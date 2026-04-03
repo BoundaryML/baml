@@ -138,7 +138,7 @@ impl<T> io::IoClassLlmPrimitiveClient for T {
         let prompt_ast = unwrap_prompt_ast(&prompt);
         let callbacks = build_io_callbacks(&ctx.io_callbacks, heap, ctx);
         SysOpOutput::async_op(async move {
-            sys_llm::execute_build_request_from_owned(&old_client, prompt_ast, Some(&callbacks))
+            sys_llm::execute_build_request_from_owned(&old_client, prompt_ast, &callbacks)
                 .await
                 .map(|req| {
                     io::owned::http::Request {

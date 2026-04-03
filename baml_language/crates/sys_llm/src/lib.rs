@@ -114,6 +114,21 @@ pub struct BuildRequestCallbacks {
     pub shell: ShellFn,
 }
 
+impl BuildRequestCallbacks {
+    /// Returns a no-op callbacks instance where every operation fails or returns
+    /// nothing. Useful for tests targeting providers that don't need IO callbacks.
+    #[cfg(test)]
+    pub(crate) fn noop() -> Self {
+        use std::sync::Arc;
+        Self {
+            http_send: Arc::new(|_| Box::pin(async { Err(LlmOpError::Other("noop".into())) })),
+            env_read: Arc::new(|_| Box::pin(async { Ok(None) })),
+            fs_read: Arc::new(|_| Box::pin(async { Err(LlmOpError::Other("noop".into())) })),
+            shell: Arc::new(|_| Box::pin(async { Err(LlmOpError::Other("noop".into())) })),
+        }
+    }
+}
+
 // ============================================================================
 // Clean (owned-type) entry points for trait-based dispatch
 // ============================================================================
@@ -304,13 +319,12 @@ pub fn execute_specialize_prompt_from_owned(
 /// Build an HTTP request from a prompt given already-extracted owned types.
 ///
 /// `callbacks` provides IO bridges for auth steps that need HTTP, env, or
-/// filesystem access (e.g. Bedrock `SigV4` credential resolution). Pass `None`
-/// when callbacks are unavailable -- providers that need them will fall back to
-/// the native AWS SDK provider chain (native only) or return an error (WASM).
+/// filesystem access (e.g. Bedrock `SigV4` credential resolution, Vertex AI
+/// service account token exchange).
 pub async fn execute_build_request_from_owned(
     client: &baml_std::PrimitiveClient,
     prompt: bex_vm_types::PromptAst,
-    callbacks: Option<&BuildRequestCallbacks>,
+    callbacks: &BuildRequestCallbacks,
 ) -> Result<baml_std::HttpRequest, LlmOpError> {
     build_request::build_request(client, prompt, callbacks)
         .await

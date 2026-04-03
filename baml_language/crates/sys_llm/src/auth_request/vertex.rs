@@ -44,7 +44,7 @@ use crate::{
 pub(crate) async fn auth_vertex(
     request: &mut HttpRequest,
     client: &PrimitiveClient,
-    callbacks: Option<&BuildRequestCallbacks>,
+    callbacks: &BuildRequestCallbacks,
 ) -> Result<(), BuildRequestError> {
     // If an API key is provided as a query param, skip token-based auth.
     if client.options.query_params.contains_key("key") {
@@ -146,7 +146,7 @@ enum ResolvedCredentials {
 /// 6. `gcloud` CLI
 async fn resolve_credentials(
     vertex_opts: Option<&VertexAiOptions>,
-    callbacks: Option<&BuildRequestCallbacks>,
+    callbacks: &BuildRequestCallbacks,
 ) -> Result<ResolvedCredentials, BuildRequestError> {
     // 1. credentials_content: always inline JSON.
     if let Some(json_str) = vertex_opts.and_then(|o| o.credentials_content.as_ref()) {
@@ -162,43 +162,38 @@ async fn resolve_credentials(
         return Ok(ResolvedCredentials::ServiceAccountJson(json_str));
     }
 
-    if let Some(cb) = callbacks {
-        // 3. GOOGLE_APPLICATION_CREDENTIALS env var.
-        // Inline JSON is handled here; file paths are deferred to ADC (step 5).
-        if let Ok(Some(val)) = (cb.env_read)("GOOGLE_APPLICATION_CREDENTIALS".to_string()).await {
-            let val = try_unwrap_quoted_json(val);
-            if !val.is_empty() && serde_json::from_str::<serde_json::Value>(&val).is_ok() {
-                return Ok(ResolvedCredentials::ServiceAccountJson(val));
-            }
+    // 3. GOOGLE_APPLICATION_CREDENTIALS env var.
+    // Inline JSON is handled here; file paths are deferred to ADC (step 5).
+    if let Ok(Some(val)) = (callbacks.env_read)("GOOGLE_APPLICATION_CREDENTIALS".to_string()).await
+    {
+        let val = try_unwrap_quoted_json(val);
+        if !val.is_empty() && serde_json::from_str::<serde_json::Value>(&val).is_ok() {
+            return Ok(ResolvedCredentials::ServiceAccountJson(val));
         }
+    }
 
-        // 4. GOOGLE_APPLICATION_CREDENTIALS_CONTENT env var (BAML-specific).
-        if let Ok(Some(val)) =
-            (cb.env_read)("GOOGLE_APPLICATION_CREDENTIALS_CONTENT".to_string()).await
-        {
-            let val = try_unwrap_quoted_json(val);
-            if !val.is_empty() && serde_json::from_str::<serde_json::Value>(&val).is_ok() {
-                return Ok(ResolvedCredentials::ServiceAccountJson(val));
-            }
+    // 4. GOOGLE_APPLICATION_CREDENTIALS_CONTENT env var (BAML-specific).
+    if let Ok(Some(val)) =
+        (callbacks.env_read)("GOOGLE_APPLICATION_CREDENTIALS_CONTENT".to_string()).await
+    {
+        let val = try_unwrap_quoted_json(val);
+        if !val.is_empty() && serde_json::from_str::<serde_json::Value>(&val).is_ok() {
+            return Ok(ResolvedCredentials::ServiceAccountJson(val));
         }
     }
 
     // 5. ADC via google-cloud-auth (native only).
     #[cfg(not(target_arch = "wasm32"))]
-    if callbacks.is_some() {
-        if native::build_from_adc(callbacks).is_ok() {
-            return Ok(ResolvedCredentials::Adc);
-        }
+    if native::build_from_adc(callbacks).is_ok() {
+        return Ok(ResolvedCredentials::Adc);
     }
 
     // 6. gcloud CLI.
-    if let Some(cb) = callbacks {
-        if (cb.shell)("gcloud auth print-access-token --quiet 2>/dev/null".to_string())
-            .await
-            .is_ok_and(|out| !out.trim().is_empty())
-        {
-            return Ok(ResolvedCredentials::GcloudCli);
-        }
+    if (callbacks.shell)("gcloud auth print-access-token --quiet 2>/dev/null".to_string())
+        .await
+        .is_ok_and(|out| !out.trim().is_empty())
+    {
+        return Ok(ResolvedCredentials::GcloudCli);
     }
 
     Err(BuildRequestError::AuthorizationFailed(
@@ -214,7 +209,7 @@ async fn resolve_credentials(
 
 async fn token_from_credentials(
     creds: &ResolvedCredentials,
-    callbacks: Option<&BuildRequestCallbacks>,
+    callbacks: &BuildRequestCallbacks,
 ) -> Result<String, BuildRequestError> {
     match creds {
         ResolvedCredentials::ServiceAccountJson(json_str) => {
@@ -222,12 +217,7 @@ async fn token_from_credentials(
         }
         ResolvedCredentials::Adc => token_from_adc(callbacks).await,
         ResolvedCredentials::GcloudCli => {
-            let cb = callbacks.ok_or_else(|| {
-                BuildRequestError::AuthorizationFailed(
-                    "Google Cloud: gcloud CLI requires shell callback".into(),
-                )
-            })?;
-            let output = (cb.shell)("gcloud auth print-access-token --quiet".to_string())
+            let output = (callbacks.shell)("gcloud auth print-access-token --quiet".to_string())
                 .await
                 .map_err(|e| {
                     BuildRequestError::AuthorizationFailed(format!(
@@ -253,7 +243,7 @@ async fn token_from_credentials(
 /// Get `project_id` from the resolved credential source, with fallbacks.
 async fn project_id_from_credentials(
     creds: &ResolvedCredentials,
-    callbacks: Option<&BuildRequestCallbacks>,
+    callbacks: &BuildRequestCallbacks,
 ) -> Option<String> {
     // Try the credential source itself first.
     match creds {
@@ -263,35 +253,31 @@ async fn project_id_from_credentials(
             }
         }
         ResolvedCredentials::GcloudCli => {
-            if let Some(cb) = callbacks {
-                if let Ok(output) =
-                    (cb.shell)("gcloud config get-value project 2>/dev/null".to_string()).await
-                {
-                    let pid = output.trim().to_string();
-                    if !pid.is_empty() {
-                        return Some(pid);
-                    }
+            if let Ok(output) =
+                (callbacks.shell)("gcloud config get-value project 2>/dev/null".to_string()).await
+            {
+                let pid = output.trim().to_string();
+                if !pid.is_empty() {
+                    return Some(pid);
                 }
             }
         }
         ResolvedCredentials::Adc => {
             // ADC was resolved by google-cloud-auth, which doesn't expose
             // project_id. Try reading the credentials file it used.
-            if let Some(cb) = callbacks {
-                if let Ok(Some(val)) =
-                    (cb.env_read)("GOOGLE_APPLICATION_CREDENTIALS".to_string()).await
-                {
-                    if !val.is_empty() {
-                        // Inline JSON?
-                        if let Some(pid) = extract_project_id_from_json(&val) {
-                            return Some(pid);
-                        }
-                        // File path? Read and extract.
-                        if let Ok(bytes) = (cb.fs_read)(val).await {
-                            if let Ok(contents) = std::str::from_utf8(&bytes) {
-                                if let Some(pid) = extract_project_id_from_json(contents) {
-                                    return Some(pid);
-                                }
+            if let Ok(Some(val)) =
+                (callbacks.env_read)("GOOGLE_APPLICATION_CREDENTIALS".to_string()).await
+            {
+                if !val.is_empty() {
+                    // Inline JSON?
+                    if let Some(pid) = extract_project_id_from_json(&val) {
+                        return Some(pid);
+                    }
+                    // File path? Read and extract.
+                    if let Ok(bytes) = (callbacks.fs_read)(val).await {
+                        if let Ok(contents) = std::str::from_utf8(&bytes) {
+                            if let Some(pid) = extract_project_id_from_json(contents) {
+                                return Some(pid);
                             }
                         }
                     }
@@ -301,10 +287,9 @@ async fn project_id_from_credentials(
     }
 
     // Fallback chain for when the credential source didn't have project_id.
-    let cb = callbacks?;
 
     // GOOGLE_CLOUD_PROJECT env var.
-    if let Ok(Some(val)) = (cb.env_read)("GOOGLE_CLOUD_PROJECT".to_string()).await {
+    if let Ok(Some(val)) = (callbacks.env_read)("GOOGLE_CLOUD_PROJECT".to_string()).await {
         if !val.is_empty() && !val.starts_with('$') {
             return Some(val);
         }
@@ -324,7 +309,7 @@ async fn project_id_from_credentials(
         },
         body: String::new(),
     };
-    if let Ok(resp) = (cb.http_send)(req).await {
+    if let Ok(resp) = (callbacks.http_send)(req).await {
         if resp.status_code == 200 {
             let pid = resp.body.trim().to_string();
             if !pid.is_empty() {
@@ -336,7 +321,7 @@ async fn project_id_from_credentials(
     // gcloud CLI (if we haven't already tried it).
     if !matches!(creds, ResolvedCredentials::GcloudCli) {
         if let Ok(output) =
-            (cb.shell)("gcloud config get-value project 2>/dev/null".to_string()).await
+            (callbacks.shell)("gcloud config get-value project 2>/dev/null".to_string()).await
         {
             let pid = output.trim().to_string();
             if !pid.is_empty() {
@@ -349,19 +334,17 @@ async fn project_id_from_credentials(
 }
 
 /// Read the ADC config file and extract `quota_project_id` (or `project_id`).
-async fn project_id_from_adc_config(callbacks: Option<&BuildRequestCallbacks>) -> Option<String> {
-    let cb = callbacks?;
-
-    let config_dir = match (cb.env_read)("CLOUDSDK_CONFIG".to_string()).await {
+async fn project_id_from_adc_config(callbacks: &BuildRequestCallbacks) -> Option<String> {
+    let config_dir = match (callbacks.env_read)("CLOUDSDK_CONFIG".to_string()).await {
         Ok(Some(dir)) if !dir.is_empty() => dir,
         _ => {
-            let home = (cb.env_read)("HOME".to_string()).await.ok()??;
+            let home = (callbacks.env_read)("HOME".to_string()).await.ok()??;
             format!("{home}/.config/gcloud")
         }
     };
     let adc_path = format!("{config_dir}/application_default_credentials.json");
 
-    let bytes = (cb.fs_read)(adc_path).await.ok()?;
+    let bytes = (callbacks.fs_read)(adc_path).await.ok()?;
     let contents = std::str::from_utf8(&bytes).ok()?;
     let parsed: serde_json::Value = serde_json::from_str(contents).ok()?;
 
@@ -375,14 +358,9 @@ async fn project_id_from_adc_config(callbacks: Option<&BuildRequestCallbacks>) -
 /// Read a credentials file via the `FsReadFn` callback.
 async fn read_credentials_file(
     path: &str,
-    callbacks: Option<&BuildRequestCallbacks>,
+    callbacks: &BuildRequestCallbacks,
 ) -> Result<String, BuildRequestError> {
-    let cb = callbacks.ok_or_else(|| {
-        BuildRequestError::AuthorizationFailed(format!(
-            "Google Cloud: cannot read credentials file '{path}' without IO callbacks"
-        ))
-    })?;
-    let bytes = (cb.fs_read)(path.to_string()).await.map_err(|e| {
+    let bytes = (callbacks.fs_read)(path.to_string()).await.map_err(|e| {
         BuildRequestError::AuthorizationFailed(format!(
             "Google Cloud: failed to read credentials file '{path}': {e}"
         ))
@@ -557,7 +535,7 @@ mod native {
 
     pub(super) fn build_from_service_account_json(
         json_str: &str,
-        callbacks: Option<&BuildRequestCallbacks>,
+        callbacks: &BuildRequestCallbacks,
     ) -> Result<google_cloud_auth::credentials::AccessTokenCredentials, BuildRequestError> {
         let json_value: serde_json::Value = serde_json::from_str(json_str).map_err(|e| {
             BuildRequestError::AuthorizationFailed(format!(
@@ -565,18 +543,15 @@ mod native {
             ))
         })?;
 
-        let mut builder = google_cloud_auth::credentials::service_account::Builder::new(json_value)
+        let builder = google_cloud_auth::credentials::service_account::Builder::new(json_value)
             .with_access_specifier(
                 google_cloud_auth::credentials::service_account::AccessSpecifier::from_scopes([
                     "https://www.googleapis.com/auth/cloud-platform",
                 ]),
-            );
-
-        if let Some(cb) = callbacks {
-            builder = builder.with_http_client_provider(BexHttpClientProvider {
-                send_fn: cb.http_send.clone(),
+            )
+            .with_http_client_provider(BexHttpClientProvider {
+                send_fn: callbacks.http_send.clone(),
             });
-        }
 
         builder.build_access_token_credentials().map_err(|e| {
             BuildRequestError::AuthorizationFailed(format!(
@@ -586,23 +561,19 @@ mod native {
     }
 
     pub(super) fn build_from_adc(
-        callbacks: Option<&BuildRequestCallbacks>,
+        callbacks: &BuildRequestCallbacks,
     ) -> Result<google_cloud_auth::credentials::AccessTokenCredentials, BuildRequestError> {
-        let mut builder =
-            Builder::default().with_scopes(["https://www.googleapis.com/auth/cloud-platform"]);
-
-        if let Some(cb) = callbacks {
-            builder = builder
-                .with_http_client_provider(BexHttpClientProvider {
-                    send_fn: cb.http_send.clone(),
-                })
-                .with_env_provider(BexEnvProvider {
-                    env_read_fn: cb.env_read.clone(),
-                })
-                .with_fs_provider(BexFsProvider {
-                    fs_read_fn: cb.fs_read.clone(),
-                });
-        }
+        let builder = Builder::default()
+            .with_scopes(["https://www.googleapis.com/auth/cloud-platform"])
+            .with_http_client_provider(BexHttpClientProvider {
+                send_fn: callbacks.http_send.clone(),
+            })
+            .with_env_provider(BexEnvProvider {
+                env_read_fn: callbacks.env_read.clone(),
+            })
+            .with_fs_provider(BexFsProvider {
+                fs_read_fn: callbacks.fs_read.clone(),
+            });
 
         builder.build_access_token_credentials().map_err(|e| {
             BuildRequestError::AuthorizationFailed(format!(
@@ -615,7 +586,7 @@ mod native {
 #[cfg(not(target_arch = "wasm32"))]
 async fn token_from_service_account_json(
     json_str: &str,
-    callbacks: Option<&BuildRequestCallbacks>,
+    callbacks: &BuildRequestCallbacks,
 ) -> Result<String, BuildRequestError> {
     let creds = native::build_from_service_account_json(json_str, callbacks)?;
     let token = creds.access_token().await.map_err(|e| {
@@ -627,9 +598,7 @@ async fn token_from_service_account_json(
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-async fn token_from_adc(
-    callbacks: Option<&BuildRequestCallbacks>,
-) -> Result<String, BuildRequestError> {
+async fn token_from_adc(callbacks: &BuildRequestCallbacks) -> Result<String, BuildRequestError> {
     let creds = native::build_from_adc(callbacks)?;
     let token = creds.access_token().await.map_err(|e| {
         BuildRequestError::AuthorizationFailed(format!(
@@ -674,7 +643,7 @@ mod wasm {
     /// it for an access token via `HttpSendFn`.
     pub(super) async fn service_account_token(
         json_str: &str,
-        callbacks: Option<&BuildRequestCallbacks>,
+        callbacks: &BuildRequestCallbacks,
     ) -> Result<String, BuildRequestError> {
         let sa: ServiceAccount = serde_json::from_str(json_str).map_err(|e| {
             BuildRequestError::AuthorizationFailed(format!(
@@ -731,14 +700,8 @@ mod wasm {
     pub(super) async fn exchange_jwt_for_token(
         token_uri: &str,
         jwt: &str,
-        callbacks: Option<&BuildRequestCallbacks>,
+        callbacks: &BuildRequestCallbacks,
     ) -> Result<String, BuildRequestError> {
-        let cb = callbacks.ok_or_else(|| {
-            BuildRequestError::AuthorizationFailed(
-                "Google Cloud: cannot exchange JWT without HTTP callbacks".into(),
-            )
-        })?;
-
         let body = format!(
             "grant_type={}&assertion={}",
             percent_encoding::utf8_percent_encode(
@@ -761,7 +724,7 @@ mod wasm {
             body,
         };
 
-        let resp = (cb.http_send)(req).await.map_err(|e| {
+        let resp = (callbacks.http_send)(req).await.map_err(|e| {
             BuildRequestError::AuthorizationFailed(format!(
                 "Google Cloud: token exchange HTTP request failed: {e}"
             ))
@@ -934,12 +897,9 @@ mod wasm {
                     })
                 })
             }));
-            let result = exchange_jwt_for_token(
-                "https://oauth2.googleapis.com/token",
-                "fake.jwt.here",
-                Some(&cb),
-            )
-            .await;
+            let result =
+                exchange_jwt_for_token("https://oauth2.googleapis.com/token", "fake.jwt.here", &cb)
+                    .await;
             let err = result.unwrap_err().to_string();
             assert!(err.contains("401"), "should mention status: {err}");
         }
@@ -955,12 +915,9 @@ mod wasm {
                     })
                 })
             }));
-            let result = exchange_jwt_for_token(
-                "https://oauth2.googleapis.com/token",
-                "fake.jwt.here",
-                Some(&cb),
-            )
-            .await;
+            let result =
+                exchange_jwt_for_token("https://oauth2.googleapis.com/token", "fake.jwt.here", &cb)
+                    .await;
             let err = result.unwrap_err().to_string();
             assert!(
                 err.contains("access_token"),
@@ -990,13 +947,10 @@ mod wasm {
                 })
             }));
 
-            let token = exchange_jwt_for_token(
-                "https://oauth2.googleapis.com/token",
-                "my.test.jwt",
-                Some(&cb),
-            )
-            .await
-            .unwrap();
+            let token =
+                exchange_jwt_for_token("https://oauth2.googleapis.com/token", "my.test.jwt", &cb)
+                    .await
+                    .unwrap();
             assert_eq!(token, "ya29.test");
 
             let req = captured.lock().unwrap().take().unwrap();
@@ -1032,9 +986,7 @@ mod wasm {
                 })
             }));
 
-            let token = service_account_token(&test_sa_json(), Some(&cb))
-                .await
-                .unwrap();
+            let token = service_account_token(&test_sa_json(), &cb).await.unwrap();
             assert_eq!(token, "ya29.wasm-full-flow");
 
             // Verify the HTTP request contained a real signed JWT
@@ -1059,21 +1011,8 @@ mod wasm {
         #[wasm_bindgen_test]
         async fn service_account_token_rejects_bad_json() {
             let cb = mock_callbacks(mock_token_http());
-            let result = service_account_token("not json", Some(&cb)).await;
+            let result = service_account_token("not json", &cb).await;
             assert!(result.is_err());
-        }
-
-        #[wasm_bindgen_test]
-        async fn exchange_jwt_requires_callbacks() {
-            let result =
-                exchange_jwt_for_token("https://oauth2.googleapis.com/token", "fake.jwt", None)
-                    .await;
-            assert!(result.is_err());
-            let err = result.unwrap_err().to_string();
-            assert!(
-                err.contains("HTTP callbacks"),
-                "should mention callbacks: {err}"
-            );
         }
     }
 }
@@ -1081,16 +1020,14 @@ mod wasm {
 #[cfg(target_arch = "wasm32")]
 async fn token_from_service_account_json(
     json_str: &str,
-    callbacks: Option<&BuildRequestCallbacks>,
+    callbacks: &BuildRequestCallbacks,
 ) -> Result<String, BuildRequestError> {
     wasm::service_account_token(json_str, callbacks).await
 }
 
 #[cfg(target_arch = "wasm32")]
 #[allow(clippy::unused_async)] // must be async to match native signature
-async fn token_from_adc(
-    _callbacks: Option<&BuildRequestCallbacks>,
-) -> Result<String, BuildRequestError> {
+async fn token_from_adc(_callbacks: &BuildRequestCallbacks) -> Result<String, BuildRequestError> {
     Err(BuildRequestError::AuthorizationFailed(
         "Google Cloud ADC is not supported on WASM. \
          Provide explicit credentials via 'credentials' or 'credentials_content'."
@@ -1152,7 +1089,7 @@ mod tests {
         };
         let client = make_client("vertex-ai");
         let mut req = fake_request();
-        let result = auth_vertex(&mut req, &client, Some(&callbacks)).await;
+        let result = auth_vertex(&mut req, &client, &callbacks).await;
         assert!(result.is_err());
     }
 
@@ -1244,9 +1181,7 @@ mod tests {
         });
         let callbacks = stub_callbacks_with_http(mock_token_http());
         let mut req = fake_request();
-        auth_vertex(&mut req, &client, Some(&callbacks))
-            .await
-            .unwrap();
+        auth_vertex(&mut req, &client, &callbacks).await.unwrap();
         assert_bearer_token(&req);
     }
 
@@ -1260,9 +1195,7 @@ mod tests {
         });
         let callbacks = stub_callbacks_with_http(mock_token_http());
         let mut req = fake_request();
-        auth_vertex(&mut req, &client, Some(&callbacks))
-            .await
-            .unwrap();
+        auth_vertex(&mut req, &client, &callbacks).await.unwrap();
         assert_bearer_token(&req);
     }
 
@@ -1293,9 +1226,7 @@ mod tests {
             }),
         };
         let mut req = fake_request();
-        auth_vertex(&mut req, &client, Some(&callbacks))
-            .await
-            .unwrap();
+        auth_vertex(&mut req, &client, &callbacks).await.unwrap();
         assert_bearer_token(&req);
     }
 
@@ -1309,9 +1240,7 @@ mod tests {
         });
         let callbacks = stub_callbacks_with_http(mock_token_http());
         let mut req = fake_request();
-        auth_vertex(&mut req, &client, Some(&callbacks))
-            .await
-            .unwrap();
+        auth_vertex(&mut req, &client, &callbacks).await.unwrap();
         assert_bearer_token(&req);
     }
 
@@ -1345,9 +1274,7 @@ mod tests {
             }),
         };
         let mut req = fake_request();
-        auth_vertex(&mut req, &client, Some(&callbacks))
-            .await
-            .unwrap();
+        auth_vertex(&mut req, &client, &callbacks).await.unwrap();
         assert!(!req.headers.contains_key("authorization"));
     }
 
@@ -1410,9 +1337,7 @@ mod tests {
 
         let client = make_client("vertex-ai");
         let mut req = fake_request();
-        auth_vertex(&mut req, &client, Some(&callbacks))
-            .await
-            .unwrap();
+        auth_vertex(&mut req, &client, &callbacks).await.unwrap();
 
         assert!(http_call_count.load(Ordering::SeqCst) > 0);
         assert_eq!(

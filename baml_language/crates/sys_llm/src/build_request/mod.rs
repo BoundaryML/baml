@@ -21,7 +21,7 @@ use crate::LlmProvider;
 pub(crate) async fn build_request(
     client: &crate::baml_std::PrimitiveClient,
     prompt: bex_vm_types::PromptAst,
-    callbacks: Option<&crate::BuildRequestCallbacks>,
+    callbacks: &crate::BuildRequestCallbacks,
 ) -> Result<crate::baml_std::HttpRequest, BuildRequestError> {
     let provider = LlmProvider::from_str(&client.provider)
         .map_err(|_| BuildRequestError::UnsupportedLlmProvider(client.provider.clone()))?;
@@ -206,7 +206,9 @@ mod tests {
         let system_text = "Given the receipt below:\n\n```\ntest@email.com\n```\n\nAnswer in JSON using this schema:\n{\n  items: [\n    {\n      name: string,\n      description: string or null,\n      quantity: int,\n      price: float,\n    }\n  ],\n  total_cost: float or null,\n  venue: \"barisa\" or \"ox_burger\",\n}";
         let prompt = Arc::new(PromptAst::Vec(vec![msg("system", system_text)]));
 
-        let result = build_request(&client, prompt, None).await.unwrap();
+        let result = build_request(&client, prompt, &crate::BuildRequestCallbacks::noop())
+            .await
+            .unwrap();
 
         // Verify envelope
         assert_eq!(result.method, "POST");
@@ -255,7 +257,9 @@ mod tests {
             msg("user", "Write a nice short story about Dr. Pepper"),
         ]));
 
-        let result = build_request(&client, prompt, None).await.unwrap();
+        let result = build_request(&client, prompt, &crate::BuildRequestCallbacks::noop())
+            .await
+            .unwrap();
 
         assert_eq!(result.url, "https://api.openai.com/v1/chat/completions");
 
@@ -293,7 +297,9 @@ mod tests {
             },
         );
         let prompt = msg("user", "Hello world");
-        let result = build_request(&client, prompt, None).await.unwrap();
+        let result = build_request(&client, prompt, &crate::BuildRequestCallbacks::noop())
+            .await
+            .unwrap();
         let body = parse_body(&result);
         assert_eq!(
             body,
@@ -316,7 +322,9 @@ mod tests {
             },
         );
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt, None).await.unwrap();
+        let result = build_request(&client, prompt, &crate::BuildRequestCallbacks::noop())
+            .await
+            .unwrap();
         assert_eq!(result.url, "https://custom.api.com/chat/completions");
     }
 
@@ -334,7 +342,9 @@ mod tests {
             },
         );
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt, None).await.unwrap();
+        let result = build_request(&client, prompt, &crate::BuildRequestCallbacks::noop())
+            .await
+            .unwrap();
         let body = parse_body(&result);
         assert_eq!(
             body,
@@ -360,7 +370,9 @@ mod tests {
             },
         );
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt, None).await.unwrap();
+        let result = build_request(&client, prompt, &crate::BuildRequestCallbacks::noop())
+            .await
+            .unwrap();
         let body = parse_body(&result);
         assert_eq!(
             body,
@@ -399,7 +411,9 @@ mod tests {
             msg("user", "Write a nice short story about Dr. Pepper"),
         ]));
 
-        let result = build_request(&client, prompt, None).await.unwrap();
+        let result = build_request(&client, prompt, &crate::BuildRequestCallbacks::noop())
+            .await
+            .unwrap();
 
         // Verify envelope
         assert_eq!(result.method, "POST");
@@ -445,7 +459,9 @@ mod tests {
             },
         );
         let prompt = msg("user", "Hello");
-        let result = build_request(&client, prompt, None).await.unwrap();
+        let result = build_request(&client, prompt, &crate::BuildRequestCallbacks::noop())
+            .await
+            .unwrap();
         let body = parse_body(&result);
         assert_eq!(
             body,
@@ -485,7 +501,9 @@ mod tests {
         );
 
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt, None).await.unwrap();
+        let result = build_request(&client, prompt, &crate::BuildRequestCallbacks::noop())
+            .await
+            .unwrap();
 
         assert_eq!(
             result.headers.get("anthropic-beta").unwrap(),
@@ -519,7 +537,9 @@ mod tests {
             },
         );
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt, None).await.unwrap();
+        let result = build_request(&client, prompt, &crate::BuildRequestCallbacks::noop())
+            .await
+            .unwrap();
         let body = parse_body(&result);
         assert_eq!(
             body,
@@ -552,7 +572,9 @@ mod tests {
             },
         );
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt, None).await.unwrap();
+        let result = build_request(&client, prompt, &crate::BuildRequestCallbacks::noop())
+            .await
+            .unwrap();
         assert!(
             result.url.contains("foo=bar") && result.url.contains("baz=qux"),
             "URL should contain query params: {}",
@@ -575,7 +597,9 @@ mod tests {
             },
         );
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt, None).await.unwrap();
+        let result = build_request(&client, prompt, &crate::BuildRequestCallbacks::noop())
+            .await
+            .unwrap();
         assert!(
             result
                 .url
@@ -596,7 +620,9 @@ mod tests {
             },
         );
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt, None).await.unwrap();
+        let result = build_request(&client, prompt, &crate::BuildRequestCallbacks::noop())
+            .await
+            .unwrap();
         assert!(
             !result.url.contains('?'),
             "URL should not contain '?' without query params: {}",
@@ -622,7 +648,9 @@ mod tests {
             },
         );
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt, None).await.unwrap();
+        let result = build_request(&client, prompt, &crate::BuildRequestCallbacks::noop())
+            .await
+            .unwrap();
         let body = parse_body(&result);
         assert_eq!(
             body,
@@ -657,7 +685,9 @@ mod tests {
             msg("user", "Write a nice short story about Dr. Pepper"),
         ]));
 
-        let result = build_request(&client, prompt, None).await.unwrap();
+        let result = build_request(&client, prompt, &crate::BuildRequestCallbacks::noop())
+            .await
+            .unwrap();
 
         assert_eq!(result.method, "POST");
         assert_eq!(
@@ -699,7 +729,9 @@ mod tests {
         );
 
         let prompt = msg("user", "Hello");
-        let result = build_request(&client, prompt, None).await.unwrap();
+        let result = build_request(&client, prompt, &crate::BuildRequestCallbacks::noop())
+            .await
+            .unwrap();
         let body = parse_body(&result);
         assert_eq!(
             body,
@@ -729,7 +761,9 @@ mod tests {
             msg("user", "How are you?"),
         ]));
 
-        let result = build_request(&client, prompt, None).await.unwrap();
+        let result = build_request(&client, prompt, &crate::BuildRequestCallbacks::noop())
+            .await
+            .unwrap();
         let body = parse_body(&result);
         assert_eq!(
             body,
@@ -769,7 +803,9 @@ mod tests {
         );
 
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt, None).await.unwrap();
+        let result = build_request(&client, prompt, &crate::BuildRequestCallbacks::noop())
+            .await
+            .unwrap();
         let body = parse_body(&result);
         assert_eq!(
             body,
@@ -797,7 +833,9 @@ mod tests {
         );
 
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt, None).await.unwrap();
+        let result = build_request(&client, prompt, &crate::BuildRequestCallbacks::noop())
+            .await
+            .unwrap();
         assert!(
             result.url.contains("key=my-api-key"),
             "URL should contain query param: {}",
@@ -831,7 +869,9 @@ mod tests {
             msg("user", "Write a nice short story about Dr. Pepper"),
         ]));
 
-        let result = build_request(&client, prompt, None).await.unwrap();
+        let result = build_request(&client, prompt, &crate::BuildRequestCallbacks::noop())
+            .await
+            .unwrap();
 
         assert_eq!(result.method, "POST");
         assert!(
@@ -879,7 +919,9 @@ mod tests {
         );
 
         let prompt = msg("user", "Hello");
-        let result = build_request(&client, prompt, None).await.unwrap();
+        let result = build_request(&client, prompt, &crate::BuildRequestCallbacks::noop())
+            .await
+            .unwrap();
         let body = parse_body(&result);
         assert_eq!(
             body,
@@ -914,7 +956,9 @@ mod tests {
             msg("model", "I'm well."),
         ]));
 
-        let result = build_request(&client, prompt, None).await.unwrap();
+        let result = build_request(&client, prompt, &crate::BuildRequestCallbacks::noop())
+            .await
+            .unwrap();
         let body = parse_body(&result);
         assert_eq!(
             body,
@@ -965,7 +1009,9 @@ mod tests {
         );
 
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt, None).await.unwrap();
+        let result = build_request(&client, prompt, &crate::BuildRequestCallbacks::noop())
+            .await
+            .unwrap();
         let body = parse_body(&result);
         assert_eq!(
             body,

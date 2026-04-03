@@ -23,7 +23,7 @@ pub(crate) async fn auth_request(
     provider: LlmProvider,
     request: &mut HttpRequest,
     client: &PrimitiveClient,
-    callbacks: Option<&crate::BuildRequestCallbacks>,
+    callbacks: &crate::BuildRequestCallbacks,
 ) -> Result<(), BuildRequestError> {
     match provider {
         LlmProvider::Anthropic => auth_anthropic(request, client),
@@ -129,9 +129,14 @@ mod tests {
             },
         );
         let mut req = fake_request();
-        auth_request(LlmProvider::Anthropic, &mut req, &client, None)
-            .await
-            .unwrap();
+        auth_request(
+            LlmProvider::Anthropic,
+            &mut req,
+            &client,
+            &crate::BuildRequestCallbacks::noop(),
+        )
+        .await
+        .unwrap();
         assert_eq!(req.headers.get("x-api-key").unwrap(), "sk-ant-test");
     }
 
@@ -139,9 +144,14 @@ mod tests {
     async fn anthropic_no_api_key_omits_header() {
         let client = make_client("anthropic", PrimitiveClientOptions::default());
         let mut req = fake_request();
-        auth_request(LlmProvider::Anthropic, &mut req, &client, None)
-            .await
-            .unwrap();
+        auth_request(
+            LlmProvider::Anthropic,
+            &mut req,
+            &client,
+            &crate::BuildRequestCallbacks::noop(),
+        )
+        .await
+        .unwrap();
         assert!(!req.headers.contains_key("x-api-key"));
     }
 
@@ -159,9 +169,14 @@ mod tests {
             },
         );
         let mut req = fake_request();
-        auth_request(LlmProvider::OpenAi, &mut req, &client, None)
-            .await
-            .unwrap();
+        auth_request(
+            LlmProvider::OpenAi,
+            &mut req,
+            &client,
+            &crate::BuildRequestCallbacks::noop(),
+        )
+        .await
+        .unwrap();
         assert_eq!(
             req.headers.get("authorization").unwrap(),
             "Bearer sk-test-key",
@@ -172,9 +187,14 @@ mod tests {
     async fn openai_no_api_key_omits_header() {
         let client = make_client("openai", PrimitiveClientOptions::default());
         let mut req = fake_request();
-        auth_request(LlmProvider::OpenAi, &mut req, &client, None)
-            .await
-            .unwrap();
+        auth_request(
+            LlmProvider::OpenAi,
+            &mut req,
+            &client,
+            &crate::BuildRequestCallbacks::noop(),
+        )
+        .await
+        .unwrap();
         assert!(!req.headers.contains_key("authorization"));
     }
 
@@ -195,9 +215,14 @@ mod tests {
             },
         );
         let mut req = fake_request();
-        auth_request(LlmProvider::AzureOpenAi, &mut req, &client, None)
-            .await
-            .unwrap();
+        auth_request(
+            LlmProvider::AzureOpenAi,
+            &mut req,
+            &client,
+            &crate::BuildRequestCallbacks::noop(),
+        )
+        .await
+        .unwrap();
         assert_eq!(req.headers.get("api-key").unwrap(), "az-key");
         assert!(!req.headers.contains_key("authorization"));
     }
@@ -213,9 +238,14 @@ mod tests {
             },
         );
         let mut req = fake_request();
-        auth_request(LlmProvider::OpenAiGeneric, &mut req, &client, None)
-            .await
-            .unwrap();
+        auth_request(
+            LlmProvider::OpenAiGeneric,
+            &mut req,
+            &client,
+            &crate::BuildRequestCallbacks::noop(),
+        )
+        .await
+        .unwrap();
         assert_eq!(req.headers.get("authorization").unwrap(), "Bearer sk-gen",);
     }
 
@@ -229,9 +259,14 @@ mod tests {
             },
         );
         let mut req = fake_request();
-        auth_request(LlmProvider::OpenRouter, &mut req, &client, None)
-            .await
-            .unwrap();
+        auth_request(
+            LlmProvider::OpenRouter,
+            &mut req,
+            &client,
+            &crate::BuildRequestCallbacks::noop(),
+        )
+        .await
+        .unwrap();
         assert_eq!(req.headers.get("authorization").unwrap(), "Bearer sk-or");
     }
 
@@ -245,9 +280,14 @@ mod tests {
             },
         );
         let mut req = fake_request();
-        auth_request(LlmProvider::Ollama, &mut req, &client, None)
-            .await
-            .unwrap();
+        auth_request(
+            LlmProvider::Ollama,
+            &mut req,
+            &client,
+            &crate::BuildRequestCallbacks::noop(),
+        )
+        .await
+        .unwrap();
         assert_eq!(
             req.headers.get("authorization").unwrap(),
             "Bearer ollama-key",
@@ -269,9 +309,14 @@ mod tests {
             },
         );
         let mut req = fake_request();
-        auth_request(LlmProvider::GoogleAi, &mut req, &client, None)
-            .await
-            .unwrap();
+        auth_request(
+            LlmProvider::GoogleAi,
+            &mut req,
+            &client,
+            &crate::BuildRequestCallbacks::noop(),
+        )
+        .await
+        .unwrap();
         assert_eq!(req.headers.get("x-goog-api-key").unwrap(), "gemini-key");
     }
 
@@ -285,9 +330,14 @@ mod tests {
             },
         );
         let mut req = fake_request();
-        auth_request(LlmProvider::GoogleAi, &mut req, &client, None)
-            .await
-            .unwrap();
+        auth_request(
+            LlmProvider::GoogleAi,
+            &mut req,
+            &client,
+            &crate::BuildRequestCallbacks::noop(),
+        )
+        .await
+        .unwrap();
         assert!(!req.headers.contains_key("x-goog-api-key"));
     }
 
@@ -304,9 +354,14 @@ mod tests {
         let mut req = fake_request();
         req.headers
             .insert("content-type".to_string(), "application/json".to_string());
-        auth_request(LlmProvider::GoogleAi, &mut req, &client, None)
-            .await
-            .unwrap();
+        auth_request(
+            LlmProvider::GoogleAi,
+            &mut req,
+            &client,
+            &crate::BuildRequestCallbacks::noop(),
+        )
+        .await
+        .unwrap();
         assert_eq!(req.headers.get("content-type").unwrap(), "application/json");
         assert_eq!(req.headers.get("x-goog-api-key").unwrap(), "gemini-key");
     }
@@ -329,9 +384,14 @@ mod tests {
             .insert("content-type".to_string(), "application/json".to_string());
         req.headers
             .insert("x-custom".to_string(), "value".to_string());
-        auth_request(LlmProvider::OpenAi, &mut req, &client, None)
-            .await
-            .unwrap();
+        auth_request(
+            LlmProvider::OpenAi,
+            &mut req,
+            &client,
+            &crate::BuildRequestCallbacks::noop(),
+        )
+        .await
+        .unwrap();
         assert_eq!(req.headers.get("content-type").unwrap(), "application/json",);
         assert_eq!(req.headers.get("x-custom").unwrap(), "value");
         assert_eq!(req.headers.get("authorization").unwrap(), "Bearer sk-test",);
