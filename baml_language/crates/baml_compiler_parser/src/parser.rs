@@ -4549,6 +4549,19 @@ impl<'a> Parser<'a> {
             return true;
         }
 
+        // Byte string literals: b"..."
+        if self.at(TokenKind::Word)
+            && let Some(token) = self.current()
+            && token.text.as_str() == "b"
+            && let Some(idx) = self.current_non_trivia_index()
+            && self
+                .tokens
+                .get(idx + 1)
+                .is_some_and(|t| t.kind == TokenKind::Quote)
+        {
+            return true;
+        }
+
         // Check for `env.` prefix - environment variable access
         if self.at(TokenKind::Word) {
             if let Some(token) = self.current() {

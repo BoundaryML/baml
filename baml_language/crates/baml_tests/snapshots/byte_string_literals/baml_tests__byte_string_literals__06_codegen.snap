@@ -8,6 +8,14 @@ function user.ByteStringBasic() -> int {
     return
 }
 
+function user.ByteStringDirectIndexRead() -> int {
+    load_const b"\x41\x42\x43"
+    call baml.deep_copy
+    load_const 0
+    load_array_element
+    return
+}
+
 function user.ByteStringEmpty() -> int {
     load_const b""
     call baml.deep_copy
@@ -56,6 +64,13 @@ function user.ByteStringIndexAccess() -> int? {
     call baml.deep_copy
     load_const 0
     call baml.Uint8Array.at
+    return
+}
+
+function user.ByteStringLiteralAsArg() -> int {
+    load_const b"\x61\x62\x63"
+    call baml.deep_copy
+    call user.ByteStringPassAndReturn
     return
 }
 

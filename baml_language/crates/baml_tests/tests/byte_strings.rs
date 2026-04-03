@@ -377,3 +377,40 @@ async fn b_as_identifier() {
     );
     assert_eq!(output.result, Ok(BexExternalValue::Int(42)));
 }
+
+// ============================================================================
+// B8. Byte string as call argument
+// ============================================================================
+
+#[tokio::test]
+async fn literal_as_call_argument() {
+    let output = baml_test!(
+        r#"
+        function get_len(data: uint8array) -> int {
+            data.length()
+        }
+
+        function main() -> int {
+            get_len(b"hello")
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(5)));
+}
+
+// ============================================================================
+// B9. Direct index read (data[0] not .at(0))
+// ============================================================================
+
+#[tokio::test]
+async fn index_read_direct() {
+    let output = baml_test!(
+        r#"
+        function main() -> int {
+            let data = b"\x41\x42\x43";
+            data[0]
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(0x41)));
+}

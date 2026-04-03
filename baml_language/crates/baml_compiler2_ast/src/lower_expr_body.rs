@@ -2560,6 +2560,7 @@ fn is_expr_node_kind(kind: SyntaxKind) -> bool {
             | SyntaxKind::ARRAY_LITERAL
             | SyntaxKind::STRING_LITERAL
             | SyntaxKind::RAW_STRING_LITERAL
+            | SyntaxKind::BYTE_STRING_LITERAL
             | SyntaxKind::OBJECT_LITERAL
             | SyntaxKind::MAP_LITERAL
             | SyntaxKind::LAMBDA_EXPR

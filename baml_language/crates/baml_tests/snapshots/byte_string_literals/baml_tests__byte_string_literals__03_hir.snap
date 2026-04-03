@@ -5,6 +5,9 @@ source: crates/baml_tests/src/generated_tests.rs
 function user.ByteStringBasic() -> int  [expr] {
   { let data = b"<5 bytes>" } data.length()
 }
+function user.ByteStringDirectIndexRead() -> int  [expr] {
+  { let data = b"<3 bytes>" } data[0]
+}
 function user.ByteStringEmpty() -> int  [expr] {
   { let data = b"<0 bytes>" } data.length()
 }
@@ -19,6 +22,9 @@ function user.ByteStringInCondition() -> int  [expr] {
 }
 function user.ByteStringIndexAccess() -> int?  [expr] {
   { let data = b"<3 bytes>" } data.at(0)
+}
+function user.ByteStringLiteralAsArg() -> int  [expr] {
+  {  } ByteStringPassAndReturn(b"<3 bytes>")
 }
 function user.ByteStringMutate() -> int?  [expr] {
   { let data = b"<3 bytes>"; data[0] = 42 } data.at(0)

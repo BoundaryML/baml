@@ -55,6 +55,7 @@ fn default_scalar_union_ty() -> Ty {
             Ty::Float { attr: d.clone() },
             Ty::String { attr: d.clone() },
             Ty::Bool { attr: d.clone() },
+            Ty::Uint8Array { attr: d.clone() },
             Ty::Null { attr: d.clone() },
         ],
         d,

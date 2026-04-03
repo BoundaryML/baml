@@ -49,3 +49,14 @@ function ByteStringMutate() -> int? {
     data[0] = 42;
     data.at(0)
 }
+
+// Direct index read (data[0], not .at(0))
+function ByteStringDirectIndexRead() -> int {
+    let data = b"\x41\x42\x43";
+    data[0]
+}
+
+// Byte string literal as function call argument
+function ByteStringLiteralAsArg() -> int {
+    ByteStringPassAndReturn(b"abc")
+}

@@ -328,6 +328,62 @@ SOURCE_FILE
             INTEGER_LITERAL "0"
             R_PAREN ")"
         R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "ByteStringDirectIndexRead"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        LET_STMT
+          KW_LET "let"
+          WORD "data"
+          EQUALS "="
+          BYTE_STRING_LITERAL "b"\x41\x42\x43""
+            WORD "b"
+            QUOTE """
+            BACKSLASH "\"
+            WORD "x41"
+            BACKSLASH "\"
+            WORD "x42"
+            BACKSLASH "\"
+            WORD "x43"
+            QUOTE """
+          SEMICOLON ";"
+        INDEX_EXPR "data[0]"
+          WORD "data"
+          L_BRACKET "["
+          INTEGER_LITERAL "0"
+          R_BRACKET "]"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "ByteStringLiteralAsArg"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        CALL_EXPR
+          WORD "ByteStringPassAndReturn"
+          CALL_ARGS
+            L_PAREN "("
+            BYTE_STRING_LITERAL "b"abc""
+              WORD "b"
+              QUOTE """
+              WORD "abc"
+              QUOTE """
+            R_PAREN ")"
+        R_BRACE "}"
 
 === ERRORS ===
 None
