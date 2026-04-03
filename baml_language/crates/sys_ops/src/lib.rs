@@ -222,7 +222,7 @@ impl<T> io::IoClassLlmPrimitiveClient for T {
 
     fn build_request_stream(
         &self,
-        heap: &std::sync::Arc<BexHeap>,
+        _heap: &std::sync::Arc<BexHeap>,
         _call_id: CallId,
         client: io::owned::llm::PrimitiveClient,
         prompt: io::owned::llm::PromptAst,
@@ -233,9 +233,9 @@ impl<T> io::IoClassLlmPrimitiveClient for T {
             Err(e) => return SysOpOutput::err(OpErrorKind::Other(e.to_string())),
         };
         let prompt_ast = unwrap_prompt_ast(&prompt);
-        let callbacks = build_io_callbacks(&ctx.io_callbacks, heap, ctx);
+        let io = ctx.runtime_io.clone();
         SysOpOutput::async_op(async move {
-            sys_llm::execute_build_request_stream_from_owned(&old_client, prompt_ast, &callbacks)
+            sys_llm::execute_build_request_stream_from_owned(&old_client, prompt_ast, io)
                 .await
                 .map(|req| {
                     io::owned::http::Request {

@@ -245,9 +245,9 @@ pub async fn execute_build_request_from_owned(
 pub async fn execute_build_request_stream_from_owned(
     client: &baml_std::PrimitiveClient,
     prompt: bex_vm_types::PromptAst,
-    callbacks: &BuildRequestCallbacks,
+    io: Arc<dyn ::sys_types::runtime_io::RuntimeIo>,
 ) -> Result<baml_std::HttpRequest, LlmOpError> {
-    let mut request = execute_build_request_from_owned(client, prompt, callbacks).await?;
+    let mut request = execute_build_request_from_owned(client, prompt, io).await?;
     request.body = add_stream_flag_to_request_body(&request.body)?;
     Ok(request)
 }

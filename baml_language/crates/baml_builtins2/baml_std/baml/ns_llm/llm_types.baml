@@ -492,6 +492,7 @@ class Stream<T> {
         }
       }
     }
+    root.sys.panic("Unreachable")
   }
   /// Return the final value of the stream.
   /// If the final value is not yet available, this will block until the stream is done.

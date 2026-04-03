@@ -2195,8 +2195,26 @@ impl LoweringContext<'_> {
                     .get(&(self.current_scope, *base))
                     .map(|ty| !matches!(ty, Tir2Ty::Unknown { .. }))
                     .unwrap_or(false);
-                if base_is_value {
-                    // Method call: arr.length() — prepend receiver as self
+                // Check if the resolved method expects a `self` receiver.
+                // Static methods (e.g. StreamCache.new) have no `self` param
+                // and must not get the class reference prepended as an argument.
+                let method_takes_self = {
+                    use baml_compiler2_tir::inference::MemberResolution;
+                    self.resolutions
+                        .get(&(self.current_scope, callee))
+                        .map_or(false, |r| match r {
+                            MemberResolution::Method { func_loc, .. }
+                            | MemberResolution::Free { func_loc } => {
+                                let sig = function_signature(self.db, *func_loc);
+                                sig.params
+                                    .first()
+                                    .map_or(false, |(name, _)| name.as_str() == "self")
+                            }
+                            _ => false,
+                        })
+                };
+                if base_is_value && method_takes_self {
+                    // Instance method call: arr.length() — prepend receiver as self
                     let receiver_op = self.lower_to_operand(*base);
                     let callee_op = self.lower_to_operand(callee);
                     let mut all_args = vec![receiver_op];

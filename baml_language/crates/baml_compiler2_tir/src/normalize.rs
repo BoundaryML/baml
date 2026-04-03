@@ -125,13 +125,6 @@ impl StructuralTy {
             return false;
         }
 
-        // TypeVar (generic parameter) is opaque — only subtypes itself (reflexivity
-        // above) and BuiltinUnknown (above). Never (bottom) is already handled above.
-        // Must come before Unknown/Error check to avoid bidirectional compatibility.
-        if matches!(self, StructuralTy::TypeVar(_)) || matches!(other, StructuralTy::TypeVar(_)) {
-            return false;
-        }
-
         // Void is only compatible with itself (handled by reflexivity above)
         if matches!(self, StructuralTy::Void) || matches!(other, StructuralTy::Void) {
             return false;
@@ -253,6 +246,12 @@ impl StructuralTy {
                 }
                 true
             }
+
+            // TypeVar (generic parameter) is opaque — only subtypes itself
+            // (reflexivity above) and BuiltinUnknown (early check above).
+            // Placed here rather than as an early guard so that Union/Optional
+            // decomposition rules above can match first (e.g. T <: T | U).
+            (StructuralTy::TypeVar(v1), StructuralTy::TypeVar(v2)) => v1 == v2,
 
             _ => false,
         };
@@ -1611,5 +1610,62 @@ mod tests {
         );
         let sup = Ty::Primitive(PrimitiveType::Float, TyAttr::default());
         assert!(is_subtype_of(&sub, &sup, &aliases));
+    }
+
+    #[test]
+    fn test_typevar_subtype_of_union_containing_same_typevar() {
+        let aliases = HashMap::new();
+        let t = Ty::TypeVar(Name::new("T"), TyAttr::default());
+        let union = Ty::Union(
+            vec![
+                t.clone(),
+                Ty::Primitive(PrimitiveType::String, TyAttr::default()),
+            ],
+            TyAttr::default(),
+        );
+        // T <: T | String should hold
+        assert!(is_subtype_of(&t, &union, &aliases));
+    }
+
+    #[test]
+    fn test_typevar_not_subtype_of_union_without_same_typevar() {
+        let aliases = HashMap::new();
+        let t = Ty::TypeVar(Name::new("T"), TyAttr::default());
+        let union = Ty::Union(
+            vec![
+                Ty::Primitive(PrimitiveType::Int, TyAttr::default()),
+                Ty::Primitive(PrimitiveType::String, TyAttr::default()),
+            ],
+            TyAttr::default(),
+        );
+        // T <: Int | String should NOT hold (T is opaque)
+        assert!(!is_subtype_of(&t, &union, &aliases));
+    }
+
+    #[test]
+    fn test_typevar_subtype_of_optional_same_typevar() {
+        let aliases = HashMap::new();
+        let t = Ty::TypeVar(Name::new("T"), TyAttr::default());
+        let opt_t = Ty::Optional(Box::new(t.clone()), TyAttr::default());
+        // T <: T? should hold
+        assert!(is_subtype_of(&t, &opt_t, &aliases));
+    }
+
+    #[test]
+    fn test_typevar_not_subtype_of_concrete() {
+        let aliases = HashMap::new();
+        let t = Ty::TypeVar(Name::new("T"), TyAttr::default());
+        // T <: Int should NOT hold
+        assert!(!is_subtype_of(
+            &t,
+            &Ty::Primitive(PrimitiveType::Int, TyAttr::default()),
+            &aliases
+        ));
+        // Int <: T should NOT hold
+        assert!(!is_subtype_of(
+            &Ty::Primitive(PrimitiveType::Int, TyAttr::default()),
+            &t,
+            &aliases
+        ));
     }
 }
