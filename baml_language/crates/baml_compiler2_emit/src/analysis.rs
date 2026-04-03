@@ -306,6 +306,16 @@ fn compute_rpo(body: &MirFunctionBody) -> Vec<BlockId> {
     let mut visited = HashSet::new();
     let mut postorder = Vec::new();
 
+    // DFS from exception handler blocks FIRST so they appear last in RPO
+    // (after the try body). They're reachable at runtime via the exception
+    // table, not via CFG edges. Seeding them before the entry DFS ensures
+    // they end up in postorder before the entry, which means after the entry
+    // in the reversed RPO.
+    for region in &body.catch_regions {
+        for arm in &region.arms {
+            rpo_dfs(body, arm.handler, &mut visited, &mut postorder);
+        }
+    }
     rpo_dfs(body, body.entry, &mut visited, &mut postorder);
     postorder.reverse();
     postorder

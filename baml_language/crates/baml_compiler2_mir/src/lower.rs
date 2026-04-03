@@ -7,9 +7,9 @@ use indexmap::IndexMap;
 use crate::{
     builder::MirBuilder,
     ir::{
-        AggregateKind, BasicBlock, BinOp, BlockId, CatchRegion, Constant, IndexKind, ItemRef,
-        Local, LocalDecl, MirFunction, MirFunctionBody, MirFunctionKind, Operand, Place, Rvalue,
-        StatementKind, Terminator,
+        AggregateKind, BasicBlock, BinOp, BlockId, CatchArmRegion, CatchRegion, Constant,
+        IndexKind, ItemRef, Local, LocalDecl, MirCatchFilter, MirFunction, MirFunctionBody,
+        MirFunctionKind, Operand, Place, Rvalue, StatementKind, Terminator,
     },
     optimize,
 };
@@ -3338,39 +3338,64 @@ impl LoweringContext<'_> {
         dest: &Place,
     ) {
         let bb_join = self.builder.create_block();
-        let bb_handler = self.builder.create_block();
         let error_local = self.builder.temp(Ty::BuiltinUnknown {
             attr: TyAttr::default(),
         });
-        self.builder
-            .unwind_error_locals
-            .insert(bb_handler, error_local);
 
-        // Check if any catch arm explicitly names a panic type.
-        let catches_panics = clauses.iter().any(|clause| {
-            clause.arms.iter().any(|&arm_id| {
-                let arm = &self.body.catch_arms[arm_id];
-                self.pattern_is_panic_type(arm.pattern)
-            })
-        });
+        // Collect arm info and create per-arm handler blocks.
+        // Each arm gets its own handler (just binding + body, no type dispatch).
+        // Type/value filtering is done by the exception table at runtime.
+        let mut arm_infos: Vec<(AstPatId, AstPatId, AstExprId, BlockId)> = Vec::new();
+        let mut arm_regions: Vec<CatchArmRegion> = Vec::new();
 
-        // Record the catch region for exception table construction.
-        // The body_entry is the current block — the try body will be lowered into
-        // it (and any successor blocks up to the handler).
+        for clause in clauses {
+            for &arm_id in &clause.arms {
+                let arm = self.body.catch_arms[arm_id].clone();
+                let bb_arm = self.builder.create_block();
+                self.builder.unwind_error_locals.insert(bb_arm, error_local);
+
+                // Classify the pattern into one or more (filter, is_panic) pairs.
+                // Union types expand to multiple entries all pointing at the same handler.
+                let filters = self.classify_catch_pattern(arm.pattern);
+                for (filter, is_panic) in filters {
+                    arm_regions.push(CatchArmRegion {
+                        handler: bb_arm,
+                        filter,
+                        is_panic_type: is_panic,
+                    });
+                }
+
+                arm_infos.push((clause.binding, arm.pattern, arm.body, bb_arm));
+            }
+        }
+
+        // Use the first arm's handler as the unwind target for Call/Await
+        // terminators in the try body. Other arm handlers are reachable via
+        // the catch_regions (the optimizer seeds DCE from them).
+        let unwind_target = arm_infos
+            .first()
+            .map(|&(_, _, _, bb)| bb)
+            .unwrap_or_else(|| {
+                // No arms — create a rethrow block as the unwind target
+                let bb = self.builder.create_block();
+                self.builder.unwind_error_locals.insert(bb, error_local);
+                bb
+            });
+
         let body_entry = self.builder.current_block();
         self.builder.catch_regions.push(CatchRegion {
             body_entry,
-            handler: bb_handler,
+            arms: arm_regions,
             error_local,
-            catches_panics,
         });
 
         let prev_catch = self.catch_context.take();
         self.catch_context = Some(CatchContext {
-            unwind_target: bb_handler,
+            unwind_target,
             error_local,
         });
 
+        // Lower the try body.
         self.lower_expr(base, dest.clone());
         if !self.builder.is_current_terminated() {
             self.builder.goto(bb_join);
@@ -3378,51 +3403,124 @@ impl LoweringContext<'_> {
 
         self.catch_context = prev_catch;
 
-        self.builder.set_current_block(bb_handler);
-        for clause in clauses {
-            // Bind the clause's binding pattern to the error local
-            self.bind_pattern(error_local, clause.binding);
-            // Lower each catch arm
-            for &arm_id in &clause.arms {
-                let arm = self.body.catch_arms[arm_id].clone();
-                // Test the arm's pattern against the error local
-                let bb_arm_body = self.builder.create_block();
-                let bb_arm_next = self.builder.create_block();
-                self.lower_pattern_test(error_local, arm.pattern, bb_arm_body, bb_arm_next);
-                self.builder.set_current_block(bb_arm_body);
-                self.bind_pattern(error_local, arm.pattern);
-                self.lower_expr(arm.body, dest.clone());
-                if !self.builder.is_current_terminated() {
-                    self.builder.goto(bb_join);
-                }
-                self.builder.set_current_block(bb_arm_next);
+        // Lower each arm's handler block: just binding + body, no pattern test.
+        for &(clause_binding, arm_pattern, arm_body, bb_arm) in &arm_infos {
+            self.builder.set_current_block(bb_arm);
+            self.bind_pattern(error_local, clause_binding);
+            self.bind_pattern(error_local, arm_pattern);
+            self.lower_expr(arm_body, dest.clone());
+            if !self.builder.is_current_terminated() {
+                self.builder.goto(bb_join);
             }
-        }
-
-        // If no clause matched, re-throw
-        if !self.builder.is_current_terminated() {
-            self.builder.throw(Operand::Copy(Place::Local(error_local)));
         }
 
         self.builder.set_current_block(bb_join);
     }
 
-    /// Check if a pattern's resolved type is a `baml.panics.*` class (or the
-    /// `Panic` type alias). Uses the TIR-resolved type instead of hardcoded
-    /// string lists, so adding a new panic class to `panics.baml` is sufficient.
-    fn pattern_is_panic_type(&self, pat_id: AstPatId) -> bool {
-        if let Some(ty) = self.pat_types.get(&(self.current_scope, pat_id)) {
-            Self::tir_ty_is_panic(ty)
-        } else {
-            false
+    // ─── Catch pattern classification ────────────────────────────────────────
+
+    /// Classify a catch arm pattern into exception table filter entries.
+    ///
+    /// Returns one entry per filter (union types expand to multiple entries,
+    /// all pointing at the same handler). Each entry is `(filter, is_panic)`.
+    fn classify_catch_pattern(&self, pat_id: AstPatId) -> Vec<(MirCatchFilter, bool)> {
+        let pat = self.body.patterns[pat_id].clone();
+        match pat {
+            AstPattern::Binding(ref name) => {
+                if name.as_str() == "_" {
+                    return vec![(MirCatchFilter::Wildcard, false)];
+                }
+                // Bare type sugar: TIR resolved this name to a type.
+                if let Some(tir_ty) = self.pat_types.get(&(self.current_scope, pat_id)) {
+                    return self.classify_tir_catch_type(tir_ty);
+                }
+                // Regular binding with no type info — wildcard.
+                vec![(MirCatchFilter::Wildcard, false)]
+            }
+            AstPattern::TypedBinding { .. } => {
+                if let Some(tir_ty) = self.pat_types.get(&(self.current_scope, pat_id)) {
+                    self.classify_tir_catch_type(tir_ty)
+                } else {
+                    // Fallback: can't classify without TIR type, use wildcard.
+                    vec![(MirCatchFilter::Wildcard, false)]
+                }
+            }
+            AstPattern::Literal(lit) => {
+                vec![(MirCatchFilter::Eq(Self::lower_literal(&lit)), false)]
+            }
+            AstPattern::Null => {
+                vec![(MirCatchFilter::Eq(Constant::Null), false)]
+            }
+            AstPattern::EnumVariant { enum_name, variant } => {
+                let enum_ref = if let Some(Tir2Ty::EnumVariant(qtn, _, _)) =
+                    self.pat_types.get(&(self.current_scope, pat_id))
+                {
+                    ItemRef::EnumType {
+                        package: qtn.package().clone(),
+                        namespace: qtn.namespace().clone(),
+                        name: qtn.name().clone(),
+                    }
+                } else {
+                    let pkg_info = file_package(self.db, self.file);
+                    ItemRef::EnumType {
+                        package: pkg_info.package.clone(),
+                        namespace: pkg_info.namespace_path,
+                        name: enum_name,
+                    }
+                };
+                vec![(
+                    MirCatchFilter::Eq(Constant::EnumVariant { enum_ref, variant }),
+                    false,
+                )]
+            }
+            AstPattern::Union(sub_pats) => sub_pats
+                .iter()
+                .flat_map(|&sub_pat| self.classify_catch_pattern(sub_pat))
+                .collect(),
         }
     }
 
-    fn tir_ty_is_panic(ty: &Tir2Ty) -> bool {
+    /// Classify a TIR type into exception table filter entries.
+    ///
+    /// Handles classes, type aliases (expanding unions like `Panic`),
+    /// primitives, and union types.
+    fn classify_tir_catch_type(&self, ty: &Tir2Ty) -> Vec<(MirCatchFilter, bool)> {
         match ty {
-            Tir2Ty::Class(qtn, _) | Tir2Ty::TypeAlias(qtn, _) => qtn.is_panic_type(),
-            Tir2Ty::Union(members, _) => members.iter().any(Self::tir_ty_is_panic),
-            _ => false,
+            Tir2Ty::Class(qtn, _) => {
+                let display_name = qtn_to_type_name(qtn).display_name.to_string();
+                let is_panic = qtn.is_panic_type();
+                vec![(MirCatchFilter::Class(display_name), is_panic)]
+            }
+            Tir2Ty::TypeAlias(qtn, _) => {
+                // Expand the alias to get its underlying type.
+                if let Some(target) = self.type_aliases.get(qtn) {
+                    self.classify_tir_catch_type(target)
+                } else {
+                    // Unknown alias — treat as class (emitter resolves by name).
+                    let display_name = qtn_to_type_name(qtn).display_name.to_string();
+                    let is_panic = qtn.is_panic_type();
+                    vec![(MirCatchFilter::Class(display_name), is_panic)]
+                }
+            }
+            Tir2Ty::Union(members, _) => members
+                .iter()
+                .flat_map(|m| self.classify_tir_catch_type(m))
+                .collect(),
+            Tir2Ty::Primitive(prim, _) => {
+                let tag = match prim {
+                    PrimitiveType::Int => baml_type::typetag::INT,
+                    PrimitiveType::Float => baml_type::typetag::FLOAT,
+                    PrimitiveType::String => baml_type::typetag::STRING,
+                    PrimitiveType::Bool => baml_type::typetag::BOOL,
+                    PrimitiveType::Null => baml_type::typetag::NULL,
+                    _ => return vec![(MirCatchFilter::Wildcard, false)],
+                };
+                vec![(MirCatchFilter::TypeTag(tag), false)]
+            }
+            Tir2Ty::Enum(_, _) => {
+                vec![(MirCatchFilter::TypeTag(baml_type::typetag::ENUM), false)]
+            }
+            _ => vec![(MirCatchFilter::Wildcard, false)],
         }
     }
 }

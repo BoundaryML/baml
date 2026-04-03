@@ -41,21 +41,12 @@ async fn catch_literal_string_match() {
 
     function main() -> int {
         call user.fails
-        jump L2
-        load_var _1
-        load_const "boom"
-        cmp_op ==
-        pop_jump_if_false L0
-        jump L1
-
-      L0:
+        jump L0
         load_const 2
-        jump L2
-
-      L1:
+        jump L0
         load_const 1
 
-      L2:
+      L0:
         return
     }
     "#);
@@ -86,21 +77,12 @@ async fn catch_literal_string_no_match_falls_to_wildcard() {
 
     function main() -> int {
         call user.fails
-        jump L2
-        load_var _1
-        load_const "boom"
-        cmp_op ==
-        pop_jump_if_false L0
-        jump L1
-
-      L0:
+        jump L0
         load_const 2
-        jump L2
-
-      L1:
+        jump L0
         load_const 1
 
-      L2:
+      L0:
         return
     }
     "#);
@@ -131,21 +113,12 @@ async fn catch_literal_int_match() {
 
     function main() -> int {
         call user.fails
-        jump L2
-        load_var _1
-        load_const 42
-        cmp_op ==
-        pop_jump_if_false L0
-        jump L1
-
-      L0:
+        jump L0
         load_const 2
-        jump L2
-
-      L1:
+        jump L0
         load_const 1
 
-      L2:
+      L0:
         return
     }
     ");
@@ -202,32 +175,14 @@ async fn catch_multiple_literals_dispatch() {
     function main() -> int {
         load_const 1
         call user.fails
-        jump L4
-        load_var _1
-        load_const "alpha"
-        cmp_op ==
-        pop_jump_if_false L0
-        jump L3
-
-      L0:
-        load_var _1
-        load_const "beta"
-        cmp_op ==
-        pop_jump_if_false L1
-        jump L2
-
-      L1:
+        jump L0
         load_const 3
-        jump L4
-
-      L2:
+        jump L0
         load_const 2
-        jump L4
-
-      L3:
+        jump L0
         load_const 1
 
-      L4:
+      L0:
         return
     }
     "#);
@@ -261,22 +216,10 @@ async fn typed_binding_string() {
 
     function main() -> int {
         call user.fails
-        jump L2
-        load_var _1
-        type_tag
+        jump L0
         load_const 1
-        cmp_op ==
-        pop_jump_if_false L0
-        jump L1
 
       L0:
-        load_var _1
-        throw
-
-      L1:
-        load_const 1
-
-      L2:
         return
     }
     "#);
@@ -306,22 +249,10 @@ async fn typed_binding_int() {
 
     function main() -> int {
         call user.fails
-        jump L2
-        load_var _1
-        type_tag
-        load_const 0
-        cmp_op ==
-        pop_jump_if_false L0
-        jump L1
-
-      L0:
-        load_var _1
-        throw
-
-      L1:
+        jump L0
         load_const 1
 
-      L2:
+      L0:
         return
     }
     ");
@@ -365,34 +296,12 @@ async fn typed_binding_dispatch_string_vs_int() {
     function main() -> int {
         load_const 0
         call user.fails
-        jump L4
-        load_var _1
-        type_tag
+        jump L0
+        load_const 2
+        jump L0
         load_const 1
-        cmp_op ==
-        pop_jump_if_false L0
-        jump L3
 
       L0:
-        load_var _1
-        type_tag
-        load_const 0
-        cmp_op ==
-        pop_jump_if_false L1
-        jump L2
-
-      L1:
-        load_var _1
-        throw
-
-      L2:
-        load_const 2
-        jump L4
-
-      L3:
-        load_const 1
-
-      L4:
         return
     }
     "#);
@@ -436,34 +345,12 @@ async fn typed_binding_dispatch_int_vs_string() {
     function main() -> int {
         load_const 1
         call user.fails
-        jump L4
-        load_var _1
-        type_tag
+        jump L0
+        load_const 2
+        jump L0
         load_const 1
-        cmp_op ==
-        pop_jump_if_false L0
-        jump L3
 
       L0:
-        load_var _1
-        type_tag
-        load_const 0
-        cmp_op ==
-        pop_jump_if_false L1
-        jump L2
-
-      L1:
-        load_var _1
-        throw
-
-      L2:
-        load_const 2
-        jump L4
-
-      L3:
-        load_const 1
-
-      L4:
         return
     }
     "#);
@@ -507,22 +394,12 @@ async fn typed_binding_plus_wildcard() {
     function main() -> int {
         load_const 1
         call user.fails
-        jump L2
-        load_var _1
-        type_tag
+        jump L0
+        load_const 2
+        jump L0
         load_const 1
-        cmp_op ==
-        pop_jump_if_false L0
-        jump L1
 
       L0:
-        load_const 2
-        jump L2
-
-      L1:
-        load_const 1
-
-      L2:
         return
     }
     "#);
@@ -570,34 +447,12 @@ async fn named_binding_string_access_value() {
     function main() -> string {
         load_const 0
         call user.fails
-        jump L4
+        jump L0
+        load_const "was int"
+        jump L0
         load_var _1
-        type_tag
-        load_const 1
-        cmp_op ==
-        pop_jump_if_false L0
-        jump L3
 
       L0:
-        load_var _1
-        type_tag
-        load_const 0
-        cmp_op ==
-        pop_jump_if_false L1
-        jump L2
-
-      L1:
-        load_var _1
-        throw
-
-      L2:
-        load_const "was int"
-        jump L4
-
-      L3:
-        load_var _1
-
-      L4:
         return
     }
     "#);
@@ -644,35 +499,13 @@ async fn named_binding_int_access_value() {
     function main() -> int {
         load_const 1
         call user.fails
-        jump L4
+        jump L0
         load_var _1
-        type_tag
-        load_const 1
-        cmp_op ==
-        pop_jump_if_false L0
-        jump L3
-
-      L0:
-        load_var _1
-        type_tag
-        load_const 0
-        cmp_op ==
-        pop_jump_if_false L1
-        jump L2
-
-      L1:
-        load_var _1
-        throw
-
-      L2:
-        load_var _1
-        jump L4
-
-      L3:
+        jump L0
         load_const 1
         unary_op -
 
-      L4:
+      L0:
         return
     }
     "#);
@@ -711,21 +544,10 @@ async fn catch_user_class_single_arm() {
 
     function main() -> int {
         call user.fails
-        jump L2
-        load_var _1
-        load_const NetworkError
-        cmp_op instanceof
-        pop_jump_if_false L0
-        jump L1
-
-      L0:
-        load_var _1
-        throw
-
-      L1:
+        jump L0
         load_const 1
 
-      L2:
+      L0:
         return
     }
     "#);
@@ -778,32 +600,12 @@ async fn catch_two_user_classes_dispatch_first() {
     function main() -> int {
         load_const 0
         call user.fails
-        jump L4
-        load_var _1
-        load_const NetworkError
-        cmp_op instanceof
-        pop_jump_if_false L0
-        jump L3
-
-      L0:
-        load_var _1
-        load_const ParseError
-        cmp_op instanceof
-        pop_jump_if_false L1
-        jump L2
-
-      L1:
-        load_var _1
-        throw
-
-      L2:
+        jump L0
         load_const 2
-        jump L4
-
-      L3:
+        jump L0
         load_const 1
 
-      L4:
+      L0:
         return
     }
     "#);
@@ -856,32 +658,12 @@ async fn catch_two_user_classes_dispatch_second() {
     function main() -> int {
         load_const 1
         call user.fails
-        jump L4
-        load_var _1
-        load_const NetworkError
-        cmp_op instanceof
-        pop_jump_if_false L0
-        jump L3
-
-      L0:
-        load_var _1
-        load_const ParseError
-        cmp_op instanceof
-        pop_jump_if_false L1
-        jump L2
-
-      L1:
-        load_var _1
-        throw
-
-      L2:
+        jump L0
         load_const 2
-        jump L4
-
-      L3:
+        jump L0
         load_const 1
 
-      L4:
+      L0:
         return
     }
     "#);
@@ -930,21 +712,12 @@ async fn catch_user_class_plus_wildcard() {
     function main() -> int {
         load_const 1
         call user.fails
-        jump L2
-        load_var _1
-        load_const NetworkError
-        cmp_op instanceof
-        pop_jump_if_false L0
-        jump L1
-
-      L0:
+        jump L0
         load_const 2
-        jump L2
-
-      L1:
+        jump L0
         load_const 1
 
-      L2:
+      L0:
         return
     }
     "#);
@@ -1027,43 +800,16 @@ async fn catch_three_user_classes_plus_wildcard() {
     function main() -> int {
         load_const 2
         call user.api
-        jump L6
-        load_var _1
-        load_const AuthError
-        cmp_op instanceof
-        pop_jump_if_false L0
-        jump L5
-
-      L0:
-        load_var _1
-        load_const NotFound
-        cmp_op instanceof
-        pop_jump_if_false L1
-        jump L4
-
-      L1:
-        load_var _1
-        load_const RateLimit
-        cmp_op instanceof
-        pop_jump_if_false L2
-        jump L3
-
-      L2:
+        jump L0
         load_const 4
-        jump L6
-
-      L3:
+        jump L0
         load_const 3
-        jump L6
-
-      L4:
+        jump L0
         load_const 2
-        jump L6
-
-      L5:
+        jump L0
         load_const 1
 
-      L6:
+      L0:
         return
     }
     "#);
@@ -1102,22 +848,11 @@ async fn named_class_binding_access_field() {
 
     function main() -> string {
         call user.fails
-        jump L2
-        load_var _1
-        load_const NetworkError
-        cmp_op instanceof
-        pop_jump_if_false L0
-        jump L1
-
-      L0:
-        load_var _1
-        throw
-
-      L1:
+        jump L0
         load_var _1
         load_field .url
 
-      L2:
+      L0:
         return
     }
     "#);
@@ -1173,34 +908,14 @@ async fn named_class_binding_dispatch_access_fields() {
     function main() -> string {
         load_const 1
         call user.fails
-        jump L4
-        load_var _1
-        load_const NetworkError
-        cmp_op instanceof
-        pop_jump_if_false L0
-        jump L3
-
-      L0:
-        load_var _1
-        load_const ParseError
-        cmp_op instanceof
-        pop_jump_if_false L1
-        jump L2
-
-      L1:
-        load_var _1
-        throw
-
-      L2:
+        jump L0
         load_var _1
         load_field .message
-        jump L4
-
-      L3:
+        jump L0
         load_var _1
         load_field .url
 
-      L4:
+      L0:
         return
     }
     "#);
@@ -1242,21 +957,10 @@ async fn bare_class_single_arm() {
 
     function main() -> int {
         call user.fails
-        jump L2
-        load_var _1
-        load_const NetworkError
-        cmp_op instanceof
-        pop_jump_if_false L0
-        jump L1
-
-      L0:
-        load_var _1
-        throw
-
-      L1:
+        jump L0
         load_const 1
 
-      L2:
+      L0:
         return
     }
     "#);
@@ -1309,32 +1013,12 @@ async fn bare_class_dispatch_first() {
     function main() -> int {
         load_const 0
         call user.fails
-        jump L4
-        load_var _1
-        load_const NetworkError
-        cmp_op instanceof
-        pop_jump_if_false L0
-        jump L3
-
-      L0:
-        load_var _1
-        load_const ParseError
-        cmp_op instanceof
-        pop_jump_if_false L1
-        jump L2
-
-      L1:
-        load_var _1
-        throw
-
-      L2:
+        jump L0
         load_const 2
-        jump L4
-
-      L3:
+        jump L0
         load_const 1
 
-      L4:
+      L0:
         return
     }
     "#);
@@ -1387,32 +1071,12 @@ async fn bare_class_dispatch_second() {
     function main() -> int {
         load_const 1
         call user.fails
-        jump L4
-        load_var _1
-        load_const NetworkError
-        cmp_op instanceof
-        pop_jump_if_false L0
-        jump L3
-
-      L0:
-        load_var _1
-        load_const ParseError
-        cmp_op instanceof
-        pop_jump_if_false L1
-        jump L2
-
-      L1:
-        load_var _1
-        throw
-
-      L2:
+        jump L0
         load_const 2
-        jump L4
-
-      L3:
+        jump L0
         load_const 1
 
-      L4:
+      L0:
         return
     }
     "#);
@@ -1461,21 +1125,12 @@ async fn bare_class_plus_wildcard() {
     function main() -> int {
         load_const 0
         call user.fails
-        jump L2
-        load_var _1
-        load_const NetworkError
-        cmp_op instanceof
-        pop_jump_if_false L0
-        jump L1
-
-      L0:
+        jump L0
         load_const 2
-        jump L2
-
-      L1:
+        jump L0
         load_const 1
 
-      L2:
+      L0:
         return
     }
     "#);
@@ -1524,21 +1179,12 @@ async fn bare_class_plus_wildcard_wildcard_fires() {
     function main() -> int {
         load_const 1
         call user.fails
-        jump L2
-        load_var _1
-        load_const NetworkError
-        cmp_op instanceof
-        pop_jump_if_false L0
-        jump L1
-
-      L0:
+        jump L0
         load_const 2
-        jump L2
-
-      L1:
+        jump L0
         load_const 1
 
-      L2:
+      L0:
         return
     }
     "#);
@@ -1620,22 +1266,11 @@ async fn catch_division_by_zero() {
 
     function main() -> int {
         call user.divides
-        jump L2
-        load_var _1
-        load_const baml.panics.DivisionByZero
-        cmp_op instanceof
-        pop_jump_if_false L0
-        jump L1
-
-      L0:
-        load_var _1
-        throw
-
-      L1:
+        jump L0
         load_const 1
         unary_op -
 
-      L2:
+      L0:
         return
     }
     ");
@@ -1656,22 +1291,11 @@ async fn catch_index_out_of_bounds() {
     insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         call user.oob
-        jump L2
-        load_var _1
-        load_const baml.panics.IndexOutOfBounds
-        cmp_op instanceof
-        pop_jump_if_false L0
-        jump L1
-
-      L0:
-        load_var _1
-        throw
-
-      L1:
+        jump L0
         load_const 1
         unary_op -
 
-      L2:
+      L0:
         return
     }
 
@@ -1710,22 +1334,11 @@ async fn catch_map_key_not_found() {
 
     function main() -> int {
         call user.bad
-        jump L2
-        load_var _1
-        load_const baml.panics.MapKeyNotFound
-        cmp_op instanceof
-        pop_jump_if_false L0
-        jump L1
-
-      L0:
-        load_var _1
-        throw
-
-      L1:
+        jump L0
         load_const 1
         unary_op -
 
-      L2:
+      L0:
         return
     }
     "#);
@@ -1756,22 +1369,11 @@ async fn catch_negative_index_as_index_out_of_bounds() {
 
     function main() -> int {
         call user.bad
-        jump L2
-        load_var _1
-        load_const baml.panics.IndexOutOfBounds
-        cmp_op instanceof
-        pop_jump_if_false L0
-        jump L1
-
-      L0:
-        load_var _1
-        throw
-
-      L1:
+        jump L0
         load_const 1
         unary_op -
 
-      L2:
+      L0:
         return
     }
     ");
@@ -1805,22 +1407,11 @@ async fn named_panic_binding_division_by_zero_field() {
 
     function main() -> int {
         call user.divides
-        jump L2
-        load_var _1
-        load_const baml.panics.DivisionByZero
-        cmp_op instanceof
-        pop_jump_if_false L0
-        jump L1
-
-      L0:
-        load_var _1
-        throw
-
-      L1:
+        jump L0
         load_var _1
         load_field .dividend
 
-      L2:
+      L0:
         return
     }
     ");
@@ -1843,22 +1434,11 @@ async fn named_panic_binding_index_out_of_bounds_fields() {
     insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         call user.oob
-        jump L2
-        load_var _1
-        load_const baml.panics.IndexOutOfBounds
-        cmp_op instanceof
-        pop_jump_if_false L0
-        jump L1
-
-      L0:
-        load_var _1
-        throw
-
-      L1:
+        jump L0
         load_var _1
         load_field .index
 
-      L2:
+      L0:
         return
     }
 
@@ -1891,22 +1471,11 @@ async fn named_panic_binding_index_out_of_bounds_length() {
     insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         call user.oob
-        jump L2
-        load_var _1
-        load_const baml.panics.IndexOutOfBounds
-        cmp_op instanceof
-        pop_jump_if_false L0
-        jump L1
-
-      L0:
-        load_var _1
-        throw
-
-      L1:
+        jump L0
         load_var _1
         load_field .length
 
-      L2:
+      L0:
         return
     }
 
@@ -1948,22 +1517,11 @@ async fn named_panic_binding_map_key_not_found_field() {
 
     function main() -> string {
         call user.bad
-        jump L2
-        load_var _1
-        load_const baml.panics.MapKeyNotFound
-        cmp_op instanceof
-        pop_jump_if_false L0
-        jump L1
-
-      L0:
-        load_var _1
-        throw
-
-      L1:
+        jump L0
         load_var _1
         load_field .key
 
-      L2:
+      L0:
         return
     }
     "#);
@@ -2102,21 +1660,12 @@ async fn panic_arm_plus_wildcard_panic_fires() {
     function main() -> int {
         load_const 0
         call user.risky
-        jump L2
-        load_var _1
-        load_const baml.panics.DivisionByZero
-        cmp_op instanceof
-        pop_jump_if_false L0
-        jump L1
-
-      L0:
+        jump L0
         load_const 2
-        jump L2
-
-      L1:
+        jump L0
         load_const 1
 
-      L2:
+      L0:
         return
     }
 
@@ -2162,21 +1711,12 @@ async fn panic_arm_plus_wildcard_user_error_fires() {
     function main() -> int {
         load_const 999
         call user.risky
-        jump L2
-        load_var _1
-        load_const baml.panics.DivisionByZero
-        cmp_op instanceof
-        pop_jump_if_false L0
-        jump L1
-
-      L0:
+        jump L0
         load_const 2
-        jump L2
-
-      L1:
+        jump L0
         load_const 1
 
-      L2:
+      L0:
         return
     }
 
@@ -2222,23 +1762,14 @@ async fn panic_arm_plus_wildcard_no_error() {
     function main() -> int {
         load_const 5
         call user.risky
-        jump L2
-        load_var _1
-        load_const baml.panics.DivisionByZero
-        cmp_op instanceof
-        pop_jump_if_false L0
-        jump L1
-
-      L0:
+        jump L0
         load_const 2
         unary_op -
-        jump L2
-
-      L1:
+        jump L0
         load_const 1
         unary_op -
 
-      L2:
+      L0:
         return
     }
 
@@ -2292,32 +1823,14 @@ async fn user_class_plus_panic_plus_wildcard_class_fires() {
     function main() -> int {
         load_const 0
         call user.risky
-        jump L4
-        load_var _1
-        load_const AppError
-        cmp_op instanceof
-        pop_jump_if_false L0
-        jump L3
-
-      L0:
-        load_var _1
-        load_const baml.panics.DivisionByZero
-        cmp_op instanceof
-        pop_jump_if_false L1
-        jump L2
-
-      L1:
+        jump L0
         load_const 3
-        jump L4
-
-      L2:
+        jump L0
         load_const 2
-        jump L4
-
-      L3:
+        jump L0
         load_const 1
 
-      L4:
+      L0:
         return
     }
 
@@ -2383,32 +1896,14 @@ async fn user_class_plus_panic_plus_wildcard_panic_fires() {
     function main() -> int {
         load_const 1
         call user.risky
-        jump L4
-        load_var _1
-        load_const AppError
-        cmp_op instanceof
-        pop_jump_if_false L0
-        jump L3
-
-      L0:
-        load_var _1
-        load_const baml.panics.DivisionByZero
-        cmp_op instanceof
-        pop_jump_if_false L1
-        jump L2
-
-      L1:
+        jump L0
         load_const 3
-        jump L4
-
-      L2:
+        jump L0
         load_const 2
-        jump L4
-
-      L3:
+        jump L0
         load_const 1
 
-      L4:
+      L0:
         return
     }
 
@@ -2479,32 +1974,14 @@ async fn user_class_plus_panic_plus_wildcard_string_fires() {
     function main() -> int {
         load_const 2
         call user.risky
-        jump L4
-        load_var _1
-        load_const AppError
-        cmp_op instanceof
-        pop_jump_if_false L0
-        jump L3
-
-      L0:
-        load_var _1
-        load_const baml.panics.DivisionByZero
-        cmp_op instanceof
-        pop_jump_if_false L1
-        jump L2
-
-      L1:
+        jump L0
         load_const 3
-        jump L4
-
-      L2:
+        jump L0
         load_const 2
-        jump L4
-
-      L3:
+        jump L0
         load_const 1
 
-      L4:
+      L0:
         return
     }
 
@@ -2589,43 +2066,16 @@ async fn four_arms_division_by_zero_fires() {
     function main() -> int {
         load_const 0
         call user.risky
-        jump L6
-        load_var _1
-        load_const baml.panics.DivisionByZero
-        cmp_op instanceof
-        pop_jump_if_false L0
-        jump L5
-
-      L0:
-        load_var _1
-        load_const baml.panics.IndexOutOfBounds
-        cmp_op instanceof
-        pop_jump_if_false L1
-        jump L4
-
-      L1:
-        load_var _1
-        load_const AppError
-        cmp_op instanceof
-        pop_jump_if_false L2
-        jump L3
-
-      L2:
+        jump L0
         load_const 4
-        jump L6
-
-      L3:
+        jump L0
         load_const 3
-        jump L6
-
-      L4:
+        jump L0
         load_const 2
-        jump L6
-
-      L5:
+        jump L0
         load_const 1
 
-      L6:
+      L0:
         return
     }
 
@@ -2719,43 +2169,16 @@ async fn four_arms_index_out_of_bounds_fires() {
     function main() -> int {
         load_const 1
         call user.risky
-        jump L6
-        load_var _1
-        load_const baml.panics.DivisionByZero
-        cmp_op instanceof
-        pop_jump_if_false L0
-        jump L5
-
-      L0:
-        load_var _1
-        load_const baml.panics.IndexOutOfBounds
-        cmp_op instanceof
-        pop_jump_if_false L1
-        jump L4
-
-      L1:
-        load_var _1
-        load_const AppError
-        cmp_op instanceof
-        pop_jump_if_false L2
-        jump L3
-
-      L2:
+        jump L0
         load_const 4
-        jump L6
-
-      L3:
+        jump L0
         load_const 3
-        jump L6
-
-      L4:
+        jump L0
         load_const 2
-        jump L6
-
-      L5:
+        jump L0
         load_const 1
 
-      L6:
+      L0:
         return
     }
 
@@ -2849,43 +2272,16 @@ async fn four_arms_user_class_fires() {
     function main() -> int {
         load_const 2
         call user.risky
-        jump L6
-        load_var _1
-        load_const baml.panics.DivisionByZero
-        cmp_op instanceof
-        pop_jump_if_false L0
-        jump L5
-
-      L0:
-        load_var _1
-        load_const baml.panics.IndexOutOfBounds
-        cmp_op instanceof
-        pop_jump_if_false L1
-        jump L4
-
-      L1:
-        load_var _1
-        load_const AppError
-        cmp_op instanceof
-        pop_jump_if_false L2
-        jump L3
-
-      L2:
+        jump L0
         load_const 4
-        jump L6
-
-      L3:
+        jump L0
         load_const 3
-        jump L6
-
-      L4:
+        jump L0
         load_const 2
-        jump L6
-
-      L5:
+        jump L0
         load_const 1
 
-      L6:
+      L0:
         return
     }
 
@@ -2979,43 +2375,16 @@ async fn four_arms_wildcard_fires() {
     function main() -> int {
         load_const 3
         call user.risky
-        jump L6
-        load_var _1
-        load_const baml.panics.DivisionByZero
-        cmp_op instanceof
-        pop_jump_if_false L0
-        jump L5
-
-      L0:
-        load_var _1
-        load_const baml.panics.IndexOutOfBounds
-        cmp_op instanceof
-        pop_jump_if_false L1
-        jump L4
-
-      L1:
-        load_var _1
-        load_const AppError
-        cmp_op instanceof
-        pop_jump_if_false L2
-        jump L3
-
-      L2:
+        jump L0
         load_const 4
-        jump L6
-
-      L3:
+        jump L0
         load_const 3
-        jump L6
-
-      L4:
+        jump L0
         load_const 2
-        jump L6
-
-      L5:
+        jump L0
         load_const 1
 
-      L6:
+      L0:
         return
     }
 
@@ -3110,43 +2479,16 @@ async fn four_arms_no_error() {
     function main() -> int {
         load_const 4
         call user.risky
-        jump L6
-        load_var _1
-        load_const baml.panics.DivisionByZero
-        cmp_op instanceof
-        pop_jump_if_false L0
-        jump L5
-
-      L0:
-        load_var _1
-        load_const baml.panics.IndexOutOfBounds
-        cmp_op instanceof
-        pop_jump_if_false L1
-        jump L4
-
-      L1:
-        load_var _1
-        load_const AppError
-        cmp_op instanceof
-        pop_jump_if_false L2
-        jump L3
-
-      L2:
+        jump L0
         load_const 4
-        jump L6
-
-      L3:
+        jump L0
         load_const 3
-        jump L6
-
-      L4:
+        jump L0
         load_const 2
-        jump L6
-
-      L5:
+        jump L0
         load_const 1
 
-      L6:
+      L0:
         return
     }
 
@@ -3261,22 +2603,11 @@ async fn wrong_panic_pattern_propagates() {
 
     function main() -> int {
         call user.divides
-        jump L2
-        load_var _1
-        load_const baml.panics.IndexOutOfBounds
-        cmp_op instanceof
-        pop_jump_if_false L0
-        jump L1
-
-      L0:
-        load_var _1
-        throw
-
-      L1:
+        jump L0
         load_const 1
         unary_op -
 
-      L2:
+      L0:
         return
     }
     ");
@@ -3311,57 +2642,11 @@ async fn panic_alias_catches_any_panic() {
 
     function main() -> int {
         call user.divides
-        jump L7
-        load_var _1
-        load_const baml.panics.DivisionByZero
-        cmp_op instanceof
-        pop_jump_if_false L0
-        jump L6
-
-      L0:
-        load_var _1
-        load_const baml.panics.IndexOutOfBounds
-        cmp_op instanceof
-        pop_jump_if_false L1
-        jump L6
-
-      L1:
-        load_var _1
-        load_const baml.panics.MapKeyNotFound
-        cmp_op instanceof
-        pop_jump_if_false L2
-        jump L6
-
-      L2:
-        load_var _1
-        load_const baml.panics.StackOverflow
-        cmp_op instanceof
-        pop_jump_if_false L3
-        jump L6
-
-      L3:
-        load_var _1
-        load_const baml.panics.AssertionFailed
-        cmp_op instanceof
-        pop_jump_if_false L4
-        jump L6
-
-      L4:
-        load_var _1
-        load_const baml.panics.Unreachable
-        cmp_op instanceof
-        pop_jump_if_false L5
-        jump L6
-
-      L5:
-        load_var _1
-        throw
-
-      L6:
+        jump L0
         load_const 1
         unary_op -
 
-      L7:
+      L0:
         return
     }
     ");
@@ -3389,56 +2674,12 @@ async fn panic_alias_plus_wildcard_dispatch() {
     function main() -> int {
         load_const 0
         call user.risky
-        jump L7
-        load_var _1
-        load_const baml.panics.DivisionByZero
-        cmp_op instanceof
-        pop_jump_if_false L0
-        jump L6
-
-      L0:
-        load_var _1
-        load_const baml.panics.IndexOutOfBounds
-        cmp_op instanceof
-        pop_jump_if_false L1
-        jump L6
-
-      L1:
-        load_var _1
-        load_const baml.panics.MapKeyNotFound
-        cmp_op instanceof
-        pop_jump_if_false L2
-        jump L6
-
-      L2:
-        load_var _1
-        load_const baml.panics.StackOverflow
-        cmp_op instanceof
-        pop_jump_if_false L3
-        jump L6
-
-      L3:
-        load_var _1
-        load_const baml.panics.AssertionFailed
-        cmp_op instanceof
-        pop_jump_if_false L4
-        jump L6
-
-      L4:
-        load_var _1
-        load_const baml.panics.Unreachable
-        cmp_op instanceof
-        pop_jump_if_false L5
-        jump L6
-
-      L5:
+        jump L0
         load_const 2
-        jump L7
-
-      L6:
+        jump L0
         load_const 1
 
-      L7:
+      L0:
         return
     }
 
@@ -3546,23 +2787,12 @@ async fn nested_inner_catches_panic_outer_catches_rethrow() {
     function middle() -> int {
         call user.divides
         store_var x
-        jump L2
-        load_var _2
-        load_const baml.panics.DivisionByZero
-        cmp_op instanceof
-        pop_jump_if_false L0
-        jump L1
-
-      L0:
-        load_var _2
-        throw
-
-      L1:
+        jump L0
         load_const 1
         unary_op -
         store_var x
 
-      L2:
+      L0:
         load_const "recovered but failing"
         throw
     }
@@ -3602,12 +2832,9 @@ async fn rethrow_propagates_to_outer() {
 
     function middle() -> int {
         call user.inner
-        jump L0
+        return
         load_const "rethrown"
         throw
-
-      L0:
-        return
     }
     "#);
     assert_eq!(output.result, Ok(BexExternalValue::Int(99)));
@@ -3739,22 +2966,11 @@ async fn caught_panic_has_accessible_fields() {
     insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         call user.oob
-        jump L2
-        load_var _1
-        load_const baml.panics.IndexOutOfBounds
-        cmp_op instanceof
-        pop_jump_if_false L0
-        jump L1
-
-      L0:
-        load_var _1
-        throw
-
-      L1:
+        jump L0
         load_var _1
         load_field .index
 
-      L2:
+      L0:
         return
     }
 

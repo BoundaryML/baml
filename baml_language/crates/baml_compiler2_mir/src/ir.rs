@@ -13,21 +13,52 @@ use baml_type::Ty;
 // Function
 // ============================================================================
 
+/// Type filter for a catch arm at the MIR level.
+///
+/// Determines what kind of exception table entry the emitter will produce.
+/// Class names are symbolic here; the emitter resolves them to `ObjectIndex`.
+#[derive(Debug, Clone)]
+pub enum MirCatchFilter {
+    /// Wildcard `_ =>` — no type test, matches any thrown value.
+    Wildcard,
+    /// Specific class: `_: NetworkError =>`, `DivisionByZero =>`.
+    /// Carries the display name for resolution to `ObjectIndex` in emit.
+    Class(String),
+    /// Primitive type tag: `_: string =>`, `_: int =>`.
+    TypeTag(i64),
+    /// Equality check against a constant: `"boom" =>`, `42 =>`, `null =>`.
+    /// The emitter puts the constant in the constant pool; the VM does an
+    /// equality check during the exception table scan.
+    Eq(Constant),
+}
+
+/// One arm of a catch expression, as recorded in the MIR.
+///
+/// Each arm becomes one or more exception table entries (union types expand
+/// to N entries pointing at the same handler block).
+#[derive(Debug, Clone)]
+pub struct CatchArmRegion {
+    /// Handler block for this arm's body.
+    pub handler: BlockId,
+    /// Type filter for this arm.
+    pub filter: MirCatchFilter,
+    /// Whether this arm catches a panic type (`baml.panics.*`).
+    pub is_panic_type: bool,
+}
+
 /// A catch region recorded during MIR lowering.
 ///
-/// Describes the try-body entry block and the handler block for a `catch`
-/// expression. The emitter uses this to build the bytecode exception table.
+/// Describes the try-body entry block and the per-arm handler blocks for a
+/// `catch` expression. The emitter uses this to build the bytecode exception
+/// table — one entry per arm (or per union member for expanded types).
 #[derive(Debug, Clone)]
 pub struct CatchRegion {
     /// First block of the try body.
     pub body_entry: BlockId,
-    /// Handler block that receives the exception.
-    pub handler: BlockId,
+    /// Per-arm handler info. Ordered by source arm order (first match wins).
+    pub arms: Vec<CatchArmRegion>,
     /// Frame-local slot for the caught error value.
     pub error_local: Local,
-    /// Whether any catch arm explicitly names a panic type.
-    /// When `false`, the VM skips this handler for runtime panics.
-    pub catches_panics: bool,
 }
 
 /// The bytecode body of a MIR function — blocks, locals, and associated data.

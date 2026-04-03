@@ -55,11 +55,20 @@ pub(crate) fn optimize_function_body(body: &mut MirFunctionBody) {
 
 /// Phase 1: Remove unreachable blocks via BFS from entry.
 fn eliminate_dead_blocks(body: &mut MirFunctionBody) {
-    // BFS to find all reachable blocks
+    // BFS to find all reachable blocks. Seed with entry AND exception
+    // handler blocks — they're reachable at runtime via the exception table
+    // even though they have no incoming CFG edges.
     let mut reachable = HashSet::new();
     let mut queue = VecDeque::new();
     queue.push_back(body.entry);
     reachable.insert(body.entry);
+    for region in &body.catch_regions {
+        for arm in &region.arms {
+            if reachable.insert(arm.handler) {
+                queue.push_back(arm.handler);
+            }
+        }
+    }
 
     while let Some(block_id) = queue.pop_front() {
         if let Some(term) = &body.blocks[block_id.0].terminator {
@@ -112,8 +121,10 @@ fn eliminate_dead_blocks(body: &mut MirFunctionBody) {
         if let Some(new_block) = old_to_new[region.body_entry.0] {
             region.body_entry = new_block;
         }
-        if let Some(new_block) = old_to_new[region.handler.0] {
-            region.handler = new_block;
+        for arm in &mut region.arms {
+            if let Some(new_block) = old_to_new[arm.handler.0] {
+                arm.handler = new_block;
+            }
         }
     }
 
@@ -1191,11 +1202,13 @@ fn verify_mir(body: &MirFunctionBody, name: &crate::ItemRef) {
             "dangling body_entry {:?} in catch_region[{i}] of MIR function {name}",
             region.body_entry,
         );
-        assert!(
-            region.handler.0 < num_blocks,
-            "dangling handler {:?} in catch_region[{i}] of MIR function {name}",
-            region.handler,
-        );
+        for (j, arm) in region.arms.iter().enumerate() {
+            assert!(
+                arm.handler.0 < num_blocks,
+                "dangling handler {:?} in catch_region[{i}].arms[{j}] of MIR function {name}",
+                arm.handler,
+            );
+        }
         assert!(
             region.error_local.0 < num_locals,
             "dangling error_local {} in catch_region[{i}] of MIR function {name}",
@@ -1228,10 +1241,16 @@ fn reorder_blocks_rpo(body: &mut MirFunctionBody) {
         return;
     }
 
-    // Compute RPO via iterative DFS
+    // Compute RPO via iterative DFS. Seed with entry AND exception handler
+    // blocks (reachable at runtime via exception table, not CFG edges).
     let mut visited = vec![false; num_blocks];
     let mut post_order: Vec<BlockId> = Vec::with_capacity(num_blocks);
     let mut stack: Vec<(BlockId, bool)> = vec![(body.entry, false)];
+    for region in &body.catch_regions {
+        for arm in &region.arms {
+            stack.push((arm.handler, false));
+        }
+    }
 
     while let Some((block_id, processed)) = stack.pop() {
         if processed {
@@ -1297,8 +1316,10 @@ fn reorder_blocks_rpo(body: &mut MirFunctionBody) {
         if let Some(new_block) = old_to_new[region.body_entry.0] {
             region.body_entry = new_block;
         }
-        if let Some(new_block) = old_to_new[region.handler.0] {
-            region.handler = new_block;
+        for arm in &mut region.arms {
+            if let Some(new_block) = old_to_new[arm.handler.0] {
+                arm.handler = new_block;
+            }
         }
     }
 
