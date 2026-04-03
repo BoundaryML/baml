@@ -1,15 +1,28 @@
-//! Vertex AI authentication.
+//! Vertex AI authentication and `project_id` resolution.
 //!
-//! On native, uses the `google-cloud-auth` crate (with IO passthrough) for
-//! Application Default Credentials and service account key auth.
+//! Credentials are resolved once via [`resolve_credentials`], then used for
+//! both access token and `project_id` (single-source principle).
 //!
-//! On WASM, `google-cloud-auth` cannot be used because it depends on tokio
-//! features (`fs`, `process`) that pull in `mio`, which does not compile on
-//! `wasm32-unknown-unknown`. So on WASM we implement service account JWT auth
-//! manually using pure-Rust crypto (`rsa` + `sha2`): parse the PKCS8 key,
-//! sign a JWT with RSASSA-PKCS1-v1_5/SHA-256, and exchange it for an access
-//! token via `HttpSendFn`. ADC is not supported on WASM -- explicit
-//! credentials are required.
+//! ## Credential resolution order
+//!
+//! 1. `options.credentials_content` -- inline service account JSON
+//! 2. `options.credentials` -- inline JSON or file path
+//! 3. `GOOGLE_APPLICATION_CREDENTIALS` env var -- inline JSON (file paths
+//!    are deferred to ADC on native)
+//! 4. `GOOGLE_APPLICATION_CREDENTIALS_CONTENT` env var (BAML-specific)
+//! 5. ADC via `google-cloud-auth` (native only -- covers ADC config file,
+//!    `GOOGLE_APPLICATION_CREDENTIALS` file paths, metadata server)
+//! 6. `gcloud` CLI
+//!
+//! ## Platform differences
+//!
+//! On native, service account tokens use `google-cloud-auth`; ADC and
+//! `gcloud` CLI are available.
+//!
+//! On WASM, `google-cloud-auth` cannot be used (depends on tokio features
+//! that don't compile on wasm32). Service account tokens are generated via
+//! pure-Rust JWT signing (`rsa` + `sha2`). ADC and `gcloud` CLI are not
+//! available; credentials must be provided explicitly or via env vars.
 
 use crate::{
     BuildRequestCallbacks,
@@ -22,6 +35,12 @@ use crate::{
 // ---------------------------------------------------------------------------
 
 /// Add Google Cloud `OAuth2` auth headers to a Vertex AI request.
+///
+/// Also resolves `project_id` in the URL if it contains the placeholder
+/// (i.e. `project_id` was not known at URL construction time).
+///
+/// Credentials are resolved once, then used for both token and `project_id`
+/// (matching the old engine's single-source principle).
 pub(crate) async fn auth_vertex(
     request: &mut HttpRequest,
     client: &PrimitiveClient,
@@ -37,7 +56,31 @@ pub(crate) async fn auth_vertex(
         _ => None,
     };
 
-    let token = resolve_token(vertex_opts.as_ref(), callbacks).await?;
+    // Resolve credentials once.
+    let creds = resolve_credentials(vertex_opts.as_ref(), callbacks).await?;
+
+    // Resolve project_id placeholder in the URL if needed.
+    if request
+        .url
+        .contains(crate::build_request::google::VERTEX_PROJECT_ID_PLACEHOLDER)
+    {
+        let project_id = project_id_from_credentials(&creds, callbacks)
+            .await
+            .ok_or_else(|| {
+                BuildRequestError::Other(
+                    "Could not resolve project_id for Vertex AI. Set options.project_id, \
+                     the GOOGLE_CLOUD_PROJECT env var, or provide credentials containing \
+                     a project_id."
+                        .to_string(),
+                )
+            })?;
+        request.url = request.url.replace(
+            crate::build_request::google::VERTEX_PROJECT_ID_PLACEHOLDER,
+            &project_id,
+        );
+    }
+
+    let token = token_from_credentials(&creds, callbacks).await?;
 
     request
         .headers
@@ -46,32 +89,287 @@ pub(crate) async fn auth_vertex(
     Ok(())
 }
 
-/// Resolve an access token from explicit credentials or ADC.
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/// Unwrap double-quoted JSON strings (e.g. from Vercel `env pull`).
+///
+/// Some environments store JSON credentials as a JSON string value with escaped
+/// inner quotes: `"{\"type\":\"service_account\",...}"`. This function detects
+/// that and unwraps to the inner JSON object string.
+fn try_unwrap_quoted_json(s: String) -> String {
+    if s.starts_with('"') {
+        if let Ok(serde_json::Value::String(inner)) = serde_json::from_str::<serde_json::Value>(&s)
+        {
+            return inner;
+        }
+    }
+    s
+}
+
+/// Extract `project_id` from a JSON string (service account credentials).
+fn extract_project_id_from_json(json_str: &str) -> Option<String> {
+    serde_json::from_str::<serde_json::Value>(json_str)
+        .ok()
+        .and_then(|v| v.get("project_id")?.as_str().map(String::from))
+}
+
+// ---------------------------------------------------------------------------
+// Credential resolution (single source for both token and project_id)
+// ---------------------------------------------------------------------------
+
+/// The resolved credential source.
+///
+/// Matches the old engine's auth strategy: one source is selected, then
+/// used for both token and `project_id`.
+enum ResolvedCredentials {
+    /// Service account JSON (inline or read from file/env var).
+    ServiceAccountJson(String),
+    /// ADC via `google-cloud-auth` (native only).
+    /// Covers `~/.config/gcloud/application_default_credentials.json`,
+    /// `GOOGLE_APPLICATION_CREDENTIALS`, and the metadata server.
+    #[allow(dead_code)] // constructed only on native (behind cfg)
+    Adc,
+    /// gcloud CLI fallback.
+    GcloudCli,
+}
+
+/// Resolve which credential source to use.
 ///
 /// Resolution order:
-/// 1. `credentials_content` -- inline service account JSON
-/// 2. `credentials` -- if valid JSON, treat as inline; otherwise file path
-/// 3. ADC (native only)
-async fn resolve_token(
+/// 1. `credentials_content` option
+/// 2. `credentials` option (inline JSON or file path)
+/// 3. `GOOGLE_APPLICATION_CREDENTIALS` env var (inline JSON; file paths deferred to ADC)
+/// 4. `GOOGLE_APPLICATION_CREDENTIALS_CONTENT` env var (BAML-specific)
+/// 5. ADC via google-cloud-auth (native only)
+/// 6. `gcloud` CLI
+async fn resolve_credentials(
     vertex_opts: Option<&VertexAiOptions>,
     callbacks: Option<&BuildRequestCallbacks>,
-) -> Result<String, BuildRequestError> {
-    // credentials_content: always inline JSON.
+) -> Result<ResolvedCredentials, BuildRequestError> {
+    // 1. credentials_content: always inline JSON.
     if let Some(json_str) = vertex_opts.and_then(|o| o.credentials_content.as_ref()) {
-        return token_from_service_account_json(json_str, callbacks).await;
+        return Ok(ResolvedCredentials::ServiceAccountJson(json_str.clone()));
     }
 
-    // credentials: inline JSON or file path.
+    // 2. credentials: inline JSON or file path.
     if let Some(creds) = vertex_opts.and_then(|o| o.credentials.as_ref()) {
         if serde_json::from_str::<serde_json::Value>(creds).is_ok() {
-            return token_from_service_account_json(creds, callbacks).await;
+            return Ok(ResolvedCredentials::ServiceAccountJson(creds.clone()));
         }
         let json_str = read_credentials_file(creds, callbacks).await?;
-        return token_from_service_account_json(&json_str, callbacks).await;
+        return Ok(ResolvedCredentials::ServiceAccountJson(json_str));
     }
 
-    // No explicit credentials -- fall back to ADC (native only).
-    token_from_adc(callbacks).await
+    if let Some(cb) = callbacks {
+        // 3. GOOGLE_APPLICATION_CREDENTIALS env var.
+        // Inline JSON is handled here; file paths are deferred to ADC (step 5).
+        if let Ok(Some(val)) = (cb.env_read)("GOOGLE_APPLICATION_CREDENTIALS".to_string()).await {
+            let val = try_unwrap_quoted_json(val);
+            if !val.is_empty() && serde_json::from_str::<serde_json::Value>(&val).is_ok() {
+                return Ok(ResolvedCredentials::ServiceAccountJson(val));
+            }
+        }
+
+        // 4. GOOGLE_APPLICATION_CREDENTIALS_CONTENT env var (BAML-specific).
+        if let Ok(Some(val)) =
+            (cb.env_read)("GOOGLE_APPLICATION_CREDENTIALS_CONTENT".to_string()).await
+        {
+            let val = try_unwrap_quoted_json(val);
+            if !val.is_empty() && serde_json::from_str::<serde_json::Value>(&val).is_ok() {
+                return Ok(ResolvedCredentials::ServiceAccountJson(val));
+            }
+        }
+    }
+
+    // 5. ADC via google-cloud-auth (native only).
+    #[cfg(not(target_arch = "wasm32"))]
+    if callbacks.is_some() {
+        if native::build_from_adc(callbacks).is_ok() {
+            return Ok(ResolvedCredentials::Adc);
+        }
+    }
+
+    // 6. gcloud CLI.
+    if let Some(cb) = callbacks {
+        if (cb.shell)("gcloud auth print-access-token --quiet 2>/dev/null".to_string())
+            .await
+            .is_ok_and(|out| !out.trim().is_empty())
+        {
+            return Ok(ResolvedCredentials::GcloudCli);
+        }
+    }
+
+    Err(BuildRequestError::AuthorizationFailed(
+        "Google Cloud: no credentials found. Set credentials/credentials_content in options, \
+         GOOGLE_APPLICATION_CREDENTIALS env var, or run `gcloud auth application-default login`."
+            .into(),
+    ))
+}
+
+// ---------------------------------------------------------------------------
+// Token from resolved credentials
+// ---------------------------------------------------------------------------
+
+async fn token_from_credentials(
+    creds: &ResolvedCredentials,
+    callbacks: Option<&BuildRequestCallbacks>,
+) -> Result<String, BuildRequestError> {
+    match creds {
+        ResolvedCredentials::ServiceAccountJson(json_str) => {
+            token_from_service_account_json(json_str, callbacks).await
+        }
+        ResolvedCredentials::Adc => token_from_adc(callbacks).await,
+        ResolvedCredentials::GcloudCli => {
+            let cb = callbacks.ok_or_else(|| {
+                BuildRequestError::AuthorizationFailed(
+                    "Google Cloud: gcloud CLI requires shell callback".into(),
+                )
+            })?;
+            let output = (cb.shell)("gcloud auth print-access-token --quiet".to_string())
+                .await
+                .map_err(|e| {
+                    BuildRequestError::AuthorizationFailed(format!(
+                        "Google Cloud: gcloud auth print-access-token failed: {e}"
+                    ))
+                })?;
+            let token = output.trim().to_string();
+            if token.is_empty() {
+                Err(BuildRequestError::AuthorizationFailed(
+                    "Google Cloud: gcloud auth print-access-token returned empty".into(),
+                ))
+            } else {
+                Ok(token)
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Project ID from resolved credentials
+// ---------------------------------------------------------------------------
+
+/// Get `project_id` from the resolved credential source, with fallbacks.
+async fn project_id_from_credentials(
+    creds: &ResolvedCredentials,
+    callbacks: Option<&BuildRequestCallbacks>,
+) -> Option<String> {
+    // Try the credential source itself first.
+    match creds {
+        ResolvedCredentials::ServiceAccountJson(json_str) => {
+            if let Some(pid) = extract_project_id_from_json(json_str) {
+                return Some(pid);
+            }
+        }
+        ResolvedCredentials::GcloudCli => {
+            if let Some(cb) = callbacks {
+                if let Ok(output) =
+                    (cb.shell)("gcloud config get-value project 2>/dev/null".to_string()).await
+                {
+                    let pid = output.trim().to_string();
+                    if !pid.is_empty() {
+                        return Some(pid);
+                    }
+                }
+            }
+        }
+        ResolvedCredentials::Adc => {
+            // ADC was resolved by google-cloud-auth, which doesn't expose
+            // project_id. Try reading the credentials file it used.
+            if let Some(cb) = callbacks {
+                if let Ok(Some(val)) =
+                    (cb.env_read)("GOOGLE_APPLICATION_CREDENTIALS".to_string()).await
+                {
+                    if !val.is_empty() {
+                        // Inline JSON?
+                        if let Some(pid) = extract_project_id_from_json(&val) {
+                            return Some(pid);
+                        }
+                        // File path? Read and extract.
+                        if let Ok(bytes) = (cb.fs_read)(val).await {
+                            if let Ok(contents) = std::str::from_utf8(&bytes) {
+                                if let Some(pid) = extract_project_id_from_json(contents) {
+                                    return Some(pid);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Fallback chain for when the credential source didn't have project_id.
+    let cb = callbacks?;
+
+    // GOOGLE_CLOUD_PROJECT env var.
+    if let Ok(Some(val)) = (cb.env_read)("GOOGLE_CLOUD_PROJECT".to_string()).await {
+        if !val.is_empty() && !val.starts_with('$') {
+            return Some(val);
+        }
+    }
+
+    // ADC config file -> quota_project_id.
+    if let Some(pid) = project_id_from_adc_config(callbacks).await {
+        return Some(pid);
+    }
+
+    // GCE metadata server.
+    let req = HttpRequest {
+        method: "GET".to_string(),
+        url: "http://metadata.google.internal/computeMetadata/v1/project/project-id".to_string(),
+        headers: indexmap::indexmap! {
+            "Metadata-Flavor".to_string() => "Google".to_string(),
+        },
+        body: String::new(),
+    };
+    if let Ok(resp) = (cb.http_send)(req).await {
+        if resp.status_code == 200 {
+            let pid = resp.body.trim().to_string();
+            if !pid.is_empty() {
+                return Some(pid);
+            }
+        }
+    }
+
+    // gcloud CLI (if we haven't already tried it).
+    if !matches!(creds, ResolvedCredentials::GcloudCli) {
+        if let Ok(output) =
+            (cb.shell)("gcloud config get-value project 2>/dev/null".to_string()).await
+        {
+            let pid = output.trim().to_string();
+            if !pid.is_empty() {
+                return Some(pid);
+            }
+        }
+    }
+
+    None
+}
+
+/// Read the ADC config file and extract `quota_project_id` (or `project_id`).
+async fn project_id_from_adc_config(callbacks: Option<&BuildRequestCallbacks>) -> Option<String> {
+    let cb = callbacks?;
+
+    let config_dir = match (cb.env_read)("CLOUDSDK_CONFIG".to_string()).await {
+        Ok(Some(dir)) if !dir.is_empty() => dir,
+        _ => {
+            let home = (cb.env_read)("HOME".to_string()).await.ok()??;
+            format!("{home}/.config/gcloud")
+        }
+    };
+    let adc_path = format!("{config_dir}/application_default_credentials.json");
+
+    let bytes = (cb.fs_read)(adc_path).await.ok()?;
+    let contents = std::str::from_utf8(&bytes).ok()?;
+    let parsed: serde_json::Value = serde_json::from_str(contents).ok()?;
+
+    parsed
+        .get("quota_project_id")
+        .or_else(|| parsed.get("project_id"))
+        .and_then(|v| v.as_str())
+        .map(String::from)
 }
 
 /// Read a credentials file via the `FsReadFn` callback.
@@ -496,14 +794,21 @@ mod wasm {
 
         use super::*;
 
-        const TEST_PRIVATE_KEY: &str = "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDUvaOLol62IQRN\nztnkgePa11sFelJ2MbLXcop/0zTyuuY0ZCcF2/Lr/WoSBP1ScH8p4Bc5i/6mX6Qe\nAkpbOpQjIy0bK6kv+7tZauJnqT8KIwyxI/uNt9g8dYO0R1MWP8k0wR9ZTHiZ7YJc\ny7v8xdRxYdQUfSZsDj/DiXbXubzGy8RbJ2OiNKJQhhcQqTUZs3ZwUdjqZW4h6zRS\nzXC1E+s4sWyu4BDLi2nrR/5s7yk9r90tiqYcBBtl/5vRR90NQsQQpel30hEqDhND\nf0mMW5LHCbTEtXd8ohzykahpRWuyGaxrXA9mxVdhHMEwRtLPWb+fNhouCpUY9hxz\n5AmIj1QXAgMBAAECggEACEmO6myb1ep5WXKaaF1q++ZxxEfcmIAdIGl03b/jiyUe\nvKG+J2tHDkxj6mnJWIHLYl05amN6uw50vTqHnQAuLyQ6qJlN0PG0fao9QZ6FNybg\nYrItJXso8En/pHE22mIHu4deakMhW5W2A1lobFNkkDooYdfyPDld4IclWwgAQ5ow\nQ/O4A2UElR4vRl3sm4Tte1RfXmmHkYXQvmMehjAkJ73A82V/hTcrb6fLd6cLkObL\njPTIFSES2ud0w8ysp46Zgw+MYxs0H6U8QeY9c4EFfuf6inZNxiixYi9Vhx1SMlnP\n3EsBhUm98LnC+r5IjO/GcZf0Sjjmk0KR5GN37hs9AQKBgQD7C4WH05su5xCJcWe5\nEQtkblZZYlDoahkzegmPEnw0h/XxP/K/ux8ywgmyY6MdFHUKzdtBLkrvf1dR+iuG\n3N0WKXI0nAN9OkSBx9tl7qKaB5H8Uu6gR0mWws1P4CFxR8XVOwhWKccGWj4UW8aS\nSCmFUsHEiEJU9crDS4EIvvrHgQKBgQDY8JLr1utG4GhgvoV5FNYYmZyRmj1vpwk6\nSJWp87988bgajaqK2c3q3rdqeY2BL7YdGlzDslhokbGlqnHTNS9S42KwroYoKDSr\nvcVyIaLPpIvuWQZKYIRjzgcoQkMIL5Di6QulJ2h75bV9849Dg6Vo/UxWO0WdE0+7\nh+lwVb8nlwKBgB5uHxl/xOfCinaekHwWXNMnrL/Y8wW5FqTuvgnhq7ySXnWH0tz6\nyaVVb+d3vGXh/O36VgFooxy0ytjdAjmuu/3buEQ4RRQA5Bz3JNkOPBd/o2p6gwJa\nocjshAaSnHsmwAxAw5nuJnnWpn/BQCirJp1KksJH4gJ6aMGTfWiZ/bwBAoGBAMl0\nZktB8oyH+gXVBueQ1NxVUdLYU7Lqf6QzIWCIbMsfQOLPqY51gkZYeiUTKbfM0aYn\nA/vrEzRQD5MTO85xtjeX1t7Rwt1psLfHa6J339RJLnSxESliha6U9YqKNetVGIvO\n9DRy6xEbGLYUxnZguutLRWdSdWvPMhyosrvRtMiTAoGBAMs/Z/KLnVffZaU5LAlV\nIR5WlJ0MyQojG9w5iBiJEYcs/xtS9fraXmhgzpnjIa7xNrSHP8b2HF9gnj9RnK1P\nxJcNFKVyi0gDpRPt5Cy4McHQ2kFPmdzeEcIClJO2Mgw7r8lUFbkZqs1jfM7kVv6o\no2RMFg65EnEU9EsYPZKkZlZr\n-----END PRIVATE KEY-----\n";
+        fn gen_test_private_key_pem() -> String {
+            use rsa::pkcs8::EncodePrivateKey;
+            let key = RsaPrivateKey::new(&mut rsa::rand_core::OsRng, 2048).unwrap();
+            key.to_pkcs8_pem(rsa::pkcs8::LineEnding::LF)
+                .unwrap()
+                .to_string()
+        }
 
         fn test_sa_json() -> String {
+            let pem = gen_test_private_key_pem();
             serde_json::json!({
                 "type": "service_account",
                 "project_id": "test-project",
                 "private_key_id": "key-id-123",
-                "private_key": TEST_PRIVATE_KEY,
+                "private_key": pem,
                 "client_email": "test@test-project.iam.gserviceaccount.com",
                 "client_id": "123456789",
                 "auth_uri": "https://accounts.google.com/o/oauth2/auth",
@@ -518,6 +823,9 @@ mod wasm {
                 env_read: Arc::new(|_key| Box::pin(async { Ok(None) })),
                 fs_read: Arc::new(|_path| {
                     Box::pin(async { Err(crate::LlmOpError::Other("not found".into())) })
+                }),
+                shell: Arc::new(|_cmd| {
+                    Box::pin(async { Err(crate::LlmOpError::Other("unsupported".into())) })
                 }),
             }
         }
@@ -590,7 +898,7 @@ mod wasm {
             let signing_input = format!("{}.{}", parts[0], parts[1]);
             let sig_bytes = URL_SAFE_NO_PAD.decode(parts[2]).unwrap();
 
-            let private_key = RsaPrivateKey::from_pkcs8_pem(TEST_PRIVATE_KEY).unwrap();
+            let private_key = RsaPrivateKey::from_pkcs8_pem(&sa.private_key).unwrap();
             let public_key = private_key.to_public_key();
             let verifying_key = rsa::pkcs1v15::VerifyingKey::<sha2::Sha256>::new(public_key);
             let signature = rsa::pkcs1v15::Signature::try_from(sig_bytes.as_slice()).unwrap();
@@ -833,6 +1141,9 @@ mod tests {
             fs_read: Arc::new(|_path| {
                 Box::pin(async { Err(crate::LlmOpError::Other("not found".into())) })
             }),
+            shell: Arc::new(|_cmd| {
+                Box::pin(async { Err(crate::LlmOpError::Other("unsupported".into())) })
+            }),
         };
         let client = make_client("vertex-ai");
         let mut req = fake_request();
@@ -840,15 +1151,21 @@ mod tests {
         assert!(result.is_err());
     }
 
-    // A test RSA private key for service account credential tests.
-    const TEST_PRIVATE_KEY: &str = "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDUvaOLol62IQRN\nztnkgePa11sFelJ2MbLXcop/0zTyuuY0ZCcF2/Lr/WoSBP1ScH8p4Bc5i/6mX6Qe\nAkpbOpQjIy0bK6kv+7tZauJnqT8KIwyxI/uNt9g8dYO0R1MWP8k0wR9ZTHiZ7YJc\ny7v8xdRxYdQUfSZsDj/DiXbXubzGy8RbJ2OiNKJQhhcQqTUZs3ZwUdjqZW4h6zRS\nzXC1E+s4sWyu4BDLi2nrR/5s7yk9r90tiqYcBBtl/5vRR90NQsQQpel30hEqDhND\nf0mMW5LHCbTEtXd8ohzykahpRWuyGaxrXA9mxVdhHMEwRtLPWb+fNhouCpUY9hxz\n5AmIj1QXAgMBAAECggEACEmO6myb1ep5WXKaaF1q++ZxxEfcmIAdIGl03b/jiyUe\nvKG+J2tHDkxj6mnJWIHLYl05amN6uw50vTqHnQAuLyQ6qJlN0PG0fao9QZ6FNybg\nYrItJXso8En/pHE22mIHu4deakMhW5W2A1lobFNkkDooYdfyPDld4IclWwgAQ5ow\nQ/O4A2UElR4vRl3sm4Tte1RfXmmHkYXQvmMehjAkJ73A82V/hTcrb6fLd6cLkObL\njPTIFSES2ud0w8ysp46Zgw+MYxs0H6U8QeY9c4EFfuf6inZNxiixYi9Vhx1SMlnP\n3EsBhUm98LnC+r5IjO/GcZf0Sjjmk0KR5GN37hs9AQKBgQD7C4WH05su5xCJcWe5\nEQtkblZZYlDoahkzegmPEnw0h/XxP/K/ux8ywgmyY6MdFHUKzdtBLkrvf1dR+iuG\n3N0WKXI0nAN9OkSBx9tl7qKaB5H8Uu6gR0mWws1P4CFxR8XVOwhWKccGWj4UW8aS\nSCmFUsHEiEJU9crDS4EIvvrHgQKBgQDY8JLr1utG4GhgvoV5FNYYmZyRmj1vpwk6\nSJWp87988bgajaqK2c3q3rdqeY2BL7YdGlzDslhokbGlqnHTNS9S42KwroYoKDSr\nvcVyIaLPpIvuWQZKYIRjzgcoQkMIL5Di6QulJ2h75bV9849Dg6Vo/UxWO0WdE0+7\nh+lwVb8nlwKBgB5uHxl/xOfCinaekHwWXNMnrL/Y8wW5FqTuvgnhq7ySXnWH0tz6\nyaVVb+d3vGXh/O36VgFooxy0ytjdAjmuu/3buEQ4RRQA5Bz3JNkOPBd/o2p6gwJa\nocjshAaSnHsmwAxAw5nuJnnWpn/BQCirJp1KksJH4gJ6aMGTfWiZ/bwBAoGBAMl0\nZktB8oyH+gXVBueQ1NxVUdLYU7Lqf6QzIWCIbMsfQOLPqY51gkZYeiUTKbfM0aYn\nA/vrEzRQD5MTO85xtjeX1t7Rwt1psLfHa6J339RJLnSxESliha6U9YqKNetVGIvO\n9DRy6xEbGLYUxnZguutLRWdSdWvPMhyosrvRtMiTAoGBAMs/Z/KLnVffZaU5LAlV\nIR5WlJ0MyQojG9w5iBiJEYcs/xtS9fraXmhgzpnjIa7xNrSHP8b2HF9gnj9RnK1P\nxJcNFKVyi0gDpRPt5Cy4McHQ2kFPmdzeEcIClJO2Mgw7r8lUFbkZqs1jfM7kVv6o\no2RMFg65EnEU9EsYPZKkZlZr\n-----END PRIVATE KEY-----\n";
+    fn gen_test_private_key_pem() -> String {
+        use rsa::{RsaPrivateKey, pkcs8::EncodePrivateKey};
+        let key = RsaPrivateKey::new(&mut rsa::rand_core::OsRng, 2048).unwrap();
+        key.to_pkcs8_pem(rsa::pkcs8::LineEnding::LF)
+            .unwrap()
+            .to_string()
+    }
 
     fn test_service_account_json() -> String {
+        let pem = gen_test_private_key_pem();
         serde_json::json!({
             "type": "service_account",
             "project_id": "test-project",
             "private_key_id": "key-id-123",
-            "private_key": TEST_PRIVATE_KEY,
+            "private_key": pem,
             "client_email": "test@test-project.iam.gserviceaccount.com",
             "client_id": "123456789",
             "auth_uri": "https://accounts.google.com/o/oauth2/auth",
@@ -895,6 +1212,9 @@ mod tests {
             fs_read: Arc::new(|_path| {
                 Box::pin(async { Err(crate::LlmOpError::Other("not found".into())) })
             }),
+            shell: Arc::new(|_cmd| {
+                Box::pin(async { Err(crate::LlmOpError::Other("unsupported".into())) })
+            }),
         }
     }
 
@@ -914,6 +1234,8 @@ mod tests {
         let client = make_client_with_vertex_opts(VertexAiOptions {
             credentials_content: Some(test_service_account_json()),
             credentials: None,
+            location: None,
+            project_id: None,
         });
         let callbacks = stub_callbacks_with_http(mock_token_http());
         let mut req = fake_request();
@@ -928,6 +1250,8 @@ mod tests {
         let client = make_client_with_vertex_opts(VertexAiOptions {
             credentials: Some(test_service_account_json()),
             credentials_content: None,
+            location: None,
+            project_id: None,
         });
         let callbacks = stub_callbacks_with_http(mock_token_http());
         let mut req = fake_request();
@@ -943,6 +1267,8 @@ mod tests {
         let client = make_client_with_vertex_opts(VertexAiOptions {
             credentials: Some("/fake/service-account.json".to_string()),
             credentials_content: None,
+            location: None,
+            project_id: None,
         });
         let callbacks = BuildRequestCallbacks {
             http_send: mock_token_http(),
@@ -957,6 +1283,9 @@ mod tests {
                     }
                 })
             }),
+            shell: Arc::new(|_cmd| {
+                Box::pin(async { Err(crate::LlmOpError::Other("unsupported".into())) })
+            }),
         };
         let mut req = fake_request();
         auth_vertex(&mut req, &client, Some(&callbacks))
@@ -970,6 +1299,8 @@ mod tests {
         let client = make_client_with_vertex_opts(VertexAiOptions {
             credentials_content: Some(test_service_account_json()),
             credentials: Some("/should/not/be/read.json".to_string()),
+            location: None,
+            project_id: None,
         });
         let callbacks = stub_callbacks_with_http(mock_token_http());
         let mut req = fake_request();
@@ -1003,6 +1334,9 @@ mod tests {
             env_read: Arc::new(|_key| Box::pin(async { Ok(None) })),
             fs_read: Arc::new(|_path| {
                 Box::pin(async { Err(crate::LlmOpError::Other("not found".into())) })
+            }),
+            shell: Arc::new(|_cmd| {
+                Box::pin(async { Err(crate::LlmOpError::Other("unsupported".into())) })
             }),
         };
         let mut req = fake_request();
@@ -1063,6 +1397,9 @@ mod tests {
                         Err(crate::LlmOpError::Other("not found".into()))
                     }
                 })
+            }),
+            shell: Arc::new(|_cmd| {
+                Box::pin(async { Err(crate::LlmOpError::Other("unsupported".into())) })
             }),
         };
 

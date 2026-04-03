@@ -50,9 +50,6 @@ pub(crate) async fn build_request(
     let mut headers = indexmap::IndexMap::new();
     headers.insert("content-type".to_string(), "application/json".to_string());
     headers.insert("accept".to_string(), "application/json".to_string());
-    for (key, value) in &client.options.headers {
-        headers.insert(key.clone(), value.clone());
-    }
 
     Ok(crate::baml_std::HttpRequest {
         method: "POST".to_string(),

@@ -54,6 +54,7 @@ web-time = { workspace = true }
 
 [dev-dependencies]
 anyhow = { workspace = true }
+rsa = { workspace = true, features = [ "sha2" ] }
 tokio = { workspace = true, features = [ "rt", "macros" ] }
 wasm-bindgen-test = { workspace = true }
 

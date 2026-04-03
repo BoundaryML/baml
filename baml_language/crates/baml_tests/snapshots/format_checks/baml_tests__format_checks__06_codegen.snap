@@ -1567,25 +1567,19 @@ function user.DeeplyNestedClient$new() -> null {
     load_const null
     store_field .provider_options
     copy 0
-    load_const null /* unknown class:  */
-    copy 0
-    load_const null /* unknown class:  */
-    copy 0
     load_const true
-    store_field .0
-    copy 0
     load_const 30000
-    store_field .1
-    copy 0
-    load_const null /* unknown class:  */
-    copy 0
     load_const "platform"
-    store_field .0
-    copy 0
     load_const "production"
-    store_field .1
-    store_field .2
-    store_field .0
+    load_const "team"
+    load_const "environment"
+    alloc_map 2
+    load_const "retry_on_failure"
+    load_const "timeout_ms"
+    load_const "metadata"
+    alloc_map 3
+    load_const "custom_config"
+    alloc_map 1
     store_field .headers
     copy 0
     alloc_map 0
@@ -1659,7 +1653,7 @@ function user.EnvClient$new() -> null {
     return
 }
 
-function user.EverythingIsLong_NameParamsReturnType(first_long_param: map<string, int>, second_long_param: int | string | bool[]) -> map<string, int | string | bool | float | null> {
+function user.EverythingIsLong_NameParamsReturnType(first_long_param: map<string, int>, second_long_param: (int | string | bool)[]) -> map<string, int | string | bool | float | null> {
     load_const 1
     load_const "a"
     alloc_map 1
@@ -2248,7 +2242,7 @@ function user.LongNestedValuesClient$new() -> null {
     load_const null
     store_field .provider_options
     copy 0
-    load_const null /* unknown class:  */
+    alloc_map 0
     store_field .headers
     copy 0
     alloc_map 0
@@ -5046,7 +5040,7 @@ function user.NestedConfigClient$new() -> null {
     load_const null
     store_field .provider_options
     copy 0
-    load_const null /* unknown class:  */
+    alloc_map 0
     store_field .headers
     copy 0
     alloc_map 0
@@ -5363,7 +5357,7 @@ function user.SingleParam(x: int) -> int {
     return
 }
 
-function user.SixLongParams(first_parameter_name: map<string, int>, second_parameter_name: int | string[], third_parameter_name: map<string, bool>, fourth_parameter_name: int, fifth_parameter_name: string, sixth_parameter_name: float) -> string {
+function user.SixLongParams(first_parameter_name: map<string, int>, second_parameter_name: (int | string)[], third_parameter_name: map<string, bool>, fourth_parameter_name: int, fifth_parameter_name: string, sixth_parameter_name: float) -> string {
     load_const "result"
     return
 }
@@ -5687,7 +5681,7 @@ function user.TriviaDeeplyNestedClient$new() -> null {
     load_const null
     store_field .provider_options
     copy 0
-    load_const null /* unknown class:  */
+    alloc_map 0
     store_field .headers
     copy 0
     alloc_map 0
@@ -5746,7 +5740,7 @@ function user.TriviaDeeplyNestedClientBlock$new() -> null {
     load_const null
     store_field .provider_options
     copy 0
-    load_const null /* unknown class:  */
+    alloc_map 0
     store_field .headers
     copy 0
     alloc_map 0
@@ -5758,14 +5752,14 @@ function user.TriviaDeeplyNestedClientBlock$new() -> null {
     return
 }
 
-function user.TriviaEverythingLong_NameAndParamsAndReturn(first_long_param: map<string, int>, second_long_param: int | string | bool[]) -> map<string, int | string | bool | float | null> {
+function user.TriviaEverythingLong_NameAndParamsAndReturn(first_long_param: map<string, int>, second_long_param: (int | string | bool)[]) -> map<string, int | string | bool | float | null> {
     load_const 1
     load_const "a"
     alloc_map 1
     return
 }
 
-function user.TriviaEverythingLong_NameAndParamsAndReturnBlock(first_long_param: map<string, int>, second_long_param: int | string | bool[]) -> map<string, int | string | bool | float | null> {
+function user.TriviaEverythingLong_NameAndParamsAndReturnBlock(first_long_param: map<string, int>, second_long_param: (int | string | bool)[]) -> map<string, int | string | bool | float | null> {
     load_const 1
     load_const "a"
     alloc_map 1
@@ -5990,7 +5984,7 @@ function user.VeryLongParamList(extremely_long_parameter_name: int, another_very
     return
 }
 
-function user.WithLongMethod.processData(first_input: map<string, int>, second_input: int | string | bool[], third_input: string) -> map<string, int | string | bool> {
+function user.WithLongMethod.processData(first_input: map<string, int>, second_input: (int | string | bool)[], third_input: string) -> map<string, int | string | bool> {
     load_const 1
     load_const "result"
     alloc_map 1

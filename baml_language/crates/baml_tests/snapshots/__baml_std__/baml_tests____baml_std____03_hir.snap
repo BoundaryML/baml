@@ -202,6 +202,8 @@ class baml.llm.RetryPolicy {
 class baml.llm.VertexAiOptions {
   credentials: string | null
   credentials_content: string | null
+  location: string | null
+  project_id: string | null
 }
 enum baml.llm.ClientType {Primitive, Fallback, RoundRobin}
 function baml.llm.__sap_parse(json: string, ty: type) -> baml.llm.T  [builtin]

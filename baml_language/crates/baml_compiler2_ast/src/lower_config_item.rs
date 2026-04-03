@@ -97,25 +97,26 @@ pub(crate) fn lower_config_value(
     alloc(Expr::Literal(Literal::String(cleaned.to_string())))
 }
 
-/// Lower a nested `ConfigBlock` into an untyped `Expr::Object`.
+/// Lower a nested `ConfigBlock` into an `Expr::Map`.
+///
+/// Nested config blocks are untyped key-value structures (not class instances),
+/// so they are lowered as maps. This ensures they work correctly when stored in
+/// `map<string, unknown>` fields like `request_body`.
 fn lower_config_block_to_object(
     block: &cst::ConfigBlock,
     alloc: &mut impl FnMut(Expr) -> ExprId,
 ) -> ExprId {
-    let fields: Vec<(Name, ExprId)> = block
+    let entries: Vec<(ExprId, ExprId)> = block
         .items()
         .filter_map(|item| {
             let key = item.key()?;
-            let value = lower_config_value(&item, alloc);
-            Some((Name::new(key.text()), value))
+            let k = alloc(Expr::Literal(Literal::String(key.text().to_string())));
+            let v = lower_config_value(&item, alloc);
+            Some((k, v))
         })
         .collect();
 
-    alloc(Expr::Object {
-        type_name: None,
-        fields,
-        spreads: vec![],
-    })
+    alloc(Expr::Map { entries })
 }
 
 /// Lower an array config value into `Expr::Array`.

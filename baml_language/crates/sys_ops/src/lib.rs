@@ -125,19 +125,20 @@ impl<T> io::IoClassLlmPrimitiveClient for T {
 
     fn build_request(
         &self,
-        _heap: &std::sync::Arc<BexHeap>,
+        heap: &std::sync::Arc<BexHeap>,
         _call_id: CallId,
         client: io::owned::llm::PrimitiveClient,
         prompt: io::owned::llm::PromptAst,
-        _ctx: &SysOpContext,
+        ctx: &SysOpContext,
     ) -> SysOpOutput<BexExternalValue> {
         let old_client = match convert_io_primitive_client(&client) {
             Ok(c) => c,
             Err(e) => return SysOpOutput::err(OpErrorKind::Other(e.to_string())),
         };
         let prompt_ast = unwrap_prompt_ast(&prompt);
+        let callbacks = build_io_callbacks(&ctx.io_callbacks, heap, ctx);
         SysOpOutput::async_op(async move {
-            sys_llm::execute_build_request_from_owned(&old_client, prompt_ast, None)
+            sys_llm::execute_build_request_from_owned(&old_client, prompt_ast, Some(&callbacks))
                 .await
                 .map(|req| {
                     io::owned::http::Request {
@@ -624,14 +625,240 @@ impl Default for IoSysOpsBuilder {
     }
 }
 
-use ::bex_heap::{BexExternalValue, BexHeap};
+use ::bex_heap::{BexExternalValue, BexHeap, BexValue};
 use ::std::sync::Arc;
 // Re-export io::SysOps as the primary SysOps type.
 use ::sys_types::{
     AsBexExternalValue as _, CallId, FunctionRef, LlmFunctionInfo, OpErrorKind, SysOpContext,
-    SysOpOutput,
+    SysOpFn, SysOpIoCallbacks, SysOpOutput, SysOpResult,
 };
 pub use io::SysOps;
+
+// ============================================================================
+// SysOpFn -> BuildRequestCallbacks adapter
+// ============================================================================
+
+/// Resolve a `SysOpResult` (sync or async) into the contained `BexExternalValue`.
+async fn resolve_sys_op_result(
+    result: SysOpResult,
+) -> Result<BexExternalValue, sys_llm::LlmOpError> {
+    match result {
+        SysOpResult::Ready(Ok(val)) => Ok(val),
+        SysOpResult::Ready(Err(e)) => Err(sys_llm::LlmOpError::Other(format!("{e:?}"))),
+        SysOpResult::Async(fut) => fut
+            .await
+            .map_err(|e| sys_llm::LlmOpError::Other(format!("{e:?}"))),
+    }
+}
+
+/// Build [`sys_llm::BuildRequestCallbacks`] by wrapping the `SysOpFn` pointers
+/// from [`SysOpIoCallbacks`]. Each callback marshals its args into
+/// `BexExternalValue`, calls the corresponding `SysOpFn`, and extracts the result.
+///
+/// The `AssertUnwindSafe` wrappers are needed because `SysOpFn` and `BexHeap`
+/// don't carry `UnwindSafe`/`RefUnwindSafe` bounds, but the AWS SDK callback
+/// traits require them. This is safe because we never actually catch panics
+/// across these boundaries.
+fn build_io_callbacks(
+    io: &SysOpIoCallbacks,
+    heap: &Arc<BexHeap>,
+    ctx: &SysOpContext,
+) -> sys_llm::BuildRequestCallbacks {
+    use std::panic::{RefUnwindSafe, UnwindSafe};
+
+    /// Wraps captured state so closures satisfy `UnwindSafe + RefUnwindSafe`.
+    /// SAFETY: We never catch panics across these closures; the bounds are only
+    /// required by the AWS SDK's `HttpConnector` trait.
+    #[derive(Clone)]
+    struct Env {
+        fn_ptr: SysOpFn,
+        heap: Arc<BexHeap>,
+        ctx: SysOpContext,
+    }
+    impl UnwindSafe for Env {}
+    impl RefUnwindSafe for Env {}
+
+    // -- env_read: String -> Option<String> ----------------------------------
+    let env_read: sys_llm::EnvReadFn = {
+        let env = Env {
+            fn_ptr: io.env_get.clone(),
+            heap: heap.clone(),
+            ctx: ctx.clone(),
+        };
+        Arc::new(move |key: String| {
+            let env = env.clone();
+            Box::pin(async move {
+                let arg = BexExternalValue::String(key);
+                let result = (env.fn_ptr)(
+                    &env.heap,
+                    vec![BexValue::ExternalValue(&arg)],
+                    &env.ctx,
+                    CallId::next(),
+                );
+                let val = resolve_sys_op_result(result).await?;
+                match val {
+                    BexExternalValue::Null => Ok(None),
+                    BexExternalValue::String(s) => Ok(Some(s)),
+                    other => Err(sys_llm::LlmOpError::Other(format!(
+                        "env.get returned unexpected type: {}",
+                        other.type_name()
+                    ))),
+                }
+            }) as std::pin::Pin<Box<dyn std::future::Future<Output = _> + Send>>
+        })
+    };
+
+    // -- http_send: HttpRequest -> HttpSendResponse --------------------------
+    let http_send: sys_llm::HttpSendFn = {
+        let send_env = Env {
+            fn_ptr: io.http_send.clone(),
+            heap: heap.clone(),
+            ctx: ctx.clone(),
+        };
+        let text_env = Env {
+            fn_ptr: io.http_response_text.clone(),
+            heap: heap.clone(),
+            ctx: ctx.clone(),
+        };
+        Arc::new(move |req: sys_llm::baml_std::HttpRequest| {
+            let send_env = send_env.clone();
+            let text_env = text_env.clone();
+            Box::pin(async move {
+                // Convert HttpRequest to owned::http::Request -> BexExternalValue
+                let io_req = io::owned::http::Request {
+                    method: req.method,
+                    url: req.url,
+                    headers: req.headers,
+                    body: req.body,
+                };
+                let arg = io_req.into_bex_external_value();
+
+                // Call http.send
+                let result = (send_env.fn_ptr)(
+                    &send_env.heap,
+                    vec![BexValue::ExternalValue(&arg)],
+                    &send_env.ctx,
+                    CallId::next(),
+                );
+                let response_val = resolve_sys_op_result(result).await?;
+
+                // Extract status_code and headers from the response
+                let response = io::owned::http::Response::from_external(response_val.clone())
+                    .map_err(|e| {
+                        sys_llm::LlmOpError::Other(format!("http.send response parse error: {e:?}"))
+                    })?;
+                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                let status_code = response.status_code as u16;
+                let headers = response.headers;
+
+                // Call http.Response.text() to get the body
+                let text_result = (text_env.fn_ptr)(
+                    &text_env.heap,
+                    vec![BexValue::ExternalValue(&response_val)],
+                    &text_env.ctx,
+                    CallId::next(),
+                );
+                let body_val = resolve_sys_op_result(text_result).await?;
+                let body = match body_val {
+                    BexExternalValue::String(s) => s,
+                    other => {
+                        return Err(sys_llm::LlmOpError::Other(format!(
+                            "http.Response.text() returned unexpected type: {}",
+                            other.type_name()
+                        )));
+                    }
+                };
+
+                Ok(sys_llm::HttpSendResponse {
+                    status_code,
+                    headers,
+                    body,
+                })
+            }) as std::pin::Pin<Box<dyn std::future::Future<Output = _> + Send>>
+        })
+    };
+
+    // -- fs_read: String -> Vec<u8> ------------------------------------------
+    let fs_read: sys_llm::FsReadFn = {
+        let open_env = Env {
+            fn_ptr: io.fs_open.clone(),
+            heap: heap.clone(),
+            ctx: ctx.clone(),
+        };
+        let read_env = Env {
+            fn_ptr: io.fs_file_read.clone(),
+            heap: heap.clone(),
+            ctx: ctx.clone(),
+        };
+        Arc::new(move |path: String| {
+            let open_env = open_env.clone();
+            let read_env = read_env.clone();
+            Box::pin(async move {
+                // fs.open(path) -> File
+                let arg = BexExternalValue::String(path);
+                let result = (open_env.fn_ptr)(
+                    &open_env.heap,
+                    vec![BexValue::ExternalValue(&arg)],
+                    &open_env.ctx,
+                    CallId::next(),
+                );
+                let file_val = resolve_sys_op_result(result).await?;
+
+                // fs.File.read() -> String
+                let result = (read_env.fn_ptr)(
+                    &read_env.heap,
+                    vec![BexValue::ExternalValue(&file_val)],
+                    &read_env.ctx,
+                    CallId::next(),
+                );
+                let content_val = resolve_sys_op_result(result).await?;
+                match content_val {
+                    BexExternalValue::String(s) => Ok(s.into_bytes()),
+                    other => Err(sys_llm::LlmOpError::Other(format!(
+                        "fs.File.read() returned unexpected type: {}",
+                        other.type_name()
+                    ))),
+                }
+            }) as std::pin::Pin<Box<dyn std::future::Future<Output = _> + Send>>
+        })
+    };
+
+    // -- shell: String -> String ---------------------------------------------
+    let shell: sys_llm::ShellFn = {
+        let env = Env {
+            fn_ptr: io.sys_shell.clone(),
+            heap: heap.clone(),
+            ctx: ctx.clone(),
+        };
+        Arc::new(move |command: String| {
+            let env = env.clone();
+            Box::pin(async move {
+                let arg = BexExternalValue::String(command);
+                let result = (env.fn_ptr)(
+                    &env.heap,
+                    vec![BexValue::ExternalValue(&arg)],
+                    &env.ctx,
+                    CallId::next(),
+                );
+                let val = resolve_sys_op_result(result).await?;
+                match val {
+                    BexExternalValue::String(s) => Ok(s),
+                    other => Err(sys_llm::LlmOpError::Other(format!(
+                        "sys.shell returned unexpected type: {}",
+                        other.type_name()
+                    ))),
+                }
+            }) as std::pin::Pin<Box<dyn std::future::Future<Output = _> + Send>>
+        })
+    };
+
+    sys_llm::BuildRequestCallbacks {
+        http_send,
+        env_read,
+        fs_read,
+        shell,
+    }
+}
 
 /// Builder for composing a [`SysOps`] table by overriding namespaces.
 ///

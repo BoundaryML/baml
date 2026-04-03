@@ -477,6 +477,8 @@ class baml.llm.AnthropicOptions {
 class baml.llm.VertexAiOptions {
   credentials: string | null
   credentials_content: string | null
+  location: string | null
+  project_id: string | null
 }
 class baml.llm.BedrockOptions {
   region: string | null
@@ -539,6 +541,8 @@ class baml.llm.AnthropicOptions$stream {
 class baml.llm.VertexAiOptions$stream {
   credentials: string | null
   credentials_content: string | null
+  location: string | null
+  project_id: string | null
 }
 class baml.llm.BedrockOptions$stream {
   region: string | null

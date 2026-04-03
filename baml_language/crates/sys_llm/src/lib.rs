@@ -91,6 +91,18 @@ pub type FsReadFn = Arc<
         + RefUnwindSafe,
 >;
 
+/// Async closure that runs a shell command and returns stdout.
+///
+/// `UnwindSafe + RefUnwindSafe` bounds are required for consistency with
+/// other callback types.
+pub type ShellFn = Arc<
+    dyn Fn(String) -> Pin<Box<dyn Future<Output = Result<String, LlmOpError>> + Send>>
+        + Send
+        + Sync
+        + UnwindSafe
+        + RefUnwindSafe,
+>;
+
 /// IO callbacks needed by `auth_request` (especially Bedrock credential resolution).
 ///
 /// These bridge the BAML runtime's IO capabilities into the auth pipeline,
@@ -99,6 +111,7 @@ pub struct BuildRequestCallbacks {
     pub http_send: HttpSendFn,
     pub env_read: EnvReadFn,
     pub fs_read: FsReadFn,
+    pub shell: ShellFn,
 }
 
 // ============================================================================

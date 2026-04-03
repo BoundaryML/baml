@@ -1187,7 +1187,21 @@ fn synthesize_client_new_companion(
             alloc(Expr::Array { elements })
         })
         .unwrap_or_else(|| alloc(Expr::Null));
-    let mut remap_roles = alloc(Expr::Null);
+    let mut remap_roles = config
+        .as_ref()
+        .and_then(|c| c.remap_roles)
+        .map(|pairs| {
+            let entries: Vec<(ExprId, ExprId)> = pairs
+                .iter()
+                .map(|(from, to)| {
+                    let k = alloc(Expr::Literal(Literal::String(from.to_string())));
+                    let v = alloc(Expr::Literal(Literal::String(to.to_string())));
+                    (k, v)
+                })
+                .collect();
+            alloc(Expr::Map { entries })
+        })
+        .unwrap_or_else(|| alloc(Expr::Null));
     let mut allowed_role_metadata = alloc(Expr::Null);
     let mut finish_reason_allow_list = alloc(Expr::Null);
     let mut finish_reason_deny_list = alloc(Expr::Null);
@@ -1208,9 +1222,23 @@ fn synthesize_client_new_companion(
 
     // Provider-specific option defaults.
     if let Some(cfg) = &config {
-        for &(field, value) in cfg.provider_option_defaults {
+        for &(field, ref default) in cfg.provider_option_defaults {
             if let Some(&i) = prov_index.get(field) {
-                prov_vals[i] = Some(alloc(Expr::Literal(Literal::Int(value))));
+                prov_vals[i] = Some(match default {
+                    ProviderOptionDefault::Int(v) => alloc(Expr::Literal(Literal::Int(*v))),
+                    ProviderOptionDefault::Env(var) => {
+                        let callee = alloc(Expr::Path(vec![
+                            Name::new("baml"),
+                            Name::new("env"),
+                            Name::new("get"),
+                        ]));
+                        let arg = alloc(Expr::Literal(Literal::String(var.to_string())));
+                        alloc(Expr::Call {
+                            callee,
+                            args: vec![arg],
+                        })
+                    }
+                });
             }
         }
     }
@@ -1380,8 +1408,20 @@ struct ProviderConfig {
     base_url: Option<&'static str>,
     default_role: Option<&'static str>,
     allowed_roles: Option<&'static [&'static str]>,
+    /// Default role remappings (e.g. `[("assistant", "model")]` for Gemini).
+    remap_roles: Option<&'static [(&'static str, &'static str)]>,
     provider_options: Option<(&'static str, &'static [&'static str])>,
-    provider_option_defaults: &'static [(&'static str, i64)],
+    /// Default values for provider options: `(field_name, default)`.
+    provider_option_defaults: &'static [(&'static str, ProviderOptionDefault)],
+}
+
+/// A default value for a provider option field.
+enum ProviderOptionDefault {
+    /// Literal integer (e.g. `max_tokens = 4096`).
+    Int(i64),
+    /// Nullable env var lookup: compiles to `baml.env.get("VAR_NAME")`.
+    #[allow(dead_code)]
+    Env(&'static str),
 }
 
 impl ProviderConfig {
@@ -1389,6 +1429,7 @@ impl ProviderConfig {
         base_url: None,
         default_role: None,
         allowed_roles: None,
+        remap_roles: None,
         provider_options: None,
         provider_option_defaults: &[],
     };
@@ -1396,20 +1437,63 @@ impl ProviderConfig {
 
 /// Define provider-specific options with fields and defaults inline.
 ///
+/// Supports three kinds of defaults:
+/// - `field = 42` -- literal integer
+/// - `field ?= env("VAR")` -- nullable env var (`baml.env.get("VAR")`)
+/// - `field` -- no default (null if not set by user)
+///
 /// ```ignore
 /// provider_options!("baml.llm.BedrockOptions",
 ///     region,
 ///     endpoint_url,
-///     max_tokens = 4096,  // field with default
+///     max_tokens = 4096,
+///     project_id ?= env("GOOGLE_CLOUD_PROJECT"),
 ///     temperature,
 /// )
 /// ```
 macro_rules! provider_options {
-    ($type_name:expr, $($field:ident $(= $default:expr)?),* $(,)?) => {{
+    ($type_name:expr, $($field:ident $(= $int_default:expr)?),* $(,)?) => {{
         const FIELDS: &[&str] = &[$(stringify!($field)),*];
-        const DEFAULTS: &[(&str, i64)] = &[
-            $($((stringify!($field), $default)),*)?
+        const DEFAULTS: &[(&str, ProviderOptionDefault)] = &[
+            $($((stringify!($field), ProviderOptionDefault::Int($int_default)),)?)*
         ];
+        (Some(($type_name, FIELDS)), DEFAULTS)
+    }};
+}
+
+/// Extended version of `provider_options!` that also supports `?= env("VAR")` defaults.
+/// Needed because `?=` after an optional `= expr` is ambiguous in `macro_rules`.
+#[allow(unused_macros)]
+macro_rules! provider_options_ext {
+    // Internal: accumulate field names
+    (@fields [$($acc:expr,)*]) => { &[$($acc,)*] };
+    (@fields [$($acc:expr,)*] $field:ident = $default:expr, $($rest:tt)*) => {
+        provider_options_ext!(@fields [$($acc,)* stringify!($field),] $($rest)*)
+    };
+    (@fields [$($acc:expr,)*] $field:ident ?= env($env_var:expr), $($rest:tt)*) => {
+        provider_options_ext!(@fields [$($acc,)* stringify!($field),] $($rest)*)
+    };
+    (@fields [$($acc:expr,)*] $field:ident, $($rest:tt)*) => {
+        provider_options_ext!(@fields [$($acc,)* stringify!($field),] $($rest)*)
+    };
+    (@fields [$($acc:expr,)*]) => { &[$($acc,)*] };
+
+    // Internal: accumulate defaults
+    (@defaults [$($acc:expr,)*]) => { &[$($acc,)*] };
+    (@defaults [$($acc:expr,)*] $field:ident = $default:expr, $($rest:tt)*) => {
+        provider_options_ext!(@defaults [$($acc,)* (stringify!($field), ProviderOptionDefault::Int($default)),] $($rest)*)
+    };
+    (@defaults [$($acc:expr,)*] $field:ident ?= env($env_var:expr), $($rest:tt)*) => {
+        provider_options_ext!(@defaults [$($acc,)* (stringify!($field), ProviderOptionDefault::Env($env_var)),] $($rest)*)
+    };
+    (@defaults [$($acc:expr,)*] $field:ident, $($rest:tt)*) => {
+        provider_options_ext!(@defaults [$($acc,)*] $($rest)*)
+    };
+
+    // Entry point
+    ($type_name:expr, $($rest:tt)*) => {{
+        const FIELDS: &[&str] = provider_options_ext!(@fields [] $($rest)*);
+        const DEFAULTS: &[(&str, ProviderOptionDefault)] = provider_options_ext!(@defaults [] $($rest)*);
         (Some(($type_name, FIELDS)), DEFAULTS)
     }};
 }
@@ -1428,6 +1512,7 @@ fn provider_config_for(provider: &str) -> ProviderConfig {
                 allowed_roles: Some(SAU),
                 provider_options: opts,
                 provider_option_defaults: defaults,
+                ..ProviderConfig::EMPTY
             }
         }
         "openai" | "openai-generic" | "openai-responses" => ProviderConfig {
@@ -1486,13 +1571,25 @@ fn provider_config_for(provider: &str) -> ProviderConfig {
                 ..ProviderConfig::EMPTY
             }
         }
-        "google-ai" => ProviderConfig::EMPTY,
+        "google-ai" => ProviderConfig {
+            base_url: Some("https://generativelanguage.googleapis.com/v1beta"),
+            default_role: Some("user"),
+            allowed_roles: Some(SAU),
+            remap_roles: Some(&[("assistant", "model")]),
+            ..ProviderConfig::EMPTY
+        },
         "vertex-ai" => {
-            let (opts, defaults) =
-                provider_options!("baml.llm.VertexAiOptions", credentials, credentials_content,);
+            let (opts, defaults) = provider_options!(
+                "baml.llm.VertexAiOptions",
+                credentials,
+                credentials_content,
+                location,
+                project_id,
+            );
             ProviderConfig {
                 default_role: Some("user"),
                 allowed_roles: Some(SAU),
+                remap_roles: Some(&[("assistant", "model")]),
                 provider_options: opts,
                 provider_option_defaults: defaults,
                 ..ProviderConfig::EMPTY
@@ -1549,6 +1646,15 @@ fn validate_client_options(
             message: format!(
                 "azure-openai requires either base_url or both resource_name and deployment_id (missing: {missing})"
             ),
+            span,
+        });
+    }
+
+    if provider == "vertex-ai" && !has_base_url && !has_prov("location") {
+        diags.push(LoweringDiagnostic::MissingClientOptions {
+            client_name: client_name.to_string(),
+            message: "vertex-ai requires either base_url or location (e.g. us-central1) in options"
+                .to_string(),
             span,
         });
     }

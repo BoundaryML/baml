@@ -258,6 +258,8 @@ class AnthropicOptions {
 class VertexAiOptions {
   credentials string | null
   credentials_content string | null
+  location string | null
+  project_id string | null
 }
 
 class BedrockOptions {

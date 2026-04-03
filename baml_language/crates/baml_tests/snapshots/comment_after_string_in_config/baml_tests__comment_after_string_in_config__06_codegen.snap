@@ -58,7 +58,7 @@ function user.OpenRouterMistralSmall3_1_24b$new() -> null {
     load_const null
     store_field .provider_options
     copy 0
-    load_const null /* unknown class:  */
+    alloc_map 0
     store_field .headers
     copy 0
     alloc_map 0

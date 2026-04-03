@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-function user.GetMixedList() -> int | string[] {
+function user.GetMixedList() -> (int | string)[] {
     load_const null
     load_const "GetMixedList"
     alloc_map 0
@@ -17,7 +17,7 @@ function user.GetMixedList$build_request() -> baml.http.Request {
     return
 }
 
-function user.GetMixedList$parse(json: string) -> int | string[] {
+function user.GetMixedList$parse(json: string) -> (int | string)[] {
     load_const "GetMixedList"
     load_var json
     call baml.llm.parse

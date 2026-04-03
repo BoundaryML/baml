@@ -39,10 +39,23 @@ pub(crate) async fn auth_request(
         LlmProvider::VertexAi => {
             return vertex::auth_vertex(request, client, callbacks).await;
         }
+        LlmProvider::GoogleAi => auth_google_ai(request, client),
         // Providers that don't need auth or aren't supported yet.
-        LlmProvider::GoogleAi | LlmProvider::BamlFallback | LlmProvider::BamlRoundRobin => {}
+        LlmProvider::BamlFallback | LlmProvider::BamlRoundRobin => {}
     }
     Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Google AI (Gemini)
+// ---------------------------------------------------------------------------
+
+fn auth_google_ai(request: &mut HttpRequest, client: &PrimitiveClient) {
+    if let Some(api_key) = &client.options.api_key {
+        request
+            .headers
+            .insert("x-goog-api-key".to_string(), api_key.clone());
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -240,6 +253,67 @@ mod tests {
             "Bearer ollama-key",
         );
     }
+
+    // -----------------------------------------------------------------------
+    // Google AI
+    // -----------------------------------------------------------------------
+
+    #[tokio::test]
+    async fn google_ai_sets_x_goog_api_key_header() {
+        let client = make_client(
+            "google-ai",
+            PrimitiveClientOptions {
+                api_key: Some("gemini-key".to_string()),
+                base_url: Some("https://generativelanguage.googleapis.com/v1beta".to_string()),
+                ..Default::default()
+            },
+        );
+        let mut req = fake_request();
+        auth_request(LlmProvider::GoogleAi, &mut req, &client, None)
+            .await
+            .unwrap();
+        assert_eq!(req.headers.get("x-goog-api-key").unwrap(), "gemini-key");
+    }
+
+    #[tokio::test]
+    async fn google_ai_no_api_key_omits_header() {
+        let client = make_client(
+            "google-ai",
+            PrimitiveClientOptions {
+                base_url: Some("https://generativelanguage.googleapis.com/v1beta".to_string()),
+                ..Default::default()
+            },
+        );
+        let mut req = fake_request();
+        auth_request(LlmProvider::GoogleAi, &mut req, &client, None)
+            .await
+            .unwrap();
+        assert!(!req.headers.contains_key("x-goog-api-key"));
+    }
+
+    #[tokio::test]
+    async fn google_ai_preserves_existing_headers() {
+        let client = make_client(
+            "google-ai",
+            PrimitiveClientOptions {
+                api_key: Some("gemini-key".to_string()),
+                base_url: Some("https://generativelanguage.googleapis.com/v1beta".to_string()),
+                ..Default::default()
+            },
+        );
+        let mut req = fake_request();
+        req.headers
+            .insert("content-type".to_string(), "application/json".to_string());
+        auth_request(LlmProvider::GoogleAi, &mut req, &client, None)
+            .await
+            .unwrap();
+        assert_eq!(req.headers.get("content-type").unwrap(), "application/json");
+        assert_eq!(req.headers.get("x-goog-api-key").unwrap(), "gemini-key");
+    }
+
+    // -----------------------------------------------------------------------
+    // General
+    // -----------------------------------------------------------------------
 
     #[tokio::test]
     async fn authorize_preserves_existing_headers() {

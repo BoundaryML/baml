@@ -499,7 +499,7 @@ function user.StringProviderClient$new() -> ? throws never {
   baml.llm.PrimitiveClient { name: "StringProviderClient", provider: "openai-generic", options: baml.llm.PrimitiveClientOptions { model: "mistralai/mistral...", base_url: "https://openroute...", allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: "system", allowed_roles: ["system", "user", "assistant"], remap_roles: null, api_key: null, provider_options: null, headers: map {  }, query_params: map {  }, request_body: map {  } } } : unknown
 }
 function user.NestedConfigClient$new() -> ? throws never {
-  baml.llm.PrimitiveClient { name: "NestedConfigClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: "https://api.opena...", allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: "system", allowed_roles: ["system", "user", "assistant"], remap_roles: null, api_key: null, provider_options: null, headers: _ {  }, query_params: map {  }, request_body: map {  } } } : unknown
+  baml.llm.PrimitiveClient { name: "NestedConfigClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: "https://api.opena...", allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: "system", allowed_roles: ["system", "user", "assistant"], remap_roles: null, api_key: null, provider_options: null, headers: map {  }, query_params: map {  }, request_body: map {  } } } : unknown
 }
 function user.ArrayConfigClient$new() -> ? throws never {
   baml.llm.PrimitiveClient { name: "ArrayConfigClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: "https://api.opena...", allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: "system", allowed_roles: ["system", "user", "assistant"], remap_roles: null, api_key: null, provider_options: null, headers: map {  }, query_params: map {  }, request_body: map { "stop_sequences": ["END", "STOP", "DONE"] } } } : unknown
@@ -532,10 +532,10 @@ function user.ThisIsAnExtremelyLongClientNameThatDefinitelyExceedsTheDefaultLine
   baml.llm.PrimitiveClient { name: "ThisIsAnExtremely...", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: "https://api.opena...", allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: "system", allowed_roles: ["system", "user", "assistant"], remap_roles: null, api_key: null, provider_options: null, headers: map {  }, query_params: map {  }, request_body: map {  } } } : unknown
 }
 function user.DeeplyNestedClient$new() -> ? throws never {
-  baml.llm.PrimitiveClient { name: "DeeplyNestedClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: "https://api.opena...", allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: "system", allowed_roles: ["system", "user", "assistant"], remap_roles: null, api_key: null, provider_options: null, headers: _ { custom_config: _ { retry_on_failure: true, timeout_ms: 30000, metadata: _ { team: "platform", environment: "production" } } }, query_params: map {  }, request_body: map {  } } } : unknown
+  baml.llm.PrimitiveClient { name: "DeeplyNestedClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: "https://api.opena...", allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: "system", allowed_roles: ["system", "user", "assistant"], remap_roles: null, api_key: null, provider_options: null, headers: map { "custom_config": map { "retry_on_failure": true, "timeout_ms": 30000, "metadata": map { "team": "platform", "environment": "production" } } }, query_params: map {  }, request_body: map {  } } } : unknown
 }
 function user.LongNestedValuesClient$new() -> ? throws never {
-  baml.llm.PrimitiveClient { name: "LongNestedValuesC...", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "anthropic/claude-...", base_url: "https://some-extr...", allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: "system", allowed_roles: ["system", "user", "assistant"], remap_roles: null, api_key: null, provider_options: null, headers: _ {  }, query_params: map {  }, request_body: map {  } } } : unknown
+  baml.llm.PrimitiveClient { name: "LongNestedValuesC...", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "anthropic/claude-...", base_url: "https://some-extr...", allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: "system", allowed_roles: ["system", "user", "assistant"], remap_roles: null, api_key: null, provider_options: null, headers: map {  }, query_params: map {  }, request_body: map {  } } } : unknown
 }
 function user.ManyOptionsClient$new() -> ? throws never {
   baml.llm.PrimitiveClient { name: "ManyOptionsClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: "https://api.opena...", allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: "system", allowed_roles: ["system", "user", "assistant"], remap_roles: null, api_key: baml.env.get_or_panic("OPENAI_API_KEY"), provider_options: null, headers: map {  }, query_params: map {  }, request_body: map { "max_tokens": 4096, "temperature": 0.7, "top_p": 0.95, "frequency_penalty": 0.5, "presence_penalty": 0.3, "stream": true, "stop_sequences": ["END", "STOP", "DONE", "COMPLETE", "FINISHED"] } } } : unknown
@@ -547,10 +547,10 @@ function user.LongArrayOfObjectsClient$new() -> ? throws never {
   baml.llm.PrimitiveClient { name: "LongArrayOfObject...", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: "https://api.opena...", allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: "system", allowed_roles: ["system", "user", "assistant"], remap_roles: null, api_key: null, provider_options: null, headers: map {  }, query_params: map {  }, request_body: map { "tools": [] } } } : unknown
 }
 function user.TriviaDeeplyNestedClient$new() -> ? throws never {
-  baml.llm.PrimitiveClient { name: "TriviaDeeplyNeste...", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: "https://api.opena...", allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: "system", allowed_roles: ["system", "user", "assistant"], remap_roles: null, api_key: null, provider_options: null, headers: _ {  }, query_params: map {  }, request_body: map {  } } } : unknown
+  baml.llm.PrimitiveClient { name: "TriviaDeeplyNeste...", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: "https://api.opena...", allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: "system", allowed_roles: ["system", "user", "assistant"], remap_roles: null, api_key: null, provider_options: null, headers: map {  }, query_params: map {  }, request_body: map {  } } } : unknown
 }
 function user.TriviaDeeplyNestedClientBlock$new() -> ? throws never {
-  baml.llm.PrimitiveClient { name: "TriviaDeeplyNeste...", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: "https://api.opena...", allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: "system", allowed_roles: ["system", "user", "assistant"], remap_roles: null, api_key: null, provider_options: null, headers: _ {  }, query_params: map {  }, request_body: map {  } } } : unknown
+  baml.llm.PrimitiveClient { name: "TriviaDeeplyNeste...", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: "https://api.opena...", allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: "system", allowed_roles: ["system", "user", "assistant"], remap_roles: null, api_key: null, provider_options: null, headers: map {  }, query_params: map {  }, request_body: map {  } } } : unknown
 }
 function user.TriviaLongValueClient$new() -> ? throws never {
   baml.llm.PrimitiveClient { name: "TriviaLongValueCl...", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "some-extremely-lo...", base_url: "https://some-real...", allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: "system", allowed_roles: ["system", "user", "assistant"], remap_roles: null, api_key: null, provider_options: null, headers: map {  }, query_params: map {  }, request_body: map {  } } } : unknown
@@ -1597,27 +1597,27 @@ function user.OtherExprs(a: int, b: int) -> int throws never {
     Neg a : int
     Neg a : int
     [] : never[]
-    [1] : 1[]
-    [1, 2, 3] : (1 | 2 | 3)[]
-    [1, 2, 3, 4, 5] : (1 | 2 | 3 | 4 | 5)[]
-    ["short", "array"] : ("short" | "array")[]
-    ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q"] : ("a" | "b" | "c" | "d" | "e" | "f" | "g" | "h" | "i" | "j" | "k" | "l" | "m" | "n" | "o" | "p" | "q")[]
-    ["this is a long st...", "another long stri...", "yet another one t...", "and one more stri..."] : ("this is a long string element" | "another long string value here" | "yet another one that is quite long" | "and one more string element here too")[]
-    ["alpha", "bravo", "charlie", "delta", "echo", "foxtrot", "golf", "hotel", "india", "juliet", "kilo", "lima", "mike", "november", "oscar", "papa"] : ("alpha" | "bravo" | "charlie" | "delta" | "echo" | "foxtrot" | "golf" | "hotel" | "india" | "juliet" | "kilo" | "lima" | "mike" | "november" | "oscar" | "papa")[]
-    [[1, 2], [3, 4]] : ((1 | 2)[] | (3 | 4)[])[]
-    [[1, 2, 3], [4, 5, 6], [7, 8, 9]] : ((1 | 2 | 3)[] | (4 | 5 | 6)[] | (7 | 8 | 9)[])[]
-    [[[1, 2], [3, 4]], [[5, 6], [7, 8]], [[9, 10], [11, 12]], [[13, 14], [15, 16]]] : (((1 | 2)[] | (3 | 4)[])[] | ((5 | 6)[] | (7 | 8)[])[] | ((9 | 10)[] | (11 | 12)[])[] | ((13 | 14)[] | (15 | 16)[])[])[]
-    [1, 2] : (1 | 2)[]
-    [1, 2] : (1 | 2)[]
-    ["this is a long st...", "another long stri...", "yet another that ...", "and one more stri..."] : ("this is a long string" | "another long string value" | "yet another that is quite long" | "and one more string element")[]
-    ["this is a long st...", "another long stri...", "yet another that ...", "and one more stri..."] : ("this is a long string" | "another long string value" | "yet another that is quite long" | "and one more string element")[]
-    map { "key": 1 } : map<"key", 1>
-    map { "a": 1, "b": 2 } : map<"a" | "b", 1 | 2>
-    map { "a": 1, "b": 2, "c": 3, "d": 4, "e": 5 } : map<"a" | "b" | "c" | "d" | "e", 1 | 2 | 3 | 4 | 5>
-    map { "first_key": "first value", "second_key": "second value", "third_key": "third value", "fourth_key": "fourth value", "fifth_key": "fifth" } : map<"first_key" | "second_key" | "third_key" | "fourth_key" | "fifth_key", "first value" | "second value" | "third value" | "fourth value" | "fifth">
-    map { "outer": map { "inner_a": 1, "inner_b": 2, "inner_c": 3 }, "other": map { "inner_d": 4, "inner_e": 5, "inner_f": 6 } } : map<"outer" | "other", map<"inner_a" | "inner_b" | "inner_c", 1 | 2 | 3> | map<"inner_d" | "inner_e" | "inner_f", 4 | 5 | 6>>
-    map { "k": 1 } : map<"k", 1>
-    map { "k": 1 } : map<"k", 1>
+    [1] : int[]
+    [1, 2, 3] : int[]
+    [1, 2, 3, 4, 5] : int[]
+    ["short", "array"] : string[]
+    ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q"] : string[]
+    ["this is a long st...", "another long stri...", "yet another one t...", "and one more stri..."] : string[]
+    ["alpha", "bravo", "charlie", "delta", "echo", "foxtrot", "golf", "hotel", "india", "juliet", "kilo", "lima", "mike", "november", "oscar", "papa"] : string[]
+    [[1, 2], [3, 4]] : int[][]
+    [[1, 2, 3], [4, 5, 6], [7, 8, 9]] : int[][]
+    [[[1, 2], [3, 4]], [[5, 6], [7, 8]], [[9, 10], [11, 12]], [[13, 14], [15, 16]]] : int[][][]
+    [1, 2] : int[]
+    [1, 2] : int[]
+    ["this is a long st...", "another long stri...", "yet another that ...", "and one more stri..."] : string[]
+    ["this is a long st...", "another long stri...", "yet another that ...", "and one more stri..."] : string[]
+    map { "key": 1 } : map<string, int>
+    map { "a": 1, "b": 2 } : map<string, int>
+    map { "a": 1, "b": 2, "c": 3, "d": 4, "e": 5 } : map<string, int>
+    map { "first_key": "first value", "second_key": "second value", "third_key": "third value", "fourth_key": "fourth value", "fifth_key": "fifth" } : map<string, string>
+    map { "outer": map { "inner_a": 1, "inner_b": 2, "inner_c": 3 }, "other": map { "inner_d": 4, "inner_e": 5, "inner_f": 6 } } : map<string, map<string, int>>
+    map { "k": 1 } : map<string, int>
+    map { "k": 1 } : map<string, int>
     OtherPoint { x: 1, y: 2 } : user.OtherPoint
     OtherVec { p: OtherPoint { x: 1, y: 2 }, q: OtherPoint { x: 3, y: 4 } } : user.OtherVec
     OtherVec { p: OtherPoint { x: 100000, y: 200000 }, q: OtherPoint { x: 300000, y: 400000 } } : user.OtherVec
@@ -1665,8 +1665,8 @@ function user.OtherExprs(a: int, b: int) -> int throws never {
           }
       x : int
     }
-    [1, 2, 3] : (1 | 2 | 3)[]
-    map { "k": 1 } : map<"k", 1>
+    [1, 2, 3] : int[]
+    map { "k": 1 } : map<string, int>
     OtherPoint { x: 1, y: 2 } : user.OtherPoint
     a + b : int
   }

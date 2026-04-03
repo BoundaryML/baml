@@ -571,6 +571,9 @@ mod tests {
             fs_read: Arc::new(|_path| {
                 Box::pin(async { Err(crate::LlmOpError::Other("not found".into())) })
             }),
+            shell: Arc::new(|_cmd| {
+                Box::pin(async { Err(crate::LlmOpError::Other("unsupported".into())) })
+            }),
         }
     }
 
@@ -611,10 +614,7 @@ mod tests {
         let send_fn = mock_http_send(call_count.clone(), 404, "");
         let callbacks = BuildRequestCallbacks {
             http_send: send_fn,
-            env_read: Arc::new(|_key| Box::pin(async { Ok(None) })),
-            fs_read: Arc::new(|_path| {
-                Box::pin(async { Err(crate::LlmOpError::Other("not found".into())) })
-            }),
+            ..stub_callbacks()
         };
         let client = make_client(BedrockOptions {
             region: Some("us-east-1".to_string()),
@@ -787,6 +787,9 @@ aws_secret_access_key = wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
             }),
             fs_read: Arc::new(|_path| {
                 Box::pin(async { Err(crate::LlmOpError::Other("not found".into())) })
+            }),
+            shell: Arc::new(|_cmd| {
+                Box::pin(async { Err(crate::LlmOpError::Other("unsupported".into())) })
             }),
         };
         let client = make_client(BedrockOptions::default());

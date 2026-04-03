@@ -83,7 +83,9 @@ function user.VertexGCP$new() -> null {
     alloc_array 3
     store_field .allowed_roles
     copy 0
-    load_const null
+    load_const "model"
+    load_const "assistant"
+    alloc_map 1
     store_field .remap_roles
     copy 0
     load_const null

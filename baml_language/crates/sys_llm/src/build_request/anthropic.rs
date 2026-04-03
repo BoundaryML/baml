@@ -76,12 +76,7 @@ pub(crate) fn build_request(
     // Headers
     let mut headers = indexmap::IndexMap::new();
     headers.insert("content-type".to_string(), "application/json".to_string());
-
     headers.insert("anthropic-version".to_string(), "2023-06-01".to_string());
-
-    for (key, value) in &client.options.headers {
-        headers.insert(key.clone(), value.clone());
-    }
 
     // Body
     let (system, messages) = extract_system_and_messages(prompt)?;

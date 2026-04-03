@@ -578,10 +578,10 @@ fn user.ExhaustiveCustomBool(b: true | false) -> string {
     }
 }
 
-fn user.ExhaustiveDoubleMaybe(dm: Success | Failure??) -> string {
+fn user.ExhaustiveDoubleMaybe(dm: (Success | Failure)??) -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: Success | Failure?? // dm // param
+    let _1: (Success | Failure)?? // dm // param
     let _2: bool
     let _3: Success // s
     let _4: Success
@@ -2172,10 +2172,10 @@ fn user.NestedMatchSpans(x: int, y: bool) -> string {
     }
 }
 
-fn user.NestedTypeAlias(mr: Success | Failure?) -> string {
+fn user.NestedTypeAlias(mr: (Success | Failure)?) -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: Success | Failure? // mr // param
+    let _1: (Success | Failure)? // mr // param
     let _2: bool
     let _3: Success // s
     let _4: Success
@@ -2445,10 +2445,10 @@ fn user.NonExhaustiveCustomBoolMissing(b: true | false) -> string {
     }
 }
 
-fn user.NonExhaustiveDoubleMaybeMissingNull(dm: Success | Failure??) -> string {
+fn user.NonExhaustiveDoubleMaybeMissingNull(dm: (Success | Failure)??) -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: Success | Failure?? // dm // param
+    let _1: (Success | Failure)?? // dm // param
     let _2: bool
     let _3: Success // s
     let _4: Success
