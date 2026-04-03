@@ -31,54 +31,54 @@ fn user.CatchAllStatusVariants(n: int) -> string {
     let _6: bool
 
     bb0: {
-        _0 = call const fn user.ThrowsAllStatusVariants(copy _1) -> [bb10, unwind: bb1];
+        _0 = call const fn user.ThrowsAllStatusVariants(copy _1) -> [bb1, unwind: bb2];
     }
 
     bb1: {
-        _3 = copy _2 == const user.Status.HttpError;
-        branch copy _3 -> [bb9, bb2];
+        goto -> bb11;
     }
 
     bb2: {
-        _4 = copy _2 == const user.Status.IndexError;
-        branch copy _4 -> [bb8, bb3];
+        _3 = copy _2 == const user.Status.HttpError;
+        branch copy _3 -> [bb10, bb3];
     }
 
     bb3: {
-        _5 = copy _2 == const user.Status.AuthError;
-        branch copy _5 -> [bb7, bb4];
+        _4 = copy _2 == const user.Status.IndexError;
+        branch copy _4 -> [bb9, bb4];
     }
 
     bb4: {
-        _6 = copy _2 == const user.Status.SomeOtherError;
-        branch copy _6 -> [bb6, bb5];
+        _5 = copy _2 == const user.Status.AuthError;
+        branch copy _5 -> [bb8, bb5];
     }
 
     bb5: {
-        throw copy _2;
+        _6 = copy _2 == const user.Status.SomeOtherError;
+        branch copy _6 -> [bb7, bb6];
     }
 
     bb6: {
+        throw copy _2;
+    }
+
+    bb7: {
         _0 = const "other!";
         goto -> bb11;
     }
 
-    bb7: {
+    bb8: {
         _0 = const "auth!";
         goto -> bb11;
     }
 
-    bb8: {
+    bb9: {
         _0 = const "index!";
         goto -> bb11;
     }
 
-    bb9: {
-        _0 = const "http!";
-        goto -> bb11;
-    }
-
     bb10: {
+        _0 = const "http!";
         goto -> bb11;
     }
 
@@ -100,34 +100,34 @@ fn user.CatchAlwaysThrows(n: int) -> string {
     let _4: bool
 
     bb0: {
-        _0 = call const fn user.WrapperAlwaysThrows(copy _1) -> [bb6, unwind: bb1];
+        _0 = call const fn user.WrapperAlwaysThrows(copy _1) -> [bb1, unwind: bb2];
     }
 
     bb1: {
-        _3 = is_type(copy _2, String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
-        branch copy _3 -> [bb5, bb2];
+        goto -> bb7;
     }
 
     bb2: {
-        _4 = is_type(copy _2, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
-        branch copy _4 -> [bb4, bb3];
+        _3 = is_type(copy _2, String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _3 -> [bb6, bb3];
     }
 
     bb3: {
-        throw copy _2;
+        _4 = is_type(copy _2, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _4 -> [bb5, bb4];
     }
 
     bb4: {
+        throw copy _2;
+    }
+
+    bb5: {
         _0 = const "index!";
         goto -> bb7;
     }
 
-    bb5: {
-        _0 = const "http!";
-        goto -> bb7;
-    }
-
     bb6: {
+        _0 = const "http!";
         goto -> bb7;
     }
 
@@ -148,24 +148,24 @@ fn user.CatchRecursiveThrow(n: int) -> string {
     let _3: bool
 
     bb0: {
-        _0 = call const fn user.RecB(copy _1) -> [bb4, unwind: bb1];
+        _0 = call const fn user.RecB(copy _1) -> [bb1, unwind: bb2];
     }
 
     bb1: {
-        _3 = is_type(copy _2, String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
-        branch copy _3 -> [bb3, bb2];
-    }
-
-    bb2: {
-        throw copy _2;
-    }
-
-    bb3: {
-        _0 = const "handled";
         goto -> bb5;
     }
 
+    bb2: {
+        _3 = is_type(copy _2, String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _3 -> [bb4, bb3];
+    }
+
+    bb3: {
+        throw copy _2;
+    }
+
     bb4: {
+        _0 = const "handled";
         goto -> bb5;
     }
 

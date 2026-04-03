@@ -1651,23 +1651,30 @@ function user.NestedTypeAlias(mr: Success | Failure?) -> string {
 
 function user.NestedTypeBindings(r: Success | Failure) -> int {
     load_var r
-    pop 1
-    load_const false
+    load_const Success
+    cmp_op instanceof
     pop_jump_if_false L0
-    jump L1
+    jump L2
 
   L0:
     load_var r
     load_const Failure
     cmp_op instanceof
-    pop_jump_if_false L2
-    load_const 1
+    pop_jump_if_false L1
     jump L2
 
   L1:
-    load_const 0
+    load_var r
+    load_const Failure
+    cmp_op instanceof
+    pop_jump_if_false L3
+    load_const 1
+    jump L3
 
   L2:
+    load_const 0
+
+  L3:
     return
 }
 
@@ -2058,20 +2065,29 @@ function user.OverlappingTypedPatterns(r: Success | Failure) -> string {
     load_const Success
     cmp_op instanceof
     pop_jump_if_false L0
-    jump L1
+    jump L3
 
   L0:
     load_var r
-    pop 1
-    load_const false
-    pop_jump_if_false L2
-    load_const "covers failure only (success already handled)"
+    load_const Success
+    cmp_op instanceof
+    pop_jump_if_false L1
     jump L2
 
   L1:
-    load_const "success"
+    load_var r
+    load_const Failure
+    cmp_op instanceof
+    pop_jump_if_false L4
 
   L2:
+    load_const "covers failure only (success already handled)"
+    jump L4
+
+  L3:
+    load_const "success"
+
+  L4:
     return
 }
 
@@ -2080,21 +2096,30 @@ function user.OverlappingWithBindings(r: Success | Failure) -> string {
     load_const Success
     cmp_op instanceof
     pop_jump_if_false L0
-    jump L1
+    jump L3
 
   L0:
     load_var r
-    pop 1
-    load_const false
-    pop_jump_if_false L2
-    load_const "remaining"
+    load_const Success
+    cmp_op instanceof
+    pop_jump_if_false L1
     jump L2
 
   L1:
     load_var r
-    load_field .data
+    load_const Failure
+    cmp_op instanceof
+    pop_jump_if_false L4
 
   L2:
+    load_const "remaining"
+    jump L4
+
+  L3:
+    load_var r
+    load_field .data
+
+  L4:
     return
 }
 
@@ -2122,34 +2147,48 @@ function user.ParenthesizedSingleLiteral(b: bool) -> string {
 
 function user.PartialUnionPatternCoverage(r: Success | Failure | Pending) -> string {
     load_var r
-    pop 1
-    load_const false
+    load_const Success
+    cmp_op instanceof
     pop_jump_if_false L0
+    jump L1
 
   L0:
+    load_var r
+    load_const Failure
+    cmp_op instanceof
+    pop_jump_if_false L1
+
+  L1:
     load_const "not pending"
     return
 }
 
 function user.PartialUnionPlusCatchAll(r: Success | Failure | Pending) -> string {
     load_var r
-    pop 1
-    load_const false
+    load_const Success
+    cmp_op instanceof
     pop_jump_if_false L0
-    jump L1
+    jump L2
 
   L0:
     load_var r
-    load_const Pending
+    load_const Failure
     cmp_op instanceof
-    pop_jump_if_false L2
-    load_const "pending"
+    pop_jump_if_false L1
     jump L2
 
   L1:
-    load_const "success or failure"
+    load_var r
+    load_const Pending
+    cmp_op instanceof
+    pop_jump_if_false L3
+    load_const "pending"
+    jump L3
 
   L2:
+    load_const "success or failure"
+
+  L3:
     return
 }
 
@@ -2285,11 +2324,18 @@ function user.ThreeLevelNestedMatch(x: int, y: int, z: int) -> string {
 
 function user.UnionPatternCoversAll(r: Success | Failure) -> string {
     load_var r
-    pop 1
-    load_const false
+    load_const Success
+    cmp_op instanceof
     pop_jump_if_false L0
+    jump L1
 
   L0:
+    load_var r
+    load_const Failure
+    cmp_op instanceof
+    pop_jump_if_false L1
+
+  L1:
     load_const "covered"
     return
 }

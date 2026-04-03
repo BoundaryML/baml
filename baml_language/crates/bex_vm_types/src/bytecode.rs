@@ -2,7 +2,7 @@
 
 use baml_base::Span;
 
-use crate::{GlobalIndex, HeapPtr, ObjectIndex, types::ConstValue};
+use crate::{GlobalIndex, ObjectIndex, types::ConstValue};
 
 // ============================================================================
 // Jump Table Data Structure
@@ -712,33 +712,11 @@ pub struct DebugLocalScope {
 /// Exception table entry mapping a PC range to a handler.
 ///
 /// Any instruction at PC in `[start_pc, end_pc)` that raises an error
-/// Type filter for an exception table entry.
-///
-/// Determines which exception values an entry matches during the VM's
-/// exception table scan — analogous to the JVM's `catch_type` field.
-#[derive(Clone, Debug, PartialEq)]
-pub enum CatchFilter {
-    /// Wildcard `_ =>` — matches any thrown value.
-    /// (Panics are still gated by the `catches_panics` flag.)
-    Wildcard,
-    /// Specific class: `_: NetworkError =>`, `DivisionByZero =>`.
-    /// The `ObjectIndex` is resolved to a `HeapPtr` at load time.
-    Class(ObjectIndex),
-    /// Primitive type tag: `_: string =>`, `_: int =>`.
-    TypeTag(i64),
-    /// Equality check against a constant pool entry: `"boom" =>`, `42 =>`.
-    /// The `u16` is an index into `bytecode.resolved_constants`.
-    /// The VM compares the exception value against the resolved constant.
-    Eq(u16),
-}
-
 /// transfers control to `handler_pc`, with the exception value stored
 /// in the frame-local slot `error_slot`.
 ///
 /// Entries are sorted by `start_pc`. For nested catch blocks the innermost
-/// (narrowest range) entry appears first. Multiple entries may share the
-/// same PC range (one per catch arm); the VM picks the first whose filter
-/// matches.
+/// (narrowest range) entry appears first.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ExceptionTableEntry {
     /// First protected instruction (inclusive).
@@ -749,16 +727,10 @@ pub struct ExceptionTableEntry {
     pub handler_pc: usize,
     /// Frame-local slot index for the caught error value.
     pub error_slot: usize,
-    /// Type filter applied during the exception table scan.
-    pub filter: CatchFilter,
     /// Whether this entry catches panic types (`root.panics.*`).
     /// When `false`, VM-originated panics (division by zero, index OOB, etc.)
     /// skip this entry and continue scanning.
     pub catches_panics: bool,
-    /// Resolved heap pointer for `CatchFilter::Class` entries.
-    /// Populated at load time by `resolve_exception_filters()`.
-    /// `None` for non-class filters or before resolution.
-    pub resolved_class_ptr: Option<HeapPtr>,
 }
 
 /// Executable bytecode.
@@ -855,22 +827,6 @@ impl Bytecode {
             .iter()
             .map(|cv| cv.to_value(&resolve))
             .collect();
-    }
-
-    /// Resolve `CatchFilter::Class` entries in the exception table.
-    ///
-    /// Called at load time (alongside `resolve_constants`) to convert each
-    /// `ObjectIndex` in a `CatchFilter::Class` to a `HeapPtr` stored in
-    /// `resolved_class_ptr`.
-    pub fn resolve_exception_filters<F>(&mut self, resolve: F)
-    where
-        F: Fn(ObjectIndex) -> HeapPtr,
-    {
-        for entry in &mut self.exception_table {
-            if let CatchFilter::Class(obj_idx) = entry.filter {
-                entry.resolved_class_ptr = Some(resolve(obj_idx));
-            }
-        }
     }
 }
 

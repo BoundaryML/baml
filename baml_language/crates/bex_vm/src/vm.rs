@@ -1037,8 +1037,7 @@ impl BexVm {
         let exception_value = Self::exception_to_value(exception);
 
         // Walk the call stack from the current frame outward looking for an
-        // exception table entry that covers the faulting PC and whose filter
-        // matches the exception value.
+        // exception table entry that covers the faulting PC.
         loop {
             let depth = self.frames.len().saturating_sub(1);
             let frame = &self.frames[depth];
@@ -1055,14 +1054,10 @@ impl BexVm {
             // Scan the exception table for the first entry that:
             // 1. Covers this PC
             // 2. If the exception is a panic, has catches_panics = true
-            // 3. Has a filter that matches the exception value
             if let Some(entry) = frame_function
                 .bytecode
                 .exception_handlers_for_pc(faulting_pc)
-                .find(|e| {
-                    (!is_panic || e.catches_panics)
-                        && self.filter_matches(exception_value, e, &frame_function.bytecode)
-                })
+                .find(|e| !is_panic || e.catches_panics)
             {
                 // Found a handler in this frame. Truncate the eval stack back
                 // to just after the frame's locals region (removes stale
@@ -1109,58 +1104,6 @@ impl BexVm {
             {
                 self.interrupt_frame = None;
             }
-        }
-    }
-
-    /// Check if an exception value matches a catch filter entry.
-    fn filter_matches(
-        &self,
-        value: Value,
-        entry: &bex_vm_types::bytecode::ExceptionTableEntry,
-        bytecode: &bex_vm_types::Bytecode,
-    ) -> bool {
-        use bex_vm_types::bytecode::CatchFilter;
-
-        match &entry.filter {
-            CatchFilter::Wildcard => true,
-            CatchFilter::Class(_) => {
-                let Some(expected_class) = entry.resolved_class_ptr else {
-                    return false;
-                };
-                match value {
-                    Value::Object(ptr) => match self.get_object(ptr) {
-                        Object::Instance(instance) => instance.class == expected_class,
-                        _ => false,
-                    },
-                    _ => false,
-                }
-            }
-            CatchFilter::TypeTag(expected_tag) => value_type_tag(&value) == *expected_tag,
-            CatchFilter::Eq(const_idx) => {
-                let filter_value = bytecode.resolved_constants[*const_idx as usize];
-                self.values_equal(value, filter_value)
-            }
-        }
-    }
-
-    /// Compare two Values for equality with content comparison for strings.
-    #[allow(clippy::float_cmp)] // intentional exact comparison, same as CmpOp::Eq
-    fn values_equal(&self, a: Value, b: Value) -> bool {
-        match (a, b) {
-            (Value::Int(a), Value::Int(b)) => a == b,
-            (Value::Float(a), Value::Float(b)) => a == b,
-            (Value::Bool(a), Value::Bool(b)) => a == b,
-            (Value::Null, Value::Null) => true,
-            (Value::Object(a_ptr), Value::Object(b_ptr)) => {
-                match (self.get_object(a_ptr), self.get_object(b_ptr)) {
-                    (Object::String(a_str), Object::String(b_str)) => a_str == b_str,
-                    (Object::Variant(a_var), Object::Variant(b_var)) => {
-                        a_var.enm == b_var.enm && a_var.index == b_var.index
-                    }
-                    _ => a_ptr == b_ptr,
-                }
-            }
-            _ => false,
         }
     }
 

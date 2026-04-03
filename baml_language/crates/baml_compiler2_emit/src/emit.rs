@@ -11,8 +11,8 @@ use std::{
 
 use baml_base::Span;
 use baml_compiler2_mir::{
-    BasicBlock, BinOp, BlockId, Constant, IndexKind, Local, MirCatchFilter, MirFunctionBody,
-    Operand, Place, Rvalue, StatementKind, Terminator, UnaryOp,
+    BasicBlock, BinOp, BlockId, Constant, IndexKind, Local, MirFunctionBody, Operand, Place,
+    Rvalue, StatementKind, Terminator, UnaryOp,
 };
 use baml_type::Ty;
 use bex_vm_types::{
@@ -1279,9 +1279,13 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
 
         for region in &mir.catch_regions {
             let body_entry = self.analysis.resolve_jump_target(region.body_entry);
+            let handler = self.analysis.resolve_jump_target(region.handler);
 
             let Some(&start_pc) = self.block_addresses.get(&body_entry) else {
                 continue; // dead region, skip
+            };
+            let Some(&handler_pc) = self.block_addresses.get(&handler) else {
+                continue; // dead handler, skip
             };
             // If the error local was optimized away (e.g. an inline
             // `throw X catch ...` that the MIR lowers as a direct jump),
@@ -1290,42 +1294,40 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 continue;
             };
 
-            // Compute end_pc as the minimum handler_pc across all arms.
-            // The protected range is [start_pc, end_pc) — handler blocks are
-            // emitted right after the try body so the earliest handler_pc
-            // marks the end of the protected region.
-            let end_pc = region
-                .arms
-                .iter()
-                .filter_map(|arm| {
-                    let h = self.analysis.resolve_jump_target(arm.handler);
-                    self.block_addresses.get(&h).copied()
-                })
-                .min()
-                .unwrap_or(start_pc);
+            // Compute end_pc: min of handler_pc and panic_handler_pc.
+            let mut end_pc = handler_pc;
+            if let Some(ph) = region.panic_handler {
+                let ph = self.analysis.resolve_jump_target(ph);
+                if let Some(&ph_pc) = self.block_addresses.get(&ph) {
+                    end_pc = end_pc.min(ph_pc);
+                }
+            }
 
             if start_pc >= end_pc {
                 continue; // degenerate region
             }
 
-            // Emit one exception table entry per arm.
-            for arm in &region.arms {
-                let handler = self.analysis.resolve_jump_target(arm.handler);
-                let Some(&handler_pc) = self.block_addresses.get(&handler) else {
-                    continue; // dead handler, skip
-                };
+            // Emit the main (error) handler entry.
+            self.bytecode.exception_table.push(ExceptionTableEntry {
+                start_pc,
+                end_pc,
+                handler_pc,
+                error_slot,
+                catches_panics: region.catches_panics,
+            });
 
-                let filter = self.resolve_mir_catch_filter(&arm.filter);
-
-                self.bytecode.exception_table.push(ExceptionTableEntry {
-                    start_pc,
-                    end_pc,
-                    handler_pc,
-                    error_slot,
-                    filter,
-                    catches_panics: arm.is_panic_type,
-                    resolved_class_ptr: None,
-                });
+            // Emit the panic handler entry (Case C: split catch).
+            if let Some(ph) = region.panic_handler {
+                let ph = self.analysis.resolve_jump_target(ph);
+                if let Some(&ph_pc) = self.block_addresses.get(&ph) {
+                    self.bytecode.exception_table.push(ExceptionTableEntry {
+                        start_pc,
+                        end_pc,
+                        handler_pc: ph_pc,
+                        error_slot,
+                        catches_panics: true,
+                    });
+                }
             }
         }
 
@@ -1334,61 +1336,6 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         // region has a later start_pc, so reverse-sorted order gives innermost
         // first during a reverse linear scan.
         self.bytecode.exception_table.sort_by_key(|e| e.start_pc);
-    }
-
-    /// Convert a MIR-level catch filter to a bytecode-level catch filter.
-    fn resolve_mir_catch_filter(
-        &mut self,
-        filter: &MirCatchFilter,
-    ) -> bex_vm_types::bytecode::CatchFilter {
-        use bex_vm_types::bytecode::CatchFilter;
-
-        match filter {
-            MirCatchFilter::Wildcard => CatchFilter::Wildcard,
-            MirCatchFilter::Class(name) => {
-                if let Some(&obj_idx) = self.class_object_indices.get(name.as_str()) {
-                    CatchFilter::Class(ObjectIndex::from_raw(obj_idx))
-                } else {
-                    // Unknown class — fall back to Wildcard so the handler
-                    // still runs (it will just match everything).
-                    CatchFilter::Wildcard
-                }
-            }
-            MirCatchFilter::TypeTag(tag) => CatchFilter::TypeTag(*tag),
-            MirCatchFilter::Eq(constant) => {
-                let const_idx = self.add_mir_constant_to_pool(constant);
-                #[allow(clippy::cast_possible_truncation)]
-                CatchFilter::Eq(const_idx as u16)
-            }
-        }
-    }
-
-    /// Add a MIR `Constant` to the bytecode constant pool, returning the index.
-    ///
-    /// This is used for `CatchFilter::Eq` entries. Unlike `emit_constant` which
-    /// also emits load instructions, this only adds to the pool.
-    fn add_mir_constant_to_pool(&mut self, constant: &Constant) -> usize {
-        match constant {
-            Constant::Int(v) => self.add_constant(ConstValue::Int(*v)),
-            Constant::Float(v) => self.add_constant(ConstValue::Float(*v)),
-            Constant::Bool(v) => self.add_constant(ConstValue::Bool(*v)),
-            Constant::Null => self.add_constant(ConstValue::Null),
-            Constant::String(s) => {
-                let obj_idx = self.objects.len();
-                self.objects.push(Object::String(s.clone()));
-                self.add_constant(ConstValue::Object(ObjectIndex::from_raw(obj_idx)))
-            }
-            Constant::EnumVariant { .. } => {
-                // Enum variants in catch arms are not yet supported.
-                // Fall back to Null (the Eq comparison will never match,
-                // effectively making this arm dead).
-                self.add_constant(ConstValue::Null)
-            }
-            Constant::Function(_) => {
-                // Function references in catch arms are nonsensical.
-                self.add_constant(ConstValue::Null)
-            }
-        }
     }
 
     // ========================================================================

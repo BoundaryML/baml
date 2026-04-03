@@ -23,12 +23,9 @@ function user.AlsoMayFail(x: int) -> string {
 function user.CatchAndRethrow(x: int) -> string {
     load_var x
     call user.MayFail
-    jump L0
+    return
     load_var _2
     throw
-
-  L0:
-    return
 }
 
 function user.CatchWithFallback(x: int) -> string {

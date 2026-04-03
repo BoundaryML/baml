@@ -312,8 +312,9 @@ fn compute_rpo(body: &MirFunctionBody) -> Vec<BlockId> {
     // they end up in postorder before the entry, which means after the entry
     // in the reversed RPO.
     for region in &body.catch_regions {
-        for arm in &region.arms {
-            rpo_dfs(body, arm.handler, &mut visited, &mut postorder);
+        rpo_dfs(body, region.handler, &mut visited, &mut postorder);
+        if let Some(ph) = region.panic_handler {
+            rpo_dfs(body, ph, &mut visited, &mut postorder);
         }
     }
     rpo_dfs(body, body.entry, &mut visited, &mut postorder);

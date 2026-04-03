@@ -497,6 +497,11 @@ function baml.llm.Client.execute(self: null, context: void, inherited_delay_ms: 
     store_var current_delay
     load_const 0
     store_var attempt
+    jump L2
+    load_var attempt
+    load_const 1
+    bin_op +
+    store_var attempt
 
   L2:
     load_var attempt
@@ -563,12 +568,6 @@ function baml.llm.Client.execute(self: null, context: void, inherited_delay_ms: 
     load_var context
     load_var attempt_delay
     call baml.llm.Client.execute_once
-    jump L9
-    load_var attempt
-    load_const 1
-    bin_op +
-    store_var attempt
-    jump L2
 
   L9:
     return
@@ -583,7 +582,7 @@ function baml.llm.Client.execute_once(self: null, context: void, active_delay_ms
     cmp_op ==
     pop_jump_if_false L0
     pop 1
-    jump L7
+    jump L3
 
   L0:
     copy 0
@@ -617,7 +616,7 @@ function baml.llm.Client.execute_once(self: null, context: void, active_delay_ms
     load_var context
     load_var active_delay_ms
     call baml.llm.Client.execute
-    jump L11
+    jump L9
 
   L2:
     load_var self
@@ -625,40 +624,9 @@ function baml.llm.Client.execute_once(self: null, context: void, active_delay_ms
     store_var _47
     load_const 0
     store_var __for_idx
+    jump L6
 
   L3:
-    load_var __for_idx
-    load_var _47
-    call baml.Array.length
-    cmp_op <
-    pop_jump_if_false L4
-    jump L5
-
-  L4:
-    alloc_instance DevOther
-    copy 0
-    load_const "All orchestration steps failed"
-    store_field .message
-    throw
-
-  L5:
-    load_var _47
-    load_var __for_idx
-    load_array_element
-    load_var context
-    load_var active_delay_ms
-    call baml.llm.Client.execute
-    jump L6
-    load_var __for_idx
-    load_const 1
-    bin_op +
-    store_var __for_idx
-    jump L3
-
-  L6:
-    jump L11
-
-  L7:
     load_var self
     dispatch_future baml.llm.Client.get_constructor
     await
@@ -692,17 +660,17 @@ function baml.llm.Client.execute_once(self: null, context: void, active_delay_ms
     store_var http_response
     load_var http_response
     call baml.http.Response.ok
-    pop_jump_if_false L8
-    jump L9
+    pop_jump_if_false L4
+    jump L5
 
-  L8:
+  L4:
     alloc_instance DevOther
     copy 0
     load_const "HTTP request failed"
     store_field .message
     throw
 
-  L9:
+  L5:
     load_var http_response
     dispatch_future baml.http.Response.text
     await
@@ -712,7 +680,37 @@ function baml.llm.Client.execute_once(self: null, context: void, active_delay_ms
     load_var return_type
     dispatch_future baml.llm.PrimitiveClient.parse
     await
-    jump L11
+    jump L9
+    load_var __for_idx
+    load_const 1
+    bin_op +
+    store_var __for_idx
+
+  L6:
+    load_var __for_idx
+    load_var _47
+    call baml.Array.length
+    cmp_op <
+    pop_jump_if_false L7
+    jump L8
+
+  L7:
+    alloc_instance DevOther
+    copy 0
+    load_const "All orchestration steps failed"
+    store_field .message
+    throw
+
+  L8:
+    load_var _47
+    load_var __for_idx
+    load_array_element
+    load_var context
+    load_var active_delay_ms
+    call baml.llm.Client.execute
+
+  L9:
+    return
     load_var active_delay_ms
     load_const 0
     cmp_op >
@@ -725,9 +723,6 @@ function baml.llm.Client.execute_once(self: null, context: void, active_delay_ms
   L10:
     load_var _36
     throw
-
-  L11:
-    return
 }
 
 function baml.llm.Client.get_constructor(self: null) -> () -> void {

@@ -7,35 +7,41 @@ fn user.Broken.BadUnionPattern(x: int | bool) -> string {
     let _0: string // _0 // return
     let _1: int | bool // x // param
     let _2: bool
-    let _3: null
+    let _3: bool
+    let _4: null
 
     bb0: {
-        _2 = is_type(copy _1, Union([Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }, Void { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
-        branch copy _2 -> [bb5, bb1];
+        _2 = is_type(copy _1, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _2 -> [bb6, bb1];
     }
 
     bb1: {
-        goto -> bb2;
+        _3 = is_type(copy _1, Void { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _3 -> [bb6, bb2];
     }
 
     bb2: {
-        _0 = const "bad";
         goto -> bb3;
     }
 
     bb3: {
+        _0 = const "bad";
         goto -> bb4;
     }
 
     bb4: {
-        return;
+        goto -> bb5;
     }
 
     bb5: {
-        _3 = call const fn baml.sys.panic(const "parse error") -> [bb6];
+        return;
     }
 
     bb6: {
+        _4 = call const fn baml.sys.panic(const "parse error") -> [bb7];
+    }
+
+    bb7: {
         unreachable;
     }
 }

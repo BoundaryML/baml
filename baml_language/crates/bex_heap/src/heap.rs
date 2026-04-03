@@ -253,9 +253,6 @@ impl BexHeap {
                     .iter()
                     .map(|cv| cv.to_value(resolve_idx))
                     .collect();
-
-                // Resolve CatchFilter::Class entries in the exception table
-                func.bytecode.resolve_exception_filters(resolve_idx);
             }
         }
     }

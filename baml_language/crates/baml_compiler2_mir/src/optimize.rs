@@ -63,9 +63,12 @@ fn eliminate_dead_blocks(body: &mut MirFunctionBody) {
     queue.push_back(body.entry);
     reachable.insert(body.entry);
     for region in &body.catch_regions {
-        for arm in &region.arms {
-            if reachable.insert(arm.handler) {
-                queue.push_back(arm.handler);
+        if reachable.insert(region.handler) {
+            queue.push_back(region.handler);
+        }
+        if let Some(ph) = region.panic_handler {
+            if reachable.insert(ph) {
+                queue.push_back(ph);
             }
         }
     }
@@ -121,9 +124,12 @@ fn eliminate_dead_blocks(body: &mut MirFunctionBody) {
         if let Some(new_block) = old_to_new[region.body_entry.0] {
             region.body_entry = new_block;
         }
-        for arm in &mut region.arms {
-            if let Some(new_block) = old_to_new[arm.handler.0] {
-                arm.handler = new_block;
+        if let Some(new_block) = old_to_new[region.handler.0] {
+            region.handler = new_block;
+        }
+        if let Some(ph) = region.panic_handler {
+            if let Some(new_block) = old_to_new[ph.0] {
+                region.panic_handler = Some(new_block);
             }
         }
     }
@@ -1202,11 +1208,15 @@ fn verify_mir(body: &MirFunctionBody, name: &crate::ItemRef) {
             "dangling body_entry {:?} in catch_region[{i}] of MIR function {name}",
             region.body_entry,
         );
-        for (j, arm) in region.arms.iter().enumerate() {
+        assert!(
+            region.handler.0 < num_blocks,
+            "dangling handler {:?} in catch_region[{i}] of MIR function {name}",
+            region.handler,
+        );
+        if let Some(ph) = region.panic_handler {
             assert!(
-                arm.handler.0 < num_blocks,
-                "dangling handler {:?} in catch_region[{i}].arms[{j}] of MIR function {name}",
-                arm.handler,
+                ph.0 < num_blocks,
+                "dangling panic_handler {ph:?} in catch_region[{i}] of MIR function {name}",
             );
         }
         assert!(
@@ -1247,8 +1257,9 @@ fn reorder_blocks_rpo(body: &mut MirFunctionBody) {
     let mut post_order: Vec<BlockId> = Vec::with_capacity(num_blocks);
     let mut stack: Vec<(BlockId, bool)> = vec![(body.entry, false)];
     for region in &body.catch_regions {
-        for arm in &region.arms {
-            stack.push((arm.handler, false));
+        stack.push((region.handler, false));
+        if let Some(ph) = region.panic_handler {
+            stack.push((ph, false));
         }
     }
 
@@ -1316,9 +1327,12 @@ fn reorder_blocks_rpo(body: &mut MirFunctionBody) {
         if let Some(new_block) = old_to_new[region.body_entry.0] {
             region.body_entry = new_block;
         }
-        for arm in &mut region.arms {
-            if let Some(new_block) = old_to_new[arm.handler.0] {
-                arm.handler = new_block;
+        if let Some(new_block) = old_to_new[region.handler.0] {
+            region.handler = new_block;
+        }
+        if let Some(ph) = region.panic_handler {
+            if let Some(new_block) = old_to_new[ph.0] {
+                region.panic_handler = Some(new_block);
             }
         }
     }
