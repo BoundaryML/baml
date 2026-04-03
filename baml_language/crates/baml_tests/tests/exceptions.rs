@@ -2554,7 +2554,320 @@ async fn user_class_plus_panic_plus_wildcard_string_fires() {
 }
 
 // ============================================================================
-// §9 — Four-arm: two panics + user class + wildcard
+// §9 — Mixed union catch arms (AppError | DivisionByZero =>)
+// ============================================================================
+
+// §9a — Mixed union WITH wildcard (split handler, Case C)
+
+#[tokio::test]
+async fn mixed_union_arm_plus_wildcard_panic_fires() {
+    let output = baml_test!(
+        r#"
+        class AppError { code int }
+        function do_div() -> int { 1 / 0 }
+
+        function risky(mode: int) -> int {
+            if (mode == 0) { throw AppError { code: 7 } }
+            if (mode == 1) { return do_div() }
+            if (mode == 2) { throw "fallback" }
+            let a = [1];
+            a[5]
+        }
+
+        function main() -> int {
+            risky(1) catch (e) {
+                AppError | DivisionByZero => 1,
+                _ => 99
+            }
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(1)));
+}
+
+#[tokio::test]
+async fn mixed_union_arm_plus_wildcard_user_error_fires() {
+    let output = baml_test!(
+        r#"
+        class AppError { code int }
+
+        function risky(mode: int) -> int {
+            if (mode == 0) { throw AppError { code: 7 } }
+            if (mode == 1) { 1 / 0 }
+            throw "fallback"
+        }
+
+        function main() -> int {
+            risky(0) catch (e) {
+                AppError | DivisionByZero => 1,
+                _ => 99
+            }
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(1)));
+}
+
+#[tokio::test]
+async fn mixed_union_arm_plus_wildcard_fallback_error_fires() {
+    let output = baml_test!(
+        r#"
+        class AppError { code int }
+
+        function risky(mode: int) -> int {
+            if (mode == 0) { throw AppError { code: 7 } }
+            if (mode == 1) { 1 / 0 }
+            throw "fallback"
+        }
+
+        function main() -> int {
+            risky(2) catch (e) {
+                AppError | DivisionByZero => 1,
+                _ => 99
+            }
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(99)));
+}
+
+#[tokio::test]
+async fn mixed_union_arm_plus_wildcard_other_panic_propagates() {
+    let output = baml_test!(
+        r#"
+        class AppError { code int }
+
+        function risky(mode: int) -> int {
+            if (mode == 0) { throw "fallback" }
+            let a = [1];
+            a[5]
+        }
+
+        function main() -> int {
+            risky(1) catch (e) {
+                AppError | DivisionByZero => 1,
+                _ => 99
+            }
+        }
+    "#
+    );
+    assert!(
+        output.result.is_err(),
+        "different panic should propagate past _"
+    );
+}
+
+#[tokio::test]
+async fn mixed_union_alias_plus_wildcard_handles_both_domains() {
+    let output = baml_test!(
+        r#"
+        class AppError { code int }
+        type Mixed = AppError | DivisionByZero
+        function do_div() -> int { 1 / 0 }
+
+        function risky(mode: int) -> int {
+            if (mode == 0) { throw AppError { code: 7 } }
+            if (mode == 1) { return do_div() }
+            throw "fallback"
+        }
+
+        function main() -> int {
+            risky(1) catch (e) {
+                Mixed => 1,
+                _ => 99
+            }
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(1)));
+}
+
+#[tokio::test]
+async fn mixed_union_alias_plus_wildcard_error_fires() {
+    let output = baml_test!(
+        r#"
+        class AppError { code int }
+        type Mixed = AppError | DivisionByZero
+
+        function risky(mode: int) -> int {
+            if (mode == 0) { throw AppError { code: 7 } }
+            1 / 0
+        }
+
+        function main() -> int {
+            risky(0) catch (e) {
+                Mixed => 1,
+                _ => 99
+            }
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(1)));
+}
+
+// §9b — Mixed union WITHOUT wildcard (single handler, Case B)
+
+#[tokio::test]
+async fn mixed_union_no_wildcard_panic_fires() {
+    let output = baml_test!(
+        r#"
+        class AppError { code int }
+        function do_div() -> int { 1 / 0 }
+
+        function risky(mode: int) -> int {
+            if (mode == 0) { throw AppError { code: 7 } }
+            return do_div()
+        }
+
+        function main() -> int {
+            risky(1) catch (e) {
+                AppError | DivisionByZero => 1
+            }
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(1)));
+}
+
+#[tokio::test]
+async fn mixed_union_no_wildcard_error_fires() {
+    let output = baml_test!(
+        r#"
+        class AppError { code int }
+        function do_div() -> int { 1 / 0 }
+
+        function risky(mode: int) -> int {
+            if (mode == 0) { throw AppError { code: 7 } }
+            return do_div()
+        }
+
+        function main() -> int {
+            risky(0) catch (e) {
+                AppError | DivisionByZero => 1
+            }
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(1)));
+}
+
+#[tokio::test]
+async fn mixed_union_no_wildcard_unmatched_rethrows() {
+    let output = baml_test!(
+        r#"
+        class AppError { code int }
+
+        function risky() -> int {
+            throw "not matched"
+        }
+
+        function main() -> int {
+            risky() catch (e) {
+                AppError | DivisionByZero => 1
+            }
+        }
+    "#
+    );
+    assert!(
+        output.result.is_err(),
+        "unmatched throw should rethrow past mixed union arm"
+    );
+}
+
+#[tokio::test]
+async fn mixed_union_no_wildcard_unmatched_panic_rethrows() {
+    let output = baml_test!(
+        r#"
+        class AppError { code int }
+
+        function risky() -> int {
+            let a = [1];
+            a[5]
+        }
+
+        function main() -> int {
+            risky() catch (e) {
+                AppError | DivisionByZero => 1
+            }
+        }
+    "#
+    );
+    assert!(
+        output.result.is_err(),
+        "IndexOutOfBounds should rethrow past mixed union arm"
+    );
+}
+
+// §9c — Pure-panic union with wildcard
+
+#[tokio::test]
+async fn panic_union_plus_wildcard_division_fires() {
+    let output = baml_test!(
+        r#"
+        function do_div() -> int { 1 / 0 }
+
+        function risky(mode: int) -> int {
+            if (mode == 0) { return do_div() }
+            if (mode == 1) { let a = [1]; return a[5] }
+            throw "fallback"
+        }
+
+        function main() -> int {
+            risky(0) catch (e) {
+                DivisionByZero | IndexOutOfBounds => 1,
+                _ => 99
+            }
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(1)));
+}
+
+#[tokio::test]
+async fn panic_union_plus_wildcard_index_fires() {
+    let output = baml_test!(
+        r#"
+        function do_div() -> int { 1 / 0 }
+
+        function risky(mode: int) -> int {
+            if (mode == 0) { return do_div() }
+            if (mode == 1) { let a = [1]; return a[5] }
+            throw "fallback"
+        }
+
+        function main() -> int {
+            risky(1) catch (e) {
+                DivisionByZero | IndexOutOfBounds => 1,
+                _ => 99
+            }
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(1)));
+}
+
+#[tokio::test]
+async fn panic_union_plus_wildcard_error_falls_to_wildcard() {
+    let output = baml_test!(
+        r#"
+        function risky(mode: int) -> int {
+            if (mode == 0) { 1 / 0 }
+            throw "fallback"
+        }
+
+        function main() -> int {
+            risky(1) catch (e) {
+                DivisionByZero | IndexOutOfBounds => 1,
+                _ => 99
+            }
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(99)));
+}
+
+// ============================================================================
+// §10 — Four-arm: two separate panics + user class + wildcard
 // ============================================================================
 
 #[tokio::test]
@@ -3230,7 +3543,7 @@ async fn four_arms_no_error() {
 }
 
 // ============================================================================
-// §10 — Uncaught panics propagate
+// §11 — Uncaught panics propagate
 // ============================================================================
 
 #[tokio::test]
@@ -3309,7 +3622,7 @@ async fn wrong_panic_pattern_propagates() {
 }
 
 // ============================================================================
-// §11 — Panic type alias (union of all panics)
+// §12 — Panic type alias (union of all panics)
 // ============================================================================
 
 #[tokio::test]
@@ -3488,7 +3801,7 @@ async fn panic_alias_plus_wildcard_dispatch() {
 }
 
 // ============================================================================
-// §12 — Nested catch, rethrow, sequential
+// §13 — Nested catch, rethrow, sequential
 // ============================================================================
 
 #[tokio::test]
@@ -3684,7 +3997,7 @@ async fn sequential_catches_both_recover() {
 }
 
 // ============================================================================
-// §13 — Special cases
+// §14 — Special cases
 // ============================================================================
 
 #[tokio::test]

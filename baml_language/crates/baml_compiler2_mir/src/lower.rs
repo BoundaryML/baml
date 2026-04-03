@@ -3329,6 +3329,52 @@ impl LoweringContext<'_> {
 
 // ─── Catch lowering ───────────────────────────────────────────────────────────
 
+#[derive(Clone, Copy, Debug, Default)]
+struct CatchArmDomain {
+    matches_errors: bool,
+    matches_panics: bool,
+}
+
+impl CatchArmDomain {
+    fn error_only() -> Self {
+        Self {
+            matches_errors: true,
+            matches_panics: false,
+        }
+    }
+
+    fn panic_only() -> Self {
+        Self {
+            matches_errors: false,
+            matches_panics: true,
+        }
+    }
+
+    fn merge(self, other: Self) -> Self {
+        Self {
+            matches_errors: self.matches_errors || other.matches_errors,
+            matches_panics: self.matches_panics || other.matches_panics,
+        }
+    }
+
+    fn matches_handler(self, include_all: bool, is_panic_handler: bool) -> bool {
+        include_all
+            || if is_panic_handler {
+                self.matches_panics
+            } else {
+                self.matches_errors
+            }
+    }
+}
+
+#[derive(Clone)]
+struct SharedCatchArm {
+    clause_binding: AstPatId,
+    arm: baml_compiler2_ast::CatchArm,
+    body_block: BlockId,
+    domain: CatchArmDomain,
+}
+
 impl LoweringContext<'_> {
     fn lower_catch(
         &mut self,
@@ -3348,13 +3394,10 @@ impl LoweringContext<'_> {
             .unwind_error_locals
             .insert(bb_handler, error_local);
 
+        let shared_arms = self.collect_shared_catch_arms(clauses);
+
         // Detect panic arms, wildcard arms, and catch_all clauses.
-        let has_panic_arms = clauses.iter().any(|clause| {
-            clause.arms.iter().any(|&arm_id| {
-                let arm = &self.body.catch_arms[arm_id];
-                self.pattern_is_panic_type(arm.pattern)
-            })
-        });
+        let has_panic_arms = shared_arms.iter().any(|arm| arm.domain.matches_panics);
         let has_wildcard = clauses.iter().any(|clause| {
             clause.arms.iter().any(|&arm_id| {
                 let arm = &self.body.catch_arms[arm_id];
@@ -3416,10 +3459,10 @@ impl LoweringContext<'_> {
         self.builder.set_current_block(bb_handler);
         if needs_split {
             // Case C: error handler gets only non-panic arms (including wildcard).
-            self.lower_catch_arms_filtered(clauses, error_local, dest, bb_join, false);
+            self.lower_catch_dispatch(&shared_arms, error_local, false);
         } else {
             // Case A/B: all arms go into the single handler.
-            self.lower_catch_arms_filtered(clauses, error_local, dest, bb_join, true);
+            self.lower_catch_dispatch(&shared_arms, error_local, true);
         }
 
         // Rethrow if nothing matched.
@@ -3431,28 +3474,58 @@ impl LoweringContext<'_> {
         if let Some(bb_panic) = panic_handler {
             self.builder.set_current_block(bb_panic);
             // Only panic arms go here.
-            self.lower_catch_arms_filtered(clauses, error_local, dest, bb_join, false);
+            self.lower_catch_dispatch(&shared_arms, error_local, false);
             // Rethrow if no panic arm matched.
             if !self.builder.is_current_terminated() {
                 self.builder.throw(Operand::Copy(Place::Local(error_local)));
             }
         }
 
+        // Lower each arm body once. Mixed panic/non-panic arms branch here from
+        // both handlers, so the body and its bindings stay shared.
+        for shared_arm in &shared_arms {
+            self.builder.set_current_block(shared_arm.body_block);
+            self.bind_pattern(error_local, shared_arm.clause_binding);
+            self.bind_pattern(error_local, shared_arm.arm.pattern);
+            self.lower_expr(shared_arm.arm.body, dest.clone());
+            if !self.builder.is_current_terminated() {
+                self.builder.goto(bb_join);
+            }
+        }
+
         self.builder.set_current_block(bb_join);
     }
 
-    /// Lower catch arms into the current block with pattern dispatch.
-    ///
-    /// When `include_all` is true, all arms are included.
-    /// When `include_all` is false, this is called twice:
-    /// - Once for the error handler (current block) — non-panic arms only
-    /// - Once for the panic handler (current block) — panic arms only
-    fn lower_catch_arms_filtered(
+    fn collect_shared_catch_arms(
         &mut self,
         clauses: &[baml_compiler2_ast::CatchClause],
+    ) -> Vec<SharedCatchArm> {
+        let mut shared_arms = Vec::new();
+
+        for clause in clauses {
+            for &arm_id in &clause.arms {
+                let arm = self.body.catch_arms[arm_id].clone();
+                shared_arms.push(SharedCatchArm {
+                    clause_binding: clause.binding,
+                    domain: self.pattern_catch_domain(arm.pattern),
+                    arm,
+                    body_block: self.builder.create_block(),
+                });
+            }
+        }
+
+        shared_arms
+    }
+
+    /// Lower catch arm tests into the current handler block.
+    ///
+    /// When `include_all` is false, this is called twice in a split catch:
+    /// - Once for the error handler (non-panic arms)
+    /// - Once for the panic handler (panic arms)
+    fn lower_catch_dispatch(
+        &mut self,
+        shared_arms: &[SharedCatchArm],
         error_local: Local,
-        dest: &Place,
-        bb_join: BlockId,
         include_all: bool,
     ) {
         let is_panic_handler = !include_all
@@ -3463,51 +3536,74 @@ impl LoweringContext<'_> {
                 .and_then(|r| r.panic_handler)
                 .is_some_and(|ph| self.builder.current_block() == ph);
 
-        for clause in clauses {
-            self.bind_pattern(error_local, clause.binding);
-            for &arm_id in &clause.arms {
-                let arm = self.body.catch_arms[arm_id].clone();
+        for shared_arm in shared_arms {
+            if !shared_arm
+                .domain
+                .matches_handler(include_all, is_panic_handler)
+            {
+                continue;
+            }
 
-                if !include_all {
-                    let is_panic = self.pattern_is_panic_type(arm.pattern);
-                    if is_panic_handler && !is_panic {
-                        continue; // panic handler: skip non-panic arms
-                    }
-                    if !is_panic_handler && is_panic {
-                        continue; // error handler: skip panic arms
+            let bb_arm_next = self.builder.create_block();
+            self.lower_pattern_test(
+                error_local,
+                shared_arm.arm.pattern,
+                shared_arm.body_block,
+                bb_arm_next,
+            );
+            self.builder.set_current_block(bb_arm_next);
+        }
+    }
+
+    fn pattern_catch_domain(&self, pat_id: AstPatId) -> CatchArmDomain {
+        let pat = self.body.patterns[pat_id].clone();
+        match pat {
+            AstPattern::Binding(name) => {
+                if name.as_str() != "_" {
+                    if let Some(tir_ty) = self.pat_types.get(&(self.current_scope, pat_id)) {
+                        let ty =
+                            convert_tir2_ty(tir_ty, &self.type_aliases, &self.recursive_aliases);
+                        return Self::mir_ty_catch_domain(&ty);
                     }
                 }
-
-                let bb_arm_body = self.builder.create_block();
-                let bb_arm_next = self.builder.create_block();
-                self.lower_pattern_test(error_local, arm.pattern, bb_arm_body, bb_arm_next);
-                self.builder.set_current_block(bb_arm_body);
-                self.bind_pattern(error_local, arm.pattern);
-                self.lower_expr(arm.body, dest.clone());
-                if !self.builder.is_current_terminated() {
-                    self.builder.goto(bb_join);
-                }
-                self.builder.set_current_block(bb_arm_next);
+                CatchArmDomain::error_only()
+            }
+            AstPattern::TypedBinding { ty, .. } => {
+                let resolved = self
+                    .pat_types
+                    .get(&(self.current_scope, pat_id))
+                    .map(|tir_ty| {
+                        convert_tir2_ty(tir_ty, &self.type_aliases, &self.recursive_aliases)
+                    })
+                    .unwrap_or_else(|| self.resolve_type_annotation(&ty));
+                Self::mir_ty_catch_domain(&resolved)
+            }
+            AstPattern::Union(sub_pats) => sub_pats
+                .into_iter()
+                .fold(CatchArmDomain::default(), |domain, sub_pat| {
+                    domain.merge(self.pattern_catch_domain(sub_pat))
+                }),
+            AstPattern::Literal(_) | AstPattern::Null | AstPattern::EnumVariant { .. } => {
+                CatchArmDomain::error_only()
             }
         }
     }
 
-    /// Check if a pattern's resolved type is a `baml.panics.*` class (or the
-    /// `Panic` type alias). Uses the TIR-resolved type instead of hardcoded
-    /// string lists, so adding a new panic class to `panics.baml` is sufficient.
-    fn pattern_is_panic_type(&self, pat_id: AstPatId) -> bool {
-        if let Some(ty) = self.pat_types.get(&(self.current_scope, pat_id)) {
-            Self::tir_ty_is_panic(ty)
-        } else {
-            false
-        }
-    }
-
-    fn tir_ty_is_panic(ty: &Tir2Ty) -> bool {
+    fn mir_ty_catch_domain(ty: &Ty) -> CatchArmDomain {
         match ty {
-            Tir2Ty::Class(qtn, _) | Tir2Ty::TypeAlias(qtn, _) => qtn.is_panic_type(),
-            Tir2Ty::Union(members, _) => members.iter().any(Self::tir_ty_is_panic),
-            _ => false,
+            Ty::Union(members, _) => members
+                .iter()
+                .fold(CatchArmDomain::default(), |domain, ty| {
+                    domain.merge(Self::mir_ty_catch_domain(ty))
+                }),
+            Ty::Class(type_name, _) | Ty::TypeAlias(type_name, _) => {
+                if type_name.is_panic_type() {
+                    CatchArmDomain::panic_only()
+                } else {
+                    CatchArmDomain::error_only()
+                }
+            }
+            _ => CatchArmDomain::error_only(),
         }
     }
 }

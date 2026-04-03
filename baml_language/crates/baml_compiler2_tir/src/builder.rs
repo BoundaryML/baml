@@ -1268,6 +1268,8 @@ impl<'db> TypeInferenceBuilder<'db> {
             let arm = &body.match_arms[*arm_id];
             let pattern_id = arm.pattern;
 
+            self.record_pattern_test_types(pattern_id, &scrutinee_ty, body, arm.body);
+
             let arm_cases = self.pattern_match_cases(pattern_id, &scrutinee_ty, body, arm.body);
             let mut unreachable = catch_all_seen;
             if !unreachable && arm.guard.is_none() {
@@ -1407,50 +1409,42 @@ impl<'db> TypeInferenceBuilder<'db> {
                 let arm = &body.catch_arms[arm_id];
                 let matches =
                     self.match_throw_types_for_pattern(arm.pattern, &residual, body, arm.body);
-                // Explicit panic type patterns (e.g. DivisionByZero =>) are
-                // never unreachable — panics can occur in any expression at
-                // runtime regardless of the declared throw set.
-                let is_explicit_panic = self.is_panic_type_pattern(arm.pattern, body);
-                // Record resolved type for bare type sugar and typed binding
-                // patterns so MIR can generate IsType checks and determine
-                // catches_panics.
-                match &body.patterns[arm.pattern] {
-                    baml_compiler2_ast::Pattern::Binding(name)
-                        if name.as_str() != "_" && self.is_bare_type_sugar_binding(name) =>
-                    {
-                        let ty = self.pattern_narrowed_type(
-                            arm.pattern,
-                            &clause_binding_ty,
-                            body,
-                            arm.body,
-                        );
-                        self.bindings.insert(arm.pattern, ty);
-                    }
-                    baml_compiler2_ast::Pattern::TypedBinding { ty, .. } => {
-                        let resolved = self.resolve_type_expr(ty, arm.body);
-                        self.bindings.insert(arm.pattern, resolved);
-                    }
-                    _ => {}
-                }
-                if matches.may_match.is_empty() && !is_explicit_panic {
+                // Panic-containing patterns are never unreachable — panics can
+                // occur in any expression at runtime regardless of the
+                // declared throw set.
+                let panic_subset_ty = self.pattern_panic_narrowed_type(arm.pattern, body, arm.body);
+                let has_panic_component = panic_subset_ty.is_some();
+                // Record resolved types for bare type sugar / typed binding
+                // patterns (including union members) so MIR can emit `IsType`
+                // checks for each subpattern.
+                self.record_pattern_test_types(arm.pattern, &clause_binding_ty, body, arm.body);
+                if matches.may_match.is_empty() && !has_panic_component {
                     self.context
                         .report_warning_simple(TirTypeError::UnreachableArm, arm.body);
                 }
 
                 let mut narrowed_binding_ty = Self::facts_to_ty(&matches.may_match);
-                // When the arm matches a panic type, may_match is empty (panics
-                // aren't in the declared throw set) so narrowed_binding_ty is
-                // `never`.  Use the pattern's resolved type instead so the
-                // clause binding (e.g. `e`) is usable inside the arm body.
-                if matches!(narrowed_binding_ty, Ty::Never { .. }) && is_explicit_panic {
-                    narrowed_binding_ty =
-                        self.pattern_narrowed_type(arm.pattern, &clause_binding_ty, body, arm.body);
+                // Panic members aren't tracked in the declared throw set, so
+                // add back the panic subset of the pattern to keep the clause
+                // binding (e.g. `e`) and arm bindings usable inside mixed arms.
+                if let Some(panic_subset_ty) = panic_subset_ty {
+                    narrowed_binding_ty = if matches!(narrowed_binding_ty, Ty::Never { .. }) {
+                        panic_subset_ty
+                    } else {
+                        Self::join_all(&[narrowed_binding_ty, panic_subset_ty])
+                    };
                 }
+                let pattern_binding_ty = self.pattern_binding_ty_for_catch(
+                    arm.pattern,
+                    &clause_binding_ty,
+                    &narrowed_binding_ty,
+                    body,
+                    arm.body,
+                );
                 let mut saved = Vec::new();
                 if let Some(name) = &binding_name {
                     saved.push((name.clone(), self.locals.get(name).cloned()));
-                    self.locals
-                        .insert(name.clone(), narrowed_binding_ty.clone());
+                    self.locals.insert(name.clone(), pattern_binding_ty.clone());
                 }
                 if let Some((arm_bind_name, arm_bind_ty)) =
                     self.pattern_binding_for_arm(arm.pattern, &narrowed_binding_ty, body, arm.body)
@@ -1459,6 +1453,14 @@ impl<'db> TypeInferenceBuilder<'db> {
                         arm_bind_name.clone(),
                         self.locals.get(&arm_bind_name).cloned(),
                     ));
+                    let arm_bind_ty =
+                        if self.pattern_has_multiple_variants(arm.pattern, body, arm.body) {
+                            Ty::BuiltinUnknown {
+                                attr: TyAttr::default(),
+                            }
+                        } else {
+                            arm_bind_ty
+                        };
                     self.locals.insert(arm_bind_name, arm_bind_ty);
                 }
 
@@ -1699,6 +1701,33 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
+    fn record_pattern_test_types(
+        &mut self,
+        pattern_id: PatId,
+        scrutinee_ty: &Ty,
+        body: &ExprBody,
+        at_expr: ExprId,
+    ) {
+        match &body.patterns[pattern_id] {
+            baml_compiler2_ast::Pattern::Binding(name)
+                if name.as_str() != "_" && self.is_bare_type_sugar_binding(name) =>
+            {
+                let ty = self.pattern_narrowed_type(pattern_id, scrutinee_ty, body, at_expr);
+                self.bindings.insert(pattern_id, ty);
+            }
+            baml_compiler2_ast::Pattern::TypedBinding { ty, .. } => {
+                let resolved = self.resolve_type_expr(ty, at_expr);
+                self.bindings.insert(pattern_id, resolved);
+            }
+            baml_compiler2_ast::Pattern::Union(parts) => {
+                for part in parts {
+                    self.record_pattern_test_types(*part, scrutinee_ty, body, at_expr);
+                }
+            }
+            _ => {}
+        }
+    }
+
     /// Resolve a `TypeExpr` to a `Ty`.  Tries `bare_type_sugar_to_ty` first
     /// (handles `baml.panics.*` types and primitives), falls back to
     /// `lower_pattern_type_expr` for user-defined types.
@@ -1801,24 +1830,129 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
-    /// Check if a catch arm pattern resolves to a `baml.panics.*` type.
-    ///
-    /// Uses the resolution context to look up the name in dep interfaces
-    /// rather than a hardcoded list, so adding a new panic class to
-    /// `panics.baml` is sufficient.
-    fn is_panic_type_pattern(
-        &self,
+    /// Return the subset of a catch pattern that can match `baml.panics.*`
+    /// values, if any.
+    fn pattern_panic_narrowed_type(
+        &mut self,
         pattern_id: baml_compiler2_ast::PatId,
         body: &baml_compiler2_ast::ExprBody,
-    ) -> bool {
+        at_expr: ExprId,
+    ) -> Option<Ty> {
         match &body.patterns[pattern_id] {
-            baml_compiler2_ast::Pattern::Binding(name) => self.panic_class_ty(name).is_some(),
-            baml_compiler2_ast::Pattern::TypedBinding {
-                ty: baml_compiler2_ast::TypeExpr::Path { segments, .. },
-                ..
-            } => segments
-                .last()
-                .is_some_and(|s| self.panic_class_ty(s).is_some()),
+            baml_compiler2_ast::Pattern::Binding(name) => {
+                if name.as_str() == "_" || !self.is_bare_type_sugar_binding(name) {
+                    return None;
+                }
+
+                let narrowed = if let Some(prim_ty) = self.bare_type_sugar_to_ty(name) {
+                    prim_ty
+                } else {
+                    self.lower_pattern_type_expr(
+                        &TypeExpr::Path {
+                            segments: vec![name.clone()],
+                            attrs: vec![],
+                        },
+                        at_expr,
+                    )
+                };
+                self.ty_panic_subset(&narrowed)
+            }
+            baml_compiler2_ast::Pattern::TypedBinding { ty, .. } => {
+                let narrowed = self.resolve_type_expr(ty, at_expr);
+                self.ty_panic_subset(&narrowed)
+            }
+            baml_compiler2_ast::Pattern::Union(parts) => {
+                let mut panic_members = Vec::new();
+                for part in parts {
+                    if let Some(ty) = self.pattern_panic_narrowed_type(*part, body, at_expr) {
+                        panic_members.push(ty);
+                    }
+                }
+
+                if panic_members.is_empty() {
+                    None
+                } else {
+                    Some(Self::join_all(&panic_members))
+                }
+            }
+            baml_compiler2_ast::Pattern::Literal(_)
+            | baml_compiler2_ast::Pattern::Null
+            | baml_compiler2_ast::Pattern::EnumVariant { .. } => None,
+        }
+    }
+
+    fn ty_panic_subset(&self, ty: &Ty) -> Option<Ty> {
+        match ty {
+            Ty::Class(qtn, _) => qtn.is_panic_type().then(|| ty.clone()),
+            Ty::TypeAlias(qtn, _) => {
+                if let Some(expanded) = self.aliases.get(qtn) {
+                    self.ty_panic_subset(expanded)
+                } else if qtn.is_panic_type() {
+                    Some(ty.clone())
+                } else {
+                    None
+                }
+            }
+            Ty::Union(parts, _) => {
+                let panic_members: Vec<_> = parts
+                    .iter()
+                    .filter_map(|part| self.ty_panic_subset(part))
+                    .collect();
+                if panic_members.is_empty() {
+                    None
+                } else {
+                    Some(Self::join_all(&panic_members))
+                }
+            }
+            _ => None,
+        }
+    }
+
+    fn pattern_binding_ty_for_catch(
+        &mut self,
+        pattern_id: PatId,
+        clause_binding_ty: &Ty,
+        narrowed_binding_ty: &Ty,
+        body: &ExprBody,
+        at_expr: ExprId,
+    ) -> Ty {
+        if self.pattern_has_multiple_variants(pattern_id, body, at_expr) {
+            Ty::BuiltinUnknown {
+                attr: TyAttr::default(),
+            }
+        } else if matches!(narrowed_binding_ty, Ty::Never { .. }) {
+            clause_binding_ty.clone()
+        } else {
+            narrowed_binding_ty.clone()
+        }
+    }
+
+    fn pattern_has_multiple_variants(
+        &mut self,
+        pattern_id: PatId,
+        body: &ExprBody,
+        at_expr: ExprId,
+    ) -> bool {
+        let pattern_ty = self.pattern_narrowed_type(
+            pattern_id,
+            &Ty::BuiltinUnknown {
+                attr: TyAttr::default(),
+            },
+            body,
+            at_expr,
+        );
+        self.ty_has_multiple_variants(&pattern_ty)
+    }
+
+    fn ty_has_multiple_variants(&self, ty: &Ty) -> bool {
+        match ty {
+            Ty::Union(members, _) => {
+                members.len() > 1 || members.iter().any(|ty| self.ty_has_multiple_variants(ty))
+            }
+            Ty::TypeAlias(qtn, _) => self
+                .aliases
+                .get(qtn)
+                .is_some_and(|expanded| self.ty_has_multiple_variants(expanded)),
             _ => false,
         }
     }
@@ -1848,7 +1982,7 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// items when compiling the `baml` package itself) so that adding a
     /// new panic class to `panics.baml` is sufficient.
     fn panic_class_ty(&self, name: &Name) -> Option<Ty> {
-        let path = [Name::new("panics"), name.clone()];
+        let path = [Name::new(baml_base::PANICS_NAMESPACE), name.clone()];
         self.res_ctx
             .resolve_type(self.context.db(), &path, &[])
             .map(|(_source, ty)| ty)
