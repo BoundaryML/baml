@@ -28,7 +28,7 @@ env:
 jobs:
   determine_changes:
     name: "Determine changes"
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     outputs:
       # Flag that is raised when any code in baml_language is changed
       code: ${{ steps.check_code.outputs.changed }}
@@ -222,7 +222,7 @@ jobs:
     name: "Pre-commit Checks"
     # Bumped to ubuntu-32gb: ubuntu-latest was hitting resource issues, using
     # this overkill runner until we can root-cause and right-size.
-    runs-on: ubuntu-32gb
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     needs: determine_changes
     if: needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary'
     timeout-minutes: 20
@@ -333,7 +333,7 @@ jobs:
 
   miri-tests:
     name: "Miri (unsafe code verification)"
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     needs: determine_changes
     if: needs.determine_changes.outputs.unsafe == 'true'
     timeout-minutes: 25
@@ -355,7 +355,7 @@ jobs:
 
   benchmarks-instrumented:
     name: "benchmarks instrumented (baml)"
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     needs: determine_changes
     # Skip benchmarks in merge_group - they already ran in the PR
     if: |
@@ -414,7 +414,7 @@ jobs:
   # Configure "CI - BAML Language / CI Failure Alert" as a required status check.
   ci-failure-alert:
     name: "CI-v2 Failure Alert"
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     needs:
       - prek
       - cargo-tests

@@ -25,7 +25,7 @@ jobs:
     name: "cargo test (linux)"
     # Bumped to ubuntu-32gb: ubuntu-latest was hitting resource issues, using
     # this overkill runner until we can root-cause and right-size.
-    runs-on: ubuntu-32gb
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     if: ${{ inputs.code_changed == 'true' || inputs.run_all }}
     timeout-minutes: 25
     steps:
@@ -117,7 +117,7 @@ jobs:
 
   cargo-test-windows:
     name: "cargo test (windows)"
-    runs-on: windows-latest
+    runs-on: blacksmith-4vcpu-windows-2025
     if: ${{ inputs.code_changed == 'true' || inputs.run_all }}
     # TODO: Reduce this once our changes to aws-sdk-rust are upstreamed
     # Right now it needs to download our repo every time which is very slow
@@ -155,7 +155,7 @@ jobs:
 
   cargo-test-wasm:
     name: "cargo test (wasm)"
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     if: ${{ inputs.code_changed == 'true' || inputs.run_all }}
     timeout-minutes: 25
     steps:
@@ -192,7 +192,7 @@ jobs:
 
   size-gate-linux:
     name: "size-gate (linux)"
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     if: ${{ inputs.code_changed == 'true' || inputs.run_all }}
     timeout-minutes: 20
     steps:
@@ -282,7 +282,7 @@ jobs:
 
   size-gate-windows:
     name: "size-gate (windows)"
-    runs-on: windows-latest
+    runs-on: blacksmith-4vcpu-windows-2025
     if: ${{ inputs.code_changed == 'true' || inputs.run_all }}
     # TODO: Reduce this once our changes to aws-sdk-rust are upstreamed
     # Right now it needs to download our repo every time which is very slow
@@ -325,7 +325,7 @@ jobs:
 
   size-gate-wasm:
     name: "size-gate (wasm)"
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     if: ${{ inputs.code_changed == 'true' || inputs.run_all }}
     timeout-minutes: 25
     steps:
@@ -368,7 +368,7 @@ jobs:
 
   size-gate-report:
     name: "size-gate (report)"
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     if: ${{ always() && (inputs.code_changed == 'true' || inputs.run_all) }}
     needs: [size-gate-linux, size-gate-macos, size-gate-windows, size-gate-wasm]
     permissions:
@@ -428,7 +428,7 @@ jobs:
     name: "cargo build (msrv)"
     # Bumped to ubuntu-32gb: ubuntu-latest was hitting resource issues, using
     # this overkill runner until we can root-cause and right-size.
-    runs-on: ubuntu-32gb
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     if: ${{ inputs.code_changed == 'true' || inputs.run_all }}
     timeout-minutes: 25
     steps:
@@ -465,7 +465,7 @@ jobs:
 
   check-dependencies:
     name: "check dependencies"
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     if: ${{ inputs.code_changed == 'true' || inputs.run_all }}
     steps:
       - uses: actions/checkout@v4
@@ -488,7 +488,7 @@ jobs:
 
   snapshot-tests:
     name: "snapshot tests"
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     if: ${{ inputs.code_changed == 'true' || inputs.run_all }}
     timeout-minutes: 20
     steps:

@@ -44,7 +44,7 @@ jobs:
             manylinux: musllinux_1_1
             license_test: skip
 
-          - target: aarch64-unknown-linux-musl
+          - target: blacksmith-4vcpu-ubuntu-2404-arm
             runs_on: ubuntu-latest
             # see https://github.com/astral-sh/uv/blob/9bb55c4ac0582e05d1a7a5bbd99cc7b2c82f1847/.github/workflows/build-binaries.yml#L594
             manylinux: musllinux_1_1
