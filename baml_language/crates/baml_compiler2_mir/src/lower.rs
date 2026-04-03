@@ -472,8 +472,28 @@ impl<'db> LoweringContext<'db> {
         let func_span = func_data.span;
 
         let index = file_semantic_index(db, file);
-        let func_scope_id: FileScopeId =
-            index.scope_at_offset(func_span.start(), Some(&func_data.name));
+        // For synthesized functions whose span is `0..0` (e.g. `$init_test_N`),
+        // `scope_at_offset` may return a descendant Lambda scope instead of the
+        // Function scope itself, because all synthesized expressions share span
+        // `0..0` and the descendant search finds a matching lambda first.
+        // Avoid this by searching explicitly for a `ScopeKind::Function` scope
+        // with the correct name and span before falling back to `scope_at_offset`.
+        let func_scope_id: FileScopeId = index
+            .scopes
+            .iter()
+            .enumerate()
+            .find_map(|(i, scope)| {
+                if scope.kind == baml_compiler2_hir::scope::ScopeKind::Function
+                    && scope.range == func_span
+                    && scope.name.as_ref() == Some(&func_data.name)
+                {
+                    #[allow(clippy::cast_possible_truncation)]
+                    Some(FileScopeId::new(i as u32))
+                } else {
+                    None
+                }
+            })
+            .unwrap_or_else(|| index.scope_at_offset(func_span.start(), Some(&func_data.name)));
 
         // --- Eagerly aggregate expr_types, pat_types, resolutions, and exhaustive_matches from all scopes ---
         let mut expr_types: FxHashMap<(FileScopeId, AstExprId), Tir2Ty> = FxHashMap::default();

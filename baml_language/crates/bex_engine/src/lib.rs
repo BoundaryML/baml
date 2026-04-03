@@ -55,6 +55,7 @@
 
 mod conversion;
 mod function_call_context;
+mod test_registry;
 use std::{
     collections::HashMap,
     sync::{
@@ -78,6 +79,7 @@ pub use conversion::test_arg_to_external;
 // Re-export CancellationToken for callers.
 pub use function_call_context::{FunctionCallContext, FunctionCallContextBuilder};
 use sys_types::{CallId, OpError, SysOpResult};
+pub use test_registry::{TestInfo, TestRegistry, TestSetInfo};
 use thiserror::Error;
 use tokio::sync::{Notify, mpsc};
 pub use tokio_util::sync::CancellationToken;
@@ -843,6 +845,7 @@ impl BexEngine {
             collectors,
             cancel,
         }: FunctionCallContext,
+        copy_objects: bool,
     ) -> Result<BexExternalValue, EngineError> {
         // Fail fast if already cancelled — guarantees pre-cancelled tokens
         // always produce Err(Cancelled) regardless of function contents.
@@ -970,6 +973,7 @@ impl BexEngine {
                 call_id,
                 &mut span_state,
                 &cancel,
+                copy_objects,
             )
             .await;
 
@@ -1099,6 +1103,238 @@ impl BexEngine {
             .find(|t| t.function_names.iter().any(|n| function_name == n) && t.name == test_name)
     }
 
+    // ========================================================================
+    // Test Metadata Extraction
+    // ========================================================================
+
+    /// Extract test names and hierarchy from a live Registry handle.
+    ///
+    /// Walks the heap selectively — reads only `name: string` fields,
+    /// skips `body`/`runner`/`collector` (closures that can't be deep-extracted).
+    ///
+    /// # Safety
+    ///
+    /// This method uses unsafe pointer dereference. It is safe because:
+    /// - We call `with_gc_protection` which holds the GC epoch lock for the duration
+    /// - All pointers are valid for the lifetime of the protection guard
+    /// - We only read objects, never write
+    pub(crate) fn extract_test_metadata(
+        &self,
+        registry_handle: &BexExternalValue,
+    ) -> Result<(Vec<TestInfo>, Vec<TestSetInfo>), EngineError> {
+        let BexExternalValue::Handle(handle) = registry_handle else {
+            return Ok((vec![], vec![]));
+        };
+
+        self.heap.with_gc_protection(|protected| {
+            let guard = protected.epoch_guard();
+            let registry_ptr =
+                handle
+                    .object_ptr(&guard)
+                    .ok_or_else(|| EngineError::SchemaInconsistency {
+                        message: "Registry handle expired".into(),
+                    })?;
+
+            // SAFETY: we hold GC protection via with_gc_protection; pointer is valid
+            let registry_obj = unsafe { registry_ptr.get() };
+
+            let Object::Instance(instance) = registry_obj else {
+                return Err(EngineError::SchemaInconsistency {
+                    message: "expected Registry instance".into(),
+                });
+            };
+
+            // Registry fields per registry.baml class definition order:
+            //   [0] tests: TestRegistration[]
+            //   [1] testsets: TestSetRegistration[]
+            if instance.fields.len() < 2 {
+                return Err(EngineError::SchemaInconsistency {
+                    message: format!(
+                        "Registry instance has {} fields, expected at least 2",
+                        instance.fields.len()
+                    ),
+                });
+            }
+
+            let tests = Self::extract_test_infos(&instance.fields[0])?;
+            let testsets = Self::extract_testset_infos(&instance.fields[1])?;
+
+            Ok((tests, testsets))
+        })
+    }
+
+    /// Extract `Vec<TestInfo>` from a `TestRegistration[]` heap value.
+    ///
+    /// Each `TestRegistration` instance has fields `[name, body, runner]`.
+    /// We extract only `name` (field index 0).
+    fn extract_test_infos(array_value: &Value) -> Result<Vec<TestInfo>, EngineError> {
+        let Value::Object(ptr) = array_value else {
+            return Ok(vec![]);
+        };
+        // SAFETY: pointer is valid within the GC epoch protection scope
+        let obj = unsafe { ptr.get() };
+        let Object::Array(items) = obj else {
+            return Ok(vec![]);
+        };
+
+        items
+            .iter()
+            .map(|item| {
+                let Value::Object(reg_ptr) = item else {
+                    return Err(EngineError::TypeMismatch {
+                        message: "expected TestRegistration instance in tests array".into(),
+                    });
+                };
+                // SAFETY: pointer is valid within GC epoch protection scope
+                let reg_obj = unsafe { reg_ptr.get() };
+                let Object::Instance(reg) = reg_obj else {
+                    return Err(EngineError::TypeMismatch {
+                        message: "expected TestRegistration instance in tests array".into(),
+                    });
+                };
+                if reg.fields.is_empty() {
+                    return Err(EngineError::SchemaInconsistency {
+                        message: "TestRegistration instance has no fields".into(),
+                    });
+                }
+                // TestRegistration fields: [0] name: string, [1] body, [2] runner
+                let name = Self::extract_string(&reg.fields[0])?;
+                Ok(TestInfo { name })
+            })
+            .collect()
+    }
+
+    /// Extract `Vec<TestSetInfo>` from a `TestSetRegistration[]` heap value.
+    ///
+    /// Each `TestSetRegistration` instance has fields `[name, collector, runner]`.
+    /// We extract only `name` (field index 0). Nested tests inside testsets require
+    /// *executing* the collector closure — that belongs in the `run_tests` follow-up.
+    fn extract_testset_infos(array_value: &Value) -> Result<Vec<TestSetInfo>, EngineError> {
+        let Value::Object(ptr) = array_value else {
+            return Ok(vec![]);
+        };
+        // SAFETY: pointer is valid within the GC epoch protection scope
+        let obj = unsafe { ptr.get() };
+        let Object::Array(items) = obj else {
+            return Ok(vec![]);
+        };
+
+        items
+            .iter()
+            .map(|item| {
+                let Value::Object(reg_ptr) = item else {
+                    return Err(EngineError::TypeMismatch {
+                        message: "expected TestSetRegistration instance in testsets array".into(),
+                    });
+                };
+                // SAFETY: pointer is valid within GC epoch protection scope
+                let reg_obj = unsafe { reg_ptr.get() };
+                let Object::Instance(reg) = reg_obj else {
+                    return Err(EngineError::TypeMismatch {
+                        message: "expected TestSetRegistration instance in testsets array".into(),
+                    });
+                };
+                if reg.fields.is_empty() {
+                    return Err(EngineError::SchemaInconsistency {
+                        message: "TestSetRegistration instance has no fields".into(),
+                    });
+                }
+                // TestSetRegistration fields: [0] name: string, [1] collector, [2] runner
+                // Extract only the name; nested tests require executing the collector.
+                let name = Self::extract_string(&reg.fields[0])?;
+                Ok(TestSetInfo {
+                    name,
+                    tests: vec![],
+                    testsets: vec![],
+                })
+            })
+            .collect()
+    }
+
+    /// Extract a `String` from a heap `Value::Object(ptr)` pointing to an `Object::String`.
+    fn extract_string(value: &Value) -> Result<String, EngineError> {
+        let Value::Object(ptr) = value else {
+            return Err(EngineError::TypeMismatch {
+                message: "expected Object pointer for string field".into(),
+            });
+        };
+        // SAFETY: pointer is valid within the GC epoch protection scope
+        let obj = unsafe { ptr.get() };
+        let Object::String(s) = obj else {
+            return Err(EngineError::TypeMismatch {
+                message: "expected Object::String for string field".into(),
+            });
+        };
+        Ok(s.clone())
+    }
+
+    // ========================================================================
+    // Test Collection API
+    // ========================================================================
+
+    /// Collect all tests for a package by invoking `{package}.$init_test(registry)`.
+    ///
+    /// Returns a [`TestRegistry`] with cached metadata (names, hierarchy) and a live
+    /// GC-rooted handle to the heap `testing.Registry` object for later execution.
+    ///
+    /// If the package has no test blocks, `$init_test` will not exist in the program
+    /// and an empty [`TestRegistry`] is returned immediately.
+    ///
+    /// # Arguments
+    ///
+    /// - `package`: The package name (e.g. `"user"`).
+    /// - `cancel`: A [`CancellationToken`] for caller-controlled cancellation.
+    pub async fn collect_tests(
+        self: &Arc<Self>,
+        package: &str,
+        cancel: CancellationToken,
+    ) -> Result<TestRegistry, EngineError> {
+        let init_test_name = if package == "user" {
+            "$init_test".to_string()
+        } else {
+            format!("{package}.$init_test")
+        };
+
+        // If no $init_test function exists, this package has no tests.
+        if self.lookup_function(&init_test_name).is_err() {
+            return Ok(TestRegistry::empty());
+        }
+
+        // 1. Create an empty Registry via testing.Registry.new().
+        //    Use copy_objects: false to get a Handle instead of deep-extracting.
+        //    The Handle keeps the heap object alive via GC rooting.
+        let registry_handle = self
+            .call_function(
+                "testing.Registry.new",
+                vec![],
+                FunctionCallContextBuilder::new(CallId::next())
+                    .with_cancel_token(cancel.clone())
+                    .build(),
+                false, // copy_objects: return a Handle, not a deep-extracted value
+            )
+            .await?;
+
+        // 2. Call $init_test(registry) — registry mutations happen in-place on
+        //    the heap via //baml:mut_self on register_test/register_test_set.
+        //    The Handle is converted to Value::Object(ptr) by
+        //    convert_external_to_vm_value (conversion.rs:232-236).
+        let _result = self
+            .call_function(
+                &init_test_name,
+                vec![registry_handle.clone()],
+                FunctionCallContextBuilder::new(CallId::next())
+                    .with_cancel_token(cancel)
+                    .build(),
+                true, // copy_objects: normal deep-extraction for the null return
+            )
+            .await?;
+
+        // 3. Extract metadata from the live registry handle.
+        let (tests, testsets) = self.extract_test_metadata(&registry_handle)?;
+
+        Ok(TestRegistry::new(registry_handle, tests, testsets))
+    }
+
     /// Collect roots from a yielded VM.
     fn collect_vm_roots(vm: &BexVm) -> Vec<HeapPtr> {
         let mut roots = Vec::new();
@@ -1179,6 +1415,7 @@ impl BexEngine {
     ///
     /// The `my_epoch` parameter is used to check if GC has been requested
     /// (epoch advanced). VMs from old epochs will park at yield points.
+    #[allow(clippy::too_many_arguments)]
     async fn run_event_loop_with_epoch(
         self: &Arc<Self>,
         return_type: Ty,
@@ -1187,6 +1424,7 @@ impl BexEngine {
         call_id: CallId,
         span_state: &mut Option<SpanState>,
         cancel: &CancellationToken,
+        copy_objects: bool,
     ) -> Result<BexExternalValue, EngineError> {
         let (pending_futures, mut processed_futures) = mpsc::unbounded_channel::<FutureResult>();
         // Abort handles for spawned async tasks.
@@ -1257,8 +1495,20 @@ impl BexEngine {
                         return Err(EngineError::Cancelled);
                     }
 
+                    // When copy_objects: false and the result is a heap object,
+                    // create a Handle without holding with_gc_protection (which
+                    // takes a read lock on handles). create_handle takes a write
+                    // lock — the two cannot nest without deadlocking.
+                    if !copy_objects {
+                        if let Value::Object(ptr) = value {
+                            let handle = self.heap.create_handle(ptr);
+                            return Ok(BexExternalValue::Handle(handle));
+                        }
+                        // Non-object primitives fall through to normal conversion below.
+                    }
+
                     return self.heap.with_gc_protection(|protected| {
-                        // Convert to BexValue (handles for objects, BexExternalValue for primitives)
+                        // Normal deep-extraction: convert VM value to fully owned BexExternalValue.
                         self.convert_vm_value_to_external_with_type(
                             &value,
                             &return_type,
@@ -1570,6 +1820,7 @@ impl sys_types::VmSpawner for BexEngine {
             FunctionCallContextBuilder::new(sys_types::CallId::next())
                 .with_cancel_token(cancel)
                 .build(),
+            true,
         )
         .await
         .map_err(|e| Box::new(e) as Box<dyn Send + Sync + 'static>)

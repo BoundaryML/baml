@@ -6,27 +6,19 @@ fn user.$init_test_17(registry: testing.Registry) -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: testing.Registry // registry // param
-    let _2: int
-    let _3: 2
-    let _4: string
-    let _5: void
-    let _6: void
-    let _7: null
-    let _8: string
-    let _9: void
+    let _2: null
+    let _3: () -> null
+    let _4: null
+    let _5: () -> null
 
     bb0: {
-        _4 = const "register_test";
-        _3 = copy _1[_4];
-        _5 = make_closure lambda[0]();
-        _2 = call copy _3(const "simple test", copy _5, const null) -> [bb1];
+        _3 = make_closure lambda[0]();
+        _2 = call const fn testing.Registry.register_test(copy _1, const "simple test", copy _3, const null) -> [bb1];
     }
 
     bb1: {
-        _8 = const "register_test";
-        _7 = copy _1[_8];
-        _9 = make_closure lambda[1]();
-        _6 = call copy _7(const "with not_null", copy _9, const null) -> [bb2];
+        _5 = make_closure lambda[1]();
+        _4 = call const fn testing.Registry.register_test(copy _1, const "with not_null", copy _5, const null) -> [bb2];
     }
 
     bb2: {
@@ -43,14 +35,17 @@ fn user.$init_test_17(registry: testing.Registry) -> null {
 fn .<lambda($init_test_17, 0)>() -> null {
     // Locals:
     let _0: null // _0 // return
-    let _1: null
 
     bb0: {
-        _1 = call const fn baml.sys.panic(const "unresolved name: x") -> [bb1];
+        _0 = call const fn assert.equal(const null, const 3_i64) -> [bb1];
     }
 
     bb1: {
-        unreachable;
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
     }
 }
 
@@ -58,13 +53,16 @@ fn .<lambda($init_test_17, 0)>() -> null {
 fn .<lambda($init_test_17, 1)>() -> null {
     // Locals:
     let _0: null // _0 // return
-    let _1: null
 
     bb0: {
-        _1 = call const fn baml.sys.panic(const "unresolved name: assert") -> [bb1];
+        _0 = call const fn assert.not_null(const null, const null) -> [bb1];
     }
 
     bb1: {
-        unreachable;
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
     }
 }

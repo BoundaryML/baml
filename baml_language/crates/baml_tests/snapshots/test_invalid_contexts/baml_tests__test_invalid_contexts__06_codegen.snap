@@ -1,19 +1,26 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
+function $init_test() -> null {
+    load_var ?1
+    call ?
+    pop 1
+    load_const ?
+    return
+}
+
 function user.$init_test_17(registry: testing.Registry) -> null {
+    load_var registry
     load_const "top level is fine"
     make_closure .<lambda($init_test_17, 0)>, 0
     load_const null
     call assert.is_true
     pop 1
+    load_var registry
     load_const "top level set is fine"
     make_closure .<lambda($init_test_17, 1)>, 0
     load_const null
-    load_var registry
-    load_const "register_test_set"
-    load_map_element
-    call_indirect
+    call testing.Registry.register_test_set
     pop 1
     load_const null
     return

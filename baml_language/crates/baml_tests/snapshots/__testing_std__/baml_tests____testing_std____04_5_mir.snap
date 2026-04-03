@@ -4,6 +4,24 @@ source: crates/baml_tests/src/generated_tests.rs
 === MIR2 ===
 
 === MIR2 (package testing) ===
+fn testing.Registry.new() -> testing.Registry {
+    // Locals:
+    let _0: testing.Registry // _0 // return
+    let _1: testing.TestRegistration[]
+    let _2: testing.TestSetRegistration[]
+
+    bb0: {
+        _1 = [];
+        _2 = [];
+        _0 = Registry { copy _1, copy _2 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
 fn testing.Registry.register_test(self: testing.Registry, name: string, body: () -> null, runner: (() -> testing.TestReport) -> () -> testing.TestReport?) -> null {
     // Locals:
     let _0: null // _0 // return

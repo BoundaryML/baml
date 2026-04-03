@@ -24,6 +24,9 @@ class testing.TestSetRegistration {
   collector: (testing.TestSetCollector) -> null
   runner: testing.TestSetRunner?
 }
+function testing.new() -> testing.Registry  [expr] {
+  {  } testing.Registry { tests: [], testsets: [] }
+}
 function testing.register_test(self: ?, name: string, body: () -> null, runner: testing.TestRunner?) -> null  [expr] {
   { let _ = self.tests.push(testing.TestRegistration { name: name, body: body, runner: runner }) } null
 }

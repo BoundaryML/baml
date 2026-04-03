@@ -225,6 +225,7 @@ pub async fn run_test(
             &resolved_entry,
             positional_args,
             FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
         )
         .await;
 

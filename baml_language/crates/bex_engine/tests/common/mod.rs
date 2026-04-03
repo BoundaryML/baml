@@ -82,6 +82,7 @@ pub(crate) async fn assert_engine_executes(input: EngineProgram) -> anyhow::Resu
             input.entry,
             input.inputs,
             FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
         )
         .await;
 
@@ -210,6 +211,7 @@ function get_prompt() -> baml.llm.PromptAst {{
                 "get_prompt",
                 vec![],
                 FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+                true,
             )
             .await
             .expect("render_prompt failed");

@@ -1,17 +1,41 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
+function $init_test() -> null {
+    load_var ?1
+    call ?
+    pop 1
+    load_const ?
+    return
+}
+
 function user.$init_test_17(registry: testing.Registry) -> null {
+    load_var registry
     load_const "simple runner"
     make_closure .<lambda($init_test_17, 0)>, 0
     load_const null
     call assert.is_true
     pop 1
-    load_const "unresolved name: testing"
-    call baml.sys.panic
+    load_const 5
+    load_const 3
+    load_const null
+    call_indirect
+    store_var _6
+    load_var registry
+    load_const "call runner"
+    make_closure .<lambda($init_test_17, 1)>, 0
+    load_var _6
+    call testing.Registry.register_test
     pop 1
-    jump L0
-
-  L0:
-    unreachable
+    load_var registry
+    load_const "constructor runner"
+    make_closure .<lambda($init_test_17, 2)>, 0
+    alloc_instance MyRunner
+    copy 0
+    load_const 0.5
+    store_field .threshold
+    call testing.Registry.register_test
+    pop 1
+    load_const null
+    return
 }

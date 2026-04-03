@@ -6,8 +6,8 @@ fn user.$init_test_17(registry: testing.Registry) -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: testing.Registry // registry // param
-    let _2: () -> null
-    let _3: testing.TestSetCollector
+    let _2: null
+    let _3: (testing.TestSetCollector) -> null
 
     bb0: {
         _3 = make_closure lambda[0]();

@@ -6,23 +6,19 @@ fn user.$init_test_17(registry: testing.Registry) -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: testing.Registry // registry // param
-    let _2: void
-    let _3: null
-    let _4: void
-    let _5: void
-    let _6: string
-    let _7: void
+    let _2: null
+    let _3: () -> null
+    let _4: null
+    let _5: (testing.TestSetCollector) -> null
 
     bb0: {
         _3 = make_closure lambda[0]();
-        _2 = call const fn assert.is_true(const "top level is fine", copy _3, const null) -> [bb1];
+        _2 = call const fn assert.is_true(copy _1, const "top level is fine", copy _3, const null) -> [bb1];
     }
 
     bb1: {
-        _6 = const "register_test_set";
-        _5 = copy _1[_6];
-        _7 = make_closure lambda[1]();
-        _4 = call copy _5(const "top level set is fine", copy _7, const null) -> [bb2];
+        _5 = make_closure lambda[1]();
+        _4 = call const fn testing.Registry.register_test_set(copy _1, const "top level set is fine", copy _5, const null) -> [bb2];
     }
 
     bb2: {
@@ -59,15 +55,11 @@ fn .<lambda($init_test_17, 1)>(testset: testing.TestSetCollector) -> null {
     let _0: null // _0 // return
     let _1: testing.TestSetCollector // testset // param
     let _2: void
-    let _3: void
-    let _4: string
-    let _5: void
+    let _3: null
 
     bb0: {
-        _4 = const "register_test";
-        _3 = copy _1[_4];
-        _5 = make_closure lambda[0]();
-        _2 = call copy _3(const "nested is fine", copy _5, const null) -> [bb1];
+        _3 = make_closure lambda[0]();
+        _2 = call const fn testing.TestSetCollector.register_test(copy _1, const "nested is fine", copy _3, const null) -> [bb1];
     }
 
     bb1: {

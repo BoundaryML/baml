@@ -28,6 +28,7 @@ async fn run(source: &str, entry: &str) -> Result<BexExternalValue, bex_engine::
             entry,
             vec![],
             FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
         )
         .await
 }

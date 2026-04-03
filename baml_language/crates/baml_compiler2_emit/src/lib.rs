@@ -568,6 +568,118 @@ pub fn generate_project_bytecode(
         program.package_init_order = package_init_order;
     }
 
+    // --- Pass 4.6: Synthesize $init_test chainer per package ---
+    // Cross-file aggregation of per-file $init_test_<N> functions.
+    // This must happen at emit level because:
+    //   - AST layer (lower_file_with_file_id) is per-file only
+    //   - MIR (lower_function) is per-function only
+    //   - Only emit iterates all_files and has the compiled program
+    // Follows the exact $init pattern at Pass 4.5 above.
+    {
+        // Discover per-file $init_test_<N> functions using structured
+        // compiler metadata (HIR item trees), group by package.
+        let mut pkg_init_tests: HashMap<String, Vec<(String, usize)>> = HashMap::new();
+
+        for file in &all_files {
+            let item_tree = file_item_tree(db, *file);
+            let pkg_info = file_package(db, *file);
+            for local_id in item_tree.functions.keys() {
+                let func_loc = FunctionLoc::new(db, *file, *local_id);
+                let fq_name = def_to_item_ref(db, Definition::Function(func_loc)).to_string();
+                // Match per-file $init_test_<N> functions synthesized by
+                // lower_cst.rs:912-972. The trailing underscore in the filter
+                // is intentional: all real files produce `$init_test_{file_id}`
+                // with a numeric suffix. The sentinel FileId path in lower_cst.rs
+                // produces bare `$init_test` (no suffix), but that only runs in
+                // unit tests, PPIR intermediate processing, and codegen — none of
+                // which produce functions that reach program.function_indices at
+                // emit time. So `contains("$init_test_")` safely matches only
+                // per-file functions without risk of collision with the chainer
+                // name we're about to synthesize.
+                if fq_name.contains("$init_test_") {
+                    if let Some(&global_slot) = program.function_global_indices.get(&fq_name) {
+                        pkg_init_tests
+                            .entry(pkg_info.package.to_string())
+                            .or_default()
+                            .push((fq_name, global_slot));
+                    }
+                }
+            }
+        }
+
+        for (pkg_name, init_test_fns) in &pkg_init_tests {
+            if init_test_fns.is_empty() {
+                continue;
+            }
+
+            // Build bytecode: for each per-file $init_test_<N>, emit:
+            //   LoadVar 1              // push registry param (slot 1 = first arg; slot 0 is reserved for fn ref)
+            //   Call($init_test_<N>)   // call per-file init with registry
+            //   Pop 1                  // discard null return
+            let mut instructions = Vec::new();
+            let mut constants: Vec<bex_vm_types::ConstValue> = Vec::new();
+            for (_name, global_slot) in init_test_fns {
+                instructions.push(Instruction::LoadVar(1)); // slot 1 = first param ("registry")
+                instructions.push(Instruction::Call(bex_vm_types::GlobalIndex::from_raw(
+                    *global_slot,
+                )));
+                instructions.push(Instruction::Pop(1));
+            }
+            // Return null
+            let null_const_idx = constants.len();
+            constants.push(bex_vm_types::ConstValue::Null);
+            instructions.push(Instruction::LoadConst(null_const_idx));
+            instructions.push(Instruction::Return);
+
+            let bytecode = Bytecode {
+                instructions,
+                constants,
+                ..Bytecode::default()
+            };
+
+            // Synthesized function uses Span::fake() — same pattern as
+            // $init synthesis at compile_init_function (lib.rs:1085-1103).
+            let chainer_fn = Function {
+                name: "$init_test".to_string(),
+                arity: 1,
+                real_local_count: 1, // the registry param
+                bytecode,
+                kind: FunctionKind::Bytecode,
+                // local_names is indexed by slot number:
+                //   slot 0 = fn ref (reserved, empty string placeholder)
+                //   slot 1 = first param "registry"
+                local_names: vec![String::new(), "registry".to_string()],
+                debug_locals: Vec::new(),
+                span: Span::fake(),
+                block_notifications: Vec::new(),
+                viz_nodes: Vec::new(),
+                return_type: baml_type::Ty::Null {
+                    attr: baml_type::TyAttr::default(),
+                },
+                param_names: vec!["registry".to_string()],
+                param_types: Vec::new(), // type not needed for chainer dispatch
+                body_meta: None,
+                trace: false,
+            };
+
+            let chainer_name = if pkg_name.as_str() == "user" {
+                "$init_test".to_string()
+            } else {
+                format!("{pkg_name}.$init_test")
+            };
+
+            let fn_obj_idx = program.add_object(Object::Function(Box::new(chainer_fn)));
+            program
+                .function_indices
+                .insert(chainer_name.clone(), fn_obj_idx);
+            let gi = program.globals.len();
+            program
+                .function_global_indices
+                .insert(chainer_name.clone(), gi);
+            program.add_global(ConstValue::Object(ObjectIndex::from_raw(fn_obj_idx)));
+        }
+    }
+
     // --- Pass 5: Template string macros ---
     let mut template_macros = Vec::new();
     for file in &all_files {

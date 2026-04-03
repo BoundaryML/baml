@@ -41,6 +41,7 @@ async fn run_baml_with_args(
             entry,
             args,
             FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
         )
         .await
         .unwrap_or_else(|e| panic!("{entry} failed: {e}"))

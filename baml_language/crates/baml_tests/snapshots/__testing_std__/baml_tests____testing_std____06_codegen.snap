@@ -1,6 +1,17 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
+function testing.Registry.new() -> testing.Registry {
+    alloc_instance Registry
+    copy 0
+    alloc_array 0
+    store_field .tests
+    copy 0
+    alloc_array 0
+    store_field .testsets
+    return
+}
+
 function testing.Registry.register_test(self: null, name: string, body: () -> null, runner: (() -> testing.TestReport) -> () -> testing.TestReport?) -> null {
     load_var self
     load_field .tests

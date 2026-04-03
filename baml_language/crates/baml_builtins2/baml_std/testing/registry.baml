@@ -18,6 +18,10 @@ class Registry {
   tests TestRegistration[]
   testsets TestSetRegistration[]
 
+  function new() -> Registry {
+    Registry { tests: [], testsets: [] }
+  }
+
   //baml:mut_self
   function register_test(self, name: string, body: () -> null, runner: TestRunner?) -> null {
     let _ = self.tests.push(TestRegistration { name: name, body: body, runner: runner })

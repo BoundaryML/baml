@@ -1,6 +1,14 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
+function $init_test() -> null {
+    load_var ?1
+    call ?
+    pop 1
+    load_const ?
+    return
+}
+
 function user.$init_test_17(registry: testing.Registry) -> null {
     load_var registry
     load_const "all evals"

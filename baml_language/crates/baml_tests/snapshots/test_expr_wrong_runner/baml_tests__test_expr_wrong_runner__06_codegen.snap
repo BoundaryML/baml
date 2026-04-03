@@ -1,27 +1,32 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
+function $init_test() -> null {
+    load_var ?1
+    call ?
+    pop 1
+    load_const ?
+    return
+}
+
 function user.$init_test_17(registry: testing.Registry) -> null {
+    load_var registry
     load_const "wrong runner type"
     make_closure .<lambda($init_test_17, 0)>, 0
     load_const 42
     call assert.is_true
     pop 1
+    load_var registry
     load_const "string as runner"
     make_closure .<lambda($init_test_17, 1)>, 0
     load_const "not a runner"
-    load_var registry
-    load_const "register_test"
-    load_map_element
-    call_indirect
+    call testing.Registry.register_test
     pop 1
+    load_var registry
     load_const "wrong testset runner"
     make_closure .<lambda($init_test_17, 2)>, 0
     load_const 42
-    load_var registry
-    load_const "register_test_set"
-    load_map_element
-    call_indirect
+    call testing.Registry.register_test_set
     pop 1
     load_const null
     return
