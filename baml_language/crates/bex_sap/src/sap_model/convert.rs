@@ -481,7 +481,8 @@ impl TypeCtx {
                     convert_ty_attrs(&attr)?,
                 )
             }
-            unparsable @ (baml_type::Ty::Opaque(_, _)
+            unparsable @ (baml_type::Ty::Uint8Array { .. }
+            | baml_type::Ty::Opaque(_, _)
             | baml_type::Ty::Function { .. }
             | baml_type::Ty::Void { .. }
             | baml_type::Ty::WatchAccessor(_, _)
@@ -531,6 +532,7 @@ impl TypeCtx {
             | ::baml_type::Ty::Float { .. }
             | ::baml_type::Ty::String { .. }
             | ::baml_type::Ty::Bool { .. }
+            | ::baml_type::Ty::Uint8Array { .. }
             | ::baml_type::Ty::Media(..)
             | ::baml_type::Ty::Literal(..)
             | ::baml_type::Ty::Class(..)
@@ -676,7 +678,7 @@ fn is_sap_parseable(ty: &baml_type::Ty) -> Result<Vec<TypeName>, ()> {
         | baml_type::Ty::Bool { .. }
         | baml_type::Ty::Null { .. }
         | baml_type::Ty::Literal(..) => Ok(Vec::new()),
-        baml_type::Ty::Media(..) => Err(()),
+        baml_type::Ty::Uint8Array { .. } | baml_type::Ty::Media(..) => Err(()),
         baml_type::Ty::Class(name, _) => Ok(vec![name.clone()]),
         baml_type::Ty::Enum(..) | baml_type::Ty::EnumVariant(..) => Ok(Vec::new()),
         baml_type::Ty::Optional(inner, _) => is_sap_parseable(inner),

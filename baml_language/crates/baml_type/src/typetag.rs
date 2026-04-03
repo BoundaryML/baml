@@ -69,6 +69,9 @@ pub const TYPE: i64 = 10;
 /// `Collector` type tag.
 pub const COLLECTOR: i64 = 11;
 
+/// Uint8Array type tag.
+pub const UINT8ARRAY: i64 = 12;
+
 /// Base value for class type tags (classes start at 100).
 pub const CLASS_BASE: i64 = 100;
 

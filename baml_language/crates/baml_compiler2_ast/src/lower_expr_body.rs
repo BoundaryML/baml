@@ -329,6 +329,7 @@ impl LoweringContext {
             SyntaxKind::STRING_LITERAL | SyntaxKind::RAW_STRING_LITERAL => {
                 self.lower_string_literal(node)
             }
+            SyntaxKind::BYTE_STRING_LITERAL => self.lower_byte_string_literal(node),
             SyntaxKind::ARRAY_LITERAL => self.lower_array_literal(node),
             SyntaxKind::OBJECT_LITERAL => self.lower_object_literal(node),
             SyntaxKind::MAP_LITERAL => self.lower_map_literal(node),
@@ -1717,6 +1718,26 @@ impl LoweringContext {
         self.alloc_expr(Expr::Literal(Literal::String(content)), node.text_range())
     }
 
+    fn lower_byte_string_literal(&mut self, node: &SyntaxNode) -> ExprId {
+        let text = node.text().to_string();
+        // Strip the b"..." delimiters: remove leading `b"` and trailing `"`
+        let content = text
+            .strip_prefix("b\"")
+            .and_then(|s| s.strip_suffix('"'))
+            .unwrap_or("");
+        match parse_byte_string_escapes(content) {
+            Ok(bytes) => self.alloc_expr(Expr::ByteStringLiteral(bytes), node.text_range()),
+            Err(message) => {
+                self.diags
+                    .push(LoweringDiagnostic::InvalidByteStringEscape {
+                        message,
+                        span: node.text_range(),
+                    });
+                self.alloc_expr(Expr::Missing, node.text_range())
+            }
+        }
+    }
+
     fn lower_array_literal(&mut self, node: &SyntaxNode) -> ExprId {
         let mut elements = Vec::new();
         for elem in node.children_with_tokens() {
@@ -2539,6 +2560,7 @@ fn is_expr_node_kind(kind: SyntaxKind) -> bool {
             | SyntaxKind::ARRAY_LITERAL
             | SyntaxKind::STRING_LITERAL
             | SyntaxKind::RAW_STRING_LITERAL
+            | SyntaxKind::BYTE_STRING_LITERAL
             | SyntaxKind::OBJECT_LITERAL
             | SyntaxKind::MAP_LITERAL
             | SyntaxKind::LAMBDA_EXPR
@@ -2555,4 +2577,50 @@ fn strip_string_delimiters(text: &str) -> String {
     } else {
         text.to_string()
     }
+}
+
+/// Parse escape sequences in a byte string literal body (content between the `b"` and `"`).
+///
+/// Supported escapes: `\n`, `\t`, `\r`, `\0`, `\\`, `\"`, `\xHH` (2 hex digits).
+/// Unescaped characters must be ASCII (0-127).
+fn parse_byte_string_escapes(input: &str) -> Result<Vec<u8>, String> {
+    let mut result = Vec::with_capacity(input.len());
+    let mut chars = input.chars();
+    while let Some(c) = chars.next() {
+        if c == '\\' {
+            match chars.next() {
+                Some('n') => result.push(b'\n'),
+                Some('t') => result.push(b'\t'),
+                Some('r') => result.push(b'\r'),
+                Some('0') => result.push(0),
+                Some('\\') => result.push(b'\\'),
+                Some('"') => result.push(b'"'),
+                Some('x') => {
+                    let hi = chars
+                        .next()
+                        .ok_or_else(|| "incomplete \\x escape".to_string())?;
+                    let lo = chars
+                        .next()
+                        .ok_or_else(|| "incomplete \\x escape".to_string())?;
+                    let hex_str: String = [hi, lo].iter().collect();
+                    let byte = u8::from_str_radix(&hex_str, 16)
+                        .map_err(|_| format!("invalid hex escape: \\x{hex_str}"))?;
+                    result.push(byte);
+                }
+                Some(other) => {
+                    return Err(format!("unknown escape sequence: \\{other}"));
+                }
+                None => {
+                    return Err("trailing backslash in byte string".to_string());
+                }
+            }
+        } else if !c.is_ascii() {
+            return Err(format!(
+                "non-ASCII character in byte string: '{c}' (use \\xHH for bytes > 127)"
+            ));
+        } else {
+            result.push(c as u8);
+        }
+    }
+    Ok(result)
 }

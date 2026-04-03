@@ -37,6 +37,7 @@ fn hir2_type_expr_to_string(ty: &baml_compiler2_ast::TypeExpr) -> String {
         TypeExpr::Bool { .. } => "bool".into(),
         TypeExpr::Null { .. } => "null".into(),
         TypeExpr::Never { .. } => "never".into(),
+        TypeExpr::Uint8Array { .. } => "uint8array".into(),
         TypeExpr::Media { kind, .. } => format!("{:?}", kind).to_lowercase(),
         TypeExpr::Optional { inner, .. } => format!("{}?", hir2_type_expr_to_string(inner)),
         TypeExpr::List { inner, .. } => format!("{}[]", hir2_type_expr_to_string(inner)),
@@ -635,6 +636,9 @@ fn expr_desc_spans<'db>(
         Expr::Throw { value } => {
             spans.push(DetailSpan::Code("throw ".into()));
             spans.extend(expr_desc_spans(*value, body, inference));
+        }
+        Expr::ByteStringLiteral(bytes) => {
+            spans.push(DetailSpan::Code(format!("b\"<{} bytes>\"", bytes.len())));
         }
         Expr::Lambda(_) => {
             spans.push(DetailSpan::Code("<lambda>".into()));
@@ -2014,6 +2018,7 @@ impl CompilerRunner {
                     format!("{}?.{field}", expr_desc(*base, body))
                 }
                 Expr::Index { base, .. } => format!("{}[...]", expr_desc(*base, body)),
+                Expr::ByteStringLiteral(bytes) => format!("b\"<{} bytes>\"", bytes.len()),
                 Expr::Lambda(_) => "<lambda>".into(),
                 Expr::OptionalIndex { base, .. } => format!("{}?.[...]", expr_desc(*base, body)),
                 Expr::OptionalCall { callee, args } => {
@@ -4993,6 +4998,7 @@ fn format_vm_value(value: &bex_vm_types::Value, vm: &bex_vm::BexVm) -> String {
                 Object::Type(ty) => format!("<type: {ty}>"),
                 Object::Closure(c) => format!("<closure captures={}>", c.captures.len()),
                 Object::Cell(c) => format!("<cell {}>", format_vm_value(&c.value, vm)),
+                Object::Uint8Array(bytes) => format!("<uint8array len={}>", bytes.len()),
                 Object::RustData(_) => "<rust_data>".to_string(),
                 #[cfg(feature = "heap_debug")]
                 Object::Sentinel(_) => "<sentinel>".to_string(),

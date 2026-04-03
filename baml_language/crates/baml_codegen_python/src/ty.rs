@@ -124,6 +124,9 @@ pub(crate) enum Ty {
     Bool,
     None,
 
+    // Binary data
+    Uint8Array,
+
     // Media types are top level types in python
     Image,
     Audio,
@@ -172,6 +175,7 @@ impl Ty {
             baml_codegen_types::Ty::String => Self::String,
             baml_codegen_types::Ty::Bool => Self::Bool,
             baml_codegen_types::Ty::Null => Self::None,
+            baml_codegen_types::Ty::Uint8Array => Self::Uint8Array,
             baml_codegen_types::Ty::Media(kind) => match kind {
                 baml_base::MediaKind::Image => Self::Image,
                 baml_base::MediaKind::Video => Self::Video,
@@ -213,6 +217,7 @@ impl Ty {
             Ty::String => "str".to_string(),
             Ty::Bool => "bool".to_string(),
             Ty::None => "None".to_string(),
+            Ty::Uint8Array => "bytes".to_string(),
             Ty::Literal(lit) => format!("typing.Literal[{lit}]"),
             Ty::Image => format!("{}Image", Namespace::BamlPy.render(ns)),
             Ty::Video => format!("{}Video", Namespace::BamlPy.render(ns)),

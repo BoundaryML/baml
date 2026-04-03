@@ -201,6 +201,7 @@ fn collect_place_index_locals(body: &MirFunctionBody) -> HashSet<Local> {
                 scan_operand(right, set);
             }
             crate::Rvalue::UnaryOp { operand, .. } => scan_operand(operand, set),
+            crate::Rvalue::Uint8Array(_) => {}
             crate::Rvalue::Array(elems) => {
                 for e in elems {
                     scan_operand(e, set);
@@ -369,6 +370,7 @@ fn count_in_rvalue(rv: &crate::Rvalue, uses: &mut [usize]) {
             count_in_operand(right, uses);
         }
         crate::Rvalue::UnaryOp { operand, .. } => count_in_operand(operand, uses),
+        crate::Rvalue::Uint8Array(_) => {}
         crate::Rvalue::Array(elems) => {
             for e in elems {
                 count_in_operand(e, uses);
@@ -644,6 +646,7 @@ fn apply_subst_to_rvalue(rv: &mut crate::Rvalue, subst: &HashMap<Local, Operand>
             apply_subst_to_operand(right, subst);
         }
         crate::Rvalue::UnaryOp { operand, .. } => apply_subst_to_operand(operand, subst),
+        crate::Rvalue::Uint8Array(_) => {}
         crate::Rvalue::Array(elems) => {
             for e in elems {
                 apply_subst_to_operand(e, subst);
@@ -829,6 +832,7 @@ fn remap_rvalue(rv: &mut crate::Rvalue, map: &[Option<Local>]) {
             remap_operand(right, map);
         }
         crate::Rvalue::UnaryOp { operand, .. } => remap_operand(operand, map),
+        crate::Rvalue::Uint8Array(_) => {}
         crate::Rvalue::Array(elems) => {
             for e in elems {
                 remap_operand(e, map);
@@ -1017,6 +1021,7 @@ fn verify_mir(body: &MirFunctionBody, name: &crate::ItemRef) {
                             check_operand(right, &blk);
                         }
                         crate::Rvalue::UnaryOp { operand, .. } => check_operand(operand, &blk),
+                        crate::Rvalue::Uint8Array(_) => {}
                         crate::Rvalue::Array(elems) => {
                             for e in elems {
                                 check_operand(e, &blk);

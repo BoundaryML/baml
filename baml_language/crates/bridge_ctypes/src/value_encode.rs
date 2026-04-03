@@ -7,10 +7,11 @@ use crate::{
     baml::cffi::{
         BamlFieldType, BamlFieldTypeBool, BamlFieldTypeFloat, BamlFieldTypeInt, BamlFieldTypeList,
         BamlFieldTypeLiteral, BamlFieldTypeMap, BamlFieldTypeMedia, BamlFieldTypeNull,
-        BamlFieldTypeOptional, BamlFieldTypeString, BamlFieldTypeUnionVariant, BamlHandle,
-        BamlOutboundMapEntry, BamlOutboundValue, BamlTypeName, BamlTypeNamespace, BamlValueClass,
-        BamlValueEnum, BamlValueList, BamlValueMap, BamlValueUnionVariant,
-        baml_field_type::Type as FieldType, baml_outbound_value::Value as BamlValueVariant,
+        BamlFieldTypeOptional, BamlFieldTypeString, BamlFieldTypeUint8Array,
+        BamlFieldTypeUnionVariant, BamlHandle, BamlOutboundMapEntry, BamlOutboundValue,
+        BamlTypeName, BamlTypeNamespace, BamlValueClass, BamlValueEnum, BamlValueList,
+        BamlValueMap, BamlValueUnionVariant, baml_field_type::Type as FieldType,
+        baml_outbound_value::Value as BamlValueVariant,
     },
     error::CtypesError,
     handle_table::{HandleTableOptions, HandleTableValue},
@@ -115,6 +116,9 @@ pub fn external_to_baml_value(
             Some(BamlValueVariant::PromptAstValue(
                 bex_prompt_ast_to_proto_prompt_ast(prompt_ast),
             ))
+        }
+        BexExternalValue::Uint8Array(bytes) => {
+            Some(BamlValueVariant::Uint8arrayValue(bytes.clone()))
         }
         BexExternalValue::RustData(arc) => {
             if let Some(converted) = bex_project::try_convert_rust_data(arc) {
@@ -299,6 +303,7 @@ fn ty_to_field_type(ty: &Ty) -> BamlFieldType {
         Ty::Opaque(tn, _) => {
             unreachable!("runtime-only {tn} should not reach FFI type encoding")
         }
+        Ty::Uint8Array { .. } => Some(FieldType::Uint8arrayType(BamlFieldTypeUint8Array {})),
         Ty::TypeAlias(_, _)
         | Ty::Future(..)
         | Ty::Function { .. }

@@ -37,6 +37,7 @@ pub(crate) trait PullSink {
     fn unary_op(&mut self, op: UnaryOp) -> Result<(), Self::Error>;
 
     fn alloc_array(&mut self, len: usize) -> Result<(), Self::Error>;
+    fn alloc_uint8array(&mut self, bytes: &[u8]) -> Result<(), Self::Error>;
     fn alloc_map(&mut self, len: usize) -> Result<(), Self::Error>;
 
     fn alloc_class_instance(&mut self, class_name: &str) -> Result<(), Self::Error>;
@@ -337,6 +338,7 @@ pub(crate) fn walk_rvalue_pull<S: PullSink>(sink: &mut S, rvalue: &Rvalue) -> Re
             }
             sink.alloc_array(elements.len())
         }
+        Rvalue::Uint8Array(bytes) => sink.alloc_uint8array(bytes),
         Rvalue::Map(entries) => {
             // VM `AllocMap` expects stack layout:
             // [..., v1, v2, ..., k1, k2, ...] for {(k1, v1), (k2, v2), ...}.

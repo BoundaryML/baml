@@ -1650,6 +1650,7 @@ dependencies = [
  "baml_compiler2_emit",
  "baml_tests",
  "baml_type",
+ "base64",
  "bex_heap",
  "bex_resource_types",
  "bex_vm_types",

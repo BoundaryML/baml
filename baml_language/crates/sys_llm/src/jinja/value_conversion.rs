@@ -70,6 +70,9 @@ pub(crate) fn external_value_to_jinja(
         //         "{MAGIC_MEDIA_DELIMITER}:baml-start-media:{media_id}:baml-end-media:{MAGIC_MEDIA_DELIMITER}"
         //     )))
         // }
+        BexExternalValue::Uint8Array(_) => Err(RenderPromptError::ConversionError {
+            reason: "uint8array cannot be passed to Jinja templates".to_string(),
+        }),
         BexExternalValue::RustData(_) => Err(RenderPromptError::ConversionError {
             reason: "RustData should not be passed to Jinja templates".to_string(),
         }),

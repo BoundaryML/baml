@@ -35,6 +35,7 @@ pub fn inbound_to_external(
             InboundValueVariant::MapValue(map) => convert_map(map, handle_table),
             InboundValueVariant::ClassValue(class) => convert_class(class, handle_table),
             InboundValueVariant::EnumValue(e) => Ok(convert_enum(e)),
+            InboundValueVariant::Uint8arrayValue(bytes) => Ok(BexExternalValue::Uint8Array(bytes)),
             InboundValueVariant::Handle(handle) => {
                 let value = handle_table
                     .resolve(handle.key)
@@ -54,6 +55,7 @@ fn default_scalar_union_ty() -> Ty {
             Ty::Float { attr: d.clone() },
             Ty::String { attr: d.clone() },
             Ty::Bool { attr: d.clone() },
+            Ty::Uint8Array { attr: d.clone() },
             Ty::Null { attr: d.clone() },
         ],
         d,

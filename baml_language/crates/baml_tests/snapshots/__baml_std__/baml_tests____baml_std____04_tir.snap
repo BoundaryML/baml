@@ -595,3 +595,9 @@ class baml.String {
 }
 class baml.String$stream {
 }
+
+--- <builtin>/baml/uint8array.baml ---
+class baml.Uint8Array {
+}
+class baml.Uint8Array$stream {
+}

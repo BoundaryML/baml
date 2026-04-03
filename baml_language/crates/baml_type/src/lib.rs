@@ -115,6 +115,9 @@ pub enum Ty {
     Null {
         attr: TyAttr,
     },
+    Uint8Array {
+        attr: TyAttr,
+    },
     Media(MediaKind, TyAttr),
     Literal(Literal, TyAttr),
     Class(TypeName, TyAttr),
@@ -210,6 +213,7 @@ impl Ty {
             Ty::Null { .. } => Ty::Null { attr },
             Ty::Void { .. } => Ty::Void { attr },
             Ty::BuiltinUnknown { .. } => Ty::BuiltinUnknown { attr },
+            Ty::Uint8Array { .. } => Ty::Uint8Array { attr },
             Ty::Media(kind, _) => Ty::Media(kind, attr),
             Ty::Literal(lit, _) => Ty::Literal(lit, attr),
             Ty::Class(tn, _) => Ty::Class(tn, attr),
@@ -237,6 +241,7 @@ impl Ty {
             | Ty::Null { attr }
             | Ty::Void { attr }
             | Ty::BuiltinUnknown { attr }
+            | Ty::Uint8Array { attr }
             | Ty::Map { attr, .. }
             | Ty::Function { attr, .. } => attr,
             Ty::Media(_, attr)
@@ -287,6 +292,13 @@ impl Ty {
     /// `null` with default attributes.
     pub fn null() -> Self {
         Ty::Null {
+            attr: TyAttr::default(),
+        }
+    }
+
+    /// `uint8array` with default attributes.
+    pub fn uint8array() -> Self {
+        Ty::Uint8Array {
             attr: TyAttr::default(),
         }
     }
@@ -417,6 +429,7 @@ impl Ty {
                 | Ty::String { .. }
                 | Ty::Bool { .. }
                 | Ty::Null { .. }
+                | Ty::Uint8Array { .. }
                 | Ty::Literal(..)
         )
     }
@@ -538,6 +551,7 @@ impl Ty {
             | Ty::Bool { .. }
             | Ty::Null { .. }
             | Ty::Media(..)
+            | Ty::Uint8Array { .. }
             | Ty::Literal(..)
             | Ty::Class(..)
             | Ty::Enum(..)
@@ -555,6 +569,7 @@ impl fmt::Display for Ty {
             Ty::String { .. } => write!(f, "string"),
             Ty::Bool { .. } => write!(f, "bool"),
             Ty::Null { .. } => write!(f, "null"),
+            Ty::Uint8Array { .. } => write!(f, "uint8array"),
             Ty::Media(kind, _) => write!(f, "{kind}"),
             Ty::Literal(lit, _) => match lit {
                 Literal::Int(i) => write!(f, "{i}"),

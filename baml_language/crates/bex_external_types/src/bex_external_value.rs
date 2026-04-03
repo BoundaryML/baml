@@ -164,6 +164,9 @@ pub enum BexExternalValue {
         metadata: UnionMetadata,
     },
 
+    /// Binary data (byte array).
+    Uint8Array(Vec<u8>),
+
     /// Opaque Rust data for `$rust_type` fields.
     /// Engine converts to `Object::RustData` on the VM heap.
     RustData(std::sync::Arc<dyn std::any::Any + Send + Sync>),
@@ -230,6 +233,7 @@ impl std::fmt::Debug for BexExternalValue {
                 .field("value", value)
                 .field("metadata", metadata)
                 .finish(),
+            Self::Uint8Array(v) => f.debug_tuple("Uint8Array").field(v).finish(),
             Self::RustData(_) => write!(f, "RustData(...)"),
             Self::FunctionRef { global_index } => f
                 .debug_struct("FunctionRef")
@@ -301,6 +305,7 @@ impl PartialEq for BexExternalValue {
                     metadata: m2,
                 },
             ) => v1 == v2 && m1 == m2,
+            (Self::Uint8Array(a), Self::Uint8Array(b)) => a == b,
             (Self::RustData(a), Self::RustData(b)) => std::sync::Arc::ptr_eq(a, b),
             (Self::FunctionRef { global_index: a }, Self::FunctionRef { global_index: b }) => {
                 a == b
@@ -392,6 +397,7 @@ impl BexExternalValue {
             BexExternalValue::Instance { .. } => "instance",
             BexExternalValue::Variant { .. } => "variant",
             BexExternalValue::Union { .. } => "union",
+            BexExternalValue::Uint8Array(_) => "uint8array",
             BexExternalValue::RustData(_) => "rust_data",
             BexExternalValue::Adt(adt) => adt.type_name(),
             BexExternalValue::FunctionRef { .. } => "function",

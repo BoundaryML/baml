@@ -1647,6 +1647,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                     Self::collect_locals_in_operand(operand, out);
                 }
             }
+            Rvalue::Uint8Array(_) => {} // No locals referenced — data is inline
             Rvalue::Map(entries) => {
                 for (key, value) in entries {
                     Self::collect_locals_in_operand(key, out);
@@ -1909,6 +1910,30 @@ impl PullSink for StackifyCodegen<'_, '_> {
         Ok(())
     }
 
+    fn alloc_uint8array(&mut self, bytes: &[u8]) -> Result<(), Self::Error> {
+        use std::fmt::Write;
+        // Store the byte data as a compile-time constant template, then deep-copy
+        // it to produce a mutable TLAB allocation (matching array literal semantics).
+        let mut display = String::from("b\"");
+        for b in bytes {
+            write!(display, "\\x{b:02x}").unwrap();
+        }
+        display.push('"');
+        let obj_idx = self.objects.len();
+        self.objects.push(Object::Uint8Array(bytes.to_vec()));
+        let idx = self.add_constant(ConstValue::Object(ObjectIndex::from_raw(obj_idx)));
+        let inst = self.emit(Instruction::LoadConst(idx));
+        self.set_operand(inst, OperandMeta::Const(display));
+        let deep_copy_idx = self
+            .globals
+            .get("baml.deep_copy")
+            .copied()
+            .unwrap_or_else(|| panic!("undefined function: baml.deep_copy"));
+        let inst = self.emit(Instruction::Call(GlobalIndex::from_raw(deep_copy_idx)));
+        self.set_operand(inst, OperandMeta::Callable("baml.deep_copy".to_string()));
+        Ok(())
+    }
+
     fn alloc_map(&mut self, len: usize) -> Result<(), Self::Error> {
         self.emit(Instruction::AllocMap(len));
         Ok(())
@@ -2027,6 +2052,7 @@ impl PullSink for StackifyCodegen<'_, '_> {
             Ty::List(..) => Some(baml_type::typetag::LIST),
             Ty::Map { .. } => Some(baml_type::typetag::MAP),
             Ty::Function { .. } => Some(baml_type::typetag::FUNCTION),
+            Ty::Uint8Array { .. } => Some(baml_type::typetag::UINT8ARRAY),
             Ty::Literal(lit, _) => Some(match lit {
                 baml_base::Literal::Int(_) => baml_type::typetag::INT,
                 baml_base::Literal::Float(_) => baml_type::typetag::FLOAT,

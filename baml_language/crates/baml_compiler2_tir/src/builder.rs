@@ -234,6 +234,9 @@ impl<'db> TypeInferenceBuilder<'db> {
         let expr = &body.exprs[expr_id];
         let ty = match expr {
             Expr::Literal(lit) => Self::infer_literal(lit),
+            Expr::ByteStringLiteral(_) => {
+                Ty::Primitive(PrimitiveType::Uint8Array, TyAttr::default())
+            }
             Expr::Null => Ty::Primitive(PrimitiveType::Null, TyAttr::default()),
             Expr::Path(segments) => self.infer_path(segments.as_slice(), body, expr_id),
             Expr::If {
@@ -511,6 +514,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                 let elem_ty = match resolve_ty {
                     Ty::List(elem_ty, _) | Ty::EvolvingList(elem_ty, _) => *elem_ty,
                     Ty::Map(_, val_ty, _) | Ty::EvolvingMap(_, val_ty, _) => *val_ty,
+                    Ty::Primitive(PrimitiveType::Uint8Array, _) => {
+                        Ty::Primitive(PrimitiveType::Int, TyAttr::default())
+                    }
                     Ty::Unknown { attr: _ } | Ty::Error { attr: _ } => Ty::Unknown {
                         attr: TyAttr::default(),
                     },
@@ -2355,7 +2361,12 @@ impl<'db> TypeInferenceBuilder<'db> {
             Expr::OptionalChain { expr } => {
                 self.collect_effective_throws_from_expr(*expr, body, out);
             }
-            Expr::Lambda(_) | Expr::Literal(_) | Expr::Null | Expr::Path(_) | Expr::Missing => {}
+            Expr::Lambda(_)
+            | Expr::Literal(_)
+            | Expr::ByteStringLiteral(_)
+            | Expr::Null
+            | Expr::Path(_)
+            | Expr::Missing => {}
         }
     }
 
@@ -2514,7 +2525,12 @@ impl<'db> TypeInferenceBuilder<'db> {
             Expr::OptionalChain { expr } => {
                 self.collect_throw_facts_from_expr(*expr, body, out);
             }
-            Expr::Lambda(_) | Expr::Literal(_) | Expr::Null | Expr::Path(_) | Expr::Missing => {}
+            Expr::Lambda(_)
+            | Expr::Literal(_)
+            | Expr::ByteStringLiteral(_)
+            | Expr::Null
+            | Expr::Path(_)
+            | Expr::Missing => {}
         }
     }
 
@@ -3056,13 +3072,14 @@ impl<'db> TypeInferenceBuilder<'db> {
                     })
             }
             Ty::Primitive(
-                p @ (PrimitiveType::Image
+                p @ (PrimitiveType::Uint8Array
+                | PrimitiveType::Image
                 | PrimitiveType::Audio
                 | PrimitiveType::Video
                 | PrimitiveType::Pdf),
                 _,
             ) => {
-                // Bridge: each media primitive → its own builtin class in baml.media
+                // Bridge: primitives with builtin companion classes
                 self.resolve_builtin_member(p.builtin_class_path(), &[], member, at)
                     .unwrap_or_else(|| {
                         self.context.report_at_member_simple(
@@ -3180,7 +3197,8 @@ impl<'db> TypeInferenceBuilder<'db> {
                 .resolve_builtin_method(&["String"], &[], member)
                 .map(BuiltinResolution::into_ty),
             Ty::Primitive(
-                p @ (PrimitiveType::Image
+                p @ (PrimitiveType::Uint8Array
+                | PrimitiveType::Image
                 | PrimitiveType::Audio
                 | PrimitiveType::Video
                 | PrimitiveType::Pdf),

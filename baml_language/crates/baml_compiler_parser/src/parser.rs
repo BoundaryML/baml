@@ -1327,6 +1327,67 @@ impl<'a> Parser<'a> {
         true
     }
 
+    /// Parse a byte string literal: `b"..."`.
+    ///
+    /// The lexer emits `Word("b"), Quote, (content tokens), Quote`.
+    /// We check adjacency: the raw token immediately after `Word("b")` must be
+    /// `Quote` with no intervening trivia. This distinguishes `b"hello"` (byte
+    /// string) from `b "hello"` (identifier `b` followed by a string).
+    ///
+    /// Must only be called when `self.current()` is `Word("b")`.
+    pub(crate) fn parse_byte_string(&mut self) -> bool {
+        // Adjacency check: the raw token immediately after `Word("b")` must be
+        // `Quote` with no trivia in between.
+        let Some(b_index) = self.current_non_trivia_index() else {
+            return false;
+        };
+        if self.tokens.get(b_index + 1).map(|t| t.kind) != Some(TokenKind::Quote) {
+            return false;
+        }
+
+        // Before starting the node, handle all leading trivia.
+        while self.eat_trivia() {}
+
+        self.with_node(SyntaxKind::BYTE_STRING_LITERAL, |p| {
+            p.bump_raw(); // Consume the `b` prefix
+
+            p.bump_raw(); // Opening quote
+
+            // Collect all tokens until closing quote (same logic as parse_string).
+            let mut loop_counter = 0;
+            while !p.at_end() {
+                loop_counter += 1;
+                if loop_counter > 100_000 {
+                    p.error_unexpected_token(
+                        "Byte string parsing exceeded iteration limit".to_string(),
+                    );
+                    return;
+                }
+
+                if p.at_raw(TokenKind::Backslash) {
+                    p.bump_raw(); // Consume backslash
+                    if let Some(directly_after) = p.tokens.get(p.current)
+                        && directly_after.kind == TokenKind::Quote
+                    {
+                        p.bump_raw(); // Consume escaped quote
+                    }
+                    continue;
+                }
+
+                if p.at_raw(TokenKind::Quote) {
+                    p.bump_raw(); // Consume closing quote
+                    return;
+                }
+
+                p.bump_raw();
+            }
+
+            p.error_unexpected_token("Unclosed byte string literal".to_string());
+        });
+
+        true
+    }
+
     /// Parse a raw string literal with hash delimiters
     /// Lexer emits: Hash+, Quote, (content tokens), Quote, Hash+
     /// Parser assembles and validates matching hash counts
@@ -3582,8 +3643,11 @@ impl<'a> Parser<'a> {
             // Throw expression
             self.parse_throw_expr();
         } else if self.at(TokenKind::Word) {
-            let text = self.current().map(|t| t.text.as_str()).unwrap_or("");
-            if text == "env"
+            // Collect text as owned String so the borrow is released before any &mut calls.
+            let text: String = self.current().map(|t| t.text.clone()).unwrap_or_default();
+            if text == "b" && self.parse_byte_string() {
+                // Byte string literal b"..."
+            } else if text == "env"
                 && self.peek(1).map(|t| t.kind) == Some(TokenKind::Dot)
                 && self.peek(2).map(|t| t.kind) == Some(TokenKind::Word)
                 && self.peek(3).map(|t| t.kind) != Some(TokenKind::LParen)
@@ -4481,6 +4545,19 @@ impl<'a> Parser<'a> {
             && self.peek(1).is_some_and(|t| {
                 matches!(t.kind, TokenKind::IntegerLiteral | TokenKind::FloatLiteral)
             })
+        {
+            return true;
+        }
+
+        // Byte string literals: b"..."
+        if self.at(TokenKind::Word)
+            && let Some(token) = self.current()
+            && token.text.as_str() == "b"
+            && let Some(idx) = self.current_non_trivia_index()
+            && self
+                .tokens
+                .get(idx + 1)
+                .is_some_and(|t| t.kind == TokenKind::Quote)
         {
             return true;
         }

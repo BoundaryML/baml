@@ -55,6 +55,9 @@ pub enum Ty {
     Null,
     Literal(baml_base::Literal),
 
+    // Binary data
+    Uint8Array,
+
     // Media types
     Media(baml_base::MediaKind),
 
@@ -92,6 +95,7 @@ impl Ty {
             | Ty::String
             | Ty::Bool
             | Ty::Null
+            | Ty::Uint8Array
             | Ty::Media(_)
             | Ty::Literal(_) => None,
             Ty::Class(name) | Ty::Enum(name) => Some(name.namespace.clone()),
@@ -120,6 +124,7 @@ impl Ty {
             Ty::Float => None,
             Ty::String => None,
             Ty::Bool => None,
+            Ty::Uint8Array => None,
             Ty::Media(_) => None,
             Ty::Class(_) => None,
             Ty::Enum(_) => None,
@@ -141,6 +146,7 @@ impl Ty {
             | Ty::Float
             | Ty::String
             | Ty::Bool
+            | Ty::Uint8Array
             | Ty::Media(_)
             | Ty::Class(_)
             | Ty::Enum(_) => Ok(()),
@@ -209,6 +215,7 @@ impl fmt::Display for Ty {
             Ty::String => write!(f, "string"),
             Ty::Bool => write!(f, "bool"),
             Ty::Null => write!(f, "null"),
+            Ty::Uint8Array => write!(f, "uint8array"),
             Ty::Media(kind) => write!(f, "{kind}"),
             Ty::Class(name) | Ty::Enum(name) => write!(f, "{name}"),
             Ty::Optional(inner) => write!(f, "{inner}?"),

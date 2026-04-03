@@ -122,6 +122,9 @@ fn bex_value_to_json(value: &BexExternalValue) -> serde_json::Value {
         }
         BexExternalValue::Union { value, .. } => bex_value_to_json(value),
         BexExternalValue::Handle(_) => serde_json::Value::String("<handle>".into()),
+        BexExternalValue::Uint8Array(bytes) => {
+            serde_json::json!({"__uint8array_len": bytes.len()})
+        }
         BexExternalValue::RustData(_) => serde_json::Value::String("<rust_data>".into()),
         BexExternalValue::FunctionRef { global_index } => {
             serde_json::json!({"__function_ref": global_index})

@@ -110,6 +110,7 @@ pub fn convert_tir2_ty(
         Tir2Ty::Primitive(PrimitiveType::String, attr) => Ty::String { attr: attr.clone() },
         Tir2Ty::Primitive(PrimitiveType::Bool, attr) => Ty::Bool { attr: attr.clone() },
         Tir2Ty::Primitive(PrimitiveType::Null, attr) => Ty::Null { attr: attr.clone() },
+        Tir2Ty::Primitive(PrimitiveType::Uint8Array, attr) => Ty::Uint8Array { attr: attr.clone() },
         Tir2Ty::Primitive(PrimitiveType::Image, attr) => Ty::Media(MediaKind::Image, attr.clone()),
         Tir2Ty::Primitive(PrimitiveType::Audio, attr) => Ty::Media(MediaKind::Audio, attr.clone()),
         Tir2Ty::Primitive(PrimitiveType::Video, attr) => Ty::Media(MediaKind::Video, attr.clone()),
@@ -1365,6 +1366,10 @@ impl LoweringContext<'_> {
                 let constant = Self::lower_literal(&lit);
                 self.builder
                     .assign(dest, Rvalue::Use(Operand::Constant(constant)));
+            }
+
+            AstExpr::ByteStringLiteral(bytes) => {
+                self.builder.assign(dest, Rvalue::Uint8Array(bytes));
             }
 
             AstExpr::Null => {
@@ -2629,7 +2634,7 @@ impl LoweringContext<'_> {
             _ => &base_ty,
         };
 
-        let kind = if matches!(unwrapped_ty, Ty::List(..)) {
+        let kind = if matches!(unwrapped_ty, Ty::List(..) | Ty::Uint8Array { .. }) {
             IndexKind::Array
         } else {
             IndexKind::Map
@@ -3155,7 +3160,7 @@ impl LoweringContext<'_> {
                     Ty::Optional(inner, _) => inner.as_ref(),
                     _ => &base_ty,
                 };
-                let kind = if matches!(unwrapped_ty, Ty::List(..)) {
+                let kind = if matches!(unwrapped_ty, Ty::List(..) | Ty::Uint8Array { .. }) {
                     IndexKind::Array
                 } else {
                     IndexKind::Map

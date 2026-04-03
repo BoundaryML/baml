@@ -62,6 +62,10 @@ pub enum TypeExpr {
     Never {
         attrs: Vec<RawAttribute>,
     },
+    /// `Uint8Array` (binary data) type
+    Uint8Array {
+        attrs: Vec<RawAttribute>,
+    },
     /// Media types
     Media {
         kind: baml_base::MediaKind,
@@ -132,6 +136,7 @@ impl TypeExpr {
             | Self::Bool { attrs }
             | Self::Null { attrs }
             | Self::Never { attrs }
+            | Self::Uint8Array { attrs }
             | Self::Media { attrs, .. }
             | Self::Optional { attrs, .. }
             | Self::List { attrs, .. }
@@ -157,6 +162,7 @@ impl TypeExpr {
             | Self::Bool { attrs }
             | Self::Null { attrs }
             | Self::Never { attrs }
+            | Self::Uint8Array { attrs }
             | Self::Media { attrs, .. }
             | Self::Optional { attrs, .. }
             | Self::List { attrs, .. }
@@ -401,6 +407,9 @@ impl Default for AstSourceMap {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Expr {
     Literal(Literal),
+    /// Byte string literal: `b"hello"`, `b"\x00\xFF"`.
+    /// Stores the fully-resolved bytes (escape sequences already processed).
+    ByteStringLiteral(Vec<u8>),
     Null,
     /// Path expression: `x`, `user.name`, `Status.Active`
     Path(Vec<Name>),

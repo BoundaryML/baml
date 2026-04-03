@@ -308,3 +308,23 @@ function baml.substring(self: ?, start: int, end: int) -> string  [builtin]
 function baml.toLowerCase(self: ?) -> string  [builtin]
 function baml.toUpperCase(self: ?) -> string  [builtin]
 function baml.trim(self: ?) -> string  [builtin]
+
+--- <builtin>/baml/uint8array.baml ---
+class baml.Uint8Array {
+}
+function baml.at(self: ?, index: int) -> int?  [builtin]
+function baml.concat(self: ?, other: uint8array) -> uint8array  [builtin]
+function baml.from_array(array: int[]) -> uint8array  [builtin]
+function baml.from_base64(base64: string) -> uint8array  [builtin]
+function baml.from_hex(hex: string) -> uint8array  [builtin]
+function baml.includes(self: ?, item: int) -> bool  [builtin]
+function baml.length(self: ?) -> int  [builtin]
+function baml.pop(self: ?) -> int?  [builtin]
+function baml.push(self: ?, item: int) -> int  [builtin]
+function baml.reverse(self: ?) -> uint8array  [builtin]
+function baml.slice(self: ?, start: int, end: int) -> uint8array  [builtin]
+function baml.sort(self: ?) -> null  [builtin]
+function baml.to_array(self: ?) -> int[]  [builtin]
+function baml.to_base64(self: ?) -> string  [builtin]
+function baml.to_hex(self: ?) -> string  [builtin]
+function baml.zeroes(size: int) -> uint8array  [builtin]

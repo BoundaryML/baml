@@ -38,6 +38,7 @@ fn deep_copy_value_recursive(
 
             let new_ptr = match object {
                 Object::String(s) => vm.tlab.alloc(Object::String(s)),
+                Object::Uint8Array(bytes) => vm.tlab.alloc(Object::Uint8Array(bytes)),
 
                 Object::Array(values) => {
                     let placeholder_ptr = vm.tlab.alloc(Object::Array(Vec::new()));
@@ -140,6 +141,7 @@ fn deep_equals_recursive(
 
             let result = match (vm.get_object(a_ptr), vm.get_object(b_ptr)) {
                 (Object::String(a), Object::String(b)) => a == b,
+                (Object::Uint8Array(a), Object::Uint8Array(b)) => a == b,
 
                 (Object::Array(a_values), Object::Array(b_values)) => {
                     a_values.len() == b_values.len()

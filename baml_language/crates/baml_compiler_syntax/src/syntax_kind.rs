@@ -278,6 +278,7 @@ pub enum SyntaxKind {
     // String components (assembled by parser)
     STRING_LITERAL,
     RAW_STRING_LITERAL,
+    BYTE_STRING_LITERAL,
     UNQUOTED_STRING,
 
     // Template components (inside raw strings)
@@ -328,6 +329,7 @@ impl SyntaxKind {
                 | SyntaxKind::FLOAT_LITERAL
                 | SyntaxKind::STRING_LITERAL
                 | SyntaxKind::RAW_STRING_LITERAL
+                | SyntaxKind::BYTE_STRING_LITERAL
         )
     }
 
