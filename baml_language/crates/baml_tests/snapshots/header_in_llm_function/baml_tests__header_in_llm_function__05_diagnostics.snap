@@ -9,7 +9,7 @@ source: crates/baml_tests/src/generated_tests.rs
    ┆ ┆   
  9 │ ├─▶     }
    │ │           
-   │ ╰─────────── invalid builtin declaration
+   │ ╰─────────── missing options
    │     
    │     Note: Error code: E0101
 ───╯
