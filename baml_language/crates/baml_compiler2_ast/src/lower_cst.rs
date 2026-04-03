@@ -1170,47 +1170,29 @@ fn synthesize_client_new_companion(
     // happens at assembly time.
 
     let mut values: std::collections::HashMap<String, ExprId> = std::collections::HashMap::new();
+    let top_level_names: std::collections::HashSet<&str> =
+        TOP_LEVEL_FIELDS.iter().map(|(n, _)| *n).collect();
+
+    // Provider-specific field names: anything in config.fields not in TOP_LEVEL_FIELDS.
     let provider_field_set: std::collections::HashSet<&str> = config
         .as_ref()
-        .and_then(|c| c.provider_options.as_ref())
-        .map(|(_, fields)| fields.iter().copied().collect())
+        .map(|c| {
+            c.fields
+                .iter()
+                .map(|(n, _)| *n)
+                .filter(|n| !top_level_names.contains(n))
+                .collect()
+        })
         .unwrap_or_default();
 
-    // Seed all known fields with null/empty-map defaults. This ensures that
-    // user-set values for these fields go into the right place rather than
-    // falling through to request_body.
-    for name in [
-        "model",
-        "base_url",
-        "allowed_role_metadata",
-        "finish_reason_allow_list",
-        "finish_reason_deny_list",
-        "supports_streaming",
-        "default_role",
-        "allowed_roles",
-        "remap_roles",
-        "api_key",
-        "headers",
-        "query_params",
-    ] {
-        let default = match name {
-            "headers" | "query_params" => alloc(Expr::Map { entries: vec![] }),
-            _ => alloc(Expr::Null),
-        };
-        values.insert(name.to_string(), default);
+    // Seed top-level fields with their base defaults.
+    for &(name, ref default) in TOP_LEVEL_FIELDS {
+        values.insert(name.to_string(), alloc_field_default(default, &mut alloc));
     }
 
-    // Initialize provider-specific fields to the null sentinel. Fields that
-    // remain at this value after defaults + user overrides are considered
-    // "unset" when deciding whether to create the provider options sub-object.
-    let null_sentinel = alloc(Expr::Null);
-    for &name in &provider_field_set {
-        values.insert(name.to_string(), null_sentinel);
-    }
-
-    // Apply provider defaults on top (both top-level and provider-specific).
+    // Apply provider field defaults on top (both top-level overrides and provider-specific).
     if let Some(cfg) = &config {
-        for &(name, ref default) in cfg.defaults {
+        for &(name, ref default) in cfg.fields {
             values.insert(name.to_string(), alloc_field_default(default, &mut alloc));
         }
     }
@@ -1230,14 +1212,17 @@ fn synthesize_client_new_companion(
     let mut has_base_url = false;
     let mut request_body_entries: Vec<(ExprId, ExprId)> = vec![];
     // Track which provider fields have been set to non-null values (by defaults
-    // or by user). Used by validate_client_options.
+    // or by user). Used by validate_client_options and assembly.
     let mut provider_fields_set: std::collections::HashSet<String> = config
         .as_ref()
-        .iter()
-        .flat_map(|c| c.defaults.iter())
-        .filter(|(name, _)| provider_field_set.contains(*name))
-        .map(|(name, _)| name.to_string())
-        .collect();
+        .map(|c| {
+            c.fields
+                .iter()
+                .filter(|(name, default)| provider_field_set.contains(*name) && !default.is_null())
+                .map(|(name, _)| name.to_string())
+                .collect()
+        })
+        .unwrap_or_default();
 
     if let Some(options_item) = config_block
         .items()
@@ -1290,81 +1275,64 @@ fn synthesize_client_new_companion(
     // Extract provider fields -> build typed sub-object.
     // Then take() known top-level fields -> leftover = request_body.
 
-    // Build provider options sub-object.
-    let provider_options = if let Some((type_name, fields)) =
-        config.as_ref().and_then(|c| c.provider_options.as_ref())
-    {
-        let mut any_set = false;
-        let prov_fields: Vec<(Name, ExprId)> = fields
-            .iter()
-            .map(|&f| {
-                let val = values.remove(f).unwrap_or(null_sentinel);
-                if val != null_sentinel {
-                    any_set = true;
-                }
-                (Name::new(f), val)
-            })
-            .collect();
-        if any_set {
-            alloc(Expr::Object {
-                type_name: Some(Name::new(type_name)),
-                fields: prov_fields,
-                spreads: vec![],
-            })
+    // Build provider options sub-object from provider-specific fields.
+    let null_expr = alloc(Expr::Null);
+    let provider_options =
+        if let Some(type_name) = config.as_ref().and_then(|c| c.provider_options_type) {
+            let prov_fields: Vec<(Name, ExprId)> = config
+                .as_ref()
+                .unwrap()
+                .fields
+                .iter()
+                .filter(|(name, _)| !top_level_names.contains(name))
+                .map(|&(name, _)| {
+                    let val = values.remove(name).unwrap_or_else(|| alloc(Expr::Null));
+                    (Name::new(name), val)
+                })
+                .collect();
+            if !provider_fields_set.is_empty() {
+                alloc(Expr::Object {
+                    type_name: Some(Name::new(type_name)),
+                    fields: prov_fields,
+                    spreads: vec![],
+                })
+            } else {
+                null_expr
+            }
         } else {
-            null_sentinel
-        }
-    } else {
-        null_sentinel
-    };
+            null_expr
+        };
 
-    // take() removes a field from the map, falling back to null or empty map.
-    // Anything left in the map after all take() calls is an unknown field that
-    // gets forwarded to request_body.
-    let mut take = |name: &str| -> (Name, ExprId) {
-        let val = values.remove(name).unwrap_or_else(|| match name {
-            "headers" | "query_params" => alloc(Expr::Map { entries: vec![] }),
-            _ => alloc(Expr::Null),
-        });
-        (Name::new(name), val)
-    };
-
-    // Extract top-level fields in PrimitiveClientOptions class-definition order.
-    let f_model = take("model");
-    let f_base_url = take("base_url");
-    let f_allowed_role_metadata = take("allowed_role_metadata");
-    let f_finish_reason_allow_list = take("finish_reason_allow_list");
-    let f_finish_reason_deny_list = take("finish_reason_deny_list");
-    let f_supports_streaming = take("supports_streaming");
-    let f_default_role = take("default_role");
-    let f_allowed_roles = take("allowed_roles");
-    let f_remap_roles = take("remap_roles");
-    let f_api_key = take("api_key");
-    let f_headers = take("headers");
-    let f_query_params = take("query_params");
+    // Extract top-level fields in class-definition order.
+    let mut options_fields: Vec<(Name, ExprId)> = TOP_LEVEL_FIELDS
+        .iter()
+        .map(|&(name, ref default)| {
+            let val = values
+                .remove(name)
+                .unwrap_or_else(|| alloc_field_default(default, &mut alloc));
+            (Name::new(name), val)
+        })
+        .collect();
 
     let request_body = alloc(Expr::Map {
         entries: request_body_entries,
     });
 
+    // Insert provider_options before "headers" to match PrimitiveClientOptions
+    // class-definition order, then append request_body at the end.
+    let headers_pos = options_fields
+        .iter()
+        .position(|(n, _)| n.as_str() == "headers")
+        .unwrap_or(options_fields.len());
+    options_fields.insert(
+        headers_pos,
+        (Name::new("provider_options"), provider_options),
+    );
+    options_fields.push((Name::new("request_body"), request_body));
+
     let options_expr = alloc(Expr::Object {
         type_name: Some(Name::new("baml.llm.PrimitiveClientOptions")),
-        fields: vec![
-            f_model,
-            f_base_url,
-            f_allowed_role_metadata,
-            f_finish_reason_allow_list,
-            f_finish_reason_deny_list,
-            f_supports_streaming,
-            f_default_role,
-            f_allowed_roles,
-            f_remap_roles,
-            f_api_key,
-            (Name::new("provider_options"), provider_options),
-            f_headers,
-            f_query_params,
-            (Name::new("request_body"), request_body),
-        ],
+        fields: options_fields,
         spreads: vec![],
     });
 
@@ -1419,30 +1387,39 @@ fn synthesize_client_new_companion(
 
 // ── Helpers ─────────────────────────────────────────────────────
 
-/// A default value for a field (top-level or provider-specific).
-///
-/// Used in [`ProviderConfig::defaults`] to declare non-null defaults.
+/// Default value for a field -- covers both "unset" sentinels (`Null`, `EmptyMap`)
+/// used in [`TOP_LEVEL_FIELDS`] and concrete provider defaults used in per-provider
+/// field consts like [`ANTHROPIC_FIELDS`].
 enum FieldDefault {
-    /// Literal string (e.g. `base_url = "https://api.openai.com/v1"`).
-    Str(&'static str),
-    /// Literal integer (e.g. `max_tokens = 4096`).
-    Int(i64),
-    /// Array of strings (e.g. `allowed_roles = ["system", "user", "assistant"]`).
-    StrArray(&'static [&'static str]),
-    /// Map of string pairs (e.g. `remap_roles = {"assistant": "model"}`).
-    StrPairMap(&'static [(&'static str, &'static str)]),
-    /// Empty map literal.
-    #[allow(dead_code)]
+    /// Null / unset.
+    Null,
+    /// Empty map literal (used as the unset default for `headers`, `query_params`).
     EmptyMap,
-    /// Nullable env var lookup: compiles to `baml.env.get("VAR_NAME")`.
+    /// Literal string.
+    Str(&'static str),
+    /// Literal integer.
+    Int(i64),
+    /// Array of strings.
+    StrArray(&'static [&'static str]),
+    /// Map of string pairs.
+    StrPairMap(&'static [(&'static str, &'static str)]),
+    /// Env var lookup: compiles to `baml.env.get("VAR_NAME")`.
     #[allow(dead_code)]
     Env(&'static str),
+}
+
+impl FieldDefault {
+    fn is_null(&self) -> bool {
+        matches!(self, Self::Null)
+    }
 }
 
 /// Allocate an `Expr` tree for a [`FieldDefault`] value.
 fn alloc_field_default(default: &FieldDefault, alloc: &mut impl FnMut(Expr) -> ExprId) -> ExprId {
     use baml_base::Literal;
     match default {
+        FieldDefault::Null => alloc(Expr::Null),
+        FieldDefault::EmptyMap => alloc(Expr::Map { entries: vec![] }),
         FieldDefault::Str(s) => alloc(Expr::Literal(Literal::String(s.to_string()))),
         FieldDefault::Int(v) => alloc(Expr::Literal(Literal::Int(*v))),
         FieldDefault::StrArray(items) => {
@@ -1463,7 +1440,6 @@ fn alloc_field_default(default: &FieldDefault, alloc: &mut impl FnMut(Expr) -> E
                 .collect();
             alloc(Expr::Map { entries })
         }
-        FieldDefault::EmptyMap => alloc(Expr::Map { entries: vec![] }),
         FieldDefault::Env(var) => {
             let callee = alloc(Expr::Path(vec![
                 Name::new("baml"),
@@ -1479,165 +1455,165 @@ fn alloc_field_default(default: &FieldDefault, alloc: &mut impl FnMut(Expr) -> E
     }
 }
 
-/// Provider configuration: defaults and provider-specific options.
+/// Top-level fields on `PrimitiveClientOptions`, in class-definition order.
 ///
-/// # How to add a new provider
-///
-/// 1. Add the provider name to [`VALID_PROVIDERS`].
-/// 2. Add an arm to [`provider_config_for`] returning a `ProviderConfig`.
-///    - `defaults`: a flat `&[(&str, FieldDefault)]` listing ALL non-null
-///      defaults for this provider, both top-level (`base_url`, `default_role`,
-///      etc.) and provider-specific (`max_tokens`, `region`, etc.) in one list.
-///      Fields not listed default to null (or empty map for `headers`/`query_params`).
-///    - `provider_options`: if the provider has a typed options class
-///      (e.g. `AnthropicOptions`), set `Some(("baml.llm.TypeName", &["field1", "field2"]))`.
-///      Fields listed here are extracted into the typed sub-object at assembly
-///      time; everything else stays on `PrimitiveClientOptions`.
-/// 3. If the provider needs compile-time validation, add checks to
-///    [`validate_client_options`].
-///
-/// # How to add a new top-level option field
-///
-/// 1. Add the field to the `PrimitiveClientOptions` class in `llm_types.baml`.
-/// 2. Add a `take("field_name")` call in `synthesize_client_new_companion`
-///    at the assembly site, in class-definition order.
-/// 3. If providers need non-null defaults, add entries to their `defaults` slice.
-struct ProviderConfig {
-    /// Non-null defaults for both top-level and provider-specific fields.
-    ///
-    /// Top-level fields like `base_url` and provider-specific fields like
-    /// `max_tokens` are defined here in a single flat list. The system
-    /// determines which object they belong to based on `provider_options`.
-    defaults: &'static [(&'static str, FieldDefault)],
+/// To add a new top-level option, add it here and in the `PrimitiveClientOptions`
+/// class in `llm_types.baml`. The seed, take, and assembly stages all derive
+/// from this list automatically.
+const TOP_LEVEL_FIELDS: &[(&str, FieldDefault)] = &[
+    ("model", FieldDefault::Null),
+    ("base_url", FieldDefault::Null),
+    ("allowed_role_metadata", FieldDefault::Null),
+    ("finish_reason_allow_list", FieldDefault::Null),
+    ("finish_reason_deny_list", FieldDefault::Null),
+    ("supports_streaming", FieldDefault::Null),
+    ("default_role", FieldDefault::Null),
+    ("allowed_roles", FieldDefault::Null),
+    ("remap_roles", FieldDefault::Null),
+    ("api_key", FieldDefault::Null),
+    ("headers", FieldDefault::EmptyMap),
+    ("query_params", FieldDefault::EmptyMap),
+];
 
-    /// Provider-specific option type and field names.
-    ///
-    /// If set, fields listed here are grouped into a typed `Expr::Object`
-    /// (e.g. `AnthropicOptions { max_tokens: 4096 }`) and stored in the
-    /// `provider_options` field of `PrimitiveClientOptions`.
-    ///
-    /// Format: `("baml.llm.TypeName", &["field1", "field2", ...])`.
-    provider_options: Option<(&'static str, &'static [&'static str])>,
-}
-
-impl ProviderConfig {
-    const EMPTY: Self = Self {
-        defaults: &[],
-        provider_options: None,
-    };
-}
+// ── Per-provider field definitions ─────────────────────────────
+//
+// Each const lists ALL fields the provider cares about -- both top-level
+// overrides (e.g. base_url, default_role) and provider-specific fields
+// (e.g. max_tokens, region). Fields not in TOP_LEVEL_FIELDS are
+// automatically treated as provider-specific and grouped into the typed
+// sub-object at assembly time.
+//
+// To add a new provider:
+//   1. Add its name to VALID_PROVIDERS.
+//   2. Add a PROVIDER_FIELDS const here.
+//   3. Add an arm to provider_config_for().
+//   4. If it needs compile-time validation, add checks to validate_client_options().
 
 const SAU: &[&str] = &["system", "user", "assistant"];
 const UA: &[&str] = &["user", "assistant"];
 
+const ANTHROPIC_FIELDS: &[(&str, FieldDefault)] = &[
+    ("base_url", FieldDefault::Str("https://api.anthropic.com")),
+    ("default_role", FieldDefault::Str("user")),
+    ("allowed_roles", FieldDefault::StrArray(SAU)),
+    ("max_tokens", FieldDefault::Int(4096)),
+];
+
+const OPENAI_FIELDS: &[(&str, FieldDefault)] = &[
+    ("base_url", FieldDefault::Str("https://api.openai.com/v1")),
+    ("default_role", FieldDefault::Str("system")),
+    ("allowed_roles", FieldDefault::StrArray(SAU)),
+];
+
+const OLLAMA_FIELDS: &[(&str, FieldDefault)] = &[
+    ("base_url", FieldDefault::Str("http://localhost:11434")),
+    ("default_role", FieldDefault::Str("user")),
+    ("allowed_roles", FieldDefault::StrArray(UA)),
+];
+
+const OPENROUTER_FIELDS: &[(&str, FieldDefault)] = &[
+    (
+        "base_url",
+        FieldDefault::Str("https://openrouter.ai/api/v1"),
+    ),
+    ("default_role", FieldDefault::Str("system")),
+    ("allowed_roles", FieldDefault::StrArray(SAU)),
+];
+
+const AZURE_OPENAI_FIELDS: &[(&str, FieldDefault)] = &[
+    ("default_role", FieldDefault::Str("system")),
+    ("allowed_roles", FieldDefault::StrArray(SAU)),
+    ("resource_name", FieldDefault::Null),
+    ("deployment_id", FieldDefault::Null),
+    ("api_version", FieldDefault::Null),
+    ("max_tokens", FieldDefault::Int(4096)),
+];
+
+const BEDROCK_FIELDS: &[(&str, FieldDefault)] = &[
+    ("default_role", FieldDefault::Str("user")),
+    ("allowed_roles", FieldDefault::StrArray(SAU)),
+    ("region", FieldDefault::Null),
+    ("endpoint_url", FieldDefault::Null),
+    ("access_key_id", FieldDefault::Null),
+    ("secret_access_key", FieldDefault::Null),
+    ("session_token", FieldDefault::Null),
+    ("profile", FieldDefault::Null),
+    ("stop_sequences", FieldDefault::Null),
+    ("max_tokens", FieldDefault::Null),
+    ("temperature", FieldDefault::Null),
+    ("top_p", FieldDefault::Null),
+];
+
+const GOOGLE_AI_FIELDS: &[(&str, FieldDefault)] = &[
+    (
+        "base_url",
+        FieldDefault::Str("https://generativelanguage.googleapis.com/v1beta"),
+    ),
+    ("default_role", FieldDefault::Str("user")),
+    ("allowed_roles", FieldDefault::StrArray(SAU)),
+    (
+        "remap_roles",
+        FieldDefault::StrPairMap(&[("assistant", "model")]),
+    ),
+];
+
+const VERTEX_AI_FIELDS: &[(&str, FieldDefault)] = &[
+    ("default_role", FieldDefault::Str("user")),
+    ("allowed_roles", FieldDefault::StrArray(SAU)),
+    (
+        "remap_roles",
+        FieldDefault::StrPairMap(&[("assistant", "model")]),
+    ),
+    ("credentials", FieldDefault::Null),
+    ("credentials_content", FieldDefault::Null),
+    ("location", FieldDefault::Null),
+    ("project_id", FieldDefault::Null),
+];
+
+/// Provider configuration: field definitions and optional typed sub-object.
+///
+/// Fields not present in [`TOP_LEVEL_FIELDS`] are automatically treated as
+/// provider-specific and assembled into a typed `Expr::Object`.
+struct ProviderConfig {
+    /// All fields this provider defines (top-level overrides + provider-specific).
+    fields: &'static [(&'static str, FieldDefault)],
+    /// Type name for the provider-specific options sub-object, if any.
+    provider_options_type: Option<&'static str>,
+}
+
 fn provider_config_for(provider: &str) -> ProviderConfig {
     match provider {
         "anthropic" => ProviderConfig {
-            defaults: &[
-                ("base_url", FieldDefault::Str("https://api.anthropic.com")),
-                ("default_role", FieldDefault::Str("user")),
-                ("allowed_roles", FieldDefault::StrArray(SAU)),
-                ("max_tokens", FieldDefault::Int(4096)),
-            ],
-            provider_options: Some(("baml.llm.AnthropicOptions", &["max_tokens"])),
+            fields: ANTHROPIC_FIELDS,
+            provider_options_type: Some("baml.llm.AnthropicOptions"),
         },
         "openai" | "openai-generic" | "openai-responses" => ProviderConfig {
-            defaults: &[
-                ("base_url", FieldDefault::Str("https://api.openai.com/v1")),
-                ("default_role", FieldDefault::Str("system")),
-                ("allowed_roles", FieldDefault::StrArray(SAU)),
-            ],
-            ..ProviderConfig::EMPTY
+            fields: OPENAI_FIELDS,
+            provider_options_type: None,
         },
         "ollama" => ProviderConfig {
-            defaults: &[
-                ("base_url", FieldDefault::Str("http://localhost:11434")),
-                ("default_role", FieldDefault::Str("user")),
-                ("allowed_roles", FieldDefault::StrArray(UA)),
-            ],
-            ..ProviderConfig::EMPTY
+            fields: OLLAMA_FIELDS,
+            provider_options_type: None,
         },
         "openrouter" => ProviderConfig {
-            defaults: &[
-                (
-                    "base_url",
-                    FieldDefault::Str("https://openrouter.ai/api/v1"),
-                ),
-                ("default_role", FieldDefault::Str("system")),
-                ("allowed_roles", FieldDefault::StrArray(SAU)),
-            ],
-            ..ProviderConfig::EMPTY
+            fields: OPENROUTER_FIELDS,
+            provider_options_type: None,
         },
         "azure-openai" => ProviderConfig {
-            defaults: &[
-                ("default_role", FieldDefault::Str("system")),
-                ("allowed_roles", FieldDefault::StrArray(SAU)),
-                ("max_tokens", FieldDefault::Int(4096)),
-            ],
-            provider_options: Some((
-                "baml.llm.AzureOpenAiOptions",
-                &[
-                    "resource_name",
-                    "deployment_id",
-                    "api_version",
-                    "max_tokens",
-                ],
-            )),
+            fields: AZURE_OPENAI_FIELDS,
+            provider_options_type: Some("baml.llm.AzureOpenAiOptions"),
         },
         "aws-bedrock" => ProviderConfig {
-            defaults: &[
-                ("default_role", FieldDefault::Str("user")),
-                ("allowed_roles", FieldDefault::StrArray(SAU)),
-            ],
-            provider_options: Some((
-                "baml.llm.BedrockOptions",
-                &[
-                    "region",
-                    "endpoint_url",
-                    "access_key_id",
-                    "secret_access_key",
-                    "session_token",
-                    "profile",
-                    "stop_sequences",
-                    "max_tokens",
-                    "temperature",
-                    "top_p",
-                ],
-            )),
+            fields: BEDROCK_FIELDS,
+            provider_options_type: Some("baml.llm.BedrockOptions"),
         },
         "google-ai" => ProviderConfig {
-            defaults: &[
-                (
-                    "base_url",
-                    FieldDefault::Str("https://generativelanguage.googleapis.com/v1beta"),
-                ),
-                ("default_role", FieldDefault::Str("user")),
-                ("allowed_roles", FieldDefault::StrArray(SAU)),
-                (
-                    "remap_roles",
-                    FieldDefault::StrPairMap(&[("assistant", "model")]),
-                ),
-            ],
-            ..ProviderConfig::EMPTY
+            fields: GOOGLE_AI_FIELDS,
+            provider_options_type: None,
         },
         "vertex-ai" => ProviderConfig {
-            defaults: &[
-                ("default_role", FieldDefault::Str("user")),
-                ("allowed_roles", FieldDefault::StrArray(SAU)),
-                (
-                    "remap_roles",
-                    FieldDefault::StrPairMap(&[("assistant", "model")]),
-                ),
-            ],
-            provider_options: Some((
-                "baml.llm.VertexAiOptions",
-                &[
-                    "credentials",
-                    "credentials_content",
-                    "location",
-                    "project_id",
-                ],
-            )),
+            fields: VERTEX_AI_FIELDS,
+            provider_options_type: Some("baml.llm.VertexAiOptions"),
         },
         _ => unreachable!("unknown provider {provider:?}: add it to provider_config_for"),
     }
