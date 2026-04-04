@@ -1,7 +1,8 @@
 mod anthropic;
-mod anthropic_types;
+mod bedrock;
+mod google;
 mod openai;
-mod openai_types;
+mod openai_responses;
 mod types;
 
 pub(super) use types::LlmProviderResponse;
@@ -56,18 +57,31 @@ pub(crate) fn parse_response(
         | LlmProvider::Ollama
         | LlmProvider::OpenRouter => openai::parse_openai_response(body),
 
-        LlmProvider::Anthropic | LlmProvider::AwsBedrock => {
-            anthropic::parse_anthropic_response(body)
-        }
+        LlmProvider::OpenAiResponses => openai_responses::parse_openai_responses_response(body),
 
-        LlmProvider::OpenAiResponses => Err(ParseResponseError::UnsupportedProvider(
-            "openai-responses".into(),
-        )),
-        LlmProvider::GoogleAi | LlmProvider::VertexAi => Err(
-            ParseResponseError::UnsupportedProvider(format!("{provider:?}")),
-        ),
+        LlmProvider::Anthropic => anthropic::parse_anthropic_response(body),
+
+        LlmProvider::GoogleAi | LlmProvider::VertexAi => google::parse_gemini_response(body),
+
+        LlmProvider::AwsBedrock => bedrock::parse_bedrock_response(body),
+
         LlmProvider::BamlFallback | LlmProvider::BamlRoundRobin => Err(
             ParseResponseError::UnsupportedProvider(format!("{provider:?}")),
         ),
+    }
+}
+
+/// Resolve which provider's response format to use: if `client_response_type`
+/// is set, parse it as an `LlmProvider` override; otherwise use the client's
+/// own provider.
+pub(crate) fn resolve_response_provider(
+    provider: LlmProvider,
+    client_response_type: Option<&str>,
+) -> Result<LlmProvider, ParseResponseError> {
+    match client_response_type {
+        Some(override_str) => override_str
+            .parse::<LlmProvider>()
+            .map_err(|_| ParseResponseError::UnsupportedProvider(override_str.to_string())),
+        None => Ok(provider),
     }
 }

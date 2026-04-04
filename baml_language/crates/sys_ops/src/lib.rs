@@ -280,6 +280,7 @@ fn convert_io_primitive_client(
             headers: options.headers.clone(),
             query_params: options.query_params.clone(),
             request_body: options.request_body.clone(),
+            client_response_type: options.client_response_type.clone(),
         },
     )
 }

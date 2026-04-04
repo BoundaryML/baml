@@ -237,6 +237,10 @@ class PrimitiveClientOptions {
   remap_roles map<string, string> | null
   api_key string | null
   provider_options AnthropicOptions | AzureOpenAiOptions | BedrockOptions | null
+  // Override which response parser to use (e.g. "openai", "anthropic",
+  // "google", "vertex", "openai-responses", "aws-bedrock"). When null the
+  // parser is inferred from the provider.
+  client_response_type string | null
 
   // request stuff here
   headers map<string, string>

@@ -311,12 +311,15 @@ pub fn execute_parse_response_from_owned(
     return_type: &baml_type::Ty,
     ctx: &::sys_types::SysOpContext,
 ) -> Result<bex_external_types::BexExternalValue, LlmOpError> {
-    let response = parse_response::parse_response(
-        LlmProvider::from_str(&client.provider)
-            .map_err(|e| LlmOpError::ParseResponseError(e.to_string()))?,
-        response,
+    let provider = LlmProvider::from_str(&client.provider)
+        .map_err(|e| LlmOpError::ParseResponseError(e.to_string()))?;
+    let response_provider = parse_response::resolve_response_provider(
+        provider,
+        client.options.client_response_type.as_deref(),
     )
     .map_err(|e| LlmOpError::ParseResponseError(e.to_string()))?;
+    let response = parse_response::parse_response(response_provider, response)
+        .map_err(|e| LlmOpError::ParseResponseError(e.to_string()))?;
 
     if !client.is_finish_reason_allowed(response.finish_reason_raw.as_deref()) {
         return Err(LlmOpError::ParseResponseError(format!(
