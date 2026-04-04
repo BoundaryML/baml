@@ -1470,6 +1470,124 @@ function get_body() -> string {
 gemini_body_tests!(google_ai, GOOGLE_AI_CLIENT);
 gemini_body_tests!(vertex_ai, VERTEX_AI_CLIENT);
 
+// ============================================================================
+// Vertex AI + Anthropic (rawPredict) e2e tests
+// ============================================================================
+
+const VERTEX_CLAUDE_CLIENT: &str = r#"
+client C {
+    provider vertex-ai
+    options {
+        model "claude-sonnet-4-20250514"
+        base_url "https://us-central1-aiplatform.googleapis.com/v1/projects/test-project/locations/us-central1/publishers/anthropic/models"
+        query_params { key "test-api-key" }
+    }
+}
+"#;
+
+#[tokio::test]
+async fn vertex_claude_uses_raw_predict_url() {
+    let source = [
+        VERTEX_CLAUDE_CLIENT,
+        r##"
+function F() -> string {
+    client C
+    prompt #"{{ _.role("user") }}Hi"#
+}
+function get_url() -> string {
+    baml.llm.build_request(C, "F", {}).url
+}
+"##,
+    ]
+    .join("\n");
+
+    let result = run_baml(&source, "get_url").await;
+    let url = as_string(&result);
+    assert!(
+        url.contains(":rawPredict"),
+        "Claude on Vertex should use rawPredict: {url}"
+    );
+    assert!(
+        !url.contains(":generateContent"),
+        "Claude on Vertex should NOT use generateContent: {url}"
+    );
+}
+
+#[tokio::test]
+async fn vertex_claude_keeps_assistant_role() {
+    let source = [
+        VERTEX_CLAUDE_CLIENT,
+        r##"
+function F() -> string {
+    client C
+    prompt #"
+        {{ _.role("user") }}
+        Hi
+        {{ _.role("assistant") }}
+        Hello!
+        {{ _.role("user") }}
+        How are you?
+    "#
+}
+function get_body() -> string {
+    baml.llm.build_request(C, "F", {}).body
+}
+"##,
+    ]
+    .join("\n");
+
+    let body = body_json(&run_baml(&source, "get_body").await);
+    assert_eq!(
+        body,
+        serde_json::json!({
+            "model": "claude-sonnet-4-20250514",
+            "anthropic_version": "vertex-2023-10-16",
+            "max_tokens": 4096,
+            "messages": [
+                {"role": "user", "content": [{"type": "text", "text": "Hi"}]},
+                {"role": "assistant", "content": [{"type": "text", "text": "Hello!"}]},
+                {"role": "user", "content": [{"type": "text", "text": "How are you?"}]}
+            ]
+        })
+    );
+}
+
+#[tokio::test]
+async fn vertex_claude_system_extracted() {
+    let source = [
+        VERTEX_CLAUDE_CLIENT,
+        r##"
+function F() -> string {
+    client C
+    prompt #"
+        {{ _.role("system") }}
+        You are helpful.
+        {{ _.role("user") }}
+        Hi
+    "#
+}
+function get_body() -> string {
+    baml.llm.build_request(C, "F", {}).body
+}
+"##,
+    ]
+    .join("\n");
+
+    let body = body_json(&run_baml(&source, "get_body").await);
+    assert_eq!(
+        body,
+        serde_json::json!({
+            "model": "claude-sonnet-4-20250514",
+            "anthropic_version": "vertex-2023-10-16",
+            "max_tokens": 4096,
+            "system": [{"type": "text", "text": "You are helpful."}],
+            "messages": [
+                {"role": "user", "content": [{"type": "text", "text": "Hi"}]}
+            ]
+        })
+    );
+}
+
 #[tokio::test]
 async fn test_google_ai_generation_config() {
     let source = r##"

@@ -338,12 +338,16 @@ pub fn execute_parse_response_from_owned(
     return_type: &baml_type::Ty,
     ctx: &::sys_types::SysOpContext,
 ) -> Result<bex_external_types::BexExternalValue, LlmOpError> {
-    let response = parse_response::parse_response(
-        LlmProvider::from_str(&client.provider)
-            .map_err(|e| LlmOpError::ParseResponseError(e.to_string()))?,
-        response,
-    )
-    .map_err(|e| LlmOpError::ParseResponseError(e.to_string()))?;
+    let mut provider = LlmProvider::from_str(&client.provider)
+        .map_err(|e| LlmOpError::ParseResponseError(e.to_string()))?;
+
+    // Vertex AI + Anthropic model uses rawPredict, which returns Anthropic-format responses.
+    if provider == LlmProvider::VertexAi && build_request::is_anthropic_model(&client.model) {
+        provider = LlmProvider::Anthropic;
+    }
+
+    let response = parse_response::parse_response(provider, response)
+        .map_err(|e| LlmOpError::ParseResponseError(e.to_string()))?;
 
     if !client.is_finish_reason_allowed(response.finish_reason_raw.as_deref()) {
         return Err(LlmOpError::ParseResponseError(format!(
@@ -488,6 +492,48 @@ mod tests {
             &ctx,
         );
         assert!(denied.is_err());
+    }
+
+    // ========================================================================
+    // Vertex + Anthropic response routing
+    // ========================================================================
+
+    #[test]
+    fn vertex_claude_parses_anthropic_response() {
+        let client = baml_std::PrimitiveClient::new(
+            "test".to_string(),
+            "vertex-ai".to_string(),
+            baml_std::PrimitiveClientOptions {
+                model: Some("claude-sonnet-4-20250514".to_string()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        let anthropic_response = r#"{
+            "id": "msg_123",
+            "type": "message",
+            "role": "assistant",
+            "content": [{"type": "text", "text": "Hello from Claude on Vertex"}],
+            "model": "claude-sonnet-4-20250514",
+            "stop_reason": "end_turn",
+            "stop_sequence": null,
+            "usage": {"input_tokens": 5, "output_tokens": 6}
+        }"#;
+
+        let ctx = SysOpContext::empty();
+        let result = execute_parse_response_from_owned(
+            &client,
+            anthropic_response,
+            &::baml_type::Ty::String {
+                attr: TyAttr::default(),
+            },
+            &ctx,
+        );
+        assert!(
+            result.is_ok(),
+            "should parse Anthropic response: {result:?}"
+        );
     }
 
     // ========================================================================

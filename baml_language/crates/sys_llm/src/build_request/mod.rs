@@ -14,6 +14,11 @@ use bex_external_types::BexExternalValue;
 
 use crate::LlmProvider;
 
+/// Returns true if the model name indicates an Anthropic model (e.g. Claude on Vertex AI).
+pub(crate) fn is_anthropic_model(model: &str) -> bool {
+    model.starts_with("claude")
+}
+
 /// Build a provider-specific HTTP request from a specialized prompt.
 ///
 /// Returns an owned `HttpRequest` matching the `baml.http.Request` class:
@@ -35,8 +40,13 @@ pub(crate) async fn build_request(
         LlmProvider::OpenAiResponses => openai::responses::build_request(client, &prompt),
         LlmProvider::Anthropic => anthropic::build_request(client, &prompt),
         LlmProvider::AwsBedrock => bedrock::build_request(client, &prompt, callbacks).await,
-        LlmProvider::GoogleAi | LlmProvider::VertexAi => {
-            google::build_request(client, &prompt, provider)
+        LlmProvider::GoogleAi => google::build_request(client, &prompt, provider),
+        LlmProvider::VertexAi => {
+            if is_anthropic_model(&client.model) {
+                build_vertex_anthropic_request(client, &prompt)
+            } else {
+                google::build_request(client, &prompt, provider)
+            }
         }
         LlmProvider::BamlFallback | LlmProvider::BamlRoundRobin => Err(
             BuildRequestError::UnsupportedLlmProvider(client.provider.clone()),
@@ -65,6 +75,44 @@ pub(crate) async fn build_request(
     crate::auth_request::auth_request(provider, &mut request, client, callbacks).await?;
 
     Ok(request)
+}
+
+// ---------------------------------------------------------------------------
+// Vertex AI + Anthropic model (rawPredict)
+// ---------------------------------------------------------------------------
+
+/// Build an Anthropic-format request for Vertex AI's `rawPredict` endpoint.
+///
+/// Vertex AI proxies Anthropic models via `rawPredict`, which passes the body
+/// through to the Anthropic API. The body format is identical to the Anthropic
+/// Messages API, with `anthropic_version` in the body (not as a header).
+fn build_vertex_anthropic_request(
+    client: &crate::baml_std::PrimitiveClient,
+    prompt: &bex_vm_types::PromptAst,
+) -> Result<crate::baml_std::HttpRequest, BuildRequestError> {
+    let mut headers = indexmap::IndexMap::new();
+    headers.insert("content-type".to_string(), "application/json".to_string());
+
+    let mut extra = client.extra_body.clone();
+    extra
+        .entry("anthropic_version")
+        .or_insert(serde_json::json!("vertex-2023-10-16"));
+
+    let max_tokens = extra
+        .remove("max_tokens")
+        .and_then(|v| v.as_i64())
+        .or(Some(4096));
+
+    let body_str = anthropic::build_anthropic_body_str(&client.model, prompt, max_tokens, &extra)?;
+
+    let url = google::resolve_vertex_raw_predict_url(client)?;
+
+    Ok(crate::baml_std::HttpRequest {
+        method: "POST".to_string(),
+        url,
+        headers,
+        body: body_str,
+    })
 }
 
 /// Extract a MIME type from a `MediaValue`, returning an error if none is set.
@@ -1024,6 +1072,202 @@ mod tests {
                     "maxOutputTokens": 2048
                 }
             })
+        );
+    }
+
+    // ========================================================================
+    // Vertex AI + Anthropic (rawPredict) tests
+    // ========================================================================
+
+    #[tokio::test]
+    async fn test_vertex_anthropic_uses_raw_predict_url() {
+        let client = make_client(
+            "vertex-ai",
+            crate::baml_std::PrimitiveClientOptions {
+                model: Some("claude-sonnet-4-20250514".to_string()),
+                base_url: Some(
+                    "https://us-central1-aiplatform.googleapis.com/v1/projects/my-project/locations/us-central1/publishers/google/models"
+                        .to_string(),
+                ),
+                query_params: IndexMap::from([("key".to_string(), "test-key".to_string())]),
+                ..crate::baml_std::PrimitiveClientOptions::default()
+            },
+        );
+
+        let prompt = msg("user", "Hello");
+        let result = build_request(&client, prompt, &crate::BuildRequestCallbacks::noop())
+            .await
+            .unwrap();
+
+        assert!(
+            result.url.contains(":rawPredict"),
+            "URL should use rawPredict: {}",
+            result.url
+        );
+        assert!(
+            !result.url.contains(":generateContent"),
+            "URL should NOT use generateContent: {}",
+            result.url
+        );
+    }
+
+    #[tokio::test]
+    async fn test_vertex_anthropic_body_format() {
+        let client = make_client(
+            "vertex-ai",
+            crate::baml_std::PrimitiveClientOptions {
+                model: Some("claude-sonnet-4-20250514".to_string()),
+                base_url: Some(
+                    "https://us-central1-aiplatform.googleapis.com/v1/projects/my-project/locations/us-central1/publishers/google/models"
+                        .to_string(),
+                ),
+                query_params: IndexMap::from([("key".to_string(), "test-key".to_string())]),
+                ..crate::baml_std::PrimitiveClientOptions::default()
+            },
+        );
+
+        let prompt = Arc::new(PromptAst::Vec(vec![
+            msg("system", "You are helpful."),
+            msg("user", "Hi"),
+            msg("assistant", "Hello!"),
+            msg("user", "How are you?"),
+        ]));
+
+        let result = build_request(&client, prompt, &crate::BuildRequestCallbacks::noop())
+            .await
+            .unwrap();
+        let body = parse_body(&result);
+
+        assert_eq!(
+            body,
+            serde_json::json!({
+                "model": "claude-sonnet-4-20250514",
+                "anthropic_version": "vertex-2023-10-16",
+                "max_tokens": 4096,
+                "system": [{"type": "text", "text": "You are helpful."}],
+                "messages": [
+                    {"role": "user", "content": [{"type": "text", "text": "Hi"}]},
+                    {"role": "assistant", "content": [{"type": "text", "text": "Hello!"}]},
+                    {"role": "user", "content": [{"type": "text", "text": "How are you?"}]}
+                ]
+            })
+        );
+    }
+
+    /// End-to-end: specialization (with `remap_roles` as `lower_cst` sets it)
+    /// followed by `build_request`. Proves Claude on Vertex keeps "assistant"
+    /// through the full pipeline.
+    #[tokio::test]
+    async fn test_vertex_anthropic_e2e_roles_survive_specialization() {
+        let client = make_client(
+            "vertex-ai",
+            crate::baml_std::PrimitiveClientOptions {
+                model: Some("claude-sonnet-4-20250514".to_string()),
+                base_url: Some(
+                    "https://us-central1-aiplatform.googleapis.com/v1/projects/my-project/locations/us-central1/publishers/google/models"
+                        .to_string(),
+                ),
+                query_params: IndexMap::from([("key".to_string(), "test-key".to_string())]),
+                // Matches what lower_cst.rs sets for vertex-ai.
+                remap_roles: Some(IndexMap::from([(
+                    "assistant".to_string(),
+                    "model".to_string(),
+                )])),
+                ..crate::baml_std::PrimitiveClientOptions::default()
+            },
+        );
+
+        let prompt = Arc::new(PromptAst::Vec(vec![
+            msg("system", "You are helpful."),
+            msg("user", "Hi"),
+            msg("assistant", "Hello!"),
+            msg("user", "How are you?"),
+        ]));
+
+        // Specialize first (remap_roles should be skipped for Claude).
+        let specialized = crate::execute_specialize_prompt_from_owned(&client, prompt).unwrap();
+
+        // Then build request.
+        let result = build_request(&client, specialized, &crate::BuildRequestCallbacks::noop())
+            .await
+            .unwrap();
+        let body = parse_body(&result);
+
+        assert!(result.url.contains(":rawPredict"));
+        // "assistant" must survive, NOT be remapped to "model".
+        assert_eq!(
+            body["messages"][1]["role"], "assistant",
+            "Claude on Vertex should keep 'assistant' role, got: {}",
+            body["messages"][1]["role"]
+        );
+    }
+
+    /// Mirror test: Gemini on Vertex DOES remap assistant -> model through
+    /// the same pipeline.
+    #[tokio::test]
+    async fn test_vertex_gemini_e2e_remaps_assistant_to_model() {
+        let client = make_client(
+            "vertex-ai",
+            crate::baml_std::PrimitiveClientOptions {
+                model: Some("gemini-2.0-flash".to_string()),
+                base_url: Some(
+                    "https://us-central1-aiplatform.googleapis.com/v1/projects/my-project/locations/us-central1/publishers/google/models"
+                        .to_string(),
+                ),
+                query_params: IndexMap::from([("key".to_string(), "test-key".to_string())]),
+                remap_roles: Some(IndexMap::from([(
+                    "assistant".to_string(),
+                    "model".to_string(),
+                )])),
+                ..crate::baml_std::PrimitiveClientOptions::default()
+            },
+        );
+
+        let prompt = Arc::new(PromptAst::Vec(vec![
+            msg("user", "Hi"),
+            msg("assistant", "Hello!"),
+            msg("user", "How are you?"),
+        ]));
+
+        let specialized = crate::execute_specialize_prompt_from_owned(&client, prompt).unwrap();
+        let result = build_request(&client, specialized, &crate::BuildRequestCallbacks::noop())
+            .await
+            .unwrap();
+        let body = parse_body(&result);
+
+        assert!(result.url.contains(":generateContent"));
+        // "assistant" must be remapped to "model" for Gemini.
+        assert_eq!(
+            body["contents"][1]["role"], "model",
+            "Gemini on Vertex should remap to 'model', got: {}",
+            body["contents"][1]["role"]
+        );
+    }
+
+    #[tokio::test]
+    async fn test_vertex_gemini_still_uses_generate_content() {
+        let client = make_client(
+            "vertex-ai",
+            crate::baml_std::PrimitiveClientOptions {
+                model: Some("gemini-2.0-flash".to_string()),
+                base_url: Some(
+                    "https://us-central1-aiplatform.googleapis.com/v1/projects/my-project/locations/us-central1/publishers/google/models"
+                        .to_string(),
+                ),
+                query_params: IndexMap::from([("key".to_string(), "test-key".to_string())]),
+                ..crate::baml_std::PrimitiveClientOptions::default()
+            },
+        );
+
+        let prompt = msg("user", "Hello");
+        let result = build_request(&client, prompt, &crate::BuildRequestCallbacks::noop())
+            .await
+            .unwrap();
+
+        assert!(
+            result.url.contains(":generateContent"),
+            "Gemini should use generateContent: {}",
+            result.url
         );
     }
 }

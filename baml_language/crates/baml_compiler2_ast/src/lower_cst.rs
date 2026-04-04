@@ -1403,9 +1403,6 @@ enum FieldDefault {
     StrArray(&'static [&'static str]),
     /// Map of string pairs.
     StrPairMap(&'static [(&'static str, &'static str)]),
-    /// Env var lookup: compiles to `baml.env.get("VAR_NAME")`.
-    #[allow(dead_code)]
-    Env(&'static str),
 }
 
 impl FieldDefault {
@@ -1439,18 +1436,6 @@ fn alloc_field_default(default: &FieldDefault, alloc: &mut impl FnMut(Expr) -> E
                 })
                 .collect();
             alloc(Expr::Map { entries })
-        }
-        FieldDefault::Env(var) => {
-            let callee = alloc(Expr::Path(vec![
-                Name::new("baml"),
-                Name::new("env"),
-                Name::new("get"),
-            ]));
-            let arg = alloc(Expr::Literal(Literal::String(var.to_string())));
-            alloc(Expr::Call {
-                callee,
-                args: vec![arg],
-            })
         }
     }
 }

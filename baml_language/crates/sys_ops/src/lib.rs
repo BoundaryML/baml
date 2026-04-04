@@ -1070,9 +1070,13 @@ mod tests {
         let ctx = test_ctx();
         let mut io = test_io_callbacks();
 
-        // fs.open returns a sentinel value that fs.File.read receives
+        // fs.open returns a File instance that fs.File.read receives
         io.fs_open = Arc::new(|_heap, _args, _ctx, _id| {
-            SysOpResult::Ready(Ok(BexExternalValue::String("file_handle".into())))
+            use io::AsBexExternalValue;
+            let file = io::owned::fs::File {
+                _handle: std::sync::Arc::new("file_handle".to_string()),
+            };
+            SysOpResult::Ready(Ok(file.into_bex_external_value()))
         });
         io.fs_file_read = Arc::new(|_heap, _args, _ctx, _id| {
             SysOpResult::Ready(Ok(BexExternalValue::String("file contents".into())))
@@ -1089,7 +1093,11 @@ mod tests {
         let ctx = test_ctx();
         let mut io = test_io_callbacks();
         io.fs_open = Arc::new(|_heap, _args, _ctx, _id| {
-            SysOpResult::Ready(Ok(BexExternalValue::String("handle".into())))
+            use io::AsBexExternalValue;
+            let file = io::owned::fs::File {
+                _handle: std::sync::Arc::new("handle".to_string()),
+            };
+            SysOpResult::Ready(Ok(file.into_bex_external_value()))
         });
         io.fs_file_read =
             Arc::new(|_heap, _args, _ctx, _id| SysOpResult::Ready(Ok(BexExternalValue::Int(999))));

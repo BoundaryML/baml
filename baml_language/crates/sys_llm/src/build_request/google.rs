@@ -93,7 +93,7 @@ pub(crate) fn build_request(
 
     Ok(crate::baml_std::HttpRequest {
         method: "POST".to_string(),
-        url: resolve_url(client, provider),
+        url: resolve_url(client, provider)?,
         headers,
         body: body_str,
     })
@@ -103,7 +103,10 @@ pub(crate) fn build_request(
 // URL construction
 // ============================================================================
 
-fn resolve_url(client: &crate::baml_std::PrimitiveClient, provider: LlmProvider) -> String {
+fn resolve_url(
+    client: &crate::baml_std::PrimitiveClient,
+    provider: LlmProvider,
+) -> Result<String, super::BuildRequestError> {
     match provider {
         // Google AI: {base_url}/models/{model}:generateContent
         LlmProvider::GoogleAi => {
@@ -112,7 +115,7 @@ fn resolve_url(client: &crate::baml_std::PrimitiveClient, provider: LlmProvider)
                 .base_url
                 .as_deref()
                 .unwrap_or("https://generativelanguage.googleapis.com/v1beta");
-            format!("{base}/models/{}:generateContent", client.model)
+            Ok(format!("{base}/models/{}:generateContent", client.model))
         }
         // Vertex AI: {base_url}/{model}:generateContent
         // base_url is either explicit, or constructed from location + project_id.
@@ -121,9 +124,9 @@ fn resolve_url(client: &crate::baml_std::PrimitiveClient, provider: LlmProvider)
         LlmProvider::VertexAi => {
             let base = match client.options.base_url.as_deref() {
                 Some(url) => url.to_string(),
-                None => resolve_vertex_base_url(client),
+                None => resolve_vertex_base_url(client)?,
             };
-            format!("{base}/{}:generateContent", client.model)
+            Ok(format!("{base}/{}:generateContent", client.model))
         }
         _ => unreachable!("resolve_url called with non-Google provider"),
     }
@@ -135,9 +138,11 @@ pub(crate) const VERTEX_PROJECT_ID_PLACEHOLDER: &str = "__BAML_VERTEX_PROJECT_ID
 
 /// Build the Vertex AI base URL from `location` and `project_id` in provider options.
 ///
-/// If `project_id` is not explicitly set, uses a placeholder that gets resolved
-/// during auth (see `auth_request::vertex::resolve_project_id_in_url`).
-fn resolve_vertex_base_url(client: &crate::baml_std::PrimitiveClient) -> String {
+/// `location` is required (the old engine errors with "must specify a GCP region").
+/// `project_id` may use a placeholder that gets resolved during auth.
+fn resolve_vertex_base_url(
+    client: &crate::baml_std::PrimitiveClient,
+) -> Result<String, super::BuildRequestError> {
     let vertex_opts = match &client.provider_options {
         Some(crate::baml_std::ProviderOptions::VertexAi(opts)) => Some(opts),
         _ => None,
@@ -145,7 +150,11 @@ fn resolve_vertex_base_url(client: &crate::baml_std::PrimitiveClient) -> String 
 
     let location = vertex_opts
         .and_then(|o| o.location.as_deref())
-        .unwrap_or("us-central1");
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| super::BuildRequestError::InvalidOption {
+            key: "location".to_string(),
+            reason: "vertex-ai requires either base_url or location (e.g. us-central1)".to_string(),
+        })?;
 
     let project_id = vertex_opts
         .and_then(|o| o.project_id.as_deref())
@@ -158,9 +167,20 @@ fn resolve_vertex_base_url(client: &crate::baml_std::PrimitiveClient) -> String 
         format!("{location}-aiplatform.googleapis.com")
     };
 
-    format!(
+    Ok(format!(
         "https://{domain}/v1/projects/{project_id}/locations/{location}/publishers/google/models"
-    )
+    ))
+}
+
+/// Build the Vertex AI URL for Anthropic `rawPredict` requests.
+pub(super) fn resolve_vertex_raw_predict_url(
+    client: &crate::baml_std::PrimitiveClient,
+) -> Result<String, super::BuildRequestError> {
+    let base = match client.options.base_url.as_deref() {
+        Some(url) => url.to_string(),
+        None => resolve_vertex_base_url(client)?,
+    };
+    Ok(format!("{base}/{}:rawPredict", client.model))
 }
 
 // ============================================================================
@@ -231,49 +251,32 @@ fn gemini_parts(content: &PromptAstSimple) -> Result<Vec<Part>, super::BuildRequ
 fn gemini_media_part(media: &Arc<MediaValue>) -> Result<Part, super::BuildRequestError> {
     let mime = super::mime_type_as_ok(media)?;
 
-    media.read_content(|c| match c {
-        MediaContent::Base64 { base64_data } => Ok(Part {
-            text: None,
-            inline_data: Some(InlineData {
-                mime_type: mime.to_string(),
-                data: base64_data.clone(),
-            }),
-            file_data: None,
-        }),
-        MediaContent::Url { url, base64_data } => {
-            if let Some(b64) = base64_data {
-                Ok(Part {
-                    text: None,
-                    inline_data: Some(InlineData {
-                        mime_type: mime.to_string(),
-                        data: b64.clone(),
-                    }),
-                    file_data: None,
-                })
-            } else {
-                Ok(Part {
-                    text: None,
-                    inline_data: None,
-                    file_data: Some(FileData {
-                        mime_type: mime.to_string(),
-                        file_uri: url.clone(),
-                    }),
-                })
-            }
+    media.read_content(|c| {
+        // Prefer inline base64 data when available (covers Base64, Url+prefetched, File+resolved).
+        if let Some(b64) = c.base64_data() {
+            return Ok(Part {
+                text: None,
+                inline_data: Some(InlineData {
+                    mime_type: mime.to_string(),
+                    data: b64.to_string(),
+                }),
+                file_data: None,
+            });
         }
-        MediaContent::File { file, base64_data } => {
-            if let Some(b64) = base64_data {
-                Ok(Part {
-                    text: None,
-                    inline_data: Some(InlineData {
-                        mime_type: mime.to_string(),
-                        data: b64.clone(),
-                    }),
-                    file_data: None,
-                })
-            } else {
+
+        match c {
+            MediaContent::Url { url, .. } => Ok(Part {
+                text: None,
+                inline_data: None,
+                file_data: Some(FileData {
+                    mime_type: mime.to_string(),
+                    file_uri: url.clone(),
+                }),
+            }),
+            MediaContent::File { file, .. } => {
                 Err(super::BuildRequestError::FileNotResolved(file.clone()))
             }
+            MediaContent::Base64 { .. } => unreachable!("base64_data() returned None for Base64"),
         }
     })
 }

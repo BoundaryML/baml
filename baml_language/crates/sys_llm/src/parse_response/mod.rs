@@ -44,7 +44,9 @@ pub(crate) enum ParseResponseError {
 
 /// Parse a raw HTTP response body into a normalized `LlmProviderResponse`.
 ///
-/// The `provider` determines which deserialization format to use.
+/// The `provider` determines which deserialization format to use. Callers
+/// should resolve the effective provider before calling (e.g. Vertex AI +
+/// Anthropic model should pass `LlmProvider::Anthropic`).
 pub(crate) fn parse_response(
     provider: LlmProvider,
     body: &str,

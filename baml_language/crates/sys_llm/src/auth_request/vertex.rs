@@ -609,19 +609,11 @@ async fn token_from_adc(callbacks: &BuildRequestCallbacks) -> Result<String, Bui
 }
 
 // ===========================================================================
-// WASM: manual JWT signing + OAuth2 token exchange
-// ===========================================================================
-
-// ==========================================================================
 // WASM: pure-Rust JWT signing (rsa + sha2) + OAuth2 token exchange
 //
-// We use the RustCrypto `rsa` and `sha2` crates instead of the browser's
-// `SubtleCrypto` API. This has two advantages:
-//   1. It compiles and runs on any WASM host (Node, Deno, Cloudflare Workers,
-//      browser) without requiring `window.crypto`.
-//   2. Signing is synchronous, so we don't need `spawn_local` or a oneshot
-//      channel to bridge `!Send` JS futures.
-// ==========================================================================
+// Uses RustCrypto crates instead of SubtleCrypto so it works on any WASM
+// host without `window.crypto`, and signing is synchronous.
+// ===========================================================================
 
 #[cfg(target_arch = "wasm32")]
 mod wasm {
