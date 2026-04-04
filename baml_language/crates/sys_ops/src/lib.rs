@@ -943,4 +943,283 @@ mod tests {
         let result = fn_ptr(&heap, vec![], &ctx, CallId::next());
         assert!(matches!(result, SysOpResult::Ready(Err(_))));
     }
+
+    // ========================================================================
+    // build_io_callbacks tests
+    // ========================================================================
+
+    /// Helper: build a `SysOpIoCallbacks` where every field is unsupported
+    /// except the ones the caller overrides.
+    fn test_io_callbacks() -> SysOpIoCallbacks {
+        SysOpIoCallbacks::unsupported()
+    }
+
+    // -- env_read -------------------------------------------------------------
+
+    #[tokio::test]
+    async fn test_env_read_returns_string() {
+        let heap = test_heap();
+        let ctx = test_ctx();
+        let mut io = test_io_callbacks();
+        io.env_get = Arc::new(|_heap, _args, _ctx, _id| {
+            SysOpResult::Ready(Ok(BexExternalValue::String("my_value".into())))
+        });
+
+        let cbs = build_io_callbacks(&io, &heap, &ctx);
+        let result = (cbs.env_read)("MY_KEY".into()).await;
+        assert_eq!(result.unwrap(), Some("my_value".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_env_read_returns_none_for_null() {
+        let heap = test_heap();
+        let ctx = test_ctx();
+        let mut io = test_io_callbacks();
+        io.env_get =
+            Arc::new(|_heap, _args, _ctx, _id| SysOpResult::Ready(Ok(BexExternalValue::Null)));
+
+        let cbs = build_io_callbacks(&io, &heap, &ctx);
+        let result = (cbs.env_read)("MISSING".into()).await;
+        assert_eq!(result.unwrap(), None);
+    }
+
+    #[tokio::test]
+    async fn test_env_read_rejects_wrong_type() {
+        let heap = test_heap();
+        let ctx = test_ctx();
+        let mut io = test_io_callbacks();
+        io.env_get =
+            Arc::new(|_heap, _args, _ctx, _id| SysOpResult::Ready(Ok(BexExternalValue::Int(42))));
+
+        let cbs = build_io_callbacks(&io, &heap, &ctx);
+        let err = (cbs.env_read)("KEY".into()).await.unwrap_err();
+        let msg = format!("{err:?}");
+        assert!(msg.contains("unexpected type"), "got: {msg}");
+    }
+
+    #[tokio::test]
+    async fn test_env_read_propagates_upstream_error() {
+        let heap = test_heap();
+        let ctx = test_ctx();
+        let mut io = test_io_callbacks();
+        io.env_get = Arc::new(|_heap, _args, _ctx, _id| {
+            SysOpResult::Ready(Err(sys_types::OpError::new(
+                SysOp::BamlEnvGet,
+                sys_types::OpErrorKind::Unsupported,
+            )))
+        });
+
+        let cbs = build_io_callbacks(&io, &heap, &ctx);
+        assert!((cbs.env_read)("KEY".into()).await.is_err());
+    }
+
+    // -- shell ----------------------------------------------------------------
+
+    #[tokio::test]
+    async fn test_shell_returns_string() {
+        let heap = test_heap();
+        let ctx = test_ctx();
+        let mut io = test_io_callbacks();
+        io.sys_shell = Arc::new(|_heap, _args, _ctx, _id| {
+            SysOpResult::Ready(Ok(BexExternalValue::String("hello\n".into())))
+        });
+
+        let cbs = build_io_callbacks(&io, &heap, &ctx);
+        let result = (cbs.shell)("echo hello".into()).await;
+        assert_eq!(result.unwrap(), "hello\n");
+    }
+
+    #[tokio::test]
+    async fn test_shell_rejects_wrong_type() {
+        let heap = test_heap();
+        let ctx = test_ctx();
+        let mut io = test_io_callbacks();
+        io.sys_shell =
+            Arc::new(|_heap, _args, _ctx, _id| SysOpResult::Ready(Ok(BexExternalValue::Null)));
+
+        let cbs = build_io_callbacks(&io, &heap, &ctx);
+        let err = (cbs.shell)("cmd".into()).await.unwrap_err();
+        let msg = format!("{err:?}");
+        assert!(msg.contains("unexpected type"), "got: {msg}");
+    }
+
+    #[tokio::test]
+    async fn test_shell_propagates_upstream_error() {
+        let heap = test_heap();
+        let ctx = test_ctx();
+        let mut io = test_io_callbacks();
+        io.sys_shell = Arc::new(|_heap, _args, _ctx, _id| {
+            SysOpResult::Ready(Err(sys_types::OpError::new(
+                SysOp::BamlSysShell,
+                sys_types::OpErrorKind::Unsupported,
+            )))
+        });
+
+        let cbs = build_io_callbacks(&io, &heap, &ctx);
+        assert!((cbs.shell)("cmd".into()).await.is_err());
+    }
+
+    // -- fs_read --------------------------------------------------------------
+
+    #[tokio::test]
+    async fn test_fs_read_returns_bytes() {
+        let heap = test_heap();
+        let ctx = test_ctx();
+        let mut io = test_io_callbacks();
+
+        // fs.open returns a sentinel value that fs.File.read receives
+        io.fs_open = Arc::new(|_heap, _args, _ctx, _id| {
+            SysOpResult::Ready(Ok(BexExternalValue::String("file_handle".into())))
+        });
+        io.fs_file_read = Arc::new(|_heap, _args, _ctx, _id| {
+            SysOpResult::Ready(Ok(BexExternalValue::String("file contents".into())))
+        });
+
+        let cbs = build_io_callbacks(&io, &heap, &ctx);
+        let result = (cbs.fs_read)("/tmp/test.txt".into()).await;
+        assert_eq!(result.unwrap(), b"file contents");
+    }
+
+    #[tokio::test]
+    async fn test_fs_read_rejects_wrong_type() {
+        let heap = test_heap();
+        let ctx = test_ctx();
+        let mut io = test_io_callbacks();
+        io.fs_open = Arc::new(|_heap, _args, _ctx, _id| {
+            SysOpResult::Ready(Ok(BexExternalValue::String("handle".into())))
+        });
+        io.fs_file_read =
+            Arc::new(|_heap, _args, _ctx, _id| SysOpResult::Ready(Ok(BexExternalValue::Int(999))));
+
+        let cbs = build_io_callbacks(&io, &heap, &ctx);
+        let err = (cbs.fs_read)("path".into()).await.unwrap_err();
+        let msg = format!("{err:?}");
+        assert!(msg.contains("unexpected type"), "got: {msg}");
+    }
+
+    #[tokio::test]
+    async fn test_fs_read_propagates_open_error() {
+        let heap = test_heap();
+        let ctx = test_ctx();
+        let mut io = test_io_callbacks();
+        io.fs_open = Arc::new(|_heap, _args, _ctx, _id| {
+            SysOpResult::Ready(Err(sys_types::OpError::new(
+                SysOp::BamlFsOpen,
+                sys_types::OpErrorKind::Unsupported,
+            )))
+        });
+        // fs_file_read should never be called
+        io.fs_file_read = Arc::new(|_heap, _args, _ctx, _id| {
+            panic!("should not be called when open fails");
+        });
+
+        let cbs = build_io_callbacks(&io, &heap, &ctx);
+        assert!((cbs.fs_read)("path".into()).await.is_err());
+    }
+
+    // -- http_send ------------------------------------------------------------
+
+    /// Build a fake `http.Response` as a `BexExternalValue::Instance`.
+    fn fake_http_response_value(status: i64) -> BexExternalValue {
+        use io::AsBexExternalValue;
+        io::owned::http::Response {
+            status_code: status,
+            headers: indexmap::indexmap! {
+                "content-type".to_string() => "application/json".to_string(),
+            },
+            url: "https://example.com".to_string(),
+            _body: std::sync::Arc::new(()),
+        }
+        .into_bex_external_value()
+    }
+
+    #[tokio::test]
+    async fn test_http_send_happy_path() {
+        let heap = test_heap();
+        let ctx = test_ctx();
+        let mut io = test_io_callbacks();
+
+        io.http_send = Arc::new(|_heap, _args, _ctx, _id| {
+            SysOpResult::Ready(Ok(fake_http_response_value(200)))
+        });
+        io.http_response_text = Arc::new(|_heap, _args, _ctx, _id| {
+            SysOpResult::Ready(Ok(BexExternalValue::String(r#"{"ok":true}"#.into())))
+        });
+
+        let cbs = build_io_callbacks(&io, &heap, &ctx);
+        let resp = (cbs.http_send)(sys_llm::baml_std::HttpRequest {
+            method: "GET".into(),
+            url: "https://example.com".into(),
+            headers: indexmap::IndexMap::new(),
+            body: String::new(),
+        })
+        .await
+        .unwrap();
+
+        assert_eq!(resp.status_code, 200);
+        assert_eq!(resp.body, r#"{"ok":true}"#);
+        assert_eq!(
+            resp.headers.get("content-type").map(String::as_str),
+            Some("application/json")
+        );
+    }
+
+    #[tokio::test]
+    async fn test_http_send_rejects_wrong_body_type() {
+        let heap = test_heap();
+        let ctx = test_ctx();
+        let mut io = test_io_callbacks();
+
+        io.http_send = Arc::new(|_heap, _args, _ctx, _id| {
+            SysOpResult::Ready(Ok(fake_http_response_value(200)))
+        });
+        io.http_response_text =
+            Arc::new(|_heap, _args, _ctx, _id| SysOpResult::Ready(Ok(BexExternalValue::Int(42))));
+
+        let cbs = build_io_callbacks(&io, &heap, &ctx);
+        let result = (cbs.http_send)(sys_llm::baml_std::HttpRequest {
+            method: "GET".into(),
+            url: "https://example.com".into(),
+            headers: indexmap::IndexMap::new(),
+            body: String::new(),
+        })
+        .await;
+
+        match result {
+            Err(e) => {
+                let msg = format!("{e:?}");
+                assert!(msg.contains("unexpected type"), "got: {msg}");
+            }
+            Ok(_) => panic!("expected error for wrong body type"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_http_send_propagates_send_error() {
+        let heap = test_heap();
+        let ctx = test_ctx();
+        let mut io = test_io_callbacks();
+
+        io.http_send = Arc::new(|_heap, _args, _ctx, _id| {
+            SysOpResult::Ready(Err(sys_types::OpError::new(
+                SysOp::BamlHttpSend,
+                sys_types::OpErrorKind::Unsupported,
+            )))
+        });
+        io.http_response_text = Arc::new(|_heap, _args, _ctx, _id| {
+            panic!("should not be called when send fails");
+        });
+
+        let cbs = build_io_callbacks(&io, &heap, &ctx);
+        assert!(
+            (cbs.http_send)(sys_llm::baml_std::HttpRequest {
+                method: "GET".into(),
+                url: "https://example.com".into(),
+                headers: indexmap::IndexMap::new(),
+                body: String::new(),
+            })
+            .await
+            .is_err()
+        );
+    }
 }

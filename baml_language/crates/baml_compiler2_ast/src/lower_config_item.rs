@@ -19,9 +19,9 @@ pub(crate) fn lower_config_value(
     item: &cst::ConfigItem,
     alloc: &mut impl FnMut(Expr) -> ExprId,
 ) -> ExprId {
-    // 1. Nested block → Expr::Object (untyped) with recursively lowered children
+    // 1. Nested block → Expr::Map (untyped) with recursively lowered children
     if let Some(nested) = item.nested_block() {
-        return lower_config_block_to_object(&nested, alloc);
+        return lower_config_block_to_map(&nested, alloc);
     }
 
     // 2. Array literal
@@ -102,7 +102,7 @@ pub(crate) fn lower_config_value(
 /// Nested config blocks are untyped key-value structures (not class instances),
 /// so they are lowered as maps. This ensures they work correctly when stored in
 /// `map<string, unknown>` fields like `request_body`.
-fn lower_config_block_to_object(
+fn lower_config_block_to_map(
     block: &cst::ConfigBlock,
     alloc: &mut impl FnMut(Expr) -> ExprId,
 ) -> ExprId {
