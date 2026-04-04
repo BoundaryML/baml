@@ -4,9 +4,16 @@ mod notification;
 mod request;
 mod wasm_helpers;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use ::std::sync::Arc;
+
+use baml_compiler2_hir::package::PackageId;
+use baml_compiler2_tir::{
+    package_interface::{ExportedType, package_interface},
+    ty::{PrimitiveType, Ty},
+};
+use baml_db::Name;
 
 /// Factory that creates [`sys_ops::SysOps`] for a given project root.
 type SysOpFactory =
@@ -513,10 +520,16 @@ impl BexMulitProject {
 
         let db_guard = project.project.db.lock().unwrap();
         let db = db_guard.db();
+
+        // Get the full package interface for type resolution
+        let pkg_id = PackageId::new(db, Name::new("user"));
+        let iface = package_interface(db, pkg_id);
+
         let functions = baml_project::list_functions_with_metadata(db)
             .into_iter()
+            .filter(|f| !f.is_sub_function)
             .map(|f| crate::bex_lsp::FunctionInfo {
-                name: f.name,
+                name: f.name.clone(),
                 kind: if f.is_llm {
                     crate::bex_lsp::FunctionKind::Llm
                 } else {
@@ -531,6 +544,7 @@ impl BexMulitProject {
                 } else {
                     None
                 },
+                params: resolve_function_params(&f.name, iface),
             })
             .collect();
 
@@ -694,4 +708,147 @@ pub fn new_lsp(
     event_sink: Option<std::sync::Arc<dyn bex_events::EventSink>>,
 ) -> impl crate::bex_lsp::BexLsp {
     BexMulitProject::new(sys_op_factory, sender, playground_sender, fs, event_sink)
+}
+
+// ---------------------------------------------------------------------------
+// Parameter schema resolution helpers
+// ---------------------------------------------------------------------------
+
+/// Resolve a function's parameter names and types into presentation-layer ParamInfo.
+fn resolve_function_params(
+    function_name: &str,
+    iface: &baml_compiler2_tir::package_interface::PackageInterface,
+) -> Vec<crate::bex_lsp::ParamInfo> {
+    for ns_funcs in iface.functions.values() {
+        if let Some(exported_fn) = ns_funcs.get(&Name::new(function_name)) {
+            return exported_fn
+                .params
+                .iter()
+                .map(|(name, ty)| crate::bex_lsp::ParamInfo {
+                    name: name.to_string(),
+                    field_type: ty_to_field_type(ty, iface, &mut HashSet::new()),
+                })
+                .collect();
+        }
+    }
+    Vec::new()
+}
+
+/// Convert a resolved Ty into a FieldType for the playground form.
+/// `ancestors` tracks class names on the current expansion path for cycle detection.
+fn ty_to_field_type(
+    ty: &Ty,
+    iface: &baml_compiler2_tir::package_interface::PackageInterface,
+    ancestors: &mut HashSet<String>,
+) -> crate::bex_lsp::FieldType {
+    match ty {
+        Ty::Primitive(PrimitiveType::String, _) => crate::bex_lsp::FieldType::String,
+        Ty::Primitive(PrimitiveType::Int, _) => crate::bex_lsp::FieldType::Int,
+        Ty::Primitive(PrimitiveType::Float, _) => crate::bex_lsp::FieldType::Float,
+        Ty::Primitive(PrimitiveType::Bool, _) => crate::bex_lsp::FieldType::Bool,
+        Ty::Primitive(PrimitiveType::Null, _) => crate::bex_lsp::FieldType::Null,
+        Ty::Primitive(PrimitiveType::Image, _) => crate::bex_lsp::FieldType::Media {
+            media_type: "image".to_string(),
+        },
+        Ty::Primitive(PrimitiveType::Audio, _) => crate::bex_lsp::FieldType::Media {
+            media_type: "audio".to_string(),
+        },
+        Ty::Primitive(PrimitiveType::Video, _) => crate::bex_lsp::FieldType::Media {
+            media_type: "video".to_string(),
+        },
+        Ty::Primitive(PrimitiveType::Pdf, _) => crate::bex_lsp::FieldType::Media {
+            media_type: "pdf".to_string(),
+        },
+
+        Ty::Enum(qtn, _) => {
+            let enum_name = qtn.name().to_string();
+            let values = find_enum_values(iface, &enum_name);
+            crate::bex_lsp::FieldType::Enum {
+                name: enum_name,
+                values,
+            }
+        }
+
+        Ty::Class(qtn, _) => {
+            let class_name = qtn.name().to_string();
+            if !ancestors.insert(class_name.clone()) {
+                // Cycle detected
+                return crate::bex_lsp::FieldType::RecursiveRef { name: class_name };
+            }
+            let fields = find_class_fields(iface, &class_name)
+                .into_iter()
+                .map(|(name, field_ty)| crate::bex_lsp::ParamInfo {
+                    name: name.to_string(),
+                    field_type: ty_to_field_type(&field_ty, iface, ancestors),
+                })
+                .collect();
+            ancestors.remove(&class_name);
+            crate::bex_lsp::FieldType::Class {
+                name: class_name,
+                fields,
+            }
+        }
+
+        Ty::List(inner, _) | Ty::EvolvingList(inner, _) => crate::bex_lsp::FieldType::List {
+            item: Box::new(ty_to_field_type(inner, iface, ancestors)),
+        },
+
+        Ty::Map(key, value, _) | Ty::EvolvingMap(key, value, _) => crate::bex_lsp::FieldType::Map {
+            key: Box::new(ty_to_field_type(key, iface, ancestors)),
+            value: Box::new(ty_to_field_type(value, iface, ancestors)),
+        },
+
+        Ty::Optional(inner, _) => crate::bex_lsp::FieldType::Optional {
+            inner: Box::new(ty_to_field_type(inner, iface, ancestors)),
+        },
+
+        Ty::Union(variants, _) => crate::bex_lsp::FieldType::Union {
+            variants: variants
+                .iter()
+                .map(|v| ty_to_field_type(v, iface, ancestors))
+                .collect(),
+        },
+
+        Ty::Literal(lit, _, _) => {
+            let value = match lit {
+                baml_base::Literal::String(s) => crate::bex_lsp::LiteralValue::String(s.clone()),
+                baml_base::Literal::Int(i) => crate::bex_lsp::LiteralValue::Int(*i),
+                baml_base::Literal::Bool(b) => crate::bex_lsp::LiteralValue::Bool(*b),
+                baml_base::Literal::Float(_) => {
+                    // Float literals are rare; treat as Any for now
+                    return crate::bex_lsp::FieldType::Any;
+                }
+            };
+            crate::bex_lsp::FieldType::Literal { value }
+        }
+
+        // Fallback — all other Ty variants map to Any
+        _ => crate::bex_lsp::FieldType::Any,
+    }
+}
+
+/// Look up enum variant names from the PackageInterface.
+fn find_enum_values(
+    iface: &baml_compiler2_tir::package_interface::PackageInterface,
+    enum_name: &str,
+) -> Vec<String> {
+    for ns_types in iface.types.values() {
+        if let Some(ExportedType::Enum { variants, .. }) = ns_types.get(&Name::new(enum_name)) {
+            return variants.iter().map(|v| v.to_string()).collect();
+        }
+    }
+    Vec::new()
+}
+
+/// Look up class fields from the PackageInterface.
+fn find_class_fields(
+    iface: &baml_compiler2_tir::package_interface::PackageInterface,
+    class_name: &str,
+) -> Vec<(Name, Ty)> {
+    for ns_types in iface.types.values() {
+        if let Some(ExportedType::Class { fields, .. }) = ns_types.get(&Name::new(class_name)) {
+            return fields.clone();
+        }
+    }
+    Vec::new()
 }

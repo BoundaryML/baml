@@ -141,8 +141,7 @@ pub fn list_tests_with_metadata(db: &ProjectDatabase) -> Vec<TestSymbol> {
                     .map(std::string::ToString::to_string)
                     .unwrap_or_default();
 
-                // args parsing is skipped in canary's alloc_test — always empty for now
-                let args_json = "{}".to_string();
+                let args_json = test.raw_args_json.clone();
 
                 result.push(TestSymbol {
                     name: name.to_string(),

@@ -26,6 +26,37 @@ export interface LlmCapabilities {
   clientName?: string;
 }
 
+// ---------------------------------------------------------------------------
+// Parameter schema types (for dynamic form generation)
+// ---------------------------------------------------------------------------
+
+export type FieldType =
+  | { type: 'string' }
+  | { type: 'int' }
+  | { type: 'float' }
+  | { type: 'bool' }
+  | { type: 'null' }
+  | { type: 'enum'; name: string; values: string[] }
+  | { type: 'class'; name: string; fields: ParamInfo[] }
+  | { type: 'list'; item: FieldType }
+  | { type: 'map'; key: FieldType; value: FieldType }
+  | { type: 'optional'; inner: FieldType }
+  | { type: 'union'; variants: FieldType[] }
+  | { type: 'literal'; value: LiteralValue }
+  | { type: 'recursiveRef'; name: string }
+  | { type: 'any' }
+  | { type: 'media'; mediaType: string };
+
+export type LiteralValue =
+  | { type: 'string'; value: string }
+  | { type: 'int'; value: number }
+  | { type: 'bool'; value: boolean };
+
+export interface ParamInfo {
+  name: string;
+  fieldType: FieldType;
+}
+
 /** Metadata about a BAML function exposed to the playground.
  *
  *  Sub-functions (render_prompt, build_request) are not separate entries —
@@ -38,6 +69,7 @@ export interface FunctionInfo {
   name: string;
   kind: FunctionKind;
   capabilities?: LlmCapabilities;
+  params?: ParamInfo[];
 }
 
 /** Metadata about a BAML test case.

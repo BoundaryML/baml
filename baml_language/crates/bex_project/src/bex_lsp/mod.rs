@@ -68,6 +68,42 @@ pub struct FunctionInfo {
     pub kind: FunctionKind,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub capabilities: Option<LlmCapabilities>,
+    pub params: Vec<ParamInfo>,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ParamInfo {
+    pub name: String,
+    pub field_type: FieldType,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(tag = "type", rename_all = "camelCase")]
+pub enum FieldType {
+    String,
+    Int,
+    Float,
+    Bool,
+    Null,
+    Enum { name: String, values: Vec<String> },
+    Class { name: String, fields: Vec<ParamInfo> },
+    List { item: Box<FieldType> },
+    Map { key: Box<FieldType>, value: Box<FieldType> },
+    Optional { inner: Box<FieldType> },
+    Union { variants: Vec<FieldType> },
+    Literal { value: LiteralValue },
+    RecursiveRef { name: String },
+    Any,
+    Media { media_type: String },
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(tag = "type", content = "value", rename_all = "camelCase")]
+pub enum LiteralValue {
+    String(String),
+    Int(i64),
+    Bool(bool),
 }
 
 #[derive(Debug, Clone, serde::Serialize)]

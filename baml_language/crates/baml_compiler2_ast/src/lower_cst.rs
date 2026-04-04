@@ -727,9 +727,22 @@ fn lower_test(node: &SyntaxNode, diags: &mut Vec<LoweringDiagnostic>) -> Option<
         .map(|cb| lower_config_block(&cb, "test", &test_name, diags))
         .unwrap_or_default();
 
+    // Build JSON from the CST `args { … }` block before structural info is lost.
+    let args_json = test
+        .config_block()
+        .and_then(|cb| {
+            cb.items().find(|item| {
+                item.key().map(|k| k.text() == "args").unwrap_or(false)
+            })
+        })
+        .and_then(|item| item.nested_block())
+        .map(|block| cst_config_block_to_json(&block))
+        .unwrap_or_else(|| "{}".to_string());
+
     Some(TestDef {
         name: Name::new(&test_name),
         config_items,
+        args_json,
         span: node.text_range(),
         name_span: name_token.text_range(),
     })
@@ -1541,6 +1554,132 @@ fn validate_client_options(
             span,
         });
     }
+}
+
+/// Convert a CST `ConfigBlock` (the `args { … }` block of a test) into a JSON object string.
+fn cst_config_block_to_json(cb: &ast::ConfigBlock) -> String {
+    let entries: Vec<String> = cb
+        .items()
+        .filter_map(|item| {
+            let key = item.key()?.text().to_string();
+            let value = cst_config_item_value_to_json(&item);
+            Some(format!("\"{}\":{}", escape_json_string(&key), value))
+        })
+        .collect();
+    format!("{{{}}}", entries.join(","))
+}
+
+/// Convert a single CST config item's value to a JSON value string.
+fn cst_config_item_value_to_json(item: &ast::ConfigItem) -> String {
+    use baml_compiler_syntax::SyntaxKind;
+
+    // Nested block → JSON object
+    if let Some(nested) = item.nested_block() {
+        return cst_config_block_to_json(&nested);
+    }
+
+    // Array literal → JSON array
+    if item.is_array() {
+        if let Some(arr_node) = item.array_node() {
+            let elements: Vec<String> = arr_node
+                .children()
+                .filter(|child| child.kind() == SyntaxKind::CONFIG_VALUE)
+                .map(|cv: baml_compiler_syntax::SyntaxNode| cst_config_value_node_to_json(&cv))
+                .collect();
+            return format!("[{}]", elements.join(","));
+        }
+        return "[]".to_string();
+    }
+
+    // Scalar value
+    if let Some(cv_node) = item.config_value_node() {
+        return cst_config_value_node_to_json(&cv_node);
+    }
+
+    "null".to_string()
+}
+
+/// Convert a CONFIG_VALUE syntax node to a JSON value string.
+fn cst_config_value_node_to_json(cv_node: &baml_compiler_syntax::SyntaxNode) -> String {
+    use baml_compiler_syntax::SyntaxKind;
+
+    // Collect all meaningful tokens
+    let tokens: Vec<_> = cv_node
+        .descendants_with_tokens()
+        .filter_map(rowan::NodeOrToken::into_token)
+        .filter(|t| !t.kind().is_trivia())
+        .collect();
+
+    if tokens.is_empty() {
+        return "null".to_string();
+    }
+
+    // Check for string literal (has QUOTE tokens)
+    let has_quotes = tokens.iter().any(|t| t.kind() == SyntaxKind::QUOTE);
+    if has_quotes {
+        // Extract the string content (everything between quotes)
+        let text: String = tokens
+            .iter()
+            .filter(|t| t.kind() != SyntaxKind::QUOTE)
+            .map(|t| t.text().to_string())
+            .collect();
+        return format!("\"{}\"", escape_json_string(&text));
+    }
+
+    // Check for array literal
+    if cv_node
+        .children()
+        .any(|child| child.kind() == SyntaxKind::ARRAY_LITERAL)
+    {
+        if let Some(arr_node) = cv_node
+            .children()
+            .find(|child| child.kind() == SyntaxKind::ARRAY_LITERAL)
+        {
+            let elements: Vec<String> = arr_node
+                .children()
+                .filter(|child| child.kind() == SyntaxKind::CONFIG_VALUE)
+                .map(|cv| cst_config_value_node_to_json(&cv))
+                .collect();
+            return format!("[{}]", elements.join(","));
+        }
+    }
+
+    // Check for integer literal
+    let all_int = tokens
+        .iter()
+        .all(|t| matches!(t.kind(), SyntaxKind::INTEGER_LITERAL | SyntaxKind::MINUS));
+    if all_int {
+        let text: String = tokens.iter().map(|t| t.text().to_string()).collect();
+        return text;
+    }
+
+    // Check for float literal
+    let all_float = tokens.iter().all(|t| {
+        matches!(
+            t.kind(),
+            SyntaxKind::FLOAT_LITERAL | SyntaxKind::MINUS
+        )
+    });
+    if all_float {
+        let text: String = tokens.iter().map(|t| t.text().to_string()).collect();
+        return text;
+    }
+
+    // Bare word — check for booleans and null
+    let text: String = tokens.iter().map(|t| t.text().to_string()).collect();
+    match text.as_str() {
+        "true" | "false" | "null" => text,
+        // Bare word treated as string
+        _ => format!("\"{}\"", escape_json_string(&text)),
+    }
+}
+
+fn escape_json_string(s: &str) -> String {
+    s.replace('\\', "\\\\")
+        .replace('"', "\\\"")
+        .replace('\n', "\\n")
+        .replace('\r', "\\r")
+        .replace('\t', "\\t")
 }
 
 fn lower_config_block(

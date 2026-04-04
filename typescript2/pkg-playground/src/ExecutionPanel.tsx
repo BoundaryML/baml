@@ -25,6 +25,8 @@ import { CopyButton } from './components/CopyButton';
 import { ErrorDisplay } from './components/ErrorDisplay';
 import { MetadataBadges } from './components/MetadataBadges';
 import { PromptStats } from './components/PromptStats';
+import { ParameterForm } from './components/ParameterForm';
+import { getDefaultValue } from './components/FieldRenderer';
 import type { RuntimePort } from './runtime-port';
 import type {
   ControlFlowGraph,
@@ -32,6 +34,7 @@ import type {
   DiagnosticEntry,
   FetchLogEntry,
   FunctionInfo,
+  ParamInfo,
   ProjectUpdate,
   RunEntry,
   TestInfo,
@@ -98,6 +101,8 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
 
   const [selectedFn, setSelectedFn] = useState<string | null>(null);
   const [argsJson, setArgsJson] = useState('{}');
+  const [formData, setFormData] = useState<Record<string, unknown>>({});
+  const [inputMode, setInputMode] = useState<'form' | 'json'>('form');
 
   // Run history — each entry is a complete invocation with its logs + result
   const [runs, setRuns] = useState<RunEntry[]>([]);
@@ -487,6 +492,17 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
 
   const onArgsJsonChange = useCallback((e: ChangeEvent<HTMLInputElement>) => {
     setArgsJson(e.target.value);
+    try {
+      setFormData(JSON.parse(e.target.value));
+    } catch {
+      // Don't update formData until valid JSON
+    }
+  }, []);
+
+  // Sync formData → argsJson
+  const handleFormDataChange = useCallback((data: Record<string, unknown>) => {
+    setFormData(data);
+    setArgsJson(JSON.stringify(data));
   }, []);
 
   // ── Run function ───────────────────────────────────────────────────────
@@ -579,6 +595,11 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
   const handleSelectTest = useCallback((test: TestInfo) => {
     setSelectedFn(test.functionName);
     setArgsJson(test.argsJson);
+    try {
+      setFormData(JSON.parse(test.argsJson));
+    } catch {
+      setFormData({});
+    }
     setActiveTab('run');
   }, []);
 
@@ -656,6 +677,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
   const diags = currentUpdate?.diagnostics ?? [];
 
   const selectedFnInfo = functions.find((f) => f.name === selectedFn);
+  const fnParams: ParamInfo[] = selectedFnInfo?.params ?? [];
   const canPreviewPrompt = selectedFnInfo?.capabilities?.renderPrompt ?? false;
   const canPreviewCurl = selectedFnInfo?.capabilities?.buildRequest ?? false;
 
@@ -668,6 +690,22 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
     if (activeTab === 'prompt' && !canPreviewPrompt) setActiveTab('run');
     if (activeTab === 'curl' && !canPreviewCurl) setActiveTab('run');
   }, [activeTab, canPreviewPrompt, canPreviewCurl]);
+
+  // Reset form data when function changes — build defaults from schema
+  useEffect(() => {
+    if (!fnParams.length) {
+      setFormData({});
+      setArgsJson('{}');
+      return;
+    }
+    const defaults: Record<string, unknown> = {};
+    for (const param of fnParams) {
+      defaults[param.name] = getDefaultValue(param.fieldType);
+    }
+    setFormData(defaults);
+    setArgsJson(JSON.stringify(defaults));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedFn]); // Only react to function changes, not param reference changes
 
   const errors = diags.filter((d) => d.severity === 'error');
   const warnings = diags.filter((d) => d.severity === 'warning');
@@ -1031,17 +1069,41 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
               {/* Execution area */}
               <TabsContent value="run" className="flex-1 flex flex-col min-h-0 mt-0">
                 {/* Args */}
-                <div className="flex items-center border-b border-vsc-border shrink-0">
-                  <span className="px-2 py-1 text-[10px] text-vsc-text-faint font-vsc-mono bg-vsc-surface border-r border-vsc-border self-stretch flex items-center">
-                    args
-                  </span>
-                  <Input
-                    spellCheck={false}
-                    value={argsJson}
-                    onChange={onArgsJsonChange}
-                    className="flex-1 h-7 rounded-none border-none font-vsc-mono text-xs"
-                    placeholder='{"key": "value"}'
-                  />
+                <div className="border-b border-vsc-border shrink-0">
+                  <div className="flex items-center justify-between px-2 py-1 bg-vsc-surface border-b border-vsc-border">
+                    <span className="text-[10px] text-vsc-text-faint font-vsc-mono">args</span>
+                    <ToggleGroup
+                      value={inputMode}
+                      onValueChange={(mode) => {
+                        if (mode === 'form' && inputMode === 'json') {
+                          try { setFormData(JSON.parse(argsJson)); } catch { /* keep current formData */ }
+                        }
+                        setInputMode(mode);
+                      }}
+                      options={[
+                        { value: 'form' as const, label: 'Form' },
+                        { value: 'json' as const, label: 'JSON' },
+                      ]}
+                      size="sm"
+                    />
+                  </div>
+                  {inputMode === 'form' ? (
+                    <ParameterForm
+                      params={fnParams}
+                      value={formData}
+                      onChange={handleFormDataChange}
+                    />
+                  ) : (
+                    <div className="flex items-center">
+                      <Input
+                        spellCheck={false}
+                        value={argsJson}
+                        onChange={onArgsJsonChange}
+                        className="flex-1 h-7 rounded-none border-none font-vsc-mono text-xs"
+                        placeholder='{"key": "value"}'
+                      />
+                    </div>
+                  )}
                 </div>
 
                 {/* Run history (scrollable) */}

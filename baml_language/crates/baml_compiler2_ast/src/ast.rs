@@ -844,6 +844,8 @@ pub struct ConfigItemDef {
 pub struct TestDef {
     pub name: Name,
     pub config_items: Vec<ConfigItemDef>,
+    /// Pre-serialized JSON object built from the `args { … }` block in the CST.
+    pub args_json: String,
     pub span: TextRange,
     pub name_span: TextRange,
 }
