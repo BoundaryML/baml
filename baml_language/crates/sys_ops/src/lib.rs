@@ -807,6 +807,9 @@ fn build_io_callbacks(
                     CallId::next(),
                 );
                 let file_val = resolve_sys_op_result(result).await?;
+                io::owned::fs::File::from_external(file_val.clone()).map_err(|e| {
+                    sys_llm::LlmOpError::Other(format!("fs.open returned unexpected type: {e:?}"))
+                })?;
 
                 // fs.File.read() -> String
                 let result = (read_env.fn_ptr)(

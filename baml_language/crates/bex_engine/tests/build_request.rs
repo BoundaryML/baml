@@ -1192,10 +1192,9 @@ function get_body() -> string {
 }
 
 // ============================================================================
-// Google AI Integration Tests
+// Google AI / Vertex AI shared body tests
 // ============================================================================
 
-/// Shared Google AI client block.
 const GOOGLE_AI_CLIENT: &str = r#"
 client C {
     provider google-ai
@@ -1206,11 +1205,28 @@ client C {
 }
 "#;
 
-#[tokio::test]
-async fn test_google_ai_template_string_expansion() {
-    let source = [
-        GOOGLE_AI_CLIENT,
-        r##"
+/// Uses API key auth via `query_params` to avoid ADC/OAuth token resolution in tests.
+const VERTEX_AI_CLIENT: &str = r#"
+client C {
+    provider vertex-ai
+    options {
+        model "gemini-2.0-flash"
+        base_url "https://us-central1-aiplatform.googleapis.com/v1/projects/test-project/locations/us-central1/publishers/google/models"
+        query_params { key "test-api-key" }
+    }
+}
+"#;
+
+macro_rules! gemini_body_tests {
+    ($mod:ident, $client:expr) => {
+        mod $mod {
+            use super::*;
+
+            #[tokio::test]
+            async fn template_string_expansion() {
+                let source = [
+                    $client,
+                    r##"
 template_string Greet(name: string) #"Hello, {{ name }}!"#
 function F(name: string) -> string {
     client C
@@ -1220,25 +1236,25 @@ function get_body() -> string {
     baml.llm.build_request(C, "F", { "name": "Alice" }).body
 }
 "##,
-    ]
-    .join("\n");
+                ]
+                .join("\n");
 
-    let body = body_json(&run_baml(&source, "get_body").await);
-    assert_eq!(
-        body,
-        serde_json::json!({
-            "contents": [
-                {"role": "user", "parts": [{"text": "Hello, Alice!"}]}
-            ]
-        })
-    );
-}
+                let body = body_json(&run_baml(&source, "get_body").await);
+                assert_eq!(
+                    body,
+                    serde_json::json!({
+                        "contents": [
+                            {"role": "user", "parts": [{"text": "Hello, Alice!"}]}
+                        ]
+                    })
+                );
+            }
 
-#[tokio::test]
-async fn test_google_ai_struct_arg_in_prompt() {
-    let source = [
-        GOOGLE_AI_CLIENT,
-        r##"
+            #[tokio::test]
+            async fn struct_arg_in_prompt() {
+                let source = [
+                    $client,
+                    r##"
 class Person {
     name string
     age int
@@ -1251,25 +1267,25 @@ function get_body() -> string {
     baml.llm.build_request(C, "F", { "p": { "name": "Bob", "age": 42 } }).body
 }
 "##,
-    ]
-    .join("\n");
+                ]
+                .join("\n");
 
-    let body = body_json(&run_baml(&source, "get_body").await);
-    assert_eq!(
-        body,
-        serde_json::json!({
-            "contents": [
-                {"role": "user", "parts": [{"text": "Bob is 42"}]}
-            ]
-        })
-    );
-}
+                let body = body_json(&run_baml(&source, "get_body").await);
+                assert_eq!(
+                    body,
+                    serde_json::json!({
+                        "contents": [
+                            {"role": "user", "parts": [{"text": "Bob is 42"}]}
+                        ]
+                    })
+                );
+            }
 
-#[tokio::test]
-async fn test_google_ai_system_and_user() {
-    let source = [
-        GOOGLE_AI_CLIENT,
-        r##"
+            #[tokio::test]
+            async fn system_and_user() {
+                let source = [
+                    $client,
+                    r##"
 function F() -> string {
     client C
     prompt #"
@@ -1283,28 +1299,28 @@ function get_body() -> string {
     baml.llm.build_request(C, "F", {}).body
 }
 "##,
-    ]
-    .join("\n");
+                ]
+                .join("\n");
 
-    let body = body_json(&run_baml(&source, "get_body").await);
-    assert_eq!(
-        body,
-        serde_json::json!({
-            "contents": [
-                {"role": "user", "parts": [{"text": "Hi"}]}
-            ],
-            "systemInstruction": {
-                "parts": [{"text": "You are helpful."}]
+                let body = body_json(&run_baml(&source, "get_body").await);
+                assert_eq!(
+                    body,
+                    serde_json::json!({
+                        "contents": [
+                            {"role": "user", "parts": [{"text": "Hi"}]}
+                        ],
+                        "systemInstruction": {
+                            "parts": [{"text": "You are helpful."}]
+                        }
+                    })
+                );
             }
-        })
-    );
-}
 
-#[tokio::test]
-async fn test_google_ai_three_role_conversation() {
-    let source = [
-        GOOGLE_AI_CLIENT,
-        r##"
+            #[tokio::test]
+            async fn three_role_conversation() {
+                let source = [
+                    $client,
+                    r##"
 function F() -> string {
     client C
     prompt #"
@@ -1320,29 +1336,29 @@ function get_body() -> string {
     baml.llm.build_request(C, "F", {}).body
 }
 "##,
-    ]
-    .join("\n");
+                ]
+                .join("\n");
 
-    let body = body_json(&run_baml(&source, "get_body").await);
-    assert_eq!(
-        body,
-        serde_json::json!({
-            "contents": [
-                {"role": "user", "parts": [{"text": "What is 2+2?"}]},
-                {"role": "model", "parts": [{"text": "4"}]}
-            ],
-            "systemInstruction": {
-                "parts": [{"text": "You are a helpful assistant."}]
+                let body = body_json(&run_baml(&source, "get_body").await);
+                assert_eq!(
+                    body,
+                    serde_json::json!({
+                        "contents": [
+                            {"role": "user", "parts": [{"text": "What is 2+2?"}]},
+                            {"role": "model", "parts": [{"text": "4"}]}
+                        ],
+                        "systemInstruction": {
+                            "parts": [{"text": "You are a helpful assistant."}]
+                        }
+                    })
+                );
             }
-        })
-    );
-}
 
-#[tokio::test]
-async fn test_google_ai_multi_turn_conversation() {
-    let source = [
-        GOOGLE_AI_CLIENT,
-        r##"
+            #[tokio::test]
+            async fn multi_turn_conversation() {
+                let source = [
+                    $client,
+                    r##"
 function F() -> string {
     client C
     prompt #"
@@ -1364,32 +1380,32 @@ function get_body() -> string {
     baml.llm.build_request(C, "F", {}).body
 }
 "##,
-    ]
-    .join("\n");
+                ]
+                .join("\n");
 
-    let body = body_json(&run_baml(&source, "get_body").await);
-    assert_eq!(
-        body,
-        serde_json::json!({
-            "contents": [
-                {"role": "user", "parts": [{"text": "Hello"}]},
-                {"role": "model", "parts": [{"text": "Hi!"}]},
-                {"role": "user", "parts": [{"text": "How are you?"}]},
-                {"role": "model", "parts": [{"text": "Good, thanks!"}]},
-                {"role": "user", "parts": [{"text": "Goodbye"}]}
-            ],
-            "systemInstruction": {
-                "parts": [{"text": "Be concise."}]
+                let body = body_json(&run_baml(&source, "get_body").await);
+                assert_eq!(
+                    body,
+                    serde_json::json!({
+                        "contents": [
+                            {"role": "user", "parts": [{"text": "Hello"}]},
+                            {"role": "model", "parts": [{"text": "Hi!"}]},
+                            {"role": "user", "parts": [{"text": "How are you?"}]},
+                            {"role": "model", "parts": [{"text": "Good, thanks!"}]},
+                            {"role": "user", "parts": [{"text": "Goodbye"}]}
+                        ],
+                        "systemInstruction": {
+                            "parts": [{"text": "Be concise."}]
+                        }
+                    })
+                );
             }
-        })
-    );
-}
 
-#[tokio::test]
-async fn test_google_ai_user_only_no_system() {
-    let source = [
-        GOOGLE_AI_CLIENT,
-        r##"
+            #[tokio::test]
+            async fn user_only_no_system() {
+                let source = [
+                    $client,
+                    r##"
 function F() -> string {
     client C
     prompt #"
@@ -1401,19 +1417,58 @@ function get_body() -> string {
     baml.llm.build_request(C, "F", {}).body
 }
 "##,
-    ]
-    .join("\n");
+                ]
+                .join("\n");
 
-    let body = body_json(&run_baml(&source, "get_body").await);
-    assert_eq!(
-        body,
-        serde_json::json!({
-            "contents": [
-                {"role": "user", "parts": [{"text": "Hello there"}]}
-            ]
-        })
-    );
+                let body = body_json(&run_baml(&source, "get_body").await);
+                assert_eq!(
+                    body,
+                    serde_json::json!({
+                        "contents": [
+                            {"role": "user", "parts": [{"text": "Hello there"}]}
+                        ]
+                    })
+                );
+            }
+
+            #[tokio::test]
+            async fn assistant_remapped_to_model() {
+                let source = [
+                    $client,
+                    r##"
+function F() -> string {
+    client C
+    prompt #"
+        {{ _.role("user") }}
+        Hi
+        {{ _.role("assistant") }}
+        Hello!
+    "#
 }
+function get_body() -> string {
+    baml.llm.build_request(C, "F", {}).body
+}
+"##,
+                ]
+                .join("\n");
+
+                let body = body_json(&run_baml(&source, "get_body").await);
+                assert_eq!(
+                    body,
+                    serde_json::json!({
+                        "contents": [
+                            {"role": "user", "parts": [{"text": "Hi"}]},
+                            {"role": "model", "parts": [{"text": "Hello!"}]}
+                        ]
+                    })
+                );
+            }
+        }
+    };
+}
+
+gemini_body_tests!(google_ai, GOOGLE_AI_CLIENT);
+gemini_body_tests!(vertex_ai, VERTEX_AI_CLIENT);
 
 #[tokio::test]
 async fn test_google_ai_generation_config() {
@@ -1452,298 +1507,6 @@ function get_body() -> string {
                 "temperature": 0.7,
                 "maxOutputTokens": 1024
             }
-        })
-    );
-}
-
-#[tokio::test]
-async fn test_google_ai_assistant_remapped_to_model() {
-    let source = [
-        GOOGLE_AI_CLIENT,
-        r##"
-function F() -> string {
-    client C
-    prompt #"
-        {{ _.role("user") }}
-        Hi
-        {{ _.role("assistant") }}
-        Hello!
-    "#
-}
-function get_body() -> string {
-    baml.llm.build_request(C, "F", {}).body
-}
-"##,
-    ]
-    .join("\n");
-
-    let body = body_json(&run_baml(&source, "get_body").await);
-    assert_eq!(
-        body,
-        serde_json::json!({
-            "contents": [
-                {"role": "user", "parts": [{"text": "Hi"}]},
-                {"role": "model", "parts": [{"text": "Hello!"}]}
-            ]
-        })
-    );
-}
-
-// ============================================================================
-// Vertex AI Integration Tests
-// ============================================================================
-
-/// Shared Vertex AI client block. Uses API key auth via `query_params` to avoid
-/// ADC/OAuth token resolution in tests.
-const VERTEX_AI_CLIENT: &str = r#"
-client C {
-    provider vertex-ai
-    options {
-        model "gemini-2.0-flash"
-        base_url "https://us-central1-aiplatform.googleapis.com/v1/projects/test-project/locations/us-central1/publishers/google/models"
-        query_params { key "test-api-key" }
-    }
-}
-"#;
-
-#[tokio::test]
-async fn test_vertex_ai_template_string_expansion() {
-    let source = [
-        VERTEX_AI_CLIENT,
-        r##"
-template_string Greet(name: string) #"Hello, {{ name }}!"#
-function F(name: string) -> string {
-    client C
-    prompt #"{{ Greet(name) }}"#
-}
-function get_body() -> string {
-    baml.llm.build_request(C, "F", { "name": "Alice" }).body
-}
-"##,
-    ]
-    .join("\n");
-
-    let body = body_json(&run_baml(&source, "get_body").await);
-    assert_eq!(
-        body,
-        serde_json::json!({
-            "contents": [
-                {"role": "user", "parts": [{"text": "Hello, Alice!"}]}
-            ]
-        })
-    );
-}
-
-#[tokio::test]
-async fn test_vertex_ai_struct_arg_in_prompt() {
-    let source = [
-        VERTEX_AI_CLIENT,
-        r##"
-class Person {
-    name string
-    age int
-}
-function F(p: Person) -> string {
-    client C
-    prompt #"{{ p.name }} is {{ p.age }}"#
-}
-function get_body() -> string {
-    baml.llm.build_request(C, "F", { "p": { "name": "Bob", "age": 42 } }).body
-}
-"##,
-    ]
-    .join("\n");
-
-    let body = body_json(&run_baml(&source, "get_body").await);
-    assert_eq!(
-        body,
-        serde_json::json!({
-            "contents": [
-                {"role": "user", "parts": [{"text": "Bob is 42"}]}
-            ]
-        })
-    );
-}
-
-#[tokio::test]
-async fn test_vertex_ai_system_and_user() {
-    let source = [
-        VERTEX_AI_CLIENT,
-        r##"
-function F() -> string {
-    client C
-    prompt #"
-        {{ _.role("system") }}
-        You are helpful.
-        {{ _.role("user") }}
-        Hi
-    "#
-}
-function get_body() -> string {
-    baml.llm.build_request(C, "F", {}).body
-}
-"##,
-    ]
-    .join("\n");
-
-    let body = body_json(&run_baml(&source, "get_body").await);
-    assert_eq!(
-        body,
-        serde_json::json!({
-            "contents": [
-                {"role": "user", "parts": [{"text": "Hi"}]}
-            ],
-            "systemInstruction": {
-                "parts": [{"text": "You are helpful."}]
-            }
-        })
-    );
-}
-
-#[tokio::test]
-async fn test_vertex_ai_three_role_conversation() {
-    let source = [
-        VERTEX_AI_CLIENT,
-        r##"
-function F() -> string {
-    client C
-    prompt #"
-        {{ _.role("system") }}
-        You are a helpful assistant.
-        {{ _.role("user") }}
-        What is 2+2?
-        {{ _.role("assistant") }}
-        4
-    "#
-}
-function get_body() -> string {
-    baml.llm.build_request(C, "F", {}).body
-}
-"##,
-    ]
-    .join("\n");
-
-    let body = body_json(&run_baml(&source, "get_body").await);
-    assert_eq!(
-        body,
-        serde_json::json!({
-            "contents": [
-                {"role": "user", "parts": [{"text": "What is 2+2?"}]},
-                {"role": "model", "parts": [{"text": "4"}]}
-            ],
-            "systemInstruction": {
-                "parts": [{"text": "You are a helpful assistant."}]
-            }
-        })
-    );
-}
-
-#[tokio::test]
-async fn test_vertex_ai_multi_turn_conversation() {
-    let source = [
-        VERTEX_AI_CLIENT,
-        r##"
-function F() -> string {
-    client C
-    prompt #"
-        {{ _.role("system") }}
-        Be concise.
-        {{ _.role("user") }}
-        Hello
-        {{ _.role("assistant") }}
-        Hi!
-        {{ _.role("user") }}
-        How are you?
-        {{ _.role("assistant") }}
-        Good, thanks!
-        {{ _.role("user") }}
-        Goodbye
-    "#
-}
-function get_body() -> string {
-    baml.llm.build_request(C, "F", {}).body
-}
-"##,
-    ]
-    .join("\n");
-
-    let body = body_json(&run_baml(&source, "get_body").await);
-    assert_eq!(
-        body,
-        serde_json::json!({
-            "contents": [
-                {"role": "user", "parts": [{"text": "Hello"}]},
-                {"role": "model", "parts": [{"text": "Hi!"}]},
-                {"role": "user", "parts": [{"text": "How are you?"}]},
-                {"role": "model", "parts": [{"text": "Good, thanks!"}]},
-                {"role": "user", "parts": [{"text": "Goodbye"}]}
-            ],
-            "systemInstruction": {
-                "parts": [{"text": "Be concise."}]
-            }
-        })
-    );
-}
-
-#[tokio::test]
-async fn test_vertex_ai_user_only_no_system() {
-    let source = [
-        VERTEX_AI_CLIENT,
-        r##"
-function F() -> string {
-    client C
-    prompt #"
-        {{ _.role("user") }}
-        Hello there
-    "#
-}
-function get_body() -> string {
-    baml.llm.build_request(C, "F", {}).body
-}
-"##,
-    ]
-    .join("\n");
-
-    let body = body_json(&run_baml(&source, "get_body").await);
-    assert_eq!(
-        body,
-        serde_json::json!({
-            "contents": [
-                {"role": "user", "parts": [{"text": "Hello there"}]}
-            ]
-        })
-    );
-}
-
-#[tokio::test]
-async fn test_vertex_ai_assistant_remapped_to_model() {
-    let source = [
-        VERTEX_AI_CLIENT,
-        r##"
-function F() -> string {
-    client C
-    prompt #"
-        {{ _.role("user") }}
-        Hi
-        {{ _.role("assistant") }}
-        Hello!
-    "#
-}
-function get_body() -> string {
-    baml.llm.build_request(C, "F", {}).body
-}
-"##,
-    ]
-    .join("\n");
-
-    let body = body_json(&run_baml(&source, "get_body").await);
-    assert_eq!(
-        body,
-        serde_json::json!({
-            "contents": [
-                {"role": "user", "parts": [{"text": "Hi"}]},
-                {"role": "model", "parts": [{"text": "Hello!"}]}
-            ]
         })
     );
 }
