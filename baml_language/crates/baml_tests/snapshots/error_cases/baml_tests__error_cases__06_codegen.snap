@@ -7,26 +7,33 @@ function user.Broken.BadUnionPattern(x: int | bool) -> string {
     load_const 0
     cmp_op ==
     pop_jump_if_false L0
-    jump L2
+    jump L3
 
   L0:
     load_var x
     pop 1
     load_const false
     pop_jump_if_false L1
-    jump L2
+    jump L3
 
   L1:
+    load_var x
+    type_tag
+    load_const 2
+    cmp_op ==
+    pop_jump_if_false L2
+
+  L2:
     load_const "bad"
     return
 
-  L2:
+  L3:
     load_const "parse error"
     call baml.sys.panic
     pop 1
-    jump L3
+    jump L4
 
-  L3:
+  L4:
     unreachable
 }
 

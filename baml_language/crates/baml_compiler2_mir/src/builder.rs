@@ -26,8 +26,6 @@
 //! let mir = builder.build();
 //! ```
 
-use std::collections::HashMap;
-
 use baml_base::{Name, Span};
 use baml_type::Ty;
 
@@ -48,8 +46,6 @@ pub(crate) struct MirBuilder {
     viz_nodes: Vec<VizNode>,
     /// Current source span for tagging statements/terminators.
     pub(crate) current_source_span: Option<Span>,
-    /// Maps unwind handler block -> error local, populated during catch lowering.
-    pub(crate) unwind_error_locals: HashMap<BlockId, Local>,
     /// Catch regions recorded during lowering for exception table construction.
     pub(crate) catch_regions: Vec<CatchRegion>,
 }
@@ -68,7 +64,6 @@ impl MirBuilder {
             span: None,
             viz_nodes: Vec::new(),
             current_source_span: None,
-            unwind_error_locals: HashMap::new(),
             catch_regions: Vec::new(),
         }
     }
@@ -431,7 +426,6 @@ impl MirBuilder {
                 blocks: self.blocks,
                 entry: BlockId(0),
                 locals: self.locals,
-                unwind_error_locals: self.unwind_error_locals,
                 catch_regions: self.catch_regions.clone(),
                 viz_nodes: self.viz_nodes,
             }),
@@ -452,7 +446,6 @@ impl MirBuilder {
             blocks: self.blocks,
             entry: BlockId(0),
             locals: self.locals,
-            unwind_error_locals: self.unwind_error_locals,
             catch_regions: self.catch_regions,
             viz_nodes: self.viz_nodes,
         }
@@ -475,7 +468,6 @@ impl MirBuilder {
                 blocks: self.blocks,
                 entry: BlockId(0),
                 locals: self.locals,
-                unwind_error_locals: self.unwind_error_locals,
                 catch_regions: self.catch_regions.clone(),
                 viz_nodes: self.viz_nodes,
             }),

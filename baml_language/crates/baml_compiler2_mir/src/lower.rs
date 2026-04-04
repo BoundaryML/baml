@@ -3329,13 +3329,21 @@ impl LoweringContext<'_> {
 
 // ─── Catch lowering ───────────────────────────────────────────────────────────
 
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug)]
 struct CatchArmDomain {
     matches_errors: bool,
     matches_panics: bool,
 }
 
 impl CatchArmDomain {
+    /// Matches nothing — identity element for `merge`.
+    fn none() -> Self {
+        Self {
+            matches_errors: false,
+            matches_panics: false,
+        }
+    }
+
     fn error_only() -> Self {
         Self {
             matches_errors: true,
@@ -3357,14 +3365,33 @@ impl CatchArmDomain {
         }
     }
 
-    fn matches_handler(self, include_all: bool, is_panic_handler: bool) -> bool {
-        include_all
-            || if is_panic_handler {
-                self.matches_panics
-            } else {
-                self.matches_errors
-            }
+    fn matches_filter(self, filter: CatchDispatchFilter) -> bool {
+        match filter {
+            CatchDispatchFilter::All => true,
+            CatchDispatchFilter::ErrorOnly => self.matches_errors,
+            CatchDispatchFilter::PanicOnly => self.matches_panics,
+        }
     }
+}
+
+/// How the exception table entry / entries should be configured for a catch.
+enum CatchStrategy {
+    /// No panic arms, no `catch_all` → single entry, `catches_panics: false`.
+    ErrorsOnly,
+    /// `catch_all` or panic arms without wildcard → single entry, `catches_panics: true`.
+    Everything,
+    /// Panic arms + wildcard (not `catch_all`) → two entries (error + panic).
+    Split,
+}
+
+#[derive(Clone, Copy)]
+enum CatchDispatchFilter {
+    /// Include all arms (single handler, Cases A/B).
+    All,
+    /// Include only error-matching arms (split handler, error side).
+    ErrorOnly,
+    /// Include only panic-matching arms (split handler, panic side).
+    PanicOnly,
 }
 
 #[derive(Clone)]
@@ -3390,9 +3417,6 @@ impl LoweringContext<'_> {
         let error_local = self.builder.temp(Ty::BuiltinUnknown {
             attr: TyAttr::default(),
         });
-        self.builder
-            .unwind_error_locals
-            .insert(bb_handler, error_local);
 
         let shared_arms = self.collect_shared_catch_arms(clauses);
 
@@ -3414,19 +3438,18 @@ impl LoweringContext<'_> {
             )
         });
 
-        // Determine catches_panics and whether we need a split (two entries).
-        //
-        // Case A: !has_panic_arms && !is_catch_all → one entry, catches_panics: false
-        // Case B: (has_panic_arms && !has_wildcard) || is_catch_all → one entry, catches_panics: true
-        // Case C: has_panic_arms && has_wildcard && !is_catch_all → two entries (error + panic)
-        let needs_split = has_panic_arms && has_wildcard && !is_catch_all;
-        let catches_panics = !needs_split && (is_catch_all || (has_panic_arms && !has_wildcard));
+        // Determine the catch strategy.
+        let strategy = if is_catch_all || (has_panic_arms && !has_wildcard) {
+            CatchStrategy::Everything
+        } else if has_panic_arms && has_wildcard {
+            CatchStrategy::Split
+        } else {
+            CatchStrategy::ErrorsOnly
+        };
 
-        // For Case C, create a separate panic handler block.
-        let panic_handler = if needs_split {
-            let bb = self.builder.create_block();
-            self.builder.unwind_error_locals.insert(bb, error_local);
-            Some(bb)
+        // For Split, create a separate panic handler block.
+        let panic_handler = if matches!(strategy, CatchStrategy::Split) {
+            Some(self.builder.create_block())
         } else {
             None
         };
@@ -3437,7 +3460,7 @@ impl LoweringContext<'_> {
             body_entry,
             handler: bb_handler,
             error_local,
-            catches_panics,
+            catches_panics: matches!(strategy, CatchStrategy::Everything),
             panic_handler,
         });
 
@@ -3457,13 +3480,11 @@ impl LoweringContext<'_> {
 
         // Lower the main handler block with bytecode dispatch.
         self.builder.set_current_block(bb_handler);
-        if needs_split {
-            // Case C: error handler gets only non-panic arms (including wildcard).
-            self.lower_catch_dispatch(&shared_arms, error_local, false);
-        } else {
-            // Case A/B: all arms go into the single handler.
-            self.lower_catch_dispatch(&shared_arms, error_local, true);
-        }
+        let main_filter = match strategy {
+            CatchStrategy::Split => CatchDispatchFilter::ErrorOnly,
+            _ => CatchDispatchFilter::All,
+        };
+        self.lower_catch_dispatch(&shared_arms, error_local, main_filter);
 
         // Rethrow if nothing matched.
         if !self.builder.is_current_terminated() {
@@ -3473,8 +3494,7 @@ impl LoweringContext<'_> {
         // Lower the panic handler block (Case C only).
         if let Some(bb_panic) = panic_handler {
             self.builder.set_current_block(bb_panic);
-            // Only panic arms go here.
-            self.lower_catch_dispatch(&shared_arms, error_local, false);
+            self.lower_catch_dispatch(&shared_arms, error_local, CatchDispatchFilter::PanicOnly);
             // Rethrow if no panic arm matched.
             if !self.builder.is_current_terminated() {
                 self.builder.throw(Operand::Copy(Place::Local(error_local)));
@@ -3518,29 +3538,14 @@ impl LoweringContext<'_> {
     }
 
     /// Lower catch arm tests into the current handler block.
-    ///
-    /// When `include_all` is false, this is called twice in a split catch:
-    /// - Once for the error handler (non-panic arms)
-    /// - Once for the panic handler (panic arms)
     fn lower_catch_dispatch(
         &mut self,
         shared_arms: &[SharedCatchArm],
         error_local: Local,
-        include_all: bool,
+        filter: CatchDispatchFilter,
     ) {
-        let is_panic_handler = !include_all
-            && self
-                .builder
-                .catch_regions
-                .last()
-                .and_then(|r| r.panic_handler)
-                .is_some_and(|ph| self.builder.current_block() == ph);
-
         for shared_arm in shared_arms {
-            if !shared_arm
-                .domain
-                .matches_handler(include_all, is_panic_handler)
-            {
+            if !shared_arm.domain.matches_filter(filter) {
                 continue;
             }
 
@@ -3580,7 +3585,7 @@ impl LoweringContext<'_> {
             }
             AstPattern::Union(sub_pats) => sub_pats
                 .into_iter()
-                .fold(CatchArmDomain::default(), |domain, sub_pat| {
+                .fold(CatchArmDomain::none(), |domain, sub_pat| {
                     domain.merge(self.pattern_catch_domain(sub_pat))
                 }),
             AstPattern::Literal(_) | AstPattern::Null | AstPattern::EnumVariant { .. } => {
@@ -3591,11 +3596,9 @@ impl LoweringContext<'_> {
 
     fn mir_ty_catch_domain(ty: &Ty) -> CatchArmDomain {
         match ty {
-            Ty::Union(members, _) => members
-                .iter()
-                .fold(CatchArmDomain::default(), |domain, ty| {
-                    domain.merge(Self::mir_ty_catch_domain(ty))
-                }),
+            Ty::Union(members, _) => members.iter().fold(CatchArmDomain::none(), |domain, ty| {
+                domain.merge(Self::mir_ty_catch_domain(ty))
+            }),
             Ty::Class(type_name, _) | Ty::TypeAlias(type_name, _) => {
                 if type_name.is_panic_type() {
                     CatchArmDomain::panic_only()
@@ -3682,7 +3685,6 @@ pub fn lower_function<'db>(db: &'db dyn crate::Db, func_loc: FunctionLoc<'db>) -
                         is_watched: false,
                     })
                     .collect(),
-                unwind_error_locals: std::collections::HashMap::new(),
                 catch_regions: vec![],
                 viz_nodes: vec![],
             }),

@@ -172,7 +172,6 @@ mod tests {
     #[test]
     fn verifier_allows_exhaustive_switch_with_unreachable_default() {
         let mut body = MirFunctionBody {
-            unwind_error_locals: std::collections::HashMap::new(),
             catch_regions: vec![],
             blocks: vec![
                 BasicBlock {
@@ -220,7 +219,6 @@ mod tests {
     #[should_panic(expected = "exhaustive switch")]
     fn verifier_rejects_exhaustive_switch_with_reachable_default() {
         let mut body = MirFunctionBody {
-            unwind_error_locals: std::collections::HashMap::new(),
             catch_regions: vec![],
             blocks: vec![
                 BasicBlock {
@@ -266,7 +264,6 @@ mod tests {
     #[test]
     fn verifier_accepts_watched_locals_classified_real() {
         let mut body = MirFunctionBody {
-            unwind_error_locals: std::collections::HashMap::new(),
             catch_regions: vec![],
             blocks: vec![BasicBlock {
                 id: BlockId(0),

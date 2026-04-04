@@ -10,8 +10,8 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use baml_base::Name;
 
 use crate::{
-    BasicBlock, BlockId, Local, MirFunction, MirFunctionBody, MirFunctionKind, Operand, Place,
-    Terminator,
+    BasicBlock, BlockId, CatchRegion, Local, MirFunction, MirFunctionBody, MirFunctionKind,
+    Operand, Place, Terminator,
 };
 
 /// Run all optimization passes on a MIR function.
@@ -111,28 +111,7 @@ fn eliminate_dead_blocks(body: &mut MirFunctionBody) {
     // Rewrite entry block
     body.entry = old_to_new[body.entry.0].expect("entry block must be reachable");
 
-    // Rewrite unwind_error_locals keys
-    let old_unwind = std::mem::take(&mut body.unwind_error_locals);
-    for (old_block, local) in old_unwind {
-        if let Some(new_block) = old_to_new[old_block.0] {
-            body.unwind_error_locals.insert(new_block, local);
-        }
-    }
-
-    // Rewrite catch_regions block IDs
-    for region in &mut body.catch_regions {
-        if let Some(new_block) = old_to_new[region.body_entry.0] {
-            region.body_entry = new_block;
-        }
-        if let Some(new_block) = old_to_new[region.handler.0] {
-            region.handler = new_block;
-        }
-        if let Some(ph) = region.panic_handler {
-            if let Some(new_block) = old_to_new[ph.0] {
-                region.panic_handler = Some(new_block);
-            }
-        }
-    }
+    rewrite_catch_region_blocks(&mut body.catch_regions, &old_to_new);
 
     body.blocks = new_blocks;
 }
@@ -180,11 +159,28 @@ fn rewrite_block_ids_in_terminator(term: &mut Terminator, map: &[Option<BlockId>
     }
 }
 
+/// Rewrite `BlockId` references in all catch regions using old->new mapping.
+fn rewrite_catch_region_blocks(regions: &mut [CatchRegion], map: &[Option<BlockId>]) {
+    for region in regions {
+        if let Some(new_block) = map[region.body_entry.0] {
+            region.body_entry = new_block;
+        }
+        if let Some(new_block) = map[region.handler.0] {
+            region.handler = new_block;
+        }
+        if let Some(ph) = region.panic_handler {
+            if let Some(new_block) = map[ph.0] {
+                region.panic_handler = Some(new_block);
+            }
+        }
+    }
+}
+
 // ============================================================================
 // Phase 2a: Copy propagation
 // ============================================================================
 
-/// Count uses of each Local across all blocks and `unwind_error_locals`.
+/// Count uses of each Local across all blocks and catch region error locals.
 /// Collect all locals that appear inside a `Place` projection.
 ///
 /// This includes locals used as `Place::Local` bases of field/index projections
@@ -352,8 +348,8 @@ fn count_local_uses(body: &MirFunctionBody) -> Vec<usize> {
         }
     }
 
-    // Count uses in unwind_error_locals values
-    for local in body.unwind_error_locals.values() {
+    // Count uses in catch region error locals (VM writes into these slots).
+    for (_, local) in body.unwind_error_locals() {
         uses[local.0] += 1;
     }
 
@@ -812,14 +808,6 @@ fn eliminate_dead_locals(body: &mut MirFunctionBody, arity: usize) {
         }
     }
 
-    // Rewrite unwind_error_locals values
-    let old_unwind = std::mem::take(&mut body.unwind_error_locals);
-    for (block_id, old_local) in old_unwind {
-        if let Some(new_local) = old_to_new[old_local.0] {
-            body.unwind_error_locals.insert(block_id, new_local);
-        }
-    }
-
     // Rewrite catch_regions error locals
     for region in &mut body.catch_regions {
         if let Some(new_local) = old_to_new[region.error_local.0] {
@@ -1189,19 +1177,7 @@ fn verify_mir(body: &MirFunctionBody, name: &crate::ItemRef) {
         }
     }
 
-    // 7. unwind_error_locals: keys must be valid BlockIds, values must be valid Locals.
-    for (&block_id, &local) in &body.unwind_error_locals {
-        assert!(
-            block_id.0 < num_blocks,
-            "dangling BlockId {block_id:?} in unwind_error_locals of MIR function {name}",
-        );
-        assert!(
-            local.0 < num_locals,
-            "dangling Local {local} in unwind_error_locals of MIR function {name}",
-        );
-    }
-
-    // 8. catch_regions: block IDs and locals must be valid.
+    // 7. catch_regions: block IDs and locals must be valid.
     for (i, region) in body.catch_regions.iter().enumerate() {
         assert!(
             region.body_entry.0 < num_blocks,
@@ -1314,28 +1290,7 @@ fn reorder_blocks_rpo(body: &mut MirFunctionBody) {
     // Rewrite entry
     body.entry = old_to_new[body.entry.0].expect("entry must be in RPO");
 
-    // Rewrite unwind_error_locals keys
-    let old_unwind = std::mem::take(&mut body.unwind_error_locals);
-    for (old_block, local) in old_unwind {
-        if let Some(new_block) = old_to_new[old_block.0] {
-            body.unwind_error_locals.insert(new_block, local);
-        }
-    }
-
-    // Rewrite catch_regions block IDs
-    for region in &mut body.catch_regions {
-        if let Some(new_block) = old_to_new[region.body_entry.0] {
-            region.body_entry = new_block;
-        }
-        if let Some(new_block) = old_to_new[region.handler.0] {
-            region.handler = new_block;
-        }
-        if let Some(ph) = region.panic_handler {
-            if let Some(new_block) = old_to_new[ph.0] {
-                region.panic_handler = Some(new_block);
-            }
-        }
-    }
+    rewrite_catch_region_blocks(&mut body.catch_regions, &old_to_new);
 
     body.blocks = new_blocks;
 }

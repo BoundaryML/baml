@@ -47,9 +47,6 @@ pub struct MirFunctionBody {
     pub entry: BlockId,
     /// Local variable declarations.
     pub locals: Vec<LocalDecl>,
-    /// Maps unwind handler block IDs to the error local that receives the error value.
-    /// Populated during catch lowering so the emitter doesn't have to infer it.
-    pub unwind_error_locals: std::collections::HashMap<BlockId, Local>,
     /// Catch regions mapping try-body extents to handler blocks.
     /// Populated during catch lowering; used by the emitter to build exception tables.
     pub catch_regions: Vec<CatchRegion>,
@@ -71,6 +68,18 @@ impl MirFunctionBody {
     /// Get a local declaration by ID.
     pub fn local(&self, id: Local) -> &LocalDecl {
         &self.locals[id.0]
+    }
+
+    /// Iterate `(handler_block, error_local)` pairs derived from catch regions.
+    ///
+    /// Yields one entry per handler (including separate panic handlers).
+    /// Replaces the old `unwind_error_locals` `HashMap`.
+    pub fn unwind_error_locals(&self) -> impl Iterator<Item = (BlockId, Local)> + '_ {
+        self.catch_regions.iter().flat_map(|r| {
+            let main = std::iter::once((r.handler, r.error_local));
+            let panic = r.panic_handler.map(|ph| (ph, r.error_local));
+            main.chain(panic)
+        })
     }
 }
 

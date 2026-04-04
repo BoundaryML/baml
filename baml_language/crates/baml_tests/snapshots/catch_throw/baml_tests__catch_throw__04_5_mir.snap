@@ -54,11 +54,11 @@ fn user.CatchAndRethrow(x: int) -> string {
     }
 
     bb4: {
-        _3 = copy _2;
         goto -> bb5;
     }
 
     bb5: {
+        _3 = copy _2;
         _4 = copy _3;
         throw copy _4;
     }

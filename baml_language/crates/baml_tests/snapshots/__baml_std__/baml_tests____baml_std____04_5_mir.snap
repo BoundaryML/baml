@@ -1301,11 +1301,11 @@ fn baml.llm.Client.execute_once(self: baml.llm.Client, context: baml.llm.Executi
     }
 
     bb30: {
-        _41 = copy _36;
         goto -> bb31;
     }
 
     bb31: {
+        _41 = copy _36;
         _43 = copy _3 > const 0_i64;
         branch copy _43 -> [bb33, bb32];
     }
