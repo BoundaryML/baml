@@ -2,7 +2,7 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === TIR2 ===
-function user.$init_test_17(registry: testing.Registry) -> ? throws never {
+function user.$init_test_17(registry: testing.TestCollector) -> ? throws never {
   { : null
     registry.register_test("wrong runner type", () -> { ... }, 42) : null
       () -> { ... } : () -> null
@@ -14,8 +14,8 @@ function user.$init_test_17(registry: testing.Registry) -> ? throws never {
         {
           assert.is_true(true)
         }
-    registry.register_test_set("wrong testset runner", (testset: testing.TestSetCollector) -> { ... }, 42) : null
-      (testset: testing.TestSetCollector) -> { ... } : (testset: testing.TestSetCollector) -> null
+    registry.register_test_set("wrong testset runner", (testset: testing.TestCollector) -> { ... }, 42) : null
+      (testset: testing.TestCollector) -> { ... } : (testset: testing.TestCollector) -> null
         {
           testset.register_test("inner", () -> { ... }, null)
           null

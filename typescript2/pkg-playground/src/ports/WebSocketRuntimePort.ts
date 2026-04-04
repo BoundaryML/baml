@@ -198,6 +198,12 @@ export class WebSocketRuntimePort implements RuntimePort {
           line: msg.line,
           column: msg.column,
         };
+      case 'requestCollectTests':
+        return null; // forwarded via WebSocket worker; no direct server equivalent
+      case 'requestExpandTestSet':
+        return null; // forwarded via WebSocket worker; no direct server equivalent
+      case 'requestRunTest':
+        return null; // forwarded via WebSocket worker; no direct server equivalent
       case 'clearHandles':
         return null; // handles live in the Rust process; no TS-side cleanup needed
       case 'dispose':

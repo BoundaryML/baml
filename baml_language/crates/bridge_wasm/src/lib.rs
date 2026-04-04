@@ -323,4 +323,50 @@ impl BamlWasmRuntime {
     pub fn handle_cursor_position(&self, file: &str, line: u32, column: u32) {
         self.bex.request_cursor_context(file, line, column);
     }
+
+    /// Request test collection for a project.
+    ///
+    /// Triggers async test collection for the given project root path and sends
+    /// `TestCollectionResult` playground notifications with `Collecting` → `Done` | `Error`.
+    ///
+    /// * `max_testset_load_time_ms` — optional per-testset timeout in milliseconds.
+    ///   Testsets that take longer will be returned as `LazyTestSet` instead of being expanded.
+    /// * `skip_testsets` — JS array of testset names to skip (returned as `LazyTestSet` immediately).
+    #[wasm_bindgen(js_name = "requestCollectTests")]
+    pub fn request_collect_tests(
+        &self,
+        project: &str,
+        max_testset_load_time_ms: Option<u32>,
+        skip_testsets: &JsValue,
+    ) {
+        let skip: Vec<String> = js_sys::Array::from(skip_testsets)
+            .iter()
+            .filter_map(|v| v.as_string())
+            .collect();
+        self.bex
+            .request_collect_tests(project, max_testset_load_time_ms, skip);
+    }
+
+    /// Request expansion of a single lazy testset.
+    ///
+    /// Sends a `TestSetExpandResult` playground notification when complete.
+    ///
+    /// * `name` — the full testset name (as reported in the `LazyTestSet` notification).
+    /// * `max_load_time_ms` — optional timeout; the expansion may itself produce nested lazy sets.
+    #[wasm_bindgen(js_name = "requestExpandTestSet")]
+    pub fn request_expand_testset(&self, project: &str, name: &str, max_load_time_ms: Option<u32>) {
+        self.bex
+            .request_expand_testset(project, name, max_load_time_ms);
+    }
+
+    /// Request execution of a single test by name.
+    ///
+    /// Sends a `TestRunResult` playground notification when the test completes.
+    ///
+    /// * `project` — the project root path.
+    /// * `name` — the full test name (as reported in the `TestCollectionResult` notification).
+    #[wasm_bindgen(js_name = "requestRunTest")]
+    pub fn request_run_test(&self, project: &str, name: &str) {
+        self.bex.request_run_test(project, name);
+    }
 }

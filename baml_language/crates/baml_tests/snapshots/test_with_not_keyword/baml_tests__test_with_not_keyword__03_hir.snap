@@ -8,7 +8,7 @@ class user.Foo {
 class user.HasWith {
   with: int
 }
-function user.$init_test_17(registry: testing.Registry) -> ?  [expr] {
+function user.$init_test_17(registry: testing.TestCollector) -> ?  [expr] {
   { registry.register_test("with as field", () -> { { let h = user.HasWith { with: 1 } } assert.equal(h.with, 1) }, null) } null
 }
 function user.make_foo() -> user.Foo  [expr] {

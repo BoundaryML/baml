@@ -7,7 +7,7 @@ function user.Greet(name: string) -> string throws never {
     "Hello, {name}!" : "Hello, {name}!"
   }
 }
-function user.$init_test_17(registry: testing.Registry) -> ? throws never {
+function user.$init_test_17(registry: testing.TestCollector) -> ? throws never {
   { : null
     registry.register_test("new style", () -> { ... }, null) : null
       () -> { ... } : () -> null

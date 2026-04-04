@@ -13,45 +13,135 @@ class testing.TestRegistration {
 }
 class testing.TestSetRegistration {
   name: string
-  collector: (testing.TestSetCollector) -> null
+  collector: (testing.TestCollector) -> null
   runner: testing.TestSetRunner?
 }
-class testing.Registry {
+class testing.TestCollector {
+  prefix: string
   tests: testing.TestRegistration[]
   testsets: testing.TestSetRegistration[]
 }
-function testing.Registry.new() -> testing.Registry throws never {
-  { : testing.Registry
-    Registry { tests: [], testsets: [] } : testing.Registry
+function testing.TestCollector.new(prefix: string) -> testing.TestCollector throws never {
+  { : testing.TestCollector
+    TestCollector { prefix: prefix, tests: [], testsets: [] } : testing.TestCollector
   }
 }
-function testing.Registry.register_test(self: testing.Registry, name: string, body: () -> null, runner: testing.TestRunner?) -> null throws never {
+function testing.TestCollector.register_test(self: testing.TestCollector, name: string, body: () -> null, runner: testing.TestRunner?) -> null throws never {
   { : null
-    let _ = self.tests.push(TestRegistration { name: name, body: body, runner: runner }) : int
+    let full_name = : string
+      if (self.prefix Eq "" : bool) : string
+        { : string
+          name : string
+        }
+      else
+        { : string
+          self.prefix Add "/" Add name : string
+        }
+    let count = 0 : 0 -> int
+    let hash_prefix = full_name Add "#" : string
+    for t in self.tests
+      { : void
+        if (t.name Eq full_name Or t.name.startsWith(hash_prefix) : bool) : void
+          { : void
+            count Add= 1 : int
+          }
+        else
+          { : null
+            null : null
+          }
+      }
+    let final_name = : string
+      if (count Gt 0 : bool) : string
+        { : string
+          full_name Add "#" Add baml.unstable.string(count Add 1) : string
+        }
+      else
+        { : string
+          full_name : string
+        }
+    let _ = self.tests.push(TestRegistration { name: final_name, body: body, runner: runner }) : int
     null : null
   }
 }
-function testing.Registry.register_test_set(self: testing.Registry, name: string, collector: (testing.TestSetCollector) -> null, runner: testing.TestSetRunner?) -> null throws never {
+function testing.TestCollector.register_test_set(self: testing.TestCollector, name: string, collector: (testing.TestCollector) -> null, runner: testing.TestSetRunner?) -> null throws never {
   { : null
-    let _ = self.testsets.push(TestSetRegistration { name: name, collector: collector, runner: runner }) : int
+    let full_name = : string
+      if (self.prefix Eq "" : bool) : string
+        { : string
+          name : string
+        }
+      else
+        { : string
+          self.prefix Add "/" Add name : string
+        }
+    let count = 0 : 0 -> int
+    let hash_prefix = full_name Add "#" : string
+    for ts in self.testsets
+      { : void
+        if (ts.name Eq full_name Or ts.name.startsWith(hash_prefix) : bool) : void
+          { : void
+            count Add= 1 : int
+          }
+        else
+          { : null
+            null : null
+          }
+      }
+    let final_name = : string
+      if (count Gt 0 : bool) : string
+        { : string
+          full_name Add "#" Add baml.unstable.string(count Add 1) : string
+        }
+      else
+        { : string
+          full_name : string
+        }
+    let _ = self.testsets.push(TestSetRegistration { name: final_name, collector: collector, runner: runner }) : int
     null : null
   }
 }
-class testing.TestSetCollector {
-  tests: testing.TestRegistration[]
-  testsets: testing.TestSetRegistration[]
-}
-function testing.TestSetCollector.register_test(self: testing.TestSetCollector, name: string, body: () -> null, runner: testing.TestRunner?) -> null throws never {
+function testing.$invoke_collector(collector: (testing.TestCollector) -> null, c: testing.TestCollector) -> null throws never {
   { : null
-    let _ = self.tests.push(TestRegistration { name: name, body: body, runner: runner }) : int
-    null : null
+    collector(c) : null
   }
 }
-function testing.TestSetCollector.register_test_set(self: testing.TestSetCollector, name: string, collector: (testing.TestSetCollector) -> null, runner: testing.TestSetRunner?) -> null throws never {
-  { : null
-    let _ = self.testsets.push(TestSetRegistration { name: name, collector: collector, runner: runner }) : int
-    null : null
+function testing.run_test(body: () -> null, runner: testing.TestRunner?) -> testing.TestReport throws never {
+  { : unknown
+    let base_run = : () -> testing.TestReport
+      () -> TestReport { ... } : () -> testing.TestReport
+        {
+          let start = baml.sys.now_ms()
+          let result = ...
+            { 1 stmts + tail } catch_all (e) { _ => { 0 stmts + tail } }
+          TestReport { outcome: result.outcome, runs: [RunReport { outcome: result.outcome, duration_ms: baml.sys.now_ms() Sub start, extras: map {  } }], extras: map {  } }
+        }
+    let effective_run = : () -> testing.TestReport | unknown
+      match (runner : testing.TestRunner?) : () -> testing.TestReport | unknown
+        null =>
+          base_run : () -> testing.TestReport
+        r: TestRunner =>
+          r(base_run) : unknown
+    effective_run() : unknown
   }
+  ?? 0..0: unreachable arm
+  !! 2761..2772: type `testing.TestRunner` is not callable
+  !! 2779..2794: type `() -> testing.TestReport | unknown` is not callable
+}
+lambda testing.run_test {
+  ?? 2416..2492: unreachable arm
+}
+function testing.run_testset(run_children: () -> testing.TestSetReport, runner: testing.TestSetRunner?) -> testing.TestSetReport throws never {
+  { : unknown
+    let effective_run = : () -> testing.TestSetReport | unknown
+      match (runner : testing.TestSetRunner?) : () -> testing.TestSetReport | unknown
+        null =>
+          run_children : () -> testing.TestSetReport
+        r: TestSetRunner =>
+          r(run_children) : unknown
+    effective_run() : unknown
+  }
+  !! 3052..3067: type `testing.TestSetRunner` is not callable
+  !! 3074..3089: type `() -> testing.TestSetReport | unknown` is not callable
 }
 class testing.TestRegistration$stream {
   name: null | string
@@ -63,11 +153,8 @@ class testing.TestSetRegistration$stream {
   collector: unknown
   runner: null | testing.TestSetRunner$stream
 }
-class testing.Registry$stream {
-  tests: testing.TestRegistration$stream[]
-  testsets: testing.TestSetRegistration$stream[]
-}
-class testing.TestSetCollector$stream {
+class testing.TestCollector$stream {
+  prefix: null | string
   tests: testing.TestRegistration$stream[]
   testsets: testing.TestSetRegistration$stream[]
 }

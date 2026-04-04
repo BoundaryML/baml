@@ -19,7 +19,7 @@ function user.use_with_as_var() -> int throws never {
 class user.HasWith {
   with: int
 }
-function user.$init_test_17(registry: testing.Registry) -> ? throws never {
+function user.$init_test_17(registry: testing.TestCollector) -> ? throws never {
   { : null
     registry.register_test("with as field", () -> { ... }, null) : null
       () -> { ... } : () -> null

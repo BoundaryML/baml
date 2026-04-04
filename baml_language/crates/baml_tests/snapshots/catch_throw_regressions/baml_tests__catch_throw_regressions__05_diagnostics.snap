@@ -2,6 +2,72 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
+  [type] Warning: unreachable arm
+   ╭─[ registry.baml:1:1 ]
+   │
+ 1 │ // testing.TestCollector — collector for tests and testsets.
+   │ │ 
+   │ ╰─ unreachable arm
+   │ 
+   │ Note: Error code: E0001
+───╯
+
+  [type] Warning: unreachable arm
+    ╭─[ registry.baml:65:13 ]
+    │
+ 65 │ ╭─▶       _ => {
+    ┆ ┆   
+ 68 │ ├─▶     }
+    │ │           
+    │ ╰─────────── unreachable arm
+    │     
+    │     Note: Error code: E0001
+────╯
+
+  [type] Error: type `testing.TestRunner` is not callable
+    ╭─[ registry.baml:77:24 ]
+    │
+ 77 │ ╭─▶     r: TestRunner => r(base_run)
+ 78 │ ├─▶   }
+    │ │         
+    │ ╰───────── type `testing.TestRunner` is not callable
+    │     
+    │     Note: Error code: E0001
+────╯
+
+  [type] Error: type `() -> testing.TestReport | unknown` is not callable
+    ╭─[ registry.baml:79:5 ]
+    │
+ 79 │ ╭─▶   effective_run()
+ 80 │ ├─▶ }
+    │ │       
+    │ ╰─────── type `() -> testing.TestReport | unknown` is not callable
+    │     
+    │     Note: Error code: E0001
+────╯
+
+  [type] Error: type `testing.TestSetRunner` is not callable
+    ╭─[ registry.baml:86:27 ]
+    │
+ 86 │ ╭─▶     r: TestSetRunner => r(run_children)
+ 87 │ ├─▶   }
+    │ │         
+    │ ╰───────── type `testing.TestSetRunner` is not callable
+    │     
+    │     Note: Error code: E0001
+────╯
+
+  [type] Error: type `() -> testing.TestSetReport | unknown` is not callable
+    ╭─[ registry.baml:88:5 ]
+    │
+ 88 │ ╭─▶   effective_run()
+ 89 │ ├─▶ }
+    │ │       
+    │ ╰─────── type `() -> testing.TestSetReport | unknown` is not callable
+    │     
+    │     Note: Error code: E0001
+────╯
+
   [type] Error: type mismatch: expected string, got user.Status
     ╭─[ regressions.baml:25:5 ]
     │

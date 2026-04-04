@@ -88,14 +88,6 @@ pub struct LlmCapabilities {
 
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct TestInfo {
-    pub name: String,
-    pub function_name: String,
-    pub args_json: String,
-}
-
-#[derive(Debug, Clone, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct ProjectDiagnostic {
     pub severity: &'static str,
     pub message: String,
@@ -106,8 +98,41 @@ pub struct ProjectDiagnostic {
 pub struct ProjectUpdate {
     pub is_bex_current: bool,
     pub functions: Vec<FunctionInfo>,
-    pub tests: Vec<TestInfo>,
     pub diagnostics: Vec<ProjectDiagnostic>,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RuntimeTestInfo {
+    pub name: String,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RuntimeTestSetInfo {
+    pub name: String,
+    pub items: Vec<TestDef>,
+    pub loading_time_ms: u64,
+    pub total_loading_time_ms: u64,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(tag = "type", rename_all = "camelCase")]
+pub enum TestDef {
+    Test(RuntimeTestInfo),
+    TestSet(RuntimeTestSetInfo),
+    #[serde(rename_all = "camelCase")]
+    LazyTestSet {
+        name: String,
+    },
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(tag = "status", rename_all = "camelCase")]
+pub enum TestCollectionStatus {
+    Collecting,
+    Done { items: Vec<TestDef> },
+    Error { message: String },
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -132,6 +157,26 @@ pub enum PlaygroundNotification {
     },
     #[serde(rename_all = "camelCase")]
     CursorContext { context: serde_json::Value },
+    #[serde(rename_all = "camelCase")]
+    TestCollectionResult {
+        project: String,
+        package: String,
+        result: TestCollectionStatus,
+    },
+    #[serde(rename_all = "camelCase")]
+    TestSetExpandResult {
+        project: String,
+        name: String,
+        result: Result<RuntimeTestSetInfo, String>,
+    },
+    #[serde(rename_all = "camelCase")]
+    BackgroundTaskCount { project: String, count: u32 },
+    #[serde(rename_all = "camelCase")]
+    TestRunResult {
+        project: String,
+        name: String,
+        report_json: serde_json::Value,
+    },
 }
 
 pub trait PlaygroundSender: Send + Sync {
@@ -179,6 +224,17 @@ pub trait BexLsp: Send + Sync + notification::BexLspNotification + request::BexL
     /// Combines `playground_cursor_context` with notification dispatch — used by
     /// the WASM bridge which cannot access the sender directly.
     fn request_cursor_context(&self, file_path: &str, line: u32, column: u32);
+
+    fn request_collect_tests(
+        &self,
+        project: &str,
+        max_testset_load_time_ms: Option<u32>,
+        skip_testsets: Vec<String>,
+    );
+
+    fn request_expand_testset(&self, project: &str, name: &str, max_load_time_ms: Option<u32>);
+
+    fn request_run_test(&self, project: &str, name: &str);
 }
 
 use ::std::sync::Arc;

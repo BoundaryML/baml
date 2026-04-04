@@ -4,16 +4,36 @@ source: crates/baml_tests/src/generated_tests.rs
 === MIR2 ===
 
 === MIR2 (package testing) ===
-fn testing.Registry.new() -> testing.Registry {
+fn testing.$invoke_collector(collector: (testing.TestCollector) -> null, c: testing.TestCollector) -> null {
     // Locals:
-    let _0: testing.Registry // _0 // return
-    let _1: testing.TestRegistration[]
-    let _2: testing.TestSetRegistration[]
+    let _0: null // _0 // return
+    let _1: (testing.TestCollector) -> null // collector // param
+    let _2: testing.TestCollector // c // param
 
     bb0: {
-        _1 = [];
+        _0 = call copy _1(copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn testing.TestCollector.new(prefix: string) -> testing.TestCollector {
+    // Locals:
+    let _0: testing.TestCollector // _0 // return
+    let _1: string // prefix // param
+    let _2: testing.TestRegistration[]
+    let _3: testing.TestSetRegistration[]
+
+    bb0: {
         _2 = [];
-        _0 = Registry { copy _1, copy _2 };
+        _3 = [];
+        _0 = TestCollector { copy _1, copy _2, copy _3 };
         goto -> bb1;
     }
 
@@ -22,110 +42,508 @@ fn testing.Registry.new() -> testing.Registry {
     }
 }
 
-fn testing.Registry.register_test(self: testing.Registry, name: string, body: () -> null, runner: (() -> testing.TestReport) -> () -> testing.TestReport?) -> null {
+fn testing.TestCollector.register_test(self: testing.TestCollector, name: string, body: () -> null, runner: (() -> testing.TestReport) -> () -> testing.TestReport?) -> null {
     // Locals:
     let _0: null // _0 // return
-    let _1: testing.Registry // self // param
+    let _1: testing.TestCollector // self // param
     let _2: string // name // param
     let _3: () -> null // body // param
     let _4: (() -> testing.TestReport) -> () -> testing.TestReport? // runner // param
-    let _5: int // _
-    let _6: testing.TestRegistration[]
-    let _7: testing.TestRegistration
+    let _5: string // full_name
+    let _6: bool
+    let _7: string
+    let _8: string
+    let _9: string
+    let _10: int // count
+    let _11: string // hash_prefix
+    let _12: string
+    let _13: testing.TestRegistration[]
+    let _14: int // __for_idx
+    let _15: int
+    let _16: bool
+    let _17: testing.TestRegistration
+    let _18: testing.TestRegistration // t
+    let _19: bool
+    let _20: bool
+    let _21: string
+    let _22: testing.TestRegistration
+    let _23: string
+    let _24: string
+    let _25: testing.TestRegistration
+    let _26: string
+    let _27: string // final_name
+    let _28: bool
+    let _29: int
+    let _30: string
+    let _31: string
+    let _32: string
+    let _33: int
+    let _34: int
+    let _35: int // _
+    let _36: testing.TestRegistration[]
+    let _37: testing.TestRegistration
+    let _38: string
 
     bb0: {
-        _6 = copy _1.0;
-        _7 = TestRegistration { copy _2, copy _3, copy _4 };
-        _5 = call const fn baml.Array.push(copy _6, copy _7) -> [bb1];
+        _7 = copy _1.0;
+        _6 = copy _7 == const "";
+        branch copy _6 -> [bb2, bb1];
     }
 
     bb1: {
-        _0 = const null;
-        goto -> bb2;
+        _9 = copy _1.0;
+        _8 = copy _9 + const "/";
+        _5 = copy _8 + copy _2;
+        goto -> bb3;
     }
 
     bb2: {
-        return;
-    }
-}
-
-fn testing.TestSetCollector.register_test(self: testing.TestSetCollector, name: string, body: () -> null, runner: (() -> testing.TestReport) -> () -> testing.TestReport?) -> null {
-    // Locals:
-    let _0: null // _0 // return
-    let _1: testing.TestSetCollector // self // param
-    let _2: string // name // param
-    let _3: () -> null // body // param
-    let _4: (() -> testing.TestReport) -> () -> testing.TestReport? // runner // param
-    let _5: int // _
-    let _6: testing.TestRegistration[]
-    let _7: testing.TestRegistration
-
-    bb0: {
-        _6 = copy _1.0;
-        _7 = TestRegistration { copy _2, copy _3, copy _4 };
-        _5 = call const fn baml.Array.push(copy _6, copy _7) -> [bb1];
+        _5 = copy _2;
+        goto -> bb3;
     }
 
-    bb1: {
+    bb3: {
+        _10 = const 0_i64;
+        _12 = copy _5;
+        _11 = copy _12 + const "#";
+        _13 = copy _1.1;
+        _14 = const 0_i64;
+        goto -> bb4;
+    }
+
+    bb4: {
+        _15 = len(_13);
+        _16 = copy _14 < copy _15;
+        branch copy _16 -> [bb12, bb5];
+    }
+
+    bb5: {
+        _29 = copy _10;
+        _28 = copy _29 > const 0_i64;
+        branch copy _28 -> [bb7, bb6];
+    }
+
+    bb6: {
+        _27 = copy _5;
+        goto -> bb9;
+    }
+
+    bb7: {
+        _31 = copy _5;
+        _30 = copy _31 + const "#";
+        _34 = copy _10;
+        _33 = copy _34 + const 1_i64;
+        _32 = call const fn baml.unstable.string(copy _33) -> [bb8];
+    }
+
+    bb8: {
+        _27 = copy _30 + copy _32;
+        goto -> bb9;
+    }
+
+    bb9: {
+        _36 = copy _1.1;
+        _38 = copy _27;
+        _37 = TestRegistration { copy _38, copy _3, copy _4 };
+        _35 = call const fn baml.Array.push(copy _36, copy _37) -> [bb10];
+    }
+
+    bb10: {
         _0 = const null;
-        goto -> bb2;
+        goto -> bb11;
     }
 
-    bb2: {
+    bb11: {
         return;
+    }
+
+    bb12: {
+        _17 = copy _13[_14];
+        _18 = copy _17;
+        _22 = copy _18;
+        _21 = copy _22.0;
+        _23 = copy _5;
+        _20 = copy _21 == copy _23;
+        _19 = copy _20;
+        branch copy _20 -> [bb15, bb13];
+    }
+
+    bb13: {
+        _25 = copy _18;
+        _24 = copy _25.0;
+        _26 = copy _11;
+        _19 = call const fn baml.String.startsWith(copy _24, copy _26) -> [bb14];
+    }
+
+    bb14: {
+        goto -> bb15;
+    }
+
+    bb15: {
+        branch copy _19 -> [bb17, bb16];
+    }
+
+    bb16: {
+        goto -> bb18;
+    }
+
+    bb17: {
+        _10 = copy _10 + const 1_i64;
+        goto -> bb18;
+    }
+
+    bb18: {
+        goto -> bb19;
+    }
+
+    bb19: {
+        _14 = copy _14 + const 1_i64;
+        goto -> bb4;
     }
 }
 
-fn testing.TestSetCollector.register_test_set(self: testing.TestSetCollector, name: string, collector: (testing.TestSetCollector) -> null, runner: (() -> testing.TestSetReport) -> () -> testing.TestSetReport?) -> null {
+fn testing.TestCollector.register_test_set(self: testing.TestCollector, name: string, collector: (testing.TestCollector) -> null, runner: (() -> testing.TestSetReport) -> () -> testing.TestSetReport?) -> null {
     // Locals:
     let _0: null // _0 // return
-    let _1: testing.TestSetCollector // self // param
+    let _1: testing.TestCollector // self // param
     let _2: string // name // param
-    let _3: (testing.TestSetCollector) -> null // collector // param
+    let _3: (testing.TestCollector) -> null // collector // param
     let _4: (() -> testing.TestSetReport) -> () -> testing.TestSetReport? // runner // param
-    let _5: int // _
-    let _6: testing.TestSetRegistration[]
-    let _7: testing.TestSetRegistration
+    let _5: string // full_name
+    let _6: bool
+    let _7: string
+    let _8: string
+    let _9: string
+    let _10: int // count
+    let _11: string // hash_prefix
+    let _12: string
+    let _13: testing.TestSetRegistration[]
+    let _14: int // __for_idx
+    let _15: int
+    let _16: bool
+    let _17: testing.TestSetRegistration
+    let _18: testing.TestSetRegistration // ts
+    let _19: bool
+    let _20: bool
+    let _21: string
+    let _22: testing.TestSetRegistration
+    let _23: string
+    let _24: string
+    let _25: testing.TestSetRegistration
+    let _26: string
+    let _27: string // final_name
+    let _28: bool
+    let _29: int
+    let _30: string
+    let _31: string
+    let _32: string
+    let _33: int
+    let _34: int
+    let _35: int // _
+    let _36: testing.TestSetRegistration[]
+    let _37: testing.TestSetRegistration
+    let _38: string
 
     bb0: {
-        _6 = copy _1.1;
-        _7 = TestSetRegistration { copy _2, copy _3, copy _4 };
-        _5 = call const fn baml.Array.push(copy _6, copy _7) -> [bb1];
+        _7 = copy _1.0;
+        _6 = copy _7 == const "";
+        branch copy _6 -> [bb2, bb1];
     }
 
     bb1: {
-        _0 = const null;
-        goto -> bb2;
+        _9 = copy _1.0;
+        _8 = copy _9 + const "/";
+        _5 = copy _8 + copy _2;
+        goto -> bb3;
     }
 
     bb2: {
+        _5 = copy _2;
+        goto -> bb3;
+    }
+
+    bb3: {
+        _10 = const 0_i64;
+        _12 = copy _5;
+        _11 = copy _12 + const "#";
+        _13 = copy _1.2;
+        _14 = const 0_i64;
+        goto -> bb4;
+    }
+
+    bb4: {
+        _15 = len(_13);
+        _16 = copy _14 < copy _15;
+        branch copy _16 -> [bb12, bb5];
+    }
+
+    bb5: {
+        _29 = copy _10;
+        _28 = copy _29 > const 0_i64;
+        branch copy _28 -> [bb7, bb6];
+    }
+
+    bb6: {
+        _27 = copy _5;
+        goto -> bb9;
+    }
+
+    bb7: {
+        _31 = copy _5;
+        _30 = copy _31 + const "#";
+        _34 = copy _10;
+        _33 = copy _34 + const 1_i64;
+        _32 = call const fn baml.unstable.string(copy _33) -> [bb8];
+    }
+
+    bb8: {
+        _27 = copy _30 + copy _32;
+        goto -> bb9;
+    }
+
+    bb9: {
+        _36 = copy _1.2;
+        _38 = copy _27;
+        _37 = TestSetRegistration { copy _38, copy _3, copy _4 };
+        _35 = call const fn baml.Array.push(copy _36, copy _37) -> [bb10];
+    }
+
+    bb10: {
+        _0 = const null;
+        goto -> bb11;
+    }
+
+    bb11: {
+        return;
+    }
+
+    bb12: {
+        _17 = copy _13[_14];
+        _18 = copy _17;
+        _22 = copy _18;
+        _21 = copy _22.0;
+        _23 = copy _5;
+        _20 = copy _21 == copy _23;
+        _19 = copy _20;
+        branch copy _20 -> [bb15, bb13];
+    }
+
+    bb13: {
+        _25 = copy _18;
+        _24 = copy _25.0;
+        _26 = copy _11;
+        _19 = call const fn baml.String.startsWith(copy _24, copy _26) -> [bb14];
+    }
+
+    bb14: {
+        goto -> bb15;
+    }
+
+    bb15: {
+        branch copy _19 -> [bb17, bb16];
+    }
+
+    bb16: {
+        goto -> bb18;
+    }
+
+    bb17: {
+        _10 = copy _10 + const 1_i64;
+        goto -> bb18;
+    }
+
+    bb18: {
+        goto -> bb19;
+    }
+
+    bb19: {
+        _14 = copy _14 + const 1_i64;
+        goto -> bb4;
+    }
+}
+
+fn testing.run_test(body: () -> null, runner: (() -> testing.TestReport) -> () -> testing.TestReport?) -> testing.TestReport {
+    // Locals:
+    let _0: testing.TestReport // _0 // return
+    let _1: () -> null // body // param [captured]
+    let _2: (() -> testing.TestReport) -> () -> testing.TestReport? // runner // param
+    let _3: () -> testing.TestReport // base_run
+    let _4: () -> testing.TestReport | void // effective_run
+    let _5: bool
+    let _6: bool
+    let _7: (() -> testing.TestReport) -> () -> testing.TestReport // r
+    let _8: (() -> testing.TestReport) -> () -> testing.TestReport
+    let _9: () -> testing.TestReport
+    let _10: () -> testing.TestReport | void
+
+    bb0: {
+        _3 = make_closure lambda[0](copy _1);
+        _5 = copy _2 == const null;
+        branch copy _5 -> [bb5, bb1];
+    }
+
+    bb1: {
+        _6 = is_type(copy _2, Function { params: [Function { params: [], ret: Class(TypeName { name: "TestReport", module_path: ["testing"], display_name: "testing.TestReport" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }), attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }], ret: Function { params: [], ret: Class(TypeName { name: "TestReport", module_path: ["testing"], display_name: "testing.TestReport" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }), attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }, attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _6 -> [bb3, bb2];
+    }
+
+    bb2: {
+        goto -> bb6;
+    }
+
+    bb3: {
+        _7 = copy _2;
+        _8 = copy _7;
+        _9 = copy _3;
+        _4 = call copy _8(copy _9) -> [bb4];
+    }
+
+    bb4: {
+        goto -> bb6;
+    }
+
+    bb5: {
+        _4 = copy _3;
+        goto -> bb6;
+    }
+
+    bb6: {
+        _10 = copy _4;
+        _0 = call copy _10() -> [bb7];
+    }
+
+    bb7: {
+        goto -> bb8;
+    }
+
+    bb8: {
         return;
     }
 }
 
-fn testing.Registry.register_test_set(self: testing.Registry, name: string, collector: (testing.TestSetCollector) -> null, runner: (() -> testing.TestSetReport) -> () -> testing.TestSetReport?) -> null {
+// lambda[0]
+fn .<lambda(run_test, 0)>() -> null {
     // Locals:
     let _0: null // _0 // return
-    let _1: testing.Registry // self // param
-    let _2: string // name // param
-    let _3: (testing.TestSetCollector) -> null // collector // param
-    let _4: (() -> testing.TestSetReport) -> () -> testing.TestSetReport? // runner // param
-    let _5: int // _
-    let _6: testing.TestSetRegistration[]
-    let _7: testing.TestSetRegistration
+    let _1: int // start
+    let _2: testing.RunReport // result
+    let _3: unknown
+    let _4: void
+    let _5: void
+    let _6: map<void, void>
+    let _7: map<void, void>
+    let _8: "pass" | "fail" | "error"
+    let _9: testing.RunReport
+    let _10: testing.RunReport[]
+    let _11: testing.RunReport
+    let _12: "pass" | "fail" | "error"
+    let _13: testing.RunReport
+    let _14: int
+    let _15: int
+    let _16: int
+    let _17: map<void, void>
+    let _18: map<void, void>
 
     bb0: {
-        _6 = copy _1.1;
-        _7 = TestSetRegistration { copy _2, copy _3, copy _4 };
-        _5 = call const fn baml.Array.push(copy _6, copy _7) -> [bb1];
+        _1 = call const fn baml.sys.now_ms() -> [bb1];
     }
 
     bb1: {
-        _0 = const null;
-        goto -> bb2;
+        _5 = copy capture[0];
+        _4 = call copy _5() -> [bb4, unwind: bb2];
     }
 
     bb2: {
+        goto -> bb3;
+    }
+
+    bb3: {
+        _7 = {  };
+        _2 = RunReport { const "fail", const 0_i64, copy _7 };
+        goto -> bb5;
+    }
+
+    bb4: {
+        _6 = {  };
+        _2 = RunReport { const "pass", const 0_i64, copy _6 };
+        goto -> bb5;
+    }
+
+    bb5: {
+        _9 = copy _2;
+        _8 = copy _9.0;
+        _13 = copy _2;
+        _12 = copy _13.0;
+        _15 = call const fn baml.sys.now_ms() -> [bb6];
+    }
+
+    bb6: {
+        _16 = copy _1;
+        _14 = copy _15 - copy _16;
+        _17 = {  };
+        _11 = RunReport { copy _12, copy _14, copy _17 };
+        _10 = [copy _11];
+        _18 = {  };
+        _0 = TestReport { copy _8, copy _10, copy _18 };
+        goto -> bb7;
+    }
+
+    bb7: {
+        return;
+    }
+}
+
+fn testing.run_testset(run_children: () -> testing.TestSetReport, runner: (() -> testing.TestSetReport) -> () -> testing.TestSetReport?) -> testing.TestSetReport {
+    // Locals:
+    let _0: testing.TestSetReport // _0 // return
+    let _1: () -> testing.TestSetReport // run_children // param
+    let _2: (() -> testing.TestSetReport) -> () -> testing.TestSetReport? // runner // param
+    let _3: () -> testing.TestSetReport | void // effective_run
+    let _4: bool
+    let _5: bool
+    let _6: (() -> testing.TestSetReport) -> () -> testing.TestSetReport // r
+    let _7: (() -> testing.TestSetReport) -> () -> testing.TestSetReport
+    let _8: () -> testing.TestSetReport | void
+
+    bb0: {
+        _4 = copy _2 == const null;
+        branch copy _4 -> [bb5, bb1];
+    }
+
+    bb1: {
+        _5 = is_type(copy _2, Function { params: [Function { params: [], ret: Class(TypeName { name: "TestSetReport", module_path: ["testing"], display_name: "testing.TestSetReport" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }), attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }], ret: Function { params: [], ret: Class(TypeName { name: "TestSetReport", module_path: ["testing"], display_name: "testing.TestSetReport" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }), attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }, attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _5 -> [bb3, bb2];
+    }
+
+    bb2: {
+        goto -> bb6;
+    }
+
+    bb3: {
+        _6 = copy _2;
+        _7 = copy _6;
+        _3 = call copy _7(copy _1) -> [bb4];
+    }
+
+    bb4: {
+        goto -> bb6;
+    }
+
+    bb5: {
+        _3 = copy _1;
+        goto -> bb6;
+    }
+
+    bb6: {
+        _8 = copy _3;
+        _0 = call copy _8() -> [bb7];
+    }
+
+    bb7: {
+        goto -> bb8;
+    }
+
+    bb8: {
         return;
     }
 }

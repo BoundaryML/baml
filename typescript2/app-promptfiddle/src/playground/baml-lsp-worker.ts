@@ -566,6 +566,20 @@ self.onmessage = async (event: MessageEvent) => {
       runtime?.handleCursorPosition(msg.file, msg.line, msg.column);
       return;
 
+    case "requestCollectTests":
+      console.log("[worker] requestCollectTests", { maxTestSetLoadTimeMs: msg.maxTestSetLoadTimeMs, skipTestSets: msg.skipTestSets });
+      runtime?.requestCollectTests(msg.project, msg.maxTestSetLoadTimeMs, msg.skipTestSets ?? []);
+      return;
+
+    case "requestExpandTestSet":
+      runtime?.requestExpandTestSet(msg.project, msg.name, msg.maxLoadTimeMs);
+      return;
+
+    case "requestRunTest":
+      console.log('[worker] requestRunTest', msg.project, msg.name);
+      runtime?.requestRunTest(msg.project, msg.name);
+      return;
+
     case "clearHandles":
       for (const id of msg.runIds) {
         const handles = liveHandles.get(id);

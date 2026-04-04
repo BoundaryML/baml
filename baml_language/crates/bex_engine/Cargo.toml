@@ -17,6 +17,7 @@ sys_ops = { workspace = true }
 sys_types = { workspace = true }
 async-trait = { workspace = true }
 futures = { workspace = true }
+futures-timer = { workspace = true }
 indexmap = { workspace = true }
 log = { workspace = true }
 thiserror = { workspace = true }

@@ -1252,6 +1252,10 @@ impl BexVm {
             }
 
             FunctionKind::SysOp(_) => {
+                log::error!(
+                    "[VM] tried to CALL SysOp function '{}' via bytecode — SysOps must go through the engine yield path",
+                    callee.name
+                );
                 return Err(InternalError::TypeError {
                     expected: FunctionType::Callable.into(),
                     got: FunctionType::from(&callee.kind).into(),

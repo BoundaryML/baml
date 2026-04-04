@@ -4660,27 +4660,48 @@ impl<'a> Parser<'a> {
         });
     }
 
-    /// Check if the current test looks like an expression-body test.
-    /// Old-style: `test Name { ... }` (bare Word name)
-    /// New-style: `test "name" { ... }` or `test "name" with ... { ... }` (string literal name)
+    /// Check if the current test looks like an expression-body test (new-style).
+    ///
+    /// Old-style: `test Name { functions [...] ... }` — config block
+    /// New-style: `test <expr> [with <expr>] { ... }` — expression body
+    ///
+    /// We detect the old style and default to new style otherwise, so that
+    /// any expression (string concat, function calls, etc.) works as a test name.
     fn looks_like_test_expr_body(&self) -> bool {
-        // After the `test` keyword, peek at the next non-trivia token.
-        // If it's a Quote (regular string) or Hash (raw string), this is an expression-body test.
-        self.peek(1)
-            .map(|t| t.kind == TokenKind::Quote || t.kind == TokenKind::Hash)
-            .unwrap_or(false)
+        let Some(next) = self.peek(1) else {
+            return true;
+        };
+        // Old-style requires: `test Word { functions` or `test Word (`
+        if next.kind == TokenKind::Word {
+            if let Some(after_word) = self.peek(2) {
+                if after_word.kind == TokenKind::LParen {
+                    return false; // old-style: `test Name(...)`
+                }
+                if after_word.kind == TokenKind::LBrace {
+                    // Peek inside the brace: `test Name { functions` → old-style
+                    if let Some(inside) = self.peek(3) {
+                        if inside.kind == TokenKind::Word && inside.text == "functions" {
+                            return false; // old-style config block
+                        }
+                    }
+                }
+            }
+        }
+        true
     }
 
-    /// Parse an expression-body test: `test "name" [with expr] { body }`
+    /// Parse an expression-body test: `test <name_expr> [with expr] { body }`
+    ///
+    /// The name is any expression that type-checks as a string, e.g.:
+    /// - `test "simple" { ... }`
+    /// - `test "prefix" + suffix { ... }`
     pub(crate) fn parse_test_expr(&mut self) {
         self.with_node(SyntaxKind::TEST_EXPR_DEF, |p| {
             // 'test' keyword
             p.expect(TokenKind::Test);
 
-            // Test name — must be a string literal
-            if !p.parse_string() && !p.parse_raw_string() {
-                p.error_unexpected_token("test name (string literal)".to_string());
-            }
+            // Test name — an expression (stops before `{` and `with`)
+            p.parse_expr();
 
             // Optional `with` clause for test runner
             if p.at_contextual_kw("with") {
@@ -4704,10 +4725,8 @@ impl<'a> Parser<'a> {
             // 'testset' keyword
             p.expect(TokenKind::TestSet);
 
-            // Testset name — must be a string literal
-            if !p.parse_string() && !p.parse_raw_string() {
-                p.error_unexpected_token("testset name (string literal)".to_string());
-            }
+            // Testset name — an expression (stops before `{` and `with`)
+            p.parse_expr();
 
             // Optional `with` clause for testset runner
             if p.at_contextual_kw("with") {

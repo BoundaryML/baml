@@ -2,16 +2,16 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR2 ===
-fn user.$init_test_17(registry: testing.Registry) -> null {
+fn user.$init_test_17(registry: testing.TestCollector) -> null {
     // Locals:
     let _0: null // _0 // return
-    let _1: testing.Registry // registry // param
+    let _1: testing.TestCollector // registry // param
     let _2: null
     let _3: () -> null
 
     bb0: {
         _3 = make_closure lambda[0]();
-        _2 = call const fn testing.Registry.register_test(copy _1, const "new style", copy _3, const null) -> [bb1];
+        _2 = call const fn testing.TestCollector.register_test(copy _1, const "new style", copy _3, const null) -> [bb1];
     }
 
     bb1: {

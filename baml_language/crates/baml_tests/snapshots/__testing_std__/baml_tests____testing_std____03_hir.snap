@@ -6,7 +6,8 @@ source: crates/baml_tests/src/generated_tests.rs
 === HIR2 (package testing) ===
 
 --- <builtin>/testing/registry.baml ---
-class testing.Registry {
+class testing.TestCollector {
+  prefix: string
   tests: testing.TestRegistration[]
   testsets: testing.TestSetRegistration[]
 }
@@ -15,30 +16,32 @@ class testing.TestRegistration {
   body: () -> null
   runner: testing.TestRunner?
 }
-class testing.TestSetCollector {
-  tests: testing.TestRegistration[]
-  testsets: testing.TestSetRegistration[]
-}
 class testing.TestSetRegistration {
   name: string
-  collector: (testing.TestSetCollector) -> null
+  collector: (testing.TestCollector) -> null
   runner: testing.TestSetRunner?
 }
-function testing.new() -> testing.Registry  [expr] {
-  {  } testing.Registry { tests: [], testsets: [] }
+function testing.$invoke_collector(collector: (testing.TestCollector) -> null, c: testing.TestCollector) -> null  [expr] {
+  {  } collector(c)
+}
+function testing.new(prefix: string) -> testing.TestCollector  [expr] {
+  {  } testing.TestCollector { prefix: prefix, tests: [], testsets: [] }
 }
 function testing.register_test(self: ?, name: string, body: () -> null, runner: testing.TestRunner?) -> null  [expr] {
-  { let _ = self.tests.push(testing.TestRegistration { name: name, body: body, runner: runner }) } null
+  { let full_name = if (self.prefix Eq "") {  } name else {  } self.prefix Add "/" Add name; let count = 0; let hash_prefix = full_name Add "#"; for t in self.tests {  } if (t.name Eq full_name Or t.name.startsWith(hash_prefix)) { count Add= 1 } else {  } null; let final_name = if (count Gt 0) {  } full_name Add "#" Add baml.unstable.string(count Add 1) else {  } full_name; let _ = self.tests.push(testing.TestRegistration { name: final_name, body: body, runner: runner }) } null
 }
-function testing.register_test(self: ?, name: string, body: () -> null, runner: testing.TestRunner?) -> null  [expr] {
-  { let _ = self.tests.push(testing.TestRegistration { name: name, body: body, runner: runner }) } null
+function testing.register_test_set(self: ?, name: string, collector: (testing.TestCollector) -> null, runner: testing.TestSetRunner?) -> null  [expr] {
+  { let full_name = if (self.prefix Eq "") {  } name else {  } self.prefix Add "/" Add name; let count = 0; let hash_prefix = full_name Add "#"; for ts in self.testsets {  } if (ts.name Eq full_name Or ts.name.startsWith(hash_prefix)) { count Add= 1 } else {  } null; let final_name = if (count Gt 0) {  } full_name Add "#" Add baml.unstable.string(count Add 1) else {  } full_name; let _ = self.testsets.push(testing.TestSetRegistration { name: final_name, collector: collector, runner: runner }) } null
 }
-function testing.register_test_set(self: ?, name: string, collector: (testing.TestSetCollector) -> null, runner: testing.TestSetRunner?) -> null  [expr] {
-  { let _ = self.testsets.push(testing.TestSetRegistration { name: name, collector: collector, runner: runner }) } null
+function testing.run_test(body: () -> null, runner: testing.TestRunner?) -> testing.TestReport  [expr] {
+  { let base_run = () -> TestReport { { let start = baml.sys.now_ms(); let result = { body() } RunReport { outcome: "pass", duration_ms: 0, extras: map {  } } catch_all (e) { _ => {  } RunReport { outcome: "fail", duration_ms: 0, extras: map {  } } } } TestReport { outcome: result.outcome, runs: [RunReport { outcome: result.outcome, duration_ms: baml.sys.now_ms() Sub start, extras: map {  } }], extras: map {  } } }; let effective_run = match (runner) { null => base_run, r: testing.TestRunner => r(base_run) } } effective_run()
 }
-function testing.register_test_set(self: ?, name: string, collector: (testing.TestSetCollector) -> null, runner: testing.TestSetRunner?) -> null  [expr] {
-  { let _ = self.testsets.push(testing.TestSetRegistration { name: name, collector: collector, runner: runner }) } null
+function testing.run_testset(run_children: () -> testing.TestSetReport, runner: testing.TestSetRunner?) -> testing.TestSetReport  [expr] {
+  { let effective_run = match (runner) { null => run_children, r: testing.TestSetRunner => r(run_children) } } effective_run()
 }
+
+--- captures ---
+lambda () in run_test: captures [body]
 
 --- <builtin>/testing/types.baml ---
 class testing.RunReport {

@@ -4307,6 +4307,8 @@ impl<'db> TypeInferenceBuilder<'db> {
         let saved_generic_params = self.generic_params.clone();
         let saved_expressions = std::mem::take(&mut self.expressions);
         let saved_bindings = std::mem::take(&mut self.bindings);
+        let saved_resolutions = std::mem::take(&mut self.resolutions);
+        let saved_exhaustive_matches = std::mem::take(&mut self.exhaustive_matches);
 
         // Extend generic params with the lambda's own generic params
         let mut new_generic_params = self.generic_params.clone();
@@ -4373,6 +4375,8 @@ impl<'db> TypeInferenceBuilder<'db> {
         // Collect the lambda's expression types and restore parent state
         let lambda_expressions = std::mem::replace(&mut self.expressions, saved_expressions);
         self.bindings = saved_bindings;
+        self.resolutions = saved_resolutions;
+        self.exhaustive_matches = saved_exhaustive_matches;
         self.locals = saved_locals;
         self.declared_types = saved_declared;
         self.declared_return_ty = saved_return_ty;

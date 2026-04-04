@@ -217,7 +217,11 @@ pub fn convert_tir2_ty(
 
 // ─── def_to_item_ref helper ──────────────────────────────────────────────────
 
-use baml_compiler2_hir::{contributions::Definition, file_item_tree, file_package::file_package};
+use baml_compiler2_hir::{contributions::Definition, file_package::file_package};
+// Use the PPIR item tree (which includes synthetic *$stream items) rather than
+// the bare HIR item tree. TIR resolves methods using PPIR `LocalItemId`s, so
+// MIR must use the same tree to avoid index mismatches.
+use baml_compiler2_ppir::file_item_tree;
 
 pub fn def_to_item_ref<'db>(db: &'db dyn crate::Db, def: Definition<'db>) -> ItemRef {
     let file = def.file(db);
@@ -287,7 +291,8 @@ fn resolution_to_item_ref(
             let pkg_info = file_package(db, class_loc.file(db));
             let item_tree = file_item_tree(db, class_loc.file(db));
             let class_data = &item_tree[class_loc.id(db)];
-            let func_data = &item_tree[func_loc.id(db)];
+            let func_id = func_loc.id(db);
+            let func_data = &item_tree[func_id];
             Some(ItemRef::Method {
                 package: pkg_info.package,
                 namespace: pkg_info.namespace_path,
@@ -337,10 +342,13 @@ struct LoweringContext<'db> {
     // arenas and their parent function body arenas (both start ExprIds at 0).
     expr_types: FxHashMap<(FileScopeId, AstExprId), Tir2Ty>,
     pat_types: FxHashMap<(FileScopeId, AstPatId), Tir2Ty>,
-    // Member resolutions from TIR: ExprId → MemberResolution
-    resolutions: FxHashMap<AstExprId, baml_compiler2_tir::inference::MemberResolution<'db>>,
+    // Member resolutions from TIR: (scope, ExprId) → MemberResolution
+    // Keyed by (FileScopeId, AstExprId) to avoid collisions between lambda body
+    // arenas and their parent function body arenas (both start ExprIds at 0).
+    resolutions:
+        FxHashMap<(FileScopeId, AstExprId), baml_compiler2_tir::inference::MemberResolution<'db>>,
     // Match expressions that TIR determined are exhaustive
-    exhaustive_matches: rustc_hash::FxHashSet<AstExprId>,
+    exhaustive_matches: rustc_hash::FxHashSet<(FileScopeId, AstExprId)>,
 
     // The FileScopeId of the expression body currently being lowered.
     // Updated when descending into lambda bodies (Phase 3+).
@@ -499,10 +507,10 @@ impl<'db> LoweringContext<'db> {
         let mut expr_types: FxHashMap<(FileScopeId, AstExprId), Tir2Ty> = FxHashMap::default();
         let mut pat_types: FxHashMap<(FileScopeId, AstPatId), Tir2Ty> = FxHashMap::default();
         let mut resolutions: FxHashMap<
-            AstExprId,
+            (FileScopeId, AstExprId),
             baml_compiler2_tir::inference::MemberResolution<'db>,
         > = FxHashMap::default();
-        let mut exhaustive_matches: rustc_hash::FxHashSet<AstExprId> =
+        let mut exhaustive_matches: rustc_hash::FxHashSet<(FileScopeId, AstExprId)> =
             rustc_hash::FxHashSet::default();
 
         let merge_scope =
@@ -510,10 +518,10 @@ impl<'db> LoweringContext<'db> {
              expr_types: &mut FxHashMap<(FileScopeId, AstExprId), Tir2Ty>,
              pat_types: &mut FxHashMap<(FileScopeId, AstPatId), Tir2Ty>,
              resolutions: &mut FxHashMap<
-                AstExprId,
+                (FileScopeId, AstExprId),
                 baml_compiler2_tir::inference::MemberResolution<'db>,
             >,
-             exhaustive_matches: &mut rustc_hash::FxHashSet<AstExprId>| {
+             exhaustive_matches: &mut rustc_hash::FxHashSet<(FileScopeId, AstExprId)>| {
                 let scope_id = index.scope_ids[fsi.index() as usize];
                 let inference = infer_scope_types(db, scope_id);
                 for (&expr_id, ty) in inference.iter_expressions() {
@@ -523,10 +531,10 @@ impl<'db> LoweringContext<'db> {
                     pat_types.insert((fsi, pat_id), ty.clone());
                 }
                 for (&expr_id, res) in inference.iter_resolutions() {
-                    resolutions.insert(expr_id, res.clone());
+                    resolutions.insert((fsi, expr_id), res.clone());
                 }
                 for &expr_id in inference.iter_exhaustive_matches() {
-                    exhaustive_matches.insert(expr_id);
+                    exhaustive_matches.insert((fsi, expr_id));
                 }
             };
 
@@ -678,10 +686,10 @@ impl<'db> LoweringContext<'db> {
         let mut expr_types: FxHashMap<(FileScopeId, AstExprId), Tir2Ty> = FxHashMap::default();
         let mut pat_types: FxHashMap<(FileScopeId, AstPatId), Tir2Ty> = FxHashMap::default();
         let mut resolutions: FxHashMap<
-            AstExprId,
+            (FileScopeId, AstExprId),
             baml_compiler2_tir::inference::MemberResolution<'db>,
         > = FxHashMap::default();
-        let mut exhaustive_matches: rustc_hash::FxHashSet<AstExprId> =
+        let mut exhaustive_matches: rustc_hash::FxHashSet<(FileScopeId, AstExprId)> =
             rustc_hash::FxHashSet::default();
 
         let merge_scope =
@@ -689,10 +697,10 @@ impl<'db> LoweringContext<'db> {
              expr_types: &mut FxHashMap<(FileScopeId, AstExprId), Tir2Ty>,
              pat_types: &mut FxHashMap<(FileScopeId, AstPatId), Tir2Ty>,
              resolutions: &mut FxHashMap<
-                AstExprId,
+                (FileScopeId, AstExprId),
                 baml_compiler2_tir::inference::MemberResolution<'db>,
             >,
-             exhaustive_matches: &mut rustc_hash::FxHashSet<AstExprId>| {
+             exhaustive_matches: &mut rustc_hash::FxHashSet<(FileScopeId, AstExprId)>| {
                 let scope_id = index.scope_ids[fsi.index() as usize];
                 let inference = infer_scope_types(db, scope_id);
                 for (&expr_id, ty) in inference.iter_expressions() {
@@ -702,10 +710,10 @@ impl<'db> LoweringContext<'db> {
                     pat_types.insert((fsi, pat_id), ty.clone());
                 }
                 for (&expr_id, res) in inference.iter_resolutions() {
-                    resolutions.insert(expr_id, res.clone());
+                    resolutions.insert((fsi, expr_id), res.clone());
                 }
                 for &expr_id in inference.iter_exhaustive_matches() {
-                    exhaustive_matches.insert(expr_id);
+                    exhaustive_matches.insert((fsi, expr_id));
                 }
             };
 
@@ -1522,7 +1530,11 @@ impl<'db> LoweringContext<'db> {
     fn lower_path_expr(&mut self, expr_id: AstExprId, segments: &[Name], dest: Place) {
         // Multi-segment paths (e.g. baml.llm.render_prompt) — check TIR resolution first
         if segments.len() > 1 {
-            if let Some(resolution) = self.resolutions.get(&expr_id).cloned() {
+            if let Some(resolution) = self
+                .resolutions
+                .get(&(self.current_scope, expr_id))
+                .cloned()
+            {
                 use baml_compiler2_tir::inference::MemberResolution;
                 match &resolution {
                     MemberResolution::Method { .. } | MemberResolution::Free { .. } => {
@@ -1796,13 +1808,17 @@ impl LoweringContext<'_> {
         // If the base is a real value (not a package namespace), prepend it as self.
         let (callee_operand, arg_operands) = if let AstExpr::FieldAccess { base, .. } = &callee_expr
         {
-            if self.resolutions.get(&callee).is_some_and(|r| {
-                use baml_compiler2_tir::inference::MemberResolution;
-                matches!(
-                    r,
-                    MemberResolution::Method { .. } | MemberResolution::Free { .. }
-                )
-            }) {
+            if self
+                .resolutions
+                .get(&(self.current_scope, callee))
+                .is_some_and(|r| {
+                    use baml_compiler2_tir::inference::MemberResolution;
+                    matches!(
+                        r,
+                        MemberResolution::Method { .. } | MemberResolution::Free { .. }
+                    )
+                })
+            {
                 // Check if base is a value receiver or a package path.
                 // Package paths have Unknown type in TIR (baml, baml.Array, etc.)
                 let base_is_value = self
@@ -1924,11 +1940,13 @@ impl LoweringContext<'_> {
             } else {
                 // Multi-segment: check TIR resolution
                 use baml_compiler2_tir::inference::MemberResolution;
-                self.resolutions.get(&callee).and_then(|res| match res {
-                    MemberResolution::Free { func_loc } => Some(*func_loc),
-                    MemberResolution::Method { func_loc, .. } => Some(*func_loc),
-                    MemberResolution::Field { .. } | MemberResolution::Variant { .. } => None,
-                })
+                self.resolutions
+                    .get(&(self.current_scope, callee))
+                    .and_then(|res| match res {
+                        MemberResolution::Free { func_loc } => Some(*func_loc),
+                        MemberResolution::Method { func_loc, .. } => Some(*func_loc),
+                        MemberResolution::Field { .. } | MemberResolution::Variant { .. } => None,
+                    })
             };
             if let Some(fl) = func_loc {
                 let body = function_body(self.db, fl);
@@ -1941,7 +1959,7 @@ impl LoweringContext<'_> {
         // ── NEW: FieldAccess callee (e.g. f.read, sock.recv) ──────────────────
         if let AstExpr::FieldAccess { .. } = &self.body.exprs[callee] {
             use baml_compiler2_tir::inference::MemberResolution;
-            if let Some(resolution) = self.resolutions.get(&callee) {
+            if let Some(resolution) = self.resolutions.get(&(self.current_scope, callee)) {
                 let func_loc = match resolution {
                     MemberResolution::Method { func_loc, .. } => Some(*func_loc),
                     MemberResolution::Free { func_loc } => Some(*func_loc),
@@ -2193,11 +2211,16 @@ impl LoweringContext<'_> {
     ) {
         // Check if TIR resolved this to a method or free function — if so, emit a function constant.
         // Field and Variant resolutions fall through to the existing lowering paths below.
-        if let Some(resolution) = self.resolutions.get(&expr_id).cloned() {
+        if let Some(resolution) = self
+            .resolutions
+            .get(&(self.current_scope, expr_id))
+            .cloned()
+        {
             use baml_compiler2_tir::inference::MemberResolution;
             match &resolution {
                 MemberResolution::Method { .. } | MemberResolution::Free { .. } => {
-                    if let Some(item) = resolution_to_item_ref(self.db, &resolution) {
+                    let item = resolution_to_item_ref(self.db, &resolution);
+                    if let Some(item) = item {
                         self.builder.assign(
                             dest,
                             Rvalue::Use(Operand::Constant(Constant::Function(item))),
@@ -2855,7 +2878,9 @@ impl LoweringContext<'_> {
         arm_ids: &[baml_compiler2_ast::MatchArmId],
         dest: Place,
     ) {
-        let is_exhaustive = self.exhaustive_matches.contains(&expr_id);
+        let is_exhaustive = self
+            .exhaustive_matches
+            .contains(&(self.current_scope, expr_id));
 
         // If scrutinee is a simple variable reference, reuse the local directly
         // instead of copying into a temp (matches MIR1 behavior).

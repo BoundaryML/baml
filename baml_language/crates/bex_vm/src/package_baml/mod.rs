@@ -21,6 +21,7 @@ mod math;
 mod media;
 mod root;
 mod string;
+mod sys;
 mod unstable;
 
 use bex_vm_types::types::{Instance, Object, Type, Value};
@@ -39,6 +40,7 @@ pub type NativeFunction = fn(&mut BexVm, &[Value]) -> NativeFunctionResult;
 
 // Generate the BamlClass*/BamlNamespace*/BamlPackageBaml trait hierarchy.
 #[allow(
+    unused_variables,
     clippy::wildcard_imports,
     clippy::pub_underscore_fields,
     clippy::used_underscore_binding,

@@ -2,10 +2,10 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === TIR2 ===
-function user.$init_test_17(registry: testing.Registry) -> ? throws never {
+function user.$init_test_17(registry: testing.TestCollector) -> ? throws never {
   { : null
-    registry.register_test_set("with shared setup", (testset: testing.TestSetCollector) -> { ... }, null) : null
-      (testset: testing.TestSetCollector) -> { ... } : (testset: testing.TestSetCollector) -> null
+    registry.register_test_set("with shared setup", (testset: testing.TestCollector) -> { ... }, null) : null
+      (testset: testing.TestCollector) -> { ... } : (testset: testing.TestCollector) -> null
         {
           let base_url = "https://api.examp..."
           let timeout = 5000

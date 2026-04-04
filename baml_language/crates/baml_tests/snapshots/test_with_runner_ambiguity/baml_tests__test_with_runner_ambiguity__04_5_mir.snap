@@ -2,10 +2,10 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR2 ===
-fn user.$init_test_17(registry: testing.Registry) -> null {
+fn user.$init_test_17(registry: testing.TestCollector) -> null {
     // Locals:
     let _0: null // _0 // return
-    let _1: testing.Registry // registry // param
+    let _1: testing.TestCollector // registry // param
     let _2: null
     let _3: () -> null
     let _4: null
@@ -17,7 +17,7 @@ fn user.$init_test_17(registry: testing.Registry) -> null {
 
     bb0: {
         _3 = make_closure lambda[0]();
-        _2 = call const fn assert.is_true(copy _1, const "simple runner", copy _3, const null) -> [bb1];
+        _2 = call const fn testing.TestCollector.register_test(copy _1, const "simple runner", copy _3, const null) -> [bb1];
     }
 
     bb1: {
@@ -26,13 +26,13 @@ fn user.$init_test_17(registry: testing.Registry) -> null {
     }
 
     bb2: {
-        _4 = call const fn testing.Registry.register_test(copy _1, const "call runner", copy _5, copy _6) -> [bb3];
+        _4 = call const fn testing.TestCollector.register_test(copy _1, const "call runner", copy _5, copy _6) -> [bb3];
     }
 
     bb3: {
         _8 = make_closure lambda[2]();
         _9 = MyRunner { const 0.5_f64 };
-        _7 = call const fn testing.Registry.register_test(copy _1, const "constructor runner", copy _8, copy _9) -> [bb4];
+        _7 = call const fn testing.TestCollector.register_test(copy _1, const "constructor runner", copy _8, copy _9) -> [bb4];
     }
 
     bb4: {

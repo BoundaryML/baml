@@ -34,7 +34,8 @@ import type {
   FunctionInfo,
   ProjectUpdate,
   RunEntry,
-  TestInfo,
+  TestCollectionStatus,
+  TestDef,
   WorkerOutMessage,
 } from './worker-protocol';
 import type { ResultRendererProps } from './result-renderers';
@@ -94,6 +95,12 @@ export interface ExecutionPanelProps {
 export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersion, resultRenderers }) => {
   const [projectRoots, setProjectRoots] = useState<string[]>([]);
   const [projectUpdates, setProjectUpdates] = useState<Record<string, ProjectUpdate>>({});
+  const [testCollections, setTestCollections] = useState<Record<string, TestCollectionStatus>>({});
+  const [slowTestSets, setSlowTestSets] = useState<Set<string>>(new Set());
+  const [cachedExpansions, setCachedExpansions] = useState<Map<string, TestDef>>(new Map());
+  const [expandingTestSets, setExpandingTestSets] = useState<Set<string>>(new Set());
+  const [backgroundTaskCount, setBackgroundTaskCount] = useState(0);
+  const [testRunResults, setTestRunResults] = useState<Map<string, Record<string, unknown>>>(new Map());
   const [selectedProject, setSelectedProject] = useState<string | null>(null);
 
   const [selectedFn, setSelectedFn] = useState<string | null>(null);
@@ -264,12 +271,82 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
             case 'updateProject':
               setProjectUpdates((prev) => ({ ...prev, [n.project]: n.update }));
               break;
+            case 'testCollectionResult':
+              setTestCollections((prev) => ({ ...prev, [n.project]: n.result }));
+              setCachedExpansions(new Map());
+              setExpandingTestSets(new Set());
+              // When done, walk the tree to find lazy testsets and slow testsets
+              if (n.result.status === 'done') {
+                const doneItems = n.result.items;
+                const newSlow = new Set<string>();
+                const collectLazyNames = (defs: TestDef[]) => {
+                  for (const def of defs) {
+                    if (def.type === 'lazyTestSet') {
+                      newSlow.add(def.name);
+                    } else if (def.type === 'testSet') {
+                      // Testsets that took too long on a previous run
+                      if (def.totalLoadingTimeMs >= 300) {
+                        newSlow.add(def.name);
+                      }
+                      collectLazyNames(def.items);
+                    }
+                  }
+                };
+                collectLazyNames(doneItems);
+                setSlowTestSets((prev) => {
+                  // Prune stale entries: only keep names that still appear in this result
+                  const allNames = new Set<string>();
+                  const gatherNames = (defs: TestDef[]) => {
+                    for (const def of defs) {
+                      allNames.add(def.name);
+                      if (def.type === 'testSet') gatherNames(def.items);
+                    }
+                  };
+                  gatherNames(doneItems);
+                  const pruned = new Set([...prev].filter((name) => allNames.has(name)));
+                  for (const name of newSlow) pruned.add(name);
+                  return pruned;
+                });
+              }
+              break;
+            case 'testSetExpandResult': {
+              setExpandingTestSets(prev => {
+                const next = new Set(prev);
+                next.delete(n.name);
+                return next;
+              });
+              if (n.result.status === 'ok') {
+                const expandedDef: TestDef = {
+                  type: 'testSet',
+                  name: n.result.set.name,
+                  items: n.result.set.items,
+                  loadingTimeMs: n.result.set.loadingTimeMs,
+                  totalLoadingTimeMs: n.result.set.totalLoadingTimeMs,
+                };
+                setCachedExpansions((prev) => {
+                  const next = new Map(prev);
+                  next.set(n.name, expandedDef);
+                  return next;
+                });
+              }
+              break;
+            }
             case 'openPlayground':
               setSelectedProject(n.project);
               if (n.functionName) setSelectedFn(n.functionName);
               break;
             case 'controlFlowGraphResult':
               if (n.graph) setControlFlowGraph(n.graph);
+              break;
+            case 'backgroundTaskCount':
+              setBackgroundTaskCount(n.count);
+              break;
+            case 'testRunResult':
+              setTestRunResults((prev) => {
+                const next = new Map(prev);
+                next.set(n.name, n.reportJson);
+                return next;
+              });
               break;
           }
           break;
@@ -576,82 +653,41 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
     }
   }, [selectedFn, selectedProject, argsJson, isRunning, port]);
 
-  const handleSelectTest = useCallback((test: TestInfo) => {
-    setSelectedFn(test.functionName);
-    setArgsJson(test.argsJson);
-    setActiveTab('run');
-  }, []);
-
-  // Core test execution — no isRunning guard, usable from batch loops
-  const executeTest = useCallback(async (test: TestInfo) => {
+  const handleExpandTestSet = useCallback((name: string) => {
     if (!selectedProject) return;
-
-    const runId = nextCallIdRef.current++;
-    const startTime = performance.now();
-    const newRun: RunEntry = {
-      id: runId,
-      functionName: test.functionName,
-      argsJson: test.argsJson,
-      testName: test.name,
-      fetchLogs: [],
-      result: null,
-      error: null,
-      status: 'running',
-      startTime,
-      durationMs: null,
-    };
-    setRuns((prev) => [...prev, newRun]);
-    setExpandedLogId(null);
-
-    requestAnimationFrame(() => {
-      outputRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+    setExpandingTestSets(prev => new Set(prev).add(name));
+    port.postMessage({
+      type: 'requestExpandTestSet',
+      project: selectedProject,
+      name,
+      maxLoadTimeMs: 500,
     });
-
-    try {
-      const parsed = JSON.parse(test.argsJson);
-      if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-        throw new Error('Test args must be a JSON object');
-      }
-      const argsProto = encodeCallArgs(parsed as Record<string, unknown>);
-      const resultStr = await new Promise<string>((resolve, reject) => {
-        pendingCallsRef.current.set(runId, { resolve, reject });
-        port.postMessage({
-          type: 'callFunction',
-          id: runId,
-          name: test.functionName,
-          argsProto: new Uint8Array(argsProto),
-          project: selectedProject,
-        });
-      });
-      const dur = Math.round(performance.now() - startTime);
-      setRuns((prev) => prev.map((r) => r.id === runId ? { ...r, result: resultStr, status: 'success', durationMs: dur } : r));
-    } catch (e) {
-      const isCancelled = e instanceof Error && (e as any).cancelled === true;
-      const errMsg = e instanceof Error ? e.message : String(e);
-      const dur = Math.round(performance.now() - startTime);
-      setRuns((prev) => prev.map((r) => r.id === runId ? {
-        ...r,
-        error: isCancelled ? null : errMsg,
-        status: isCancelled ? 'cancelled' : 'error',
-        durationMs: dur,
-      } : r));
-    }
   }, [selectedProject, port]);
 
-  const handleRunTest = useCallback(async (test: TestInfo) => {
-    if (!selectedProject || isRunning) return;
-    setSelectedFn(test.functionName);
-    setArgsJson(test.argsJson);
-    setActiveTab('run');
-    await executeTest(test);
-  }, [selectedProject, isRunning, executeTest]);
+  const handleRefreshTests = useCallback(() => {
+    if (!selectedProject) return;
+    port.postMessage({
+      type: 'requestCollectTests',
+      project: selectedProject,
+      maxTestSetLoadTimeMs: 500,
+      skipTestSets: [...slowTestSets],
+    });
+  }, [selectedProject, port, slowTestSets]);
+
+  const handleRunTest = useCallback((name: string) => {
+    console.log('[handleRunTest]', { name, selectedProject });
+    if (!selectedProject) return;
+    port.postMessage({ type: 'requestRunTest', project: selectedProject, name });
+  }, [selectedProject, port]);
 
   // ── Derived state ──────────────────────────────────────────────────────
 
   const currentUpdate = selectedProject ? projectUpdates[selectedProject] : undefined;
   const functions: FunctionInfo[] = currentUpdate?.functions ?? [];
   const functionNames = functions.map((f) => f.name);
-  const tests: TestInfo[] = currentUpdate?.tests ?? [];
+  const testCollection: TestCollectionStatus | undefined = selectedProject
+    ? testCollections[selectedProject]
+    : undefined;
   const engineStale = currentUpdate ? !currentUpdate.isBexCurrent : false;
   const diags = currentUpdate?.diagnostics ?? [];
 
@@ -672,57 +708,6 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
   const errors = diags.filter((d) => d.severity === 'error');
   const warnings = diags.filter((d) => d.severity === 'warning');
   const hasErrors = errors.length > 0;
-
-  // Derive per-test status from run history (most recent run wins)
-  const testStatuses = new Map<string, RunEntry['status']>();
-  for (const run of runs) {
-    if (run.testName) {
-      testStatuses.set(run.testName, run.status);
-    }
-  }
-
-  // ── Batch test execution ───────────────────────────────────────────────
-
-  const [parallelTests, setParallelTests] = useState(false);
-  const batchAbortRef = useRef(false);
-
-  const handleRunAllTests = useCallback(async (testsToRun: TestInfo[]) => {
-    if (!selectedProject) return;
-    batchAbortRef.current = false;
-    setActiveTab('run');
-
-    if (parallelTests) {
-      // Fire all at once — don't await, each resolves independently
-      for (const test of testsToRun) {
-        executeTest(test);
-      }
-    } else {
-      // Sequential: run one at a time, check abort between each
-      for (const test of testsToRun) {
-        if (batchAbortRef.current) break;
-        await executeTest(test);
-      }
-    }
-  }, [selectedProject, parallelTests, executeTest]);
-
-  const handleStopAllTests = useCallback(() => {
-    if (!selectedProject) return;
-    // Signal sequential loop to stop queuing new tests
-    batchAbortRef.current = true;
-    // Cancel currently running tests
-    for (const run of runs) {
-      if (run.status === 'running' && run.testName) {
-        port.postMessage({ type: 'cancelCall', id: run.id, project: selectedProject });
-      }
-    }
-  }, [runs, selectedProject, port]);
-
-  const handleRerunFailed = useCallback(() => {
-    const failedTests = tests.filter((t) =>
-      runs.some((r) => r.testName === t.name && r.status === 'error')
-    );
-    if (failedTests.length > 0) handleRunAllTests(failedTests);
-  }, [tests, runs, handleRunAllTests]);
 
   // Whether any known-required keys are missing — proactive, not just reactive to pending requests
   const hasMissingKeys = [...knownRequiredKeys].some((k) => !envVars[k]);
@@ -900,20 +885,16 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
             <div className="shrink-0 overflow-hidden" style={{ width: sidebarWidth }}>
               <FunctionSidebar
                 functions={functions}
-                tests={tests}
+                testCollection={testCollection}
                 selectedFn={selectedFn}
                 onSelectFn={(fn) => { setWorkflowContext(null); setSelectedFn(fn); }}
-                onSelectTest={handleSelectTest}
+                onRefreshTests={handleRefreshTests}
+                onExpandTestSet={handleExpandTestSet}
+                cachedExpansions={cachedExpansions}
+                expandingTestSets={expandingTestSets}
+                backgroundTaskCount={backgroundTaskCount}
                 onRunTest={handleRunTest}
-                isRunning={isRunning}
-                testStatuses={testStatuses}
-                onRunAllTests={() => handleRunAllTests(tests)}
-                onStopAllTests={handleStopAllTests}
-                onRerunFailed={handleRerunFailed}
-                hasFailedTests={runs.some((r) => r.testName != null && r.status === 'error')}
-                hasRunningTests={runs.some((r) => r.testName != null && r.status === 'running')}
-                parallelTests={parallelTests}
-                onToggleParallel={() => setParallelTests((p) => !p)}
+                testRunResults={testRunResults}
               />
             </div>
             <div

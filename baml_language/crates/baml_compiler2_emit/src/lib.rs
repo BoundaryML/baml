@@ -16,7 +16,6 @@ use baml_compiler2_ast::TypeExpr;
 use baml_compiler2_hir::{
     compiler2_all_files,
     contributions::Definition,
-    file_item_tree,
     file_package::file_package,
     loc::{FunctionLoc, LetLoc},
     package::{PackageId, package_items},
@@ -24,6 +23,9 @@ use baml_compiler2_hir::{
 use baml_compiler2_mir::{
     BuiltinKind, MirFunctionKind, def_to_item_ref, lower_function, lower_let_body,
 };
+// Use the PPIR item tree (which includes synthetic *$stream items) rather than
+// the bare HIR item tree, to stay consistent with TIR's LocalItemId indices.
+use baml_compiler2_ppir::file_item_tree;
 use baml_type::TyAttr;
 use bex_vm_types::{
     Bytecode, Class, ClassField, ConstValue, Enum, EnumVariant, Function, FunctionKind,

@@ -17,7 +17,7 @@ use crate::{
     ast::{
         AstSourceMap, BuiltinKind, ConfigItemDef, EnumDef, Expr, ExprBody, ExprId, FieldDef,
         FunctionBodyDef, FunctionDef, GeneratorDef, Interpolation, Item, LetDef, LetOrigin,
-        Literal, LlmBodyDef, Param, RawAttribute, RawAttributeArg, RawPrompt, SpannedTypeExpr,
+        LlmBodyDef, Param, RawAttribute, RawAttributeArg, RawPrompt, SpannedTypeExpr,
         TemplateStringDef, TestDef, TypeAliasDef, VariantDef,
     },
     companions::expand_companions,
@@ -33,7 +33,8 @@ use crate::{
 /// `registry.register_test(...)` / `registry.register_test_set(...)` calls.
 enum TestRegistrationItem {
     Test {
-        name: String,
+        /// The name expression CST element (`STRING_LITERAL`, `BINARY_EXPR`, etc.).
+        name_element: baml_compiler_syntax::SyntaxElement,
         /// The `BLOCK_EXPR` CST node for the test body — lowered lazily into a lambda.
         body_node: SyntaxNode,
         /// Optional runner expression element from `with <expr>`.
@@ -41,7 +42,8 @@ enum TestRegistrationItem {
         runner_element: Option<baml_compiler_syntax::SyntaxElement>,
     },
     TestSet {
-        name: String,
+        /// The name expression CST element (`STRING_LITERAL`, `BINARY_EXPR`, etc.).
+        name_element: baml_compiler_syntax::SyntaxElement,
         /// The `BLOCK_EXPR` body node of the testset — lowered as a collector lambda body.
         /// May contain setup statements (let bindings), for/if blocks, and nested test/testset.
         body_node: SyntaxNode,
@@ -786,22 +788,36 @@ fn lower_test(node: &SyntaxNode, diags: &mut Vec<LoweringDiagnostic>) -> Option<
     })
 }
 
-/// Extract the string content from a `STRING_LITERAL` CST node.
+/// Extract the name expression element from a `TEST_EXPR_DEF` or `TESTSET_DEF` node.
 ///
-/// The node structure is: `QUOTE <words/keywords> QUOTE`. We use the full
-/// node text and strip the surrounding quotes.
-fn extract_string_literal_name(node: &SyntaxNode) -> String {
-    let raw = node.text().to_string();
-    let trimmed = raw.trim();
-    // Strip raw string delimiters: #"..."#
-    if trimmed.starts_with("#\"") && trimmed.ends_with("\"#") && trimmed.len() >= 4 {
-        trimmed[2..trimmed.len() - 2].to_string()
-    // Strip regular string delimiters: "..."
-    } else if trimmed.starts_with('"') && trimmed.ends_with('"') && trimmed.len() >= 2 {
-        trimmed[1..trimmed.len() - 1].to_string()
-    } else {
-        raw
+/// Returns the first non-trivial child (node or token) after the keyword
+/// (`KW_TEST` or `KW_TESTSET`) and before `KW_WITH` or `BLOCK_EXPR`.
+fn extract_name_element(
+    node: &SyntaxNode,
+    keyword_kind: SyntaxKind,
+) -> Option<baml_compiler_syntax::SyntaxElement> {
+    let mut past_keyword = false;
+    for child in node.children_with_tokens() {
+        let kind = child.kind();
+        // Skip whitespace/newline trivia
+        if matches!(
+            kind,
+            SyntaxKind::WHITESPACE | SyntaxKind::NEWLINE | SyntaxKind::LINE_COMMENT
+        ) {
+            continue;
+        }
+        if kind == keyword_kind {
+            past_keyword = true;
+            continue;
+        }
+        if past_keyword && kind != SyntaxKind::KW_WITH && kind != SyntaxKind::BLOCK_EXPR {
+            return Some(child);
+        }
+        if kind == SyntaxKind::KW_WITH || kind == SyntaxKind::BLOCK_EXPR {
+            break;
+        }
     }
+    None
 }
 
 /// Extract the runner expression element from a `TEST_EXPR_DEF` or `TESTSET_DEF` node.
@@ -841,14 +857,8 @@ pub(crate) fn extract_runner_element(
 /// The CST structure is:
 /// `TEST_EXPR_DEF [ KW_TEST STRING_LITERAL [KW_WITH expr] BLOCK_EXPR ]`
 fn lower_test_expr(node: &SyntaxNode) -> Option<TestRegistrationItem> {
-    // Find the STRING_LITERAL or RAW_STRING_LITERAL child
-    let name_node = node.children().find(|c| {
-        matches!(
-            c.kind(),
-            SyntaxKind::STRING_LITERAL | SyntaxKind::RAW_STRING_LITERAL
-        )
-    })?;
-    let name = extract_string_literal_name(&name_node);
+    // Find the name expression — first child element after KW_TEST, before KW_WITH/BLOCK_EXPR.
+    let name_element = extract_name_element(node, SyntaxKind::KW_TEST)?;
 
     // Find the optional runner expression (first child after KW_WITH, before BLOCK_EXPR)
     let runner_element = extract_runner_element(node);
@@ -859,7 +869,7 @@ fn lower_test_expr(node: &SyntaxNode) -> Option<TestRegistrationItem> {
         .find(|c| c.kind() == SyntaxKind::BLOCK_EXPR)?;
 
     Some(TestRegistrationItem::Test {
-        name,
+        name_element,
         body_node,
         runner_element,
     })
@@ -874,14 +884,8 @@ fn lower_test_expr(node: &SyntaxNode) -> Option<TestRegistrationItem> {
 /// flow, and nested `TEST_EXPR_DEF` / `TESTSET_DEF` nodes. The entire body is stored
 /// and lowered lazily into a collector lambda body.
 fn lower_testset(node: &SyntaxNode) -> Option<TestRegistrationItem> {
-    // Find the STRING_LITERAL or RAW_STRING_LITERAL child
-    let name_node = node.children().find(|c| {
-        matches!(
-            c.kind(),
-            SyntaxKind::STRING_LITERAL | SyntaxKind::RAW_STRING_LITERAL
-        )
-    })?;
-    let name = extract_string_literal_name(&name_node);
+    // Find the name expression — first child element after KW_TESTSET, before KW_WITH/BLOCK_EXPR.
+    let name_element = extract_name_element(node, SyntaxKind::KW_TESTSET)?;
 
     // Find the optional runner expression (first child after KW_WITH, before BLOCK_EXPR)
     let runner_element = extract_runner_element(node);
@@ -892,7 +896,7 @@ fn lower_testset(node: &SyntaxNode) -> Option<TestRegistrationItem> {
         .find(|c| c.kind() == SyntaxKind::BLOCK_EXPR)?;
 
     Some(TestRegistrationItem::TestSet {
-        name,
+        name_element,
         body_node,
         runner_element,
     })
@@ -943,12 +947,12 @@ fn synthesize_init_test_function(
 
     let (body, source_map, _diags) = ctx.finish(Some(block_expr));
 
-    // The single parameter: `registry: testing.Registry`
+    // The single parameter: `registry: testing.TestCollector`
     let registry_param = Param {
         name: Name::new("registry"),
         type_expr: Some(SpannedTypeExpr {
             expr: crate::ast::TypeExpr::Path {
-                segments: vec![Name::new("testing"), Name::new("Registry")],
+                segments: vec![Name::new("testing"), Name::new("TestCollector")],
                 attrs: vec![],
             },
             span,
@@ -980,7 +984,7 @@ fn synthesize_register_call(
     let span = text_size::TextRange::default();
     match reg {
         TestRegistrationItem::Test {
-            name,
+            name_element,
             body_node,
             runner_element,
         } => {
@@ -1011,9 +1015,12 @@ fn synthesize_register_call(
                 span,
             );
 
-            // Args: ("name", lambda, runner_or_null)
-            let name_arg = ctx.alloc_expr(Expr::Literal(Literal::String(name.clone())), span);
-            let lambda_arg = ctx.alloc_expr(Expr::Lambda(Box::new(lambda_def)), span);
+            // Args: (name_expr, lambda, runner_or_null)
+            let name_arg = lower_expr_body::lower_runner_element(ctx, name_element);
+            // Use a unique synthetic span for the lambda so the HIR scope builder
+            // can distinguish this lambda's scope from other synthesized lambdas.
+            let lambda_span = ctx.next_lambda_span();
+            let lambda_arg = ctx.alloc_expr(Expr::Lambda(Box::new(lambda_def)), lambda_span);
             let runner_arg = lower_runner_element(runner_element.as_ref(), ctx, span);
 
             ctx.alloc_expr(
@@ -1025,7 +1032,7 @@ fn synthesize_register_call(
             )
         }
         TestRegistrationItem::TestSet {
-            name,
+            name_element,
             body_node,
             runner_element,
         } => {
@@ -1042,7 +1049,7 @@ fn synthesize_register_call(
                 name: Name::new("testset"),
                 type_expr: Some(SpannedTypeExpr {
                     expr: crate::ast::TypeExpr::Path {
-                        segments: vec![Name::new("testing"), Name::new("TestSetCollector")],
+                        segments: vec![Name::new("testing"), Name::new("TestCollector")],
                         attrs: vec![],
                     },
                     span,
@@ -1074,9 +1081,12 @@ fn synthesize_register_call(
                 span,
             );
 
-            // Args: ("name", collector_lambda, runner_or_null)
-            let name_arg = ctx.alloc_expr(Expr::Literal(Literal::String(name.clone())), span);
-            let collector_arg = ctx.alloc_expr(Expr::Lambda(Box::new(collector_def)), span);
+            // Args: (name_expr, collector_lambda, runner_or_null)
+            let name_arg = lower_expr_body::lower_runner_element(ctx, name_element);
+            // Use a unique synthetic span for the collector lambda.
+            let collector_lambda_span = ctx.next_lambda_span();
+            let collector_arg =
+                ctx.alloc_expr(Expr::Lambda(Box::new(collector_def)), collector_lambda_span);
             let runner_arg = lower_runner_element(runner_element.as_ref(), ctx, span);
 
             ctx.alloc_expr(

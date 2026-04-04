@@ -151,13 +151,35 @@ pub(crate) fn lower_runner_element(
 /// directly into the same arena (no IIFE indirection needed).
 pub(crate) struct InitTestContext {
     inner: LoweringContext,
+    /// Counter for generating unique synthetic spans for lambda expressions.
+    /// Synthesized lambdas all share span `0..0`, which causes the HIR scope
+    /// builder and MIR lowering to confuse them. Each lambda gets a unique
+    /// synthetic span at offset `(counter * 2)..(counter * 2 + 1)` to make
+    /// them distinguishable.
+    synthetic_lambda_counter: u32,
 }
 
 impl InitTestContext {
     pub(crate) fn new() -> Self {
         let mut inner = LoweringContext::new();
         inner.names_in_scope.insert("registry".to_string());
-        Self { inner }
+        Self {
+            inner,
+            synthetic_lambda_counter: 0,
+        }
+    }
+
+    /// Generate a unique synthetic span for a lambda expression.
+    /// Each call returns a different 1-byte span to ensure that HIR Lambda
+    /// scopes can be distinguished by their `range` field.
+    pub(crate) fn next_lambda_span(&mut self) -> text_size::TextRange {
+        let offset = self.synthetic_lambda_counter;
+        self.synthetic_lambda_counter += 1;
+        // Use offsets starting at 1 to avoid collision with the default 0..0 span
+        // used for the function itself and non-lambda expressions.
+        let start = text_size::TextSize::from((offset + 1) * 2);
+        let end = start + text_size::TextSize::from(1);
+        text_size::TextRange::new(start, end)
     }
 
     pub(crate) fn alloc_expr(&mut self, expr: Expr, span: text_size::TextRange) -> ExprId {
@@ -2566,7 +2588,7 @@ impl LoweringContext {
             name: Name::new("testset"),
             type_expr: Some(SpannedTypeExpr {
                 expr: TypeExpr::Path {
-                    segments: vec![Name::new("testing"), Name::new("TestSetCollector")],
+                    segments: vec![Name::new("testing"), Name::new("TestCollector")],
                     attrs: vec![],
                 },
                 span,
@@ -2620,36 +2642,29 @@ impl LoweringContext {
     ///
     /// The name can be a plain `STRING_LITERAL` or a `BINARY_EXPR` (e.g. `"check " + case`).
     fn lower_test_name_expr(&mut self, node: &SyntaxNode, span: TextRange) -> ExprId {
-        // The name is the first expression child after the keyword.
-        // It can be: STRING_LITERAL, RAW_STRING_LITERAL, or BINARY_EXPR (for concatenation).
-        let name_node_opt = node.children().find(|c| {
-            matches!(
-                c.kind(),
-                SyntaxKind::STRING_LITERAL
-                    | SyntaxKind::RAW_STRING_LITERAL
-                    | SyntaxKind::BINARY_EXPR
+        // The name is the first expression child after the keyword (KW_TEST / KW_TESTSET),
+        // before KW_WITH or BLOCK_EXPR. It can be any expression node.
+        let name_element = node.children_with_tokens().find(|c| {
+            let kind = c.kind();
+            !matches!(
+                kind,
+                SyntaxKind::KW_TEST
+                    | SyntaxKind::KW_TESTSET
+                    | SyntaxKind::KW_WITH
+                    | SyntaxKind::BLOCK_EXPR
+                    | SyntaxKind::WHITESPACE
+                    | SyntaxKind::NEWLINE
+                    | SyntaxKind::LINE_COMMENT
             )
         });
 
-        if let Some(name_node) = name_node_opt {
-            self.lower_expr(&name_node)
-        } else {
-            // Fallback: look for a STRING_LITERAL token directly
-            let name_str = node
-                .children_with_tokens()
-                .filter_map(rowan::NodeOrToken::into_token)
-                .find(|t| {
-                    matches!(
-                        t.kind(),
-                        SyntaxKind::STRING_LITERAL | SyntaxKind::RAW_STRING_LITERAL
-                    )
-                })
-                .map(|t| {
-                    let text = t.text().to_string();
-                    strip_string_delimiters(&text)
-                })
-                .unwrap_or_default();
-            self.alloc_expr(Expr::Literal(Literal::String(name_str)), span)
+        match name_element {
+            Some(rowan::NodeOrToken::Node(ref name_node)) => self.lower_expr(name_node),
+            Some(rowan::NodeOrToken::Token(ref token)) => {
+                let expr = lower_bare_token_expr(token.kind(), token.text());
+                self.alloc_expr(expr, token.text_range())
+            }
+            None => self.alloc_expr(Expr::Literal(Literal::String(String::new())), span),
         }
     }
 

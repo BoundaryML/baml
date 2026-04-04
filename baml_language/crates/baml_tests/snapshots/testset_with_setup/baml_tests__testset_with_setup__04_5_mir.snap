@@ -2,16 +2,16 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR2 ===
-fn user.$init_test_17(registry: testing.Registry) -> null {
+fn user.$init_test_17(registry: testing.TestCollector) -> null {
     // Locals:
     let _0: null // _0 // return
-    let _1: testing.Registry // registry // param
+    let _1: testing.TestCollector // registry // param
     let _2: null
-    let _3: (testing.TestSetCollector) -> null
+    let _3: (testing.TestCollector) -> null
 
     bb0: {
         _3 = make_closure lambda[0]();
-        _2 = call const fn assert.contains(copy _1, const "with shared setup", copy _3, const null) -> [bb1];
+        _2 = call const fn testing.TestCollector.register_test_set(copy _1, const "with shared setup", copy _3, const null) -> [bb1];
     }
 
     bb1: {
@@ -25,10 +25,10 @@ fn user.$init_test_17(registry: testing.Registry) -> null {
 }
 
 // lambda[0]
-fn .<lambda($init_test_17, 0)>(testset: testing.TestSetCollector) -> null {
+fn .<lambda($init_test_17, 0)>(testset: testing.TestCollector) -> null {
     // Locals:
     let _0: null // _0 // return
-    let _1: testing.TestSetCollector // testset // param
+    let _1: testing.TestCollector // testset // param
     let _2: string // base_url [captured]
     let _3: int // timeout [captured]
     let _4: null
@@ -40,12 +40,12 @@ fn .<lambda($init_test_17, 0)>(testset: testing.TestSetCollector) -> null {
         _2 = const "https://api.example.com";
         _3 = const 5000_i64;
         _5 = make_closure lambda[0](copy _2, copy _3);
-        _4 = call const fn testing.TestSetCollector.register_test(copy _1, const "uses setup vars", copy _5, const null) -> [bb1];
+        _4 = call const fn testing.TestCollector.register_test(copy _1, const "uses setup vars", copy _5, const null) -> [bb1];
     }
 
     bb1: {
         _7 = make_closure lambda[1](copy _2);
-        _6 = call const fn testing.TestSetCollector.register_test(copy _1, const "also uses setup", copy _7, const null) -> [bb2];
+        _6 = call const fn testing.TestCollector.register_test(copy _1, const "also uses setup", copy _7, const null) -> [bb2];
     }
 
     bb2: {
@@ -68,7 +68,7 @@ fn .<lambda(<lambda($init_test_17, 0)>, 1)>() -> null {
 
     bb0: {
         _2 = copy capture[0];
-        _1 = call const fn assert.contains(copy _2) -> [bb1];
+        _1 = call const fn assert.not_null(copy _2) -> [bb1];
     }
 
     bb1: {

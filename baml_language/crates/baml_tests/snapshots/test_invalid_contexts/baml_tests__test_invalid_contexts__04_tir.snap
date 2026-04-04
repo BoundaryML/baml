@@ -14,15 +14,15 @@ function user.another() -> null throws never {
   }
   !! 178..273: missing return: expected `null`
 }
-function user.$init_test_17(registry: testing.Registry) -> ? throws never {
+function user.$init_test_17(registry: testing.TestCollector) -> ? throws never {
   { : null
     registry.register_test("top level is fine", () -> { ... }, null) : null
       () -> { ... } : () -> null
         {
           assert.is_true(true)
         }
-    registry.register_test_set("top level set is ...", (testset: testing.TestSetCollector) -> { ... }, null) : null
-      (testset: testing.TestSetCollector) -> { ... } : (testset: testing.TestSetCollector) -> null
+    registry.register_test_set("top level set is ...", (testset: testing.TestCollector) -> { ... }, null) : null
+      (testset: testing.TestCollector) -> { ... } : (testset: testing.TestCollector) -> null
         {
           testset.register_test("nested is fine", () -> { ... }, null)
           null
