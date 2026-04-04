@@ -91,6 +91,18 @@ pub type FsReadFn = Arc<
         + RefUnwindSafe,
 >;
 
+/// Async closure that runs a shell command and returns stdout.
+///
+/// `UnwindSafe + RefUnwindSafe` bounds are required for consistency with
+/// other callback types.
+pub type ShellFn = Arc<
+    dyn Fn(String) -> Pin<Box<dyn Future<Output = Result<String, LlmOpError>> + Send>>
+        + Send
+        + Sync
+        + UnwindSafe
+        + RefUnwindSafe,
+>;
+
 /// IO callbacks needed by `auth_request` (especially Bedrock credential resolution).
 ///
 /// These bridge the BAML runtime's IO capabilities into the auth pipeline,
@@ -99,6 +111,22 @@ pub struct BuildRequestCallbacks {
     pub http_send: HttpSendFn,
     pub env_read: EnvReadFn,
     pub fs_read: FsReadFn,
+    pub shell: ShellFn,
+}
+
+impl BuildRequestCallbacks {
+    /// Returns a no-op callbacks instance where every operation fails or returns
+    /// nothing. Useful for tests targeting providers that don't need IO callbacks.
+    #[cfg(test)]
+    pub(crate) fn noop() -> Self {
+        use std::sync::Arc;
+        Self {
+            http_send: Arc::new(|_| Box::pin(async { Err(LlmOpError::Other("noop".into())) })),
+            env_read: Arc::new(|_| Box::pin(async { Ok(None) })),
+            fs_read: Arc::new(|_| Box::pin(async { Err(LlmOpError::Other("noop".into())) })),
+            shell: Arc::new(|_| Box::pin(async { Err(LlmOpError::Other("noop".into())) })),
+        }
+    }
 }
 
 // ============================================================================
@@ -291,13 +319,12 @@ pub fn execute_specialize_prompt_from_owned(
 /// Build an HTTP request from a prompt given already-extracted owned types.
 ///
 /// `callbacks` provides IO bridges for auth steps that need HTTP, env, or
-/// filesystem access (e.g. Bedrock `SigV4` credential resolution). Pass `None`
-/// when callbacks are unavailable -- providers that need them will fall back to
-/// the native AWS SDK provider chain (native only) or return an error (WASM).
+/// filesystem access (e.g. Bedrock `SigV4` credential resolution, Vertex AI
+/// service account token exchange).
 pub async fn execute_build_request_from_owned(
     client: &baml_std::PrimitiveClient,
     prompt: bex_vm_types::PromptAst,
-    callbacks: Option<&BuildRequestCallbacks>,
+    callbacks: &BuildRequestCallbacks,
 ) -> Result<baml_std::HttpRequest, LlmOpError> {
     build_request::build_request(client, prompt, callbacks)
         .await
@@ -311,12 +338,16 @@ pub fn execute_parse_response_from_owned(
     return_type: &baml_type::Ty,
     ctx: &::sys_types::SysOpContext,
 ) -> Result<bex_external_types::BexExternalValue, LlmOpError> {
-    let response = parse_response::parse_response(
-        LlmProvider::from_str(&client.provider)
-            .map_err(|e| LlmOpError::ParseResponseError(e.to_string()))?,
-        response,
-    )
-    .map_err(|e| LlmOpError::ParseResponseError(e.to_string()))?;
+    let mut provider = LlmProvider::from_str(&client.provider)
+        .map_err(|e| LlmOpError::ParseResponseError(e.to_string()))?;
+
+    // Vertex AI + Anthropic model uses rawPredict, which returns Anthropic-format responses.
+    if provider == LlmProvider::VertexAi && build_request::is_anthropic_model(&client.model) {
+        provider = LlmProvider::Anthropic;
+    }
+
+    let response = parse_response::parse_response(provider, response)
+        .map_err(|e| LlmOpError::ParseResponseError(e.to_string()))?;
 
     if !client.is_finish_reason_allowed(response.finish_reason_raw.as_deref()) {
         return Err(LlmOpError::ParseResponseError(format!(
@@ -461,6 +492,48 @@ mod tests {
             &ctx,
         );
         assert!(denied.is_err());
+    }
+
+    // ========================================================================
+    // Vertex + Anthropic response routing
+    // ========================================================================
+
+    #[test]
+    fn vertex_claude_parses_anthropic_response() {
+        let client = baml_std::PrimitiveClient::new(
+            "test".to_string(),
+            "vertex-ai".to_string(),
+            baml_std::PrimitiveClientOptions {
+                model: Some("claude-sonnet-4-20250514".to_string()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        let anthropic_response = r#"{
+            "id": "msg_123",
+            "type": "message",
+            "role": "assistant",
+            "content": [{"type": "text", "text": "Hello from Claude on Vertex"}],
+            "model": "claude-sonnet-4-20250514",
+            "stop_reason": "end_turn",
+            "stop_sequence": null,
+            "usage": {"input_tokens": 5, "output_tokens": 6}
+        }"#;
+
+        let ctx = SysOpContext::empty();
+        let result = execute_parse_response_from_owned(
+            &client,
+            anthropic_response,
+            &::baml_type::Ty::String {
+                attr: TyAttr::default(),
+            },
+            &ctx,
+        );
+        assert!(
+            result.is_ok(),
+            "should parse Anthropic response: {result:?}"
+        );
     }
 
     // ========================================================================

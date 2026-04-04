@@ -582,8 +582,20 @@ impl fmt::Display for Ty {
             Ty::EnumVariant(tn, variant, _) => write!(f, "{tn}.{variant}"),
             Ty::Opaque(tn, _) => write!(f, "{tn}"),
             Ty::TypeAlias(tn, _) => write!(f, "{tn}"),
-            Ty::Optional(inner, _) => write!(f, "{inner}?"),
-            Ty::List(inner, _) => write!(f, "{inner}[]"),
+            Ty::Optional(inner, _) => {
+                if matches!(inner.as_ref(), Ty::Union(..)) {
+                    write!(f, "({inner})?")
+                } else {
+                    write!(f, "{inner}?")
+                }
+            }
+            Ty::List(inner, _) => {
+                if matches!(inner.as_ref(), Ty::Union(..)) {
+                    write!(f, "({inner})[]")
+                } else {
+                    write!(f, "{inner}[]")
+                }
+            }
             Ty::Map { key, value, .. } => write!(f, "map<{key}, {value}>"),
             Ty::Union(types, _) => {
                 let parts: Vec<std::string::String> =
@@ -743,6 +755,18 @@ mod tests {
             Some("PromptAst"),
         );
         assert_eq!(ty_int().as_opaque(), None);
+    }
+
+    #[test]
+    fn test_display_optional_union_parenthesized() {
+        let ty = Ty::optional(Ty::union([ty_int(), ty_string()]));
+        assert_eq!(ty.to_string(), "(int | string)?");
+    }
+
+    #[test]
+    fn test_display_list_union_parenthesized() {
+        let ty = Ty::list(Ty::union([ty_int(), ty_string()]));
+        assert_eq!(ty.to_string(), "(int | string)[]");
     }
 
     #[test]

@@ -90,12 +90,12 @@ fn user.HeadersAroundExpressions() -> string {
     let _1: int // x
     let _2: bool
     let _3: int
-    let _4: 1 | 2 | 3[]
+    let _4: int[]
     let _5: int // __for_idx
     let _6: int
     let _7: bool
-    let _8: 1 | 2 | 3
-    let _9: 1 | 2 | 3 // i
+    let _8: int
+    let _9: int // i
 
     bb0: {
         notify_block(Before Let, level=1);

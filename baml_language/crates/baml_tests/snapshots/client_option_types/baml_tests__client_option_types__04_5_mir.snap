@@ -6,7 +6,7 @@ fn user.BadAzureMissingUrl$new() -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: void
-    let _2: "system" | "user" | "assistant"[]
+    let _2: string[]
     let _3: void
     let _4: map<void, void>
     let _5: map<void, void>
@@ -32,10 +32,10 @@ fn user.BadMaxTokens$new() -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: void
-    let _2: "system" | "user" | "assistant"[]
+    let _2: string[]
     let _3: map<void, void>
     let _4: map<void, void>
-    let _5: map<"max_tokens", "notanumber">
+    let _5: map<string, string>
 
     bb0: {
         _2 = [const "system", const "user", const "assistant"];
@@ -56,10 +56,10 @@ fn user.BadTemperature$new() -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: void
-    let _2: "system" | "user" | "assistant"[]
+    let _2: string[]
     let _3: map<void, void>
     let _4: map<void, void>
-    let _5: map<"temperature", "warm">
+    let _5: map<string, string>
 
     bb0: {
         _2 = [const "system", const "user", const "assistant"];
@@ -80,7 +80,7 @@ fn user.ValidAzure$new() -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: void
-    let _2: "system" | "user" | "assistant"[]
+    let _2: string[]
     let _3: void
     let _4: map<void, void>
     let _5: map<void, void>
@@ -106,7 +106,7 @@ fn user.ValidAzureBaseUrl$new() -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: void
-    let _2: "system" | "user" | "assistant"[]
+    let _2: string[]
     let _3: void
     let _4: map<void, void>
     let _5: map<void, void>
@@ -132,10 +132,10 @@ fn user.ValidOpenAI$new() -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: void
-    let _2: "system" | "user" | "assistant"[]
+    let _2: string[]
     let _3: map<void, void>
     let _4: map<void, void>
-    let _5: map<"max_tokens" | "temperature", 100 | 0.7>
+    let _5: map<string, int | float>
 
     bb0: {
         _2 = [const "system", const "user", const "assistant"];

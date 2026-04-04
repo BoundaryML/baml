@@ -382,7 +382,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             Expr::Array { elements } => {
                 let elem_types: Vec<Ty> =
                     elements.iter().map(|e| self.infer_expr(*e, body)).collect();
-                let elem_ty = Self::join_all(&elem_types);
+                let elem_ty = Self::join_all(&elem_types).widen_fresh();
                 Ty::List(Box::new(elem_ty), TyAttr::default())
             }
             Expr::Map { entries } => {
@@ -392,8 +392,8 @@ impl<'db> TypeInferenceBuilder<'db> {
                     key_types.push(self.infer_expr(*k, body));
                     val_types.push(self.infer_expr(*v, body));
                 }
-                let key_ty = Self::join_all(&key_types);
-                let val_ty = Self::join_all(&val_types);
+                let key_ty = Self::join_all(&key_types).widen_fresh();
+                let val_ty = Self::join_all(&val_types).widen_fresh();
                 Ty::Map(Box::new(key_ty), Box::new(val_ty), TyAttr::default())
             }
             Expr::Binary { op, lhs, rhs } => {

@@ -76,29 +76,14 @@ pub(crate) fn build_request(
     // Headers
     let mut headers = indexmap::IndexMap::new();
     headers.insert("content-type".to_string(), "application/json".to_string());
-
     headers.insert("anthropic-version".to_string(), "2023-06-01".to_string());
 
-    for (key, value) in &client.options.headers {
-        headers.insert(key.clone(), value.clone());
-    }
-
     // Body
-    let (system, messages) = extract_system_and_messages(prompt)?;
-
     let max_tokens = match &client.provider_options {
         Some(crate::baml_std::ProviderOptions::Anthropic(opts)) => opts.max_tokens,
         _ => None,
     };
-
-    let body = RequestBody {
-        model: client.model.clone(),
-        system,
-        messages,
-        max_tokens,
-        extra: client.extra_body.clone(),
-    };
-    let body_str = serde_json::to_string(&body)?;
+    let body_str = build_anthropic_body_str(&client.model, prompt, max_tokens, &client.extra_body)?;
 
     Ok(crate::baml_std::HttpRequest {
         method: "POST".to_string(),
@@ -109,6 +94,26 @@ pub(crate) fn build_request(
         headers,
         body: body_str,
     })
+}
+
+/// Build the Anthropic Messages API body as a JSON string.
+///
+/// Reused by Vertex AI's Anthropic-on-Vertex path (`rawPredict`).
+pub(super) fn build_anthropic_body_str(
+    model: &str,
+    prompt: &bex_vm_types::PromptAst,
+    max_tokens: Option<i64>,
+    extra: &serde_json::Map<String, serde_json::Value>,
+) -> Result<String, super::BuildRequestError> {
+    let (system, messages) = extract_system_and_messages(prompt)?;
+    let body = RequestBody {
+        model: model.to_string(),
+        system,
+        messages,
+        max_tokens,
+        extra: extra.clone(),
+    };
+    serde_json::to_string(&body).map_err(Into::into)
 }
 
 // ============================================================================

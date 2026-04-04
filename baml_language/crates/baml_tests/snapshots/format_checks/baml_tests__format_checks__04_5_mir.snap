@@ -1017,11 +1017,11 @@ fn user.WithMethod.greet() -> string {
     }
 }
 
-fn user.WithLongMethod.processData(first_input: map<string, int>, second_input: int | string | bool[], third_input: string) -> map<string, int | string | bool> {
+fn user.WithLongMethod.processData(first_input: map<string, int>, second_input: (int | string | bool)[], third_input: string) -> map<string, int | string | bool> {
     // Locals:
     let _0: map<string, int | string | bool> // _0 // return
     let _1: map<string, int> // first_input // param
-    let _2: int | string | bool[] // second_input // param
+    let _2: (int | string | bool)[] // second_input // param
     let _3: string // third_input // param
 
     bb0: {
@@ -1038,11 +1038,11 @@ fn user.ArrayConfigClient$new() -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: void
-    let _2: "system" | "user" | "assistant"[]
+    let _2: string[]
     let _3: map<void, void>
     let _4: map<void, void>
-    let _5: map<"stop_sequences", "END" | "STOP" | "DONE"[]>
-    let _6: "END" | "STOP" | "DONE"[]
+    let _5: map<string, string[]>
+    let _6: string[]
 
     bb0: {
         _2 = [const "system", const "user", const "assistant"];
@@ -1064,10 +1064,10 @@ fn user.ArrayOfObjectsClient$new() -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: void
-    let _2: "system" | "user" | "assistant"[]
+    let _2: string[]
     let _3: map<void, void>
     let _4: map<void, void>
-    let _5: map<"tools", void[]>
+    let _5: map<string, void[]>
     let _6: void[]
 
     bb0: {
@@ -1090,7 +1090,7 @@ fn user.BasicClient$new() -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: void
-    let _2: "system" | "user" | "assistant"[]
+    let _2: string[]
     let _3: map<void, void>
     let _4: map<void, void>
     let _5: map<void, void>
@@ -1114,7 +1114,7 @@ fn user.C$new() -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: void
-    let _2: "system" | "user" | "assistant"[]
+    let _2: string[]
     let _3: map<void, void>
     let _4: map<void, void>
     let _5: map<void, void>
@@ -1138,10 +1138,10 @@ fn user.CommaClient$new() -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: void
-    let _2: "system" | "user" | "assistant"[]
+    let _2: string[]
     let _3: map<void, void>
     let _4: map<void, void>
-    let _5: map<"max_tokens", 100>
+    let _5: map<string, int>
 
     bb0: {
         _2 = [const "system", const "user", const "assistant"];
@@ -1162,18 +1162,18 @@ fn user.DeeplyNestedClient$new() -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: void
-    let _2: "system" | "user" | "assistant"[]
-    let _3: void
-    let _4: void
-    let _5: void
+    let _2: string[]
+    let _3: map<string, map<string, bool | int | map<string, string>>>
+    let _4: map<string, bool | int | map<string, string>>
+    let _5: map<string, string>
     let _6: map<void, void>
     let _7: map<void, void>
 
     bb0: {
         _2 = [const "system", const "user", const "assistant"];
-        _5 =  { const "platform", const "production" };
-        _4 =  { const true, const 30000_i64, copy _5 };
-        _3 =  { copy _4 };
+        _5 = { const "team": const "platform", const "environment": const "production" };
+        _4 = { const "retry_on_failure": const true, const "timeout_ms": const 30000_i64, const "metadata": copy _5 };
+        _3 = { const "custom_config": copy _4 };
         _6 = {  };
         _7 = {  };
         _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const "https://api.openai.com/v1", const null, const null, const null, const null, const "system", copy _2, const null, const null, const null, copy _3, copy _6, copy _7 };
@@ -1190,7 +1190,7 @@ fn user.EnvClient$new() -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: void
-    let _2: "system" | "user" | "assistant"[]
+    let _2: string[]
     let _3: string
     let _4: map<void, void>
     let _5: map<void, void>
@@ -1219,7 +1219,7 @@ fn user.ExtraWhitespaceClient$new() -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: void
-    let _2: "system" | "user" | "assistant"[]
+    let _2: string[]
     let _3: map<void, void>
     let _4: map<void, void>
     let _5: map<void, void>
@@ -1243,10 +1243,10 @@ fn user.FullClient$new() -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: void
-    let _2: "system" | "user" | "assistant"[]
+    let _2: string[]
     let _3: map<void, void>
     let _4: map<void, void>
-    let _5: map<"max_tokens" | "temperature" | "top_p", 100 | 0.7 | 0.9>
+    let _5: map<string, int | float>
 
     bb0: {
         _2 = [const "system", const "user", const "assistant"];
@@ -1267,11 +1267,11 @@ fn user.LongArrayClient$new() -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: void
-    let _2: "system" | "user" | "assistant"[]
+    let _2: string[]
     let _3: map<void, void>
     let _4: map<void, void>
-    let _5: map<"stop_sequences", "STOP_GENERATION_NOW" | "END_OF_RESPONSE_MARKER" | "COMPLETION_FINISHED_SIGNAL" | "TERMINATE_OUTPUT_HERE" | "FINAL_ANSWER_DELIMITER"[]>
-    let _6: "STOP_GENERATION_NOW" | "END_OF_RESPONSE_MARKER" | "COMPLETION_FINISHED_SIGNAL" | "TERMINATE_OUTPUT_HERE" | "FINAL_ANSWER_DELIMITER"[]
+    let _5: map<string, string[]>
+    let _6: string[]
 
     bb0: {
         _2 = [const "system", const "user", const "assistant"];
@@ -1293,10 +1293,10 @@ fn user.LongArrayOfObjectsClient$new() -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: void
-    let _2: "system" | "user" | "assistant"[]
+    let _2: string[]
     let _3: map<void, void>
     let _4: map<void, void>
-    let _5: map<"tools", void[]>
+    let _5: map<string, void[]>
     let _6: void[]
 
     bb0: {
@@ -1319,14 +1319,14 @@ fn user.LongNestedValuesClient$new() -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: void
-    let _2: "system" | "user" | "assistant"[]
-    let _3: void
+    let _2: string[]
+    let _3: map<void, void>
     let _4: map<void, void>
     let _5: map<void, void>
 
     bb0: {
         _2 = [const "system", const "user", const "assistant"];
-        _3 =  {  };
+        _3 = {  };
         _4 = {  };
         _5 = {  };
         _1 = baml.llm.PrimitiveClientOptions { const "anthropic/claude-3.5-sonnet-20250101-with-some-extremely-long-suffix-that-pushes-past-the-line-limit-easily", const "https://some-extremely-long-api-gateway-subdomain.internal.production.cluster.example.com/api/v2/chat/completions/streaming", const null, const null, const null, const null, const "system", copy _2, const null, const null, const null, copy _3, copy _4, copy _5 };
@@ -1343,7 +1343,7 @@ fn user.LongOptionClient$new() -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: void
-    let _2: "system" | "user" | "assistant"[]
+    let _2: string[]
     let _3: map<void, void>
     let _4: map<void, void>
     let _5: map<void, void>
@@ -1367,12 +1367,12 @@ fn user.ManyOptionsClient$new() -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: void
-    let _2: "system" | "user" | "assistant"[]
+    let _2: string[]
     let _3: string
     let _4: map<void, void>
     let _5: map<void, void>
-    let _6: map<"max_tokens" | "temperature" | "top_p" | "frequency_penalty" | "presence_penalty" | "stream" | "stop_sequences", 4096 | 0.7 | 0.95 | 0.5 | 0.3 | true | "END" | "STOP" | "DONE" | "COMPLETE" | "FINISHED"[]>
-    let _7: "END" | "STOP" | "DONE" | "COMPLETE" | "FINISHED"[]
+    let _6: map<string, int | float | bool | string[]>
+    let _7: string[]
 
     bb0: {
         _2 = [const "system", const "user", const "assistant"];
@@ -1398,11 +1398,11 @@ fn user.MixedValuesClient$new() -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: void
-    let _2: "system" | "user" | "assistant"[]
+    let _2: string[]
     let _3: map<void, void>
     let _4: map<void, void>
-    let _5: map<"max_tokens" | "temperature" | "stream" | "stop" | "inline_string", 100 | 0.7 | true | "END"[] | "#inlineraw#">
-    let _6: "END"[]
+    let _5: map<string, int | float | bool | string[] | string>
+    let _6: string[]
 
     bb0: {
         _2 = [const "system", const "user", const "assistant"];
@@ -1424,14 +1424,14 @@ fn user.NestedConfigClient$new() -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: void
-    let _2: "system" | "user" | "assistant"[]
-    let _3: void
+    let _2: string[]
+    let _3: map<void, void>
     let _4: map<void, void>
     let _5: map<void, void>
 
     bb0: {
         _2 = [const "system", const "user", const "assistant"];
-        _3 =  {  };
+        _3 = {  };
         _4 = {  };
         _5 = {  };
         _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const "https://api.openai.com/v1", const null, const null, const null, const null, const "system", copy _2, const null, const null, const null, copy _3, copy _4, copy _5 };
@@ -1448,10 +1448,10 @@ fn user.RawStringConfigClient$new() -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: void
-    let _2: "system" | "user" | "assistant"[]
+    let _2: string[]
     let _3: map<void, void>
     let _4: map<void, void>
-    let _5: map<"system_prompt", "#Youareahelpfulassistant.Alwaysbeconcise.#">
+    let _5: map<string, string>
 
     bb0: {
         _2 = [const "system", const "user", const "assistant"];
@@ -1472,7 +1472,7 @@ fn user.SameLineClient$new() -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: void
-    let _2: "system" | "user" | "assistant"[]
+    let _2: string[]
     let _3: map<void, void>
     let _4: map<void, void>
     let _5: map<void, void>
@@ -1496,7 +1496,7 @@ fn user.StringProviderClient$new() -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: void
-    let _2: "system" | "user" | "assistant"[]
+    let _2: string[]
     let _3: map<void, void>
     let _4: map<void, void>
     let _5: map<void, void>
@@ -1595,7 +1595,7 @@ fn user.ThisIsAnExtremelyLongClientNameThatDefinitelyExceedsTheDefaultLineLimitO
     // Locals:
     let _0: null // _0 // return
     let _1: void
-    let _2: "system" | "user" | "assistant"[]
+    let _2: string[]
     let _3: map<void, void>
     let _4: map<void, void>
     let _5: map<void, void>
@@ -1619,7 +1619,7 @@ fn user.TriviaClient$new() -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: void
-    let _2: "system" | "user" | "assistant"[]
+    let _2: string[]
     let _3: map<void, void>
     let _4: map<void, void>
     let _5: map<void, void>
@@ -1643,7 +1643,7 @@ fn user.TriviaClientBlock$new() -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: void
-    let _2: "system" | "user" | "assistant"[]
+    let _2: string[]
     let _3: map<void, void>
     let _4: map<void, void>
     let _5: map<void, void>
@@ -1667,14 +1667,14 @@ fn user.TriviaDeeplyNestedClient$new() -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: void
-    let _2: "system" | "user" | "assistant"[]
-    let _3: void
+    let _2: string[]
+    let _3: map<void, void>
     let _4: map<void, void>
     let _5: map<void, void>
 
     bb0: {
         _2 = [const "system", const "user", const "assistant"];
-        _3 =  {  };
+        _3 = {  };
         _4 = {  };
         _5 = {  };
         _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const "https://api.openai.com/v1", const null, const null, const null, const null, const "system", copy _2, const null, const null, const null, copy _3, copy _4, copy _5 };
@@ -1691,14 +1691,14 @@ fn user.TriviaDeeplyNestedClientBlock$new() -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: void
-    let _2: "system" | "user" | "assistant"[]
-    let _3: void
+    let _2: string[]
+    let _3: map<void, void>
     let _4: map<void, void>
     let _5: map<void, void>
 
     bb0: {
         _2 = [const "system", const "user", const "assistant"];
-        _3 =  {  };
+        _3 = {  };
         _4 = {  };
         _5 = {  };
         _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const "https://api.openai.com/v1", const null, const null, const null, const null, const "system", copy _2, const null, const null, const null, copy _3, copy _4, copy _5 };
@@ -1715,7 +1715,7 @@ fn user.TriviaLongValueClient$new() -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: void
-    let _2: "system" | "user" | "assistant"[]
+    let _2: string[]
     let _3: map<void, void>
     let _4: map<void, void>
     let _5: map<void, void>
@@ -1739,7 +1739,7 @@ fn user.TriviaLongValueClientBlock$new() -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: void
-    let _2: "system" | "user" | "assistant"[]
+    let _2: string[]
     let _3: map<void, void>
     let _4: map<void, void>
     let _5: map<void, void>
@@ -1763,10 +1763,10 @@ fn user.TypedValuesClient$new() -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: void
-    let _2: "system" | "user" | "assistant"[]
+    let _2: string[]
     let _3: map<void, void>
     let _4: map<void, void>
-    let _5: map<"temperature" | "max_tokens" | "stream", 0.5 | 2048 | true>
+    let _5: map<string, float | int | bool>
 
     bb0: {
         _2 = [const "system", const "user", const "assistant"];
@@ -2011,11 +2011,11 @@ fn user.DeeplyNestedBody(a: int, b: int, c: int) -> int {
     }
 }
 
-fn user.EverythingIsLong_NameParamsReturnType(first_long_param: map<string, int>, second_long_param: int | string | bool[]) -> map<string, int | string | bool | float | null> {
+fn user.EverythingIsLong_NameParamsReturnType(first_long_param: map<string, int>, second_long_param: (int | string | bool)[]) -> map<string, int | string | bool | float | null> {
     // Locals:
     let _0: map<string, int | string | bool | float | null> // _0 // return
     let _1: map<string, int> // first_long_param // param
-    let _2: int | string | bool[] // second_long_param // param
+    let _2: (int | string | bool)[] // second_long_param // param
 
     bb0: {
         _0 = { const "a": const 1_i64 };
@@ -2896,11 +2896,11 @@ fn user.SingleParam(x: int) -> int {
     }
 }
 
-fn user.SixLongParams(first_parameter_name: map<string, int>, second_parameter_name: int | string[], third_parameter_name: map<string, bool>, fourth_parameter_name: int, fifth_parameter_name: string, sixth_parameter_name: float) -> string {
+fn user.SixLongParams(first_parameter_name: map<string, int>, second_parameter_name: (int | string)[], third_parameter_name: map<string, bool>, fourth_parameter_name: int, fifth_parameter_name: string, sixth_parameter_name: float) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: map<string, int> // first_parameter_name // param
-    let _2: int | string[] // second_parameter_name // param
+    let _2: (int | string)[] // second_parameter_name // param
     let _3: map<string, bool> // third_parameter_name // param
     let _4: int // fourth_parameter_name // param
     let _5: string // fifth_parameter_name // param
@@ -2930,11 +2930,11 @@ fn user.ThisIsAnExtremelyLongFunctionNameThatDefinitelyCausesWrappingAllByItself
     }
 }
 
-fn user.TriviaEverythingLong_NameAndParamsAndReturn(first_long_param: map<string, int>, second_long_param: int | string | bool[]) -> map<string, int | string | bool | float | null> {
+fn user.TriviaEverythingLong_NameAndParamsAndReturn(first_long_param: map<string, int>, second_long_param: (int | string | bool)[]) -> map<string, int | string | bool | float | null> {
     // Locals:
     let _0: map<string, int | string | bool | float | null> // _0 // return
     let _1: map<string, int> // first_long_param // param
-    let _2: int | string | bool[] // second_long_param // param
+    let _2: (int | string | bool)[] // second_long_param // param
 
     bb0: {
         _0 = { const "a": const 1_i64 };
@@ -2946,11 +2946,11 @@ fn user.TriviaEverythingLong_NameAndParamsAndReturn(first_long_param: map<string
     }
 }
 
-fn user.TriviaEverythingLong_NameAndParamsAndReturnBlock(first_long_param: map<string, int>, second_long_param: int | string | bool[]) -> map<string, int | string | bool | float | null> {
+fn user.TriviaEverythingLong_NameAndParamsAndReturnBlock(first_long_param: map<string, int>, second_long_param: (int | string | bool)[]) -> map<string, int | string | bool | float | null> {
     // Locals:
     let _0: map<string, int | string | bool | float | null> // _0 // return
     let _1: map<string, int> // first_long_param // param
-    let _2: int | string | bool[] // second_long_param // param
+    let _2: (int | string | bool)[] // second_long_param // param
 
     bb0: {
         _0 = { const "a": const 1_i64 };
@@ -3642,28 +3642,28 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     let _33: int
     let _34: int // item
     let _35: int
-    let _36: 1 | 2 | 3 | 4 | 5[]
+    let _36: int[]
     let _37: int // __for_idx_1
     let _38: int
     let _39: bool
-    let _40: 1 | 2 | 3 | 4 | 5
-    let _41: 1 | 2 | 3 | 4 | 5 // x
+    let _40: int
+    let _41: int // x
     let _42: int
-    let _43: 1 | 2 | 3[]
+    let _43: int[]
     let _44: int // __for_idx_2
     let _45: int
     let _46: bool
-    let _47: 1 | 2 | 3
-    let _48: 1 | 2 | 3 // i
-    let _49: 4 | 5 | 6[]
+    let _47: int
+    let _48: int // i
+    let _49: int[]
     let _50: int // __for_idx_3
     let _51: int
     let _52: bool
-    let _53: 4 | 5 | 6
-    let _54: 4 | 5 | 6 // j
+    let _53: int
+    let _54: int // j
     let _55: int
-    let _56: 1 | 2 | 3
-    let _57: 4 | 5 | 6
+    let _56: int
+    let _57: int
     let _58: int // i
     let _59: bool
     let _60: int
@@ -3759,16 +3759,16 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     let _150: void
     let _151: void
     let _152: void
-    let _153: "very long string one" | "very long string two" | "very long string three" | "very long string four"[]
+    let _153: string[]
     let _154: int // __for_idx_6
     let _155: int
     let _156: bool
-    let _157: "very long string one" | "very long string two" | "very long string three" | "very long string four"
-    let _158: "alpha bravo charlie" | "delta echo foxtrot" | "golf hotel india" | "juliet kilo lima" | "mike november oscar" | "papa quebec romeo"[]
+    let _157: string
+    let _158: string[]
     let _159: int // __for_idx_7
     let _160: int
     let _161: bool
-    let _162: "alpha bravo charlie" | "delta echo foxtrot" | "golf hotel india" | "juliet kilo lima" | "mike november oscar" | "papa quebec romeo"
+    let _162: string
     let _163: bool
     let _164: bool
     let _165: bool
@@ -3841,39 +3841,39 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     let _232: void
     let _233: void
     let _234: void
-    let _235: "alpha bravo charlie" | "delta echo foxtrot" | "golf hotel india" | "juliet kilo lima" | "mike november oscar" | "papa quebec romeo"[]
+    let _235: string[]
     let _236: int // __for_idx_8
     let _237: int
     let _238: bool
-    let _239: "alpha bravo charlie" | "delta echo foxtrot" | "golf hotel india" | "juliet kilo lima" | "mike november oscar" | "papa quebec romeo"
-    let _240: "alpha bravo charlie" | "delta echo foxtrot" | "golf hotel india" | "juliet kilo lima" | "mike november oscar" | "papa quebec romeo"[]
+    let _239: string
+    let _240: string[]
     let _241: int // __for_idx_9
     let _242: int
     let _243: bool
-    let _244: "alpha bravo charlie" | "delta echo foxtrot" | "golf hotel india" | "juliet kilo lima" | "mike november oscar" | "papa quebec romeo"
-    let _245: 1 | 2 | 3[]
+    let _244: string
+    let _245: int[]
     let _246: int // __for_idx_10
     let _247: int
     let _248: bool
-    let _249: 1 | 2 | 3
-    let _250: 1 | 2 | 3 // i
-    let _251: 4 | 5 | 6[]
+    let _249: int
+    let _250: int // i
+    let _251: int[]
     let _252: int // __for_idx_11
     let _253: int
     let _254: bool
-    let _255: 4 | 5 | 6
-    let _256: 4 | 5 | 6 // j
-    let _257: 7 | 8 | 9[]
+    let _255: int
+    let _256: int // j
+    let _257: int[]
     let _258: int // __for_idx_12
     let _259: int
     let _260: bool
-    let _261: 7 | 8 | 9
-    let _262: 7 | 8 | 9 // k
+    let _261: int
+    let _262: int // k
     let _263: int
     let _264: int
-    let _265: 1 | 2 | 3
-    let _266: 4 | 5 | 6
-    let _267: 7 | 8 | 9
+    let _265: int
+    let _266: int
+    let _267: int
     let _268: int // outer
     let _269: bool
     let _270: int
@@ -3888,24 +3888,24 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     let _279: int
     let _280: int
     let _281: int
-    let _282: 1 | 2 | 3 | 4 | 5[]
+    let _282: int[]
     let _283: int // __for_idx_13
     let _284: int
     let _285: bool
-    let _286: 1 | 2 | 3 | 4 | 5
-    let _287: 1 | 2 | 3 | 4 | 5 // i
+    let _286: int
+    let _287: int // i
     let _288: bool
-    let _289: 1 | 2 | 3 | 4 | 5
-    let _290: 10 | 20 | 30 | 40 | 50[]
+    let _289: int
+    let _290: int[]
     let _291: int // __for_idx_14
     let _292: int
     let _293: bool
-    let _294: 10 | 20 | 30 | 40 | 50
-    let _295: 10 | 20 | 30 | 40 | 50 // j
+    let _294: int
+    let _295: int // j
     let _296: int // val
     let _297: int
-    let _298: 1 | 2 | 3 | 4 | 5
-    let _299: 10 | 20 | 30 | 40 | 50
+    let _298: int
+    let _299: int
     let _300: bool
     let _301: bool
     let _302: int // n
@@ -3917,12 +3917,12 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     let _308: int // lvl1
     let _309: bool
     let _310: int
-    let _311: 1 | 2[]
+    let _311: int[]
     let _312: int // __for_idx_15
     let _313: int
     let _314: bool
-    let _315: 1 | 2
-    let _316: 1 | 2 // lvl2
+    let _315: int
+    let _316: int // lvl2
     let _317: int // lvl3
     let _318: bool
     let _319: int
@@ -3933,7 +3933,7 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     let _324: int
     let _325: int
     let _326: int
-    let _327: 1 | 2
+    let _327: int
     let _328: int
     let _329: int
     let _330: int // __for_idx_16
@@ -3962,39 +3962,39 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     let _353: void
     let _354: void
     let _355: void
-    let _356: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10[]
+    let _356: int[]
     let _357: int // __for_idx_17
     let _358: int
     let _359: bool
-    let _360: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10
-    let _361: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 // i
-    let _362: 10 | 20 | 30 | 40 | 50 | 60 | 70 | 80 | 90 | 100[]
+    let _360: int
+    let _361: int // i
+    let _362: int[]
     let _363: int // __for_idx_18
     let _364: int
     let _365: bool
-    let _366: 10 | 20 | 30 | 40 | 50 | 60 | 70 | 80 | 90 | 100
-    let _367: 10 | 20 | 30 | 40 | 50 | 60 | 70 | 80 | 90 | 100 // j
+    let _366: int
+    let _367: int // j
     let _368: int // computation
     let _369: bool
     let _370: bool
     let _371: int
-    let _372: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10
-    let _373: 10 | 20 | 30 | 40 | 50 | 60 | 70 | 80 | 90 | 100
+    let _372: int
+    let _373: int
     let _374: int
-    let _375: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10
-    let _376: 10 | 20 | 30 | 40 | 50 | 60 | 70 | 80 | 90 | 100
+    let _375: int
+    let _376: int
     let _377: int
-    let _378: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10
+    let _378: int
     let _379: int
-    let _380: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10
-    let _381: 10 | 20 | 30 | 40 | 50 | 60 | 70 | 80 | 90 | 100
+    let _380: int
+    let _381: int
     let _382: int
     let _383: int
-    let _384: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10
-    let _385: 10 | 20 | 30 | 40 | 50 | 60 | 70 | 80 | 90 | 100
+    let _384: int
+    let _385: int
     let _386: int
-    let _387: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10
-    let _388: 10 | 20 | 30 | 40 | 50 | 60 | 70 | 80 | 90 | 100
+    let _387: int
+    let _388: int
     let _389: int
     let _390: bool
     let _391: int
@@ -6982,25 +6982,25 @@ fn user.OtherExprs(a: int, b: int) -> int {
     let _18: int
     let _19: int
     let _20: bool
-    let _21: 1 | 2[]
-    let _22: 3 | 4[]
-    let _23: 1 | 2 | 3[]
-    let _24: 4 | 5 | 6[]
-    let _25: 7 | 8 | 9[]
-    let _26: 1 | 2[] | 3 | 4[][]
-    let _27: 1 | 2[]
-    let _28: 3 | 4[]
-    let _29: 5 | 6[] | 7 | 8[][]
-    let _30: 5 | 6[]
-    let _31: 7 | 8[]
-    let _32: 9 | 10[] | 11 | 12[][]
-    let _33: 9 | 10[]
-    let _34: 11 | 12[]
-    let _35: 13 | 14[] | 15 | 16[][]
-    let _36: 13 | 14[]
-    let _37: 15 | 16[]
-    let _38: map<"inner_a" | "inner_b" | "inner_c", 1 | 2 | 3>
-    let _39: map<"inner_d" | "inner_e" | "inner_f", 4 | 5 | 6>
+    let _21: int[]
+    let _22: int[]
+    let _23: int[]
+    let _24: int[]
+    let _25: int[]
+    let _26: int[][]
+    let _27: int[]
+    let _28: int[]
+    let _29: int[][]
+    let _30: int[]
+    let _31: int[]
+    let _32: int[][]
+    let _33: int[]
+    let _34: int[]
+    let _35: int[][]
+    let _36: int[]
+    let _37: int[]
+    let _38: map<string, int>
+    let _39: map<string, int>
     let _40: OtherPoint
     let _41: OtherPoint
     let _42: OtherPoint

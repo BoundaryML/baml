@@ -304,7 +304,7 @@ async fn load_aws_sdk_config_with_callbacks(
 pub(crate) async fn auth_bedrock(
     request: &mut HttpRequest,
     client: &PrimitiveClient,
-    callbacks: Option<&BuildRequestCallbacks>,
+    callbacks: &BuildRequestCallbacks,
 ) -> Result<(), BuildRequestError> {
     let bedrock_opts = match &client.provider_options {
         Some(ProviderOptions::Bedrock(opts)) => opts.clone(),
@@ -328,118 +328,51 @@ pub(crate) async fn auth_bedrock(
 }
 
 // ---------------------------------------------------------------------------
-// Shared native SDK config loader (no callbacks)
-// ---------------------------------------------------------------------------
-
-/// Load the AWS SDK config using the native default provider chain.
-/// This is the no-callbacks counterpart of `load_aws_sdk_config_with_callbacks`.
-#[cfg(not(target_arch = "wasm32"))]
-async fn load_aws_sdk_config_native(opts: &BedrockOptions) -> aws_config::SdkConfig {
-    let mut loader = aws_config::defaults(aws_config::BehaviorVersion::latest());
-    if let Some(profile) = &opts.profile {
-        loader = loader.profile_name(profile);
-    }
-    loader.load().await
-}
-
-// ---------------------------------------------------------------------------
 // Credential resolution
 // ---------------------------------------------------------------------------
 
 /// Resolve the AWS region from explicit options or the default provider chain.
 pub(crate) async fn resolve_region(
     opts: &BedrockOptions,
-    callbacks: Option<&BuildRequestCallbacks>,
+    callbacks: &BuildRequestCallbacks,
 ) -> Result<String, BuildRequestError> {
     if let Some(region) = &opts.region {
         return Ok(region.clone());
     }
 
-    if let Some(cb) = callbacks {
-        let sdk_config = load_aws_sdk_config_with_callbacks(opts, cb).await;
-        return sdk_config.region().map(ToString::to_string).ok_or_else(|| {
-            BuildRequestError::AuthorizationFailed(
-                "AWS region not found in default provider chain".into(),
-            )
-        });
-    }
-
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        let sdk_config = load_aws_sdk_config_native(opts).await;
-        sdk_config.region().map(ToString::to_string).ok_or_else(|| {
-            BuildRequestError::AuthorizationFailed(
-                "AWS region not found in default provider chain".into(),
-            )
-        })
-    }
-
-    #[cfg(target_arch = "wasm32")]
-    {
-        Err(BuildRequestError::AuthorizationFailed(
-            "AWS Bedrock on WASM requires an explicit region".into(),
-        ))
-    }
+    let sdk_config = load_aws_sdk_config_with_callbacks(opts, callbacks).await;
+    sdk_config.region().map(ToString::to_string).ok_or_else(|| {
+        BuildRequestError::AuthorizationFailed(
+            "AWS region not found in default provider chain".into(),
+        )
+    })
 }
 
 /// Resolve AWS credentials from explicit options or the default provider chain.
 async fn resolve_credentials(
     opts: &BedrockOptions,
-    callbacks: Option<&BuildRequestCallbacks>,
+    callbacks: &BuildRequestCallbacks,
 ) -> Result<Credentials, BuildRequestError> {
     // Prefer explicit credentials from client options.
     if let Some(creds) = credentials_from_options(opts) {
         return Ok(creds);
     }
 
-    // Fall back to the AWS provider chain.
-    if let Some(cb) = callbacks {
-        // Use callbacks for IO -- works on both native and WASM.
-        let sdk_config = load_aws_sdk_config_with_callbacks(opts, cb).await;
-        let credentials_provider = sdk_config.credentials_provider().ok_or_else(|| {
-            BuildRequestError::AuthorizationFailed(
-                "AWS credentials provider not found in default provider chain".into(),
-            )
-        })?;
-        return credentials_provider
-            .provide_credentials()
-            .await
-            .map_err(|e| {
-                BuildRequestError::AuthorizationFailed(format!(
-                    "failed to load credentials from default provider chain: {e}"
-                ))
-            });
-    }
-
-    // No callbacks -- try the native default provider chain directly.
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        let sdk_config = load_aws_sdk_config_native(opts).await;
-
-        let credentials_provider = sdk_config.credentials_provider().ok_or_else(|| {
-            BuildRequestError::AuthorizationFailed(
-                "AWS credentials provider not found in default provider chain".into(),
-            )
-        })?;
-
-        credentials_provider
-            .provide_credentials()
-            .await
-            .map_err(|e| {
-                BuildRequestError::AuthorizationFailed(format!(
-                    "failed to load credentials from default provider chain: {e}"
-                ))
-            })
-    }
-
-    #[cfg(target_arch = "wasm32")]
-    {
-        Err(BuildRequestError::AuthorizationFailed(
-            "AWS Bedrock on WASM requires explicit credentials \
-             (access_key_id + secret_access_key)"
-                .into(),
-        ))
-    }
+    // Fall back to the AWS provider chain via callbacks.
+    let sdk_config = load_aws_sdk_config_with_callbacks(opts, callbacks).await;
+    let credentials_provider = sdk_config.credentials_provider().ok_or_else(|| {
+        BuildRequestError::AuthorizationFailed(
+            "AWS credentials provider not found in default provider chain".into(),
+        )
+    })?;
+    credentials_provider
+        .provide_credentials()
+        .await
+        .map_err(|e| {
+            BuildRequestError::AuthorizationFailed(format!(
+                "failed to load credentials from default provider chain: {e}"
+            ))
+        })
 }
 
 /// Try to build credentials from explicit client options.
@@ -571,6 +504,9 @@ mod tests {
             fs_read: Arc::new(|_path| {
                 Box::pin(async { Err(crate::LlmOpError::Other("not found".into())) })
             }),
+            shell: Arc::new(|_cmd| {
+                Box::pin(async { Err(crate::LlmOpError::Other("unsupported".into())) })
+            }),
         }
     }
 
@@ -592,7 +528,9 @@ mod tests {
     async fn sigv4_headers_present() {
         let client = make_client(base_bedrock_opts());
         let mut req = fake_bedrock_request();
-        auth_bedrock(&mut req, &client, None).await.unwrap();
+        auth_bedrock(&mut req, &client, &BuildRequestCallbacks::noop())
+            .await
+            .unwrap();
         assert!(req.headers.contains_key("authorization"));
         assert!(req.headers.contains_key("x-amz-date"));
     }
@@ -601,7 +539,7 @@ mod tests {
     async fn explicit_credentials_used_without_callbacks() {
         let client = make_client(base_bedrock_opts());
         let mut req = fake_bedrock_request();
-        let result = auth_bedrock(&mut req, &client, None).await;
+        let result = auth_bedrock(&mut req, &client, &BuildRequestCallbacks::noop()).await;
         assert!(result.is_ok());
     }
 
@@ -611,17 +549,14 @@ mod tests {
         let send_fn = mock_http_send(call_count.clone(), 404, "");
         let callbacks = BuildRequestCallbacks {
             http_send: send_fn,
-            env_read: Arc::new(|_key| Box::pin(async { Ok(None) })),
-            fs_read: Arc::new(|_path| {
-                Box::pin(async { Err(crate::LlmOpError::Other("not found".into())) })
-            }),
+            ..stub_callbacks()
         };
         let client = make_client(BedrockOptions {
             region: Some("us-east-1".to_string()),
             ..Default::default()
         });
         let mut req = fake_bedrock_request();
-        let result = auth_bedrock(&mut req, &client, Some(&callbacks)).await;
+        let result = auth_bedrock(&mut req, &client, &callbacks).await;
         assert!(result.is_err());
         // The callbacks were invoked during credential resolution.
         assert!(call_count.load(Ordering::SeqCst) > 0);
@@ -637,7 +572,7 @@ mod tests {
         };
         let client = make_client(base_bedrock_opts());
         let mut req = fake_bedrock_request();
-        let result = auth_bedrock(&mut req, &client, Some(&callbacks)).await;
+        let result = auth_bedrock(&mut req, &client, &callbacks).await;
         assert!(result.is_ok());
         assert_eq!(call_count.load(Ordering::SeqCst), 0);
     }
@@ -648,7 +583,9 @@ mod tests {
             region: Some("eu-west-1".into()),
             ..Default::default()
         };
-        let region = resolve_region(&opts, None).await.unwrap();
+        let region = resolve_region(&opts, &BuildRequestCallbacks::noop())
+            .await
+            .unwrap();
         assert_eq!(region, "eu-west-1");
     }
 
@@ -665,7 +602,7 @@ mod tests {
             })
         });
         let opts = BedrockOptions::default();
-        let region = resolve_region(&opts, Some(&cb)).await.unwrap();
+        let region = resolve_region(&opts, &cb).await.unwrap();
         assert_eq!(region, "ap-southeast-1");
     }
 
@@ -673,8 +610,127 @@ mod tests {
     async fn resolve_region_missing_with_empty_env() {
         let cb = stub_callbacks();
         let opts = BedrockOptions::default();
-        let result = resolve_region(&opts, Some(&cb)).await;
+        let result = resolve_region(&opts, &cb).await;
         assert!(result.is_err());
+    }
+
+    /// Confirms the full injection flow: env callbacks provide AWS credentials
+    /// and region, which are resolved through the AWS SDK config loader and
+    /// used to produce valid `SigV4` headers on the request.
+    #[tokio::test]
+    async fn sigv4_headers_from_env_via_callbacks() {
+        let callbacks = BuildRequestCallbacks {
+            env_read: Arc::new(|key| {
+                Box::pin(async move {
+                    match key.as_str() {
+                        "AWS_ACCESS_KEY_ID" => Ok(Some("AKIAIOSFODNN7EXAMPLE".to_string())),
+                        "AWS_SECRET_ACCESS_KEY" => {
+                            Ok(Some("wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY".to_string()))
+                        }
+                        "AWS_REGION" => Ok(Some("us-east-1".to_string())),
+                        _ => Ok(None),
+                    }
+                })
+            }),
+            ..stub_callbacks()
+        };
+        let client = make_client(BedrockOptions::default());
+        let mut req = fake_bedrock_request();
+        auth_bedrock(&mut req, &client, &callbacks).await.unwrap();
+        assert!(req.headers.contains_key("authorization"));
+        assert!(req.headers.contains_key("x-amz-date"));
+    }
+
+    /// Confirms that the fs callback is used by the AWS SDK config loader.
+    #[tokio::test]
+    async fn sigv4_headers_from_credentials_file_via_fs_callback() {
+        let credentials_file = "\
+[default]
+aws_access_key_id = AKIAIOSFODNN7EXAMPLE
+aws_secret_access_key = wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+";
+        let callbacks = BuildRequestCallbacks {
+            env_read: Arc::new(|key| {
+                Box::pin(async move {
+                    match key.as_str() {
+                        "AWS_SHARED_CREDENTIALS_FILE" => {
+                            Ok(Some("/fake/aws/credentials".to_string()))
+                        }
+                        "AWS_REGION" => Ok(Some("us-east-1".to_string())),
+                        _ => Ok(None),
+                    }
+                })
+            }),
+            fs_read: {
+                let creds = credentials_file.to_string();
+                Arc::new(move |path| {
+                    let creds = creds.clone();
+                    Box::pin(async move {
+                        if path == "/fake/aws/credentials" {
+                            Ok(creds.into_bytes())
+                        } else {
+                            Err(crate::LlmOpError::Other("not found".into()))
+                        }
+                    })
+                })
+            },
+            ..stub_callbacks()
+        };
+        let client = make_client(BedrockOptions::default());
+        let mut req = fake_bedrock_request();
+        auth_bedrock(&mut req, &client, &callbacks).await.unwrap();
+        assert!(req.headers.contains_key("authorization"));
+        assert!(req.headers.contains_key("x-amz-date"));
+    }
+
+    /// Confirms that the http callback is used when the AWS SDK falls back
+    /// to the container credentials provider.
+    #[tokio::test]
+    async fn sigv4_headers_from_container_credentials_via_http_callback() {
+        let http_call_count = Arc::new(AtomicUsize::new(0));
+        let http_call_count_clone = http_call_count.clone();
+
+        let callbacks = BuildRequestCallbacks {
+            env_read: Arc::new(|key| {
+                Box::pin(async move {
+                    match key.as_str() {
+                        "AWS_CONTAINER_CREDENTIALS_FULL_URI" => {
+                            Ok(Some("http://169.254.170.23/creds".to_string()))
+                        }
+                        "AWS_REGION" => Ok(Some("us-east-1".to_string())),
+                        _ => Ok(None),
+                    }
+                })
+            }),
+            http_send: Arc::new(move |_req| {
+                http_call_count_clone.fetch_add(1, Ordering::SeqCst);
+                Box::pin(async {
+                    Ok(crate::HttpSendResponse {
+                        status_code: 200,
+                        headers: IndexMap::new(),
+                        body: serde_json::json!({
+                            "AccessKeyId": "AKIAIOSFODNN7EXAMPLE",
+                            "SecretAccessKey": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+                            "Token": "FwoGZXIvYXdzEBYaDH...",
+                            "Expiration": "2099-01-01T00:00:00Z",
+                        })
+                        .to_string(),
+                    })
+                })
+            }),
+            fs_read: Arc::new(|_path| {
+                Box::pin(async { Err(crate::LlmOpError::Other("not found".into())) })
+            }),
+            shell: Arc::new(|_cmd| {
+                Box::pin(async { Err(crate::LlmOpError::Other("unsupported".into())) })
+            }),
+        };
+        let client = make_client(BedrockOptions::default());
+        let mut req = fake_bedrock_request();
+        auth_bedrock(&mut req, &client, &callbacks).await.unwrap();
+        assert!(http_call_count.load(Ordering::SeqCst) > 0);
+        assert!(req.headers.contains_key("authorization"));
+        assert!(req.headers.contains_key("x-amz-date"));
     }
 
     #[test]

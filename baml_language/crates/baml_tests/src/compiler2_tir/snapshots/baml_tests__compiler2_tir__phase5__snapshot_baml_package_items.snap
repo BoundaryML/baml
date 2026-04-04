@@ -45,6 +45,7 @@ namespace baml.llm:
   class PrimitiveClientOptions { methods: [] }
   class PromptAst { methods: [] }
   class RetryPolicy { methods: [] }
+  class VertexAiOptions { methods: [] }
   function __sap_parse<T>
   function build_request
   function call_llm_function<T>
