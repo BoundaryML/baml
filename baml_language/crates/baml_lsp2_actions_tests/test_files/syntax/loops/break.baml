@@ -55,7 +55,7 @@ function Nested() -> int {
 //    │ 
 //    │ Note: Error code: E0001
 // ───╯
-// Error: unreachable code: 1 statement(s) after diverging statement
+// Warning: unreachable code: 1 statement(s) after diverging statement
 //     ╭─[ loops_break.baml:20:32 ]
 //     │
 //  20 │ ╭─▶ function OutsideLoop() -> int {
