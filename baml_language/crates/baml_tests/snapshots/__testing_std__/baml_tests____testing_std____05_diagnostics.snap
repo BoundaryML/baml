@@ -2,24 +2,4 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] Warning: unreachable arm
-   ╭─[ registry.baml:1:1 ]
-   │
- 1 │ // root.TestCollector — collector for tests and testsets.
-   │ │ 
-   │ ╰─ unreachable arm
-   │ 
-   │ Note: Error code: E0001
-───╯
-
-  [type] Warning: unreachable arm
-     ╭─[ registry.baml:179:13 ]
-     │
- 179 │ ╭─▶       _ => {
-     ┆ ┆   
- 182 │ ├─▶     }
-     │ │           
-     │ ╰─────────── unreachable arm
-     │     
-     │     Note: Error code: E0001
-─────╯
+No errors found.

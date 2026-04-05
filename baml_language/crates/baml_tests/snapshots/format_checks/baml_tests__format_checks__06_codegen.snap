@@ -3,16 +3,6 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 function $init() -> null {
     call ?
-    store_global ?204
-    call ?
-    store_global ?205
-    call ?
-    store_global ?206
-    call ?
-    store_global ?207
-    call ?
-    store_global ?208
-    call ?
     store_global ?209
     call ?
     store_global ?210
@@ -70,6 +60,16 @@ function $init() -> null {
     store_global ?236
     call ?
     store_global ?237
+    call ?
+    store_global ?238
+    call ?
+    store_global ?239
+    call ?
+    store_global ?240
+    call ?
+    store_global ?241
+    call ?
+    store_global ?242
     load_const ?
     return
 }

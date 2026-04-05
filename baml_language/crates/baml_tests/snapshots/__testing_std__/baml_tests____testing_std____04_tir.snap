@@ -172,12 +172,9 @@ function testing.TestRegistry.run_test(self: testing.TestRegistry, name: string)
     for k in self.expansions.keys()
       { : void
         let sub = self.expansions[k] : testing.TestRegistry
-        for st in sub.collector.tests
-          { : void
-            if (st.name Eq name : bool) : void
-              { : never
-                return root.run_test(st.body, st.runner) : testing.TestReport
-              }
+        if (name.startsWith(k) : bool) : void
+          { : never
+            return sub.run_test(name) : testing.TestReport
           }
       }
     throw "Test not found: " Add name : string
@@ -201,9 +198,9 @@ function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: strin
     for k in self.expansions.keys()
       { : void
         let sub = self.expansions[k] : testing.TestRegistry
-        for ts in sub.collector.testsets
+        for sts in sub.collector.testsets
           { : void
-            if (ts.name Eq name : bool) : void
+            if (sts.name Eq name : bool) : void
               { : never
                 return sub.expand_set(name) : testing.SerializedTestDef[]
               }
@@ -220,7 +217,7 @@ function testing.run_test(body: () -> null, runner: testing.TestRunner?) -> test
           let start = baml.sys.now_ms()
           let result = ...
             { 1 stmts + tail } catch_all (e) { _ => { 0 stmts + tail } }
-          TestReport { outcome: result.outcome, runs: [RunReport { outcome: result.outcome, duration_ms: baml.sys.now_ms() Sub start }], extras: map {  } }
+          TestReport { outcome: result.outcome, runs: [RunReport { outcome: result.outcome, duration_ms: baml.sys.now_ms() Sub start }] }
         }
     let effective_run = : () -> testing.TestReport
       match (runner : testing.TestRunner?) : () -> testing.TestReport
@@ -233,7 +230,7 @@ function testing.run_test(body: () -> null, runner: testing.TestRunner?) -> test
   ?? 0..0: unreachable arm
 }
 lambda testing.run_test {
-  ?? 5657..5721: unreachable arm
+  ?? 5753..5817: unreachable arm
 }
 function testing.run_testset(run_children: () -> testing.TestSetReport, runner: testing.TestSetRunner?) -> testing.TestSetReport throws never {
   { : testing.TestSetReport

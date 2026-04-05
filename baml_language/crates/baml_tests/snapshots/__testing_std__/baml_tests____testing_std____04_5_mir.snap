@@ -73,7 +73,7 @@ fn testing.TestRegistry.expand_set(self: testing.TestRegistry, name: string) -> 
     let _45: int
     let _46: bool
     let _47: testing.TestSetRegistration
-    let _48: testing.TestSetRegistration // ts
+    let _48: testing.TestSetRegistration // sts
     let _49: bool
     let _50: string
     let _51: testing.TestSetRegistration
@@ -736,7 +736,6 @@ fn .<lambda(run_test, 0)>() -> null {
     let _12: int
     let _13: int
     let _14: int
-    let _15: map<void, void>
 
     bb0: {
         _1 = call const fn baml.sys.now_ms() -> [bb1];
@@ -774,8 +773,7 @@ fn .<lambda(run_test, 0)>() -> null {
         _12 = copy _13 - copy _14;
         _9 = RunReport { copy _10, copy _12 };
         _8 = [copy _9];
-        _15 = {  };
-        _0 = TestReport { copy _6, copy _8, copy _15 };
+        _0 = TestReport { copy _6, copy _8 };
         goto -> bb7;
     }
 
@@ -813,22 +811,10 @@ fn testing.TestRegistry.run_test(self: testing.TestRegistry, name: string) -> te
     let _24: testing.TestRegistry // sub
     let _25: map<string, testing.TestRegistry>
     let _26: string
-    let _27: testing.TestRegistration[]
-    let _28: testing.TestCollector
+    let _27: bool
+    let _28: string
     let _29: testing.TestRegistry
-    let _30: int // __for_idx_2
-    let _31: int
-    let _32: bool
-    let _33: testing.TestRegistration
-    let _34: testing.TestRegistration // st
-    let _35: bool
-    let _36: string
-    let _37: testing.TestRegistration
-    let _38: () -> null
-    let _39: testing.TestRegistration
-    let _40: (() -> testing.TestReport) -> () -> testing.TestReport?
-    let _41: testing.TestRegistration
-    let _42: string
+    let _30: string
 
     bb0: {
         _4 = copy _1.0;
@@ -840,7 +826,7 @@ fn testing.TestRegistry.run_test(self: testing.TestRegistry, name: string) -> te
     bb1: {
         _6 = len(_3);
         _7 = copy _5 < copy _6;
-        branch copy _7 -> [bb16, bb2];
+        branch copy _7 -> [bb13, bb2];
     }
 
     bb2: {
@@ -860,8 +846,8 @@ fn testing.TestRegistry.run_test(self: testing.TestRegistry, name: string) -> te
     }
 
     bb5: {
-        _42 = const "Test not found: " + copy _2;
-        throw copy _42;
+        _30 = const "Test not found: " + copy _2;
+        throw copy _30;
     }
 
     bb6: {
@@ -870,17 +856,12 @@ fn testing.TestRegistry.run_test(self: testing.TestRegistry, name: string) -> te
         _25 = copy _1.1;
         _26 = copy _23;
         _24 = copy _25[_26];
-        _29 = copy _24;
-        _28 = copy _29.0;
-        _27 = copy _28.1;
-        _30 = const 0_i64;
-        goto -> bb7;
+        _28 = copy _23;
+        _27 = call const fn baml.String.startsWith(copy _2, copy _28) -> [bb7];
     }
 
     bb7: {
-        _31 = len(_27);
-        _32 = copy _30 < copy _31;
-        branch copy _32 -> [bb10, bb8];
+        branch copy _27 -> [bb11, bb8];
     }
 
     bb8: {
@@ -888,55 +869,51 @@ fn testing.TestRegistry.run_test(self: testing.TestRegistry, name: string) -> te
     }
 
     bb9: {
+        goto -> bb10;
+    }
+
+    bb10: {
         _19 = copy _19 + const 1_i64;
         goto -> bb4;
     }
 
-    bb10: {
-        _33 = copy _27[_30];
-        _34 = copy _33;
-        _37 = copy _34;
-        _36 = copy _37.0;
-        _35 = copy _36 == copy _2;
-        branch copy _35 -> [bb14, bb11];
-    }
-
     bb11: {
-        goto -> bb12;
+        _29 = copy _24;
+        _0 = call const fn testing.TestRegistry.run_test(copy _29, copy _2) -> [bb12];
     }
 
     bb12: {
-        goto -> bb13;
+        goto -> bb19;
     }
 
     bb13: {
-        _30 = copy _30 + const 1_i64;
-        goto -> bb7;
-    }
-
-    bb14: {
-        _39 = copy _34;
-        _38 = copy _39.1;
-        _41 = copy _34;
-        _40 = copy _41.2;
-        _0 = call const fn testing.run_test(copy _38, copy _40) -> [bb15];
-    }
-
-    bb15: {
-        goto -> bb22;
-    }
-
-    bb16: {
         _8 = copy _3[_5];
         _9 = copy _8;
         _12 = copy _9;
         _11 = copy _12.0;
         _10 = copy _11 == copy _2;
-        branch copy _10 -> [bb20, bb17];
+        branch copy _10 -> [bb17, bb14];
+    }
+
+    bb14: {
+        goto -> bb15;
+    }
+
+    bb15: {
+        goto -> bb16;
+    }
+
+    bb16: {
+        _5 = copy _5 + const 1_i64;
+        goto -> bb1;
     }
 
     bb17: {
-        goto -> bb18;
+        _14 = copy _9;
+        _13 = copy _14.1;
+        _16 = copy _9;
+        _15 = copy _16.2;
+        _0 = call const fn testing.run_test(copy _13, copy _15) -> [bb18];
     }
 
     bb18: {
@@ -944,23 +921,6 @@ fn testing.TestRegistry.run_test(self: testing.TestRegistry, name: string) -> te
     }
 
     bb19: {
-        _5 = copy _5 + const 1_i64;
-        goto -> bb1;
-    }
-
-    bb20: {
-        _14 = copy _9;
-        _13 = copy _14.1;
-        _16 = copy _9;
-        _15 = copy _16.2;
-        _0 = call const fn testing.run_test(copy _13, copy _15) -> [bb21];
-    }
-
-    bb21: {
-        goto -> bb22;
-    }
-
-    bb22: {
         return;
     }
 }

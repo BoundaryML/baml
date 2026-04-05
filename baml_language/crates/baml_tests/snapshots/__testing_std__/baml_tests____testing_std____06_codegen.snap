@@ -498,7 +498,7 @@ function testing.TestRegistry.run_test(self: null, name: string) -> testing.Test
     call baml.Array.length
     cmp_op <
     pop_jump_if_false L1
-    jump L10
+    jump L7
 
   L1:
     load_var self
@@ -523,61 +523,35 @@ function testing.TestRegistry.run_test(self: null, name: string) -> testing.Test
     throw
 
   L4:
-    load_var self
-    load_field .expansions
     load_var _17
     load_var __for_idx_1
     load_array_element
+    store_var k
+    load_var self
+    load_field .expansions
+    load_var k
     load_map_element
-    load_field .collector
-    load_field .tests
-    store_var _27
-    load_const 0
-    store_var __for_idx_2
+    store_var sub
+    load_var name
+    load_var k
+    call baml.String.startsWith
+    pop_jump_if_false L5
+    jump L6
 
   L5:
-    load_var __for_idx_2
-    load_var _27
-    call baml.Array.length
-    cmp_op <
-    pop_jump_if_false L6
-    jump L7
-
-  L6:
     load_var __for_idx_1
     load_const 1
     bin_op +
     store_var __for_idx_1
     jump L2
 
-  L7:
-    load_var _27
-    load_var __for_idx_2
-    load_array_element
-    store_var st
-    load_var st
-    load_field .name
+  L6:
+    load_var sub
     load_var name
-    cmp_op ==
-    pop_jump_if_false L8
-    jump L9
+    call testing.TestRegistry.run_test
+    jump L10
 
-  L8:
-    load_var __for_idx_2
-    load_const 1
-    bin_op +
-    store_var __for_idx_2
-    jump L5
-
-  L9:
-    load_var st
-    load_field .body
-    load_var st
-    load_field .runner
-    call testing.run_test
-    jump L13
-
-  L10:
+  L7:
     load_var _3
     load_var __for_idx
     load_array_element
@@ -586,24 +560,24 @@ function testing.TestRegistry.run_test(self: null, name: string) -> testing.Test
     load_field .name
     load_var name
     cmp_op ==
-    pop_jump_if_false L11
-    jump L12
+    pop_jump_if_false L8
+    jump L9
 
-  L11:
+  L8:
     load_var __for_idx
     load_const 1
     bin_op +
     store_var __for_idx
     jump L0
 
-  L12:
+  L9:
     load_var t
     load_field .body
     load_var t
     load_field .runner
     call testing.run_test
 
-  L13:
+  L10:
     return
 }
 

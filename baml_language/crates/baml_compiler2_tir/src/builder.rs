@@ -1412,8 +1412,17 @@ impl<'db> TypeInferenceBuilder<'db> {
                 let matches =
                     self.match_throw_types_for_pattern(arm.pattern, &residual, body, arm.body);
                 if matches.may_match.is_empty() {
-                    self.context
-                        .report_warning_simple(TirTypeError::UnreachableArm, arm.body);
+                    // Suppress for wildcard `_ =>` catch arms — they are intentionally
+                    // defensive (e.g. catching runtime panics that the static type
+                    // system doesn't model as throwable).
+                    let is_wildcard = matches!(
+                        &body.patterns[arm.pattern],
+                        baml_compiler2_ast::Pattern::Binding(name) if name == "_"
+                    );
+                    if !is_wildcard {
+                        self.context
+                            .report_warning_simple(TirTypeError::UnreachableArm, arm.body);
+                    }
                 }
 
                 let narrowed_binding_ty = Self::facts_to_ty(&matches.may_match);
