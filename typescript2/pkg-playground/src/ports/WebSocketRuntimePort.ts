@@ -31,8 +31,11 @@ type WsOutMessage =
 type WsInMessage =
   | { type: 'callFunction'; id: number; project: string; name: string; argsProto: string }
   | { type: 'cancelCall'; id: number; project: string }
+  | { type: 'callTestFunction'; id: number; project: string; generation: number; testName: string }
+  | { type: 'expandTestSet'; project: string; generation: number; testsetName: string }
   | { type: 'envVarResponse'; id: number; value: string | undefined; variable?: string }
   | { type: 'requestState' }
+  | { type: 'requestCollectTests'; project: string }
   | { type: 'requestControlFlowGraph'; project: string; functionName: string }
   | { type: 'cursorPosition'; file: string; line: number; column: number };
 
@@ -197,6 +200,23 @@ export class WebSocketRuntimePort implements RuntimePort {
           file: msg.file,
           line: msg.line,
           column: msg.column,
+        };
+      case 'requestCollectTests':
+        return { type: 'requestCollectTests', project: msg.project };
+      case 'callTestFunction':
+        return {
+          type: 'callTestFunction',
+          id: msg.id,
+          project: msg.project,
+          generation: msg.generation,
+          testName: msg.testName,
+        };
+      case 'expandTestSet':
+        return {
+          type: 'expandTestSet',
+          project: msg.project,
+          generation: msg.generation,
+          testsetName: msg.testsetName,
         };
       case 'clearHandles':
         return null; // handles live in the Rust process; no TS-side cleanup needed

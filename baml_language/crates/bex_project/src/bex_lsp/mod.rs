@@ -6,6 +6,8 @@ mod request;
 
 mod multi_project;
 
+use async_trait::async_trait;
+
 #[derive(Debug, thiserror::Error)]
 pub enum LspError {
     #[error("{0}")]
@@ -88,14 +90,6 @@ pub struct LlmCapabilities {
 
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct TestInfo {
-    pub name: String,
-    pub function_name: String,
-    pub args_json: String,
-}
-
-#[derive(Debug, Clone, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct ProjectDiagnostic {
     pub severity: &'static str,
     pub message: String,
@@ -106,7 +100,6 @@ pub struct ProjectDiagnostic {
 pub struct ProjectUpdate {
     pub is_bex_current: bool,
     pub functions: Vec<FunctionInfo>,
-    pub tests: Vec<TestInfo>,
     pub diagnostics: Vec<ProjectDiagnostic>,
 }
 
@@ -132,6 +125,13 @@ pub enum PlaygroundNotification {
     },
     #[serde(rename_all = "camelCase")]
     CursorContext { context: serde_json::Value },
+    #[serde(rename_all = "camelCase")]
+    TestCollectionResult {
+        project: String,
+        generation: u64,
+        call_id: u64,
+        data: Vec<u8>,
+    },
 }
 
 pub trait PlaygroundSender: Send + Sync {
@@ -144,6 +144,7 @@ pub trait PlaygroundSender: Send + Sync {
 //
 // Send + Sync are required so that `Arc<dyn BexLsp>` can be used as Axum app
 // state (e.g. in playground_server's WsState), which must be Clone + Send + Sync.
+#[async_trait]
 pub trait BexLsp: Send + Sync + notification::BexLspNotification + request::BexLspRequest {
     fn get_bex_for_project(
         &self,
@@ -179,6 +180,22 @@ pub trait BexLsp: Send + Sync + notification::BexLspNotification + request::BexL
     /// Combines `playground_cursor_context` with notification dispatch — used by
     /// the WASM bridge which cannot access the sender directly.
     fn request_cursor_context(&self, file_path: &str, line: u32, column: u32);
+
+    fn request_collect_tests(&self, project: &str);
+
+    /// Run a specific test by name. Request-response — returns the serialized
+    /// `TestReport` as proto bytes, using the same path as `call_function`.
+    async fn call_test_function(
+        &self,
+        project: &str,
+        generation: u64,
+        test_name: &str,
+        ctx: bex_engine::FunctionCallContext,
+    ) -> Result<bex_external_types::BexExternalValue, bex_engine::EngineError>;
+
+    /// Expand a lazy test set by name. Fire-and-forget — result comes via a
+    /// `TestCollectionResult` playground notification with the full serialized tree.
+    fn expand_test_set(&self, project: &str, generation: u64, testset_name: &str);
 }
 
 use ::std::sync::Arc;

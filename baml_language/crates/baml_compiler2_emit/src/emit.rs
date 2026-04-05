@@ -861,9 +861,6 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 self.emit(Instruction::VizExit(*node_idx));
             }
             StatementKind::Nop => {}
-            StatementKind::Assert(operand) => {
-                unwrap_infallible(pull_semantics::walk_assert_statement(self, operand));
-            }
         }
     }
 
@@ -1690,7 +1687,6 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 out.push(*local);
                 Self::collect_locals_in_operand(filter, out);
             }
-            StatementKind::Assert(operand) => Self::collect_locals_in_operand(operand, out),
             StatementKind::NotifyBlock { .. }
             | StatementKind::VizEnter(_)
             | StatementKind::VizExit(_)
@@ -2170,11 +2166,6 @@ impl StackEffectSink for StackifyCodegen<'_, '_> {
         let slot = self.local_slot_or_panic(local, "Watch");
         let inst = self.emit(Instruction::Watch(slot));
         self.set_var_operand(inst, slot);
-        Ok(())
-    }
-
-    fn assert_top(&mut self) -> Result<(), Self::Error> {
-        self.emit(Instruction::Assert);
         Ok(())
     }
 }

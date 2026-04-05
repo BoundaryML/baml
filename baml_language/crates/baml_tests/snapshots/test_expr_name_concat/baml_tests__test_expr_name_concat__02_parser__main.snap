@@ -1,0 +1,63 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  TESTSET_DEF
+    KW_TESTSET "testset"
+    STRING_LITERAL "concat names"
+      QUOTE """
+      WORD "concat"
+      WORD "names"
+      QUOTE """
+    BLOCK_EXPR
+      L_BRACE "{"
+      TEST_EXPR_DEF
+        KW_TEST "test"
+        BINARY_EXPR
+          STRING_LITERAL "prefix_"
+            QUOTE """
+            WORD "prefix_"
+            QUOTE """
+          PLUS "+"
+          STRING_LITERAL "suffix"
+            QUOTE """
+            WORD "suffix"
+            QUOTE """
+        BLOCK_EXPR "{
+    null
+  }"
+          L_BRACE "{"
+          WORD "null"
+          R_BRACE "}"
+      TESTSET_DEF
+        KW_TESTSET "testset"
+        BINARY_EXPR
+          STRING_LITERAL "nested_"
+            QUOTE """
+            WORD "nested_"
+            QUOTE """
+          PLUS "+"
+          STRING_LITERAL "group"
+            QUOTE """
+            WORD "group"
+            QUOTE """
+        BLOCK_EXPR
+          L_BRACE "{"
+          TEST_EXPR_DEF
+            KW_TEST "test"
+            STRING_LITERAL "inner"
+              QUOTE """
+              WORD "inner"
+              QUOTE """
+            BLOCK_EXPR "{
+      null
+    }"
+              L_BRACE "{"
+              WORD "null"
+              R_BRACE "}"
+          R_BRACE "}"
+      R_BRACE "}"
+
+=== ERRORS ===
+None

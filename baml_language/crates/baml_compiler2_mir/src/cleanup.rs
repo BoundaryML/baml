@@ -422,7 +422,6 @@ fn count_in_statement(stmt: &crate::Statement, uses: &mut [usize]) {
         crate::StatementKind::WatchNotify(l) => {
             uses[l.0] += 1;
         }
-        crate::StatementKind::Assert(op) => count_in_operand(op, uses),
         crate::StatementKind::VizEnter(_)
         | crate::StatementKind::VizExit(_)
         | crate::StatementKind::NotifyBlock { .. }
@@ -683,9 +682,6 @@ fn apply_subst_to_statement(stmt: &mut crate::Statement, subst: &HashMap<Local, 
         crate::StatementKind::WatchOptions { filter, .. } => {
             apply_subst_to_operand(filter, subst);
         }
-        crate::StatementKind::Assert(op) => {
-            apply_subst_to_operand(op, subst);
-        }
         _ => {}
     }
 }
@@ -874,7 +870,6 @@ fn rewrite_locals_in_statement(stmt: &mut crate::Statement, map: &[Option<Local>
             remap_operand(filter, map);
         }
         crate::StatementKind::WatchNotify(l) => remap_local(l, map),
-        crate::StatementKind::Assert(op) => remap_operand(op, map),
         crate::StatementKind::VizEnter(_)
         | crate::StatementKind::VizExit(_)
         | crate::StatementKind::NotifyBlock { .. }
@@ -1056,7 +1051,6 @@ fn verify_mir(body: &MirFunctionBody, name: &crate::ItemRef) {
                     check_operand(filter, &blk);
                 }
                 crate::StatementKind::WatchNotify(l) => check_local(*l, &blk),
-                crate::StatementKind::Assert(op) => check_operand(op, &blk),
                 _ => {}
             }
         }

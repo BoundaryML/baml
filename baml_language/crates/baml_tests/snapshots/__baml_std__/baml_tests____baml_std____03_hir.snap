@@ -290,6 +290,7 @@ function baml.net.connect(addr: string) -> baml.net.Socket  [builtin]
 function baml.net.read(self: ?) -> string  [builtin]
 
 --- <builtin>/baml/ns_sys/sys.baml ---
+function baml.sys.now_ms() -> int  [builtin]
 function baml.sys.panic(message: string) -> null  [builtin]
 function baml.sys.shell(command: string) -> string  [builtin]
 function baml.sys.sleep(ms: int) -> null  [builtin]

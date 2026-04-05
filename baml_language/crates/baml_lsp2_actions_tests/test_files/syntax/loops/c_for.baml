@@ -119,7 +119,7 @@ function BreakContinue() -> int {
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯
-// Error: unreachable code: 1 statement(s) after diverging statement
+// Warning: unreachable code: 1 statement(s) after diverging statement
 //     ╭─[ loops_c_for.baml:51:12 ]
 //     │
 //  51 │ ╭─▶     for (;;) {

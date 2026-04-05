@@ -1130,6 +1130,7 @@ dependencies = [
  "baml_compiler2_ast",
  "baml_compiler2_hir",
  "baml_compiler2_mir",
+ "baml_compiler2_ppir",
  "baml_compiler2_tir",
  "baml_type",
  "baml_workspace",
@@ -1161,6 +1162,7 @@ dependencies = [
  "baml_base",
  "baml_compiler2_ast",
  "baml_compiler2_hir",
+ "baml_compiler2_ppir",
  "baml_compiler2_tir",
  "baml_type",
  "indexmap 2.13.0",
@@ -1517,6 +1519,7 @@ dependencies = [
  "bex_vm",
  "bex_vm_types",
  "futures",
+ "futures-timer",
  "indexmap 2.13.0",
  "insta",
  "log",
@@ -1666,6 +1669,7 @@ dependencies = [
  "log",
  "thiserror 2.0.18",
  "tokio",
+ "web-time",
 ]
 
 [[package]]

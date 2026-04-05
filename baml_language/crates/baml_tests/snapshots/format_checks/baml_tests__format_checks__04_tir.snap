@@ -1259,19 +1259,27 @@ function user.LoopStmts(items: int[], flag: bool) -> int throws never {
     let another_extremely_long_variable_name = a * a + result * result + a * result + a + result + a * a * a + result * result * result + a * result * a + result * a * result : int
     return result : int
   }
-  !! 12080..12107: unreachable code: 1 statement(s) after diverging statement
-  !! 12187..12217: unreachable code: 1 statement(s) after diverging statement
+  ?? 12080..12107: unreachable code: 1 statement(s) after diverging statement
+  ?? 12187..12217: unreachable code: 1 statement(s) after diverging statement
 }
 function user.AssertStmts(x: int, y: int) -> int throws never {
   { : int
-    assert x > 0
-    assert x < 100
-    assert x > 0
-    assert x > 0
-    assert x > 0 && x < 100 && y > 0 && y < 100 && x != y && x + y < 150 && x * y > 10 && x - y != 42 && x % 7 == 0
-    assert x > 0 && x < 100 && y > 0 && y < 100 && x != y && x + y < 150 && x * y > 10 && x - y != 42 && x % 7 == 0 && y % 3 == 0 && x + y + x * y > 100 && x * x + y * y < 10000
-    assert x > 0 && x < 100 && y > 0 && y < 100 && x != y && x + y < 150 && x * y > 10 && x - y != 42 && x % 7 == 0
-    assert x > 0 && x < 100 && y > 0 && y < 100 && x != y && x + y < 150 && x * y > 10 && x - y != 42 && x % 7 == 0
+    assert : unknown
+    x > 0 : bool
+    assert : unknown
+    x < 100 : bool
+    assert : unknown
+    x > 0 : bool
+    assert : unknown
+    x > 0 : bool
+    assert : unknown
+    x > 0 && x < 100 && y > 0 && y < 100 && x != y && x + y < 150 && x * y > 10 && x - y != 42 && x % 7 == 0 : bool
+    assert : unknown
+    x > 0 && x < 100 && y > 0 && y < 100 && x != y && x + y < 150 && x * y > 10 && x - y != 42 && x % 7 == 0 && y % 3 == 0 && x + y + x * y > 100 && x * x + y * y < 10000 : bool
+    assert : unknown
+    x > 0 && x < 100 && y > 0 && y < 100 && x != y && x + y < 150 && x * y > 10 && x - y != 42 && x % 7 == 0 : bool
+    assert : unknown
+    x > 0 && x < 100 && y > 0 && y < 100 && x != y && x + y < 150 && x * y > 10 && x - y != 42 && x % 7 == 0 : bool
     x : int
   }
 }

@@ -9,7 +9,7 @@
 //! all of that moves downstream.
 
 use baml_base::Name;
-use baml_compiler_syntax::{SyntaxNode, ast};
+use baml_compiler_syntax::{SyntaxKind, SyntaxNode, ast};
 use rowan::ast::AstNode;
 
 use crate::{
@@ -24,6 +24,34 @@ use crate::{
     lower_expr_body, lower_type_expr,
 };
 
+// ── Test/Testset desugaring intermediate types ───────────────────
+
+/// Intermediate representation of a test/testset block before synthesis.
+///
+/// Collected during file lowering, then passed to `synthesize_init_test_function`
+/// which emits a per-file `$init_test_<file_id>` function containing
+/// `registry.register_test(...)` / `registry.register_test_set(...)` calls.
+enum TestRegistrationItem {
+    Test {
+        /// The name expression CST element (`STRING_LITERAL`, `BINARY_EXPR`, etc.).
+        name_element: baml_compiler_syntax::SyntaxElement,
+        /// The `BLOCK_EXPR` CST node for the test body — lowered lazily into a lambda.
+        body_node: SyntaxNode,
+        /// Optional runner expression element from `with <expr>`.
+        /// May be a node (e.g. `CALL_EXPR`) or a token (e.g. `INTEGER_LITERAL`).
+        runner_element: Option<baml_compiler_syntax::SyntaxElement>,
+    },
+    TestSet {
+        /// The name expression CST element (`STRING_LITERAL`, `BINARY_EXPR`, etc.).
+        name_element: baml_compiler_syntax::SyntaxElement,
+        /// The `BLOCK_EXPR` body node of the testset — lowered as a collector lambda body.
+        /// May contain setup statements (let bindings), for/if blocks, and nested test/testset.
+        body_node: SyntaxNode,
+        /// Optional runner expression element from `with <expr>`.
+        runner_element: Option<baml_compiler_syntax::SyntaxElement>,
+    },
+}
+
 // ── File-level lowering ─────────────────────────────────────────
 
 /// Lower a CST root node to a list of `Item`s.
@@ -34,8 +62,16 @@ use crate::{
 /// All diagnostics (structural lowering issues, client validation,
 /// field-attr-in-wrong-position) are returned as `LoweringDiagnostic` variants.
 pub fn lower_file(root: &SyntaxNode) -> (Vec<Item>, Vec<LoweringDiagnostic>) {
+    lower_file_with_file_id(root, baml_base::FileId::sentinel())
+}
+
+pub fn lower_file_with_file_id(
+    root: &SyntaxNode,
+    file_id: baml_base::FileId,
+) -> (Vec<Item>, Vec<LoweringDiagnostic>) {
     let mut diags = Vec::new();
     let mut items = Vec::new();
+    let mut test_registrations: Vec<TestRegistrationItem> = Vec::new();
 
     for child in root.children() {
         match child.kind() {
@@ -74,6 +110,16 @@ pub fn lower_file(root: &SyntaxNode) -> (Vec<Item>, Vec<LoweringDiagnostic>) {
                     items.push(Item::Test(t));
                 }
             }
+            baml_compiler_syntax::SyntaxKind::TEST_EXPR_DEF => {
+                if let Some(reg) = lower_test_expr(&child) {
+                    test_registrations.push(reg);
+                }
+            }
+            baml_compiler_syntax::SyntaxKind::TESTSET_DEF => {
+                if let Some(reg) = lower_testset(&child) {
+                    test_registrations.push(reg);
+                }
+            }
             baml_compiler_syntax::SyntaxKind::GENERATOR_DEF => {
                 if let Some(g) = lower_generator(&child, &mut diags) {
                     items.push(Item::Generator(g));
@@ -91,6 +137,13 @@ pub fn lower_file(root: &SyntaxNode) -> (Vec<Item>, Vec<LoweringDiagnostic>) {
             }
             _ => {} // skip comments, whitespace, errors
         }
+    }
+
+    // Synthesize a per-file $init_test function for all collected test/testset registrations.
+    // The file_id suffix ensures uniqueness when multiple files contain tests.
+    if !test_registrations.is_empty() {
+        let init_fn = synthesize_init_test_function(&test_registrations, file_id, &mut diags);
+        items.push(Item::Function(init_fn));
     }
 
     // Post-lowering validation: reject field attrs in invalid type positions.
@@ -733,6 +786,336 @@ fn lower_test(node: &SyntaxNode, diags: &mut Vec<LoweringDiagnostic>) -> Option<
         span: node.text_range(),
         name_span: name_token.text_range(),
     })
+}
+
+/// Extract the name expression element from a `TEST_EXPR_DEF` or `TESTSET_DEF` node.
+///
+/// Returns the first non-trivial child (node or token) after the keyword
+/// (`KW_TEST` or `KW_TESTSET`) and before `KW_WITH` or `BLOCK_EXPR`.
+fn extract_name_element(
+    node: &SyntaxNode,
+    keyword_kind: SyntaxKind,
+) -> Option<baml_compiler_syntax::SyntaxElement> {
+    let mut past_keyword = false;
+    for child in node.children_with_tokens() {
+        let kind = child.kind();
+        // Skip whitespace/newline trivia
+        if matches!(
+            kind,
+            SyntaxKind::WHITESPACE | SyntaxKind::NEWLINE | SyntaxKind::LINE_COMMENT
+        ) {
+            continue;
+        }
+        if kind == keyword_kind {
+            past_keyword = true;
+            continue;
+        }
+        if past_keyword && kind != SyntaxKind::KW_WITH && kind != SyntaxKind::BLOCK_EXPR {
+            return Some(child);
+        }
+        if kind == SyntaxKind::KW_WITH || kind == SyntaxKind::BLOCK_EXPR {
+            break;
+        }
+    }
+    None
+}
+
+/// Extract the runner expression element from a `TEST_EXPR_DEF` or `TESTSET_DEF` node.
+///
+/// Returns the first non-trivial child (node or token) that appears after `KW_WITH` and
+/// before `BLOCK_EXPR`. This uses `children_with_tokens()` because the runner expression
+/// may be a bare token (e.g. `INTEGER_LITERAL "42"`) rather than a wrapped node.
+pub(crate) fn extract_runner_element(
+    node: &SyntaxNode,
+) -> Option<baml_compiler_syntax::SyntaxElement> {
+    let mut found_with = false;
+    for child in node.children_with_tokens() {
+        let kind = child.kind();
+        // Skip whitespace/newline trivia
+        if matches!(
+            kind,
+            SyntaxKind::WHITESPACE | SyntaxKind::NEWLINE | SyntaxKind::LINE_COMMENT
+        ) {
+            continue;
+        }
+        if kind == SyntaxKind::KW_WITH {
+            found_with = true;
+            continue;
+        }
+        if found_with && kind != SyntaxKind::BLOCK_EXPR {
+            return Some(child);
+        }
+        if kind == SyntaxKind::BLOCK_EXPR {
+            break;
+        }
+    }
+    None
+}
+
+/// Lower a `TEST_EXPR_DEF` CST node into a `TestRegistrationItem::Test`.
+///
+/// The CST structure is:
+/// `TEST_EXPR_DEF [ KW_TEST STRING_LITERAL [KW_WITH expr] BLOCK_EXPR ]`
+fn lower_test_expr(node: &SyntaxNode) -> Option<TestRegistrationItem> {
+    // Find the name expression — first child element after KW_TEST, before KW_WITH/BLOCK_EXPR.
+    let name_element = extract_name_element(node, SyntaxKind::KW_TEST)?;
+
+    // Find the optional runner expression (first child after KW_WITH, before BLOCK_EXPR)
+    let runner_element = extract_runner_element(node);
+
+    // Find the BLOCK_EXPR child (the test body)
+    let body_node = node
+        .children()
+        .find(|c| c.kind() == SyntaxKind::BLOCK_EXPR)?;
+
+    Some(TestRegistrationItem::Test {
+        name_element,
+        body_node,
+        runner_element,
+    })
+}
+
+/// Lower a `TESTSET_DEF` CST node into a `TestRegistrationItem::TestSet`.
+///
+/// The CST structure is:
+/// `TESTSET_DEF [ KW_TESTSET STRING_LITERAL [KW_WITH expr] BLOCK_EXPR ]`
+///
+/// The `BLOCK_EXPR` body may contain setup statements (let bindings), for/if control
+/// flow, and nested `TEST_EXPR_DEF` / `TESTSET_DEF` nodes. The entire body is stored
+/// and lowered lazily into a collector lambda body.
+fn lower_testset(node: &SyntaxNode) -> Option<TestRegistrationItem> {
+    // Find the name expression — first child element after KW_TESTSET, before KW_WITH/BLOCK_EXPR.
+    let name_element = extract_name_element(node, SyntaxKind::KW_TESTSET)?;
+
+    // Find the optional runner expression (first child after KW_WITH, before BLOCK_EXPR)
+    let runner_element = extract_runner_element(node);
+
+    // Find the BLOCK_EXPR child (the full testset body)
+    let body_node = node
+        .children()
+        .find(|c| c.kind() == SyntaxKind::BLOCK_EXPR)?;
+
+    Some(TestRegistrationItem::TestSet {
+        name_element,
+        body_node,
+        runner_element,
+    })
+}
+
+/// Synthesize a `$init_test` function that registers tests and testsets
+/// into a `testing.Registry` parameter.
+///
+/// The function body calls `registry.register_test(name, lambda, null)` for each test
+/// and `registry.register_test_set(name, collector_lambda, null)` for each testset.
+///
+/// Lambda bodies are lowered from the original CST `BLOCK_EXPR` nodes.
+///
+/// The function is named `"$init_test_<file_id>"` to avoid collisions when
+/// multiple files contain tests. For the sentinel `FileId` (PPIR), uses plain
+/// `"$init_test"` since PPIR processes files individually.
+fn synthesize_init_test_function(
+    registrations: &[TestRegistrationItem],
+    file_id: baml_base::FileId,
+    diags: &mut Vec<LoweringDiagnostic>,
+) -> FunctionDef {
+    let fn_name = if file_id == baml_base::FileId::sentinel() {
+        "$init_test".to_string()
+    } else {
+        format!("$init_test_{}", file_id.as_u32())
+    };
+    let span = text_size::TextRange::default();
+
+    let mut ctx = lower_expr_body::InitTestContext::new();
+
+    // Build statements: one per registration
+    let mut stmt_ids: Vec<crate::ast::StmtId> = Vec::with_capacity(registrations.len());
+    for reg in registrations {
+        let stmt_expr = synthesize_register_call(reg, &mut ctx, diags);
+        stmt_ids.push(ctx.alloc_stmt(crate::ast::Stmt::Expr(stmt_expr), span));
+    }
+
+    // Block expression containing all registration calls, with a null tail
+    let null_expr = ctx.alloc_expr(Expr::Null, span);
+    let block_expr = ctx.alloc_expr(
+        Expr::Block {
+            stmts: stmt_ids,
+            tail_expr: Some(null_expr),
+        },
+        span,
+    );
+
+    let (body, source_map, finish_diags) = ctx.finish(Some(block_expr));
+    diags.extend(finish_diags);
+
+    // The single parameter: `registry: testing.TestCollector`
+    let registry_param = Param {
+        name: Name::new("registry"),
+        type_expr: Some(SpannedTypeExpr {
+            expr: crate::ast::TypeExpr::Path {
+                segments: vec![Name::new("testing"), Name::new("TestCollector")],
+                attrs: vec![],
+            },
+            span,
+        }),
+        span,
+        name_span: span,
+    };
+
+    FunctionDef {
+        name: Name::new(&fn_name),
+        generic_params: vec![],
+        params: vec![registry_param],
+        return_type: None,
+        throws: None,
+        body: Some(FunctionBodyDef::Expr(body, source_map)),
+        declarative_meta: None,
+        attributes: vec![],
+        span,
+        name_span: span,
+    }
+}
+
+/// Synthesize a single `registry.register_test(name, lambda, runner)` or
+/// `registry.register_test_set(name, collector_lambda, runner)` call expression.
+fn synthesize_register_call(
+    reg: &TestRegistrationItem,
+    ctx: &mut lower_expr_body::InitTestContext,
+    diags: &mut Vec<LoweringDiagnostic>,
+) -> ExprId {
+    let span = text_size::TextRange::default();
+    match reg {
+        TestRegistrationItem::Test {
+            name_element,
+            body_node,
+            runner_element,
+        } => {
+            // Lower the test block body into a fresh ExprBody (lambda body)
+            let (lambda_body, lambda_source_map, lambda_diags) =
+                lower_expr_body::lower_block_node(body_node, &[Name::new("registry")]);
+            diags.extend(lambda_diags);
+
+            let lambda_def = FunctionDef {
+                name: Name::new("<test body>"),
+                generic_params: vec![],
+                params: vec![],
+                return_type: None,
+                throws: None,
+                body: Some(FunctionBodyDef::Expr(lambda_body, lambda_source_map)),
+                declarative_meta: None,
+                attributes: vec![],
+                span,
+                name_span: span,
+            };
+
+            // registry.register_test
+            let registry_ref = ctx.alloc_expr(Expr::Path(vec![Name::new("registry")]), span);
+            let method_call_target = ctx.alloc_expr(
+                Expr::FieldAccess {
+                    base: registry_ref,
+                    field: Name::new("register_test"),
+                },
+                span,
+            );
+
+            // Args: (name_expr, lambda, runner_or_null)
+            let name_arg = lower_expr_body::lower_runner_element(ctx, name_element);
+            // Use a unique synthetic span for the lambda so the HIR scope builder
+            // can distinguish this lambda's scope from other synthesized lambdas.
+            let lambda_span = ctx.next_lambda_span();
+            let lambda_arg = ctx.alloc_expr(Expr::Lambda(Box::new(lambda_def)), lambda_span);
+            let runner_arg = lower_runner_element(runner_element.as_ref(), ctx, span);
+
+            ctx.alloc_expr(
+                Expr::Call {
+                    callee: method_call_target,
+                    args: vec![name_arg, lambda_arg, runner_arg],
+                },
+                span,
+            )
+        }
+        TestRegistrationItem::TestSet {
+            name_element,
+            body_node,
+            runner_element,
+        } => {
+            // Lower the testset body into a collector lambda using the full testset lowering.
+            let (collector_exprs, collector_source_map, collector_diags) =
+                lower_expr_body::lower_testset_block_node(
+                    body_node,
+                    &Name::new("testset"),
+                    &[Name::new("registry")],
+                );
+            diags.extend(collector_diags);
+
+            // Collector lambda parameter: `testset`
+            let testset_param = Param {
+                name: Name::new("testset"),
+                type_expr: Some(SpannedTypeExpr {
+                    expr: crate::ast::TypeExpr::Path {
+                        segments: vec![Name::new("testing"), Name::new("TestCollector")],
+                        attrs: vec![],
+                    },
+                    span,
+                }),
+                span,
+                name_span: span,
+            };
+
+            let collector_def = FunctionDef {
+                name: Name::new("<testset collector>"),
+                generic_params: vec![],
+                params: vec![testset_param],
+                return_type: None,
+                throws: None,
+                body: Some(FunctionBodyDef::Expr(collector_exprs, collector_source_map)),
+                declarative_meta: None,
+                attributes: vec![],
+                span,
+                name_span: span,
+            };
+
+            // registry.register_test_set
+            let registry_ref = ctx.alloc_expr(Expr::Path(vec![Name::new("registry")]), span);
+            let method_call_target = ctx.alloc_expr(
+                Expr::FieldAccess {
+                    base: registry_ref,
+                    field: Name::new("register_test_set"),
+                },
+                span,
+            );
+
+            // Args: (name_expr, collector_lambda, runner_or_null)
+            let name_arg = lower_expr_body::lower_runner_element(ctx, name_element);
+            // Use a unique synthetic span for the collector lambda.
+            let collector_lambda_span = ctx.next_lambda_span();
+            let collector_arg =
+                ctx.alloc_expr(Expr::Lambda(Box::new(collector_def)), collector_lambda_span);
+            let runner_arg = lower_runner_element(runner_element.as_ref(), ctx, span);
+
+            ctx.alloc_expr(
+                Expr::Call {
+                    callee: method_call_target,
+                    args: vec![name_arg, collector_arg, runner_arg],
+                },
+                span,
+            )
+        }
+    }
+}
+
+/// Lower an optional runner CST element directly into the parent arena.
+///
+/// If present, the runner expression is lowered into the same `InitTestContext` arena
+/// (no IIFE wrapping needed). If absent, returns `Expr::Null`.
+fn lower_runner_element(
+    runner_element: Option<&baml_compiler_syntax::SyntaxElement>,
+    ctx: &mut lower_expr_body::InitTestContext,
+    span: text_size::TextRange,
+) -> ExprId {
+    match runner_element {
+        Some(element) => lower_expr_body::lower_runner_element(ctx, element),
+        None => ctx.alloc_expr(Expr::Null, span),
+    }
 }
 
 fn lower_generator(node: &SyntaxNode, diags: &mut Vec<LoweringDiagnostic>) -> Option<GeneratorDef> {

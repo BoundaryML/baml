@@ -50,6 +50,13 @@ const ValueRenderer: FC<{
     return <CodeBlock>{JSON.stringify(value, null, 2)}</CodeBlock>;
   }
 
+  // $type dispatch — BAML instance types from bex_value_to_json
+  const dollarType = (value as Record<string, unknown>).$type;
+  if (typeof dollarType === 'string') {
+    const Renderer = resolve(dollarType, customRenderers);
+    if (Renderer) return <Renderer value={value} />;
+  }
+
   // Array
   if (Array.isArray(value)) {
     if (value.length === 0) return <span className="font-vsc-mono text-xs text-vsc-text-faint">[]</span>;

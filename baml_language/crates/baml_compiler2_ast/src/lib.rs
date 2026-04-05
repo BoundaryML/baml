@@ -18,7 +18,7 @@ pub mod lowering_diagnostic;
 
 pub use ast::*;
 pub use disambiguate::is_field_attr;
-pub use lower_cst::lower_file;
+pub use lower_cst::{lower_file, lower_file_with_file_id};
 pub use lowering_diagnostic::LoweringDiagnostic;
 
 #[cfg(test)]

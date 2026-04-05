@@ -64,6 +64,7 @@ namespace baml.net:
   class Socket { methods: [read, close] }
   function connect
 namespace baml.sys:
+  function now_ms
   function panic
   function shell
   function sleep

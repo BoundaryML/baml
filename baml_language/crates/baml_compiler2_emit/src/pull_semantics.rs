@@ -80,7 +80,6 @@ pub(crate) trait StackEffectSink: PullSink {
         channel_name: Option<&str>,
     ) -> Result<(), Self::Error>;
     fn watch_local(&mut self, local: Local) -> Result<(), Self::Error>;
-    fn assert_top(&mut self) -> Result<(), Self::Error>;
 }
 
 /// How a local assignment statement should be emitted/evaluated.
@@ -182,15 +181,6 @@ pub(crate) fn walk_watch_options_statement<S: StackEffectSink>(
     sink.push_watch_channel(local, channel_name)?;
     walk_operand_pull(sink, filter)?;
     sink.watch_local(local)
-}
-
-/// Shared evaluation for `Assert(operand)`.
-pub(crate) fn walk_assert_statement<S: StackEffectSink>(
-    sink: &mut S,
-    operand: &Operand,
-) -> Result<(), S::Error> {
-    walk_operand_pull(sink, operand)?;
-    sink.assert_top()
 }
 
 /// Shared pull order for direct calls: each arg only.

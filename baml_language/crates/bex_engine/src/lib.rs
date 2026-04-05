@@ -77,7 +77,8 @@ use bex_vm_types::{FunctionMeta, GlobalPool, HeapPtr, Object, SysOp, Value};
 pub use conversion::test_arg_to_external;
 // Re-export CancellationToken for callers.
 pub use function_call_context::{FunctionCallContext, FunctionCallContextBuilder};
-use sys_types::{CallId, OpError, SysOpResult};
+pub use sys_types::CallId;
+use sys_types::{OpError, SysOpResult};
 use thiserror::Error;
 use tokio::sync::{Notify, mpsc};
 pub use tokio_util::sync::CancellationToken;
@@ -851,6 +852,7 @@ impl BexEngine {
             collectors,
             cancel,
         }: FunctionCallContext,
+        copy_objects: bool,
     ) -> Result<BexExternalValue, EngineError> {
         // Fail fast if already cancelled — guarantees pre-cancelled tokens
         // always produce Err(Cancelled) regardless of function contents.
@@ -978,6 +980,7 @@ impl BexEngine {
                 call_id,
                 &mut span_state,
                 &cancel,
+                copy_objects,
             )
             .await;
 
@@ -1107,6 +1110,77 @@ impl BexEngine {
             .find(|t| t.function_names.iter().any(|n| function_name == n) && t.name == test_name)
     }
 
+    // ========================================================================
+    // Test Collection API
+    // ========================================================================
+
+    /// Collect all tests for a package by invoking `{package}.$init_test(collector)`.
+    ///
+    /// Returns a `BexExternalValue::Handle` pointing to a live `testing.TestRegistry`
+    /// heap object (GC-rooted), or `BexExternalValue::Null` if the package has no tests.
+    ///
+    /// If the package has no test blocks, `$init_test` will not exist in the program
+    /// and `Null` is returned immediately.
+    ///
+    /// # Arguments
+    ///
+    /// - `package`: The package name (e.g. `"user"`).
+    /// - `cancel`: A [`CancellationToken`] for caller-controlled cancellation.
+    pub async fn collect_tests(
+        self: &Arc<Self>,
+        package: &str,
+        call_id: CallId,
+        cancel: CancellationToken,
+    ) -> Result<BexExternalValue, EngineError> {
+        let init_test_name = if package == "user" {
+            "$init_test".to_string()
+        } else {
+            format!("{package}.$init_test")
+        };
+
+        // If no $init_test function exists, this package has no tests.
+        if self.lookup_function(&init_test_name).is_err() {
+            return Ok(BexExternalValue::Null);
+        }
+
+        let ctx = || {
+            FunctionCallContextBuilder::new(call_id)
+                .with_cancel_token(cancel.clone())
+                .build()
+        };
+
+        // Step 1: Create a live TestCollector on the heap
+        let collector = self
+            .call_function(
+                "testing.TestCollector.new",
+                vec![BexExternalValue::String(String::new())],
+                ctx(),
+                false, // return Handle, not deep copy
+            )
+            .await?;
+
+        // Step 2: Populate the collector in-place via $init_test
+        self.call_function(
+            &init_test_name,
+            vec![collector.clone()],
+            ctx(),
+            true, // return value is null, doesn't matter
+        )
+        .await?;
+
+        // Step 3: Wrap in a TestRegistry
+        let registry = self
+            .call_function(
+                "testing.TestRegistry.new",
+                vec![collector],
+                ctx(),
+                false, // return Handle to live registry
+            )
+            .await?;
+
+        Ok(registry)
+    }
+
     /// Collect roots from a yielded VM.
     fn collect_vm_roots(vm: &BexVm) -> Vec<HeapPtr> {
         let mut roots = Vec::new();
@@ -1187,6 +1261,7 @@ impl BexEngine {
     ///
     /// The `my_epoch` parameter is used to check if GC has been requested
     /// (epoch advanced). VMs from old epochs will park at yield points.
+    #[allow(clippy::too_many_arguments)]
     async fn run_event_loop_with_epoch(
         self: &Arc<Self>,
         return_type: Ty,
@@ -1195,6 +1270,7 @@ impl BexEngine {
         call_id: CallId,
         span_state: &mut Option<SpanState>,
         cancel: &CancellationToken,
+        copy_objects: bool,
     ) -> Result<BexExternalValue, EngineError> {
         let (pending_futures, mut processed_futures) = mpsc::unbounded_channel::<FutureResult>();
         // Abort handles for spawned async tasks.
@@ -1265,8 +1341,20 @@ impl BexEngine {
                         return Err(EngineError::Cancelled);
                     }
 
+                    // When copy_objects: false and the result is a heap object,
+                    // create a Handle without holding with_gc_protection (which
+                    // takes a read lock on handles). create_handle takes a write
+                    // lock — the two cannot nest without deadlocking.
+                    if !copy_objects {
+                        if let Value::Object(ptr) = value {
+                            let handle = self.heap.create_handle(ptr);
+                            return Ok(BexExternalValue::Handle(handle));
+                        }
+                        // Non-object primitives fall through to normal conversion below.
+                    }
+
                     return self.heap.with_gc_protection(|protected| {
-                        // Convert to BexValue (handles for objects, BexExternalValue for primitives)
+                        // Normal deep-extraction: convert VM value to fully owned BexExternalValue.
                         self.convert_vm_value_to_external_with_type(
                             &value,
                             &return_type,
@@ -1578,6 +1666,7 @@ impl sys_types::VmSpawner for BexEngine {
             FunctionCallContextBuilder::new(sys_types::CallId::next())
                 .with_cancel_token(cancel)
                 .build(),
+            true,
         )
         .await
         .map_err(|e| Box::new(e) as Box<dyn Send + Sync + 'static>)

@@ -28,6 +28,7 @@ colored = { workspace = true }
 indexmap = { workspace = true }
 log = { workspace = true }
 thiserror = { workspace = true }
+web-time = { workspace = true }
 
 [build-dependencies]
 baml_builtins2_codegen = { workspace = true }

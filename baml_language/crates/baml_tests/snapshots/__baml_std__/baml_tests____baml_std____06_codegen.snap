@@ -1070,6 +1070,9 @@ function baml.net.Socket.read(self: null) -> string {
 function baml.net.connect(addr: string) -> void {
 }
 
+function baml.sys.now_ms() -> int {
+}
+
 function baml.sys.panic(message: string) -> null {
 }
 

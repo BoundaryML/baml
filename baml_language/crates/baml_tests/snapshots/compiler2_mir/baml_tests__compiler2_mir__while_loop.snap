@@ -9,8 +9,7 @@ fn user.f(n: int) -> int {
     let _3: int // i
     let _4: bool
     let _5: int
-    let _6: void
-    let _7: null
+    let _6: int
 
     bb0: {
         _2 = const 0_i64;
@@ -20,8 +19,7 @@ fn user.f(n: int) -> int {
 
     bb1: {
         _5 = copy _3;
-        _6 = n {  };
-        _4 = copy _5 < copy _6;
+        _4 = copy _5 < copy _1;
         branch copy _4 -> [bb4, bb2];
     }
 
@@ -35,10 +33,9 @@ fn user.f(n: int) -> int {
     }
 
     bb4: {
-        _7 = call const fn baml.sys.panic(const "parse error") -> [bb5];
-    }
-
-    bb5: {
-        unreachable;
+        _6 = copy _3;
+        _2 = copy _2 + copy _6;
+        _3 = copy _3 + const 1_i64;
+        goto -> bb1;
     }
 }

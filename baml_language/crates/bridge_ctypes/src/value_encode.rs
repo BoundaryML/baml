@@ -309,7 +309,9 @@ fn ty_to_field_type(ty: &Ty) -> BamlFieldType {
         | Ty::Function { .. }
         | Ty::Void { .. }
         | Ty::WatchAccessor(_, _)
-        | Ty::BuiltinUnknown { .. } => unreachable!("compiler-only variant should not reach FFI"),
+        | Ty::BuiltinUnknown { .. } => {
+            unreachable!("compiler-only variant should not reach FFI: {ty:?}")
+        }
     };
 
     BamlFieldType { r#type: field_type }

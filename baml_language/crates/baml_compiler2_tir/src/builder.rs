@@ -295,7 +295,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 if let Some((div_idx, div_stmt)) = diverged_at {
                     let remaining = stmts.len() - div_idx - 1 + usize::from(tail_expr.is_some());
                     if remaining > 0 {
-                        self.context.report_at_stmt(
+                        self.context.report_warning_at_stmt(
                             crate::infer_context::TirTypeError::DeadCode {
                                 after: div_stmt,
                                 unreachable_count: remaining,
@@ -752,7 +752,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 let ty = if let Some((div_idx, div_stmt)) = diverged_at {
                     let remaining = stmts.len() - div_idx - 1 + usize::from(tail_expr.is_some());
                     if remaining > 0 {
-                        self.context.report_at_stmt(
+                        self.context.report_warning_at_stmt(
                             crate::infer_context::TirTypeError::DeadCode {
                                 after: div_stmt,
                                 unreachable_count: remaining,
@@ -916,6 +916,23 @@ impl<'db> TypeInferenceBuilder<'db> {
 
                 let is_method_call = matches!(&body.exprs[*callee], Expr::FieldAccess { .. });
                 let callee_ty = self.infer_expr(*callee, body);
+
+                // Expand type alias chains so alias-over-function types are callable.
+                // Bare alias cycles are already caught by find_invalid_alias_cycles (Tarjan SCC)
+                // before we reach here, so the depth guard is cheap insurance.
+                let callee_ty = {
+                    let mut ty = callee_ty;
+                    for _ in 0..64 {
+                        match &ty {
+                            Ty::TypeAlias(qtn, _) => match self.aliases.get(qtn) {
+                                Some(expanded) => ty = expanded.clone(),
+                                None => break,
+                            },
+                            _ => break,
+                        }
+                    }
+                    ty
+                };
 
                 match &callee_ty {
                     Ty::Function { params, ret, .. } => {
@@ -1410,10 +1427,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                 }
                 false
             }
-            Stmt::Assert { condition } => {
-                self.infer_expr(*condition, body);
-                false
-            }
             Stmt::Break | Stmt::Continue => true, // break/continue diverge
             Stmt::Missing | Stmt::HeaderComment { .. } => false,
         }
@@ -1688,8 +1701,17 @@ impl<'db> TypeInferenceBuilder<'db> {
                 let matches =
                     self.match_throw_types_for_pattern(arm.pattern, &residual, body, arm.body);
                 if matches.may_match.is_empty() {
-                    self.context
-                        .report_warning_simple(TirTypeError::UnreachableArm, arm.body);
+                    // Suppress for wildcard `_ =>` catch arms — they are intentionally
+                    // defensive (e.g. catching runtime panics that the static type
+                    // system doesn't model as throwable).
+                    let is_wildcard = matches!(
+                        &body.patterns[arm.pattern],
+                        baml_compiler2_ast::Pattern::Binding(name) if name == "_"
+                    );
+                    if !is_wildcard {
+                        self.context
+                            .report_warning_simple(TirTypeError::UnreachableArm, arm.body);
+                    }
                 }
 
                 let narrowed_binding_ty = Self::facts_to_ty(&matches.may_match);
@@ -2412,9 +2434,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                 self.collect_effective_throws_from_expr(*target, body, out);
                 self.collect_effective_throws_from_expr(*value, body, out);
             }
-            Stmt::Assert { condition } => {
-                self.collect_effective_throws_from_expr(*condition, body, out);
-            }
             Stmt::Throw { value } => {
                 self.collect_effective_throws_from_expr(*value, body, out);
                 self.collect_throw_facts_from_value(*value, out);
@@ -2576,7 +2595,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                 self.collect_throw_facts_from_expr(*target, body, out);
                 self.collect_throw_facts_from_expr(*value, body, out);
             }
-            Stmt::Assert { condition } => self.collect_throw_facts_from_expr(*condition, body, out),
             Stmt::Throw { value } => {
                 self.collect_throw_facts_from_expr(*value, body, out);
                 self.collect_throw_facts_from_value(*value, out);
@@ -2667,6 +2685,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                     | "errors"
                     | "unstable"
             );
+            // Don't report "unresolved name" for dependency package names —
+            // they'll be resolved by the parent FieldAccess expression.
+            let is_dep_package = self.res_ctx.dep_interfaces.iter().any(|(n, _)| n == name);
             if matches!(ty, Ty::Unknown { .. })
                 && !self.locals.contains_key(name)
                 && self
@@ -2678,6 +2699,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     .lookup_type(&self.ns_context, name)
                     .is_none()
                 && !is_baml_ns_shorthand
+                && !is_dep_package
             {
                 self.context
                     .report_simple(TirTypeError::UnresolvedName { name: name.clone() }, expr_id);
@@ -3568,7 +3590,22 @@ impl<'db> TypeInferenceBuilder<'db> {
             .chain(std::iter::once(member))
             .cloned()
             .collect();
-        self.resolve_package_item(pkg_items, &full_path, at)
+        let result = self.resolve_package_item(pkg_items, &full_path, at);
+        if result.is_none() {
+            // Package was found but the member doesn't exist — report a clear error
+            // with the full dotted path as context (e.g. "unresolved member: testing.Quorum").
+            let base_path = segments.join(".");
+            self.context.report_simple(
+                TirTypeError::UnresolvedName {
+                    name: Name::new(format!("{base_path}.{member}")),
+                },
+                at,
+            );
+            return Some(Ty::Unknown {
+                attr: TyAttr::default(),
+            });
+        }
+        result
     }
 
     fn try_primitive_static_access(
@@ -4652,6 +4689,9 @@ impl<'db> TypeInferenceBuilder<'db> {
         let saved_generic_params = self.generic_params.clone();
         let saved_expressions = std::mem::take(&mut self.expressions);
         let saved_bindings = std::mem::take(&mut self.bindings);
+        let saved_resolutions = std::mem::take(&mut self.resolutions);
+        let saved_exhaustive_matches = std::mem::take(&mut self.exhaustive_matches);
+        let saved_catch_residual_throws = std::mem::take(&mut self.catch_residual_throws);
 
         // Extend generic params with the lambda's own generic params
         let mut new_generic_params = self.generic_params.clone();
@@ -4718,6 +4758,9 @@ impl<'db> TypeInferenceBuilder<'db> {
         // Collect the lambda's expression types and restore parent state
         let lambda_expressions = std::mem::replace(&mut self.expressions, saved_expressions);
         self.bindings = saved_bindings;
+        self.resolutions = saved_resolutions;
+        self.exhaustive_matches = saved_exhaustive_matches;
+        self.catch_residual_throws = saved_catch_residual_throws;
         self.locals = saved_locals;
         self.declared_types = saved_declared;
         self.declared_return_ty = saved_return_ty;

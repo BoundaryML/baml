@@ -1017,9 +1017,7 @@ impl BexVm {
         match error {
             VmError::RuntimeError(runtime_error) => matches!(
                 runtime_error,
-                RuntimeError::AssertionError
-                    | RuntimeError::Unreachable
-                    | RuntimeError::StackOverflow
+                RuntimeError::Unreachable | RuntimeError::StackOverflow
             ),
         }
     }
@@ -1284,6 +1282,10 @@ impl BexVm {
             }
 
             FunctionKind::SysOp(_) => {
+                log::error!(
+                    "[VM] tried to CALL SysOp function '{}' via bytecode — SysOps must go through the engine yield path",
+                    callee.name
+                );
                 return Err(InternalError::TypeError {
                     expected: FunctionType::Callable.into(),
                     got: FunctionType::from(&callee.kind).into(),
@@ -2808,22 +2810,6 @@ impl BexVm {
 
                         // SAFETY: See `load_function` doc comment.
                         function = unsafe { self.load_function(frame_idx)? };
-                    }
-
-                    Instruction::Assert => {
-                        let value = self.stack.pop().ok_or(RuntimeError::AssertionError)?;
-
-                        let Value::Bool(condition_result) = value else {
-                            return Err(InternalError::TypeError {
-                                expected: Type::Bool,
-                                got: self.type_of(&value),
-                            }
-                            .into());
-                        };
-
-                        if !condition_result {
-                            return Err(RuntimeError::AssertionError.into());
-                        }
                     }
 
                     Instruction::AllocMap(n) => {
