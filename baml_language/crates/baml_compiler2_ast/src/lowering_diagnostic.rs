@@ -77,6 +77,9 @@ pub enum LoweringDiagnostic {
     /// expression where only type attributes are valid (e.g. inside parens, on a
     /// non-final union member, or in a function signature).
     FieldAttributeInTypePosition { attr_name: String, span: TextRange },
+
+    /// A byte string literal contains an invalid escape sequence.
+    InvalidByteStringEscape { message: String, span: TextRange },
 }
 
 impl LoweringDiagnostic {
@@ -173,6 +176,12 @@ impl LoweringDiagnostic {
                 ),
                 *span,
                 "field attribute here",
+            ),
+            LoweringDiagnostic::InvalidByteStringEscape { message, span } => (
+                DiagnosticId::InvalidByteStringEscape,
+                format!("invalid byte string literal: {message}"),
+                *span,
+                "invalid escape",
             ),
         };
 

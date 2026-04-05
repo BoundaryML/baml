@@ -144,6 +144,9 @@ mod tests {
             TypeExpr::Null { attrs } => TypeExpr::Null {
                 attrs: strip_attrs(attrs),
             },
+            TypeExpr::Uint8Array { attrs } => TypeExpr::Uint8Array {
+                attrs: strip_attrs(attrs),
+            },
             TypeExpr::Never { attrs } => TypeExpr::Never {
                 attrs: strip_attrs(attrs),
             },

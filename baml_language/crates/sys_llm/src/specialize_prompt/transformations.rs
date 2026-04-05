@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use baml_builtins::PromptAst;
+use baml_builtins2::PromptAst;
 use serde_json::Value;
 
 use crate::{AllowedMetadata, ModelFeatures};

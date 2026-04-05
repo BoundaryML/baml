@@ -22,6 +22,7 @@ mod media;
 mod root;
 mod string;
 mod sys;
+mod uint8array;
 mod unstable;
 
 use bex_vm_types::types::{Instance, Object, Type, Value};

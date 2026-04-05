@@ -2,12 +2,12 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === TIR2 ===
-function user.$init_test_17(registry: testing.TestCollector) -> ? throws never {
+function user.$init_test_18(registry: testing.TestCollector) -> ? throws never {
   { : null
     registry.register_test("simple test", () -> { ... }, null) : null
       () -> { ... } : () -> null
         {
-          let x = 1 Add 2
+          let x = 1 + 2
           assert.equal(x, 3)
         }
     registry.register_test("with not_null", () -> { ... }, null) : null
@@ -19,7 +19,7 @@ function user.$init_test_17(registry: testing.TestCollector) -> ? throws never {
     null : null
   }
 }
-lambda user.$init_test_17 {
+lambda user.$init_test_18 {
 }
-lambda user.$init_test_17 {
+lambda user.$init_test_18 {
 }

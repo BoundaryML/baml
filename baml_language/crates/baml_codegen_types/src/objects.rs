@@ -148,6 +148,7 @@ impl super::Ty {
             Ty::Bool |
             Ty::Null |
             Ty::Unit |
+            Ty::Uint8Array |
             Ty::Media(_) |
             Ty::Class(_) |
             Ty::Enum(_) |

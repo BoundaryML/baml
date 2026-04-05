@@ -13,7 +13,7 @@ mod common;
 
 use std::sync::Arc;
 
-use baml_builtins::{MediaContent, MediaValue};
+use baml_builtins2::{MediaContent, MediaValue};
 use baml_type::MediaKind;
 use bex_engine::{BexEngine, BexExternalValue, FunctionCallContextBuilder};
 use bex_external_types::BexExternalAdt;
@@ -1188,6 +1188,444 @@ function get_body() -> string {
             "messages": [
                 {"role": "user", "content": [{"text": "Hello there"}]}
             ]
+        })
+    );
+}
+
+// ============================================================================
+// Google AI / Vertex AI shared body tests
+// ============================================================================
+
+const GOOGLE_AI_CLIENT: &str = r#"
+client C {
+    provider google-ai
+    options {
+        model "gemini-2.0-flash"
+        api_key "gemini-test-key"
+    }
+}
+"#;
+
+/// Uses API key auth via `query_params` to avoid ADC/OAuth token resolution in tests.
+const VERTEX_AI_CLIENT: &str = r#"
+client C {
+    provider vertex-ai
+    options {
+        model "gemini-2.0-flash"
+        base_url "https://us-central1-aiplatform.googleapis.com/v1/projects/test-project/locations/us-central1/publishers/google/models"
+        query_params { key "test-api-key" }
+    }
+}
+"#;
+
+macro_rules! gemini_body_tests {
+    ($mod:ident, $client:expr) => {
+        mod $mod {
+            use super::*;
+
+            #[tokio::test]
+            async fn template_string_expansion() {
+                let source = [
+                    $client,
+                    r##"
+template_string Greet(name: string) #"Hello, {{ name }}!"#
+function F(name: string) -> string {
+    client C
+    prompt #"{{ Greet(name) }}"#
+}
+function get_body() -> string {
+    baml.llm.build_request(C, "F", { "name": "Alice" }).body
+}
+"##,
+                ]
+                .join("\n");
+
+                let body = body_json(&run_baml(&source, "get_body").await);
+                assert_eq!(
+                    body,
+                    serde_json::json!({
+                        "contents": [
+                            {"role": "user", "parts": [{"text": "Hello, Alice!"}]}
+                        ]
+                    })
+                );
+            }
+
+            #[tokio::test]
+            async fn struct_arg_in_prompt() {
+                let source = [
+                    $client,
+                    r##"
+class Person {
+    name string
+    age int
+}
+function F(p: Person) -> string {
+    client C
+    prompt #"{{ p.name }} is {{ p.age }}"#
+}
+function get_body() -> string {
+    baml.llm.build_request(C, "F", { "p": { "name": "Bob", "age": 42 } }).body
+}
+"##,
+                ]
+                .join("\n");
+
+                let body = body_json(&run_baml(&source, "get_body").await);
+                assert_eq!(
+                    body,
+                    serde_json::json!({
+                        "contents": [
+                            {"role": "user", "parts": [{"text": "Bob is 42"}]}
+                        ]
+                    })
+                );
+            }
+
+            #[tokio::test]
+            async fn system_and_user() {
+                let source = [
+                    $client,
+                    r##"
+function F() -> string {
+    client C
+    prompt #"
+        {{ _.role("system") }}
+        You are helpful.
+        {{ _.role("user") }}
+        Hi
+    "#
+}
+function get_body() -> string {
+    baml.llm.build_request(C, "F", {}).body
+}
+"##,
+                ]
+                .join("\n");
+
+                let body = body_json(&run_baml(&source, "get_body").await);
+                assert_eq!(
+                    body,
+                    serde_json::json!({
+                        "contents": [
+                            {"role": "user", "parts": [{"text": "Hi"}]}
+                        ],
+                        "systemInstruction": {
+                            "parts": [{"text": "You are helpful."}]
+                        }
+                    })
+                );
+            }
+
+            #[tokio::test]
+            async fn three_role_conversation() {
+                let source = [
+                    $client,
+                    r##"
+function F() -> string {
+    client C
+    prompt #"
+        {{ _.role("system") }}
+        You are a helpful assistant.
+        {{ _.role("user") }}
+        What is 2+2?
+        {{ _.role("assistant") }}
+        4
+    "#
+}
+function get_body() -> string {
+    baml.llm.build_request(C, "F", {}).body
+}
+"##,
+                ]
+                .join("\n");
+
+                let body = body_json(&run_baml(&source, "get_body").await);
+                assert_eq!(
+                    body,
+                    serde_json::json!({
+                        "contents": [
+                            {"role": "user", "parts": [{"text": "What is 2+2?"}]},
+                            {"role": "model", "parts": [{"text": "4"}]}
+                        ],
+                        "systemInstruction": {
+                            "parts": [{"text": "You are a helpful assistant."}]
+                        }
+                    })
+                );
+            }
+
+            #[tokio::test]
+            async fn multi_turn_conversation() {
+                let source = [
+                    $client,
+                    r##"
+function F() -> string {
+    client C
+    prompt #"
+        {{ _.role("system") }}
+        Be concise.
+        {{ _.role("user") }}
+        Hello
+        {{ _.role("assistant") }}
+        Hi!
+        {{ _.role("user") }}
+        How are you?
+        {{ _.role("assistant") }}
+        Good, thanks!
+        {{ _.role("user") }}
+        Goodbye
+    "#
+}
+function get_body() -> string {
+    baml.llm.build_request(C, "F", {}).body
+}
+"##,
+                ]
+                .join("\n");
+
+                let body = body_json(&run_baml(&source, "get_body").await);
+                assert_eq!(
+                    body,
+                    serde_json::json!({
+                        "contents": [
+                            {"role": "user", "parts": [{"text": "Hello"}]},
+                            {"role": "model", "parts": [{"text": "Hi!"}]},
+                            {"role": "user", "parts": [{"text": "How are you?"}]},
+                            {"role": "model", "parts": [{"text": "Good, thanks!"}]},
+                            {"role": "user", "parts": [{"text": "Goodbye"}]}
+                        ],
+                        "systemInstruction": {
+                            "parts": [{"text": "Be concise."}]
+                        }
+                    })
+                );
+            }
+
+            #[tokio::test]
+            async fn user_only_no_system() {
+                let source = [
+                    $client,
+                    r##"
+function F() -> string {
+    client C
+    prompt #"
+        {{ _.role("user") }}
+        Hello there
+    "#
+}
+function get_body() -> string {
+    baml.llm.build_request(C, "F", {}).body
+}
+"##,
+                ]
+                .join("\n");
+
+                let body = body_json(&run_baml(&source, "get_body").await);
+                assert_eq!(
+                    body,
+                    serde_json::json!({
+                        "contents": [
+                            {"role": "user", "parts": [{"text": "Hello there"}]}
+                        ]
+                    })
+                );
+            }
+
+            #[tokio::test]
+            async fn assistant_remapped_to_model() {
+                let source = [
+                    $client,
+                    r##"
+function F() -> string {
+    client C
+    prompt #"
+        {{ _.role("user") }}
+        Hi
+        {{ _.role("assistant") }}
+        Hello!
+    "#
+}
+function get_body() -> string {
+    baml.llm.build_request(C, "F", {}).body
+}
+"##,
+                ]
+                .join("\n");
+
+                let body = body_json(&run_baml(&source, "get_body").await);
+                assert_eq!(
+                    body,
+                    serde_json::json!({
+                        "contents": [
+                            {"role": "user", "parts": [{"text": "Hi"}]},
+                            {"role": "model", "parts": [{"text": "Hello!"}]}
+                        ]
+                    })
+                );
+            }
+        }
+    };
+}
+
+gemini_body_tests!(google_ai, GOOGLE_AI_CLIENT);
+gemini_body_tests!(vertex_ai, VERTEX_AI_CLIENT);
+
+// ============================================================================
+// Vertex AI + Anthropic (rawPredict) e2e tests
+// ============================================================================
+
+const VERTEX_CLAUDE_CLIENT: &str = r#"
+client C {
+    provider vertex-ai
+    options {
+        model "claude-sonnet-4-20250514"
+        base_url "https://us-central1-aiplatform.googleapis.com/v1/projects/test-project/locations/us-central1/publishers/anthropic/models"
+        query_params { key "test-api-key" }
+    }
+}
+"#;
+
+#[tokio::test]
+async fn vertex_claude_uses_raw_predict_url() {
+    let source = [
+        VERTEX_CLAUDE_CLIENT,
+        r##"
+function F() -> string {
+    client C
+    prompt #"{{ _.role("user") }}Hi"#
+}
+function get_url() -> string {
+    baml.llm.build_request(C, "F", {}).url
+}
+"##,
+    ]
+    .join("\n");
+
+    let result = run_baml(&source, "get_url").await;
+    let url = as_string(&result);
+    assert!(
+        url.contains(":rawPredict"),
+        "Claude on Vertex should use rawPredict: {url}"
+    );
+    assert!(
+        !url.contains(":generateContent"),
+        "Claude on Vertex should NOT use generateContent: {url}"
+    );
+}
+
+#[tokio::test]
+async fn vertex_claude_keeps_assistant_role() {
+    let source = [
+        VERTEX_CLAUDE_CLIENT,
+        r##"
+function F() -> string {
+    client C
+    prompt #"
+        {{ _.role("user") }}
+        Hi
+        {{ _.role("assistant") }}
+        Hello!
+        {{ _.role("user") }}
+        How are you?
+    "#
+}
+function get_body() -> string {
+    baml.llm.build_request(C, "F", {}).body
+}
+"##,
+    ]
+    .join("\n");
+
+    let body = body_json(&run_baml(&source, "get_body").await);
+    assert_eq!(
+        body,
+        serde_json::json!({
+            "model": "claude-sonnet-4-20250514",
+            "anthropic_version": "vertex-2023-10-16",
+            "max_tokens": 4096,
+            "messages": [
+                {"role": "user", "content": [{"type": "text", "text": "Hi"}]},
+                {"role": "assistant", "content": [{"type": "text", "text": "Hello!"}]},
+                {"role": "user", "content": [{"type": "text", "text": "How are you?"}]}
+            ]
+        })
+    );
+}
+
+#[tokio::test]
+async fn vertex_claude_system_extracted() {
+    let source = [
+        VERTEX_CLAUDE_CLIENT,
+        r##"
+function F() -> string {
+    client C
+    prompt #"
+        {{ _.role("system") }}
+        You are helpful.
+        {{ _.role("user") }}
+        Hi
+    "#
+}
+function get_body() -> string {
+    baml.llm.build_request(C, "F", {}).body
+}
+"##,
+    ]
+    .join("\n");
+
+    let body = body_json(&run_baml(&source, "get_body").await);
+    assert_eq!(
+        body,
+        serde_json::json!({
+            "model": "claude-sonnet-4-20250514",
+            "anthropic_version": "vertex-2023-10-16",
+            "max_tokens": 4096,
+            "system": [{"type": "text", "text": "You are helpful."}],
+            "messages": [
+                {"role": "user", "content": [{"type": "text", "text": "Hi"}]}
+            ]
+        })
+    );
+}
+
+#[tokio::test]
+async fn test_google_ai_generation_config() {
+    let source = r##"
+client C {
+    provider google-ai
+    options {
+        model "gemini-2.0-flash"
+        api_key "gemini-test-key"
+        generationConfig {
+            temperature 0.7
+            maxOutputTokens 1024
+        }
+    }
+}
+function F() -> string {
+    client C
+    prompt #"
+        {{ _.role("user") }}
+        Hi
+    "#
+}
+function get_body() -> string {
+    baml.llm.build_request(C, "F", {}).body
+}
+"##;
+
+    let body = body_json(&run_baml(source, "get_body").await);
+    assert_eq!(
+        body,
+        serde_json::json!({
+            "contents": [
+                {"role": "user", "parts": [{"text": "Hi"}]}
+            ],
+            "generationConfig": {
+                "temperature": 0.7,
+                "maxOutputTokens": 1024
+            }
         })
     );
 }

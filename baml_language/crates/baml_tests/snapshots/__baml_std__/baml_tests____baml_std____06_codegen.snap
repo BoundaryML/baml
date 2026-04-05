@@ -107,6 +107,54 @@ function baml.String.toUpperCase(self: null) -> string {
 function baml.String.trim(self: null) -> string {
 }
 
+function baml.Uint8Array.at(self: null, index: int) -> int? {
+}
+
+function baml.Uint8Array.concat(self: null, other: uint8array) -> uint8array {
+}
+
+function baml.Uint8Array.from_array(array: int[]) -> uint8array {
+}
+
+function baml.Uint8Array.from_base64(base64: string) -> uint8array {
+}
+
+function baml.Uint8Array.from_hex(hex: string) -> uint8array {
+}
+
+function baml.Uint8Array.includes(self: null, item: int) -> bool {
+}
+
+function baml.Uint8Array.length(self: null) -> int {
+}
+
+function baml.Uint8Array.pop(self: null) -> int? {
+}
+
+function baml.Uint8Array.push(self: null, item: int) -> int {
+}
+
+function baml.Uint8Array.reverse(self: null) -> uint8array {
+}
+
+function baml.Uint8Array.slice(self: null, start: int, end: int) -> uint8array {
+}
+
+function baml.Uint8Array.sort(self: null) -> null {
+}
+
+function baml.Uint8Array.to_array(self: null) -> int[] {
+}
+
+function baml.Uint8Array.to_base64(self: null) -> string {
+}
+
+function baml.Uint8Array.to_hex(self: null) -> string {
+}
+
+function baml.Uint8Array.zeroes(size: int) -> uint8array {
+}
+
 function baml.deep_copy(value: void) -> void {
 }
 

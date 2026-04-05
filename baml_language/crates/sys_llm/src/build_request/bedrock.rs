@@ -12,7 +12,7 @@ use std::sync::Arc;
 use aws_credential_types::Credentials;
 use aws_sdk_bedrockruntime as bedrock;
 use baml_base::MediaKind;
-use baml_builtins::{PromptAst, PromptAstSimple};
+use baml_builtins2::{PromptAst, PromptAstSimple};
 use bedrock::types::{
     ContentBlock, ConversationRole, DocumentBlock, DocumentFormat, DocumentSource, ImageBlock,
     ImageFormat, ImageSource, InferenceConfiguration, Message, SystemContentBlock, VideoBlock,
@@ -28,7 +28,7 @@ use super::BuildRequestError;
 pub(crate) async fn build_request(
     client: &crate::baml_std::PrimitiveClient,
     prompt: &bex_vm_types::PromptAst,
-    callbacks: Option<&crate::BuildRequestCallbacks>,
+    callbacks: &crate::BuildRequestCallbacks,
 ) -> Result<crate::baml_std::HttpRequest, BuildRequestError> {
     // Convert BAML prompt to SDK types.
     let (system_blocks, messages) = prompt_to_sdk_types(prompt, &client.default_role)?;
@@ -50,9 +50,6 @@ pub(crate) async fn build_request(
     let mut headers = indexmap::IndexMap::new();
     headers.insert("content-type".to_string(), "application/json".to_string());
     headers.insert("accept".to_string(), "application/json".to_string());
-    for (key, value) in &client.options.headers {
-        headers.insert(key.clone(), value.clone());
-    }
 
     Ok(crate::baml_std::HttpRequest {
         method: "POST".to_string(),
@@ -70,7 +67,7 @@ pub(crate) async fn build_request(
 /// We extract the path starting at `/model/` and prepend the real host.
 async fn resolve_url(
     client: &crate::baml_std::PrimitiveClient,
-    callbacks: Option<&crate::BuildRequestCallbacks>,
+    callbacks: &crate::BuildRequestCallbacks,
     sdk_uri: &str,
 ) -> Result<String, BuildRequestError> {
     // Extract the path portion from the SDK URI (everything from `/model/` onward).
@@ -313,12 +310,12 @@ enum ResolvedMedia {
 }
 
 fn resolve_media_source(
-    content: &baml_builtins::MediaContent,
+    content: &baml_builtins2::MediaContent,
     kind_label: &str,
 ) -> Result<ResolvedMedia, BuildRequestError> {
     use base64::Engine;
     match content {
-        baml_builtins::MediaContent::Url {
+        baml_builtins2::MediaContent::Url {
             url,
             base64_data: None,
         } => {
@@ -330,12 +327,12 @@ fn resolve_media_source(
                 )))
             }
         }
-        baml_builtins::MediaContent::Base64 { base64_data, .. }
-        | baml_builtins::MediaContent::Url {
+        baml_builtins2::MediaContent::Base64 { base64_data, .. }
+        | baml_builtins2::MediaContent::Url {
             base64_data: Some(base64_data),
             ..
         }
-        | baml_builtins::MediaContent::File {
+        | baml_builtins2::MediaContent::File {
             base64_data: Some(base64_data),
             ..
         } => {
@@ -348,7 +345,7 @@ fn resolve_media_source(
                 })?;
             Ok(ResolvedMedia::Bytes(bytes))
         }
-        baml_builtins::MediaContent::File {
+        baml_builtins2::MediaContent::File {
             base64_data: None, ..
         } => Err(BuildRequestError::FileNotResolved(format!(
             "{kind_label} file content was not resolved properly"
@@ -405,8 +402,8 @@ fn s3_location(uri: String) -> bedrock::types::S3Location {
 }
 
 fn media_to_content_block(
-    media: &baml_builtins::MediaValue,
-    content: &baml_builtins::MediaContent,
+    media: &baml_builtins2::MediaValue,
+    content: &baml_builtins2::MediaContent,
 ) -> Result<Vec<ContentBlock>, BuildRequestError> {
     let mime = super::mime_type_as_ok(media)?;
     let kind_label = media.kind.to_string();
@@ -599,7 +596,7 @@ fn json_value_to_document(value: &serde_json::Value) -> Option<aws_smithy_types:
 mod tests {
     use std::sync::Arc;
 
-    use baml_builtins::{MediaContent, MediaValue, PromptAst, PromptAstSimple};
+    use baml_builtins2::{MediaContent, MediaValue, PromptAst, PromptAstSimple};
     use bex_external_types::AsBexExternalValue;
 
     use super::*;
@@ -685,7 +682,9 @@ mod tests {
         client: &crate::baml_std::PrimitiveClient,
         prompt: Arc<PromptAst>,
     ) -> serde_json::Value {
-        let result = build_request(client, &prompt, None).await.unwrap();
+        let result = build_request(client, &prompt, &crate::BuildRequestCallbacks::noop())
+            .await
+            .unwrap();
         serde_json::from_str(&result.body).unwrap()
     }
 
@@ -790,9 +789,13 @@ mod tests {
     #[tokio::test]
     async fn bedrock_url_contains_model_and_region() {
         let client = make_default_client();
-        let result = build_request(&client, &msg("user", "hi"), None)
-            .await
-            .unwrap();
+        let result = build_request(
+            &client,
+            &msg("user", "hi"),
+            &crate::BuildRequestCallbacks::noop(),
+        )
+        .await
+        .unwrap();
         assert_eq!(
             result.url,
             "https://bedrock-runtime.us-east-1.amazonaws.com/model/anthropic.claude-3-haiku-20240307-v1%3A0/converse"
@@ -806,9 +809,13 @@ mod tests {
             Some("http://localhost:4566"),
             "anthropic.claude-3-haiku-20240307-v1:0",
         );
-        let result = build_request(&client, &msg("user", "hi"), None)
-            .await
-            .unwrap();
+        let result = build_request(
+            &client,
+            &msg("user", "hi"),
+            &crate::BuildRequestCallbacks::noop(),
+        )
+        .await
+        .unwrap();
         assert_eq!(
             result.url,
             "http://localhost:4566/model/anthropic.claude-3-haiku-20240307-v1%3A0/converse"
@@ -822,9 +829,13 @@ mod tests {
             None,
             "arn:aws:bedrock:us-west-2:123456789012:foundation-model/anthropic.claude-3-sonnet",
         );
-        let result = build_request(&client, &msg("user", "hi"), None)
-            .await
-            .unwrap();
+        let result = build_request(
+            &client,
+            &msg("user", "hi"),
+            &crate::BuildRequestCallbacks::noop(),
+        )
+        .await
+        .unwrap();
         assert_eq!(
             result.url,
             "https://bedrock-runtime.us-west-2.amazonaws.com/model/arn%3Aaws%3Abedrock%3Aus-west-2%3A123456789012%3Afoundation-model%2Fanthropic.claude-3-sonnet/converse"
@@ -1025,7 +1036,7 @@ mod tests {
                 base64_data: None,
             },
         );
-        let result = build_request(&client, &prompt, None).await;
+        let result = build_request(&client, &prompt, &crate::BuildRequestCallbacks::noop()).await;
         assert!(result.is_err(), "non-s3 URLs should be rejected");
     }
 
@@ -1064,9 +1075,13 @@ mod tests {
             Some("http://localhost:4566/"),
             "anthropic.claude-3-haiku-20240307-v1:0",
         );
-        let result = build_request(&client, &msg("user", "hi"), None)
-            .await
-            .unwrap();
+        let result = build_request(
+            &client,
+            &msg("user", "hi"),
+            &crate::BuildRequestCallbacks::noop(),
+        )
+        .await
+        .unwrap();
         assert_eq!(
             result.url,
             "http://localhost:4566/model/anthropic.claude-3-haiku-20240307-v1%3A0/converse"
@@ -1080,9 +1095,13 @@ mod tests {
             Some("http://localhost:4566"),
             "anthropic.claude-3-haiku-20240307-v1:0",
         );
-        let result = build_request(&client, &msg("user", "hi"), None)
-            .await
-            .unwrap();
+        let result = build_request(
+            &client,
+            &msg("user", "hi"),
+            &crate::BuildRequestCallbacks::noop(),
+        )
+        .await
+        .unwrap();
         assert!(result.url.starts_with("http://localhost:4566/"));
     }
 
@@ -1110,7 +1129,12 @@ mod tests {
             options,
         )
         .unwrap();
-        let result = build_request(&client, &msg("user", "hi"), None).await;
+        let result = build_request(
+            &client,
+            &msg("user", "hi"),
+            &crate::BuildRequestCallbacks::noop(),
+        )
+        .await;
         assert!(
             matches!(&result, Err(BuildRequestError::InvalidOption { key, .. }) if key == "max_tokens"),
             "expected InvalidOption for max_tokens, got: {result:?}"

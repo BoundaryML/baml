@@ -174,6 +174,8 @@ define_punctuation_tokens! {
     "*" => SyntaxKind::STAR => Star;
     "/" => SyntaxKind::SLASH => Slash;
     "%" => SyntaxKind::PERCENT => Percent;
+    "?." => SyntaxKind::QUESTION_DOT => QuestionDot;
+    "??" => SyntaxKind::QUESTION_QUESTION => QuestionQuestion;
 }
 
 #[derive(Debug)]
@@ -223,6 +225,7 @@ pub enum BinaryOp {
     CaretEquals(CaretEquals),
     LessLessEquals(LessLessEquals),
     GreaterGreaterEquals(GreaterGreaterEquals),
+    QuestionQuestion(QuestionQuestion),
 }
 
 impl BinaryOp {
@@ -259,6 +262,7 @@ impl BinaryOp {
             BinaryOp::CaretEquals(t) => t.span(),
             BinaryOp::LessLessEquals(t) => t.span(),
             BinaryOp::GreaterGreaterEquals(t) => t.span(),
+            BinaryOp::QuestionQuestion(t) => t.span(),
         }
     }
 }
@@ -336,6 +340,9 @@ impl FromCST for BinaryOp {
             SyntaxKind::GREATER_GREATER_EQUALS => Ok(BinaryOp::GreaterGreaterEquals(
                 GreaterGreaterEquals::new_from_span(token.text_range()),
             )),
+            SyntaxKind::QUESTION_QUESTION => Ok(BinaryOp::QuestionQuestion(
+                QuestionQuestion::new_from_span(token.text_range()),
+            )),
             _ => Err(StrongAstError::UnexpectedKindDesc {
                 expected_desc: "binary operator".into(),
                 found: token.kind(),
@@ -378,6 +385,7 @@ impl Printable for BinaryOp {
             BinaryOp::CaretEquals(t) => printer.print_raw_token(t),
             BinaryOp::LessLessEquals(t) => printer.print_raw_token(t),
             BinaryOp::GreaterGreaterEquals(t) => printer.print_raw_token(t),
+            BinaryOp::QuestionQuestion(t) => printer.print_raw_token(t),
         }
         PrintInfo::default_single_line()
     }
@@ -678,6 +686,54 @@ impl Printable for RawString {
         printer.print_str(&text[end_quote..]);
 
         PrintInfo { multi_lined }
+    }
+    fn leftmost_token(&self) -> TextRange {
+        TextRange::new(
+            self.token_span.start(),
+            self.token_span.start() + TextSize::from(1),
+        )
+    }
+    fn rightmost_token(&self) -> TextRange {
+        TextRange::new(
+            self.token_span.end() - TextSize::from(1),
+            self.token_span.end(),
+        )
+    }
+}
+
+#[derive(Debug)]
+pub struct ByteString {
+    pub token_span: TextRange,
+}
+impl FromCST for ByteString {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        let node = StrongAstError::assert_is_node(elem)?;
+        StrongAstError::assert_kind_node(&node, SyntaxKind::BYTE_STRING_LITERAL)?;
+
+        // Find the `b` prefix word token to strip preceding trivia.
+        let start = node
+            .first_child_or_token_by_kind(&|kind| kind == SyntaxKind::WORD)
+            .ok_or_else(|| StrongAstError::missing(SyntaxKind::WORD, node.text_range()))?;
+
+        Ok(ByteString {
+            token_span: TextRange::new(start.text_range().start(), node.text_range().end()),
+        })
+    }
+}
+impl Token for ByteString {
+    fn span(&self) -> TextRange {
+        self.token_span
+    }
+}
+impl KnownKind for ByteString {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::BYTE_STRING_LITERAL
+    }
+}
+impl Printable for ByteString {
+    fn print(&self, _shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer.print_raw_token(self);
+        PrintInfo { multi_lined: false }
     }
     fn leftmost_token(&self) -> TextRange {
         TextRange::new(

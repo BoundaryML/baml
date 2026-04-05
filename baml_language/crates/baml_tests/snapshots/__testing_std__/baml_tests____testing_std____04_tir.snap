@@ -29,19 +29,19 @@ function testing.TestCollector.new(prefix: string) -> testing.TestCollector thro
 function testing.TestCollector.register_test(self: testing.TestCollector, name: string, body: () -> null, runner: testing.TestRunner?) -> null throws never {
   { : null
     let full_name = : string
-      if (self.prefix Eq "" : bool) : string
+      if (self.prefix == "" : bool) : string
         { : string
           name : string
         }
       else
         { : string
-          self.prefix Add "/" Add name : string
+          self.prefix + "/" + name : string
         }
     let count = 0 : 0 -> int
-    let hash_prefix = full_name Add "#" : string
+    let hash_prefix = full_name + "#" : string
     for t in self.tests
       { : void
-        if (t.name Eq full_name Or t.name.startsWith(hash_prefix) : bool) : void
+        if (t.name == full_name || t.name.startsWith(hash_prefix) : bool) : void
           { : void
             count Add= 1 : int
           }
@@ -51,9 +51,9 @@ function testing.TestCollector.register_test(self: testing.TestCollector, name: 
           }
       }
     let final_name = : string
-      if (count Gt 0 : bool) : string
+      if (count > 0 : bool) : string
         { : string
-          full_name Add "#" Add baml.unstable.string(count Add 1) : string
+          full_name + "#" + baml.unstable.string(count + 1) : string
         }
       else
         { : string
@@ -66,19 +66,19 @@ function testing.TestCollector.register_test(self: testing.TestCollector, name: 
 function testing.TestCollector.register_test_set(self: testing.TestCollector, name: string, collector: (testing.TestCollector) -> null, runner: testing.TestSetRunner?) -> null throws never {
   { : null
     let full_name = : string
-      if (self.prefix Eq "" : bool) : string
+      if (self.prefix == "" : bool) : string
         { : string
           name : string
         }
       else
         { : string
-          self.prefix Add "/" Add name : string
+          self.prefix + "/" + name : string
         }
     let count = 0 : 0 -> int
-    let hash_prefix = full_name Add "#" : string
+    let hash_prefix = full_name + "#" : string
     for ts in self.testsets
       { : void
-        if (ts.name Eq full_name Or ts.name.startsWith(hash_prefix) : bool) : void
+        if (ts.name == full_name || ts.name.startsWith(hash_prefix) : bool) : void
           { : void
             count Add= 1 : int
           }
@@ -88,9 +88,9 @@ function testing.TestCollector.register_test_set(self: testing.TestCollector, na
           }
       }
     let final_name = : string
-      if (count Gt 0 : bool) : string
+      if (count > 0 : bool) : string
         { : string
-          full_name Add "#" Add baml.unstable.string(count Add 1) : string
+          full_name + "#" + baml.unstable.string(count + 1) : string
         }
       else
         { : string
@@ -104,12 +104,12 @@ function testing.TestCollector.find_testset(self: testing.TestCollector, name: s
   { : never
     for ts in self.testsets
       { : void
-        if (ts.name Eq name : bool) : void
+        if (ts.name == name : bool) : void
           { : never
             return ts : testing.TestSetRegistration
           }
       }
-    throw "TestSet not found: " Add name : string
+    throw "TestSet not found: " + name : string
   }
 }
 function testing.$invoke_collector(collector: (testing.TestCollector) -> null, c: testing.TestCollector) -> null throws never {
@@ -164,7 +164,7 @@ function testing.TestRegistry.run_test(self: testing.TestRegistry, name: string)
   { : never
     for t in self.collector.tests
       { : void
-        if (t.name Eq name : bool) : void
+        if (t.name == name : bool) : void
           { : never
             return root.run_test(t.body, t.runner) : testing.TestReport
           }
@@ -172,24 +172,24 @@ function testing.TestRegistry.run_test(self: testing.TestRegistry, name: string)
     for k in self.expansions.keys()
       { : void
         let sub = self.expansions[k] : testing.TestRegistry
-        if (name.startsWith(k) : bool) : void
+        if (name.startsWith(k + "/") : bool) : void
           { : never
             return sub.run_test(name) : testing.TestReport
           }
       }
-    throw "Test not found: " Add name : string
+    throw "Test not found: " + name : string
   }
 }
 function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: string) -> testing.SerializedTestDef[] throws never {
   { : never
     for ts in self.collector.testsets
       { : void
-        if (ts.name Eq name : bool) : void
+        if (ts.name == name : bool) : void
           { : never
             let start = baml.sys.now_ms() : int
             let sub_collector = TestCollector { prefix: name, tests: [], testsets: [] } : testing.TestCollector
             ts.collector(sub_collector) : null
-            let elapsed = baml.sys.now_ms() Sub start : int
+            let elapsed = baml.sys.now_ms() - start : int
             let sub_registry = TestRegistry { collector: sub_collector, expansions: map {  }, loading_time_ms: elapsed } : testing.TestRegistry
             self.expansions.set(name, sub_registry) : null
             return self.serialize() : testing.SerializedTestDef[]
@@ -198,15 +198,12 @@ function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: strin
     for k in self.expansions.keys()
       { : void
         let sub = self.expansions[k] : testing.TestRegistry
-        for sts in sub.collector.testsets
-          { : void
-            if (sts.name Eq name : bool) : void
-              { : never
-                return sub.expand_set(name) : testing.SerializedTestDef[]
-              }
+        if (name.startsWith(k + "/") : bool) : void
+          { : never
+            return sub.expand_set(name) : testing.SerializedTestDef[]
           }
       }
-    throw "TestSet not found..." Add name : string
+    throw "TestSet not found..." + name : string
   }
 }
 function testing.run_test(body: () -> null, runner: testing.TestRunner?) -> testing.TestReport throws never {
@@ -217,7 +214,7 @@ function testing.run_test(body: () -> null, runner: testing.TestRunner?) -> test
           let start = baml.sys.now_ms()
           let result = ...
             { 1 stmts + tail } catch_all (e) { _ => { 0 stmts + tail } }
-          TestReport { outcome: result.outcome, runs: [RunReport { outcome: result.outcome, duration_ms: baml.sys.now_ms() Sub start }] }
+          TestReport { outcome: result.outcome, runs: [RunReport { outcome: result.outcome, duration_ms: baml.sys.now_ms() - start }] }
         }
     let effective_run = : () -> testing.TestReport
       match (runner : testing.TestRunner?) : () -> testing.TestReport
@@ -227,10 +224,8 @@ function testing.run_test(body: () -> null, runner: testing.TestRunner?) -> test
           r(base_run) : () -> testing.TestReport
     effective_run() : testing.TestReport
   }
-  ?? 0..0: unreachable arm
 }
 lambda testing.run_test {
-  ?? 5753..5817: unreachable arm
 }
 function testing.run_testset(run_children: () -> testing.TestSetReport, runner: testing.TestSetRunner?) -> testing.TestSetReport throws never {
   { : testing.TestSetReport

@@ -87,6 +87,7 @@ impl TryFrom<BexExternalValue> for HandleTableValue {
             | BexExternalValue::Instance { .. }
             | BexExternalValue::Variant { .. }
             | BexExternalValue::Union { .. }
+            | BexExternalValue::Uint8Array(_)
             | BexExternalValue::RustData(_) => {
                 Err("only opaque BexExternalValue variants can be held as handles")
             }

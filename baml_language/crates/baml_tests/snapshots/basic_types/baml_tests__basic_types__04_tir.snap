@@ -18,10 +18,10 @@ class user.FieldAttributes$stream {
   money: null | int @description("In USD")
   currency: null | string @alias("currency_code")
   name: null | string @skip
-  summary: null | string
+  summary: string
   details: null | string
   state: null | string
-  multiple: null | string @description("Multiple attributes") @alias("multiple_alias")
+  multiple: string? @description("Multiple attributes") @alias("multiple_alias")
 }
 class user.ClassAttributes$stream {
   name: null | string

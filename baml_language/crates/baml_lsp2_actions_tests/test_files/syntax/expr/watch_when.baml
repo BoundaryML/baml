@@ -39,30 +39,30 @@ function BadFunction2(i: string) -> bool {
 
 //----
 //- diagnostics
-// Error: unresolved member: int.$watch
+// Error: type `int` has no member `$watch`
 //    ╭─[ expr_watch_when.baml:3:5 ]
 //    │
 //  3 │   x.$watch.options(baml.WatchOptions{ when: GoodFunction });
 //    │     ───┬──  
-//    │        ╰──── unresolved member: int.$watch
+//    │        ╰──── type `int` has no member `$watch`
 //    │ 
 //    │ Note: Error code: E0001
 // ───╯
-// Error: unresolved member: int.$watch
+// Error: type `int` has no member `$watch`
 //    ╭─[ expr_watch_when.baml:4:5 ]
 //    │
 //  4 │   x.$watch.options(baml.WatchOptions{ when: BadFunction1 });
 //    │     ───┬──  
-//    │        ╰──── unresolved member: int.$watch
+//    │        ╰──── type `int` has no member `$watch`
 //    │ 
 //    │ Note: Error code: E0001
 // ───╯
-// Error: unresolved member: int.$watch
+// Error: type `int` has no member `$watch`
 //    ╭─[ expr_watch_when.baml:5:5 ]
 //    │
 //  5 │   x.$watch.options(baml.WatchOptions{ when: BadFunction2 });
 //    │     ───┬──  
-//    │        ╰──── unresolved member: int.$watch
+//    │        ╰──── type `int` has no member `$watch`
 //    │ 
 //    │ Note: Error code: E0001
 // ───╯

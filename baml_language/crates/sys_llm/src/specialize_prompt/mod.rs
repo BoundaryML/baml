@@ -24,11 +24,23 @@ pub(crate) fn specialize_prompt_from_owned(
     let prompt = transformations::wrap_simple_as_message(prompt, &client.default_role);
     let prompt = transformations::merge_adjacent_roles(prompt);
     let prompt = transformations::consolidate_system_prompts(prompt, &features);
-    let prompt = transformations::validate_and_remap_roles(
-        prompt,
-        &client.allowed_roles,
-        client.options.remap_roles.as_ref(),
-    )?;
+
+    // Vertex AI sets remap_roles: {assistant: model} at compile time, but
+    // Anthropic models on Vertex expect "assistant" not "model". Skip the
+    // remap when the model is Anthropic.
+    //
+    // TODO(avery): provider defaults (base_url, remap_roles, etc.) should be
+    // resolved at runtime rather than compile time, so model-dependent defaults
+    // like this don't need special-casing. That's a larger refactor of
+    // lower_cst.rs.
+    let remap = if provider == LlmProvider::VertexAi
+        && crate::build_request::is_anthropic_model(&client.model)
+    {
+        None
+    } else {
+        client.options.remap_roles.as_ref()
+    };
+    let prompt = transformations::validate_and_remap_roles(prompt, &client.allowed_roles, remap)?;
 
     Ok(transformations::filter_metadata(prompt, &features))
 }
@@ -37,4 +49,66 @@ pub(crate) fn specialize_prompt_from_owned(
 pub(crate) enum SpecializePromptError {
     #[error("role '{role}' is not in allowed_roles: {allowed:?}")]
     DisallowedRole { role: String, allowed: Vec<String> },
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use baml_builtins2::PromptAst;
+
+    use super::*;
+
+    fn msg(role: &str, text: &str) -> Arc<PromptAst> {
+        Arc::new(PromptAst::Message {
+            role: role.to_string(),
+            content: Arc::new(text.to_string().into()),
+            metadata: serde_json::Value::Null,
+        })
+    }
+
+    fn vertex_client(model: &str) -> crate::baml_std::PrimitiveClient {
+        crate::baml_std::PrimitiveClient::new(
+            "test".to_string(),
+            "vertex-ai".to_string(),
+            crate::baml_std::PrimitiveClientOptions {
+                model: Some(model.to_string()),
+                remap_roles: Some(indexmap::indexmap! {
+                    "assistant".to_string() => "model".to_string(),
+                }),
+                ..Default::default()
+            },
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn vertex_gemini_remaps_assistant_to_model() {
+        let client = vertex_client("gemini-2.0-flash");
+        let prompt = Arc::new(PromptAst::Vec(vec![
+            msg("user", "Hi"),
+            msg("assistant", "Hello!"),
+        ]));
+        let result = specialize_prompt_from_owned(&client, prompt).unwrap();
+        let expected = Arc::new(PromptAst::Vec(vec![
+            msg("user", "Hi"),
+            msg("model", "Hello!"),
+        ]));
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn vertex_claude_keeps_assistant_role() {
+        let client = vertex_client("claude-sonnet-4-20250514");
+        let prompt = Arc::new(PromptAst::Vec(vec![
+            msg("user", "Hi"),
+            msg("assistant", "Hello!"),
+        ]));
+        let result = specialize_prompt_from_owned(&client, prompt).unwrap();
+        let expected = Arc::new(PromptAst::Vec(vec![
+            msg("user", "Hi"),
+            msg("assistant", "Hello!"),
+        ]));
+        assert_eq!(result, expected);
+    }
 }

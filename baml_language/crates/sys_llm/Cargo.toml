@@ -8,7 +8,7 @@ license.workspace = true
 
 [dependencies]
 baml_base = { workspace = true }
-baml_builtins = { workspace = true }
+baml_builtins2 = { workspace = true }
 baml_type = { workspace = true }
 bex_external_types = { workspace = true }
 bex_heap = { workspace = true }
@@ -26,12 +26,14 @@ base64 = { workspace = true }
 indexmap = { workspace = true }
 minijinja = { workspace = true }
 minijinja-contrib = { workspace = true }
+percent-encoding = { workspace = true }
 regex = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 strum = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = [ "rt" ] }
+url = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 aws-config = { workspace = true, features = [
@@ -39,16 +41,22 @@ aws-config = { workspace = true, features = [
   "credentials-process",
   "sso",
 ] }
+google-cloud-auth = { workspace = true }
 tokio = { workspace = true, features = [ "rt-multi-thread" ] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 aws-config = { workspace = true }
 futures-timer = { workspace = true }
+getrandom = { workspace = true, features = [ "js" ] }
+rsa = { workspace = true, features = [ "sha2" ] }
+sha2 = { workspace = true }
 web-time = { workspace = true }
 
 [dev-dependencies]
 anyhow = { workspace = true }
+rsa = { workspace = true, features = [ "sha2" ] }
 tokio = { workspace = true, features = [ "rt", "macros" ] }
+wasm-bindgen-test = { workspace = true }
 
 [lints]
 workspace = true

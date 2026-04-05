@@ -8,7 +8,7 @@
 
 use std::{io::Write, sync::Arc};
 
-use baml_builtins::{PromptAst as BuiltinPromptAst, PromptAstSimple};
+use baml_builtins2::{PromptAst as BuiltinPromptAst, PromptAstSimple};
 use baml_tests::engine::compile_source;
 use bex_engine::{BexEngine, BexExternalValue, FunctionCallContextBuilder};
 use bex_external_types::BexExternalAdt;

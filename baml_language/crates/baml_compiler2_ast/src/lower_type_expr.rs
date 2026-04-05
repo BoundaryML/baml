@@ -371,6 +371,7 @@ fn lower_from_type_name(name: &str) -> TypeExpr {
             kind: baml_base::MediaKind::Pdf,
             attrs: vec![],
         },
+        "uint8array" => TypeExpr::Uint8Array { attrs: vec![] },
         _ => {
             if name.contains('.') {
                 let segments: Vec<Name> = name.split('.').map(Name::new).collect();

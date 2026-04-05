@@ -37,6 +37,7 @@ fn hir2_type_expr_to_string(ty: &baml_compiler2_ast::TypeExpr) -> String {
         TypeExpr::Bool { .. } => "bool".into(),
         TypeExpr::Null { .. } => "null".into(),
         TypeExpr::Never { .. } => "never".into(),
+        TypeExpr::Uint8Array { .. } => "uint8array".into(),
         TypeExpr::Media { kind, .. } => format!("{:?}", kind).to_lowercase(),
         TypeExpr::Optional { inner, .. } => format!("{}?", hir2_type_expr_to_string(inner)),
         TypeExpr::List { inner, .. } => format!("{}[]", hir2_type_expr_to_string(inner)),
@@ -447,6 +448,7 @@ fn binop_sym(op: &baml_compiler2_ast::BinaryOp) -> &'static str {
         BinaryOp::Shl => "<<",
         BinaryOp::Shr => ">>",
         BinaryOp::Instanceof => "instanceof",
+        BinaryOp::NullCoalesce => "??",
     }
 }
 
@@ -585,11 +587,32 @@ fn expr_desc_spans<'db>(
             spans.extend(expr_desc_spans(*base, body, inference));
             spans.push(DetailSpan::Code(format!(".{field}")));
         }
+        Expr::OptionalFieldAccess { base, field } => {
+            spans.extend(expr_desc_spans(*base, body, inference));
+            spans.push(DetailSpan::Code(format!("?.{field}")));
+        }
         Expr::Index { base, index } => {
             spans.extend(expr_desc_spans(*base, body, inference));
             spans.push(DetailSpan::Code("[".into()));
             spans.extend(expr_desc_spans(*index, body, inference));
             spans.push(DetailSpan::Code("]".into()));
+        }
+        Expr::OptionalIndex { base, index } => {
+            spans.extend(expr_desc_spans(*base, body, inference));
+            spans.push(DetailSpan::Code("?.[".into()));
+            spans.extend(expr_desc_spans(*index, body, inference));
+            spans.push(DetailSpan::Code("]".into()));
+        }
+        Expr::OptionalCall { callee, args } => {
+            spans.extend(expr_desc_spans(*callee, body, inference));
+            spans.push(DetailSpan::Code("?.(".into()));
+            for (i, arg) in args.iter().enumerate() {
+                if i > 0 {
+                    spans.push(DetailSpan::Code(", ".into()));
+                }
+                spans.extend(expr_desc_spans(*arg, body, inference));
+            }
+            spans.push(DetailSpan::Code(")".into()));
         }
         Expr::If { condition, .. } => {
             spans.push(DetailSpan::Code("if (".into()));
@@ -614,8 +637,14 @@ fn expr_desc_spans<'db>(
             spans.push(DetailSpan::Code("throw ".into()));
             spans.extend(expr_desc_spans(*value, body, inference));
         }
+        Expr::ByteStringLiteral(bytes) => {
+            spans.push(DetailSpan::Code(format!("b\"<{} bytes>\"", bytes.len())));
+        }
         Expr::Lambda(_) => {
             spans.push(DetailSpan::Code("<lambda>".into()));
+        }
+        Expr::OptionalChain { expr } => {
+            spans.extend(expr_desc_spans(*expr, body, inference));
         }
         Expr::Missing => {
             spans.push(DetailSpan::Code("<missing>".into()));
@@ -1985,8 +2014,21 @@ impl CompilerRunner {
                     format!("{{ {} stmts{tail} }}", stmts.len())
                 }
                 Expr::FieldAccess { base, field } => format!("{}.{field}", expr_desc(*base, body)),
+                Expr::OptionalFieldAccess { base, field } => {
+                    format!("{}?.{field}", expr_desc(*base, body))
+                }
                 Expr::Index { base, .. } => format!("{}[...]", expr_desc(*base, body)),
+                Expr::ByteStringLiteral(bytes) => format!("b\"<{} bytes>\"", bytes.len()),
                 Expr::Lambda(_) => "<lambda>".into(),
+                Expr::OptionalIndex { base, .. } => format!("{}?.[...]", expr_desc(*base, body)),
+                Expr::OptionalCall { callee, args } => {
+                    let callee_str = expr_desc(*callee, body);
+                    format!(
+                        "{callee_str}?.({})",
+                        if args.is_empty() { "" } else { "..." }
+                    )
+                }
+                Expr::OptionalChain { expr } => expr_desc(*expr, body),
                 Expr::Missing => "<missing>".into(),
             }
         }
@@ -4945,6 +4987,7 @@ fn format_vm_value(value: &bex_vm_types::Value, vm: &bex_vm::BexVm) -> String {
                 Object::Type(ty) => format!("<type: {ty}>"),
                 Object::Closure(c) => format!("<closure captures={}>", c.captures.len()),
                 Object::Cell(c) => format!("<cell {}>", format_vm_value(&c.value, vm)),
+                Object::Uint8Array(bytes) => format!("<uint8array len={}>", bytes.len()),
                 Object::RustData(_) => "<rust_data>".to_string(),
                 #[cfg(feature = "heap_debug")]
                 Object::Sentinel(_) => "<sentinel>".to_string(),

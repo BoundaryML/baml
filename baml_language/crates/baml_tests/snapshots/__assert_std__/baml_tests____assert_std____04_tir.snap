@@ -20,7 +20,7 @@ function assert.is_true(condition: bool) -> null throws never {
 }
 function assert.not_null(value: unknown?) -> null throws never {
   { : null
-    if (value Eq null : bool) : null
+    if (value == null : bool) : null
       { : null
         baml.sys.panic("assertion failed:...") : null
       }
@@ -32,7 +32,7 @@ function assert.not_null(value: unknown?) -> null throws never {
 }
 function assert.equal(actual: unknown, expected: unknown) -> null throws never {
   { : null
-    if (actual Ne expected : bool) : null
+    if (actual != expected : bool) : null
       { : null
         baml.sys.panic("assertion failed:...") : null
       }

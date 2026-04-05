@@ -166,6 +166,8 @@ pub enum TokenKind {
     At,
     #[token("|")]
     Pipe,
+    #[token("?.")]
+    QuestionDot,
     #[token("?")]
     Question,
 
@@ -319,6 +321,7 @@ impl std::fmt::Display for TokenKind {
             TokenKind::AtAt => "'@@'",
             TokenKind::At => "'@'",
             TokenKind::Pipe => "'|'",
+            TokenKind::QuestionDot => "'?.'",
             TokenKind::Question => "'?'",
 
             // Assignment operators
@@ -894,6 +897,65 @@ mod tests {
                 TokenKind::Word, // get_client
             ]
         );
+    }
+
+    #[test]
+    fn test_optional_chaining_and_null_coalescing() {
+        // ?. should be a single token
+        let tokens = lex_no_whitespace("a?.b");
+        assert_eq!(
+            tokens,
+            vec![
+                TokenKind::Word,        // a
+                TokenKind::QuestionDot, // ?.
+                TokenKind::Word,        // b
+            ]
+        );
+
+        // ?? is two Question tokens at the lexer level
+        // (parser combines them to avoid ambiguity with int?? double optional)
+        let tokens = lex_no_whitespace("a ?? b");
+        assert_eq!(
+            tokens,
+            vec![
+                TokenKind::Word,     // a
+                TokenKind::Question, // ?
+                TokenKind::Question, // ?
+                TokenKind::Word,     // b
+            ]
+        );
+
+        // ? alone (for optional types) should still work
+        let tokens = lex_no_whitespace("int?");
+        assert_eq!(tokens, vec![TokenKind::Word, TokenKind::Question]);
+
+        // int?? is two Question tokens (double optional)
+        let tokens = lex_no_whitespace("int??");
+        assert_eq!(
+            tokens,
+            vec![
+                TokenKind::Word,     // int
+                TokenKind::Question, // ?
+                TokenKind::Question, // ?
+            ]
+        );
+
+        // Chaining: a?.b?.c ?? d
+        let tokens = lex_no_whitespace("a?.b?.c");
+        assert_eq!(
+            tokens,
+            vec![
+                TokenKind::Word,        // a
+                TokenKind::QuestionDot, // ?.
+                TokenKind::Word,        // b
+                TokenKind::QuestionDot, // ?.
+                TokenKind::Word,        // c
+            ]
+        );
+
+        // Lossless reconstruction
+        let source = "a?.b ?? c";
+        assert_eq!(reconstruct_source(&lex(source)), source);
     }
 
     #[test]

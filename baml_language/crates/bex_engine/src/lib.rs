@@ -545,6 +545,14 @@ impl BexEngine {
             class_definitions: Arc::new(class_definitions),
             enum_definitions: Arc::new(enum_definitions),
             type_alias_definitions: Arc::new(bytecode.recursive_type_alias_defs),
+            io_callbacks: sys_types::SysOpIoCallbacks {
+                http_send: sys_ops.baml_http_send.clone(),
+                http_response_text: sys_ops.baml_http_response_text.clone(),
+                env_get: sys_ops.baml_env_get.clone(),
+                fs_open: sys_ops.baml_fs_open.clone(),
+                fs_file_read: sys_ops.baml_fs_file_read.clone(),
+                sys_shell: sys_ops.baml_sys_shell.clone(),
+            },
         };
 
         Ok(Self {

@@ -85,6 +85,7 @@ fn token_kind_to_syntax_kind(kind: TokenKind) -> SyntaxKind {
         TokenKind::At => SyntaxKind::AT,
         TokenKind::AtAt => SyntaxKind::AT_AT,
         TokenKind::Pipe => SyntaxKind::PIPE,
+        TokenKind::QuestionDot => SyntaxKind::QUESTION_DOT,
         TokenKind::Question => SyntaxKind::QUESTION,
 
         // Assignment operators
@@ -1383,6 +1384,67 @@ impl<'a> Parser<'a> {
             // If we get here, we reached EOF without finding closing quote
             // eprintln!("[PARSE_STRING] Reached EOF without closing quote");
             p.error_unexpected_token("Unclosed string literal".to_string());
+        });
+
+        true
+    }
+
+    /// Parse a byte string literal: `b"..."`.
+    ///
+    /// The lexer emits `Word("b"), Quote, (content tokens), Quote`.
+    /// We check adjacency: the raw token immediately after `Word("b")` must be
+    /// `Quote` with no intervening trivia. This distinguishes `b"hello"` (byte
+    /// string) from `b "hello"` (identifier `b` followed by a string).
+    ///
+    /// Must only be called when `self.current()` is `Word("b")`.
+    pub(crate) fn parse_byte_string(&mut self) -> bool {
+        // Adjacency check: the raw token immediately after `Word("b")` must be
+        // `Quote` with no trivia in between.
+        let Some(b_index) = self.current_non_trivia_index() else {
+            return false;
+        };
+        if self.tokens.get(b_index + 1).map(|t| t.kind) != Some(TokenKind::Quote) {
+            return false;
+        }
+
+        // Before starting the node, handle all leading trivia.
+        while self.eat_trivia() {}
+
+        self.with_node(SyntaxKind::BYTE_STRING_LITERAL, |p| {
+            p.bump_raw(); // Consume the `b` prefix
+
+            p.bump_raw(); // Opening quote
+
+            // Collect all tokens until closing quote (same logic as parse_string).
+            let mut loop_counter = 0;
+            while !p.at_end() {
+                loop_counter += 1;
+                if loop_counter > 100_000 {
+                    p.error_unexpected_token(
+                        "Byte string parsing exceeded iteration limit".to_string(),
+                    );
+                    return;
+                }
+
+                if p.at_raw(TokenKind::Backslash) {
+                    p.bump_raw(); // Consume backslash
+                    if let Some(directly_after) = p.tokens.get(p.current)
+                        && directly_after.kind == TokenKind::Quote
+                    {
+                        p.bump_raw(); // Consume escaped quote
+                    }
+                    continue;
+                }
+
+                if p.at_raw(TokenKind::Quote) {
+                    p.bump_raw(); // Consume closing quote
+                    return;
+                }
+
+                p.bump_raw();
+            }
+
+            p.error_unexpected_token("Unclosed byte string literal".to_string());
         });
 
         true
@@ -3397,6 +3459,23 @@ impl<'a> Parser<'a> {
                 self.finish_node();
                 // Continue to potentially parse function call
                 continue;
+            } else if op == TokenKind::Question
+                && self.peek(1).map(|t| t.kind) == Some(TokenKind::Question)
+            {
+                // Null coalescing operator `??`
+                // Lexed as two Question tokens to avoid ambiguity with `int??` (double optional).
+                // Binding power: below ||/&& (6/8), above assignment (2).
+                let left_bp = 4u8;
+                if left_bp < min_bp {
+                    break;
+                }
+                let lhs_start = self.find_previous_expr_start_after(expr_start);
+                // Consume both ? tokens, emitting a single QUESTION_QUESTION node
+                self.bump(); // first ?
+                self.bump(); // second ?
+                self.parse_expr_bp(5); // right_bp = 5 (left associative)
+                self.wrap_events_in_node(lhs_start, SyntaxKind::BINARY_EXPR);
+                self.finish_node();
             } else if op == TokenKind::LParen {
                 // Function call
                 let lhs_start = self.find_previous_expr_start_after(expr_start);
@@ -3411,6 +3490,36 @@ impl<'a> Parser<'a> {
                 self.parse_expr();
                 self.expect(TokenKind::RBracket);
                 self.finish_node();
+            } else if op == TokenKind::QuestionDot {
+                // Optional chaining: obj?.field, obj?.[expr], obj?.(args)
+                let lhs_start = self.find_previous_expr_start_after(expr_start);
+                if self.peek_after_question_dot() == Some(TokenKind::LParen) {
+                    // obj?.(args) — optional call
+                    self.wrap_events_in_node(lhs_start, SyntaxKind::OPTIONAL_CALL_EXPR);
+                    self.bump(); // ?.
+                    self.parse_call_args();
+                    self.finish_node();
+                } else if self.peek_after_question_dot() == Some(TokenKind::LBracket) {
+                    // obj?.[expr] — optional index
+                    self.wrap_events_in_node(lhs_start, SyntaxKind::OPTIONAL_INDEX_EXPR);
+                    self.bump(); // ?.
+                    self.bump(); // [
+                    self.parse_expr();
+                    self.expect(TokenKind::RBracket);
+                    self.finish_node();
+                } else {
+                    // obj?.field — optional field access
+                    self.wrap_events_in_node(lhs_start, SyntaxKind::OPTIONAL_FIELD_ACCESS_EXPR);
+                    self.bump(); // ?.
+                    if self.at(TokenKind::Word) {
+                        self.bump();
+                    } else {
+                        self.error_unexpected_token(
+                            "Expected field name, '[', or '(' after '?.'".to_string(),
+                        );
+                    }
+                    self.finish_node();
+                }
             } else if op == TokenKind::Dot || op == TokenKind::Dollar {
                 // Field access on a complex expression.
                 //
@@ -3507,6 +3616,12 @@ impl<'a> Parser<'a> {
         }
 
         min_index
+    }
+
+    /// Peek at the next non-trivia token after the current `?.` token.
+    /// Used to disambiguate `?.field` vs `?.[expr]` vs `?.(args)`.
+    fn peek_after_question_dot(&self) -> Option<TokenKind> {
+        self.peek(1).map(|t| t.kind)
     }
 
     /// Check if the most recent expression looks like a constructor/type name
@@ -3636,8 +3751,11 @@ impl<'a> Parser<'a> {
             // Throw expression
             self.parse_throw_expr();
         } else if self.at(TokenKind::Word) {
-            let text = self.current().map(|t| t.text.as_str()).unwrap_or("");
-            if text == "env"
+            // Collect text as owned String so the borrow is released before any &mut calls.
+            let text: String = self.current().map(|t| t.text.clone()).unwrap_or_default();
+            if text == "b" && self.parse_byte_string() {
+                // Byte string literal b"..."
+            } else if text == "env"
                 && self.peek(1).map(|t| t.kind) == Some(TokenKind::Dot)
                 && self.peek(2).map(|t| t.kind) == Some(TokenKind::Word)
                 && self.peek(3).map(|t| t.kind) != Some(TokenKind::LParen)
@@ -4217,34 +4335,34 @@ impl<'a> Parser<'a> {
             }
 
             // Logical OR (left associative)
-            OrOr => (3, 4),
+            OrOr => (6, 7),
 
             // Logical AND (left associative)
-            AndAnd => (5, 6),
+            AndAnd => (8, 9),
 
             // Bitwise OR (left associative)
-            Pipe => (7, 8),
+            Pipe => (10, 11),
 
             // Bitwise XOR (left associative)
-            Caret => (9, 10),
+            Caret => (12, 13),
 
             // Bitwise AND (left associative)
-            And => (11, 12),
+            And => (14, 15),
 
             // Equality (left associative)
-            EqualsEquals | NotEquals => (13, 14),
+            EqualsEquals | NotEquals => (16, 17),
 
             // Comparison (left associative) - includes instanceof
-            Less | Greater | LessEquals | GreaterEquals | Instanceof => (15, 16),
+            Less | Greater | LessEquals | GreaterEquals | Instanceof => (18, 19),
 
             // Bitwise shift (left associative)
-            LessLess | GreaterGreater => (17, 18),
+            LessLess | GreaterGreater => (20, 21),
 
             // Addition/Subtraction (left associative)
-            Plus | Minus => (19, 20),
+            Plus | Minus => (22, 23),
 
             // Multiplication/Division/Modulo (left associative)
-            Star | Slash | Percent => (21, 22),
+            Star | Slash | Percent => (24, 25),
 
             _ => return None,
         })
@@ -4535,6 +4653,19 @@ impl<'a> Parser<'a> {
             && self.peek(1).is_some_and(|t| {
                 matches!(t.kind, TokenKind::IntegerLiteral | TokenKind::FloatLiteral)
             })
+        {
+            return true;
+        }
+
+        // Byte string literals: b"..."
+        if self.at(TokenKind::Word)
+            && let Some(token) = self.current()
+            && token.text.as_str() == "b"
+            && let Some(idx) = self.current_non_trivia_index()
+            && self
+                .tokens
+                .get(idx + 1)
+                .is_some_and(|t| t.kind == TokenKind::Quote)
         {
             return true;
         }

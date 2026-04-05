@@ -9,7 +9,7 @@
 //! - [`new`] — compile source files and return `Arc<dyn Bex>`.
 use std::{collections::HashMap, sync::Arc};
 
-pub use baml_builtins::{MediaContent, MediaValue, PromptAst, PromptAstSimple};
+pub use baml_builtins2::{MediaContent, MediaValue, PromptAst, PromptAstSimple};
 pub use bex::Bex;
 pub use bex_engine::{EngineError, FunctionCallContextBuilder};
 pub use bex_events::EventSink;

@@ -51,13 +51,7 @@ async fn optional_int_returns_value() {
             }
         "#
     );
-    assert_eq!(
-        output.result,
-        Ok(BexExternalValue::optional(
-            BexExternalValue::Int(42),
-            Ty::int()
-        ))
-    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(42)));
 }
 
 #[tokio::test]
@@ -69,13 +63,7 @@ async fn optional_int_returns_null() {
             }
         "#
     );
-    assert_eq!(
-        output.result,
-        Ok(BexExternalValue::optional(
-            BexExternalValue::Null,
-            Ty::int()
-        ))
-    );
+    assert_eq!(output.result, Ok(BexExternalValue::Null));
 }
 
 #[tokio::test]
@@ -237,13 +225,10 @@ async fn optional_class() {
     );
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::optional(
-            BexExternalValue::Instance {
-                class_name: "Data".to_string(),
-                fields: indexmap! { "value".to_string() => BexExternalValue::Int(42) },
-            },
-            Ty::user_class("Data"),
-        ))
+        Ok(BexExternalValue::Instance {
+            class_name: "Data".to_string(),
+            fields: indexmap! { "value".to_string() => BexExternalValue::Int(42) },
+        })
     );
 }
 
@@ -260,13 +245,7 @@ async fn optional_class_returns_null() {
             }
         "#
     );
-    assert_eq!(
-        output.result,
-        Ok(BexExternalValue::optional(
-            BexExternalValue::Null,
-            Ty::user_class("Data")
-        ))
-    );
+    assert_eq!(output.result, Ok(BexExternalValue::Null));
 }
 
 #[tokio::test]
@@ -289,10 +268,43 @@ async fn class_with_optional_field() {
             class_name: "Person".to_string(),
             fields: indexmap! {
                 "name".to_string() => BexExternalValue::String("Alice".to_string()),
-                "age".to_string() => BexExternalValue::optional(BexExternalValue::Null, Ty::int()),
+                "age".to_string() => BexExternalValue::Null,
             },
         })
     );
+}
+
+#[tokio::test]
+async fn optional_union_preserves_union_metadata() {
+    // Regression: Optional<Union<...>> must preserve the union wrapper for non-null values.
+    // Previously, maybe_wrap_union early-returned for Ty::Optional, losing the selected branch.
+    let output = baml_test!(
+        r#"
+            function main() -> (int | string)? {
+                42
+            }
+        "#
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::union(
+            BexExternalValue::Int(42),
+            [Ty::int(), Ty::string()],
+            Ty::int(),
+        ))
+    );
+}
+
+#[tokio::test]
+async fn optional_union_returns_null() {
+    let output = baml_test!(
+        r#"
+            function main() -> (int | string)? {
+                null
+            }
+        "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Null));
 }
 
 #[tokio::test]

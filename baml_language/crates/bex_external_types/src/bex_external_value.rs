@@ -87,9 +87,9 @@ pub enum BexExternalAdt {
     Collector(bex_vm_types::CollectorRef),
     Type(baml_type::Ty),
     /// A rendered prompt AST (from `baml.llm.render_prompt`).
-    PromptAst(std::sync::Arc<baml_builtins::PromptAst>),
+    PromptAst(std::sync::Arc<baml_builtins2::PromptAst>),
     /// A media value (image, audio, etc.) passed as a function argument.
-    Media(std::sync::Arc<baml_builtins::MediaValue>),
+    Media(std::sync::Arc<baml_builtins2::MediaValue>),
 }
 
 /// A deep-copied value tree with no heap references.
@@ -164,6 +164,9 @@ pub enum BexExternalValue {
         metadata: UnionMetadata,
     },
 
+    /// Binary data (byte array).
+    Uint8Array(Vec<u8>),
+
     /// Opaque Rust data for `$rust_type` fields.
     /// Engine converts to `Object::RustData` on the VM heap.
     RustData(std::sync::Arc<dyn std::any::Any + Send + Sync>),
@@ -230,6 +233,7 @@ impl std::fmt::Debug for BexExternalValue {
                 .field("value", value)
                 .field("metadata", metadata)
                 .finish(),
+            Self::Uint8Array(v) => f.debug_tuple("Uint8Array").field(v).finish(),
             Self::RustData(_) => write!(f, "RustData(...)"),
             Self::FunctionRef { global_index } => f
                 .debug_struct("FunctionRef")
@@ -301,6 +305,7 @@ impl PartialEq for BexExternalValue {
                     metadata: m2,
                 },
             ) => v1 == v2 && m1 == m2,
+            (Self::Uint8Array(a), Self::Uint8Array(b)) => a == b,
             (Self::RustData(a), Self::RustData(b)) => std::sync::Arc::ptr_eq(a, b),
             (Self::FunctionRef { global_index: a }, Self::FunctionRef { global_index: b }) => {
                 a == b
@@ -392,6 +397,7 @@ impl BexExternalValue {
             BexExternalValue::Instance { .. } => "instance",
             BexExternalValue::Variant { .. } => "variant",
             BexExternalValue::Union { .. } => "union",
+            BexExternalValue::Uint8Array(_) => "uint8array",
             BexExternalValue::RustData(_) => "rust_data",
             BexExternalValue::Adt(adt) => adt.type_name(),
             BexExternalValue::FunctionRef { .. } => "function",
@@ -543,13 +549,13 @@ pub trait ToBexExternalValue: std::any::Any + Send + Sync {
     fn to_bex_external_value(self: std::sync::Arc<Self>) -> BexExternalValue;
 }
 
-impl ToBexExternalValue for baml_builtins::PromptAst {
+impl ToBexExternalValue for baml_builtins2::PromptAst {
     fn to_bex_external_value(self: std::sync::Arc<Self>) -> BexExternalValue {
         BexExternalValue::Adt(BexExternalAdt::PromptAst(self))
     }
 }
 
-impl ToBexExternalValue for baml_builtins::MediaValue {
+impl ToBexExternalValue for baml_builtins2::MediaValue {
     fn to_bex_external_value(self: std::sync::Arc<Self>) -> BexExternalValue {
         BexExternalValue::Adt(BexExternalAdt::Media(self))
     }
@@ -563,10 +569,10 @@ impl ToBexExternalValue for baml_builtins::MediaValue {
 pub fn try_convert_rust_data(
     arc: &std::sync::Arc<dyn std::any::Any + Send + Sync>,
 ) -> Option<BexExternalValue> {
-    if let Ok(typed) = arc.clone().downcast::<baml_builtins::PromptAst>() {
+    if let Ok(typed) = arc.clone().downcast::<baml_builtins2::PromptAst>() {
         return Some(typed.to_bex_external_value());
     }
-    if let Ok(typed) = arc.clone().downcast::<baml_builtins::MediaValue>() {
+    if let Ok(typed) = arc.clone().downcast::<baml_builtins2::MediaValue>() {
         return Some(typed.to_bex_external_value());
     }
     None

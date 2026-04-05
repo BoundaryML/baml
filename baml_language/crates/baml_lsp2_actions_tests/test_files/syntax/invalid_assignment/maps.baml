@@ -48,21 +48,21 @@ function MapAssignments() -> int {
 
 //----
 //- diagnostics
-// Error: type mismatch: expected map<string, int>, got map<"y", "wrong">
+// Error: type mismatch: expected map<string, int>, got map<string, string>
 //     ╭─[ invalid_assignment_maps.baml:28:5 ]
 //     │
 //  28 │     d = {"y": "wrong"};
 //     │        ───────┬───────  
-//     │               ╰───────── type mismatch: expected map<string, int>, got map<"y", "wrong">
+//     │               ╰───────── type mismatch: expected map<string, int>, got map<string, string>
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯
-// Error: type mismatch: expected map<string, user.Person>, got map<"a", user.Animal>
+// Error: type mismatch: expected map<string, user.Person>, got map<string, user.Animal>
 //     ╭─[ invalid_assignment_maps.baml:32:5 ]
 //     │
 //  32 │     e = {"a": Animal { species: "Cat", legs: 4 }};
 //     │        ─────────────────────┬────────────────────  
-//     │                             ╰────────────────────── type mismatch: expected map<string, user.Person>, got map<"a", user.Animal>
+//     │                             ╰────────────────────── type mismatch: expected map<string, user.Person>, got map<string, user.Animal>
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯
