@@ -57,7 +57,7 @@ pub use codec::{
     DynamicUnion, FromBamlValue, FromBamlValueRef, KnownTypes,
 };
 pub use error::BamlError;
-pub use ffi::callbacks::OnTickData;
+pub use ffi::callbacks::OnTickCallback;
 pub use raw_objects::{
     // Media types
     Audio,
