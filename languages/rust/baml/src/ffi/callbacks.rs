@@ -1,7 +1,7 @@
 use std::{
     collections::HashMap,
     ffi::{c_char, c_int},
-    sync::{mpsc, Mutex, OnceLock},
+    sync::{mpsc, Arc, Mutex, OnceLock},
 };
 
 use crate::{error::BamlError, ffi::bindings};
@@ -16,14 +16,19 @@ pub enum CallbackResult {
     Error(BamlError),
 }
 
+/// On-tick callback type - a boxed closure that can be called from FFI
+pub type OnTickCallback = Arc<dyn Fn() + Send + Sync>;
+
 /// Sync callback data
 struct SyncCallbackData {
     sender: mpsc::Sender<CallbackResult>,
+    on_tick: Option<OnTickCallback>,
 }
 
 /// Async callback data
 struct AsyncCallbackData {
     sender: async_channel::Sender<CallbackResult>,
+    on_tick: Option<OnTickCallback>,
 }
 
 /// Callback data - either sync or async
@@ -96,12 +101,23 @@ fn allocate_callback_id(callbacks: &mut HashMap<u32, CallbackData>) -> u32 {
 /// Uses sequential IDs with collision checking to ensure uniqueness even if
 /// IDs wrap around while old callbacks are still pending.
 pub fn create_callback() -> (u32, mpsc::Receiver<CallbackResult>) {
+    create_callback_with_on_tick(None)
+}
+
+/// Create a new sync callback ID and channel with an optional on_tick callback.
+///
+/// The on_tick callback is invoked on each SSE streaming chunk, before the partial
+/// result is sent through the channel. This can be used to implement progress indicators
+/// or to access streaming thinking/reasoning content.
+pub fn create_callback_with_on_tick(
+    on_tick: Option<OnTickCallback>,
+) -> (u32, mpsc::Receiver<CallbackResult>) {
     let (sender, receiver) = mpsc::channel();
 
     let mut callbacks = get_callbacks().lock().unwrap();
     let id = allocate_callback_id(&mut callbacks);
 
-    callbacks.insert(id, CallbackData::Sync(SyncCallbackData { sender }));
+    callbacks.insert(id, CallbackData::Sync(SyncCallbackData { sender, on_tick }));
     drop(callbacks);
 
     (id, receiver)
@@ -109,12 +125,26 @@ pub fn create_callback() -> (u32, mpsc::Receiver<CallbackResult>) {
 
 /// Create a new async callback ID and channel.
 pub fn create_async_callback() -> (u32, async_channel::Receiver<CallbackResult>) {
+    create_async_callback_with_on_tick(None)
+}
+
+/// Create a new async callback ID and channel with an optional on_tick callback.
+///
+/// The on_tick callback is invoked on each SSE streaming chunk, before the partial
+/// result is sent through the channel. This can be used to implement progress indicators
+/// or to access streaming thinking/reasoning content.
+pub fn create_async_callback_with_on_tick(
+    on_tick: Option<OnTickCallback>,
+) -> (u32, async_channel::Receiver<CallbackResult>) {
     let (sender, receiver) = async_channel::unbounded();
 
     let mut callbacks = get_callbacks().lock().unwrap();
     let id = allocate_callback_id(&mut callbacks);
 
-    callbacks.insert(id, CallbackData::Async(AsyncCallbackData { sender }));
+    callbacks.insert(
+        id,
+        CallbackData::Async(AsyncCallbackData { sender, on_tick }),
+    );
     drop(callbacks);
 
     (id, receiver)
@@ -191,8 +221,23 @@ extern "C" fn error_callback(call_id: u32, _is_done: c_int, content: *const c_ch
 }
 
 /// On-tick callback for streaming updates
-extern "C" fn on_tick_callback(_call_id: u32) {
-    // Currently unused - can be extended for streaming progress
+///
+/// This is invoked by the CFFI layer on each SSE streaming chunk. It looks up
+/// the registered on_tick callback for the given call_id and invokes it if present.
+extern "C" fn on_tick_callback(call_id: u32) {
+    let callbacks = get_callbacks().lock().unwrap();
+    if let Some(cb_data) = callbacks.get(&call_id) {
+        let on_tick = match cb_data {
+            CallbackData::Sync(sync_data) => sync_data.on_tick.clone(),
+            CallbackData::Async(async_data) => async_data.on_tick.clone(),
+        };
+        // Release the lock before calling user code to avoid deadlocks
+        drop(callbacks);
+
+        if let Some(tick_cb) = on_tick {
+            tick_cb();
+        }
+    }
 }
 
 #[cfg(test)]
@@ -268,5 +313,89 @@ mod tests {
         remove_callback(sync_id);
         remove_callback(async_id);
         remove_callback(sync_id2);
+    }
+
+    #[test]
+    fn test_on_tick_callback_sync() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        let tick_count = Arc::new(AtomicUsize::new(0));
+        let tick_count_clone = tick_count.clone();
+
+        let on_tick: OnTickCallback = Arc::new(move || {
+            tick_count_clone.fetch_add(1, Ordering::SeqCst);
+        });
+
+        let (id, _rx) = create_callback_with_on_tick(Some(on_tick));
+
+        // Simulate multiple on_tick calls (as if from CFFI)
+        on_tick_callback(id);
+        on_tick_callback(id);
+        on_tick_callback(id);
+
+        assert_eq!(tick_count.load(Ordering::SeqCst), 3);
+
+        // Clean up
+        remove_callback(id);
+    }
+
+    #[test]
+    fn test_on_tick_callback_async() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        let tick_count = Arc::new(AtomicUsize::new(0));
+        let tick_count_clone = tick_count.clone();
+
+        let on_tick: OnTickCallback = Arc::new(move || {
+            tick_count_clone.fetch_add(1, Ordering::SeqCst);
+        });
+
+        let (id, _rx) = create_async_callback_with_on_tick(Some(on_tick));
+
+        // Simulate on_tick calls
+        on_tick_callback(id);
+        on_tick_callback(id);
+
+        assert_eq!(tick_count.load(Ordering::SeqCst), 2);
+
+        // Clean up
+        remove_callback(id);
+    }
+
+    #[test]
+    fn test_on_tick_callback_none() {
+        // Verify no panic when on_tick is None
+        let (id, _rx) = create_callback_with_on_tick(None);
+
+        // Should not panic
+        on_tick_callback(id);
+
+        // Clean up
+        remove_callback(id);
+    }
+
+    #[test]
+    fn test_on_tick_after_removal() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        let tick_count = Arc::new(AtomicUsize::new(0));
+        let tick_count_clone = tick_count.clone();
+
+        let on_tick: OnTickCallback = Arc::new(move || {
+            tick_count_clone.fetch_add(1, Ordering::SeqCst);
+        });
+
+        let (id, _rx) = create_callback_with_on_tick(Some(on_tick));
+
+        // Call before removal
+        on_tick_callback(id);
+        assert_eq!(tick_count.load(Ordering::SeqCst), 1);
+
+        // Remove callback
+        remove_callback(id);
+
+        // Call after removal - should not increment (callback not found)
+        on_tick_callback(id);
+        assert_eq!(tick_count.load(Ordering::SeqCst), 1);
     }
 }

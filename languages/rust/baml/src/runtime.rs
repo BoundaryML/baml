@@ -135,6 +135,9 @@ impl BamlRuntime {
     }
 
     /// Call a function with streaming results
+    ///
+    /// If `args` contains an `on_tick` callback (set via `FunctionArgs::with_on_tick`),
+    /// it will be invoked for each SSE streaming chunk received from the LLM.
     pub fn call_function_stream<TPartial, TFinal>(
         &self,
         name: &str,
@@ -148,7 +151,7 @@ impl BamlRuntime {
         let name_cstr =
             CString::new(name).map_err(|_| BamlError::internal("invalid function name"))?;
 
-        let (id, receiver) = callbacks::create_callback();
+        let (id, receiver) = callbacks::create_callback_with_on_tick(args.on_tick.clone());
 
         #[allow(unsafe_code)]
         let buf = unsafe {
@@ -244,6 +247,9 @@ impl BamlRuntime {
     }
 
     /// Call a function with async streaming results
+    ///
+    /// If `args` contains an `on_tick` callback (set via `FunctionArgs::with_on_tick`),
+    /// it will be invoked for each SSE streaming chunk received from the LLM.
     pub fn call_function_stream_async<TPartial, TFinal>(
         &self,
         name: &str,
@@ -257,7 +263,7 @@ impl BamlRuntime {
         let name_cstr =
             CString::new(name).map_err(|_| BamlError::internal("invalid function name"))?;
 
-        let (id, receiver) = callbacks::create_async_callback();
+        let (id, receiver) = callbacks::create_async_callback_with_on_tick(args.on_tick.clone());
 
         #[allow(unsafe_code)]
         let buf = unsafe {
