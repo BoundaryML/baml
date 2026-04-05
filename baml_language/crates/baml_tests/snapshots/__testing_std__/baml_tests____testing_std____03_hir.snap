@@ -40,7 +40,7 @@ function testing.$invoke_collector(collector: (testing.TestCollector) -> null, c
   {  } collector(c)
 }
 function testing.expand_set(self: ?, name: string) -> testing.SerializedTestDef[]  [expr] {
-  { for ts in self.collector.testsets {  } if (ts.name Eq name) { let start = baml.sys.now_ms(); let sub_collector = testing.TestCollector { prefix: name, tests: [], testsets: [] }; ts.collector(sub_collector); let elapsed = baml.sys.now_ms() Sub start; let sub_registry = testing.TestRegistry { collector: sub_collector, expansions: map {  }, loading_time_ms: elapsed }; self.expansions.set(name, sub_registry); return self.serialize() }; for k in self.expansions.keys() { let sub = self.expansions[k]; for sts in sub.collector.testsets {  } if (sts.name Eq name) { return sub.expand_set(name) } }; throw "TestSet not found..." Add name }
+  { for ts in self.collector.testsets {  } if (ts.name Eq name) { let start = baml.sys.now_ms(); let sub_collector = testing.TestCollector { prefix: name, tests: [], testsets: [] }; ts.collector(sub_collector); let elapsed = baml.sys.now_ms() Sub start; let sub_registry = testing.TestRegistry { collector: sub_collector, expansions: map {  }, loading_time_ms: elapsed }; self.expansions.set(name, sub_registry); return self.serialize() }; for k in self.expansions.keys() { let sub = self.expansions[k] } if (name.startsWith(k Add "/")) { return sub.expand_set(name) }; throw "TestSet not found..." Add name }
 }
 function testing.find_testset(self: ?, name: string) -> testing.TestSetRegistration  [expr] {
   { for ts in self.testsets {  } if (ts.name Eq name) { return ts }; throw "TestSet not found: " Add name }
@@ -61,7 +61,7 @@ function testing.run_test(body: () -> null, runner: testing.TestRunner?) -> test
   { let base_run = () -> TestReport { { let start = baml.sys.now_ms(); let result = { body() } RunReport { outcome: "pass", duration_ms: 0 } catch_all (e) { _ => {  } RunReport { outcome: "fail", duration_ms: 0 } } } TestReport { outcome: result.outcome, runs: [RunReport { outcome: result.outcome, duration_ms: baml.sys.now_ms() Sub start }] } }; let effective_run = match (runner) { null => base_run, r: testing.TestRunner => r(base_run) } } effective_run()
 }
 function testing.run_test(self: ?, name: string) -> testing.TestReport  [expr] {
-  { for t in self.collector.tests {  } if (t.name Eq name) { return root.run_test(t.body, t.runner) }; for k in self.expansions.keys() { let sub = self.expansions[k] } if (name.startsWith(k)) { return sub.run_test(name) }; throw "Test not found: " Add name }
+  { for t in self.collector.tests {  } if (t.name Eq name) { return root.run_test(t.body, t.runner) }; for k in self.expansions.keys() { let sub = self.expansions[k] } if (name.startsWith(k Add "/")) { return sub.run_test(name) }; throw "Test not found: " Add name }
 }
 function testing.run_testset(run_children: () -> testing.TestSetReport, runner: testing.TestSetRunner?) -> testing.TestSetReport  [expr] {
   { let effective_run = match (runner) { null => run_children, r: testing.TestSetRunner => r(run_children) } } effective_run()

@@ -2,7 +2,7 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR2 ===
-fn user.$init_test_17(registry: testing.TestCollector) -> null {
+fn user.$init_test_18(registry: testing.TestCollector) -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: testing.TestCollector // registry // param
@@ -41,7 +41,7 @@ fn user.$init_test_17(registry: testing.TestCollector) -> null {
 }
 
 // lambda[0]
-fn .<lambda($init_test_17, 0)>() -> null {
+fn .<lambda($init_test_18, 0)>() -> null {
     // Locals:
     let _0: null // _0 // return
 
@@ -56,7 +56,7 @@ fn .<lambda($init_test_17, 0)>() -> null {
 }
 
 // lambda[1]
-fn .<lambda($init_test_17, 1)>() -> null {
+fn .<lambda($init_test_18, 1)>() -> null {
     // Locals:
     let _0: null // _0 // return
 
@@ -71,19 +71,19 @@ fn .<lambda($init_test_17, 1)>() -> null {
 }
 
 // lambda[2]
-fn .<lambda($init_test_17, 2)>(testset: testing.TestCollector) -> null {
+fn .<lambda($init_test_18, 2)>(testset: testing.TestCollector) -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: testing.TestCollector // testset // param
-    let _2: 1 | 2 | 3[]
+    let _2: int[]
     let _3: int // __for_idx
     let _4: int
     let _5: bool
-    let _6: 1 | 2 | 3
-    let _7: 1 | 2 | 3 // i
+    let _6: int
+    let _7: int // i
     let _8: null
     let _9: int
-    let _10: 1 | 2 | 3
+    let _10: int
     let _11: () -> null
 
     bb0: {
@@ -127,7 +127,7 @@ fn .<lambda($init_test_17, 2)>(testset: testing.TestCollector) -> null {
 }
 
 // lambda[0]
-fn .<lambda(<lambda($init_test_17, 2)>, 3)>() -> null {
+fn .<lambda(<lambda($init_test_18, 2)>, 3)>() -> null {
     // Locals:
     let _0: null // _0 // return
 

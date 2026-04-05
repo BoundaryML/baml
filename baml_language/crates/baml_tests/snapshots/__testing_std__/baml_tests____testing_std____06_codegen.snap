@@ -315,7 +315,7 @@ function testing.TestCollector.register_test_set(self: null, name: string, colle
     jump L3
 }
 
-function testing.TestRegistry.expand_set(self: null, name: string) -> testing.SerializedTest | testing.SerializedTestSet[] {
+function testing.TestRegistry.expand_set(self: null, name: string) -> (testing.SerializedTest | testing.SerializedTestSet)[] {
     load_var self
     load_field .collector
     load_field .testsets
@@ -329,7 +329,7 @@ function testing.TestRegistry.expand_set(self: null, name: string) -> testing.Se
     call baml.Array.length
     cmp_op <
     pop_jump_if_false L1
-    jump L10
+    jump L7
 
   L1:
     load_var self
@@ -354,59 +354,37 @@ function testing.TestRegistry.expand_set(self: null, name: string) -> testing.Se
     throw
 
   L4:
-    load_var self
-    load_field .expansions
     load_var _31
     load_var __for_idx_1
     load_array_element
+    store_var k
+    load_var self
+    load_field .expansions
+    load_var k
     load_map_element
     store_var sub
-    load_var sub
-    load_field .collector
-    load_field .testsets
-    store_var _41
-    load_const 0
-    store_var __for_idx_2
+    load_var name
+    load_var k
+    load_const "/"
+    bin_op +
+    call baml.String.startsWith
+    pop_jump_if_false L5
+    jump L6
 
   L5:
-    load_var __for_idx_2
-    load_var _41
-    call baml.Array.length
-    cmp_op <
-    pop_jump_if_false L6
-    jump L7
-
-  L6:
     load_var __for_idx_1
     load_const 1
     bin_op +
     store_var __for_idx_1
     jump L2
 
-  L7:
-    load_var _41
-    load_var __for_idx_2
-    load_array_element
-    load_field .name
-    load_var name
-    cmp_op ==
-    pop_jump_if_false L8
-    jump L9
-
-  L8:
-    load_var __for_idx_2
-    load_const 1
-    bin_op +
-    store_var __for_idx_2
-    jump L5
-
-  L9:
+  L6:
     load_var sub
     load_var name
     call testing.TestRegistry.expand_set
-    jump L13
+    jump L10
 
-  L10:
+  L7:
     load_var _3
     load_var __for_idx
     load_array_element
@@ -415,17 +393,17 @@ function testing.TestRegistry.expand_set(self: null, name: string) -> testing.Se
     load_field .name
     load_var name
     cmp_op ==
-    pop_jump_if_false L11
-    jump L12
+    pop_jump_if_false L8
+    jump L9
 
-  L11:
+  L8:
     load_var __for_idx
     load_const 1
     bin_op +
     store_var __for_idx
     jump L0
 
-  L12:
+  L9:
     call baml.sys.now_ms
     store_var start
     alloc_instance TestCollector
@@ -466,7 +444,7 @@ function testing.TestRegistry.expand_set(self: null, name: string) -> testing.Se
     load_var self
     call testing.TestRegistry.serialize
 
-  L13:
+  L10:
     return
 }
 
@@ -534,6 +512,8 @@ function testing.TestRegistry.run_test(self: null, name: string) -> testing.Test
     store_var sub
     load_var name
     load_var k
+    load_const "/"
+    bin_op +
     call baml.String.startsWith
     pop_jump_if_false L5
     jump L6
@@ -581,7 +561,7 @@ function testing.TestRegistry.run_test(self: null, name: string) -> testing.Test
     return
 }
 
-function testing.TestRegistry.serialize(self: null) -> testing.SerializedTest | testing.SerializedTestSet[] {
+function testing.TestRegistry.serialize(self: null) -> (testing.SerializedTest | testing.SerializedTestSet)[] {
     alloc_array 0
     store_var items
     load_var self
