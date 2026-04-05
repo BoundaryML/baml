@@ -1,12 +1,10 @@
-use std::sync::Arc;
-
 use prost::Message;
 
 use crate::{
     client_registry::ClientRegistry,
     codec::BamlEncode,
     error::BamlError,
-    ffi::callbacks::OnTickCallback,
+    ffi::callbacks::OnTickData,
     proto::baml_cffi_v1::{
         host_map_entry, BamlObjectHandle, HostEnvVar, HostFunctionArguments, HostMapEntry,
     },
@@ -534,9 +532,8 @@ pub struct FunctionArgs {
     tags: Vec<HostMapEntry>,
     client_registry: Option<ClientRegistry>,
     pub(crate) cancellation_token: Option<CancellationToken>,
-    /// On-tick callback invoked for each SSE streaming chunk.
-    /// Used to implement progress indicators or access streaming thinking/reasoning content.
-    pub(crate) on_tick: Option<OnTickCallback>,
+    /// Bundled on-tick callback + collector, set by generated code's `with_on_tick()`.
+    pub(crate) on_tick: Option<OnTickData>,
 }
 
 impl Default for FunctionArgs {
@@ -583,39 +580,13 @@ impl FunctionArgs {
         self
     }
 
-    /// Set an on-tick callback for streaming calls.
+    /// Set the bundled on-tick callback + collector.
     ///
-    /// The callback is invoked for each SSE streaming chunk received from the LLM.
-    /// This can be used to implement progress indicators or to access streaming
-    /// thinking/reasoning content as it arrives.
-    ///
-    /// # Example
-    /// ```ignore
-    /// use std::sync::Arc;
-    ///
-    /// let args = FunctionArgs::new()
-    ///     .arg("prompt", "Hello!")
-    ///     .with_on_tick(|| {
-    ///         println!("Received a streaming chunk!");
-    ///     });
-    ///
-    /// let stream = runtime.call_function_stream::<PartialOutput, Output>("MyFunction", &args)?;
-    /// ```
+    /// Typically called by generated code -- users should use the generated
+    /// `with_on_tick()` method on the function builder which auto-creates the collector.
     #[must_use]
-    pub fn with_on_tick<F>(mut self, callback: F) -> Self
-    where
-        F: Fn() + Send + Sync + 'static,
-    {
-        self.on_tick = Some(Arc::new(callback));
-        self
-    }
-
-    /// Set an on-tick callback for streaming calls using a pre-wrapped Arc.
-    ///
-    /// This is useful when you need to share the same callback across multiple calls.
-    #[must_use]
-    pub fn with_on_tick_arc(mut self, callback: OnTickCallback) -> Self {
-        self.on_tick = Some(callback);
+    pub fn with_on_tick_data(mut self, data: OnTickData) -> Self {
+        self.on_tick = Some(data);
         self
     }
 
@@ -766,65 +737,17 @@ mod tests {
 
     #[test]
     fn test_function_args_with_on_tick() {
-        use std::sync::atomic::{AtomicUsize, Ordering};
+        let args = FunctionArgs::new().arg("text", "hello");
 
-        let counter = Arc::new(AtomicUsize::new(0));
-        let counter_clone = counter.clone();
-
-        let args = FunctionArgs::new()
-            .arg("text", "hello")
-            .with_on_tick(move || {
-                counter_clone.fetch_add(1, Ordering::SeqCst);
-            });
-
-        // Verify on_tick is set
-        assert!(args.on_tick.is_some());
-
-        // Call the on_tick callback
-        if let Some(ref tick_cb) = args.on_tick {
-            tick_cb();
-            tick_cb();
-        }
-
-        assert_eq!(counter.load(Ordering::SeqCst), 2);
-    }
-
-    #[test]
-    fn test_function_args_with_on_tick_arc() {
-        use std::sync::atomic::{AtomicUsize, Ordering};
-
-        let counter = Arc::new(AtomicUsize::new(0));
-        let counter_clone = counter.clone();
-
-        let on_tick: OnTickCallback = Arc::new(move || {
-            counter_clone.fetch_add(1, Ordering::SeqCst);
-        });
-
-        let args = FunctionArgs::new()
-            .arg("text", "hello")
-            .with_on_tick_arc(on_tick.clone());
-
-        // Verify on_tick is set
-        assert!(args.on_tick.is_some());
-
-        // Call the shared on_tick callback directly
-        on_tick();
-        assert_eq!(counter.load(Ordering::SeqCst), 1);
-
-        // Call via args
-        if let Some(ref tick_cb) = args.on_tick {
-            tick_cb();
-        }
-        assert_eq!(counter.load(Ordering::SeqCst), 2);
+        // on_tick is not set directly on FunctionArgs; it's set via generated code
+        assert!(args.on_tick.is_none());
     }
 
     #[test]
     fn test_function_args_debug_with_on_tick() {
-        let args = FunctionArgs::new().arg("text", "hello").with_on_tick(|| {});
+        let args = FunctionArgs::new().arg("text", "hello");
 
-        // Debug should not panic and should show "<callback>" for on_tick
         let debug_str = format!("{args:?}");
         assert!(debug_str.contains("on_tick"));
-        assert!(debug_str.contains("<callback>"));
     }
 }

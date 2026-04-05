@@ -6,7 +6,6 @@
 //! Runtime initialization and function options.
 
 use std::collections::HashMap;
-use std::sync::Arc;
 
 use crate::baml_client::baml_source_map::get_baml_files;
 use std::sync::OnceLock;
@@ -20,7 +19,7 @@ pub struct FunctionOptions {
     client: Option<String>,
     client_registry: Option<baml::ClientRegistry>,
     cancellation_token: Option<baml::CancellationToken>,
-    on_tick: Option<baml::OnTickCallback>,
+    on_tick: Option<baml::OnTickData>,
 }
 
 impl std::fmt::Debug for FunctionOptions {
@@ -33,7 +32,7 @@ impl std::fmt::Debug for FunctionOptions {
             .field("client", &self.client)
             .field("client_registry", &self.client_registry)
             .field("cancellation_token", &self.cancellation_token)
-            .field("on_tick", &self.on_tick.as_ref().map(|_| "<callback>"))
+            .field("on_tick", &self.on_tick.as_ref().map(|_| "<on_tick>"))
             .finish()
     }
 }
@@ -144,39 +143,38 @@ impl FunctionOptions {
 
     /// Set an on-tick callback for streaming calls.
     ///
-    /// The callback is invoked for each SSE streaming chunk received from the LLM.
-    /// This can be used to implement progress indicators or to access streaming
-    /// thinking/reasoning content as it arrives.
+    /// The callback is invoked for each SSE streaming chunk received from the LLM,
+    /// with a `FunctionLog` providing access to SSE chunks, thinking tokens, usage,
+    /// and timing data as they arrive.
+    ///
+    /// Automatically creates an internal collector to capture the function log data.
     ///
     /// # Example
     /// ```ignore
-    /// use std::sync::Arc;
-    /// use std::sync::atomic::{AtomicUsize, Ordering};
-    ///
-    /// let tick_count = Arc::new(AtomicUsize::new(0));
-    /// let tick_count_clone = tick_count.clone();
-    ///
     /// let mut stream = B.MyFunction
-    ///     .with_on_tick(move || {
-    ///         tick_count_clone.fetch_add(1, Ordering::SeqCst);
-    ///         println!("Received a streaming chunk!");
+    ///     .with_on_tick(|log: &baml::FunctionLog| {
+    ///         for call in log.calls() {
+    ///             if let Some(stream_call) = call.as_stream() {
+    ///                 if let Some(chunks) = stream_call.sse_chunks() {
+    ///                     for chunk in &chunks {
+    ///                         println!("SSE: {}", chunk.text());
+    ///                     }
+    ///                 }
+    ///             }
+    ///         }
     ///     })
     ///     .stream(args)
     ///     .expect("Failed to start stream");
     /// ```
     pub fn with_on_tick<F>(mut self, callback: F) -> Self
     where
-        F: Fn() + Send + Sync + 'static,
+        F: Fn(&baml::FunctionLog) + Send + Sync + 'static,
     {
-        self.on_tick = Some(Arc::new(callback));
-        self
-    }
-
-    /// Set an on-tick callback using a pre-wrapped Arc.
-    ///
-    /// This is useful when you need to share the same callback across multiple calls.
-    pub fn with_on_tick_arc(mut self, callback: baml::OnTickCallback) -> Self {
-        self.on_tick = Some(callback);
+        let collector = new_collector("on-tick-collector");
+        self.collectors
+            .get_or_insert_with(Vec::new)
+            .push(collector.clone());
+        self.on_tick = Some(baml::OnTickData::new(callback, collector));
         self
     }
 
@@ -228,7 +226,7 @@ impl FunctionOptions {
         }
 
         if let Some(on_tick) = &self.on_tick {
-            args = args.with_on_tick_arc(on_tick.clone());
+            args = args.with_on_tick_data(on_tick.clone());
         }
 
         args

@@ -207,16 +207,26 @@ mod tests {
         assert_eq!(get_variant_name(&result), get_variant_name(&cloned));
     }
 
-    /// Test on_tick callback with streaming - verifies the callback is invoked
-    /// for each SSE streaming chunk.
+    /// Test on_tick callback with streaming - verifies the callback receives
+    /// FunctionLog and can access thinking tokens from SSE chunks.
     #[test]
     fn test_on_tick_stream() {
         let tick_count = Arc::new(AtomicUsize::new(0));
         let tick_count_clone = tick_count.clone();
 
         let mut stream = B.Foo
-            .with_on_tick(move || {
+            .with_on_tick(move |log: &baml::FunctionLog| {
                 tick_count_clone.fetch_add(1, Ordering::SeqCst);
+
+                for call in log.calls() {
+                    if let Some(stream_call) = call.as_stream() {
+                        if let Some(chunks) = stream_call.sse_chunks() {
+                            for chunk in &chunks {
+                                println!("thinking token: {}", chunk.text());
+                            }
+                        }
+                    }
+                }
             })
             .stream(8192)
             .expect("Failed to start Foo stream with on_tick");
@@ -234,13 +244,12 @@ mod tests {
         let variant_name = get_variant_name(&final_result);
         assert!(!variant_name.is_empty());
 
-        // Verify on_tick was called at least once
         let ticks = tick_count.load(Ordering::SeqCst);
         println!("on_tick called {} times, received {} partials", ticks, partial_count);
         assert!(ticks >= 1, "Expected on_tick to be called at least once, got {} calls", ticks);
     }
 
-    /// Test on_tick callback with collector - verifies both work together
+    /// Test on_tick callback with an explicit collector - verifies both work together
     #[test]
     fn test_on_tick_with_collector() {
         let collector = new_collector("on-tick-collector-test");
@@ -249,23 +258,30 @@ mod tests {
 
         let mut stream = B.Foo
             .with_collector(&collector)
-            .with_on_tick(move || {
+            .with_on_tick(move |log: &baml::FunctionLog| {
                 tick_count_clone.fetch_add(1, Ordering::SeqCst);
+
+                for call in log.calls() {
+                    if let Some(stream_call) = call.as_stream() {
+                        if let Some(chunks) = stream_call.sse_chunks() {
+                            for chunk in &chunks {
+                                println!("thinking token (collector test): {}", chunk.text());
+                            }
+                        }
+                    }
+                }
             })
             .stream(8192)
             .expect("Failed to start Foo stream with on_tick and collector");
 
-        // Consume the stream
         for partial in stream.partials() {
             let _ = partial.expect("Error receiving partial");
         }
         let _ = stream.get_final_response().expect("Failed to get final response");
 
-        // Verify on_tick was called
         let ticks = tick_count.load(Ordering::SeqCst);
         assert!(ticks >= 1, "Expected on_tick to be called at least once");
 
-        // Verify collector captured the call
         let logs = collector.logs();
         assert!(!logs.is_empty(), "Expected collector to have logs");
         println!("on_tick called {} times, collector has {} logs", ticks, logs.len());
@@ -388,15 +404,25 @@ mod async_tests {
         assert_eq!(usage.output_tokens(), 0, "Cancelled stream should have 0 output tokens");
     }
 
-    /// Test on_tick callback with async streaming
+    /// Test on_tick callback with async streaming and thinking tokens
     #[tokio::test]
     async fn test_on_tick_stream_async() {
         let tick_count = Arc::new(AtomicUsize::new(0));
         let tick_count_clone = tick_count.clone();
 
         let mut stream = B.Foo
-            .with_on_tick(move || {
+            .with_on_tick(move |log: &baml::FunctionLog| {
                 tick_count_clone.fetch_add(1, Ordering::SeqCst);
+
+                for call in log.calls() {
+                    if let Some(stream_call) = call.as_stream() {
+                        if let Some(chunks) = stream_call.sse_chunks() {
+                            for chunk in &chunks {
+                                println!("thinking token (async): {}", chunk.text());
+                            }
+                        }
+                    }
+                }
             })
             .stream(8192)
             .expect("Failed to start Foo stream with on_tick");
@@ -415,13 +441,12 @@ mod async_tests {
         let variant_name = get_variant_name(&final_result);
         assert!(!variant_name.is_empty());
 
-        // Verify on_tick was called at least once
         let ticks = tick_count.load(Ordering::SeqCst);
         println!("on_tick (async) called {} times, received {} partials", ticks, partial_count);
         assert!(ticks >= 1, "Expected on_tick to be called at least once, got {} calls", ticks);
     }
 
-    /// Test on_tick callback with collector in async context
+    /// Test on_tick callback with explicit collector in async context
     #[tokio::test]
     async fn test_on_tick_with_collector_async() {
         let collector = new_collector("on-tick-collector-async-test");
@@ -430,23 +455,30 @@ mod async_tests {
 
         let mut stream = B.Foo
             .with_collector(&collector)
-            .with_on_tick(move || {
+            .with_on_tick(move |log: &baml::FunctionLog| {
                 tick_count_clone.fetch_add(1, Ordering::SeqCst);
+
+                for call in log.calls() {
+                    if let Some(stream_call) = call.as_stream() {
+                        if let Some(chunks) = stream_call.sse_chunks() {
+                            for chunk in &chunks {
+                                println!("thinking token (async collector): {}", chunk.text());
+                            }
+                        }
+                    }
+                }
             })
             .stream(8192)
             .expect("Failed to start Foo stream with on_tick and collector");
 
-        // Consume the stream
         while let Some(partial) = stream.next().await {
             let _ = partial.expect("Error receiving partial");
         }
         let _ = stream.get_final_response().await.expect("Failed to get final response");
 
-        // Verify on_tick was called
         let ticks = tick_count.load(Ordering::SeqCst);
         assert!(ticks >= 1, "Expected on_tick to be called at least once");
 
-        // Verify collector captured the call
         let logs = collector.logs();
         assert!(!logs.is_empty(), "Expected collector to have logs");
 
