@@ -327,46 +327,73 @@ impl BamlWasmRuntime {
     /// Request test collection for a project.
     ///
     /// Triggers async test collection for the given project root path and sends
-    /// `TestCollectionResult` playground notifications with `Collecting` → `Done` | `Error`.
-    ///
-    /// * `max_testset_load_time_ms` — optional per-testset timeout in milliseconds.
-    ///   Testsets that take longer will be returned as `LazyTestSet` instead of being expanded.
-    /// * `skip_testsets` — JS array of testset names to skip (returned as `LazyTestSet` immediately).
+    /// a `TestCollectionResult` playground notification with the serialized test tree.
     #[wasm_bindgen(js_name = "requestCollectTests")]
-    pub fn request_collect_tests(
+    pub fn request_collect_tests(&self, project: &str) {
+        self.bex.request_collect_tests(project);
+    }
+
+    /// Run a specific test by name. Request-response — returns proto-encoded `TestReport`,
+    /// using the same path as `callFunction`.
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - Unique call identifier (used for cancellation via `cancelCall`)
+    /// * `project` - Project root path (e.g. `"/workspace/baml_src"`)
+    /// * `generation` - The test-state generation captured when the test list was collected
+    /// * `test_name` - The test name to run
+    ///
+    /// # Returns
+    ///
+    /// Protobuf-encoded `CffiValueHolder` containing the `TestReport` result.
+    #[wasm_bindgen(js_name = "callTestFunction")]
+    pub async fn call_test_function(
         &self,
+        id: u32,
         project: &str,
-        max_testset_load_time_ms: Option<u32>,
-        skip_testsets: &JsValue,
-    ) {
-        let skip: Vec<String> = js_sys::Array::from(skip_testsets)
-            .iter()
-            .filter_map(|v| v.as_string())
-            .collect();
-        self.bex
-            .request_collect_tests(project, max_testset_load_time_ms, skip);
+        generation: u32,
+        test_name: &str,
+    ) -> Result<Vec<u8>, JsValue> {
+        let call_id = sys_types::CallId(u64::from(id));
+        let function_call_ctx = bex_project::FunctionCallContextBuilder::new(call_id);
+
+        let result = self
+            .bex
+            .call_test_function(
+                project,
+                u64::from(generation),
+                test_name,
+                function_call_ctx.build(),
+            )
+            .await;
+
+        match result {
+            Ok(result) => {
+                let handle_options = bridge_ctypes::HandleTableOptions::for_wire();
+                let baml_value = external_to_baml_value(&result, &handle_options)
+                    .map_err(|e| JsError::new(&format!("Failed to encode result: {e}")))?;
+                Ok(baml_value.encode_to_vec())
+            }
+            Err(bex_project::EngineError::Cancelled) => {
+                let error = js_sys::Error::new("Function call was cancelled");
+                error.set_name("BamlCancelledError");
+                Err(error.into())
+            }
+            Err(e) => Err(JsError::new(&e.to_string()).into()),
+        }
     }
 
-    /// Request expansion of a single lazy testset.
+    /// Expand a lazy test set by name. Fire-and-forget — result comes via a
+    /// `TestCollectionResult` playground notification with the full serialized tree.
     ///
-    /// Sends a `TestSetExpandResult` playground notification when complete.
+    /// # Arguments
     ///
-    /// * `name` — the full testset name (as reported in the `LazyTestSet` notification).
-    /// * `max_load_time_ms` — optional timeout; the expansion may itself produce nested lazy sets.
-    #[wasm_bindgen(js_name = "requestExpandTestSet")]
-    pub fn request_expand_testset(&self, project: &str, name: &str, max_load_time_ms: Option<u32>) {
+    /// * `project` - Project root path (e.g. `"/workspace/baml_src"`)
+    /// * `generation` - The test-state generation captured when the test list was collected
+    /// * `testset_name` - The lazy test set name to expand
+    #[wasm_bindgen(js_name = "expandTestSet")]
+    pub fn expand_test_set(&self, project: &str, generation: u32, testset_name: &str) {
         self.bex
-            .request_expand_testset(project, name, max_load_time_ms);
-    }
-
-    /// Request execution of a single test by name.
-    ///
-    /// Sends a `TestRunResult` playground notification when the test completes.
-    ///
-    /// * `project` — the project root path.
-    /// * `name` — the full test name (as reported in the `TestCollectionResult` notification).
-    #[wasm_bindgen(js_name = "requestRunTest")]
-    pub fn request_run_test(&self, project: &str, name: &str) {
-        self.bex.request_run_test(project, name);
+            .expand_test_set(project, u64::from(generation), testset_name);
     }
 }

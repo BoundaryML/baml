@@ -31,6 +31,8 @@ type WsOutMessage =
 type WsInMessage =
   | { type: 'callFunction'; id: number; project: string; name: string; argsProto: string }
   | { type: 'cancelCall'; id: number; project: string }
+  | { type: 'callTestFunction'; id: number; project: string; generation: number; testName: string }
+  | { type: 'expandTestSet'; project: string; generation: number; testsetName: string }
   | { type: 'envVarResponse'; id: number; value: string | undefined; variable?: string }
   | { type: 'requestState' }
   | { type: 'requestControlFlowGraph'; project: string; functionName: string }
@@ -200,10 +202,21 @@ export class WebSocketRuntimePort implements RuntimePort {
         };
       case 'requestCollectTests':
         return null; // forwarded via WebSocket worker; no direct server equivalent
-      case 'requestExpandTestSet':
-        return null; // forwarded via WebSocket worker; no direct server equivalent
-      case 'requestRunTest':
-        return null; // forwarded via WebSocket worker; no direct server equivalent
+      case 'callTestFunction':
+        return {
+          type: 'callTestFunction',
+          id: msg.id,
+          project: msg.project,
+          generation: msg.generation,
+          testName: msg.testName,
+        };
+      case 'expandTestSet':
+        return {
+          type: 'expandTestSet',
+          project: msg.project,
+          generation: msg.generation,
+          testsetName: msg.testsetName,
+        };
       case 'clearHandles':
         return null; // handles live in the Rust process; no TS-side cleanup needed
       case 'dispose':

@@ -478,9 +478,8 @@ impl BexMulitProject {
         self.send_update_project(project_root, &project, flat_diags);
 
         // Auto-trigger runtime test collection when BexEngine is ready
-        // Use a default 500ms timeout so slow testsets don't block the sidebar
         if project.project.is_bex_current() {
-            self.request_collect_tests_impl(project_root.as_str(), Some(500), vec![]);
+            self.request_collect_tests_impl(project_root.as_str());
         }
 
         tracing::debug!("refresh_project done");
@@ -574,15 +573,8 @@ impl BexMulitProject {
         );
     }
 
-    fn request_collect_tests_impl(
-        &self,
-        project_root_str: &str,
-        max_testset_load_time_ms: Option<u32>,
-        skip_testsets: Vec<String>,
-    ) {
-        log::info!(
-            "[request_collect_tests_impl] max_testset_load_time_ms={max_testset_load_time_ms:?} skip_testsets={skip_testsets:?}"
-        );
+    fn request_collect_tests_impl(&self, project_root_str: &str) {
+        log::info!("[request_collect_tests_impl] project={project_root_str}");
         // Resolve project and get the concrete BexEngine (before trait erasure)
         let (engine, test_state) = {
             let projects = self.projects.lock().unwrap();
@@ -599,319 +591,232 @@ impl BexMulitProject {
             (engine, project.project.test_state())
         };
 
-        // Capture generation and cancel token; increment active task count
-        let (generation_at_start, cancel) = {
+        // Bump generation, cancel in-flight tasks, and clear stale registry
+        let (generation, cancel) = {
             let mut state = test_state.lock().unwrap();
-            state.active_tasks += 1;
+            state.cancel.cancel();
+            state.generation += 1;
+            state.cancel = sys_types::CancellationToken::new();
+            state.registry = None;
             (state.generation, state.cancel.clone())
         };
 
         let sender = self.playground_sender.clone();
         let project = project_root_str.to_string();
         let package = "user".to_string();
-
-        // Push "collecting" status immediately
-        sender.send_playground_notification(
-            crate::bex_lsp::PlaygroundNotification::TestCollectionResult {
-                project: project.clone(),
-                package: package.clone(),
-                result: crate::bex_lsp::TestCollectionStatus::Collecting,
-            },
-        );
-        send_task_count(&sender, &project, &test_state);
-
-        let max_load_time =
-            max_testset_load_time_ms.map(|ms| std::time::Duration::from_millis(u64::from(ms)));
-        let skip_set: std::collections::HashSet<String> = skip_testsets.into_iter().collect();
+        let call_id = sys_types::CallId::next();
 
         // Spawn async collection task
         wasm_helpers::run_async_in_background(async move {
-            let result = engine
-                .collect_tests(&package, cancel, max_load_time, skip_set)
-                .await;
-
-            // Decrement active tasks and send count
-            {
-                let mut state = test_state.lock().unwrap();
-                state.active_tasks = state.active_tasks.saturating_sub(1);
-            }
-            send_task_count(&sender, &project, &test_state);
-
-            match result {
+            match engine.collect_tests(&package, cancel.clone()).await {
                 Ok(registry) => {
-                    // Discard stale results if the engine was swapped during collection
-                    let mut state = test_state.lock().unwrap();
-                    if state.generation != generation_at_start {
-                        log::info!(
-                            "[collect_tests] discarding stale result (gen {generation_at_start} vs current {})",
-                            state.generation
-                        );
+                    // Discard stale results if the engine was swapped during collection.
+                    // The guard is scoped to this block so it is dropped before the await below.
+                    let should_continue = {
+                        let mut state = test_state.lock().unwrap();
+                        if state.generation != generation {
+                            log::info!(
+                                "[collect_tests] discarding stale result (gen {generation} vs current {})",
+                                state.generation
+                            );
+                            false
+                        } else {
+                            // Extract Handle from BexExternalValue::Handle
+                            let handle = match &registry {
+                                bex_engine::BexExternalValue::Handle(h) => h.clone(),
+                                _ => {
+                                    log::error!("[collect_tests] unexpected non-Handle result");
+                                    return;
+                                }
+                            };
+                            state.registry = Some(handle);
+                            true
+                        }
+                    };
+                    if !should_continue {
                         return;
                     }
-                    let items = test_registry_to_test_defs(&registry);
-                    state.registry = Some(registry);
-                    drop(state);
-                    sender.send_playground_notification(
-                        crate::bex_lsp::PlaygroundNotification::TestCollectionResult {
-                            project,
-                            package,
-                            result: crate::bex_lsp::TestCollectionStatus::Done { items },
-                        },
-                    );
+
+                    // Serialize the full test tree via TestRegistry.serialize
+                    let ctx = bex_engine::FunctionCallContextBuilder::new(call_id)
+                        .with_cancel_token(cancel)
+                        .build();
+                    match engine
+                        .call_function(
+                            "testing.TestRegistry.serialize",
+                            vec![registry],
+                            ctx,
+                            true, // deep copy for wire
+                        )
+                        .await
+                    {
+                        Ok(serialized) => {
+                            let data = serde_json::to_vec(&bex_value_to_json(&serialized))
+                                .unwrap_or_default();
+                            sender.send_playground_notification(
+                                crate::bex_lsp::PlaygroundNotification::TestCollectionResult {
+                                    project,
+                                    generation,
+                                    call_id: call_id.0,
+                                    data,
+                                },
+                            );
+                        }
+                        Err(e) => {
+                            log::error!("[collect_tests] serialize failed: {e}");
+                        }
+                    }
                 }
                 Err(e) => {
-                    sender.send_playground_notification(
-                        crate::bex_lsp::PlaygroundNotification::TestCollectionResult {
-                            project,
-                            package,
-                            result: crate::bex_lsp::TestCollectionStatus::Error {
-                                message: e.to_string(),
-                            },
-                        },
-                    );
+                    // Collection failed — log error; the UI will not receive an update
+                    log::error!("[collect_tests] collect_tests failed: {e}");
                 }
             }
         });
     }
 
-    fn request_run_test_impl(&self, project_root_str: &str, test_name: &str) {
-        log::info!("[request_run_test_impl] project={project_root_str} test_name={test_name}");
-        let (engine, test_state) = {
-            let projects = self.projects.lock().unwrap();
-            let project = projects
-                .iter()
-                .find(|(k, _)| k.as_path().to_string_lossy() == project_root_str)
-                .map(|(_, v)| v.clone());
-            let Some(project) = project else {
-                log::warn!("[request_run_test_impl] project not found");
-                return;
-            };
-            let Ok(engine) = project.project.get_bex() else {
-                log::warn!("[request_run_test_impl] engine not ready");
-                return;
-            };
-            (engine, project.project.test_state())
-        };
-
-        // Find the TestInfo by name from the cached registry
-        let test_info = {
-            let registry_guard = test_state.lock().unwrap();
-            let Some(registry) = registry_guard.registry.as_ref() else {
-                log::warn!("[request_run_test_impl] no test registry cached");
-                return;
-            };
-            log::info!(
-                "[request_run_test_impl] registry has {} tests",
-                registry.all_test_names().len(),
-            );
-            find_test_by_name(registry, test_name).map(|t| {
-                // Clone the owned data we need (name + BexExternalValue handles)
-                bex_engine::TestInfo {
-                    name: t.name.clone(),
-                    body: t.body.clone(),
-                    runner: t.runner.clone(),
-                }
-            })
-        };
-        let Some(test_info) = test_info else {
-            log::warn!("[request_run_test_impl] test '{test_name}' not found in registry");
-            return;
-        };
-
-        let sender = self.playground_sender.clone();
-        let project = project_root_str.to_string();
-        let name = test_name.to_string();
-        let cancel = test_state.lock().unwrap().cancel.clone();
-
-        log::info!("[request_run_test_impl] spawning async run for '{name}'");
-        wasm_helpers::run_async_in_background(async move {
-            log::info!("[request_run_test_impl] async start for '{name}'");
-            match engine.run_test(&test_info, cancel).await {
-                Ok(report) => {
-                    let report_json = bex_value_to_json(&report);
-                    log::info!("[request_run_test_impl] run_test OK for '{name}': {report_json}");
-                    sender.send_playground_notification(
-                        crate::bex_lsp::PlaygroundNotification::TestRunResult {
-                            project,
-                            name,
-                            report_json,
-                        },
-                    );
-                }
-                Err(e) => {
-                    log::error!("[request_run_test_impl] run_test ERROR for '{name}': {e:?}");
-                    sender.send_playground_notification(
-                        crate::bex_lsp::PlaygroundNotification::TestRunResult {
-                            project,
-                            name,
-                            report_json: serde_json::json!({ "$type": "testing.TestReport", "outcome": "error", "runs": [], "extras": { "error": e.to_string() } }),
-                        },
-                    );
-                }
-            }
-        });
-    }
-
-    fn request_expand_testset_impl(
+    async fn call_test_function_impl(
         &self,
         project_root_str: &str,
-        name: &str,
-        max_load_time_ms: Option<u32>,
-    ) {
-        let (engine, test_state) = {
+        generation: u64,
+        test_name: &str,
+        ctx: bex_engine::FunctionCallContext,
+    ) -> Result<bex_engine::BexExternalValue, bex_engine::EngineError> {
+        let (engine, registry_value) = {
             let projects = self.projects.lock().unwrap();
             let project = projects
                 .iter()
                 .find(|(k, _)| k.as_path().to_string_lossy() == project_root_str)
-                .map(|(_, v)| v.clone());
-            let Some(project) = project else {
+                .map(|(_, v)| v.clone())
+                .ok_or_else(|| bex_engine::EngineError::FunctionNotFound {
+                    name: format!("project not found: {project_root_str}"),
+                })?;
+            let engine = project.project.get_bex().map_err(|e| {
+                bex_engine::EngineError::FunctionNotFound {
+                    name: format!("engine not ready: {e}"),
+                }
+            })?;
+            let test_state = project.project.test_state();
+            let state = test_state.lock().unwrap();
+            if state.generation != generation {
+                return Err(bex_engine::EngineError::FunctionNotFound {
+                    name: "stale generation".to_string(),
+                });
+            }
+            let registry_value = match &state.registry {
+                Some(handle) => bex_engine::BexExternalValue::Handle(handle.clone()),
+                None => {
+                    return Err(bex_engine::EngineError::FunctionNotFound {
+                        name: "no test registry".to_string(),
+                    });
+                }
+            };
+            (engine, registry_value)
+        };
+
+        log::info!("[call_test_function] test_name={test_name} generation={generation}");
+
+        let result = engine
+            .call_function(
+                "testing.TestRegistry.run_test",
+                vec![
+                    registry_value,
+                    bex_engine::BexExternalValue::String(test_name.to_string()),
+                ],
+                ctx,
+                true, // deep copy TestReport for wire
+            )
+            .await;
+
+        match &result {
+            Ok(_) => log::info!("[call_test_function] test_name={test_name} succeeded"),
+            Err(e) => log::error!("[call_test_function] test_name={test_name} failed: {e}"),
+        }
+
+        result
+    }
+
+    fn expand_test_set_impl(&self, project_root_str: &str, generation: u64, testset_name: &str) {
+        let (engine, registry_value, cancel) = {
+            let projects = self.projects.lock().unwrap();
+            let Some(project) = projects
+                .iter()
+                .find(|(k, _)| k.as_path().to_string_lossy() == project_root_str)
+                .map(|(_, v)| v.clone())
+            else {
                 return;
             };
             let Ok(engine) = project.project.get_bex() else {
                 return;
             };
-            (engine, project.project.test_state())
-        };
-
-        // Find the Lazy entry and take its closure; capture generation + cancel token; increment tasks
-        let (collector_closure, generation_at_start, cancel) = {
-            let mut state = test_state.lock().unwrap();
-            let generation = state.generation;
-            let cancel = state.cancel.clone();
-            let Some(registry) = state.registry.as_mut() else {
+            let test_state = project.project.test_state();
+            let state = test_state.lock().unwrap();
+            if state.generation != generation {
                 return;
-            };
-            let closure = find_and_take_lazy_closure(&mut registry.testsets, name);
-            match closure {
-                Some(c) => {
-                    state.active_tasks += 1;
-                    (c, generation, cancel)
-                }
-                None => return,
             }
+            let registry_value = match &state.registry {
+                Some(handle) => bex_engine::BexExternalValue::Handle(handle.clone()),
+                None => return,
+            };
+            let cancel = state.cancel.clone();
+            (engine, registry_value, cancel)
         };
 
+        let call_id = sys_types::CallId::next();
         let sender = self.playground_sender.clone();
         let project = project_root_str.to_string();
-        let name_owned = name.to_string();
-        let max_load_time =
-            max_load_time_ms.map(|ms| std::time::Duration::from_millis(u64::from(ms)));
-
-        send_task_count(&sender, &project, &test_state);
+        let name = testset_name.to_string();
 
         wasm_helpers::run_async_in_background(async move {
-            let result = engine
-                .expand_lazy_testset(&name_owned, collector_closure, cancel, max_load_time)
-                .await;
+            let ctx = bex_engine::FunctionCallContextBuilder::new(call_id)
+                .with_cancel_token(cancel.clone())
+                .build();
 
-            // Decrement active tasks and send count
+            // Expand — mutates registry.expansions in-place on the heap
+            if let Err(e) = engine
+                .call_function(
+                    "testing.TestRegistry.expand_set",
+                    vec![
+                        registry_value.clone(),
+                        bex_engine::BexExternalValue::String(name),
+                    ],
+                    ctx,
+                    true,
+                )
+                .await
             {
-                let mut state = test_state.lock().unwrap();
-                state.active_tasks = state.active_tasks.saturating_sub(1);
+                log::error!("[expand_test_set] expand failed: {e}");
+                return;
             }
-            send_task_count(&sender, &project, &test_state);
 
-            match result {
-                Ok(testset_info) => {
-                    // Discard stale results if the engine was swapped during expansion
-                    let mut state = test_state.lock().unwrap();
-                    if state.generation != generation_at_start {
-                        log::info!(
-                            "[expand_testset] discarding stale result for '{name_owned}' (gen {generation_at_start} vs current {})",
-                            state.generation
-                        );
-                        return;
-                    }
-                    // Convert to LSP def first (borrows testset_info), then move into registry.
-                    let def = testset_to_def(&testset_info);
-                    // Replace the Lazy entry with Expanded in the stored registry
-                    if let Some(registry) = state.registry.as_mut() {
-                        replace_lazy_with_expanded(
-                            &mut registry.testsets,
-                            &name_owned,
-                            testset_info,
-                        );
-                    }
-                    drop(state);
+            // Re-serialize full state
+            let ctx2 = bex_engine::FunctionCallContextBuilder::new(sys_types::CallId::next())
+                .with_cancel_token(cancel)
+                .build();
+            match engine
+                .call_function(
+                    "testing.TestRegistry.serialize",
+                    vec![registry_value],
+                    ctx2,
+                    true,
+                )
+                .await
+            {
+                Ok(serialized) => {
+                    let data =
+                        serde_json::to_vec(&bex_value_to_json(&serialized)).unwrap_or_default();
                     sender.send_playground_notification(
-                        crate::bex_lsp::PlaygroundNotification::TestSetExpandResult {
+                        crate::bex_lsp::PlaygroundNotification::TestCollectionResult {
                             project,
-                            name: name_owned,
-                            result: Ok(def),
+                            generation,
+                            call_id: call_id.0,
+                            data,
                         },
                     );
                 }
-                Err(e) => {
-                    sender.send_playground_notification(
-                        crate::bex_lsp::PlaygroundNotification::TestSetExpandResult {
-                            project,
-                            name: name_owned,
-                            result: Err(e.to_string()),
-                        },
-                    );
-                }
+                Err(e) => log::error!("[expand_test_set] serialize after expand failed: {e}"),
             }
         });
-    }
-}
-
-fn send_task_count(
-    sender: &std::sync::Arc<dyn crate::bex_lsp::PlaygroundSender>,
-    project: &str,
-    test_state: &std::sync::Arc<std::sync::Mutex<crate::project::TestState>>,
-) {
-    let count = test_state.lock().unwrap().active_tasks;
-    sender.send_playground_notification(
-        crate::bex_lsp::PlaygroundNotification::BackgroundTaskCount {
-            project: project.to_string(),
-            count,
-        },
-    );
-}
-
-fn test_registry_to_test_defs(registry: &bex_engine::TestRegistry) -> Vec<crate::bex_lsp::TestDef> {
-    let mut items = Vec::new();
-    for t in &registry.tests {
-        items.push(crate::bex_lsp::TestDef::Test(
-            crate::bex_lsp::RuntimeTestInfo {
-                name: t.name.clone(),
-            },
-        ));
-    }
-    for ts in &registry.testsets {
-        items.push(testset_result_to_def(ts));
-    }
-    items
-}
-
-fn testset_result_to_def(result: &bex_engine::TestSetResult) -> crate::bex_lsp::TestDef {
-    match result {
-        bex_engine::TestSetResult::Expanded(ts) => {
-            crate::bex_lsp::TestDef::TestSet(testset_to_def(ts))
-        }
-        bex_engine::TestSetResult::Lazy { name, .. } => {
-            crate::bex_lsp::TestDef::LazyTestSet { name: name.clone() }
-        }
-    }
-}
-
-fn testset_to_def(ts: &bex_engine::TestSetInfo) -> crate::bex_lsp::RuntimeTestSetInfo {
-    let mut items = Vec::new();
-    for t in &ts.tests {
-        items.push(crate::bex_lsp::TestDef::Test(
-            crate::bex_lsp::RuntimeTestInfo {
-                name: t.name.clone(),
-            },
-        ));
-    }
-    for nested in &ts.testsets {
-        items.push(testset_result_to_def(nested));
-    }
-    crate::bex_lsp::RuntimeTestSetInfo {
-        name: ts.name.clone(),
-        items,
-        loading_time_ms: ts.loading_time_ms,
-        total_loading_time_ms: ts.total_loading_time_ms,
     }
 }
 
@@ -955,119 +860,7 @@ fn bex_value_to_json(v: &bex_engine::BexExternalValue) -> serde_json::Value {
     }
 }
 
-/// Walk a `TestRegistry` tree to find the first `TestInfo` whose name matches `name`.
-/// Returns a clone of the found `TestInfo`, or `None` if not found.
-fn find_test_by_name<'a>(
-    registry: &'a bex_engine::TestRegistry,
-    name: &str,
-) -> Option<&'a bex_engine::TestInfo> {
-    // Search top-level tests
-    for t in &registry.tests {
-        if t.name == name {
-            return Some(t);
-        }
-    }
-    // Search inside expanded testsets
-    for ts in &registry.testsets {
-        if let Some(found) = find_test_by_name_in_testset_result(ts, name) {
-            return Some(found);
-        }
-    }
-    None
-}
-
-fn find_test_by_name_in_testset_result<'a>(
-    result: &'a bex_engine::TestSetResult,
-    name: &str,
-) -> Option<&'a bex_engine::TestInfo> {
-    match result {
-        bex_engine::TestSetResult::Expanded(ts) => find_test_by_name_in_testset(ts, name),
-        bex_engine::TestSetResult::Lazy { .. } => None,
-    }
-}
-
-fn find_test_by_name_in_testset<'a>(
-    ts: &'a bex_engine::TestSetInfo,
-    name: &str,
-) -> Option<&'a bex_engine::TestInfo> {
-    for t in &ts.tests {
-        if t.name == name {
-            return Some(t);
-        }
-    }
-    for nested in &ts.testsets {
-        if let Some(found) = find_test_by_name_in_testset_result(nested, name) {
-            return Some(found);
-        }
-    }
-    None
-}
-
-/// Walk the `Vec<TestSetResult>` tree looking for a `Lazy` entry with the given `name`.
-/// If found, takes its `collector_closure` (replacing the entry with a placeholder that
-/// keeps the name but is now inert) and returns it.
-fn find_and_take_lazy_closure(
-    testsets: &mut [bex_engine::TestSetResult],
-    name: &str,
-) -> Option<bex_external_types::BexExternalValue> {
-    for result in testsets.iter_mut() {
-        match result {
-            bex_engine::TestSetResult::Lazy {
-                name: n,
-                collector_closure,
-            } if n == name => {
-                let closure = std::mem::replace(
-                    collector_closure,
-                    Box::new(bex_external_types::BexExternalValue::Null),
-                );
-                return Some(*closure);
-            }
-            bex_engine::TestSetResult::Expanded(ts) => {
-                if let Some(c) = find_and_take_lazy_closure(&mut ts.testsets, name) {
-                    return Some(c);
-                }
-            }
-            bex_engine::TestSetResult::Lazy { .. } => {}
-        }
-    }
-    None
-}
-
-/// Walk the `Vec<TestSetResult>` tree and replace a `Lazy` entry (identified by name)
-/// with an `Expanded` entry containing the given `TestSetInfo`.
-fn replace_lazy_with_expanded(
-    testsets: &mut [bex_engine::TestSetResult],
-    name: &str,
-    info: bex_engine::TestSetInfo,
-) {
-    // First pass: find the index of a Lazy entry with the given name at this level.
-    let lazy_idx = testsets
-        .iter()
-        .position(|r| matches!(r, bex_engine::TestSetResult::Lazy { name: n, .. } if n == name));
-    if let Some(idx) = lazy_idx {
-        testsets[idx] = bex_engine::TestSetResult::Expanded(info);
-        return;
-    }
-    // Recurse into expanded children.
-    let mut info_opt = Some(info);
-    for result in testsets.iter_mut() {
-        if let bex_engine::TestSetResult::Expanded(ts) = result {
-            let lazy_idx = ts.testsets.iter().position(
-                |r| matches!(r, bex_engine::TestSetResult::Lazy { name: n, .. } if n == name),
-            );
-            if let Some(idx) = lazy_idx {
-                ts.testsets[idx] = bex_engine::TestSetResult::Expanded(info_opt.take().unwrap());
-                return;
-            }
-            // Keep searching deeper — re-enter with a helper that carries mut ref
-            if let Some(info) = info_opt.take() {
-                replace_lazy_with_expanded(&mut ts.testsets, name, info);
-                return;
-            }
-        }
-    }
-}
-
+#[async_trait::async_trait]
 impl super::BexLsp for BexMulitProject {
     fn get_bex_for_project(
         &self,
@@ -1175,21 +968,23 @@ impl super::BexLsp for BexMulitProject {
         );
     }
 
-    fn request_collect_tests(
+    fn request_collect_tests(&self, project: &str) {
+        self.request_collect_tests_impl(project);
+    }
+
+    async fn call_test_function(
         &self,
         project: &str,
-        max_testset_load_time_ms: Option<u32>,
-        skip_testsets: Vec<String>,
-    ) {
-        self.request_collect_tests_impl(project, max_testset_load_time_ms, skip_testsets);
+        generation: u64,
+        test_name: &str,
+        ctx: bex_engine::FunctionCallContext,
+    ) -> Result<bex_engine::BexExternalValue, bex_engine::EngineError> {
+        self.call_test_function_impl(project, generation, test_name, ctx)
+            .await
     }
 
-    fn request_expand_testset(&self, project: &str, name: &str, max_load_time_ms: Option<u32>) {
-        self.request_expand_testset_impl(project, name, max_load_time_ms);
-    }
-
-    fn request_run_test(&self, project: &str, name: &str) {
-        self.request_run_test_impl(project, name);
+    fn expand_test_set(&self, project: &str, generation: u64, testset_name: &str) {
+        self.expand_test_set_impl(project, generation, testset_name);
     }
 }
 

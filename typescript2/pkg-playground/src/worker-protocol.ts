@@ -46,46 +46,13 @@ export interface ProjectUpdate {
   diagnostics: DiagnosticEntry[];
 }
 
-/** A single runtime-collected test. */
-export interface RuntimeTestInfo {
-  name: string;
-}
-
-/** A named group of tests (may nest). */
-export interface RuntimeTestSetInfo {
-  name: string;
-  items: TestDef[];
-  loadingTimeMs: number;
-  totalLoadingTimeMs: number;
-}
-
-/** Discriminated union: either a single test, a test set, or a lazy (unexpanded) test set. */
-export type TestDef =
-  | { type: 'test'; name: string }
-  | { type: 'testSet'; name: string; items: TestDef[]; loadingTimeMs: number; totalLoadingTimeMs: number }
-  | { type: 'lazyTestSet'; name: string };
-
-/** Status of a test collection request. */
-export type TestCollectionStatus =
-  | { status: 'collecting' }
-  | { status: 'done'; items: TestDef[] }
-  | { status: 'error'; message: string };
-
-/** Payload for testSetExpandResult — either a successful expansion or an error. */
-export type TestSetExpandResultPayload =
-  | { status: 'ok'; set: RuntimeTestSetInfo }
-  | { status: 'err'; message: string };
-
 export type PlaygroundNotification =
   | { type: 'listProjects'; projects: string[] }
   | { type: 'updateProject'; project: string; update: ProjectUpdate }
   | { type: 'openPlayground'; project: string; functionName?: string }
   | { type: 'controlFlowGraphResult'; functionName: string; graph: ControlFlowGraph | null }
   | { type: 'cursorContext'; context: CursorContext }
-  | { type: 'testCollectionResult'; project: string; package: string; result: TestCollectionStatus }
-  | { type: 'testSetExpandResult'; project: string; name: string; result: TestSetExpandResultPayload }
-  | { type: 'backgroundTaskCount'; project: string; count: number }
-  | { type: 'testRunResult'; project: string; name: string; reportJson: Record<string, unknown> };
+  | { type: 'testCollectionResult'; project: string; generation: number; callId: number; data: number[] };
 
 // ---------------------------------------------------------------------------
 // Control flow graph types (matches Rust serde output from baml_compiler2_visualization)
@@ -208,9 +175,9 @@ export type WorkerInMessage =
   | { type: 'requestState' }
   | { type: 'requestControlFlowGraph'; project: string; functionName: string }
   | { type: 'cursorPosition'; file: string; line: number; column: number }
-  | { type: 'requestCollectTests'; project: string; maxTestSetLoadTimeMs?: number; skipTestSets?: string[] }
-  | { type: 'requestExpandTestSet'; project: string; name: string; maxLoadTimeMs?: number }
-  | { type: 'requestRunTest'; project: string; name: string }
+  | { type: 'requestCollectTests'; project: string }
+  | { type: 'callTestFunction'; id: number; project: string; generation: number; testName: string }
+  | { type: 'expandTestSet'; project: string; generation: number; testsetName: string }
   | { type: 'filesChanged'; files: Record<string, string> }
   | { type: 'dispose' };
 

@@ -34,10 +34,9 @@ import type {
   FunctionInfo,
   ProjectUpdate,
   RunEntry,
-  TestCollectionStatus,
-  TestDef,
   WorkerOutMessage,
 } from './worker-protocol';
+import { decodeCallResult } from '@b/pkg-proto';
 import type { ResultRendererProps } from './result-renderers';
 import { ResultDisplay } from './ResultDisplay';
 import { registerBuiltinResultRenderers } from './renderers/registerBuiltins';
@@ -89,18 +88,93 @@ export interface ExecutionPanelProps {
 }
 
 // ---------------------------------------------------------------------------
+// CollectionRunView — renders fetch logs from a collection/expansion RunEntry
+// ---------------------------------------------------------------------------
+
+interface CollectionRunViewProps {
+  run: RunEntry;
+  expandedLogId: number | null;
+  setExpandedLogId: (id: number | null) => void;
+}
+
+const CollectionRunView: FC<CollectionRunViewProps> = ({ run, expandedLogId, setExpandedLogId }) => {
+  return (
+    <div className="flex-1 flex flex-col min-h-0">
+      {/* Header */}
+      <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-vsc-surface border-b border-vsc-border shrink-0">
+        <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-vsc-green" />
+        <span className="text-vsc-accent font-semibold text-[11px]">$collect_tests</span>
+        <span className="text-vsc-text-faint text-[10px] flex-1">collection fetch logs</span>
+        <span className="text-vsc-text-faint text-[10px]">{run.fetchLogs.length} request{run.fetchLogs.length !== 1 ? 's' : ''}</span>
+      </div>
+      {/* Fetch logs */}
+      <div className="flex-1 overflow-auto font-vsc-mono text-xs bg-vsc-bg">
+        {run.fetchLogs.length === 0 && (
+          <div className="p-5 text-center text-vsc-text-faint text-[11px]">
+            No fetch logs — collection may not have made any HTTP requests
+          </div>
+        )}
+        {run.fetchLogs.map((log) => {
+          const isExp = expandedLogId === log.id;
+          const statusColorCls = log.status === null ? 'text-vsc-text-muted'
+            : log.status >= 200 && log.status < 300 ? 'text-vsc-green'
+            : log.status === 0 ? 'text-vsc-red' : 'text-vsc-yellow';
+          return (
+            <div key={`cl-${log.id}`}>
+              <div
+                onClick={() => setExpandedLogId(isExp ? null : log.id)}
+                className="flex items-center gap-1.5 py-0.5 pr-2.5 pl-[22px] cursor-pointer border-b border-vsc-border-subtle"
+              >
+                <span className={`${statusColorCls} font-semibold text-[11px]`}>{log.status ?? '...'}</span>
+                <span className="text-vsc-text-faint text-[10px]">{log.method}</span>
+                <span className="text-vsc-text flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-[11px]">{log.url}</span>
+                {log.durationMs != null && <span className="text-vsc-text-faint text-[10px]">{log.durationMs}ms</span>}
+                <span className="text-vsc-text-faint text-[9px]">{isExp ? '\u25B4' : '\u25BE'}</span>
+              </div>
+              {isExp && (
+                <div className="py-2 pr-2.5 pl-[22px] flex flex-col gap-2 border-b border-vsc-border">
+                  {log.error && <CodeBlock variant="error">{log.error}</CodeBlock>}
+                  <div>
+                    <div className="text-[10px] font-semibold text-vsc-text-muted mb-0.5 uppercase tracking-wide">Request Headers</div>
+                    <CodeBlock>{JSON.stringify(log.requestHeaders, null, 2)}</CodeBlock>
+                  </div>
+                  {log.requestBody && (
+                    <div>
+                      <div className="text-[10px] font-semibold text-vsc-text-muted mb-0.5 uppercase tracking-wide">Request Body</div>
+                      <CodeBlock>{tryFormatJson(log.requestBody)}</CodeBlock>
+                    </div>
+                  )}
+                  {log.responseBody != null && (
+                    <div>
+                      <div className="text-[10px] font-semibold text-vsc-text-muted mb-0.5 uppercase tracking-wide">Response Body</div>
+                      <CodeBlock>{tryFormatJson(log.responseBody)}</CodeBlock>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+// ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
 export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersion, resultRenderers }) => {
   const [projectRoots, setProjectRoots] = useState<string[]>([]);
   const [projectUpdates, setProjectUpdates] = useState<Record<string, ProjectUpdate>>({});
-  const [testCollections, setTestCollections] = useState<Record<string, TestCollectionStatus>>({});
-  const [slowTestSets, setSlowTestSets] = useState<Set<string>>(new Set());
-  const [cachedExpansions, setCachedExpansions] = useState<Map<string, TestDef>>(new Map());
-  const [expandingTestSets, setExpandingTestSets] = useState<Set<string>>(new Set());
-  const [backgroundTaskCount, setBackgroundTaskCount] = useState(0);
+  const [testTree, setTestTree] = useState<any>(null);
+  const [collectionCallId, setCollectionCallId] = useState<number | null>(null);
+  const [generation, setGeneration] = useState<number>(0);
   const [testRunResults, setTestRunResults] = useState<Map<string, Record<string, unknown>>>(new Map());
+  // Synthetic RunEntry that accumulates fetch logs from test collection/expansion operations
+  const [collectionRun, setCollectionRun] = useState<RunEntry | null>(null);
+  // When true, the main content area shows the collection run's fetch logs
+  const [viewingCollection, setViewingCollection] = useState(false);
   const [selectedProject, setSelectedProject] = useState<string | null>(null);
 
   const [selectedFn, setSelectedFn] = useState<string | null>(null);
@@ -271,63 +345,30 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
             case 'updateProject':
               setProjectUpdates((prev) => ({ ...prev, [n.project]: n.update }));
               break;
-            case 'testCollectionResult':
-              setTestCollections((prev) => ({ ...prev, [n.project]: n.result }));
-              setCachedExpansions(new Map());
-              setExpandingTestSets(new Set());
-              // When done, walk the tree to find lazy testsets and slow testsets
-              if (n.result.status === 'done') {
-                const doneItems = n.result.items;
-                const newSlow = new Set<string>();
-                const collectLazyNames = (defs: TestDef[]) => {
-                  for (const def of defs) {
-                    if (def.type === 'lazyTestSet') {
-                      newSlow.add(def.name);
-                    } else if (def.type === 'testSet') {
-                      // Testsets that took too long on a previous run
-                      if (def.totalLoadingTimeMs >= 300) {
-                        newSlow.add(def.name);
-                      }
-                      collectLazyNames(def.items);
-                    }
-                  }
+            case 'testCollectionResult': {
+              try {
+                const jsonStr = new TextDecoder().decode(new Uint8Array(n.data));
+                const tree = JSON.parse(jsonStr);
+                console.log('[testCollectionResult] decoded tree:', JSON.stringify(tree, null, 2));
+                setTestTree(tree);
+                setCollectionCallId(n.callId);
+                setGeneration(n.generation);
+
+                // Create/replace the synthetic RunEntry for collection
+                const collectionEntry: RunEntry = {
+                  id: n.callId,
+                  functionName: '$collect_tests',
+                  argsJson: '',
+                  fetchLogs: [],
+                  result: null,
+                  error: null,
+                  status: 'success',
+                  startTime: performance.now(),
+                  durationMs: null,
                 };
-                collectLazyNames(doneItems);
-                setSlowTestSets((prev) => {
-                  // Prune stale entries: only keep names that still appear in this result
-                  const allNames = new Set<string>();
-                  const gatherNames = (defs: TestDef[]) => {
-                    for (const def of defs) {
-                      allNames.add(def.name);
-                      if (def.type === 'testSet') gatherNames(def.items);
-                    }
-                  };
-                  gatherNames(doneItems);
-                  const pruned = new Set([...prev].filter((name) => allNames.has(name)));
-                  for (const name of newSlow) pruned.add(name);
-                  return pruned;
-                });
-              }
-              break;
-            case 'testSetExpandResult': {
-              setExpandingTestSets(prev => {
-                const next = new Set(prev);
-                next.delete(n.name);
-                return next;
-              });
-              if (n.result.status === 'ok') {
-                const expandedDef: TestDef = {
-                  type: 'testSet',
-                  name: n.result.set.name,
-                  items: n.result.set.items,
-                  loadingTimeMs: n.result.set.loadingTimeMs,
-                  totalLoadingTimeMs: n.result.set.totalLoadingTimeMs,
-                };
-                setCachedExpansions((prev) => {
-                  const next = new Map(prev);
-                  next.set(n.name, expandedDef);
-                  return next;
-                });
+                setCollectionRun(collectionEntry);
+              } catch (e) {
+                console.error('[testCollectionResult] decode error:', e);
               }
               break;
             }
@@ -337,16 +378,6 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
               break;
             case 'controlFlowGraphResult':
               if (n.graph) setControlFlowGraph(n.graph);
-              break;
-            case 'backgroundTaskCount':
-              setBackgroundTaskCount(n.count);
-              break;
-            case 'testRunResult':
-              setTestRunResults((prev) => {
-                const next = new Map(prev);
-                next.set(n.name, n.reportJson);
-                return next;
-              });
               break;
           }
           break;
@@ -372,16 +403,33 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
           break;
         }
 
-        case 'fetchLogNew':
+        case 'fetchLogNew': {
+          const logEntry = data.entry;
+          // Route to collection run if callId matches
+          setCollectionRun((prev) => {
+            if (prev && logEntry.callId === prev.id) {
+              return { ...prev, fetchLogs: [...prev.fetchLogs, logEntry] };
+            }
+            return prev;
+          });
+          // Route to regular runs
           setRuns((prev) => {
-            const targetIdx = prev.findIndex((r) => r.id === data.entry.callId);
+            const targetIdx = prev.findIndex((r) => r.id === logEntry.callId);
             if (targetIdx === -1) return prev;
             const target = prev[targetIdx];
-            return [...prev.slice(0, targetIdx), { ...target, fetchLogs: [...target.fetchLogs, data.entry] }, ...prev.slice(targetIdx + 1)];
+            return [...prev.slice(0, targetIdx), { ...target, fetchLogs: [...target.fetchLogs, logEntry] }, ...prev.slice(targetIdx + 1)];
           });
           break;
+        }
 
         case 'fetchLogUpdate':
+          // Also update collection run logs
+          setCollectionRun((prev) => {
+            if (!prev) return prev;
+            const updated = prev.fetchLogs.map((e) => (e.id === data.logId ? { ...e, ...data.patch } : e));
+            if (updated === prev.fetchLogs) return prev;
+            return { ...prev, fetchLogs: updated };
+          });
           setRuns((prev) =>
             prev.map((r) => ({
               ...r,
@@ -653,41 +701,108 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
     }
   }, [selectedFn, selectedProject, argsJson, isRunning, port]);
 
-  const handleExpandTestSet = useCallback((name: string) => {
-    if (!selectedProject) return;
-    setExpandingTestSets(prev => new Set(prev).add(name));
-    port.postMessage({
-      type: 'requestExpandTestSet',
-      project: selectedProject,
-      name,
-      maxLoadTimeMs: 500,
-    });
-  }, [selectedProject, port]);
-
   const handleRefreshTests = useCallback(() => {
     if (!selectedProject) return;
-    port.postMessage({
-      type: 'requestCollectTests',
-      project: selectedProject,
-      maxTestSetLoadTimeMs: 500,
-      skipTestSets: [...slowTestSets],
-    });
-  }, [selectedProject, port, slowTestSets]);
-
-  const handleRunTest = useCallback((name: string) => {
-    console.log('[handleRunTest]', { name, selectedProject });
-    if (!selectedProject) return;
-    port.postMessage({ type: 'requestRunTest', project: selectedProject, name });
+    port.postMessage({ type: 'requestCollectTests', project: selectedProject });
   }, [selectedProject, port]);
+
+  const handleRunTest = useCallback(async (name: string) => {
+    if (!selectedProject) return;
+    const runId = nextCallIdRef.current++;
+    const newRun: RunEntry = {
+      id: runId,
+      functionName: 'testing.run_test',
+      testName: name,
+      argsJson: `(test: ${name})`,
+      fetchLogs: [],
+      result: null,
+      error: null,
+      status: 'running',
+      startTime: performance.now(),
+      durationMs: null,
+    };
+    setRuns((prev) => [...prev, newRun]);
+
+    try {
+      const resultStr = await new Promise<string>((resolve, reject) => {
+        pendingCallsRef.current.set(runId, { resolve, reject });
+        port.postMessage({
+          type: 'callTestFunction',
+          id: runId,
+          project: selectedProject,
+          generation,
+          testName: name,
+        });
+      });
+
+      const dur = Math.round(performance.now() - newRun.startTime);
+      setRuns((prev) =>
+        prev.map((r) =>
+          r.id === runId
+            ? { ...r, result: resultStr, status: 'success', durationMs: dur }
+            : r,
+        ),
+      );
+
+      try {
+        const report = JSON.parse(resultStr);
+        setTestRunResults((prev) => new Map(prev).set(name, report));
+      } catch {}
+    } catch (e: any) {
+      const dur = Math.round(performance.now() - newRun.startTime);
+      const cancelled = e instanceof Error && (e as any).cancelled === true;
+      setRuns((prev) =>
+        prev.map((r) =>
+          r.id === runId
+            ? { ...r, error: cancelled ? null : (e instanceof Error ? e.message : String(e)), status: cancelled ? 'cancelled' : 'error', durationMs: dur }
+            : r,
+        ),
+      );
+
+      setTestRunResults((prev) =>
+        new Map(prev).set(name, { outcome: 'error', error: e instanceof Error ? e.message : String(e) }),
+      );
+    }
+  }, [selectedProject, generation, port]);
+
+  // Track which testsets we've already requested expansion for (per generation)
+  const pendingExpandsRef = useRef<{ generation: number; names: Set<string> }>({ generation: -1, names: new Set() });
+
+  // Auto-expand lazy testsets after receiving a new testTree
+  useEffect(() => {
+    if (!testTree || !selectedProject) return;
+    // Reset pending set when generation changes (new collection)
+    if (pendingExpandsRef.current.generation !== generation) {
+      pendingExpandsRef.current = { generation, names: new Set() };
+    }
+    const pending = pendingExpandsRef.current.names;
+    const expandLazy = (items: any[]) => {
+      for (const item of items) {
+        if (item && item.type === 'lazyTestSet' && !pending.has(item.name)) {
+          console.log('[auto-expand] expanding lazy testset:', item.name);
+          pending.add(item.name);
+          port.postMessage({
+            type: 'expandTestSet',
+            project: selectedProject,
+            generation,
+            testsetName: item.name,
+          });
+        } else if (item && item.items && Array.isArray(item.items)) {
+          // Recurse into expanded testsets to find nested lazy items
+          expandLazy(item.items);
+        }
+      }
+    };
+    if (Array.isArray(testTree)) {
+      expandLazy(testTree);
+    }
+  }, [testTree, selectedProject, generation, port]);
 
   // ── Derived state ──────────────────────────────────────────────────────
 
   const currentUpdate = selectedProject ? projectUpdates[selectedProject] : undefined;
   const functions: FunctionInfo[] = currentUpdate?.functions ?? [];
   const functionNames = functions.map((f) => f.name);
-  const testCollection: TestCollectionStatus | undefined = selectedProject
-    ? testCollections[selectedProject]
-    : undefined;
   const engineStale = currentUpdate ? !currentUpdate.isBexCurrent : false;
   const diags = currentUpdate?.diagnostics ?? [];
 
@@ -885,16 +1000,15 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
             <div className="shrink-0 overflow-hidden" style={{ width: sidebarWidth }}>
               <FunctionSidebar
                 functions={functions}
-                testCollection={testCollection}
+                testTree={testTree}
                 selectedFn={selectedFn}
-                onSelectFn={(fn) => { setWorkflowContext(null); setSelectedFn(fn); }}
+                onSelectFn={(fn) => { setWorkflowContext(null); setSelectedFn(fn); setViewingCollection(false); }}
                 onRefreshTests={handleRefreshTests}
-                onExpandTestSet={handleExpandTestSet}
-                cachedExpansions={cachedExpansions}
-                expandingTestSets={expandingTestSets}
-                backgroundTaskCount={backgroundTaskCount}
                 onRunTest={handleRunTest}
                 testRunResults={testRunResults}
+                collectionRun={collectionRun}
+                viewingCollection={viewingCollection}
+                onSelectCollectionView={() => { setViewingCollection(true); setSelectedFn(null); }}
               />
             </div>
             <div
@@ -906,7 +1020,13 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
 
         {/* Content area */}
         <div className="flex-1 flex flex-col min-h-0 min-w-0">
-          {selectedFn ? (
+          {viewingCollection && collectionRun ? (
+            <CollectionRunView
+              run={collectionRun}
+              expandedLogId={expandedLogId}
+              setExpandedLogId={setExpandedLogId}
+            />
+          ) : selectedFn ? (
             <Tabs
               value={activeTab}
               onValueChange={(v) => setActiveTab(v as typeof activeTab)}
@@ -1167,7 +1287,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
             </Tabs>
           ) : (
             <div className="flex-1 flex items-center justify-center text-vsc-text-faint text-xs bg-vsc-bg">
-              Select a function to run
+              {viewingCollection ? 'Collection not yet available — click Refresh' : 'Select a function to run'}
             </div>
           )}
         </div>

@@ -26,8 +26,17 @@ impl BamlClassMap for PackageBamlImpl {
         map.values().copied().collect()
     }
 
+    fn __glue_set(vm: &mut BexVm, args: &[Value]) -> super::NativeFunctionResult {
+        let key = &args[1];
+        let value = &args[2];
+        let key_as_string = vm.as_string(key)?.clone();
+        let map = vm.as_map_mut(&args[0])?;
+        map.insert(key_as_string, *value);
+        Ok(Value::Null)
+    }
+
     fn set(_map: &mut IndexMap<String, Value>, _key: &Value, _value: &Value) {
-        todo!("Map.set: not yet implemented (requires vm-free string extraction from Value)")
+        panic!("Should be called via __glue_set");
     }
 
     fn get(vm: &mut BexVm, map: &IndexMap<String, Value>, key: &Value) -> Option<Value> {

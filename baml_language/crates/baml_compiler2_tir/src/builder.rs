@@ -665,6 +665,12 @@ impl<'db> TypeInferenceBuilder<'db> {
                 let is_method_call = matches!(&body.exprs[*callee], Expr::FieldAccess { .. });
                 let callee_ty = self.infer_expr(*callee, body);
 
+                // Expand type aliases so alias-over-function types are callable.
+                let callee_ty = match &callee_ty {
+                    Ty::TypeAlias(qtn, _) => self.aliases.get(qtn).cloned().unwrap_or(callee_ty),
+                    _ => callee_ty,
+                };
+
                 match &callee_ty {
                     Ty::Function { params, ret, .. } => {
                         let effective_params = if is_method_call {

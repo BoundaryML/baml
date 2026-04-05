@@ -52,7 +52,7 @@ pub mod generated {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct CallId(pub u64);
 
-static NEXT_CALL_ID: AtomicU64 = AtomicU64::new(0);
+static NEXT_CALL_ID: AtomicU64 = AtomicU64::new(1_000_000);
 
 impl CallId {
     /// Returns a fresh call ID that is unique across the process. Use this from

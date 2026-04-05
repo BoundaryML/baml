@@ -323,6 +323,60 @@ async fn handle_ws_in_message(
             }
         }
 
+        WsInMessage::CallTestFunction {
+            id,
+            project,
+            generation,
+            test_name,
+        } => {
+            let call_id = sys_types::CallId(id);
+            let ctx = bex_project::FunctionCallContextBuilder::new(call_id).build();
+            let broadcast_tx = state.broadcast_tx.clone();
+            let bex = state.bex.clone();
+
+            tokio::spawn(async move {
+                let out = match bex
+                    .call_test_function(&project, generation, &test_name, ctx)
+                    .await
+                {
+                    Ok(result) => {
+                        let handle_options = bridge_ctypes::HandleTableOptions::for_wire();
+                        match bridge_ctypes::external_to_baml_value(&result, &handle_options) {
+                            Ok(baml_val) => {
+                                let b64 = base64::engine::general_purpose::STANDARD
+                                    .encode(baml_val.encode_to_vec());
+                                WsOutMessage::CallFunctionResult { id, result: b64 }
+                            }
+                            Err(e) => WsOutMessage::CallFunctionError {
+                                id,
+                                error: format!("Failed to encode result: {e}"),
+                                cancelled: None,
+                            },
+                        }
+                    }
+                    Err(e) => {
+                        let is_cancelled = matches!(&e, bex_project::EngineError::Cancelled);
+                        WsOutMessage::CallFunctionError {
+                            id,
+                            error: format!("{e}"),
+                            cancelled: if is_cancelled { Some(true) } else { None },
+                        }
+                    }
+                };
+                let _ = broadcast_tx.send(out);
+            });
+        }
+
+        WsInMessage::ExpandTestSet {
+            project,
+            generation,
+            testset_name,
+        } => {
+            state
+                .bex
+                .expand_test_set(&project, generation, &testset_name);
+        }
+
         WsInMessage::EnvVarResponse { id, value, .. } => {
             state.env_state.resolve(id, value);
         }

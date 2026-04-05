@@ -6,6 +6,8 @@ mod request;
 
 mod multi_project;
 
+use async_trait::async_trait;
+
 #[derive(Debug, thiserror::Error)]
 pub enum LspError {
     #[error("{0}")]
@@ -102,40 +104,6 @@ pub struct ProjectUpdate {
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct RuntimeTestInfo {
-    pub name: String,
-}
-
-#[derive(Debug, Clone, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct RuntimeTestSetInfo {
-    pub name: String,
-    pub items: Vec<TestDef>,
-    pub loading_time_ms: u64,
-    pub total_loading_time_ms: u64,
-}
-
-#[derive(Debug, Clone, serde::Serialize)]
-#[serde(tag = "type", rename_all = "camelCase")]
-pub enum TestDef {
-    Test(RuntimeTestInfo),
-    TestSet(RuntimeTestSetInfo),
-    #[serde(rename_all = "camelCase")]
-    LazyTestSet {
-        name: String,
-    },
-}
-
-#[derive(Debug, Clone, serde::Serialize)]
-#[serde(tag = "status", rename_all = "camelCase")]
-pub enum TestCollectionStatus {
-    Collecting,
-    Done { items: Vec<TestDef> },
-    Error { message: String },
-}
-
-#[derive(Debug, Clone, serde::Serialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum PlaygroundNotification {
     #[serde(rename_all = "camelCase")]
@@ -160,22 +128,9 @@ pub enum PlaygroundNotification {
     #[serde(rename_all = "camelCase")]
     TestCollectionResult {
         project: String,
-        package: String,
-        result: TestCollectionStatus,
-    },
-    #[serde(rename_all = "camelCase")]
-    TestSetExpandResult {
-        project: String,
-        name: String,
-        result: Result<RuntimeTestSetInfo, String>,
-    },
-    #[serde(rename_all = "camelCase")]
-    BackgroundTaskCount { project: String, count: u32 },
-    #[serde(rename_all = "camelCase")]
-    TestRunResult {
-        project: String,
-        name: String,
-        report_json: serde_json::Value,
+        generation: u64,
+        call_id: u64,
+        data: Vec<u8>,
     },
 }
 
@@ -189,6 +144,7 @@ pub trait PlaygroundSender: Send + Sync {
 //
 // Send + Sync are required so that `Arc<dyn BexLsp>` can be used as Axum app
 // state (e.g. in playground_server's WsState), which must be Clone + Send + Sync.
+#[async_trait]
 pub trait BexLsp: Send + Sync + notification::BexLspNotification + request::BexLspRequest {
     fn get_bex_for_project(
         &self,
@@ -225,16 +181,21 @@ pub trait BexLsp: Send + Sync + notification::BexLspNotification + request::BexL
     /// the WASM bridge which cannot access the sender directly.
     fn request_cursor_context(&self, file_path: &str, line: u32, column: u32);
 
-    fn request_collect_tests(
+    fn request_collect_tests(&self, project: &str);
+
+    /// Run a specific test by name. Request-response — returns the serialized
+    /// `TestReport` as proto bytes, using the same path as `call_function`.
+    async fn call_test_function(
         &self,
         project: &str,
-        max_testset_load_time_ms: Option<u32>,
-        skip_testsets: Vec<String>,
-    );
+        generation: u64,
+        test_name: &str,
+        ctx: bex_engine::FunctionCallContext,
+    ) -> Result<bex_external_types::BexExternalValue, bex_engine::EngineError>;
 
-    fn request_expand_testset(&self, project: &str, name: &str, max_load_time_ms: Option<u32>);
-
-    fn request_run_test(&self, project: &str, name: &str);
+    /// Expand a lazy test set by name. Fire-and-forget — result comes via a
+    /// `TestCollectionResult` playground notification with the full serialized tree.
+    fn expand_test_set(&self, project: &str, generation: u64, testset_name: &str);
 }
 
 use ::std::sync::Arc;

@@ -55,7 +55,6 @@
 
 mod conversion;
 mod function_call_context;
-mod test_registry;
 use std::{
     collections::HashMap,
     sync::{
@@ -79,7 +78,6 @@ pub use conversion::test_arg_to_external;
 // Re-export CancellationToken for callers.
 pub use function_call_context::{FunctionCallContext, FunctionCallContextBuilder};
 use sys_types::{CallId, OpError, SysOpResult};
-pub use test_registry::{TestInfo, TestRegistry, TestSetInfo, TestSetResult};
 use thiserror::Error;
 use tokio::sync::{Notify, mpsc};
 pub use tokio_util::sync::CancellationToken;
@@ -1104,256 +1102,16 @@ impl BexEngine {
     }
 
     // ========================================================================
-    // Test Metadata Extraction
-    // ========================================================================
-
-    /// Extract test names from a live Registry or `TestSetCollector` handle.
-    ///
-    /// Returns `(tests, testset_stubs)` where `testset_stubs` are `(name, collector_handle)` pairs.
-    /// The collector handles are GC-rooted closures that can be invoked to discover nested tests.
-    ///
-    /// # Safety
-    ///
-    /// This method uses unsafe pointer dereference. It is safe because:
-    /// - We call `with_gc_protection` which holds the GC epoch lock for the duration
-    /// - All pointers are valid for the lifetime of the protection guard
-    /// - We only read objects, never write (handles are created via `create_handle`)
-    #[allow(clippy::type_complexity)]
-    fn extract_tests_and_testset_stubs(
-        &self,
-        container_handle: &BexExternalValue,
-    ) -> Result<(Vec<TestInfo>, Vec<(String, BexExternalValue)>), EngineError> {
-        let BexExternalValue::Handle(handle) = container_handle else {
-            return Ok((vec![], vec![]));
-        };
-
-        // Phase 1: extract raw ptrs and raw closure HeapPtrs under GC protection.
-        // We CANNOT call create_handle inside with_gc_protection — it would deadlock
-        // (with_gc_protection holds handles.read(), create_handle needs handles.write()).
-        let (test_raw, raw_stubs) = self.heap.with_gc_protection(|protected| {
-            let guard = protected.epoch_guard();
-            let container_ptr =
-                handle
-                    .object_ptr(&guard)
-                    .ok_or_else(|| EngineError::SchemaInconsistency {
-                        message: "TestCollector handle expired".into(),
-                    })?;
-
-            // SAFETY: we hold GC protection via with_gc_protection; pointer is valid
-            let container_obj = unsafe { container_ptr.get() };
-
-            let Object::Instance(instance) = container_obj else {
-                return Err(EngineError::SchemaInconsistency {
-                    message: "expected TestCollector instance".into(),
-                });
-            };
-
-            // Scan all array fields for TestRegistration and TestSetRegistration items.
-            // The compiler may assign field orderings that differ from the class declaration,
-            // so we identify fields by their element type rather than by index.
-            let mut test_raw: Vec<(String, HeapPtr, Option<HeapPtr>)> = Vec::new();
-            let mut raw_stubs = Vec::new();
-
-            for field in &instance.fields {
-                let Value::Object(ptr) = field else { continue };
-                let obj = unsafe { ptr.get() };
-                let Object::Array(items) = obj else {
-                    continue;
-                };
-                if items.is_empty() {
-                    continue;
-                }
-
-                // Peek at the first element to determine array type.
-                let Value::Object(elem_ptr) = &items[0] else {
-                    continue;
-                };
-                let elem_obj = unsafe { elem_ptr.get() };
-                let Object::Instance(elem) = elem_obj else {
-                    continue;
-                };
-                let class_obj = unsafe { elem.class.get() };
-                let Object::Class(class) = class_obj else {
-                    continue;
-                };
-                let class_name = class.name.display_name.as_str();
-
-                if class_name.ends_with("TestRegistration")
-                    && !class_name.ends_with("TestSetRegistration")
-                {
-                    test_raw = Self::extract_test_raw_ptrs(field)?;
-                } else if class_name.ends_with("TestSetRegistration") {
-                    raw_stubs = Self::extract_testset_raw_ptrs(field)?;
-                }
-            }
-
-            // Also handle fields that are empty arrays (they could be either type).
-            // If we didn't find any tests/testsets yet from non-empty arrays, try the
-            // remaining empty arrays. Since empty arrays don't affect the result, this is safe.
-            if test_raw.is_empty() && raw_stubs.is_empty() {
-                // Both arrays are empty — nothing to do
-            }
-
-            Ok((test_raw, raw_stubs))
-        })?;
-
-        // Phase 2: create GC-rooted handles OUTSIDE gc_protection.
-        let tests = test_raw
-            .into_iter()
-            .map(|(name, body_ptr, runner_ptr)| {
-                let body = BexExternalValue::Handle(self.heap.create_handle(body_ptr));
-                let runner =
-                    runner_ptr.map(|p| BexExternalValue::Handle(self.heap.create_handle(p)));
-                TestInfo { name, body, runner }
-            })
-            .collect();
-
-        let testset_stubs = raw_stubs
-            .into_iter()
-            .map(|(name, closure_ptr)| {
-                let handle = self.heap.create_handle(closure_ptr);
-                (name, BexExternalValue::Handle(handle))
-            })
-            .collect();
-
-        Ok((tests, testset_stubs))
-    }
-
-    /// Extract raw test data from a `TestRegistration[]` heap value.
-    ///
-    /// Returns `(name, body_ptr, runner_ptr_or_none)` tuples.
-    /// Must be called inside `with_gc_protection`. Handles are created outside.
-    fn extract_test_raw_ptrs(
-        array_value: &Value,
-    ) -> Result<Vec<(String, HeapPtr, Option<HeapPtr>)>, EngineError> {
-        let Value::Object(ptr) = array_value else {
-            return Ok(vec![]);
-        };
-        // SAFETY: pointer is valid within the GC epoch protection scope
-        let obj = unsafe { ptr.get() };
-        let Object::Array(items) = obj else {
-            return Ok(vec![]);
-        };
-
-        items
-            .iter()
-            .map(|item| {
-                let Value::Object(reg_ptr) = item else {
-                    return Err(EngineError::TypeMismatch {
-                        message: "expected TestRegistration instance in tests array".into(),
-                    });
-                };
-                // SAFETY: pointer is valid within GC epoch protection scope
-                let reg_obj = unsafe { reg_ptr.get() };
-                let Object::Instance(reg) = reg_obj else {
-                    return Err(EngineError::TypeMismatch {
-                        message: "expected TestRegistration instance in tests array".into(),
-                    });
-                };
-                if reg.fields.len() < 2 {
-                    return Err(EngineError::SchemaInconsistency {
-                        message: "TestRegistration needs at least 2 fields".into(),
-                    });
-                }
-                // TestRegistration fields: [0] name: string, [1] body, [2] runner
-                let name = Self::extract_string(&reg.fields[0])?;
-                // fields[1] = body: () -> null
-                let Value::Object(body_ptr) = &reg.fields[1] else {
-                    return Err(EngineError::TypeMismatch {
-                        message: "expected Object for body field".into(),
-                    });
-                };
-                // fields[2] = runner: TestRunner? (may be null)
-                let runner_ptr = if reg.fields.len() > 2 {
-                    match &reg.fields[2] {
-                        Value::Object(ptr) => Some(*ptr),
-                        Value::Null => None,
-                        _ => None,
-                    }
-                } else {
-                    None
-                };
-                Ok((name, *body_ptr, runner_ptr))
-            })
-            .collect()
-    }
-
-    /// Extract testset names and raw collector closure `HeapPtrs` from a `TestSetRegistration[]`.
-    ///
-    /// Returns `(name, closure_ptr)` pairs. The raw `HeapPtrs` must be rooted via
-    /// `create_handle` OUTSIDE of `with_gc_protection` to avoid deadlock.
-    fn extract_testset_raw_ptrs(
-        array_value: &Value,
-    ) -> Result<Vec<(String, HeapPtr)>, EngineError> {
-        let Value::Object(ptr) = array_value else {
-            return Ok(vec![]);
-        };
-        // SAFETY: pointer is valid within the GC epoch protection scope
-        let obj = unsafe { ptr.get() };
-        let Object::Array(items) = obj else {
-            return Ok(vec![]);
-        };
-
-        items
-            .iter()
-            .map(|item| {
-                let Value::Object(reg_ptr) = item else {
-                    return Err(EngineError::TypeMismatch {
-                        message: "expected TestSetRegistration instance in testsets array".into(),
-                    });
-                };
-                // SAFETY: pointer is valid within GC epoch protection scope
-                let reg_obj = unsafe { reg_ptr.get() };
-                let Object::Instance(reg) = reg_obj else {
-                    return Err(EngineError::TypeMismatch {
-                        message: "expected TestSetRegistration instance in testsets array".into(),
-                    });
-                };
-                if reg.fields.len() < 2 {
-                    return Err(EngineError::SchemaInconsistency {
-                        message: "TestSetRegistration instance needs at least 2 fields".into(),
-                    });
-                }
-                // TestSetRegistration fields: [0] name: string, [1] collector, [2] runner
-                let name = Self::extract_string(&reg.fields[0])?;
-                let Value::Object(closure_ptr) = &reg.fields[1] else {
-                    return Err(EngineError::TypeMismatch {
-                        message: "expected Object pointer for collector field".into(),
-                    });
-                };
-                Ok((name, *closure_ptr))
-            })
-            .collect()
-    }
-
-    /// Extract a `String` from a heap `Value::Object(ptr)` pointing to an `Object::String`.
-    fn extract_string(value: &Value) -> Result<String, EngineError> {
-        let Value::Object(ptr) = value else {
-            return Err(EngineError::TypeMismatch {
-                message: "expected Object pointer for string field".into(),
-            });
-        };
-        // SAFETY: pointer is valid within the GC epoch protection scope
-        let obj = unsafe { ptr.get() };
-        let Object::String(s) = obj else {
-            return Err(EngineError::TypeMismatch {
-                message: "expected Object::String for string field".into(),
-            });
-        };
-        Ok(s.clone())
-    }
-
-    // ========================================================================
     // Test Collection API
     // ========================================================================
 
-    /// Collect all tests for a package by invoking `{package}.$init_test(registry)`.
+    /// Collect all tests for a package by invoking `{package}.$init_test(collector)`.
     ///
-    /// Returns a [`TestRegistry`] with cached metadata (names, hierarchy) and a live
-    /// GC-rooted handle to the heap `testing.Registry` object for later execution.
+    /// Returns a `BexExternalValue::Handle` pointing to a live `testing.TestRegistry`
+    /// heap object (GC-rooted), or `BexExternalValue::Null` if the package has no tests.
     ///
     /// If the package has no test blocks, `$init_test` will not exist in the program
-    /// and an empty [`TestRegistry`] is returned immediately.
+    /// and `Null` is returned immediately.
     ///
     /// # Arguments
     ///
@@ -1363,9 +1121,7 @@ impl BexEngine {
         self: &Arc<Self>,
         package: &str,
         cancel: CancellationToken,
-        max_testset_load_time: Option<std::time::Duration>,
-        skip_testsets: std::collections::HashSet<String>,
-    ) -> Result<TestRegistry, EngineError> {
+    ) -> Result<BexExternalValue, EngineError> {
         let init_test_name = if package == "user" {
             "$init_test".to_string()
         } else {
@@ -1374,263 +1130,45 @@ impl BexEngine {
 
         // If no $init_test function exists, this package has no tests.
         if self.lookup_function(&init_test_name).is_err() {
-            return Ok(TestRegistry::empty());
+            return Ok(BexExternalValue::Null);
         }
 
-        // 1. Create an empty TestCollector via testing.TestCollector.new().
-        //    Use copy_objects: false to get a Handle instead of deep-extracting.
-        //    The Handle keeps the heap object alive via GC rooting.
-        let registry_handle = self
+        let ctx = || {
+            FunctionCallContextBuilder::new(CallId::next())
+                .with_cancel_token(cancel.clone())
+                .build()
+        };
+
+        // Step 1: Create a live TestCollector on the heap
+        let collector = self
             .call_function(
                 "testing.TestCollector.new",
                 vec![BexExternalValue::String(String::new())],
-                FunctionCallContextBuilder::new(CallId::next())
-                    .with_cancel_token(cancel.clone())
-                    .build(),
-                false, // copy_objects: return a Handle, not a deep-extracted value
+                ctx(),
+                false, // return Handle, not deep copy
             )
             .await?;
 
-        // 2. Call $init_test(registry) — registry mutations happen in-place on
-        //    the heap via //baml:mut_self on register_test/register_test_set.
-        //    The Handle is converted to Value::Object(ptr) by
-        //    convert_external_to_vm_value (conversion.rs:232-236).
-        let _result = self
-            .call_function(
-                &init_test_name,
-                vec![registry_handle.clone()],
-                FunctionCallContextBuilder::new(CallId::next())
-                    .with_cancel_token(cancel.clone())
-                    .build(),
-                true, // copy_objects: normal deep-extraction for the null return
-            )
-            .await?;
-
-        // 3. Extract test names and testset stubs (with collector closure handles).
-        let (tests, testset_stubs) = self.extract_tests_and_testset_stubs(&registry_handle)?;
-
-        // 4. Expand testsets by invoking each collector closure recursively.
-        let testsets = self
-            .expand_testset_stubs(
-                testset_stubs,
-                &cancel,
-                max_testset_load_time,
-                &skip_testsets,
-            )
-            .await?;
-
-        Ok(TestRegistry::new(registry_handle, tests, testsets))
-    }
-
-    /// Invoke a collector closure: `TestCollector.new(prefix)` → `$invoke_collector` → extract.
-    ///
-    /// Returns `(tests, nested_stubs, loading_time_ms)`.
-    /// `loading_time_ms` covers `TestCollector.new` + `$invoke_collector` + extraction.
-    async fn invoke_collector(
-        self: &Arc<Self>,
-        parent_name: &str,
-        collector_closure: BexExternalValue,
-        cancel: &CancellationToken,
-    ) -> Result<(Vec<TestInfo>, Vec<(String, BexExternalValue)>, u64), EngineError> {
-        let start = web_time::Instant::now();
-
-        // Create a fresh TestCollector with the parent's full-path name as prefix
-        let collector_handle = self
-            .call_function(
-                "testing.TestCollector.new",
-                vec![BexExternalValue::String(parent_name.to_string())],
-                FunctionCallContextBuilder::new(CallId::next())
-                    .with_cancel_token(cancel.clone())
-                    .build(),
-                false, // Handle, not deep-extracted
-            )
-            .await?;
-
-        // Invoke: $invoke_collector(closure, collector)
-        let _invoke_result = self
-            .call_function(
-                "testing.$invoke_collector",
-                vec![collector_closure, collector_handle.clone()],
-                FunctionCallContextBuilder::new(CallId::next())
-                    .with_cancel_token(cancel.clone())
-                    .build(),
-                true, // null return
-            )
-            .await?;
-
-        #[allow(clippy::cast_possible_truncation)]
-        let loading_time_ms = start.elapsed().as_millis() as u64;
-        let (tests, nested_stubs) = self.extract_tests_and_testset_stubs(&collector_handle)?;
-        Ok((tests, nested_stubs, loading_time_ms))
-    }
-
-    /// Expand testset stubs by invoking each collector closure via `$invoke_collector`.
-    ///
-    /// For each `(name, collector_closure_handle)` pair:
-    /// 1. If the name is in `skip_names`, push `TestSetResult::Lazy` immediately.
-    /// 2. If `max_load_time` is set, race the invocation against a timer; if the
-    ///    timer fires first, cancel the invocation and push `Lazy`.
-    /// 3. Otherwise expand fully (original behavior).
-    async fn expand_testset_stubs(
-        self: &Arc<Self>,
-        stubs: Vec<(String, BexExternalValue)>,
-        cancel: &CancellationToken,
-        max_load_time: Option<std::time::Duration>,
-        skip_names: &std::collections::HashSet<String>,
-    ) -> Result<Vec<TestSetResult>, EngineError> {
-        log::info!(
-            "[expand_testset_stubs] stubs={} max_load_time={:?} skip_names={:?}",
-            stubs.len(),
-            max_load_time,
-            skip_names
-        );
-        let mut result = Vec::with_capacity(stubs.len());
-        for (name, collector_closure) in stubs {
-            // Skip: return lazy immediately, retain closure for later expansion
-            if skip_names.contains(&name) {
-                log::info!("[expand_testset_stubs] SKIP (in skip_names): {name}");
-                result.push(TestSetResult::Lazy {
-                    name,
-                    collector_closure: Box::new(collector_closure),
-                });
-                continue;
-            }
-
-            let total_start = web_time::Instant::now();
-
-            if let Some(timeout) = max_load_time {
-                log::info!("[expand_testset_stubs] racing '{name}' with timeout {timeout:?}");
-                // Race the collector invocation against a timer.
-                let child_cancel = CancellationToken::new();
-                let invoke_fut =
-                    self.invoke_collector(&name, collector_closure.clone(), &child_cancel);
-
-                let collector_result = tokio::select! {
-                    biased;
-                    () = cancel.cancelled() => {
-                        child_cancel.cancel();
-                        return Err(EngineError::Cancelled);
-                    }
-                    res = invoke_fut => {
-                        log::info!("[expand_testset_stubs] '{name}' completed before timeout");
-                        res
-                    }
-                    () = futures_timer::Delay::new(timeout) => {
-                        // Timed out: cancel the in-flight invocation and keep lazy.
-                        log::info!("[expand_testset_stubs] '{name}' TIMED OUT, marking lazy");
-                        child_cancel.cancel();
-                        result.push(TestSetResult::Lazy { name, collector_closure: Box::new(collector_closure) });
-                        continue;
-                    }
-                };
-
-                let (tests, nested_stubs, loading_time_ms) = collector_result?;
-                let testsets = Box::pin(self.expand_testset_stubs(
-                    nested_stubs,
-                    cancel,
-                    max_load_time,
-                    skip_names,
-                ))
-                .await?;
-                #[allow(clippy::cast_possible_truncation)]
-                let total_loading_time_ms = total_start.elapsed().as_millis() as u64;
-                result.push(TestSetResult::Expanded(TestSetInfo {
-                    name,
-                    tests,
-                    testsets,
-                    loading_time_ms,
-                    total_loading_time_ms,
-                }));
-            } else {
-                // No timeout — expand fully (original behavior)
-                let (tests, nested_stubs, loading_time_ms) = self
-                    .invoke_collector(&name, collector_closure, cancel)
-                    .await?;
-                let testsets =
-                    Box::pin(self.expand_testset_stubs(nested_stubs, cancel, None, skip_names))
-                        .await?;
-                #[allow(clippy::cast_possible_truncation)]
-                let total_loading_time_ms = total_start.elapsed().as_millis() as u64;
-                result.push(TestSetResult::Expanded(TestSetInfo {
-                    name,
-                    tests,
-                    testsets,
-                    loading_time_ms,
-                    total_loading_time_ms,
-                }));
-            }
-        }
-        Ok(result)
-    }
-
-    /// Expand a single lazy testset by its stored collector closure.
-    ///
-    /// Called when the user clicks "load" on a lazy testset in the UI.
-    /// Uses `max_load_time` for nested child testsets but not for `name` itself
-    /// (we always try to expand what the user explicitly requested).
-    pub async fn expand_lazy_testset(
-        self: &Arc<Self>,
-        name: &str,
-        collector_closure: BexExternalValue,
-        cancel: CancellationToken,
-        max_load_time: Option<std::time::Duration>,
-    ) -> Result<TestSetInfo, EngineError> {
-        let total_start = web_time::Instant::now();
-        let (tests, nested_stubs, loading_time_ms) = self
-            .invoke_collector(name, collector_closure, &cancel)
-            .await?;
-        let testsets = self
-            .expand_testset_stubs(
-                nested_stubs,
-                &cancel,
-                max_load_time,
-                &std::collections::HashSet::new(),
-            )
-            .await?;
-        #[allow(clippy::cast_possible_truncation)]
-        let total_loading_time_ms = total_start.elapsed().as_millis() as u64;
-        Ok(TestSetInfo {
-            name: name.to_string(),
-            tests,
-            testsets,
-            loading_time_ms,
-            total_loading_time_ms,
-        })
-    }
-
-    /// Run a single test by invoking `testing.run_test(body, runner)`.
-    ///
-    /// Returns a deep-extracted `TestReport` as a `BexExternalValue`.
-    pub async fn run_test(
-        self: &Arc<Self>,
-        test: &TestInfo,
-        cancel: CancellationToken,
-    ) -> Result<BexExternalValue, EngineError> {
-        log::info!(
-            "[run_test] test='{}' body={:?} runner={:?}",
-            test.name,
-            test.body,
-            test.runner
-        );
-        // Check if testing.run_test is resolved
-        if let Some((ptr, kind)) = self.resolved_function_names.get("testing.run_test") {
-            log::info!("[run_test] testing.run_test found: ptr={ptr:?} kind={kind:?}");
-        } else {
-            log::warn!("[run_test] testing.run_test NOT found in resolved_function_names");
-        }
-        let runner_arg = match &test.runner {
-            Some(r) => r.clone(),
-            None => BexExternalValue::Null,
-        };
+        // Step 2: Populate the collector in-place via $init_test
         self.call_function(
-            "testing.run_test",
-            vec![test.body.clone(), runner_arg],
-            FunctionCallContextBuilder::new(CallId::next())
-                .with_cancel_token(cancel)
-                .build(),
-            true, // deep-extract the TestReport
+            &init_test_name,
+            vec![collector.clone()],
+            ctx(),
+            true, // return value is null, doesn't matter
         )
-        .await
+        .await?;
+
+        // Step 3: Wrap in a TestRegistry
+        let registry = self
+            .call_function(
+                "testing.TestRegistry.new",
+                vec![collector],
+                ctx(),
+                false, // return Handle to live registry
+            )
+            .await?;
+
+        Ok(registry)
     }
 
     /// Collect roots from a yielded VM.

@@ -1,4 +1,5 @@
 use bex_engine::BexEngine;
+use bex_external_types::Handle;
 use sys_ops::SysOps;
 
 use crate::RuntimeError;
@@ -6,9 +7,7 @@ use crate::RuntimeError;
 pub(crate) struct TestState {
     pub generation: u64,
     pub cancel: sys_types::CancellationToken,
-    pub registry: Option<bex_engine::TestRegistry>,
-    /// Number of in-flight background tasks (`collect_tests` + `expand_testset`).
-    pub active_tasks: u32,
+    pub registry: Option<Handle>,
 }
 
 impl TestState {
@@ -17,7 +16,6 @@ impl TestState {
             generation: 0,
             cancel: sys_types::CancellationToken::new(),
             registry: None,
-            active_tasks: 0,
         }
     }
 }
@@ -30,7 +28,7 @@ pub(crate) struct BexProject {
     /// `(generation, cancel_token, registry)` — generation is bumped on every engine swap;
     /// stale async tasks compare their captured generation before storing results.
     /// The cancel token is cancelled and replaced on engine swap so in-flight tasks abort.
-    /// The registry is cleared to `None` on engine swap.
+    /// The registry (a `Handle` to a live `testing.TestRegistry` on the heap) is cleared on engine swap.
     test_state: std::sync::Arc<std::sync::Mutex<TestState>>,
 }
 
@@ -175,7 +173,6 @@ impl BexProject {
         state.generation += 1;
         state.cancel = sys_types::CancellationToken::new();
         state.registry = None;
-        state.active_tasks = 0;
     }
 
     fn update_bex(&self) -> Result<(), RuntimeError> {
