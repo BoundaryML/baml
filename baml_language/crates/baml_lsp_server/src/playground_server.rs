@@ -385,6 +385,10 @@ async fn handle_ws_in_message(
             state.bex.request_playground_state();
         }
 
+        WsInMessage::RequestCollectTests { project } => {
+            state.bex.request_collect_tests(&project);
+        }
+
         WsInMessage::RequestControlFlowGraph {
             project: _,
             function_name,

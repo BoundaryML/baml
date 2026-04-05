@@ -52,6 +52,7 @@ pub mod generated {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct CallId(pub u64);
 
+// Start at 1M to reserve lower IDs for internal/test use
 static NEXT_CALL_ID: AtomicU64 = AtomicU64::new(1_000_000);
 
 impl CallId {

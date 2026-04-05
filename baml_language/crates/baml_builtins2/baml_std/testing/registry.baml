@@ -95,6 +95,9 @@ class TestRegistry {
 
   // Serialize registry to pure-data list for the UI.
   // Checks expansions map to determine lazy vs expanded for each testset.
+  //
+  // Tests are serialized before testsets by design — tests are leaf items,
+  // testsets are containers.
   function serialize(self) -> SerializedTestDef[] {
     let items: SerializedTestDef[] = []
     for (let t in self.collector.tests) {
@@ -129,8 +132,8 @@ class TestRegistry {
     // Recurse into expanded sub-registries
     for (let k in self.expansions.keys()) {
       let sub = self.expansions[k]
-      // Check if the name could be in this sub-registry (prefix match)
-      if (name.startsWith(k)) {
+      // Check if the name could be in this sub-registry (segment-aware prefix match)
+      if (name.startsWith(k + "/")) {
         return sub.run_test(name)
       }
     }
@@ -156,13 +159,11 @@ class TestRegistry {
         return self.serialize()
       }
     }
-    // Search in expanded sub-registries
+    // Search in expanded sub-registries using segment-aware prefix match
     for (let k in self.expansions.keys()) {
       let sub = self.expansions[k]
-      for (let sts in sub.collector.testsets) {
-        if (sts.name == name) {
-          return sub.expand_set(name)
-        }
+      if (name.startsWith(k + "/")) {
+        return sub.expand_set(name)
       }
     }
     throw ("TestSet not found for expansion: " + name)

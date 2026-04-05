@@ -142,7 +142,7 @@ pub fn lower_file_with_file_id(
     // Synthesize a per-file $init_test function for all collected test/testset registrations.
     // The file_id suffix ensures uniqueness when multiple files contain tests.
     if !test_registrations.is_empty() {
-        let init_fn = synthesize_init_test_function(&test_registrations, file_id);
+        let init_fn = synthesize_init_test_function(&test_registrations, file_id, &mut diags);
         items.push(Item::Function(init_fn));
     }
 
@@ -916,6 +916,7 @@ fn lower_testset(node: &SyntaxNode) -> Option<TestRegistrationItem> {
 fn synthesize_init_test_function(
     registrations: &[TestRegistrationItem],
     file_id: baml_base::FileId,
+    diags: &mut Vec<LoweringDiagnostic>,
 ) -> FunctionDef {
     let fn_name = if file_id == baml_base::FileId::sentinel() {
         "$init_test".to_string()
@@ -927,13 +928,11 @@ fn synthesize_init_test_function(
     let mut ctx = lower_expr_body::InitTestContext::new();
 
     // Build statements: one per registration
-    let stmt_ids: Vec<crate::ast::StmtId> = registrations
-        .iter()
-        .map(|reg| {
-            let stmt_expr = synthesize_register_call(reg, &mut ctx);
-            ctx.alloc_stmt(crate::ast::Stmt::Expr(stmt_expr), span)
-        })
-        .collect();
+    let mut stmt_ids: Vec<crate::ast::StmtId> = Vec::with_capacity(registrations.len());
+    for reg in registrations {
+        let stmt_expr = synthesize_register_call(reg, &mut ctx, diags);
+        stmt_ids.push(ctx.alloc_stmt(crate::ast::Stmt::Expr(stmt_expr), span));
+    }
 
     // Block expression containing all registration calls, with a null tail
     let null_expr = ctx.alloc_expr(Expr::Null, span);
@@ -945,7 +944,8 @@ fn synthesize_init_test_function(
         span,
     );
 
-    let (body, source_map, _diags) = ctx.finish(Some(block_expr));
+    let (body, source_map, finish_diags) = ctx.finish(Some(block_expr));
+    diags.extend(finish_diags);
 
     // The single parameter: `registry: testing.TestCollector`
     let registry_param = Param {
@@ -980,6 +980,7 @@ fn synthesize_init_test_function(
 fn synthesize_register_call(
     reg: &TestRegistrationItem,
     ctx: &mut lower_expr_body::InitTestContext,
+    diags: &mut Vec<LoweringDiagnostic>,
 ) -> ExprId {
     let span = text_size::TextRange::default();
     match reg {
@@ -989,8 +990,9 @@ fn synthesize_register_call(
             runner_element,
         } => {
             // Lower the test block body into a fresh ExprBody (lambda body)
-            let (lambda_body, lambda_source_map, _lambda_diags) =
+            let (lambda_body, lambda_source_map, lambda_diags) =
                 lower_expr_body::lower_block_node(body_node, &[Name::new("registry")]);
+            diags.extend(lambda_diags);
 
             let lambda_def = FunctionDef {
                 name: Name::new("<test body>"),
@@ -1037,12 +1039,13 @@ fn synthesize_register_call(
             runner_element,
         } => {
             // Lower the testset body into a collector lambda using the full testset lowering.
-            let (collector_exprs, collector_source_map, _collector_diags) =
+            let (collector_exprs, collector_source_map, collector_diags) =
                 lower_expr_body::lower_testset_block_node(
                     body_node,
                     &Name::new("testset"),
                     &[Name::new("registry")],
                 );
+            diags.extend(collector_diags);
 
             // Collector lambda parameter: `testset`
             let testset_param = Param {

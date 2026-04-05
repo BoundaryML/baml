@@ -77,7 +77,8 @@ use bex_vm_types::{FunctionMeta, GlobalPool, HeapPtr, Object, SysOp, Value};
 pub use conversion::test_arg_to_external;
 // Re-export CancellationToken for callers.
 pub use function_call_context::{FunctionCallContext, FunctionCallContextBuilder};
-use sys_types::{CallId, OpError, SysOpResult};
+pub use sys_types::CallId;
+use sys_types::{OpError, SysOpResult};
 use thiserror::Error;
 use tokio::sync::{Notify, mpsc};
 pub use tokio_util::sync::CancellationToken;
@@ -1120,6 +1121,7 @@ impl BexEngine {
     pub async fn collect_tests(
         self: &Arc<Self>,
         package: &str,
+        call_id: CallId,
         cancel: CancellationToken,
     ) -> Result<BexExternalValue, EngineError> {
         let init_test_name = if package == "user" {
@@ -1134,7 +1136,7 @@ impl BexEngine {
         }
 
         let ctx = || {
-            FunctionCallContextBuilder::new(CallId::next())
+            FunctionCallContextBuilder::new(call_id)
                 .with_cancel_token(cancel.clone())
                 .build()
         };

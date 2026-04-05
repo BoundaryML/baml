@@ -46,6 +46,8 @@ pub enum WsInMessage {
     },
     #[serde(rename = "requestState")]
     RequestState,
+    #[serde(rename = "requestCollectTests")]
+    RequestCollectTests { project: String },
     #[serde(rename = "requestControlFlowGraph")]
     RequestControlFlowGraph {
         project: String,

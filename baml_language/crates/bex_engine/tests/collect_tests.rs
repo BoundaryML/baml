@@ -9,7 +9,7 @@ mod common;
 
 use std::sync::Arc;
 
-use bex_engine::{BexEngine, BexExternalValue, CancellationToken};
+use bex_engine::{BexEngine, BexExternalValue, CallId, CancellationToken};
 use common::compile_for_engine;
 use sys_native::SysOpsExt;
 
@@ -41,7 +41,7 @@ async fn collect_tests_returns_registry_handle() {
 
     let engine = make_engine(source);
     let registry = engine
-        .collect_tests("user", CancellationToken::default())
+        .collect_tests("user", CallId::next(), CancellationToken::default())
         .await
         .expect("collect_tests should succeed");
 
@@ -59,7 +59,7 @@ async fn collect_tests_no_tests_returns_null() {
 
     let engine = make_engine(source);
     let registry = engine
-        .collect_tests("user", CancellationToken::default())
+        .collect_tests("user", CallId::next(), CancellationToken::default())
         .await
         .expect("collect_tests should succeed");
 
@@ -82,7 +82,7 @@ async fn collect_tests_with_testset_returns_handle() {
 
     let engine = make_engine(source);
     let registry = engine
-        .collect_tests("user", CancellationToken::default())
+        .collect_tests("user", CallId::next(), CancellationToken::default())
         .await
         .expect("collect_tests should succeed");
 
@@ -105,7 +105,7 @@ async fn collect_tests_nested_testset_returns_handle() {
 
     let engine = make_engine(source);
     let registry = engine
-        .collect_tests("user", CancellationToken::default())
+        .collect_tests("user", CallId::next(), CancellationToken::default())
         .await
         .expect("collect_tests should succeed");
 
@@ -128,7 +128,7 @@ async fn collect_tests_dynamic_name_returns_handle() {
 
     let engine = make_engine(source);
     let registry = engine
-        .collect_tests("user", CancellationToken::default())
+        .collect_tests("user", CallId::next(), CancellationToken::default())
         .await
         .expect("collect_tests should succeed");
 
@@ -153,7 +153,7 @@ async fn collect_tests_multiple_testsets_returns_handle() {
 
     let engine = make_engine(source);
     let registry = engine
-        .collect_tests("user", CancellationToken::default())
+        .collect_tests("user", CallId::next(), CancellationToken::default())
         .await
         .expect("collect_tests should succeed");
 

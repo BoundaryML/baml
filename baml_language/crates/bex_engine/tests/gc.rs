@@ -12,11 +12,19 @@ use common::compile_for_engine;
 use sys_native::SysOpsExt;
 
 /// Test that a handle prevents the referenced object from being collected.
+///
+/// The test goes beyond checking the local `result` binding: it passes the
+/// value *back through the engine* after GC to verify the engine can still
+/// round-trip it correctly — something that would fail if the underlying
+/// heap object had been collected or its memory corrupted during GC.
 #[tokio::test]
 async fn test_handle_prevents_gc_collection() {
     let source = r#"
         function return_string() -> string {
             "hello world"
+        }
+        function echo_string(s: string) -> string {
+            s
         }
     "#;
 
@@ -48,8 +56,29 @@ async fn test_handle_prevents_gc_collection() {
     // Trigger GC
     let _stats = engine.collect_garbage().await;
 
-    // Value should still be correct after GC
-    assert_eq!(result, BexExternalValue::String("hello world".to_string()));
+    // Value should still be correct after GC (basic local-binding check)
+    assert_eq!(
+        result.clone(),
+        BexExternalValue::String("hello world".to_string())
+    );
+
+    // Strengthen: pass the value back through the engine after GC.
+    // If GC had corrupted or collected the underlying data, the engine
+    // would either panic or return a wrong value here.
+    let echoed = engine
+        .call_function(
+            "echo_string",
+            vec![result],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        echoed,
+        BexExternalValue::String("hello world".to_string()),
+        "Engine must round-trip the string correctly after GC"
+    );
 }
 
 /// Test that handles to arrays preserve the entire structure.

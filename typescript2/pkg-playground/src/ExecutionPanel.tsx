@@ -175,6 +175,8 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
   const [collectionRun, setCollectionRun] = useState<RunEntry | null>(null);
   // When true, the main content area shows the collection run's fetch logs
   const [viewingCollection, setViewingCollection] = useState(false);
+  // When true, the main content area shows the test run history panel
+  const [viewingTestRun, setViewingTestRun] = useState(false);
   const [selectedProject, setSelectedProject] = useState<string | null>(null);
 
   const [selectedFn, setSelectedFn] = useState<string | null>(null);
@@ -229,6 +231,8 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
 
   const nextCallIdRef = useRef(0);
   const pendingCallsRef = useRef<Map<number, { resolve: (v: string) => void; reject: (e: Error) => void }>>(new Map());
+  // Buffer fetch logs by callId so logs that arrive before testCollectionResult are not lost.
+  const pendingLogsRef = useRef<Map<number, FetchLogEntry[]>>(new Map());
 
   // ── Cursor context navigation ────────────────────────────────────────
 
@@ -353,13 +357,17 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
                 setTestTree(tree);
                 setCollectionCallId(n.callId);
                 setGeneration(n.generation);
+                setTestRunResults(new Map());
 
-                // Create/replace the synthetic RunEntry for collection
+                // Create/replace the synthetic RunEntry for collection, hydrating any
+                // fetch logs that arrived before this notification.
+                const buffered = pendingLogsRef.current.get(n.callId) ?? [];
+                pendingLogsRef.current.delete(n.callId);
                 const collectionEntry: RunEntry = {
                   id: n.callId,
                   functionName: '$collect_tests',
                   argsJson: '',
-                  fetchLogs: [],
+                  fetchLogs: buffered,
                   result: null,
                   error: null,
                   status: 'success',
@@ -405,6 +413,13 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
 
         case 'fetchLogNew': {
           const logEntry = data.entry;
+          // Always buffer by callId so logs that arrive before testCollectionResult are not lost.
+          const existing = pendingLogsRef.current.get(logEntry.callId);
+          if (existing) {
+            existing.push(logEntry);
+          } else {
+            pendingLogsRef.current.set(logEntry.callId, [logEntry]);
+          }
           // Route to collection run if callId matches
           setCollectionRun((prev) => {
             if (prev && logEntry.callId === prev.id) {
@@ -708,6 +723,9 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
 
   const handleRunTest = useCallback(async (name: string) => {
     if (!selectedProject) return;
+    // Switch to the test run view so the runs panel is visible even when no function is selected.
+    setViewingTestRun(true);
+    setViewingCollection(false);
     const runId = nextCallIdRef.current++;
     const newRun: RunEntry = {
       id: runId,
@@ -1002,13 +1020,13 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
                 functions={functions}
                 testTree={testTree}
                 selectedFn={selectedFn}
-                onSelectFn={(fn) => { setWorkflowContext(null); setSelectedFn(fn); setViewingCollection(false); }}
+                onSelectFn={(fn) => { setWorkflowContext(null); setSelectedFn(fn); setViewingCollection(false); setViewingTestRun(false); }}
                 onRefreshTests={handleRefreshTests}
                 onRunTest={handleRunTest}
                 testRunResults={testRunResults}
                 collectionRun={collectionRun}
                 viewingCollection={viewingCollection}
-                onSelectCollectionView={() => { setViewingCollection(true); setSelectedFn(null); }}
+                onSelectCollectionView={() => { setViewingCollection(true); setViewingTestRun(false); setSelectedFn(null); }}
               />
             </div>
             <div
@@ -1026,6 +1044,109 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
               expandedLogId={expandedLogId}
               setExpandedLogId={setExpandedLogId}
             />
+          ) : viewingTestRun ? (
+            <div ref={outputRef} className="flex-1 overflow-auto font-vsc-mono text-xs bg-vsc-bg">
+              {runs.length === 0 && (
+                <div className="p-5 text-center text-vsc-text-faint text-[11px]">
+                  No test runs yet
+                </div>
+              )}
+              {[...runs].reverse().map((run, runIdx) => {
+                const isLatest = runIdx === 0;
+                const statusCls = run.status === 'error' ? 'bg-vsc-red' : run.status === 'success' ? 'bg-vsc-green' : run.status === 'cancelled' ? 'bg-vsc-yellow' : 'bg-vsc-text-muted';
+                return (
+                  <div key={run.id} className={!isLatest ? 'border-b-2 border-vsc-border' : ''}>
+                    <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-vsc-surface border-b border-vsc-border-subtle">
+                      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${statusCls}`} />
+                      <span className="text-vsc-accent font-semibold text-[11px]">
+                        {run.testName ?? run.functionName}
+                      </span>
+                      {run.status === 'running' && (
+                        <>
+                          <span className="text-vsc-text-muted text-[10px]">running...</span>
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-5 w-5 text-vsc-text-muted hover:text-vsc-error"
+                                  onClick={() => onCancelRun(run.id)}
+                                >
+                                  <Square size={12} />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>Cancel execution</TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        </>
+                      )}
+                      {run.durationMs != null && (
+                        <span className="text-vsc-text-faint text-[10px] shrink-0">{run.durationMs}ms</span>
+                      )}
+                    </div>
+                    {run.fetchLogs.map((log) => {
+                      const isExp = expandedLogId === log.id;
+                      const statusColorCls = log.status === null ? 'text-vsc-text-muted'
+                        : log.status >= 200 && log.status < 300 ? 'text-vsc-green'
+                        : log.status === 0 ? 'text-vsc-red' : 'text-vsc-yellow';
+                      return (
+                        <div key={`t-${log.id}`}>
+                          <div
+                            onClick={() => setExpandedLogId(isExp ? null : log.id)}
+                            className="flex items-center gap-1.5 py-0.5 pr-2.5 pl-[22px] cursor-pointer border-b border-vsc-border-subtle"
+                          >
+                            <span className={`${statusColorCls} font-semibold text-[11px]`}>{log.status ?? '...'}</span>
+                            <span className="text-vsc-text-faint text-[10px]">{log.method}</span>
+                            <span className="text-vsc-text flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-[11px]">{log.url}</span>
+                            {log.durationMs != null && <span className="text-vsc-text-faint text-[10px]">{log.durationMs}ms</span>}
+                            <span className="text-vsc-text-faint text-[9px]">{isExp ? '\u25B4' : '\u25BE'}</span>
+                          </div>
+                          {isExp && (
+                            <div className="py-2 pr-2.5 pl-[22px] flex flex-col gap-2 border-b border-vsc-border">
+                              {log.error && <CodeBlock variant="error">{log.error}</CodeBlock>}
+                              <div>
+                                <div className="text-[10px] font-semibold text-vsc-text-muted mb-0.5 uppercase tracking-wide">Request Headers</div>
+                                <CodeBlock>{JSON.stringify(log.requestHeaders, null, 2)}</CodeBlock>
+                              </div>
+                              {log.requestBody && (
+                                <div>
+                                  <div className="text-[10px] font-semibold text-vsc-text-muted mb-0.5 uppercase tracking-wide">Request Body</div>
+                                  <CodeBlock>{tryFormatJson(log.requestBody)}</CodeBlock>
+                                </div>
+                              )}
+                              {log.responseBody != null && (
+                                <div>
+                                  <div className="text-[10px] font-semibold text-vsc-text-muted mb-0.5 uppercase tracking-wide">Response Body</div>
+                                  <CodeBlock>{tryFormatJson(log.responseBody)}</CodeBlock>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                    {run.status === 'cancelled' && (
+                      <div className="py-1.5 pr-2.5 pl-[22px]">
+                        <div className="text-[11px] text-vsc-text-faint italic">Cancelled</div>
+                      </div>
+                    )}
+                    {run.error && (
+                      <div className="py-1.5 pr-2.5 pl-[22px]">
+                        <div className="text-[10px] font-semibold text-vsc-red mb-0.5 uppercase tracking-wide">Error</div>
+                        <ErrorDisplay error={run.error} />
+                      </div>
+                    )}
+                    {run.result != null && (
+                      <div className="py-1.5 pr-2.5 pl-[22px]">
+                        <div className="text-[10px] font-semibold text-vsc-green mb-0.5 uppercase tracking-wide">Result</div>
+                        <ResultDisplay resultJson={run.result} customRenderers={resultRenderers} />
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           ) : selectedFn ? (
             <Tabs
               value={activeTab}

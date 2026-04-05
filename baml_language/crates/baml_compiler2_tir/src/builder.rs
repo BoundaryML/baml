@@ -665,10 +665,21 @@ impl<'db> TypeInferenceBuilder<'db> {
                 let is_method_call = matches!(&body.exprs[*callee], Expr::FieldAccess { .. });
                 let callee_ty = self.infer_expr(*callee, body);
 
-                // Expand type aliases so alias-over-function types are callable.
-                let callee_ty = match &callee_ty {
-                    Ty::TypeAlias(qtn, _) => self.aliases.get(qtn).cloned().unwrap_or(callee_ty),
-                    _ => callee_ty,
+                // Expand type alias chains so alias-over-function types are callable.
+                // Bare alias cycles are already caught by find_invalid_alias_cycles (Tarjan SCC)
+                // before we reach here, so the depth guard is cheap insurance.
+                let callee_ty = {
+                    let mut ty = callee_ty;
+                    for _ in 0..64 {
+                        match &ty {
+                            Ty::TypeAlias(qtn, _) => match self.aliases.get(qtn) {
+                                Some(expanded) => ty = expanded.clone(),
+                                None => break,
+                            },
+                            _ => break,
+                        }
+                    }
+                    ty
                 };
 
                 match &callee_ty {
@@ -4324,6 +4335,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         let saved_bindings = std::mem::take(&mut self.bindings);
         let saved_resolutions = std::mem::take(&mut self.resolutions);
         let saved_exhaustive_matches = std::mem::take(&mut self.exhaustive_matches);
+        let saved_catch_residual_throws = std::mem::take(&mut self.catch_residual_throws);
 
         // Extend generic params with the lambda's own generic params
         let mut new_generic_params = self.generic_params.clone();
@@ -4392,6 +4404,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         self.bindings = saved_bindings;
         self.resolutions = saved_resolutions;
         self.exhaustive_matches = saved_exhaustive_matches;
+        self.catch_residual_throws = saved_catch_residual_throws;
         self.locals = saved_locals;
         self.declared_types = saved_declared;
         self.declared_return_ty = saved_return_ty;

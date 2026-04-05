@@ -608,7 +608,10 @@ impl BexMulitProject {
 
         // Spawn async collection task
         wasm_helpers::run_async_in_background(async move {
-            match engine.collect_tests(&package, cancel.clone()).await {
+            match engine
+                .collect_tests(&package, call_id, cancel.clone())
+                .await
+            {
                 Ok(registry) => {
                     // Discard stale results if the engine was swapped during collection.
                     // The guard is scoped to this block so it is dropped before the await below.
@@ -664,12 +667,29 @@ impl BexMulitProject {
                         }
                         Err(e) => {
                             log::error!("[collect_tests] serialize failed: {e}");
+                            sender.send_playground_notification(
+                                crate::bex_lsp::PlaygroundNotification::TestCollectionResult {
+                                    project: project.clone(),
+                                    generation,
+                                    call_id: call_id.0,
+                                    data: serde_json::to_vec(&serde_json::json!([]))
+                                        .unwrap_or_default(),
+                                },
+                            );
                         }
                     }
                 }
                 Err(e) => {
-                    // Collection failed — log error; the UI will not receive an update
+                    // Collection failed — notify the frontend with an empty result so it unblocks
                     log::error!("[collect_tests] collect_tests failed: {e}");
+                    sender.send_playground_notification(
+                        crate::bex_lsp::PlaygroundNotification::TestCollectionResult {
+                            project,
+                            generation,
+                            call_id: call_id.0,
+                            data: serde_json::to_vec(&serde_json::json!([])).unwrap_or_default(),
+                        },
+                    );
                 }
             }
         });

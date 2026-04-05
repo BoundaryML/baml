@@ -35,6 +35,7 @@ type WsInMessage =
   | { type: 'expandTestSet'; project: string; generation: number; testsetName: string }
   | { type: 'envVarResponse'; id: number; value: string | undefined; variable?: string }
   | { type: 'requestState' }
+  | { type: 'requestCollectTests'; project: string }
   | { type: 'requestControlFlowGraph'; project: string; functionName: string }
   | { type: 'cursorPosition'; file: string; line: number; column: number };
 
@@ -201,7 +202,7 @@ export class WebSocketRuntimePort implements RuntimePort {
           column: msg.column,
         };
       case 'requestCollectTests':
-        return null; // forwarded via WebSocket worker; no direct server equivalent
+        return { type: 'requestCollectTests', project: msg.project };
       case 'callTestFunction':
         return {
           type: 'callTestFunction',

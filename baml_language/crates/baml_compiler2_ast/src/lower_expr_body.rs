@@ -2500,7 +2500,7 @@ impl LoweringContext {
         // Find the BLOCK_EXPR child (the test body)
         let body_node_opt = node.children().find(|c| c.kind() == SyntaxKind::BLOCK_EXPR);
 
-        let (lambda_body, lambda_source_map, _lambda_diags) = if let Some(body_node) = body_node_opt
+        let (lambda_body, lambda_source_map, lambda_diags) = if let Some(body_node) = body_node_opt
         {
             // Lower the body using a fresh context (no collector var — test bodies don't nest)
             crate::lower_expr_body::lower_block_node(
@@ -2513,6 +2513,7 @@ impl LoweringContext {
             let null_expr = sub_ctx.alloc_expr(Expr::Null, span);
             sub_ctx.finish(Some(null_expr))
         };
+        self.diags.extend(lambda_diags);
 
         let lambda_def = FunctionDef {
             name: Name::new("<test body>"),
@@ -2572,7 +2573,7 @@ impl LoweringContext {
         // Find the BLOCK_EXPR child (the testset body)
         let body_node_opt = node.children().find(|c| c.kind() == SyntaxKind::BLOCK_EXPR);
 
-        let (sub_body, sub_source_map, _sub_diags) = if let Some(body_node) = body_node_opt {
+        let (sub_body, sub_source_map, sub_diags) = if let Some(body_node) = body_node_opt {
             crate::lower_expr_body::lower_testset_block_node(
                 &body_node,
                 &Name::new("testset"),
@@ -2583,6 +2584,7 @@ impl LoweringContext {
             let null_expr = sub_ctx.alloc_expr(Expr::Null, span);
             sub_ctx.finish(Some(null_expr))
         };
+        self.diags.extend(sub_diags);
 
         let sub_param = Param {
             name: Name::new("testset"),

@@ -87,22 +87,20 @@ function TestTreeNode({ def, depth = 0, onRunTest, testRunResults }: TestTreeNod
   const set = def as SerializedTestSet;
   return (
     <Collapsible open={expanded} onOpenChange={setExpanded}>
-      <CollapsibleTrigger asChild>
-        <div
-          className="flex items-center gap-1 pr-2 py-0.5 cursor-pointer text-[10px] font-vsc-mono text-vsc-text-muted hover:bg-vsc-hover"
-          style={{ paddingLeft: indent }}
-        >
-          <ChevronRight className={cn('h-3 w-3 text-vsc-text-faint transition-transform', expanded && 'rotate-90')} />
-          <span className="truncate text-[11px] font-medium">{set.name}</span>
-          <span className="text-vsc-text-faint ml-1">({set.items.length})</span>
-          {set.loadingTimeMs > 0 && (
-            <span className="text-[9px] text-vsc-text-faint ml-auto shrink-0">
-              {set.loadingTimeMs >= 1000
-                ? `${(set.loadingTimeMs / 1000).toFixed(1)}s`
-                : `${set.loadingTimeMs}ms`}
-            </span>
-          )}
-        </div>
+      <CollapsibleTrigger
+        className="flex items-center gap-1 w-full pr-2 py-0.5 cursor-pointer text-[10px] font-vsc-mono text-vsc-text-muted hover:bg-vsc-hover"
+        style={{ paddingLeft: indent }}
+      >
+        <ChevronRight className={cn('h-3 w-3 text-vsc-text-faint transition-transform', expanded && 'rotate-90')} />
+        <span className="truncate text-[11px] font-medium">{set.name.split('/').pop()}</span>
+        <span className="text-vsc-text-faint ml-1">({set.items.length})</span>
+        {set.loadingTimeMs > 0 && (
+          <span className="text-[9px] text-vsc-text-faint ml-auto shrink-0">
+            {set.loadingTimeMs >= 1000
+              ? `${(set.loadingTimeMs / 1000).toFixed(1)}s`
+              : `${set.loadingTimeMs}ms`}
+          </span>
+        )}
       </CollapsibleTrigger>
       <CollapsibleContent>
         {set.items.map((child, i) => (
@@ -195,9 +193,10 @@ export const FunctionSidebar: FC<FunctionSidebarProps> = ({
           const Icon = fn.kind === 'llm' ? Bot : FunctionSquare;
 
           return (
-            <div
+            <button
+              type="button"
               key={fn.name}
-              className={`flex items-center gap-1 px-2 py-1 cursor-pointer text-[11px] font-vsc-mono ${
+              className={`flex items-center gap-1 w-full px-2 py-1 cursor-pointer text-[11px] font-vsc-mono text-left ${
                 isSelected
                   ? 'bg-vsc-accent/15 text-vsc-text font-semibold'
                   : 'text-vsc-text-muted hover:bg-vsc-hover'
@@ -207,7 +206,7 @@ export const FunctionSidebar: FC<FunctionSidebarProps> = ({
               <span className="w-4 shrink-0" />
               <Icon className="h-3.5 w-3.5 shrink-0 text-vsc-text-faint" />
               <span className="truncate">{fn.name}</span>
-            </div>
+            </button>
           );
         })}
 

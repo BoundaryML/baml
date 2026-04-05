@@ -4671,16 +4671,17 @@ impl<'a> Parser<'a> {
         let Some(next) = self.peek(1) else {
             return true;
         };
-        // Old-style requires: `test Word { functions` or `test Word (`
+        // Old-style is only: `test Name { functions ...}` or `test Name { type_builder ...}`
+        // There is no old-style form with parens — `test Name(...)` was never valid old-style
+        // syntax (the old parser just emits a "remove parentheses" error).
         if next.kind == TokenKind::Word {
             if let Some(after_word) = self.peek(2) {
-                if after_word.kind == TokenKind::LParen {
-                    return false; // old-style: `test Name(...)`
-                }
                 if after_word.kind == TokenKind::LBrace {
-                    // Peek inside the brace: `test Name { functions` → old-style
+                    // Peek inside the brace: `test Name { functions` or `test Name { type_builder`
                     if let Some(inside) = self.peek(3) {
-                        if inside.kind == TokenKind::Word && inside.text == "functions" {
+                        if inside.kind == TokenKind::Word
+                            && (inside.text == "functions" || inside.text == "type_builder")
+                        {
                             return false; // old-style config block
                         }
                     }

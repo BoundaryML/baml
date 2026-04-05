@@ -295,3 +295,47 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::CannotInferLambdaParamType { .. } => DiagnosticId::UnknownType,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use baml_compiler_diagnostics::Severity;
+    use baml_compiler2_tir::infer_context::{DiagnosticSeverity, RenderedTirDiagnostic};
+    use text_size::{TextRange, TextSize};
+
+    use super::*;
+
+    fn dummy_file_id() -> FileId {
+        // Use index 0 — sufficient for span construction in unit tests.
+        FileId::new(0)
+    }
+
+    fn dummy_rendered(severity: DiagnosticSeverity) -> RenderedTirDiagnostic {
+        RenderedTirDiagnostic {
+            message: "test message".to_string(),
+            range: TextRange::new(TextSize::from(0u32), TextSize::from(5u32)),
+            severity,
+        }
+    }
+
+    #[test]
+    fn tir_warning_severity_maps_to_warning_diagnostic() {
+        let rendered = dummy_rendered(DiagnosticSeverity::Warning);
+        let diag = tir_rendered_to_diagnostic(rendered, dummy_file_id());
+        assert_eq!(
+            diag.severity,
+            Severity::Warning,
+            "DiagnosticSeverity::Warning must produce a warning-level Diagnostic"
+        );
+    }
+
+    #[test]
+    fn tir_error_severity_maps_to_error_diagnostic() {
+        let rendered = dummy_rendered(DiagnosticSeverity::Error);
+        let diag = tir_rendered_to_diagnostic(rendered, dummy_file_id());
+        assert_eq!(
+            diag.severity,
+            Severity::Error,
+            "DiagnosticSeverity::Error must produce an error-level Diagnostic"
+        );
+    }
+}
