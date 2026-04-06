@@ -195,6 +195,9 @@ pub enum DiagnosticId {
 
     // Attribute disambiguation (E0106)
     FieldAttributeInTypePosition,
+
+    // Byte string literal errors (E0109)
+    InvalidByteStringEscape,
 }
 
 impl DiagnosticId {
@@ -343,6 +346,9 @@ impl DiagnosticId {
 
             // Attribute disambiguation
             DiagnosticId::FieldAttributeInTypePosition => "E0106",
+
+            // Byte string literal errors
+            DiagnosticId::InvalidByteStringEscape => "E0109",
         }
     }
 }

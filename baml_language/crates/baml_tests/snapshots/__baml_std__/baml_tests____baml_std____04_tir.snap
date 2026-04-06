@@ -460,7 +460,7 @@ class baml.llm.PrimitiveClientOptions {
   allowed_roles: string[] | null
   remap_roles: map<string, string> | null
   api_key: string | null
-  provider_options: baml.llm.AnthropicOptions | baml.llm.AzureOpenAiOptions | baml.llm.BedrockOptions | null
+  provider_options: baml.llm.AnthropicOptions | baml.llm.AzureOpenAiOptions | baml.llm.BedrockOptions | baml.llm.VertexAiOptions | null
   headers: map<string, string>
   query_params: map<string, string>
   request_body: map<string, unknown>
@@ -473,6 +473,12 @@ class baml.llm.AzureOpenAiOptions {
 }
 class baml.llm.AnthropicOptions {
   max_tokens: int | null
+}
+class baml.llm.VertexAiOptions {
+  credentials: string | null
+  credentials_content: string | null
+  location: string | null
+  project_id: string | null
 }
 class baml.llm.BedrockOptions {
   region: string | null
@@ -518,7 +524,7 @@ class baml.llm.PrimitiveClientOptions$stream {
   allowed_roles: string[] | null
   remap_roles: map<string, string> | null
   api_key: string | null
-  provider_options: baml.llm.AnthropicOptions$stream | baml.llm.AzureOpenAiOptions$stream | baml.llm.BedrockOptions$stream | null
+  provider_options: baml.llm.AnthropicOptions$stream | baml.llm.AzureOpenAiOptions$stream | baml.llm.BedrockOptions$stream | baml.llm.VertexAiOptions$stream | null
   headers: map<string, string>
   query_params: map<string, string>
   request_body: map<string, unknown>
@@ -531,6 +537,12 @@ class baml.llm.AzureOpenAiOptions$stream {
 }
 class baml.llm.AnthropicOptions$stream {
   max_tokens: int | null
+}
+class baml.llm.VertexAiOptions$stream {
+  credentials: string | null
+  credentials_content: string | null
+  location: string | null
+  project_id: string | null
 }
 class baml.llm.BedrockOptions$stream {
   region: string | null
@@ -594,4 +606,10 @@ class baml.net.Socket$stream {
 class baml.String {
 }
 class baml.String$stream {
+}
+
+--- <builtin>/baml/uint8array.baml ---
+class baml.Uint8Array {
+}
+class baml.Uint8Array$stream {
 }

@@ -59,6 +59,7 @@ define_keyword_tokens! {
     "client" => SyntaxKind::KW_CLIENT => Client;
     "generator" => SyntaxKind::KW_GENERATOR => Generator;
     "test" => SyntaxKind::KW_TEST => Test;
+    "testset" => SyntaxKind::KW_TESTSET => TestSet;
     "retry_policy" => SyntaxKind::KW_RETRY_POLICY => RetryPolicy;
     "template_string" => SyntaxKind::KW_TEMPLATE_STRING => TemplateString;
     "type_builder" => SyntaxKind::KW_TYPE_BUILDER => TypeBuilder;
@@ -72,10 +73,10 @@ define_keyword_tokens! {
     "continue" => SyntaxKind::KW_CONTINUE => Continue;
     "return" => SyntaxKind::KW_RETURN => Return;
     "match" => SyntaxKind::KW_MATCH => Match;
-    "assert" => SyntaxKind::KW_ASSERT => Assert;
     "watch" => SyntaxKind::KW_WATCH => Watch;
     "instanceof" => SyntaxKind::KW_INSTANCEOF => Instanceof;
     "dynamic" => SyntaxKind::KW_DYNAMIC => Dynamic;
+    "with" => SyntaxKind::KW_WITH => With;
     "throws" => SyntaxKind::KW_THROWS => Throws;
 }
 
@@ -685,6 +686,54 @@ impl Printable for RawString {
         printer.print_str(&text[end_quote..]);
 
         PrintInfo { multi_lined }
+    }
+    fn leftmost_token(&self) -> TextRange {
+        TextRange::new(
+            self.token_span.start(),
+            self.token_span.start() + TextSize::from(1),
+        )
+    }
+    fn rightmost_token(&self) -> TextRange {
+        TextRange::new(
+            self.token_span.end() - TextSize::from(1),
+            self.token_span.end(),
+        )
+    }
+}
+
+#[derive(Debug)]
+pub struct ByteString {
+    pub token_span: TextRange,
+}
+impl FromCST for ByteString {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        let node = StrongAstError::assert_is_node(elem)?;
+        StrongAstError::assert_kind_node(&node, SyntaxKind::BYTE_STRING_LITERAL)?;
+
+        // Find the `b` prefix word token to strip preceding trivia.
+        let start = node
+            .first_child_or_token_by_kind(&|kind| kind == SyntaxKind::WORD)
+            .ok_or_else(|| StrongAstError::missing(SyntaxKind::WORD, node.text_range()))?;
+
+        Ok(ByteString {
+            token_span: TextRange::new(start.text_range().start(), node.text_range().end()),
+        })
+    }
+}
+impl Token for ByteString {
+    fn span(&self) -> TextRange {
+        self.token_span
+    }
+}
+impl KnownKind for ByteString {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::BYTE_STRING_LITERAL
+    }
+}
+impl Printable for ByteString {
+    fn print(&self, _shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer.print_raw_token(self);
+        PrintInfo { multi_lined: false }
     }
     fn leftmost_token(&self) -> TextRange {
         TextRange::new(

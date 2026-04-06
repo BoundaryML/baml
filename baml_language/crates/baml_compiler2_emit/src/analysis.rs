@@ -608,10 +608,6 @@ fn collect_def_use(body: &MirFunctionBody) -> HashMap<Local, LocalDefUse> {
                     // VizEnter/VizExit don't use any locals
                 }
                 StatementKind::Nop => {}
-                StatementKind::Assert(operand) => {
-                    // Assert uses the condition operand
-                    collect_uses_in_operand(operand, block.id, stmt_ref, &mut def_use);
-                }
             }
         }
 
@@ -678,6 +674,7 @@ fn walk_rvalue_locals(rvalue: &Rvalue, f: &mut impl FnMut(Local)) {
                 walk_operand_locals(elem, f);
             }
         }
+        Rvalue::Uint8Array(_) => {}
         Rvalue::Map(entries) => {
             for (key, value) in entries {
                 walk_operand_locals(key, f);
@@ -1055,8 +1052,6 @@ fn is_stack_neutral_statement(kind: &StatementKind) -> bool {
         // These modify the stack
         StatementKind::Assign { .. } => false,
         StatementKind::Drop(_) => false,
-        // Assert pushes condition then pops it
-        StatementKind::Assert(_) => false,
     }
 }
 
@@ -1360,6 +1355,7 @@ fn rvalue_has_projection_reads(rvalue: &Rvalue) -> bool {
         }
         Rvalue::UnaryOp { operand, .. } => operand_has_projection(operand),
         Rvalue::Array(elements) => elements.iter().any(operand_has_projection),
+        Rvalue::Uint8Array(_) => false,
         Rvalue::Map(entries) => entries
             .iter()
             .any(|(key, value)| operand_has_projection(key) || operand_has_projection(value)),
@@ -1466,7 +1462,6 @@ fn has_side_effect(kind: &StatementKind, rvalue_reads: &HashSet<Local>) -> bool 
         StatementKind::WatchNotify(_) => true, // WatchNotify has side effects (emits notification)
         StatementKind::VizEnter(_) | StatementKind::VizExit(_) => true, // VizEnter/VizExit emit notifications
         StatementKind::Nop => false,
-        StatementKind::Assert(_) => true, // Assert has side effects (can throw)
     }
 }
 

@@ -25,7 +25,7 @@ function ThrowsEnumExact(x: int) -> string throws Errors {
 //    │ 
 //    │ Note: Error code: E0001
 // ───╯
-// Error: extraneous throws declaration: user.Errors
+// Warning: extraneous throws declaration: user.Errors
 //    ╭─[ throw_throws_enum_exact_match.baml:9:52 ]
 //    │
 //  9 │ function ThrowsEnumExact(x: int) -> string throws Errors {

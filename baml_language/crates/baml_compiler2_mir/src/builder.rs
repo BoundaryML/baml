@@ -233,11 +233,6 @@ impl MirBuilder {
         }
     }
 
-    /// Emit an assert statement.
-    pub(crate) fn assert(&mut self, condition: Operand) {
-        self.push_statement(StatementKind::Assert(condition), None);
-    }
-
     // ========================================================================
     // Terminator Emission
     // ========================================================================

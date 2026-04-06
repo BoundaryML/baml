@@ -77,7 +77,8 @@ impl Bex for BexEngine {
             });
         }
 
-        let result = BexEngine::call_function(&self, function_name, ordered_args, call_ctx).await?;
+        let result =
+            BexEngine::call_function(&self, function_name, ordered_args, call_ctx, true).await?;
 
         let owned_result = self
             .heap()

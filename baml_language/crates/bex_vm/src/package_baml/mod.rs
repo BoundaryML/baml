@@ -21,6 +21,8 @@ mod math;
 mod media;
 mod root;
 mod string;
+mod sys;
+mod uint8array;
 mod unstable;
 
 use bex_vm_types::types::{Instance, Object, Type, Value};
@@ -39,6 +41,7 @@ pub type NativeFunction = fn(&mut BexVm, &[Value]) -> NativeFunctionResult;
 
 // Generate the BamlClass*/BamlNamespace*/BamlPackageBaml trait hierarchy.
 #[allow(
+    unused_variables,
     clippy::wildcard_imports,
     clippy::pub_underscore_fields,
     clippy::used_underscore_binding,
@@ -62,6 +65,11 @@ pub struct PackageBamlImpl;
 // =============================================================================
 
 /// Resolves native function pointers for unresolved native functions in objects.
+///
+/// Only functions in the `baml.*` namespace are resolved here. Functions from
+/// other packages (e.g. `assert.*`, `testing.*`) are left as `NativeUnresolved`
+/// so they can be wired up by future package implementations. They will only
+/// fail at runtime if actually called.
 pub fn attach_builtins(object: Object) -> Result<Object, VmError> {
     Ok(match object {
         Object::Function(function) => {
@@ -69,15 +77,21 @@ pub fn attach_builtins(object: Object) -> Result<Object, VmError> {
                 bex_vm_types::FunctionKind::Bytecode => bex_vm_types::FunctionKind::Bytecode,
                 bex_vm_types::FunctionKind::SysOp(op) => bex_vm_types::FunctionKind::SysOp(op),
                 bex_vm_types::FunctionKind::NativeUnresolved => {
-                    let Some(native_function) =
-                        PackageBamlImpl::get_native_fn(function.name.as_str())
-                    else {
-                        return Err(VmError::RuntimeError(RuntimeError::Other(format!(
-                            "Native function '{}' not found",
-                            function.name
-                        ))));
-                    };
-                    bex_vm_types::FunctionKind::Native(native_function as *const ())
+                    // Only attempt resolution for the `baml.*` package. Functions
+                    // from other stdlib packages (assert, testing, …) are deferred.
+                    if !function.name.starts_with("baml.") {
+                        bex_vm_types::FunctionKind::NativeUnresolved
+                    } else {
+                        let Some(native_function) =
+                            PackageBamlImpl::get_native_fn(function.name.as_str())
+                        else {
+                            return Err(VmError::RuntimeError(RuntimeError::Other(format!(
+                                "Native function '{}' not found",
+                                function.name
+                            ))));
+                        };
+                        bex_vm_types::FunctionKind::Native(native_function as *const ())
+                    }
                 }
                 bex_vm_types::FunctionKind::Native(ptr) => bex_vm_types::FunctionKind::Native(ptr),
             };

@@ -56,7 +56,10 @@ pub fn extract_native_builtins()
     let mut class_defs = Vec::new();
     let mut diagnostic_lines: Vec<String> = Vec::new();
 
-    for builtin_file in baml_builtins2::ALL {
+    for builtin_file in baml_builtins2::ALL
+        .iter()
+        .filter(|f| f.package == baml_builtins2::PACKAGE_BAML)
+    {
         let path = builtin_file.virtual_path();
         // Lex and parse into a lossless CST.
         let tokens = baml_compiler_lexer::lex_lossless(builtin_file.contents, FileId::new(0));
@@ -260,7 +263,7 @@ fn extract_from_class(
 
 /// Extract field definitions from a class, producing a `NativeClassDef`.
 ///
-/// Returns `None` for classes that keep dedicated `Object` variants (Array, Map, String)
+/// Returns `None` for classes that keep dedicated `Object` variants (Array, Map, String, `Uint8Array`)
 /// since they don't use `Object::Instance`.
 fn extract_class_fields(
     class_def: &ClassDef,
@@ -271,7 +274,7 @@ fn extract_class_fields(
 
     // Skip classes with dedicated Object variants — they are not Instance-based.
     match class_name {
-        "Array" | "Map" | "String" => return None,
+        "Array" | "Map" | "String" | "Uint8Array" => return None,
         _ => {}
     }
 
@@ -492,6 +495,8 @@ fn type_expr_to_baml_type(ty: &TypeExpr, generics: &[String]) -> BamlType {
             };
             BamlType::Media(name.to_string())
         }
+
+        TypeExpr::Uint8Array { .. } => BamlType::Uint8Array,
 
         TypeExpr::Optional { inner, .. } => {
             BamlType::Optional(Box::new(type_expr_to_baml_type(inner, generics)))

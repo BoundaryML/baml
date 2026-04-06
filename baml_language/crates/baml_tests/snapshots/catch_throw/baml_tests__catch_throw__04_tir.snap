@@ -102,7 +102,7 @@ function user.ThrowStatement(x: int) -> string throws never {
     throw "error" : "error"
     "unreachable" : unknown
   }
-  !! 3181..3199: unreachable code: 1 statement(s) after diverging statement
+  ?? 3181..3199: unreachable code: 1 statement(s) after diverging statement
 }
 function user.ChainedCatchClauses(x: int) -> string throws never {
   { : string | "first handler" | "second handler"

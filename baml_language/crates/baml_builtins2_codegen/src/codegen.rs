@@ -23,6 +23,13 @@ use crate::types::{BamlType, NativeBuiltin, NativeClassDef, Receiver, VmUsage};
 /// `Result<T, VmError>` instead of plain `T`.
 fn is_fallible(path: &str) -> bool {
     path.starts_with("baml.unstable.")
+        || matches!(
+            path,
+            "baml.Uint8Array.zeroes"
+                | "baml.Uint8Array.from_array"
+                | "baml.Uint8Array.from_hex"
+                | "baml.Uint8Array.from_base64"
+        )
 }
 
 // ============================================================================
@@ -495,6 +502,7 @@ fn copy_field_type(ty: &BamlType) -> String {
         BamlType::Null => "()".to_string(),
         // Heap types stored as Value — caller creates them via vm helpers
         BamlType::String
+        | BamlType::Uint8Array
         | BamlType::List(_)
         | BamlType::Map(_, _)
         | BamlType::Optional(_)
@@ -1024,6 +1032,7 @@ fn emit_mut_receiver_extraction(out: &mut String, name: &str, recv: &Receiver) {
         "Array" => "vm.as_array_mut(&args[0])?".to_string(),
         "Map" => "vm.as_map_mut(&args[0])?".to_string(),
         "String" => "vm.as_string_mut(&args[0])?".to_string(),
+        "Uint8Array" => "vm.as_uint8array_mut(&args[0])?".to_string(),
         _ => "vm.as_value_mut(&args[0])?".to_string(),
     };
     writeln!(out, "        let {name} = {expr};").unwrap();
@@ -1038,6 +1047,7 @@ fn receiver_immut_extraction_expr(val: &str, recv: &Receiver) -> String {
         "Array" => format!("vm.as_array({val})?.to_vec()"),
         "Map" => format!("vm.as_map({val})?.clone()"),
         "String" => format!("vm.as_string({val})?.clone()"),
+        "Uint8Array" => format!("vm.as_uint8array({val})?.clone()"),
         "Pdf" | "Audio" | "Video" | "Image" => {
             let kind = media_kind_expr(&recv.class_name);
             format!("vm.as_media({val}, {kind})?.clone()")
@@ -1082,6 +1092,13 @@ fn extraction_expr(val: &str, ty: &BamlType, is_mut: bool) -> String {
             let inner_expr = extraction_expr("other", inner, false);
             format!("match {val} {{ Value::Null => None, other => Some({inner_expr}) }}")
         }
+        BamlType::Uint8Array => {
+            if is_mut {
+                format!("vm.as_uint8array_mut({val})?")
+            } else {
+                format!("vm.as_uint8array({val})?.clone()")
+            }
+        }
         BamlType::Generic(_) => val.to_string(),
         BamlType::Media(name) => {
             let kind = media_kind_expr(name);
@@ -1115,7 +1132,11 @@ fn call_arg_list(b: &NativeBuiltin) -> String {
 
 fn call_arg_for_type(name: &str, ty: &BamlType) -> String {
     match ty {
-        BamlType::String | BamlType::List(_) | BamlType::Map(_, _) | BamlType::Media(_) => {
+        BamlType::String
+        | BamlType::Uint8Array
+        | BamlType::List(_)
+        | BamlType::Map(_, _)
+        | BamlType::Media(_) => {
             format!("&{name}")
         }
         BamlType::Optional(inner) => match inner.as_ref() {
@@ -1143,7 +1164,11 @@ fn call_arg_for_type(name: &str, ty: &BamlType) -> String {
 fn call_arg_needs_ref(ty: &BamlType) -> bool {
     matches!(
         ty,
-        BamlType::String | BamlType::List(_) | BamlType::Map(_, _) | BamlType::Media(_)
+        BamlType::String
+            | BamlType::Uint8Array
+            | BamlType::List(_)
+            | BamlType::Map(_, _)
+            | BamlType::Media(_)
     )
 }
 
@@ -1164,6 +1189,7 @@ fn emit_result_conversion(out: &mut String, b: &NativeBuiltin) {
 fn result_conversion_expr(name: &str, ty: &BamlType) -> String {
     match ty {
         BamlType::String => format!("vm.alloc_string({name})"),
+        BamlType::Uint8Array => format!("vm.alloc_uint8array({name})"),
         BamlType::Int => format!("Value::Int({name})"),
         BamlType::Float => format!("Value::Float({name})"),
         BamlType::Bool => format!("Value::Bool({name})"),
@@ -1215,6 +1241,7 @@ fn baml_type_to_input(ty: &BamlType, is_mut: bool) -> String {
             let inner_str = baml_type_to_input(inner, false);
             format!("Option<{inner_str}>")
         }
+        BamlType::Uint8Array => "&[u8]".to_string(),
         BamlType::Generic(_) | BamlType::Named(_) | BamlType::RustType => "&Value".to_string(),
         BamlType::Media(_) => {
             if is_mut {
@@ -1239,6 +1266,7 @@ fn baml_type_to_output(ty: &BamlType) -> String {
             let inner_str = baml_type_to_output(inner);
             format!("Option<{inner_str}>")
         }
+        BamlType::Uint8Array => "Vec<u8>".to_string(),
         BamlType::Generic(_) | BamlType::Named(_) | BamlType::Media(_) | BamlType::RustType => {
             "Value".to_string()
         }
@@ -1276,6 +1304,13 @@ fn receiver_input_type(recv: &Receiver) -> String {
                 "&str".to_string()
             }
         }
+        "Uint8Array" => {
+            if recv.is_mut {
+                "&mut Vec<u8>".to_string()
+            } else {
+                "&[u8]".to_string()
+            }
+        }
         "Pdf" => "&view::media::Pdf<'_>".to_string(),
         "Audio" => "&view::media::Audio<'_>".to_string(),
         "Video" => "&view::media::Video<'_>".to_string(),
@@ -1292,6 +1327,7 @@ fn receiver_baml_type(recv: &Receiver) -> BamlType {
             Box::new(BamlType::Generic("V".to_string())),
         ),
         "String" => BamlType::String,
+        "Uint8Array" => BamlType::Uint8Array,
         "Pdf" | "Audio" | "Video" | "Image" => BamlType::Named(recv.class_name.clone()),
         _ => BamlType::Named(recv.class_name.clone()),
     }

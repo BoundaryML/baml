@@ -22,7 +22,7 @@ source: crates/baml_tests/src/generated_tests.rs
     │ Note: Error code: E0001
 ────╯
 
-  [type] Error: unreachable code: 2 statement(s) after diverging statement
+  [type] Warning: unreachable code: 2 statement(s) after diverging statement
     ╭─[ regressions.baml:75:6 ]
     │
  75 │ ╭─▶     {

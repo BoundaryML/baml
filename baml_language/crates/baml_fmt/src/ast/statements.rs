@@ -5,7 +5,7 @@ use super::tokens as t;
 use crate::{
     ast::{
         BlockExpr, Expression, FromCST, HeaderComment, KnownKind, ParenExpr, StrongAstError,
-        SyntaxNodeIter, Token, Type,
+        SyntaxNodeIter, TestExprDecl, TestSetDecl, Token, Type,
     },
     printer::{PrintInfo, PrintMultiLine, Printable, Printer, Shape},
     trivia_classifier::TriviaSliceExt,
@@ -24,11 +24,14 @@ pub enum Statement {
     Return(ReturnStmt),
     Break(BreakStmt),
     Continue(ContinueStmt),
-    Assert(AssertStmt),
     For(ForStmt),
     HeaderComment(HeaderComment),
     /// There's a semicolon with no preceding statement.
     EmptySemicolon(t::Semicolon),
+    /// An expression-body test nested inside a testset body.
+    TestExpr(TestExprDecl),
+    /// A nested testset inside a testset body.
+    TestSet(TestSetDecl),
     Unknown(TextRange),
 }
 
@@ -43,11 +46,12 @@ impl FromCST for Statement {
             SyntaxKind::FOR_EXPR => ForStmt::from_cst(elem).map(Statement::For),
             SyntaxKind::BREAK_STMT => BreakStmt::from_cst(elem).map(Statement::Break),
             SyntaxKind::CONTINUE_STMT => ContinueStmt::from_cst(elem).map(Statement::Continue),
-            SyntaxKind::ASSERT_STMT => AssertStmt::from_cst(elem).map(Statement::Assert),
             SyntaxKind::SEMICOLON => t::Semicolon::from_cst(elem).map(Statement::EmptySemicolon),
             SyntaxKind::HEADER_COMMENT => {
                 t::HeaderComment::from_cst(elem).map(Statement::HeaderComment)
             }
+            SyntaxKind::TEST_EXPR_DEF => TestExprDecl::from_cst(elem).map(Statement::TestExpr),
+            SyntaxKind::TESTSET_DEF => TestSetDecl::from_cst(elem).map(Statement::TestSet),
             _ => ExpressionStmt::from_cst(elem).map(Statement::Expr),
         }
     }
@@ -62,7 +66,6 @@ impl Printable for Statement {
             Statement::Return(return_stmt) => return_stmt.print(shape, printer),
             Statement::Break(break_stmt) => break_stmt.print(shape, printer),
             Statement::Continue(continue_stmt) => continue_stmt.print(shape, printer),
-            Statement::Assert(assert_stmt) => assert_stmt.print(shape, printer),
             Statement::For(for_stmt) => for_stmt.print(shape, printer),
             Statement::HeaderComment(header_comment) => {
                 printer.print_raw_token(header_comment);
@@ -72,6 +75,8 @@ impl Printable for Statement {
                 printer.print_raw_token(semicolon);
                 PrintInfo::default_single_line()
             }
+            Statement::TestExpr(test_expr_decl) => test_expr_decl.print(shape, printer),
+            Statement::TestSet(test_set_decl) => test_set_decl.print(shape, printer),
             Statement::Unknown(range) => {
                 printer.print_input_range_trimmed_start(*range);
                 PrintInfo::default_multi_lined()
@@ -86,10 +91,11 @@ impl Printable for Statement {
             Statement::Return(return_stmt) => return_stmt.leftmost_token(),
             Statement::Break(break_stmt) => break_stmt.leftmost_token(),
             Statement::Continue(continue_stmt) => continue_stmt.leftmost_token(),
-            Statement::Assert(assert_stmt) => assert_stmt.leftmost_token(),
             Statement::For(for_stmt) => for_stmt.leftmost_token(),
             Statement::HeaderComment(header_comment) => header_comment.span(),
             Statement::EmptySemicolon(semicolon) => semicolon.span(),
+            Statement::TestExpr(t) => t.leftmost_token(),
+            Statement::TestSet(t) => t.leftmost_token(),
             Statement::Unknown(range) => *range,
         }
     }
@@ -101,10 +107,11 @@ impl Printable for Statement {
             Statement::Return(return_stmt) => return_stmt.rightmost_token(),
             Statement::Break(break_stmt) => break_stmt.rightmost_token(),
             Statement::Continue(continue_stmt) => continue_stmt.rightmost_token(),
-            Statement::Assert(assert_stmt) => assert_stmt.rightmost_token(),
             Statement::For(for_stmt) => for_stmt.rightmost_token(),
             Statement::HeaderComment(header_comment) => header_comment.span(),
             Statement::EmptySemicolon(semicolon) => semicolon.span(),
+            Statement::TestExpr(t) => t.rightmost_token(),
+            Statement::TestSet(t) => t.rightmost_token(),
             Statement::Unknown(range) => *range,
         }
     }
@@ -934,85 +941,5 @@ impl Printable for ContinueStmt {
         self.semicolon
             .as_ref()
             .map_or(self.keyword.span(), Token::span)
-    }
-}
-
-/// Corresponds to a [`SyntaxKind::ASSERT_STMT`] node.
-#[derive(Debug)]
-pub struct AssertStmt {
-    pub keyword: t::Assert,
-    pub condition: Expression,
-    pub semicolon: Option<t::Semicolon>,
-}
-
-impl FromCST for AssertStmt {
-    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        let node = StrongAstError::assert_is_node(elem)?;
-        StrongAstError::assert_kind_node(&node, SyntaxKind::ASSERT_STMT)?;
-
-        let mut it = SyntaxNodeIter::new(&node);
-
-        let keyword = it.expect_parse()?;
-
-        let condition = it.expect_next("some expression")?;
-        let condition = Expression::from_cst(condition)?;
-
-        let semicolon = it.next().map(t::Semicolon::from_cst).transpose()?;
-
-        it.expect_end()?;
-
-        Ok(AssertStmt {
-            keyword,
-            condition,
-            semicolon,
-        })
-    }
-}
-
-impl KnownKind for AssertStmt {
-    fn kind() -> SyntaxKind {
-        SyntaxKind::ASSERT_STMT
-    }
-}
-
-impl Printable for AssertStmt {
-    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        let mut trivia_len = 0;
-        printer.print_raw_token(&self.keyword);
-        printer.print_spaces(1);
-
-        let (_, kw_trailing) = printer.trivia.get_for_range_split(self.keyword.span());
-        let (condition_leading, condition_trailing) =
-            printer.trivia.get_for_element(&self.condition);
-        trivia_len += printer.print_trivia_squished(kw_trailing);
-        trivia_len += printer.print_trivia_squished(condition_leading);
-
-        let offset = const { "assert ".len() } + trivia_len;
-        let expr_shape = Shape {
-            width: shape.width.saturating_sub(offset + const { ";".len() }),
-            indent: shape.indent,
-            first_line_offset: offset,
-        };
-        let info = printer.print(&self.condition, expr_shape);
-
-        if let Some(semicolon) = &self.semicolon {
-            printer.print_trivia_squished(condition_trailing);
-            let (semicolon_leading, _) = printer.trivia.get_for_range_split(semicolon.span());
-            printer.print_trivia_squished(semicolon_leading);
-            printer.print_raw_token(semicolon);
-        } else {
-            printer.print_str(";");
-        }
-        info
-    }
-    fn leftmost_token(&self) -> TextRange {
-        self.keyword.span()
-    }
-    fn rightmost_token(&self) -> TextRange {
-        if let Some(semicolon) = &self.semicolon {
-            semicolon.span()
-        } else {
-            self.condition.rightmost_token()
-        }
     }
 }

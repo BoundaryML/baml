@@ -15,7 +15,7 @@ use crate::{
     ast::{
         AssignOp, AstSourceMap, BinaryOp, CatchArm, CatchArmId, CatchClause, CatchClauseKind, Expr,
         ExprBody, ExprId, FunctionBodyDef, FunctionDef, LetOrigin, Literal, LoopOrigin, MatchArm,
-        MatchArmId, PatId, Pattern, SpannedTypeExpr, SpreadField, Stmt, StmtId, TypeAnnotId,
+        MatchArmId, Param, PatId, Pattern, SpannedTypeExpr, SpreadField, Stmt, StmtId, TypeAnnotId,
         TypeExpr, UnaryOp,
     },
 };
@@ -55,6 +55,153 @@ pub(crate) fn lower(
     (body, source_map)
 }
 
+/// Lower a `BLOCK_EXPR` node directly to an owned `ExprBody` + parallel `AstSourceMap`.
+///
+/// Used by `lower_cst` when synthesizing lambda bodies from `TEST_EXPR_DEF` / `TESTSET_DEF`
+/// blocks, where there is no wrapping `EXPR_FUNCTION_BODY` node.
+pub(crate) fn lower_block_node(
+    block_node: &SyntaxNode,
+    param_names: &[Name],
+) -> (ExprBody, AstSourceMap, Vec<LoweringDiagnostic>) {
+    let mut ctx = LoweringContext::new();
+    for name in param_names {
+        ctx.names_in_scope.insert(name.to_string());
+    }
+    let root_expr = baml_compiler_syntax::ast::BlockExpr::cast(block_node.clone())
+        .map(|block| ctx.lower_block_expr(&block));
+    ctx.finish(root_expr)
+}
+
+/// Lower a testset `BLOCK_EXPR` body node to an owned `ExprBody` + `AstSourceMap`.
+///
+/// The body may contain a mix of regular statements (let bindings, for loops, if conditions)
+/// and `TEST_EXPR_DEF` / `TESTSET_DEF` nodes. The latter are converted to
+/// `<collector_var>.register_test(...)` / `<collector_var>.register_test_set(...)` calls
+/// so that the resulting body is a valid expression body for the testset collector lambda.
+///
+/// `collector_var` is the name of the `testing.TestSetCollector` parameter in scope.
+/// `param_names` are additional parameters to seed `names_in_scope` (e.g. the parent scope).
+///
+/// The returned body always has a `null` tail expression so the collector lambda satisfies
+/// the type checker's expectation that the body evaluates to `null`.
+pub(crate) fn lower_testset_block_node(
+    block_node: &SyntaxNode,
+    collector_var: &Name,
+    param_names: &[Name],
+) -> (ExprBody, AstSourceMap, Vec<LoweringDiagnostic>) {
+    let mut ctx = LoweringContext::new_testset_collector(collector_var.clone());
+    ctx.names_in_scope.insert(collector_var.to_string());
+    for name in param_names {
+        ctx.names_in_scope.insert(name.to_string());
+    }
+    let range = block_node.text_range();
+    let root_expr = baml_compiler_syntax::ast::BlockExpr::cast(block_node.clone()).map(|block| {
+        let inner_block_id = ctx.lower_block_expr(&block);
+        // Ensure the body ends with `null` so the collector lambda always returns null.
+        // We extract the statements from the inner block and rebuild with a null tail.
+        // If the inner block already has a tail expression, wrap everything in a new block.
+        ctx.ensure_null_tail(inner_block_id, range)
+    });
+    ctx.finish(root_expr)
+}
+
+/// Lower a runner `SyntaxElement` (node or token) into an `ExprId` within the given context.
+///
+/// If the element is a node (e.g. `CALL_EXPR`, `OBJECT_LITERAL`), delegates to `lower_expr`.
+/// If the element is a bare token (e.g. `INTEGER_LITERAL`, `WORD`), lowers inline.
+/// Lower a bare token (not wrapped in a CST node) into an `Expr`.
+/// Used for runner expressions that are simple literals or identifiers.
+fn lower_bare_token_expr(kind: SyntaxKind, text: &str) -> Expr {
+    match kind {
+        SyntaxKind::INTEGER_LITERAL => {
+            if let Ok(v) = text.parse::<i64>() {
+                Expr::Literal(Literal::Int(v))
+            } else {
+                Expr::Missing
+            }
+        }
+        SyntaxKind::FLOAT_LITERAL => Expr::Literal(Literal::Float(text.to_string())),
+        k if is_ident_token(k) => match text {
+            "null" => Expr::Null,
+            "true" => Expr::Literal(Literal::Bool(true)),
+            "false" => Expr::Literal(Literal::Bool(false)),
+            _ => Expr::Path(vec![Name::new(text)]),
+        },
+        _ => Expr::Missing,
+    }
+}
+
+pub(crate) fn lower_runner_element(
+    ctx: &mut InitTestContext,
+    element: &baml_compiler_syntax::SyntaxElement,
+) -> ExprId {
+    let span = element.text_range();
+    match element {
+        rowan::NodeOrToken::Node(node) => ctx.inner.lower_expr(node),
+        rowan::NodeOrToken::Token(token) => {
+            let expr = lower_bare_token_expr(token.kind(), token.text());
+            ctx.inner.alloc_expr(expr, span)
+        }
+    }
+}
+
+/// Context for building the `$init_test` function body.
+///
+/// Wraps a `LoweringContext` so that runner expressions can be lowered
+/// directly into the same arena (no IIFE indirection needed).
+pub(crate) struct InitTestContext {
+    inner: LoweringContext,
+    /// Counter for generating unique synthetic spans for lambda expressions.
+    /// Synthesized lambdas all share span `0..0`, which causes the HIR scope
+    /// builder and MIR lowering to confuse them. Each lambda gets a unique
+    /// synthetic span at offset `(counter * 2)..(counter * 2 + 1)` to make
+    /// them distinguishable.
+    synthetic_lambda_counter: u32,
+}
+
+impl InitTestContext {
+    pub(crate) fn new() -> Self {
+        let mut inner = LoweringContext::new();
+        inner.names_in_scope.insert("registry".to_string());
+        Self {
+            inner,
+            synthetic_lambda_counter: 0,
+        }
+    }
+
+    /// Generate a unique synthetic span for a lambda expression.
+    /// Each call returns a different 1-byte span to ensure that HIR Lambda
+    /// scopes can be distinguished by their `range` field.
+    pub(crate) fn next_lambda_span(&mut self) -> text_size::TextRange {
+        let offset = self.synthetic_lambda_counter;
+        self.synthetic_lambda_counter += 1;
+        // Use offsets starting at 1 to avoid collision with the default 0..0 span
+        // used for the function itself and non-lambda expressions.
+        let start = text_size::TextSize::from((offset + 1) * 2);
+        let end = start + text_size::TextSize::from(1);
+        text_size::TextRange::new(start, end)
+    }
+
+    pub(crate) fn alloc_expr(&mut self, expr: Expr, span: text_size::TextRange) -> ExprId {
+        self.inner.alloc_expr(expr, span)
+    }
+
+    pub(crate) fn alloc_stmt(
+        &mut self,
+        stmt: Stmt,
+        span: text_size::TextRange,
+    ) -> crate::ast::StmtId {
+        self.inner.alloc_stmt(stmt, span)
+    }
+
+    pub(crate) fn finish(
+        self,
+        root_expr: Option<ExprId>,
+    ) -> (ExprBody, AstSourceMap, Vec<LoweringDiagnostic>) {
+        self.inner.finish(root_expr)
+    }
+}
+
 /// Helper enum for building pattern elements during lowering.
 enum PatternElement {
     /// Accumulated dotted path segments.
@@ -76,6 +223,11 @@ struct LoweringContext {
     source_map: AstSourceMap,
     /// All names used, for generating unique synthetic variable names.
     names_in_scope: std::collections::HashSet<String>,
+    /// When set, `TEST_EXPR_DEF` and `TESTSET_DEF` nodes encountered during block
+    /// lowering are converted to `<var>.register_test(...)` / `<var>.register_test_set(...)`
+    /// calls using this variable name. This supports dynamic test generation inside
+    /// `for`/`if` blocks inside a testset body.
+    testset_collector_var: Option<Name>,
     /// Diagnostics accumulated during lowering.
     diags: Vec<LoweringDiagnostic>,
     /// Expressions that contain unwrapped `?.` operators and need an `OptionalChain` wrapper.
@@ -94,9 +246,16 @@ impl LoweringContext {
             type_annotations: Arena::new(),
             source_map: AstSourceMap::new(),
             names_in_scope: std::collections::HashSet::new(),
+            testset_collector_var: None,
             diags: Vec::new(),
             needs_chain_wrap: std::collections::HashSet::new(),
         }
+    }
+
+    fn new_testset_collector(collector_var: Name) -> Self {
+        let mut ctx = Self::new();
+        ctx.testset_collector_var = Some(collector_var);
+        ctx
     }
 
     fn alloc_expr(&mut self, expr: Expr, range: TextRange) -> ExprId {
@@ -169,6 +328,60 @@ impl LoweringContext {
         }
     }
 
+    /// Ensure a block expression ends with a `null` tail.
+    ///
+    /// If `block_id` refers to a `Block` with no tail expression, this adds a `null` tail
+    /// by constructing a new block expression that reuses the same statements.
+    /// If the block already has a non-null tail, this wraps it in a new block that evaluates
+    /// the original block as a statement and then returns null.
+    fn ensure_null_tail(&mut self, block_id: ExprId, range: TextRange) -> ExprId {
+        match self.exprs[block_id].clone() {
+            Expr::Block { stmts, tail_expr } => {
+                match tail_expr {
+                    None => {
+                        // No tail — add explicit null tail by allocating a new block
+                        let null_id = self.alloc_expr(Expr::Null, range);
+                        self.alloc_expr(
+                            Expr::Block {
+                                stmts,
+                                tail_expr: Some(null_id),
+                            },
+                            range,
+                        )
+                    }
+                    Some(t) if matches!(self.exprs[t], Expr::Null) => {
+                        // Already has null tail — return as-is
+                        block_id
+                    }
+                    Some(_) => {
+                        // Has a non-null tail expression — keep it as a statement and add null
+                        let inner_as_stmt = self.alloc_stmt(Stmt::Expr(block_id), range);
+                        let null_id = self.alloc_expr(Expr::Null, range);
+                        self.alloc_expr(
+                            Expr::Block {
+                                stmts: vec![inner_as_stmt],
+                                tail_expr: Some(null_id),
+                            },
+                            range,
+                        )
+                    }
+                }
+            }
+            _ => {
+                // Not a block — wrap in a block with null tail
+                let inner_as_stmt = self.alloc_stmt(Stmt::Expr(block_id), range);
+                let null_id = self.alloc_expr(Expr::Null, range);
+                self.alloc_expr(
+                    Expr::Block {
+                        stmts: vec![inner_as_stmt],
+                        tail_expr: Some(null_id),
+                    },
+                    range,
+                )
+            }
+        }
+    }
+
     fn finish(
         self,
         root_expr: Option<ExprId>,
@@ -208,7 +421,24 @@ impl LoweringContext {
                         SyntaxKind::CONTINUE_STMT => {
                             self.alloc_stmt(Stmt::Continue, node.text_range())
                         }
-                        SyntaxKind::ASSERT_STMT => self.lower_assert_stmt(node),
+                        SyntaxKind::TEST_EXPR_DEF => {
+                            if self.testset_collector_var.is_some() {
+                                let expr_id = self.lower_test_expr_as_register_call(node);
+                                self.alloc_stmt(Stmt::Expr(expr_id), node.text_range())
+                            } else {
+                                // Invalid context — parser already emitted a diagnostic
+                                self.alloc_stmt(Stmt::Missing, node.text_range())
+                            }
+                        }
+                        SyntaxKind::TESTSET_DEF => {
+                            if self.testset_collector_var.is_some() {
+                                let expr_id = self.lower_testset_as_register_call(node);
+                                self.alloc_stmt(Stmt::Expr(expr_id), node.text_range())
+                            } else {
+                                // Invalid context — parser already emitted a diagnostic
+                                self.alloc_stmt(Stmt::Missing, node.text_range())
+                            }
+                        }
                         _ => self.alloc_stmt(Stmt::Missing, node.text_range()),
                     };
                     stmts.push(stmt_id);
@@ -329,6 +559,7 @@ impl LoweringContext {
             SyntaxKind::STRING_LITERAL | SyntaxKind::RAW_STRING_LITERAL => {
                 self.lower_string_literal(node)
             }
+            SyntaxKind::BYTE_STRING_LITERAL => self.lower_byte_string_literal(node),
             SyntaxKind::ARRAY_LITERAL => self.lower_array_literal(node),
             SyntaxKind::OBJECT_LITERAL => self.lower_object_literal(node),
             SyntaxKind::MAP_LITERAL => self.lower_map_literal(node),
@@ -1717,6 +1948,26 @@ impl LoweringContext {
         self.alloc_expr(Expr::Literal(Literal::String(content)), node.text_range())
     }
 
+    fn lower_byte_string_literal(&mut self, node: &SyntaxNode) -> ExprId {
+        let text = node.text().to_string();
+        // Strip the b"..." delimiters: remove leading `b"` and trailing `"`
+        let content = text
+            .strip_prefix("b\"")
+            .and_then(|s| s.strip_suffix('"'))
+            .unwrap_or("");
+        match parse_byte_string_escapes(content) {
+            Ok(bytes) => self.alloc_expr(Expr::ByteStringLiteral(bytes), node.text_range()),
+            Err(message) => {
+                self.diags
+                    .push(LoweringDiagnostic::InvalidByteStringEscape {
+                        message,
+                        span: node.text_range(),
+                    });
+                self.alloc_expr(Expr::Missing, node.text_range())
+            }
+        }
+    }
+
     fn lower_array_literal(&mut self, node: &SyntaxNode) -> ExprId {
         let mut elements = Vec::new();
         for elem in node.children_with_tokens() {
@@ -2481,18 +2732,191 @@ impl LoweringContext {
         self.alloc_stmt(Stmt::Expr(block_expr), range)
     }
 
-    fn lower_assert_stmt(&mut self, node: &SyntaxNode) -> StmtId {
-        let condition = if let Some(n) = node.children().next() {
-            self.lower_expr(&n)
+    /// Lower a `TEST_EXPR_DEF` node as a `<collector>.register_test(name, lambda, null)` call.
+    ///
+    /// Used when `test` appears inside a testset body (possibly nested inside a `for`/`if`).
+    /// Requires `self.testset_collector_var` to be set.
+    fn lower_test_expr_as_register_call(&mut self, node: &SyntaxNode) -> ExprId {
+        let span = node.text_range();
+        let collector_name = self
+            .testset_collector_var
+            .clone()
+            .unwrap_or_else(|| Name::new("testset"));
+
+        // Extract test name from STRING_LITERAL child (may be a BINARY_EXPR for concatenation)
+        let name_expr = self.lower_test_name_expr(node, span);
+
+        // Find the BLOCK_EXPR child (the test body)
+        let body_node_opt = node.children().find(|c| c.kind() == SyntaxKind::BLOCK_EXPR);
+
+        let (lambda_body, lambda_source_map, lambda_diags) = if let Some(body_node) = body_node_opt
+        {
+            // Lower the body using a fresh context (no collector var — test bodies don't nest)
+            crate::lower_expr_body::lower_block_node(
+                &body_node,
+                std::slice::from_ref(&collector_name),
+            )
         } else {
-            // Try bare token: `assert x;`
-            node.children_with_tokens()
-                .filter_map(rowan::NodeOrToken::into_token)
-                .find_map(|t| self.try_lower_bare_token(&t))
-                .unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.text_range()))
+            // Empty body: produce null
+            let mut sub_ctx = LoweringContext::new();
+            let null_expr = sub_ctx.alloc_expr(Expr::Null, span);
+            sub_ctx.finish(Some(null_expr))
+        };
+        self.diags.extend(lambda_diags);
+
+        let lambda_def = FunctionDef {
+            name: Name::new("<test body>"),
+            generic_params: vec![],
+            params: vec![],
+            return_type: None,
+            throws: None,
+            body: Some(FunctionBodyDef::Expr(lambda_body, lambda_source_map)),
+            declarative_meta: None,
+            attributes: vec![],
+            span,
+            name_span: span,
         };
 
-        self.alloc_stmt(Stmt::Assert { condition }, node.text_range())
+        // <collector>.register_test(name_expr, lambda, runner_or_null)
+        let collector_ref = self.alloc_expr(Expr::Path(vec![collector_name]), span);
+        let method_target = self.alloc_expr(
+            Expr::FieldAccess {
+                base: collector_ref,
+                field: Name::new("register_test"),
+            },
+            span,
+        );
+        let lambda_arg = self.alloc_expr(Expr::Lambda(Box::new(lambda_def)), span);
+        let runner_arg = match crate::lower_cst::extract_runner_element(node) {
+            Some(rowan::NodeOrToken::Node(runner_node)) => self.lower_expr(&runner_node),
+            Some(rowan::NodeOrToken::Token(token)) => {
+                let expr = lower_bare_token_expr(token.kind(), token.text());
+                self.alloc_expr(expr, span)
+            }
+            None => self.alloc_expr(Expr::Null, span),
+        };
+
+        self.alloc_expr(
+            Expr::Call {
+                callee: method_target,
+                args: vec![name_expr, lambda_arg, runner_arg],
+            },
+            span,
+        )
+    }
+
+    /// Lower a `TESTSET_DEF` node as a `<collector>.register_test_set(name, sub_collector_lambda, null)` call.
+    ///
+    /// The sub-collector lambda body is produced by recursively lowering the testset's
+    /// `BLOCK_EXPR` body using a nested `LoweringContext` with `testset_collector_var = "testset"`.
+    fn lower_testset_as_register_call(&mut self, node: &SyntaxNode) -> ExprId {
+        let span = node.text_range();
+        let collector_name = self
+            .testset_collector_var
+            .clone()
+            .unwrap_or_else(|| Name::new("testset"));
+
+        // Extract testset name
+        let name_expr = self.lower_test_name_expr(node, span);
+
+        // Find the BLOCK_EXPR child (the testset body)
+        let body_node_opt = node.children().find(|c| c.kind() == SyntaxKind::BLOCK_EXPR);
+
+        let (sub_body, sub_source_map, sub_diags) = if let Some(body_node) = body_node_opt {
+            crate::lower_expr_body::lower_testset_block_node(
+                &body_node,
+                &Name::new("testset"),
+                std::slice::from_ref(&collector_name),
+            )
+        } else {
+            let mut sub_ctx = LoweringContext::new();
+            let null_expr = sub_ctx.alloc_expr(Expr::Null, span);
+            sub_ctx.finish(Some(null_expr))
+        };
+        self.diags.extend(sub_diags);
+
+        let sub_param = Param {
+            name: Name::new("testset"),
+            type_expr: Some(SpannedTypeExpr {
+                expr: TypeExpr::Path {
+                    segments: vec![Name::new("testing"), Name::new("TestCollector")],
+                    attrs: vec![],
+                },
+                span,
+            }),
+            span,
+            name_span: span,
+        };
+
+        let sub_collector_def = FunctionDef {
+            name: Name::new("<testset collector>"),
+            generic_params: vec![],
+            params: vec![sub_param],
+            return_type: None,
+            throws: None,
+            body: Some(FunctionBodyDef::Expr(sub_body, sub_source_map)),
+            declarative_meta: None,
+            attributes: vec![],
+            span,
+            name_span: span,
+        };
+
+        // <collector>.register_test_set(name_expr, sub_collector_lambda, runner_or_null)
+        let collector_ref = self.alloc_expr(Expr::Path(vec![collector_name]), span);
+        let method_target = self.alloc_expr(
+            Expr::FieldAccess {
+                base: collector_ref,
+                field: Name::new("register_test_set"),
+            },
+            span,
+        );
+        let sub_collector_arg = self.alloc_expr(Expr::Lambda(Box::new(sub_collector_def)), span);
+        let runner_arg = match crate::lower_cst::extract_runner_element(node) {
+            Some(rowan::NodeOrToken::Node(runner_node)) => self.lower_expr(&runner_node),
+            Some(rowan::NodeOrToken::Token(token)) => {
+                let expr = lower_bare_token_expr(token.kind(), token.text());
+                self.alloc_expr(expr, span)
+            }
+            None => self.alloc_expr(Expr::Null, span),
+        };
+
+        self.alloc_expr(
+            Expr::Call {
+                callee: method_target,
+                args: vec![name_expr, sub_collector_arg, runner_arg],
+            },
+            span,
+        )
+    }
+
+    /// Extract the name expression from a `TEST_EXPR_DEF` or `TESTSET_DEF` node.
+    ///
+    /// The name can be a plain `STRING_LITERAL` or a `BINARY_EXPR` (e.g. `"check " + case`).
+    fn lower_test_name_expr(&mut self, node: &SyntaxNode, span: TextRange) -> ExprId {
+        // The name is the first expression child after the keyword (KW_TEST / KW_TESTSET),
+        // before KW_WITH or BLOCK_EXPR. It can be any expression node.
+        let name_element = node.children_with_tokens().find(|c| {
+            let kind = c.kind();
+            !matches!(
+                kind,
+                SyntaxKind::KW_TEST
+                    | SyntaxKind::KW_TESTSET
+                    | SyntaxKind::KW_WITH
+                    | SyntaxKind::BLOCK_EXPR
+                    | SyntaxKind::WHITESPACE
+                    | SyntaxKind::NEWLINE
+                    | SyntaxKind::LINE_COMMENT
+            )
+        });
+
+        match name_element {
+            Some(rowan::NodeOrToken::Node(ref name_node)) => self.lower_expr(name_node),
+            Some(rowan::NodeOrToken::Token(ref token)) => {
+                let expr = lower_bare_token_expr(token.kind(), token.text());
+                self.alloc_expr(expr, token.text_range())
+            }
+            None => self.alloc_expr(Expr::Literal(Literal::String(String::new())), span),
+        }
     }
 
     fn lower_header_comment(&mut self, node: &SyntaxNode) -> StmtId {
@@ -2539,6 +2963,7 @@ fn is_expr_node_kind(kind: SyntaxKind) -> bool {
             | SyntaxKind::ARRAY_LITERAL
             | SyntaxKind::STRING_LITERAL
             | SyntaxKind::RAW_STRING_LITERAL
+            | SyntaxKind::BYTE_STRING_LITERAL
             | SyntaxKind::OBJECT_LITERAL
             | SyntaxKind::MAP_LITERAL
             | SyntaxKind::LAMBDA_EXPR
@@ -2555,4 +2980,50 @@ fn strip_string_delimiters(text: &str) -> String {
     } else {
         text.to_string()
     }
+}
+
+/// Parse escape sequences in a byte string literal body (content between the `b"` and `"`).
+///
+/// Supported escapes: `\n`, `\t`, `\r`, `\0`, `\\`, `\"`, `\xHH` (2 hex digits).
+/// Unescaped characters must be ASCII (0-127).
+fn parse_byte_string_escapes(input: &str) -> Result<Vec<u8>, String> {
+    let mut result = Vec::with_capacity(input.len());
+    let mut chars = input.chars();
+    while let Some(c) = chars.next() {
+        if c == '\\' {
+            match chars.next() {
+                Some('n') => result.push(b'\n'),
+                Some('t') => result.push(b'\t'),
+                Some('r') => result.push(b'\r'),
+                Some('0') => result.push(0),
+                Some('\\') => result.push(b'\\'),
+                Some('"') => result.push(b'"'),
+                Some('x') => {
+                    let hi = chars
+                        .next()
+                        .ok_or_else(|| "incomplete \\x escape".to_string())?;
+                    let lo = chars
+                        .next()
+                        .ok_or_else(|| "incomplete \\x escape".to_string())?;
+                    let hex_str: String = [hi, lo].iter().collect();
+                    let byte = u8::from_str_radix(&hex_str, 16)
+                        .map_err(|_| format!("invalid hex escape: \\x{hex_str}"))?;
+                    result.push(byte);
+                }
+                Some(other) => {
+                    return Err(format!("unknown escape sequence: \\{other}"));
+                }
+                None => {
+                    return Err("trailing backslash in byte string".to_string());
+                }
+            }
+        } else if !c.is_ascii() {
+            return Err(format!(
+                "non-ASCII character in byte string: '{c}' (use \\xHH for bytes > 127)"
+            ));
+        } else {
+            result.push(c as u8);
+        }
+    }
+    Ok(result)
 }

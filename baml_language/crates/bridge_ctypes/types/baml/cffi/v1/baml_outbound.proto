@@ -34,6 +34,7 @@ message BamlOutboundValue {
     BamlHandle handle_value = 16;
     BamlValueMedia media_value = 17;
     BamlValuePromptAst prompt_ast_value = 18;
+    bytes uint8array_value = 19;
   }
 }
 
@@ -178,6 +179,7 @@ message BamlFieldType {
     BamlFieldTypeChecked checked_type = 16;
     BamlFieldTypeStreamState stream_state_type = 17;
     BamlFieldTypeAny any_type = 18;
+    BamlFieldTypeUint8Array uint8array_type = 19;
   }
 }
 
@@ -187,6 +189,7 @@ message BamlFieldTypeInt {}
 message BamlFieldTypeFloat {}
 message BamlFieldTypeBool {}
 message BamlFieldTypeNull {}
+message BamlFieldTypeUint8Array {}
 message BamlFieldTypeAny {}
 
 // Literal: wraps a literal oneof.

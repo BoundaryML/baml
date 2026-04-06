@@ -48,6 +48,7 @@ async fn cancel_before_call_returns_cancelled() {
             FunctionCallContextBuilder::new(sys_types::CallId::next())
                 .with_cancel_token(cancel)
                 .build(),
+            true,
         )
         .await;
 
@@ -95,6 +96,7 @@ async fn cancel_during_sleep_returns_promptly() {
                     FunctionCallContextBuilder::new(sys_types::CallId::next())
                         .with_cancel_token(cancel_clone)
                         .build(),
+                    true,
                 )
                 .await
         }
@@ -171,6 +173,7 @@ async fn cancel_during_http_returns_promptly() {
                     FunctionCallContextBuilder::new(sys_types::CallId::next())
                         .with_cancel_token(cancel_clone)
                         .build(),
+                    true,
                 )
                 .await
         }
@@ -234,6 +237,7 @@ async fn selective_cancellation_only_affects_target() {
                     FunctionCallContextBuilder::new(sys_types::CallId::next())
                         .with_cancel_token(cancel)
                         .build(),
+                    true,
                 )
                 .await
         }
@@ -250,6 +254,7 @@ async fn selective_cancellation_only_affects_target() {
                     FunctionCallContextBuilder::new(sys_types::CallId::next())
                         .with_cancel_token(cancel)
                         .build(),
+                    true,
                 )
                 .await
         }
@@ -314,6 +319,7 @@ async fn cancel_interrupts_sequential_sleeps() {
                     FunctionCallContextBuilder::new(sys_types::CallId::next())
                         .with_cancel_token(cancel_clone)
                         .build(),
+                    true,
                 )
                 .await
         }
@@ -364,6 +370,7 @@ async fn non_cancelled_token_completes_normally() {
             "main",
             vec![],
             FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
         )
         .await
         .expect("call should succeed");
@@ -407,6 +414,7 @@ async fn cancel_is_idempotent() {
                     FunctionCallContextBuilder::new(sys_types::CallId::next())
                         .with_cancel_token(cancel_clone)
                         .build(),
+                    true,
                 )
                 .await
         }

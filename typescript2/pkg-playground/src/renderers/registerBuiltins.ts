@@ -7,9 +7,11 @@ import { registerResultRenderer } from '../result-renderers';
 import { HttpRequestCurlRenderer } from './HttpRequestCurl';
 import { MediaRenderer } from './Media';
 import { PromptAstRenderer } from './PromptAst';
+import { TestReportRenderer } from './TestReport';
 
 export function registerBuiltinResultRenderers(): void {
   registerResultRenderer('baml.http.Request', HttpRequestCurlRenderer);
   registerResultRenderer('$media', MediaRenderer);
   registerResultRenderer('$prompt_ast', PromptAstRenderer);
+  registerResultRenderer('testing.TestReport', TestReportRenderer);
 }

@@ -327,6 +327,7 @@ impl BexHeap {
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => {}
             Object::String(_)
+            | Object::Uint8Array(_)
             | Object::Class(_)
             | Object::Enum(_)
             | Object::Function(_)
@@ -407,6 +408,7 @@ impl BexHeap {
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => {}
             Object::String(_)
+            | Object::Uint8Array(_)
             | Object::Class(_)
             | Object::Enum(_)
             | Object::Function(_)

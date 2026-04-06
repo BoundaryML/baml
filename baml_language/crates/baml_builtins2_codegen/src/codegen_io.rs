@@ -208,6 +208,7 @@ fn owned_rust_type(
                 }
             }
         }
+        BamlType::Uint8Array => "Vec<u8>".into(),
         BamlType::Generic(_) | BamlType::Media(_) => "BexExternalValue".into(),
     }
 }
@@ -435,6 +436,7 @@ fn clean_rust_type(
                 }
             }
         }
+        BamlType::Uint8Array => "Vec<u8>".into(),
         BamlType::Generic(_) | BamlType::Media(_) => "BexExternalValue".into(),
     }
 }

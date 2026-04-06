@@ -18,7 +18,7 @@ pub mod lowering_diagnostic;
 
 pub use ast::*;
 pub use disambiguate::is_field_attr;
-pub use lower_cst::lower_file;
+pub use lower_cst::{lower_file, lower_file_with_file_id};
 pub use lowering_diagnostic::LoweringDiagnostic;
 
 #[cfg(test)]
@@ -142,6 +142,9 @@ mod tests {
                 attrs: strip_attrs(attrs),
             },
             TypeExpr::Null { attrs } => TypeExpr::Null {
+                attrs: strip_attrs(attrs),
+            },
+            TypeExpr::Uint8Array { attrs } => TypeExpr::Uint8Array {
                 attrs: strip_attrs(attrs),
             },
             TypeExpr::Never { attrs } => TypeExpr::Never {

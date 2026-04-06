@@ -2,9 +2,9 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR2 ===
-fn user.GetMixedList() -> int | string[] {
+fn user.GetMixedList() -> (int | string)[] {
     // Locals:
-    let _0: int | string[] // _0 // return
+    let _0: (int | string)[] // _0 // return
     let _1: map<string, unknown>
 
     bb0: {
@@ -40,9 +40,9 @@ fn user.GetMixedList$build_request() -> baml.http.Request {
     }
 }
 
-fn user.GetMixedList$parse(json: string) -> int | string[] {
+fn user.GetMixedList$parse(json: string) -> (int | string)[] {
     // Locals:
-    let _0: int | string[] // _0 // return
+    let _0: (int | string)[] // _0 // return
     let _1: string // json // param
 
     bb0: {

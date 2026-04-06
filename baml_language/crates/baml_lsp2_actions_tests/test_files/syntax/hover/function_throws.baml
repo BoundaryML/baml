@@ -18,7 +18,7 @@ function MayFail<[CURSOR](x: int) -> string throws Errors {
 //    │ 
 //    │ Note: Error code: E0001
 // ───╯
-// Error: extraneous throws declaration: user.Errors
+// Warning: extraneous throws declaration: user.Errors
 //    ╭─[ hover_function_throws.baml:6:42 ]
 //    │
 //  6 │ function MayFail(x: int) -> string throws Errors {

@@ -1055,7 +1055,7 @@ async fn virtual_multiple_defs_preserve_side_effects() {
     let output = baml_test!(
         r#"
         function fail() -> int {
-            assert(false);
+            throw "fail";
             1
         }
 
@@ -1067,12 +1067,10 @@ async fn virtual_multiple_defs_preserve_side_effects() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @r#"
     function fail() -> int {
-        load_const false
-        assert
-        load_const 1
-        return
+        load_const "fail"
+        throw
     }
 
     function main() -> int {
@@ -1083,12 +1081,7 @@ async fn virtual_multiple_defs_preserve_side_effects() {
         load_var x
         return
     }
-    ");
+    "#);
 
-    assert_eq!(
-        output.result,
-        Err(bex_engine::EngineError::VmError(
-            bex_vm::errors::VmError::RuntimeError(bex_vm::errors::RuntimeError::AssertionError)
-        ))
-    );
+    assert!(output.result.is_err());
 }

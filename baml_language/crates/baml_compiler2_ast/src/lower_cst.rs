@@ -9,7 +9,7 @@
 //! all of that moves downstream.
 
 use baml_base::Name;
-use baml_compiler_syntax::{SyntaxNode, ast};
+use baml_compiler_syntax::{SyntaxKind, SyntaxNode, ast};
 use rowan::ast::AstNode;
 
 use crate::{
@@ -24,6 +24,34 @@ use crate::{
     lower_expr_body, lower_type_expr,
 };
 
+// ── Test/Testset desugaring intermediate types ───────────────────
+
+/// Intermediate representation of a test/testset block before synthesis.
+///
+/// Collected during file lowering, then passed to `synthesize_init_test_function`
+/// which emits a per-file `$init_test_<file_id>` function containing
+/// `registry.register_test(...)` / `registry.register_test_set(...)` calls.
+enum TestRegistrationItem {
+    Test {
+        /// The name expression CST element (`STRING_LITERAL`, `BINARY_EXPR`, etc.).
+        name_element: baml_compiler_syntax::SyntaxElement,
+        /// The `BLOCK_EXPR` CST node for the test body — lowered lazily into a lambda.
+        body_node: SyntaxNode,
+        /// Optional runner expression element from `with <expr>`.
+        /// May be a node (e.g. `CALL_EXPR`) or a token (e.g. `INTEGER_LITERAL`).
+        runner_element: Option<baml_compiler_syntax::SyntaxElement>,
+    },
+    TestSet {
+        /// The name expression CST element (`STRING_LITERAL`, `BINARY_EXPR`, etc.).
+        name_element: baml_compiler_syntax::SyntaxElement,
+        /// The `BLOCK_EXPR` body node of the testset — lowered as a collector lambda body.
+        /// May contain setup statements (let bindings), for/if blocks, and nested test/testset.
+        body_node: SyntaxNode,
+        /// Optional runner expression element from `with <expr>`.
+        runner_element: Option<baml_compiler_syntax::SyntaxElement>,
+    },
+}
+
 // ── File-level lowering ─────────────────────────────────────────
 
 /// Lower a CST root node to a list of `Item`s.
@@ -34,8 +62,16 @@ use crate::{
 /// All diagnostics (structural lowering issues, client validation,
 /// field-attr-in-wrong-position) are returned as `LoweringDiagnostic` variants.
 pub fn lower_file(root: &SyntaxNode) -> (Vec<Item>, Vec<LoweringDiagnostic>) {
+    lower_file_with_file_id(root, baml_base::FileId::sentinel())
+}
+
+pub fn lower_file_with_file_id(
+    root: &SyntaxNode,
+    file_id: baml_base::FileId,
+) -> (Vec<Item>, Vec<LoweringDiagnostic>) {
     let mut diags = Vec::new();
     let mut items = Vec::new();
+    let mut test_registrations: Vec<TestRegistrationItem> = Vec::new();
 
     for child in root.children() {
         match child.kind() {
@@ -74,6 +110,16 @@ pub fn lower_file(root: &SyntaxNode) -> (Vec<Item>, Vec<LoweringDiagnostic>) {
                     items.push(Item::Test(t));
                 }
             }
+            baml_compiler_syntax::SyntaxKind::TEST_EXPR_DEF => {
+                if let Some(reg) = lower_test_expr(&child) {
+                    test_registrations.push(reg);
+                }
+            }
+            baml_compiler_syntax::SyntaxKind::TESTSET_DEF => {
+                if let Some(reg) = lower_testset(&child) {
+                    test_registrations.push(reg);
+                }
+            }
             baml_compiler_syntax::SyntaxKind::GENERATOR_DEF => {
                 if let Some(g) = lower_generator(&child, &mut diags) {
                     items.push(Item::Generator(g));
@@ -91,6 +137,13 @@ pub fn lower_file(root: &SyntaxNode) -> (Vec<Item>, Vec<LoweringDiagnostic>) {
             }
             _ => {} // skip comments, whitespace, errors
         }
+    }
+
+    // Synthesize a per-file $init_test function for all collected test/testset registrations.
+    // The file_id suffix ensures uniqueness when multiple files contain tests.
+    if !test_registrations.is_empty() {
+        let init_fn = synthesize_init_test_function(&test_registrations, file_id, &mut diags);
+        items.push(Item::Function(init_fn));
     }
 
     // Post-lowering validation: reject field attrs in invalid type positions.
@@ -735,6 +788,336 @@ fn lower_test(node: &SyntaxNode, diags: &mut Vec<LoweringDiagnostic>) -> Option<
     })
 }
 
+/// Extract the name expression element from a `TEST_EXPR_DEF` or `TESTSET_DEF` node.
+///
+/// Returns the first non-trivial child (node or token) after the keyword
+/// (`KW_TEST` or `KW_TESTSET`) and before `KW_WITH` or `BLOCK_EXPR`.
+fn extract_name_element(
+    node: &SyntaxNode,
+    keyword_kind: SyntaxKind,
+) -> Option<baml_compiler_syntax::SyntaxElement> {
+    let mut past_keyword = false;
+    for child in node.children_with_tokens() {
+        let kind = child.kind();
+        // Skip whitespace/newline trivia
+        if matches!(
+            kind,
+            SyntaxKind::WHITESPACE | SyntaxKind::NEWLINE | SyntaxKind::LINE_COMMENT
+        ) {
+            continue;
+        }
+        if kind == keyword_kind {
+            past_keyword = true;
+            continue;
+        }
+        if past_keyword && kind != SyntaxKind::KW_WITH && kind != SyntaxKind::BLOCK_EXPR {
+            return Some(child);
+        }
+        if kind == SyntaxKind::KW_WITH || kind == SyntaxKind::BLOCK_EXPR {
+            break;
+        }
+    }
+    None
+}
+
+/// Extract the runner expression element from a `TEST_EXPR_DEF` or `TESTSET_DEF` node.
+///
+/// Returns the first non-trivial child (node or token) that appears after `KW_WITH` and
+/// before `BLOCK_EXPR`. This uses `children_with_tokens()` because the runner expression
+/// may be a bare token (e.g. `INTEGER_LITERAL "42"`) rather than a wrapped node.
+pub(crate) fn extract_runner_element(
+    node: &SyntaxNode,
+) -> Option<baml_compiler_syntax::SyntaxElement> {
+    let mut found_with = false;
+    for child in node.children_with_tokens() {
+        let kind = child.kind();
+        // Skip whitespace/newline trivia
+        if matches!(
+            kind,
+            SyntaxKind::WHITESPACE | SyntaxKind::NEWLINE | SyntaxKind::LINE_COMMENT
+        ) {
+            continue;
+        }
+        if kind == SyntaxKind::KW_WITH {
+            found_with = true;
+            continue;
+        }
+        if found_with && kind != SyntaxKind::BLOCK_EXPR {
+            return Some(child);
+        }
+        if kind == SyntaxKind::BLOCK_EXPR {
+            break;
+        }
+    }
+    None
+}
+
+/// Lower a `TEST_EXPR_DEF` CST node into a `TestRegistrationItem::Test`.
+///
+/// The CST structure is:
+/// `TEST_EXPR_DEF [ KW_TEST STRING_LITERAL [KW_WITH expr] BLOCK_EXPR ]`
+fn lower_test_expr(node: &SyntaxNode) -> Option<TestRegistrationItem> {
+    // Find the name expression — first child element after KW_TEST, before KW_WITH/BLOCK_EXPR.
+    let name_element = extract_name_element(node, SyntaxKind::KW_TEST)?;
+
+    // Find the optional runner expression (first child after KW_WITH, before BLOCK_EXPR)
+    let runner_element = extract_runner_element(node);
+
+    // Find the BLOCK_EXPR child (the test body)
+    let body_node = node
+        .children()
+        .find(|c| c.kind() == SyntaxKind::BLOCK_EXPR)?;
+
+    Some(TestRegistrationItem::Test {
+        name_element,
+        body_node,
+        runner_element,
+    })
+}
+
+/// Lower a `TESTSET_DEF` CST node into a `TestRegistrationItem::TestSet`.
+///
+/// The CST structure is:
+/// `TESTSET_DEF [ KW_TESTSET STRING_LITERAL [KW_WITH expr] BLOCK_EXPR ]`
+///
+/// The `BLOCK_EXPR` body may contain setup statements (let bindings), for/if control
+/// flow, and nested `TEST_EXPR_DEF` / `TESTSET_DEF` nodes. The entire body is stored
+/// and lowered lazily into a collector lambda body.
+fn lower_testset(node: &SyntaxNode) -> Option<TestRegistrationItem> {
+    // Find the name expression — first child element after KW_TESTSET, before KW_WITH/BLOCK_EXPR.
+    let name_element = extract_name_element(node, SyntaxKind::KW_TESTSET)?;
+
+    // Find the optional runner expression (first child after KW_WITH, before BLOCK_EXPR)
+    let runner_element = extract_runner_element(node);
+
+    // Find the BLOCK_EXPR child (the full testset body)
+    let body_node = node
+        .children()
+        .find(|c| c.kind() == SyntaxKind::BLOCK_EXPR)?;
+
+    Some(TestRegistrationItem::TestSet {
+        name_element,
+        body_node,
+        runner_element,
+    })
+}
+
+/// Synthesize a `$init_test` function that registers tests and testsets
+/// into a `testing.Registry` parameter.
+///
+/// The function body calls `registry.register_test(name, lambda, null)` for each test
+/// and `registry.register_test_set(name, collector_lambda, null)` for each testset.
+///
+/// Lambda bodies are lowered from the original CST `BLOCK_EXPR` nodes.
+///
+/// The function is named `"$init_test_<file_id>"` to avoid collisions when
+/// multiple files contain tests. For the sentinel `FileId` (PPIR), uses plain
+/// `"$init_test"` since PPIR processes files individually.
+fn synthesize_init_test_function(
+    registrations: &[TestRegistrationItem],
+    file_id: baml_base::FileId,
+    diags: &mut Vec<LoweringDiagnostic>,
+) -> FunctionDef {
+    let fn_name = if file_id == baml_base::FileId::sentinel() {
+        "$init_test".to_string()
+    } else {
+        format!("$init_test_{}", file_id.as_u32())
+    };
+    let span = text_size::TextRange::default();
+
+    let mut ctx = lower_expr_body::InitTestContext::new();
+
+    // Build statements: one per registration
+    let mut stmt_ids: Vec<crate::ast::StmtId> = Vec::with_capacity(registrations.len());
+    for reg in registrations {
+        let stmt_expr = synthesize_register_call(reg, &mut ctx, diags);
+        stmt_ids.push(ctx.alloc_stmt(crate::ast::Stmt::Expr(stmt_expr), span));
+    }
+
+    // Block expression containing all registration calls, with a null tail
+    let null_expr = ctx.alloc_expr(Expr::Null, span);
+    let block_expr = ctx.alloc_expr(
+        Expr::Block {
+            stmts: stmt_ids,
+            tail_expr: Some(null_expr),
+        },
+        span,
+    );
+
+    let (body, source_map, finish_diags) = ctx.finish(Some(block_expr));
+    diags.extend(finish_diags);
+
+    // The single parameter: `registry: testing.TestCollector`
+    let registry_param = Param {
+        name: Name::new("registry"),
+        type_expr: Some(SpannedTypeExpr {
+            expr: crate::ast::TypeExpr::Path {
+                segments: vec![Name::new("testing"), Name::new("TestCollector")],
+                attrs: vec![],
+            },
+            span,
+        }),
+        span,
+        name_span: span,
+    };
+
+    FunctionDef {
+        name: Name::new(&fn_name),
+        generic_params: vec![],
+        params: vec![registry_param],
+        return_type: None,
+        throws: None,
+        body: Some(FunctionBodyDef::Expr(body, source_map)),
+        declarative_meta: None,
+        attributes: vec![],
+        span,
+        name_span: span,
+    }
+}
+
+/// Synthesize a single `registry.register_test(name, lambda, runner)` or
+/// `registry.register_test_set(name, collector_lambda, runner)` call expression.
+fn synthesize_register_call(
+    reg: &TestRegistrationItem,
+    ctx: &mut lower_expr_body::InitTestContext,
+    diags: &mut Vec<LoweringDiagnostic>,
+) -> ExprId {
+    let span = text_size::TextRange::default();
+    match reg {
+        TestRegistrationItem::Test {
+            name_element,
+            body_node,
+            runner_element,
+        } => {
+            // Lower the test block body into a fresh ExprBody (lambda body)
+            let (lambda_body, lambda_source_map, lambda_diags) =
+                lower_expr_body::lower_block_node(body_node, &[Name::new("registry")]);
+            diags.extend(lambda_diags);
+
+            let lambda_def = FunctionDef {
+                name: Name::new("<test body>"),
+                generic_params: vec![],
+                params: vec![],
+                return_type: None,
+                throws: None,
+                body: Some(FunctionBodyDef::Expr(lambda_body, lambda_source_map)),
+                declarative_meta: None,
+                attributes: vec![],
+                span,
+                name_span: span,
+            };
+
+            // registry.register_test
+            let registry_ref = ctx.alloc_expr(Expr::Path(vec![Name::new("registry")]), span);
+            let method_call_target = ctx.alloc_expr(
+                Expr::FieldAccess {
+                    base: registry_ref,
+                    field: Name::new("register_test"),
+                },
+                span,
+            );
+
+            // Args: (name_expr, lambda, runner_or_null)
+            let name_arg = lower_expr_body::lower_runner_element(ctx, name_element);
+            // Use a unique synthetic span for the lambda so the HIR scope builder
+            // can distinguish this lambda's scope from other synthesized lambdas.
+            let lambda_span = ctx.next_lambda_span();
+            let lambda_arg = ctx.alloc_expr(Expr::Lambda(Box::new(lambda_def)), lambda_span);
+            let runner_arg = lower_runner_element(runner_element.as_ref(), ctx, span);
+
+            ctx.alloc_expr(
+                Expr::Call {
+                    callee: method_call_target,
+                    args: vec![name_arg, lambda_arg, runner_arg],
+                },
+                span,
+            )
+        }
+        TestRegistrationItem::TestSet {
+            name_element,
+            body_node,
+            runner_element,
+        } => {
+            // Lower the testset body into a collector lambda using the full testset lowering.
+            let (collector_exprs, collector_source_map, collector_diags) =
+                lower_expr_body::lower_testset_block_node(
+                    body_node,
+                    &Name::new("testset"),
+                    &[Name::new("registry")],
+                );
+            diags.extend(collector_diags);
+
+            // Collector lambda parameter: `testset`
+            let testset_param = Param {
+                name: Name::new("testset"),
+                type_expr: Some(SpannedTypeExpr {
+                    expr: crate::ast::TypeExpr::Path {
+                        segments: vec![Name::new("testing"), Name::new("TestCollector")],
+                        attrs: vec![],
+                    },
+                    span,
+                }),
+                span,
+                name_span: span,
+            };
+
+            let collector_def = FunctionDef {
+                name: Name::new("<testset collector>"),
+                generic_params: vec![],
+                params: vec![testset_param],
+                return_type: None,
+                throws: None,
+                body: Some(FunctionBodyDef::Expr(collector_exprs, collector_source_map)),
+                declarative_meta: None,
+                attributes: vec![],
+                span,
+                name_span: span,
+            };
+
+            // registry.register_test_set
+            let registry_ref = ctx.alloc_expr(Expr::Path(vec![Name::new("registry")]), span);
+            let method_call_target = ctx.alloc_expr(
+                Expr::FieldAccess {
+                    base: registry_ref,
+                    field: Name::new("register_test_set"),
+                },
+                span,
+            );
+
+            // Args: (name_expr, collector_lambda, runner_or_null)
+            let name_arg = lower_expr_body::lower_runner_element(ctx, name_element);
+            // Use a unique synthetic span for the collector lambda.
+            let collector_lambda_span = ctx.next_lambda_span();
+            let collector_arg =
+                ctx.alloc_expr(Expr::Lambda(Box::new(collector_def)), collector_lambda_span);
+            let runner_arg = lower_runner_element(runner_element.as_ref(), ctx, span);
+
+            ctx.alloc_expr(
+                Expr::Call {
+                    callee: method_call_target,
+                    args: vec![name_arg, collector_arg, runner_arg],
+                },
+                span,
+            )
+        }
+    }
+}
+
+/// Lower an optional runner CST element directly into the parent arena.
+///
+/// If present, the runner expression is lowered into the same `InitTestContext` arena
+/// (no IIFE wrapping needed). If absent, returns `Expr::Null`.
+fn lower_runner_element(
+    runner_element: Option<&baml_compiler_syntax::SyntaxElement>,
+    ctx: &mut lower_expr_body::InitTestContext,
+    span: text_size::TextRange,
+) -> ExprId {
+    match runner_element {
+        Some(element) => lower_expr_body::lower_runner_element(ctx, element),
+        None => ctx.alloc_expr(Expr::Null, span),
+    }
+}
+
 fn lower_generator(node: &SyntaxNode, diags: &mut Vec<LoweringDiagnostic>) -> Option<GeneratorDef> {
     let generator = ast::GeneratorDef::cast(node.clone())?;
     let Some(name_token) = generator.name() else {
@@ -1158,68 +1541,71 @@ fn synthesize_client_new_companion(
         id
     };
 
-    // Initialize all top-level fields and provider-specific options from a
-    // single ProviderConfig. User-specified values overwrite these below.
     let config = provider
         .map(String::as_str)
         .filter(|p| VALID_PROVIDERS.contains(p))
         .map(provider_config_for);
 
-    let mut model = alloc(Expr::Null);
-    let mut base_url = config
+    // ── 1. Seed the unified value map from provider defaults ────
+    //
+    // All known fields (top-level AND provider-specific) go into one map.
+    // The split into PrimitiveClientOptions vs provider sub-object only
+    // happens at assembly time.
+
+    let mut values: std::collections::HashMap<String, ExprId> = std::collections::HashMap::new();
+    let top_level_names: std::collections::HashSet<&str> =
+        TOP_LEVEL_FIELDS.iter().map(|(n, _)| *n).collect();
+
+    // Provider-specific field names: anything in config.fields not in TOP_LEVEL_FIELDS.
+    let provider_field_set: std::collections::HashSet<&str> = config
         .as_ref()
-        .and_then(|c| c.base_url)
-        .map(|s| alloc(Expr::Literal(Literal::String(s.to_string()))))
-        .unwrap_or_else(|| alloc(Expr::Null));
-    let mut default_role = config
-        .as_ref()
-        .and_then(|c| c.default_role)
-        .map(|s| alloc(Expr::Literal(Literal::String(s.to_string()))))
-        .unwrap_or_else(|| alloc(Expr::Null));
-    let mut allowed_roles = config
-        .as_ref()
-        .and_then(|c| c.allowed_roles)
-        .map(|items| {
-            let elements: Vec<ExprId> = items
+        .map(|c| {
+            c.fields
                 .iter()
-                .map(|s| alloc(Expr::Literal(Literal::String(s.to_string()))))
-                .collect();
-            alloc(Expr::Array { elements })
+                .map(|(n, _)| *n)
+                .filter(|n| !top_level_names.contains(n))
+                .collect()
         })
-        .unwrap_or_else(|| alloc(Expr::Null));
-    let mut remap_roles = alloc(Expr::Null);
-    let mut allowed_role_metadata = alloc(Expr::Null);
-    let mut finish_reason_allow_list = alloc(Expr::Null);
-    let mut finish_reason_deny_list = alloc(Expr::Null);
-    let mut supports_streaming = alloc(Expr::Null);
-    let mut api_key = alloc(Expr::Null);
-    let mut headers = alloc(Expr::Map { entries: vec![] });
-    let mut query_params = alloc(Expr::Map { entries: vec![] });
-
-    let selected_group = config.as_ref().and_then(|c| c.provider_options);
-    let mut prov_vals: Vec<Option<ExprId>> = selected_group
-        .map(|(_, fields)| vec![None; fields.len()])
         .unwrap_or_default();
-    let prov_index: std::collections::HashMap<&str, usize> = selected_group
-        .map(|(_, fields)| fields.iter().enumerate().map(|(i, &f)| (f, i)).collect())
-        .unwrap_or_default();
-    let mut request_body_entries: Vec<(ExprId, ExprId)> = vec![];
-    let mut has_base_url = false;
 
-    // Provider-specific option defaults.
+    // Seed top-level fields with their base defaults.
+    for &(name, ref default) in TOP_LEVEL_FIELDS {
+        values.insert(name.to_string(), alloc_field_default(default, &mut alloc));
+    }
+
+    // Apply provider field defaults on top (both top-level overrides and provider-specific).
     if let Some(cfg) = &config {
-        for &(field, value) in cfg.provider_option_defaults {
-            if let Some(&i) = prov_index.get(field) {
-                prov_vals[i] = Some(alloc(Expr::Literal(Literal::Int(value))));
-            }
+        for &(name, ref default) in cfg.fields {
+            values.insert(name.to_string(), alloc_field_default(default, &mut alloc));
         }
     }
+
+    // ── 2. Override from user config ────────────────────────────
+    //
+    // Every option the user writes goes into the same map. Provider fields
+    // skip null (so writing `field null` preserves the default rather than
+    // overwriting it). Unknown fields go to request_body.
 
     let options_span = config_block
         .items()
         .find(|item| item.matches_key("options"))
         .map(|item| item.syntax().text_range())
         .unwrap_or(span);
+
+    let mut has_base_url = false;
+    let mut request_body_entries: Vec<(ExprId, ExprId)> = vec![];
+    // Track which provider fields have been set to non-null values (by defaults
+    // or by user). Used by validate_client_options and assembly.
+    let mut provider_fields_set: std::collections::HashSet<String> = config
+        .as_ref()
+        .map(|c| {
+            c.fields
+                .iter()
+                .filter(|(name, default)| provider_field_set.contains(*name) && !default.is_null())
+                .map(|(name, _)| name.to_string())
+                .collect()
+        })
+        .unwrap_or_default();
 
     if let Some(options_item) = config_block
         .items()
@@ -1233,93 +1619,103 @@ fn synthesize_client_new_companion(
                 let k = opt_key.text();
                 let val = crate::lower_config_item::lower_config_value(&opt_item, &mut alloc);
                 let is_null = opt_item.value_str().as_deref() == Some("null");
-                match k {
-                    "model" => model = val,
-                    "base_url" => {
-                        has_base_url = !is_null;
-                        base_url = val;
+
+                if values.contains_key(k) || provider_field_set.contains(k) {
+                    // Known field. Provider fields skip null to preserve defaults.
+                    if !provider_field_set.contains(k) || !is_null {
+                        values.insert(k.to_string(), val);
                     }
-                    "default_role" => default_role = val,
-                    "allowed_roles" => allowed_roles = val,
-                    "remap_roles" => remap_roles = val,
-                    "api_key" => api_key = val,
-                    "allowed_role_metadata" => allowed_role_metadata = val,
-                    "finish_reason_allow_list" => finish_reason_allow_list = val,
-                    "finish_reason_deny_list" => finish_reason_deny_list = val,
-                    "supports_streaming" => supports_streaming = val,
-                    "headers" => headers = val,
-                    "query_params" => query_params = val,
-                    other => {
-                        if let Some(&i) = prov_index.get(other) {
-                            if !is_null {
-                                prov_vals[i] = Some(val);
-                            }
-                        } else {
-                            let kx = alloc(Expr::Literal(Literal::String(other.to_string())));
-                            request_body_entries.push((kx, val));
-                        }
+                    if provider_field_set.contains(k) && !is_null {
+                        provider_fields_set.insert(k.to_string());
                     }
+                } else {
+                    // Unknown field -> request_body (preserves source order).
+                    let kx = alloc(Expr::Literal(Literal::String(k.to_string())));
+                    request_body_entries.push((kx, val));
+                }
+                if k == "base_url" {
+                    has_base_url = !is_null;
                 }
             }
         }
     }
 
-    // Provider-specific compile-time validation.
+    // ── 3. Validate ─────────────────────────────────────────────
+
     if let Some(provider_str) = provider.map(String::as_str) {
         validate_client_options(
             provider_str,
             client_name,
             has_base_url,
-            &prov_index,
-            &prov_vals,
+            &provider_fields_set,
             options_span,
             diags,
         );
     }
 
-    let provider_options = if selected_group.is_some_and(|_| prov_vals.iter().any(Option::is_some))
-    {
-        let (type_name, fields) = selected_group.unwrap();
-        let mut obj_fields: Vec<(Name, ExprId)> = Vec::with_capacity(fields.len());
-        for (&f, v) in fields.iter().zip(&prov_vals) {
-            obj_fields.push((Name::new(f), v.unwrap_or_else(|| alloc(Expr::Null))));
-        }
-        alloc(Expr::Object {
-            type_name: Some(Name::new(type_name)),
-            fields: obj_fields,
-            spreads: vec![],
+    // ── 4. Assemble ─────────────────────────────────────────────
+    //
+    // Extract provider fields -> build typed sub-object.
+    // Then take() known top-level fields -> leftover = request_body.
+
+    // Build provider options sub-object from provider-specific fields.
+    let null_expr = alloc(Expr::Null);
+    let provider_options =
+        if let Some(type_name) = config.as_ref().and_then(|c| c.provider_options_type) {
+            let prov_fields: Vec<(Name, ExprId)> = config
+                .as_ref()
+                .unwrap()
+                .fields
+                .iter()
+                .filter(|(name, _)| !top_level_names.contains(name))
+                .map(|&(name, _)| {
+                    let val = values.remove(name).unwrap_or_else(|| alloc(Expr::Null));
+                    (Name::new(name), val)
+                })
+                .collect();
+            if !provider_fields_set.is_empty() {
+                alloc(Expr::Object {
+                    type_name: Some(Name::new(type_name)),
+                    fields: prov_fields,
+                    spreads: vec![],
+                })
+            } else {
+                null_expr
+            }
+        } else {
+            null_expr
+        };
+
+    // Extract top-level fields in class-definition order.
+    let mut options_fields: Vec<(Name, ExprId)> = TOP_LEVEL_FIELDS
+        .iter()
+        .map(|&(name, ref default)| {
+            let val = values
+                .remove(name)
+                .unwrap_or_else(|| alloc_field_default(default, &mut alloc));
+            (Name::new(name), val)
         })
-    } else {
-        alloc(Expr::Null)
-    };
+        .collect();
 
     let request_body = alloc(Expr::Map {
         entries: request_body_entries,
     });
+
+    // Insert provider_options before "headers" to match PrimitiveClientOptions
+    // class-definition order, then append request_body at the end.
+    let headers_pos = options_fields
+        .iter()
+        .position(|(n, _)| n.as_str() == "headers")
+        .unwrap_or(options_fields.len());
+    options_fields.insert(
+        headers_pos,
+        (Name::new("provider_options"), provider_options),
+    );
+    options_fields.push((Name::new("request_body"), request_body));
+
     let options_expr = alloc(Expr::Object {
         type_name: Some(Name::new("baml.llm.PrimitiveClientOptions")),
-        fields: vec![
-            (Name::new("model"), model),
-            (Name::new("base_url"), base_url),
-            (Name::new("allowed_role_metadata"), allowed_role_metadata),
-            (
-                Name::new("finish_reason_allow_list"),
-                finish_reason_allow_list,
-            ),
-            (
-                Name::new("finish_reason_deny_list"),
-                finish_reason_deny_list,
-            ),
-            (Name::new("supports_streaming"), supports_streaming),
-            (Name::new("default_role"), default_role),
-            (Name::new("allowed_roles"), allowed_roles),
-            (Name::new("remap_roles"), remap_roles),
-            (Name::new("api_key"), api_key),
-            (Name::new("provider_options"), provider_options),
-            (Name::new("headers"), headers),
-            (Name::new("query_params"), query_params),
-            (Name::new("request_body"), request_body),
-        ],
+        fields: options_fields,
         spreads: vec![],
     });
 
@@ -1374,120 +1770,219 @@ fn synthesize_client_new_companion(
 
 // ── Helpers ─────────────────────────────────────────────────────
 
-/// All provider configuration in one place: top-level defaults, provider-
-/// specific option type + fields, and provider-specific option defaults.
-struct ProviderConfig {
-    base_url: Option<&'static str>,
-    default_role: Option<&'static str>,
-    allowed_roles: Option<&'static [&'static str]>,
-    provider_options: Option<(&'static str, &'static [&'static str])>,
-    provider_option_defaults: &'static [(&'static str, i64)],
+/// Default value for a field -- covers both "unset" sentinels (`Null`, `EmptyMap`)
+/// used in [`TOP_LEVEL_FIELDS`] and concrete provider defaults used in per-provider
+/// field consts like [`ANTHROPIC_FIELDS`].
+enum FieldDefault {
+    /// Null / unset.
+    Null,
+    /// Empty map literal (used as the unset default for `headers`, `query_params`).
+    EmptyMap,
+    /// Literal string.
+    Str(&'static str),
+    /// Literal integer.
+    Int(i64),
+    /// Array of strings.
+    StrArray(&'static [&'static str]),
+    /// Map of string pairs.
+    StrPairMap(&'static [(&'static str, &'static str)]),
 }
 
-impl ProviderConfig {
-    const EMPTY: Self = Self {
-        base_url: None,
-        default_role: None,
-        allowed_roles: None,
-        provider_options: None,
-        provider_option_defaults: &[],
-    };
+impl FieldDefault {
+    fn is_null(&self) -> bool {
+        matches!(self, Self::Null)
+    }
 }
 
-/// Define provider-specific options with fields and defaults inline.
+/// Allocate an `Expr` tree for a [`FieldDefault`] value.
+fn alloc_field_default(default: &FieldDefault, alloc: &mut impl FnMut(Expr) -> ExprId) -> ExprId {
+    use baml_base::Literal;
+    match default {
+        FieldDefault::Null => alloc(Expr::Null),
+        FieldDefault::EmptyMap => alloc(Expr::Map { entries: vec![] }),
+        FieldDefault::Str(s) => alloc(Expr::Literal(Literal::String(s.to_string()))),
+        FieldDefault::Int(v) => alloc(Expr::Literal(Literal::Int(*v))),
+        FieldDefault::StrArray(items) => {
+            let elements: Vec<ExprId> = items
+                .iter()
+                .map(|s| alloc(Expr::Literal(Literal::String(s.to_string()))))
+                .collect();
+            alloc(Expr::Array { elements })
+        }
+        FieldDefault::StrPairMap(pairs) => {
+            let entries: Vec<(ExprId, ExprId)> = pairs
+                .iter()
+                .map(|(k, v)| {
+                    let ke = alloc(Expr::Literal(Literal::String(k.to_string())));
+                    let ve = alloc(Expr::Literal(Literal::String(v.to_string())));
+                    (ke, ve)
+                })
+                .collect();
+            alloc(Expr::Map { entries })
+        }
+    }
+}
+
+/// Top-level fields on `PrimitiveClientOptions`, in class-definition order.
 ///
-/// ```ignore
-/// provider_options!("baml.llm.BedrockOptions",
-///     region,
-///     endpoint_url,
-///     max_tokens = 4096,  // field with default
-///     temperature,
-/// )
-/// ```
-macro_rules! provider_options {
-    ($type_name:expr, $($field:ident $(= $default:expr)?),* $(,)?) => {{
-        const FIELDS: &[&str] = &[$(stringify!($field)),*];
-        const DEFAULTS: &[(&str, i64)] = &[
-            $($((stringify!($field), $default)),*)?
-        ];
-        (Some(($type_name, FIELDS)), DEFAULTS)
-    }};
-}
+/// To add a new top-level option, add it here and in the `PrimitiveClientOptions`
+/// class in `llm_types.baml`. The seed, take, and assembly stages all derive
+/// from this list automatically.
+const TOP_LEVEL_FIELDS: &[(&str, FieldDefault)] = &[
+    ("model", FieldDefault::Null),
+    ("base_url", FieldDefault::Null),
+    ("allowed_role_metadata", FieldDefault::Null),
+    ("finish_reason_allow_list", FieldDefault::Null),
+    ("finish_reason_deny_list", FieldDefault::Null),
+    ("supports_streaming", FieldDefault::Null),
+    ("default_role", FieldDefault::Null),
+    ("allowed_roles", FieldDefault::Null),
+    ("remap_roles", FieldDefault::Null),
+    ("api_key", FieldDefault::Null),
+    ("headers", FieldDefault::EmptyMap),
+    ("query_params", FieldDefault::EmptyMap),
+];
+
+// ── Per-provider field definitions ─────────────────────────────
+//
+// Each const lists ALL fields the provider cares about -- both top-level
+// overrides (e.g. base_url, default_role) and provider-specific fields
+// (e.g. max_tokens, region). Fields not in TOP_LEVEL_FIELDS are
+// automatically treated as provider-specific and grouped into the typed
+// sub-object at assembly time.
+//
+// To add a new provider:
+//   1. Add its name to VALID_PROVIDERS.
+//   2. Add a PROVIDER_FIELDS const here.
+//   3. Add an arm to provider_config_for().
+//   4. If it needs compile-time validation, add checks to validate_client_options().
 
 const SAU: &[&str] = &["system", "user", "assistant"];
 const UA: &[&str] = &["user", "assistant"];
 
+const ANTHROPIC_FIELDS: &[(&str, FieldDefault)] = &[
+    ("base_url", FieldDefault::Str("https://api.anthropic.com")),
+    ("default_role", FieldDefault::Str("user")),
+    ("allowed_roles", FieldDefault::StrArray(SAU)),
+    ("max_tokens", FieldDefault::Int(4096)),
+];
+
+const OPENAI_FIELDS: &[(&str, FieldDefault)] = &[
+    ("base_url", FieldDefault::Str("https://api.openai.com/v1")),
+    ("default_role", FieldDefault::Str("system")),
+    ("allowed_roles", FieldDefault::StrArray(SAU)),
+];
+
+const OLLAMA_FIELDS: &[(&str, FieldDefault)] = &[
+    ("base_url", FieldDefault::Str("http://localhost:11434")),
+    ("default_role", FieldDefault::Str("user")),
+    ("allowed_roles", FieldDefault::StrArray(UA)),
+];
+
+const OPENROUTER_FIELDS: &[(&str, FieldDefault)] = &[
+    (
+        "base_url",
+        FieldDefault::Str("https://openrouter.ai/api/v1"),
+    ),
+    ("default_role", FieldDefault::Str("system")),
+    ("allowed_roles", FieldDefault::StrArray(SAU)),
+];
+
+const AZURE_OPENAI_FIELDS: &[(&str, FieldDefault)] = &[
+    ("default_role", FieldDefault::Str("system")),
+    ("allowed_roles", FieldDefault::StrArray(SAU)),
+    ("resource_name", FieldDefault::Null),
+    ("deployment_id", FieldDefault::Null),
+    ("api_version", FieldDefault::Null),
+    ("max_tokens", FieldDefault::Int(4096)),
+];
+
+const BEDROCK_FIELDS: &[(&str, FieldDefault)] = &[
+    ("default_role", FieldDefault::Str("user")),
+    ("allowed_roles", FieldDefault::StrArray(SAU)),
+    ("region", FieldDefault::Null),
+    ("endpoint_url", FieldDefault::Null),
+    ("access_key_id", FieldDefault::Null),
+    ("secret_access_key", FieldDefault::Null),
+    ("session_token", FieldDefault::Null),
+    ("profile", FieldDefault::Null),
+    ("stop_sequences", FieldDefault::Null),
+    ("max_tokens", FieldDefault::Null),
+    ("temperature", FieldDefault::Null),
+    ("top_p", FieldDefault::Null),
+];
+
+const GOOGLE_AI_FIELDS: &[(&str, FieldDefault)] = &[
+    (
+        "base_url",
+        FieldDefault::Str("https://generativelanguage.googleapis.com/v1beta"),
+    ),
+    ("default_role", FieldDefault::Str("user")),
+    ("allowed_roles", FieldDefault::StrArray(SAU)),
+    (
+        "remap_roles",
+        FieldDefault::StrPairMap(&[("assistant", "model")]),
+    ),
+];
+
+const VERTEX_AI_FIELDS: &[(&str, FieldDefault)] = &[
+    ("default_role", FieldDefault::Str("user")),
+    ("allowed_roles", FieldDefault::StrArray(SAU)),
+    (
+        "remap_roles",
+        FieldDefault::StrPairMap(&[("assistant", "model")]),
+    ),
+    ("credentials", FieldDefault::Null),
+    ("credentials_content", FieldDefault::Null),
+    ("location", FieldDefault::Null),
+    ("project_id", FieldDefault::Null),
+];
+
+/// Provider configuration: field definitions and optional typed sub-object.
+///
+/// Fields not present in [`TOP_LEVEL_FIELDS`] are automatically treated as
+/// provider-specific and assembled into a typed `Expr::Object`.
+struct ProviderConfig {
+    /// All fields this provider defines (top-level overrides + provider-specific).
+    fields: &'static [(&'static str, FieldDefault)],
+    /// Type name for the provider-specific options sub-object, if any.
+    provider_options_type: Option<&'static str>,
+}
+
 fn provider_config_for(provider: &str) -> ProviderConfig {
     match provider {
-        "anthropic" => {
-            let (opts, defaults) =
-                provider_options!("baml.llm.AnthropicOptions", max_tokens = 4096,);
-            ProviderConfig {
-                base_url: Some("https://api.anthropic.com"),
-                default_role: Some("user"),
-                allowed_roles: Some(SAU),
-                provider_options: opts,
-                provider_option_defaults: defaults,
-            }
-        }
+        "anthropic" => ProviderConfig {
+            fields: ANTHROPIC_FIELDS,
+            provider_options_type: Some("baml.llm.AnthropicOptions"),
+        },
         "openai" | "openai-generic" | "openai-responses" => ProviderConfig {
-            base_url: Some("https://api.openai.com/v1"),
-            default_role: Some("system"),
-            allowed_roles: Some(SAU),
-            ..ProviderConfig::EMPTY
+            fields: OPENAI_FIELDS,
+            provider_options_type: None,
         },
         "ollama" => ProviderConfig {
-            base_url: Some("http://localhost:11434"),
-            default_role: Some("user"),
-            allowed_roles: Some(UA),
-            ..ProviderConfig::EMPTY
+            fields: OLLAMA_FIELDS,
+            provider_options_type: None,
         },
         "openrouter" => ProviderConfig {
-            base_url: Some("https://openrouter.ai/api/v1"),
-            default_role: Some("system"),
-            allowed_roles: Some(SAU),
-            ..ProviderConfig::EMPTY
+            fields: OPENROUTER_FIELDS,
+            provider_options_type: None,
         },
-        "azure-openai" => {
-            let (opts, defaults) = provider_options!(
-                "baml.llm.AzureOpenAiOptions",
-                resource_name,
-                deployment_id,
-                api_version,
-                max_tokens = 4096,
-            );
-            ProviderConfig {
-                default_role: Some("system"),
-                allowed_roles: Some(SAU),
-                provider_options: opts,
-                provider_option_defaults: defaults,
-                ..ProviderConfig::EMPTY
-            }
-        }
-        "aws-bedrock" => {
-            let (opts, defaults) = provider_options!(
-                "baml.llm.BedrockOptions",
-                region,
-                endpoint_url,
-                access_key_id,
-                secret_access_key,
-                session_token,
-                profile,
-                stop_sequences,
-                max_tokens,
-                temperature,
-                top_p,
-            );
-            ProviderConfig {
-                default_role: Some("user"),
-                allowed_roles: Some(SAU),
-                provider_options: opts,
-                provider_option_defaults: defaults,
-                ..ProviderConfig::EMPTY
-            }
-        }
-        "google-ai" | "vertex-ai" => ProviderConfig::EMPTY,
-        // Dev guard: adding a new provider without updating this panics at test time.
+        "azure-openai" => ProviderConfig {
+            fields: AZURE_OPENAI_FIELDS,
+            provider_options_type: Some("baml.llm.AzureOpenAiOptions"),
+        },
+        "aws-bedrock" => ProviderConfig {
+            fields: BEDROCK_FIELDS,
+            provider_options_type: Some("baml.llm.BedrockOptions"),
+        },
+        "google-ai" => ProviderConfig {
+            fields: GOOGLE_AI_FIELDS,
+            provider_options_type: None,
+        },
+        "vertex-ai" => ProviderConfig {
+            fields: VERTEX_AI_FIELDS,
+            provider_options_type: Some("baml.llm.VertexAiOptions"),
+        },
         _ => unreachable!("unknown provider {provider:?}: add it to provider_config_for"),
     }
 }
@@ -1512,16 +2007,11 @@ fn validate_client_options(
     provider: &str,
     client_name: &str,
     has_base_url: bool,
-    prov_index: &std::collections::HashMap<&str, usize>,
-    prov_vals: &[Option<ExprId>],
+    provider_fields_set: &std::collections::HashSet<String>,
     span: text_size::TextRange,
     diags: &mut Vec<LoweringDiagnostic>,
 ) {
-    let has_prov = |name: &str| -> bool {
-        prov_index
-            .get(name)
-            .is_some_and(|&i| prov_vals[i].is_some())
-    };
+    let has_prov = |name: &str| -> bool { provider_fields_set.contains(name) };
 
     if provider == "azure-openai"
         && !has_base_url
@@ -1538,6 +2028,15 @@ fn validate_client_options(
             message: format!(
                 "azure-openai requires either base_url or both resource_name and deployment_id (missing: {missing})"
             ),
+            span,
+        });
+    }
+
+    if provider == "vertex-ai" && !has_base_url && !has_prov("location") {
+        diags.push(LoweringDiagnostic::MissingClientOptions {
+            client_name: client_name.to_string(),
+            message: "vertex-ai requires either base_url or location (e.g. us-central1) in options"
+                .to_string(),
             span,
         });
     }

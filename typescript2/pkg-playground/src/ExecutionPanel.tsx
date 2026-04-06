@@ -34,9 +34,9 @@ import type {
   FunctionInfo,
   ProjectUpdate,
   RunEntry,
-  TestInfo,
   WorkerOutMessage,
 } from './worker-protocol';
+import { decodeCallResult } from '@b/pkg-proto';
 import type { ResultRendererProps } from './result-renderers';
 import { ResultDisplay } from './ResultDisplay';
 import { registerBuiltinResultRenderers } from './renderers/registerBuiltins';
@@ -88,12 +88,95 @@ export interface ExecutionPanelProps {
 }
 
 // ---------------------------------------------------------------------------
+// CollectionRunView — renders fetch logs from a collection/expansion RunEntry
+// ---------------------------------------------------------------------------
+
+interface CollectionRunViewProps {
+  run: RunEntry;
+  expandedLogId: number | null;
+  setExpandedLogId: (id: number | null) => void;
+}
+
+const CollectionRunView: FC<CollectionRunViewProps> = ({ run, expandedLogId, setExpandedLogId }) => {
+  return (
+    <div className="flex-1 flex flex-col min-h-0">
+      {/* Header */}
+      <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-vsc-surface border-b border-vsc-border shrink-0">
+        <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-vsc-green" />
+        <span className="text-vsc-accent font-semibold text-[11px]">$collect_tests</span>
+        <span className="text-vsc-text-faint text-[10px] flex-1">collection fetch logs</span>
+        <span className="text-vsc-text-faint text-[10px]">{run.fetchLogs.length} request{run.fetchLogs.length !== 1 ? 's' : ''}</span>
+      </div>
+      {/* Fetch logs */}
+      <div className="flex-1 overflow-auto font-vsc-mono text-xs bg-vsc-bg">
+        {run.fetchLogs.length === 0 && (
+          <div className="p-5 text-center text-vsc-text-faint text-[11px]">
+            No fetch logs — collection may not have made any HTTP requests
+          </div>
+        )}
+        {run.fetchLogs.map((log) => {
+          const isExp = expandedLogId === log.id;
+          const statusColorCls = log.status === null ? 'text-vsc-text-muted'
+            : log.status >= 200 && log.status < 300 ? 'text-vsc-green'
+            : log.status === 0 ? 'text-vsc-red' : 'text-vsc-yellow';
+          return (
+            <div key={`cl-${log.id}`}>
+              <div
+                onClick={() => setExpandedLogId(isExp ? null : log.id)}
+                className="flex items-center gap-1.5 py-0.5 pr-2.5 pl-[22px] cursor-pointer border-b border-vsc-border-subtle"
+              >
+                <span className={`${statusColorCls} font-semibold text-[11px]`}>{log.status ?? '...'}</span>
+                <span className="text-vsc-text-faint text-[10px]">{log.method}</span>
+                <span className="text-vsc-text flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-[11px]">{log.url}</span>
+                {log.durationMs != null && <span className="text-vsc-text-faint text-[10px]">{log.durationMs}ms</span>}
+                <span className="text-vsc-text-faint text-[9px]">{isExp ? '\u25B4' : '\u25BE'}</span>
+              </div>
+              {isExp && (
+                <div className="py-2 pr-2.5 pl-[22px] flex flex-col gap-2 border-b border-vsc-border">
+                  {log.error && <CodeBlock variant="error">{log.error}</CodeBlock>}
+                  <div>
+                    <div className="text-[10px] font-semibold text-vsc-text-muted mb-0.5 uppercase tracking-wide">Request Headers</div>
+                    <CodeBlock>{JSON.stringify(log.requestHeaders, null, 2)}</CodeBlock>
+                  </div>
+                  {log.requestBody && (
+                    <div>
+                      <div className="text-[10px] font-semibold text-vsc-text-muted mb-0.5 uppercase tracking-wide">Request Body</div>
+                      <CodeBlock>{tryFormatJson(log.requestBody)}</CodeBlock>
+                    </div>
+                  )}
+                  {log.responseBody != null && (
+                    <div>
+                      <div className="text-[10px] font-semibold text-vsc-text-muted mb-0.5 uppercase tracking-wide">Response Body</div>
+                      <CodeBlock>{tryFormatJson(log.responseBody)}</CodeBlock>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+// ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
 export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersion, resultRenderers }) => {
   const [projectRoots, setProjectRoots] = useState<string[]>([]);
   const [projectUpdates, setProjectUpdates] = useState<Record<string, ProjectUpdate>>({});
+  const [testTree, setTestTree] = useState<any>(null);
+  const [collectionCallId, setCollectionCallId] = useState<number | null>(null);
+  const [generation, setGeneration] = useState<number>(0);
+  const [testRunResults, setTestRunResults] = useState<Map<string, Record<string, unknown>>>(new Map());
+  // Synthetic RunEntry that accumulates fetch logs from test collection/expansion operations
+  const [collectionRun, setCollectionRun] = useState<RunEntry | null>(null);
+  // When true, the main content area shows the collection run's fetch logs
+  const [viewingCollection, setViewingCollection] = useState(false);
+  // When true, the main content area shows the test run history panel
+  const [viewingTestRun, setViewingTestRun] = useState(false);
   const [selectedProject, setSelectedProject] = useState<string | null>(null);
 
   const [selectedFn, setSelectedFn] = useState<string | null>(null);
@@ -148,6 +231,8 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
 
   const nextCallIdRef = useRef(0);
   const pendingCallsRef = useRef<Map<number, { resolve: (v: string) => void; reject: (e: Error) => void }>>(new Map());
+  // Buffer fetch logs by callId so logs that arrive before testCollectionResult are not lost.
+  const pendingLogsRef = useRef<Map<number, FetchLogEntry[]>>(new Map());
 
   // ── Cursor context navigation ────────────────────────────────────────
 
@@ -264,6 +349,37 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
             case 'updateProject':
               setProjectUpdates((prev) => ({ ...prev, [n.project]: n.update }));
               break;
+            case 'testCollectionResult': {
+              try {
+                const jsonStr = new TextDecoder().decode(new Uint8Array(n.data));
+                const tree = JSON.parse(jsonStr);
+                console.log('[testCollectionResult] decoded tree:', JSON.stringify(tree, null, 2));
+                setTestTree(tree);
+                setCollectionCallId(n.callId);
+                setGeneration(n.generation);
+                setTestRunResults(new Map());
+
+                // Create/replace the synthetic RunEntry for collection, hydrating any
+                // fetch logs that arrived before this notification.
+                const buffered = pendingLogsRef.current.get(n.callId) ?? [];
+                pendingLogsRef.current.delete(n.callId);
+                const collectionEntry: RunEntry = {
+                  id: n.callId,
+                  functionName: '$collect_tests',
+                  argsJson: '',
+                  fetchLogs: buffered,
+                  result: null,
+                  error: null,
+                  status: 'success',
+                  startTime: performance.now(),
+                  durationMs: null,
+                };
+                setCollectionRun(collectionEntry);
+              } catch (e) {
+                console.error('[testCollectionResult] decode error:', e);
+              }
+              break;
+            }
             case 'openPlayground':
               setSelectedProject(n.project);
               if (n.functionName) setSelectedFn(n.functionName);
@@ -295,16 +411,40 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
           break;
         }
 
-        case 'fetchLogNew':
+        case 'fetchLogNew': {
+          const logEntry = data.entry;
+          // Always buffer by callId so logs that arrive before testCollectionResult are not lost.
+          const existing = pendingLogsRef.current.get(logEntry.callId);
+          if (existing) {
+            existing.push(logEntry);
+          } else {
+            pendingLogsRef.current.set(logEntry.callId, [logEntry]);
+          }
+          // Route to collection run if callId matches
+          setCollectionRun((prev) => {
+            if (prev && logEntry.callId === prev.id) {
+              return { ...prev, fetchLogs: [...prev.fetchLogs, logEntry] };
+            }
+            return prev;
+          });
+          // Route to regular runs
           setRuns((prev) => {
-            const targetIdx = prev.findIndex((r) => r.id === data.entry.callId);
+            const targetIdx = prev.findIndex((r) => r.id === logEntry.callId);
             if (targetIdx === -1) return prev;
             const target = prev[targetIdx];
-            return [...prev.slice(0, targetIdx), { ...target, fetchLogs: [...target.fetchLogs, data.entry] }, ...prev.slice(targetIdx + 1)];
+            return [...prev.slice(0, targetIdx), { ...target, fetchLogs: [...target.fetchLogs, logEntry] }, ...prev.slice(targetIdx + 1)];
           });
           break;
+        }
 
         case 'fetchLogUpdate':
+          // Also update collection run logs
+          setCollectionRun((prev) => {
+            if (!prev) return prev;
+            const updated = prev.fetchLogs.map((e) => (e.id === data.logId ? { ...e, ...data.patch } : e));
+            if (updated === prev.fetchLogs) return prev;
+            return { ...prev, fetchLogs: updated };
+          });
           setRuns((prev) =>
             prev.map((r) => ({
               ...r,
@@ -576,82 +716,111 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
     }
   }, [selectedFn, selectedProject, argsJson, isRunning, port]);
 
-  const handleSelectTest = useCallback((test: TestInfo) => {
-    setSelectedFn(test.functionName);
-    setArgsJson(test.argsJson);
-    setActiveTab('run');
-  }, []);
-
-  // Core test execution — no isRunning guard, usable from batch loops
-  const executeTest = useCallback(async (test: TestInfo) => {
+  const handleRefreshTests = useCallback(() => {
     if (!selectedProject) return;
+    port.postMessage({ type: 'requestCollectTests', project: selectedProject });
+  }, [selectedProject, port]);
 
+  const handleRunTest = useCallback(async (name: string) => {
+    if (!selectedProject) return;
+    // Switch to the test run view so the runs panel is visible even when no function is selected.
+    setViewingTestRun(true);
+    setViewingCollection(false);
     const runId = nextCallIdRef.current++;
-    const startTime = performance.now();
     const newRun: RunEntry = {
       id: runId,
-      functionName: test.functionName,
-      argsJson: test.argsJson,
-      testName: test.name,
+      functionName: 'testing.run_test',
+      testName: name,
+      argsJson: `(test: ${name})`,
       fetchLogs: [],
       result: null,
       error: null,
       status: 'running',
-      startTime,
+      startTime: performance.now(),
       durationMs: null,
     };
     setRuns((prev) => [...prev, newRun]);
-    setExpandedLogId(null);
-
-    requestAnimationFrame(() => {
-      outputRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
-    });
 
     try {
-      const parsed = JSON.parse(test.argsJson);
-      if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-        throw new Error('Test args must be a JSON object');
-      }
-      const argsProto = encodeCallArgs(parsed as Record<string, unknown>);
       const resultStr = await new Promise<string>((resolve, reject) => {
         pendingCallsRef.current.set(runId, { resolve, reject });
         port.postMessage({
-          type: 'callFunction',
+          type: 'callTestFunction',
           id: runId,
-          name: test.functionName,
-          argsProto: new Uint8Array(argsProto),
           project: selectedProject,
+          generation,
+          testName: name,
         });
       });
-      const dur = Math.round(performance.now() - startTime);
-      setRuns((prev) => prev.map((r) => r.id === runId ? { ...r, result: resultStr, status: 'success', durationMs: dur } : r));
-    } catch (e) {
-      const isCancelled = e instanceof Error && (e as any).cancelled === true;
-      const errMsg = e instanceof Error ? e.message : String(e);
-      const dur = Math.round(performance.now() - startTime);
-      setRuns((prev) => prev.map((r) => r.id === runId ? {
-        ...r,
-        error: isCancelled ? null : errMsg,
-        status: isCancelled ? 'cancelled' : 'error',
-        durationMs: dur,
-      } : r));
-    }
-  }, [selectedProject, port]);
 
-  const handleRunTest = useCallback(async (test: TestInfo) => {
-    if (!selectedProject || isRunning) return;
-    setSelectedFn(test.functionName);
-    setArgsJson(test.argsJson);
-    setActiveTab('run');
-    await executeTest(test);
-  }, [selectedProject, isRunning, executeTest]);
+      const dur = Math.round(performance.now() - newRun.startTime);
+      setRuns((prev) =>
+        prev.map((r) =>
+          r.id === runId
+            ? { ...r, result: resultStr, status: 'success', durationMs: dur }
+            : r,
+        ),
+      );
+
+      try {
+        const report = JSON.parse(resultStr);
+        setTestRunResults((prev) => new Map(prev).set(name, report));
+      } catch {}
+    } catch (e: any) {
+      const dur = Math.round(performance.now() - newRun.startTime);
+      const cancelled = e instanceof Error && (e as any).cancelled === true;
+      setRuns((prev) =>
+        prev.map((r) =>
+          r.id === runId
+            ? { ...r, error: cancelled ? null : (e instanceof Error ? e.message : String(e)), status: cancelled ? 'cancelled' : 'error', durationMs: dur }
+            : r,
+        ),
+      );
+
+      setTestRunResults((prev) =>
+        new Map(prev).set(name, { outcome: 'error', error: e instanceof Error ? e.message : String(e) }),
+      );
+    }
+  }, [selectedProject, generation, port]);
+
+  // Track which testsets we've already requested expansion for (per generation)
+  const pendingExpandsRef = useRef<{ generation: number; names: Set<string> }>({ generation: -1, names: new Set() });
+
+  // Auto-expand lazy testsets after receiving a new testTree
+  useEffect(() => {
+    if (!testTree || !selectedProject) return;
+    // Reset pending set when generation changes (new collection)
+    if (pendingExpandsRef.current.generation !== generation) {
+      pendingExpandsRef.current = { generation, names: new Set() };
+    }
+    const pending = pendingExpandsRef.current.names;
+    const expandLazy = (items: any[]) => {
+      for (const item of items) {
+        if (item && item.type === 'lazyTestSet' && !pending.has(item.name)) {
+          console.log('[auto-expand] expanding lazy testset:', item.name);
+          pending.add(item.name);
+          port.postMessage({
+            type: 'expandTestSet',
+            project: selectedProject,
+            generation,
+            testsetName: item.name,
+          });
+        } else if (item && item.items && Array.isArray(item.items)) {
+          // Recurse into expanded testsets to find nested lazy items
+          expandLazy(item.items);
+        }
+      }
+    };
+    if (Array.isArray(testTree)) {
+      expandLazy(testTree);
+    }
+  }, [testTree, selectedProject, generation, port]);
 
   // ── Derived state ──────────────────────────────────────────────────────
 
   const currentUpdate = selectedProject ? projectUpdates[selectedProject] : undefined;
   const functions: FunctionInfo[] = currentUpdate?.functions ?? [];
   const functionNames = functions.map((f) => f.name);
-  const tests: TestInfo[] = currentUpdate?.tests ?? [];
   const engineStale = currentUpdate ? !currentUpdate.isBexCurrent : false;
   const diags = currentUpdate?.diagnostics ?? [];
 
@@ -672,57 +841,6 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
   const errors = diags.filter((d) => d.severity === 'error');
   const warnings = diags.filter((d) => d.severity === 'warning');
   const hasErrors = errors.length > 0;
-
-  // Derive per-test status from run history (most recent run wins)
-  const testStatuses = new Map<string, RunEntry['status']>();
-  for (const run of runs) {
-    if (run.testName) {
-      testStatuses.set(run.testName, run.status);
-    }
-  }
-
-  // ── Batch test execution ───────────────────────────────────────────────
-
-  const [parallelTests, setParallelTests] = useState(false);
-  const batchAbortRef = useRef(false);
-
-  const handleRunAllTests = useCallback(async (testsToRun: TestInfo[]) => {
-    if (!selectedProject) return;
-    batchAbortRef.current = false;
-    setActiveTab('run');
-
-    if (parallelTests) {
-      // Fire all at once — don't await, each resolves independently
-      for (const test of testsToRun) {
-        executeTest(test);
-      }
-    } else {
-      // Sequential: run one at a time, check abort between each
-      for (const test of testsToRun) {
-        if (batchAbortRef.current) break;
-        await executeTest(test);
-      }
-    }
-  }, [selectedProject, parallelTests, executeTest]);
-
-  const handleStopAllTests = useCallback(() => {
-    if (!selectedProject) return;
-    // Signal sequential loop to stop queuing new tests
-    batchAbortRef.current = true;
-    // Cancel currently running tests
-    for (const run of runs) {
-      if (run.status === 'running' && run.testName) {
-        port.postMessage({ type: 'cancelCall', id: run.id, project: selectedProject });
-      }
-    }
-  }, [runs, selectedProject, port]);
-
-  const handleRerunFailed = useCallback(() => {
-    const failedTests = tests.filter((t) =>
-      runs.some((r) => r.testName === t.name && r.status === 'error')
-    );
-    if (failedTests.length > 0) handleRunAllTests(failedTests);
-  }, [tests, runs, handleRunAllTests]);
 
   // Whether any known-required keys are missing — proactive, not just reactive to pending requests
   const hasMissingKeys = [...knownRequiredKeys].some((k) => !envVars[k]);
@@ -900,20 +1018,15 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
             <div className="shrink-0 overflow-hidden" style={{ width: sidebarWidth }}>
               <FunctionSidebar
                 functions={functions}
-                tests={tests}
+                testTree={testTree}
                 selectedFn={selectedFn}
-                onSelectFn={(fn) => { setWorkflowContext(null); setSelectedFn(fn); }}
-                onSelectTest={handleSelectTest}
+                onSelectFn={(fn) => { setWorkflowContext(null); setSelectedFn(fn); setViewingCollection(false); setViewingTestRun(false); }}
+                onRefreshTests={handleRefreshTests}
                 onRunTest={handleRunTest}
-                isRunning={isRunning}
-                testStatuses={testStatuses}
-                onRunAllTests={() => handleRunAllTests(tests)}
-                onStopAllTests={handleStopAllTests}
-                onRerunFailed={handleRerunFailed}
-                hasFailedTests={runs.some((r) => r.testName != null && r.status === 'error')}
-                hasRunningTests={runs.some((r) => r.testName != null && r.status === 'running')}
-                parallelTests={parallelTests}
-                onToggleParallel={() => setParallelTests((p) => !p)}
+                testRunResults={testRunResults}
+                collectionRun={collectionRun}
+                viewingCollection={viewingCollection}
+                onSelectCollectionView={() => { setViewingCollection(true); setViewingTestRun(false); setSelectedFn(null); }}
               />
             </div>
             <div
@@ -925,7 +1038,116 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
 
         {/* Content area */}
         <div className="flex-1 flex flex-col min-h-0 min-w-0">
-          {selectedFn ? (
+          {viewingCollection && collectionRun ? (
+            <CollectionRunView
+              run={collectionRun}
+              expandedLogId={expandedLogId}
+              setExpandedLogId={setExpandedLogId}
+            />
+          ) : viewingTestRun ? (
+            <div ref={outputRef} className="flex-1 overflow-auto font-vsc-mono text-xs bg-vsc-bg">
+              {runs.length === 0 && (
+                <div className="p-5 text-center text-vsc-text-faint text-[11px]">
+                  No test runs yet
+                </div>
+              )}
+              {[...runs].reverse().map((run, runIdx) => {
+                const isLatest = runIdx === 0;
+                const statusCls = run.status === 'error' ? 'bg-vsc-red' : run.status === 'success' ? 'bg-vsc-green' : run.status === 'cancelled' ? 'bg-vsc-yellow' : 'bg-vsc-text-muted';
+                return (
+                  <div key={run.id} className={!isLatest ? 'border-b-2 border-vsc-border' : ''}>
+                    <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-vsc-surface border-b border-vsc-border-subtle">
+                      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${statusCls}`} />
+                      <span className="text-vsc-accent font-semibold text-[11px]">
+                        {run.testName ?? run.functionName}
+                      </span>
+                      {run.status === 'running' && (
+                        <>
+                          <span className="text-vsc-text-muted text-[10px]">running...</span>
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-5 w-5 text-vsc-text-muted hover:text-vsc-error"
+                                  onClick={() => onCancelRun(run.id)}
+                                >
+                                  <Square size={12} />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>Cancel execution</TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        </>
+                      )}
+                      {run.durationMs != null && (
+                        <span className="text-vsc-text-faint text-[10px] shrink-0">{run.durationMs}ms</span>
+                      )}
+                    </div>
+                    {run.fetchLogs.map((log) => {
+                      const isExp = expandedLogId === log.id;
+                      const statusColorCls = log.status === null ? 'text-vsc-text-muted'
+                        : log.status >= 200 && log.status < 300 ? 'text-vsc-green'
+                        : log.status === 0 ? 'text-vsc-red' : 'text-vsc-yellow';
+                      return (
+                        <div key={`t-${log.id}`}>
+                          <div
+                            onClick={() => setExpandedLogId(isExp ? null : log.id)}
+                            className="flex items-center gap-1.5 py-0.5 pr-2.5 pl-[22px] cursor-pointer border-b border-vsc-border-subtle"
+                          >
+                            <span className={`${statusColorCls} font-semibold text-[11px]`}>{log.status ?? '...'}</span>
+                            <span className="text-vsc-text-faint text-[10px]">{log.method}</span>
+                            <span className="text-vsc-text flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-[11px]">{log.url}</span>
+                            {log.durationMs != null && <span className="text-vsc-text-faint text-[10px]">{log.durationMs}ms</span>}
+                            <span className="text-vsc-text-faint text-[9px]">{isExp ? '\u25B4' : '\u25BE'}</span>
+                          </div>
+                          {isExp && (
+                            <div className="py-2 pr-2.5 pl-[22px] flex flex-col gap-2 border-b border-vsc-border">
+                              {log.error && <CodeBlock variant="error">{log.error}</CodeBlock>}
+                              <div>
+                                <div className="text-[10px] font-semibold text-vsc-text-muted mb-0.5 uppercase tracking-wide">Request Headers</div>
+                                <CodeBlock>{JSON.stringify(log.requestHeaders, null, 2)}</CodeBlock>
+                              </div>
+                              {log.requestBody && (
+                                <div>
+                                  <div className="text-[10px] font-semibold text-vsc-text-muted mb-0.5 uppercase tracking-wide">Request Body</div>
+                                  <CodeBlock>{tryFormatJson(log.requestBody)}</CodeBlock>
+                                </div>
+                              )}
+                              {log.responseBody != null && (
+                                <div>
+                                  <div className="text-[10px] font-semibold text-vsc-text-muted mb-0.5 uppercase tracking-wide">Response Body</div>
+                                  <CodeBlock>{tryFormatJson(log.responseBody)}</CodeBlock>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                    {run.status === 'cancelled' && (
+                      <div className="py-1.5 pr-2.5 pl-[22px]">
+                        <div className="text-[11px] text-vsc-text-faint italic">Cancelled</div>
+                      </div>
+                    )}
+                    {run.error && (
+                      <div className="py-1.5 pr-2.5 pl-[22px]">
+                        <div className="text-[10px] font-semibold text-vsc-red mb-0.5 uppercase tracking-wide">Error</div>
+                        <ErrorDisplay error={run.error} />
+                      </div>
+                    )}
+                    {run.result != null && (
+                      <div className="py-1.5 pr-2.5 pl-[22px]">
+                        <div className="text-[10px] font-semibold text-vsc-green mb-0.5 uppercase tracking-wide">Result</div>
+                        <ResultDisplay resultJson={run.result} customRenderers={resultRenderers} />
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ) : selectedFn ? (
             <Tabs
               value={activeTab}
               onValueChange={(v) => setActiveTab(v as typeof activeTab)}
@@ -1186,7 +1408,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
             </Tabs>
           ) : (
             <div className="flex-1 flex items-center justify-center text-vsc-text-faint text-xs bg-vsc-bg">
-              Select a function to run
+              {viewingCollection ? 'Collection not yet available — click Refresh' : 'Select a function to run'}
             </div>
           )}
         </div>

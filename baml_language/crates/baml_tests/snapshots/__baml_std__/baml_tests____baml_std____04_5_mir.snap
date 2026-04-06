@@ -1506,6 +1506,8 @@ fn baml.net.connect = builtin(io)
 
 fn baml.net.Socket.read = builtin(io)
 
+fn baml.sys.now_ms = builtin(vm)
+
 fn baml.sys.panic = builtin(io)
 
 fn baml.sys.shell = builtin(io)
@@ -1541,3 +1543,35 @@ fn baml.String.toLowerCase = builtin(vm)
 fn baml.String.toUpperCase = builtin(vm)
 
 fn baml.String.trim = builtin(vm)
+
+fn baml.Uint8Array.at = builtin(vm)
+
+fn baml.Uint8Array.concat = builtin(vm)
+
+fn baml.Uint8Array.from_array = builtin(vm)
+
+fn baml.Uint8Array.from_base64 = builtin(vm)
+
+fn baml.Uint8Array.from_hex = builtin(vm)
+
+fn baml.Uint8Array.includes = builtin(vm)
+
+fn baml.Uint8Array.length = builtin(vm)
+
+fn baml.Uint8Array.pop = builtin(vm)
+
+fn baml.Uint8Array.push = builtin(vm)
+
+fn baml.Uint8Array.reverse = builtin(vm)
+
+fn baml.Uint8Array.slice = builtin(vm)
+
+fn baml.Uint8Array.sort = builtin(vm)
+
+fn baml.Uint8Array.to_array = builtin(vm)
+
+fn baml.Uint8Array.to_base64 = builtin(vm)
+
+fn baml.Uint8Array.to_hex = builtin(vm)
+
+fn baml.Uint8Array.zeroes = builtin(vm)

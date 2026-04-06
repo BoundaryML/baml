@@ -236,7 +236,7 @@ class PrimitiveClientOptions {
   allowed_roles string[] | null
   remap_roles map<string, string> | null
   api_key string | null
-  provider_options AnthropicOptions | AzureOpenAiOptions | BedrockOptions | null
+  provider_options AnthropicOptions | AzureOpenAiOptions | BedrockOptions | VertexAiOptions | null
 
   // request stuff here
   headers map<string, string>
@@ -253,6 +253,13 @@ class AzureOpenAiOptions {
 
 class AnthropicOptions {
   max_tokens int | null
+}
+
+class VertexAiOptions {
+  credentials string | null
+  credentials_content string | null
+  location string | null
+  project_id string | null
 }
 
 class BedrockOptions {

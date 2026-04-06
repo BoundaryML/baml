@@ -6,6 +6,7 @@ client<llm> VertexGCP {
     provider "vertex-ai"
     options {
         model "gemini-2.0-flash"
+        location "us-central1"
     }
 }
 
@@ -26,9 +27,9 @@ function FetchDatax(user_id: string) -> Hi {
 //----
 //- diagnostics
 // Error: Header comments (//#) are not allowed inside LLM functions
-//     ╭─[ headers_header_in_llm_function.baml:13:5 ]
+//     ╭─[ headers_header_in_llm_function.baml:14:5 ]
 //     │
-//  13 │     //# collect source material
+//  14 │     //# collect source material
 //     │     ─────────────┬─────────────  
 //     │                  ╰─────────────── Header comments (//#) are not allowed inside LLM functions
 //     │ 

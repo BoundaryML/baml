@@ -154,6 +154,74 @@ fn let_binding_global_slot_and_init_function() {
     );
 }
 
+// ─── Phase 4.6 $init_test chainer tests ───────────────────────────────────────
+
+/// Verify that when a file contains `test` blocks, a root `$init_test` chainer
+/// is synthesized in `program.function_indices` with `arity: 1`.
+#[test]
+fn init_test_chainer_synthesized_when_tests_present() {
+    let mut db = make_db();
+    db.add_file(
+        "test.baml",
+        r#"
+        test "foo" {
+          assert.is_true(true)
+        }
+
+        test "bar" {
+          assert.is_true(true)
+        }
+        "#,
+    );
+
+    let program = compile(&db);
+
+    // The root $init_test chainer should be present in function_indices
+    assert!(
+        program.function_indices.contains_key("$init_test"),
+        "expected '$init_test' in function_indices after test block synthesis, got: {:?}",
+        program.function_indices.keys().collect::<Vec<_>>()
+    );
+
+    // The chainer should also appear in function_global_indices
+    assert!(
+        program.function_global_indices.contains_key("$init_test"),
+        "expected '$init_test' in function_global_indices, got: {:?}",
+        program.function_global_indices.keys().collect::<Vec<_>>()
+    );
+
+    // Verify the chainer function has arity 1 (takes the registry parameter)
+    let fn_obj_idx = program.function_indices["$init_test"];
+    // program.objects derefs to Vec<Object> via Deref, so a plain usize index works.
+    let fn_obj = &(*program.objects)[fn_obj_idx];
+    let bex_vm_types::Object::Function(chainer) = fn_obj else {
+        panic!("expected $init_test to be a Function object, got: {fn_obj:?}");
+    };
+    assert_eq!(
+        chainer.arity, 1,
+        "expected $init_test chainer to have arity 1, got: {}",
+        chainer.arity
+    );
+}
+
+/// Verify that when a file has NO test blocks, no `$init_test` chainer is synthesized.
+#[test]
+fn no_init_test_chainer_when_no_tests() {
+    let mut db = make_db();
+    db.add_file(
+        "test.baml",
+        "function greet(name: string) -> string { return name; }",
+    );
+
+    let program = compile(&db);
+
+    assert!(
+        !program.function_indices.contains_key("$init_test"),
+        "expected no '$init_test' in function_indices when no test blocks present, got: {:?}",
+        program.function_indices.keys().collect::<Vec<_>>()
+    );
+}
+
 /// Verify that multiple client declarations:
 /// - Both get global slots in `let_global_indices`
 /// - `$init` is synthesized to initialize them

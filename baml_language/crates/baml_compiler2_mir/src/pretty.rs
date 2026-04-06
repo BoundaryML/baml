@@ -180,11 +180,6 @@ fn write_statement(f: &mut impl Write, stmt: &Statement) -> fmt::Result {
         StatementKind::Nop => {
             write!(f, "nop;")
         }
-        StatementKind::Assert(operand) => {
-            write!(f, "assert(")?;
-            write_operand(f, operand)?;
-            write!(f, ");")
-        }
     }
 }
 
@@ -319,6 +314,7 @@ fn write_rvalue(f: &mut impl Write, rvalue: &Rvalue) -> fmt::Result {
             }
             write!(f, "]")
         }
+        Rvalue::Uint8Array(bytes) => write!(f, "b\"<{} bytes>\"", bytes.len()),
         Rvalue::Map(entries) => {
             write!(f, "{{ ")?;
             for (i, (key, value)) in entries.iter().enumerate() {

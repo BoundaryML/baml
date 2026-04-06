@@ -34,6 +34,7 @@ pub enum Expression {
     MapInitializer(MapLiteral),
     ObjectInitializer(ObjectInitializer),
     RawString(t::RawString),
+    ByteString(t::ByteString),
     Lambda(Box<LambdaExpr>),
     Unknown(TextRange),
 }
@@ -101,6 +102,9 @@ impl FromCST for Expression {
             SyntaxKind::RAW_STRING_LITERAL => {
                 t::RawString::from_cst(elem).map(Expression::RawString)?
             }
+            SyntaxKind::BYTE_STRING_LITERAL => {
+                t::ByteString::from_cst(elem).map(Expression::ByteString)?
+            }
             SyntaxKind::LAMBDA_EXPR => Expression::Lambda(Box::new(LambdaExpr::from_cst(elem)?)),
             _ => Expression::Unknown(elem.text_range()),
         };
@@ -138,6 +142,7 @@ impl Expression {
                     Some(usize::from(raw.span().len()))
                 }
             }
+            Expression::ByteString(bs) => Some(usize::from(bs.span().len())),
             Expression::Lambda(_) => None,
             Expression::Unknown(_) => None,
         }
@@ -170,6 +175,7 @@ impl Printable for Expression {
             Expression::MapInitializer(map) => map.print(shape, printer),
             Expression::ObjectInitializer(obj) => obj.print(shape, printer),
             Expression::RawString(raw) => raw.print(shape, printer),
+            Expression::ByteString(bs) => bs.print(shape, printer),
             Expression::Lambda(lambda) => lambda.print(shape, printer),
             Expression::Unknown(range) => {
                 printer.print_input_range_trimmed_start(*range);
@@ -198,6 +204,7 @@ impl Printable for Expression {
             Expression::MapInitializer(map) => map.leftmost_token(),
             Expression::ObjectInitializer(obj) => obj.leftmost_token(),
             Expression::RawString(raw) => raw.leftmost_token(),
+            Expression::ByteString(bs) => bs.leftmost_token(),
             Expression::Lambda(lambda) => lambda.leftmost_token(),
             Expression::Unknown(range) => *range,
         }
@@ -223,6 +230,7 @@ impl Printable for Expression {
             Expression::MapInitializer(map) => map.rightmost_token(),
             Expression::ObjectInitializer(obj) => obj.rightmost_token(),
             Expression::RawString(raw) => raw.rightmost_token(),
+            Expression::ByteString(bs) => bs.rightmost_token(),
             Expression::Lambda(lambda) => lambda.rightmost_token(),
             Expression::Unknown(range) => *range,
         }

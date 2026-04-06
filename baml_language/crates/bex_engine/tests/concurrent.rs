@@ -50,6 +50,7 @@ async fn test_concurrent_calls_no_race() {
                     "test_function",
                     vec![],
                     FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+                    true,
                 )
                 .await
         }));
@@ -101,6 +102,7 @@ async fn test_concurrent_allocations_no_overlap() {
                     "allocate_many",
                     vec![],
                     FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+                    true,
                 )
                 .await?;
             count.fetch_add(1, Ordering::SeqCst);
@@ -163,6 +165,7 @@ async fn test_heap_stats_during_concurrent_execution() {
                     "test_function",
                     vec![],
                     FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+                    true,
                 )
                 .await
         }));
@@ -227,6 +230,7 @@ async fn test_concurrent_string_allocations() {
                     &func,
                     vec![],
                     FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+                    true,
                 )
                 .await?;
 
@@ -287,6 +291,7 @@ async fn test_concurrent_array_allocations() {
                     func_name,
                     vec![],
                     FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+                    true,
                 )
                 .await?;
 
@@ -348,6 +353,7 @@ async fn test_call_function_with_external_args() {
             "concat_strings",
             vec!["Hello".into(), "World".into()],
             FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
         )
         .await
         .expect("call_function failed");
@@ -371,6 +377,7 @@ async fn test_call_function_with_external_args() {
             "sum_array",
             vec![arr],
             FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
         )
         .await
         .expect("call_function failed");
@@ -383,6 +390,7 @@ async fn test_call_function_with_external_args() {
             "add_numbers",
             vec![BexExternalValue::from(15i64), BexExternalValue::from(27i64)],
             FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
         )
         .await
         .expect("call_function failed");

@@ -224,10 +224,6 @@ pub enum StatementKind {
 
     /// No-op (placeholder for removed statements).
     Nop,
-
-    /// Assert that a condition is true.
-    /// Evaluates the operand and panics if it's false.
-    Assert(Operand),
 }
 
 // ============================================================================
@@ -376,7 +372,7 @@ impl Terminator {
 /// The kind of indexing operation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum IndexKind {
-    /// Array indexing: `arr[i]`
+    /// Array indexing: `arr[i]` (array or `uint8array`)
     Array,
     /// Map indexing: `map[key]`
     Map,
@@ -479,6 +475,9 @@ pub enum Rvalue {
 
     /// Create an array: `[_1, _2, _3]`
     Array(Vec<Operand>),
+
+    /// Create a byte array from a literal: `b"hello"`
+    Uint8Array(Vec<u8>),
 
     /// Create a map: `{ key1: value1, key2: value2, ... }`
     /// Each entry is a (key, value) pair.

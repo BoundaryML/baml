@@ -49,6 +49,10 @@ impl BuiltinFile {
 
 /// Package name for the main std package (baml types and namespaces).
 pub const PACKAGE_BAML: &str = "baml";
+/// Package name for the testing package.
+pub const PACKAGE_TESTING: &str = "testing";
+/// Package name for the assert package.
+pub const PACKAGE_ASSERT: &str = "assert";
 
 /// Builtin registration macro: package, relative virtual path, filesystem include path.
 macro_rules! builtin {
@@ -56,7 +60,7 @@ macro_rules! builtin {
         BuiltinFile {
             package: $pkg,
             relative_path: $fs_path,
-            contents: include_str!(concat!("../baml_std/baml/", $fs_path)),
+            contents: include_str!(concat!("../baml_std/", $pkg, "/", $fs_path)),
         }
     };
 }
@@ -68,6 +72,7 @@ pub const ALL: &[BuiltinFile] = &[
     builtin!("baml", "containers.baml"),
     builtin!("baml", "core.baml"),
     builtin!("baml", "string.baml"),
+    builtin!("baml", "uint8array.baml"),
     // --- Namespaced (ns_* folders) ---
     builtin!("baml", "ns_errors/errors.baml"),
     builtin!("baml", "ns_env/env.baml"),
@@ -80,8 +85,11 @@ pub const ALL: &[BuiltinFile] = &[
     builtin!("baml", "ns_unstable/unstable.baml"),
     builtin!("baml", "ns_llm/llm_types.baml"),
     builtin!("baml", "ns_llm/llm.baml"),
-    // // --- baml_std/env/ ---
-    // builtin!("env", "env.baml"),
+    // --- testing package ---
+    builtin!("testing", "registry.baml"),
+    builtin!("testing", "types.baml"),
+    // --- assert package ---
+    builtin!("assert", "assert.baml"),
 ];
 
 mod adt;

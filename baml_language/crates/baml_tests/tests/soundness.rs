@@ -279,7 +279,7 @@ async fn multiple_defs_preserve_side_effects() {
     let output = baml_tests::baml_test! {
         baml: r#"
             function fail() -> int {
-                assert(false);
+                assert.is_true(false)
                 1
             }
 
@@ -294,7 +294,8 @@ async fn multiple_defs_preserve_side_effects() {
     insta::assert_snapshot!(output.bytecode, @r"
     function fail() -> int {
         load_const false
-        assert
+        call assert.is_true
+        pop 1
         load_const 1
         return
     }
@@ -308,5 +309,5 @@ async fn multiple_defs_preserve_side_effects() {
         return
     }
     ");
-    insta::assert_snapshot!(output.result.unwrap_err().to_string(), @"VM error: assertion failed");
+    insta::assert_snapshot!(output.result.unwrap_err().to_string(), @"failed to call baml.sys.panic: assertion failed: expected true");
 }

@@ -395,15 +395,6 @@ fn simulate_statement_stack(
             };
             pull_semantics::walk_watch_options_statement(&mut sink, *local, None, filter).is_ok()
         }
-        StatementKind::Assert(operand) => {
-            let mut sink = StackCarryPullSink {
-                sim,
-                carried_local,
-                classifications,
-                def_use,
-            };
-            pull_semantics::walk_assert_statement(&mut sink, operand).is_ok()
-        }
     }
 }
 
@@ -688,6 +679,12 @@ impl PullSink for StackCarryPullSink<'_> {
         Ok(())
     }
 
+    fn alloc_uint8array(&mut self, _bytes: &[u8]) -> Result<(), Self::Error> {
+        // LoadConst pushes 1, Call(deep_copy) pops 1 + pushes 1 → net push 1.
+        self.sim.push();
+        Ok(())
+    }
+
     fn alloc_map(&mut self, len: usize) -> Result<(), Self::Error> {
         if !self.sim.pop_n(len * 2) {
             return Err(());
@@ -823,13 +820,6 @@ impl StackEffectSink for StackCarryPullSink<'_> {
 
     fn watch_local(&mut self, _local: Local) -> Result<(), Self::Error> {
         if !self.sim.pop_n(2) {
-            return Err(());
-        }
-        Ok(())
-    }
-
-    fn assert_top(&mut self) -> Result<(), Self::Error> {
-        if !self.sim.pop_n(1) {
             return Err(());
         }
         Ok(())

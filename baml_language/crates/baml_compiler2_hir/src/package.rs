@@ -229,6 +229,13 @@ pub fn package_dependencies<'db>(
         // The "baml" package provides core builtins; every other package
         // implicitly depends on it.
         "baml" => vec![],
-        _ => vec![PackageId::new(db, Name::new("baml"))],
+        // The "testing" and "assert" packages depend on "baml" only.
+        "testing" | "assert" => vec![PackageId::new(db, Name::new("baml"))],
+        // User packages depend on "baml", "testing", and "assert".
+        _ => vec![
+            PackageId::new(db, Name::new("baml")),
+            PackageId::new(db, Name::new("testing")),
+            PackageId::new(db, Name::new("assert")),
+        ],
     }
 }
