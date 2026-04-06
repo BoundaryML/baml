@@ -13,6 +13,22 @@
 use baml_tests::baml_test;
 use bex_engine::BexExternalValue;
 
+/// Assert that execution failed with an uncaught panic of the given class.
+fn assert_uncaught_panic(
+    result: &Result<BexExternalValue, bex_engine::EngineError>,
+    expected_class: &str,
+) {
+    match result {
+        Err(bex_engine::EngineError::UnhandledThrow { value }) => match value.as_ref() {
+            BexExternalValue::Instance { class_name, .. } => {
+                assert_eq!(class_name, expected_class);
+            }
+            other => panic!("expected panic Instance, got {other:?}"),
+        },
+        other => panic!("expected UnhandledThrow({expected_class}), got {other:?}"),
+    }
+}
+
 // ============================================================================
 // §1 — Catch by literal value
 // ============================================================================
@@ -42,13 +58,15 @@ async fn catch_literal_string_match() {
     function main() -> int {
         call user.fails
         jump L2
-        load_var _1
+        load_var e
         load_const "boom"
         cmp_op ==
         pop_jump_if_false L0
         jump L1
 
       L0:
+        load_var e
+        throw_if_panic
         load_const 2
         jump L2
 
@@ -87,13 +105,15 @@ async fn catch_literal_string_no_match_falls_to_wildcard() {
     function main() -> int {
         call user.fails
         jump L2
-        load_var _1
+        load_var e
         load_const "boom"
         cmp_op ==
         pop_jump_if_false L0
         jump L1
 
       L0:
+        load_var e
+        throw_if_panic
         load_const 2
         jump L2
 
@@ -132,13 +152,15 @@ async fn catch_literal_int_match() {
     function main() -> int {
         call user.fails
         jump L2
-        load_var _1
+        load_var e
         load_const 42
         cmp_op ==
         pop_jump_if_false L0
         jump L1
 
       L0:
+        load_var e
+        throw_if_panic
         load_const 2
         jump L2
 
@@ -203,20 +225,22 @@ async fn catch_multiple_literals_dispatch() {
         load_const 1
         call user.fails
         jump L4
-        load_var _1
+        load_var e
         load_const "alpha"
         cmp_op ==
         pop_jump_if_false L0
         jump L3
 
       L0:
-        load_var _1
+        load_var e
         load_const "beta"
         cmp_op ==
         pop_jump_if_false L1
         jump L2
 
       L1:
+        load_var e
+        throw_if_panic
         load_const 3
         jump L4
 
@@ -262,7 +286,7 @@ async fn typed_binding_string() {
     function main() -> int {
         call user.fails
         jump L2
-        load_var _1
+        load_var e
         type_tag
         load_const 1
         cmp_op ==
@@ -270,7 +294,7 @@ async fn typed_binding_string() {
         jump L1
 
       L0:
-        load_var _1
+        load_var e
         throw
 
       L1:
@@ -307,7 +331,7 @@ async fn typed_binding_int() {
     function main() -> int {
         call user.fails
         jump L2
-        load_var _1
+        load_var e
         type_tag
         load_const 0
         cmp_op ==
@@ -315,7 +339,7 @@ async fn typed_binding_int() {
         jump L1
 
       L0:
-        load_var _1
+        load_var e
         throw
 
       L1:
@@ -366,7 +390,7 @@ async fn typed_binding_dispatch_string_vs_int() {
         load_const 0
         call user.fails
         jump L4
-        load_var _1
+        load_var e
         type_tag
         load_const 1
         cmp_op ==
@@ -374,7 +398,7 @@ async fn typed_binding_dispatch_string_vs_int() {
         jump L3
 
       L0:
-        load_var _1
+        load_var e
         type_tag
         load_const 0
         cmp_op ==
@@ -382,7 +406,7 @@ async fn typed_binding_dispatch_string_vs_int() {
         jump L2
 
       L1:
-        load_var _1
+        load_var e
         throw
 
       L2:
@@ -399,6 +423,7 @@ async fn typed_binding_dispatch_string_vs_int() {
     assert_eq!(output.result, Ok(BexExternalValue::Int(1)));
 }
 
+// Bytecode tested in typed_binding_dispatch_string_vs_int (same source, different mode).
 #[tokio::test]
 async fn typed_binding_dispatch_int_vs_string() {
     let output = baml_test!(
@@ -416,57 +441,6 @@ async fn typed_binding_dispatch_int_vs_string() {
         }
     "#
     );
-    insta::assert_snapshot!(output.bytecode, @r#"
-    function fails(mode: int) -> int {
-        load_var mode
-        load_const 0
-        cmp_op ==
-        pop_jump_if_false L0
-        jump L1
-
-      L0:
-        load_const 42
-        throw
-
-      L1:
-        load_const "boom"
-        throw
-    }
-
-    function main() -> int {
-        load_const 1
-        call user.fails
-        jump L4
-        load_var _1
-        type_tag
-        load_const 1
-        cmp_op ==
-        pop_jump_if_false L0
-        jump L3
-
-      L0:
-        load_var _1
-        type_tag
-        load_const 0
-        cmp_op ==
-        pop_jump_if_false L1
-        jump L2
-
-      L1:
-        load_var _1
-        throw
-
-      L2:
-        load_const 2
-        jump L4
-
-      L3:
-        load_const 1
-
-      L4:
-        return
-    }
-    "#);
     assert_eq!(output.result, Ok(BexExternalValue::Int(2)));
 }
 
@@ -508,7 +482,7 @@ async fn typed_binding_plus_wildcard() {
         load_const 1
         call user.fails
         jump L2
-        load_var _1
+        load_var e
         type_tag
         load_const 1
         cmp_op ==
@@ -516,6 +490,8 @@ async fn typed_binding_plus_wildcard() {
         jump L1
 
       L0:
+        load_var e
+        throw_if_panic
         load_const 2
         jump L2
 
@@ -571,7 +547,7 @@ async fn named_binding_string_access_value() {
         load_const 0
         call user.fails
         jump L4
-        load_var _1
+        load_var e
         type_tag
         load_const 1
         cmp_op ==
@@ -579,7 +555,7 @@ async fn named_binding_string_access_value() {
         jump L3
 
       L0:
-        load_var _1
+        load_var e
         type_tag
         load_const 0
         cmp_op ==
@@ -587,7 +563,7 @@ async fn named_binding_string_access_value() {
         jump L2
 
       L1:
-        load_var _1
+        load_var e
         throw
 
       L2:
@@ -595,7 +571,7 @@ async fn named_binding_string_access_value() {
         jump L4
 
       L3:
-        load_var _1
+        load_var e
 
       L4:
         return
@@ -645,7 +621,7 @@ async fn named_binding_int_access_value() {
         load_const 1
         call user.fails
         jump L4
-        load_var _1
+        load_var e
         type_tag
         load_const 1
         cmp_op ==
@@ -653,7 +629,7 @@ async fn named_binding_int_access_value() {
         jump L3
 
       L0:
-        load_var _1
+        load_var e
         type_tag
         load_const 0
         cmp_op ==
@@ -661,11 +637,11 @@ async fn named_binding_int_access_value() {
         jump L2
 
       L1:
-        load_var _1
+        load_var e
         throw
 
       L2:
-        load_var _1
+        load_var e
         jump L4
 
       L3:
@@ -712,14 +688,14 @@ async fn catch_user_class_single_arm() {
     function main() -> int {
         call user.fails
         jump L2
-        load_var _1
+        load_var e
         load_const NetworkError
         cmp_op instanceof
         pop_jump_if_false L0
         jump L1
 
       L0:
-        load_var _1
+        load_var e
         throw
 
       L1:
@@ -779,21 +755,21 @@ async fn catch_two_user_classes_dispatch_first() {
         load_const 0
         call user.fails
         jump L4
-        load_var _1
+        load_var e
         load_const NetworkError
         cmp_op instanceof
         pop_jump_if_false L0
         jump L3
 
       L0:
-        load_var _1
+        load_var e
         load_const ParseError
         cmp_op instanceof
         pop_jump_if_false L1
         jump L2
 
       L1:
-        load_var _1
+        load_var e
         throw
 
       L2:
@@ -810,6 +786,7 @@ async fn catch_two_user_classes_dispatch_first() {
     assert_eq!(output.result, Ok(BexExternalValue::Int(1)));
 }
 
+// Bytecode tested in catch_two_user_classes_dispatch_first (same source, different mode).
 #[tokio::test]
 async fn catch_two_user_classes_dispatch_second() {
     let output = baml_test!(
@@ -830,61 +807,6 @@ async fn catch_two_user_classes_dispatch_second() {
         }
     "#
     );
-    insta::assert_snapshot!(output.bytecode, @r#"
-    function fails(mode: int) -> int {
-        load_var mode
-        load_const 0
-        cmp_op ==
-        pop_jump_if_false L0
-        jump L1
-
-      L0:
-        alloc_instance ParseError
-        copy 0
-        load_const "bad json"
-        store_field .message
-        throw
-
-      L1:
-        alloc_instance NetworkError
-        copy 0
-        load_const "http://x"
-        store_field .url
-        throw
-    }
-
-    function main() -> int {
-        load_const 1
-        call user.fails
-        jump L4
-        load_var _1
-        load_const NetworkError
-        cmp_op instanceof
-        pop_jump_if_false L0
-        jump L3
-
-      L0:
-        load_var _1
-        load_const ParseError
-        cmp_op instanceof
-        pop_jump_if_false L1
-        jump L2
-
-      L1:
-        load_var _1
-        throw
-
-      L2:
-        load_const 2
-        jump L4
-
-      L3:
-        load_const 1
-
-      L4:
-        return
-    }
-    "#);
     assert_eq!(output.result, Ok(BexExternalValue::Int(2)));
 }
 
@@ -931,13 +853,15 @@ async fn catch_user_class_plus_wildcard() {
         load_const 1
         call user.fails
         jump L2
-        load_var _1
+        load_var e
         load_const NetworkError
         cmp_op instanceof
         pop_jump_if_false L0
         jump L1
 
       L0:
+        load_var e
+        throw_if_panic
         load_const 2
         jump L2
 
@@ -1028,27 +952,29 @@ async fn catch_three_user_classes_plus_wildcard() {
         load_const 2
         call user.api
         jump L6
-        load_var _1
+        load_var e
         load_const AuthError
         cmp_op instanceof
         pop_jump_if_false L0
         jump L5
 
       L0:
-        load_var _1
+        load_var e
         load_const NotFound
         cmp_op instanceof
         pop_jump_if_false L1
         jump L4
 
       L1:
-        load_var _1
+        load_var e
         load_const RateLimit
         cmp_op instanceof
         pop_jump_if_false L2
         jump L3
 
       L2:
+        load_var e
+        throw_if_panic
         load_const 4
         jump L6
 
@@ -1103,18 +1029,18 @@ async fn named_class_binding_access_field() {
     function main() -> string {
         call user.fails
         jump L2
-        load_var _1
+        load_var e
         load_const NetworkError
         cmp_op instanceof
         pop_jump_if_false L0
         jump L1
 
       L0:
-        load_var _1
+        load_var e
         throw
 
       L1:
-        load_var _1
+        load_var e
         load_field .url
 
       L2:
@@ -1174,30 +1100,30 @@ async fn named_class_binding_dispatch_access_fields() {
         load_const 1
         call user.fails
         jump L4
-        load_var _1
+        load_var e
         load_const NetworkError
         cmp_op instanceof
         pop_jump_if_false L0
         jump L3
 
       L0:
-        load_var _1
+        load_var e
         load_const ParseError
         cmp_op instanceof
         pop_jump_if_false L1
         jump L2
 
       L1:
-        load_var _1
+        load_var e
         throw
 
       L2:
-        load_var _1
+        load_var e
         load_field .message
         jump L4
 
       L3:
-        load_var _1
+        load_var e
         load_field .url
 
       L4:
@@ -1243,14 +1169,14 @@ async fn bare_class_single_arm() {
     function main() -> int {
         call user.fails
         jump L2
-        load_var _1
+        load_var e
         load_const NetworkError
         cmp_op instanceof
         pop_jump_if_false L0
         jump L1
 
       L0:
-        load_var _1
+        load_var e
         throw
 
       L1:
@@ -1310,21 +1236,21 @@ async fn bare_class_dispatch_first() {
         load_const 0
         call user.fails
         jump L4
-        load_var _1
+        load_var e
         load_const NetworkError
         cmp_op instanceof
         pop_jump_if_false L0
         jump L3
 
       L0:
-        load_var _1
+        load_var e
         load_const ParseError
         cmp_op instanceof
         pop_jump_if_false L1
         jump L2
 
       L1:
-        load_var _1
+        load_var e
         throw
 
       L2:
@@ -1341,6 +1267,7 @@ async fn bare_class_dispatch_first() {
     assert_eq!(output.result, Ok(BexExternalValue::Int(1)));
 }
 
+// Bytecode tested in bare_class_dispatch_first (same source, different mode).
 #[tokio::test]
 async fn bare_class_dispatch_second() {
     let output = baml_test!(
@@ -1361,61 +1288,6 @@ async fn bare_class_dispatch_second() {
         }
     "#
     );
-    insta::assert_snapshot!(output.bytecode, @r#"
-    function fails(mode: int) -> int {
-        load_var mode
-        load_const 0
-        cmp_op ==
-        pop_jump_if_false L0
-        jump L1
-
-      L0:
-        alloc_instance ParseError
-        copy 0
-        load_const "bad"
-        store_field .message
-        throw
-
-      L1:
-        alloc_instance NetworkError
-        copy 0
-        load_const "http://x"
-        store_field .url
-        throw
-    }
-
-    function main() -> int {
-        load_const 1
-        call user.fails
-        jump L4
-        load_var _1
-        load_const NetworkError
-        cmp_op instanceof
-        pop_jump_if_false L0
-        jump L3
-
-      L0:
-        load_var _1
-        load_const ParseError
-        cmp_op instanceof
-        pop_jump_if_false L1
-        jump L2
-
-      L1:
-        load_var _1
-        throw
-
-      L2:
-        load_const 2
-        jump L4
-
-      L3:
-        load_const 1
-
-      L4:
-        return
-    }
-    "#);
     assert_eq!(output.result, Ok(BexExternalValue::Int(2)));
 }
 
@@ -1462,13 +1334,15 @@ async fn bare_class_plus_wildcard() {
         load_const 0
         call user.fails
         jump L2
-        load_var _1
+        load_var e
         load_const NetworkError
         cmp_op instanceof
         pop_jump_if_false L0
         jump L1
 
       L0:
+        load_var e
+        throw_if_panic
         load_const 2
         jump L2
 
@@ -1482,6 +1356,7 @@ async fn bare_class_plus_wildcard() {
     assert_eq!(output.result, Ok(BexExternalValue::Int(1)));
 }
 
+// Bytecode tested in bare_class_plus_wildcard (same source, different mode).
 #[tokio::test]
 async fn bare_class_plus_wildcard_wildcard_fires() {
     let output = baml_test!(
@@ -1501,47 +1376,6 @@ async fn bare_class_plus_wildcard_wildcard_fires() {
         }
     "#
     );
-    insta::assert_snapshot!(output.bytecode, @r#"
-    function fails(mode: int) -> int {
-        load_var mode
-        load_const 0
-        cmp_op ==
-        pop_jump_if_false L0
-        jump L1
-
-      L0:
-        load_const "plain string"
-        throw
-
-      L1:
-        alloc_instance NetworkError
-        copy 0
-        load_const "http://x"
-        store_field .url
-        throw
-    }
-
-    function main() -> int {
-        load_const 1
-        call user.fails
-        jump L2
-        load_var _1
-        load_const NetworkError
-        cmp_op instanceof
-        pop_jump_if_false L0
-        jump L1
-
-      L0:
-        load_const 2
-        jump L2
-
-      L1:
-        load_const 1
-
-      L2:
-        return
-    }
-    "#);
     assert_eq!(output.result, Ok(BexExternalValue::Int(2)));
 }
 
@@ -1621,14 +1455,14 @@ async fn catch_division_by_zero() {
     function main() -> int {
         call user.divides
         jump L2
-        load_var _1
+        load_var e
         load_const baml.panics.DivisionByZero
         cmp_op instanceof
         pop_jump_if_false L0
         jump L1
 
       L0:
-        load_var _1
+        load_var e
         throw
 
       L1:
@@ -1657,14 +1491,14 @@ async fn catch_index_out_of_bounds() {
     function main() -> int {
         call user.oob
         jump L2
-        load_var _1
+        load_var e
         load_const baml.panics.IndexOutOfBounds
         cmp_op instanceof
         pop_jump_if_false L0
         jump L1
 
       L0:
-        load_var _1
+        load_var e
         throw
 
       L1:
@@ -1711,14 +1545,14 @@ async fn catch_map_key_not_found() {
     function main() -> int {
         call user.bad
         jump L2
-        load_var _1
+        load_var e
         load_const baml.panics.MapKeyNotFound
         cmp_op instanceof
         pop_jump_if_false L0
         jump L1
 
       L0:
-        load_var _1
+        load_var e
         throw
 
       L1:
@@ -1757,14 +1591,14 @@ async fn catch_negative_index_as_index_out_of_bounds() {
     function main() -> int {
         call user.bad
         jump L2
-        load_var _1
+        load_var e
         load_const baml.panics.IndexOutOfBounds
         cmp_op instanceof
         pop_jump_if_false L0
         jump L1
 
       L0:
-        load_var _1
+        load_var e
         throw
 
       L1:
@@ -1806,18 +1640,18 @@ async fn named_panic_binding_division_by_zero_field() {
     function main() -> int {
         call user.divides
         jump L2
-        load_var _1
+        load_var e
         load_const baml.panics.DivisionByZero
         cmp_op instanceof
         pop_jump_if_false L0
         jump L1
 
       L0:
-        load_var _1
+        load_var e
         throw
 
       L1:
-        load_var _1
+        load_var e
         load_field .dividend
 
       L2:
@@ -1844,18 +1678,18 @@ async fn named_panic_binding_index_out_of_bounds_fields() {
     function main() -> int {
         call user.oob
         jump L2
-        load_var _1
+        load_var e
         load_const baml.panics.IndexOutOfBounds
         cmp_op instanceof
         pop_jump_if_false L0
         jump L1
 
       L0:
-        load_var _1
+        load_var e
         throw
 
       L1:
-        load_var _1
+        load_var e
         load_field .index
 
       L2:
@@ -1892,18 +1726,18 @@ async fn named_panic_binding_index_out_of_bounds_length() {
     function main() -> int {
         call user.oob
         jump L2
-        load_var _1
+        load_var e
         load_const baml.panics.IndexOutOfBounds
         cmp_op instanceof
         pop_jump_if_false L0
         jump L1
 
       L0:
-        load_var _1
+        load_var e
         throw
 
       L1:
-        load_var _1
+        load_var e
         load_field .length
 
       L2:
@@ -1949,18 +1783,18 @@ async fn named_panic_binding_map_key_not_found_field() {
     function main() -> string {
         call user.bad
         jump L2
-        load_var _1
+        load_var e
         load_const baml.panics.MapKeyNotFound
         cmp_op instanceof
         pop_jump_if_false L0
         jump L1
 
       L0:
-        load_var _1
+        load_var e
         throw
 
       L1:
-        load_var _1
+        load_var e
         load_field .key
 
       L2:
@@ -1998,6 +1832,8 @@ async fn wildcard_skips_division_by_zero() {
         load_const 0
         call user.risky
         jump L0
+        load_var e
+        throw_if_panic
         load_const 1
         unary_op -
 
@@ -2023,7 +1859,7 @@ async fn wildcard_skips_division_by_zero() {
         throw
     }
     "#);
-    assert!(output.result.is_err(), "panic should propagate past _");
+    assert_uncaught_panic(&output.result, "baml.panics.DivisionByZero");
 }
 
 #[tokio::test]
@@ -2046,6 +1882,8 @@ async fn wildcard_skips_index_out_of_bounds() {
         load_const 99
         call user.risky
         jump L0
+        load_var e
+        throw_if_panic
         load_const 1
         unary_op -
 
@@ -2074,7 +1912,7 @@ async fn wildcard_skips_index_out_of_bounds() {
         throw
     }
     "#);
-    assert!(output.result.is_err(), "panic should propagate past _");
+    assert_uncaught_panic(&output.result, "baml.panics.IndexOutOfBounds");
 }
 
 // ============================================================================
@@ -2102,31 +1940,23 @@ async fn panic_arm_plus_wildcard_panic_fires() {
     function main() -> int {
         load_const 0
         call user.risky
-        jump L4
-        load_var _1
+        jump L2
+        load_var e
         load_const baml.panics.DivisionByZero
         cmp_op instanceof
         pop_jump_if_false L0
-        jump L3
+        jump L1
 
       L0:
-        load_var _1
-        is_panic
-        pop_jump_if_false L1
+        load_var e
+        throw_if_panic
+        load_const 2
         jump L2
 
       L1:
-        load_const 2
-        jump L4
-
-      L2:
-        load_var _1
-        throw
-
-      L3:
         load_const 1
 
-      L4:
+      L2:
         return
     }
 
@@ -2151,6 +1981,7 @@ async fn panic_arm_plus_wildcard_panic_fires() {
     assert_eq!(output.result, Ok(BexExternalValue::Int(1)));
 }
 
+// Bytecode tested in panic_arm_plus_wildcard_panic_fires (same source, different mode).
 #[tokio::test]
 async fn panic_arm_plus_wildcard_user_error_fires() {
     let output = baml_test!(
@@ -2168,56 +1999,6 @@ async fn panic_arm_plus_wildcard_user_error_fires() {
         }
     "#
     );
-    insta::assert_snapshot!(output.bytecode, @r#"
-    function main() -> int {
-        load_const 999
-        call user.risky
-        jump L4
-        load_var _1
-        load_const baml.panics.DivisionByZero
-        cmp_op instanceof
-        pop_jump_if_false L0
-        jump L3
-
-      L0:
-        load_var _1
-        is_panic
-        pop_jump_if_false L1
-        jump L2
-
-      L1:
-        load_const 2
-        jump L4
-
-      L2:
-        load_var _1
-        throw
-
-      L3:
-        load_const 1
-
-      L4:
-        return
-    }
-
-    function risky(x: int) -> int {
-        load_var x
-        load_const 100
-        cmp_op >
-        pop_jump_if_false L0
-        jump L1
-
-      L0:
-        load_const 1
-        load_var x
-        bin_op /
-        return
-
-      L1:
-        load_const "too big"
-        throw
-    }
-    "#);
     assert_eq!(output.result, Ok(BexExternalValue::Int(2)));
 }
 
@@ -2242,33 +2023,25 @@ async fn panic_arm_plus_wildcard_no_error() {
     function main() -> int {
         load_const 5
         call user.risky
-        jump L4
-        load_var _1
+        jump L2
+        load_var e
         load_const baml.panics.DivisionByZero
         cmp_op instanceof
         pop_jump_if_false L0
-        jump L3
+        jump L1
 
       L0:
-        load_var _1
-        is_panic
-        pop_jump_if_false L1
+        load_var e
+        throw_if_panic
+        load_const 2
+        unary_op -
         jump L2
 
       L1:
-        load_const 2
-        unary_op -
-        jump L4
-
-      L2:
-        load_var _1
-        throw
-
-      L3:
         load_const 1
         unary_op -
 
-      L4:
+      L2:
         return
     }
 
@@ -2322,42 +2095,34 @@ async fn user_class_plus_panic_plus_wildcard_class_fires() {
     function main() -> int {
         load_const 0
         call user.risky
-        jump L6
-        load_var _1
+        jump L4
+        load_var e
         load_const AppError
         cmp_op instanceof
         pop_jump_if_false L0
-        jump L5
+        jump L3
 
       L0:
-        load_var _1
+        load_var e
         load_const baml.panics.DivisionByZero
         cmp_op instanceof
         pop_jump_if_false L1
-        jump L4
+        jump L2
 
       L1:
-        load_var _1
-        is_panic
-        pop_jump_if_false L2
-        jump L3
+        load_var e
+        throw_if_panic
+        load_const 3
+        jump L4
 
       L2:
-        load_const 3
-        jump L6
+        load_const 2
+        jump L4
 
       L3:
-        load_var _1
-        throw
-
-      L4:
-        load_const 2
-        jump L6
-
-      L5:
         load_const 1
 
-      L6:
+      L4:
         return
     }
 
@@ -2423,42 +2188,34 @@ async fn user_class_plus_panic_plus_wildcard_panic_fires() {
     function main() -> int {
         load_const 1
         call user.risky
-        jump L6
-        load_var _1
+        jump L4
+        load_var e
         load_const AppError
         cmp_op instanceof
         pop_jump_if_false L0
-        jump L5
+        jump L3
 
       L0:
-        load_var _1
+        load_var e
         load_const baml.panics.DivisionByZero
         cmp_op instanceof
         pop_jump_if_false L1
-        jump L4
+        jump L2
 
       L1:
-        load_var _1
-        is_panic
-        pop_jump_if_false L2
-        jump L3
+        load_var e
+        throw_if_panic
+        load_const 3
+        jump L4
 
       L2:
-        load_const 3
-        jump L6
+        load_const 2
+        jump L4
 
       L3:
-        load_var _1
-        throw
-
-      L4:
-        load_const 2
-        jump L6
-
-      L5:
         load_const 1
 
-      L6:
+      L4:
         return
     }
 
@@ -2495,6 +2252,7 @@ async fn user_class_plus_panic_plus_wildcard_panic_fires() {
     assert_eq!(output.result, Ok(BexExternalValue::Int(2)));
 }
 
+// Bytecode tested in user_class_plus_panic_plus_wildcard_panic_fires (same source, different mode).
 #[tokio::test]
 async fn user_class_plus_panic_plus_wildcard_string_fires() {
     let output = baml_test!(
@@ -2518,86 +2276,6 @@ async fn user_class_plus_panic_plus_wildcard_string_fires() {
         }
     "#
     );
-    insta::assert_snapshot!(output.bytecode, @r#"
-    function do_div() -> int {
-        load_const 1
-        load_const 0
-        bin_op /
-        return
-    }
-
-    function main() -> int {
-        load_const 2
-        call user.risky
-        jump L6
-        load_var _1
-        load_const AppError
-        cmp_op instanceof
-        pop_jump_if_false L0
-        jump L5
-
-      L0:
-        load_var _1
-        load_const baml.panics.DivisionByZero
-        cmp_op instanceof
-        pop_jump_if_false L1
-        jump L4
-
-      L1:
-        load_var _1
-        is_panic
-        pop_jump_if_false L2
-        jump L3
-
-      L2:
-        load_const 3
-        jump L6
-
-      L3:
-        load_var _1
-        throw
-
-      L4:
-        load_const 2
-        jump L6
-
-      L5:
-        load_const 1
-
-      L6:
-        return
-    }
-
-    function risky(mode: int) -> int {
-        load_var mode
-        load_const 0
-        cmp_op ==
-        pop_jump_if_false L0
-        jump L3
-
-      L0:
-        load_var mode
-        load_const 1
-        cmp_op ==
-        pop_jump_if_false L1
-        jump L2
-
-      L1:
-        load_const "fallback"
-        throw
-
-      L2:
-        call user.do_div
-        return
-
-      L3:
-        alloc_instance AppError
-        copy 0
-        load_const 500
-        store_field .code
-        throw
-    }
-    "#);
     assert_eq!(output.result, Ok(BexExternalValue::Int(3)));
 }
 
@@ -2699,10 +2377,7 @@ async fn mixed_union_arm_plus_wildcard_other_panic_propagates() {
         }
     "#
     );
-    assert!(
-        output.result.is_err(),
-        "different panic should propagate past _"
-    );
+    assert_uncaught_panic(&output.result, "baml.panics.IndexOutOfBounds");
 }
 
 #[tokio::test]
@@ -2777,6 +2452,7 @@ async fn mixed_union_no_wildcard_panic_fires() {
     assert_eq!(output.result, Ok(BexExternalValue::Int(1)));
 }
 
+// Same source as mixed_union_no_wildcard_panic_fires, different mode.
 #[tokio::test]
 async fn mixed_union_no_wildcard_error_fires() {
     let output = baml_test!(
@@ -2816,8 +2492,11 @@ async fn mixed_union_no_wildcard_unmatched_rethrows() {
         }
     "#
     );
-    assert!(
-        output.result.is_err(),
+    assert_eq!(
+        output.result,
+        Err(bex_engine::EngineError::UnhandledThrow {
+            value: Box::new(BexExternalValue::String("not matched".to_string())),
+        }),
         "unmatched throw should rethrow past mixed union arm"
     );
 }
@@ -2840,10 +2519,7 @@ async fn mixed_union_no_wildcard_unmatched_panic_rethrows() {
         }
     "#
     );
-    assert!(
-        output.result.is_err(),
-        "IndexOutOfBounds should rethrow past mixed union arm"
-    );
+    assert_uncaught_panic(&output.result, "baml.panics.IndexOutOfBounds");
 }
 
 // §9c — Pure-panic union with wildcard
@@ -2871,6 +2547,7 @@ async fn panic_union_plus_wildcard_division_fires() {
     assert_eq!(output.result, Ok(BexExternalValue::Int(1)));
 }
 
+// Same source as panic_union_plus_wildcard_division_fires, different mode.
 #[tokio::test]
 async fn panic_union_plus_wildcard_index_fires() {
     let output = baml_test!(
@@ -2962,53 +2639,45 @@ async fn four_arms_division_by_zero_fires() {
     function main() -> int {
         load_const 0
         call user.risky
-        jump L8
-        load_var _1
+        jump L6
+        load_var e
         load_const baml.panics.DivisionByZero
         cmp_op instanceof
         pop_jump_if_false L0
-        jump L7
+        jump L5
 
       L0:
-        load_var _1
+        load_var e
         load_const baml.panics.IndexOutOfBounds
         cmp_op instanceof
         pop_jump_if_false L1
-        jump L6
+        jump L4
 
       L1:
-        load_var _1
+        load_var e
         load_const AppError
         cmp_op instanceof
         pop_jump_if_false L2
-        jump L5
+        jump L3
 
       L2:
-        load_var _1
-        is_panic
-        pop_jump_if_false L3
-        jump L4
+        load_var e
+        throw_if_panic
+        load_const 4
+        jump L6
 
       L3:
-        load_const 4
-        jump L8
+        load_const 3
+        jump L6
 
       L4:
-        load_var _1
-        throw
+        load_const 2
+        jump L6
 
       L5:
-        load_const 3
-        jump L8
-
-      L6:
-        load_const 2
-        jump L8
-
-      L7:
         load_const 1
 
-      L8:
+      L6:
         return
     }
 
@@ -3058,6 +2727,7 @@ async fn four_arms_division_by_zero_fires() {
     assert_eq!(output.result, Ok(BexExternalValue::Int(1)));
 }
 
+// Bytecode tested in four_arms_division_by_zero_fires (same source, different mode).
 #[tokio::test]
 async fn four_arms_index_out_of_bounds_fires() {
     let output = baml_test!(
@@ -3083,121 +2753,10 @@ async fn four_arms_index_out_of_bounds_fires() {
         }
     "#
     );
-    insta::assert_snapshot!(output.bytecode, @r#"
-    function do_div() -> int {
-        load_const 1
-        load_const 0
-        bin_op /
-        return
-    }
-
-    function do_oob() -> int {
-        load_const 1
-        alloc_array 1
-        load_const 5
-        load_array_element
-        return
-    }
-
-    function main() -> int {
-        load_const 1
-        call user.risky
-        jump L8
-        load_var _1
-        load_const baml.panics.DivisionByZero
-        cmp_op instanceof
-        pop_jump_if_false L0
-        jump L7
-
-      L0:
-        load_var _1
-        load_const baml.panics.IndexOutOfBounds
-        cmp_op instanceof
-        pop_jump_if_false L1
-        jump L6
-
-      L1:
-        load_var _1
-        load_const AppError
-        cmp_op instanceof
-        pop_jump_if_false L2
-        jump L5
-
-      L2:
-        load_var _1
-        is_panic
-        pop_jump_if_false L3
-        jump L4
-
-      L3:
-        load_const 4
-        jump L8
-
-      L4:
-        load_var _1
-        throw
-
-      L5:
-        load_const 3
-        jump L8
-
-      L6:
-        load_const 2
-        jump L8
-
-      L7:
-        load_const 1
-
-      L8:
-        return
-    }
-
-    function risky(mode: int) -> int {
-        load_var mode
-        load_const 0
-        cmp_op ==
-        pop_jump_if_false L0
-        jump L5
-
-      L0:
-        load_var mode
-        load_const 1
-        cmp_op ==
-        pop_jump_if_false L1
-        jump L4
-
-      L1:
-        load_var mode
-        load_const 2
-        cmp_op ==
-        pop_jump_if_false L2
-        jump L3
-
-      L2:
-        load_const "unknown"
-        throw
-
-      L3:
-        alloc_instance AppError
-        copy 0
-        load_const 404
-        store_field .code
-        throw
-
-      L4:
-        call user.do_oob
-        jump L6
-
-      L5:
-        call user.do_div
-
-      L6:
-        return
-    }
-    "#);
     assert_eq!(output.result, Ok(BexExternalValue::Int(2)));
 }
 
+// Bytecode tested in four_arms_division_by_zero_fires (same source, different mode).
 #[tokio::test]
 async fn four_arms_user_class_fires() {
     let output = baml_test!(
@@ -3223,121 +2782,10 @@ async fn four_arms_user_class_fires() {
         }
     "#
     );
-    insta::assert_snapshot!(output.bytecode, @r#"
-    function do_div() -> int {
-        load_const 1
-        load_const 0
-        bin_op /
-        return
-    }
-
-    function do_oob() -> int {
-        load_const 1
-        alloc_array 1
-        load_const 5
-        load_array_element
-        return
-    }
-
-    function main() -> int {
-        load_const 2
-        call user.risky
-        jump L8
-        load_var _1
-        load_const baml.panics.DivisionByZero
-        cmp_op instanceof
-        pop_jump_if_false L0
-        jump L7
-
-      L0:
-        load_var _1
-        load_const baml.panics.IndexOutOfBounds
-        cmp_op instanceof
-        pop_jump_if_false L1
-        jump L6
-
-      L1:
-        load_var _1
-        load_const AppError
-        cmp_op instanceof
-        pop_jump_if_false L2
-        jump L5
-
-      L2:
-        load_var _1
-        is_panic
-        pop_jump_if_false L3
-        jump L4
-
-      L3:
-        load_const 4
-        jump L8
-
-      L4:
-        load_var _1
-        throw
-
-      L5:
-        load_const 3
-        jump L8
-
-      L6:
-        load_const 2
-        jump L8
-
-      L7:
-        load_const 1
-
-      L8:
-        return
-    }
-
-    function risky(mode: int) -> int {
-        load_var mode
-        load_const 0
-        cmp_op ==
-        pop_jump_if_false L0
-        jump L5
-
-      L0:
-        load_var mode
-        load_const 1
-        cmp_op ==
-        pop_jump_if_false L1
-        jump L4
-
-      L1:
-        load_var mode
-        load_const 2
-        cmp_op ==
-        pop_jump_if_false L2
-        jump L3
-
-      L2:
-        load_const "unknown"
-        throw
-
-      L3:
-        alloc_instance AppError
-        copy 0
-        load_const 404
-        store_field .code
-        throw
-
-      L4:
-        call user.do_oob
-        jump L6
-
-      L5:
-        call user.do_div
-
-      L6:
-        return
-    }
-    "#);
     assert_eq!(output.result, Ok(BexExternalValue::Int(3)));
 }
 
+// Bytecode tested in four_arms_division_by_zero_fires (same source, different mode).
 #[tokio::test]
 async fn four_arms_wildcard_fires() {
     let output = baml_test!(
@@ -3363,118 +2811,6 @@ async fn four_arms_wildcard_fires() {
         }
     "#
     );
-    insta::assert_snapshot!(output.bytecode, @r#"
-    function do_div() -> int {
-        load_const 1
-        load_const 0
-        bin_op /
-        return
-    }
-
-    function do_oob() -> int {
-        load_const 1
-        alloc_array 1
-        load_const 5
-        load_array_element
-        return
-    }
-
-    function main() -> int {
-        load_const 3
-        call user.risky
-        jump L8
-        load_var _1
-        load_const baml.panics.DivisionByZero
-        cmp_op instanceof
-        pop_jump_if_false L0
-        jump L7
-
-      L0:
-        load_var _1
-        load_const baml.panics.IndexOutOfBounds
-        cmp_op instanceof
-        pop_jump_if_false L1
-        jump L6
-
-      L1:
-        load_var _1
-        load_const AppError
-        cmp_op instanceof
-        pop_jump_if_false L2
-        jump L5
-
-      L2:
-        load_var _1
-        is_panic
-        pop_jump_if_false L3
-        jump L4
-
-      L3:
-        load_const 4
-        jump L8
-
-      L4:
-        load_var _1
-        throw
-
-      L5:
-        load_const 3
-        jump L8
-
-      L6:
-        load_const 2
-        jump L8
-
-      L7:
-        load_const 1
-
-      L8:
-        return
-    }
-
-    function risky(mode: int) -> int {
-        load_var mode
-        load_const 0
-        cmp_op ==
-        pop_jump_if_false L0
-        jump L5
-
-      L0:
-        load_var mode
-        load_const 1
-        cmp_op ==
-        pop_jump_if_false L1
-        jump L4
-
-      L1:
-        load_var mode
-        load_const 2
-        cmp_op ==
-        pop_jump_if_false L2
-        jump L3
-
-      L2:
-        load_const "unknown"
-        throw
-
-      L3:
-        alloc_instance AppError
-        copy 0
-        load_const 404
-        store_field .code
-        throw
-
-      L4:
-        call user.do_oob
-        jump L6
-
-      L5:
-        call user.do_div
-
-      L6:
-        return
-    }
-    "#);
     assert_eq!(output.result, Ok(BexExternalValue::Int(4)));
 }
 
@@ -3523,53 +2859,45 @@ async fn four_arms_no_error() {
     function main() -> int {
         load_const 4
         call user.risky
-        jump L8
-        load_var _1
+        jump L6
+        load_var e
         load_const baml.panics.DivisionByZero
         cmp_op instanceof
         pop_jump_if_false L0
-        jump L7
+        jump L5
 
       L0:
-        load_var _1
+        load_var e
         load_const baml.panics.IndexOutOfBounds
         cmp_op instanceof
         pop_jump_if_false L1
-        jump L6
+        jump L4
 
       L1:
-        load_var _1
+        load_var e
         load_const AppError
         cmp_op instanceof
         pop_jump_if_false L2
-        jump L5
+        jump L3
 
       L2:
-        load_var _1
-        is_panic
-        pop_jump_if_false L3
-        jump L4
+        load_var e
+        throw_if_panic
+        load_const 4
+        jump L6
 
       L3:
-        load_const 4
-        jump L8
+        load_const 3
+        jump L6
 
       L4:
-        load_var _1
-        throw
+        load_const 2
+        jump L6
 
       L5:
-        load_const 3
-        jump L8
-
-      L6:
-        load_const 2
-        jump L8
-
-      L7:
         load_const 1
 
-      L8:
+      L6:
         return
     }
 
@@ -3645,7 +2973,7 @@ async fn uncaught_division_by_zero() {
         return
     }
     ");
-    assert!(output.result.is_err());
+    assert_uncaught_panic(&output.result, "baml.panics.DivisionByZero");
 }
 
 #[tokio::test]
@@ -3660,7 +2988,7 @@ async fn uncaught_index_out_of_bounds() {
         return
     }
     ");
-    assert!(output.result.is_err());
+    assert_uncaught_panic(&output.result, "baml.panics.IndexOutOfBounds");
 }
 
 #[tokio::test]
@@ -3685,14 +3013,14 @@ async fn wrong_panic_pattern_propagates() {
     function main() -> int {
         call user.divides
         jump L2
-        load_var _1
+        load_var e
         load_const baml.panics.IndexOutOfBounds
         cmp_op instanceof
         pop_jump_if_false L0
         jump L1
 
       L0:
-        load_var _1
+        load_var e
         throw
 
       L1:
@@ -3703,10 +3031,40 @@ async fn wrong_panic_pattern_propagates() {
         return
     }
     ");
-    assert!(
-        output.result.is_err(),
-        "DivisionByZero should propagate past IndexOutOfBounds arm"
+    assert_uncaught_panic(&output.result, "baml.panics.DivisionByZero");
+}
+
+// ============================================================================
+// §11b — Same-frame exception table lookup
+// ============================================================================
+
+#[tokio::test]
+async fn same_frame_division_caught() {
+    let output = baml_test!(
+        r#"
+        function main() -> int {
+            (1 / 0) catch (e) {
+                _: baml.panics.DivisionByZero => -1
+            }
+        }
+    "#
     );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(-1)));
+}
+
+#[tokio::test]
+async fn same_frame_index_out_of_bounds_caught() {
+    let output = baml_test!(
+        r#"
+        function main() -> int {
+            let a = [1, 2, 3];
+            a[10] catch (e) {
+                _: baml.panics.IndexOutOfBounds => -1
+            }
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(-1)));
 }
 
 // ============================================================================
@@ -3735,49 +3093,49 @@ async fn panic_alias_catches_any_panic() {
     function main() -> int {
         call user.divides
         jump L7
-        load_var _1
+        load_var e
         load_const baml.panics.DivisionByZero
         cmp_op instanceof
         pop_jump_if_false L0
         jump L6
 
       L0:
-        load_var _1
+        load_var e
         load_const baml.panics.IndexOutOfBounds
         cmp_op instanceof
         pop_jump_if_false L1
         jump L6
 
       L1:
-        load_var _1
+        load_var e
         load_const baml.panics.MapKeyNotFound
         cmp_op instanceof
         pop_jump_if_false L2
         jump L6
 
       L2:
-        load_var _1
+        load_var e
         load_const baml.panics.StackOverflow
         cmp_op instanceof
         pop_jump_if_false L3
         jump L6
 
       L3:
-        load_var _1
+        load_var e
         load_const baml.panics.AssertionFailed
         cmp_op instanceof
         pop_jump_if_false L4
         jump L6
 
       L4:
-        load_var _1
+        load_var e
         load_const baml.panics.Unreachable
         cmp_op instanceof
         pop_jump_if_false L5
         jump L6
 
       L5:
-        load_var _1
+        load_var e
         throw
 
       L6:
@@ -3812,66 +3170,58 @@ async fn panic_alias_plus_wildcard_dispatch() {
     function main() -> int {
         load_const 0
         call user.risky
-        jump L9
-        load_var _1
+        jump L7
+        load_var e
         load_const baml.panics.DivisionByZero
         cmp_op instanceof
         pop_jump_if_false L0
-        jump L8
+        jump L6
 
       L0:
-        load_var _1
+        load_var e
         load_const baml.panics.IndexOutOfBounds
         cmp_op instanceof
         pop_jump_if_false L1
-        jump L8
+        jump L6
 
       L1:
-        load_var _1
+        load_var e
         load_const baml.panics.MapKeyNotFound
         cmp_op instanceof
         pop_jump_if_false L2
-        jump L8
+        jump L6
 
       L2:
-        load_var _1
+        load_var e
         load_const baml.panics.StackOverflow
         cmp_op instanceof
         pop_jump_if_false L3
-        jump L8
+        jump L6
 
       L3:
-        load_var _1
+        load_var e
         load_const baml.panics.AssertionFailed
         cmp_op instanceof
         pop_jump_if_false L4
-        jump L8
+        jump L6
 
       L4:
-        load_var _1
+        load_var e
         load_const baml.panics.Unreachable
         cmp_op instanceof
         pop_jump_if_false L5
-        jump L8
+        jump L6
 
       L5:
-        load_var _1
-        is_panic
-        pop_jump_if_false L6
+        load_var e
+        throw_if_panic
+        load_const 2
         jump L7
 
       L6:
-        load_const 2
-        jump L9
-
-      L7:
-        load_var _1
-        throw
-
-      L8:
         load_const 1
 
-      L9:
+      L7:
         return
     }
 
@@ -3924,6 +3274,8 @@ async fn nested_inner_catches_outer_does_not_fire() {
     function main() -> int {
         call user.middle
         jump L0
+        load_var e
+        throw_if_panic
         load_const 1
         unary_op -
 
@@ -3934,6 +3286,8 @@ async fn nested_inner_catches_outer_does_not_fire() {
     function middle() -> int {
         call user.inner
         jump L0
+        load_var e
+        throw_if_panic
         load_const 42
 
       L0:
@@ -3970,6 +3324,8 @@ async fn nested_inner_catches_panic_outer_catches_rethrow() {
     function main() -> int {
         call user.middle
         jump L0
+        load_var e
+        throw_if_panic
         load_const 99
 
       L0:
@@ -3980,14 +3336,14 @@ async fn nested_inner_catches_panic_outer_catches_rethrow() {
         call user.divides
         store_var x
         jump L2
-        load_var _2
+        load_var e
         load_const baml.panics.DivisionByZero
         cmp_op instanceof
         pop_jump_if_false L0
         jump L1
 
       L0:
-        load_var _2
+        load_var e
         throw
 
       L1:
@@ -4027,6 +3383,8 @@ async fn rethrow_propagates_to_outer() {
     function main() -> int {
         call user.middle
         jump L0
+        load_var e
+        throw_if_panic
         load_const 99
 
       L0:
@@ -4036,6 +3394,8 @@ async fn rethrow_propagates_to_outer() {
     function middle() -> int {
         call user.inner
         return
+        load_var e
+        throw_if_panic
         load_const "rethrown"
         throw
     }
@@ -4072,6 +3432,8 @@ async fn sequential_catches_both_recover() {
         call user.f1
         store_var a
         jump L0
+        load_var e
+        throw_if_panic
         load_const 10
         store_var a
 
@@ -4079,6 +3441,8 @@ async fn sequential_catches_both_recover() {
         call user.f2
         store_var b
         jump L1
+        load_var e
+        throw_if_panic
         load_const 20
         store_var b
 
@@ -4107,6 +3471,8 @@ async fn inline_throw_catch() {
     );
     insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
+        load_const 1
+        throw_if_panic
         load_const 2
         return
     }
@@ -4170,18 +3536,18 @@ async fn caught_panic_has_accessible_fields() {
     function main() -> int {
         call user.oob
         jump L2
-        load_var _1
+        load_var e
         load_const baml.panics.IndexOutOfBounds
         cmp_op instanceof
         pop_jump_if_false L0
         jump L1
 
       L0:
-        load_var _1
+        load_var e
         throw
 
       L1:
-        load_var _1
+        load_var e
         load_field .index
 
       L2:
