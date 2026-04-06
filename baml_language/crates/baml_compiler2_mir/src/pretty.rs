@@ -362,6 +362,11 @@ fn write_rvalue(f: &mut impl Write, rvalue: &Rvalue) -> fmt::Result {
             write_operand(f, operand)?;
             write!(f, ", {ty:?})")
         }
+        Rvalue::IsPanic(operand) => {
+            write!(f, "is_panic(")?;
+            write_operand(f, operand)?;
+            write!(f, ")")
+        }
         Rvalue::MakeClosure {
             lambda_idx,
             captures,

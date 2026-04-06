@@ -313,9 +313,6 @@ fn compute_rpo(body: &MirFunctionBody) -> Vec<BlockId> {
     // in the reversed RPO.
     for region in &body.catch_regions {
         rpo_dfs(body, region.handler, &mut visited, &mut postorder);
-        if let Some(ph) = region.panic_handler {
-            rpo_dfs(body, ph, &mut visited, &mut postorder);
-        }
     }
     rpo_dfs(body, body.entry, &mut visited, &mut postorder);
     postorder.reverse();
@@ -703,7 +700,9 @@ fn walk_rvalue_locals(rvalue: &Rvalue, f: &mut impl FnMut(Local)) {
         Rvalue::Discriminant(place) | Rvalue::TypeTag(place) | Rvalue::Len(place) => {
             walk_place_locals(place, f);
         }
-        Rvalue::IsType { operand, .. } => walk_operand_locals(operand, f),
+        Rvalue::IsType { operand, .. } | Rvalue::IsPanic(operand) => {
+            walk_operand_locals(operand, f);
+        }
         Rvalue::MakeClosure { captures, .. } => {
             for cap in captures {
                 walk_operand_locals(cap, f);
@@ -1378,7 +1377,9 @@ fn rvalue_has_projection_reads(rvalue: &Rvalue) -> bool {
         Rvalue::Discriminant(place) | Rvalue::TypeTag(place) | Rvalue::Len(place) => {
             place_has_projection(place)
         }
-        Rvalue::IsType { operand, .. } => operand_has_projection(operand),
+        Rvalue::IsType { operand, .. } | Rvalue::IsPanic(operand) => {
+            operand_has_projection(operand)
+        }
         Rvalue::MakeClosure { captures, .. } => captures.iter().any(operand_has_projection),
     }
 }

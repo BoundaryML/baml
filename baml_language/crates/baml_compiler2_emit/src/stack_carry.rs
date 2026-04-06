@@ -759,6 +759,15 @@ impl PullSink for StackCarryPullSink<'_> {
         Ok(())
     }
 
+    fn is_panic(&mut self) -> Result<(), Self::Error> {
+        // Consumes value, pushes boolean.
+        if !self.sim.pop_n(1) {
+            return Err(());
+        }
+        self.sim.push();
+        Ok(())
+    }
+
     fn make_closure(
         &mut self,
         _lambda_idx: usize,

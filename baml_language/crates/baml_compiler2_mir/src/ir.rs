@@ -28,10 +28,6 @@ pub struct CatchRegion {
     /// Whether any catch arm explicitly names a panic type.
     /// When `false`, the VM skips this handler for runtime panics.
     pub catches_panics: bool,
-    /// Separate handler for panic arms (only when catch mixes panic arms + wildcard).
-    /// Error handler gets the wildcard (panics can't reach it). Panic handler
-    /// gets the explicit panic checks + rethrow.
-    pub panic_handler: Option<BlockId>,
 }
 
 /// The bytecode body of a MIR function — blocks, locals, and associated data.
@@ -72,14 +68,11 @@ impl MirFunctionBody {
 
     /// Iterate `(handler_block, error_local)` pairs derived from catch regions.
     ///
-    /// Yields one entry per handler (including separate panic handlers).
-    /// Replaces the old `unwind_error_locals` `HashMap`.
+    /// Yields one entry per handler.
     pub fn unwind_error_locals(&self) -> impl Iterator<Item = (BlockId, Local)> + '_ {
-        self.catch_regions.iter().flat_map(|r| {
-            let main = std::iter::once((r.handler, r.error_local));
-            let panic = r.panic_handler.map(|ph| (ph, r.error_local));
-            main.chain(panic)
-        })
+        self.catch_regions
+            .iter()
+            .map(|r| (r.handler, r.error_local))
     }
 }
 
@@ -539,6 +532,12 @@ pub enum Rvalue {
 
     /// Type check for pattern matching: `is_type(_1, Type)`
     IsType { operand: Operand, ty: Ty },
+
+    /// Check whether a value is a panic instance (`baml.panics.*`).
+    ///
+    /// Produces `bool`: true if the value's class is any panic type.
+    /// Used in catch handlers to rethrow unmatched panics before wildcard arms.
+    IsPanic(Operand),
 
     /// Allocate a closure object from a child lambda function.
     ///

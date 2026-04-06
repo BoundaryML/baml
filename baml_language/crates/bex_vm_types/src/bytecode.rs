@@ -360,6 +360,13 @@ pub enum Instruction {
     /// - Classes: assigned unique IDs starting at 100
     TypeTag,
 
+    /// Check whether a value is a panic instance (`baml.panics.*`).
+    ///
+    /// Stack: `[value]` -> `[is_panic: Bool]`
+    ///
+    /// Used in catch handlers before wildcard arms to rethrow unmatched panics.
+    IsPanic,
+
     /// Halt execution with an unreachable code error.
     ///
     /// This instruction should never be executed at runtime. If it is,
@@ -623,6 +630,7 @@ impl std::fmt::Display for Instruction {
             }
             Instruction::Discriminant => f.write_str("DISCRIMINANT"),
             Instruction::TypeTag => f.write_str("TYPE_TAG"),
+            Instruction::IsPanic => f.write_str("IS_PANIC"),
             Instruction::Unreachable => f.write_str("UNREACHABLE"),
             Instruction::MakeClosure(obj_idx, count) => {
                 write!(f, "MAKE_CLOSURE {} {}", obj_idx.raw(), count)
@@ -717,6 +725,28 @@ pub struct DebugLocalScope {
 ///
 /// Entries are sorted by `start_pc`. For nested catch blocks the innermost
 /// (narrowest range) entry appears first.
+///
+/// # Panic filtering: `catches_panics` vs `IsPanic`
+///
+/// These two mechanisms work at different levels to prevent wildcards from
+/// catching panics the programmer didn't ask for:
+///
+/// - `catches_panics` (this field) is a **coarse VM-level gate**. When `false`,
+///   the VM skips this entry entirely for panic exceptions during table
+///   scanning — the handler is never entered. This handles the common case
+///   of `catch (e) { _ => ... }` with no panic arms: panics propagate up.
+///
+/// - `IsPanic` is a **bytecode instruction** emitted inside the handler,
+///   right before a wildcard arm, only when the catch has both explicit panic
+///   arms AND a wildcard. It rethrows unmatched panics so the wildcard doesn't
+///   swallow them.
+///
+/// | Catch shape                     | `catches_panics` | `IsPanic` in handler |
+/// |---------------------------------|------------------|----------------------|
+/// | `_ => ...` (no panic arms)      | `false`          | not emitted          |
+/// | `DivisionByZero => ...` (no wc) | `true`           | not emitted          |
+/// | `DivisionByZero => ..., _ =>..` | `true`           | guards the wildcard  |
+/// | `catch_all`                     | `true`           | not emitted          |
 #[derive(Clone, Debug, PartialEq)]
 pub struct ExceptionTableEntry {
     /// First protected instruction (inclusive).

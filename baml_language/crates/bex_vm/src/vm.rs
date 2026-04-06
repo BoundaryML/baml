@@ -2774,6 +2774,21 @@ impl BexVm {
                         self.stack.push(Value::Int(tag));
                     }
 
+                    Instruction::IsPanic => {
+                        let value = self.stack.ensure_pop()?;
+                        let is_panic = match value {
+                            Value::Object(ptr) => match self.get_object(ptr) {
+                                Object::Instance(instance) => self
+                                    .panic_class_ptrs
+                                    .iter()
+                                    .any(|p| p == &Some(instance.class)),
+                                _ => false,
+                            },
+                            _ => false,
+                        };
+                        self.stack.push(Value::Bool(is_panic));
+                    }
+
                     Instruction::Unreachable => {
                         // This instruction should never be executed. If we reach it,
                         // there's a bug in the compiler or type system.

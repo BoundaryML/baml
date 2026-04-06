@@ -2102,23 +2102,31 @@ async fn panic_arm_plus_wildcard_panic_fires() {
     function main() -> int {
         load_const 0
         call user.risky
-        jump L2
+        jump L4
         load_var _1
         load_const baml.panics.DivisionByZero
         cmp_op instanceof
         pop_jump_if_false L0
-        jump L1
+        jump L3
 
       L0:
         load_var _1
-        throw
+        is_panic
+        pop_jump_if_false L1
+        jump L2
 
       L1:
-        load_const 1
-        jump L2
         load_const 2
+        jump L4
 
       L2:
+        load_var _1
+        throw
+
+      L3:
+        load_const 1
+
+      L4:
         return
     }
 
@@ -2164,23 +2172,31 @@ async fn panic_arm_plus_wildcard_user_error_fires() {
     function main() -> int {
         load_const 999
         call user.risky
-        jump L2
+        jump L4
         load_var _1
         load_const baml.panics.DivisionByZero
         cmp_op instanceof
         pop_jump_if_false L0
-        jump L1
+        jump L3
 
       L0:
         load_var _1
-        throw
+        is_panic
+        pop_jump_if_false L1
+        jump L2
 
       L1:
-        load_const 1
-        jump L2
         load_const 2
+        jump L4
 
       L2:
+        load_var _1
+        throw
+
+      L3:
+        load_const 1
+
+      L4:
         return
     }
 
@@ -2226,25 +2242,33 @@ async fn panic_arm_plus_wildcard_no_error() {
     function main() -> int {
         load_const 5
         call user.risky
-        jump L2
+        jump L4
         load_var _1
         load_const baml.panics.DivisionByZero
         cmp_op instanceof
         pop_jump_if_false L0
-        jump L1
+        jump L3
 
       L0:
         load_var _1
-        throw
+        is_panic
+        pop_jump_if_false L1
+        jump L2
 
       L1:
-        load_const 1
-        unary_op -
-        jump L2
         load_const 2
         unary_op -
+        jump L4
 
       L2:
+        load_var _1
+        throw
+
+      L3:
+        load_const 1
+        unary_op -
+
+      L4:
         return
     }
 
@@ -2298,34 +2322,42 @@ async fn user_class_plus_panic_plus_wildcard_class_fires() {
     function main() -> int {
         load_const 0
         call user.risky
-        jump L4
-        load_var _1
-        load_const baml.panics.DivisionByZero
-        cmp_op instanceof
-        pop_jump_if_false L0
-        jump L1
-
-      L0:
-        load_var _1
-        throw
-
-      L1:
-        load_const 2
-        jump L4
+        jump L6
         load_var _1
         load_const AppError
         cmp_op instanceof
+        pop_jump_if_false L0
+        jump L5
+
+      L0:
+        load_var _1
+        load_const baml.panics.DivisionByZero
+        cmp_op instanceof
+        pop_jump_if_false L1
+        jump L4
+
+      L1:
+        load_var _1
+        is_panic
         pop_jump_if_false L2
         jump L3
 
       L2:
         load_const 3
-        jump L4
+        jump L6
 
       L3:
-        load_const 1
+        load_var _1
+        throw
 
       L4:
+        load_const 2
+        jump L6
+
+      L5:
+        load_const 1
+
+      L6:
         return
     }
 
@@ -2391,34 +2423,42 @@ async fn user_class_plus_panic_plus_wildcard_panic_fires() {
     function main() -> int {
         load_const 1
         call user.risky
-        jump L4
-        load_var _1
-        load_const baml.panics.DivisionByZero
-        cmp_op instanceof
-        pop_jump_if_false L0
-        jump L1
-
-      L0:
-        load_var _1
-        throw
-
-      L1:
-        load_const 2
-        jump L4
+        jump L6
         load_var _1
         load_const AppError
         cmp_op instanceof
+        pop_jump_if_false L0
+        jump L5
+
+      L0:
+        load_var _1
+        load_const baml.panics.DivisionByZero
+        cmp_op instanceof
+        pop_jump_if_false L1
+        jump L4
+
+      L1:
+        load_var _1
+        is_panic
         pop_jump_if_false L2
         jump L3
 
       L2:
         load_const 3
-        jump L4
+        jump L6
 
       L3:
-        load_const 1
+        load_var _1
+        throw
 
       L4:
+        load_const 2
+        jump L6
+
+      L5:
+        load_const 1
+
+      L6:
         return
     }
 
@@ -2489,34 +2529,42 @@ async fn user_class_plus_panic_plus_wildcard_string_fires() {
     function main() -> int {
         load_const 2
         call user.risky
-        jump L4
-        load_var _1
-        load_const baml.panics.DivisionByZero
-        cmp_op instanceof
-        pop_jump_if_false L0
-        jump L1
-
-      L0:
-        load_var _1
-        throw
-
-      L1:
-        load_const 2
-        jump L4
+        jump L6
         load_var _1
         load_const AppError
         cmp_op instanceof
+        pop_jump_if_false L0
+        jump L5
+
+      L0:
+        load_var _1
+        load_const baml.panics.DivisionByZero
+        cmp_op instanceof
+        pop_jump_if_false L1
+        jump L4
+
+      L1:
+        load_var _1
+        is_panic
         pop_jump_if_false L2
         jump L3
 
       L2:
         load_const 3
-        jump L4
+        jump L6
 
       L3:
-        load_const 1
+        load_var _1
+        throw
 
       L4:
+        load_const 2
+        jump L6
+
+      L5:
+        load_const 1
+
+      L6:
         return
     }
 
@@ -2914,45 +2962,53 @@ async fn four_arms_division_by_zero_fires() {
     function main() -> int {
         load_const 0
         call user.risky
-        jump L6
+        jump L8
         load_var _1
         load_const baml.panics.DivisionByZero
         cmp_op instanceof
         pop_jump_if_false L0
-        jump L3
+        jump L7
 
       L0:
         load_var _1
         load_const baml.panics.IndexOutOfBounds
         cmp_op instanceof
         pop_jump_if_false L1
-        jump L2
+        jump L6
 
       L1:
         load_var _1
-        throw
-
-      L2:
-        load_const 2
-        jump L6
-
-      L3:
-        load_const 1
-        jump L6
-        load_var _1
         load_const AppError
         cmp_op instanceof
-        pop_jump_if_false L4
+        pop_jump_if_false L2
         jump L5
 
-      L4:
+      L2:
+        load_var _1
+        is_panic
+        pop_jump_if_false L3
+        jump L4
+
+      L3:
         load_const 4
-        jump L6
+        jump L8
+
+      L4:
+        load_var _1
+        throw
 
       L5:
         load_const 3
+        jump L8
 
       L6:
+        load_const 2
+        jump L8
+
+      L7:
+        load_const 1
+
+      L8:
         return
     }
 
@@ -3046,45 +3102,53 @@ async fn four_arms_index_out_of_bounds_fires() {
     function main() -> int {
         load_const 1
         call user.risky
-        jump L6
+        jump L8
         load_var _1
         load_const baml.panics.DivisionByZero
         cmp_op instanceof
         pop_jump_if_false L0
-        jump L3
+        jump L7
 
       L0:
         load_var _1
         load_const baml.panics.IndexOutOfBounds
         cmp_op instanceof
         pop_jump_if_false L1
-        jump L2
+        jump L6
 
       L1:
         load_var _1
-        throw
-
-      L2:
-        load_const 2
-        jump L6
-
-      L3:
-        load_const 1
-        jump L6
-        load_var _1
         load_const AppError
         cmp_op instanceof
-        pop_jump_if_false L4
+        pop_jump_if_false L2
         jump L5
 
-      L4:
+      L2:
+        load_var _1
+        is_panic
+        pop_jump_if_false L3
+        jump L4
+
+      L3:
         load_const 4
-        jump L6
+        jump L8
+
+      L4:
+        load_var _1
+        throw
 
       L5:
         load_const 3
+        jump L8
 
       L6:
+        load_const 2
+        jump L8
+
+      L7:
+        load_const 1
+
+      L8:
         return
     }
 
@@ -3178,45 +3242,53 @@ async fn four_arms_user_class_fires() {
     function main() -> int {
         load_const 2
         call user.risky
-        jump L6
+        jump L8
         load_var _1
         load_const baml.panics.DivisionByZero
         cmp_op instanceof
         pop_jump_if_false L0
-        jump L3
+        jump L7
 
       L0:
         load_var _1
         load_const baml.panics.IndexOutOfBounds
         cmp_op instanceof
         pop_jump_if_false L1
-        jump L2
+        jump L6
 
       L1:
         load_var _1
-        throw
-
-      L2:
-        load_const 2
-        jump L6
-
-      L3:
-        load_const 1
-        jump L6
-        load_var _1
         load_const AppError
         cmp_op instanceof
-        pop_jump_if_false L4
+        pop_jump_if_false L2
         jump L5
 
-      L4:
+      L2:
+        load_var _1
+        is_panic
+        pop_jump_if_false L3
+        jump L4
+
+      L3:
         load_const 4
-        jump L6
+        jump L8
+
+      L4:
+        load_var _1
+        throw
 
       L5:
         load_const 3
+        jump L8
 
       L6:
+        load_const 2
+        jump L8
+
+      L7:
+        load_const 1
+
+      L8:
         return
     }
 
@@ -3310,45 +3382,53 @@ async fn four_arms_wildcard_fires() {
     function main() -> int {
         load_const 3
         call user.risky
-        jump L6
+        jump L8
         load_var _1
         load_const baml.panics.DivisionByZero
         cmp_op instanceof
         pop_jump_if_false L0
-        jump L3
+        jump L7
 
       L0:
         load_var _1
         load_const baml.panics.IndexOutOfBounds
         cmp_op instanceof
         pop_jump_if_false L1
-        jump L2
+        jump L6
 
       L1:
         load_var _1
-        throw
-
-      L2:
-        load_const 2
-        jump L6
-
-      L3:
-        load_const 1
-        jump L6
-        load_var _1
         load_const AppError
         cmp_op instanceof
-        pop_jump_if_false L4
+        pop_jump_if_false L2
         jump L5
 
-      L4:
+      L2:
+        load_var _1
+        is_panic
+        pop_jump_if_false L3
+        jump L4
+
+      L3:
         load_const 4
-        jump L6
+        jump L8
+
+      L4:
+        load_var _1
+        throw
 
       L5:
         load_const 3
+        jump L8
 
       L6:
+        load_const 2
+        jump L8
+
+      L7:
+        load_const 1
+
+      L8:
         return
     }
 
@@ -3443,45 +3523,53 @@ async fn four_arms_no_error() {
     function main() -> int {
         load_const 4
         call user.risky
-        jump L6
+        jump L8
         load_var _1
         load_const baml.panics.DivisionByZero
         cmp_op instanceof
         pop_jump_if_false L0
-        jump L3
+        jump L7
 
       L0:
         load_var _1
         load_const baml.panics.IndexOutOfBounds
         cmp_op instanceof
         pop_jump_if_false L1
-        jump L2
+        jump L6
 
       L1:
         load_var _1
-        throw
-
-      L2:
-        load_const 2
-        jump L6
-
-      L3:
-        load_const 1
-        jump L6
-        load_var _1
         load_const AppError
         cmp_op instanceof
-        pop_jump_if_false L4
+        pop_jump_if_false L2
         jump L5
 
-      L4:
+      L2:
+        load_var _1
+        is_panic
+        pop_jump_if_false L3
+        jump L4
+
+      L3:
         load_const 4
-        jump L6
+        jump L8
+
+      L4:
+        load_var _1
+        throw
 
       L5:
         load_const 3
+        jump L8
 
       L6:
+        load_const 2
+        jump L8
+
+      L7:
+        load_const 1
+
+      L8:
         return
     }
 
@@ -3724,58 +3812,66 @@ async fn panic_alias_plus_wildcard_dispatch() {
     function main() -> int {
         load_const 0
         call user.risky
-        jump L7
+        jump L9
         load_var _1
         load_const baml.panics.DivisionByZero
         cmp_op instanceof
         pop_jump_if_false L0
-        jump L6
+        jump L8
 
       L0:
         load_var _1
         load_const baml.panics.IndexOutOfBounds
         cmp_op instanceof
         pop_jump_if_false L1
-        jump L6
+        jump L8
 
       L1:
         load_var _1
         load_const baml.panics.MapKeyNotFound
         cmp_op instanceof
         pop_jump_if_false L2
-        jump L6
+        jump L8
 
       L2:
         load_var _1
         load_const baml.panics.StackOverflow
         cmp_op instanceof
         pop_jump_if_false L3
-        jump L6
+        jump L8
 
       L3:
         load_var _1
         load_const baml.panics.AssertionFailed
         cmp_op instanceof
         pop_jump_if_false L4
-        jump L6
+        jump L8
 
       L4:
         load_var _1
         load_const baml.panics.Unreachable
         cmp_op instanceof
         pop_jump_if_false L5
-        jump L6
+        jump L8
 
       L5:
         load_var _1
-        throw
+        is_panic
+        pop_jump_if_false L6
+        jump L7
 
       L6:
-        load_const 1
-        jump L7
         load_const 2
+        jump L9
 
       L7:
+        load_var _1
+        throw
+
+      L8:
+        load_const 1
+
+      L9:
         return
     }
 

@@ -1294,41 +1294,17 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 continue;
             };
 
-            // Compute end_pc: min of handler_pc and panic_handler_pc.
-            let mut end_pc = handler_pc;
-            if let Some(ph) = region.panic_handler {
-                let ph = self.analysis.resolve_jump_target(ph);
-                if let Some(&ph_pc) = self.block_addresses.get(&ph) {
-                    end_pc = end_pc.min(ph_pc);
-                }
-            }
-
-            if start_pc >= end_pc {
+            if start_pc >= handler_pc {
                 continue; // degenerate region
             }
 
-            // Emit the main (error) handler entry.
             self.bytecode.exception_table.push(ExceptionTableEntry {
                 start_pc,
-                end_pc,
+                end_pc: handler_pc,
                 handler_pc,
                 error_slot,
                 catches_panics: region.catches_panics,
             });
-
-            // Emit the panic handler entry (Case C: split catch).
-            if let Some(ph) = region.panic_handler {
-                let ph = self.analysis.resolve_jump_target(ph);
-                if let Some(&ph_pc) = self.block_addresses.get(&ph) {
-                    self.bytecode.exception_table.push(ExceptionTableEntry {
-                        start_pc,
-                        end_pc,
-                        handler_pc: ph_pc,
-                        error_slot,
-                        catches_panics: true,
-                    });
-                }
-            }
         }
 
         // Sort by start_pc so the VM can do a linear scan from most-specific
@@ -1806,6 +1782,11 @@ impl PullSink for StackifyCodegen<'_, '_> {
 
     fn type_tag(&mut self) -> Result<(), Self::Error> {
         self.emit(Instruction::TypeTag);
+        Ok(())
+    }
+
+    fn is_panic(&mut self) -> Result<(), Self::Error> {
+        self.emit(Instruction::IsPanic);
         Ok(())
     }
 

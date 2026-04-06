@@ -50,6 +50,7 @@ pub(crate) trait PullSink {
 
     fn len_of_place(&mut self, place: &Place) -> Result<(), Self::Error>;
     fn is_type(&mut self, ty: &Ty) -> Result<(), Self::Error>;
+    fn is_panic(&mut self) -> Result<(), Self::Error>;
     fn make_closure(&mut self, lambda_idx: usize, capture_count: usize) -> Result<(), Self::Error>;
 
     /// Load a captured variable from the current closure's captures array.
@@ -381,6 +382,10 @@ pub(crate) fn walk_rvalue_pull<S: PullSink>(sink: &mut S, rvalue: &Rvalue) -> Re
         Rvalue::IsType { operand, ty } => {
             walk_operand_pull(sink, operand)?;
             sink.is_type(ty)
+        }
+        Rvalue::IsPanic(operand) => {
+            walk_operand_pull(sink, operand)?;
+            sink.is_panic()
         }
         Rvalue::MakeClosure {
             lambda_idx,

@@ -66,11 +66,6 @@ fn eliminate_dead_blocks(body: &mut MirFunctionBody) {
         if reachable.insert(region.handler) {
             queue.push_back(region.handler);
         }
-        if let Some(ph) = region.panic_handler {
-            if reachable.insert(ph) {
-                queue.push_back(ph);
-            }
-        }
     }
 
     while let Some(block_id) = queue.pop_front() {
@@ -168,11 +163,6 @@ fn rewrite_catch_region_blocks(regions: &mut [CatchRegion], map: &[Option<BlockI
         if let Some(new_block) = map[region.handler.0] {
             region.handler = new_block;
         }
-        if let Some(ph) = region.panic_handler {
-            if let Some(new_block) = map[ph.0] {
-                region.panic_handler = Some(new_block);
-            }
-        }
     }
 }
 
@@ -243,7 +233,9 @@ fn collect_place_index_locals(body: &MirFunctionBody) -> HashSet<Local> {
             crate::Rvalue::Discriminant(p) | crate::Rvalue::TypeTag(p) | crate::Rvalue::Len(p) => {
                 scan_place(p, set);
             }
-            crate::Rvalue::IsType { operand, .. } => scan_operand(operand, set),
+            crate::Rvalue::IsType { operand, .. } | crate::Rvalue::IsPanic(operand) => {
+                scan_operand(operand, set);
+            }
             crate::Rvalue::MakeClosure { captures, .. } => {
                 for cap in captures {
                     scan_operand(cap, set);
@@ -411,7 +403,9 @@ fn count_in_rvalue(rv: &crate::Rvalue, uses: &mut [usize]) {
         crate::Rvalue::Discriminant(p) => count_in_place(p, uses),
         crate::Rvalue::TypeTag(p) => count_in_place(p, uses),
         crate::Rvalue::Len(p) => count_in_place(p, uses),
-        crate::Rvalue::IsType { operand, .. } => count_in_operand(operand, uses),
+        crate::Rvalue::IsType { operand, .. } | crate::Rvalue::IsPanic(operand) => {
+            count_in_operand(operand, uses);
+        }
         crate::Rvalue::MakeClosure { captures, .. } => {
             for cap in captures {
                 count_in_operand(cap, uses);
@@ -686,7 +680,9 @@ fn apply_subst_to_rvalue(rv: &mut crate::Rvalue, subst: &HashMap<Local, Operand>
         crate::Rvalue::Discriminant(p) | crate::Rvalue::TypeTag(p) | crate::Rvalue::Len(p) => {
             apply_subst_to_place_locals(p, subst);
         }
-        crate::Rvalue::IsType { operand, .. } => apply_subst_to_operand(operand, subst),
+        crate::Rvalue::IsType { operand, .. } | crate::Rvalue::IsPanic(operand) => {
+            apply_subst_to_operand(operand, subst);
+        }
         crate::Rvalue::MakeClosure { captures, .. } => {
             for cap in captures {
                 apply_subst_to_operand(cap, subst);
@@ -870,7 +866,9 @@ fn remap_rvalue(rv: &mut crate::Rvalue, map: &[Option<Local>]) {
         crate::Rvalue::Discriminant(p) | crate::Rvalue::TypeTag(p) | crate::Rvalue::Len(p) => {
             remap_place(p, map);
         }
-        crate::Rvalue::IsType { operand, .. } => remap_operand(operand, map),
+        crate::Rvalue::IsType { operand, .. } | crate::Rvalue::IsPanic(operand) => {
+            remap_operand(operand, map);
+        }
         crate::Rvalue::MakeClosure { captures, .. } => {
             for cap in captures {
                 remap_operand(cap, map);
@@ -1058,7 +1056,9 @@ fn verify_mir(body: &MirFunctionBody, name: &crate::ItemRef) {
                         crate::Rvalue::Discriminant(p)
                         | crate::Rvalue::TypeTag(p)
                         | crate::Rvalue::Len(p) => check_place(p, &blk),
-                        crate::Rvalue::IsType { operand, .. } => check_operand(operand, &blk),
+                        crate::Rvalue::IsType { operand, .. } | crate::Rvalue::IsPanic(operand) => {
+                            check_operand(operand, &blk);
+                        }
                         crate::Rvalue::MakeClosure { captures, .. } => {
                             for cap in captures {
                                 check_operand(cap, &blk);
@@ -1189,12 +1189,6 @@ fn verify_mir(body: &MirFunctionBody, name: &crate::ItemRef) {
             "dangling handler {:?} in catch_region[{i}] of MIR function {name}",
             region.handler,
         );
-        if let Some(ph) = region.panic_handler {
-            assert!(
-                ph.0 < num_blocks,
-                "dangling panic_handler {ph:?} in catch_region[{i}] of MIR function {name}",
-            );
-        }
         assert!(
             region.error_local.0 < num_locals,
             "dangling error_local {} in catch_region[{i}] of MIR function {name}",
@@ -1234,9 +1228,6 @@ fn reorder_blocks_rpo(body: &mut MirFunctionBody) {
     let mut stack: Vec<(BlockId, bool)> = vec![(body.entry, false)];
     for region in &body.catch_regions {
         stack.push((region.handler, false));
-        if let Some(ph) = region.panic_handler {
-            stack.push((ph, false));
-        }
     }
 
     while let Some((block_id, processed)) = stack.pop() {

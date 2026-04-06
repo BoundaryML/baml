@@ -26,3 +26,12 @@ function server(req: int) -> bool throws never {
 //     │     
 //     │     Note: Error code: E0001
 // ────╯
+// Error: throws contract violation: `never` is missing unknown
+//     ╭─[ throw_throws_never_unreachable_rethrow.baml:11:43 ]
+//     │
+//  11 │ function server(req: int) -> bool throws never {
+//     │                                           ───┬──  
+//     │                                              ╰──── throws contract violation: `never` is missing unknown
+//     │ 
+//     │ Note: Error code: E0001
+// ────╯

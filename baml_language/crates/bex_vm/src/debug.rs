@@ -184,6 +184,7 @@ pub(crate) fn display_instruction(
         | Instruction::Assert
         | Instruction::Discriminant
         | Instruction::TypeTag
+        | Instruction::IsPanic
         | Instruction::Unreachable
         | Instruction::MakeClosure(_, _)
         | Instruction::MakeCell
@@ -322,7 +323,9 @@ fn instruction_color(instruction: &Instruction) -> Color {
             Color::BrightRed
         }
         Instruction::VizEnter(_) | Instruction::VizExit(_) => Color::BrightYellow,
-        Instruction::Discriminant | Instruction::TypeTag => Color::BrightBlue,
+        Instruction::Discriminant | Instruction::TypeTag | Instruction::IsPanic => {
+            Color::BrightBlue
+        }
         Instruction::Unreachable => Color::BrightRed,
         Instruction::MakeClosure(_, _) | Instruction::MakeCell => Color::Cyan,
         Instruction::LoadDeref(_) | Instruction::LoadCapture(_) | Instruction::CaptureRef(_) => {
@@ -747,6 +750,7 @@ fn display_instruction_textual(
         // --- Type introspection ---
         Instruction::Discriminant => "discriminant".to_string(),
         Instruction::TypeTag => "type_tag".to_string(),
+        Instruction::IsPanic => "is_panic".to_string(),
 
         // --- Closures and cells ---
         Instruction::MakeClosure(obj_idx, count) => {
