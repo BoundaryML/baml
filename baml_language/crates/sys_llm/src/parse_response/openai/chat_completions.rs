@@ -1,29 +1,98 @@
-use super::{
-    ParseResponseError,
-    openai_types::ChatCompletionResponse,
-    types::{FinishReason, LlmProviderResponse, TokenUsage},
-};
+use serde::{Deserialize, Deserializer, Serialize};
+
+use super::CompletionUsage;
+use crate::parse_response::{FinishReason, LlmProviderResponse, ParseResponseError, TokenUsage};
+
+// ── Serde types ───────────────────────────────────────────────────
+
+#[derive(Debug, Deserialize, Clone, PartialEq)]
+struct ChatCompletionResponse {
+    pub id: Option<String>,
+    pub choices: Vec<ChatCompletionChoice>,
+    #[serde(default, deserialize_with = "deserialize_float_to_u32")]
+    pub created: Option<u32>,
+    pub model: String,
+    pub system_fingerprint: Option<String>,
+    pub object: Option<String>,
+    pub usage: Option<CompletionUsage>,
+}
+
+fn deserialize_float_to_u32<'de, D>(deserializer: D) -> Result<Option<u32>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum FloatOrInt {
+        Int(u32),
+        Float(f64),
+    }
+
+    match Option::<FloatOrInt>::deserialize(deserializer)? {
+        Some(FloatOrInt::Int(i)) => Ok(Some(i)),
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        Some(FloatOrInt::Float(f)) => Ok(Some(f.floor() as u32)),
+        None => Ok(None),
+    }
+}
+
+#[derive(Debug, Deserialize, Clone, PartialEq)]
+struct ChatCompletionChoice {
+    pub index: u32,
+    pub message: ChatCompletionResponseMessage,
+    pub finish_reason: Option<String>,
+    pub logprobs: Option<ChatChoiceLogprobs>,
+}
+
+#[derive(Debug, Deserialize, Clone, PartialEq)]
+struct ChatCompletionResponseMessage {
+    pub content: Option<String>,
+    pub role: ChatCompletionMessageRole,
+}
+
+#[derive(Debug, Deserialize, Clone, Default, PartialEq)]
+#[serde(rename_all = "lowercase")]
+enum ChatCompletionMessageRole {
+    System,
+    #[default]
+    User,
+    Assistant,
+    Tool,
+    Function,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
+struct ChatChoiceLogprobs {
+    pub content: Option<Vec<ChatCompletionTokenLogprob>>,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
+struct ChatCompletionTokenLogprob {
+    pub token: String,
+    pub logprob: f32,
+    pub bytes: Option<Vec<u8>>,
+    pub top_logprobs: Vec<TopLogprobs>,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
+struct TopLogprobs {
+    pub token: String,
+    pub logprob: f32,
+    pub bytes: Option<Vec<u8>>,
+}
+
+// ── Parser ────────────────────────────────────────────────────────
 
 /// Parse an OpenAI-compatible chat completion response body into a normalized `LlmProviderResponse`.
-pub(super) fn parse_openai_response(body: &str) -> Result<LlmProviderResponse, ParseResponseError> {
+pub(in crate::parse_response) fn parse_openai_response(
+    body: &str,
+) -> Result<LlmProviderResponse, ParseResponseError> {
     let response: ChatCompletionResponse =
         serde_json::from_str(body).map_err(|e| ParseResponseError::Deserialize {
             provider: "openai",
             source: e,
             content: body.to_string(),
         })?;
-
-    let response = match response {
-        ChatCompletionResponse::Success(success) => success,
-        ChatCompletionResponse::Error(wrapper) => {
-            return Err(ParseResponseError::ApiError {
-                provider: "openai",
-                message: wrapper.error.message,
-                code: wrapper.error.code,
-                param: wrapper.error.param,
-            });
-        }
-    };
 
     if response.choices.is_empty() {
         return Err(ParseResponseError::NoContent {
@@ -63,31 +132,13 @@ pub(super) fn parse_openai_response(body: &str) -> Result<LlmProviderResponse, P
             input_tokens: Some(u.prompt_tokens),
             output_tokens: Some(u.completion_tokens),
             total_tokens: Some(u.total_tokens),
+            cached_input_tokens: u
+                .input_tokens_details
+                .as_ref()
+                .and_then(|details| details.get("cached_tokens"))
+                .and_then(serde_json::Value::as_u64),
         })
         .unwrap_or_default();
-
-    // Build metadata map with provider-specific fields.
-    let mut metadata = serde_json::Map::new();
-    if let Some(id) = &response.id {
-        metadata.insert("id".into(), serde_json::Value::String(id.clone()));
-    }
-    if let Some(fp) = &response.system_fingerprint {
-        metadata.insert(
-            "system_fingerprint".into(),
-            serde_json::Value::String(fp.clone()),
-        );
-    }
-    if let Some(created) = response.created {
-        metadata.insert("created".into(), serde_json::Value::Number(created.into()));
-    }
-    if let Some(object) = &response.object {
-        metadata.insert("object".into(), serde_json::Value::String(object.clone()));
-    }
-    if let Some(logprobs) = &choice.logprobs {
-        if let Ok(val) = serde_json::to_value(logprobs) {
-            metadata.insert("logprobs".into(), val);
-        }
-    }
 
     Ok(LlmProviderResponse {
         content,
@@ -95,7 +146,6 @@ pub(super) fn parse_openai_response(body: &str) -> Result<LlmProviderResponse, P
         finish_reason,
         finish_reason_raw: choice.finish_reason.clone(),
         usage,
-        metadata,
     })
 }
 
@@ -136,12 +186,7 @@ mod tests {
         assert_eq!(resp.usage.input_tokens, Some(9));
         assert_eq!(resp.usage.output_tokens, Some(12));
         assert_eq!(resp.usage.total_tokens, Some(21));
-
-        // Metadata
-        assert_eq!(resp.metadata["id"], "chatcmpl-123");
-        assert_eq!(resp.metadata["system_fingerprint"], "fp_44709d6fcb");
-        assert_eq!(resp.metadata["created"], 1_677_652_288);
-        assert_eq!(resp.metadata["object"], "chat.completion");
+        assert_eq!(resp.usage.cached_input_tokens, None);
     }
 
     #[test]
@@ -165,11 +210,7 @@ mod tests {
         assert_eq!(resp.usage.input_tokens, None);
         assert_eq!(resp.usage.output_tokens, None);
         assert_eq!(resp.usage.total_tokens, None);
-
-        // No metadata when fields are absent
-        assert!(!resp.metadata.contains_key("id"));
-        assert!(!resp.metadata.contains_key("system_fingerprint"));
-        assert!(!resp.metadata.contains_key("created"));
+        assert_eq!(resp.usage.cached_input_tokens, None);
     }
 
     #[test]
@@ -282,5 +323,46 @@ mod tests {
         assert_eq!(openai_resp.content, azure_resp.content);
         assert_eq!(openai_resp.model, azure_resp.model);
         assert_eq!(openai_resp.finish_reason, azure_resp.finish_reason);
+    }
+
+    #[test]
+    fn test_parse_cached_tokens() {
+        let body = r#"{
+            "model": "gpt-4o",
+            "choices": [{
+                "index": 0,
+                "message": { "role": "assistant", "content": "hi" },
+                "finish_reason": "stop"
+            }],
+            "usage": {
+                "prompt_tokens": 100,
+                "completion_tokens": 10,
+                "total_tokens": 110,
+                "input_tokens_details": { "cached_tokens": 50 }
+            }
+        }"#;
+
+        let resp = parse_openai_response(body).unwrap();
+        assert_eq!(resp.usage.cached_input_tokens, Some(50));
+    }
+
+    #[test]
+    fn test_parse_no_cached_tokens() {
+        let body = r#"{
+            "model": "gpt-4o",
+            "choices": [{
+                "index": 0,
+                "message": { "role": "assistant", "content": "hi" },
+                "finish_reason": "stop"
+            }],
+            "usage": {
+                "prompt_tokens": 100,
+                "completion_tokens": 10,
+                "total_tokens": 110
+            }
+        }"#;
+
+        let resp = parse_openai_response(body).unwrap();
+        assert_eq!(resp.usage.cached_input_tokens, None);
     }
 }
