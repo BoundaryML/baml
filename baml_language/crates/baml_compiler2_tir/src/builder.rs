@@ -1734,7 +1734,7 @@ impl<'db> TypeInferenceBuilder<'db> {
     fn resolve_type_expr(&mut self, ty: &TypeExpr, at_expr: ExprId) -> Ty {
         if let TypeExpr::Path { segments, .. } = ty {
             if segments.len() == 1 {
-                if let Some(resolved) = self.bare_type_sugar_to_ty(&segments[0]) {
+                if let Some(resolved) = bare_type_sugar_to_ty(&segments[0]) {
                     return resolved;
                 }
             }
@@ -1751,7 +1751,7 @@ impl<'db> TypeInferenceBuilder<'db> {
     ) -> Ty {
         match &body.patterns[pattern_id] {
             baml_compiler2_ast::Pattern::Binding(name) => {
-                if let Some(prim_ty) = self.bare_type_sugar_to_ty(name) {
+                if let Some(prim_ty) = bare_type_sugar_to_ty(name) {
                     prim_ty
                 } else if self.is_bare_type_sugar_binding(name) {
                     self.lower_pattern_type_expr(
@@ -1844,7 +1844,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     return None;
                 }
 
-                let narrowed = if let Some(prim_ty) = self.bare_type_sugar_to_ty(name) {
+                let narrowed = if let Some(prim_ty) = bare_type_sugar_to_ty(name) {
                     prim_ty
                 } else {
                     self.lower_pattern_type_expr(
@@ -1957,39 +1957,8 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
-    /// Map a bare type sugar name to a `Ty` for primitive and media types.
-    ///
-    /// Returns `Some(Ty)` for names like `int`, `string`, `image`, etc.
-    /// Falls back to panic class lookup for names in `baml.panics.*`.
-    /// Returns `None` for class/enum names that need full resolution.
-    fn bare_type_sugar_to_ty(&self, name: &Name) -> Option<Ty> {
-        match name.as_str() {
-            "int" => Some(Ty::Primitive(PrimitiveType::Int, TyAttr::default())),
-            "float" => Some(Ty::Primitive(PrimitiveType::Float, TyAttr::default())),
-            "string" => Some(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
-            "bool" => Some(Ty::Primitive(PrimitiveType::Bool, TyAttr::default())),
-            "null" => Some(Ty::Primitive(PrimitiveType::Null, TyAttr::default())),
-            "image" => Some(Ty::Primitive(PrimitiveType::Image, TyAttr::default())),
-            "audio" => Some(Ty::Primitive(PrimitiveType::Audio, TyAttr::default())),
-            "video" => Some(Ty::Primitive(PrimitiveType::Video, TyAttr::default())),
-            "pdf" => Some(Ty::Primitive(PrimitiveType::Pdf, TyAttr::default())),
-            _ => self.panic_class_ty(name),
-        }
-    }
-
-    /// If `name` resolves to a class or type alias in the `baml.panics`
-    /// namespace, return its `Ty`. Queries dependency interfaces (or own
-    /// items when compiling the `baml` package itself) so that adding a
-    /// new panic class to `panics.baml` is sufficient.
-    fn panic_class_ty(&self, name: &Name) -> Option<Ty> {
-        let path = [Name::new(baml_base::PANICS_NAMESPACE), name.clone()];
-        self.res_ctx
-            .resolve_type(self.context.db(), &path, &[])
-            .map(|(_source, ty)| ty)
-    }
-
     fn is_bare_type_sugar_binding(&self, name: &Name) -> bool {
-        self.bare_type_sugar_to_ty(name).is_some()
+        bare_type_sugar_to_ty(name).is_some()
             || self
                 .package_items
                 .lookup_type(&self.ns_context, name)
@@ -2080,7 +2049,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         match pattern {
             baml_compiler2_ast::Pattern::Binding(name) => {
                 if self.is_bare_type_sugar_binding(name) {
-                    let lowered = if let Some(prim_ty) = self.bare_type_sugar_to_ty(name) {
+                    let lowered = if let Some(prim_ty) = bare_type_sugar_to_ty(name) {
                         prim_ty
                     } else {
                         self.lower_pattern_type_expr(
@@ -4606,5 +4575,24 @@ impl<'db> TypeInferenceBuilder<'db> {
         self.generic_params = saved_generic_params;
 
         (ret_ty, lambda_expressions)
+    }
+}
+
+/// Map a bare type sugar name to a `Ty` for primitive and media types.
+///
+/// Returns `Some(Ty)` for names like `int`, `string`, `image`, etc.
+/// Returns `None` for class/enum names that need full resolution.
+fn bare_type_sugar_to_ty(name: &Name) -> Option<Ty> {
+    match name.as_str() {
+        "int" => Some(Ty::Primitive(PrimitiveType::Int, TyAttr::default())),
+        "float" => Some(Ty::Primitive(PrimitiveType::Float, TyAttr::default())),
+        "string" => Some(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
+        "bool" => Some(Ty::Primitive(PrimitiveType::Bool, TyAttr::default())),
+        "null" => Some(Ty::Primitive(PrimitiveType::Null, TyAttr::default())),
+        "image" => Some(Ty::Primitive(PrimitiveType::Image, TyAttr::default())),
+        "audio" => Some(Ty::Primitive(PrimitiveType::Audio, TyAttr::default())),
+        "video" => Some(Ty::Primitive(PrimitiveType::Video, TyAttr::default())),
+        "pdf" => Some(Ty::Primitive(PrimitiveType::Pdf, TyAttr::default())),
+        _ => None,
     }
 }

@@ -3,7 +3,7 @@
 //! Progression from simple to complex, covering all catch arm pattern types:
 //!   - Literal value patterns: "string" =>, 42 =>
 //!   - Typed bindings: _: string =>, _: MyClass =>
-//!   - Bare type sugar: DivisionByZero =>
+//!   - Bare type sugar: baml.panics.DivisionByZero =>
 //!   - Wildcard: _ =>
 //!   - User-defined error classes
 //!   - Multi-arm dispatch with mixed pattern types
@@ -1606,7 +1606,7 @@ async fn catch_division_by_zero() {
         function divides() -> int { 1 / 0 }
 
         function main() -> int {
-            divides() catch (e) { DivisionByZero => -1 }
+            divides() catch (e) { _: baml.panics.DivisionByZero => -1 }
         }
     "#
     );
@@ -1649,7 +1649,7 @@ async fn catch_index_out_of_bounds() {
         function oob() -> int { let a = [1, 2]; a[5] }
 
         function main() -> int {
-            oob() catch (e) { IndexOutOfBounds => -1 }
+            oob() catch (e) { _: baml.panics.IndexOutOfBounds => -1 }
         }
     "#
     );
@@ -1694,7 +1694,7 @@ async fn catch_map_key_not_found() {
         function bad() -> int { let m = {"a": 1}; m["x"] }
 
         function main() -> int {
-            bad() catch (e) { MapKeyNotFound => -1 }
+            bad() catch (e) { _: baml.panics.MapKeyNotFound => -1 }
         }
     "#
     );
@@ -1739,7 +1739,7 @@ async fn catch_negative_index_as_index_out_of_bounds() {
         function bad() -> int { let a = [1, 2]; a[-1] }
 
         function main() -> int {
-            bad() catch (e) { IndexOutOfBounds => -1 }
+            bad() catch (e) { _: baml.panics.IndexOutOfBounds => -1 }
         }
     "#
     );
@@ -1790,7 +1790,7 @@ async fn named_panic_binding_division_by_zero_field() {
 
         function main() -> int {
             divides() catch (e) {
-                err: DivisionByZero => err.dividend
+                err: baml.panics.DivisionByZero => err.dividend
             }
         }
     "#
@@ -1835,7 +1835,7 @@ async fn named_panic_binding_index_out_of_bounds_fields() {
 
         function main() -> int {
             oob() catch (e) {
-                err: IndexOutOfBounds => err.index
+                err: baml.panics.IndexOutOfBounds => err.index
             }
         }
     "#
@@ -1883,7 +1883,7 @@ async fn named_panic_binding_index_out_of_bounds_length() {
 
         function main() -> int {
             oob() catch (e) {
-                err: IndexOutOfBounds => err.length
+                err: baml.panics.IndexOutOfBounds => err.length
             }
         }
     "#
@@ -1931,7 +1931,7 @@ async fn named_panic_binding_map_key_not_found_field() {
 
         function main() -> string {
             bad() catch (e) {
-                err: MapKeyNotFound => err.key
+                err: baml.panics.MapKeyNotFound => err.key
             }
         }
     "#
@@ -2092,7 +2092,7 @@ async fn panic_arm_plus_wildcard_panic_fires() {
 
         function main() -> int {
             risky(0) catch (e) {
-                DivisionByZero => 1,
+                _: baml.panics.DivisionByZero => 1,
                 _ => 2
             }
         }
@@ -2162,7 +2162,7 @@ async fn panic_arm_plus_wildcard_user_error_fires() {
 
         function main() -> int {
             risky(999) catch (e) {
-                DivisionByZero => 1,
+                _: baml.panics.DivisionByZero => 1,
                 _ => 2
             }
         }
@@ -2232,7 +2232,7 @@ async fn panic_arm_plus_wildcard_no_error() {
 
         function main() -> int {
             risky(5) catch (e) {
-                DivisionByZero => -1,
+                _: baml.panics.DivisionByZero => -1,
                 _ => -2
             }
         }
@@ -2312,7 +2312,7 @@ async fn user_class_plus_panic_plus_wildcard_class_fires() {
         function main() -> int {
             risky(0) catch (e) {
                 _: AppError => 1,
-                DivisionByZero => 2,
+                _: baml.panics.DivisionByZero => 2,
                 _ => 3
             }
         }
@@ -2406,7 +2406,7 @@ async fn user_class_plus_panic_plus_wildcard_panic_fires() {
         function main() -> int {
             risky(1) catch (e) {
                 _: AppError => 1,
-                DivisionByZero => 2,
+                _: baml.panics.DivisionByZero => 2,
                 _ => 3
             }
         }
@@ -2512,7 +2512,7 @@ async fn user_class_plus_panic_plus_wildcard_string_fires() {
         function main() -> int {
             risky(2) catch (e) {
                 _: AppError => 1,
-                DivisionByZero => 2,
+                _: baml.panics.DivisionByZero => 2,
                 _ => 3
             }
         }
@@ -2602,7 +2602,7 @@ async fn user_class_plus_panic_plus_wildcard_string_fires() {
 }
 
 // ============================================================================
-// §9 — Mixed union catch arms (AppError | DivisionByZero =>)
+// §9 — Mixed union catch arms (AppError | baml.panics.DivisionByZero =>)
 // ============================================================================
 
 // §9a — Mixed union WITH wildcard (split handler, Case C)
@@ -2624,7 +2624,7 @@ async fn mixed_union_arm_plus_wildcard_panic_fires() {
 
         function main() -> int {
             risky(1) catch (e) {
-                AppError | DivisionByZero => 1,
+                _: AppError | baml.panics.DivisionByZero => 1,
                 _ => 99
             }
         }
@@ -2647,7 +2647,7 @@ async fn mixed_union_arm_plus_wildcard_user_error_fires() {
 
         function main() -> int {
             risky(0) catch (e) {
-                AppError | DivisionByZero => 1,
+                _: AppError | baml.panics.DivisionByZero => 1,
                 _ => 99
             }
         }
@@ -2670,7 +2670,7 @@ async fn mixed_union_arm_plus_wildcard_fallback_error_fires() {
 
         function main() -> int {
             risky(2) catch (e) {
-                AppError | DivisionByZero => 1,
+                _: AppError | baml.panics.DivisionByZero => 1,
                 _ => 99
             }
         }
@@ -2693,7 +2693,7 @@ async fn mixed_union_arm_plus_wildcard_other_panic_propagates() {
 
         function main() -> int {
             risky(1) catch (e) {
-                AppError | DivisionByZero => 1,
+                _: AppError | baml.panics.DivisionByZero => 1,
                 _ => 99
             }
         }
@@ -2710,7 +2710,7 @@ async fn mixed_union_alias_plus_wildcard_handles_both_domains() {
     let output = baml_test!(
         r#"
         class AppError { code int }
-        type Mixed = AppError | DivisionByZero
+        type Mixed = AppError | baml.panics.DivisionByZero
         function do_div() -> int { 1 / 0 }
 
         function risky(mode: int) -> int {
@@ -2735,7 +2735,7 @@ async fn mixed_union_alias_plus_wildcard_error_fires() {
     let output = baml_test!(
         r#"
         class AppError { code int }
-        type Mixed = AppError | DivisionByZero
+        type Mixed = AppError | baml.panics.DivisionByZero
 
         function risky(mode: int) -> int {
             if (mode == 0) { throw AppError { code: 7 } }
@@ -2769,7 +2769,7 @@ async fn mixed_union_no_wildcard_panic_fires() {
 
         function main() -> int {
             risky(1) catch (e) {
-                AppError | DivisionByZero => 1
+                _: AppError | baml.panics.DivisionByZero => 1
             }
         }
     "#
@@ -2791,7 +2791,7 @@ async fn mixed_union_no_wildcard_error_fires() {
 
         function main() -> int {
             risky(0) catch (e) {
-                AppError | DivisionByZero => 1
+                _: AppError | baml.panics.DivisionByZero => 1
             }
         }
     "#
@@ -2811,7 +2811,7 @@ async fn mixed_union_no_wildcard_unmatched_rethrows() {
 
         function main() -> int {
             risky() catch (e) {
-                AppError | DivisionByZero => 1
+                _: AppError | baml.panics.DivisionByZero => 1
             }
         }
     "#
@@ -2835,7 +2835,7 @@ async fn mixed_union_no_wildcard_unmatched_panic_rethrows() {
 
         function main() -> int {
             risky() catch (e) {
-                AppError | DivisionByZero => 1
+                _: AppError | baml.panics.DivisionByZero => 1
             }
         }
     "#
@@ -2862,7 +2862,7 @@ async fn panic_union_plus_wildcard_division_fires() {
 
         function main() -> int {
             risky(0) catch (e) {
-                DivisionByZero | IndexOutOfBounds => 1,
+                _: baml.panics.DivisionByZero | baml.panics.IndexOutOfBounds => 1,
                 _ => 99
             }
         }
@@ -2885,7 +2885,7 @@ async fn panic_union_plus_wildcard_index_fires() {
 
         function main() -> int {
             risky(1) catch (e) {
-                DivisionByZero | IndexOutOfBounds => 1,
+                _: baml.panics.DivisionByZero | baml.panics.IndexOutOfBounds => 1,
                 _ => 99
             }
         }
@@ -2905,7 +2905,7 @@ async fn panic_union_plus_wildcard_error_falls_to_wildcard() {
 
         function main() -> int {
             risky(1) catch (e) {
-                DivisionByZero | IndexOutOfBounds => 1,
+                _: baml.panics.DivisionByZero | baml.panics.IndexOutOfBounds => 1,
                 _ => 99
             }
         }
@@ -2935,8 +2935,8 @@ async fn four_arms_division_by_zero_fires() {
 
         function main() -> int {
             risky(0) catch (e) {
-                DivisionByZero => 1,
-                IndexOutOfBounds => 2,
+                _: baml.panics.DivisionByZero => 1,
+                _: baml.panics.IndexOutOfBounds => 2,
                 _: AppError => 3,
                 _ => 4
             }
@@ -3075,8 +3075,8 @@ async fn four_arms_index_out_of_bounds_fires() {
 
         function main() -> int {
             risky(1) catch (e) {
-                DivisionByZero => 1,
-                IndexOutOfBounds => 2,
+                _: baml.panics.DivisionByZero => 1,
+                _: baml.panics.IndexOutOfBounds => 2,
                 _: AppError => 3,
                 _ => 4
             }
@@ -3215,8 +3215,8 @@ async fn four_arms_user_class_fires() {
 
         function main() -> int {
             risky(2) catch (e) {
-                DivisionByZero => 1,
-                IndexOutOfBounds => 2,
+                _: baml.panics.DivisionByZero => 1,
+                _: baml.panics.IndexOutOfBounds => 2,
                 _: AppError => 3,
                 _ => 4
             }
@@ -3355,8 +3355,8 @@ async fn four_arms_wildcard_fires() {
 
         function main() -> int {
             risky(3) catch (e) {
-                DivisionByZero => 1,
-                IndexOutOfBounds => 2,
+                _: baml.panics.DivisionByZero => 1,
+                _: baml.panics.IndexOutOfBounds => 2,
                 _: AppError => 3,
                 _ => 4
             }
@@ -3496,8 +3496,8 @@ async fn four_arms_no_error() {
 
         function main() -> int {
             risky(4) catch (e) {
-                DivisionByZero => 1,
-                IndexOutOfBounds => 2,
+                _: baml.panics.DivisionByZero => 1,
+                _: baml.panics.IndexOutOfBounds => 2,
                 _: AppError => 3,
                 _ => 4
             }
@@ -3670,7 +3670,7 @@ async fn wrong_panic_pattern_propagates() {
         function divides() -> int { 1 / 0 }
 
         function main() -> int {
-            divides() catch (e) { IndexOutOfBounds => -1 }
+            divides() catch (e) { _: baml.panics.IndexOutOfBounds => -1 }
         }
     "#
     );
@@ -3720,7 +3720,7 @@ async fn panic_alias_catches_any_panic() {
         function divides() -> int { 1 / 0 }
 
         function main() -> int {
-            divides() catch (e) { Panic => -1 }
+            divides() catch (e) { _: baml.panics.Panic => -1 }
         }
     "#
     );
@@ -3802,7 +3802,7 @@ async fn panic_alias_plus_wildcard_dispatch() {
 
         function main() -> int {
             risky(0) catch (e) {
-                Panic => 1,
+                _: baml.panics.Panic => 1,
                 _ => 2
             }
         }
@@ -3950,7 +3950,7 @@ async fn nested_inner_catches_panic_outer_catches_rethrow() {
         function divides() -> int { 1 / 0 }
 
         function middle() -> int {
-            let x = divides() catch (e) { DivisionByZero => -1 };
+            let x = divides() catch (e) { _: baml.panics.DivisionByZero => -1 };
             throw "recovered but failing"
         }
 
@@ -4162,7 +4162,7 @@ async fn caught_panic_has_accessible_fields() {
         function oob() -> int { let a = [10, 20, 30]; a[7] }
 
         function main() -> int {
-            oob() catch (e) { IndexOutOfBounds => e.index }
+            oob() catch (e) { _: baml.panics.IndexOutOfBounds => e.index }
         }
     "#
     );

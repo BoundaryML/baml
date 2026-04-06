@@ -101,24 +101,6 @@ pub fn lower_type_expr_in_ns(
                     if generic_params.iter().any(|p| *p == segments[0]) {
                         return Ty::TypeVar(segments[0].clone(), TyAttr::default());
                     }
-                    // Bare panic class sugar: `DivisionByZero` → `baml.panics.DivisionByZero`.
-                    let baml_pkg_id =
-                        PackageId::new(db, baml_base::Name::new(baml_base::BAML_PACKAGE));
-                    let baml_pkg = baml_compiler2_ppir::package_items(db, baml_pkg_id);
-                    let panics_ns = [baml_base::Name::new(baml_base::PANICS_NAMESPACE)];
-                    if let Some(def) = baml_pkg.lookup_type(&panics_ns, item) {
-                        return match def {
-                            Definition::Class(_) => {
-                                Ty::Class(qualify_def(db, def, item), TyAttr::default())
-                            }
-                            Definition::TypeAlias(_) => {
-                                Ty::TypeAlias(qualify_def(db, def, item), TyAttr::default())
-                            }
-                            _ => Ty::Unknown {
-                                attr: TyAttr::default(),
-                            },
-                        };
-                    }
                 }
                 let name_str = segments
                     .iter()
