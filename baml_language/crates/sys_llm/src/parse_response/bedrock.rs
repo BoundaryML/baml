@@ -18,7 +18,6 @@ struct ConverseResponse {
     output: Option<ConverseOutput>,
     stop_reason: Option<String>,
     usage: Option<ConverseUsage>,
-    metrics: Option<ConverseMetrics>,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -30,8 +29,6 @@ struct ConverseOutput {
 #[derive(Debug, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 struct ConverseMessage {
-    #[allow(dead_code)]
-    role: Option<String>,
     #[serde(default)]
     content: Vec<ContentBlock>,
 }
@@ -41,17 +38,6 @@ struct ConverseMessage {
 #[serde(rename_all = "camelCase")]
 struct ContentBlock {
     text: Option<String>,
-    #[allow(dead_code)]
-    tool_use: Option<ToolUseBlock>,
-}
-
-#[derive(Debug, Deserialize, Clone)]
-#[serde(rename_all = "camelCase")]
-#[allow(dead_code)]
-struct ToolUseBlock {
-    tool_use_id: Option<String>,
-    name: Option<String>,
-    input: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -61,13 +47,6 @@ struct ConverseUsage {
     input_tokens: Option<u64>,
     output_tokens: Option<u64>,
     total_tokens: Option<u64>,
-}
-
-#[derive(Debug, Deserialize, Clone)]
-#[serde(rename_all = "camelCase")]
-#[allow(dead_code)]
-struct ConverseMetrics {
-    latency_ms: Option<u64>,
 }
 
 // ---------------------------------------------------------------------------
@@ -120,18 +99,9 @@ pub(super) fn parse_bedrock_response(
             input_tokens: u.input_tokens,
             output_tokens: u.output_tokens,
             total_tokens: u.total_tokens,
+            cached_input_tokens: None,
         })
         .unwrap_or_default();
-
-    let mut metadata = serde_json::Map::new();
-    if let Some(metrics) = &response.metrics {
-        if let Some(latency) = metrics.latency_ms {
-            metadata.insert(
-                "latency_ms".into(),
-                serde_json::Value::Number(latency.into()),
-            );
-        }
-    }
 
     Ok(LlmProviderResponse {
         content,
@@ -140,7 +110,6 @@ pub(super) fn parse_bedrock_response(
         finish_reason,
         finish_reason_raw: response.stop_reason,
         usage,
-        metadata,
     })
 }
 
@@ -182,7 +151,6 @@ mod tests {
         assert_eq!(usage.input_tokens, Some(10));
         assert_eq!(usage.output_tokens, Some(8));
         assert_eq!(usage.total_tokens, Some(18));
-        assert_eq!(resp.metrics.unwrap().latency_ms, Some(234));
     }
 
     #[test]
@@ -211,11 +179,10 @@ mod tests {
         }"#;
 
         let resp: ConverseResponse = serde_json::from_str(json).unwrap();
-        let msg = resp.output.unwrap().message.unwrap();
-        let tool = msg.content[0].tool_use.as_ref().unwrap();
-        assert_eq!(tool.name.as_deref(), Some("get_weather"));
-        assert_eq!(tool.tool_use_id.as_deref(), Some("tool_123"));
         assert_eq!(resp.stop_reason.as_deref(), Some("tool_use"));
+        // tool_use content block has no text, so text is None
+        let msg = resp.output.unwrap().message.unwrap();
+        assert_eq!(msg.content[0].text, None);
     }
 
     #[test]
@@ -247,7 +214,7 @@ mod tests {
         assert_eq!(resp.usage.input_tokens, Some(10));
         assert_eq!(resp.usage.output_tokens, Some(8));
         assert_eq!(resp.usage.total_tokens, Some(18));
-        assert_eq!(resp.metadata["latency_ms"], 234);
+        assert_eq!(resp.usage.cached_input_tokens, None);
     }
 
     #[test]
@@ -331,6 +298,31 @@ mod tests {
 
         let err = parse_bedrock_response(body).unwrap_err();
         assert!(matches!(err, ParseResponseError::NoContent { .. }));
+    }
+
+    #[test]
+    fn test_parse_multiple_content_blocks() {
+        let body = r#"{
+            "output": {
+                "message": {
+                    "role": "assistant",
+                    "content": [
+                        {"text": "Hello"},
+                        {"text": " "},
+                        {"text": "World"}
+                    ]
+                }
+            },
+            "stopReason": "end_turn",
+            "usage": {
+                "inputTokens": 5,
+                "outputTokens": 3,
+                "totalTokens": 8
+            }
+        }"#;
+
+        let resp = parse_bedrock_response(body).unwrap();
+        assert_eq!(resp.content, "Hello World");
     }
 
     #[test]

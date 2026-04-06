@@ -1,4 +1,4 @@
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::Deserialize;
 
 use super::{
     ParseResponseError,
@@ -12,7 +12,7 @@ use super::{
 #[derive(Debug, Deserialize, Clone, PartialEq)]
 #[serde(untagged)]
 enum ChatCompletionResponse {
-    Success(ChatCompletionGeneric<ChatCompletionChoice>),
+    Success(ChatCompletionSuccess),
     Error(OpenAiErrorWrapper),
 }
 
@@ -24,95 +24,40 @@ struct OpenAiErrorWrapper {
 #[derive(Debug, Deserialize, Clone, PartialEq)]
 struct OpenAiErrorResponse {
     message: String,
-    #[serde(rename = "type")]
-    r#type: String,
     param: Option<String>,
     code: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Clone, PartialEq)]
-struct ChatCompletionGeneric<C> {
-    id: Option<String>,
-    choices: Vec<C>,
-    #[serde(default, deserialize_with = "deserialize_float_to_u32")]
-    created: Option<u32>,
+struct ChatCompletionSuccess {
+    choices: Vec<ChatCompletionChoice>,
     model: String,
-    system_fingerprint: Option<String>,
-    object: Option<String>,
     usage: Option<CompletionUsage>,
-}
-
-fn deserialize_float_to_u32<'de, D>(deserializer: D) -> Result<Option<u32>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    #[derive(Deserialize)]
-    #[serde(untagged)]
-    enum FloatOrInt {
-        Int(u32),
-        Float(f64),
-    }
-
-    match Option::<FloatOrInt>::deserialize(deserializer)? {
-        Some(FloatOrInt::Int(i)) => Ok(Some(i)),
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-        Some(FloatOrInt::Float(f)) => Ok(Some(f.floor() as u32)),
-        None => Ok(None),
-    }
 }
 
 #[derive(Debug, Deserialize, Clone, PartialEq)]
 struct ChatCompletionChoice {
-    index: u32,
     message: ChatCompletionResponseMessage,
     finish_reason: Option<String>,
-    logprobs: Option<ChatChoiceLogprobs>,
 }
 
-#[allow(clippy::struct_field_names)]
-#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
+#[derive(Debug, Deserialize, Clone, PartialEq)]
 struct CompletionUsage {
     prompt_tokens: u64,
     completion_tokens: u64,
     total_tokens: u64,
+    #[serde(alias = "prompt_tokens_details")]
+    input_tokens_details: Option<InputTokensDetails>,
+}
+
+#[derive(Debug, Deserialize, Clone, PartialEq)]
+struct InputTokensDetails {
+    cached_tokens: Option<u64>,
 }
 
 #[derive(Debug, Deserialize, Clone, PartialEq)]
 struct ChatCompletionResponseMessage {
     content: Option<String>,
-    #[allow(dead_code)]
-    role: ChatCompletionMessageRole,
-}
-
-#[derive(Debug, Deserialize, Clone, Default, PartialEq)]
-#[serde(rename_all = "lowercase")]
-enum ChatCompletionMessageRole {
-    System,
-    #[default]
-    User,
-    Assistant,
-    Tool,
-    Function,
-}
-
-#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
-struct ChatChoiceLogprobs {
-    content: Option<Vec<ChatCompletionTokenLogprob>>,
-}
-
-#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
-struct ChatCompletionTokenLogprob {
-    token: String,
-    logprob: f32,
-    bytes: Option<Vec<u8>>,
-    top_logprobs: Vec<TopLogprobs>,
-}
-
-#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
-struct TopLogprobs {
-    token: String,
-    logprob: f32,
-    bytes: Option<Vec<u8>>,
 }
 
 // ---------------------------------------------------------------------------
@@ -178,31 +123,12 @@ pub(super) fn parse_openai_response(body: &str) -> Result<LlmProviderResponse, P
             input_tokens: Some(u.prompt_tokens),
             output_tokens: Some(u.completion_tokens),
             total_tokens: Some(u.total_tokens),
+            cached_input_tokens: u
+                .input_tokens_details
+                .as_ref()
+                .and_then(|d| d.cached_tokens),
         })
         .unwrap_or_default();
-
-    // Build metadata map with provider-specific fields.
-    let mut metadata = serde_json::Map::new();
-    if let Some(id) = &response.id {
-        metadata.insert("id".into(), serde_json::Value::String(id.clone()));
-    }
-    if let Some(fp) = &response.system_fingerprint {
-        metadata.insert(
-            "system_fingerprint".into(),
-            serde_json::Value::String(fp.clone()),
-        );
-    }
-    if let Some(created) = response.created {
-        metadata.insert("created".into(), serde_json::Value::Number(created.into()));
-    }
-    if let Some(object) = &response.object {
-        metadata.insert("object".into(), serde_json::Value::String(object.clone()));
-    }
-    if let Some(logprobs) = &choice.logprobs {
-        if let Ok(val) = serde_json::to_value(logprobs) {
-            metadata.insert("logprobs".into(), val);
-        }
-    }
 
     Ok(LlmProviderResponse {
         content,
@@ -210,7 +136,6 @@ pub(super) fn parse_openai_response(body: &str) -> Result<LlmProviderResponse, P
         finish_reason,
         finish_reason_raw: choice.finish_reason.clone(),
         usage,
-        metadata,
     })
 }
 
@@ -247,7 +172,6 @@ mod tests {
         let ChatCompletionResponse::Success(response) = response else {
             panic!("expected success");
         };
-        assert_eq!(response.id, Some("chatcmpl-123".to_string()));
         assert_eq!(response.model, "gpt-3.5-turbo-0125");
         assert_eq!(response.choices.len(), 1);
         assert_eq!(
@@ -255,30 +179,7 @@ mod tests {
             Some("Hello! How can I help you today?".to_string())
         );
         assert_eq!(response.choices[0].finish_reason, Some("stop".to_string()));
-        assert!(response.usage.is_some());
         assert_eq!(response.usage.as_ref().unwrap().total_tokens, 21);
-    }
-
-    #[test]
-    fn test_deserialize_float_created() {
-        let json = r#"{
-            "model": "custom-model",
-            "created": 1677652288.5,
-            "choices": [{
-                "index": 0,
-                "message": {
-                    "role": "assistant",
-                    "content": "Hello"
-                },
-                "finish_reason": "stop"
-            }]
-        }"#;
-
-        let response: ChatCompletionResponse = serde_json::from_str(json).unwrap();
-        let ChatCompletionResponse::Success(response) = response else {
-            panic!("expected success");
-        };
-        assert_eq!(response.created, Some(1_677_652_288));
     }
 
     #[test]
@@ -297,55 +198,8 @@ mod tests {
             panic!("expected error");
         };
         assert_eq!(wrapper.error.message, "Invalid request");
-        assert_eq!(wrapper.error.r#type, "invalid_request_error");
         assert_eq!(wrapper.error.param, Some("model".to_string()));
         assert_eq!(wrapper.error.code, Some("invalid_model".to_string()));
-    }
-
-    #[test]
-    fn test_deserialize_error_response_minimal() {
-        let json = r#"{
-            "error": {
-                "message": "Something went wrong",
-                "type": "server_error"
-            }
-        }"#;
-
-        let response: ChatCompletionResponse = serde_json::from_str(json).unwrap();
-        let ChatCompletionResponse::Error(wrapper) = response else {
-            panic!("expected error");
-        };
-        assert_eq!(wrapper.error.message, "Something went wrong");
-        assert_eq!(wrapper.error.r#type, "server_error");
-        assert_eq!(wrapper.error.param, None);
-        assert_eq!(wrapper.error.code, None);
-    }
-
-    #[test]
-    fn test_deserialize_minimal_response() {
-        let json = r#"{
-            "model": "basic-model",
-            "choices": [{
-                "index": 0,
-                "message": {
-                    "role": "assistant",
-                    "content": "Minimal response"
-                }
-            }]
-        }"#;
-
-        let response: ChatCompletionResponse = serde_json::from_str(json).unwrap();
-        let ChatCompletionResponse::Success(response) = response else {
-            panic!("expected success");
-        };
-        assert!(response.id.is_none());
-        assert!(response.created.is_none());
-        assert!(response.usage.is_none());
-        assert_eq!(response.model, "basic-model");
-        assert_eq!(
-            response.choices[0].message.content,
-            Some("Minimal response".to_string())
-        );
     }
 
     #[test]
@@ -381,11 +235,7 @@ mod tests {
         assert_eq!(resp.usage.output_tokens, Some(12));
         assert_eq!(resp.usage.total_tokens, Some(21));
 
-        // Metadata
-        assert_eq!(resp.metadata["id"], "chatcmpl-123");
-        assert_eq!(resp.metadata["system_fingerprint"], "fp_44709d6fcb");
-        assert_eq!(resp.metadata["created"], 1_677_652_288);
-        assert_eq!(resp.metadata["object"], "chat.completion");
+        assert_eq!(resp.usage.cached_input_tokens, None);
     }
 
     #[test]
@@ -410,10 +260,7 @@ mod tests {
         assert_eq!(resp.usage.output_tokens, None);
         assert_eq!(resp.usage.total_tokens, None);
 
-        // No metadata when fields are absent
-        assert!(!resp.metadata.contains_key("id"));
-        assert!(!resp.metadata.contains_key("system_fingerprint"));
-        assert!(!resp.metadata.contains_key("created"));
+        assert_eq!(resp.usage.cached_input_tokens, None);
     }
 
     #[test]

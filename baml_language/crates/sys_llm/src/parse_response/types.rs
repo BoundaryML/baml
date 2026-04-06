@@ -1,16 +1,11 @@
 // TODO: Remove this once we consume all the fields in this struct via collector etc
 #![allow(dead_code)]
 
-use serde_json::Value as JsonValue;
-
 /// Normalized response from any LLM provider.
 ///
 /// This is the result of parsing a provider-specific HTTP response body
 /// (e.g. `OpenAI` `ChatCompletion` JSON, Anthropic Message JSON) into a
-/// common shape.
-///
-/// Provider-specific data that doesn't fit the common fields is
-/// preserved in `metadata` as a JSON map.
+/// common shape that matches the engine's `LLMCompleteResponseMetadata`.
 #[derive(Debug, Clone)]
 pub(crate) struct LlmProviderResponse {
     /// The text content extracted from the LLM response.
@@ -33,14 +28,6 @@ pub(crate) struct LlmProviderResponse {
 
     /// Token usage information, if the provider reported it.
     pub usage: TokenUsage,
-
-    /// Arbitrary provider-specific metadata as a JSON map.
-    ///
-    /// Examples of what ends up here:
-    /// - `OpenAI`: `id`, `system_fingerprint`, `created`, `logprobs`
-    /// - Anthropic: `id`, `cache_creation_input_tokens`, `cache_read_input_tokens`, `service_tier`, `stop_sequence`
-    /// - Google: `safety_ratings`, `citation_metadata`, `grounding_metadata`
-    pub metadata: serde_json::Map<String, JsonValue>,
 }
 
 /// Normalized finish reason.
@@ -72,4 +59,5 @@ pub(crate) struct TokenUsage {
     pub input_tokens: Option<u64>,
     pub output_tokens: Option<u64>,
     pub total_tokens: Option<u64>,
+    pub cached_input_tokens: Option<u64>,
 }

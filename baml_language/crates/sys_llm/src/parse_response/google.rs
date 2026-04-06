@@ -24,7 +24,6 @@ struct GeminiResponse {
 struct Candidate {
     content: Option<Content>,
     finish_reason: Option<String>,
-    finish_message: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -32,8 +31,6 @@ struct Candidate {
 struct Content {
     #[serde(default)]
     parts: Vec<Part>,
-    #[allow(dead_code)]
-    role: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -115,32 +112,9 @@ pub(super) fn parse_gemini_response(body: &str) -> Result<LlmProviderResponse, P
             input_tokens: u.prompt_token_count,
             output_tokens: u.candidates_token_count,
             total_tokens: u.total_token_count,
+            cached_input_tokens: u.cached_content_token_count,
         })
         .unwrap_or_default();
-
-    let mut metadata = serde_json::Map::new();
-    if let Some(version) = &response.model_version {
-        metadata.insert(
-            "model_version".into(),
-            serde_json::Value::String(version.clone()),
-        );
-    }
-    if let Some(u) = &response.usage_metadata {
-        if let Some(cached) = u.cached_content_token_count {
-            if cached > 0 {
-                metadata.insert(
-                    "cached_content_token_count".into(),
-                    serde_json::Value::Number(cached.into()),
-                );
-            }
-        }
-    }
-    if let Some(msg) = &candidate.finish_message {
-        metadata.insert(
-            "finish_message".into(),
-            serde_json::Value::String(msg.clone()),
-        );
-    }
 
     Ok(LlmProviderResponse {
         content,
@@ -150,7 +124,6 @@ pub(super) fn parse_gemini_response(body: &str) -> Result<LlmProviderResponse, P
         finish_reason,
         finish_reason_raw: candidate.finish_reason.clone(),
         usage,
-        metadata,
     })
 }
 
@@ -257,7 +230,7 @@ mod tests {
         assert_eq!(resp.usage.input_tokens, Some(10));
         assert_eq!(resp.usage.output_tokens, Some(8));
         assert_eq!(resp.usage.total_tokens, Some(18));
-        assert_eq!(resp.metadata["model_version"], "gemini-1.5-flash");
+        assert_eq!(resp.model, "gemini-1.5-flash");
     }
 
     #[test]
@@ -328,10 +301,6 @@ mod tests {
         let resp = parse_gemini_response(body).unwrap();
         assert_eq!(resp.content, "");
         assert_eq!(resp.finish_reason, FinishReason::Other("SAFETY".into()));
-        assert_eq!(
-            resp.metadata["finish_message"],
-            "Content blocked by safety filters"
-        );
     }
 
     #[test]
@@ -417,7 +386,7 @@ mod tests {
         }"#;
 
         let resp = parse_gemini_response(body).unwrap();
-        assert_eq!(resp.metadata["cached_content_token_count"], 80);
+        assert_eq!(resp.usage.cached_input_tokens, Some(80));
     }
 
     #[test]
@@ -439,7 +408,7 @@ mod tests {
         }"#;
 
         let resp = parse_gemini_response(body).unwrap();
-        assert!(!resp.metadata.contains_key("cached_content_token_count"));
+        assert_eq!(resp.usage.cached_input_tokens, Some(0));
     }
 
     #[test]

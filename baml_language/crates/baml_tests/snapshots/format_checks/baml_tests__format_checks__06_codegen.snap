@@ -122,10 +122,10 @@ function user.ArrayConfigClient$new() -> null {
     store_field .provider_options
     copy 0
     alloc_map 0
-    store_field .headers
+    store_field .client_response_type
     copy 0
     alloc_map 0
-    store_field .query_params
+    store_field .headers
     copy 0
     load_const "END"
     load_const "STOP"
@@ -133,7 +133,7 @@ function user.ArrayConfigClient$new() -> null {
     alloc_array 3
     load_const "stop_sequences"
     alloc_map 1
-    store_field .request_body
+    store_field .query_params
     store_field .options
     return
 }
@@ -186,15 +186,15 @@ function user.ArrayOfObjectsClient$new() -> null {
     store_field .provider_options
     copy 0
     alloc_map 0
-    store_field .headers
+    store_field .client_response_type
     copy 0
     alloc_map 0
-    store_field .query_params
+    store_field .headers
     copy 0
     alloc_array 0
     load_const "tools"
     alloc_map 1
-    store_field .request_body
+    store_field .query_params
     store_field .options
     return
 }
@@ -688,13 +688,13 @@ function user.BasicClient$new() -> null {
     store_field .provider_options
     copy 0
     alloc_map 0
+    store_field .client_response_type
+    copy 0
+    alloc_map 0
     store_field .headers
     copy 0
     alloc_map 0
     store_field .query_params
-    copy 0
-    alloc_map 0
-    store_field .request_body
     store_field .options
     return
 }
@@ -1156,13 +1156,13 @@ function user.C$new() -> null {
     store_field .provider_options
     copy 0
     alloc_map 0
+    store_field .client_response_type
+    copy 0
+    alloc_map 0
     store_field .headers
     copy 0
     alloc_map 0
     store_field .query_params
-    copy 0
-    alloc_map 0
-    store_field .request_body
     store_field .options
     return
 }
@@ -1335,15 +1335,15 @@ function user.CommaClient$new() -> null {
     store_field .provider_options
     copy 0
     alloc_map 0
-    store_field .headers
+    store_field .client_response_type
     copy 0
     alloc_map 0
-    store_field .query_params
+    store_field .headers
     copy 0
     load_const 100
     load_const "max_tokens"
     alloc_map 1
-    store_field .request_body
+    store_field .query_params
     store_field .options
     return
 }
@@ -1586,13 +1586,13 @@ function user.DeeplyNestedClient$new() -> null {
     store_field .1
     store_field .2
     store_field .0
+    store_field .client_response_type
+    copy 0
+    alloc_map 0
     store_field .headers
     copy 0
     alloc_map 0
     store_field .query_params
-    copy 0
-    alloc_map 0
-    store_field .request_body
     store_field .options
     return
 }
@@ -1648,13 +1648,13 @@ function user.EnvClient$new() -> null {
     store_field .provider_options
     copy 0
     alloc_map 0
+    store_field .client_response_type
+    copy 0
+    alloc_map 0
     store_field .headers
     copy 0
     alloc_map 0
     store_field .query_params
-    copy 0
-    alloc_map 0
-    store_field .request_body
     store_field .options
     return
 }
@@ -1721,13 +1721,13 @@ function user.ExtraWhitespaceClient$new() -> null {
     store_field .provider_options
     copy 0
     alloc_map 0
+    store_field .client_response_type
+    copy 0
+    alloc_map 0
     store_field .headers
     copy 0
     alloc_map 0
     store_field .query_params
-    copy 0
-    alloc_map 0
-    store_field .request_body
     store_field .options
     return
 }
@@ -1792,10 +1792,10 @@ function user.FullClient$new() -> null {
     store_field .provider_options
     copy 0
     alloc_map 0
-    store_field .headers
+    store_field .client_response_type
     copy 0
     alloc_map 0
-    store_field .query_params
+    store_field .headers
     copy 0
     load_const 100
     load_const 0.7
@@ -1804,7 +1804,7 @@ function user.FullClient$new() -> null {
     load_const "temperature"
     load_const "top_p"
     alloc_map 3
-    store_field .request_body
+    store_field .query_params
     store_field .options
     return
 }
@@ -2108,10 +2108,10 @@ function user.LongArrayClient$new() -> null {
     store_field .provider_options
     copy 0
     alloc_map 0
-    store_field .headers
+    store_field .client_response_type
     copy 0
     alloc_map 0
-    store_field .query_params
+    store_field .headers
     copy 0
     load_const "STOP_GENERATION_NOW"
     load_const "END_OF_RESPONSE_MARKER"
@@ -2121,7 +2121,7 @@ function user.LongArrayClient$new() -> null {
     alloc_array 5
     load_const "stop_sequences"
     alloc_map 1
-    store_field .request_body
+    store_field .query_params
     store_field .options
     return
 }
@@ -2174,15 +2174,15 @@ function user.LongArrayOfObjectsClient$new() -> null {
     store_field .provider_options
     copy 0
     alloc_map 0
-    store_field .headers
+    store_field .client_response_type
     copy 0
     alloc_map 0
-    store_field .query_params
+    store_field .headers
     copy 0
     alloc_array 0
     load_const "tools"
     alloc_map 1
-    store_field .request_body
+    store_field .query_params
     store_field .options
     return
 }
@@ -2249,13 +2249,13 @@ function user.LongNestedValuesClient$new() -> null {
     store_field .provider_options
     copy 0
     load_const null /* unknown class:  */
+    store_field .client_response_type
+    copy 0
+    alloc_map 0
     store_field .headers
     copy 0
     alloc_map 0
     store_field .query_params
-    copy 0
-    alloc_map 0
-    store_field .request_body
     store_field .options
     return
 }
@@ -2308,13 +2308,13 @@ function user.LongOptionClient$new() -> null {
     store_field .provider_options
     copy 0
     alloc_map 0
+    store_field .client_response_type
+    copy 0
+    alloc_map 0
     store_field .headers
     copy 0
     alloc_map 0
     store_field .query_params
-    copy 0
-    alloc_map 0
-    store_field .request_body
     store_field .options
     return
 }
@@ -4121,10 +4121,10 @@ function user.ManyOptionsClient$new() -> null {
     store_field .provider_options
     copy 0
     alloc_map 0
-    store_field .headers
+    store_field .client_response_type
     copy 0
     alloc_map 0
-    store_field .query_params
+    store_field .headers
     copy 0
     load_const 4096
     load_const 0.7
@@ -4146,7 +4146,7 @@ function user.ManyOptionsClient$new() -> null {
     load_const "stream"
     load_const "stop_sequences"
     alloc_map 7
-    store_field .request_body
+    store_field .query_params
     store_field .options
     return
 }
@@ -4911,10 +4911,10 @@ function user.MixedValuesClient$new() -> null {
     store_field .provider_options
     copy 0
     alloc_map 0
-    store_field .headers
+    store_field .client_response_type
     copy 0
     alloc_map 0
-    store_field .query_params
+    store_field .headers
     copy 0
     load_const 100
     load_const 0.7
@@ -4928,7 +4928,7 @@ function user.MixedValuesClient$new() -> null {
     load_const "stop"
     load_const "inline_string"
     alloc_map 5
-    store_field .request_body
+    store_field .query_params
     store_field .options
     return
 }
@@ -5047,13 +5047,13 @@ function user.NestedConfigClient$new() -> null {
     store_field .provider_options
     copy 0
     load_const null /* unknown class:  */
+    store_field .client_response_type
+    copy 0
+    alloc_map 0
     store_field .headers
     copy 0
     alloc_map 0
     store_field .query_params
-    copy 0
-    alloc_map 0
-    store_field .request_body
     store_field .options
     return
 }
@@ -5286,15 +5286,15 @@ function user.RawStringConfigClient$new() -> null {
     store_field .provider_options
     copy 0
     alloc_map 0
-    store_field .headers
+    store_field .client_response_type
     copy 0
     alloc_map 0
-    store_field .query_params
+    store_field .headers
     copy 0
     load_const "#Youareahelpfulassistant.Alwaysbeconcise.#"
     load_const "system_prompt"
     alloc_map 1
-    store_field .request_body
+    store_field .query_params
     store_field .options
     return
 }
@@ -5347,13 +5347,13 @@ function user.SameLineClient$new() -> null {
     store_field .provider_options
     copy 0
     alloc_map 0
+    store_field .client_response_type
+    copy 0
+    alloc_map 0
     store_field .headers
     copy 0
     alloc_map 0
     store_field .query_params
-    copy 0
-    alloc_map 0
-    store_field .request_body
     store_field .options
     return
 }
@@ -5416,13 +5416,13 @@ function user.StringProviderClient$new() -> null {
     store_field .provider_options
     copy 0
     alloc_map 0
+    store_field .client_response_type
+    copy 0
+    alloc_map 0
     store_field .headers
     copy 0
     alloc_map 0
     store_field .query_params
-    copy 0
-    alloc_map 0
-    store_field .request_body
     store_field .options
     return
 }
@@ -5506,13 +5506,13 @@ function user.ThisIsAnExtremelyLongClientNameThatDefinitelyExceedsTheDefaultLine
     store_field .provider_options
     copy 0
     alloc_map 0
+    store_field .client_response_type
+    copy 0
+    alloc_map 0
     store_field .headers
     copy 0
     alloc_map 0
     store_field .query_params
-    copy 0
-    alloc_map 0
-    store_field .request_body
     store_field .options
     return
 }
@@ -5570,13 +5570,13 @@ function user.TriviaClient$new() -> null {
     store_field .provider_options
     copy 0
     alloc_map 0
+    store_field .client_response_type
+    copy 0
+    alloc_map 0
     store_field .headers
     copy 0
     alloc_map 0
     store_field .query_params
-    copy 0
-    alloc_map 0
-    store_field .request_body
     store_field .options
     return
 }
@@ -5629,13 +5629,13 @@ function user.TriviaClientBlock$new() -> null {
     store_field .provider_options
     copy 0
     alloc_map 0
+    store_field .client_response_type
+    copy 0
+    alloc_map 0
     store_field .headers
     copy 0
     alloc_map 0
     store_field .query_params
-    copy 0
-    alloc_map 0
-    store_field .request_body
     store_field .options
     return
 }
@@ -5688,13 +5688,13 @@ function user.TriviaDeeplyNestedClient$new() -> null {
     store_field .provider_options
     copy 0
     load_const null /* unknown class:  */
+    store_field .client_response_type
+    copy 0
+    alloc_map 0
     store_field .headers
     copy 0
     alloc_map 0
     store_field .query_params
-    copy 0
-    alloc_map 0
-    store_field .request_body
     store_field .options
     return
 }
@@ -5747,13 +5747,13 @@ function user.TriviaDeeplyNestedClientBlock$new() -> null {
     store_field .provider_options
     copy 0
     load_const null /* unknown class:  */
+    store_field .client_response_type
+    copy 0
+    alloc_map 0
     store_field .headers
     copy 0
     alloc_map 0
     store_field .query_params
-    copy 0
-    alloc_map 0
-    store_field .request_body
     store_field .options
     return
 }
@@ -5830,13 +5830,13 @@ function user.TriviaLongValueClient$new() -> null {
     store_field .provider_options
     copy 0
     alloc_map 0
+    store_field .client_response_type
+    copy 0
+    alloc_map 0
     store_field .headers
     copy 0
     alloc_map 0
     store_field .query_params
-    copy 0
-    alloc_map 0
-    store_field .request_body
     store_field .options
     return
 }
@@ -5889,13 +5889,13 @@ function user.TriviaLongValueClientBlock$new() -> null {
     store_field .provider_options
     copy 0
     alloc_map 0
+    store_field .client_response_type
+    copy 0
+    alloc_map 0
     store_field .headers
     copy 0
     alloc_map 0
     store_field .query_params
-    copy 0
-    alloc_map 0
-    store_field .request_body
     store_field .options
     return
 }
@@ -5968,10 +5968,10 @@ function user.TypedValuesClient$new() -> null {
     store_field .provider_options
     copy 0
     alloc_map 0
-    store_field .headers
+    store_field .client_response_type
     copy 0
     alloc_map 0
-    store_field .query_params
+    store_field .headers
     copy 0
     load_const 0.5
     load_const 2048
@@ -5980,7 +5980,7 @@ function user.TypedValuesClient$new() -> null {
     load_const "max_tokens"
     load_const "stream"
     alloc_map 3
-    store_field .request_body
+    store_field .query_params
     store_field .options
     return
 }

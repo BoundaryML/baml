@@ -186,6 +186,7 @@ class baml.llm.PrimitiveClientOptions {
   remap_roles: map<string, string> | null
   api_key: string | null
   provider_options: baml.llm.AnthropicOptions | baml.llm.AzureOpenAiOptions | baml.llm.BedrockOptions | null
+  client_response_type: string | null
   headers: map<string, string>
   query_params: map<string, string>
   request_body: map<string, unknown>

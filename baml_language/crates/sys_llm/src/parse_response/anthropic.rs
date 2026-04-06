@@ -1,4 +1,4 @@
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
 use super::{
     ParseResponseError,
@@ -9,69 +9,30 @@ use super::{
 // Types
 // ---------------------------------------------------------------------------
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq)]
 #[serde(tag = "type", rename_all = "snake_case")]
 enum AnthropicMessageContent {
     Text {
         text: String,
     },
-    ToolUse {
-        id: Option<String>,
-        input: serde_json::Value,
-        name: String,
-    },
-    RedactedThinking {
-        data: String,
-    },
     #[serde(other)]
     Other,
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[allow(clippy::struct_field_names)]
+#[derive(Clone, Debug, Deserialize, PartialEq)]
 struct AnthropicUsage {
     input_tokens: u64,
     output_tokens: u64,
-    #[serde(default)]
-    cache_creation_input_tokens: u64,
-    #[serde(default)]
-    cache_read_input_tokens: u64,
-    #[serde(default)]
-    service_tier: String,
+    cache_read_input_tokens: Option<u64>,
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq)]
 struct AnthropicMessageResponse {
-    id: String,
-    #[allow(dead_code)]
-    role: String,
-    #[allow(dead_code)]
-    r#type: String,
     content: Vec<AnthropicMessageContent>,
     model: String,
     stop_reason: Option<String>,
-    stop_sequence: Option<StopSequence>,
     usage: AnthropicUsage,
-}
-
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-#[serde(transparent)]
-struct StopSequence {
-    value: String,
-}
-
-#[allow(dead_code)]
-#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
-struct AnthropicErrorResponse {
-    r#type: String,
-    error: AnthropicErrorInner,
-}
-
-#[allow(dead_code)]
-#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
-struct AnthropicErrorInner {
-    r#type: String,
-    message: Option<String>,
-    details: Option<serde_json::Value>,
 }
 
 // ---------------------------------------------------------------------------
@@ -89,37 +50,18 @@ pub(super) fn parse_anthropic_response(
             content: body.to_string(),
         })?;
 
-    if response.content.len() > 1 {
-        let block_types: Vec<&str> = response
-            .content
-            .iter()
-            .map(|b| match b {
-                AnthropicMessageContent::Text { .. } => "text",
-                AnthropicMessageContent::ToolUse { .. } => "tool_use",
-                AnthropicMessageContent::RedactedThinking { .. } => "redacted_thinking",
-                AnthropicMessageContent::Other => "other",
-            })
-            .collect();
-        return Err(ParseResponseError::UnsupportedResponseFormat {
-            provider: "anthropic",
-            detail: format!(
-                "response contains {} content blocks ({}) but we can only parse a single block; \
-                 dropping block(s) would lose data",
-                response.content.len(),
-                block_types.join(", ")
-            ),
-        });
-    }
+    // Extract the first text content block, matching engine behavior.
+    let content = response.content.iter().find_map(|block| match block {
+        AnthropicMessageContent::Text { text } => Some(text.clone()),
+        AnthropicMessageContent::Other => None,
+    });
 
-    // Extract the single content block (if any).
-    let content = response
-        .content
-        .first()
-        .and_then(|block| match block {
-            AnthropicMessageContent::Text { text } => Some(text.clone()),
-            _ => None,
-        })
-        .unwrap_or_default();
+    let Some(content) = content else {
+        return Err(ParseResponseError::NoContent {
+            provider: "anthropic",
+            detail: "response contains no text".into(),
+        });
+    };
 
     let finish_reason = match response.stop_reason.as_deref() {
         Some("end_turn" | "stop_sequence") => FinishReason::Stop,
@@ -135,35 +77,8 @@ pub(super) fn parse_anthropic_response(
         input_tokens: Some(input),
         output_tokens: Some(output),
         total_tokens: Some(input + output),
+        cached_input_tokens: response.usage.cache_read_input_tokens,
     };
-
-    // Build metadata map with provider-specific fields.
-    let mut metadata = serde_json::Map::new();
-    metadata.insert("id".into(), serde_json::Value::String(response.id.clone()));
-    if let Some(stop_seq) = &response.stop_sequence {
-        metadata.insert(
-            "stop_sequence".into(),
-            serde_json::Value::String(stop_seq.value.clone()),
-        );
-    }
-    if response.usage.cache_creation_input_tokens > 0 {
-        metadata.insert(
-            "cache_creation_input_tokens".into(),
-            serde_json::Value::Number(response.usage.cache_creation_input_tokens.into()),
-        );
-    }
-    if response.usage.cache_read_input_tokens > 0 {
-        metadata.insert(
-            "cache_read_input_tokens".into(),
-            serde_json::Value::Number(response.usage.cache_read_input_tokens.into()),
-        );
-    }
-    if !response.usage.service_tier.is_empty() {
-        metadata.insert(
-            "service_tier".into(),
-            serde_json::Value::String(response.usage.service_tier.clone()),
-        );
-    }
 
     Ok(LlmProviderResponse {
         content,
@@ -171,7 +86,6 @@ pub(super) fn parse_anthropic_response(
         finish_reason,
         finish_reason_raw: response.stop_reason,
         usage,
-        metadata,
     })
 }
 
@@ -205,59 +119,28 @@ mod tests {
         }"#;
 
         let response: AnthropicMessageResponse = serde_json::from_str(json).unwrap();
-        assert_eq!(response.id, "msg_013QyXSmCitiepWfcCMHPTsQ");
-        assert_eq!(response.role, "assistant");
         assert_eq!(response.model, "claude-3-haiku-20240307");
         assert_eq!(response.content.len(), 1);
-        match &response.content[0] {
-            AnthropicMessageContent::Text { text } => {
-                assert_eq!(text, "Hello! How can I help you today?");
-            }
-            _ => panic!("Expected text content"),
-        }
+        assert!(
+            matches!(&response.content[0], AnthropicMessageContent::Text { text } if text == "Hello! How can I help you today?")
+        );
         assert_eq!(response.stop_reason, Some("end_turn".to_string()));
         assert_eq!(response.usage.input_tokens, 9);
         assert_eq!(response.usage.output_tokens, 8);
-        assert_eq!(response.usage.cache_creation_input_tokens, 51);
-        assert_eq!(response.usage.cache_read_input_tokens, 2258);
-        assert_eq!(response.usage.service_tier, "standard");
+        assert_eq!(response.usage.cache_read_input_tokens, Some(2258));
     }
 
     #[test]
-    fn test_deserialize_error_response() {
-        let json = r#"{
-            "type": "error",
-            "error": {
-                "type": "invalid_request_error",
-                "message": "Invalid API key"
-            }
-        }"#;
-
-        let response: AnthropicErrorResponse = serde_json::from_str(json).unwrap();
-        assert_eq!(response.r#type, "error");
-        assert_eq!(response.error.r#type, "invalid_request_error");
-        assert_eq!(response.error.message, Some("Invalid API key".to_string()));
-    }
-
-    #[test]
-    fn test_deserialize_tool_use_content() {
+    fn test_deserialize_tool_use_falls_through_to_other() {
         let json = r#"{
             "type": "tool_use",
             "id": "toolu_01A09q90qw90lq917835lq9",
             "name": "get_weather",
-            "input": {"location": "San Francisco, CA", "unit": "celsius"}
+            "input": {"location": "San Francisco, CA"}
         }"#;
 
         let content: AnthropicMessageContent = serde_json::from_str(json).unwrap();
-        match content {
-            AnthropicMessageContent::ToolUse { id, name, input } => {
-                assert_eq!(id, Some("toolu_01A09q90qw90lq917835lq9".to_string()));
-                assert_eq!(name, "get_weather");
-                assert_eq!(input["location"], "San Francisco, CA");
-                assert_eq!(input["unit"], "celsius");
-            }
-            _ => panic!("Expected ToolUse content"),
-        }
+        assert!(matches!(content, AnthropicMessageContent::Other));
     }
 
     #[test]
@@ -293,11 +176,7 @@ mod tests {
         assert_eq!(resp.usage.output_tokens, Some(8));
         assert_eq!(resp.usage.total_tokens, Some(17));
 
-        // Metadata
-        assert_eq!(resp.metadata["id"], "msg_013QyXSmCitiepWfcCMHPTsQ");
-        assert_eq!(resp.metadata["cache_creation_input_tokens"], 51);
-        assert_eq!(resp.metadata["cache_read_input_tokens"], 2258);
-        assert_eq!(resp.metadata["service_tier"], "standard");
+        assert_eq!(resp.usage.cached_input_tokens, Some(2258));
     }
 
     #[test]
@@ -323,11 +202,10 @@ mod tests {
 
         let resp = parse_anthropic_response(body).unwrap();
         assert_eq!(resp.finish_reason, FinishReason::Stop);
-        assert_eq!(resp.metadata["stop_sequence"], "END");
     }
 
     #[test]
-    fn test_parse_tool_use_response() {
+    fn test_parse_tool_use_only_errors() {
         let body = r#"{
             "id": "msg_tools",
             "type": "message",
@@ -349,10 +227,8 @@ mod tests {
             }
         }"#;
 
-        let resp = parse_anthropic_response(body).unwrap();
-        // No text content block, so content is empty
-        assert_eq!(resp.content, "");
-        assert_eq!(resp.finish_reason, FinishReason::ToolUse);
+        let err = parse_anthropic_response(body).unwrap_err();
+        assert!(matches!(err, ParseResponseError::NoContent { .. }));
     }
 
     #[test]
@@ -382,7 +258,7 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_multiple_content_blocks() {
+    fn test_parse_multiple_content_blocks_takes_first_text() {
         let body = r#"{
             "id": "msg_multi",
             "type": "message",
@@ -397,14 +273,9 @@ mod tests {
             "usage": { "input_tokens": 10, "output_tokens": 20 }
         }"#;
 
-        let err = parse_anthropic_response(body).unwrap_err();
-        assert!(matches!(
-            err,
-            ParseResponseError::UnsupportedResponseFormat { .. }
-        ));
-        let msg = err.to_string();
-        assert!(msg.contains("2 content blocks"), "error message: {msg}");
-        assert!(msg.contains("text, tool_use"), "error message: {msg}");
+        let resp = parse_anthropic_response(body).unwrap();
+        assert_eq!(resp.content, "Let me check the weather.");
+        assert_eq!(resp.finish_reason, FinishReason::ToolUse);
     }
 
     #[test]
@@ -431,7 +302,7 @@ mod tests {
     }
 
     #[test]
-    fn test_cache_tokens_zero_not_in_metadata() {
+    fn test_cache_tokens_zero_yields_none() {
         let body = r#"{
             "id": "msg_test",
             "type": "message",
@@ -449,8 +320,6 @@ mod tests {
         }"#;
 
         let resp = parse_anthropic_response(body).unwrap();
-        // Zero cache tokens should not appear in metadata
-        assert!(!resp.metadata.contains_key("cache_creation_input_tokens"));
-        assert!(!resp.metadata.contains_key("cache_read_input_tokens"));
+        assert_eq!(resp.usage.cached_input_tokens, Some(0));
     }
 }

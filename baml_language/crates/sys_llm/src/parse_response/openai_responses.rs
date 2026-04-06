@@ -12,7 +12,6 @@ use super::{
 /// Top-level response from `OpenAI`'s Responses API.
 #[derive(Debug, Deserialize, Clone)]
 struct ResponsesApiResponse {
-    id: String,
     status: String,
     model: String,
     #[serde(default)]
@@ -50,10 +49,7 @@ struct ResponseOutput {
 }
 
 #[derive(Debug, Deserialize, Clone)]
-#[allow(dead_code)]
 struct ResponseContent {
-    #[serde(rename = "type")]
-    content_type: String,
     text: Option<String>,
 }
 
@@ -62,8 +58,12 @@ struct ResponsesApiUsage {
     input_tokens: u64,
     output_tokens: u64,
     total_tokens: u64,
-    input_tokens_details: Option<serde_json::Map<String, serde_json::Value>>,
-    output_tokens_details: Option<serde_json::Map<String, serde_json::Value>>,
+    input_tokens_details: Option<ResponsesInputTokensDetails>,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+struct ResponsesInputTokensDetails {
+    cached_tokens: Option<u64>,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -166,48 +166,12 @@ pub(super) fn parse_openai_responses_response(
             input_tokens: Some(u.input_tokens),
             output_tokens: Some(u.output_tokens),
             total_tokens: Some(u.total_tokens),
+            cached_input_tokens: u
+                .input_tokens_details
+                .as_ref()
+                .and_then(|d| d.cached_tokens),
         })
         .unwrap_or_default();
-
-    let mut metadata = serde_json::Map::new();
-    metadata.insert("id".into(), serde_json::Value::String(response.id.clone()));
-
-    // Extract cached tokens from input_tokens_details if available.
-    if let Some(u) = &response.usage {
-        if let Some(details) = &u.input_tokens_details {
-            if let Some(cached) = details
-                .get("cached_tokens")
-                .and_then(serde_json::Value::as_u64)
-            {
-                if cached > 0 {
-                    metadata.insert(
-                        "cached_input_tokens".into(),
-                        serde_json::Value::Number(cached.into()),
-                    );
-                }
-            }
-        }
-        if let Some(details) = &u.output_tokens_details {
-            if let Some(reasoning) = details
-                .get("reasoning_tokens")
-                .and_then(serde_json::Value::as_u64)
-            {
-                if reasoning > 0 {
-                    metadata.insert(
-                        "reasoning_tokens".into(),
-                        serde_json::Value::Number(reasoning.into()),
-                    );
-                }
-            }
-        }
-    }
-
-    if let Some(details) = &response.incomplete_details {
-        metadata.insert(
-            "incomplete_reason".into(),
-            serde_json::Value::String(details.reason.clone()),
-        );
-    }
 
     Ok(LlmProviderResponse {
         content,
@@ -215,7 +179,6 @@ pub(super) fn parse_openai_responses_response(
         finish_reason,
         finish_reason_raw: Some(response.status),
         usage,
-        metadata,
     })
 }
 
@@ -250,7 +213,6 @@ mod tests {
         }"#;
 
         let resp: ResponsesApiResponse = serde_json::from_str(json).unwrap();
-        assert_eq!(resp.id, "resp_abc123");
         assert_eq!(resp.status, "completed");
         assert_eq!(resp.model, "gpt-4o");
         assert_eq!(resp.output.len(), 1);
@@ -325,15 +287,8 @@ mod tests {
 
         let resp: ResponsesApiResponse = serde_json::from_str(json).unwrap();
         let usage = resp.usage.unwrap();
-        let cached = usage
-            .input_tokens_details
-            .as_ref()
-            .unwrap()
-            .get("cached_tokens")
-            .unwrap()
-            .as_u64()
-            .unwrap();
-        assert_eq!(cached, 80);
+        let cached = usage.input_tokens_details.as_ref().unwrap().cached_tokens;
+        assert_eq!(cached, Some(80));
     }
 
     #[test]
@@ -417,7 +372,7 @@ mod tests {
         assert_eq!(resp.usage.input_tokens, Some(10));
         assert_eq!(resp.usage.output_tokens, Some(8));
         assert_eq!(resp.usage.total_tokens, Some(18));
-        assert_eq!(resp.metadata["id"], "resp_abc123");
+        assert_eq!(resp.usage.cached_input_tokens, None);
     }
 
     #[test]
@@ -476,7 +431,7 @@ mod tests {
         let resp = parse_openai_responses_response(body).unwrap();
         assert_eq!(resp.finish_reason, FinishReason::Length);
         assert!(!resp.finish_reason.is_complete());
-        assert_eq!(resp.metadata["incomplete_reason"], "max_output_tokens");
+        assert_eq!(resp.finish_reason, FinishReason::Length);
     }
 
     #[test]
@@ -532,12 +487,11 @@ mod tests {
         }"#;
 
         let resp = parse_openai_responses_response(body).unwrap();
-        assert_eq!(resp.metadata["cached_input_tokens"], 80);
-        assert_eq!(resp.metadata["reasoning_tokens"], 50);
+        assert_eq!(resp.usage.cached_input_tokens, Some(80));
     }
 
     #[test]
-    fn test_parse_zero_cached_tokens_not_in_metadata() {
+    fn test_parse_zero_cached_tokens() {
         let body = r#"{
             "id": "resp_no_cache",
             "object": "response",
@@ -564,8 +518,7 @@ mod tests {
         }"#;
 
         let resp = parse_openai_responses_response(body).unwrap();
-        assert!(!resp.metadata.contains_key("cached_input_tokens"));
-        assert!(!resp.metadata.contains_key("reasoning_tokens"));
+        assert_eq!(resp.usage.cached_input_tokens, Some(0));
     }
 
     #[test]

@@ -90,15 +90,15 @@ function user.VertexGCP$new() -> null {
     store_field .provider_options
     copy 0
     alloc_map 0
-    store_field .headers
+    store_field .client_response_type
     copy 0
     alloc_map 0
-    store_field .query_params
+    store_field .headers
     copy 0
     load_const ""
     load_const "flash"
     alloc_map 1
-    store_field .request_body
+    store_field .query_params
     store_field .options
     return
 }

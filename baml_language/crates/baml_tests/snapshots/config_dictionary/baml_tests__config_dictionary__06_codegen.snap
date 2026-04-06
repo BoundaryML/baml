@@ -56,10 +56,10 @@ function user.MyClient$new() -> null {
     store_field .provider_options
     copy 0
     alloc_map 0
-    store_field .headers
+    store_field .client_response_type
     copy 0
     alloc_map 0
-    store_field .query_params
+    store_field .headers
     copy 0
     load_const 100
     load_const "abc"
@@ -120,7 +120,7 @@ function user.MyClient$new() -> null {
     load_const "tools"
     load_const "block_string"
     alloc_map 17
-    store_field .request_body
+    store_field .query_params
     store_field .options
     return
 }
