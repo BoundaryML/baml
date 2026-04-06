@@ -276,9 +276,6 @@ mod tests {
 
         let resp = parse_response(LlmProvider::Anthropic, body).unwrap();
         assert_eq!(resp.content, "hi");
-
-        let resp2 = parse_response(LlmProvider::AwsBedrock, body).unwrap();
-        assert_eq!(resp2.content, "hi");
     }
 
     #[test]

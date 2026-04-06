@@ -1,4 +1,5 @@
 mod anthropic;
+mod bedrock;
 mod google;
 mod openai;
 
@@ -90,9 +91,8 @@ pub(crate) fn parse_response(
         | LlmProvider::Ollama
         | LlmProvider::OpenRouter => openai::chat_completions::parse_openai_response(body),
 
-        LlmProvider::Anthropic | LlmProvider::AwsBedrock => {
-            anthropic::parse_anthropic_response(body)
-        }
+        LlmProvider::Anthropic => anthropic::parse_anthropic_response(body),
+        LlmProvider::AwsBedrock => bedrock::parse_bedrock_response(body),
 
         LlmProvider::OpenAiResponses => openai::responses::parse_openai_responses_response(body),
         LlmProvider::GoogleAi => google::parse_google_response(body),
@@ -145,6 +145,18 @@ mod tests {
         "usage": { "prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2 }
     }"#;
 
+    /// Minimal valid Bedrock Converse API body.
+    const BEDROCK_BODY: &str = r#"{
+        "output": {
+            "message": {
+                "role": "assistant",
+                "content": [{ "text": "ok" }]
+            }
+        },
+        "stopReason": "end_turn",
+        "usage": { "inputTokens": 1, "outputTokens": 1, "totalTokens": 2 }
+    }"#;
+
     /// Minimal valid Google AI / Vertex AI body.
     const GOOGLE_BODY: &str = r#"{
         "candidates": [{
@@ -178,15 +190,22 @@ mod tests {
         }
     }
 
-    // ── Anthropic + Bedrock ──────────────────────────────────────
+    // ── Anthropic ─────────────────────────────────────────────────
 
     #[test]
-    fn test_anthropic_and_bedrock_route_correctly() {
-        for provider in [LlmProvider::Anthropic, LlmProvider::AwsBedrock] {
-            let resp = parse_response(provider, ANTHROPIC_BODY).unwrap();
-            assert_eq!(resp.content, "ok");
-            assert_eq!(resp.finish_reason, FinishReason::Stop);
-        }
+    fn test_anthropic_routes_correctly() {
+        let resp = parse_response(LlmProvider::Anthropic, ANTHROPIC_BODY).unwrap();
+        assert_eq!(resp.content, "ok");
+        assert_eq!(resp.finish_reason, FinishReason::Stop);
+    }
+
+    // ── Bedrock Converse ─────────────────────────────────────────
+
+    #[test]
+    fn test_bedrock_routes_correctly() {
+        let resp = parse_response(LlmProvider::AwsBedrock, BEDROCK_BODY).unwrap();
+        assert_eq!(resp.content, "ok");
+        assert_eq!(resp.finish_reason, FinishReason::Stop);
     }
 
     // ── OpenAI Responses API ─────────────────────────────────────
