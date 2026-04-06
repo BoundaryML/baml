@@ -39,8 +39,8 @@ pub(crate) enum ParseResponseError {
 pub(crate) struct LlmProviderResponse {
     /// Text content extracted from the LLM response.
     pub content: String,
-    /// Model identifier returned by the provider.
-    pub model: String,
+    /// Model identifier returned by the provider (absent for Google/Vertex).
+    pub model: Option<String>,
     /// Normalized finish reason.
     pub finish_reason: FinishReason,
     /// Raw provider-reported finish reason string.

@@ -58,33 +58,11 @@ pub(super) fn parse_anthropic_response(
             content: body.to_string(),
         })?;
 
-    if response.content.len() > 1 {
-        let block_types: Vec<&str> = response
-            .content
-            .iter()
-            .map(|b| match b {
-                AnthropicMessageContent::Text { .. } => "text",
-                AnthropicMessageContent::ToolUse { .. } => "tool_use",
-                AnthropicMessageContent::RedactedThinking { .. } => "redacted_thinking",
-                AnthropicMessageContent::Other => "other",
-            })
-            .collect();
-        return Err(ParseResponseError::UnsupportedResponseFormat {
-            provider: "anthropic",
-            detail: format!(
-                "response contains {} content blocks ({}) but we can only parse a single block; \
-                 dropping block(s) would lose data",
-                response.content.len(),
-                block_types.join(", ")
-            ),
-        });
-    }
-
-    // Extract the single content block (if any).
+    // Extract content: take the first text block, skip non-text blocks (matching runtime behavior).
     let content = response
         .content
-        .first()
-        .and_then(|block| match block {
+        .iter()
+        .find_map(|block| match block {
             AnthropicMessageContent::Text { text } => Some(text.clone()),
             _ => None,
         })
@@ -109,7 +87,7 @@ pub(super) fn parse_anthropic_response(
 
     Ok(LlmProviderResponse {
         content,
-        model: response.model,
+        model: Some(response.model),
         finish_reason,
         finish_reason_raw: response.stop_reason,
         usage,
@@ -147,7 +125,7 @@ mod tests {
 
         let resp = parse_anthropic_response(body).unwrap();
         assert_eq!(resp.content, "Hello! How can I help you today?");
-        assert_eq!(resp.model, "claude-3-haiku-20240307");
+        assert_eq!(resp.model.as_deref(), Some("claude-3-haiku-20240307"));
         assert_eq!(resp.finish_reason, FinishReason::Stop);
         assert!(resp.finish_reason.is_complete());
         assert_eq!(resp.usage.input_tokens, Some(9));
@@ -237,7 +215,7 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_multiple_content_blocks() {
+    fn test_parse_multiple_content_blocks_takes_first_text() {
         let body = r#"{
             "id": "msg_multi",
             "type": "message",
@@ -252,14 +230,29 @@ mod tests {
             "usage": { "input_tokens": 10, "output_tokens": 20 }
         }"#;
 
-        let err = parse_anthropic_response(body).unwrap_err();
-        assert!(matches!(
-            err,
-            ParseResponseError::UnsupportedResponseFormat { .. }
-        ));
-        let msg = err.to_string();
-        assert!(msg.contains("2 content blocks"), "error message: {msg}");
-        assert!(msg.contains("text, tool_use"), "error message: {msg}");
+        let resp = parse_anthropic_response(body).unwrap();
+        assert_eq!(resp.content, "Let me check the weather.");
+        assert_eq!(resp.finish_reason, FinishReason::ToolUse);
+    }
+
+    #[test]
+    fn test_parse_tool_use_before_text_skips_to_text() {
+        let body = r#"{
+            "id": "msg_multi",
+            "type": "message",
+            "role": "assistant",
+            "model": "claude-3-haiku-20240307",
+            "content": [
+                { "type": "tool_use", "id": "toolu_1", "name": "get_weather", "input": {"city": "SF"} },
+                { "type": "text", "text": "Here's the weather." }
+            ],
+            "stop_reason": "tool_use",
+            "stop_sequence": null,
+            "usage": { "input_tokens": 10, "output_tokens": 20 }
+        }"#;
+
+        let resp = parse_anthropic_response(body).unwrap();
+        assert_eq!(resp.content, "Here's the weather.");
     }
 
     #[test]

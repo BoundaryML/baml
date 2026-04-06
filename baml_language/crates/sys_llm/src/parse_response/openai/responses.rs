@@ -101,7 +101,7 @@ pub(in crate::parse_response) fn parse_openai_responses_response(
 
     Ok(LlmProviderResponse {
         content,
-        model: response.model,
+        model: Some(response.model),
         finish_reason,
         finish_reason_raw: Some(response.status),
         usage,
@@ -136,7 +136,7 @@ mod tests {
 
         let resp = parse_openai_responses_response(body).unwrap();
         assert_eq!(resp.content, "Hello!");
-        assert_eq!(resp.model, "gpt-4o");
+        assert_eq!(resp.model.as_deref(), Some("gpt-4o"));
         assert_eq!(resp.finish_reason, FinishReason::Stop);
         assert_eq!(resp.finish_reason_raw, Some("completed".to_string()));
         assert_eq!(resp.usage.input_tokens, Some(10));

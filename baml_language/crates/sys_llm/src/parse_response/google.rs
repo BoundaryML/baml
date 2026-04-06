@@ -115,7 +115,7 @@ pub(super) fn parse_google_response(body: &str) -> Result<LlmProviderResponse, P
 
     Ok(LlmProviderResponse {
         content,
-        model: String::new(), // Google responses don't include model in response body
+        model: None,
         finish_reason,
         finish_reason_raw: candidate.finish_reason.clone(),
         usage,
@@ -181,7 +181,7 @@ pub(super) fn parse_vertex_response(body: &str) -> Result<LlmProviderResponse, P
 
     Ok(LlmProviderResponse {
         content,
-        model: String::new(), // Vertex responses don't include model in response body
+        model: None,
         finish_reason,
         finish_reason_raw: candidate.finish_reason.clone(),
         usage,

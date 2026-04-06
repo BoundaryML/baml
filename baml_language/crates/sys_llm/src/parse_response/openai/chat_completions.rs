@@ -142,7 +142,7 @@ pub(in crate::parse_response) fn parse_openai_response(
 
     Ok(LlmProviderResponse {
         content,
-        model: response.model,
+        model: Some(response.model),
         finish_reason,
         finish_reason_raw: choice.finish_reason.clone(),
         usage,
@@ -180,7 +180,7 @@ mod tests {
 
         let resp = parse_openai_response(body).unwrap();
         assert_eq!(resp.content, "Hello! How can I help you today?");
-        assert_eq!(resp.model, "gpt-4o");
+        assert_eq!(resp.model.as_deref(), Some("gpt-4o"));
         assert_eq!(resp.finish_reason, FinishReason::Stop);
         assert!(resp.finish_reason.is_complete());
         assert_eq!(resp.usage.input_tokens, Some(9));
@@ -204,7 +204,7 @@ mod tests {
 
         let resp = parse_openai_response(body).unwrap();
         assert_eq!(resp.content, "Minimal");
-        assert_eq!(resp.model, "basic-model");
+        assert_eq!(resp.model.as_deref(), Some("basic-model"));
         assert_eq!(resp.finish_reason, FinishReason::Unknown);
         assert!(!resp.finish_reason.is_complete());
         assert_eq!(resp.usage.input_tokens, None);
