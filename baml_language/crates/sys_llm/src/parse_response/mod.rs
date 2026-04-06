@@ -102,3 +102,190 @@ pub(crate) fn parse_response(
         ),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Minimal valid `OpenAI` Chat Completion response body.
+    const OPENAI_CHAT_BODY: &str = r#"{
+        "model": "gpt-4o",
+        "choices": [{
+            "index": 0,
+            "message": { "role": "assistant", "content": "ok" },
+            "finish_reason": "stop"
+        }],
+        "usage": { "prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2 }
+    }"#;
+
+    /// Minimal valid Anthropic Messages response body.
+    const ANTHROPIC_BODY: &str = r#"{
+        "id": "msg_1",
+        "type": "message",
+        "role": "assistant",
+        "model": "claude-3-haiku-20240307",
+        "content": [{"type": "text", "text": "ok"}],
+        "stop_reason": "end_turn",
+        "stop_sequence": null,
+        "usage": { "input_tokens": 1, "output_tokens": 1 }
+    }"#;
+
+    /// Minimal valid `OpenAI` Responses API body.
+    const RESPONSES_BODY: &str = r#"{
+        "id": "resp_1",
+        "object": "response",
+        "status": "completed",
+        "model": "gpt-4o",
+        "output": [{
+            "type": "message",
+            "id": "msg_1",
+            "role": "assistant",
+            "content": [{"type": "output_text", "text": "ok"}]
+        }],
+        "usage": { "prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2 }
+    }"#;
+
+    /// Minimal valid Google AI / Vertex AI body.
+    const GOOGLE_BODY: &str = r#"{
+        "candidates": [{
+            "content": {
+                "parts": [{"text": "ok"}],
+                "role": "model"
+            },
+            "finishReason": "STOP"
+        }],
+        "usageMetadata": {
+            "promptTokenCount": 1,
+            "candidatesTokenCount": 1,
+            "totalTokenCount": 2
+        }
+    }"#;
+
+    // ── OpenAI Chat variants all route to the same parser ────────
+
+    #[test]
+    fn test_openai_variants_route_correctly() {
+        for provider in [
+            LlmProvider::OpenAi,
+            LlmProvider::OpenAiGeneric,
+            LlmProvider::AzureOpenAi,
+            LlmProvider::Ollama,
+            LlmProvider::OpenRouter,
+        ] {
+            let resp = parse_response(provider, OPENAI_CHAT_BODY).unwrap();
+            assert_eq!(resp.content, "ok");
+            assert_eq!(resp.finish_reason, FinishReason::Stop);
+        }
+    }
+
+    // ── Anthropic + Bedrock ──────────────────────────────────────
+
+    #[test]
+    fn test_anthropic_and_bedrock_route_correctly() {
+        for provider in [LlmProvider::Anthropic, LlmProvider::AwsBedrock] {
+            let resp = parse_response(provider, ANTHROPIC_BODY).unwrap();
+            assert_eq!(resp.content, "ok");
+            assert_eq!(resp.finish_reason, FinishReason::Stop);
+        }
+    }
+
+    // ── OpenAI Responses API ─────────────────────────────────────
+
+    #[test]
+    fn test_openai_responses_routes_correctly() {
+        let resp = parse_response(LlmProvider::OpenAiResponses, RESPONSES_BODY).unwrap();
+        assert_eq!(resp.content, "ok");
+        assert_eq!(resp.finish_reason, FinishReason::Stop);
+    }
+
+    // ── Google AI ────────────────────────────────────────────────
+
+    #[test]
+    fn test_google_ai_routes_correctly() {
+        let resp = parse_response(LlmProvider::GoogleAi, GOOGLE_BODY).unwrap();
+        assert_eq!(resp.content, "ok");
+        assert_eq!(resp.finish_reason, FinishReason::Stop);
+    }
+
+    // ── Vertex AI ────────────────────────────────────────────────
+
+    #[test]
+    fn test_vertex_ai_routes_correctly() {
+        let resp = parse_response(LlmProvider::VertexAi, GOOGLE_BODY).unwrap();
+        assert_eq!(resp.content, "ok");
+        assert_eq!(resp.finish_reason, FinishReason::Stop);
+    }
+
+    // ── Meta-strategies remain unsupported ───────────────────────
+
+    #[test]
+    fn test_meta_strategies_unsupported() {
+        for provider in [LlmProvider::BamlFallback, LlmProvider::BamlRoundRobin] {
+            let err = parse_response(provider, "{}").unwrap_err();
+            assert!(matches!(err, ParseResponseError::UnsupportedProvider(_)));
+        }
+    }
+
+    // ── cached_input_tokens round-trip per provider ──────────────
+
+    #[test]
+    fn test_openai_cached_tokens_round_trip() {
+        let body = r#"{
+            "model": "gpt-4o",
+            "choices": [{
+                "index": 0,
+                "message": { "role": "assistant", "content": "ok" },
+                "finish_reason": "stop"
+            }],
+            "usage": {
+                "prompt_tokens": 100,
+                "completion_tokens": 10,
+                "total_tokens": 110,
+                "input_tokens_details": { "cached_tokens": 50 }
+            }
+        }"#;
+        let resp = parse_response(LlmProvider::OpenAi, body).unwrap();
+        assert_eq!(resp.usage.cached_input_tokens, Some(50));
+    }
+
+    #[test]
+    fn test_anthropic_cached_tokens_round_trip() {
+        let body = r#"{
+            "id": "msg_1",
+            "type": "message",
+            "role": "assistant",
+            "model": "claude-3-haiku-20240307",
+            "content": [{"type": "text", "text": "ok"}],
+            "stop_reason": "end_turn",
+            "stop_sequence": null,
+            "usage": {
+                "input_tokens": 100,
+                "output_tokens": 10,
+                "cache_read_input_tokens": 50
+            }
+        }"#;
+        let resp = parse_response(LlmProvider::Anthropic, body).unwrap();
+        assert_eq!(resp.usage.cached_input_tokens, Some(50));
+    }
+
+    #[test]
+    fn test_google_cached_tokens_round_trip() {
+        let body = r#"{
+            "candidates": [{
+                "content": {
+                    "parts": [{"text": "ok"}],
+                    "role": "model"
+                },
+                "finishReason": "STOP"
+            }],
+            "usageMetadata": {
+                "promptTokenCount": 100,
+                "candidatesTokenCount": 10,
+                "totalTokenCount": 110,
+                "cachedContentTokenCount": 80
+            }
+        }"#;
+        let resp = parse_response(LlmProvider::GoogleAi, body).unwrap();
+        assert_eq!(resp.usage.cached_input_tokens, Some(80));
+    }
+}
