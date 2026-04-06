@@ -1,4 +1,5 @@
 mod anthropic;
+mod google;
 mod openai;
 
 use crate::LlmProvider;
@@ -94,9 +95,8 @@ pub(crate) fn parse_response(
         }
 
         LlmProvider::OpenAiResponses => openai::responses::parse_openai_responses_response(body),
-        LlmProvider::GoogleAi | LlmProvider::VertexAi => Err(
-            ParseResponseError::UnsupportedProvider(format!("{provider:?}")),
-        ),
+        LlmProvider::GoogleAi => google::parse_google_response(body),
+        LlmProvider::VertexAi => google::parse_vertex_response(body),
         LlmProvider::BamlFallback | LlmProvider::BamlRoundRobin => Err(
             ParseResponseError::UnsupportedProvider(format!("{provider:?}")),
         ),
