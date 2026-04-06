@@ -213,4 +213,29 @@ mod tests {
         assert_eq!(resp.content, "");
         assert_eq!(resp.finish_reason, FinishReason::Stop);
     }
+
+    #[test]
+    fn test_parse_cached_tokens() {
+        let body = r#"{
+            "id": "resp_123",
+            "object": "response",
+            "status": "completed",
+            "model": "gpt-4o",
+            "output": [{
+                "type": "message",
+                "id": "msg_1",
+                "role": "assistant",
+                "content": [{"type": "output_text", "text": "hi"}]
+            }],
+            "usage": {
+                "prompt_tokens": 100,
+                "completion_tokens": 10,
+                "total_tokens": 110,
+                "input_tokens_details": { "cached_tokens": 50 }
+            }
+        }"#;
+
+        let resp = parse_openai_responses_response(body).unwrap();
+        assert_eq!(resp.usage.cached_input_tokens, Some(50));
+    }
 }
