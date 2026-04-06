@@ -1162,7 +1162,7 @@ impl CompilerRunner {
                                 *source_file,
                                 *local_id,
                             );
-                            let body = baml_compiler2_hir::body::function_body(&self.db, func_loc);
+                            let body = baml_compiler2_ppir::function_body(&self.db, func_loc);
                             if let baml_compiler2_hir::body::FunctionBody::Expr(ref eb) = *body {
                                 let expr_count = eb.exprs.len();
                                 let line = format!("  <expr body: {} nodes>", expr_count);
@@ -2179,10 +2179,8 @@ impl CompilerRunner {
                                 *local_id,
                             );
                             func_body =
-                                Some(baml_compiler2_hir::body::function_body(&self.db, func_loc));
-                            let sig = baml_compiler2_hir::signature::function_signature(
-                                &self.db, func_loc,
-                            );
+                                Some(baml_compiler2_ppir::function_body(&self.db, func_loc));
+                            let sig = baml_compiler2_ppir::function_signature(&self.db, func_loc);
                             let params: Vec<String> = sig
                                 .params
                                 .iter()
@@ -2768,7 +2766,7 @@ impl CompilerRunner {
                         *source_file,
                         *local_id,
                     );
-                    let sig = baml_compiler2_hir::signature::function_signature(&self.db, func_loc);
+                    let sig = baml_compiler2_ppir::function_signature(&self.db, func_loc);
 
                     let params: Vec<String> = sig
                         .params
@@ -2815,7 +2813,7 @@ impl CompilerRunner {
                         detail.push(plain(format!("Expressions: {expr_count} typed")));
 
                         // Type-checked body rendering
-                        let func_body = baml_compiler2_hir::body::function_body(&self.db, func_loc);
+                        let func_body = baml_compiler2_ppir::function_body(&self.db, func_loc);
                         if let baml_compiler2_hir::body::FunctionBody::Expr(ref body) = *func_body {
                             detail.push(plain(""));
                             detail.push(plain("Body:"));
@@ -3328,7 +3326,7 @@ impl CompilerRunner {
                 let func_name = func_data.name.to_string();
                 let func_loc =
                     baml_compiler2_hir::loc::FunctionLoc::new(&self.db, *source_file, *local_id);
-                let body = baml_compiler2_hir::body::function_body(&self.db, func_loc);
+                let body = baml_compiler2_ppir::function_body(&self.db, func_loc);
 
                 let status = if file_recomputed {
                     LineStatus::Recomputed

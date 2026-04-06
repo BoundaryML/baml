@@ -32,8 +32,8 @@ impl CompiledSapModel {
         let inner = CompiledSapModelInner::try_new(
             type_ctx,
             target,
-            |type_ctx| type_ctx.build_db(),
-            |type_ctx, target| type_ctx.convert_ty(target),
+            sap_model::TypeCtx::build_db,
+            sap_model::TypeCtx::convert_ty,
         )?;
         Ok(Self { inner })
     }
@@ -46,11 +46,11 @@ impl CompiledSapModel {
     }
 
     pub fn db(&self) -> &TypeRefDb<'_, TypeName> {
-        &self.inner.borrow_db()
+        self.inner.borrow_db()
     }
 
     pub fn ty(&self) -> &AnnotatedTy<'_, TypeName> {
-        &self.inner.borrow_ty()
+        self.inner.borrow_ty()
     }
 }
 

@@ -28,11 +28,7 @@ pub(crate) mod support {
         CatchClauseKind, Expr, ExprBody, ExprId, Literal, PatId, Pattern, Stmt, StmtId, TypeExpr,
     };
     use baml_compiler2_hir::{
-        body::{FunctionBody, function_body},
-        contributions::Definition,
-        loc::FunctionLoc,
-        scope::ScopeKind,
-        signature::function_signature,
+        body::FunctionBody, contributions::Definition, loc::FunctionLoc, scope::ScopeKind,
     };
     use baml_compiler2_tir::{
         inference::{
@@ -840,7 +836,7 @@ pub(crate) mod support {
     /// Render a file's TIR output in the same format as the onion skin tool.
     /// Uses the PPIR semantic index which includes synthetic stream_* types.
     pub fn render_tir(db: &ProjectDatabase, file: baml_base::SourceFile) -> String {
-        use baml_compiler2_hir::package::{PackageId, package_items};
+        use baml_compiler2_hir::package::PackageId;
         use baml_compiler2_tir::inference::{
             detect_invalid_alias_cycles, detect_invalid_class_cycles,
         };
@@ -851,7 +847,7 @@ pub(crate) mod support {
         // Get package items for resolving TypeExpr -> Ty in signatures
         let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
         let pkg_id = PackageId::new(db, pkg_info.package.clone());
-        let pkg_items = package_items(db, pkg_id);
+        let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
 
         // Pre-compute throw sets for the package
         let throw_sets = baml_compiler2_tir::throw_inference::function_throw_sets(db, pkg_id);
@@ -1004,8 +1000,8 @@ pub(crate) mod support {
                     let name_matches = scope.name.as_ref().is_none_or(|n| *n == func_data.name);
                     if func_data.span == scope.range && name_matches {
                         let func_loc = FunctionLoc::new(db, file, *local_id);
-                        func_body_opt = Some(function_body(db, func_loc));
-                        let sig = function_signature(db, func_loc);
+                        func_body_opt = Some(baml_compiler2_ppir::function_body(db, func_loc));
+                        let sig = baml_compiler2_ppir::function_signature(db, func_loc);
                         let ns = &pkg_info.namespace_path;
 
                         let enclosing_class_ty: Option<baml_compiler2_tir::ty::Ty> =

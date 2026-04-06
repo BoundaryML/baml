@@ -41,6 +41,10 @@ class user.NestedQuotes$stream {
   complex_nesting: null | string @description("It's \"really\" 'complex'")
   json_like: null | string @alias("{\"key\": \"value\"}")
 }
+function user.FormatMessage$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream throws never {
+  baml.llm.__make_stream(sse, "FormatMessage", GPT4) : unknown
+  !! 345..553: unresolved name: GPT4
+}
 class user.RawStrings {
   simple: string @description(#"raw string"#)
   with_quotes: string @description(#"contains "quotes" easily"#)
@@ -75,6 +79,10 @@ class user.RawStrings$stream {
     raw string with "quotes"
     and #hashes#
   "###)
+}
+function user.ProcessText$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream throws never {
+  baml.llm.__make_stream(sse, "ProcessText", GPT4) : unknown
+  !! 364..532: unresolved name: GPT4
 }
 class user.Messages {
   greeting: string @alias("hello")

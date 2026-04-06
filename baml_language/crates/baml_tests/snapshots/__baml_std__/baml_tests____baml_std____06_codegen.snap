@@ -1366,6 +1366,9 @@ function baml.llm.get_jinja_template(function_name: string) -> string {
 function baml.llm.get_return_type(function_name: string) -> type {
 }
 
+function baml.llm.get_stream_return_type(function_name: string) -> type {
+}
+
 function baml.llm.parse(function_name: string, json: string) -> void {
     load_var function_name
     dispatch_future baml.llm.get_return_type

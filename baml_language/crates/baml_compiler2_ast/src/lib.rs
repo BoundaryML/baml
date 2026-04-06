@@ -18,7 +18,7 @@ pub mod lowering_diagnostic;
 
 pub use ast::*;
 pub use disambiguate::is_field_attr;
-pub use lower_cst::{lower_file, lower_file_with_file_id};
+pub use lower_cst::{lower_file, lower_file_with_file_id, synthesize_llm_make_stream_call};
 pub use lowering_diagnostic::LoweringDiagnostic;
 
 #[cfg(test)]
@@ -65,6 +65,7 @@ mod tests {
         (Path($name:expr $(, Attr($a:expr))*)) => {
             TypeExpr::Path {
                 segments: vec![baml_base::Name::new($name)],
+                generic_args: vec![],
                 attrs: type_expr!(@attrs $(, Attr($a))*),
             }
         };
@@ -156,8 +157,13 @@ mod tests {
             TypeExpr::Rust { attrs } => TypeExpr::Rust {
                 attrs: strip_attrs(attrs),
             },
-            TypeExpr::Path { segments, attrs } => TypeExpr::Path {
+            TypeExpr::Path {
+                segments,
+                generic_args,
+                attrs,
+            } => TypeExpr::Path {
                 segments: segments.clone(),
+                generic_args: generic_args.iter().map(strip_spans).collect(),
                 attrs: strip_attrs(attrs),
             },
             TypeExpr::Optional { inner, attrs } => TypeExpr::Optional {
@@ -289,6 +295,7 @@ class Response {
                     baml_base::Name::new("errors"),
                     baml_base::Name::new("Io"),
                 ],
+                generic_args: vec![],
                 attrs: vec![]
             }
         );

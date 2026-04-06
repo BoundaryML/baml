@@ -588,6 +588,15 @@ function get_return_type(function_name: string) -> type throws root.errors.Inval
   $rust_io_function
 }
 
+/// Returns the stream-expanded return type for an LLM function.
+///
+/// For a function returning `MyClass`, this returns the type that SAP uses for
+/// partial streaming (e.g. `null | MyClass$stream`). Used by `__make_stream`
+/// to construct a `StreamCache` with the correct streaming type schema.
+function get_stream_return_type(function_name: string) -> type throws root.errors.InvalidArgument {
+  $rust_io_function
+}
+
 /// DO NOT CALL FROM USER CODE
 function __sap_parse_final<T>(json: string, cache: StreamCache<T>) -> T throws root.errors.LlmClient {
     $rust_io_function

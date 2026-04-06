@@ -1862,6 +1862,8 @@ fn baml.llm.get_jinja_template = builtin(io)
 
 fn baml.llm.get_return_type = builtin(io)
 
+fn baml.llm.get_stream_return_type = builtin(io)
+
 fn baml.llm.StreamAccumulator.input_tokens = builtin(io)
 
 fn baml.llm.StreamAccumulator.is_done = builtin(io)

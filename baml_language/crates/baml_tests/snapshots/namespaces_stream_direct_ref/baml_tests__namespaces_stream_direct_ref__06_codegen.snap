@@ -1,22 +1,42 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-function user.RootUsesLlmStream(r: void) -> string {
-    load_const null
-    return
+function user.RootUsesLlmStream(r: llm.Response$stream) -> string {
+    load_const "internal compiler error: MIR failed to resolve field access .text against class definition 'Response$stream' (module_path: ["user", "llm"]). This class should be in class_fields but isn't."
+    call baml.sys.panic
+    pop 1
+    jump L0
+
+  L0:
+    unreachable
 }
 
-function user.RootUsesOwnStream(c: void) -> string {
-    load_const null
-    return
+function user.RootUsesOwnStream(c: Config$stream) -> string {
+    load_const "internal compiler error: MIR failed to resolve field access .key against class definition 'Config$stream' (module_path: ["user"]). This class should be in class_fields but isn't."
+    call baml.sys.panic
+    pop 1
+    jump L0
+
+  L0:
+    unreachable
 }
 
-function user.llm.LlmUsesOwnStream(r: void) -> string {
-    load_const null
-    return
+function user.llm.LlmUsesOwnStream(r: Response$stream) -> string {
+    load_const "internal compiler error: MIR failed to resolve field access .text against class definition 'Response$stream' (module_path: ["user", "llm"]). This class should be in class_fields but isn't."
+    call baml.sys.panic
+    pop 1
+    jump L0
+
+  L0:
+    unreachable
 }
 
-function user.llm.LlmUsesRootStream(c: void) -> string {
-    load_const null
-    return
+function user.llm.LlmUsesRootStream(c: Config$stream) -> string {
+    load_const "internal compiler error: MIR failed to resolve field access .key against class definition 'Config$stream' (module_path: ["user"]). This class should be in class_fields but isn't."
+    call baml.sys.panic
+    pop 1
+    jump L0
+
+  L0:
+    unreachable
 }

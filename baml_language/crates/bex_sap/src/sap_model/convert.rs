@@ -164,7 +164,7 @@ impl TypeCtx {
     }
 
     /// Constructs a full [`TypeRefDb`] from the given context with all types converted.
-    pub fn build_db<'a>(&'a self) -> Result<TypeRefDb<'a, TypeName>, ConvertError> {
+    pub fn build_db(&'_ self) -> Result<TypeRefDb<'_, TypeName>, ConvertError> {
         let mut db = TypeRefDb::new();
         for (name, cls) in &self.class_definitions {
             if self.sap_parseable.get(name).is_some_and(|v| !v) {

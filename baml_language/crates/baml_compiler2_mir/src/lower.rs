@@ -321,15 +321,11 @@ use baml_compiler2_ast::{
     Pattern as AstPattern, Stmt as AstStmt, StmtId as AstStmtId, UnaryOp as AstUnaryOp,
 };
 use baml_compiler2_hir::{
-    body::{
-        FunctionBody, LetBody, function_body, function_body_source_map, let_body,
-        let_body_source_map,
-    },
+    body::{FunctionBody, LetBody, let_body, let_body_source_map},
     file_semantic_index,
     loc::{FunctionLoc, LetLoc},
     package::{PackageId, package_dependencies, package_items},
     scope::FileScopeId,
-    signature::function_signature,
 };
 use baml_compiler2_tir::{
     inference::infer_scope_types,
@@ -643,7 +639,7 @@ impl<'db> LoweringContext<'db> {
         let resolved_aliases = ResolvedAliases::for_package(db, pkg_id);
 
         // --- Determine arity from function signature ---
-        let sig = function_signature(db, func_loc);
+        let sig = baml_compiler2_ppir::function_signature(db, func_loc);
         let arity = sig.params.len();
 
         // Detect if this function is a class method by checking the parent scope.
@@ -927,7 +923,7 @@ impl LoweringContext<'_> {
         let func_loc = self
             .func_loc
             .expect("lower_function_body called on non-function LoweringContext");
-        let sig = function_signature(self.db, func_loc);
+        let sig = baml_compiler2_ppir::function_signature(self.db, func_loc);
 
         // Return place _0
         let pkg_info = file_package(self.db, self.file);
@@ -2202,13 +2198,14 @@ impl LoweringContext<'_> {
                     use baml_compiler2_tir::inference::MemberResolution;
                     self.resolutions
                         .get(&(self.current_scope, callee))
-                        .map_or(false, |r| match r {
+                        .is_some_and(|r| match r {
                             MemberResolution::Method { func_loc, .. }
                             | MemberResolution::Free { func_loc } => {
-                                let sig = function_signature(self.db, *func_loc);
+                                let sig =
+                                    baml_compiler2_ppir::function_signature(self.db, *func_loc);
                                 sig.params
                                     .first()
-                                    .map_or(false, |(name, _)| name.as_str() == "self")
+                                    .is_some_and(|(name, _)| name.as_str() == "self")
                             }
                             _ => false,
                         })
@@ -2336,7 +2333,7 @@ impl LoweringContext<'_> {
                     })
             };
             if let Some(fl) = func_loc {
-                let body = function_body(self.db, fl);
+                let body = baml_compiler2_ppir::function_body(self.db, fl);
                 if let FunctionBody::Builtin(BuiltinKind::Io) = body.as_ref() {
                     return true;
                 }
@@ -2353,7 +2350,7 @@ impl LoweringContext<'_> {
                     MemberResolution::Field { .. } | MemberResolution::Variant { .. } => None,
                 };
                 if let Some(fl) = func_loc {
-                    let body = function_body(self.db, fl);
+                    let body = baml_compiler2_ppir::function_body(self.db, fl);
                     if let FunctionBody::Builtin(BuiltinKind::Io) = body.as_ref() {
                         return true;
                     }
@@ -4443,13 +4440,13 @@ pub fn lower_function<'db>(
     func_loc: FunctionLoc<'db>,
     opt: crate::OptLevel,
 ) -> MirFunction {
-    let body = function_body(db, func_loc);
-    let source_map = function_body_source_map(db, func_loc);
+    let body = baml_compiler2_ppir::function_body(db, func_loc);
+    let source_map = baml_compiler2_ppir::function_body_source_map(db, func_loc);
     let item_ref = def_to_item_ref(
         db,
         baml_compiler2_hir::contributions::Definition::Function(func_loc),
     );
-    let sig = function_signature(db, func_loc);
+    let sig = baml_compiler2_ppir::function_signature(db, func_loc);
     let arity = sig.params.len();
 
     match body.as_ref() {

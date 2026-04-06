@@ -19,11 +19,11 @@ impl SapStreamCache {
     }
 
     pub fn db(&self) -> &sap_model::TypeRefDb<'_, TypeName> {
-        &self.types.db()
+        self.types.db()
     }
 
     pub fn ty(&self) -> &sap_model::AnnotatedTy<'_, TypeName> {
-        &self.types.ty()
+        self.types.ty()
     }
 
     pub fn ty_resolved(

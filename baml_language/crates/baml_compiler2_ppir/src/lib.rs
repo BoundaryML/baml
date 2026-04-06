@@ -42,6 +42,16 @@ pub struct PpirExpansionItems<'db> {
     #[tracked]
     #[returns(ref)]
     pub items: Vec<ast::Item>,
+    /// Stream-expanded return types for LLM functions in this file.
+    /// Each entry maps `(qualified_function_name, stream_expanded_type_expr)`.
+    ///
+    /// This is the streaming counterpart of `Function.return_type` in
+    /// [`bex_vm_types::Function`]: where `return_type` holds the original
+    /// declared type (e.g. `MyClass`), entries here hold the stream-expanded
+    /// version (e.g. `null | MyClass$stream`).
+    #[tracked]
+    #[returns(ref)]
+    pub stream_return_types: Vec<(SmolStr, ast::TypeExpr)>,
 }
 
 // -- Block attributes ---------------------------------------------------------
@@ -156,6 +166,7 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
     let alias_bodies = collect_alias_bodies(db, project);
 
     let mut synthetic_items = Vec::new();
+    let mut stream_return_types: Vec<(SmolStr, ast::TypeExpr)> = Vec::new();
     let mut seen_class_names = FxHashSet::default();
     let mut seen_alias_names = FxHashSet::default();
 
@@ -317,11 +328,118 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
 
                 synthetic_items.push(ast::Item::TypeAlias(stream_alias));
             }
+            ast::Item::Function(func) => {
+                // Only LLM functions get $parse_stream companions.
+                if !matches!(&func.declarative_meta, Some(ast::DeclarativeMeta::Llm(_))) {
+                    continue;
+                }
+                // Skip companions (contain $) to avoid recursive generation.
+                if func.name.contains('$') {
+                    continue;
+                }
+                // Skip functions without return types.
+                let Some(ref return_type_spanned) = func.return_type else {
+                    continue;
+                };
+
+                // Compute the stream-expanded return type.
+                let ppir_ty = PpirTy::from_type_expr(&return_type_spanned.expr);
+                let ctx = ExpandCtx {
+                    package_name: &package_name,
+                    namespace_path: &pkg_info.namespace_path,
+                    package_items,
+                    all_package_items: &all_package_items,
+                    block_attrs: &block_attrs,
+                    alias_bodies: &alias_bodies,
+                };
+                let (stream_type, _sap_attrs) = stream_expand(&ppir_ty, &ctx);
+                let stream_type_expr = stream_type.to_type_expr();
+
+                // Store the stream-expanded return type for this function.
+                let qualified_name = if pkg_info.namespace_path.is_empty() {
+                    SmolStr::new(format!("{package_name}.{}", func.name))
+                } else {
+                    let ns = pkg_info
+                        .namespace_path
+                        .iter()
+                        .map(Name::as_str)
+                        .collect::<Vec<_>>()
+                        .join(".");
+                    SmolStr::new(format!("{package_name}.{ns}.{}", func.name))
+                };
+                stream_return_types.push((qualified_name, stream_type_expr.clone()));
+
+                // Extract client name from parent's LLM metadata.
+                let client_name = match &func.declarative_meta {
+                    Some(ast::DeclarativeMeta::Llm(llm)) => {
+                        llm.client.as_ref().map(|n| n.as_str().to_string())
+                    }
+                    _ => None,
+                };
+
+                // Build the companion function.
+                let companion_name = SmolStr::new(format!("{}$parse_stream", func.name));
+
+                // Share the parent function's span — same as AST-level companions.
+                let span = func.span;
+                let name_span = func.name_span;
+
+                // Parameter: sse: baml.http.SseStream
+                let sse_param = ast::Param {
+                    name: Name::new("sse"),
+                    type_expr: Some(ast::SpannedTypeExpr {
+                        expr: ast::TypeExpr::Path {
+                            segments: vec![
+                                Name::new("baml"),
+                                Name::new("http"),
+                                Name::new("SseStream"),
+                            ],
+                            generic_args: vec![],
+                            attrs: vec![],
+                        },
+                        span,
+                    }),
+                    span,
+                    name_span,
+                };
+
+                // Return type: baml.llm.Stream<STREAM_EXPANDED_TYPE>
+                let stream_return_type = ast::SpannedTypeExpr {
+                    expr: ast::TypeExpr::Path {
+                        segments: vec![Name::new("baml"), Name::new("llm"), Name::new("Stream")],
+                        generic_args: vec![stream_type_expr],
+                        attrs: vec![],
+                    },
+                    span,
+                };
+
+                // Body: baml.llm.__make_stream(sse, "FuncName", CLIENT)
+                let (body, source_map) = ast::synthesize_llm_make_stream_call(
+                    func.name.as_str(),
+                    client_name.as_deref(),
+                    span,
+                );
+
+                let companion = ast::FunctionDef {
+                    name: companion_name,
+                    generic_params: vec![],
+                    params: vec![sse_param],
+                    return_type: Some(stream_return_type),
+                    throws: None,
+                    body: Some(ast::FunctionBodyDef::Expr(body, source_map)),
+                    declarative_meta: None,
+                    attributes: vec![],
+                    span,
+                    name_span,
+                };
+
+                synthetic_items.push(ast::Item::Function(companion));
+            }
             _ => {}
         }
     }
 
-    PpirExpansionItems::new(db, synthetic_items)
+    PpirExpansionItems::new(db, synthetic_items, stream_return_types)
 }
 
 // -- Canonical queries (original + *$stream) ----------------------------------
@@ -354,6 +472,99 @@ pub fn file_symbol_contributions(
 pub fn file_item_tree(db: &dyn Db, file: SourceFile) -> Arc<ItemTree> {
     let index = file_semantic_index(db, file);
     Arc::clone(&index.item_tree)
+}
+
+/// Canonical function body — uses PPIR's item tree (includes synthetic companions).
+///
+/// TIR should call this instead of `baml_compiler2_hir::body::function_body`
+/// so that PPIR-synthesized functions (like `$parse_stream`) are found.
+pub fn function_body<'db>(
+    db: &'db dyn Db,
+    function: baml_compiler2_hir::loc::FunctionLoc<'db>,
+) -> Arc<baml_compiler2_hir::body::FunctionBody> {
+    let file = function.file(db);
+    let item_tree = file_item_tree(db, file);
+    let func_data = &item_tree[function.id(db)];
+
+    let body = match &func_data.body {
+        Some(ast::FunctionBodyDef::Expr(expr_body, _source_map)) => {
+            baml_compiler2_hir::body::FunctionBody::Expr(expr_body.clone())
+        }
+        Some(ast::FunctionBodyDef::Builtin(kind)) => {
+            baml_compiler2_hir::body::FunctionBody::Builtin(*kind)
+        }
+        None => baml_compiler2_hir::body::FunctionBody::Missing,
+    };
+
+    Arc::new(body)
+}
+
+/// Canonical function body source map — uses PPIR's item tree.
+pub fn function_body_source_map<'db>(
+    db: &'db dyn Db,
+    function: baml_compiler2_hir::loc::FunctionLoc<'db>,
+) -> Option<ast::AstSourceMap> {
+    let file = function.file(db);
+    let item_tree = file_item_tree(db, file);
+    let func_data = &item_tree[function.id(db)];
+
+    match &func_data.body {
+        Some(ast::FunctionBodyDef::Expr(_body, source_map)) => Some(source_map.clone()),
+        _ => None,
+    }
+}
+
+/// Canonical function signature — uses PPIR's item tree.
+pub fn function_signature<'db>(
+    db: &'db dyn Db,
+    function: baml_compiler2_hir::loc::FunctionLoc<'db>,
+) -> Arc<baml_compiler2_hir::signature::FunctionSignature> {
+    let file = function.file(db);
+    let item_tree = file_item_tree(db, file);
+    let func_data = &item_tree[function.id(db)];
+
+    let params: Vec<_> = func_data
+        .params
+        .iter()
+        .map(|p| {
+            let type_expr = p
+                .type_expr
+                .as_ref()
+                .map(|te| te.expr.clone())
+                .unwrap_or(ast::TypeExpr::Unknown { attrs: vec![] });
+            (p.name.clone(), type_expr)
+        })
+        .collect();
+
+    let return_type = func_data.return_type.as_ref().map(|te| te.expr.clone());
+
+    Arc::new(baml_compiler2_hir::signature::FunctionSignature {
+        name: func_data.name.clone(),
+        params,
+        return_type,
+        throws: func_data.throws.as_ref().map(|te| te.expr.clone()),
+    })
+}
+
+/// Canonical function signature source map — uses PPIR's item tree.
+pub fn function_signature_source_map<'db>(
+    db: &'db dyn Db,
+    function: baml_compiler2_hir::loc::FunctionLoc<'db>,
+) -> baml_compiler2_hir::signature::SignatureSourceMap {
+    let file = function.file(db);
+    let item_tree = file_item_tree(db, file);
+    let func_data = &item_tree[function.id(db)];
+
+    baml_compiler2_hir::signature::SignatureSourceMap {
+        param_spans: func_data.params.iter().map(|p| p.span).collect(),
+        param_type_spans: func_data
+            .params
+            .iter()
+            .map(|p| p.type_expr.as_ref().map(|te| te.span))
+            .collect(),
+        return_type_span: func_data.return_type.as_ref().map(|te| te.span),
+        throws_type_span: func_data.throws.as_ref().map(|te| te.span),
+    }
 }
 
 /// Returns the `ScopeBindings` for a given scope (canonical index).

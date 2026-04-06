@@ -59,6 +59,7 @@ namespace baml.llm:
   function call_llm_function<T>
   function get_jinja_template
   function get_return_type
+  function get_stream_return_type
   function parse<T>
   function render_prompt
   function stream_llm_function<T>

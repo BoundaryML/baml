@@ -32,6 +32,13 @@ function user.AnotherLLM$build_request(input: string) -> baml.http.Request throw
 function user.AnotherLLM$parse(json: string) -> string throws never {
   baml.llm.parse<T>("AnotherLLM", json) : string
 }
+function user.Ambiguous$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream throws never {
+  baml.llm.__make_stream(sse, "Ambiguous", GPT4) : unknown
+  !! 0..220: unresolved name: GPT4
+}
+function user.AnotherLLM$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream throws never {
+  baml.llm.__make_stream(sse, "AnotherLLM", null) : unknown
+}
 class user.JsonData {
   field1: int
   field2: int
@@ -64,6 +71,10 @@ function user.ExtractData$build_request(text: string) -> baml.http.Request throw
 }
 function user.ExtractData$parse(json: string) -> user.JsonData throws never {
   baml.llm.parse<T>("ExtractData", json) : user.JsonData
+}
+function user.ExtractData$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream throws never {
+  baml.llm.__make_stream(sse, "ExtractData", GPT4) : unknown
+  !! 0..146: unresolved name: GPT4
 }
 function user.LLMAnalyze(text: string) -> user.Analysis throws never {
   baml.llm.call_llm_function<T>(GPT4, "LLMAnalyze", map { "text": text }) : user.Analysis
@@ -128,8 +139,16 @@ function user.SimpleCalc(a: int, b: int) -> int throws never {
     return a + b * 2 : int
   }
 }
+function user.LLMAnalyze$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream throws never {
+  baml.llm.__make_stream(sse, "LLMAnalyze", GPT4) : unknown
+  !! 0..242: unresolved name: GPT4
+}
 class user.Analysis$stream {
   sentiment: null | string
   keywords: string[]
   score: null | float
+}
+function user.ChainedProcess$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream throws never {
+  baml.llm.__make_stream(sse, "ChainedProcess", GPT4) : unknown
+  !! 674..860: unresolved name: GPT4
 }

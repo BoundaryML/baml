@@ -484,6 +484,21 @@ impl<T> io::IoNamespaceLlm for T {
         SysOpOutput::ok(info.return_type.clone())
     }
 
+    fn get_stream_return_type(
+        &self,
+        _heap: &std::sync::Arc<BexHeap>,
+        _call_id: CallId,
+        function_name: String,
+        ctx: &SysOpContext,
+    ) -> SysOpOutput<baml_type::Ty> {
+        let Some(info) = lookup_llm_function(&function_name, &ctx.llm_functions) else {
+            return SysOpOutput::err(OpErrorKind::Other(format!(
+                "LLM function not found: {function_name}"
+            )));
+        };
+        SysOpOutput::ok(info.stream_return_type.clone())
+    }
+
     fn new(
         &self,
         _heap: &std::sync::Arc<BexHeap>,

@@ -50,7 +50,25 @@ pub fn lower_type_expr_in_ns(
     diagnostics: &mut Vec<TirTypeError>,
 ) -> Ty {
     match type_expr {
-        TypeExpr::Path { segments, .. } => {
+        TypeExpr::Path {
+            segments,
+            generic_args,
+            ..
+        } => {
+            // Recursively lower generic args (e.g., Stream<MyClass$stream>).
+            // The resolved Ty doesn't carry concrete generic arguments yet,
+            // but lowering validates that the referenced types exist.
+            for ga in generic_args {
+                let _ = lower_type_expr_in_ns(
+                    db,
+                    ga,
+                    package_items,
+                    ns_context,
+                    generic_params,
+                    diagnostics,
+                );
+            }
+
             let item = segments.last().expect("non-empty path");
             let seg_ns = &segments[..segments.len() - 1];
             // When we have a namespace context, try the qualified path first.

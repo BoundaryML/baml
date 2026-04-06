@@ -50,6 +50,26 @@ function user.TypeBuilderFn$parse(json: string) -> Resume {
     return
 }
 
+function user.TypeBuilderFn$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream {
+    load_var sse
+    load_const "TypeBuilderFn"
+    alloc_instance baml.llm.Client
+    load_const "openai/gpt-4o-mini"
+    init_field .name
+    load_const null
+    load_const "Primitive"
+    load_map_element
+    init_field .client_type
+    alloc_array 0
+    init_field .sub_clients
+    load_const null
+    init_field .retry
+    load_const 0
+    init_field .counter
+    call baml.llm.parse
+    return
+}
+
 function user.TypeBuilderFn$render_prompt(from_text: string) -> baml.llm.PromptAst {
     alloc_instance baml.llm.Client
     load_const "openai/gpt-4o-mini"

@@ -2120,6 +2120,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     self.lower_pattern_type_expr(
                         &TypeExpr::Path {
                             segments: vec![name.clone()],
+                            generic_args: vec![],
                             attrs: vec![],
                         },
                         at_expr,
@@ -2213,6 +2214,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     self.lower_pattern_type_expr(
                         &TypeExpr::Path {
                             segments: vec![name.clone()],
+                            generic_args: vec![],
                             attrs: vec![],
                         },
                         at_expr,
@@ -2421,6 +2423,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                         self.lower_pattern_type_expr(
                             &TypeExpr::Path {
                                 segments: vec![name.clone()],
+                                generic_args: vec![],
                                 attrs: vec![],
                             },
                             at_expr,
@@ -3077,7 +3080,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 expr_id,
                 crate::inference::MemberResolution::Free { func_loc },
             );
-            let sig = baml_compiler2_hir::signature::function_signature(db, func_loc);
+            let sig = baml_compiler2_ppir::function_signature(db, func_loc);
             let mut diags = Vec::new();
             let ty = Ty::Function {
                 params: sig
@@ -3156,7 +3159,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 Definition::Function(func_loc) => {
                     // Get function signature to build the function type
                     let db = self.context.db();
-                    let sig = baml_compiler2_hir::signature::function_signature(db, func_loc);
+                    let sig = baml_compiler2_ppir::function_signature(db, func_loc);
                     let item_tree = baml_compiler2_ppir::file_item_tree(db, func_loc.file(db));
                     let func_data = &item_tree[func_loc.id(db)];
                     let generic_params = &func_data.generic_params;
@@ -3664,7 +3667,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 let mut all_generic_params = class_data.generic_params.clone();
                 all_generic_params.extend(method_data.generic_params.iter().cloned());
                 let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(db, file, method_id);
-                let sig = baml_compiler2_hir::signature::function_signature(db, func_loc);
+                let sig = baml_compiler2_ppir::function_signature(db, func_loc);
                 let mut diags = Vec::new();
                 let class_ty = Ty::Class(class_name.clone(), TyAttr::default());
                 let ty = Ty::Function {
@@ -4008,7 +4011,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                         .or_insert_with(|| Ty::TypeVar(gp.clone(), TyAttr::default()));
                 }
                 let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(db, file, method_id);
-                let sig = baml_compiler2_hir::signature::function_signature(db, func_loc);
+                let sig = baml_compiler2_ppir::function_signature(db, func_loc);
                 let mut diags = Vec::new();
                 // Build the class type for self parameter resolution.
                 // For generics, apply type_args (e.g. Array<int>).
