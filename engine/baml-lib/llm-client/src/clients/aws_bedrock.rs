@@ -473,7 +473,8 @@ impl<Meta: Clone> UnresolvedAwsBedrock<Meta> {
 
         let role_selection = properties.ensure_roles_selection();
         let allowed_metadata = match properties.ensure_allowed_metadata() {
-            // Default to All (like Anthropic) so that cache_control metadata flows through
+            // Default to All so that cache_control and other metadata flows through
+            // without requiring explicit configuration
             UnresolvedAllowedRoleMetadata::None => UnresolvedAllowedRoleMetadata::All,
             other => other,
         };

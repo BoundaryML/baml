@@ -7,7 +7,7 @@ use playground_server::{
 use tracing_subscriber::EnvFilter;
 use walkdir::WalkDir;
 
-// PROJECT_DIR is relative to the Cargo workspace root (engine/)
+// PROJECT_DIR is relative to this crate's directory (engine/playground-server)
 const PROJECT_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../integ-tests/baml_src");
 
 #[derive(Debug)]

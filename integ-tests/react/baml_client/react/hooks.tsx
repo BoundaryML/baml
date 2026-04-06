@@ -7155,6 +7155,58 @@ export function useTestAws(
   }
 }
 /**
+ * A specialized hook for the TestAwsCaching BAML function that supports both streaming and non‑streaming responses.
+ *
+ * **Input Types:**
+ *
+ * - input: string
+ *
+ * - not_cached: string
+ *
+ *
+ * **Return Type:**
+ * - **Non‑streaming:** string
+ * - **Streaming Partial:** string
+ * - **Streaming Final:** string
+ *
+ * **Usage Patterns:**
+ * 1. **Non‑streaming (Default)**
+ *    - Best for quick responses and simple UI updates.
+ * 2. **Streaming**
+ *    - Ideal for long‑running operations or real‑time feedback.
+ *
+ * **Edge Cases:**
+ * - Ensure robust error handling via `onError`.
+ * - Handle cases where partial data may be incomplete or missing.
+ *
+ * @example
+ * ```tsx
+ * // Basic non‑streaming usage:
+ * const { data, error, isLoading, mutate } = useTestAwsCaching({ stream: false});
+ *
+ * // Streaming usage:
+ * const { data, streamData, isLoading, error, mutate } = useTestAwsCaching({
+ *   stream: true | undefined,
+ *   onStreamData: (partial) => console.log('Partial update:', partial),
+ *   onFinalData: (final) => console.log('Final result:', final),
+ *   onError: (err) => console.error('Error:', err),
+ * });
+ * ```
+ */
+export function useTestAwsCaching(props: HookInput<'TestAwsCaching', { stream: false }>): HookOutput<'TestAwsCaching', { stream: false }>
+export function useTestAwsCaching(props?: HookInput<'TestAwsCaching', { stream?: true }>): HookOutput<'TestAwsCaching', { stream: true }>
+export function useTestAwsCaching(
+  props: HookInput<'TestAwsCaching', { stream?: boolean }> = {},
+): HookOutput<'TestAwsCaching', { stream: true }> | HookOutput<'TestAwsCaching', { stream: false }> {
+  let action: ServerAction = Actions.TestAwsCaching;
+  if (isStreamingProps(props)) {
+    action = StreamingActions.TestAwsCaching;
+    return useBamlAction(action, props)
+  } else {
+    return useBamlAction(action, props as HookInput<'TestAwsCaching', { stream: false }>)
+  }
+}
+/**
  * A specialized hook for the TestAwsClaude37 BAML function that supports both streaming and non‑streaming responses.
  *
  * **Input Types:**
