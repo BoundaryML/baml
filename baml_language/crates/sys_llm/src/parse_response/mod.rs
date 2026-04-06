@@ -93,9 +93,7 @@ pub(crate) fn parse_response(
             anthropic::parse_anthropic_response(body)
         }
 
-        LlmProvider::OpenAiResponses => Err(ParseResponseError::UnsupportedProvider(
-            "openai-responses".into(),
-        )),
+        LlmProvider::OpenAiResponses => openai::responses::parse_openai_responses_response(body),
         LlmProvider::GoogleAi | LlmProvider::VertexAi => Err(
             ParseResponseError::UnsupportedProvider(format!("{provider:?}")),
         ),
