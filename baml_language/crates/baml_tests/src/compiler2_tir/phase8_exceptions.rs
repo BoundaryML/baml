@@ -308,7 +308,7 @@ function fail() -> int {
 function f() -> int {
   return fail() catch (e) {
     _ => 1
-    AppError | DivisionByZero => 2
+    _: AppError | baml.panics.DivisionByZero => 2
   }
 }"#,
     );

@@ -66,11 +66,38 @@ pub fn qtn_to_type_name(qtn: &QualifiedTypeName) -> TypeName {
     }
 }
 
-pub fn convert_tir2_ty(
-    ty: &Tir2Ty,
-    type_aliases: &HashMap<QualifiedTypeName, Tir2Ty>,
-    recursive_aliases: &HashSet<QualifiedTypeName>,
-) -> Ty {
+/// Pre-computed type alias data for inline expansion in `convert_tir2_ty`.
+///
+/// Bundles the alias map and recursion info that are always passed together.
+pub struct ResolvedAliases {
+    pub aliases: HashMap<QualifiedTypeName, Tir2Ty>,
+    pub recursive: HashSet<QualifiedTypeName>,
+}
+
+impl ResolvedAliases {
+    /// Build resolved aliases for a package, including dependency packages.
+    pub fn for_package(db: &dyn crate::Db, pkg_id: baml_compiler2_hir::package::PackageId) -> Self {
+        use baml_compiler2_hir::package::{package_dependencies, package_items};
+
+        let pkg_items = package_items(db, pkg_id);
+        let mut aliases = baml_compiler2_tir::inference::collect_type_aliases(db, pkg_items);
+        for &dep_id in package_dependencies(db, pkg_id) {
+            let dep_items = package_items(db, dep_id);
+            aliases.extend(baml_compiler2_tir::inference::collect_type_aliases(
+                db, dep_items,
+            ));
+        }
+        let recursive = baml_compiler2_tir::normalize::find_recursive_aliases(&aliases);
+        Self { aliases, recursive }
+    }
+
+    /// Convert a TIR type to `baml_type::Ty` using the cached alias data.
+    pub fn convert(&self, ty: &Tir2Ty) -> Ty {
+        convert_tir2_ty(ty, self)
+    }
+}
+
+pub fn convert_tir2_ty(ty: &Tir2Ty, resolved: &ResolvedAliases) -> Ty {
     let attr = ty.attr().clone();
     match ty {
         // Primitives
@@ -88,12 +115,12 @@ pub fn convert_tir2_ty(
         Tir2Ty::Class(qtn, attr) => Ty::Class(qtn_to_type_name(qtn), attr.clone()),
         Tir2Ty::Enum(qtn, attr) => Ty::Enum(qtn_to_type_name(qtn), attr.clone()),
         Tir2Ty::TypeAlias(qtn, attr) => {
-            if recursive_aliases.contains(qtn) {
+            if resolved.recursive.contains(qtn) {
                 // Keep recursive aliases opaque — they need runtime resolution
                 Ty::TypeAlias(qtn_to_type_name(qtn), attr.clone())
-            } else if let Some(target) = type_aliases.get(qtn) {
+            } else if let Some(target) = resolved.aliases.get(qtn) {
                 // Expand non-recursive aliases inline
-                convert_tir2_ty(target, type_aliases, recursive_aliases)
+                convert_tir2_ty(target, resolved)
             } else {
                 // Unknown alias (e.g. from another package) — keep opaque
                 Ty::TypeAlias(qtn_to_type_name(qtn), attr.clone())
@@ -106,36 +133,33 @@ pub fn convert_tir2_ty(
         }
 
         // Containers
-        Tir2Ty::List(inner, attr) => Ty::List(
-            Box::new(convert_tir2_ty(inner, type_aliases, recursive_aliases)),
-            attr.clone(),
-        ),
+        Tir2Ty::List(inner, attr) => {
+            Ty::List(Box::new(convert_tir2_ty(inner, resolved)), attr.clone())
+        }
         Tir2Ty::Map(k, v, attr) => Ty::Map {
-            key: Box::new(convert_tir2_ty(k, type_aliases, recursive_aliases)),
-            value: Box::new(convert_tir2_ty(v, type_aliases, recursive_aliases)),
+            key: Box::new(convert_tir2_ty(k, resolved)),
+            value: Box::new(convert_tir2_ty(v, resolved)),
             attr: attr.clone(),
         },
         Tir2Ty::Union(members, attr) => Ty::Union(
             members
                 .iter()
-                .map(|m| convert_tir2_ty(m, type_aliases, recursive_aliases))
+                .map(|m| convert_tir2_ty(m, resolved))
                 .collect(),
             attr.clone(),
         ),
-        Tir2Ty::Optional(inner, attr) => Ty::Optional(
-            Box::new(convert_tir2_ty(inner, type_aliases, recursive_aliases)),
-            attr.clone(),
-        ),
+        Tir2Ty::Optional(inner, attr) => {
+            Ty::Optional(Box::new(convert_tir2_ty(inner, resolved)), attr.clone())
+        }
         Tir2Ty::Literal(lit, _freshness, attr) => Ty::Literal(lit.clone(), attr.clone()),
 
         // Evolving containers → freeze to regular containers
-        Tir2Ty::EvolvingList(inner, attr) => Ty::List(
-            Box::new(convert_tir2_ty(inner, type_aliases, recursive_aliases)),
-            attr.clone(),
-        ),
+        Tir2Ty::EvolvingList(inner, attr) => {
+            Ty::List(Box::new(convert_tir2_ty(inner, resolved)), attr.clone())
+        }
         Tir2Ty::EvolvingMap(k, v, attr) => Ty::Map {
-            key: Box::new(convert_tir2_ty(k, type_aliases, recursive_aliases)),
-            value: Box::new(convert_tir2_ty(v, type_aliases, recursive_aliases)),
+            key: Box::new(convert_tir2_ty(k, resolved)),
+            value: Box::new(convert_tir2_ty(v, resolved)),
             attr: attr.clone(),
         },
 
@@ -143,9 +167,9 @@ pub fn convert_tir2_ty(
         Tir2Ty::Function { params, ret, attr } => Ty::Function {
             params: params
                 .iter()
-                .map(|(_, t)| convert_tir2_ty(t, type_aliases, recursive_aliases))
+                .map(|(_, t)| convert_tir2_ty(t, resolved))
                 .collect(),
-            ret: Box::new(convert_tir2_ty(ret, type_aliases, recursive_aliases)),
+            ret: Box::new(convert_tir2_ty(ret, resolved)),
             attr: attr.clone(),
         },
 
@@ -338,9 +362,8 @@ struct LoweringContext<'db> {
     #[allow(dead_code)]
     class_type_tags: IndexMap<TypeName, i64>,
 
-    // Type alias maps for inline expansion in convert_tir2_ty
-    type_aliases: HashMap<QualifiedTypeName, Tir2Ty>,
-    recursive_aliases: HashSet<QualifiedTypeName>,
+    // Pre-computed type alias data for inline expansion in convert_tir2_ty
+    resolved_aliases: ResolvedAliases,
 
     watched_locals_stack: Vec<Local>,
 
@@ -536,18 +559,7 @@ impl<'db> LoweringContext<'db> {
             &mut enum_variants,
         );
 
-        // --- Build type alias maps for inline expansion ---
-        let mut type_aliases = baml_compiler2_tir::inference::collect_type_aliases(db, pkg_items);
-        // Also include type aliases from dependency packages (e.g. Panic alias
-        // from baml.panics) so they can be expanded inline.
-        for &dep_id in package_dependencies(db, pkg_id) {
-            let dep_items = package_items(db, dep_id);
-            type_aliases.extend(baml_compiler2_tir::inference::collect_type_aliases(
-                db, dep_items,
-            ));
-        }
-        let recursive_aliases =
-            baml_compiler2_tir::normalize::find_recursive_aliases(&type_aliases);
+        let resolved_aliases = ResolvedAliases::for_package(db, pkg_id);
 
         // --- Determine arity from function signature ---
         let sig = function_signature(db, func_loc);
@@ -598,8 +610,7 @@ impl<'db> LoweringContext<'db> {
             pending_lambdas: Vec::new(),
             capture_indices: None,
             transitive_captures_needed: Vec::new(),
-            type_aliases,
-            recursive_aliases,
+            resolved_aliases,
             watched_locals_stack: Vec::new(),
             synthetic_name_counts: HashMap::new(),
         }
@@ -720,18 +731,7 @@ impl<'db> LoweringContext<'db> {
             &mut enum_variants,
         );
 
-        // --- Build type alias maps for inline expansion ---
-        let mut type_aliases = baml_compiler2_tir::inference::collect_type_aliases(db, pkg_items);
-        // Also include type aliases from dependency packages (e.g. Panic alias
-        // from baml.panics) so they can be expanded inline.
-        for &dep_id in package_dependencies(db, pkg_id) {
-            let dep_items = package_items(db, dep_id);
-            type_aliases.extend(baml_compiler2_tir::inference::collect_type_aliases(
-                db, dep_items,
-            ));
-        }
-        let recursive_aliases =
-            baml_compiler2_tir::normalize::find_recursive_aliases(&type_aliases);
+        let resolved_aliases = ResolvedAliases::for_package(db, pkg_id);
 
         LoweringContext {
             db,
@@ -753,8 +753,7 @@ impl<'db> LoweringContext<'db> {
             class_fields,
             enum_variants,
             class_type_tags,
-            type_aliases,
-            recursive_aliases,
+            resolved_aliases,
             watched_locals_stack: Vec::new(),
             synthetic_name_counts: HashMap::new(),
             pending_lambdas: Vec::new(),
@@ -783,7 +782,7 @@ impl<'db> LoweringContext<'db> {
     fn expr_ty(&self, expr_id: AstExprId) -> Ty {
         self.expr_types
             .get(&(self.current_scope, expr_id))
-            .map(|ty| convert_tir2_ty(ty, &self.type_aliases, &self.recursive_aliases))
+            .map(|ty| convert_tir2_ty(ty, &self.resolved_aliases))
             .unwrap_or(Ty::Void {
                 attr: TyAttr::default(),
             })
@@ -793,7 +792,7 @@ impl<'db> LoweringContext<'db> {
     fn pat_ty(&self, pat_id: AstPatId) -> Ty {
         self.pat_types
             .get(&(self.current_scope, pat_id))
-            .map(|ty| convert_tir2_ty(ty, &self.type_aliases, &self.recursive_aliases))
+            .map(|ty| convert_tir2_ty(ty, &self.resolved_aliases))
             .unwrap_or(Ty::Void {
                 attr: TyAttr::default(),
             })
@@ -816,7 +815,7 @@ impl<'db> LoweringContext<'db> {
             &[],
             &mut diags,
         );
-        convert_tir2_ty(&tir_ty, &self.type_aliases, &self.recursive_aliases)
+        self.resolved_aliases.convert(&tir_ty)
     }
 }
 
@@ -849,7 +848,7 @@ impl LoweringContext<'_> {
                     &[],
                     &mut diags,
                 );
-                convert_tir2_ty(&tir_ty, &self.type_aliases, &self.recursive_aliases)
+                self.resolved_aliases.convert(&tir_ty)
             })
             .unwrap_or(Ty::Null {
                 attr: TyAttr::default(),
@@ -895,11 +894,7 @@ impl LoweringContext<'_> {
                                     ),
                                     baml_compiler2_tir::ty::TyAttr::default(),
                                 );
-                                convert_tir2_ty(
-                                    &tir_ty,
-                                    &self.type_aliases,
-                                    &self.recursive_aliases,
-                                )
+                                self.resolved_aliases.convert(&tir_ty)
                             })
                     })
                     .unwrap_or(Ty::Null {
@@ -915,7 +910,7 @@ impl LoweringContext<'_> {
                     &[],
                     &mut diags,
                 );
-                convert_tir2_ty(&tir_ty, &self.type_aliases, &self.recursive_aliases)
+                self.resolved_aliases.convert(&tir_ty)
             };
             let local = self
                 .builder
@@ -1167,7 +1162,7 @@ impl LoweringContext<'_> {
                         &[],
                         &mut diags,
                     );
-                    convert_tir2_ty(&tir_ty, &self.type_aliases, &self.recursive_aliases)
+                    self.resolved_aliases.convert(&tir_ty)
                 }
                 None => baml_type::Ty::Null {
                     attr: baml_type::TyAttr::default(),
@@ -3188,8 +3183,7 @@ impl LoweringContext<'_> {
                 if name.as_str() != "_" {
                     if let Some(tir_ty) = self.pat_types.get(&(self.current_scope, pat_id)).cloned()
                     {
-                        let resolved =
-                            convert_tir2_ty(&tir_ty, &self.type_aliases, &self.recursive_aliases);
+                        let resolved = self.resolved_aliases.convert(&tir_ty);
                         self.emit_is_type_branch(scrutinee, resolved, success, failure);
                         return;
                     }
@@ -3197,17 +3191,13 @@ impl LoweringContext<'_> {
                 // Regular binding — always matches
                 self.builder.goto(success);
             }
-            AstPattern::TypedBinding { ty, .. } => {
-                // Prefer the TIR-resolved type (handles panic types from
-                // baml.panics.* that resolve_type_annotation can't find in
-                // the user namespace), falling back to direct resolution.
+            AstPattern::TypedBinding { .. } => {
+                // TIR always resolves TypedBinding patterns via record_pattern_test_types.
                 let annotation_ty = self
                     .pat_types
                     .get(&(self.current_scope, pat_id))
-                    .map(|tir_ty| {
-                        convert_tir2_ty(tir_ty, &self.type_aliases, &self.recursive_aliases)
-                    })
-                    .unwrap_or_else(|| self.resolve_type_annotation(&ty));
+                    .map(|tir_ty| convert_tir2_ty(tir_ty, &self.resolved_aliases))
+                    .expect("TIR must resolve TypedBinding patterns");
                 self.emit_is_type_branch(scrutinee, annotation_ty, success, failure);
             }
             AstPattern::Literal(lit) => {
@@ -3298,7 +3288,7 @@ impl LoweringContext<'_> {
                 let ty = self
                     .pat_types
                     .get(&(self.current_scope, pat_id))
-                    .map(|ty| convert_tir2_ty(ty, &self.type_aliases, &self.recursive_aliases))
+                    .map(|ty| convert_tir2_ty(ty, &self.resolved_aliases))
                     .unwrap_or_else(|| self.builder.local_ty(scrutinee));
                 let local = self
                     .builder
@@ -3329,14 +3319,6 @@ impl LoweringContext<'_> {
 
 // ─── Catch lowering ───────────────────────────────────────────────────────────
 
-#[derive(Clone)]
-struct SharedCatchArm {
-    clause_binding: AstPatId,
-    arm: baml_compiler2_ast::CatchArm,
-    body_block: BlockId,
-    is_wildcard: bool,
-}
-
 impl LoweringContext<'_> {
     fn lower_catch(
         &mut self,
@@ -3353,12 +3335,28 @@ impl LoweringContext<'_> {
             attr: TyAttr::default(),
         });
 
-        let shared_arms = self.collect_shared_catch_arms(clauses);
+        // Flatten all arms from all clauses, pre-creating body blocks.
+        let mut arms = Vec::new();
+        for clause in clauses {
+            for &arm_id in &clause.arms {
+                let arm = self.body.catch_arms[arm_id].clone();
+                let is_wildcard = matches!(
+                    self.body.patterns[arm.pattern],
+                    AstPattern::Binding(ref name) if name.as_str() == "_"
+                );
+                arms.push((
+                    clause.binding,
+                    arm,
+                    self.builder.create_block(),
+                    is_wildcard,
+                ));
+            }
+        }
 
-        let has_panic_arms = shared_arms
+        let has_panic_arms = arms
             .iter()
-            .any(|arm| self.pattern_references_panic(arm.arm.pattern));
-        let has_wildcard = shared_arms.iter().any(|arm| arm.is_wildcard);
+            .any(|(_, arm, _, _)| self.pattern_references_panic(arm.pattern));
+        let has_wildcard = arms.iter().any(|(_, _, _, is_wc)| *is_wc);
         let is_catch_all = clauses.iter().any(|clause| {
             matches!(
                 clause.kind,
@@ -3398,8 +3396,8 @@ impl LoweringContext<'_> {
         let needs_is_panic_guard = has_panic_arms && has_wildcard && !is_catch_all;
 
         self.builder.set_current_block(bb_handler);
-        for shared_arm in &shared_arms {
-            if shared_arm.is_wildcard && needs_is_panic_guard {
+        for &(_, ref arm, body_block, is_wildcard) in &arms {
+            if is_wildcard && needs_is_panic_guard {
                 // Insert: if is_panic(e) { throw e }
                 let bb_rethrow = self.builder.create_block();
                 let bb_wildcard = self.builder.create_block();
@@ -3423,12 +3421,7 @@ impl LoweringContext<'_> {
             }
 
             let bb_arm_next = self.builder.create_block();
-            self.lower_pattern_test(
-                error_local,
-                shared_arm.arm.pattern,
-                shared_arm.body_block,
-                bb_arm_next,
-            );
+            self.lower_pattern_test(error_local, arm.pattern, body_block, bb_arm_next);
             self.builder.set_current_block(bb_arm_next);
         }
 
@@ -3438,11 +3431,11 @@ impl LoweringContext<'_> {
         }
 
         // Lower each arm body.
-        for shared_arm in &shared_arms {
-            self.builder.set_current_block(shared_arm.body_block);
-            self.bind_pattern(error_local, shared_arm.clause_binding);
-            self.bind_pattern(error_local, shared_arm.arm.pattern);
-            self.lower_expr(shared_arm.arm.body, dest.clone());
+        for &(clause_binding, ref arm, body_block, _) in &arms {
+            self.builder.set_current_block(body_block);
+            self.bind_pattern(error_local, clause_binding);
+            self.bind_pattern(error_local, arm.pattern);
+            self.lower_expr(arm.body, dest.clone());
             if !self.builder.is_current_terminated() {
                 self.builder.goto(bb_join);
             }
@@ -3451,66 +3444,33 @@ impl LoweringContext<'_> {
         self.builder.set_current_block(bb_join);
     }
 
-    fn collect_shared_catch_arms(
-        &mut self,
-        clauses: &[baml_compiler2_ast::CatchClause],
-    ) -> Vec<SharedCatchArm> {
-        let mut shared_arms = Vec::new();
-
-        for clause in clauses {
-            for &arm_id in &clause.arms {
-                let arm = self.body.catch_arms[arm_id].clone();
-                let is_wildcard = matches!(
-                    self.body.patterns[arm.pattern],
-                    AstPattern::Binding(ref name) if name.as_str() == "_"
-                );
-                shared_arms.push(SharedCatchArm {
-                    clause_binding: clause.binding,
-                    arm,
-                    body_block: self.builder.create_block(),
-                    is_wildcard,
-                });
-            }
-        }
-
-        shared_arms
-    }
-
     /// Check if a pattern references any panic type (recursively through unions).
     fn pattern_references_panic(&self, pat_id: AstPatId) -> bool {
-        let pat = self.body.patterns[pat_id].clone();
-        match pat {
-            AstPattern::Binding(name) => {
-                if name.as_str() != "_" {
-                    if let Some(tir_ty) = self.pat_types.get(&(self.current_scope, pat_id)) {
-                        let ty =
-                            convert_tir2_ty(tir_ty, &self.type_aliases, &self.recursive_aliases);
-                        return Self::ty_references_panic(&ty);
-                    }
-                }
-                false
-            }
-            AstPattern::TypedBinding { ty, .. } => {
-                let resolved = self
-                    .pat_types
-                    .get(&(self.current_scope, pat_id))
-                    .map(|tir_ty| {
-                        convert_tir2_ty(tir_ty, &self.type_aliases, &self.recursive_aliases)
-                    })
-                    .unwrap_or_else(|| self.resolve_type_annotation(&ty));
-                Self::ty_references_panic(&resolved)
-            }
+        match &self.body.patterns[pat_id] {
+            AstPattern::Binding(name) if name.as_str() == "_" => false,
+            AstPattern::Binding(_) | AstPattern::TypedBinding { .. } => self
+                .pat_types
+                .get(&(self.current_scope, pat_id))
+                .is_some_and(|ty| self.tir_ty_references_panic(ty)),
             AstPattern::Union(sub_pats) => sub_pats
-                .into_iter()
-                .any(|sub_pat| self.pattern_references_panic(sub_pat)),
+                .iter()
+                .any(|&sub_pat| self.pattern_references_panic(sub_pat)),
             AstPattern::Literal(_) | AstPattern::Null | AstPattern::EnumVariant { .. } => false,
         }
     }
 
-    fn ty_references_panic(ty: &Ty) -> bool {
+    /// Check if a TIR type references any panic type, expanding aliases.
+    fn tir_ty_references_panic(&self, ty: &Tir2Ty) -> bool {
         match ty {
-            Ty::Union(members, _) => members.iter().any(Self::ty_references_panic),
-            Ty::Class(type_name, _) | Ty::TypeAlias(type_name, _) => type_name.is_panic_type(),
+            Tir2Ty::Class(qtn, _) => qtn.is_panic_type(),
+            Tir2Ty::TypeAlias(qtn, _) => {
+                if let Some(expanded) = self.resolved_aliases.aliases.get(qtn) {
+                    self.tir_ty_references_panic(expanded)
+                } else {
+                    qtn.is_panic_type()
+                }
+            }
+            Tir2Ty::Union(members, _) => members.iter().any(|m| self.tir_ty_references_panic(m)),
             _ => false,
         }
     }
