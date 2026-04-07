@@ -197,10 +197,9 @@ pub struct BexVm {
     /// Populated at VM construction time from the compiled program's class index.
     pub resolved_class_names: HashMap<String, HeapPtr>,
 
-    /// Pre-resolved heap pointers for `baml.panics.*` classes (indexed by
-    /// `PanicClass` discriminant). `None` when the panic class isn't loaded
-    /// (e.g. minimal test programs without `baml_std`).
-    panic_class_ptrs: Vec<Option<HeapPtr>>,
+    /// Pre-resolved heap pointers for `baml.panics.*` classes, indexed by
+    /// `PanicClass` discriminant.
+    panic_class_ptrs: Vec<HeapPtr>,
 
     /// Emit dependency graph.
     pub watch: Watch,
@@ -426,9 +425,13 @@ impl BexVm {
         let tlab = Tlab::new(Arc::clone(&heap));
 
         // Pre-resolve panic class pointers indexed by PanicClass discriminant.
-        let panic_class_ptrs: Vec<Option<HeapPtr>> = PanicClass::ALL
+        let panic_class_ptrs: Vec<HeapPtr> = PanicClass::ALL
             .iter()
-            .map(|pc| resolved_class_names.get(pc.fqn()).copied())
+            .map(|pc| {
+                *resolved_class_names.get(pc.fqn()).unwrap_or_else(|| {
+                    panic!("panic class {:?} not in resolved_class_names", pc.fqn())
+                })
+            })
             .collect();
 
         Self {
@@ -1016,20 +1019,13 @@ impl BexVm {
     }
 
     /// Allocate a `baml.panics.*` class instance using pre-resolved pointers.
-    ///
-    /// Falls back to returning the first field if the class isn't available
-    /// (e.g. in minimal test programs without `baml_std`).
     fn alloc_panic_value(&mut self, class: PanicClass, fields: Vec<Value>) -> Value {
-        if let Some(Some(class_ptr)) = self.panic_class_ptrs.get(class as usize) {
-            let class_ptr = *class_ptr;
-            let instance_ptr = self.tlab.alloc(Object::Instance(Instance {
-                class: class_ptr,
-                fields,
-            }));
-            Value::Object(instance_ptr)
-        } else {
-            fields.into_iter().next().unwrap_or(Value::Null)
-        }
+        let class_ptr = self.panic_class_ptrs[class as usize];
+        let instance_ptr = self.tlab.alloc(Object::Instance(Instance {
+            class: class_ptr,
+            fields,
+        }));
+        Value::Object(instance_ptr)
     }
 
     fn try_unwind_exception(
@@ -1041,13 +1037,21 @@ impl BexVm {
         // Walk the call stack from the current frame outward looking for an
         // exception table entry that covers the faulting PC.
         loop {
-            let depth = self.frames.len().saturating_sub(1);
+            debug_assert!(
+                !self.frames.is_empty(),
+                "try_unwind_exception called with no frames"
+            );
+            let depth = self.frames.len() - 1;
             let frame = &self.frames[depth];
 
             // The frame's instruction_ptr already points to the NEXT instruction
             // (it was incremented before the instruction executed), so the
             // faulting PC is one less.
-            let faulting_pc = frame.instruction_ptr.saturating_sub(1);
+            debug_assert!(
+                frame.instruction_ptr > 0,
+                "instruction_ptr should be > 0 after execution"
+            );
+            let faulting_pc = frame.instruction_ptr - 1;
 
             // Load the function for this frame to access its exception table.
             // SAFETY: See `load_function` doc comment.
@@ -2854,10 +2858,9 @@ impl BexVm {
                         let value = self.stack.ensure_pop()?;
                         let is_panic = match value {
                             Value::Object(ptr) => match self.get_object(ptr) {
-                                Object::Instance(instance) => self
-                                    .panic_class_ptrs
-                                    .iter()
-                                    .any(|p| p == &Some(instance.class)),
+                                Object::Instance(instance) => {
+                                    self.panic_class_ptrs.contains(&instance.class)
+                                }
                                 _ => false,
                             },
                             _ => false,

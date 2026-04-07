@@ -1284,21 +1284,33 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             let body_entry = self.analysis.resolve_jump_target(region.body_entry);
             let handler = self.analysis.resolve_jump_target(region.handler);
 
-            let Some(&start_pc) = self.block_addresses.get(&body_entry) else {
-                continue; // dead region, skip
-            };
-            let Some(&handler_pc) = self.block_addresses.get(&handler) else {
-                continue; // dead handler, skip
-            };
+            let &start_pc = self.block_addresses.get(&body_entry).unwrap_or_else(|| {
+                unreachable!(
+                    "exception table: body entry block {body_entry:?} has no PC address — \
+                     catch region was emitted but its body block was dropped"
+                )
+            });
+            let &handler_pc = self.block_addresses.get(&handler).unwrap_or_else(|| {
+                unreachable!(
+                    "exception table: handler block {handler:?} has no PC address — \
+                     catch region was emitted but its handler block was dropped"
+                )
+            });
             // If the error local was optimized away (e.g. an inline
             // `throw X catch ...` that the MIR lowers as a direct jump),
             // the catch region doesn't need a VM-level exception table entry.
             let Some(&error_slot) = self.local_slots.get(&region.error_local) else {
+                log::debug!(
+                    "exception table: error local {:?} has no slot (optimized away)",
+                    region.error_local,
+                );
                 continue;
             };
 
             if start_pc >= handler_pc {
-                continue; // degenerate region
+                unreachable!(
+                    "exception table: degenerate region start_pc={start_pc} >= handler_pc={handler_pc}"
+                );
             }
 
             self.bytecode.exception_table.push(ExceptionTableEntry {
