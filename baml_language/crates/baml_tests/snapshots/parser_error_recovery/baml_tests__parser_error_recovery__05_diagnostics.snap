@@ -2,28 +2,6 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] Warning: unreachable arm
-   ╭─[ registry.baml:1:1 ]
-   │
- 1 │ // root.TestCollector — collector for tests and testsets.
-   │ │ 
-   │ ╰─ unreachable arm
-   │ 
-   │ Note: Error code: E0001
-───╯
-
-  [type] Warning: unreachable arm
-     ╭─[ registry.baml:182:2 ]
-     │
- 182 │ ╭─▶         RunReport { outcome: "fail", duration_ms: 0 }
-     ┆ ┆   
- 184 │ ├─▶     }
-     │ │           
-     │ ╰─────────── unreachable arm
-     │     
-     │     Note: Error code: E0001
-─────╯
-
   [hir] Error: class is missing a name
    ╭─[ invalid_syntax.baml:1:1 ]
    │

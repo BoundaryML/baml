@@ -224,10 +224,8 @@ function testing.run_test(body: () -> null, runner: testing.TestRunner?) -> test
           r(base_run) : () -> testing.TestReport
     effective_run() : testing.TestReport
   }
-  ?? 0..0: unreachable arm
 }
 lambda testing.run_test {
-  ?? 5865..5929: unreachable arm
 }
 function testing.run_testset(run_children: () -> testing.TestSetReport, runner: testing.TestSetRunner?) -> testing.TestSetReport throws never {
   { : testing.TestSetReport

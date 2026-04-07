@@ -2495,7 +2495,18 @@ impl<'db> TypeInferenceBuilder<'db> {
                     );
                     if let Some(transitive) = throws.transitive_for(&target) {
                         out.extend(transitive.iter().cloned());
+                    } else {
+                        // Target not in throw set registry (function parameter,
+                        // external function, etc.) — conservatively assume it
+                        // could throw anything.
+                        out.insert(Ty::Unknown {
+                            attr: TyAttr::default(),
+                        });
                     }
+                } else {
+                    out.insert(Ty::Unknown {
+                        attr: TyAttr::default(),
+                    });
                 }
             }
             Expr::Catch { clauses, .. } => {
@@ -2666,7 +2677,15 @@ impl<'db> TypeInferenceBuilder<'db> {
                     );
                     if let Some(transitive) = throws.transitive_for(&target) {
                         out.extend(transitive.iter().cloned());
+                    } else {
+                        out.insert(Ty::Unknown {
+                            attr: TyAttr::default(),
+                        });
                     }
+                } else {
+                    out.insert(Ty::Unknown {
+                        attr: TyAttr::default(),
+                    });
                 }
             }
             Expr::If {

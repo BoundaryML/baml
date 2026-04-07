@@ -1,4 +1,4 @@
-// Multiple catch clauses chained on same expression — no diagnostics expected
+// Multiple catch clauses chained on same expression — unreachable because MayFail never throws
 function MayFail(x: int) -> string {
   "ok"
 }

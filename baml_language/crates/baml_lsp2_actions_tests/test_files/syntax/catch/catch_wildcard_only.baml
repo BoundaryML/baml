@@ -1,4 +1,4 @@
-// catch with only wildcard arm — no diagnostics expected
+// catch with only wildcard arm — unreachable because MayFail never throws
 function MayFail(x: int) -> string {
   "ok"
 }
