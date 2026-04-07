@@ -403,4 +403,348 @@ mod tests {
         let err = new_accumulator("google-ai").unwrap_err();
         assert!(matches!(err, LlmOpError::NotImplemented { .. }));
     }
+
+    /// Helper: wrap data strings into the event array format expected by `add_events`.
+    fn events_json(data_strings: &[&str]) -> String {
+        let events: Vec<serde_json::Value> = data_strings
+            .iter()
+            .map(|d| serde_json::json!({"event": "message", "data": *d, "id": null}))
+            .collect();
+        serde_json::to_string(&events).unwrap()
+    }
+
+    // ========================================================================
+    // Provider creation
+    // ========================================================================
+
+    #[test]
+    fn test_all_supported_providers_accepted() {
+        let providers = [
+            "openai",
+            "openai-generic",
+            "azure-openai",
+            "ollama",
+            "openrouter",
+            "openai-responses",
+            "anthropic",
+        ];
+        for p in providers {
+            let handle =
+                new_accumulator(p).unwrap_or_else(|e| panic!("{p} should be accepted: {e}"));
+            assert_eq!(get_content(&handle).unwrap(), "");
+            assert!(!is_done(&handle).unwrap());
+            assert_eq!(get_model(&handle).unwrap(), None);
+            assert_eq!(get_finish_reason(&handle).unwrap(), None);
+            assert_eq!(get_input_tokens(&handle).unwrap(), None);
+            assert_eq!(get_output_tokens(&handle).unwrap(), None);
+        }
+    }
+
+    #[test]
+    fn test_all_unsupported_providers_rejected() {
+        for p in ["google-ai", "aws-bedrock", "vertex-ai"] {
+            let err = new_accumulator(p).unwrap_err();
+            assert!(
+                matches!(err, LlmOpError::NotImplemented { .. }),
+                "{p} should be rejected as NotImplemented, got: {err:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_invalid_provider_string_rejected() {
+        let err = new_accumulator("not-a-provider").unwrap_err();
+        assert!(
+            matches!(err, LlmOpError::Other(_)),
+            "invalid provider should be Other error, got: {err:?}"
+        );
+    }
+
+    // ========================================================================
+    // OpenAI format edge cases
+    // ========================================================================
+
+    #[test]
+    fn test_openai_finish_reason_stop() {
+        let handle = new_accumulator("openai").unwrap();
+        let json =
+            events_json(&[r#"{"choices":[{"delta":{"content":"hi"},"finish_reason":"stop"}]}"#]);
+        add_events(&handle, &json).unwrap();
+        assert!(is_done(&handle).unwrap());
+        assert_eq!(get_finish_reason(&handle).unwrap(), Some("stop".into()));
+    }
+
+    #[test]
+    fn test_openai_finish_reason_length() {
+        let handle = new_accumulator("openai").unwrap();
+        let json =
+            events_json(&[r#"{"choices":[{"delta":{"content":"hi"},"finish_reason":"length"}]}"#]);
+        add_events(&handle, &json).unwrap();
+        assert!(is_done(&handle).unwrap());
+        assert_eq!(get_finish_reason(&handle).unwrap(), Some("length".into()));
+    }
+
+    #[test]
+    fn test_openai_finish_reason_other_does_not_set_done() {
+        let handle = new_accumulator("openai").unwrap();
+        let json = events_json(&[
+            r#"{"choices":[{"delta":{"content":""},"finish_reason":"content_filter"}]}"#,
+        ]);
+        add_events(&handle, &json).unwrap();
+        // finish_reason is stored but is_done is NOT set for non-stop/length reasons.
+        assert!(!is_done(&handle).unwrap());
+        assert_eq!(
+            get_finish_reason(&handle).unwrap(),
+            Some("content_filter".into())
+        );
+    }
+
+    #[test]
+    fn test_openai_model_extraction() {
+        let handle = new_accumulator("openai").unwrap();
+        let json = events_json(&[
+            r#"{"model":"gpt-4o-2024-05-13","choices":[{"delta":{"content":"x"}}]}"#,
+        ]);
+        add_events(&handle, &json).unwrap();
+        assert_eq!(
+            get_model(&handle).unwrap(),
+            Some("gpt-4o-2024-05-13".into())
+        );
+    }
+
+    #[test]
+    fn test_openai_usage_tokens() {
+        let handle = new_accumulator("openai").unwrap();
+        let json = events_json(&[
+            r#"{"choices":[{"delta":{}}],"usage":{"prompt_tokens":42,"completion_tokens":17}}"#,
+        ]);
+        add_events(&handle, &json).unwrap();
+        assert_eq!(get_input_tokens(&handle).unwrap(), Some(42));
+        assert_eq!(get_output_tokens(&handle).unwrap(), Some(17));
+    }
+
+    #[test]
+    fn test_openai_empty_delta() {
+        let handle = new_accumulator("openai").unwrap();
+        // First chunk adds content.
+        add_events(
+            &handle,
+            &events_json(&[r#"{"choices":[{"delta":{"content":"hello"}}]}"#]),
+        )
+        .unwrap();
+        // Second chunk has empty delta (no content key) — common for role-only chunks.
+        add_events(&handle, &events_json(&[r#"{"choices":[{"delta":{}}]}"#])).unwrap();
+        assert_eq!(get_content(&handle).unwrap(), "hello");
+    }
+
+    #[test]
+    fn test_openai_null_content_in_delta() {
+        let handle = new_accumulator("openai").unwrap();
+        add_events(
+            &handle,
+            &events_json(&[r#"{"choices":[{"delta":{"content":"hi"}}]}"#]),
+        )
+        .unwrap();
+        // null content should not change accumulated content.
+        add_events(
+            &handle,
+            &events_json(&[r#"{"choices":[{"delta":{"content":null}}]}"#]),
+        )
+        .unwrap();
+        assert_eq!(get_content(&handle).unwrap(), "hi");
+    }
+
+    #[test]
+    fn test_openai_multiple_chunks_accumulate() {
+        let handle = new_accumulator("openai").unwrap();
+        let chunks = ["Hello", ", ", "world", "! ", "How ", "are ", "you?"];
+        for chunk in chunks {
+            let json = events_json(&[&format!(
+                r#"{{"choices":[{{"delta":{{"content":"{chunk}"}}}}]}}"#
+            )]);
+            add_events(&handle, &json).unwrap();
+        }
+        assert_eq!(get_content(&handle).unwrap(), "Hello, world! How are you?");
+    }
+
+    #[test]
+    fn test_openai_invalid_json_in_data_skipped() {
+        let handle = new_accumulator("openai").unwrap();
+        add_events(
+            &handle,
+            &events_json(&[r#"{"choices":[{"delta":{"content":"before"}}]}"#]),
+        )
+        .unwrap();
+        // Invalid JSON in data field is silently skipped.
+        add_events(&handle, &events_json(&["not valid json"])).unwrap();
+        assert_eq!(get_content(&handle).unwrap(), "before");
+    }
+
+    #[test]
+    fn test_openai_done_after_finish_reason() {
+        let handle = new_accumulator("openai").unwrap();
+        // finish_reason="stop" sets done.
+        add_events(
+            &handle,
+            &events_json(&[r#"{"choices":[{"delta":{},"finish_reason":"stop"}]}"#]),
+        )
+        .unwrap();
+        assert!(is_done(&handle).unwrap());
+
+        // [DONE] also sets done — no issues from double-set.
+        add_events(&handle, &events_json(&["[DONE]"])).unwrap();
+        assert!(is_done(&handle).unwrap());
+    }
+
+    // ========================================================================
+    // Anthropic format edge cases
+    // ========================================================================
+
+    #[test]
+    fn test_anthropic_content_block_delta_accumulates() {
+        let handle = new_accumulator("anthropic").unwrap();
+        let chunks = ["Hello", " ", "world"];
+        for chunk in chunks {
+            let json = events_json(&[&format!(
+                r#"{{"type":"content_block_delta","delta":{{"text":"{chunk}"}}}}"#
+            )]);
+            add_events(&handle, &json).unwrap();
+        }
+        assert_eq!(get_content(&handle).unwrap(), "Hello world");
+    }
+
+    #[test]
+    fn test_anthropic_message_start_extracts_model_and_input_tokens() {
+        let handle = new_accumulator("anthropic").unwrap();
+        let json = events_json(&[
+            r#"{"type":"message_start","message":{"model":"claude-3-5-sonnet","usage":{"input_tokens":100}}}"#,
+        ]);
+        add_events(&handle, &json).unwrap();
+        assert_eq!(
+            get_model(&handle).unwrap(),
+            Some("claude-3-5-sonnet".into())
+        );
+        assert_eq!(get_input_tokens(&handle).unwrap(), Some(100));
+    }
+
+    #[test]
+    fn test_anthropic_message_delta_extracts_stop_reason_and_output_tokens() {
+        let handle = new_accumulator("anthropic").unwrap();
+        let json = events_json(&[
+            r#"{"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":55}}"#,
+        ]);
+        add_events(&handle, &json).unwrap();
+        assert_eq!(get_finish_reason(&handle).unwrap(), Some("end_turn".into()));
+        assert_eq!(get_output_tokens(&handle).unwrap(), Some(55));
+    }
+
+    #[test]
+    fn test_anthropic_message_stop_sets_done() {
+        let handle = new_accumulator("anthropic").unwrap();
+        // message_stop alone (without prior message_delta) sets is_done.
+        let json = events_json(&[r#"{"type":"message_stop"}"#]);
+        add_events(&handle, &json).unwrap();
+        assert!(is_done(&handle).unwrap());
+    }
+
+    #[test]
+    fn test_anthropic_unknown_event_type_ignored() {
+        let handle = new_accumulator("anthropic").unwrap();
+        add_events(
+            &handle,
+            &events_json(&[r#"{"type":"content_block_delta","delta":{"text":"hi"}}"#]),
+        )
+        .unwrap();
+        // "ping" event type is silently ignored.
+        add_events(&handle, &events_json(&[r#"{"type":"ping"}"#])).unwrap();
+        assert_eq!(get_content(&handle).unwrap(), "hi");
+        assert!(!is_done(&handle).unwrap());
+    }
+
+    // ========================================================================
+    // Cross-provider
+    // ========================================================================
+
+    #[test]
+    fn test_done_signal_is_idempotent() {
+        let handle = new_accumulator("openai").unwrap();
+        add_events(&handle, &events_json(&["[DONE]"])).unwrap();
+        assert!(is_done(&handle).unwrap());
+        add_events(&handle, &events_json(&["[DONE]"])).unwrap();
+        assert!(is_done(&handle).unwrap());
+    }
+
+    #[test]
+    fn test_events_after_done_still_processed() {
+        // The accumulator doesn't gate on is_done — content chunks after [DONE]
+        // are still appended. This pins current behavior.
+        let handle = new_accumulator("openai").unwrap();
+        add_events(&handle, &events_json(&["[DONE]"])).unwrap();
+        assert!(is_done(&handle).unwrap());
+
+        add_events(
+            &handle,
+            &events_json(&[r#"{"choices":[{"delta":{"content":"late"}}]}"#]),
+        )
+        .unwrap();
+        assert_eq!(get_content(&handle).unwrap(), "late");
+    }
+
+    #[test]
+    fn test_empty_events_array() {
+        let handle = new_accumulator("openai").unwrap();
+        add_events(&handle, "[]").unwrap();
+        assert_eq!(get_content(&handle).unwrap(), "");
+        assert!(!is_done(&handle).unwrap());
+    }
+
+    #[test]
+    fn test_invalid_events_json() {
+        let handle = new_accumulator("openai").unwrap();
+        let err = add_events(&handle, "not-json").unwrap_err();
+        assert!(
+            matches!(err, LlmOpError::Other(_)),
+            "invalid JSON should be Other error, got: {err:?}"
+        );
+    }
+
+    // ========================================================================
+    // Resource lifecycle
+    // ========================================================================
+
+    #[test]
+    fn test_handle_drop_cleans_up_registry() {
+        let handle = new_accumulator("openai").unwrap();
+        let key = handle.key();
+
+        // Entry exists while handle is alive.
+        assert!(ACCUM_REGISTRY.entries.read().unwrap().contains_key(&key));
+
+        drop(handle);
+
+        // Entry removed after handle is dropped.
+        assert!(!ACCUM_REGISTRY.entries.read().unwrap().contains_key(&key));
+    }
+
+    #[test]
+    fn test_concurrent_accumulators_independent() {
+        let h1 = new_accumulator("openai").unwrap();
+        let h2 = new_accumulator("anthropic").unwrap();
+
+        add_events(
+            &h1,
+            &events_json(&[r#"{"choices":[{"delta":{"content":"openai-text"}}]}"#]),
+        )
+        .unwrap();
+        add_events(
+            &h2,
+            &events_json(&[r#"{"type":"content_block_delta","delta":{"text":"anthropic-text"}}"#]),
+        )
+        .unwrap();
+
+        assert_eq!(get_content(&h1).unwrap(), "openai-text");
+        assert_eq!(get_content(&h2).unwrap(), "anthropic-text");
+        assert!(!is_done(&h1).unwrap());
+        assert!(!is_done(&h2).unwrap());
+    }
 }
