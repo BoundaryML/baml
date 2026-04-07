@@ -139,7 +139,8 @@ pub(super) fn parse_vertex_response(body: &str) -> Result<LlmProviderResponse, P
 
     let candidate = &response.candidates[0];
 
-    // Vertex takes first part only, no thought filtering
+    // Vertex takes first part only, no thought filtering.
+    // Matches engine/baml-runtime vertex/response_handler.rs behavior.
     let content = candidate
         .content
         .as_ref()
@@ -296,8 +297,9 @@ mod tests {
             }]
         }"#;
 
-        let err = parse_google_response(body).unwrap_err();
-        assert!(matches!(err, ParseResponseError::NoContent { .. }));
+        let resp = parse_google_response(body).unwrap();
+        assert_eq!(resp.content, "hi");
+        assert_eq!(resp.usage.input_tokens, None);
     }
 
     #[test]
@@ -403,8 +405,9 @@ mod tests {
             }]
         }"#;
 
-        let err = parse_vertex_response(body).unwrap_err();
-        assert!(matches!(err, ParseResponseError::NoContent { .. }));
+        let resp = parse_vertex_response(body).unwrap();
+        assert_eq!(resp.content, "hi");
+        assert_eq!(resp.usage.input_tokens, None);
     }
 
     #[test]

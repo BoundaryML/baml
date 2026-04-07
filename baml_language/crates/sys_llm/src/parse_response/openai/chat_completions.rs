@@ -1,4 +1,4 @@
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Deserializer};
 
 use super::CompletionUsage;
 use crate::parse_response::{FinishReason, LlmProviderResponse, ParseResponseError, TokenUsage};
@@ -61,12 +61,12 @@ enum ChatCompletionMessageRole {
     Function,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
+#[derive(Debug, Deserialize, Clone, PartialEq)]
 struct ChatChoiceLogprobs {
     pub content: Option<Vec<ChatCompletionTokenLogprob>>,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
+#[derive(Debug, Deserialize, Clone, PartialEq)]
 struct ChatCompletionTokenLogprob {
     pub token: String,
     pub logprob: f32,
@@ -74,7 +74,7 @@ struct ChatCompletionTokenLogprob {
     pub top_logprobs: Vec<TopLogprobs>,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
+#[derive(Debug, Deserialize, Clone, PartialEq)]
 struct TopLogprobs {
     pub token: String,
     pub logprob: f32,

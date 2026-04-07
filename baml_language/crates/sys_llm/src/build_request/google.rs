@@ -449,6 +449,28 @@ mod tests {
         );
     }
 
+    #[test]
+    fn vertex_anthropic_url_respects_explicit_base_url() {
+        let client = make_client(
+            "vertex-ai",
+            crate::baml_std::PrimitiveClientOptions {
+                model: Some("claude-sonnet-4-20250514".to_string()),
+                base_url: Some(
+                    "https://us-central1-aiplatform.googleapis.com/v1/projects/my-project/locations/us-central1/publishers/anthropic/models"
+                        .to_string(),
+                ),
+                ..Default::default()
+            },
+        );
+
+        let url = resolve_vertex_raw_predict_url(&client).unwrap();
+
+        assert_eq!(
+            url,
+            "https://us-central1-aiplatform.googleapis.com/v1/projects/my-project/locations/us-central1/publishers/anthropic/models/claude-sonnet-4-20250514:rawPredict"
+        );
+    }
+
     // ========================================================================
     // Basic message tests
     // ========================================================================
