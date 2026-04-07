@@ -886,7 +886,7 @@ impl BexVm {
             .frames
             .iter()
             .map(|frame| {
-                let function = self.get_object(frame.function).as_function()?;
+                let function = self.get_object(frame.function).as_callable()?;
 
                 // VM increments instruction pointer as soon as it reads the
                 // instruction. So in reality the error ocurred on the previous
@@ -896,6 +896,7 @@ impl BexVm {
 
                 Ok(ErrorLocation {
                     function_name: function.name.clone(),
+                    file_path: function.source_file.clone(),
                     function_span: function.span,
                     error_line: function
                         .bytecode
@@ -1034,6 +1035,25 @@ impl BexVm {
         function: &mut &'static Function,
         exception_value: Value,
     ) -> Result<(), VmError> {
+        // Capture the stack trace before unwinding destroys frame information.
+        // We build it inline rather than calling stack_trace() to avoid
+        // constructing a StackTrace wrapper we don't need.
+        let trace: Vec<ErrorLocation> = self
+            .frames
+            .iter()
+            .filter_map(|frame| {
+                let func = self.get_object(frame.function).as_callable().ok()?;
+                let last_pc = frame.instruction_ptr.saturating_sub(1);
+                let error_line = func.bytecode.source_line_for_pc(last_pc);
+                Some(ErrorLocation {
+                    function_name: func.name.clone(),
+                    file_path: func.source_file.clone(),
+                    function_span: func.span,
+                    error_line,
+                })
+            })
+            .collect();
+
         // Walk the call stack from the current frame outward looking for an
         // exception table entry that covers the faulting PC.
         loop {
@@ -1090,6 +1110,7 @@ impl BexVm {
                 // No more frames to unwind through.
                 return Err(VmError::UnhandledThrow {
                     value: exception_value,
+                    trace,
                 });
             }
 
@@ -2697,7 +2718,7 @@ impl BexVm {
                 let span_exit = if self.traced_frames.last() == Some(frame_idx) {
                     let func_name = self
                         .get_object(self.frames[*frame_idx].function)
-                        .as_function()
+                        .as_callable()
                         .map(|f| f.name.clone())
                         .ok();
                     self.traced_frames.pop();

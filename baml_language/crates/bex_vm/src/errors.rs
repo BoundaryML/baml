@@ -66,15 +66,21 @@ pub enum VmError {
 
     // ── Terminal errors ─────────────────────────────────────────────────
     #[error("uncaught throw: {value:?}")]
-    UnhandledThrow { value: Value },
+    UnhandledThrow {
+        value: Value,
+        trace: Vec<ErrorLocation>,
+    },
 
     #[error("internal error: {0}")]
     InternalError(String),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ErrorLocation {
     pub function_name: String,
+    /// Filesystem path of the source file containing this function.
+    /// Empty string for builtins and synthesized functions.
+    pub file_path: String,
     pub function_span: baml_type::Span,
     pub error_line: usize,
 }
@@ -92,7 +98,7 @@ impl std::fmt::Display for StackTrace {
             writeln!(
                 f,
                 "  File \"{}\", line {}, in {}",
-                location.function_span.file_id, location.error_line, location.function_name
+                location.file_path, location.error_line, location.function_name
             )?;
         }
         write!(f, "{}", self.error)

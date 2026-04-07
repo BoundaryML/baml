@@ -425,9 +425,16 @@ pub fn generate_project_bytecode(
                         lambda_object_indices: &lambda_obj_indices,
                         lambda_names: &lambda_names_vec,
                     };
-                    let mut f =
-                        compile_mir_function(body, mir.arity, &line_starts, ctx, OptLevel::One);
+                    let mut f = compile_mir_function(
+                        body,
+                        mir.arity,
+                        mir.span,
+                        &line_starts,
+                        ctx,
+                        OptLevel::One,
+                    );
                     f.name.clone_from(&fq_name);
+                    f.source_file = file.path(db).display().to_string();
                     f
                 }
                 MirFunctionKind::Builtin(BuiltinKind::Io) => {
@@ -435,6 +442,7 @@ pub fn generate_project_bytecode(
                         .unwrap_or_else(|| panic!("unknown sys_op path: {fq_name}"));
                     Function {
                         name: fq_name.clone(),
+                        source_file: String::new(), // builtins have no source file
                         arity: mir.arity,
                         real_local_count: 0,
                         bytecode: Bytecode::default(),
@@ -456,6 +464,7 @@ pub fn generate_project_bytecode(
                 }
                 MirFunctionKind::Builtin(BuiltinKind::Vm) => Function {
                     name: fq_name.clone(),
+                    source_file: String::new(), // builtins have no source file
                     arity: mir.arity,
                     real_local_count: 0,
                     bytecode: Bytecode::default(),
@@ -661,6 +670,7 @@ pub fn generate_project_bytecode(
             // $init synthesis at compile_init_function (lib.rs:1085-1103).
             let chainer_fn = Function {
                 name: "$init_test".to_string(),
+                source_file: String::new(), // synthesized, no source file
                 arity: 1,
                 real_local_count: 1, // the registry param
                 bytecode,
@@ -1088,8 +1098,14 @@ fn compile_lambdas_flat(
                     lambda_object_indices: &nested_obj_indices,
                     lambda_names: &nested_names,
                 };
-                let mut f =
-                    compile_mir_function(body, lambda.arity, line_starts, ctx, OptLevel::One);
+                let mut f = compile_mir_function(
+                    body,
+                    lambda.arity,
+                    lambda.span,
+                    line_starts,
+                    ctx,
+                    OptLevel::One,
+                );
                 f.name.clone_from(&lambda_name);
                 let idx = objects.len();
                 objects.push(Object::Function(Box::new(f)));
@@ -1167,8 +1183,9 @@ fn compile_init_function<'db>(
                     lambda_names: &lambda_let_names,
                 };
                 let mut helper =
-                    compile_mir_function(&mir_body, 0, &line_starts, ctx, OptLevel::One);
+                    compile_mir_function(&mir_body, 0, None, &line_starts, ctx, OptLevel::One);
                 helper.name = format!("$init_let_{i}");
+                helper.source_file = file.path(db).display().to_string();
                 helper.arity = 0;
                 helper
             }
@@ -1181,6 +1198,7 @@ fn compile_init_function<'db>(
                 bytecode.instructions.push(Instruction::Return);
                 Function {
                     name: format!("$init_let_{i}"),
+                    source_file: String::new(), // synthesized, no source file
                     arity: 0,
                     real_local_count: 0,
                     bytecode,
@@ -1233,6 +1251,7 @@ fn compile_init_function<'db>(
 
     Ok(Function {
         name: "$init".to_string(),
+        source_file: String::new(), // synthesized, no source file
         arity: 0,
         real_local_count: 0,
         bytecode,

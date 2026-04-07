@@ -19,7 +19,7 @@ fn assert_uncaught_panic(
     expected_class: &str,
 ) {
     match result {
-        Err(bex_engine::EngineError::UnhandledThrow { value }) => match value.as_ref() {
+        Err(bex_engine::EngineError::UnhandledThrow { value, .. }) => match value.as_ref() {
             BexExternalValue::Instance { class_name, .. } => {
                 assert_eq!(class_name, expected_class);
             }
@@ -1398,11 +1398,12 @@ async fn unhandled_throw_string() {
         throw
     }
     "#);
+    let Err(bex_engine::EngineError::UnhandledThrow { value, .. }) = &output.result else {
+        panic!("expected UnhandledThrow, got: {:?}", output.result);
+    };
     assert_eq!(
-        output.result,
-        Err(bex_engine::EngineError::UnhandledThrow {
-            value: Box::new(BexExternalValue::String("something went wrong".to_string())),
-        })
+        value.as_ref(),
+        &BexExternalValue::String("something went wrong".to_string())
     );
 }
 
@@ -1421,12 +1422,10 @@ async fn unhandled_throw_int() {
         throw
     }
     ");
-    assert_eq!(
-        output.result,
-        Err(bex_engine::EngineError::UnhandledThrow {
-            value: Box::new(BexExternalValue::Int(42)),
-        })
-    );
+    let Err(bex_engine::EngineError::UnhandledThrow { value, .. }) = &output.result else {
+        panic!("expected UnhandledThrow, got: {:?}", output.result);
+    };
+    assert_eq!(value.as_ref(), &BexExternalValue::Int(42));
 }
 
 // ============================================================================
@@ -2492,11 +2491,12 @@ async fn mixed_union_no_wildcard_unmatched_rethrows() {
         }
     "#
     );
+    let Err(bex_engine::EngineError::UnhandledThrow { value, .. }) = &output.result else {
+        panic!("expected UnhandledThrow, got: {:?}", output.result);
+    };
     assert_eq!(
-        output.result,
-        Err(bex_engine::EngineError::UnhandledThrow {
-            value: Box::new(BexExternalValue::String("not matched".to_string())),
-        }),
+        value.as_ref(),
+        &BexExternalValue::String("not matched".to_string()),
         "unmatched throw should rethrow past mixed union arm"
     );
 }
@@ -3516,11 +3516,12 @@ async fn throw_in_match_arm_propagates() {
         return
     }
     "#);
+    let Err(bex_engine::EngineError::UnhandledThrow { value, .. }) = &output.result else {
+        panic!("expected UnhandledThrow, got: {:?}", output.result);
+    };
     assert_eq!(
-        output.result,
-        Err(bex_engine::EngineError::UnhandledThrow {
-            value: Box::new(BexExternalValue::String("boom".to_string())),
-        })
+        value.as_ref(),
+        &BexExternalValue::String("boom".to_string())
     );
 }
 
@@ -3568,4 +3569,75 @@ async fn caught_panic_has_accessible_fields() {
     }
     ");
     assert_eq!(output.result, Ok(BexExternalValue::Int(7)));
+}
+
+// ============================================================================
+// §N — Stack trace tests
+// ============================================================================
+
+#[tokio::test]
+async fn exception_stack_trace_through_closures() {
+    let output = baml_test!(
+        r#"
+function inner() -> int {
+  throw "from_closure"
+}
+
+function outer() -> int {
+  let f = inner
+  f()
+}
+
+function main() -> int {
+  outer()
+}
+"#
+    );
+
+    let Err(bex_engine::EngineError::UnhandledThrow { trace, .. }) = &output.result else {
+        panic!("expected UnhandledThrow, got: {:?}", output.result);
+    };
+
+    // Trace should include frames even when closures are involved
+    assert!(
+        trace.len() >= 2,
+        "expected at least 2 frames, got {}",
+        trace.len()
+    );
+}
+
+#[tokio::test]
+async fn exception_stack_trace_on_panic() {
+    let output = baml_test!(
+        r#"
+function divider(x: int) -> int {
+  x / 0
+}
+
+function caller() -> int {
+  divider(42)
+}
+
+function main() -> int {
+  caller()
+}
+"#
+    );
+
+    let Err(bex_engine::EngineError::UnhandledThrow { trace, .. }) = &output.result else {
+        panic!("expected UnhandledThrow, got: {:?}", output.result);
+    };
+
+    assert!(
+        trace.len() >= 3,
+        "expected at least 3 frames, got {}",
+        trace.len()
+    );
+
+    // The Display output should include the traceback
+    let display = format!("{}", output.result.unwrap_err());
+    assert!(
+        display.contains("Traceback (most recent call last):"),
+        "missing traceback header in: {display}"
+    );
 }

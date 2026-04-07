@@ -245,8 +245,11 @@ pub enum EngineError {
     #[error("VM error: {0}")]
     VmError(bex_vm::errors::VmError),
 
-    #[error("uncaught throw: {value:?}")]
-    UnhandledThrow { value: Box<BexExternalValue> },
+    #[error("{}", format_unhandled_throw(value, trace))]
+    UnhandledThrow {
+        value: Box<BexExternalValue>,
+        trace: Vec<bex_vm::ErrorLocation>,
+    },
 
     #[error("Cannot convert object of type {type_name}")]
     CannotConvert { type_name: String },
@@ -269,6 +272,24 @@ pub enum EngineError {
 
     #[error("Package initialization failed: {0}")]
     InitFailed(String),
+}
+
+fn format_unhandled_throw(value: &BexExternalValue, trace: &[bex_vm::ErrorLocation]) -> String {
+    use std::fmt::Write;
+    let mut out = String::new();
+    if !trace.is_empty() {
+        writeln!(out, "Traceback (most recent call last):").unwrap();
+        for location in trace {
+            writeln!(
+                out,
+                "  File \"{}\", line {}, in {}",
+                location.file_path, location.error_line, location.function_name
+            )
+            .unwrap();
+        }
+    }
+    write!(out, "uncaught throw: {value:?}").unwrap();
+    out
 }
 
 // ============================================================================
@@ -1314,7 +1335,7 @@ impl BexEngine {
 
             let exec_result = match vm.exec() {
                 Ok(state) => state,
-                Err(bex_vm::errors::VmError::UnhandledThrow { value }) => {
+                Err(bex_vm::errors::VmError::UnhandledThrow { value, trace }) => {
                     let external = if let Some(ref ty) = throws_type {
                         self.heap.with_gc_protection(|protected| {
                             self.convert_vm_value_to_external_with_type(
@@ -1328,6 +1349,7 @@ impl BexEngine {
                     };
                     return Err(EngineError::UnhandledThrow {
                         value: Box::new(external),
+                        trace,
                     });
                 }
                 Err(other) => return Err(EngineError::VmError(other)),

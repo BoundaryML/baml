@@ -7,10 +7,15 @@ use crate::errors::VmError;
 
 pub trait ObjectTrait {
     fn as_function(&self) -> Result<&Function, VmError>;
+    /// Like `as_function`, but also handles `Object::Closure` by returning the
+    /// inner `Function`. This fixes the silent-empty-trace bug in `stack_trace()`
+    /// where closure frames were causing an early `Err` that got swallowed.
+    fn as_callable(&self) -> Result<&Function, VmError>;
     fn as_string(&self) -> Result<&String, VmError>;
     fn as_string_mut(&mut self) -> Result<&mut String, VmError>;
 }
 
+#[allow(unsafe_code)]
 impl ObjectTrait for Object {
     /// Helper to unwrap an [`Object::Function`].
     ///
@@ -20,6 +25,28 @@ impl ObjectTrait for Object {
     fn as_function(&self) -> Result<&Function, VmError> {
         match self {
             Object::Function(function) => Ok(function),
+            _ => Err(VmError::TypeError {
+                expected: FunctionType::Any.into(),
+                got: ObjectType::of(self).into(),
+            }),
+        }
+    }
+
+    /// Unwrap either an [`Object::Function`] or the inner function of an
+    /// [`Object::Closure`], returning a reference to the underlying `Function`.
+    ///
+    /// This mirrors the dual-dispatch pattern in `load_function()` in `vm.rs`.
+    #[inline]
+    fn as_callable(&self) -> Result<&Function, VmError> {
+        match self {
+            Object::Function(f) => Ok(f),
+            Object::Closure(closure) => {
+                // SAFETY: closure.function points to a Function object that lives
+                // for the lifetime of the program (stored in the object pool).
+                // Same guarantee as in load_function() in vm.rs.
+                let func_obj: &Object = unsafe { closure.function.get() };
+                func_obj.as_function()
+            }
             _ => Err(VmError::TypeError {
                 expected: FunctionType::Any.into(),
                 got: ObjectType::of(self).into(),
