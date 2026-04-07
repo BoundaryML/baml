@@ -136,13 +136,13 @@ fn resolve_url(
 /// Resolved during auth when credentials are available.
 pub(crate) const VERTEX_PROJECT_ID_PLACEHOLDER: &str = "__BAML_VERTEX_PROJECT_ID__";
 
-/// Build the Vertex AI base URL from `location` and `project_id` in provider options.
+/// Extract Vertex AI URL components: `(domain, location, project_id)`.
 ///
 /// `location` is required (the old engine errors with "must specify a GCP region").
 /// `project_id` may use a placeholder that gets resolved during auth.
-fn resolve_vertex_base_url(
+fn vertex_url_components(
     client: &crate::baml_std::PrimitiveClient,
-) -> Result<String, super::BuildRequestError> {
+) -> Result<(String, String, String), super::BuildRequestError> {
     let vertex_opts = match &client.provider_options {
         Some(crate::baml_std::ProviderOptions::VertexAi(opts)) => Some(opts),
         _ => None,
@@ -167,20 +167,36 @@ fn resolve_vertex_base_url(
         format!("{location}-aiplatform.googleapis.com")
     };
 
+    Ok((domain, location.to_string(), project_id.to_string()))
+}
+
+/// Build the Vertex AI base URL from `location` and `project_id` in provider options.
+fn resolve_vertex_base_url(
+    client: &crate::baml_std::PrimitiveClient,
+) -> Result<String, super::BuildRequestError> {
+    let (domain, location, project_id) = vertex_url_components(client)?;
     Ok(format!(
         "https://{domain}/v1/projects/{project_id}/locations/{location}/publishers/google/models"
     ))
 }
 
 /// Build the Vertex AI URL for Anthropic `rawPredict` requests.
+///
+/// Anthropic models on Vertex AI use a different publisher path:
+/// `publishers/anthropic/models` instead of `publishers/google/models`.
 pub(super) fn resolve_vertex_raw_predict_url(
     client: &crate::baml_std::PrimitiveClient,
 ) -> Result<String, super::BuildRequestError> {
-    let base = match client.options.base_url.as_deref() {
-        Some(url) => url.to_string(),
-        None => resolve_vertex_base_url(client)?,
-    };
-    Ok(format!("{base}/{}:rawPredict", client.model))
+    // If user provides a base_url, use it as-is (they're responsible for the path)
+    if let Some(url) = client.options.base_url.as_deref() {
+        return Ok(format!("{url}/{}:rawPredict", client.model));
+    }
+
+    let (domain, location, project_id) = vertex_url_components(client)?;
+    Ok(format!(
+        "https://{domain}/v1/projects/{project_id}/locations/{location}/publishers/anthropic/models/{}:rawPredict",
+        client.model
+    ))
 }
 
 // ============================================================================
@@ -393,6 +409,65 @@ mod tests {
         assert_eq!(
             result.url,
             "https://europe-west4-aiplatform.googleapis.com/v1/projects/my-project/locations/europe-west4/publishers/google/models/gemini-2.0-flash:generateContent"
+        );
+    }
+
+    #[test]
+    fn vertex_anthropic_url_uses_anthropic_publisher() {
+        // When no base_url is provided, the URL should use publishers/anthropic, not publishers/google
+        let mut client = make_client(
+            "vertex-ai",
+            crate::baml_std::PrimitiveClientOptions {
+                model: Some("claude-sonnet-4-20250514".to_string()),
+                // No base_url - URL is built from location + project_id
+                ..Default::default()
+            },
+        );
+        client.provider_options = Some(crate::baml_std::ProviderOptions::VertexAi(
+            crate::baml_std::VertexAiOptions {
+                location: Some("us-central1".to_string()),
+                project_id: Some("my-project".to_string()),
+                credentials: None,
+                credentials_content: None,
+            },
+        ));
+
+        // Test the URL building directly (no auth required)
+        let url = resolve_vertex_raw_predict_url(&client).unwrap();
+
+        assert!(
+            url.contains("publishers/anthropic/models"),
+            "Claude on Vertex should use publishers/anthropic, got: {url}"
+        );
+        assert!(
+            !url.contains("publishers/google/models"),
+            "Claude on Vertex should NOT use publishers/google, got: {url}"
+        );
+        assert_eq!(
+            url,
+            "https://us-central1-aiplatform.googleapis.com/v1/projects/my-project/locations/us-central1/publishers/anthropic/models/claude-sonnet-4-20250514:rawPredict"
+        );
+    }
+
+    #[test]
+    fn vertex_anthropic_url_respects_explicit_base_url() {
+        let client = make_client(
+            "vertex-ai",
+            crate::baml_std::PrimitiveClientOptions {
+                model: Some("claude-sonnet-4-20250514".to_string()),
+                base_url: Some(
+                    "https://us-central1-aiplatform.googleapis.com/v1/projects/my-project/locations/us-central1/publishers/anthropic/models"
+                        .to_string(),
+                ),
+                ..Default::default()
+            },
+        );
+
+        let url = resolve_vertex_raw_predict_url(&client).unwrap();
+
+        assert_eq!(
+            url,
+            "https://us-central1-aiplatform.googleapis.com/v1/projects/my-project/locations/us-central1/publishers/anthropic/models/claude-sonnet-4-20250514:rawPredict"
         );
     }
 
