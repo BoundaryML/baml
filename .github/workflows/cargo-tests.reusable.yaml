@@ -23,9 +23,7 @@ env:
 jobs:
   cargo-test-linux:
     name: "cargo test (linux)"
-    # Bumped to ubuntu-32gb: ubuntu-latest was hitting resource issues, using
-    # this overkill runner until we can root-cause and right-size.
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: blacksmith-16vcpu-ubuntu-2404
     if: ${{ inputs.code_changed == 'true' || inputs.run_all }}
     timeout-minutes: 25
     steps:
@@ -295,7 +293,7 @@ jobs:
       - name: "Install LLVM tools (llvm-strip)"
         run: |
           choco install llvm -y
-          echo "C:\Program Files\LLVM\bin" >> $GITHUB_PATH
+          echo 'C:\Program Files\LLVM\bin' >> $GITHUB_PATH
 
       - name: "Install Rust toolchain"
         run: rustup show
@@ -431,9 +429,7 @@ jobs:
 
   cargo-build-msrv:
     name: "cargo build (msrv)"
-    # Bumped to ubuntu-32gb: ubuntu-latest was hitting resource issues, using
-    # this overkill runner until we can root-cause and right-size.
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: blacksmith-16vcpu-ubuntu-2404
     if: ${{ inputs.code_changed == 'true' || inputs.run_all }}
     timeout-minutes: 25
     steps:
