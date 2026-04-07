@@ -635,6 +635,10 @@ self.onmessage = async (event: MessageEvent) => {
     case "dispose":
       dispose();
       return;
+
+    case "toggleReplay":
+      // WASM replay support added in Phase 4.
+      return;
   }
   msg satisfies never;
 };

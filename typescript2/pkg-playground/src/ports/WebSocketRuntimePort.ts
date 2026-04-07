@@ -22,7 +22,7 @@ type WsOutMessage =
   | { type: 'callFunctionResult'; id: number; result: string }
   | { type: 'callFunctionError'; id: number; error: string; cancelled?: boolean }
   | { type: 'envVarRequest'; id: number; variable: string }
-  | { type: 'fetchLogNew'; callId: number; id: number; method: string; url: string; requestHeaders: Record<string, string>; requestBody: string }
+  | { type: 'fetchLogNew'; callId: number; id: number; method: string; url: string; requestHeaders: Record<string, string>; requestBody: string; replayed?: boolean }
   | { type: 'fetchLogUpdate'; callId: number; logId: number; status?: number; durationMs?: number; responseBody?: string; error?: string; responseHeaders?: Record<string, string> }
   | { type: 'controlFlowGraphResult'; functionName: string; graph: unknown | null }
   | { type: 'cursorContext'; context: unknown };
@@ -37,7 +37,8 @@ type WsInMessage =
   | { type: 'requestState' }
   | { type: 'requestCollectTests'; project: string }
   | { type: 'requestControlFlowGraph'; project: string; functionName: string }
-  | { type: 'cursorPosition'; file: string; line: number; column: number };
+  | { type: 'cursorPosition'; file: string; line: number; column: number }
+  | { type: 'toggleReplay'; project: string; fetchId: number; pinned: boolean };
 
 const MAX_RECONNECT_DELAY = 5000;
 
@@ -218,6 +219,13 @@ export class WebSocketRuntimePort implements RuntimePort {
           generation: msg.generation,
           testsetName: msg.testsetName,
         };
+      case 'toggleReplay':
+        return {
+          type: 'toggleReplay',
+          project: msg.project,
+          fetchId: msg.fetchId,
+          pinned: msg.pinned,
+        };
       case 'clearHandles':
         return null; // handles live in the Rust process; no TS-side cleanup needed
       case 'dispose':
@@ -281,6 +289,7 @@ export class WebSocketRuntimePort implements RuntimePort {
             error: null,
             durationMs: null,
             responseHeaders: null,
+            replayed: raw.replayed ?? undefined,
           },
         };
       case 'fetchLogUpdate':

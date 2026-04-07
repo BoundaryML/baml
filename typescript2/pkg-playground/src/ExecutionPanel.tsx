@@ -12,7 +12,7 @@
 import type { ChangeEvent, FC, RefObject } from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { encodeCallArgs } from '@b/pkg-proto';
-import { KeyRound, PanelLeft, Square } from 'lucide-react';
+import { KeyRound, PanelLeft, Pin, PinOff, Square } from 'lucide-react';
 import { Button } from './components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs';
 import { Input } from './components/ui/input';
@@ -95,9 +95,10 @@ interface CollectionRunViewProps {
   run: RunEntry;
   expandedLogId: number | null;
   setExpandedLogId: (id: number | null) => void;
+  onTogglePin?: (fetchId: number, pinned: boolean) => void;
 }
 
-const CollectionRunView: FC<CollectionRunViewProps> = ({ run, expandedLogId, setExpandedLogId }) => {
+const CollectionRunView: FC<CollectionRunViewProps> = ({ run, expandedLogId, setExpandedLogId, onTogglePin }) => {
   return (
     <div className="flex-1 flex flex-col min-h-0">
       {/* Header */}
@@ -126,9 +127,31 @@ const CollectionRunView: FC<CollectionRunViewProps> = ({ run, expandedLogId, set
                 className="flex items-center gap-1.5 py-0.5 pr-2.5 pl-[22px] cursor-pointer border-b border-vsc-border-subtle"
               >
                 <span className={`${statusColorCls} font-semibold text-[11px]`}>{log.status ?? '...'}</span>
+                {log.replayed && (
+                  <span className="px-1 py-0 rounded text-[9px] font-semibold" style={{ backgroundColor: '#1e1528', color: '#7c3aed', border: '1px solid #7c3aed' }}>
+                    REPLAYED
+                  </span>
+                )}
                 <span className="text-vsc-text-faint text-[10px]">{log.method}</span>
                 <span className="text-vsc-text flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-[11px]">{log.url}</span>
                 {log.durationMs != null && <span className="text-vsc-text-faint text-[10px]">{log.durationMs}ms</span>}
+                {onTogglePin && (
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-5 w-5 shrink-0 text-vsc-text-muted hover:text-vsc-text"
+                          onClick={(e) => { e.stopPropagation(); onTogglePin(log.id, !log.pinned); }}
+                        >
+                          {log.pinned ? <PinOff size={11} /> : <Pin size={11} />}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>{log.pinned ? 'Unpin (allow live call)' : 'Pin (replay this response)'}</TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                )}
                 <span className="text-vsc-text-faint text-[9px]">{isExp ? '\u25B4' : '\u25BE'}</span>
               </div>
               {isExp && (
@@ -645,6 +668,27 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
     }));
   }, []);
 
+  const onTogglePin = useCallback((fetchId: number, pinned: boolean) => {
+    // Update pinned state locally across all runs
+    setRuns((prev) =>
+      prev.map((r) => ({
+        ...r,
+        fetchLogs: r.fetchLogs.map((l) => (l.id === fetchId ? { ...l, pinned } : l)),
+      })),
+    );
+    // Also update in collection run
+    setCollectionRun((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        fetchLogs: prev.fetchLogs.map((l) => (l.id === fetchId ? { ...l, pinned } : l)),
+      };
+    });
+    if (selectedProject) {
+      port.postMessage({ type: 'toggleReplay', fetchId, pinned, project: selectedProject });
+    }
+  }, [port, selectedProject]);
+
   const onResizeStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     resizingRef.current = true;
@@ -1043,6 +1087,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
               run={collectionRun}
               expandedLogId={expandedLogId}
               setExpandedLogId={setExpandedLogId}
+              onTogglePin={onTogglePin}
             />
           ) : viewingTestRun ? (
             <div ref={outputRef} className="flex-1 overflow-auto font-vsc-mono text-xs bg-vsc-bg">
@@ -1097,9 +1142,29 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
                             className="flex items-center gap-1.5 py-0.5 pr-2.5 pl-[22px] cursor-pointer border-b border-vsc-border-subtle"
                           >
                             <span className={`${statusColorCls} font-semibold text-[11px]`}>{log.status ?? '...'}</span>
+                            {log.replayed && (
+                              <span className="px-1 py-0 rounded text-[9px] font-semibold" style={{ backgroundColor: '#1e1528', color: '#7c3aed', border: '1px solid #7c3aed' }}>
+                                REPLAYED
+                              </span>
+                            )}
                             <span className="text-vsc-text-faint text-[10px]">{log.method}</span>
                             <span className="text-vsc-text flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-[11px]">{log.url}</span>
                             {log.durationMs != null && <span className="text-vsc-text-faint text-[10px]">{log.durationMs}ms</span>}
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-5 w-5 shrink-0 text-vsc-text-muted hover:text-vsc-text"
+                                    onClick={(e) => { e.stopPropagation(); onTogglePin(log.id, !log.pinned); }}
+                                  >
+                                    {log.pinned ? <PinOff size={11} /> : <Pin size={11} />}
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>{log.pinned ? 'Unpin (allow live call)' : 'Pin (replay this response)'}</TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
                             <span className="text-vsc-text-faint text-[9px]">{isExp ? '\u25B4' : '\u25BE'}</span>
                           </div>
                           {isExp && (
@@ -1327,9 +1392,29 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
                                 className="flex items-center gap-1.5 py-0.5 pr-2.5 pl-[22px] cursor-pointer border-b border-vsc-border-subtle"
                               >
                                 <span className={`${statusColorCls} font-semibold text-[11px]`}>{log.status ?? '...'}</span>
+                                {log.replayed && (
+                                  <span className="px-1 py-0 rounded text-[9px] font-semibold" style={{ backgroundColor: '#1e1528', color: '#7c3aed', border: '1px solid #7c3aed' }}>
+                                    REPLAYED
+                                  </span>
+                                )}
                                 <span className="text-vsc-text-faint text-[10px]">{log.method}</span>
                                 <span className="text-vsc-text flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-[11px]">{log.url}</span>
                                 {log.durationMs != null && <span className="text-vsc-text-faint text-[10px]">{log.durationMs}ms</span>}
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-5 w-5 shrink-0 text-vsc-text-muted hover:text-vsc-text"
+                                        onClick={(e) => { e.stopPropagation(); onTogglePin(log.id, !log.pinned); }}
+                                      >
+                                        {log.pinned ? <PinOff size={11} /> : <Pin size={11} />}
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>{log.pinned ? 'Unpin (allow live call)' : 'Pin (replay this response)'}</TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
                                 <span className="text-vsc-text-faint text-[9px]">{isExp ? '\u25B4' : '\u25BE'}</span>
                               </div>
                               {isExp && (

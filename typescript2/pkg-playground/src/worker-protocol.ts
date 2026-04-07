@@ -120,6 +120,8 @@ export interface FetchLogEntry {
   error: string | null;
   durationMs: number | null;
   responseHeaders: Record<string, string> | null;
+  replayed?: boolean;
+  pinned?: boolean;
 }
 
 export interface EnvVarRequest {
@@ -178,6 +180,7 @@ export type WorkerInMessage =
   | { type: 'requestCollectTests'; project: string }
   | { type: 'callTestFunction'; id: number; project: string; generation: number; testName: string }
   | { type: 'expandTestSet'; project: string; generation: number; testsetName: string }
+  | { type: 'toggleReplay'; fetchId: number; pinned: boolean; project: string }
   | { type: 'filesChanged'; files: Record<string, string> }
   | { type: 'dispose' };
 
