@@ -694,7 +694,7 @@ fn .<lambda(run_test, 0)>() -> null {
     let _0: null // _0 // return
     let _1: int // start
     let _2: testing.RunReport // result
-    let _3: unknown
+    let _3: unknown // e
     let _4: void
     let _5: void
     let _6: "pass" | "fail" | "error"
@@ -713,41 +713,45 @@ fn .<lambda(run_test, 0)>() -> null {
 
     bb1: {
         _5 = copy capture[0];
-        _4 = call copy _5() -> [bb4, unwind: bb2];
+        _4 = call copy _5() -> [bb2, unwind: bb3];
     }
 
     bb2: {
-        goto -> bb3;
+        _2 = RunReport { const "pass", const 0_i64 };
+        goto -> bb6;
     }
 
     bb3: {
-        _2 = RunReport { const "fail", const 0_i64 };
-        goto -> bb5;
+        throw_if_panic copy _3 -> bb4;
     }
 
     bb4: {
-        _2 = RunReport { const "pass", const 0_i64 };
         goto -> bb5;
     }
 
     bb5: {
+        _2 = RunReport { const "fail", const 0_i64 };
+        goto -> bb6;
+    }
+
+    bb6: {
         _7 = copy _2;
         _6 = copy _7.0;
         _11 = copy _2;
         _10 = copy _11.0;
-        _13 = call const fn baml.sys.now_ms() -> [bb6];
+        _13 = call const fn baml.sys.now_ms() -> [bb7];
     }
 
-    bb6: {
+    bb7: {
         _14 = copy _1;
         _12 = copy _13 - copy _14;
         _9 = RunReport { copy _10, copy _12 };
         _8 = [copy _9];
         _0 = TestReport { copy _6, copy _8 };
-        goto -> bb7;
+        goto -> bb8;
     }
 
-    bb7: {
+    bb8: {
         return;
     }
 }

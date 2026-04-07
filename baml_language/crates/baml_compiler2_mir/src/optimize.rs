@@ -156,15 +156,18 @@ fn rewrite_block_ids_in_terminator(term: &mut Terminator, map: &[Option<BlockId>
 }
 
 /// Rewrite `BlockId` references in all catch regions using old->new mapping.
-fn rewrite_catch_region_blocks(regions: &mut [CatchRegion], map: &[Option<BlockId>]) {
-    for region in regions {
-        if let Some(new_block) = map[region.body_entry.0] {
-            region.body_entry = new_block;
-        }
-        if let Some(new_block) = map[region.handler.0] {
-            region.handler = new_block;
-        }
-    }
+fn rewrite_catch_region_blocks(regions: &mut Vec<CatchRegion>, map: &[Option<BlockId>]) {
+    regions.retain_mut(|region| {
+        let Some(new_body) = map[region.body_entry.0] else {
+            return false; // body block was removed — drop the region
+        };
+        let Some(new_handler) = map[region.handler.0] else {
+            return false; // handler block was removed — drop the region
+        };
+        region.body_entry = new_body;
+        region.handler = new_handler;
+        true
+    });
 }
 
 // ============================================================================

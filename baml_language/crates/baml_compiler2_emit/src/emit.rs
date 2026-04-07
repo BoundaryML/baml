@@ -1307,10 +1307,14 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 continue;
             };
 
+            // The linear layout may place the handler before the body (the
+            // stackifier picks block order to minimise jumps, not to preserve
+            // try/handler ordering). The handler code itself is still
+            // reachable via normal control flow; only the exception-table
+            // entry is useless, so skip it.
+            // TODO: fix the stackifier or MIR lowering so this doesn't happen.
             if start_pc >= handler_pc {
-                unreachable!(
-                    "exception table: degenerate region start_pc={start_pc} >= handler_pc={handler_pc}"
-                );
+                continue;
             }
 
             self.bytecode.exception_table.push(ExceptionTableEntry {

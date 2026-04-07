@@ -64,3 +64,13 @@ function TripleChainedCatch(x: int) -> string {
 //     │     
 //     │     Note: Error code: E0001
 // ────╯
+// Warning: unreachable arm
+//     ╭─[ catch_chained_catch.baml:21:12 ]
+//     │
+//  21 │ ╭─▶     _ => "third"
+//  22 │ ├─▶   }
+//     │ │         
+//     │ ╰───────── unreachable arm
+//     │     
+//     │     Note: Error code: E0001
+// ────╯
