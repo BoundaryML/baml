@@ -24,12 +24,13 @@ where
     #[derive(Deserialize)]
     #[serde(untagged)]
     enum FloatOrInt {
-        Int(u32),
+        Int(u64),
         Float(f64),
     }
 
     match Option::<FloatOrInt>::deserialize(deserializer)? {
-        Some(FloatOrInt::Int(i)) => Ok(Some(i)),
+        #[allow(clippy::cast_possible_truncation)]
+        Some(FloatOrInt::Int(i)) => Ok(Some(i.min(u64::from(u32::MAX)) as u32)),
         #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
         Some(FloatOrInt::Float(f)) => Ok(Some(f.clamp(0.0, f64::from(u32::MAX)).floor() as u32)),
         None => Ok(None),
@@ -338,7 +339,7 @@ mod tests {
                 "prompt_tokens": 100,
                 "completion_tokens": 10,
                 "total_tokens": 110,
-                "input_tokens_details": { "cached_tokens": 50 }
+                "prompt_tokens_details": { "cached_tokens": 50 }
             }
         }"#;
 
