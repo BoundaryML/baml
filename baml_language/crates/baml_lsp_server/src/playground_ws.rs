@@ -60,6 +60,13 @@ pub enum WsInMessage {
         line: u32,
         column: u32,
     },
+    #[serde(rename = "toggleReplay")]
+    ToggleReplay {
+        project: String,
+        #[serde(rename = "fetchId")]
+        fetch_id: u64,
+        pinned: bool,
+    },
 }
 
 // ---------------------------------------------------------------------------
@@ -99,6 +106,8 @@ pub enum WsOutMessage {
         request_headers: std::collections::HashMap<String, String>,
         #[serde(rename = "requestBody")]
         request_body: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        replayed: Option<bool>,
     },
     #[serde(rename = "fetchLogUpdate")]
     FetchLogUpdate {

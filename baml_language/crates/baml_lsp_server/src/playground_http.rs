@@ -116,6 +116,7 @@ impl io::IoNamespaceHttp for PlaygroundHttp {
             url: request.url.clone(),
             request_headers: extract_headers_as_hashmap(&request.headers),
             request_body: request.body.clone(),
+            replayed: None,
         });
 
         let native_result = <sys_native::NativeSysOps as io::IoNamespaceHttp>::send(

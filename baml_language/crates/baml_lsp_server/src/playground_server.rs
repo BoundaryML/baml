@@ -70,7 +70,6 @@ struct WsState {
     bex: Arc<dyn bex_project::BexLsp>,
     broadcast_tx: broadcast::Sender<WsOutMessage>,
     env_state: Arc<PlaygroundEnvState>,
-    #[allow(dead_code)] // Used in Phase 2
     replay_stores: ReplayStoreMap,
 }
 
@@ -424,6 +423,19 @@ async fn handle_ws_in_message(
                 && sink.send(ws_msg).await.is_err()
             {
                 tracing::warn!("Failed to send cursor context");
+            }
+        }
+
+        WsInMessage::ToggleReplay {
+            project,
+            fetch_id,
+            pinned,
+        } => {
+            let stores = state.replay_stores.lock().unwrap();
+            if let Some(store) = stores.get(&project) {
+                store.write().unwrap().set_pinned(fetch_id, pinned);
+            } else {
+                tracing::warn!("ToggleReplay: no replay store for project {project}");
             }
         }
     }

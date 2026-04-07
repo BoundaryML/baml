@@ -149,7 +149,6 @@ pub struct ReplayHttp {
     store: Arc<RwLock<RecordReplay<RequestKey, RecordedResponse>>>,
     fetch_id_allocator: Arc<AtomicU64>,
     /// Callback for replay-hit fetch log events.
-    #[allow(dead_code)]
     on_replay: Option<Arc<dyn Fn(ReplayFetchEvent) + Send + Sync>>,
     /// Correlates `send()` to `text()` via response body pointer identity.
     pending_recordings: Arc<Mutex<HashMap<usize, RequestKey>>>,
@@ -246,9 +245,43 @@ impl IoNamespaceHttp for ReplayHttp {
     ) -> SysOpOutput<owned::http::Response> {
         let request_key = RequestKey::from_request(&request);
 
-        // Phase 2 will add: check `store.get_pinned(&request_key)` here.
+        // Check for a pinned replay entry.
+        if let Some(entry) = self.store.read().unwrap().get_pinned(&request_key) {
+            let recorded = entry.value.clone();
+            let fetch_id = self.fetch_id_allocator.fetch_add(1, Ordering::Relaxed);
 
-        // Delegate to inner (`PlaygroundHttp`).
+            // Emit replay fetch log events via callback.
+            if let Some(ref on_replay) = self.on_replay {
+                on_replay(ReplayFetchEvent {
+                    call_id: call_id.0,
+                    fetch_id,
+                    method: request.method,
+                    url: request.url,
+                    request_headers: request.headers.into_iter().collect(),
+                    request_body: request.body,
+                    status: recorded.status,
+                    response_headers: recorded
+                        .headers
+                        .iter()
+                        .map(|(k, v)| (k.clone(), v.clone()))
+                        .collect(),
+                    response_body: recorded.body.clone(),
+                    duration_ms: 0,
+                });
+            }
+
+            // Return synthetic response with ReplayResponseBody.
+            let body: Arc<dyn std::any::Any + Send + Sync> =
+                Arc::new(ReplayResponseBody(Mutex::new(Some(recorded.body.clone()))));
+            return SysOpOutput::ok(owned::http::Response {
+                status_code: recorded.status,
+                headers: recorded.headers,
+                url: recorded.url,
+                _body: body,
+            });
+        }
+
+        // No replay hit — delegate to inner.
         let inner_result = self.inner.send(heap, call_id, request, ctx);
         let pending = self.pending_recordings.clone();
         let key = request_key;

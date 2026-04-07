@@ -73,11 +73,35 @@ fn build_playground_sys_ops(
         broadcast_tx.clone(),
         fetch_id_alloc.clone(),
     ));
+
+    let broadcast_tx_for_replay = broadcast_tx.clone();
+    let on_replay: Arc<dyn Fn(sys_ops::replay::ReplayFetchEvent) + Send + Sync> =
+        Arc::new(move |event: sys_ops::replay::ReplayFetchEvent| {
+            let _ = broadcast_tx_for_replay.send(WsOutMessage::FetchLogNew {
+                call_id: event.call_id,
+                id: event.fetch_id,
+                method: event.method,
+                url: event.url,
+                request_headers: event.request_headers,
+                request_body: event.request_body,
+                replayed: Some(true),
+            });
+            let _ = broadcast_tx_for_replay.send(WsOutMessage::FetchLogUpdate {
+                call_id: event.call_id,
+                log_id: event.fetch_id,
+                status: Some(event.status),
+                duration_ms: Some(event.duration_ms),
+                response_body: Some(event.response_body),
+                error: None,
+                response_headers: Some(event.response_headers),
+            });
+        });
+
     let replay = ReplayHttp::new(
         Arc::new(PlaygroundHttp(http_state)),
         replay_store,
         fetch_id_alloc,
-        None, // on_replay callback added in Phase 2
+        Some(on_replay),
     );
     sys_ops::SysOpsBuilder::new()
         .with_fs::<sys_native::NativeSysOps>()
