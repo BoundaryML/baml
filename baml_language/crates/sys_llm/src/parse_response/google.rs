@@ -43,6 +43,15 @@ struct UsageMetaData {
 
 // == Helpers =======================================================
 
+fn map_finish_reason(raw: Option<&str>) -> FinishReason {
+    match raw {
+        Some("STOP") => FinishReason::Stop,
+        Some("MAX_TOKENS") => FinishReason::Length,
+        Some(other) => FinishReason::Other(other.to_string()),
+        None => FinishReason::Unknown,
+    }
+}
+
 /// Filter out thought parts and join remaining text.
 /// Mirrors `engine/baml-runtime/.../google/response_handler.rs:107-119`.
 fn text_content_part(parts: &[Part]) -> Option<String> {
@@ -90,12 +99,7 @@ pub(super) fn parse_google_response(body: &str) -> Result<LlmProviderResponse, P
 
     let content = text_content_part(&content_obj.parts).unwrap_or_default();
 
-    let finish_reason = match candidate.finish_reason.as_deref() {
-        Some("STOP") => FinishReason::Stop,
-        Some("MAX_TOKENS") => FinishReason::Length,
-        Some(other) => FinishReason::Other(other.to_string()),
-        None => FinishReason::Unknown,
-    };
+    let finish_reason = map_finish_reason(candidate.finish_reason.as_deref());
 
     let usage = response
         .usage_metadata
@@ -151,12 +155,7 @@ pub(super) fn parse_vertex_response(body: &str) -> Result<LlmProviderResponse, P
             detail: "candidate has no content parts".into(),
         })?;
 
-    let finish_reason = match candidate.finish_reason.as_deref() {
-        Some("STOP") => FinishReason::Stop,
-        Some("MAX_TOKENS") => FinishReason::Length,
-        Some(other) => FinishReason::Other(other.to_string()),
-        None => FinishReason::Unknown,
-    };
+    let finish_reason = map_finish_reason(candidate.finish_reason.as_deref());
 
     let usage = response
         .usage_metadata
