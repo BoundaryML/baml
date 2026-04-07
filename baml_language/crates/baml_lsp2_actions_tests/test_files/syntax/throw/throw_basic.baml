@@ -18,7 +18,7 @@ function ThrowVariable(msg: string) -> string {
 
 //----
 //- diagnostics
-// Error: unreachable code: 1 statement(s) after diverging statement
+// Warning: unreachable code: 1 statement(s) after diverging statement
 //    ╭─[ throw_throw_basic.baml:3:2 ]
 //    │
 //  3 │ ╭─▶   throw "something went wrong"
@@ -28,7 +28,7 @@ function ThrowVariable(msg: string) -> string {
 //    │     
 //    │     Note: Error code: E0001
 // ───╯
-// Error: unreachable code: 1 statement(s) after diverging statement
+// Warning: unreachable code: 1 statement(s) after diverging statement
 //     ╭─[ throw_throw_basic.baml:9:2 ]
 //     │
 //   9 │ ╭─▶   throw 42
@@ -38,7 +38,7 @@ function ThrowVariable(msg: string) -> string {
 //     │     
 //     │     Note: Error code: E0001
 // ────╯
-// Error: unreachable code: 1 statement(s) after diverging statement
+// Warning: unreachable code: 1 statement(s) after diverging statement
 //     ╭─[ throw_throw_basic.baml:15:2 ]
 //     │
 //  15 │ ╭─▶   throw msg

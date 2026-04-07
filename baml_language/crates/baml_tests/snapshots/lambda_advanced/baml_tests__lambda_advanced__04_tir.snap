@@ -9,7 +9,7 @@ function user.test_chained_map() -> int[] throws never {
     step1.map<U>((x) -> { ... }) : int[]
       (x) -> { ... } : (x: int) -> int
         {
-          x Add 1
+          x + 1
         }
   }
 }
@@ -37,7 +37,7 @@ function user.test_higher_order_return() -> int throws never {
           let adder = ...
             (x: int) -> int { ... }
               {
-                x Add n
+                x + n
               }
           adder
         }
@@ -54,7 +54,7 @@ function user.test_lambda_calling_lambda() -> int throws never {
     let double = : (x: int) -> int
       (x: int) -> int { ... } : (x: int) -> int
         {
-          x Mul 2
+          x * 2
         }
     let apply_twice = : (f: (int) -> int, x: int) -> int
       (f: (int) -> int, x: int) -> int { ... } : (f: (int) -> int, x: int) -> int
@@ -77,7 +77,7 @@ function user.test_deep_capture() -> int throws never {
           let g = ...
             (c: int) -> int { ... }
               {
-                a Add b Add c
+                a + b + c
               }
           g(100)
         }
@@ -119,12 +119,12 @@ function user.test_lambda_with_if() -> string throws never {
     let classify = : (n: int) -> "negative" | "zero" | "positive"
       (n: int) -> string { ... } : (n: int) -> "negative" | "zero" | "positive"
         {
-          if (n Lt 0)
+          if (n < 0)
             {
               "negative"
             }
           else
-            if (n Eq 0)
+            if (n == 0)
               {
                 "zero"
               }
@@ -145,7 +145,7 @@ function user.test_map_with_capture() -> int[] throws never {
     items.map<U>((x) -> { ... }) : int[]
       (x) -> { ... } : (x: int) -> int
         {
-          x Mul factor
+          x * factor
         }
   }
 }
@@ -171,9 +171,9 @@ function user.test_map_multi_statement() -> int[] throws never {
     items.map<U>((x) -> { ... }) : int[]
       (x) -> { ... } : (x: int) -> int
         {
-          let doubled = x Mul 2
+          let doubled = x * 2
           let offset = 100
-          doubled Add offset
+          doubled + offset
         }
   }
 }
@@ -197,7 +197,7 @@ function user.test_map_values_transform() -> int[] throws never {
     m.map_values<U>((v) -> { ... }) : int[]
       (v) -> { ... } : (v: int) -> int
         {
-          v Mul 2
+          v * 2
         }
   }
 }
@@ -221,7 +221,7 @@ function user.test_lambda_variable_then_pass() -> int[] throws never {
     let halve = : (x: int) -> int
       (x: int) -> int { ... } : (x: int) -> int
         {
-          x Div 2
+          x / 2
         }
     items.map<U>(halve) : int[]
   }
@@ -236,7 +236,7 @@ function user.test_shadowing() -> string throws never {
     for y in mapped
       { : void
         let i = 0 : 0 -> int
-        while i Lt y
+        while i < y
           { : void
             x Add= "1" : string
             i Add= 1 : int
@@ -260,7 +260,7 @@ function user.test_optional_return() -> int? throws never {
     let maybe = : (x: int) -> int | null
       (x: int) -> int? { ... } : (x: int) -> int | null
         {
-          if (x Gt 0)
+          if (x > 0)
             {
               x
             }
@@ -280,7 +280,7 @@ function user.test_fully_inferred_map() -> int[] throws never {
     items.map<U>((x) -> { ... }) : int[]
       (x) -> { ... } : (x: int) -> int
         {
-          x Mul 2
+          x * 2
         }
   }
 }
@@ -304,7 +304,7 @@ function user.test_map_values_fully_inferred() -> string[] throws never {
     m.map_values<U>((v) -> { ... }) : (string | "big" | "small")[]
       (v) -> { ... } : (v: int) -> "big" | "small"
         {
-          if (v Gt 15)
+          if (v > 15)
             {
               "big"
             }
@@ -336,7 +336,7 @@ function user.test_compose_inferred() -> int[] throws never {
     step1.map<U>((x) -> { ... }) : int[]
       (x) -> { ... } : (x: int) -> int
         {
-          x Add 1
+          x + 1
         }
   }
 }
@@ -352,7 +352,7 @@ function user.test_higher_order_inferred() -> int throws never {
           let adder = ...
             (x: int) -> { ... }
               {
-                x Add n
+                x + n
               }
           adder
         }
@@ -369,7 +369,7 @@ function user.test_apply_twice_inferred() -> int throws never {
     let double = : (x: int) -> int
       (x: int) -> { ... } : (x: int) -> int
         {
-          x Mul 2
+          x * 2
         }
     let apply_twice = : (f: (int) -> int, x: int) -> int
       (f: (int) -> int, x: int) -> { ... } : (f: (int) -> int, x: int) -> int
@@ -392,7 +392,7 @@ function user.test_deep_capture_inferred() -> int throws never {
           let g = ...
             (c: int) -> { ... }
               {
-                a Add b Add c
+                a + b + c
               }
           g(100)
         }
@@ -413,7 +413,7 @@ function user.test_generic_apply_inferred() -> int throws never {
     apply<T, U>((x) -> { ... }, 21) : int | 42
       (x) -> { ... } : (x: 21) -> 42
         {
-          x Mul 2
+          x * 2
         }
   }
 }
@@ -431,11 +431,11 @@ function user.test_two_transforms_inferred() -> int throws never {
     apply_both((x: int) -> { ... }, (x: int) -> { ... }, 5) : int
       (x: int) -> { ... } : (x: int) -> int
         {
-          x Mul 2
+          x * 2
         }
       (x: int) -> { ... } : (x: int) -> int
         {
-          x Add 10
+          x + 10
         }
   }
 }
@@ -453,12 +453,12 @@ function user.test_lambda_in_match_inferred() -> int throws never {
         "double" =>
           (x: int) -> { ... } : (x: int) -> int
             {
-              x Mul 2
+              x * 2
             }
         "negate" =>
           (x: int) -> { ... } : (x: int) -> int
             {
-              0 Sub x
+              0 - x
             }
         _ =>
           (x: int) -> { ... } : (x: int) -> int
@@ -481,7 +481,7 @@ function user.test_capture_in_map_inferred() -> int[] throws never {
     items.map<U>((x) -> { ... }) : int[]
       (x) -> { ... } : (x: int) -> int
         {
-          x Mul factor
+          x * factor
         }
   }
 }
@@ -519,7 +519,7 @@ function user.test_capture_lambda_inferred() -> int throws never {
     let multiply = : (a: int, b: int) -> int
       (a: int, b: int) -> { ... } : (a: int, b: int) -> int
         {
-          a Mul b
+          a * b
         }
     let double = : (x: int) -> int
       (x: int) -> { ... } : (x: int) -> int
@@ -552,7 +552,7 @@ function user.test_shadowing_inferred() -> int[] throws never {
     items.map<U>((x) -> { ... }) : int[]
       (x) -> { ... } : (x: int) -> int
         {
-          x Add 1
+          x + 1
         }
   }
 }

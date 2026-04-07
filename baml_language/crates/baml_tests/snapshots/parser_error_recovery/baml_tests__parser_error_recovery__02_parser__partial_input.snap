@@ -22,16 +22,16 @@ SOURCE_FILE
           AT "@"
     FIELD
       WORD "field4"
-      TYPE_EXPR "string"
+      TYPE_EXPR
         WORD "string"
-      ATTRIBUTE
-        AT "@"
-        WORD "alias"
-        ATTRIBUTE_ARGS
-          L_PAREN "("
-          UNQUOTED_STRING "// Unclosed attribute
+        ATTRIBUTE
+          AT "@"
+          WORD "alias"
+          ATTRIBUTE_ARGS
+            L_PAREN "("
+            UNQUOTED_STRING "// Unclosed attribute
   field5"
-            WORD "field5"
+              WORD "field5"
     FIELD "string"
       WORD "string"
     R_BRACE "}"

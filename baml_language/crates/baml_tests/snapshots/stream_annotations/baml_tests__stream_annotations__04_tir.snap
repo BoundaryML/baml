@@ -89,8 +89,8 @@ class user.ExplicitAnnotations$stream {
 }
 class user.WithDone$stream {
   type: "resume"
-  name: null | string
-  id: null | string
+  name: string
+  id: string
 }
 class user.AtomicPoint$stream {
   x: null | float
@@ -112,11 +112,11 @@ class user.ReferencesNotNull$stream {
   optional_education: null | user.NotNullEducation$stream
 }
 class user.AnnotatedResume$stream {
-  name: null | string
+  name: string
   gpa: null | float
   title: null | string
   internal_id: null | string
-  token: null | string
+  token: string
 }
 class user.StatusResponse$stream {
   status: null | user.Status
@@ -129,10 +129,10 @@ class user.TypeCategoryOverrides$stream {
   data: map<string, int>
 }
 class user.WithDesugaring$stream {
-  done_string: null | string
+  done_string: string
   not_null_string: null | string
   not_null_class: null | user.Inner$stream
-  done_and_not_null: null | string
+  done_and_not_null: string
   type_never: null | string
   type_never_literal: "resume"
 }

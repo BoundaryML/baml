@@ -52,7 +52,7 @@ function user.intValues() -> map<string, int> {
     return
 }
 
-function user.mixedArray() -> int | string[] {
+function user.mixedArray() -> (int | string)[] {
     load_const 1
     load_const "two"
     load_const 3

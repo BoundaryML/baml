@@ -37,6 +37,7 @@ import type {
   WorkerOutMessage,
   WorkerInMessage,
   WorkerInitMessage,
+  PlaygroundNotification as WorkerPlaygroundNotification,
 } from "@b/pkg-playground";
 
 import { decodeCallResult } from "@b/pkg-proto";
@@ -262,7 +263,9 @@ function onPlaygroundNotification(notification: PlaygroundNotification): void {
       });
       break;
     default:
-      postOut({ type: "playgroundNotification", notification });
+      // Cast to worker-protocol type: the WASM-generated type uses `string` for severity
+      // while the protocol narrows it to a literal union; the runtime values are always valid.
+      postOut({ type: "playgroundNotification", notification: notification as unknown as WorkerPlaygroundNotification });
   }
 }
 
@@ -564,6 +567,59 @@ self.onmessage = async (event: MessageEvent) => {
 
     case "cursorPosition":
       runtime?.handleCursorPosition(msg.file, msg.line, msg.column);
+      return;
+
+    case "requestCollectTests":
+      runtime?.requestCollectTests(msg.project);
+      return;
+
+    case "callTestFunction": {
+      if (!runtime) {
+        postOut({
+          type: "callFunctionError",
+          id: msg.id,
+          error: "Runtime not initialized",
+        });
+        return;
+      }
+      try {
+        const resultBytes = await runtime.callTestFunction(
+          msg.id, msg.project, msg.generation, msg.testName,
+        );
+        const bytes = new Uint8Array(resultBytes);
+        const handles: BamlHandle[] = [];
+        const decoded = decodeCallResult(bytes, (key, handleType, typeName) => {
+          const h = new BamlHandle(key.toString(), handleType);
+          handles.push(h);
+          return h;
+        });
+        const existing = liveHandles.get(msg.id);
+        if (existing) {
+          for (const h of existing) h.free();
+        }
+        if (handles.length > 0) {
+          liveHandles.set(msg.id, handles);
+        } else {
+          liveHandles.delete(msg.id);
+        }
+        postOut({
+          type: "callFunctionResult",
+          id: msg.id,
+          result: JSON.stringify(decoded, null, 2),
+        });
+      } catch (e: any) {
+        postOut({
+          type: "callFunctionError",
+          id: msg.id,
+          error: e instanceof Error ? e.message : String(e),
+          cancelled: e instanceof Error && (e as any).name === "BamlCancelledError" ? true : undefined,
+        });
+      }
+      return;
+    }
+
+    case "expandTestSet":
+      runtime?.expandTestSet(msg.project, msg.generation, msg.testsetName);
       return;
 
     case "clearHandles":

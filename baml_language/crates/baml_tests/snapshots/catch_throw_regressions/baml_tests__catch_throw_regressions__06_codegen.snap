@@ -24,7 +24,7 @@ function user.CatchAllStatusVariants(n: int) -> string {
     load_var n
     call user.ThrowsAllStatusVariants
     jump L8
-    load_var _2
+    load_var e
     load_const user.Status.HttpError
     alloc_variant user.Status
     cmp_op ==
@@ -32,7 +32,7 @@ function user.CatchAllStatusVariants(n: int) -> string {
     jump L7
 
   L0:
-    load_var _2
+    load_var e
     load_const user.Status.IndexError
     alloc_variant user.Status
     cmp_op ==
@@ -40,7 +40,7 @@ function user.CatchAllStatusVariants(n: int) -> string {
     jump L6
 
   L1:
-    load_var _2
+    load_var e
     load_const user.Status.AuthError
     alloc_variant user.Status
     cmp_op ==
@@ -48,7 +48,7 @@ function user.CatchAllStatusVariants(n: int) -> string {
     jump L5
 
   L2:
-    load_var _2
+    load_var e
     load_const user.Status.SomeOtherError
     alloc_variant user.Status
     cmp_op ==
@@ -56,7 +56,7 @@ function user.CatchAllStatusVariants(n: int) -> string {
     jump L4
 
   L3:
-    load_var _2
+    load_var e
     throw
 
   L4:
@@ -82,7 +82,7 @@ function user.CatchAlwaysThrows(n: int) -> string {
     load_var n
     call user.WrapperAlwaysThrows
     jump L4
-    load_var _2
+    load_var e
     type_tag
     load_const 1
     cmp_op ==
@@ -90,7 +90,7 @@ function user.CatchAlwaysThrows(n: int) -> string {
     jump L3
 
   L0:
-    load_var _2
+    load_var e
     type_tag
     load_const 0
     cmp_op ==
@@ -98,7 +98,7 @@ function user.CatchAlwaysThrows(n: int) -> string {
     jump L2
 
   L1:
-    load_var _2
+    load_var e
     throw
 
   L2:
@@ -116,7 +116,7 @@ function user.CatchRecursiveThrow(n: int) -> string {
     load_var n
     call user.RecB
     jump L2
-    load_var _2
+    load_var e
     type_tag
     load_const 1
     cmp_op ==
@@ -124,7 +124,7 @@ function user.CatchRecursiveThrow(n: int) -> string {
     jump L1
 
   L0:
-    load_var _2
+    load_var e
     throw
 
   L1:

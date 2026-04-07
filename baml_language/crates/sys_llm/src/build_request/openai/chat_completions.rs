@@ -6,7 +6,7 @@
 use std::sync::Arc;
 
 use baml_base::MediaKind;
-use baml_builtins::{MediaContent, MediaValue, PromptAst, PromptAstSimple};
+use baml_builtins2::{MediaContent, MediaValue, PromptAst, PromptAstSimple};
 use serde::Serialize;
 
 // ============================================================================
@@ -79,12 +79,8 @@ pub(crate) fn build_request(
     client: &crate::baml_std::PrimitiveClient,
     prompt: &bex_vm_types::PromptAst,
 ) -> Result<crate::baml_std::HttpRequest, crate::build_request::BuildRequestError> {
-    // Headers
     let mut headers = indexmap::IndexMap::new();
     headers.insert("content-type".to_string(), "application/json".to_string());
-    for (key, value) in &client.options.headers {
-        headers.insert(key.clone(), value.clone());
-    }
 
     // Body
     let mut extra = client.extra_body.clone();
@@ -316,7 +312,7 @@ fn audio_format_from_mime(mime: &str) -> Result<String, crate::build_request::Bu
 mod tests {
     use std::sync::Arc;
 
-    use baml_builtins::{MediaContent, MediaValue, PromptAst, PromptAstSimple};
+    use baml_builtins2::{MediaContent, MediaValue, PromptAst, PromptAstSimple};
     use bex_external_types::{AsBexExternalValue, BexExternalValue};
     use indexmap::IndexMap;
 

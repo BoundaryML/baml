@@ -235,6 +235,7 @@ pub enum PrimitiveType {
     String,
     Bool,
     Null,
+    Uint8Array,
     Image,
     Audio,
     Video,
@@ -242,20 +243,19 @@ pub enum PrimitiveType {
 }
 
 impl PrimitiveType {
-    /// Map media primitives to their builtin class path in the `baml` package.
+    /// Map primitives with builtin companion classes to their class path in the `baml` package.
     ///
-    /// Each media primitive (`image`, `audio`, `video`, `pdf`) has a
-    /// corresponding class declared in `baml_builtins2/baml_std/baml/media.baml`
-    /// (e.g. `class Image { ... }`). The file is at `<builtin>/baml/media.baml`
-    /// which routes to the `baml.media` namespace, so the lookup path is
-    /// `&["media", "Image"]` etc.
+    /// Media primitives (`image`, `audio`, `video`, `pdf`) have corresponding
+    /// classes in `baml_builtins2/baml_std/baml/ns_media/media.baml`, and
+    /// `uint8array` has its class in `baml_builtins2/baml_std/baml/uint8array.baml`.
     pub fn builtin_class_path(&self) -> &'static [&'static str] {
         match self {
+            Self::Uint8Array => &["Uint8Array"],
             Self::Image => &["media", "Image"],
             Self::Audio => &["media", "Audio"],
             Self::Video => &["media", "Video"],
             Self::Pdf => &["media", "Pdf"],
-            other => panic!("{other:?} is not a media primitive with a builtin class"),
+            other => panic!("{other:?} is not a primitive with a builtin class"),
         }
     }
 
@@ -526,6 +526,7 @@ impl fmt::Display for PrimitiveType {
             PrimitiveType::Audio => write!(f, "audio"),
             PrimitiveType::Video => write!(f, "video"),
             PrimitiveType::Pdf => write!(f, "pdf"),
+            PrimitiveType::Uint8Array => write!(f, "uint8array"),
         }
     }
 }

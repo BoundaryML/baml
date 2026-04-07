@@ -24,7 +24,7 @@ fn user.CatchAllStatusVariants(n: int) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: int // n // param
-    let _2: unknown
+    let _2: unknown // e
     let _3: bool
     let _4: bool
     let _5: bool
@@ -95,7 +95,7 @@ fn user.CatchAlwaysThrows(n: int) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: int // n // param
-    let _2: unknown
+    let _2: unknown // e
     let _3: bool
     let _4: bool
 
@@ -144,7 +144,7 @@ fn user.CatchRecursiveThrow(n: int) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: int // n // param
-    let _2: unknown
+    let _2: unknown // e
     let _3: bool
 
     bb0: {

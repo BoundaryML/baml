@@ -400,7 +400,7 @@ function user.ExhaustiveCustomBool(b: true | false) -> string {
     return
 }
 
-function user.ExhaustiveDoubleMaybe(dm: Success | Failure??) -> string {
+function user.ExhaustiveDoubleMaybe(dm: (Success | Failure)??) -> string {
     load_var dm
     load_const Success
     cmp_op instanceof
@@ -1614,7 +1614,7 @@ function user.NestedMatchSpans(x: int, y: bool) -> string {
     return
 }
 
-function user.NestedTypeAlias(mr: Success | Failure?) -> string {
+function user.NestedTypeAlias(mr: (Success | Failure)?) -> string {
     load_var mr
     load_const Success
     cmp_op instanceof
@@ -1751,7 +1751,7 @@ function user.NonExhaustiveCustomBoolMissing(b: true | false) -> string {
     return
 }
 
-function user.NonExhaustiveDoubleMaybeMissingNull(dm: Success | Failure??) -> string {
+function user.NonExhaustiveDoubleMaybeMissingNull(dm: (Success | Failure)??) -> string {
     load_var dm
     load_const Success
     cmp_op instanceof

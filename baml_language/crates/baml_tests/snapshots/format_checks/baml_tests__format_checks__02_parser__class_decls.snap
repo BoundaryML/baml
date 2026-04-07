@@ -59,22 +59,22 @@ class EmptyClass {
     L_BRACE "{"
     FIELD
       WORD "name"
-      TYPE_EXPR "string"
+      TYPE_EXPR
         WORD "string"
-      ATTRIBUTE
-        AT "@"
-        WORD "description"
-        ATTRIBUTE_ARGS
-          L_PAREN "("
-          STRING_LITERAL "The user's name"
-            QUOTE """
-            WORD "The"
-            WORD "user"
-            ERROR_TOKEN "'"
-            WORD "s"
-            WORD "name"
-            QUOTE """
-          R_PAREN ")"
+        ATTRIBUTE
+          AT "@"
+          WORD "description"
+          ATTRIBUTE_ARGS
+            L_PAREN "("
+            STRING_LITERAL "The user's name"
+              QUOTE """
+              WORD "The"
+              WORD "user"
+              ERROR_TOKEN "'"
+              WORD "s"
+              WORD "name"
+              QUOTE """
+            R_PAREN ")"
     R_BRACE "}"
   CLASS_DEF
     KW_CLASS "class"
@@ -83,68 +83,68 @@ class EmptyClass {
     FIELD
       WORD "name"
       COLON ":"
-      TYPE_EXPR "string"
+      TYPE_EXPR
         WORD "string"
-      ATTRIBUTE
-        AT "@"
-        WORD "description"
-        ATTRIBUTE_ARGS
-          L_PAREN "("
-          STRING_LITERAL "The user's name"
-            QUOTE """
-            WORD "The"
-            WORD "user"
-            ERROR_TOKEN "'"
-            WORD "s"
-            WORD "name"
-            QUOTE """
-          R_PAREN ")"
-      ATTRIBUTE
-        AT "@"
-        WORD "alias"
-        ATTRIBUTE_ARGS
-          L_PAREN "("
-          STRING_LITERAL "user_name"
-            QUOTE """
-            WORD "user_name"
-            QUOTE """
-          R_PAREN ")"
+        ATTRIBUTE
+          AT "@"
+          WORD "description"
+          ATTRIBUTE_ARGS
+            L_PAREN "("
+            STRING_LITERAL "The user's name"
+              QUOTE """
+              WORD "The"
+              WORD "user"
+              ERROR_TOKEN "'"
+              WORD "s"
+              WORD "name"
+              QUOTE """
+            R_PAREN ")"
+        ATTRIBUTE
+          AT "@"
+          WORD "alias"
+          ATTRIBUTE_ARGS
+            L_PAREN "("
+            STRING_LITERAL "user_name"
+              QUOTE """
+              WORD "user_name"
+              QUOTE """
+            R_PAREN ")"
     FIELD
       WORD "summary"
-      TYPE_EXPR "string?"
+      TYPE_EXPR
         WORD "string"
         QUESTION "?"
-      ATTRIBUTE
-        AT "@"
-        WORD "description"
-        ATTRIBUTE_ARGS
-          L_PAREN "("
-          STRING_LITERAL "A summary"
-            QUOTE """
-            WORD "A"
-            WORD "summary"
-            QUOTE """
-          R_PAREN ")"
-      ATTRIBUTE
-        AT "@"
-        WORD "alias"
-        ATTRIBUTE_ARGS
-          L_PAREN "("
-          STRING_LITERAL "sum"
-            QUOTE """
-            WORD "sum"
-            QUOTE """
-          R_PAREN ")"
-      ATTRIBUTE "@stream.done"
-        AT "@"
-        WORD "stream"
-        DOT "."
-        WORD "done"
-      ATTRIBUTE "@stream.not_null"
-        AT "@"
-        WORD "stream"
-        DOT "."
-        WORD "not_null"
+        ATTRIBUTE
+          AT "@"
+          WORD "description"
+          ATTRIBUTE_ARGS
+            L_PAREN "("
+            STRING_LITERAL "A summary"
+              QUOTE """
+              WORD "A"
+              WORD "summary"
+              QUOTE """
+            R_PAREN ")"
+        ATTRIBUTE
+          AT "@"
+          WORD "alias"
+          ATTRIBUTE_ARGS
+            L_PAREN "("
+            STRING_LITERAL "sum"
+              QUOTE """
+              WORD "sum"
+              QUOTE """
+            R_PAREN ")"
+        ATTRIBUTE "@stream.done"
+          AT "@"
+          WORD "stream"
+          DOT "."
+          WORD "done"
+        ATTRIBUTE "@stream.not_null"
+          AT "@"
+          WORD "stream"
+          DOT "."
+          WORD "not_null"
     R_BRACE "}"
   CLASS_DEF
     KW_CLASS "class"
@@ -152,42 +152,42 @@ class EmptyClass {
     L_BRACE "{"
     FIELD
       WORD "name"
-      TYPE_EXPR "string"
+      TYPE_EXPR
         WORD "string"
-      ATTRIBUTE
-        AT "@"
-        WORD "description"
-        ATTRIBUTE_ARGS
-          L_PAREN "("
-          STRING_LITERAL "This is an extremely long description attribute value that should push the field definition well past the default line width limit of one hundred columns"
-            QUOTE """
-            WORD "This"
-            WORD "is"
-            WORD "an"
-            WORD "extremely"
-            WORD "long"
-            WORD "description"
-            WORD "attribute"
-            WORD "value"
-            WORD "that"
-            WORD "should"
-            WORD "push"
-            WORD "the"
-            WORD "field"
-            WORD "definition"
-            WORD "well"
-            WORD "past"
-            WORD "the"
-            WORD "default"
-            WORD "line"
-            WORD "width"
-            WORD "limit"
-            WORD "of"
-            WORD "one"
-            WORD "hundred"
-            WORD "columns"
-            QUOTE """
-          R_PAREN ")"
+        ATTRIBUTE
+          AT "@"
+          WORD "description"
+          ATTRIBUTE_ARGS
+            L_PAREN "("
+            STRING_LITERAL "This is an extremely long description attribute value that should push the field definition well past the default line width limit of one hundred columns"
+              QUOTE """
+              WORD "This"
+              WORD "is"
+              WORD "an"
+              WORD "extremely"
+              WORD "long"
+              WORD "description"
+              WORD "attribute"
+              WORD "value"
+              WORD "that"
+              WORD "should"
+              WORD "push"
+              WORD "the"
+              WORD "field"
+              WORD "definition"
+              WORD "well"
+              WORD "past"
+              WORD "the"
+              WORD "default"
+              WORD "line"
+              WORD "width"
+              WORD "limit"
+              WORD "of"
+              WORD "one"
+              WORD "hundred"
+              WORD "columns"
+              QUOTE """
+            R_PAREN ")"
     FIELD
       WORD "data"
       TYPE_EXPR
@@ -204,32 +204,32 @@ class EmptyClass {
             PIPE "|"
             WORD "bool"
           GREATER ">"
-      ATTRIBUTE
-        AT "@"
-        WORD "description"
-        ATTRIBUTE_ARGS
-          L_PAREN "("
-          STRING_LITERAL "complex data"
-            QUOTE """
-            WORD "complex"
-            WORD "data"
-            QUOTE """
-          R_PAREN ")"
-      ATTRIBUTE
-        AT "@"
-        WORD "alias"
-        ATTRIBUTE_ARGS
-          L_PAREN "("
-          STRING_LITERAL "payload"
-            QUOTE """
-            WORD "payload"
-            QUOTE """
-          R_PAREN ")"
-      ATTRIBUTE "@stream.done"
-        AT "@"
-        WORD "stream"
-        DOT "."
-        WORD "done"
+        ATTRIBUTE
+          AT "@"
+          WORD "description"
+          ATTRIBUTE_ARGS
+            L_PAREN "("
+            STRING_LITERAL "complex data"
+              QUOTE """
+              WORD "complex"
+              WORD "data"
+              QUOTE """
+            R_PAREN ")"
+        ATTRIBUTE
+          AT "@"
+          WORD "alias"
+          ATTRIBUTE_ARGS
+            L_PAREN "("
+            STRING_LITERAL "payload"
+              QUOTE """
+              WORD "payload"
+              QUOTE """
+            R_PAREN ")"
+        ATTRIBUTE "@stream.done"
+          AT "@"
+          WORD "stream"
+          DOT "."
+          WORD "done"
     FIELD
       WORD "config"
       TYPE_EXPR
@@ -256,22 +256,22 @@ class EmptyClass {
                 WORD "null"
               GREATER ">"
           GREATER ">"
-      ATTRIBUTE
-        AT "@"
-        WORD "description"
-        ATTRIBUTE_ARGS
-          L_PAREN "("
-          STRING_LITERAL "deeply nested config structure for testing wrapping"
-            QUOTE """
-            WORD "deeply"
-            WORD "nested"
-            WORD "config"
-            WORD "structure"
-            KW_FOR "for"
-            WORD "testing"
-            WORD "wrapping"
-            QUOTE """
-          R_PAREN ")"
+        ATTRIBUTE
+          AT "@"
+          WORD "description"
+          ATTRIBUTE_ARGS
+            L_PAREN "("
+            STRING_LITERAL "deeply nested config structure for testing wrapping"
+              QUOTE """
+              WORD "deeply"
+              WORD "nested"
+              WORD "config"
+              WORD "structure"
+              KW_FOR "for"
+              WORD "testing"
+              WORD "wrapping"
+              QUOTE """
+            R_PAREN ")"
     R_BRACE "}"
   CLASS_DEF
     KW_CLASS "class"
@@ -630,21 +630,19 @@ class EmptyClass {
     FIELD
       WORD "name"
       COLON ":"
-      TYPE_EXPR "// 4 colon trailing
-    // 5 type leading
-    string"
+      TYPE_EXPR
         WORD "string"
-      ATTRIBUTE
-        AT "@"
-        WORD "description"
-        ATTRIBUTE_ARGS
-          L_PAREN "("
-          STRING_LITERAL "the name"
-            QUOTE """
-            WORD "the"
-            WORD "name"
-            QUOTE """
-          R_PAREN ")"
+        ATTRIBUTE
+          AT "@"
+          WORD "description"
+          ATTRIBUTE_ARGS
+            L_PAREN "("
+            STRING_LITERAL "the name"
+              QUOTE """
+              WORD "the"
+              WORD "name"
+              QUOTE """
+            R_PAREN ")"
     R_BRACE "}"
   CLASS_DEF
     KW_CLASS "class"
@@ -653,21 +651,19 @@ class EmptyClass {
     FIELD
       WORD "name"
       COLON ":"
-      TYPE_EXPR "/* 4 colon trailing */
-    /* 5 type leading */
-    string"
+      TYPE_EXPR
         WORD "string"
-      ATTRIBUTE
-        AT "@"
-        WORD "description"
-        ATTRIBUTE_ARGS
-          L_PAREN "("
-          STRING_LITERAL "the name"
-            QUOTE """
-            WORD "the"
-            WORD "name"
-            QUOTE """
-          R_PAREN ")"
+        ATTRIBUTE
+          AT "@"
+          WORD "description"
+          ATTRIBUTE_ARGS
+            L_PAREN "("
+            STRING_LITERAL "the name"
+              QUOTE """
+              WORD "the"
+              WORD "name"
+              QUOTE """
+            R_PAREN ")"
     R_BRACE "}"
   CLASS_DEF
     KW_CLASS "class"
@@ -710,18 +706,18 @@ class EmptyClass {
             PIPE "|"
             WORD "null"
           GREATER ">"
-      ATTRIBUTE
-        AT "@"
-        WORD "description"
-        ATTRIBUTE_ARGS
-          L_PAREN "("
-          STRING_LITERAL "a long description"
-            QUOTE """
-            WORD "a"
-            WORD "long"
-            WORD "description"
-            QUOTE """
-          R_PAREN ")"
+        ATTRIBUTE
+          AT "@"
+          WORD "description"
+          ATTRIBUTE_ARGS
+            L_PAREN "("
+            STRING_LITERAL "a long description"
+              QUOTE """
+              WORD "a"
+              WORD "long"
+              WORD "description"
+              QUOTE """
+            R_PAREN ")"
     R_BRACE "}"
   CLASS_DEF
     KW_CLASS "class"
@@ -764,18 +760,18 @@ class EmptyClass {
             PIPE "|"
             WORD "null"
           GREATER ">"
-      ATTRIBUTE
-        AT "@"
-        WORD "description"
-        ATTRIBUTE_ARGS
-          L_PAREN "("
-          STRING_LITERAL "a long description"
-            QUOTE """
-            WORD "a"
-            WORD "long"
-            WORD "description"
-            QUOTE """
-          R_PAREN ")"
+        ATTRIBUTE
+          AT "@"
+          WORD "description"
+          ATTRIBUTE_ARGS
+            L_PAREN "("
+            STRING_LITERAL "a long description"
+              QUOTE """
+              WORD "a"
+              WORD "long"
+              WORD "description"
+              QUOTE """
+            R_PAREN ")"
     R_BRACE "}"
   CLASS_DEF
     KW_CLASS "class"
@@ -784,37 +780,33 @@ class EmptyClass {
     FIELD
       WORD "name"
       COLON ":"
-      TYPE_EXPR "// 4 colon trailing
-    // 5 type leading
-    string"
+      TYPE_EXPR
         WORD "string"
-      ATTRIBUTE
-        AT "@"
-        WORD "description"
-        ATTRIBUTE_ARGS
-          L_PAREN "("
-          STRING_LITERAL "name"
-            QUOTE """
-            WORD "name"
-            QUOTE """
-          R_PAREN ")"
-      ATTRIBUTE
-        AT "@"
-        WORD "alias"
-        ATTRIBUTE_ARGS
-          L_PAREN "("
-          STRING_LITERAL "user_name"
-            QUOTE """
-            WORD "user_name"
-            QUOTE """
-          R_PAREN ")"
-      ATTRIBUTE "// 18 second attr close trailing
-    // 19 third attr leading    
-    @stream.done"
-        AT "@"
-        WORD "stream"
-        DOT "."
-        WORD "done"
+        ATTRIBUTE
+          AT "@"
+          WORD "description"
+          ATTRIBUTE_ARGS
+            L_PAREN "("
+            STRING_LITERAL "name"
+              QUOTE """
+              WORD "name"
+              QUOTE """
+            R_PAREN ")"
+        ATTRIBUTE
+          AT "@"
+          WORD "alias"
+          ATTRIBUTE_ARGS
+            L_PAREN "("
+            STRING_LITERAL "user_name"
+              QUOTE """
+              WORD "user_name"
+              QUOTE """
+            R_PAREN ")"
+        ATTRIBUTE "@stream.done"
+          AT "@"
+          WORD "stream"
+          DOT "."
+          WORD "done"
     R_BRACE "}"
   CLASS_DEF
     KW_CLASS "class"
@@ -823,37 +815,33 @@ class EmptyClass {
     FIELD
       WORD "name"
       COLON ":"
-      TYPE_EXPR "/* 4 colon trailing */
-    /* 5 type leading */
-    string"
+      TYPE_EXPR
         WORD "string"
-      ATTRIBUTE
-        AT "@"
-        WORD "description"
-        ATTRIBUTE_ARGS
-          L_PAREN "("
-          STRING_LITERAL "name"
-            QUOTE """
-            WORD "name"
-            QUOTE """
-          R_PAREN ")"
-      ATTRIBUTE
-        AT "@"
-        WORD "alias"
-        ATTRIBUTE_ARGS
-          L_PAREN "("
-          STRING_LITERAL "user_name"
-            QUOTE """
-            WORD "user_name"
-            QUOTE """
-          R_PAREN ")"
-      ATTRIBUTE "/* 18 second attr close trailing */
-    /* 19 third attr leading */
-    @stream.done"
-        AT "@"
-        WORD "stream"
-        DOT "."
-        WORD "done"
+        ATTRIBUTE
+          AT "@"
+          WORD "description"
+          ATTRIBUTE_ARGS
+            L_PAREN "("
+            STRING_LITERAL "name"
+              QUOTE """
+              WORD "name"
+              QUOTE """
+            R_PAREN ")"
+        ATTRIBUTE
+          AT "@"
+          WORD "alias"
+          ATTRIBUTE_ARGS
+            L_PAREN "("
+            STRING_LITERAL "user_name"
+              QUOTE """
+              WORD "user_name"
+              QUOTE """
+            R_PAREN ")"
+        ATTRIBUTE "@stream.done"
+          AT "@"
+          WORD "stream"
+          DOT "."
+          WORD "done"
     R_BRACE "}"
   CLASS_DEF
     KW_CLASS "class"
@@ -879,40 +867,40 @@ class EmptyClass {
     L_BRACE "{"
     FIELD
       WORD "a"
-      TYPE_EXPR "string"
+      TYPE_EXPR
         WORD "string"
-      ATTRIBUTE "@skip"
-        AT "@"
-        WORD "skip"
+        ATTRIBUTE "@skip"
+          AT "@"
+          WORD "skip"
     FIELD
       WORD "b"
       COLON ":"
-      TYPE_EXPR "string"
+      TYPE_EXPR
         WORD "string"
-      ATTRIBUTE
-        AT "@"
-        WORD "alias"
-        ATTRIBUTE_ARGS
-          L_PAREN "("
-          STRING_LITERAL "alt_name"
-            QUOTE """
-            WORD "alt_name"
-            QUOTE """
-          R_PAREN ")"
+        ATTRIBUTE
+          AT "@"
+          WORD "alias"
+          ATTRIBUTE_ARGS
+            L_PAREN "("
+            STRING_LITERAL "alt_name"
+              QUOTE """
+              WORD "alt_name"
+              QUOTE """
+            R_PAREN ")"
     FIELD
       WORD "c"
-      TYPE_EXPR "string"
+      TYPE_EXPR
         WORD "string"
-      ATTRIBUTE
-        AT "@"
-        WORD "description"
-        ATTRIBUTE_ARGS
-          L_PAREN "("
-          STRING_LITERAL "desc"
-            QUOTE """
-            WORD "desc"
-            QUOTE """
-          R_PAREN ")"
+        ATTRIBUTE
+          AT "@"
+          WORD "description"
+          ATTRIBUTE_ARGS
+            L_PAREN "("
+            STRING_LITERAL "desc"
+              QUOTE """
+              WORD "desc"
+              QUOTE """
+            R_PAREN ")"
     FIELD
       WORD "d"
       TYPE_EXPR
@@ -947,28 +935,28 @@ class EmptyClass {
     L_BRACE "{"
     FIELD
       WORD "name"
-      TYPE_EXPR "string"
+      TYPE_EXPR
         WORD "string"
-      ATTRIBUTE
-        AT "@"
-        WORD "description"
-        ATTRIBUTE_ARGS
-          L_PAREN "("
-          STRING_LITERAL "name"
-            QUOTE """
-            WORD "name"
-            QUOTE """
-          R_PAREN ")"
-      ATTRIBUTE
-        AT "@"
-        WORD "alias"
-        ATTRIBUTE_ARGS
-          L_PAREN "("
-          STRING_LITERAL "n"
-            QUOTE """
-            WORD "n"
-            QUOTE """
-          R_PAREN ")"
+        ATTRIBUTE
+          AT "@"
+          WORD "description"
+          ATTRIBUTE_ARGS
+            L_PAREN "("
+            STRING_LITERAL "name"
+              QUOTE """
+              WORD "name"
+              QUOTE """
+            R_PAREN ")"
+        ATTRIBUTE
+          AT "@"
+          WORD "alias"
+          ATTRIBUTE_ARGS
+            L_PAREN "("
+            STRING_LITERAL "n"
+              QUOTE """
+              WORD "n"
+              QUOTE """
+            R_PAREN ")"
     FIELD
       WORD "age"
       TYPE_EXPR "int"

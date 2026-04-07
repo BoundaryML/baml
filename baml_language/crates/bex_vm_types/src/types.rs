@@ -594,10 +594,10 @@ impl ConstValue {
 ///
 /// Kept as a type alias for compatibility with downstream crates that still use it.
 /// Within `bex_vm`, media is now stored as `Object::Instance` with a `$rust_type` `_data` field.
-pub type MediaValue = std::sync::Arc<baml_builtins::MediaValue>;
+pub type MediaValue = std::sync::Arc<baml_builtins2::MediaValue>;
 
 /// Prompt AST tree node.
-pub type PromptAst = std::sync::Arc<baml_builtins::PromptAst>;
+pub type PromptAst = std::sync::Arc<baml_builtins2::PromptAst>;
 
 /// Opaque handle to a `Collector` object from `bex_events`.
 ///
@@ -654,6 +654,9 @@ pub enum Object {
     /// otherwise.
     String(String),
 
+    /// Byte array (uint8array).
+    Uint8Array(Vec<u8>),
+
     /// List of values.
     Array(Vec<Value>),
 
@@ -708,6 +711,7 @@ impl std::fmt::Display for Object {
             }
             Object::Cell(cell) => write!(f, "<cell {}>", cell.value),
             Object::String(string) => string.fmt(f),
+            Object::Uint8Array(bytes) => write!(f, "<uint8array len={}>", bytes.len()),
             Object::Array(array) => write!(f, "<array len={}>", array.len()),
             Object::Map(map) => write!(f, "<map len={}>", map.len()),
             Object::RustData(_) => write!(f, "<rust_data>"),
@@ -799,6 +803,7 @@ pub enum ObjectType {
     /// types.
     Any,
     Instance,
+    Uint8Array,
     Array,
     Map,
     Function(FunctionType),
@@ -825,6 +830,7 @@ impl ObjectType {
             Object::Enum(_) => Self::Enum,
             Object::Variant(_) => Self::Enum,
             Object::String(_) => Self::String,
+            Object::Uint8Array(_) => Self::Uint8Array,
             Object::Array(_) => Self::Array,
             Object::Map(_) => Self::Map,
             Object::RustData(_) => Self::RustData,
@@ -865,6 +871,7 @@ impl std::fmt::Display for ObjectType {
             ObjectType::Variant => write!(f, "variant"),
             ObjectType::Future(future_type) => write!(f, "{future_type}"),
             ObjectType::String => write!(f, "string"),
+            ObjectType::Uint8Array => write!(f, "uint8array"),
             ObjectType::Collector => write!(f, "collector"),
             ObjectType::Type => write!(f, "type"),
             ObjectType::RustData => write!(f, "rust_data"),

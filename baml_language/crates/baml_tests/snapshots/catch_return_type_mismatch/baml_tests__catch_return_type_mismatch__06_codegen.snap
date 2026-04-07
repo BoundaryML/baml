@@ -9,7 +9,7 @@ function user.callee() -> bool {
 function user.caller() -> bool {
     call user.callee
     jump L2
-    load_var _1
+    load_var e
     load_const user.Errors.AuthenticationError
     alloc_variant user.Errors
     cmp_op ==
@@ -17,11 +17,11 @@ function user.caller() -> bool {
     jump L1
 
   L0:
-    load_var _1
+    load_var e
     throw
 
   L1:
-    load_var _1
+    load_var e
 
   L2:
     return

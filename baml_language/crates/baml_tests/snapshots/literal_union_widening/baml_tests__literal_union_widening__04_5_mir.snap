@@ -54,8 +54,8 @@ fn user.nestedArray() -> int[][] {
     // Locals:
     let _0: int[][] // _0 // return
     let _1: int[][] // x
-    let _2: 1 | 2[]
-    let _3: 3 | 4[]
+    let _2: int[]
+    let _3: int[]
 
     bb0: {
         _2 = [const 1_i64, const 2_i64];

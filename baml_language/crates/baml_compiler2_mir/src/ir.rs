@@ -25,9 +25,6 @@ pub struct CatchRegion {
     pub handler: BlockId,
     /// Frame-local slot for the caught error value.
     pub error_local: Local,
-    /// Whether any catch arm explicitly names a panic type.
-    /// When `false`, the VM skips this handler for runtime panics.
-    pub catches_panics: bool,
 }
 
 /// The bytecode body of a MIR function — blocks, locals, and associated data.
@@ -250,10 +247,6 @@ pub enum StatementKind {
 
     /// No-op (placeholder for removed statements).
     Nop,
-
-    /// Assert that a condition is true.
-    /// Evaluates the operand and panics if it's false.
-    Assert(Operand),
 }
 
 // ============================================================================
@@ -354,6 +347,13 @@ pub enum Terminator {
         /// The error value to throw.
         value: Operand,
     },
+
+    /// If the value is a panic instance (`baml.panics.*`), throw it.
+    /// Otherwise continue to `otherwise` block.
+    ///
+    /// Used before wildcard catch arms to prevent them from swallowing
+    /// panics the programmer didn't explicitly name.
+    ThrowIfPanic { value: Operand, otherwise: BlockId },
 }
 
 impl Terminator {
@@ -391,6 +391,7 @@ impl Terminator {
                 succs
             }
             Terminator::Throw { .. } => vec![],
+            Terminator::ThrowIfPanic { otherwise, .. } => vec![*otherwise],
         }
     }
 }
@@ -402,7 +403,7 @@ impl Terminator {
 /// The kind of indexing operation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum IndexKind {
-    /// Array indexing: `arr[i]`
+    /// Array indexing: `arr[i]` (array or `uint8array`)
     Array,
     /// Map indexing: `map[key]`
     Map,
@@ -506,6 +507,9 @@ pub enum Rvalue {
     /// Create an array: `[_1, _2, _3]`
     Array(Vec<Operand>),
 
+    /// Create a byte array from a literal: `b"hello"`
+    Uint8Array(Vec<u8>),
+
     /// Create a map: `{ key1: value1, key2: value2, ... }`
     /// Each entry is a (key, value) pair.
     Map(Vec<(Operand, Operand)>),
@@ -532,12 +536,6 @@ pub enum Rvalue {
 
     /// Type check for pattern matching: `is_type(_1, Type)`
     IsType { operand: Operand, ty: Ty },
-
-    /// Check whether a value is a panic instance (`baml.panics.*`).
-    ///
-    /// Produces `bool`: true if the value's class is any panic type.
-    /// Used in catch handlers to rethrow unmatched panics before wildcard arms.
-    IsPanic(Operand),
 
     /// Allocate a closure object from a child lambda function.
     ///

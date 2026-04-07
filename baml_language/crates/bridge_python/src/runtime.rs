@@ -31,6 +31,7 @@ impl BamlRuntime {
     /// * `root_path` - Root path for BAML files
     /// * `files` - Map of filename to file content
     #[staticmethod]
+    #[pyo3(name = "from_files")]
     fn initialize(
         root_path: String,
         files: std::collections::HashMap<String, String>,

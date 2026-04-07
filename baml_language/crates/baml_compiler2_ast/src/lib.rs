@@ -9,13 +9,17 @@
 
 pub mod ast;
 pub(crate) mod companions;
+pub(crate) mod disambiguate;
 pub(crate) mod lower_config_item;
 pub(crate) mod lower_cst;
 pub(crate) mod lower_expr_body;
 pub(crate) mod lower_type_expr;
+pub mod lowering_diagnostic;
 
 pub use ast::*;
+pub use disambiguate::is_field_attr;
 pub use lower_cst::{lower_file, lower_file_with_file_id};
+pub use lowering_diagnostic::LoweringDiagnostic;
 
 #[cfg(test)]
 mod tests {
@@ -30,15 +34,42 @@ mod tests {
     };
 
     /// Build a `TypeExpr` value for use in `assert_eq!` comparisons.
-    /// All `attrs` fields are set to `vec![]`.
+    /// All spans are zeroed. Attrs go inside the variant constructor:
+    ///
+    /// ```ignore
+    /// type_expr!(Path("Foo", Attr("stream.done")))
+    /// type_expr!(WithAttrs((List(String)), Attr("stream.done")))
+    /// type_expr!(Union((Path("A")), (Path("B", Attr("stream.done")))))
+    /// ```
     macro_rules! type_expr {
-        (Int) => { TypeExpr::Int { attrs: vec![] } };
-        (Float) => { TypeExpr::Float { attrs: vec![] } };
-        (String) => { TypeExpr::String { attrs: vec![] } };
-        (Bool) => { TypeExpr::Bool { attrs: vec![] } };
-        (Null) => { TypeExpr::Null { attrs: vec![] } };
-        (Never) => { TypeExpr::Never { attrs: vec![] } };
-        (Rust) => { TypeExpr::Rust { attrs: vec![] } };
+        // ── Helper: build attr vec from Attr("name") args ──
+        (@attrs) => { vec![] };
+        (@attrs $(, Attr($attr_name:expr))+) => {
+            vec![$(crate::ast::RawAttribute {
+                name: baml_base::Name::new($attr_name),
+                args: vec![],
+                span: text_size::TextRange::default(),
+            }),+]
+        };
+
+        // ── Leaves ──
+        (Int $(, Attr($a:expr))*) => { TypeExpr::Int { attrs: type_expr!(@attrs $(, Attr($a))*) } };
+        (Float $(, Attr($a:expr))*) => { TypeExpr::Float { attrs: type_expr!(@attrs $(, Attr($a))*) } };
+        (String $(, Attr($a:expr))*) => { TypeExpr::String { attrs: type_expr!(@attrs $(, Attr($a))*) } };
+        (Bool $(, Attr($a:expr))*) => { TypeExpr::Bool { attrs: type_expr!(@attrs $(, Attr($a))*) } };
+        (Null $(, Attr($a:expr))*) => { TypeExpr::Null { attrs: type_expr!(@attrs $(, Attr($a))*) } };
+        (Never $(, Attr($a:expr))*) => { TypeExpr::Never { attrs: type_expr!(@attrs $(, Attr($a))*) } };
+        (Rust $(, Attr($a:expr))*) => { TypeExpr::Rust { attrs: type_expr!(@attrs $(, Attr($a))*) } };
+
+        // ── Path ──
+        (Path($name:expr $(, Attr($a:expr))*)) => {
+            TypeExpr::Path {
+                segments: vec![baml_base::Name::new($name)],
+                attrs: type_expr!(@attrs $(, Attr($a))*),
+            }
+        };
+
+        // ── Containers ──
         (Optional($($inner:tt)+)) => {
             TypeExpr::Optional {
                 inner: Box::new(type_expr!($($inner)+)),
@@ -51,12 +82,130 @@ mod tests {
                 attrs: vec![],
             }
         };
-        (Union($($variant:tt),+ $(,)?)) => {
+
+        // ── Union: each variant is wrapped in parens ──
+        (Union($(($($variant:tt)+)),+ $(,)?)) => {
             TypeExpr::Union {
-                variants: vec![$(type_expr!($variant)),+],
+                variants: vec![$(type_expr!(($($variant)+))),+],
                 attrs: vec![],
             }
         };
+
+        // ── Attach attrs to any type: WithAttrs((List(String)), Attr("stream.done")) ──
+        (WithAttrs(($($inner:tt)+), $(Attr($a:expr)),+)) => {{
+            let mut te = type_expr!($($inner)+);
+            *te.attrs_mut() = type_expr!(@attrs $(, Attr($a))+);
+            te
+        }};
+
+        // ── Paren passthrough: ((Int)) → type_expr!(Int) ──
+        (($($inner:tt)+)) => {
+            type_expr!($($inner)+)
+        };
+    }
+
+    /// Strip all `TextRange` spans from a `TypeExpr` tree (recursively),
+    /// replacing them with `TextRange::default()`. This allows `assert_eq!`
+    /// comparison against hand-built expected values.
+    fn strip_spans(expr: &TypeExpr) -> TypeExpr {
+        fn strip_attr(attr: &crate::ast::RawAttribute) -> crate::ast::RawAttribute {
+            crate::ast::RawAttribute {
+                name: attr.name.clone(),
+                args: attr
+                    .args
+                    .iter()
+                    .map(|a| crate::ast::RawAttributeArg {
+                        key: a.key.clone(),
+                        value: a.value.clone(),
+                        span: text_size::TextRange::default(),
+                    })
+                    .collect(),
+                span: text_size::TextRange::default(),
+            }
+        }
+
+        fn strip_attrs(attrs: &[crate::ast::RawAttribute]) -> Vec<crate::ast::RawAttribute> {
+            attrs.iter().map(strip_attr).collect()
+        }
+
+        match expr {
+            TypeExpr::Int { attrs } => TypeExpr::Int {
+                attrs: strip_attrs(attrs),
+            },
+            TypeExpr::Float { attrs } => TypeExpr::Float {
+                attrs: strip_attrs(attrs),
+            },
+            TypeExpr::String { attrs } => TypeExpr::String {
+                attrs: strip_attrs(attrs),
+            },
+            TypeExpr::Bool { attrs } => TypeExpr::Bool {
+                attrs: strip_attrs(attrs),
+            },
+            TypeExpr::Null { attrs } => TypeExpr::Null {
+                attrs: strip_attrs(attrs),
+            },
+            TypeExpr::Uint8Array { attrs } => TypeExpr::Uint8Array {
+                attrs: strip_attrs(attrs),
+            },
+            TypeExpr::Never { attrs } => TypeExpr::Never {
+                attrs: strip_attrs(attrs),
+            },
+            TypeExpr::Rust { attrs } => TypeExpr::Rust {
+                attrs: strip_attrs(attrs),
+            },
+            TypeExpr::Path { segments, attrs } => TypeExpr::Path {
+                segments: segments.clone(),
+                attrs: strip_attrs(attrs),
+            },
+            TypeExpr::Optional { inner, attrs } => TypeExpr::Optional {
+                inner: Box::new(strip_spans(inner)),
+                attrs: strip_attrs(attrs),
+            },
+            TypeExpr::List { inner, attrs } => TypeExpr::List {
+                inner: Box::new(strip_spans(inner)),
+                attrs: strip_attrs(attrs),
+            },
+            TypeExpr::Map { key, value, attrs } => TypeExpr::Map {
+                key: Box::new(strip_spans(key)),
+                value: Box::new(strip_spans(value)),
+                attrs: strip_attrs(attrs),
+            },
+            TypeExpr::Union { variants, attrs } => TypeExpr::Union {
+                variants: variants.iter().map(strip_spans).collect(),
+                attrs: strip_attrs(attrs),
+            },
+            TypeExpr::Literal { value, attrs } => TypeExpr::Literal {
+                value: value.clone(),
+                attrs: strip_attrs(attrs),
+            },
+            TypeExpr::Function { params, ret, attrs } => TypeExpr::Function {
+                params: params
+                    .iter()
+                    .map(|p| crate::ast::FunctionTypeParam {
+                        name: p.name.clone(),
+                        ty: strip_spans(&p.ty),
+                    })
+                    .collect(),
+                ret: Box::new(strip_spans(ret)),
+                attrs: strip_attrs(attrs),
+            },
+            TypeExpr::Media { kind, attrs } => TypeExpr::Media {
+                kind: *kind,
+                attrs: strip_attrs(attrs),
+            },
+            TypeExpr::BuiltinUnknown { attrs } => TypeExpr::BuiltinUnknown {
+                attrs: strip_attrs(attrs),
+            },
+            TypeExpr::Type { attrs } => TypeExpr::Type {
+                attrs: strip_attrs(attrs),
+            },
+            TypeExpr::Error { attrs } => TypeExpr::Error {
+                attrs: strip_attrs(attrs),
+            },
+            TypeExpr::Unknown { attrs } => TypeExpr::Unknown {
+                attrs: strip_attrs(attrs),
+            },
+        }
     }
 
     /// Parse BAML source text and return the CST root.
@@ -74,10 +223,7 @@ mod tests {
     fn parse_and_lower(source: &str) -> Vec<Item> {
         let root = parse(source);
         let (items, diags) = lower_file(&root);
-        assert!(
-            diags.is_empty(),
-            "expected no lower diagnostics, got: {diags:#?}"
-        );
+        assert!(diags.is_empty(), "expected no diagnostics, got: {diags:#?}");
         items
     }
 
@@ -753,7 +899,7 @@ function f() -> int {
         let ta = first_type_alias(parse_and_lower("type T = (int | string)[]\n"));
         assert_eq!(
             ta.type_expr.unwrap().expr,
-            type_expr!(List(Union(Int, String)))
+            type_expr!(List(Union((Int), (String))))
         );
     }
 
@@ -763,7 +909,7 @@ function f() -> int {
         let ta = first_type_alias(parse_and_lower("type T = (int | bool)[][]\n"));
         assert_eq!(
             ta.type_expr.unwrap().expr,
-            type_expr!(List(List(Union(Int, Bool))))
+            type_expr!(List(List(Union((Int), (Bool)))))
         );
     }
 
@@ -773,7 +919,7 @@ function f() -> int {
         let ta = first_type_alias(parse_and_lower("type T = (int | bool)[][]?\n"));
         assert_eq!(
             ta.type_expr.unwrap().expr,
-            type_expr!(Optional(List(List(Union(Int, Bool)))))
+            type_expr!(Optional(List(List(Union((Int), (Bool))))))
         );
     }
 
@@ -783,7 +929,7 @@ function f() -> int {
         let ta = first_type_alias(parse_and_lower("type T = (int | bool)?[]\n"));
         assert_eq!(
             ta.type_expr.unwrap().expr,
-            type_expr!(List(Optional(Union(Int, Bool))))
+            type_expr!(List(Optional(Union((Int), (Bool)))))
         );
     }
 
@@ -945,10 +1091,9 @@ class Foo {
 
     #[test]
     fn type_attr_after_field_attr_parses_as_type_attribute() {
-        // When @alias("bar") comes first, it breaks out of TYPE_EXPR parsing.
-        // @stream.done then becomes a field attribute in the CST.
-        // This test documents the CURRENT behavior: @stream.done ends up as a
-        // field attribute when it follows a field attribute like @alias.
+        // THE FIX: @alias("bar") before @stream.done now works correctly.
+        // Both attrs are consumed inside TYPE_EXPR, then disambiguation
+        // hoists @alias to FieldDef and keeps @stream.done on TypeExpr.
         let source = r#"
 class Foo {
   foo Fizz @alias("bar") @stream.done
@@ -961,33 +1106,19 @@ class Foo {
             .find(|f| f.name.as_str() == "foo")
             .expect("expected field 'foo'");
 
-        // Currently, both @alias("bar") and @stream.done end up as field attributes
-        // because once the parser breaks out of TYPE_EXPR for @alias, @stream.done
-        // is parsed in the field attribute loop.
-        // This documents the existing behavior; a future parser fix may change this.
-        let type_expr = &field.type_expr.as_ref().expect("expected type expr").expr;
-        let type_attrs = type_expr.attrs();
-        let field_attr_names: Vec<_> = field.attributes.iter().map(|a| a.name.as_str()).collect();
-        let type_attr_names: Vec<_> = type_attrs.iter().map(|a| a.name.as_str()).collect();
-
-        // Document current state: we expect EITHER:
-        // (a) @stream.done is a type attr (ideal), or
-        // (b) @stream.done is a field attr (current parser limitation)
-        let stream_done_is_type_attr = type_attrs.iter().any(|a| a.name.as_str() == "stream.done");
-        let stream_done_is_field_attr = field
-            .attributes
-            .iter()
-            .any(|a| a.name.as_str() == "stream.done");
-
-        assert!(
-            stream_done_is_type_attr || stream_done_is_field_attr,
-            "expected @stream.done somewhere: type_attrs={type_attr_names:?}, field_attrs={field_attr_names:?}",
+        // Field attribute: @alias("bar") — hoisted from TypeExpr to FieldDef
+        assert_eq!(
+            field.attributes.len(),
+            1,
+            "expected 1 field attribute, got {:?}",
+            field.attributes
         );
+        assert_eq!(field.attributes[0].name.as_str(), "alias");
 
-        // @alias should always be a field attribute
-        assert!(
-            field.attributes.iter().any(|a| a.name.as_str() == "alias"),
-            "expected @alias as field attribute, got field_attrs={field_attr_names:?}",
+        // Type attribute: @stream.done stays on the TypeExpr
+        assert_eq!(
+            strip_spans(&field.type_expr.as_ref().expect("expected type expr").expr),
+            type_expr!(Path("Fizz", Attr("stream.done")))
         );
     }
 
@@ -1047,30 +1178,155 @@ class Foo {
             "expected 1 type attribute, got {type_attrs:?}"
         );
         assert_eq!(type_attrs[0].name.as_str(), "stream.done");
+        // Type attribute: @stream.done stays on the TypeExpr
+        assert_eq!(
+            strip_spans(&field.type_expr.as_ref().expect("expected type expr").expr),
+            type_expr!(WithAttrs((List(String)), Attr("stream.done")))
+        );
+    }
+
+    // ── Attribute disambiguation sanity checks ──────────────────────────────
+    //
+    // Comprehensive coverage lives in baml_tests/projects/attr_disambiguation/.
+    // These unit tests verify the core AST-level mechanics:
+    //  1. The bug fix (field-before-type ordering)
+    //  2. Union trailing attr → hoisted to FieldDef
+    //  3. Nested field attr → validation error
+
+    /// Helper: parse BAML source, lower to AST, and also return field-attr validation diagnostics.
+    fn parse_lower_validate(
+        source: &str,
+    ) -> (Vec<Item>, Vec<(std::string::String, text_size::TextRange)>) {
+        let root = parse(source);
+        let (items, diags) = lower_file(&root);
+        // Separate out field-attr-in-type-position diagnostics from other diagnostics.
+        let mut field_attr_errors = Vec::new();
+        let mut other_diags = Vec::new();
+        for d in diags {
+            match d {
+                crate::lowering_diagnostic::LoweringDiagnostic::FieldAttributeInTypePosition {
+                    attr_name,
+                    span,
+                } => {
+                    field_attr_errors.push((attr_name, span));
+                }
+                other => other_diags.push(other),
+            }
+        }
+        assert!(
+            other_diags.is_empty(),
+            "expected no non-field-attr diagnostics, got: {other_diags:#?}"
+        );
+        (items, field_attr_errors)
     }
 
     #[test]
-    fn multiple_type_attrs_are_collected() {
+    fn field_attr_before_type_attr_disambiguated_correctly() {
+        // The core bug: @alias before @stream.done used to misclassify @stream.done.
         let source = r#"
-class Foo {
-  baz int @stream.done @check("positive", {{this > 0}})
+class C {
+  f Foo @alias("x") @stream.done
+}
+"#;
+        let (items, diags) = parse_lower_validate(source);
+        assert!(diags.is_empty(), "expected no diagnostics, got {diags:?}");
+        let class = first_class(items);
+        let field = &class.fields[0];
+        assert_eq!(field.attributes.len(), 1);
+        assert_eq!(field.attributes[0].name.as_str(), "alias");
+        let te = &field.type_expr.as_ref().unwrap().expr;
+        assert_eq!(te.attrs().len(), 1);
+        assert_eq!(te.attrs()[0].name.as_str(), "stream.done");
+    }
+
+    #[test]
+    fn union_trailing_field_attr_hoisted_to_field() {
+        // A | B | C @alias("x") → @alias hoisted to FieldDef, Union has no attrs.
+        let source = r#"
+class C {
+  f A | B | C @alias("x")
+}
+"#;
+        let (items, diags) = parse_lower_validate(source);
+        assert!(diags.is_empty(), "expected no diagnostics, got {diags:?}");
+        let class = first_class(items);
+        let field = &class.fields[0];
+        assert_eq!(field.attributes.len(), 1);
+        assert_eq!(field.attributes[0].name.as_str(), "alias");
+        assert!(matches!(
+            &field.type_expr.as_ref().unwrap().expr,
+            TypeExpr::Union { attrs, .. } if attrs.is_empty()
+        ));
+    }
+
+    #[test]
+    fn field_attr_in_nested_position_produces_diagnostic() {
+        // (Foo @alias("x"))[] → @alias inside parens is an error.
+        let source = r#"
+class C {
+  f (Foo @alias("x"))[]
+}
+"#;
+        let (_, diags) = parse_lower_validate(source);
+        assert_eq!(diags.len(), 1, "expected 1 diagnostic, got {diags:?}");
+        assert_eq!(diags[0].0, "alias");
+    }
+
+    #[test]
+    fn type_attr_on_inner_union_member_stays_on_member() {
+        // (A | B @stream.done) | C → @stream.done should apply to B specifically,
+        // not to the inner union (A | B).
+        let source = r#"
+class C {
+  f (A | B @stream.done) | C
 }
 "#;
         let class = first_class(parse_and_lower(source));
-        let field = class
-            .fields
-            .iter()
-            .find(|f| f.name.as_str() == "baz")
-            .expect("expected field 'baz'");
-
-        let type_expr = &field.type_expr.as_ref().expect("expected type expr").expr;
-        let type_attrs = type_expr.attrs();
+        let field = &class.fields[0];
         assert_eq!(
-            type_attrs.len(),
-            2,
-            "expected 2 type attributes, got {type_attrs:?}"
+            strip_spans(&field.type_expr.as_ref().expect("expected type expr").expr),
+            type_expr!(Union(
+                (Union((Path("A")), (Path("B", Attr("stream.done"))))),
+                (Path("C"))
+            ))
         );
-        assert_eq!(type_attrs[0].name.as_str(), "stream.done");
-        assert_eq!(type_attrs[1].name.as_str(), "check");
+    }
+
+    #[test]
+    fn paren_union_trailing_type_attr_stays_on_last_member() {
+        // (A | B | C @stream.done) → no trailing hoisting inside type expressions,
+        // so @stream.done stays on C, not on the inner union.
+        let source = r#"
+class C {
+  f (A | B | C @stream.done)
+}
+"#;
+        let (items, diags) = parse_lower_validate(source);
+        assert!(diags.is_empty(), "expected no diagnostics, got {diags:?}");
+        let class = first_class(items);
+        let field = &class.fields[0];
+
+        assert_eq!(
+            strip_spans(&field.type_expr.as_ref().expect("expected type expr").expr),
+            type_expr!(Union(
+                (Path("A")),
+                (Path("B")),
+                (Path("C", Attr("stream.done")))
+            ))
+        );
+    }
+
+    #[test]
+    fn paren_union_trailing_field_attr_produces_diagnostic() {
+        // (A | B | C @alias("x")) → @alias is a field attr inside parens,
+        // should produce a diagnostic (can't be hoisted from nested position).
+        let source = r#"
+class C {
+  f (A | B | C @alias("x"))
+}
+"#;
+        let (_, diags) = parse_lower_validate(source);
+        assert_eq!(diags.len(), 1, "expected 1 diagnostic, got {diags:?}");
+        assert_eq!(diags[0].0, "alias");
     }
 }

@@ -180,11 +180,6 @@ fn write_statement(f: &mut impl Write, stmt: &Statement) -> fmt::Result {
         StatementKind::Nop => {
             write!(f, "nop;")
         }
-        StatementKind::Assert(operand) => {
-            write!(f, "assert(")?;
-            write_operand(f, operand)?;
-            write!(f, ");")
-        }
     }
 }
 
@@ -294,6 +289,11 @@ fn write_terminator(f: &mut impl Write, term: &Terminator) -> fmt::Result {
             write_operand(f, value)?;
             write!(f, ";")
         }
+        Terminator::ThrowIfPanic { value, otherwise } => {
+            write!(f, "throw_if_panic ")?;
+            write_operand(f, value)?;
+            write!(f, " -> {otherwise};")
+        }
     }
 }
 
@@ -319,6 +319,7 @@ fn write_rvalue(f: &mut impl Write, rvalue: &Rvalue) -> fmt::Result {
             }
             write!(f, "]")
         }
+        Rvalue::Uint8Array(bytes) => write!(f, "b\"<{} bytes>\"", bytes.len()),
         Rvalue::Map(entries) => {
             write!(f, "{{ ")?;
             for (i, (key, value)) in entries.iter().enumerate() {
@@ -361,11 +362,6 @@ fn write_rvalue(f: &mut impl Write, rvalue: &Rvalue) -> fmt::Result {
             write!(f, "is_type(")?;
             write_operand(f, operand)?;
             write!(f, ", {ty:?})")
-        }
-        Rvalue::IsPanic(operand) => {
-            write!(f, "is_panic(")?;
-            write_operand(f, operand)?;
-            write!(f, ")")
         }
         Rvalue::MakeClosure {
             lambda_idx,

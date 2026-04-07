@@ -106,6 +106,42 @@ pub enum TirTypeError {
     /// A lambda parameter has no type annotation and no expected type context
     /// to infer the type from.
     CannotInferLambdaParamType { param_name: Name },
+    /// `?.` used on a non-nullable type (e.g. `a?.b` where `a` is not nullable).
+    UnnecessaryOptionalChaining {
+        /// The full expression text (e.g. `a?.b`)
+        expr: String,
+        /// The base expression text (e.g. `a`)
+        base: String,
+    },
+    /// `??` used where the left operand is non-nullable.
+    UnnecessaryNullCoalesce {
+        /// LHS expression text
+        lhs: String,
+        /// Full expression text (e.g. `a ?? b`)
+        expr: String,
+    },
+    /// `||` used where `??` was likely intended (nullable LHS).
+    SuggestNullCoalesce {
+        /// LHS expression text
+        lhs: String,
+        /// RHS expression text
+        rhs: String,
+    },
+    /// `?? null` is a no-op.
+    NullCoalesceWithNull {
+        /// LHS expression text
+        lhs: String,
+    },
+    /// Member access (`.field` or `[index]`) on a nullable type without `?.`.
+    /// Occurs when parentheses break an optional chain: `(a?.b).c`.
+    NullableMemberAccess {
+        /// The base expression text (e.g. `a`)
+        base: String,
+        /// The member being accessed (e.g. `.name`)
+        member: String,
+        /// The full expression text (e.g. `a.name`)
+        expr: String,
+    },
 }
 
 impl fmt::Display for TirTypeError {
@@ -115,7 +151,7 @@ impl fmt::Display for TirTypeError {
                 write!(f, "type mismatch: expected {expected}, got {got}")
             }
             TirTypeError::UnresolvedMember { base_type, member } => {
-                write!(f, "unresolved member: {base_type}.{member}")
+                write!(f, "type `{base_type}` has no member `{member}`")
             }
             TirTypeError::UnresolvedName { name } => {
                 write!(f, "unresolved name: {name}")
@@ -135,7 +171,7 @@ impl fmt::Display for TirTypeError {
                 )
             }
             TirTypeError::NotCallable { ty } => {
-                write!(f, "type `{ty}` is not callable")
+                write!(f, "`{ty}` is not a function — it cannot be called")
             }
             TirTypeError::NotIterable { ty } => {
                 write!(f, "cannot iterate over type `{ty}`")
@@ -216,6 +252,62 @@ impl fmt::Display for TirTypeError {
                 write!(
                     f,
                     "cannot infer type of lambda parameter `{param_name}` — add a type annotation or provide context"
+                )
+            }
+            TirTypeError::UnnecessaryOptionalChaining { expr, base } => {
+                // e.g. "did you mean `a.b`? `a?.b` is unnecessary, because `a` cannot be null"
+                // Build the rewrite from the base/suffix boundary so we strip the
+                // diagnosed `?.`, not the first one in the string (which may be
+                // inside a nested sub-expression like `foo(bar?.baz)?.qux`).
+                let suffix = &expr[base.len()..];
+                let dotted = if let Some(rest) = suffix.strip_prefix("?.(") {
+                    format!("{base}({rest}")
+                } else if let Some(rest) = suffix.strip_prefix("?.[") {
+                    format!("{base}[{rest}")
+                } else if let Some(rest) = suffix.strip_prefix("?.") {
+                    format!("{base}.{rest}")
+                } else {
+                    // Fallback: should not happen, but be safe
+                    expr.replacen("?.", ".", 1)
+                };
+                write!(
+                    f,
+                    "did you mean `{dotted}`? `{expr}` is unnecessary, because `{base}` cannot be null"
+                )
+            }
+            TirTypeError::UnnecessaryNullCoalesce { lhs, expr } => {
+                // e.g. "did you mean `a`? `a ?? b` is unnecessary, because `a` cannot be null"
+                write!(
+                    f,
+                    "did you mean `{lhs}`? `{expr}` is unnecessary, because `{lhs}` cannot be null"
+                )
+            }
+            TirTypeError::SuggestNullCoalesce { lhs, rhs } => {
+                // e.g. "did you mean `a ?? b`? BAML uses `??` instead of `||` for null coalescing"
+                write!(
+                    f,
+                    "did you mean `{lhs} ?? {rhs}`? BAML uses `??` instead of `||` for null coalescing"
+                )
+            }
+            TirTypeError::NullCoalesceWithNull { lhs } => {
+                // e.g. "did you mean `a`? `... ?? null` is unnecessary because `a` is already nullable"
+                write!(
+                    f,
+                    "did you mean `{lhs}`? `... ?? null` is unnecessary because `{lhs}` is already nullable"
+                )
+            }
+            TirTypeError::NullableMemberAccess { base, member, expr } => {
+                // member is ".name" or "[...]" — construct suggestion by inserting ?
+                // e.g. base="a", member=".name" → "a?.name"
+                // e.g. base="a", member="[...]" → "a?.[...]"
+                let suggested = if member.starts_with('.') {
+                    format!("{base}?{member}")
+                } else {
+                    format!("{base}?.{member}")
+                };
+                write!(
+                    f,
+                    "did you mean `{suggested}`? `{expr}` does not handle the case when `{base}` is null"
                 )
             }
         }
@@ -451,6 +543,19 @@ impl<'db> InferContext<'db> {
             .push(TirDiagnostic {
                 error,
                 severity: DiagnosticSeverity::Error,
+                primary: DiagnosticLocation::Stmt(at),
+                related: Vec::new(),
+            });
+    }
+
+    /// Report a warning-level diagnostic at a specific statement.
+    pub fn report_warning_at_stmt(&self, error: TirTypeError, at: StmtId) {
+        self.diagnostics
+            .borrow_mut()
+            .diagnostics
+            .push(TirDiagnostic {
+                error,
+                severity: DiagnosticSeverity::Warning,
                 primary: DiagnosticLocation::Stmt(at),
                 related: Vec::new(),
             });

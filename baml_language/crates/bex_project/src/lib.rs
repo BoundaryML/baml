@@ -9,7 +9,7 @@
 //! - [`new`] — compile source files and return `Arc<dyn Bex>`.
 use std::{collections::HashMap, sync::Arc};
 
-pub use baml_builtins::{MediaContent, MediaValue, PromptAst, PromptAstSimple};
+pub use baml_builtins2::{MediaContent, MediaValue, PromptAst, PromptAstSimple};
 pub use bex::Bex;
 pub use bex_engine::{EngineError, FunctionCallContextBuilder};
 pub use bex_events::EventSink;
@@ -75,6 +75,6 @@ pub fn new(
 
 pub use bex_lsp::{
     BexLsp, FunctionInfo, FunctionKind, LlmCapabilities, LspClientSenderTrait, LspError,
-    PlaygroundNotification, PlaygroundSender, ProjectDiagnostic, ProjectUpdate, TestInfo, new_lsp,
+    PlaygroundNotification, PlaygroundSender, ProjectDiagnostic, ProjectUpdate, new_lsp,
 };
 pub use fs::{BamlVFS, BulkReadFileSystem, DefaultBulkReadFileSystem, FsPath};

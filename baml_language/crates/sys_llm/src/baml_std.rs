@@ -104,15 +104,18 @@ impl PrimitiveClient {
 }
 
 // Provider option structs are generated from llm_types.baml via sys_types.
-pub use sys_types::generated::owned::llm::{AnthropicOptions, AzureOpenAiOptions, BedrockOptions};
+pub use sys_types::generated::owned::llm::{
+    AnthropicOptions, AzureOpenAiOptions, BedrockOptions, VertexAiOptions,
+};
 
 /// Provider-specific options, matching the BAML schema union
-/// `AnthropicOptions | AzureOpenAiOptions | BedrockOptions | null`.
+/// `AnthropicOptions | AzureOpenAiOptions | BedrockOptions | VertexAiOptions | null`.
 #[derive(Clone, Debug)]
 pub enum ProviderOptions {
     Anthropic(AnthropicOptions),
     AzureOpenAi(AzureOpenAiOptions),
     Bedrock(BedrockOptions),
+    VertexAi(VertexAiOptions),
 }
 
 /// Convert a `BexExternalValue` (from the VM) to a typed `ProviderOptions`.
@@ -131,6 +134,9 @@ pub fn resolve_provider_options(val: &bex_heap::BexExternalValue) -> Option<Prov
         "baml.llm.BedrockOptions" => BedrockOptions::from_external(val.clone())
             .ok()
             .map(ProviderOptions::Bedrock),
+        "baml.llm.VertexAiOptions" => VertexAiOptions::from_external(val.clone())
+            .ok()
+            .map(ProviderOptions::VertexAi),
         other => unreachable!(
             "unknown provider options class {other:?}: add it to resolve_provider_options"
         ),

@@ -13,6 +13,7 @@ use baml_compiler2_ast::{RawAttribute, TypeExpr};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum CannotBeStreamedOrigin {
     Media(baml_base::MediaKind),
+    Uint8Array,
     RustType,
     Error,
     Unknown,
@@ -269,6 +270,10 @@ impl PpirTy {
                     attrs,
                 },
             },
+            TypeExpr::Uint8Array { .. } => PpirTy::CannotBeStreamed {
+                origin: CannotBeStreamedOrigin::Uint8Array,
+                attrs,
+            },
             TypeExpr::Media { kind, .. } => PpirTy::CannotBeStreamed {
                 origin: CannotBeStreamedOrigin::Media(*kind),
                 attrs,
@@ -330,6 +335,7 @@ impl PpirTy {
                     kind: *kind,
                     attrs: vec![],
                 },
+                CannotBeStreamedOrigin::Uint8Array => TypeExpr::Uint8Array { attrs: vec![] },
                 CannotBeStreamedOrigin::RustType => TypeExpr::Rust { attrs: vec![] },
                 CannotBeStreamedOrigin::Error => TypeExpr::Error { attrs: vec![] },
                 CannotBeStreamedOrigin::Unknown => TypeExpr::Unknown { attrs: vec![] },

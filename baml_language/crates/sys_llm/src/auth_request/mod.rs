@@ -10,6 +10,7 @@
 //! OAuth token refresh, or vault-based secret retrieval).
 
 pub(crate) mod bedrock;
+pub(crate) mod vertex;
 
 use crate::{
     LlmProvider,
@@ -22,7 +23,7 @@ pub(crate) async fn auth_request(
     provider: LlmProvider,
     request: &mut HttpRequest,
     client: &PrimitiveClient,
-    callbacks: Option<&crate::BuildRequestCallbacks>,
+    callbacks: &crate::BuildRequestCallbacks,
 ) -> Result<(), BuildRequestError> {
     match provider {
         LlmProvider::Anthropic => auth_anthropic(request, client),
@@ -35,13 +36,26 @@ pub(crate) async fn auth_request(
         LlmProvider::AwsBedrock => {
             return bedrock::auth_bedrock(request, client, callbacks).await;
         }
+        LlmProvider::VertexAi => {
+            return vertex::auth_vertex(request, client, callbacks).await;
+        }
+        LlmProvider::GoogleAi => auth_google_ai(request, client),
         // Providers that don't need auth or aren't supported yet.
-        LlmProvider::GoogleAi
-        | LlmProvider::VertexAi
-        | LlmProvider::BamlFallback
-        | LlmProvider::BamlRoundRobin => {}
+        LlmProvider::BamlFallback | LlmProvider::BamlRoundRobin => {}
     }
     Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Google AI (Gemini)
+// ---------------------------------------------------------------------------
+
+fn auth_google_ai(request: &mut HttpRequest, client: &PrimitiveClient) {
+    if let Some(api_key) = &client.options.api_key {
+        request
+            .headers
+            .insert("x-goog-api-key".to_string(), api_key.clone());
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -115,9 +129,14 @@ mod tests {
             },
         );
         let mut req = fake_request();
-        auth_request(LlmProvider::Anthropic, &mut req, &client, None)
-            .await
-            .unwrap();
+        auth_request(
+            LlmProvider::Anthropic,
+            &mut req,
+            &client,
+            &crate::BuildRequestCallbacks::noop(),
+        )
+        .await
+        .unwrap();
         assert_eq!(req.headers.get("x-api-key").unwrap(), "sk-ant-test");
     }
 
@@ -125,9 +144,14 @@ mod tests {
     async fn anthropic_no_api_key_omits_header() {
         let client = make_client("anthropic", PrimitiveClientOptions::default());
         let mut req = fake_request();
-        auth_request(LlmProvider::Anthropic, &mut req, &client, None)
-            .await
-            .unwrap();
+        auth_request(
+            LlmProvider::Anthropic,
+            &mut req,
+            &client,
+            &crate::BuildRequestCallbacks::noop(),
+        )
+        .await
+        .unwrap();
         assert!(!req.headers.contains_key("x-api-key"));
     }
 
@@ -145,9 +169,14 @@ mod tests {
             },
         );
         let mut req = fake_request();
-        auth_request(LlmProvider::OpenAi, &mut req, &client, None)
-            .await
-            .unwrap();
+        auth_request(
+            LlmProvider::OpenAi,
+            &mut req,
+            &client,
+            &crate::BuildRequestCallbacks::noop(),
+        )
+        .await
+        .unwrap();
         assert_eq!(
             req.headers.get("authorization").unwrap(),
             "Bearer sk-test-key",
@@ -158,9 +187,14 @@ mod tests {
     async fn openai_no_api_key_omits_header() {
         let client = make_client("openai", PrimitiveClientOptions::default());
         let mut req = fake_request();
-        auth_request(LlmProvider::OpenAi, &mut req, &client, None)
-            .await
-            .unwrap();
+        auth_request(
+            LlmProvider::OpenAi,
+            &mut req,
+            &client,
+            &crate::BuildRequestCallbacks::noop(),
+        )
+        .await
+        .unwrap();
         assert!(!req.headers.contains_key("authorization"));
     }
 
@@ -181,9 +215,14 @@ mod tests {
             },
         );
         let mut req = fake_request();
-        auth_request(LlmProvider::AzureOpenAi, &mut req, &client, None)
-            .await
-            .unwrap();
+        auth_request(
+            LlmProvider::AzureOpenAi,
+            &mut req,
+            &client,
+            &crate::BuildRequestCallbacks::noop(),
+        )
+        .await
+        .unwrap();
         assert_eq!(req.headers.get("api-key").unwrap(), "az-key");
         assert!(!req.headers.contains_key("authorization"));
     }
@@ -199,9 +238,14 @@ mod tests {
             },
         );
         let mut req = fake_request();
-        auth_request(LlmProvider::OpenAiGeneric, &mut req, &client, None)
-            .await
-            .unwrap();
+        auth_request(
+            LlmProvider::OpenAiGeneric,
+            &mut req,
+            &client,
+            &crate::BuildRequestCallbacks::noop(),
+        )
+        .await
+        .unwrap();
         assert_eq!(req.headers.get("authorization").unwrap(), "Bearer sk-gen",);
     }
 
@@ -215,9 +259,14 @@ mod tests {
             },
         );
         let mut req = fake_request();
-        auth_request(LlmProvider::OpenRouter, &mut req, &client, None)
-            .await
-            .unwrap();
+        auth_request(
+            LlmProvider::OpenRouter,
+            &mut req,
+            &client,
+            &crate::BuildRequestCallbacks::noop(),
+        )
+        .await
+        .unwrap();
         assert_eq!(req.headers.get("authorization").unwrap(), "Bearer sk-or");
     }
 
@@ -231,14 +280,95 @@ mod tests {
             },
         );
         let mut req = fake_request();
-        auth_request(LlmProvider::Ollama, &mut req, &client, None)
-            .await
-            .unwrap();
+        auth_request(
+            LlmProvider::Ollama,
+            &mut req,
+            &client,
+            &crate::BuildRequestCallbacks::noop(),
+        )
+        .await
+        .unwrap();
         assert_eq!(
             req.headers.get("authorization").unwrap(),
             "Bearer ollama-key",
         );
     }
+
+    // -----------------------------------------------------------------------
+    // Google AI
+    // -----------------------------------------------------------------------
+
+    #[tokio::test]
+    async fn google_ai_sets_x_goog_api_key_header() {
+        let client = make_client(
+            "google-ai",
+            PrimitiveClientOptions {
+                api_key: Some("gemini-key".to_string()),
+                base_url: Some("https://generativelanguage.googleapis.com/v1beta".to_string()),
+                ..Default::default()
+            },
+        );
+        let mut req = fake_request();
+        auth_request(
+            LlmProvider::GoogleAi,
+            &mut req,
+            &client,
+            &crate::BuildRequestCallbacks::noop(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(req.headers.get("x-goog-api-key").unwrap(), "gemini-key");
+    }
+
+    #[tokio::test]
+    async fn google_ai_no_api_key_omits_header() {
+        let client = make_client(
+            "google-ai",
+            PrimitiveClientOptions {
+                base_url: Some("https://generativelanguage.googleapis.com/v1beta".to_string()),
+                ..Default::default()
+            },
+        );
+        let mut req = fake_request();
+        auth_request(
+            LlmProvider::GoogleAi,
+            &mut req,
+            &client,
+            &crate::BuildRequestCallbacks::noop(),
+        )
+        .await
+        .unwrap();
+        assert!(!req.headers.contains_key("x-goog-api-key"));
+    }
+
+    #[tokio::test]
+    async fn google_ai_preserves_existing_headers() {
+        let client = make_client(
+            "google-ai",
+            PrimitiveClientOptions {
+                api_key: Some("gemini-key".to_string()),
+                base_url: Some("https://generativelanguage.googleapis.com/v1beta".to_string()),
+                ..Default::default()
+            },
+        );
+        let mut req = fake_request();
+        req.headers
+            .insert("content-type".to_string(), "application/json".to_string());
+        auth_request(
+            LlmProvider::GoogleAi,
+            &mut req,
+            &client,
+            &crate::BuildRequestCallbacks::noop(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(req.headers.get("content-type").unwrap(), "application/json");
+        assert_eq!(req.headers.get("x-goog-api-key").unwrap(), "gemini-key");
+    }
+
+    // -----------------------------------------------------------------------
+    // General
+    // -----------------------------------------------------------------------
 
     #[tokio::test]
     async fn authorize_preserves_existing_headers() {
@@ -254,9 +384,14 @@ mod tests {
             .insert("content-type".to_string(), "application/json".to_string());
         req.headers
             .insert("x-custom".to_string(), "value".to_string());
-        auth_request(LlmProvider::OpenAi, &mut req, &client, None)
-            .await
-            .unwrap();
+        auth_request(
+            LlmProvider::OpenAi,
+            &mut req,
+            &client,
+            &crate::BuildRequestCallbacks::noop(),
+        )
+        .await
+        .unwrap();
         assert_eq!(req.headers.get("content-type").unwrap(), "application/json",);
         assert_eq!(req.headers.get("x-custom").unwrap(), "value");
         assert_eq!(req.headers.get("authorization").unwrap(), "Bearer sk-test",);

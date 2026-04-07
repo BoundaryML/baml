@@ -151,6 +151,7 @@ fn rewrite_block_ids_in_terminator(term: &mut Terminator, map: &[Option<BlockId>
             }
         }
         Terminator::Throw { .. } => {}
+        Terminator::ThrowIfPanic { otherwise, .. } => remap(otherwise),
     }
 }
 
@@ -214,6 +215,7 @@ fn collect_place_index_locals(body: &MirFunctionBody) -> HashSet<Local> {
                 scan_operand(right, set);
             }
             crate::Rvalue::UnaryOp { operand, .. } => scan_operand(operand, set),
+            crate::Rvalue::Uint8Array(_) => {}
             crate::Rvalue::Array(elems) => {
                 for e in elems {
                     scan_operand(e, set);
@@ -233,7 +235,7 @@ fn collect_place_index_locals(body: &MirFunctionBody) -> HashSet<Local> {
             crate::Rvalue::Discriminant(p) | crate::Rvalue::TypeTag(p) | crate::Rvalue::Len(p) => {
                 scan_place(p, set);
             }
-            crate::Rvalue::IsType { operand, .. } | crate::Rvalue::IsPanic(operand) => {
+            crate::Rvalue::IsType { operand, .. } => {
                 scan_operand(operand, set);
             }
             crate::Rvalue::MakeClosure { captures, .. } => {
@@ -286,7 +288,9 @@ fn collect_place_index_locals(body: &MirFunctionBody) -> HashSet<Local> {
                 Terminator::Switch { discriminant, .. } => {
                     scan_operand(discriminant, &mut set);
                 }
-                Terminator::Throw { value } => scan_operand(value, &mut set),
+                Terminator::Throw { value } | Terminator::ThrowIfPanic { value, .. } => {
+                    scan_operand(value, &mut set);
+                }
                 Terminator::Await { destination, .. } => scan_place(destination, &mut set),
                 Terminator::Goto { .. } | Terminator::Return | Terminator::Unreachable => {}
             }
@@ -384,6 +388,7 @@ fn count_in_rvalue(rv: &crate::Rvalue, uses: &mut [usize]) {
             count_in_operand(right, uses);
         }
         crate::Rvalue::UnaryOp { operand, .. } => count_in_operand(operand, uses),
+        crate::Rvalue::Uint8Array(_) => {}
         crate::Rvalue::Array(elems) => {
             for e in elems {
                 count_in_operand(e, uses);
@@ -403,7 +408,7 @@ fn count_in_rvalue(rv: &crate::Rvalue, uses: &mut [usize]) {
         crate::Rvalue::Discriminant(p) => count_in_place(p, uses),
         crate::Rvalue::TypeTag(p) => count_in_place(p, uses),
         crate::Rvalue::Len(p) => count_in_place(p, uses),
-        crate::Rvalue::IsType { operand, .. } | crate::Rvalue::IsPanic(operand) => {
+        crate::Rvalue::IsType { operand, .. } => {
             count_in_operand(operand, uses);
         }
         crate::Rvalue::MakeClosure { captures, .. } => {
@@ -437,7 +442,6 @@ fn count_in_statement(stmt: &crate::Statement, uses: &mut [usize]) {
         crate::StatementKind::WatchNotify(l) => {
             uses[l.0] += 1;
         }
-        crate::StatementKind::Assert(op) => count_in_operand(op, uses),
         crate::StatementKind::VizEnter(_)
         | crate::StatementKind::VizExit(_)
         | crate::StatementKind::NotifyBlock { .. }
@@ -493,7 +497,9 @@ fn count_in_terminator(term: &Terminator, uses: &mut [usize]) {
             // destination is a write
             count_dest_place(destination, uses);
         }
-        Terminator::Throw { value } => count_in_operand(value, uses),
+        Terminator::Throw { value } | Terminator::ThrowIfPanic { value, .. } => {
+            count_in_operand(value, uses);
+        }
         Terminator::Goto { .. } | Terminator::Return | Terminator::Unreachable => {}
     }
 }
@@ -661,6 +667,7 @@ fn apply_subst_to_rvalue(rv: &mut crate::Rvalue, subst: &HashMap<Local, Operand>
             apply_subst_to_operand(right, subst);
         }
         crate::Rvalue::UnaryOp { operand, .. } => apply_subst_to_operand(operand, subst),
+        crate::Rvalue::Uint8Array(_) => {}
         crate::Rvalue::Array(elems) => {
             for e in elems {
                 apply_subst_to_operand(e, subst);
@@ -680,7 +687,7 @@ fn apply_subst_to_rvalue(rv: &mut crate::Rvalue, subst: &HashMap<Local, Operand>
         crate::Rvalue::Discriminant(p) | crate::Rvalue::TypeTag(p) | crate::Rvalue::Len(p) => {
             apply_subst_to_place_locals(p, subst);
         }
-        crate::Rvalue::IsType { operand, .. } | crate::Rvalue::IsPanic(operand) => {
+        crate::Rvalue::IsType { operand, .. } => {
             apply_subst_to_operand(operand, subst);
         }
         crate::Rvalue::MakeClosure { captures, .. } => {
@@ -698,9 +705,6 @@ fn apply_subst_to_statement(stmt: &mut crate::Statement, subst: &HashMap<Local, 
         }
         crate::StatementKind::WatchOptions { filter, .. } => {
             apply_subst_to_operand(filter, subst);
-        }
-        crate::StatementKind::Assert(op) => {
-            apply_subst_to_operand(op, subst);
         }
         _ => {}
     }
@@ -722,7 +726,9 @@ fn apply_subst_to_terminator(term: &mut Terminator, subst: &HashMap<Local, Opera
                 apply_subst_to_operand(arg, subst);
             }
         }
-        Terminator::Throw { value } => apply_subst_to_operand(value, subst),
+        Terminator::Throw { value } | Terminator::ThrowIfPanic { value, .. } => {
+            apply_subst_to_operand(value, subst);
+        }
         Terminator::Goto { .. }
         | Terminator::Return
         | Terminator::Unreachable
@@ -847,6 +853,7 @@ fn remap_rvalue(rv: &mut crate::Rvalue, map: &[Option<Local>]) {
             remap_operand(right, map);
         }
         crate::Rvalue::UnaryOp { operand, .. } => remap_operand(operand, map),
+        crate::Rvalue::Uint8Array(_) => {}
         crate::Rvalue::Array(elems) => {
             for e in elems {
                 remap_operand(e, map);
@@ -866,7 +873,7 @@ fn remap_rvalue(rv: &mut crate::Rvalue, map: &[Option<Local>]) {
         crate::Rvalue::Discriminant(p) | crate::Rvalue::TypeTag(p) | crate::Rvalue::Len(p) => {
             remap_place(p, map);
         }
-        crate::Rvalue::IsType { operand, .. } | crate::Rvalue::IsPanic(operand) => {
+        crate::Rvalue::IsType { operand, .. } => {
             remap_operand(operand, map);
         }
         crate::Rvalue::MakeClosure { captures, .. } => {
@@ -890,7 +897,6 @@ fn rewrite_locals_in_statement(stmt: &mut crate::Statement, map: &[Option<Local>
             remap_operand(filter, map);
         }
         crate::StatementKind::WatchNotify(l) => remap_local(l, map),
-        crate::StatementKind::Assert(op) => remap_operand(op, map),
         crate::StatementKind::VizEnter(_)
         | crate::StatementKind::VizExit(_)
         | crate::StatementKind::NotifyBlock { .. }
@@ -934,7 +940,9 @@ fn rewrite_locals_in_terminator(term: &mut Terminator, map: &[Option<Local>]) {
             remap_place(future, map);
             remap_place(destination, map);
         }
-        Terminator::Throw { value } => remap_operand(value, map),
+        Terminator::Throw { value } | Terminator::ThrowIfPanic { value, .. } => {
+            remap_operand(value, map);
+        }
         Terminator::Goto { .. } | Terminator::Return | Terminator::Unreachable => {}
     }
 }
@@ -1037,6 +1045,7 @@ fn verify_mir(body: &MirFunctionBody, name: &crate::ItemRef) {
                             check_operand(right, &blk);
                         }
                         crate::Rvalue::UnaryOp { operand, .. } => check_operand(operand, &blk),
+                        crate::Rvalue::Uint8Array(_) => {}
                         crate::Rvalue::Array(elems) => {
                             for e in elems {
                                 check_operand(e, &blk);
@@ -1056,7 +1065,7 @@ fn verify_mir(body: &MirFunctionBody, name: &crate::ItemRef) {
                         crate::Rvalue::Discriminant(p)
                         | crate::Rvalue::TypeTag(p)
                         | crate::Rvalue::Len(p) => check_place(p, &blk),
-                        crate::Rvalue::IsType { operand, .. } | crate::Rvalue::IsPanic(operand) => {
+                        crate::Rvalue::IsType { operand, .. } => {
                             check_operand(operand, &blk);
                         }
                         crate::Rvalue::MakeClosure { captures, .. } => {
@@ -1073,7 +1082,6 @@ fn verify_mir(body: &MirFunctionBody, name: &crate::ItemRef) {
                     check_operand(filter, &blk);
                 }
                 crate::StatementKind::WatchNotify(l) => check_local(*l, &blk),
-                crate::StatementKind::Assert(op) => check_operand(op, &blk),
                 _ => {}
             }
         }
@@ -1118,7 +1126,9 @@ fn verify_mir(body: &MirFunctionBody, name: &crate::ItemRef) {
                     check_place(future, &blk);
                     check_place(destination, &blk);
                 }
-                Terminator::Throw { value } => check_operand(value, &blk),
+                Terminator::Throw { value } | Terminator::ThrowIfPanic { value, .. } => {
+                    check_operand(value, &blk);
+                }
                 Terminator::Goto { .. } | Terminator::Return | Terminator::Unreachable => {}
             }
         }

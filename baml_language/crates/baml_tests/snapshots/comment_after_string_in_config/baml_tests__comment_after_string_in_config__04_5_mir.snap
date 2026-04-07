@@ -6,11 +6,11 @@ fn user.OpenRouterMistralSmall3_1_24b$new() -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: void
-    let _2: "system" | "user" | "assistant"[]
+    let _2: string[]
     let _3: string
-    let _4: void
+    let _4: map<void, void>
     let _5: map<void, void>
-    let _6: map<"temperature", 0.1>
+    let _6: map<string, float>
 
     bb0: {
         _2 = [const "system", const "user", const "assistant"];
@@ -18,7 +18,7 @@ fn user.OpenRouterMistralSmall3_1_24b$new() -> null {
     }
 
     bb1: {
-        _4 =  {  };
+        _4 = {  };
         _5 = {  };
         _6 = { const "temperature": const 0.1_f64 };
         _1 = baml.llm.PrimitiveClientOptions { const "mistralai/mistral-small-3.1-24b-instruct", const "https://openrouter.ai/api/v1", const null, const null, const null, const null, const "system", copy _2, const null, copy _3, const null, copy _4, copy _5, copy _6 };

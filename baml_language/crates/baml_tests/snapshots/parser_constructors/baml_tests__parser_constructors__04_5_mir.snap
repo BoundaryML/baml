@@ -44,9 +44,9 @@ fn user.intArray() -> int[] {
     }
 }
 
-fn user.mixedArray() -> int | string[] {
+fn user.mixedArray() -> (int | string)[] {
     // Locals:
-    let _0: int | string[] // _0 // return
+    let _0: (int | string)[] // _0 // return
 
     bb0: {
         _0 = [const 1_i64, const "two", const 3_i64];

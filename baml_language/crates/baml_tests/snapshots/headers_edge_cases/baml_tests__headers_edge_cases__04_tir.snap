@@ -102,7 +102,7 @@ function user.HeadersAroundExpressions() -> string throws never {
     let x = 5 : 5 -> int
     // [2] After Let
     // [3] Before If
-    if (x Gt 0 : bool) : int | 0
+    if (x > 0 : bool) : int | 0
       { : int
         // [4] Inside If
         x : int
@@ -115,9 +115,9 @@ function user.HeadersAroundExpressions() -> string throws never {
     // [3] After If
     // [2] Before For
     for i in [1, 2, 3]
-      { : 1 | 2 | 3
+      { : int
         // [3] Inside For
-        i : 1 | 2 | 3
+        i : int
       }
     // [2] After For
     // [1] Final Section

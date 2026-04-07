@@ -126,6 +126,7 @@ pub fn display_ty(ty: &Ty) -> String {
             PrimitiveType::Audio => "audio".to_string(),
             PrimitiveType::Video => "video".to_string(),
             PrimitiveType::Pdf => "pdf".to_string(),
+            PrimitiveType::Uint8Array => "uint8array".to_string(),
         },
         Ty::List(inner, _) => format!("{}[]", display_ty(inner)),
         Ty::Map(k, v, _) => format!("map<{}, {}>", display_ty(k), display_ty(v)),
@@ -191,6 +192,7 @@ pub fn display_type_expr(te: &TypeExpr) -> String {
         TypeExpr::String { .. } => "string".to_string(),
         TypeExpr::Bool { .. } => "bool".to_string(),
         TypeExpr::Null { .. } => "null".to_string(),
+        TypeExpr::Uint8Array { .. } => "uint8array".to_string(),
         TypeExpr::Media { kind, .. } => format!("{kind:?}").to_lowercase(),
         TypeExpr::Optional { inner, .. } => {
             let s = display_type_expr(inner);

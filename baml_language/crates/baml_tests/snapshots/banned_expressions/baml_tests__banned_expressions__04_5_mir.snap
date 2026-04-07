@@ -1,0 +1,165 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== MIR2 ===
+fn user.Bar() -> int {
+    // Locals:
+    let _0: int // _0 // return
+
+    bb0: {
+        _0 = const null;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.Foo() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: void // a
+
+    bb0: {
+        _1 = const null;
+        _0 = copy _1;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.ParenAssignInLet() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: null
+
+    bb0: {
+        _1 = call const fn baml.sys.panic(const "parse error") -> [bb1];
+    }
+
+    bb1: {
+        unreachable;
+    }
+}
+
+fn user.ParenAssignSimple() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: null
+
+    bb0: {
+        _1 = call const fn baml.sys.panic(const "parse error") -> [bb1];
+    }
+
+    bb1: {
+        unreachable;
+    }
+}
+
+fn user.ParenCompoundAssign() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: null
+
+    bb0: {
+        _1 = call const fn baml.sys.panic(const "parse error") -> [bb1];
+    }
+
+    bb1: {
+        unreachable;
+    }
+}
+
+fn user.ParenSafeAssignDeepChain(node: Node?) -> int? {
+    // Locals:
+    let _0: int? // _0 // return
+    let _1: Node? // node // param
+    let _2: null
+
+    bb0: {
+        _2 = call const fn baml.sys.panic(const "parse error") -> [bb1];
+    }
+
+    bb1: {
+        unreachable;
+    }
+}
+
+fn user.ParenSafeAssignField(user: User?) -> string? {
+    // Locals:
+    let _0: string? // _0 // return
+    let _1: User? // user // param
+    let _2: null
+
+    bb0: {
+        _2 = call const fn baml.sys.panic(const "parse error") -> [bb1];
+    }
+
+    bb1: {
+        unreachable;
+    }
+}
+
+fn user.ParenSafeAssignIndex(items: int[]?) -> int? {
+    // Locals:
+    let _0: int? // _0 // return
+    let _1: int[]? // items // param
+    let _2: null
+
+    bb0: {
+        _2 = call const fn baml.sys.panic(const "parse error") -> [bb1];
+    }
+
+    bb1: {
+        unreachable;
+    }
+}
+
+fn user.ParenSafeAssignMapIndex(node: Node?) -> int? {
+    // Locals:
+    let _0: int? // _0 // return
+    let _1: Node? // node // param
+    let _2: null
+
+    bb0: {
+        _2 = call const fn baml.sys.panic(const "parse error") -> [bb1];
+    }
+
+    bb1: {
+        unreachable;
+    }
+}
+
+fn user.ParenSafeAssignReturn(user: User?) -> string? {
+    // Locals:
+    let _0: string? // _0 // return
+    let _1: User? // user // param
+    let _2: null
+
+    bb0: {
+        _2 = call const fn baml.sys.panic(const "parse error") -> [bb1];
+    }
+
+    bb1: {
+        unreachable;
+    }
+}
+
+fn user.ParenSafeCompoundAssign(user: User?) -> int? {
+    // Locals:
+    let _0: int? // _0 // return
+    let _1: User? // user // param
+    let _2: null
+
+    bb0: {
+        _2 = call const fn baml.sys.panic(const "parse error") -> [bb1];
+    }
+
+    bb1: {
+        unreachable;
+    }
+}

@@ -395,15 +395,6 @@ fn simulate_statement_stack(
             };
             pull_semantics::walk_watch_options_statement(&mut sink, *local, None, filter).is_ok()
         }
-        StatementKind::Assert(operand) => {
-            let mut sink = StackCarryPullSink {
-                sim,
-                carried_local,
-                classifications,
-                def_use,
-            };
-            pull_semantics::walk_assert_statement(&mut sink, operand).is_ok()
-        }
     }
 }
 
@@ -537,6 +528,20 @@ fn simulate_terminator_stack(
                 return false;
             }
             // THROW consumes the thrown value from the stack when unwinding.
+            sim.pop_n(1)
+        }
+        Terminator::ThrowIfPanic { value, .. } => {
+            let mut sink = StackCarryPullSink {
+                sim,
+                carried_local,
+                classifications,
+                def_use,
+            };
+            if pull_semantics::walk_operand_pull(&mut sink, value).is_err() {
+                return false;
+            }
+            // ThrowIfPanic loads the value, checks it, and either throws (consuming it)
+            // or continues (consuming it). Either way the stack is clean after.
             sim.pop_n(1)
         }
     }
@@ -688,6 +693,12 @@ impl PullSink for StackCarryPullSink<'_> {
         Ok(())
     }
 
+    fn alloc_uint8array(&mut self, _bytes: &[u8]) -> Result<(), Self::Error> {
+        // LoadConst pushes 1, Call(deep_copy) pops 1 + pushes 1 → net push 1.
+        self.sim.push();
+        Ok(())
+    }
+
     fn alloc_map(&mut self, len: usize) -> Result<(), Self::Error> {
         if !self.sim.pop_n(len * 2) {
             return Err(());
@@ -759,15 +770,6 @@ impl PullSink for StackCarryPullSink<'_> {
         Ok(())
     }
 
-    fn is_panic(&mut self) -> Result<(), Self::Error> {
-        // Consumes value, pushes boolean.
-        if !self.sim.pop_n(1) {
-            return Err(());
-        }
-        self.sim.push();
-        Ok(())
-    }
-
     fn make_closure(
         &mut self,
         _lambda_idx: usize,
@@ -832,13 +834,6 @@ impl StackEffectSink for StackCarryPullSink<'_> {
 
     fn watch_local(&mut self, _local: Local) -> Result<(), Self::Error> {
         if !self.sim.pop_n(2) {
-            return Err(());
-        }
-        Ok(())
-    }
-
-    fn assert_top(&mut self) -> Result<(), Self::Error> {
-        if !self.sim.pop_n(1) {
             return Err(());
         }
         Ok(())

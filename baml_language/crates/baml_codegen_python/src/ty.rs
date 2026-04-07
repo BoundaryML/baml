@@ -56,8 +56,16 @@ impl std::fmt::Display for Namespace {
 
 impl Name {
     pub(crate) fn from_codegen_types(name: &baml_codegen_types::Name) -> Self {
+        // Strip the `$stream` suffix — stream types live in their own module
+        // so they can keep the original user-defined name.
+        let bare_name = name
+            .name
+            .as_str()
+            .strip_suffix("$stream")
+            .map(baml_base::Name::new)
+            .unwrap_or_else(|| name.name.clone());
         Name {
-            name: name.name.clone(),
+            name: bare_name,
             namespace: Namespace::from_codegen_types(&name.namespace),
         }
     }
@@ -116,6 +124,9 @@ pub(crate) enum Ty {
     Bool,
     None,
 
+    // Binary data
+    Uint8Array,
+
     // Media types are top level types in python
     Image,
     Audio,
@@ -164,6 +175,7 @@ impl Ty {
             baml_codegen_types::Ty::String => Self::String,
             baml_codegen_types::Ty::Bool => Self::Bool,
             baml_codegen_types::Ty::Null => Self::None,
+            baml_codegen_types::Ty::Uint8Array => Self::Uint8Array,
             baml_codegen_types::Ty::Media(kind) => match kind {
                 baml_base::MediaKind::Image => Self::Image,
                 baml_base::MediaKind::Video => Self::Video,
@@ -205,6 +217,7 @@ impl Ty {
             Ty::String => "str".to_string(),
             Ty::Bool => "bool".to_string(),
             Ty::None => "None".to_string(),
+            Ty::Uint8Array => "bytes".to_string(),
             Ty::Literal(lit) => format!("typing.Literal[{lit}]"),
             Ty::Image => format!("{}Image", Namespace::BamlPy.render(ns)),
             Ty::Video => format!("{}Video", Namespace::BamlPy.render(ns)),

@@ -107,6 +107,54 @@ function baml.String.toUpperCase(self: null) -> string {
 function baml.String.trim(self: null) -> string {
 }
 
+function baml.Uint8Array.at(self: null, index: int) -> int? {
+}
+
+function baml.Uint8Array.concat(self: null, other: uint8array) -> uint8array {
+}
+
+function baml.Uint8Array.from_array(array: int[]) -> uint8array {
+}
+
+function baml.Uint8Array.from_base64(base64: string) -> uint8array {
+}
+
+function baml.Uint8Array.from_hex(hex: string) -> uint8array {
+}
+
+function baml.Uint8Array.includes(self: null, item: int) -> bool {
+}
+
+function baml.Uint8Array.length(self: null) -> int {
+}
+
+function baml.Uint8Array.pop(self: null) -> int? {
+}
+
+function baml.Uint8Array.push(self: null, item: int) -> int {
+}
+
+function baml.Uint8Array.reverse(self: null) -> uint8array {
+}
+
+function baml.Uint8Array.slice(self: null, start: int, end: int) -> uint8array {
+}
+
+function baml.Uint8Array.sort(self: null) -> null {
+}
+
+function baml.Uint8Array.to_array(self: null) -> int[] {
+}
+
+function baml.Uint8Array.to_base64(self: null) -> string {
+}
+
+function baml.Uint8Array.to_hex(self: null) -> string {
+}
+
+function baml.Uint8Array.zeroes(size: int) -> uint8array {
+}
+
 function baml.deep_copy(value: void) -> void {
 }
 
@@ -498,6 +546,8 @@ function baml.llm.Client.execute(self: null, context: void, inherited_delay_ms: 
     load_const 0
     store_var attempt
     jump L2
+    load_var e
+    throw_if_panic
     load_var attempt
     load_const 1
     bin_op +
@@ -596,11 +646,11 @@ function baml.llm.Client.execute_once(self: null, context: void, active_delay_ms
     pop 1
     load_var self
     load_field .counter
-    store_var _58
+    store_var _57
     load_var self
     load_field .sub_clients
     call baml.Array.length
-    store_var _59
+    store_var _58
     load_var self
     load_var self
     load_field .counter
@@ -609,8 +659,8 @@ function baml.llm.Client.execute_once(self: null, context: void, active_delay_ms
     store_field .counter
     load_var self
     load_field .sub_clients
+    load_var _57
     load_var _58
-    load_var _59
     bin_op %
     load_array_element
     load_var context
@@ -621,7 +671,7 @@ function baml.llm.Client.execute_once(self: null, context: void, active_delay_ms
   L2:
     load_var self
     load_field .sub_clients
-    store_var _47
+    store_var _46
     load_const 0
     store_var __for_idx
     jump L6
@@ -681,6 +731,8 @@ function baml.llm.Client.execute_once(self: null, context: void, active_delay_ms
     dispatch_future baml.llm.PrimitiveClient.parse
     await
     jump L9
+    load_var e
+    throw_if_panic
     load_var __for_idx
     load_const 1
     bin_op +
@@ -688,7 +740,7 @@ function baml.llm.Client.execute_once(self: null, context: void, active_delay_ms
 
   L6:
     load_var __for_idx
-    load_var _47
+    load_var _46
     call baml.Array.length
     cmp_op <
     pop_jump_if_false L7
@@ -702,7 +754,7 @@ function baml.llm.Client.execute_once(self: null, context: void, active_delay_ms
     throw
 
   L8:
-    load_var _47
+    load_var _46
     load_var __for_idx
     load_array_element
     load_var context
@@ -711,6 +763,8 @@ function baml.llm.Client.execute_once(self: null, context: void, active_delay_ms
 
   L9:
     return
+    load_var e
+    throw_if_panic
     load_var active_delay_ms
     load_const 0
     cmp_op >
@@ -721,7 +775,7 @@ function baml.llm.Client.execute_once(self: null, context: void, active_delay_ms
     pop 1
 
   L10:
-    load_var _36
+    load_var e
     throw
 }
 
@@ -1003,6 +1057,9 @@ function baml.net.Socket.read(self: null) -> string {
 }
 
 function baml.net.connect(addr: string) -> void {
+}
+
+function baml.sys.now_ms() -> int {
 }
 
 function baml.sys.panic(message: string) -> null {

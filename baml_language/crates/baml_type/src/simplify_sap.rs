@@ -16,7 +16,7 @@
 ///
 /// Basic types, No Attributes
 ///
-/// ```jsx
+/// ```baml
 /// int
 ///   parse_without_null: Unset,
 ///   pending_never: Unset,
@@ -30,7 +30,7 @@
 ///   asserts: []
 /// ```
 ///
-/// ```jsx
+/// ```baml
 /// string (def)
 /// ==S()==>
 /// string (def)
@@ -38,7 +38,7 @@
 ///
 ///  Classes, No Attributes
 ///
-/// ```jsx
+/// ```baml
 /// MyClass (def)
 /// ==S()==>
 /// MyClass (def)
@@ -46,7 +46,7 @@
 ///
 /// Unions, No Attributes
 ///
-/// ```jsx
+/// ```baml
 /// MyA (def) | int (def)
 /// ==S()==>
 /// MyA (def) | int (def)
@@ -54,7 +54,7 @@
 ///
 /// ---
 ///
-/// ```jsx
+/// ```baml
 /// int |
 ///   (def)
 /// ==S()==>
@@ -68,7 +68,7 @@
 ///
 /// Unions with comparable variants
 ///
-/// ```jsx
+/// ```baml
 /// int
 ///     (def)
 /// | int
@@ -82,7 +82,7 @@
 ///
 /// ---
 ///
-/// ```jsx
+/// ```baml
 /// int
 ///     (def)
 /// | 5
@@ -98,7 +98,7 @@
 ///
 /// Unions with `@sap.parse_without_null` attributes
 ///
-/// ```jsx
+/// ```baml
 /// int
 ///     parse_without_null: Set,
 ///     pending_never: Unset,
@@ -120,7 +120,7 @@
 ///
 /// Unions of unions
 ///
-/// ```jsx
+/// ```baml
 /// (int (def)|bool (def))|float (def)
 /// ==S()==>
 /// int(def) | bool(def) | float (def)
@@ -136,7 +136,7 @@
 ///
 /// `null` normalization
 ///
-/// ```jsx
+/// ```baml
 /// null(def) | int(def)
 /// ==S()==>
 /// int(def) | null(def)
@@ -146,7 +146,7 @@
 ///
 /// ---
 ///
-/// ```jsx
+/// ```baml
 /// int
 ///   parse_without_null: Unset,
 ///   pending_never: Set,
@@ -164,7 +164,7 @@
 ///
 /// ---
 ///
-/// ```jsx
+/// ```baml
 /// int
 ///   parse_without_null: Unset,
 ///   pending_never: Set,
@@ -182,7 +182,7 @@
 ///
 /// ---
 ///
-/// ```jsx
+/// ```baml
 /// int
 ///     parse_without_null: Unset,
 ///     pending_never: Set,
@@ -205,7 +205,7 @@
 ///
 /// ---
 ///
-/// ```jsx
+/// ```baml
 /// int
 ///     asserts: ASSERTS_1,
 ///     ..def
@@ -221,7 +221,7 @@
 ///
 /// ---
 ///
-/// ```jsx
+/// ```baml
 /// int
 ///     asserts: ASSERTS_1,
 ///     ..def
@@ -238,7 +238,7 @@
 ///
 /// ---
 ///
-/// ```jsx
+/// ```baml
 /// int
 ///     asserts: ASRTS_1,
 ///     ..def
@@ -260,7 +260,7 @@
 ///
 /// Type Aliases
 ///
-/// ```jsx
+/// ```baml
 /// type X = int
 ///
 /// int (def) | 5 (def) | X (def)
@@ -272,7 +272,7 @@
 ///
 /// ---
 ///
-/// ```jsx
+/// ```baml
 /// type X = int @sap.parse_without_null
 ///
 /// X |
@@ -293,7 +293,7 @@
 ///
 /// Attributes on unions
 ///
-/// ```jsx
+/// ```baml
 /// (int (def) | string (def))
 ///   parse_without_null: Set,
 ///   pending_never: Unset,
@@ -316,7 +316,7 @@
 ///
 /// ---
 ///
-/// ```jsx
+/// ```baml
 /// (int (def) | string (def))
 ///   parse_without_null: Unset,
 ///   pending_never: Set,
@@ -344,7 +344,7 @@
 ///
 /// ---
 ///
-/// ```jsx
+/// ```baml
 /// (int
 ///     parse_without_null: Set,
 ///     pending_never: Unset,
@@ -382,7 +382,7 @@
 ///
 /// ---
 ///
-/// ```jsx
+/// ```baml
 /// (5
 ///   asserts: A_1,
 ///   ..def

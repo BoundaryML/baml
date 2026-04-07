@@ -8,7 +8,7 @@
 
 use std::{io::Write, sync::Arc};
 
-use baml_builtins::{PromptAst as BuiltinPromptAst, PromptAstSimple};
+use baml_builtins2::{PromptAst as BuiltinPromptAst, PromptAstSimple};
 use baml_tests::engine::compile_source;
 use bex_engine::{BexEngine, BexExternalValue, FunctionCallContextBuilder};
 use bex_external_types::BexExternalAdt;
@@ -82,6 +82,7 @@ pub(crate) async fn assert_engine_executes(input: EngineProgram) -> anyhow::Resu
             input.entry,
             input.inputs,
             FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
         )
         .await;
 
@@ -210,6 +211,7 @@ function get_prompt() -> baml.llm.PromptAst {{
                 "get_prompt",
                 vec![],
                 FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+                true,
             )
             .await
             .expect("render_prompt failed");

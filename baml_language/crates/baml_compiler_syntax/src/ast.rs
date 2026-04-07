@@ -1584,10 +1584,7 @@ impl BlockAttribute {
             .find(|token| {
                 matches!(
                     token.kind(),
-                    SyntaxKind::WORD
-                        | SyntaxKind::KW_DYNAMIC
-                        | SyntaxKind::KW_ASSERT
-                        | SyntaxKind::KW_THROWS
+                    SyntaxKind::WORD | SyntaxKind::KW_DYNAMIC | SyntaxKind::KW_THROWS
                 )
             })
     }
@@ -1602,10 +1599,7 @@ impl BlockAttribute {
             .filter(|token| {
                 matches!(
                     token.kind(),
-                    SyntaxKind::WORD
-                        | SyntaxKind::KW_DYNAMIC
-                        | SyntaxKind::KW_ASSERT
-                        | SyntaxKind::KW_THROWS
+                    SyntaxKind::WORD | SyntaxKind::KW_DYNAMIC | SyntaxKind::KW_THROWS
                 )
             })
             .map(|token| token.text().to_string())
@@ -1629,7 +1623,6 @@ impl BlockAttribute {
                     token.kind(),
                     SyntaxKind::WORD
                         | SyntaxKind::KW_DYNAMIC
-                        | SyntaxKind::KW_ASSERT
                         | SyntaxKind::KW_THROWS
                         | SyntaxKind::DOT
                 )
@@ -1813,23 +1806,21 @@ impl BlockAttribute {
 
 impl Attribute {
     /// Get the first segment of the attribute name (e.g., "stream" from @stream.done).
-    /// Also handles keyword attribute names like @assert and @check.
     pub fn name(&self) -> Option<SyntaxToken> {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .find(|token| matches!(token.kind(), SyntaxKind::WORD | SyntaxKind::KW_ASSERT))
+            .find(|token| matches!(token.kind(), SyntaxKind::WORD))
     }
 
     /// Get the full attribute name including dot-separated modifiers.
     /// For @stream.done returns "stream.done", for @alias returns "alias".
-    /// Also handles keyword attribute names like @assert and @check.
     pub fn full_name(&self) -> Option<String> {
         let segments: Vec<String> = self
             .syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|token| matches!(token.kind(), SyntaxKind::WORD | SyntaxKind::KW_ASSERT))
+            .filter(|token| matches!(token.kind(), SyntaxKind::WORD))
             .map(|token| token.text().to_string())
             .collect();
 
@@ -1842,18 +1833,12 @@ impl Attribute {
 
     /// Get the text range covering the full attribute name (including modifiers).
     /// For @stream.done returns the range from "stream" to "done".
-    /// Also handles keyword attribute names like @assert and @check.
     pub fn full_name_range(&self) -> Option<rowan::TextRange> {
         let tokens: Vec<_> = self
             .syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|token| {
-                matches!(
-                    token.kind(),
-                    SyntaxKind::WORD | SyntaxKind::KW_ASSERT | SyntaxKind::DOT
-                )
-            })
+            .filter(|token| matches!(token.kind(), SyntaxKind::WORD | SyntaxKind::DOT))
             .collect();
 
         if tokens.is_empty() {
@@ -2295,7 +2280,10 @@ impl LetStmt {
                     | SyntaxKind::CALL_EXPR
                     | SyntaxKind::PATH_EXPR
                     | SyntaxKind::FIELD_ACCESS_EXPR
+                    | SyntaxKind::OPTIONAL_FIELD_ACCESS_EXPR
                     | SyntaxKind::INDEX_EXPR
+                    | SyntaxKind::OPTIONAL_INDEX_EXPR
+                    | SyntaxKind::OPTIONAL_CALL_EXPR
                     | SyntaxKind::IF_EXPR
                     | SyntaxKind::MATCH_EXPR
                     | SyntaxKind::CATCH_EXPR
@@ -2461,7 +2449,9 @@ impl BlockExpr {
                         | SyntaxKind::BREAK_STMT
                         | SyntaxKind::CONTINUE_STMT
                         | SyntaxKind::THROW_STMT
-                        | SyntaxKind::ASSERT_STMT => Some(BlockElement::Stmt(n)),
+                        // test/testset declarations inside blocks (dynamic test generation)
+                        | SyntaxKind::TEST_EXPR_DEF
+                        | SyntaxKind::TESTSET_DEF => Some(BlockElement::Stmt(n)),
                         // Header comment (//# name)
                         SyntaxKind::HEADER_COMMENT => Some(BlockElement::HeaderComment(n)),
                         // Expression nodes
@@ -2476,8 +2466,11 @@ impl BlockExpr {
                         | SyntaxKind::BLOCK_EXPR
                         | SyntaxKind::PATH_EXPR
                         | SyntaxKind::FIELD_ACCESS_EXPR
+                        | SyntaxKind::OPTIONAL_FIELD_ACCESS_EXPR
                         | SyntaxKind::ENV_ACCESS_EXPR
                         | SyntaxKind::INDEX_EXPR
+                        | SyntaxKind::OPTIONAL_INDEX_EXPR
+                        | SyntaxKind::OPTIONAL_CALL_EXPR
                         | SyntaxKind::PAREN_EXPR
                         | SyntaxKind::ARRAY_LITERAL
                         | SyntaxKind::OBJECT_LITERAL

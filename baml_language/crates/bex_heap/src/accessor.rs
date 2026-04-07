@@ -595,6 +595,9 @@ impl<'a> BexValue<'a> {
                     value: Box::new(BexValue::ExternalValue(value).as_owned_but_very_slow(heap)?),
                     metadata: metadata.clone(),
                 }),
+                BexExternalValue::Uint8Array(bytes) => {
+                    Ok(BexExternalValue::Uint8Array(bytes.clone()))
+                }
                 BexExternalValue::RustData(data) => {
                     Ok(BexExternalValue::RustData(std::sync::Arc::clone(data)))
                 }
@@ -688,6 +691,7 @@ impl<'a> BexValue<'a> {
                         Ok(BexExternalValue::Adt(BexExternalAdt::Collector(c.clone())))
                     }
                     Object::Type(ty) => Ok(BexExternalValue::Adt(BexExternalAdt::Type(ty.clone()))),
+                    Object::Uint8Array(bytes) => Ok(BexExternalValue::Uint8Array(bytes.clone())),
                     Object::RustData(data) => Ok(BexExternalValue::RustData(data.clone())),
                     Object::Closure(_) => Err(AccessError::CannotConvertToOwned {
                         reason: "closure".to_string(),

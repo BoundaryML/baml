@@ -32,7 +32,7 @@ function CallerGood(x: int) -> string {
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯
-// Error: extraneous throws declaration: user.Errors
+// Warning: extraneous throws declaration: user.Errors
 //     ╭─[ throw_throws_caller_variant_contract.baml:10:42 ]
 //     │
 //  10 │ function MayFail(x: int) -> string throws Errors {
@@ -41,7 +41,7 @@ function CallerGood(x: int) -> string {
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯
-// Error: unreachable arm
+// Warning: unreachable arm
 //     ╭─[ throw_throws_caller_variant_contract.baml:20:29 ]
 //     │
 //  20 │     Errors.NotFoundError => "notfound"

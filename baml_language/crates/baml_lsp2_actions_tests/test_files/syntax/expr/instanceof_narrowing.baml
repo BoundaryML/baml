@@ -43,39 +43,48 @@ function test_multiple_classes(x: Foo | Bar | Baz) -> string {
 
 //----
 //- diagnostics
-// Error: unresolved member: user.Bar.field
+// Error: type `user.Bar` has no member `field`
 //     ╭─[ expr_instanceof_narrowing.baml:13:18 ]
 //     │
 //  13 │         return x.field;
 //     │                  ──┬──  
-//     │                    ╰──── unresolved member: user.Bar.field
+//     │                    ╰──── type `user.Bar` has no member `field`
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯
-// Error: unresolved member: null.field
-//     ╭─[ expr_instanceof_narrowing.baml:23:18 ]
+// Error: did you mean `x?.field`? `x.field` does not handle the case when `x` is null
+//     ╭─[ expr_instanceof_narrowing.baml:23:15 ]
 //     │
 //  23 │         return x.field;
-//     │                  ──┬──  
-//     │                    ╰──── unresolved member: null.field
+//     │               ────┬───  
+//     │                   ╰───── did you mean `x?.field`? `x.field` does not handle the case when `x` is null
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯
-// Error: unresolved member: user.Bar.field
+// Error: type mismatch: expected string, got string?
+//     ╭─[ expr_instanceof_narrowing.baml:23:15 ]
+//     │
+//  23 │         return x.field;
+//     │               ────┬───  
+//     │                   ╰───── type mismatch: expected string, got string?
+//     │ 
+//     │ Note: Error code: E0001
+// ────╯
+// Error: type `user.Bar` has no member `field`
 //     ╭─[ expr_instanceof_narrowing.baml:36:18 ]
 //     │
 //  36 │         return x.field;
 //     │                  ──┬──  
-//     │                    ╰──── unresolved member: user.Bar.field
+//     │                    ╰──── type `user.Bar` has no member `field`
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯
-// Error: unresolved member: user.Bar.field
+// Error: type `user.Bar` has no member `field`
 //     ╭─[ expr_instanceof_narrowing.baml:38:18 ]
 //     │
 //  38 │         return x.field;
 //     │                  ──┬──  
-//     │                    ╰──── unresolved member: user.Bar.field
+//     │                    ╰──── type `user.Bar` has no member `field`
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯

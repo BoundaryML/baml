@@ -4,6 +4,8 @@
 
 mod anthropic;
 mod bedrock;
+// pub(crate) for VERTEX_PROJECT_ID_PLACEHOLDER, used by auth_request::vertex.
+pub(crate) mod google;
 mod openai;
 
 use std::str::FromStr;
@@ -12,6 +14,11 @@ use bex_external_types::BexExternalValue;
 
 use crate::LlmProvider;
 
+/// Returns true if the model name indicates an Anthropic model (e.g. Claude on Vertex AI).
+pub(crate) fn is_anthropic_model(model: &str) -> bool {
+    model.starts_with("claude")
+}
+
 /// Build a provider-specific HTTP request from a specialized prompt.
 ///
 /// Returns an owned `HttpRequest` matching the `baml.http.Request` class:
@@ -19,7 +26,7 @@ use crate::LlmProvider;
 pub(crate) async fn build_request(
     client: &crate::baml_std::PrimitiveClient,
     prompt: bex_vm_types::PromptAst,
-    callbacks: Option<&crate::BuildRequestCallbacks>,
+    callbacks: &crate::BuildRequestCallbacks,
 ) -> Result<crate::baml_std::HttpRequest, BuildRequestError> {
     let provider = LlmProvider::from_str(&client.provider)
         .map_err(|_| BuildRequestError::UnsupportedLlmProvider(client.provider.clone()))?;
@@ -33,13 +40,33 @@ pub(crate) async fn build_request(
         LlmProvider::OpenAiResponses => openai::responses::build_request(client, &prompt),
         LlmProvider::Anthropic => anthropic::build_request(client, &prompt),
         LlmProvider::AwsBedrock => bedrock::build_request(client, &prompt, callbacks).await,
-        LlmProvider::GoogleAi
-        | LlmProvider::VertexAi
-        | LlmProvider::BamlFallback
-        | LlmProvider::BamlRoundRobin => Err(BuildRequestError::UnsupportedLlmProvider(
-            client.provider.clone(),
-        )),
+        LlmProvider::GoogleAi => google::build_request(client, &prompt, provider),
+        LlmProvider::VertexAi => {
+            if is_anthropic_model(&client.model) {
+                build_vertex_anthropic_request(client, &prompt)
+            } else {
+                google::build_request(client, &prompt, provider)
+            }
+        }
+        LlmProvider::BamlFallback | LlmProvider::BamlRoundRobin => Err(
+            BuildRequestError::UnsupportedLlmProvider(client.provider.clone()),
+        ),
     }?;
+
+    // Apply user-configured headers on top of provider defaults.
+    for (k, v) in &client.options.headers {
+        request.headers.insert(k.to_ascii_lowercase(), v.clone());
+    }
+
+    // Append query params to the URL (percent-encoded via the `url` crate).
+    if !client.options.query_params.is_empty() {
+        let mut parsed = url::Url::parse(&request.url)
+            .map_err(|e| BuildRequestError::Other(format!("invalid URL '{}': {e}", request.url)))?;
+        for (k, v) in &client.options.query_params {
+            parsed.query_pairs_mut().append_pair(k, v);
+        }
+        request.url = parsed.to_string();
+    }
 
     // Auth is applied after body construction. Eventually this can be promoted
     // to a standalone step in the LLM function pipeline (llm.baml) so that
@@ -50,9 +77,47 @@ pub(crate) async fn build_request(
     Ok(request)
 }
 
+// ---------------------------------------------------------------------------
+// Vertex AI + Anthropic model (rawPredict)
+// ---------------------------------------------------------------------------
+
+/// Build an Anthropic-format request for Vertex AI's `rawPredict` endpoint.
+///
+/// Vertex AI proxies Anthropic models via `rawPredict`, which passes the body
+/// through to the Anthropic API. The body format is identical to the Anthropic
+/// Messages API, with `anthropic_version` in the body (not as a header).
+fn build_vertex_anthropic_request(
+    client: &crate::baml_std::PrimitiveClient,
+    prompt: &bex_vm_types::PromptAst,
+) -> Result<crate::baml_std::HttpRequest, BuildRequestError> {
+    let mut headers = indexmap::IndexMap::new();
+    headers.insert("content-type".to_string(), "application/json".to_string());
+
+    let mut extra = client.extra_body.clone();
+    extra
+        .entry("anthropic_version")
+        .or_insert(serde_json::json!("vertex-2023-10-16"));
+
+    let max_tokens = extra
+        .remove("max_tokens")
+        .and_then(|v| v.as_i64())
+        .or(Some(4096));
+
+    let body_str = anthropic::build_anthropic_body_str(&client.model, prompt, max_tokens, &extra)?;
+
+    let url = google::resolve_vertex_raw_predict_url(client)?;
+
+    Ok(crate::baml_std::HttpRequest {
+        method: "POST".to_string(),
+        url,
+        headers,
+        body: body_str,
+    })
+}
+
 /// Extract a MIME type from a `MediaValue`, returning an error if none is set.
 pub(super) fn mime_type_as_ok(
-    media: &baml_builtins::MediaValue,
+    media: &baml_builtins2::MediaValue,
 ) -> Result<&str, BuildRequestError> {
     media
         .mime_type
@@ -97,7 +162,15 @@ pub(crate) fn bex_value_to_json(value: &BexExternalValue) -> Option<serde_json::
                 .collect();
             Some(serde_json::Value::Object(map))
         }
-        _ => None, // Skip non-serializable types (Resource, PromptAst, etc.)
+        // Binary data, opaque handles, and internal types have no JSON representation.
+        BexExternalValue::Uint8Array(_)
+        | BexExternalValue::RustData(_)
+        | BexExternalValue::Handle(_)
+        | BexExternalValue::FunctionRef { .. }
+        | BexExternalValue::Adt(_)
+        | BexExternalValue::Instance { .. }
+        | BexExternalValue::Variant { .. }
+        | BexExternalValue::Union { .. } => None,
     }
 }
 
@@ -105,7 +178,7 @@ pub(crate) fn bex_value_to_json(value: &BexExternalValue) -> Option<serde_json::
 mod tests {
     use std::sync::Arc;
 
-    use baml_builtins::PromptAst;
+    use baml_builtins2::PromptAst;
     use bex_external_types::{AsBexExternalValue, Ty};
     use indexmap::IndexMap;
 
@@ -181,7 +254,9 @@ mod tests {
         let system_text = "Given the receipt below:\n\n```\ntest@email.com\n```\n\nAnswer in JSON using this schema:\n{\n  items: [\n    {\n      name: string,\n      description: string or null,\n      quantity: int,\n      price: float,\n    }\n  ],\n  total_cost: float or null,\n  venue: \"barisa\" or \"ox_burger\",\n}";
         let prompt = Arc::new(PromptAst::Vec(vec![msg("system", system_text)]));
 
-        let result = build_request(&client, prompt, None).await.unwrap();
+        let result = build_request(&client, prompt, &crate::BuildRequestCallbacks::noop())
+            .await
+            .unwrap();
 
         // Verify envelope
         assert_eq!(result.method, "POST");
@@ -230,7 +305,9 @@ mod tests {
             msg("user", "Write a nice short story about Dr. Pepper"),
         ]));
 
-        let result = build_request(&client, prompt, None).await.unwrap();
+        let result = build_request(&client, prompt, &crate::BuildRequestCallbacks::noop())
+            .await
+            .unwrap();
 
         assert_eq!(result.url, "https://api.openai.com/v1/chat/completions");
 
@@ -268,7 +345,9 @@ mod tests {
             },
         );
         let prompt = msg("user", "Hello world");
-        let result = build_request(&client, prompt, None).await.unwrap();
+        let result = build_request(&client, prompt, &crate::BuildRequestCallbacks::noop())
+            .await
+            .unwrap();
         let body = parse_body(&result);
         assert_eq!(
             body,
@@ -291,7 +370,9 @@ mod tests {
             },
         );
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt, None).await.unwrap();
+        let result = build_request(&client, prompt, &crate::BuildRequestCallbacks::noop())
+            .await
+            .unwrap();
         assert_eq!(result.url, "https://custom.api.com/chat/completions");
     }
 
@@ -309,7 +390,9 @@ mod tests {
             },
         );
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt, None).await.unwrap();
+        let result = build_request(&client, prompt, &crate::BuildRequestCallbacks::noop())
+            .await
+            .unwrap();
         let body = parse_body(&result);
         assert_eq!(
             body,
@@ -335,7 +418,9 @@ mod tests {
             },
         );
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt, None).await.unwrap();
+        let result = build_request(&client, prompt, &crate::BuildRequestCallbacks::noop())
+            .await
+            .unwrap();
         let body = parse_body(&result);
         assert_eq!(
             body,
@@ -374,7 +459,9 @@ mod tests {
             msg("user", "Write a nice short story about Dr. Pepper"),
         ]));
 
-        let result = build_request(&client, prompt, None).await.unwrap();
+        let result = build_request(&client, prompt, &crate::BuildRequestCallbacks::noop())
+            .await
+            .unwrap();
 
         // Verify envelope
         assert_eq!(result.method, "POST");
@@ -420,7 +507,9 @@ mod tests {
             },
         );
         let prompt = msg("user", "Hello");
-        let result = build_request(&client, prompt, None).await.unwrap();
+        let result = build_request(&client, prompt, &crate::BuildRequestCallbacks::noop())
+            .await
+            .unwrap();
         let body = parse_body(&result);
         assert_eq!(
             body,
@@ -460,7 +549,9 @@ mod tests {
         );
 
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt, None).await.unwrap();
+        let result = build_request(&client, prompt, &crate::BuildRequestCallbacks::noop())
+            .await
+            .unwrap();
 
         assert_eq!(
             result.headers.get("anthropic-beta").unwrap(),
@@ -494,7 +585,9 @@ mod tests {
             },
         );
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt, None).await.unwrap();
+        let result = build_request(&client, prompt, &crate::BuildRequestCallbacks::noop())
+            .await
+            .unwrap();
         let body = parse_body(&result);
         assert_eq!(
             body,
@@ -507,6 +600,87 @@ mod tests {
             })
         );
     }
+
+    // ========================================================================
+    // Query params tests
+    // ========================================================================
+
+    #[tokio::test]
+    async fn test_query_params_appended_to_url() {
+        let client = make_client(
+            "openai",
+            crate::baml_std::PrimitiveClientOptions {
+                base_url: Some("https://api.openai.com/v1".to_string()),
+                model: Some("gpt-4o".to_string()),
+                query_params: IndexMap::from([
+                    ("foo".to_string(), "bar".to_string()),
+                    ("baz".to_string(), "qux".to_string()),
+                ]),
+                ..crate::baml_std::PrimitiveClientOptions::default()
+            },
+        );
+        let prompt = msg("user", "hello");
+        let result = build_request(&client, prompt, &crate::BuildRequestCallbacks::noop())
+            .await
+            .unwrap();
+        assert!(
+            result.url.contains("foo=bar") && result.url.contains("baz=qux"),
+            "URL should contain query params: {}",
+            result.url
+        );
+    }
+
+    #[tokio::test]
+    async fn test_query_params_percent_encoded() {
+        let client = make_client(
+            "openai",
+            crate::baml_std::PrimitiveClientOptions {
+                base_url: Some("https://api.openai.com/v1".to_string()),
+                model: Some("gpt-4o".to_string()),
+                query_params: IndexMap::from([(
+                    "key".to_string(),
+                    "value with spaces & special=chars".to_string(),
+                )]),
+                ..crate::baml_std::PrimitiveClientOptions::default()
+            },
+        );
+        let prompt = msg("user", "hello");
+        let result = build_request(&client, prompt, &crate::BuildRequestCallbacks::noop())
+            .await
+            .unwrap();
+        assert!(
+            result
+                .url
+                .contains("key=value+with+spaces+%26+special%3Dchars"),
+            "Query param values should be percent-encoded: {}",
+            result.url
+        );
+    }
+
+    #[tokio::test]
+    async fn test_no_query_params_no_question_mark() {
+        let client = make_client(
+            "openai",
+            crate::baml_std::PrimitiveClientOptions {
+                base_url: Some("https://api.openai.com/v1".to_string()),
+                model: Some("gpt-4o".to_string()),
+                ..crate::baml_std::PrimitiveClientOptions::default()
+            },
+        );
+        let prompt = msg("user", "hello");
+        let result = build_request(&client, prompt, &crate::BuildRequestCallbacks::noop())
+            .await
+            .unwrap();
+        assert!(
+            !result.url.contains('?'),
+            "URL should not contain '?' without query params: {}",
+            result.url
+        );
+    }
+
+    // ========================================================================
+    // Anthropic tests (continued)
+    // ========================================================================
 
     #[tokio::test]
     async fn test_anthropic_default_max_tokens_when_not_set() {
@@ -522,7 +696,9 @@ mod tests {
             },
         );
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt, None).await.unwrap();
+        let result = build_request(&client, prompt, &crate::BuildRequestCallbacks::noop())
+            .await
+            .unwrap();
         let body = parse_body(&result);
         assert_eq!(
             body,
@@ -533,6 +709,565 @@ mod tests {
                     {"role": "user", "content": [{"type": "text", "text": "hello"}]}
                 ]
             })
+        );
+    }
+
+    // ========================================================================
+    // Google AI tests
+    // ========================================================================
+
+    #[tokio::test]
+    async fn test_google_ai_system_and_user() {
+        let client = make_client(
+            "google-ai",
+            crate::baml_std::PrimitiveClientOptions {
+                model: Some("gemini-2.0-flash".to_string()),
+                api_key: Some("gemini-key".to_string()),
+                base_url: Some("https://generativelanguage.googleapis.com/v1beta".to_string()),
+                ..crate::baml_std::PrimitiveClientOptions::default()
+            },
+        );
+
+        let prompt = Arc::new(PromptAst::Vec(vec![
+            msg("system", "You are a helpful assistant."),
+            msg("user", "Write a nice short story about Dr. Pepper"),
+        ]));
+
+        let result = build_request(&client, prompt, &crate::BuildRequestCallbacks::noop())
+            .await
+            .unwrap();
+
+        assert_eq!(result.method, "POST");
+        assert_eq!(
+            result.url,
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
+        );
+        assert_eq!(
+            result.headers.get("content-type").unwrap(),
+            "application/json"
+        );
+        assert_eq!(result.headers.get("x-goog-api-key").unwrap(), "gemini-key");
+
+        let body = parse_body(&result);
+        assert_eq!(
+            body,
+            serde_json::json!({
+                "contents": [
+                    {
+                        "role": "user",
+                        "parts": [{"text": "Write a nice short story about Dr. Pepper"}]
+                    }
+                ],
+                "systemInstruction": {
+                    "parts": [{"text": "You are a helpful assistant."}]
+                }
+            })
+        );
+    }
+
+    #[tokio::test]
+    async fn test_google_ai_user_only() {
+        let client = make_client(
+            "google-ai",
+            crate::baml_std::PrimitiveClientOptions {
+                model: Some("gemini-2.0-flash".to_string()),
+                base_url: Some("https://generativelanguage.googleapis.com/v1beta".to_string()),
+                ..crate::baml_std::PrimitiveClientOptions::default()
+            },
+        );
+
+        let prompt = msg("user", "Hello");
+        let result = build_request(&client, prompt, &crate::BuildRequestCallbacks::noop())
+            .await
+            .unwrap();
+        let body = parse_body(&result);
+        assert_eq!(
+            body,
+            serde_json::json!({
+                "contents": [
+                    {"role": "user", "parts": [{"text": "Hello"}]}
+                ]
+            })
+        );
+    }
+
+    #[tokio::test]
+    async fn test_google_ai_multi_turn() {
+        let client = make_client(
+            "google-ai",
+            crate::baml_std::PrimitiveClientOptions {
+                model: Some("gemini-2.0-flash".to_string()),
+                base_url: Some("https://generativelanguage.googleapis.com/v1beta".to_string()),
+                ..crate::baml_std::PrimitiveClientOptions::default()
+            },
+        );
+
+        let prompt = Arc::new(PromptAst::Vec(vec![
+            msg("system", "You are helpful."),
+            msg("user", "Hi"),
+            msg("model", "Hello!"),
+            msg("user", "How are you?"),
+        ]));
+
+        let result = build_request(&client, prompt, &crate::BuildRequestCallbacks::noop())
+            .await
+            .unwrap();
+        let body = parse_body(&result);
+        assert_eq!(
+            body,
+            serde_json::json!({
+                "contents": [
+                    {"role": "user", "parts": [{"text": "Hi"}]},
+                    {"role": "model", "parts": [{"text": "Hello!"}]},
+                    {"role": "user", "parts": [{"text": "How are you?"}]}
+                ],
+                "systemInstruction": {
+                    "parts": [{"text": "You are helpful."}]
+                }
+            })
+        );
+    }
+
+    #[tokio::test]
+    async fn test_google_ai_forwards_generation_config() {
+        let client = make_client(
+            "google-ai",
+            crate::baml_std::PrimitiveClientOptions {
+                model: Some("gemini-2.0-flash".to_string()),
+                base_url: Some("https://generativelanguage.googleapis.com/v1beta".to_string()),
+                request_body: IndexMap::from([(
+                    "generationConfig".to_string(),
+                    BexExternalValue::Map {
+                        key_type: baml_type::Ty::string(),
+                        value_type: baml_type::Ty::unknown(),
+                        entries: IndexMap::from([(
+                            "temperature".to_string(),
+                            BexExternalValue::Float(0.5),
+                        )]),
+                    },
+                )]),
+                ..crate::baml_std::PrimitiveClientOptions::default()
+            },
+        );
+
+        let prompt = msg("user", "hello");
+        let result = build_request(&client, prompt, &crate::BuildRequestCallbacks::noop())
+            .await
+            .unwrap();
+        let body = parse_body(&result);
+        assert_eq!(
+            body,
+            serde_json::json!({
+                "contents": [
+                    {"role": "user", "parts": [{"text": "hello"}]}
+                ],
+                "generationConfig": {
+                    "temperature": 0.5
+                }
+            })
+        );
+    }
+
+    #[tokio::test]
+    async fn test_google_ai_query_params() {
+        let client = make_client(
+            "google-ai",
+            crate::baml_std::PrimitiveClientOptions {
+                model: Some("gemini-2.0-flash".to_string()),
+                base_url: Some("https://generativelanguage.googleapis.com/v1beta".to_string()),
+                query_params: IndexMap::from([("key".to_string(), "my-api-key".to_string())]),
+                ..crate::baml_std::PrimitiveClientOptions::default()
+            },
+        );
+
+        let prompt = msg("user", "hello");
+        let result = build_request(&client, prompt, &crate::BuildRequestCallbacks::noop())
+            .await
+            .unwrap();
+        assert!(
+            result.url.contains("key=my-api-key"),
+            "URL should contain query param: {}",
+            result.url
+        );
+    }
+
+    // ========================================================================
+    // Vertex AI tests
+    // ========================================================================
+
+    /// Vertex AI tests use `query_params: { "key": ... }` to skip ADC/OAuth
+    /// token resolution, which would fail in CI/test environments.
+    #[tokio::test]
+    async fn test_vertex_ai_system_and_user() {
+        let client = make_client(
+            "vertex-ai",
+            crate::baml_std::PrimitiveClientOptions {
+                model: Some("gemini-2.0-flash".to_string()),
+                base_url: Some(
+                    "https://us-central1-aiplatform.googleapis.com/v1/projects/my-project/locations/us-central1/publishers/google/models"
+                        .to_string(),
+                ),
+                query_params: IndexMap::from([("key".to_string(), "test-key".to_string())]),
+                ..crate::baml_std::PrimitiveClientOptions::default()
+            },
+        );
+
+        let prompt = Arc::new(PromptAst::Vec(vec![
+            msg("system", "You are a helpful assistant."),
+            msg("user", "Write a nice short story about Dr. Pepper"),
+        ]));
+
+        let result = build_request(&client, prompt, &crate::BuildRequestCallbacks::noop())
+            .await
+            .unwrap();
+
+        assert_eq!(result.method, "POST");
+        assert!(
+            result.url.starts_with(
+                "https://us-central1-aiplatform.googleapis.com/v1/projects/my-project/locations/us-central1/publishers/google/models/gemini-2.0-flash:generateContent"
+            ),
+            "URL mismatch: {}",
+            result.url
+        );
+        assert_eq!(
+            result.headers.get("content-type").unwrap(),
+            "application/json"
+        );
+
+        let body = parse_body(&result);
+        assert_eq!(
+            body,
+            serde_json::json!({
+                "contents": [
+                    {
+                        "role": "user",
+                        "parts": [{"text": "Write a nice short story about Dr. Pepper"}]
+                    }
+                ],
+                "systemInstruction": {
+                    "parts": [{"text": "You are a helpful assistant."}]
+                }
+            })
+        );
+    }
+
+    #[tokio::test]
+    async fn test_vertex_ai_user_only() {
+        let client = make_client(
+            "vertex-ai",
+            crate::baml_std::PrimitiveClientOptions {
+                model: Some("gemini-2.0-flash".to_string()),
+                base_url: Some(
+                    "https://us-central1-aiplatform.googleapis.com/v1/projects/my-project/locations/us-central1/publishers/google/models"
+                        .to_string(),
+                ),
+                query_params: IndexMap::from([("key".to_string(), "test-key".to_string())]),
+                ..crate::baml_std::PrimitiveClientOptions::default()
+            },
+        );
+
+        let prompt = msg("user", "Hello");
+        let result = build_request(&client, prompt, &crate::BuildRequestCallbacks::noop())
+            .await
+            .unwrap();
+        let body = parse_body(&result);
+        assert_eq!(
+            body,
+            serde_json::json!({
+                "contents": [
+                    {"role": "user", "parts": [{"text": "Hello"}]}
+                ]
+            })
+        );
+    }
+
+    #[tokio::test]
+    async fn test_vertex_ai_multi_turn() {
+        let client = make_client(
+            "vertex-ai",
+            crate::baml_std::PrimitiveClientOptions {
+                model: Some("gemini-2.0-flash".to_string()),
+                base_url: Some(
+                    "https://us-central1-aiplatform.googleapis.com/v1/projects/my-project/locations/us-central1/publishers/google/models"
+                        .to_string(),
+                ),
+                query_params: IndexMap::from([("key".to_string(), "test-key".to_string())]),
+                ..crate::baml_std::PrimitiveClientOptions::default()
+            },
+        );
+
+        let prompt = Arc::new(PromptAst::Vec(vec![
+            msg("system", "You are helpful."),
+            msg("user", "Hi"),
+            msg("model", "Hello!"),
+            msg("user", "How are you?"),
+            msg("model", "I'm well."),
+        ]));
+
+        let result = build_request(&client, prompt, &crate::BuildRequestCallbacks::noop())
+            .await
+            .unwrap();
+        let body = parse_body(&result);
+        assert_eq!(
+            body,
+            serde_json::json!({
+                "contents": [
+                    {"role": "user", "parts": [{"text": "Hi"}]},
+                    {"role": "model", "parts": [{"text": "Hello!"}]},
+                    {"role": "user", "parts": [{"text": "How are you?"}]},
+                    {"role": "model", "parts": [{"text": "I'm well."}]}
+                ],
+                "systemInstruction": {
+                    "parts": [{"text": "You are helpful."}]
+                }
+            })
+        );
+    }
+
+    #[tokio::test]
+    async fn test_vertex_ai_forwards_generation_config() {
+        let client = make_client(
+            "vertex-ai",
+            crate::baml_std::PrimitiveClientOptions {
+                model: Some("gemini-2.0-flash".to_string()),
+                base_url: Some(
+                    "https://us-central1-aiplatform.googleapis.com/v1/projects/my-project/locations/us-central1/publishers/google/models"
+                        .to_string(),
+                ),
+                query_params: IndexMap::from([("key".to_string(), "test-key".to_string())]),
+                request_body: IndexMap::from([(
+                    "generationConfig".to_string(),
+                    BexExternalValue::Map {
+                        key_type: baml_type::Ty::string(),
+                        value_type: baml_type::Ty::unknown(),
+                        entries: IndexMap::from([
+                            (
+                                "temperature".to_string(),
+                                BexExternalValue::Float(0.7),
+                            ),
+                            (
+                                "maxOutputTokens".to_string(),
+                                BexExternalValue::Int(2048),
+                            ),
+                        ]),
+                    },
+                )]),
+                ..crate::baml_std::PrimitiveClientOptions::default()
+            },
+        );
+
+        let prompt = msg("user", "hello");
+        let result = build_request(&client, prompt, &crate::BuildRequestCallbacks::noop())
+            .await
+            .unwrap();
+        let body = parse_body(&result);
+        assert_eq!(
+            body,
+            serde_json::json!({
+                "contents": [
+                    {"role": "user", "parts": [{"text": "hello"}]}
+                ],
+                "generationConfig": {
+                    "temperature": 0.7,
+                    "maxOutputTokens": 2048
+                }
+            })
+        );
+    }
+
+    // ========================================================================
+    // Vertex AI + Anthropic (rawPredict) tests
+    // ========================================================================
+
+    #[tokio::test]
+    async fn test_vertex_anthropic_uses_raw_predict_url() {
+        let client = make_client(
+            "vertex-ai",
+            crate::baml_std::PrimitiveClientOptions {
+                model: Some("claude-sonnet-4-20250514".to_string()),
+                base_url: Some(
+                    "https://us-central1-aiplatform.googleapis.com/v1/projects/my-project/locations/us-central1/publishers/google/models"
+                        .to_string(),
+                ),
+                query_params: IndexMap::from([("key".to_string(), "test-key".to_string())]),
+                ..crate::baml_std::PrimitiveClientOptions::default()
+            },
+        );
+
+        let prompt = msg("user", "Hello");
+        let result = build_request(&client, prompt, &crate::BuildRequestCallbacks::noop())
+            .await
+            .unwrap();
+
+        assert!(
+            result.url.contains(":rawPredict"),
+            "URL should use rawPredict: {}",
+            result.url
+        );
+        assert!(
+            !result.url.contains(":generateContent"),
+            "URL should NOT use generateContent: {}",
+            result.url
+        );
+    }
+
+    #[tokio::test]
+    async fn test_vertex_anthropic_body_format() {
+        let client = make_client(
+            "vertex-ai",
+            crate::baml_std::PrimitiveClientOptions {
+                model: Some("claude-sonnet-4-20250514".to_string()),
+                base_url: Some(
+                    "https://us-central1-aiplatform.googleapis.com/v1/projects/my-project/locations/us-central1/publishers/google/models"
+                        .to_string(),
+                ),
+                query_params: IndexMap::from([("key".to_string(), "test-key".to_string())]),
+                ..crate::baml_std::PrimitiveClientOptions::default()
+            },
+        );
+
+        let prompt = Arc::new(PromptAst::Vec(vec![
+            msg("system", "You are helpful."),
+            msg("user", "Hi"),
+            msg("assistant", "Hello!"),
+            msg("user", "How are you?"),
+        ]));
+
+        let result = build_request(&client, prompt, &crate::BuildRequestCallbacks::noop())
+            .await
+            .unwrap();
+        let body = parse_body(&result);
+
+        assert_eq!(
+            body,
+            serde_json::json!({
+                "model": "claude-sonnet-4-20250514",
+                "anthropic_version": "vertex-2023-10-16",
+                "max_tokens": 4096,
+                "system": [{"type": "text", "text": "You are helpful."}],
+                "messages": [
+                    {"role": "user", "content": [{"type": "text", "text": "Hi"}]},
+                    {"role": "assistant", "content": [{"type": "text", "text": "Hello!"}]},
+                    {"role": "user", "content": [{"type": "text", "text": "How are you?"}]}
+                ]
+            })
+        );
+    }
+
+    /// End-to-end: specialization (with `remap_roles` as `lower_cst` sets it)
+    /// followed by `build_request`. Proves Claude on Vertex keeps "assistant"
+    /// through the full pipeline.
+    #[tokio::test]
+    async fn test_vertex_anthropic_e2e_roles_survive_specialization() {
+        let client = make_client(
+            "vertex-ai",
+            crate::baml_std::PrimitiveClientOptions {
+                model: Some("claude-sonnet-4-20250514".to_string()),
+                base_url: Some(
+                    "https://us-central1-aiplatform.googleapis.com/v1/projects/my-project/locations/us-central1/publishers/google/models"
+                        .to_string(),
+                ),
+                query_params: IndexMap::from([("key".to_string(), "test-key".to_string())]),
+                // Matches what lower_cst.rs sets for vertex-ai.
+                remap_roles: Some(IndexMap::from([(
+                    "assistant".to_string(),
+                    "model".to_string(),
+                )])),
+                ..crate::baml_std::PrimitiveClientOptions::default()
+            },
+        );
+
+        let prompt = Arc::new(PromptAst::Vec(vec![
+            msg("system", "You are helpful."),
+            msg("user", "Hi"),
+            msg("assistant", "Hello!"),
+            msg("user", "How are you?"),
+        ]));
+
+        // Specialize first (remap_roles should be skipped for Claude).
+        let specialized = crate::execute_specialize_prompt_from_owned(&client, prompt).unwrap();
+
+        // Then build request.
+        let result = build_request(&client, specialized, &crate::BuildRequestCallbacks::noop())
+            .await
+            .unwrap();
+        let body = parse_body(&result);
+
+        assert!(result.url.contains(":rawPredict"));
+        // "assistant" must survive, NOT be remapped to "model".
+        assert_eq!(
+            body["messages"][1]["role"], "assistant",
+            "Claude on Vertex should keep 'assistant' role, got: {}",
+            body["messages"][1]["role"]
+        );
+    }
+
+    /// Mirror test: Gemini on Vertex DOES remap assistant -> model through
+    /// the same pipeline.
+    #[tokio::test]
+    async fn test_vertex_gemini_e2e_remaps_assistant_to_model() {
+        let client = make_client(
+            "vertex-ai",
+            crate::baml_std::PrimitiveClientOptions {
+                model: Some("gemini-2.0-flash".to_string()),
+                base_url: Some(
+                    "https://us-central1-aiplatform.googleapis.com/v1/projects/my-project/locations/us-central1/publishers/google/models"
+                        .to_string(),
+                ),
+                query_params: IndexMap::from([("key".to_string(), "test-key".to_string())]),
+                remap_roles: Some(IndexMap::from([(
+                    "assistant".to_string(),
+                    "model".to_string(),
+                )])),
+                ..crate::baml_std::PrimitiveClientOptions::default()
+            },
+        );
+
+        let prompt = Arc::new(PromptAst::Vec(vec![
+            msg("user", "Hi"),
+            msg("assistant", "Hello!"),
+            msg("user", "How are you?"),
+        ]));
+
+        let specialized = crate::execute_specialize_prompt_from_owned(&client, prompt).unwrap();
+        let result = build_request(&client, specialized, &crate::BuildRequestCallbacks::noop())
+            .await
+            .unwrap();
+        let body = parse_body(&result);
+
+        assert!(result.url.contains(":generateContent"));
+        // "assistant" must be remapped to "model" for Gemini.
+        assert_eq!(
+            body["contents"][1]["role"], "model",
+            "Gemini on Vertex should remap to 'model', got: {}",
+            body["contents"][1]["role"]
+        );
+    }
+
+    #[tokio::test]
+    async fn test_vertex_gemini_still_uses_generate_content() {
+        let client = make_client(
+            "vertex-ai",
+            crate::baml_std::PrimitiveClientOptions {
+                model: Some("gemini-2.0-flash".to_string()),
+                base_url: Some(
+                    "https://us-central1-aiplatform.googleapis.com/v1/projects/my-project/locations/us-central1/publishers/google/models"
+                        .to_string(),
+                ),
+                query_params: IndexMap::from([("key".to_string(), "test-key".to_string())]),
+                ..crate::baml_std::PrimitiveClientOptions::default()
+            },
+        );
+
+        let prompt = msg("user", "Hello");
+        let result = build_request(&client, prompt, &crate::BuildRequestCallbacks::noop())
+            .await
+            .unwrap();
+
+        assert!(
+            result.url.contains(":generateContent"),
+            "Gemini should use generateContent: {}",
+            result.url
         );
     }
 }

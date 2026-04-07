@@ -40,21 +40,9 @@ export interface FunctionInfo {
   capabilities?: LlmCapabilities;
 }
 
-/** Metadata about a BAML test case.
- *
- *  Each test targets a single function (the first in `functions [...]`)
- *  and carries pre-serialized args JSON for immediate use.
- */
-export interface TestInfo {
-  name: string;
-  functionName: string;
-  argsJson: string;
-}
-
 export interface ProjectUpdate {
   isBexCurrent: boolean;
   functions: FunctionInfo[];
-  tests: TestInfo[];
   diagnostics: DiagnosticEntry[];
 }
 
@@ -63,7 +51,8 @@ export type PlaygroundNotification =
   | { type: 'updateProject'; project: string; update: ProjectUpdate }
   | { type: 'openPlayground'; project: string; functionName?: string }
   | { type: 'controlFlowGraphResult'; functionName: string; graph: ControlFlowGraph | null }
-  | { type: 'cursorContext'; context: CursorContext };
+  | { type: 'cursorContext'; context: CursorContext }
+  | { type: 'testCollectionResult'; project: string; generation: number; callId: number; data: number[] };
 
 // ---------------------------------------------------------------------------
 // Control flow graph types (matches Rust serde output from baml_compiler2_visualization)
@@ -186,6 +175,9 @@ export type WorkerInMessage =
   | { type: 'requestState' }
   | { type: 'requestControlFlowGraph'; project: string; functionName: string }
   | { type: 'cursorPosition'; file: string; line: number; column: number }
+  | { type: 'requestCollectTests'; project: string }
+  | { type: 'callTestFunction'; id: number; project: string; generation: number; testName: string }
+  | { type: 'expandTestSet'; project: string; generation: number; testsetName: string }
   | { type: 'filesChanged'; files: Record<string, string> }
   | { type: 'dispose' };
 

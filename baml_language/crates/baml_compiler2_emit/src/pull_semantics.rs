@@ -37,6 +37,7 @@ pub(crate) trait PullSink {
     fn unary_op(&mut self, op: UnaryOp) -> Result<(), Self::Error>;
 
     fn alloc_array(&mut self, len: usize) -> Result<(), Self::Error>;
+    fn alloc_uint8array(&mut self, bytes: &[u8]) -> Result<(), Self::Error>;
     fn alloc_map(&mut self, len: usize) -> Result<(), Self::Error>;
 
     fn alloc_class_instance(&mut self, class_name: &str) -> Result<(), Self::Error>;
@@ -50,7 +51,6 @@ pub(crate) trait PullSink {
 
     fn len_of_place(&mut self, place: &Place) -> Result<(), Self::Error>;
     fn is_type(&mut self, ty: &Ty) -> Result<(), Self::Error>;
-    fn is_panic(&mut self) -> Result<(), Self::Error>;
     fn make_closure(&mut self, lambda_idx: usize, capture_count: usize) -> Result<(), Self::Error>;
 
     /// Load a captured variable from the current closure's captures array.
@@ -80,7 +80,6 @@ pub(crate) trait StackEffectSink: PullSink {
         channel_name: Option<&str>,
     ) -> Result<(), Self::Error>;
     fn watch_local(&mut self, local: Local) -> Result<(), Self::Error>;
-    fn assert_top(&mut self) -> Result<(), Self::Error>;
 }
 
 /// How a local assignment statement should be emitted/evaluated.
@@ -182,15 +181,6 @@ pub(crate) fn walk_watch_options_statement<S: StackEffectSink>(
     sink.push_watch_channel(local, channel_name)?;
     walk_operand_pull(sink, filter)?;
     sink.watch_local(local)
-}
-
-/// Shared evaluation for `Assert(operand)`.
-pub(crate) fn walk_assert_statement<S: StackEffectSink>(
-    sink: &mut S,
-    operand: &Operand,
-) -> Result<(), S::Error> {
-    walk_operand_pull(sink, operand)?;
-    sink.assert_top()
 }
 
 /// Shared pull order for direct calls: each arg only.
@@ -338,6 +328,7 @@ pub(crate) fn walk_rvalue_pull<S: PullSink>(sink: &mut S, rvalue: &Rvalue) -> Re
             }
             sink.alloc_array(elements.len())
         }
+        Rvalue::Uint8Array(bytes) => sink.alloc_uint8array(bytes),
         Rvalue::Map(entries) => {
             // VM `AllocMap` expects stack layout:
             // [..., v1, v2, ..., k1, k2, ...] for {(k1, v1), (k2, v2), ...}.
@@ -382,10 +373,6 @@ pub(crate) fn walk_rvalue_pull<S: PullSink>(sink: &mut S, rvalue: &Rvalue) -> Re
         Rvalue::IsType { operand, ty } => {
             walk_operand_pull(sink, operand)?;
             sink.is_type(ty)
-        }
-        Rvalue::IsPanic(operand) => {
-            walk_operand_pull(sink, operand)?;
-            sink.is_panic()
         }
         Rvalue::MakeClosure {
             lambda_idx,

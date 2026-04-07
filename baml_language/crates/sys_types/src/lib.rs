@@ -52,7 +52,8 @@ pub mod generated {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct CallId(pub u64);
 
-static NEXT_CALL_ID: AtomicU64 = AtomicU64::new(0);
+// Start at 1M to reserve lower IDs for internal/test use
+static NEXT_CALL_ID: AtomicU64 = AtomicU64::new(1_000_000);
 
 impl CallId {
     /// Returns a fresh call ID that is unique across the process. Use this from
@@ -351,7 +352,9 @@ pub type SysOpFn = Arc<
 /// This needs to be a separate trait because `sys_types` cannot import `bex_engine`
 /// due to a circular dependency.
 #[async_trait]
-pub trait VmSpawner<E: Send + Sync + 'static = Box<dyn Send + Sync + 'static>> {
+pub trait VmSpawner<E: Send + Sync + 'static = Box<dyn Send + Sync + 'static>>:
+    Send + Sync
+{
     /// Spawn a a new VM with the given function name and arguments.
     ///
     /// Generally just calls `BexEngine::call_function`.
@@ -374,7 +377,8 @@ pub trait VmSpawner<E: Send + Sync + 'static = Box<dyn Send + Sync + 'static>> {
 /// # Per-call fields
 ///
 /// [`SysOpContext`] is the per-call version of [`EngineSysOpContext`].
-#[derive(Clone)]
+// Manual Clone impl: the derive would add an unnecessary `E: Clone` bound,
+// but no field actually stores `E` directly (only `Arc<dyn VmSpawner<E>>`).
 pub struct SysOpContext<E: Send + Sync + 'static = Box<dyn Send + Sync + 'static>> {
     /// Pre-extracted LLM function metadata, keyed by function name.
     /// Used by LLM ops that need to look up function prompt templates, client names, etc.
@@ -409,6 +413,64 @@ pub struct SysOpContext<E: Send + Sync + 'static = Box<dyn Send + Sync + 'static
 
     /// Can be used to spawn new VMs.
     pub spawner: Arc<dyn VmSpawner<E>>,
+
+    /// IO function pointers copied from the `SysOps` table by the engine.
+    /// Allows sys-op implementations (e.g. `build_request` auth for Bedrock/Vertex)
+    /// to call back into the runtime IO layer without needing direct access to the
+    /// ops table. Other sys-ops that need runtime IO in the future can use these
+    /// as well.
+    pub io_callbacks: SysOpIoCallbacks,
+}
+
+impl<E: Send + Sync + 'static> Clone for SysOpContext<E> {
+    fn clone(&self) -> Self {
+        Self {
+            llm_functions: self.llm_functions.clone(),
+            function_global_indices: self.function_global_indices.clone(),
+            template_strings_macros: self.template_strings_macros.clone(),
+            cancel: self.cancel.clone(),
+            class_definitions: self.class_definitions.clone(),
+            enum_definitions: self.enum_definitions.clone(),
+            type_alias_definitions: self.type_alias_definitions.clone(),
+            spawner: self.spawner.clone(),
+            io_callbacks: self.io_callbacks.clone(),
+        }
+    }
+}
+
+/// IO function pointers available to sys-op implementations.
+///
+/// Copied from the `SysOps` table during engine construction so that ops like
+/// `build_request` can call back into the runtime IO layer (e.g. for credential
+/// resolution) without needing direct access to the ops table.
+#[derive(Clone)]
+pub struct SysOpIoCallbacks {
+    pub http_send: SysOpFn,
+    pub http_response_text: SysOpFn,
+    pub env_get: SysOpFn,
+    pub fs_open: SysOpFn,
+    pub fs_file_read: SysOpFn,
+    pub sys_shell: SysOpFn,
+}
+
+impl SysOpIoCallbacks {
+    /// Create a context where all IO ops return `Unsupported`.
+    /// Used by tests and contexts where no real IO is available.
+    pub fn unsupported() -> Self {
+        fn make_unsupported(op: SysOp) -> SysOpFn {
+            Arc::new(move |_, _, _, _| {
+                SysOpResult::Ready(Err(OpError::new(op, OpErrorKind::Unsupported)))
+            })
+        }
+        Self {
+            http_send: make_unsupported(SysOp::BamlHttpSend),
+            http_response_text: make_unsupported(SysOp::BamlHttpResponseText),
+            env_get: make_unsupported(SysOp::BamlEnvGet),
+            fs_open: make_unsupported(SysOp::BamlFsOpen),
+            fs_file_read: make_unsupported(SysOp::BamlFsFileRead),
+            sys_shell: make_unsupported(SysOp::BamlSysShell),
+        }
+    }
 }
 
 /// The shared part of [`SysOpContext`]. Used in `sys_ops` that need engine-level information.
@@ -439,6 +501,10 @@ pub struct EngineSysOpContext {
     /// Only recursive aliases are stored (non-recursive ones are expanded inline).
     /// Maps alias name → target type.
     pub type_alias_definitions: Arc<indexmap::IndexMap<baml_type::TypeName, baml_type::Ty>>,
+
+    /// IO function pointers copied from the `SysOps` table by the engine.
+    /// See [`SysOpIoCallbacks`] for details.
+    pub io_callbacks: SysOpIoCallbacks,
 }
 
 /// Pre-extracted metadata for an LLM function.
@@ -523,6 +589,7 @@ impl SysOpContext {
                 baml_type::Ty,
             >::new()),
             spawner: Arc::new(NeverSpawner),
+            io_callbacks: SysOpIoCallbacks::unsupported(),
         }
     }
 }
@@ -543,12 +610,13 @@ impl EngineSysOpContext {
             enum_definitions: self.enum_definitions.clone(),
             type_alias_definitions: self.type_alias_definitions.clone(),
             spawner,
+            io_callbacks: self.io_callbacks.clone(),
         }
     }
 }
 
 // ============================================================================
-// FunctionRef<T> — Typed wrapper for VM function references
+// FunctionRef<T> -- Typed wrapper for VM function references
 // ============================================================================
 
 /// Typed wrapper for VM function references.

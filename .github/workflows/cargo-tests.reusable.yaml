@@ -23,9 +23,11 @@ env:
 jobs:
   cargo-test-linux:
     name: "cargo test (linux)"
-    runs-on: ubuntu-latest
+    # Bumped to ubuntu-32gb: ubuntu-latest was hitting resource issues, using
+    # this overkill runner until we can root-cause and right-size.
+    runs-on: ubuntu-32gb
     if: ${{ inputs.code_changed == 'true' || inputs.run_all }}
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
         with:
@@ -40,7 +42,7 @@ jobs:
         with:
           workspaces: "baml_language -> target"
           # Share cache across similar Linux jobs for better hit rates
-          shared-key: "linux-cargo"
+          shared-key: "linux-cargo-32gb"
 
       - name: "Install cargo insta"
         uses: taiki-e/install-action@v2
@@ -82,7 +84,7 @@ jobs:
     name: "cargo test (macos)"
     runs-on: macos-latest
     if: ${{ inputs.code_changed == 'true' || inputs.run_all }}
-    timeout-minutes: 30
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
         with:
@@ -119,7 +121,7 @@ jobs:
     if: ${{ inputs.code_changed == 'true' || inputs.run_all }}
     # TODO: Reduce this once our changes to aws-sdk-rust are upstreamed
     # Right now it needs to download our repo every time which is very slow
-    timeout-minutes: 45
+    timeout-minutes: 50
     steps:
       - uses: actions/checkout@v4
         with:
@@ -155,7 +157,7 @@ jobs:
     name: "cargo test (wasm)"
     runs-on: ubuntu-latest
     if: ${{ inputs.code_changed == 'true' || inputs.run_all }}
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
         with:
@@ -192,7 +194,7 @@ jobs:
     name: "size-gate (linux)"
     runs-on: ubuntu-latest
     if: ${{ inputs.code_changed == 'true' || inputs.run_all }}
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
         with:
@@ -241,7 +243,7 @@ jobs:
     name: "size-gate (macos)"
     runs-on: macos-latest
     if: ${{ inputs.code_changed == 'true' || inputs.run_all }}
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
         with:
@@ -284,7 +286,7 @@ jobs:
     if: ${{ inputs.code_changed == 'true' || inputs.run_all }}
     # TODO: Reduce this once our changes to aws-sdk-rust are upstreamed
     # Right now it needs to download our repo every time which is very slow
-    timeout-minutes: 40
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
         with:
@@ -325,7 +327,7 @@ jobs:
     name: "size-gate (wasm)"
     runs-on: ubuntu-latest
     if: ${{ inputs.code_changed == 'true' || inputs.run_all }}
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
         with:
@@ -424,9 +426,11 @@ jobs:
 
   cargo-build-msrv:
     name: "cargo build (msrv)"
-    runs-on: ubuntu-latest
+    # Bumped to ubuntu-32gb: ubuntu-latest was hitting resource issues, using
+    # this overkill runner until we can root-cause and right-size.
+    runs-on: ubuntu-32gb
     if: ${{ inputs.code_changed == 'true' || inputs.run_all }}
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
         with:
@@ -450,8 +454,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: "baml_language -> target"
-          # Share cache across Linux MSRV jobs
-          shared-key: "linux-msrv"
+          # Share cache across Linux MSRV jobs (32gb runner)
+          shared-key: "linux-msrv-32gb"
 
       - name: "Build with MSRV"
         env:
@@ -486,7 +490,7 @@ jobs:
     name: "snapshot tests"
     runs-on: ubuntu-latest
     if: ${{ inputs.code_changed == 'true' || inputs.run_all }}
-    timeout-minutes: 15
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
         with:

@@ -108,6 +108,7 @@ fn format_value_recursive(vm: &mut BexVm, value: &Value, depth: usize) -> Result
             Object::Future(_) => Ok("<future>".to_string()),
             Object::Collector(_) => Ok("<collector>".to_string()),
             Object::Type(ty) => Ok(format!("<type: {ty}>")),
+            Object::Uint8Array(bytes) => Ok(format!("<uint8array len={}>", bytes.len())),
             Object::RustData(_) => Ok("<rust_data>".to_string()),
             Object::Closure(closure) => {
                 Ok(format!("<closure captures={}>", closure.captures.len()))

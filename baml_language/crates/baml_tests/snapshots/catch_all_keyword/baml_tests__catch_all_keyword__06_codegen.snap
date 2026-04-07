@@ -5,7 +5,7 @@ function user.CatchAllTyped(x: int) -> string {
     load_var x
     call user.MayFailIntOrString
     jump L4
-    load_var _2
+    load_var e
     type_tag
     load_const 1
     cmp_op ==
@@ -13,7 +13,7 @@ function user.CatchAllTyped(x: int) -> string {
     jump L3
 
   L0:
-    load_var _2
+    load_var e
     type_tag
     load_const 0
     cmp_op ==
@@ -21,7 +21,7 @@ function user.CatchAllTyped(x: int) -> string {
     jump L2
 
   L1:
-    load_var _2
+    load_var e
     throw
 
   L2:
@@ -39,6 +39,8 @@ function user.CatchAllWildcard(x: int) -> string {
     load_var x
     call user.MayFailIntOrString
     jump L0
+    load_var e
+    throw_if_panic
     load_const "caught all"
 
   L0:
@@ -49,7 +51,7 @@ function user.CatchThenCatchAll(x: int) -> string {
     load_var x
     call user.MayFailIntOrString
     jump L2
-    load_var _2
+    load_var e
     type_tag
     load_const 1
     cmp_op ==
@@ -57,6 +59,8 @@ function user.CatchThenCatchAll(x: int) -> string {
     jump L1
 
   L0:
+    load_var e
+    throw_if_panic
     load_const "caught rest"
     jump L2
 
@@ -102,7 +106,7 @@ function user.PartialCatch(x: int) -> string {
     load_var x
     call user.MayFailIntOrString
     jump L2
-    load_var _2
+    load_var e
     type_tag
     load_const 1
     cmp_op ==
@@ -110,7 +114,7 @@ function user.PartialCatch(x: int) -> string {
     jump L1
 
   L0:
-    load_var _2
+    load_var e
     throw
 
   L1:

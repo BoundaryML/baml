@@ -33,6 +33,7 @@ fn token_kind_to_syntax_kind(kind: TokenKind) -> SyntaxKind {
         TokenKind::Client => SyntaxKind::KW_CLIENT,
         TokenKind::Generator => SyntaxKind::KW_GENERATOR,
         TokenKind::Test => SyntaxKind::KW_TEST,
+        TokenKind::TestSet => SyntaxKind::KW_TESTSET,
         TokenKind::RetryPolicy => SyntaxKind::KW_RETRY_POLICY,
         TokenKind::TemplateString => SyntaxKind::KW_TEMPLATE_STRING,
         TokenKind::TypeBuilder => SyntaxKind::KW_TYPE_BUILDER,
@@ -52,7 +53,6 @@ fn token_kind_to_syntax_kind(kind: TokenKind) -> SyntaxKind {
         TokenKind::Match => SyntaxKind::KW_MATCH,
         TokenKind::Catch => SyntaxKind::KW_CATCH,
         TokenKind::CatchAll => SyntaxKind::KW_CATCH_ALL,
-        TokenKind::Assert => SyntaxKind::KW_ASSERT,
         TokenKind::Throws => SyntaxKind::KW_THROWS,
 
         // Literals
@@ -85,6 +85,7 @@ fn token_kind_to_syntax_kind(kind: TokenKind) -> SyntaxKind {
         TokenKind::At => SyntaxKind::AT,
         TokenKind::AtAt => SyntaxKind::AT_AT,
         TokenKind::Pipe => SyntaxKind::PIPE,
+        TokenKind::QuestionDot => SyntaxKind::QUESTION_DOT,
         TokenKind::Question => SyntaxKind::QUESTION,
 
         // Assignment operators
@@ -182,6 +183,9 @@ pub(crate) struct Parser<'a> {
     /// Managed by [`Self::parse_expr_bp_no_catch`]; prefer that helper over
     /// manually incrementing/decrementing this counter.
     suppress_catch_depth: u32,
+    /// Track nesting depth inside testset bodies where `test`/`testset` statements
+    /// are valid. Incremented by `parse_testset_body`, checked by `parse_stmt`.
+    testset_body_depth: u32,
 }
 
 impl<'a> Parser<'a> {
@@ -194,6 +198,7 @@ impl<'a> Parser<'a> {
             pending_greater_span: None,
             type_args_depth: 0,
             suppress_catch_depth: 0,
+            testset_body_depth: 0,
         }
     }
 
@@ -302,6 +307,49 @@ impl<'a> Parser<'a> {
     /// Use this inside string parsing where // should not be treated as comment start.
     fn at_raw(&self, kind: TokenKind) -> bool {
         self.current_raw().map(|t| t.kind == kind).unwrap_or(false)
+    }
+
+    /// Check if the current token is a `Word` with the given text.
+    /// Used for contextual keywords like `with` that should not be reserved globally.
+    fn at_contextual_kw(&self, kw: &str) -> bool {
+        self.current()
+            .map(|t| t.kind == TokenKind::Word && t.text == kw)
+            .unwrap_or(false)
+    }
+
+    /// Consume the current `Word("with")` token, re-labelling it as `KW_WITH`
+    /// in the syntax tree. Handles leading trivia just like [`Self::bump`].
+    fn bump_contextual_with(&mut self) {
+        // Emit leading trivia (whitespace, newlines, comments) before the keyword,
+        // matching the same pattern as `bump_impl`.
+        while self.current < self.tokens.len() {
+            if self.at_line_comment_start() {
+                self.consume_line_comment();
+                continue;
+            }
+            if self.at_block_comment_start() {
+                self.consume_block_comment();
+                continue;
+            }
+            let token = &self.tokens[self.current];
+            if self.is_basic_trivia(token.kind) {
+                self.events.push(Event::Token {
+                    kind: token_kind_to_syntax_kind(token.kind),
+                    text: token.text.clone(),
+                });
+                self.current += 1;
+                continue;
+            }
+            break;
+        }
+        // Emit the Word("with") token as KW_WITH
+        if self.current < self.tokens.len() {
+            self.events.push(Event::Token {
+                kind: SyntaxKind::KW_WITH,
+                text: self.tokens[self.current].text.clone(),
+            });
+            self.current += 1;
+        }
     }
 
     /// Check if the current token can start a type expression.
@@ -416,7 +464,7 @@ impl<'a> Parser<'a> {
         let name_kind = self.tokens.get(i)?.kind;
         if !matches!(
             name_kind,
-            TokenKind::Word | TokenKind::Dynamic | TokenKind::Assert | TokenKind::Throws
+            TokenKind::Word | TokenKind::Dynamic | TokenKind::Throws
         ) {
             return None;
         }
@@ -433,7 +481,7 @@ impl<'a> Parser<'a> {
             let segment_kind = self.tokens.get(i)?.kind;
             if !matches!(
                 segment_kind,
-                TokenKind::Word | TokenKind::Dynamic | TokenKind::Assert | TokenKind::Throws
+                TokenKind::Word | TokenKind::Dynamic | TokenKind::Throws
             ) {
                 return None;
             }
@@ -717,6 +765,7 @@ impl<'a> Parser<'a> {
                     | TokenKind::Client
                     | TokenKind::Generator
                     | TokenKind::Test
+                    | TokenKind::TestSet
                     | TokenKind::RetryPolicy
                     | TokenKind::TemplateString
                     | TokenKind::TypeBuilder
@@ -724,10 +773,24 @@ impl<'a> Parser<'a> {
         )
     }
 
-    /// [`at_top_level_keyword`] minus `client`: in blocks, `client` can start `client.method(...)`
-    /// (e.g. a parameter named `client`), not a top-level `client` declaration.
+    /// [`at_top_level_keyword`] minus tokens that are valid in statement position:
+    /// - `client` can start `client.method(...)` (parameter named `client`)
+    /// - `test` with a string literal is an expression-body test (valid in blocks)
+    /// - `testset` with a string literal is a testset declaration (valid in blocks)
     fn at_top_level_keyword_except_client(&self) -> bool {
-        self.at_top_level_keyword() && !self.at(TokenKind::Client)
+        if !self.at_top_level_keyword() {
+            return false;
+        }
+        if self.at(TokenKind::Client) {
+            return false;
+        }
+        // Expression-body test/testset are valid inside block expressions
+        if (self.at(TokenKind::Test) && self.looks_like_test_expr_body())
+            || self.at(TokenKind::TestSet)
+        {
+            return false;
+        }
+        true
     }
 
     /// Expect a '>' token, but also accept '>>' and consume only one '>'.
@@ -1326,6 +1389,67 @@ impl<'a> Parser<'a> {
         true
     }
 
+    /// Parse a byte string literal: `b"..."`.
+    ///
+    /// The lexer emits `Word("b"), Quote, (content tokens), Quote`.
+    /// We check adjacency: the raw token immediately after `Word("b")` must be
+    /// `Quote` with no intervening trivia. This distinguishes `b"hello"` (byte
+    /// string) from `b "hello"` (identifier `b` followed by a string).
+    ///
+    /// Must only be called when `self.current()` is `Word("b")`.
+    pub(crate) fn parse_byte_string(&mut self) -> bool {
+        // Adjacency check: the raw token immediately after `Word("b")` must be
+        // `Quote` with no trivia in between.
+        let Some(b_index) = self.current_non_trivia_index() else {
+            return false;
+        };
+        if self.tokens.get(b_index + 1).map(|t| t.kind) != Some(TokenKind::Quote) {
+            return false;
+        }
+
+        // Before starting the node, handle all leading trivia.
+        while self.eat_trivia() {}
+
+        self.with_node(SyntaxKind::BYTE_STRING_LITERAL, |p| {
+            p.bump_raw(); // Consume the `b` prefix
+
+            p.bump_raw(); // Opening quote
+
+            // Collect all tokens until closing quote (same logic as parse_string).
+            let mut loop_counter = 0;
+            while !p.at_end() {
+                loop_counter += 1;
+                if loop_counter > 100_000 {
+                    p.error_unexpected_token(
+                        "Byte string parsing exceeded iteration limit".to_string(),
+                    );
+                    return;
+                }
+
+                if p.at_raw(TokenKind::Backslash) {
+                    p.bump_raw(); // Consume backslash
+                    if let Some(directly_after) = p.tokens.get(p.current)
+                        && directly_after.kind == TokenKind::Quote
+                    {
+                        p.bump_raw(); // Consume escaped quote
+                    }
+                    continue;
+                }
+
+                if p.at_raw(TokenKind::Quote) {
+                    p.bump_raw(); // Consume closing quote
+                    return;
+                }
+
+                p.bump_raw();
+            }
+
+            p.error_unexpected_token("Unclosed byte string literal".to_string());
+        });
+
+        true
+    }
+
     /// Parse a raw string literal with hash delimiters
     /// Lexer emits: Hash+, Quote, (content tokens), Quote, Hash+
     /// Parser assembles and validates matching hash counts
@@ -1565,8 +1689,11 @@ impl<'a> Parser<'a> {
 
     // ============ Attribute Parsing ============
 
-    /// Parse a field attribute: @alias("name") or @stream.done
-    pub(crate) fn parse_field_attribute(&mut self) {
+    /// Parse an @attr: @alias("name") or @stream.done
+    pub(crate) fn parse_at_attribute(&mut self) {
+        // Eat leading trivia so whitespace stays outside the ATTRIBUTE node,
+        // keeping the node's text_range tight around `@name(...)`.
+        while self.eat_trivia() {}
         self.with_node(SyntaxKind::ATTRIBUTE, |p| {
             let at_span = p.current().map(|t| t.span);
             p.expect(TokenKind::At);
@@ -1580,13 +1707,12 @@ impl<'a> Parser<'a> {
             }
 
             // Attribute name (can be dotted like stream.done)
-            // Allow keywords like 'assert' as attribute names (for @assert)
-            if p.at(TokenKind::Word) || p.at(TokenKind::Assert) {
+            if p.at(TokenKind::Word) {
                 p.bump();
                 // Handle dotted attribute names like @stream.done
                 while p.at(TokenKind::Dot) {
                     p.bump(); // consume dot
-                    if p.at(TokenKind::Word) || p.at(TokenKind::Assert) {
+                    if p.at(TokenKind::Word) {
                         p.bump(); // consume next segment
                     } else {
                         p.error_unexpected_token("attribute name segment after dot".to_string());
@@ -1605,25 +1731,18 @@ impl<'a> Parser<'a> {
         });
     }
 
-    /// Parse a block attribute: @@dynamic or @@stream.done
-    pub(crate) fn parse_block_attribute(&mut self) {
+    /// Parse an @@attr: @@dynamic or @@stream.done
+    pub(crate) fn parse_atat_attribute(&mut self) {
         self.with_node(SyntaxKind::BLOCK_ATTRIBUTE, |p| {
             p.expect(TokenKind::AtAt);
 
             // Attribute name (can be dotted like @@stream.done)
-            if p.at(TokenKind::Word)
-                || p.at(TokenKind::Dynamic)
-                || p.at(TokenKind::Assert)
-                || p.at(TokenKind::Throws)
-            {
+            if p.at(TokenKind::Word) || p.at(TokenKind::Dynamic) || p.at(TokenKind::Throws) {
                 p.bump();
                 // Handle dotted attribute names like @@stream.done
                 while p.at(TokenKind::Dot) {
                     p.bump(); // consume dot
-                    if p.at(TokenKind::Word)
-                        || p.at(TokenKind::Dynamic)
-                        || p.at(TokenKind::Assert)
-                        || p.at(TokenKind::Throws)
+                    if p.at(TokenKind::Word) || p.at(TokenKind::Dynamic) || p.at(TokenKind::Throws)
                     {
                         p.bump(); // consume next segment
                     } else {
@@ -1668,7 +1787,7 @@ impl<'a> Parser<'a> {
         // Attribute argument can be:
         // - String: @alias("user_name")
         // - Raw string: @description(#"Multi-line\ndescription"#)
-        // - Expression: @assert({{ this > 0 }})
+        // - Expression: @check({{ this > 0 }})
         // - Unquoted string: @alias(my_alias) - one WORD token
 
         if self.parse_any_string() {
@@ -1742,20 +1861,13 @@ impl<'a> Parser<'a> {
                     p.bump();
                     p.parse_type_primary();
                 } else if p.at(TokenKind::At) {
-                    // An attribute
-                    let Some(attr_name_first) = p.peek(1) else {
-                        break; // attribute goes on a parent node or something
-                    };
-                    if attr_name_first.kind == TokenKind::Word
-                        && matches!(
-                            attr_name_first.text.as_str(),
-                            "alias" | "description" | "skip"
-                        )
-                    {
-                        // attribute applies to a field, not the type
+                    // All attributes (both type and field) are consumed inside TYPE_EXPR.
+                    // Disambiguation happens during lowering, which has the structural
+                    // context to classify field vs type attributes.
+                    if p.peek(1).is_none() {
                         break;
                     }
-                    p.parse_field_attribute();
+                    p.parse_at_attribute();
                 } else {
                     break;
                 }
@@ -1952,7 +2064,7 @@ impl<'a> Parser<'a> {
     pub(crate) fn parse_enum(&mut self) {
         self.with_node(SyntaxKind::ENUM_DEF, |p| {
             while p.at(TokenKind::AtAt) {
-                p.parse_block_attribute();
+                p.parse_atat_attribute();
             }
 
             // 'enum' keyword
@@ -1979,7 +2091,7 @@ impl<'a> Parser<'a> {
 
                 if p.at(TokenKind::AtAt) {
                     // Block attribute: @@dynamic
-                    p.parse_block_attribute();
+                    p.parse_atat_attribute();
                 } else if p.at(TokenKind::Word) {
                     // Enum variant
                     p.parse_enum_variant();
@@ -2066,7 +2178,7 @@ impl<'a> Parser<'a> {
 
             // Optional field attributes (@alias, etc.)
             while p.at(TokenKind::At) && !p.at(TokenKind::AtAt) {
-                p.parse_field_attribute();
+                p.parse_at_attribute();
             }
         });
     }
@@ -2077,7 +2189,7 @@ impl<'a> Parser<'a> {
     pub(crate) fn parse_class(&mut self) {
         self.with_node(SyntaxKind::CLASS_DEF, |p| {
             while p.at(TokenKind::AtAt) {
-                p.parse_block_attribute();
+                p.parse_atat_attribute();
             }
 
             // 'class' keyword
@@ -2114,7 +2226,7 @@ impl<'a> Parser<'a> {
                     p.parse_function();
                 } else if p.at(TokenKind::AtAt) {
                     // Block attribute: @@dynamic
-                    p.parse_block_attribute();
+                    p.parse_atat_attribute();
                 } else if p.at(TokenKind::Function) {
                     // Method definition
                     p.parse_function();
@@ -2180,12 +2292,6 @@ impl<'a> Parser<'a> {
             let has_type = p.is_at_type_start() && (!newline_before_type || has_colon);
             if has_type {
                 p.parse_type();
-
-                // Optional field attributes (@alias, @description, @skip, etc.)
-                // `parse_type` has already consumed all the "field" attributes that aren't field-related
-                while p.at(TokenKind::At) && !p.at(TokenKind::AtAt) {
-                    p.parse_field_attribute();
-                }
             } else {
                 // Field is incomplete - emit error and don't consume more tokens
                 if let Some(span) = field_name_span {
@@ -2203,7 +2309,7 @@ impl<'a> Parser<'a> {
     pub(crate) fn parse_function(&mut self) {
         self.with_node(SyntaxKind::FUNCTION_DEF, |p| {
             while p.at(TokenKind::AtAt) {
-                p.parse_block_attribute();
+                p.parse_atat_attribute();
             }
 
             // 'function' keyword
@@ -2365,7 +2471,6 @@ impl<'a> Parser<'a> {
                 | TokenKind::Throw
                 | TokenKind::Catch
                 | TokenKind::CatchAll
-                | TokenKind::Assert
                     if brace_depth == 1 =>
                 {
                     return false;
@@ -2620,8 +2725,33 @@ impl<'a> Parser<'a> {
             self.parse_continue_stmt();
         } else if self.at(TokenKind::Throw) {
             self.parse_throw_stmt();
-        } else if self.at(TokenKind::Assert) {
-            self.parse_assert_stmt();
+        } else if self.at(TokenKind::Test) && self.looks_like_test_expr_body() {
+            if self.testset_body_depth > 0 {
+                self.parse_test_expr();
+            } else {
+                let span = self.current().map(|t| t.span).unwrap_or_else(|| {
+                    baml_base::Span::new(baml_base::FileId::new(0), TextRange::default())
+                });
+                self.error(
+                    "test blocks are only allowed at the top level or inside a testset".to_string(),
+                    span,
+                );
+                self.parse_test_expr(); // still parse to recover
+            }
+        } else if self.at(TokenKind::TestSet) {
+            if self.testset_body_depth > 0 {
+                self.parse_testset();
+            } else {
+                let span = self.current().map(|t| t.span).unwrap_or_else(|| {
+                    baml_base::Span::new(baml_base::FileId::new(0), TextRange::default())
+                });
+                self.error(
+                    "testset blocks are only allowed at the top level or inside a testset"
+                        .to_string(),
+                    span,
+                );
+                self.parse_testset(); // still parse to recover
+            }
         } else {
             // Expression statement
             self.parse_expr_stmt();
@@ -2726,18 +2856,6 @@ impl<'a> Parser<'a> {
             }
 
             p.parse_expr_bp_no_catch(0);
-        });
-    }
-
-    fn parse_assert_stmt(&mut self) {
-        self.with_node(SyntaxKind::ASSERT_STMT, |p| {
-            p.expect(TokenKind::Assert);
-
-            // Condition expression
-            p.parse_expr();
-
-            // Consume trailing semicolon
-            p.eat(TokenKind::Semicolon);
         });
     }
 
@@ -3341,6 +3459,23 @@ impl<'a> Parser<'a> {
                 self.finish_node();
                 // Continue to potentially parse function call
                 continue;
+            } else if op == TokenKind::Question
+                && self.peek(1).map(|t| t.kind) == Some(TokenKind::Question)
+            {
+                // Null coalescing operator `??`
+                // Lexed as two Question tokens to avoid ambiguity with `int??` (double optional).
+                // Binding power: below ||/&& (6/8), above assignment (2).
+                let left_bp = 4u8;
+                if left_bp < min_bp {
+                    break;
+                }
+                let lhs_start = self.find_previous_expr_start_after(expr_start);
+                // Consume both ? tokens, emitting a single QUESTION_QUESTION node
+                self.bump(); // first ?
+                self.bump(); // second ?
+                self.parse_expr_bp(5); // right_bp = 5 (left associative)
+                self.wrap_events_in_node(lhs_start, SyntaxKind::BINARY_EXPR);
+                self.finish_node();
             } else if op == TokenKind::LParen {
                 // Function call
                 let lhs_start = self.find_previous_expr_start_after(expr_start);
@@ -3355,6 +3490,36 @@ impl<'a> Parser<'a> {
                 self.parse_expr();
                 self.expect(TokenKind::RBracket);
                 self.finish_node();
+            } else if op == TokenKind::QuestionDot {
+                // Optional chaining: obj?.field, obj?.[expr], obj?.(args)
+                let lhs_start = self.find_previous_expr_start_after(expr_start);
+                if self.peek_after_question_dot() == Some(TokenKind::LParen) {
+                    // obj?.(args) — optional call
+                    self.wrap_events_in_node(lhs_start, SyntaxKind::OPTIONAL_CALL_EXPR);
+                    self.bump(); // ?.
+                    self.parse_call_args();
+                    self.finish_node();
+                } else if self.peek_after_question_dot() == Some(TokenKind::LBracket) {
+                    // obj?.[expr] — optional index
+                    self.wrap_events_in_node(lhs_start, SyntaxKind::OPTIONAL_INDEX_EXPR);
+                    self.bump(); // ?.
+                    self.bump(); // [
+                    self.parse_expr();
+                    self.expect(TokenKind::RBracket);
+                    self.finish_node();
+                } else {
+                    // obj?.field — optional field access
+                    self.wrap_events_in_node(lhs_start, SyntaxKind::OPTIONAL_FIELD_ACCESS_EXPR);
+                    self.bump(); // ?.
+                    if self.at(TokenKind::Word) {
+                        self.bump();
+                    } else {
+                        self.error_unexpected_token(
+                            "Expected field name, '[', or '(' after '?.'".to_string(),
+                        );
+                    }
+                    self.finish_node();
+                }
             } else if op == TokenKind::Dot || op == TokenKind::Dollar {
                 // Field access on a complex expression.
                 //
@@ -3453,6 +3618,12 @@ impl<'a> Parser<'a> {
         min_index
     }
 
+    /// Peek at the next non-trivia token after the current `?.` token.
+    /// Used to disambiguate `?.field` vs `?.[expr]` vs `?.(args)`.
+    fn peek_after_question_dot(&self) -> Option<TokenKind> {
+        self.peek(1).map(|t| t.kind)
+    }
+
     /// Check if the most recent expression looks like a constructor/type name
     /// that can be followed by `{` for object literal construction.
     ///
@@ -3466,6 +3637,16 @@ impl<'a> Parser<'a> {
     /// - Function calls (e.g., `func()`)
     /// - Any other complex expression
     fn looks_like_object_constructor(&self) -> bool {
+        // Two conditions must hold:
+        // 1. The preceding expression looks like a type name (Word, PATH_EXPR, etc.)
+        // 2. The content after `{` looks like `<word> :` (field initializer),
+        //    not arbitrary statements. This prevents `Name { body_code }` from
+        //    being mis-parsed as an object literal.
+
+        if !self.brace_content_looks_like_fields() {
+            return false;
+        }
+
         // Walk backward to find the most recent complete expression
         let mut depth = 0;
         for event in self.events.iter().rev() {
@@ -3496,6 +3677,26 @@ impl<'a> Parser<'a> {
         false
     }
 
+    /// Peek past the current `{` token to check if the brace content starts with
+    /// `<word> :` or `...` (spread), which indicates an object literal / constructor.
+    /// If it starts with something else (e.g. a statement, keyword, or expression),
+    /// the `{` is more likely a block body.
+    fn brace_content_looks_like_fields(&self) -> bool {
+        // peek() already skips trivia (whitespace, newlines, comments),
+        // so peek(1) is the first content token after `{`.
+        match self.peek(1) {
+            Some(t) if t.kind == TokenKind::DotDotDot => true, // spread
+            Some(t) if t.kind == TokenKind::RBrace => true,    // empty braces
+            Some(t) if t.kind == TokenKind::Word => {
+                // Check for `<word> :` pattern
+                self.peek(2)
+                    .map(|t| t.kind == TokenKind::Colon)
+                    .unwrap_or(false)
+            }
+            _ => false,
+        }
+    }
+
     /// Wrap events from `start_index` onwards in a new node
     /// This allows us to retroactively wrap parsed expressions.
     ///
@@ -3509,8 +3710,20 @@ impl<'a> Parser<'a> {
         self.events.insert(start_index, Event::StartNode { kind });
     }
 
-    /// Parse prefix expression (primary or unary operator)
+    /// Parse prefix expression (primary or unary operator).
+    ///
+    /// Unary operators (`!`, `-`, `~`, `++`, `--`) bind looser than postfix
+    /// operators (`.`, `()`, `[]`), so `!x.f()` parses as `!(x.f())`.
+    /// We achieve this by parsing the operand with `parse_expr_bp(PREFIX_BP)`
+    /// instead of recursing into `parse_prefix()` directly — the Pratt loop
+    /// then handles `.` and `()` before the `UNARY_EXPR` node closes.
     fn parse_prefix(&mut self) {
+        // Binding power for unary prefix operators — higher than all infix
+        // operators (max infix is 22) so `!a + b` is still `(!a) + b`, but
+        // the operand goes through parse_expr_bp so postfix `.`/`()`/`[]`
+        // bind tighter.
+        const PREFIX_BP: u8 = 23;
+
         // Check for unary operators
         if self.at(TokenKind::Minus)
             || self.at(TokenKind::Not)
@@ -3520,7 +3733,7 @@ impl<'a> Parser<'a> {
         {
             self.with_node(SyntaxKind::UNARY_EXPR, |p| {
                 p.bump(); // operator
-                p.parse_prefix(); // operand
+                p.parse_expr_bp(PREFIX_BP); // operand: postfix ops bind tighter
             });
         } else {
             self.parse_primary_expr();
@@ -3538,8 +3751,11 @@ impl<'a> Parser<'a> {
             // Throw expression
             self.parse_throw_expr();
         } else if self.at(TokenKind::Word) {
-            let text = self.current().map(|t| t.text.as_str()).unwrap_or("");
-            if text == "env"
+            // Collect text as owned String so the borrow is released before any &mut calls.
+            let text: String = self.current().map(|t| t.text.clone()).unwrap_or_default();
+            if text == "b" && self.parse_byte_string() {
+                // Byte string literal b"..."
+            } else if text == "env"
                 && self.peek(1).map(|t| t.kind) == Some(TokenKind::Dot)
                 && self.peek(2).map(|t| t.kind) == Some(TokenKind::Word)
                 && self.peek(3).map(|t| t.kind) != Some(TokenKind::LParen)
@@ -4119,34 +4335,34 @@ impl<'a> Parser<'a> {
             }
 
             // Logical OR (left associative)
-            OrOr => (3, 4),
+            OrOr => (6, 7),
 
             // Logical AND (left associative)
-            AndAnd => (5, 6),
+            AndAnd => (8, 9),
 
             // Bitwise OR (left associative)
-            Pipe => (7, 8),
+            Pipe => (10, 11),
 
             // Bitwise XOR (left associative)
-            Caret => (9, 10),
+            Caret => (12, 13),
 
             // Bitwise AND (left associative)
-            And => (11, 12),
+            And => (14, 15),
 
             // Equality (left associative)
-            EqualsEquals | NotEquals => (13, 14),
+            EqualsEquals | NotEquals => (16, 17),
 
             // Comparison (left associative) - includes instanceof
-            Less | Greater | LessEquals | GreaterEquals | Instanceof => (15, 16),
+            Less | Greater | LessEquals | GreaterEquals | Instanceof => (18, 19),
 
             // Bitwise shift (left associative)
-            LessLess | GreaterGreater => (17, 18),
+            LessLess | GreaterGreater => (20, 21),
 
             // Addition/Subtraction (left associative)
-            Plus | Minus => (19, 20),
+            Plus | Minus => (22, 23),
 
             // Multiplication/Division/Modulo (left associative)
-            Star | Slash | Percent => (21, 22),
+            Star | Slash | Percent => (24, 25),
 
             _ => return None,
         })
@@ -4233,7 +4449,7 @@ impl<'a> Parser<'a> {
 
                 // Block attributes like @@check(...) inside config blocks
                 if p.at(TokenKind::AtAt) {
-                    p.parse_block_attribute();
+                    p.parse_atat_attribute();
                 } else {
                     p.parse_config_item();
                     // Allow optional comma after config items
@@ -4307,7 +4523,7 @@ impl<'a> Parser<'a> {
 
             // Optional field attributes after config value (e.g., args { ... } @check(...))
             while p.at(TokenKind::At) && !p.at(TokenKind::AtAt) {
-                p.parse_field_attribute();
+                p.parse_at_attribute();
             }
         });
     }
@@ -4441,6 +4657,19 @@ impl<'a> Parser<'a> {
             return true;
         }
 
+        // Byte string literals: b"..."
+        if self.at(TokenKind::Word)
+            && let Some(token) = self.current()
+            && token.text.as_str() == "b"
+            && let Some(idx) = self.current_non_trivia_index()
+            && self
+                .tokens
+                .get(idx + 1)
+                .is_some_and(|t| t.kind == TokenKind::Quote)
+        {
+            return true;
+        }
+
         // Check for `env.` prefix - environment variable access
         if self.at(TokenKind::Word) {
             if let Some(token) = self.current() {
@@ -4562,6 +4791,98 @@ impl<'a> Parser<'a> {
         });
     }
 
+    /// Check if the current test looks like an expression-body test (new-style).
+    ///
+    /// Old-style: `test Name { functions [...] ... }` — config block
+    /// New-style: `test <expr> [with <expr>] { ... }` — expression body
+    ///
+    /// We detect the old style and default to new style otherwise, so that
+    /// any expression (string concat, function calls, etc.) works as a test name.
+    fn looks_like_test_expr_body(&self) -> bool {
+        let Some(next) = self.peek(1) else {
+            return true;
+        };
+        // Old-style is only: `test Name { functions ...}` or `test Name { type_builder ...}`
+        // There is no old-style form with parens — `test Name(...)` was never valid old-style
+        // syntax (the old parser just emits a "remove parentheses" error).
+        if next.kind == TokenKind::Word {
+            if let Some(after_word) = self.peek(2) {
+                if after_word.kind == TokenKind::LBrace {
+                    // Peek inside the brace: `test Name { functions` or `test Name { type_builder`
+                    if let Some(inside) = self.peek(3) {
+                        if inside.kind == TokenKind::Word
+                            && (inside.text == "functions" || inside.text == "type_builder")
+                        {
+                            return false; // old-style config block
+                        }
+                    }
+                }
+            }
+        }
+        true
+    }
+
+    /// Parse an expression-body test: `test <name_expr> [with expr] { body }`
+    ///
+    /// The name is any expression that type-checks as a string, e.g.:
+    /// - `test "simple" { ... }`
+    /// - `test "prefix" + suffix { ... }`
+    pub(crate) fn parse_test_expr(&mut self) {
+        self.with_node(SyntaxKind::TEST_EXPR_DEF, |p| {
+            // 'test' keyword
+            p.expect(TokenKind::Test);
+
+            // Test name — an expression (stops before `{` and `with`)
+            p.parse_expr();
+
+            // Optional `with` clause for test runner
+            if p.at_contextual_kw("with") {
+                p.bump_contextual_with();
+                p.parse_expr();
+            }
+
+            // Block body — reuse existing expression body parsing
+            if p.at(TokenKind::LBrace) {
+                p.parse_block_expr();
+            } else {
+                p.error_unexpected_token("test body".to_string());
+            }
+        });
+    }
+
+    /// Parse a testset: `testset "name" [with expr] { body }`
+    /// Body can contain statements, nested `test` and `testset` blocks.
+    pub(crate) fn parse_testset(&mut self) {
+        self.with_node(SyntaxKind::TESTSET_DEF, |p| {
+            // 'testset' keyword
+            p.expect(TokenKind::TestSet);
+
+            // Testset name — an expression (stops before `{` and `with`)
+            p.parse_expr();
+
+            // Optional `with` clause for testset runner
+            if p.at_contextual_kw("with") {
+                p.bump_contextual_with();
+                p.parse_expr();
+            }
+
+            // Block body — parse as a block containing statements + nested test/testset
+            if p.at(TokenKind::LBrace) {
+                p.parse_testset_body();
+            } else {
+                p.error_unexpected_token("testset body".to_string());
+            }
+        });
+    }
+
+    /// Parse the body of a testset block.
+    /// Allows statements (let, for) and nested test/testset declarations.
+    fn parse_testset_body(&mut self) {
+        self.testset_body_depth += 1;
+        self.parse_block_expr();
+        self.testset_body_depth -= 1;
+    }
+
     // ============ Retry Policy Parsing ============
 
     /// Parse a retry policy declaration
@@ -4664,7 +4985,7 @@ impl<'a> Parser<'a> {
 
             // Optional attributes (not including those taken by the type)
             while p.at(TokenKind::At) && !p.at(TokenKind::AtAt) {
-                p.parse_field_attribute();
+                p.parse_at_attribute();
             }
 
             // Optional semicolon
@@ -4700,7 +5021,13 @@ fn parse_impl(tokens: &[Token], cache: Option<&mut NodeCache>) -> (GreenNode, Ve
         } else if parser.at(TokenKind::Generator) {
             parser.parse_generator();
         } else if parser.at(TokenKind::Test) {
-            parser.parse_test();
+            if parser.looks_like_test_expr_body() {
+                parser.parse_test_expr();
+            } else {
+                parser.parse_test();
+            }
+        } else if parser.at(TokenKind::TestSet) {
+            parser.parse_testset();
         } else if parser.at(TokenKind::RetryPolicy) {
             parser.parse_retry_policy();
         } else if parser.at(TokenKind::TemplateString) {

@@ -300,12 +300,6 @@ pub enum Instruction {
     /// simply has to clean up the call stack and continue execution.
     Return,
 
-    /// Pops a `Bool` value from the stack. If the value is `false`, raises
-    /// an assertion error.
-    ///
-    /// Format: `ASSERT`
-    Assert,
-
     /// Notifies about entering or exiting a block.
     ///
     /// Format: `NOTIFY_BLOCK block_index` where `block_index` is the index
@@ -360,12 +354,14 @@ pub enum Instruction {
     /// - Classes: assigned unique IDs starting at 100
     TypeTag,
 
-    /// Check whether a value is a panic instance (`baml.panics.*`).
+    /// If the top-of-stack value is a panic instance (`baml.panics.*`), throw it.
+    /// Otherwise pop the value and continue to the next instruction.
     ///
-    /// Stack: `[value]` -> `[is_panic: Bool]`
+    /// Stack: `[value]` -> `[]` (continues) or unwinds (throws)
     ///
-    /// Used in catch handlers before wildcard arms to rethrow unmatched panics.
-    IsPanic,
+    /// Used in catch handlers before wildcard arms to prevent them from
+    /// swallowing panics the programmer didn't explicitly name.
+    ThrowIfPanic,
 
     /// Halt execution with an unreachable code error.
     ///
@@ -615,7 +611,6 @@ impl std::fmt::Display for Instruction {
             Instruction::Throw => f.write_str("THROW"),
 
             Instruction::Return => f.write_str("RETURN"),
-            Instruction::Assert => f.write_str("ASSERT"),
             Instruction::AllocMap(n) => write!(f, "ALLOC_MAP {n}"),
             Instruction::Watch(i) => write!(f, "WATCH {i}"),
             Instruction::Unwatch(i) => write!(f, "UNWATCH {i}"),
@@ -630,7 +625,7 @@ impl std::fmt::Display for Instruction {
             }
             Instruction::Discriminant => f.write_str("DISCRIMINANT"),
             Instruction::TypeTag => f.write_str("TYPE_TAG"),
-            Instruction::IsPanic => f.write_str("IS_PANIC"),
+            Instruction::ThrowIfPanic => f.write_str("THROW_IF_PANIC"),
             Instruction::Unreachable => f.write_str("UNREACHABLE"),
             Instruction::MakeClosure(obj_idx, count) => {
                 write!(f, "MAKE_CLOSURE {} {}", obj_idx.raw(), count)
@@ -726,27 +721,10 @@ pub struct DebugLocalScope {
 /// Entries are sorted by `start_pc`. For nested catch blocks the innermost
 /// (narrowest range) entry appears first.
 ///
-/// # Panic filtering: `catches_panics` vs `IsPanic`
-///
-/// These two mechanisms work at different levels to prevent wildcards from
-/// catching panics the programmer didn't ask for:
-///
-/// - `catches_panics` (this field) is a **coarse VM-level gate**. When `false`,
-///   the VM skips this entry entirely for panic exceptions during table
-///   scanning — the handler is never entered. This handles the common case
-///   of `catch (e) { _ => ... }` with no panic arms: panics propagate up.
-///
-/// - `IsPanic` is a **bytecode instruction** emitted inside the handler,
-///   right before a wildcard arm, only when the catch has both explicit panic
-///   arms AND a wildcard. It rethrows unmatched panics so the wildcard doesn't
-///   swallow them.
-///
-/// | Catch shape                     | `catches_panics` | `IsPanic` in handler |
-/// |---------------------------------|------------------|----------------------|
-/// | `_ => ...` (no panic arms)      | `false`          | not emitted          |
-/// | `DivisionByZero => ...` (no wc) | `true`           | not emitted          |
-/// | `DivisionByZero => ..., _ =>..` | `true`           | guards the wildcard  |
-/// | `catch_all`                     | `true`           | not emitted          |
+/// All exceptions (user-thrown values and VM panics) are routed to the
+/// handler. The handler bytecode is responsible for filtering: a
+/// `ThrowIfPanic` instruction before wildcard arms rethrows panics the
+/// programmer didn't explicitly name.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ExceptionTableEntry {
     /// First protected instruction (inclusive).
@@ -757,10 +735,6 @@ pub struct ExceptionTableEntry {
     pub handler_pc: usize,
     /// Frame-local slot index for the caught error value.
     pub error_slot: usize,
-    /// Whether this entry catches panic types (`root.panics.*`).
-    /// When `false`, VM-originated panics (division by zero, index OOB, etc.)
-    /// skip this entry and continue scanning.
-    pub catches_panics: bool,
 }
 
 /// Executable bytecode.

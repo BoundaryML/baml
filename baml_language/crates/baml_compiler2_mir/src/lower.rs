@@ -106,6 +106,7 @@ pub fn convert_tir2_ty(ty: &Tir2Ty, resolved: &ResolvedAliases) -> Ty {
         Tir2Ty::Primitive(PrimitiveType::String, attr) => Ty::String { attr: attr.clone() },
         Tir2Ty::Primitive(PrimitiveType::Bool, attr) => Ty::Bool { attr: attr.clone() },
         Tir2Ty::Primitive(PrimitiveType::Null, attr) => Ty::Null { attr: attr.clone() },
+        Tir2Ty::Primitive(PrimitiveType::Uint8Array, attr) => Ty::Uint8Array { attr: attr.clone() },
         Tir2Ty::Primitive(PrimitiveType::Image, attr) => Ty::Media(MediaKind::Image, attr.clone()),
         Tir2Ty::Primitive(PrimitiveType::Audio, attr) => Ty::Media(MediaKind::Audio, attr.clone()),
         Tir2Ty::Primitive(PrimitiveType::Video, attr) => Ty::Media(MediaKind::Video, attr.clone()),
@@ -210,7 +211,11 @@ pub fn convert_tir2_ty(ty: &Tir2Ty, resolved: &ResolvedAliases) -> Ty {
 
 // ─── def_to_item_ref helper ──────────────────────────────────────────────────
 
-use baml_compiler2_hir::{contributions::Definition, file_item_tree, file_package::file_package};
+use baml_compiler2_hir::{contributions::Definition, file_package::file_package};
+// Use the PPIR item tree (which includes synthetic *$stream items) rather than
+// the bare HIR item tree. TIR resolves methods using PPIR `LocalItemId`s, so
+// MIR must use the same tree to avoid index mismatches.
+use baml_compiler2_ppir::file_item_tree;
 
 pub fn def_to_item_ref<'db>(db: &'db dyn crate::Db, def: Definition<'db>) -> ItemRef {
     let file = def.file(db);
@@ -280,7 +285,8 @@ fn resolution_to_item_ref(
             let pkg_info = file_package(db, class_loc.file(db));
             let item_tree = file_item_tree(db, class_loc.file(db));
             let class_data = &item_tree[class_loc.id(db)];
-            let func_data = &item_tree[func_loc.id(db)];
+            let func_id = func_loc.id(db);
+            let func_data = &item_tree[func_id];
             Some(ItemRef::Method {
                 package: pkg_info.package,
                 namespace: pkg_info.namespace_path,
@@ -330,10 +336,13 @@ struct LoweringContext<'db> {
     // arenas and their parent function body arenas (both start ExprIds at 0).
     expr_types: FxHashMap<(FileScopeId, AstExprId), Tir2Ty>,
     pat_types: FxHashMap<(FileScopeId, AstPatId), Tir2Ty>,
-    // Member resolutions from TIR: ExprId → MemberResolution
-    resolutions: FxHashMap<AstExprId, baml_compiler2_tir::inference::MemberResolution<'db>>,
+    // Member resolutions from TIR: (scope, ExprId) → MemberResolution
+    // Keyed by (FileScopeId, AstExprId) to avoid collisions between lambda body
+    // arenas and their parent function body arenas (both start ExprIds at 0).
+    resolutions:
+        FxHashMap<(FileScopeId, AstExprId), baml_compiler2_tir::inference::MemberResolution<'db>>,
     // Match expressions that TIR determined are exhaustive
-    exhaustive_matches: rustc_hash::FxHashSet<AstExprId>,
+    exhaustive_matches: rustc_hash::FxHashSet<(FileScopeId, AstExprId)>,
 
     // The FileScopeId of the expression body currently being lowered.
     // Updated when descending into lambda bodies (Phase 3+).
@@ -389,6 +398,11 @@ struct LoweringContext<'db> {
     // `lower_lambda` call after the body is lowered so it can extend the outer
     // MakeClosure with extra captures.
     transitive_captures_needed: Vec<Name>,
+
+    /// Stack of null-exit blocks for active `OptionalChain` scopes.
+    /// When an `OptionalFieldAccess`/`OptionalIndex`/`OptionalCall` encounters null,
+    /// it jumps to the top of this stack instead of creating its own null block.
+    chain_null_exits: Vec<BlockId>,
 }
 
 impl<'db> LoweringContext<'db> {
@@ -461,17 +475,37 @@ impl<'db> LoweringContext<'db> {
         let func_span = func_data.span;
 
         let index = file_semantic_index(db, file);
-        let func_scope_id: FileScopeId =
-            index.scope_at_offset(func_span.start(), Some(&func_data.name));
+        // For synthesized functions whose span is `0..0` (e.g. `$init_test_N`),
+        // `scope_at_offset` may return a descendant Lambda scope instead of the
+        // Function scope itself, because all synthesized expressions share span
+        // `0..0` and the descendant search finds a matching lambda first.
+        // Avoid this by searching explicitly for a `ScopeKind::Function` scope
+        // with the correct name and span before falling back to `scope_at_offset`.
+        let func_scope_id: FileScopeId = index
+            .scopes
+            .iter()
+            .enumerate()
+            .find_map(|(i, scope)| {
+                if scope.kind == baml_compiler2_hir::scope::ScopeKind::Function
+                    && scope.range == func_span
+                    && scope.name.as_ref() == Some(&func_data.name)
+                {
+                    #[allow(clippy::cast_possible_truncation)]
+                    Some(FileScopeId::new(i as u32))
+                } else {
+                    None
+                }
+            })
+            .unwrap_or_else(|| index.scope_at_offset(func_span.start(), Some(&func_data.name)));
 
         // --- Eagerly aggregate expr_types, pat_types, resolutions, and exhaustive_matches from all scopes ---
         let mut expr_types: FxHashMap<(FileScopeId, AstExprId), Tir2Ty> = FxHashMap::default();
         let mut pat_types: FxHashMap<(FileScopeId, AstPatId), Tir2Ty> = FxHashMap::default();
         let mut resolutions: FxHashMap<
-            AstExprId,
+            (FileScopeId, AstExprId),
             baml_compiler2_tir::inference::MemberResolution<'db>,
         > = FxHashMap::default();
-        let mut exhaustive_matches: rustc_hash::FxHashSet<AstExprId> =
+        let mut exhaustive_matches: rustc_hash::FxHashSet<(FileScopeId, AstExprId)> =
             rustc_hash::FxHashSet::default();
 
         let merge_scope =
@@ -479,10 +513,10 @@ impl<'db> LoweringContext<'db> {
              expr_types: &mut FxHashMap<(FileScopeId, AstExprId), Tir2Ty>,
              pat_types: &mut FxHashMap<(FileScopeId, AstPatId), Tir2Ty>,
              resolutions: &mut FxHashMap<
-                AstExprId,
+                (FileScopeId, AstExprId),
                 baml_compiler2_tir::inference::MemberResolution<'db>,
             >,
-             exhaustive_matches: &mut rustc_hash::FxHashSet<AstExprId>| {
+             exhaustive_matches: &mut rustc_hash::FxHashSet<(FileScopeId, AstExprId)>| {
                 let scope_id = index.scope_ids[fsi.index() as usize];
                 let inference = infer_scope_types(db, scope_id);
                 for (&expr_id, ty) in inference.iter_expressions() {
@@ -492,10 +526,10 @@ impl<'db> LoweringContext<'db> {
                     pat_types.insert((fsi, pat_id), ty.clone());
                 }
                 for (&expr_id, res) in inference.iter_resolutions() {
-                    resolutions.insert(expr_id, res.clone());
+                    resolutions.insert((fsi, expr_id), res.clone());
                 }
                 for &expr_id in inference.iter_exhaustive_matches() {
-                    exhaustive_matches.insert(expr_id);
+                    exhaustive_matches.insert((fsi, expr_id));
                 }
             };
 
@@ -613,6 +647,7 @@ impl<'db> LoweringContext<'db> {
             resolved_aliases,
             watched_locals_stack: Vec::new(),
             synthetic_name_counts: HashMap::new(),
+            chain_null_exits: Vec::new(),
         }
     }
 
@@ -641,10 +676,10 @@ impl<'db> LoweringContext<'db> {
         let mut expr_types: FxHashMap<(FileScopeId, AstExprId), Tir2Ty> = FxHashMap::default();
         let mut pat_types: FxHashMap<(FileScopeId, AstPatId), Tir2Ty> = FxHashMap::default();
         let mut resolutions: FxHashMap<
-            AstExprId,
+            (FileScopeId, AstExprId),
             baml_compiler2_tir::inference::MemberResolution<'db>,
         > = FxHashMap::default();
-        let mut exhaustive_matches: rustc_hash::FxHashSet<AstExprId> =
+        let mut exhaustive_matches: rustc_hash::FxHashSet<(FileScopeId, AstExprId)> =
             rustc_hash::FxHashSet::default();
 
         let merge_scope =
@@ -652,10 +687,10 @@ impl<'db> LoweringContext<'db> {
              expr_types: &mut FxHashMap<(FileScopeId, AstExprId), Tir2Ty>,
              pat_types: &mut FxHashMap<(FileScopeId, AstPatId), Tir2Ty>,
              resolutions: &mut FxHashMap<
-                AstExprId,
+                (FileScopeId, AstExprId),
                 baml_compiler2_tir::inference::MemberResolution<'db>,
             >,
-             exhaustive_matches: &mut rustc_hash::FxHashSet<AstExprId>| {
+             exhaustive_matches: &mut rustc_hash::FxHashSet<(FileScopeId, AstExprId)>| {
                 let scope_id = index.scope_ids[fsi.index() as usize];
                 let inference = infer_scope_types(db, scope_id);
                 for (&expr_id, ty) in inference.iter_expressions() {
@@ -665,10 +700,10 @@ impl<'db> LoweringContext<'db> {
                     pat_types.insert((fsi, pat_id), ty.clone());
                 }
                 for (&expr_id, res) in inference.iter_resolutions() {
-                    resolutions.insert(expr_id, res.clone());
+                    resolutions.insert((fsi, expr_id), res.clone());
                 }
                 for &expr_id in inference.iter_exhaustive_matches() {
-                    exhaustive_matches.insert(expr_id);
+                    exhaustive_matches.insert((fsi, expr_id));
                 }
             };
 
@@ -759,6 +794,7 @@ impl<'db> LoweringContext<'db> {
             pending_lambdas: Vec::new(),
             capture_indices: None,
             transitive_captures_needed: Vec::new(),
+            chain_null_exits: Vec::new(),
         }
     }
 
@@ -1333,6 +1369,10 @@ impl LoweringContext<'_> {
                     .assign(dest, Rvalue::Use(Operand::Constant(constant)));
             }
 
+            AstExpr::ByteStringLiteral(bytes) => {
+                self.builder.assign(dest, Rvalue::Uint8Array(bytes));
+            }
+
             AstExpr::Null => {
                 self.builder
                     .assign(dest, Rvalue::Use(Operand::Constant(Constant::Null)));
@@ -1386,6 +1426,18 @@ impl LoweringContext<'_> {
 
             AstExpr::FieldAccess { base, field } => {
                 self.lower_field_access(expr_id, base, &field, dest);
+            }
+
+            AstExpr::OptionalFieldAccess { base, field } => {
+                self.lower_optional_field_access(expr_id, base, &field, dest);
+            }
+
+            AstExpr::OptionalIndex { base, index } => {
+                self.lower_optional_index(expr_id, base, index, dest);
+            }
+
+            AstExpr::OptionalCall { callee, args } => {
+                self.lower_optional_call(expr_id, callee, &args, dest);
             }
 
             AstExpr::Index { base, index } => {
@@ -1444,6 +1496,10 @@ impl LoweringContext<'_> {
                 self.lower_lambda(&func_def, expr_id, dest);
             }
 
+            AstExpr::OptionalChain { expr } => {
+                self.lower_optional_chain(expr_id, expr, dest);
+            }
+
             AstExpr::Missing => {
                 self.emit_panic_call("parse error", expr_id);
             }
@@ -1475,7 +1531,11 @@ impl<'db> LoweringContext<'db> {
     fn lower_path_expr(&mut self, expr_id: AstExprId, segments: &[Name], dest: Place) {
         // Multi-segment paths (e.g. baml.llm.render_prompt) — check TIR resolution first
         if segments.len() > 1 {
-            if let Some(resolution) = self.resolutions.get(&expr_id).cloned() {
+            if let Some(resolution) = self
+                .resolutions
+                .get(&(self.current_scope, expr_id))
+                .cloned()
+            {
                 use baml_compiler2_tir::inference::MemberResolution;
                 match &resolution {
                     MemberResolution::Method { .. } | MemberResolution::Free { .. } => {
@@ -1624,6 +1684,8 @@ impl LoweringContext<'_> {
             AstBinaryOp::And | AstBinaryOp::Or => None,
             // Instanceof is not a simple binary op at MIR level
             AstBinaryOp::Instanceof => None,
+            // Null coalescing desugars to control flow, not a binary op
+            AstBinaryOp::NullCoalesce => None,
         }
     }
 
@@ -1655,6 +1717,9 @@ impl LoweringContext<'_> {
                     },
                 );
                 return;
+            }
+            AstBinaryOp::NullCoalesce => {
+                return self.lower_null_coalesce(expr_id, lhs, rhs, dest);
             }
             _ => {}
         }
@@ -1706,6 +1771,293 @@ impl LoweringContext<'_> {
         self.builder.set_current_block(bb_join);
     }
 
+    /// Lower `a ?? b` — evaluate `a`, if null then evaluate `b`, otherwise use `a`.
+    fn lower_null_coalesce(
+        &mut self,
+        _expr_id: AstExprId,
+        lhs: AstExprId,
+        rhs: AstExprId,
+        dest: Place,
+    ) {
+        // Evaluate LHS and store in dest
+        let lhs_op = self.lower_to_operand(lhs);
+        self.builder
+            .assign(dest.clone(), Rvalue::Use(lhs_op.clone()));
+
+        // Test: lhs == null
+        let is_null = Rvalue::BinaryOp {
+            op: BinOp::Eq,
+            left: lhs_op,
+            right: Operand::Constant(Constant::Null),
+        };
+        let test_local = self.builder.temp(Ty::Bool {
+            attr: TyAttr::default(),
+        });
+        self.builder.assign(Place::local(test_local), is_null);
+
+        let bb_rhs = self.builder.create_block();
+        let bb_join = self.builder.create_block();
+
+        // If null → evaluate RHS, otherwise keep LHS
+        self.builder
+            .branch(Operand::Copy(Place::Local(test_local)), bb_rhs, bb_join);
+
+        self.builder.set_current_block(bb_rhs);
+        self.lower_expr(rhs, dest);
+        if !self.builder.is_current_terminated() {
+            self.builder.goto(bb_join);
+        }
+
+        self.builder.set_current_block(bb_join);
+    }
+
+    /// Lower `OptionalChain { expr }` — set up shared null exit for the entire chain.
+    fn lower_optional_chain(&mut self, _expr_id: AstExprId, inner: AstExprId, dest: Place) {
+        let bb_null = self.builder.create_block();
+        let bb_join = self.builder.create_block();
+
+        // Push shared null exit
+        self.chain_null_exits.push(bb_null);
+
+        // Lower inner expression — Optional* nodes will jump to bb_null on null
+        self.lower_expr(inner, dest.clone());
+
+        self.chain_null_exits.pop();
+
+        // Non-null path: goto join
+        if !self.builder.is_current_terminated() {
+            self.builder.goto(bb_join);
+        }
+
+        // Null path: assign null, goto join
+        self.builder.set_current_block(bb_null);
+        self.builder
+            .assign(dest, Rvalue::Use(Operand::Constant(Constant::Null)));
+        self.builder.goto(bb_join);
+
+        self.builder.set_current_block(bb_join);
+    }
+
+    /// Lower an assignment whose target is wrapped in `OptionalChain`.
+    /// Sets up null guards, then emits the assignment only on the non-null path.
+    fn lower_assign_optional_chain(&mut self, inner_target: AstExprId, value: AstExprId) {
+        let bb_null = self.builder.create_block();
+        let bb_join = self.builder.create_block();
+
+        // Push shared null exit — Optional* nodes inside will jump here on null
+        self.chain_null_exits.push(bb_null);
+
+        // Lower target as lvalue (this will trigger null checks at each ?. node)
+        let place = self.lower_lvalue(inner_target);
+
+        // Lower value and assign
+        self.lower_expr(value, place);
+
+        self.chain_null_exits.pop();
+
+        // Non-null path: goto join
+        if !self.builder.is_current_terminated() {
+            self.builder.goto(bb_join);
+        }
+
+        // Null path: skip assignment, goto join
+        self.builder.set_current_block(bb_null);
+        self.builder.goto(bb_join);
+
+        self.builder.set_current_block(bb_join);
+    }
+
+    /// Lower a compound assignment (+=, etc.) whose target is wrapped in `OptionalChain`.
+    fn lower_assign_op_optional_chain(
+        &mut self,
+        inner_target: AstExprId,
+        op: AstAssignOp,
+        value: AstExprId,
+    ) {
+        let bb_null = self.builder.create_block();
+        let bb_join = self.builder.create_block();
+
+        self.chain_null_exits.push(bb_null);
+
+        let place = self.lower_lvalue(inner_target);
+        let current = Operand::Copy(place.clone());
+        let rhs = self.lower_to_operand(value);
+        let mir_op = Self::convert_assign_op(op);
+        self.builder.assign(
+            place,
+            Rvalue::BinaryOp {
+                op: mir_op,
+                left: current,
+                right: rhs,
+            },
+        );
+
+        self.chain_null_exits.pop();
+
+        if !self.builder.is_current_terminated() {
+            self.builder.goto(bb_join);
+        }
+
+        self.builder.set_current_block(bb_null);
+        self.builder.goto(bb_join);
+
+        self.builder.set_current_block(bb_join);
+    }
+
+    /// Lower `obj?.field` — null-check obj, then access field or produce null.
+    fn lower_optional_field_access(
+        &mut self,
+        expr_id: AstExprId,
+        base: AstExprId,
+        field: &Name,
+        dest: Place,
+    ) {
+        let base_op = self.lower_to_operand(base);
+
+        // Test: base == null
+        let is_null = Rvalue::BinaryOp {
+            op: BinOp::Eq,
+            left: base_op,
+            right: Operand::Constant(Constant::Null),
+        };
+        let test_local = self.builder.temp(Ty::Bool {
+            attr: TyAttr::default(),
+        });
+        self.builder.assign(Place::local(test_local), is_null);
+
+        let bb_access = self.builder.create_block();
+
+        if let Some(&bb_null) = self.chain_null_exits.last() {
+            // Inside an OptionalChain — jump to shared null exit
+            self.builder
+                .branch(Operand::Copy(Place::Local(test_local)), bb_null, bb_access);
+
+            self.builder.set_current_block(bb_access);
+            self.lower_field_access(expr_id, base, field, dest);
+            // Don't create our own join — the OptionalChain handler does that
+        } else {
+            // Standalone (no wrapping OptionalChain) — fall back to own null/join blocks
+            let bb_null = self.builder.create_block();
+            let bb_join = self.builder.create_block();
+
+            self.builder
+                .branch(Operand::Copy(Place::Local(test_local)), bb_null, bb_access);
+
+            self.builder.set_current_block(bb_access);
+            self.lower_field_access(expr_id, base, field, dest.clone());
+            if !self.builder.is_current_terminated() {
+                self.builder.goto(bb_join);
+            }
+
+            self.builder.set_current_block(bb_null);
+            self.builder
+                .assign(dest, Rvalue::Use(Operand::Constant(Constant::Null)));
+            self.builder.goto(bb_join);
+
+            self.builder.set_current_block(bb_join);
+        }
+    }
+
+    /// Lower `obj?.[index]` — null-check obj, then index or produce null.
+    fn lower_optional_index(
+        &mut self,
+        expr_id: AstExprId,
+        base: AstExprId,
+        index: AstExprId,
+        dest: Place,
+    ) {
+        let base_op = self.lower_to_operand(base);
+
+        let is_null = Rvalue::BinaryOp {
+            op: BinOp::Eq,
+            left: base_op,
+            right: Operand::Constant(Constant::Null),
+        };
+        let test_local = self.builder.temp(Ty::Bool {
+            attr: TyAttr::default(),
+        });
+        self.builder.assign(Place::local(test_local), is_null);
+
+        let bb_access = self.builder.create_block();
+
+        if let Some(&bb_null) = self.chain_null_exits.last() {
+            self.builder
+                .branch(Operand::Copy(Place::Local(test_local)), bb_null, bb_access);
+
+            self.builder.set_current_block(bb_access);
+            self.lower_index(expr_id, base, index, dest);
+        } else {
+            let bb_null = self.builder.create_block();
+            let bb_join = self.builder.create_block();
+
+            self.builder
+                .branch(Operand::Copy(Place::Local(test_local)), bb_null, bb_access);
+
+            self.builder.set_current_block(bb_access);
+            self.lower_index(expr_id, base, index, dest.clone());
+            if !self.builder.is_current_terminated() {
+                self.builder.goto(bb_join);
+            }
+
+            self.builder.set_current_block(bb_null);
+            self.builder
+                .assign(dest, Rvalue::Use(Operand::Constant(Constant::Null)));
+            self.builder.goto(bb_join);
+
+            self.builder.set_current_block(bb_join);
+        }
+    }
+
+    /// Lower `func?.(args)` — null-check callee, then call or produce null.
+    fn lower_optional_call(
+        &mut self,
+        expr_id: AstExprId,
+        callee: AstExprId,
+        args: &[AstExprId],
+        dest: Place,
+    ) {
+        let callee_op = self.lower_to_operand(callee);
+
+        let is_null = Rvalue::BinaryOp {
+            op: BinOp::Eq,
+            left: callee_op,
+            right: Operand::Constant(Constant::Null),
+        };
+        let test_local = self.builder.temp(Ty::Bool {
+            attr: TyAttr::default(),
+        });
+        self.builder.assign(Place::local(test_local), is_null);
+
+        let bb_call = self.builder.create_block();
+
+        if let Some(&bb_null) = self.chain_null_exits.last() {
+            self.builder
+                .branch(Operand::Copy(Place::Local(test_local)), bb_null, bb_call);
+
+            self.builder.set_current_block(bb_call);
+            self.lower_call(expr_id, callee, args, dest);
+        } else {
+            let bb_null = self.builder.create_block();
+            let bb_join = self.builder.create_block();
+
+            self.builder
+                .branch(Operand::Copy(Place::Local(test_local)), bb_null, bb_call);
+
+            self.builder.set_current_block(bb_call);
+            self.lower_call(expr_id, callee, args, dest.clone());
+            if !self.builder.is_current_terminated() {
+                self.builder.goto(bb_join);
+            }
+
+            self.builder.set_current_block(bb_null);
+            self.builder
+                .assign(dest, Rvalue::Use(Operand::Constant(Constant::Null)));
+            self.builder.goto(bb_join);
+
+            self.builder.set_current_block(bb_join);
+        }
+    }
+
     fn lower_unary(&mut self, _expr_id: AstExprId, op: AstUnaryOp, expr: AstExprId, dest: Place) {
         let operand = self.lower_to_operand(expr);
         let mir_op = match op {
@@ -1749,13 +2101,17 @@ impl LoweringContext<'_> {
         // If the base is a real value (not a package namespace), prepend it as self.
         let (callee_operand, arg_operands) = if let AstExpr::FieldAccess { base, .. } = &callee_expr
         {
-            if self.resolutions.get(&callee).is_some_and(|r| {
-                use baml_compiler2_tir::inference::MemberResolution;
-                matches!(
-                    r,
-                    MemberResolution::Method { .. } | MemberResolution::Free { .. }
-                )
-            }) {
+            if self
+                .resolutions
+                .get(&(self.current_scope, callee))
+                .is_some_and(|r| {
+                    use baml_compiler2_tir::inference::MemberResolution;
+                    matches!(
+                        r,
+                        MemberResolution::Method { .. } | MemberResolution::Free { .. }
+                    )
+                })
+            {
                 // Check if base is a value receiver or a package path.
                 // Package paths have Unknown type in TIR (baml, baml.Array, etc.)
                 let base_is_value = self
@@ -1877,11 +2233,13 @@ impl LoweringContext<'_> {
             } else {
                 // Multi-segment: check TIR resolution
                 use baml_compiler2_tir::inference::MemberResolution;
-                self.resolutions.get(&callee).and_then(|res| match res {
-                    MemberResolution::Free { func_loc } => Some(*func_loc),
-                    MemberResolution::Method { func_loc, .. } => Some(*func_loc),
-                    MemberResolution::Field { .. } | MemberResolution::Variant { .. } => None,
-                })
+                self.resolutions
+                    .get(&(self.current_scope, callee))
+                    .and_then(|res| match res {
+                        MemberResolution::Free { func_loc } => Some(*func_loc),
+                        MemberResolution::Method { func_loc, .. } => Some(*func_loc),
+                        MemberResolution::Field { .. } | MemberResolution::Variant { .. } => None,
+                    })
             };
             if let Some(fl) = func_loc {
                 let body = function_body(self.db, fl);
@@ -1894,7 +2252,7 @@ impl LoweringContext<'_> {
         // ── NEW: FieldAccess callee (e.g. f.read, sock.recv) ──────────────────
         if let AstExpr::FieldAccess { .. } = &self.body.exprs[callee] {
             use baml_compiler2_tir::inference::MemberResolution;
-            if let Some(resolution) = self.resolutions.get(&callee) {
+            if let Some(resolution) = self.resolutions.get(&(self.current_scope, callee)) {
                 let func_loc = match resolution {
                     MemberResolution::Method { func_loc, .. } => Some(*func_loc),
                     MemberResolution::Free { func_loc } => Some(*func_loc),
@@ -2146,11 +2504,16 @@ impl LoweringContext<'_> {
     ) {
         // Check if TIR resolved this to a method or free function — if so, emit a function constant.
         // Field and Variant resolutions fall through to the existing lowering paths below.
-        if let Some(resolution) = self.resolutions.get(&expr_id).cloned() {
+        if let Some(resolution) = self
+            .resolutions
+            .get(&(self.current_scope, expr_id))
+            .cloned()
+        {
             use baml_compiler2_tir::inference::MemberResolution;
             match &resolution {
                 MemberResolution::Method { .. } | MemberResolution::Free { .. } => {
-                    if let Some(item) = resolution_to_item_ref(self.db, &resolution) {
+                    let item = resolution_to_item_ref(self.db, &resolution);
+                    if let Some(item) = item {
                         self.builder.assign(
                             dest,
                             Rvalue::Use(Operand::Constant(Constant::Function(item))),
@@ -2212,8 +2575,15 @@ impl LoweringContext<'_> {
         let base_op = self.lower_to_operand(base);
         let field_str = field.to_string();
 
+        // Unwrap Optional — when called from lower_optional_field_access,
+        // the base type is T? but we've already null-checked, so use the inner type.
+        let unwrapped_ty = match &base_ty {
+            Ty::Optional(inner, _) => inner.as_ref(),
+            _ => &base_ty,
+        };
+
         // Look up field index from class_fields
-        let field_idx = if let Ty::Class(ref tn, _) = base_ty {
+        let field_idx = if let Ty::Class(tn, _) = unwrapped_ty {
             self.class_fields
                 .get(tn)
                 .and_then(|fields| fields.get(&field_str))
@@ -2233,7 +2603,7 @@ impl LoweringContext<'_> {
                 })),
             );
         } else {
-            if let Ty::Class(ref tn, _) = base_ty {
+            if let Ty::Class(tn, _) = unwrapped_ty {
                 self.emit_panic_call(
                     &format!(
                         "internal compiler error: MIR failed to resolve field access \
@@ -2273,7 +2643,14 @@ impl LoweringContext<'_> {
         let base_local = self.operand_to_local(base_op, base_ty.clone());
         let index_local = self.operand_to_local(index_op, index_ty);
 
-        let kind = if matches!(base_ty, Ty::List(..)) {
+        // Unwrap Optional — when called from lower_optional_index,
+        // the base type is T? but we've already null-checked.
+        let unwrapped_ty = match &base_ty {
+            Ty::Optional(inner, _) => inner.as_ref(),
+            _ => &base_ty,
+        };
+
+        let kind = if matches!(unwrapped_ty, Ty::List(..) | Ty::Uint8Array { .. }) {
             IndexKind::Array
         } else {
             IndexKind::Map
@@ -2641,28 +3018,35 @@ impl LoweringContext<'_> {
             }
 
             AstStmt::Assign { target, value } => {
-                let place = self.lower_lvalue(target);
-                self.lower_expr(value, place);
+                let target_expr = &self.body.exprs[target];
+                if let AstExpr::OptionalChain { expr: inner } = target_expr {
+                    let inner = *inner;
+                    self.lower_assign_optional_chain(inner, value);
+                } else {
+                    let place = self.lower_lvalue(target);
+                    self.lower_expr(value, place);
+                }
             }
 
             AstStmt::AssignOp { target, op, value } => {
-                let place = self.lower_lvalue(target);
-                let current = Operand::Copy(place.clone());
-                let rhs = self.lower_to_operand(value);
-                let mir_op = Self::convert_assign_op(op);
-                self.builder.assign(
-                    place,
-                    Rvalue::BinaryOp {
-                        op: mir_op,
-                        left: current,
-                        right: rhs,
-                    },
-                );
-            }
-
-            AstStmt::Assert { condition } => {
-                let cond_op = self.lower_to_operand(condition);
-                self.builder.assert(cond_op);
+                let target_expr = &self.body.exprs[target];
+                if let AstExpr::OptionalChain { expr: inner } = target_expr {
+                    let inner = *inner;
+                    self.lower_assign_op_optional_chain(inner, op, value);
+                } else {
+                    let place = self.lower_lvalue(target);
+                    let current = Operand::Copy(place.clone());
+                    let rhs = self.lower_to_operand(value);
+                    let mir_op = Self::convert_assign_op(op);
+                    self.builder.assign(
+                        place,
+                        Rvalue::BinaryOp {
+                            op: mir_op,
+                            left: current,
+                            right: rhs,
+                        },
+                    );
+                }
             }
 
             AstStmt::Missing => {
@@ -2783,13 +3167,133 @@ impl LoweringContext<'_> {
                 let base_ty = self.expr_ty(base_id);
                 let index_ty = self.expr_ty(index_id);
                 let index_local = self.operand_to_local(index_op, index_ty);
-                let kind = if matches!(base_ty, Ty::List(..)) {
+                let unwrapped_ty = match &base_ty {
+                    Ty::Optional(inner, _) => inner.as_ref(),
+                    _ => &base_ty,
+                };
+                let kind = if matches!(unwrapped_ty, Ty::List(..) | Ty::Uint8Array { .. }) {
                     IndexKind::Array
                 } else {
                     IndexKind::Map
                 };
                 Place::Index {
                     base: Box::new(base_place),
+                    index: index_local,
+                    kind,
+                }
+            }
+            AstExpr::OptionalFieldAccess { base, field } => {
+                let base_id = *base;
+                let field_name = field.clone();
+
+                // Evaluate base once into a temp local
+                let base_op = self.lower_to_operand(base_id);
+                let base_ty = self.expr_ty(base_id);
+                let base_local = self.operand_to_local(base_op, base_ty.clone());
+
+                // Null check using the operand
+                let is_null = Rvalue::BinaryOp {
+                    op: BinOp::Eq,
+                    left: Operand::Copy(Place::Local(base_local)),
+                    right: Operand::Constant(Constant::Null),
+                };
+                let test_local = self.builder.temp(Ty::Bool {
+                    attr: TyAttr::default(),
+                });
+                self.builder.assign(Place::local(test_local), is_null);
+
+                let bb_continue = self.builder.create_block();
+                let bb_null = *self
+                    .chain_null_exits
+                    .last()
+                    .expect("OptionalFieldAccess in lvalue must be inside OptionalChain");
+                self.builder.branch(
+                    Operand::Copy(Place::Local(test_local)),
+                    bb_null,
+                    bb_continue,
+                );
+
+                self.builder.set_current_block(bb_continue);
+
+                // Project field from the same temp local — no second evaluation
+                let base_place = Place::Local(base_local);
+                // Unwrap Optional — we've already null-checked, so use the inner type.
+                let unwrapped_ty = match &base_ty {
+                    Ty::Optional(inner, _) => inner.as_ref(),
+                    _ => &base_ty,
+                };
+                if let Ty::Class(tn, _) = unwrapped_ty {
+                    if let Some(fields) = self.class_fields.get(tn) {
+                        if let Some(&idx) = fields.get(field_name.as_str()) {
+                            return Place::Field {
+                                base: Box::new(base_place),
+                                field: idx,
+                            };
+                        }
+                    }
+                }
+                // Dynamic map access
+                let key_local = self.builder.temp(Ty::String {
+                    attr: TyAttr::default(),
+                });
+                self.builder.assign(
+                    Place::local(key_local),
+                    Rvalue::Use(Operand::Constant(Constant::String(field_name.to_string()))),
+                );
+                Place::Index {
+                    base: Box::new(base_place),
+                    index: key_local,
+                    kind: IndexKind::Map,
+                }
+            }
+            AstExpr::OptionalIndex { base, index } => {
+                let base_id = *base;
+                let index_id = *index;
+
+                // Evaluate base once into a temp local
+                let base_op = self.lower_to_operand(base_id);
+                let base_ty = self.expr_ty(base_id);
+                let base_local = self.operand_to_local(base_op, base_ty.clone());
+
+                // Null check
+                let is_null = Rvalue::BinaryOp {
+                    op: BinOp::Eq,
+                    left: Operand::Copy(Place::Local(base_local)),
+                    right: Operand::Constant(Constant::Null),
+                };
+                let test_local = self.builder.temp(Ty::Bool {
+                    attr: TyAttr::default(),
+                });
+                self.builder.assign(Place::local(test_local), is_null);
+
+                let bb_continue = self.builder.create_block();
+                let bb_null = *self
+                    .chain_null_exits
+                    .last()
+                    .expect("OptionalIndex in lvalue must be inside OptionalChain");
+                self.builder.branch(
+                    Operand::Copy(Place::Local(test_local)),
+                    bb_null,
+                    bb_continue,
+                );
+
+                self.builder.set_current_block(bb_continue);
+
+                // Project index from the same temp local
+                let index_op = self.lower_to_operand(index_id);
+                let index_ty = self.expr_ty(index_id);
+                let index_local = self.operand_to_local(index_op, index_ty);
+                let unwrapped_ty = match &base_ty {
+                    Ty::Optional(inner, _) => inner.as_ref(),
+                    _ => &base_ty,
+                };
+                let kind = if matches!(unwrapped_ty, Ty::List(..)) {
+                    IndexKind::Array
+                } else {
+                    IndexKind::Map
+                };
+                Place::Index {
+                    base: Box::new(Place::Local(base_local)),
                     index: index_local,
                     kind,
                 }
@@ -2813,7 +3317,9 @@ impl LoweringContext<'_> {
         arm_ids: &[baml_compiler2_ast::MatchArmId],
         dest: Place,
     ) {
-        let is_exhaustive = self.exhaustive_matches.contains(&expr_id);
+        let is_exhaustive = self
+            .exhaustive_matches
+            .contains(&(self.current_scope, expr_id));
 
         // If scrutinee is a simple variable reference, reuse the local directly
         // instead of copying into a temp (matches MIR1 behavior).
@@ -3331,9 +3837,26 @@ impl LoweringContext<'_> {
 
         let bb_join = self.builder.create_block();
         let bb_handler = self.builder.create_block();
-        let error_local = self.builder.temp(Ty::BuiltinUnknown {
-            attr: TyAttr::default(),
-        });
+
+        // Use the user-provided binding name (e.g. `e` from `catch (e)`) so it
+        // shows up in bytecode instead of an anonymous `_N` temp.
+        let binding_name = clauses
+            .first()
+            .and_then(|c| match &self.body.patterns[c.binding] {
+                AstPattern::Binding(name) if name.as_str() != "_" => Some(name.clone()),
+                _ => None,
+            });
+        let error_local = self.builder.declare_local(
+            binding_name.clone(),
+            Ty::BuiltinUnknown {
+                attr: TyAttr::default(),
+            },
+            None,
+            false,
+        );
+        if let Some(name) = binding_name {
+            self.locals.insert(name, error_local);
+        }
 
         // Flatten all arms from all clauses, pre-creating body blocks.
         let mut arms = Vec::new();
@@ -3344,27 +3867,14 @@ impl LoweringContext<'_> {
                     self.body.patterns[arm.pattern],
                     AstPattern::Binding(ref name) if name.as_str() == "_"
                 );
-                arms.push((
-                    clause.binding,
-                    arm,
-                    self.builder.create_block(),
-                    is_wildcard,
-                ));
+                arms.push((arm, self.builder.create_block(), is_wildcard));
             }
         }
 
-        let has_panic_arms = arms
+        let has_wildcard = arms.iter().any(|(_, _, is_wc)| *is_wc);
+        let is_catch_all_panics = clauses
             .iter()
-            .any(|(_, arm, _, _)| self.pattern_references_panic(arm.pattern));
-        let has_wildcard = arms.iter().any(|(_, _, _, is_wc)| *is_wc);
-        let is_catch_all = clauses.iter().any(|clause| {
-            matches!(
-                clause.kind,
-                CatchClauseKind::CatchAll | CatchClauseKind::CatchAllPanics
-            )
-        });
-
-        let catches_panics = has_panic_arms || is_catch_all;
+            .any(|clause| matches!(clause.kind, CatchClauseKind::CatchAllPanics));
 
         // Record the catch region (always one handler, one exception table entry).
         let body_entry = self.builder.current_block();
@@ -3372,7 +3882,6 @@ impl LoweringContext<'_> {
             body_entry,
             handler: bb_handler,
             error_local,
-            catches_panics,
         });
 
         let prev_catch = self.catch_context.take();
@@ -3389,34 +3898,17 @@ impl LoweringContext<'_> {
 
         self.catch_context = prev_catch;
 
-        // Lower the single handler block with all arms in source order.
-        // Before the wildcard arm (if any), insert an IsPanic guard to rethrow
-        // unmatched panics — prevents the wildcard from catching panics the
-        // programmer didn't explicitly name.
-        let needs_is_panic_guard = has_panic_arms && has_wildcard && !is_catch_all;
+        // Before the wildcard arm (if any), insert a throw_if_panic guard to
+        // prevent the wildcard from swallowing panics the programmer didn't
+        // explicitly name. Skipped for catch_all_panics (user wants everything).
+        let needs_throw_if_panic = has_wildcard && !is_catch_all_panics;
 
         self.builder.set_current_block(bb_handler);
-        for &(_, ref arm, body_block, is_wildcard) in &arms {
-            if is_wildcard && needs_is_panic_guard {
-                // Insert: if is_panic(e) { throw e }
-                let bb_rethrow = self.builder.create_block();
+        for &(ref arm, body_block, is_wildcard) in &arms {
+            if is_wildcard && needs_throw_if_panic {
                 let bb_wildcard = self.builder.create_block();
-                let is_panic_local = self.builder.temp(Ty::Bool {
-                    attr: TyAttr::default(),
-                });
-                self.builder.assign(
-                    Place::local(is_panic_local),
-                    Rvalue::IsPanic(Operand::Copy(Place::Local(error_local))),
-                );
-                self.builder.branch(
-                    Operand::Copy(Place::Local(is_panic_local)),
-                    bb_rethrow,
-                    bb_wildcard,
-                );
-
-                self.builder.set_current_block(bb_rethrow);
-                self.builder.throw(Operand::Copy(Place::Local(error_local)));
-
+                self.builder
+                    .throw_if_panic(Operand::Copy(Place::Local(error_local)), bb_wildcard);
                 self.builder.set_current_block(bb_wildcard);
             }
 
@@ -3431,9 +3923,8 @@ impl LoweringContext<'_> {
         }
 
         // Lower each arm body.
-        for &(clause_binding, ref arm, body_block, _) in &arms {
+        for &(ref arm, body_block, _) in &arms {
             self.builder.set_current_block(body_block);
-            self.bind_pattern(error_local, clause_binding);
             self.bind_pattern(error_local, arm.pattern);
             self.lower_expr(arm.body, dest.clone());
             if !self.builder.is_current_terminated() {
@@ -3442,37 +3933,6 @@ impl LoweringContext<'_> {
         }
 
         self.builder.set_current_block(bb_join);
-    }
-
-    /// Check if a pattern references any panic type (recursively through unions).
-    fn pattern_references_panic(&self, pat_id: AstPatId) -> bool {
-        match &self.body.patterns[pat_id] {
-            AstPattern::Binding(name) if name.as_str() == "_" => false,
-            AstPattern::Binding(_) | AstPattern::TypedBinding { .. } => self
-                .pat_types
-                .get(&(self.current_scope, pat_id))
-                .is_some_and(|ty| self.tir_ty_references_panic(ty)),
-            AstPattern::Union(sub_pats) => sub_pats
-                .iter()
-                .any(|&sub_pat| self.pattern_references_panic(sub_pat)),
-            AstPattern::Literal(_) | AstPattern::Null | AstPattern::EnumVariant { .. } => false,
-        }
-    }
-
-    /// Check if a TIR type references any panic type, expanding aliases.
-    fn tir_ty_references_panic(&self, ty: &Tir2Ty) -> bool {
-        match ty {
-            Tir2Ty::Class(qtn, _) => qtn.is_panic_type(),
-            Tir2Ty::TypeAlias(qtn, _) => {
-                if let Some(expanded) = self.resolved_aliases.aliases.get(qtn) {
-                    self.tir_ty_references_panic(expanded)
-                } else {
-                    qtn.is_panic_type()
-                }
-            }
-            Tir2Ty::Union(members, _) => members.iter().any(|m| self.tir_ty_references_panic(m)),
-            _ => false,
-        }
     }
 }
 

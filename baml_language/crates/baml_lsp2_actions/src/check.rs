@@ -53,6 +53,11 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
     // pay for iteration when there are diagnostics.
     let index = file_semantic_index(db, file);
     if let Some(extra) = &index.extra {
+        // 2a. Lowering diagnostics (CST → AST structural errors)
+        for ld in &extra.lowering_diagnostics {
+            diagnostics.push(ld.to_diagnostic(file_id));
+        }
+        // 2b. HIR2 semantic diagnostics (duplicate definitions, etc.)
         for hir_diag in &extra.diagnostics {
             diagnostics.push(hir_diag.to_diagnostic(file_id));
         }
@@ -245,8 +250,15 @@ fn tir_rendered_to_diagnostic(
         file_id,
         range: rendered.range,
     };
-    Diagnostic::error(DiagnosticId::TypeMismatch, rendered.message)
-        .with_primary_span(span)
+    let diag = match rendered.severity {
+        baml_compiler2_tir::infer_context::DiagnosticSeverity::Warning => {
+            Diagnostic::warning(DiagnosticId::TypeMismatch, rendered.message)
+        }
+        baml_compiler2_tir::infer_context::DiagnosticSeverity::Error => {
+            Diagnostic::error(DiagnosticId::TypeMismatch, rendered.message)
+        }
+    };
+    diag.with_primary_span(span)
         .with_phase(DiagnosticPhase::Type)
 }
 
@@ -281,5 +293,55 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::ExtraneousThrowsDeclaration { .. } => DiagnosticId::ThrowsContractExtraneous,
         TirTypeError::CannotInferTypeParameter { .. } => DiagnosticId::UnknownType,
         TirTypeError::CannotInferLambdaParamType { .. } => DiagnosticId::UnknownType,
+        // Optional chaining diagnostics
+        TirTypeError::UnnecessaryOptionalChaining { .. } => DiagnosticId::InvalidOperator,
+        TirTypeError::UnnecessaryNullCoalesce { .. } => DiagnosticId::InvalidOperator,
+        TirTypeError::SuggestNullCoalesce { .. } => DiagnosticId::InvalidOperator,
+        TirTypeError::NullCoalesceWithNull { .. } => DiagnosticId::InvalidOperator,
+        TirTypeError::NullableMemberAccess { .. } => DiagnosticId::TypeMismatch,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use baml_compiler_diagnostics::Severity;
+    use baml_compiler2_tir::infer_context::{DiagnosticSeverity, RenderedTirDiagnostic};
+    use text_size::{TextRange, TextSize};
+
+    use super::*;
+
+    fn dummy_file_id() -> FileId {
+        // Use index 0 — sufficient for span construction in unit tests.
+        FileId::new(0)
+    }
+
+    fn dummy_rendered(severity: DiagnosticSeverity) -> RenderedTirDiagnostic {
+        RenderedTirDiagnostic {
+            message: "test message".to_string(),
+            range: TextRange::new(TextSize::from(0u32), TextSize::from(5u32)),
+            severity,
+        }
+    }
+
+    #[test]
+    fn tir_warning_severity_maps_to_warning_diagnostic() {
+        let rendered = dummy_rendered(DiagnosticSeverity::Warning);
+        let diag = tir_rendered_to_diagnostic(rendered, dummy_file_id());
+        assert_eq!(
+            diag.severity,
+            Severity::Warning,
+            "DiagnosticSeverity::Warning must produce a warning-level Diagnostic"
+        );
+    }
+
+    #[test]
+    fn tir_error_severity_maps_to_error_diagnostic() {
+        let rendered = dummy_rendered(DiagnosticSeverity::Error);
+        let diag = tir_rendered_to_diagnostic(rendered, dummy_file_id());
+        assert_eq!(
+            diag.severity,
+            Severity::Error,
+            "DiagnosticSeverity::Error must produce an error-level Diagnostic"
+        );
     }
 }

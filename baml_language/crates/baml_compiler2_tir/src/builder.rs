@@ -135,6 +135,10 @@ pub struct TypeInferenceBuilder<'db> {
     /// function body so that `T` resolves to `Ty::TypeVar("T", TyAttr::default())` rather than
     /// `Ty::Unknown`.
     pub generic_params: Vec<Name>,
+    /// Depth counter for `OptionalChain` scopes. When > 0, `FieldAccess` and
+    /// `Index` auto-unwrap nullable bases (null is caught by the chain wrapper).
+    /// When 0, accessing a member on a nullable type is a type error.
+    in_optional_chain: usize,
 }
 
 impl<'db> TypeInferenceBuilder<'db> {
@@ -166,6 +170,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             catch_residual_throws: FxHashMap::default(),
             exhaustive_matches: FxHashSet::default(),
             generic_params: Vec::new(),
+            in_optional_chain: 0,
         }
     }
 
@@ -229,6 +234,9 @@ impl<'db> TypeInferenceBuilder<'db> {
         let expr = &body.exprs[expr_id];
         let ty = match expr {
             Expr::Literal(lit) => Self::infer_literal(lit),
+            Expr::ByteStringLiteral(_) => {
+                Ty::Primitive(PrimitiveType::Uint8Array, TyAttr::default())
+            }
             Expr::Null => Ty::Primitive(PrimitiveType::Null, TyAttr::default()),
             Expr::Path(segments) => self.infer_path(segments.as_slice(), body, expr_id),
             Expr::If {
@@ -287,7 +295,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 if let Some((div_idx, div_stmt)) = diverged_at {
                     let remaining = stmts.len() - div_idx - 1 + usize::from(tail_expr.is_some());
                     if remaining > 0 {
-                        self.context.report_at_stmt(
+                        self.context.report_warning_at_stmt(
                             crate::infer_context::TirTypeError::DeadCode {
                                 after: div_stmt,
                                 unreachable_count: remaining,
@@ -316,13 +324,65 @@ impl<'db> TypeInferenceBuilder<'db> {
                     ty
                 } else {
                     let base_ty = self.infer_expr(*base, body);
-                    self.resolve_member(&base_ty, field, expr_id)
+                    let inner = crate::narrowing::remove_null(&base_ty);
+                    if inner != base_ty && !matches!(base_ty, Ty::Unknown { .. } | Ty::Error { .. })
+                    {
+                        if self.in_optional_chain > 0 {
+                            // Inside an OptionalChain: auto-unwrap nullable base,
+                            // resolve the member, and re-wrap in Optional.
+                            // This allows `a?.b.c` where `a?.b` returns `T?`.
+                            let member_ty = self.resolve_member(&inner, field, expr_id);
+                            Self::make_optional(member_ty)
+                        } else {
+                            // Outside any chain: accessing `.field` on a nullable type
+                            // is an error (e.g. `(a?.b).c`). Use `?.` instead.
+                            let base_text = body.display_expr(*base);
+                            self.context.report_simple(
+                                TirTypeError::NullableMemberAccess {
+                                    base: base_text.clone(),
+                                    member: format!(".{field}"),
+                                    expr: format!("{base_text}.{field}"),
+                                },
+                                expr_id,
+                            );
+                            // Still resolve for downstream inference
+                            let member_ty = self.resolve_member(&inner, field, expr_id);
+                            Self::make_optional(member_ty)
+                        }
+                    } else {
+                        self.resolve_member(&base_ty, field, expr_id)
+                    }
+                }
+            }
+            Expr::OptionalFieldAccess { base, field } => {
+                // Optional chaining: a?.b — if a is null, short-circuit to null.
+                // Type: if a: T?, resolve member on T, wrap result in Optional.
+                let base_ty = self.infer_expr(*base, body);
+                let inner_ty = crate::narrowing::remove_null(&base_ty);
+                // E2: warn if base is not nullable (?.  is unnecessary)
+                if inner_ty == base_ty && !matches!(base_ty, Ty::Unknown { .. } | Ty::Error { .. })
+                {
+                    let base_text = body.display_expr(*base);
+                    self.context.report_simple(
+                        TirTypeError::UnnecessaryOptionalChaining {
+                            expr: format!("{base_text}?.{field}"),
+                            base: base_text,
+                        },
+                        expr_id,
+                    );
+                }
+                if matches!(inner_ty, Ty::Never { .. }) {
+                    // Base is just null — result is null
+                    Ty::Primitive(PrimitiveType::Null, TyAttr::default())
+                } else {
+                    let member_ty = self.resolve_member(&inner_ty, field, expr_id);
+                    Self::make_optional(member_ty)
                 }
             }
             Expr::Array { elements } => {
                 let elem_types: Vec<Ty> =
                     elements.iter().map(|e| self.infer_expr(*e, body)).collect();
-                let elem_ty = Self::join_all(&elem_types);
+                let elem_ty = Self::join_all(&elem_types).widen_fresh();
                 Ty::List(Box::new(elem_ty), TyAttr::default())
             }
             Expr::Map { entries } => {
@@ -332,13 +392,61 @@ impl<'db> TypeInferenceBuilder<'db> {
                     key_types.push(self.infer_expr(*k, body));
                     val_types.push(self.infer_expr(*v, body));
                 }
-                let key_ty = Self::join_all(&key_types);
-                let val_ty = Self::join_all(&val_types);
+                let key_ty = Self::join_all(&key_types).widen_fresh();
+                let val_ty = Self::join_all(&val_types).widen_fresh();
                 Ty::Map(Box::new(key_ty), Box::new(val_ty), TyAttr::default())
             }
             Expr::Binary { op, lhs, rhs } => {
                 let lhs_ty = self.infer_expr(*lhs, body);
                 let rhs_ty = self.infer_expr(*rhs, body);
+
+                // Optional chaining diagnostics for ?? and ||
+                match op {
+                    baml_compiler2_ast::BinaryOp::NullCoalesce => {
+                        // E3: LHS is non-nullable — ?? is unnecessary
+                        let inner_lhs = crate::narrowing::remove_null(&lhs_ty);
+                        if inner_lhs == lhs_ty
+                            && !matches!(lhs_ty, Ty::Unknown { .. } | Ty::Error { .. })
+                        {
+                            let lhs_text = body.display_expr(*lhs);
+                            let expr_text = body.display_expr(expr_id);
+                            self.context.report_simple(
+                                TirTypeError::UnnecessaryNullCoalesce {
+                                    lhs: lhs_text,
+                                    expr: expr_text,
+                                },
+                                expr_id,
+                            );
+                        }
+                        // W2: RHS is null — ?? null is a no-op
+                        if matches!(&body.exprs[*rhs], Expr::Null) {
+                            let lhs_text = body.display_expr(*lhs);
+                            self.context.report_warning_simple(
+                                TirTypeError::NullCoalesceWithNull { lhs: lhs_text },
+                                expr_id,
+                            );
+                        }
+                    }
+                    baml_compiler2_ast::BinaryOp::Or => {
+                        // W1: LHS is nullable — suggest ?? instead of ||
+                        let inner_lhs = crate::narrowing::remove_null(&lhs_ty);
+                        if inner_lhs != lhs_ty
+                            && !matches!(lhs_ty, Ty::Unknown { .. } | Ty::Error { .. })
+                        {
+                            let lhs_text = body.display_expr(*lhs);
+                            let rhs_text = body.display_expr(*rhs);
+                            self.context.report_warning_simple(
+                                TirTypeError::SuggestNullCoalesce {
+                                    lhs: lhs_text,
+                                    rhs: rhs_text,
+                                },
+                                expr_id,
+                            );
+                        }
+                    }
+                    _ => {}
+                }
+
                 self.infer_binary_op(*op, &lhs_ty, &rhs_ty, expr_id)
             }
             Expr::Unary { op, expr } => {
@@ -382,16 +490,40 @@ impl<'db> TypeInferenceBuilder<'db> {
             Expr::Index { base, index } => {
                 let base_ty = self.infer_expr(*base, body);
                 self.infer_expr(*index, body);
-                match base_ty {
+                let inner = crate::narrowing::remove_null(&base_ty);
+                let (resolve_ty, rewrap) = if inner != base_ty
+                    && !matches!(base_ty, Ty::Unknown { attr: _ } | Ty::Error { attr: _ })
+                {
+                    if self.in_optional_chain == 0 {
+                        // Outside any chain: indexing a nullable type is an error.
+                        let base_text = body.display_expr(*base);
+                        let expr_text = body.display_expr(expr_id);
+                        self.context.report_simple(
+                            TirTypeError::NullableMemberAccess {
+                                base: base_text,
+                                member: "[...]".to_string(),
+                                expr: expr_text,
+                            },
+                            expr_id,
+                        );
+                    }
+                    (inner, true)
+                } else {
+                    (base_ty, false)
+                };
+                let elem_ty = match resolve_ty {
                     Ty::List(elem_ty, _) | Ty::EvolvingList(elem_ty, _) => *elem_ty,
                     Ty::Map(_, val_ty, _) | Ty::EvolvingMap(_, val_ty, _) => *val_ty,
+                    Ty::Primitive(PrimitiveType::Uint8Array, _) => {
+                        Ty::Primitive(PrimitiveType::Int, TyAttr::default())
+                    }
                     Ty::Unknown { attr: _ } | Ty::Error { attr: _ } => Ty::Unknown {
                         attr: TyAttr::default(),
                     },
                     _ => {
                         self.context.report_simple(
                             TirTypeError::NotIndexable {
-                                ty: base_ty.clone(),
+                                ty: resolve_ty.clone(),
                             },
                             expr_id,
                         );
@@ -399,7 +531,127 @@ impl<'db> TypeInferenceBuilder<'db> {
                             attr: TyAttr::default(),
                         }
                     }
+                };
+                if rewrap {
+                    Self::make_optional(elem_ty)
+                } else {
+                    elem_ty
                 }
+            }
+            Expr::OptionalIndex { base, index } => {
+                // Optional chaining: a?.[expr] — short-circuits to null if a is null.
+                let base_ty = self.infer_expr(*base, body);
+                self.infer_expr(*index, body);
+                let inner_ty = crate::narrowing::remove_null(&base_ty);
+                // E2: warn if base is not nullable
+                if inner_ty == base_ty && !matches!(base_ty, Ty::Unknown { .. } | Ty::Error { .. })
+                {
+                    let base_text = body.display_expr(*base);
+                    let expr_text = body.display_expr(expr_id);
+                    self.context.report_simple(
+                        TirTypeError::UnnecessaryOptionalChaining {
+                            expr: expr_text,
+                            base: base_text,
+                        },
+                        expr_id,
+                    );
+                }
+                if matches!(inner_ty, Ty::Never { .. }) {
+                    Ty::Primitive(PrimitiveType::Null, TyAttr::default())
+                } else {
+                    let elem_ty = match inner_ty {
+                        Ty::List(elem_ty, _) | Ty::EvolvingList(elem_ty, _) => *elem_ty,
+                        Ty::Map(_, val_ty, _) | Ty::EvolvingMap(_, val_ty, _) => *val_ty,
+                        Ty::Unknown { .. } | Ty::Error { .. } => Ty::Unknown {
+                            attr: TyAttr::default(),
+                        },
+                        _ => {
+                            self.context.report_simple(
+                                TirTypeError::NotIndexable {
+                                    ty: inner_ty.clone(),
+                                },
+                                expr_id,
+                            );
+                            Ty::Unknown {
+                                attr: TyAttr::default(),
+                            }
+                        }
+                    };
+                    Self::make_optional(elem_ty)
+                }
+            }
+            Expr::OptionalCall { callee, args } => {
+                // Optional chaining: func?.(args) — short-circuits to null if callee is null.
+                let is_method_call = matches!(
+                    &body.exprs[*callee],
+                    Expr::FieldAccess { .. } | Expr::OptionalFieldAccess { .. }
+                );
+                let callee_ty = self.infer_expr(*callee, body);
+                for arg in args {
+                    self.infer_expr(*arg, body);
+                }
+                let inner_ty = crate::narrowing::remove_null(&callee_ty);
+                // E2: warn if callee is not nullable
+                if inner_ty == callee_ty
+                    && !matches!(callee_ty, Ty::Unknown { .. } | Ty::Error { .. })
+                {
+                    let callee_text = body.display_expr(*callee);
+                    let expr_text = body.display_expr(expr_id);
+                    self.context.report_simple(
+                        TirTypeError::UnnecessaryOptionalChaining {
+                            expr: expr_text,
+                            base: callee_text,
+                        },
+                        expr_id,
+                    );
+                }
+                if matches!(inner_ty, Ty::Never { .. }) {
+                    Ty::Primitive(PrimitiveType::Null, TyAttr::default())
+                } else {
+                    let result_ty = match &inner_ty {
+                        Ty::Function { params, ret, .. } => {
+                            let effective_params = if is_method_call {
+                                crate::generics::skip_self_param(params)
+                            } else {
+                                params.as_slice()
+                            };
+                            if effective_params.len() != args.len() {
+                                self.context.report_simple(
+                                    TirTypeError::ArgumentCountMismatch {
+                                        expected: effective_params.len(),
+                                        got: args.len(),
+                                    },
+                                    expr_id,
+                                );
+                            }
+                            ret.as_ref().clone()
+                        }
+                        Ty::Unknown { .. } | Ty::Error { .. } => Ty::Unknown {
+                            attr: TyAttr::default(),
+                        },
+                        _ => {
+                            self.context.report_simple(
+                                TirTypeError::NotCallable {
+                                    ty: inner_ty.clone(),
+                                },
+                                expr_id,
+                            );
+                            Ty::Unknown {
+                                attr: TyAttr::default(),
+                            }
+                        }
+                    };
+                    Self::make_optional(result_ty)
+                }
+            }
+            Expr::OptionalChain { expr } => {
+                // Transparent wrapper — type is the same as the inner expression's type.
+                // While inside the chain, FieldAccess/Index auto-unwrap nullable bases
+                // (null is caught by the chain's short-circuit scope).
+                self.in_optional_chain += 1;
+                let ty = self.infer_expr(*expr, body);
+                self.in_optional_chain -= 1;
+                ty
             }
             Expr::Lambda(func_def) => {
                 // Synthesis mode: no expected type available.
@@ -500,7 +752,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 let ty = if let Some((div_idx, div_stmt)) = diverged_at {
                     let remaining = stmts.len() - div_idx - 1 + usize::from(tail_expr.is_some());
                     if remaining > 0 {
-                        self.context.report_at_stmt(
+                        self.context.report_warning_at_stmt(
                             crate::infer_context::TirTypeError::DeadCode {
                                 after: div_stmt,
                                 unreachable_count: remaining,
@@ -664,6 +916,23 @@ impl<'db> TypeInferenceBuilder<'db> {
 
                 let is_method_call = matches!(&body.exprs[*callee], Expr::FieldAccess { .. });
                 let callee_ty = self.infer_expr(*callee, body);
+
+                // Expand type alias chains so alias-over-function types are callable.
+                // Bare alias cycles are already caught by find_invalid_alias_cycles (Tarjan SCC)
+                // before we reach here, so the depth guard is cheap insurance.
+                let callee_ty = {
+                    let mut ty = callee_ty;
+                    for _ in 0..64 {
+                        match &ty {
+                            Ty::TypeAlias(qtn, _) => match self.aliases.get(qtn) {
+                                Some(expanded) => ty = expanded.clone(),
+                                None => break,
+                            },
+                            _ => break,
+                        }
+                    }
+                    ty
+                };
 
                 match &callee_ty {
                     Ty::Function { params, ret, .. } => {
@@ -1090,6 +1359,13 @@ impl<'db> TypeInferenceBuilder<'db> {
                 if self.try_index_assign_mutation(*target, *value, body) {
                     return false;
                 }
+                // Assignment targets with Optional* nodes (e.g. `user?.profile.name = val`)
+                // are guarded by MIR's lower_safe_chain_guard — treat them as if inside
+                // an OptionalChain for type inference to avoid false NullableMemberAccess errors.
+                let target_has_optional = Self::expr_contains_optional(*target, body);
+                if target_has_optional {
+                    self.in_optional_chain += 1;
+                }
                 // For simple variable assignment (x = val), check against the
                 // variable's *declared* type, not its potentially-narrowed type.
                 // Narrowing may have refined x: int? → null inside an if-branch,
@@ -1120,20 +1396,35 @@ impl<'db> TypeInferenceBuilder<'db> {
                     self.infer_expr(*target, body);
                     self.infer_expr(*value, body);
                 }
+                if target_has_optional {
+                    self.in_optional_chain -= 1;
+                }
                 false
             }
             Stmt::AssignOp { target, op, value } => {
+                let target_has_optional = Self::expr_contains_optional(*target, body);
+                if target_has_optional {
+                    self.in_optional_chain += 1;
+                }
                 let target_ty = self.infer_expr(*target, body);
                 let value_ty = self.infer_expr(*value, body);
                 let binary_op = Self::assign_op_to_binary_op(*op);
-                let result_ty = self.infer_binary_op(binary_op, &target_ty, &value_ty, *target);
+                // When the target is behind `?.`, the type is T? but the compound
+                // op only executes when the chain is non-null, so arithmetic should
+                // see T, not T?.
+                let effective_target_ty = if target_has_optional {
+                    crate::narrowing::remove_null(&target_ty)
+                } else {
+                    target_ty
+                };
+                let result_ty =
+                    self.infer_binary_op(binary_op, &effective_target_ty, &value_ty, *target);
                 // Re-record the value expression with the result type so the
                 // display shows the operation result, not the raw RHS literal.
                 self.record_expr_type(*value, result_ty);
-                false
-            }
-            Stmt::Assert { condition } => {
-                self.infer_expr(*condition, body);
+                if target_has_optional {
+                    self.in_optional_chain -= 1;
+                }
                 false
             }
             Stmt::Break | Stmt::Continue => true, // break/continue diverge
@@ -2274,14 +2565,28 @@ impl<'db> TypeInferenceBuilder<'db> {
                     self.collect_effective_throws_from_expr(*tail, body, out);
                 }
             }
-            Expr::FieldAccess { base, .. } => {
+            Expr::FieldAccess { base, .. } | Expr::OptionalFieldAccess { base, .. } => {
                 self.collect_effective_throws_from_expr(*base, body, out);
             }
-            Expr::Index { base, index } => {
+            Expr::Index { base, index } | Expr::OptionalIndex { base, index } => {
                 self.collect_effective_throws_from_expr(*base, body, out);
                 self.collect_effective_throws_from_expr(*index, body, out);
             }
-            Expr::Lambda(_) | Expr::Literal(_) | Expr::Null | Expr::Path(_) | Expr::Missing => {}
+            Expr::OptionalCall { callee, args } => {
+                self.collect_effective_throws_from_expr(*callee, body, out);
+                for arg in args {
+                    self.collect_effective_throws_from_expr(*arg, body, out);
+                }
+            }
+            Expr::OptionalChain { expr } => {
+                self.collect_effective_throws_from_expr(*expr, body, out);
+            }
+            Expr::Lambda(_)
+            | Expr::Literal(_)
+            | Expr::ByteStringLiteral(_)
+            | Expr::Null
+            | Expr::Path(_)
+            | Expr::Missing => {}
         }
     }
 
@@ -2326,9 +2631,6 @@ impl<'db> TypeInferenceBuilder<'db> {
             Stmt::Assign { target, value } | Stmt::AssignOp { target, value, .. } => {
                 self.collect_effective_throws_from_expr(*target, body, out);
                 self.collect_effective_throws_from_expr(*value, body, out);
-            }
-            Stmt::Assert { condition } => {
-                self.collect_effective_throws_from_expr(*condition, body, out);
             }
             Stmt::Throw { value } => {
                 self.collect_effective_throws_from_expr(*value, body, out);
@@ -2421,15 +2723,31 @@ impl<'db> TypeInferenceBuilder<'db> {
                     self.collect_throw_facts_from_expr(*tail, body, out);
                 }
             }
-            Expr::FieldAccess { base, .. } => self.collect_throw_facts_from_expr(*base, body, out),
-            Expr::Index { base, index } => {
+            Expr::FieldAccess { base, .. } | Expr::OptionalFieldAccess { base, .. } => {
+                self.collect_throw_facts_from_expr(*base, body, out);
+            }
+            Expr::Index { base, index } | Expr::OptionalIndex { base, index } => {
                 self.collect_throw_facts_from_expr(*base, body, out);
                 self.collect_throw_facts_from_expr(*index, body, out);
+            }
+            Expr::OptionalCall { callee, args } => {
+                self.collect_throw_facts_from_expr(*callee, body, out);
+                for arg in args {
+                    self.collect_throw_facts_from_expr(*arg, body, out);
+                }
             }
             Expr::Catch { base, .. } => {
                 self.collect_throw_facts_from_expr(*base, body, out);
             }
-            Expr::Lambda(_) | Expr::Literal(_) | Expr::Null | Expr::Path(_) | Expr::Missing => {}
+            Expr::OptionalChain { expr } => {
+                self.collect_throw_facts_from_expr(*expr, body, out);
+            }
+            Expr::Lambda(_)
+            | Expr::Literal(_)
+            | Expr::ByteStringLiteral(_)
+            | Expr::Null
+            | Expr::Path(_)
+            | Expr::Missing => {}
         }
     }
 
@@ -2475,7 +2793,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                 self.collect_throw_facts_from_expr(*target, body, out);
                 self.collect_throw_facts_from_expr(*value, body, out);
             }
-            Stmt::Assert { condition } => self.collect_throw_facts_from_expr(*condition, body, out),
             Stmt::Throw { value } => {
                 self.collect_throw_facts_from_expr(*value, body, out);
                 self.collect_throw_facts_from_value(*value, out);
@@ -2566,6 +2883,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                     | "errors"
                     | "unstable"
             );
+            // Don't report "unresolved name" for dependency package names —
+            // they'll be resolved by the parent FieldAccess expression.
+            let is_dep_package = self.res_ctx.dep_interfaces.iter().any(|(n, _)| n == name);
             if matches!(ty, Ty::Unknown { .. })
                 && !self.locals.contains_key(name)
                 && self
@@ -2577,6 +2897,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     .lookup_type(&self.ns_context, name)
                     .is_none()
                 && !is_baml_ns_shorthand
+                && !is_dep_package
             {
                 self.context
                     .report_simple(TirTypeError::UnresolvedName { name: name.clone() }, expr_id);
@@ -2971,13 +3292,14 @@ impl<'db> TypeInferenceBuilder<'db> {
                     })
             }
             Ty::Primitive(
-                p @ (PrimitiveType::Image
+                p @ (PrimitiveType::Uint8Array
+                | PrimitiveType::Image
                 | PrimitiveType::Audio
                 | PrimitiveType::Video
                 | PrimitiveType::Pdf),
                 _,
             ) => {
-                // Bridge: each media primitive → its own builtin class in baml.media
+                // Bridge: primitives with builtin companion classes
                 self.resolve_builtin_member(p.builtin_class_path(), &[], member, at)
                     .unwrap_or_else(|| {
                         self.context.report_at_member_simple(
@@ -3095,7 +3417,8 @@ impl<'db> TypeInferenceBuilder<'db> {
                 .resolve_builtin_method(&["String"], &[], member)
                 .map(BuiltinResolution::into_ty),
             Ty::Primitive(
-                p @ (PrimitiveType::Image
+                p @ (PrimitiveType::Uint8Array
+                | PrimitiveType::Image
                 | PrimitiveType::Audio
                 | PrimitiveType::Video
                 | PrimitiveType::Pdf),
@@ -3465,7 +3788,22 @@ impl<'db> TypeInferenceBuilder<'db> {
             .chain(std::iter::once(member))
             .cloned()
             .collect();
-        self.resolve_package_item(pkg_items, &full_path, at)
+        let result = self.resolve_package_item(pkg_items, &full_path, at);
+        if result.is_none() {
+            // Package was found but the member doesn't exist — report a clear error
+            // with the full dotted path as context (e.g. "unresolved member: testing.Quorum").
+            let base_path = segments.join(".");
+            self.context.report_simple(
+                TirTypeError::UnresolvedName {
+                    name: Name::new(format!("{base_path}.{member}")),
+                },
+                at,
+            );
+            return Some(Ty::Unknown {
+                attr: TyAttr::default(),
+            });
+        }
+        result
     }
 
     fn try_primitive_static_access(
@@ -3967,6 +4305,36 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
+    /// Wrap a type in `Optional` unless it is already nullable.
+    /// Check if an expression tree contains any Optional* nodes (`OptionalFieldAccess`,
+    /// `OptionalIndex`, `OptionalCall`). Used to detect safe-chain assignment targets.
+    fn expr_contains_optional(expr_id: ExprId, body: &ExprBody) -> bool {
+        match &body.exprs[expr_id] {
+            Expr::OptionalFieldAccess { .. }
+            | Expr::OptionalIndex { .. }
+            | Expr::OptionalCall { .. } => true,
+            Expr::OptionalChain { expr } => Self::expr_contains_optional(*expr, body),
+            Expr::FieldAccess { base, .. } | Expr::Index { base, .. } => {
+                Self::expr_contains_optional(*base, body)
+            }
+            _ => false,
+        }
+    }
+
+    fn make_optional(ty: Ty) -> Ty {
+        match &ty {
+            Ty::Optional(..) | Ty::Primitive(PrimitiveType::Null, _) => ty,
+            Ty::Union(members, _)
+                if members
+                    .iter()
+                    .any(|m| matches!(m, Ty::Primitive(PrimitiveType::Null, _))) =>
+            {
+                ty
+            }
+            _ => Ty::Optional(Box::new(ty), TyAttr::default()),
+        }
+    }
+
     fn join_types(a: &Ty, b: &Ty) -> Ty {
         if matches!(a, Ty::Never { .. }) {
             return b.clone();
@@ -4089,6 +4457,22 @@ impl<'db> TypeInferenceBuilder<'db> {
             | BinaryOp::BitXor
             | BinaryOp::Shl
             | BinaryOp::Shr => Ty::Primitive(PrimitiveType::Int, TyAttr::default()),
+
+            // Null coalescing: a ?? b
+            // If a: T?, result is T | typeof(b).
+            // Canonical unwrap: a ?? b where a: T? and b: T → T (non-nullable).
+            BinaryOp::NullCoalesce => {
+                let inner_lhs = crate::narrowing::remove_null(lhs);
+                // If RHS is a subtype of the unwrapped LHS (e.g. int? ?? 1 → int),
+                // return the unwrapped LHS directly instead of building a union.
+                if self.is_subtype(rhs, &inner_lhs) {
+                    inner_lhs
+                } else if self.is_subtype(&inner_lhs, rhs) {
+                    rhs.clone()
+                } else {
+                    Self::join_types(&inner_lhs, rhs)
+                }
+            }
         }
     }
 
@@ -4503,6 +4887,9 @@ impl<'db> TypeInferenceBuilder<'db> {
         let saved_generic_params = self.generic_params.clone();
         let saved_expressions = std::mem::take(&mut self.expressions);
         let saved_bindings = std::mem::take(&mut self.bindings);
+        let saved_resolutions = std::mem::take(&mut self.resolutions);
+        let saved_exhaustive_matches = std::mem::take(&mut self.exhaustive_matches);
+        let saved_catch_residual_throws = std::mem::take(&mut self.catch_residual_throws);
 
         // Extend generic params with the lambda's own generic params
         let mut new_generic_params = self.generic_params.clone();
@@ -4569,6 +4956,9 @@ impl<'db> TypeInferenceBuilder<'db> {
         // Collect the lambda's expression types and restore parent state
         let lambda_expressions = std::mem::replace(&mut self.expressions, saved_expressions);
         self.bindings = saved_bindings;
+        self.resolutions = saved_resolutions;
+        self.exhaustive_matches = saved_exhaustive_matches;
+        self.catch_residual_throws = saved_catch_residual_throws;
         self.locals = saved_locals;
         self.declared_types = saved_declared;
         self.declared_return_ty = saved_return_ty;

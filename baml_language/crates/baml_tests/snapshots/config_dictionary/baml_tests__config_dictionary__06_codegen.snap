@@ -3,7 +3,7 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 function $init() -> null {
     call ?
-    store_global ?101
+    store_global ?133
     load_const ?
     return
 }
@@ -83,21 +83,17 @@ function user.MyClient$new() -> null {
     load_const null
     load_const null
     alloc_array 3
-    load_const null /* unknown class:  */
-    copy 0
     load_const "value"
-    store_field .0
-    copy 0
     load_const "value2"
-    store_field .1
-    copy 0
     load_const "yes"
     load_const "queen"
     alloc_array 2
-    store_field .2
-    copy 0
     load_const 10
-    store_field .3
+    load_const "key"
+    load_const "key2"
+    load_const "nestedArray"
+    load_const "number"
+    alloc_map 4
     load_const "value"
     load_const 100
     alloc_array 0

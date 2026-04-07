@@ -6,7 +6,7 @@ fn user.CatchAllTyped(x: int) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: int // x // param
-    let _2: unknown
+    let _2: unknown // e
     let _3: bool
     let _4: bool
 
@@ -55,30 +55,34 @@ fn user.CatchAllWildcard(x: int) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: int // x // param
-    let _2: unknown
+    let _2: unknown // e
 
     bb0: {
         _0 = call const fn user.MayFailIntOrString(copy _1) -> [bb1, unwind: bb2];
     }
 
     bb1: {
-        goto -> bb4;
+        goto -> bb5;
     }
 
     bb2: {
-        goto -> bb3;
+        throw_if_panic copy _2 -> bb3;
     }
 
     bb3: {
-        _0 = const "caught all";
         goto -> bb4;
     }
 
     bb4: {
+        _0 = const "caught all";
         goto -> bb5;
     }
 
     bb5: {
+        goto -> bb6;
+    }
+
+    bb6: {
         return;
     }
 }
@@ -87,7 +91,7 @@ fn user.CatchThenCatchAll(x: int) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: int // x // param
-    let _2: unknown
+    let _2: unknown // e
     let _3: bool
 
     bb0: {
@@ -95,33 +99,37 @@ fn user.CatchThenCatchAll(x: int) -> string {
     }
 
     bb1: {
-        goto -> bb6;
+        goto -> bb7;
     }
 
     bb2: {
         _3 = is_type(copy _2, String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
-        branch copy _3 -> [bb5, bb3];
+        branch copy _3 -> [bb6, bb3];
     }
 
     bb3: {
-        goto -> bb4;
+        throw_if_panic copy _2 -> bb4;
     }
 
     bb4: {
-        _0 = const "caught rest";
-        goto -> bb6;
+        goto -> bb5;
     }
 
     bb5: {
-        _0 = const "caught string";
-        goto -> bb6;
+        _0 = const "caught rest";
+        goto -> bb7;
     }
 
     bb6: {
+        _0 = const "caught string";
         goto -> bb7;
     }
 
     bb7: {
+        goto -> bb8;
+    }
+
+    bb8: {
         return;
     }
 }
@@ -161,7 +169,7 @@ fn user.PartialCatch(x: int) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: int // x // param
-    let _2: unknown
+    let _2: unknown // e
     let _3: bool
 
     bb0: {

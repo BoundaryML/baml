@@ -4,8 +4,8 @@ use thiserror::Error;
 /// A catchable BAML panic — maps 1:1 to a `baml.panics.*` class.
 ///
 /// These are user-visible runtime errors (division by zero, index out of
-/// bounds, etc.) that can be caught by `catch` handlers with
-/// `catches_panics = true`.
+/// bounds, etc.) that can be caught by `catch` handlers. The handler's
+/// `ThrowIfPanic` instruction filters which panics are caught vs rethrown.
 #[derive(Debug, Error, PartialEq, Clone)]
 pub enum VmPanic {
     #[error("division by zero: {left:?} / {right:?}")]

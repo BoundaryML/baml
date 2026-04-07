@@ -233,11 +233,6 @@ impl MirBuilder {
         }
     }
 
-    /// Emit an assert statement.
-    pub(crate) fn assert(&mut self, condition: Operand) {
-        self.push_statement(StatementKind::Assert(condition), None);
-    }
-
     // ========================================================================
     // Terminator Emission
     // ========================================================================
@@ -320,6 +315,12 @@ impl MirBuilder {
     /// Emit a throw terminator (unwind with error value).
     pub(crate) fn throw(&mut self, value: Operand) {
         self.set_terminator(Terminator::Throw { value });
+    }
+
+    /// Emit a throw-if-panic terminator: if the value is a panic instance,
+    /// throw it; otherwise continue to `otherwise`.
+    pub(crate) fn throw_if_panic(&mut self, value: Operand, otherwise: BlockId) {
+        self.set_terminator(Terminator::ThrowIfPanic { value, otherwise });
     }
 
     /// Emit a dispatch future (for LLM calls).

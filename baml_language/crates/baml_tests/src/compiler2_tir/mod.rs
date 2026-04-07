@@ -58,6 +58,7 @@ pub(crate) mod support {
             TypeExpr::Bool { .. } => "bool".into(),
             TypeExpr::Null { .. } => "null".into(),
             TypeExpr::Never { .. } => "never".into(),
+            TypeExpr::Uint8Array { .. } => "uint8array".into(),
             TypeExpr::Media { kind: k, .. } => format!("{:?}", k).to_lowercase(),
             TypeExpr::Optional { inner, .. } => {
                 let s = type_expr_to_string(inner);
@@ -206,7 +207,7 @@ pub(crate) mod support {
             }
             Expr::Throw { value } => format!("throw {}", expr_desc(*value, body)),
             Expr::Binary { op, lhs, rhs } => {
-                format!("{} {op:?} {}", expr_desc(*lhs, body), expr_desc(*rhs, body))
+                format!("{} {op} {}", expr_desc(*lhs, body), expr_desc(*rhs, body))
             }
             Expr::Unary { op, expr: inner } => format!("{op:?} {}", expr_desc(*inner, body)),
             Expr::Call { callee, args } => {
@@ -242,10 +243,23 @@ pub(crate) mod support {
             Expr::FieldAccess { base, field } => {
                 format!("{}.{field}", expr_desc(*base, body))
             }
+            Expr::OptionalFieldAccess { base, field } => {
+                format!("{}?.{field}", expr_desc(*base, body))
+            }
             Expr::Index { base, index } => {
                 format!("{}[{}]", expr_desc(*base, body), expr_desc(*index, body))
             }
+            Expr::ByteStringLiteral(bytes) => format!("b\"<{} bytes>\"", bytes.len()),
             Expr::Lambda(func_def) => format_lambda_signature(func_def),
+            Expr::OptionalIndex { base, index } => {
+                format!("{}?.[{}]", expr_desc(*base, body), expr_desc(*index, body))
+            }
+            Expr::OptionalCall { callee, args } => {
+                let callee_str = expr_desc(*callee, body);
+                let args_str: Vec<String> = args.iter().map(|a| expr_desc(*a, body)).collect();
+                format!("{}?.({})", callee_str, args_str.join(", "))
+            }
+            Expr::OptionalChain { expr } => expr_desc(*expr, body),
             Expr::Missing => "<missing>".into(),
         }
     }
@@ -642,10 +656,6 @@ pub(crate) mod support {
             Stmt::Continue => {
                 writeln!(output, "{pad}continue").ok();
             }
-            Stmt::Assert { condition } => {
-                let desc = expr_desc(*condition, body);
-                writeln!(output, "{pad}assert {desc}").ok();
-            }
             Stmt::Missing | Stmt::HeaderComment { .. } => {}
         }
     }
@@ -786,10 +796,6 @@ pub(crate) mod support {
                 let val_desc = expr_desc(*value, body);
                 let val_ty = expr_ty(inference, *value);
                 writeln!(output, "{pad}{target_desc} {op:?}= {val_desc} : {val_ty}").ok();
-            }
-            Stmt::Assert { condition } => {
-                let desc = expr_desc(*condition, body);
-                writeln!(output, "{pad}assert {desc}").ok();
             }
             Stmt::Break => {
                 writeln!(output, "{pad}break").ok();
@@ -1181,6 +1187,7 @@ pub(crate) mod support {
                 baml_compiler2_ast::TypeExpr::Bool { .. } => "bool".into(),
                 baml_compiler2_ast::TypeExpr::Null { .. } => "null".into(),
                 baml_compiler2_ast::TypeExpr::Never { .. } => "never".into(),
+                baml_compiler2_ast::TypeExpr::Uint8Array { .. } => "uint8array".into(),
                 baml_compiler2_ast::TypeExpr::Media { kind: k, .. } => {
                     format!("{:?}", k).to_lowercase()
                 }
@@ -1427,6 +1434,25 @@ pub(crate) mod support {
                         expr_desc_hir(*base, body, prefix, local_type_names)
                     )
                 }
+                Expr::OptionalFieldAccess { base, field } => {
+                    format!(
+                        "{}?.{field}",
+                        expr_desc_hir(*base, body, prefix, local_type_names)
+                    )
+                }
+                Expr::OptionalIndex { base, index } => format!(
+                    "{}?.[{}]",
+                    expr_desc_hir(*base, body, prefix, local_type_names),
+                    expr_desc_hir(*index, body, prefix, local_type_names)
+                ),
+                Expr::OptionalCall { callee, args } => {
+                    let callee_str = expr_desc_hir(*callee, body, prefix, local_type_names);
+                    let arg_strs: Vec<String> = args
+                        .iter()
+                        .map(|a| expr_desc_hir(*a, body, prefix, local_type_names))
+                        .collect();
+                    format!("{callee_str}?.({})", arg_strs.join(", "))
+                }
                 Expr::Index { base, index } => format!(
                     "{}[{}]",
                     expr_desc_hir(*base, body, prefix, local_type_names),
@@ -1448,6 +1474,10 @@ pub(crate) mod support {
                     // Replace "{ ... }" placeholder with actual body
                     sig.replace("{ ... }", &format!("{{ {body_desc} }}"))
                 }
+                Expr::OptionalChain { expr } => {
+                    expr_desc_hir(*expr, body, prefix, local_type_names)
+                }
+                Expr::ByteStringLiteral(bytes) => format!("b\"<{} bytes>\"", bytes.len()),
                 Expr::Missing => "<missing>".into(),
             }
         }
@@ -1526,12 +1556,6 @@ pub(crate) mod support {
                     expr_desc_hir(*target, body, prefix, local_type_names),
                     expr_desc_hir(*value, body, prefix, local_type_names)
                 ),
-                Stmt::Assert { condition } => {
-                    format!(
-                        "assert {}",
-                        expr_desc_hir(*condition, body, prefix, local_type_names)
-                    )
-                }
                 Stmt::Break => "break".into(),
                 Stmt::Continue => "continue".into(),
                 Stmt::HeaderComment { name, level } => format!("// [{level}] {name}"),

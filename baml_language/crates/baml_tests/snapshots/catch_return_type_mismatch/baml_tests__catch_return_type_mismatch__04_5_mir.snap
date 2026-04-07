@@ -19,9 +19,8 @@ fn user.callee() -> bool {
 fn user.caller() -> bool {
     // Locals:
     let _0: bool // _0 // return
-    let _1: unknown
+    let _1: unknown // e
     let _2: bool
-    let _3: Errors // e
 
     bb0: {
         _0 = call const fn user.callee() -> [bb1, unwind: bb3];
@@ -45,8 +44,7 @@ fn user.caller() -> bool {
     }
 
     bb5: {
-        _3 = copy _1;
-        _0 = copy _3;
+        _0 = copy _1;
         goto -> bb6;
     }
 

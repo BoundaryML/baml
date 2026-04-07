@@ -54,6 +54,7 @@ enum StructuralTy {
     Audio,
     Video,
     Pdf,
+    Uint8Array,
     // Literal
     Literal(baml_base::Literal),
     // User-defined (resolved by qualified name)
@@ -330,6 +331,7 @@ fn normalize_impl(
             PrimitiveType::Audio => StructuralTy::Audio,
             PrimitiveType::Video => StructuralTy::Video,
             PrimitiveType::Pdf => StructuralTy::Pdf,
+            PrimitiveType::Uint8Array => StructuralTy::Uint8Array,
         },
         Ty::Never { .. } => StructuralTy::Never,
         Ty::Void { .. } => StructuralTy::Void,

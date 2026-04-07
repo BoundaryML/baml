@@ -44,7 +44,7 @@ function ContinueNested() -> int {
 
 //----
 //- diagnostics
-// Error: unreachable code: 1 statement(s) after diverging statement
+// Warning: unreachable code: 1 statement(s) after diverging statement
 //     ╭─[ loops_continue.baml:23:40 ]
 //     │
 //  23 │ ╭─▶ function ContinueOutsideLoop() -> int {

@@ -1028,12 +1028,34 @@ async fn method_call_field_assignment_with_copy() {
     assert_eq!(output.result, Ok(BexExternalValue::Int(15)));
 }
 
+/// Parenthesized assignment `(x = 5)` in expression position is rejected by
+/// AST lowering (emits Expr::Missing instead of silently defaulting to BinaryOp::Add).
+/// The missing expression propagates through compilation as a runtime panic.
+#[tokio::test]
+async fn parenthesized_assignment_in_expr_position_is_bug() {
+    let output = baml_test!(
+        r#"
+        function main() -> int {
+            let x = 10;
+            (x = 5)
+        }
+    "#
+    );
+
+    // Assignment in expression position is not valid — the result should be an error.
+    assert!(
+        output.result.is_err(),
+        "expected error for parenthesized assignment in expression position, got: {:?}",
+        output.result
+    );
+}
+
 #[tokio::test]
 async fn virtual_multiple_defs_preserve_side_effects() {
     let output = baml_test!(
         r#"
         function fail() -> int {
-            assert(false);
+            throw "fail";
             1
         }
 
@@ -1045,12 +1067,10 @@ async fn virtual_multiple_defs_preserve_side_effects() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @r#"
     function fail() -> int {
-        load_const false
-        assert
-        load_const 1
-        return
+        load_const "fail"
+        throw
     }
 
     function main() -> int {
@@ -1061,7 +1081,7 @@ async fn virtual_multiple_defs_preserve_side_effects() {
         load_var x
         return
     }
-    ");
+    "#);
 
     assert!(matches!(
         output.result,

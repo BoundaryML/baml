@@ -185,6 +185,19 @@ pub enum DiagnosticId {
 
     // Namespace diagnostics (E0099)
     NamespaceShadow,
+
+    // Lowering diagnostics (E0101-E0105)
+    MissingName,
+    UnparseableType,
+    MissingConfigBlock,
+    MissingConfigKey,
+    MalformedAttribute,
+
+    // Attribute disambiguation (E0106)
+    FieldAttributeInTypePosition,
+
+    // Byte string literal errors (E0109)
+    InvalidByteStringEscape,
 }
 
 impl DiagnosticId {
@@ -323,6 +336,19 @@ impl DiagnosticId {
             DiagnosticId::InstanceofRemoved => "E0098",
 
             DiagnosticId::NamespaceShadow => "E0099",
+
+            // Lowering diagnostics
+            DiagnosticId::MissingName => "E0107",
+            DiagnosticId::UnparseableType => "E0108",
+            DiagnosticId::MissingConfigBlock => "E0103",
+            DiagnosticId::MissingConfigKey => "E0104",
+            DiagnosticId::MalformedAttribute => "E0105",
+
+            // Attribute disambiguation
+            DiagnosticId::FieldAttributeInTypePosition => "E0106",
+
+            // Byte string literal errors
+            DiagnosticId::InvalidByteStringEscape => "E0109",
         }
     }
 }

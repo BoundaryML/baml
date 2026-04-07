@@ -528,6 +528,7 @@ impl OutputFormatContent {
                 }
             }
 
+            Ty::Uint8Array { .. } => Err(RenderError::UnsupportedType("uint8array".to_string())),
             Ty::Media(_, _) => Err(RenderError::UnsupportedType("media".to_string())),
 
             Ty::Literal(lit, _) => Ok(Some(render_literal(lit))),

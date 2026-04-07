@@ -181,10 +181,9 @@ pub(crate) fn display_instruction(
         | Instruction::Await
         | Instruction::CallIndirect
         | Instruction::Throw
-        | Instruction::Assert
         | Instruction::Discriminant
         | Instruction::TypeTag
-        | Instruction::IsPanic
+        | Instruction::ThrowIfPanic
         | Instruction::Unreachable
         | Instruction::MakeClosure(_, _)
         | Instruction::MakeCell
@@ -309,11 +308,9 @@ fn instruction_color(instruction: &Instruction) -> Color {
             Color::Yellow
         }
         Instruction::Call(_) | Instruction::CallIndirect => Color::Magenta,
-        Instruction::Assert
-        | Instruction::Return
-        | Instruction::Pop(_)
-        | Instruction::Copy(_)
-        | Instruction::Throw => Color::Red,
+        Instruction::Return | Instruction::Pop(_) | Instruction::Copy(_) | Instruction::Throw => {
+            Color::Red
+        }
         Instruction::AllocMap(_)
         | Instruction::AllocInstance(_)
         | Instruction::AllocVariant(_)
@@ -323,7 +320,7 @@ fn instruction_color(instruction: &Instruction) -> Color {
             Color::BrightRed
         }
         Instruction::VizEnter(_) | Instruction::VizExit(_) => Color::BrightYellow,
-        Instruction::Discriminant | Instruction::TypeTag | Instruction::IsPanic => {
+        Instruction::Discriminant | Instruction::TypeTag | Instruction::ThrowIfPanic => {
             Color::BrightBlue
         }
         Instruction::Unreachable => Color::BrightRed,
@@ -716,7 +713,6 @@ fn display_instruction_textual(
 
         // --- Control ---
         Instruction::Return => "return".to_string(),
-        Instruction::Assert => "assert".to_string(),
         Instruction::Unreachable => "unreachable".to_string(),
 
         // --- Watch/Notify ---
@@ -750,7 +746,7 @@ fn display_instruction_textual(
         // --- Type introspection ---
         Instruction::Discriminant => "discriminant".to_string(),
         Instruction::TypeTag => "type_tag".to_string(),
-        Instruction::IsPanic => "is_panic".to_string(),
+        Instruction::ThrowIfPanic => "throw_if_panic".to_string(),
 
         // --- Closures and cells ---
         Instruction::MakeClosure(obj_idx, count) => {

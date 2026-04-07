@@ -174,7 +174,7 @@ impl<'a> AstGraphBuilder<'a> {
                 self.visit_expr(*value);
             }
 
-            ast::Expr::Call { .. } => {
+            ast::Expr::Call { .. } | ast::Expr::OptionalCall { .. } => {
                 // Emit an OtherScope node for function calls so they appear in the graph.
                 let label = render_expr_compact_ast(self.body, id);
                 self.emit_call_scope(id, &label);
@@ -231,7 +231,7 @@ impl<'a> AstGraphBuilder<'a> {
                 let return_expr = self.body.exprs[*expr_id].clone();
                 match &return_expr {
                     // Calls already produce their own graph node via visit_expr.
-                    ast::Expr::Call { .. } => {
+                    ast::Expr::Call { .. } | ast::Expr::OptionalCall { .. } => {
                         self.visit_expr(*expr_id);
                     }
                     // For other return values, emit a leaf node showing the
@@ -703,6 +703,7 @@ fn render_expr_compact_ast(body: &ast::ExprBody, id: ast::ExprId) -> String {
                 ast::BinaryOp::Shl => "<<",
                 ast::BinaryOp::Shr => ">>",
                 ast::BinaryOp::Instanceof => "instanceof",
+                ast::BinaryOp::NullCoalesce => "??",
             };
             format!(
                 "{} {} {}",
@@ -721,9 +722,19 @@ fn render_expr_compact_ast(body: &ast::ExprBody, id: ast::ExprId) -> String {
         ast::Expr::FieldAccess { base, field } => {
             format!("{}.{field}", render_expr_compact_ast(body, *base))
         }
+        ast::Expr::OptionalFieldAccess { base, field } => {
+            format!("{}?.{field}", render_expr_compact_ast(body, *base))
+        }
         ast::Expr::Index { base, index } => {
             format!(
                 "{}[{}]",
+                render_expr_compact_ast(body, *base),
+                render_expr_compact_ast(body, *index)
+            )
+        }
+        ast::Expr::OptionalIndex { base, index } => {
+            format!(
+                "{}?.[{}]",
                 render_expr_compact_ast(body, *base),
                 render_expr_compact_ast(body, *index)
             )
@@ -735,6 +746,14 @@ fn render_expr_compact_ast(body: &ast::ExprBody, id: ast::ExprId) -> String {
                 .map(|a| render_expr_compact_ast(body, *a))
                 .collect();
             format!("{}({})", callee_str, args_str.join(", "))
+        }
+        ast::Expr::OptionalCall { callee, args } => {
+            let callee_str = render_expr_compact_ast(body, *callee);
+            let args_str: Vec<_> = args
+                .iter()
+                .map(|a| render_expr_compact_ast(body, *a))
+                .collect();
+            format!("{}?.({})", callee_str, args_str.join(", "))
         }
         ast::Expr::Throw { value } => format!("throw {}", render_expr_compact_ast(body, *value)),
         ast::Expr::Catch { base, clauses } => {
