@@ -12,10 +12,42 @@ use std::{
     },
 };
 
+use serde::Serialize;
 use sha2::{Digest, Sha256};
 use sys_types::{BexHeap, CallId, OpErrorKind, SysOpContext, SysOpOutput};
 
 use crate::io::{IoClassHttpResponse, IoNamespaceHttp, owned};
+
+// ---------------------------------------------------------------------------
+// Display info and snapshot types
+// ---------------------------------------------------------------------------
+
+/// Human-readable request metadata for popover display.
+#[derive(Debug, Clone, Serialize)]
+pub struct RequestDisplayInfo {
+    pub method: String,
+    pub url: String,
+    pub body_preview: String,
+}
+
+/// Snapshot of a single request group for the popover.
+#[derive(Debug, Clone, Serialize)]
+pub struct ReplayGroupSnapshot {
+    pub key: String,
+    pub display: RequestDisplayInfo,
+    pub recordings: Vec<RecordingSnapshot>,
+    pub pinned_fetch_id: Option<u64>,
+}
+
+/// Snapshot of a single recording within a group.
+#[derive(Debug, Clone, Serialize)]
+pub struct RecordingSnapshot {
+    pub fetch_id: u64,
+    pub status: i64,
+    pub body_preview: String,
+    /// Seconds since UNIX epoch when the recording was captured.
+    pub recorded_at: u64,
+}
 
 // ---------------------------------------------------------------------------
 // Generic record-replay store
@@ -25,6 +57,8 @@ use crate::io::{IoClassHttpResponse, IoNamespaceHttp, owned};
 pub struct RecordedEntry<V> {
     pub fetch_id: u64,
     pub value: V,
+    /// Seconds since UNIX epoch when recorded.
+    pub recorded_at: u64,
 }
 
 pub struct RecordReplay<K: std::hash::Hash + Eq + Clone, V: Clone> {
@@ -34,6 +68,8 @@ pub struct RecordReplay<K: std::hash::Hash + Eq + Clone, V: Clone> {
     fetch_id_to_key: HashMap<u64, K>,
     /// Content key to pinned entry (at most one per key).
     pinned_by_key: HashMap<K, RecordedEntry<V>>,
+    /// Human-readable request metadata, one per unique key.
+    request_display: HashMap<K, RequestDisplayInfo>,
 }
 
 impl<K: std::hash::Hash + Eq + Clone, V: Clone> Default for RecordReplay<K, V> {
@@ -48,16 +84,24 @@ impl<K: std::hash::Hash + Eq + Clone, V: Clone> RecordReplay<K, V> {
             recordings: HashMap::new(),
             fetch_id_to_key: HashMap::new(),
             pinned_by_key: HashMap::new(),
+            request_display: HashMap::new(),
         }
     }
 
     /// Record a response. Called after every successful HTTP round-trip.
-    pub fn record(&mut self, key: K, fetch_id: u64, value: V) {
+    pub fn record(&mut self, key: K, fetch_id: u64, value: V, display: RequestDisplayInfo) {
         self.fetch_id_to_key.insert(fetch_id, key.clone());
-        self.recordings
-            .entry(key)
-            .or_default()
-            .push(RecordedEntry { fetch_id, value });
+        // Store display info only on first recording for this key.
+        self.request_display.entry(key.clone()).or_insert(display);
+        let recorded_at = web_time::SystemTime::now()
+            .duration_since(web_time::SystemTime::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
+        self.recordings.entry(key).or_default().push(RecordedEntry {
+            fetch_id,
+            value,
+            recorded_at,
+        });
     }
 
     /// Look up a pinned entry by content key.
@@ -83,6 +127,34 @@ impl<K: std::hash::Hash + Eq + Clone, V: Clone> RecordReplay<K, V> {
             self.pinned_by_key.remove(&key);
             true
         }
+    }
+}
+
+impl RecordReplay<RequestKey, RecordedResponse> {
+    /// Return a full snapshot of the store for the popover UI.
+    pub fn snapshot(&self) -> Vec<ReplayGroupSnapshot> {
+        self.recordings
+            .iter()
+            .filter_map(|(key, entries)| {
+                let display = self.request_display.get(key)?.clone();
+                let pinned_fetch_id = self.pinned_by_key.get(key).map(|e| e.fetch_id);
+                let recordings = entries
+                    .iter()
+                    .map(|e| RecordingSnapshot {
+                        fetch_id: e.fetch_id,
+                        status: e.value.status,
+                        body_preview: e.value.body.chars().take(1000).collect(),
+                        recorded_at: e.recorded_at,
+                    })
+                    .collect();
+                Some(ReplayGroupSnapshot {
+                    key: hex::encode(key.0),
+                    display,
+                    recordings,
+                    pinned_fetch_id,
+                })
+            })
+            .collect()
     }
 }
 
@@ -151,7 +223,8 @@ pub struct ReplayHttp {
     /// Callback for replay-hit fetch log events.
     on_replay: Option<Arc<dyn Fn(ReplayFetchEvent) + Send + Sync>>,
     /// Correlates `send()` to `text()` via response body pointer identity.
-    pending_recordings: Arc<Mutex<HashMap<usize, RequestKey>>>,
+    #[allow(clippy::type_complexity)]
+    pending_recordings: Arc<Mutex<HashMap<usize, (RequestKey, RequestDisplayInfo, u64)>>>,
 }
 
 impl ReplayHttp {
@@ -200,7 +273,7 @@ impl IoClassHttpResponse for ReplayHttp {
 
         // Look up correlation from `send()`.
         let body_ptr = Self::response_body_key(&response);
-        let request_key = self.pending_recordings.lock().unwrap().remove(&body_ptr);
+        let pending_entry = self.pending_recordings.lock().unwrap().remove(&body_ptr);
 
         // Capture response metadata before delegating.
         let resp_status = response.status_code;
@@ -209,13 +282,11 @@ impl IoClassHttpResponse for ReplayHttp {
 
         let inner_result = self.inner.text(heap, call_id, response, ctx);
         let store = self.store.clone();
-        let fetch_id_alloc = self.fetch_id_allocator.clone();
 
-        match request_key {
-            Some(key) => match inner_result {
+        match pending_entry {
+            Some((key, display, fetch_id)) => match inner_result {
                 SysOpOutput::Async(fut) => SysOpOutput::async_op(async move {
                     let text = fut.await?;
-                    let fetch_id = fetch_id_alloc.load(Ordering::Relaxed) - 1;
                     store.write().unwrap().record(
                         key,
                         fetch_id,
@@ -225,6 +296,7 @@ impl IoClassHttpResponse for ReplayHttp {
                             body: text.clone(),
                             url: resp_url,
                         },
+                        display,
                     );
                     Ok(text)
                 }),
@@ -282,6 +354,13 @@ impl IoNamespaceHttp for ReplayHttp {
         }
 
         // No replay hit — delegate to inner.
+        let display = RequestDisplayInfo {
+            method: request.method.clone(),
+            url: request.url.clone(),
+            body_preview: request.body.chars().take(1000).collect(),
+        };
+        // Pre-allocate a unique fetch_id now so it's deterministic (not racy).
+        let fetch_id = self.fetch_id_allocator.fetch_add(1, Ordering::Relaxed);
         let inner_result = self.inner.send(heap, call_id, request, ctx);
         let pending = self.pending_recordings.clone();
         let key = request_key;
@@ -290,7 +369,10 @@ impl IoNamespaceHttp for ReplayHttp {
             SysOpOutput::Async(fut) => SysOpOutput::async_op(async move {
                 let resp = fut.await?;
                 let body_ptr = Arc::as_ptr(&resp._body).cast::<()>() as usize;
-                pending.lock().unwrap().insert(body_ptr, key);
+                pending
+                    .lock()
+                    .unwrap()
+                    .insert(body_ptr, (key, display, fetch_id));
                 Ok(resp)
             }),
             SysOpOutput::Ready(Ok(resp)) => {
@@ -298,7 +380,7 @@ impl IoNamespaceHttp for ReplayHttp {
                 self.pending_recordings
                     .lock()
                     .unwrap()
-                    .insert(body_ptr, key);
+                    .insert(body_ptr, (key, display, fetch_id));
                 SysOpOutput::Ready(Ok(resp))
             }
             other @ SysOpOutput::Ready(Err(_)) => other,
@@ -326,11 +408,19 @@ impl IoNamespaceHttp for ReplayHttp {
 mod tests {
     use super::*;
 
+    fn dummy_display() -> RequestDisplayInfo {
+        RequestDisplayInfo {
+            method: "GET".to_string(),
+            url: "https://example.com".to_string(),
+            body_preview: String::new(),
+        }
+    }
+
     #[test]
     fn test_record_and_lookup() {
         let mut store = RecordReplay::new();
         let key = RequestKey([0u8; 32]);
-        store.record(key.clone(), 1, "response body".to_string());
+        store.record(key.clone(), 1, "response body".to_string(), dummy_display());
 
         assert!(store.get_pinned(&key).is_none());
 
@@ -347,8 +437,8 @@ mod tests {
     fn test_multiple_recordings_per_key() {
         let mut store = RecordReplay::new();
         let key = RequestKey([0u8; 32]);
-        store.record(key.clone(), 1, "first".to_string());
-        store.record(key.clone(), 2, "second".to_string());
+        store.record(key.clone(), 1, "first".to_string(), dummy_display());
+        store.record(key.clone(), 2, "second".to_string(), dummy_display());
 
         assert!(store.set_pinned(2, true));
         let pinned = store.get_pinned(&key).unwrap();
@@ -425,5 +515,121 @@ mod tests {
     fn test_set_pinned_unknown_fetch_id() {
         let mut store: RecordReplay<RequestKey, String> = RecordReplay::new();
         assert!(!store.set_pinned(999, true));
+    }
+
+    // ---------------------------------------------------------------------------
+    // snapshot() tests
+    // ---------------------------------------------------------------------------
+
+    fn make_key(s: &str) -> RequestKey {
+        let mut hasher = sha2::Sha256::new();
+        hasher.update(s.as_bytes());
+        RequestKey(hasher.finalize().into())
+    }
+
+    fn make_display(method: &str, url: &str) -> RequestDisplayInfo {
+        RequestDisplayInfo {
+            method: method.to_string(),
+            url: url.to_string(),
+            body_preview: String::new(),
+        }
+    }
+
+    fn make_response(status: i64, body: &str) -> RecordedResponse {
+        RecordedResponse {
+            status,
+            headers: indexmap::IndexMap::new(),
+            body: body.to_string(),
+            url: "https://example.com".to_string(),
+        }
+    }
+
+    #[test]
+    fn snapshot_returns_all_groups_with_display_info() {
+        let mut store = RecordReplay::new();
+        let key_a = make_key("request-a");
+        let key_b = make_key("request-b");
+
+        store.record(
+            key_a.clone(),
+            1,
+            make_response(200, "resp1"),
+            make_display("POST", "https://a.com"),
+        );
+        store.record(
+            key_a,
+            2,
+            make_response(200, "resp2"),
+            make_display("POST", "https://a.com"),
+        );
+        store.record(
+            key_b,
+            3,
+            make_response(404, "not found"),
+            make_display("GET", "https://b.com"),
+        );
+
+        let snap = store.snapshot();
+        assert_eq!(snap.len(), 2);
+
+        let group_a = snap
+            .iter()
+            .find(|g| g.display.url == "https://a.com")
+            .unwrap();
+        assert_eq!(group_a.display.method, "POST");
+        assert_eq!(group_a.recordings.len(), 2);
+        assert_eq!(group_a.pinned_fetch_id, None);
+
+        let group_b = snap
+            .iter()
+            .find(|g| g.display.url == "https://b.com")
+            .unwrap();
+        assert_eq!(group_b.recordings.len(), 1);
+        assert_eq!(group_b.recordings[0].status, 404);
+    }
+
+    #[test]
+    fn snapshot_shows_pinned_fetch_id() {
+        let mut store = RecordReplay::new();
+        let key = make_key("req");
+        store.record(
+            key.clone(),
+            10,
+            make_response(200, "ok"),
+            make_display("GET", "https://x.com"),
+        );
+        store.record(
+            key,
+            11,
+            make_response(200, "ok2"),
+            make_display("GET", "https://x.com"),
+        );
+        store.set_pinned(11, true);
+
+        let snap = store.snapshot();
+        assert_eq!(snap.len(), 1);
+        assert_eq!(snap[0].pinned_fetch_id, Some(11));
+    }
+
+    #[test]
+    fn display_info_stored_only_on_first_record() {
+        let mut store = RecordReplay::new();
+        let key = make_key("req");
+        store.record(
+            key.clone(),
+            1,
+            make_response(200, "a"),
+            make_display("POST", "https://first.com"),
+        );
+        store.record(
+            key,
+            2,
+            make_response(200, "b"),
+            make_display("POST", "https://second.com"),
+        );
+
+        let snap = store.snapshot();
+        // Display info should be from the first recording, not overwritten.
+        assert_eq!(snap[0].display.url, "https://first.com");
     }
 }

@@ -124,6 +124,24 @@ export interface FetchLogEntry {
   pinned?: boolean;
 }
 
+export interface ReplayRecording {
+  fetchId: number;
+  status: number;
+  bodyPreview: string;
+  recordedAt: number;
+}
+
+export interface ReplayGroup {
+  key: string;
+  display: {
+    method: string;
+    url: string;
+    bodyPreview: string;
+  };
+  recordings: ReplayRecording[];
+  pinnedFetchId: number | null;
+}
+
 export interface EnvVarRequest {
   id: number;
   variable: string;
@@ -160,7 +178,8 @@ export type WorkerOutMessage =
   | { type: 'vfsFileDeleted'; path: string }
   | { type: 'buildTime'; value: string }
   | { type: 'controlFlowGraphResult'; functionName: string; graph: ControlFlowGraph | null }
-  | { type: 'cursorContext'; context: CursorContext };
+  | { type: 'cursorContext'; context: CursorContext }
+  | { type: 'replayState'; entries: ReplayGroup[] };
 
 // ---------------------------------------------------------------------------
 // Main thread → Worker messages
@@ -181,6 +200,7 @@ export type WorkerInMessage =
   | { type: 'callTestFunction'; id: number; project: string; generation: number; testName: string }
   | { type: 'expandTestSet'; project: string; generation: number; testsetName: string }
   | { type: 'toggleReplay'; fetchId: number; pinned: boolean; project: string }
+  | { type: 'requestReplayState'; project: string }
   | { type: 'filesChanged'; files: Record<string, string> }
   | { type: 'dispose' };
 

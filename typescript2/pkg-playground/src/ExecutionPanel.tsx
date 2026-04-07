@@ -12,7 +12,7 @@
 import type { ChangeEvent, FC, RefObject } from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { encodeCallArgs } from '@b/pkg-proto';
-import { KeyRound, PanelLeft, Pin, PinOff, Square } from 'lucide-react';
+import { KeyRound, PanelLeft, RotateCcw, Square } from 'lucide-react';
 import { Button } from './components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs';
 import { Input } from './components/ui/input';
@@ -42,6 +42,8 @@ import { ResultDisplay } from './ResultDisplay';
 import { registerBuiltinResultRenderers } from './renderers/registerBuiltins';
 import { GraphView } from './graph/GraphView';
 import { FunctionSidebar } from './FunctionSidebar';
+import { ReplayManagerDialog } from './ReplayManagerPopover';
+import type { ReplayGroup } from './worker-protocol';
 
 registerBuiltinResultRenderers();
 
@@ -95,10 +97,9 @@ interface CollectionRunViewProps {
   run: RunEntry;
   expandedLogId: number | null;
   setExpandedLogId: (id: number | null) => void;
-  onTogglePin?: (fetchId: number, pinned: boolean) => void;
 }
 
-const CollectionRunView: FC<CollectionRunViewProps> = ({ run, expandedLogId, setExpandedLogId, onTogglePin }) => {
+const CollectionRunView: FC<CollectionRunViewProps> = ({ run, expandedLogId, setExpandedLogId }) => {
   return (
     <div className="flex-1 flex flex-col min-h-0">
       {/* Header */}
@@ -135,23 +136,6 @@ const CollectionRunView: FC<CollectionRunViewProps> = ({ run, expandedLogId, set
                 <span className="text-vsc-text-faint text-[10px]">{log.method}</span>
                 <span className="text-vsc-text flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-[11px]">{log.url}</span>
                 {log.durationMs != null && <span className="text-vsc-text-faint text-[10px]">{log.durationMs}ms</span>}
-                {onTogglePin && (
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-5 w-5 shrink-0 text-vsc-text-muted hover:text-vsc-text"
-                          onClick={(e) => { e.stopPropagation(); onTogglePin(log.id, !log.pinned); }}
-                        >
-                          {log.pinned ? <PinOff size={11} /> : <Pin size={11} />}
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>{log.pinned ? 'Unpin (allow live call)' : 'Pin (replay this response)'}</TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                )}
                 <span className="text-vsc-text-faint text-[9px]">{isExp ? '\u25B4' : '\u25BE'}</span>
               </div>
               {isExp && (
@@ -233,6 +217,8 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
 
   const [showApiKeysDialog, setShowApiKeysDialog] = useState(false);
   const showApiKeysDialogRef = useRef(false);
+  const [showReplayManager, setShowReplayManager] = useState(false);
+  const [replayEntries, setReplayEntries] = useState<ReplayGroup[]>([]);
 
   const [diagsExpanded, setDiagsExpanded] = useState(false);
   const [buildTime, setBuildTime] = useState<number | null>(null);
@@ -513,6 +499,10 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
           handleCursorContext(data.context);
           break;
 
+        case "replayState":
+          setReplayEntries(data.entries);
+          break;
+
         default:
           data satisfies never;
       }
@@ -667,27 +657,6 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
       [runId]: (prev[runId] ?? 'parsed') === 'parsed' ? 'raw' : 'parsed',
     }));
   }, []);
-
-  const onTogglePin = useCallback((fetchId: number, pinned: boolean) => {
-    // Update pinned state locally across all runs
-    setRuns((prev) =>
-      prev.map((r) => ({
-        ...r,
-        fetchLogs: r.fetchLogs.map((l) => (l.id === fetchId ? { ...l, pinned } : l)),
-      })),
-    );
-    // Also update in collection run
-    setCollectionRun((prev) => {
-      if (!prev) return prev;
-      return {
-        ...prev,
-        fetchLogs: prev.fetchLogs.map((l) => (l.id === fetchId ? { ...l, pinned } : l)),
-      };
-    });
-    if (selectedProject) {
-      port.postMessage({ type: 'toggleReplay', fetchId, pinned, project: selectedProject });
-    }
-  }, [port, selectedProject]);
 
   const onResizeStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -914,6 +883,21 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
         <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="relative h-7 w-7"
+                onClick={() => setShowReplayManager((prev) => !prev)}
+              >
+                <RotateCcw size={14} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Record / Replay</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
               <Button variant="ghost" size="icon" className="relative h-7 w-7" onClick={() => setShowApiKeysDialog(true)}>
                 <KeyRound size={14} />
                 {hasMissingKeys && (
@@ -1087,7 +1071,6 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
               run={collectionRun}
               expandedLogId={expandedLogId}
               setExpandedLogId={setExpandedLogId}
-              onTogglePin={onTogglePin}
             />
           ) : viewingTestRun ? (
             <div ref={outputRef} className="flex-1 overflow-auto font-vsc-mono text-xs bg-vsc-bg">
@@ -1150,21 +1133,6 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
                             <span className="text-vsc-text-faint text-[10px]">{log.method}</span>
                             <span className="text-vsc-text flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-[11px]">{log.url}</span>
                             {log.durationMs != null && <span className="text-vsc-text-faint text-[10px]">{log.durationMs}ms</span>}
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-5 w-5 shrink-0 text-vsc-text-muted hover:text-vsc-text"
-                                    onClick={(e) => { e.stopPropagation(); onTogglePin(log.id, !log.pinned); }}
-                                  >
-                                    {log.pinned ? <PinOff size={11} /> : <Pin size={11} />}
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>{log.pinned ? 'Unpin (allow live call)' : 'Pin (replay this response)'}</TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
                             <span className="text-vsc-text-faint text-[9px]">{isExp ? '\u25B4' : '\u25BE'}</span>
                           </div>
                           {isExp && (
@@ -1400,21 +1368,6 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
                                 <span className="text-vsc-text-faint text-[10px]">{log.method}</span>
                                 <span className="text-vsc-text flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-[11px]">{log.url}</span>
                                 {log.durationMs != null && <span className="text-vsc-text-faint text-[10px]">{log.durationMs}ms</span>}
-                                <TooltipProvider>
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="h-5 w-5 shrink-0 text-vsc-text-muted hover:text-vsc-text"
-                                        onClick={(e) => { e.stopPropagation(); onTogglePin(log.id, !log.pinned); }}
-                                      >
-                                        {log.pinned ? <PinOff size={11} /> : <Pin size={11} />}
-                                      </Button>
-                                    </TooltipTrigger>
-                                    <TooltipContent>{log.pinned ? 'Unpin (allow live call)' : 'Pin (replay this response)'}</TooltipContent>
-                                  </Tooltip>
-                                </TooltipProvider>
                                 <span className="text-vsc-text-faint text-[9px]">{isExp ? '\u25B4' : '\u25BE'}</span>
                               </div>
                               {isExp && (
@@ -1519,6 +1472,26 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
         onSetEnvVar={addEnvVar}
         onDeleteEnvVar={removeEnvVar}
         onImportEnvVars={handleImportEnvVars}
+      />
+      <ReplayManagerDialog
+        open={showReplayManager}
+        onOpenChange={setShowReplayManager}
+        entries={replayEntries}
+        onToggleReplay={(fetchId, pinned) => {
+          port.postMessage({
+            type: 'toggleReplay',
+            fetchId,
+            pinned,
+            project: selectedProject ?? '',
+          });
+          // Refresh state after toggle.
+          setTimeout(() => {
+            port.postMessage({ type: 'requestReplayState', project: selectedProject ?? '' });
+          }, 50);
+        }}
+        onRequestState={() => {
+          port.postMessage({ type: 'requestReplayState', project: selectedProject ?? '' });
+        }}
       />
     </>
   );

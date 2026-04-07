@@ -438,6 +438,34 @@ async fn handle_ws_in_message(
                 tracing::warn!("ToggleReplay: no replay store for project {project}");
             }
         }
+
+        WsInMessage::RequestReplayState { project } => {
+            // Collect entries while holding the lock, then drop it before await.
+            let entries: Vec<serde_json::Value> = {
+                let stores = state.replay_stores.lock().unwrap();
+                if let Some(store) = stores.get(&project) {
+                    let store = store.read().unwrap();
+                    store
+                        .snapshot()
+                        .into_iter()
+                        .map(|g| serde_json::to_value(g).unwrap())
+                        .collect()
+                } else {
+                    vec![]
+                }
+            };
+            // Send via sink (per-session), not broadcast.
+            if let Err(e) = sink
+                .send(axum::extract::ws::Message::Text(
+                    serde_json::to_string(&WsOutMessage::ReplayState { entries })
+                        .unwrap()
+                        .into(),
+                ))
+                .await
+            {
+                tracing::warn!("Failed to send ReplayState: {e}");
+            }
+        }
     }
 }
 

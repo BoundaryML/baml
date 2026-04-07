@@ -675,6 +675,28 @@ self.onmessage = async (event: MessageEvent) => {
         runtime.toggleReplay(msg.fetchId, msg.pinned);
       }
       return;
+
+    case "requestReplayState":
+      if (runtime) {
+        const rawEntries = runtime.replayState();
+        const entries = (Array.isArray(rawEntries) ? rawEntries : []).map((e: any) => ({
+          key: e.key,
+          display: {
+            method: e.display.method,
+            url: e.display.url,
+            bodyPreview: e.display.body_preview,
+          },
+          recordings: (e.recordings ?? []).map((r: any) => ({
+            fetchId: r.fetch_id,
+            status: r.status,
+            bodyPreview: r.body_preview,
+            recordedAt: r.recorded_at ?? 0,
+          })),
+          pinnedFetchId: e.pinned_fetch_id ?? null,
+        }));
+        self.postMessage({ type: "replayState", entries });
+      }
+      return;
   }
   msg satisfies never;
 };

@@ -67,6 +67,8 @@ pub enum WsInMessage {
         fetch_id: u64,
         pinned: bool,
     },
+    #[serde(rename = "requestReplayState")]
+    RequestReplayState { project: String },
 }
 
 // ---------------------------------------------------------------------------
@@ -134,4 +136,6 @@ pub enum WsOutMessage {
     },
     #[serde(rename = "cursorContext")]
     CursorContext { context: serde_json::Value },
+    #[serde(rename = "replayState")]
+    ReplayState { entries: Vec<serde_json::Value> },
 }

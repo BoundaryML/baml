@@ -77,7 +77,7 @@ export const ApiKeysDialog: FC<ApiKeysDialogProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[480px] max-h-[80vh] flex flex-col overflow-hidden">
+      <DialogContent className="w-[480px] max-h-[80vh] flex flex-col overflow-hidden" data-1p-ignore data-lpignore="true">
         <DialogHeader>
           <DialogTitle>API Keys</DialogTitle>
         </DialogHeader>
@@ -98,6 +98,10 @@ export const ApiKeysDialog: FC<ApiKeysDialogProps> = ({
                   onChange={(e) => handleInlineEdit(key, e.target.value)}
                   placeholder={isMissing ? 'Required' : ''}
                   className="flex-1 text-[11px] font-vsc-mono"
+                  autoComplete="off"
+                  data-1p-ignore
+                  data-lpignore="true"
+                  data-form-type="other"
                 />
                 <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => toggleShow(key)}>
                   {showValues.has(key) ? <EyeOff size={12} /> : <Eye size={12} />}
@@ -116,12 +120,20 @@ export const ApiKeysDialog: FC<ApiKeysDialogProps> = ({
               value={newKey}
               onChange={(e) => setNewKey(e.target.value)}
               className="w-[140px] text-[11px] font-vsc-mono"
+              autoComplete="off"
+              data-1p-ignore
+              data-lpignore="true"
+              data-form-type="other"
             />
             <Input
               placeholder="Value"
               value={newValue}
               onChange={(e) => setNewValue(e.target.value)}
               className="flex-1 text-[11px] font-vsc-mono"
+              autoComplete="off"
+              data-1p-ignore
+              data-lpignore="true"
+              data-form-type="other"
             />
             <Button variant="default" size="sm" onClick={handleAdd}>
               <Plus size={12} />

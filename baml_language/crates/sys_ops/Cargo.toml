@@ -19,8 +19,11 @@ bex_heap = { workspace = true }
 bex_vm_types = { workspace = true }
 sys_llm = { workspace = true }
 sys_types = { workspace = true }
+hex = { workspace = true }
 indexmap = { workspace = true }
+serde = { workspace = true, features = [ "derive" ] }
 sha2 = { workspace = true }
+web-time = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = [ "rt", "macros" ] }

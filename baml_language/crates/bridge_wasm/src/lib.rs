@@ -470,4 +470,19 @@ impl BamlWasmRuntime {
             .unwrap()
             .set_pinned(fetch_id, pinned)
     }
+
+    /// Return a snapshot of all recorded requests for the Replay Manager popover.
+    ///
+    /// Returns an array of `ReplayGroupSnapshot` objects as a JS value.
+    /// Each entry has: `key` (hex string), `display` (`method`, `url`, `body_preview`),
+    /// `recordings` (array of `{fetch_id, status, body_preview}`), and `pinned_fetch_id`.
+    #[wasm_bindgen(js_name = "replayState")]
+    pub fn replay_state(&self) -> JsValue {
+        let store = self.replay_store.read().unwrap();
+        let snapshot = store.snapshot();
+        match serde_json::to_string(&snapshot) {
+            Ok(json) => js_sys::JSON::parse(&json).unwrap_or(JsValue::NULL),
+            Err(_) => JsValue::NULL,
+        }
+    }
 }

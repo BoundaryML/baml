@@ -7254,11 +7254,14 @@ dependencies = [
  "bex_external_types",
  "bex_heap",
  "bex_vm_types",
+ "hex",
  "indexmap 2.13.0",
+ "serde",
  "sha2 0.10.9",
  "sys_llm",
  "sys_types",
  "tokio",
+ "web-time",
 ]
 
 [[package]]
