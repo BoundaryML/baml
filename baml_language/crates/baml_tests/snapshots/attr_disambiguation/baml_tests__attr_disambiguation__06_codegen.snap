@@ -13,16 +13,14 @@ function user.E6(x: EFoo) -> string {
 
 function user.E7() -> EFoo {
     alloc_instance EFoo
-    copy 0
     load_const 1
-    store_field .x
+    init_field .x
     return
 }
 
 function user.E8() -> EFoo {
     alloc_instance EFoo
-    copy 0
     load_const 1
-    store_field .x
+    init_field .x
     return
 }

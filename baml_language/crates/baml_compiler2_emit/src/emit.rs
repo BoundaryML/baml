@@ -1777,13 +1777,8 @@ impl PullSink for StackifyCodegen<'_, '_> {
         Ok(())
     }
 
-    fn copy_top(&mut self, offset: usize) -> Result<(), Self::Error> {
-        self.emit(Instruction::Copy(offset));
-        Ok(())
-    }
-
-    fn store_field(&mut self, field_idx: usize, name: &str) -> Result<(), Self::Error> {
-        let idx = self.emit(Instruction::StoreField(field_idx));
+    fn init_field(&mut self, field_idx: usize, name: &str) -> Result<(), Self::Error> {
+        let idx = self.emit(Instruction::InitField(field_idx));
         self.set_operand(idx, OperandMeta::Field(name.to_string()));
         Ok(())
     }
