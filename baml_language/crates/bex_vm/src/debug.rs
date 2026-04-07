@@ -183,6 +183,7 @@ pub(crate) fn display_instruction(
         | Instruction::Throw
         | Instruction::Discriminant
         | Instruction::TypeTag
+        | Instruction::IsType(_)
         | Instruction::ThrowIfPanic
         | Instruction::Unreachable
         | Instruction::MakeClosure(_, _)
@@ -320,9 +321,10 @@ fn instruction_color(instruction: &Instruction) -> Color {
             Color::BrightRed
         }
         Instruction::VizEnter(_) | Instruction::VizExit(_) => Color::BrightYellow,
-        Instruction::Discriminant | Instruction::TypeTag | Instruction::ThrowIfPanic => {
-            Color::BrightBlue
-        }
+        Instruction::Discriminant
+        | Instruction::TypeTag
+        | Instruction::IsType(_)
+        | Instruction::ThrowIfPanic => Color::BrightBlue,
         Instruction::Unreachable => Color::BrightRed,
         Instruction::MakeClosure(_, _) | Instruction::MakeCell => Color::Cyan,
         Instruction::LoadDeref(_) | Instruction::LoadCapture(_) | Instruction::CaptureRef(_) => {
@@ -746,6 +748,10 @@ fn display_instruction_textual(
         // --- Type introspection ---
         Instruction::Discriminant => "discriminant".to_string(),
         Instruction::TypeTag => "type_tag".to_string(),
+        Instruction::IsType(const_idx) => {
+            let name = meta_str(const_idx);
+            format!("is_type {name}")
+        }
         Instruction::ThrowIfPanic => "throw_if_panic".to_string(),
 
         // --- Closures and cells ---

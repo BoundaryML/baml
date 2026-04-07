@@ -3,9 +3,7 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 function user.Broken.BadUnionPattern(x: int | bool) -> string {
     load_var x
-    type_tag
-    load_const 0
-    cmp_op ==
+    is_type ?0
     pop_jump_if_false L0
     jump L3
 
@@ -18,9 +16,7 @@ function user.Broken.BadUnionPattern(x: int | bool) -> string {
 
   L1:
     load_var x
-    type_tag
-    load_const 2
-    cmp_op ==
+    is_type ?2
     pop_jump_if_false L2
 
   L2:
@@ -51,9 +47,7 @@ function user.Broken.MixedLiteralAndTyped(x: int) -> string {
 
   L0:
     load_var x
-    type_tag
-    load_const 0
-    cmp_op ==
+    is_type ?1
     pop_jump_if_false L1
 
   L1:

@@ -1840,15 +1840,11 @@ impl PullSink for StackifyCodegen<'_, '_> {
     }
 
     fn is_type(&mut self, ty: &Ty) -> Result<(), Self::Error> {
-        // Emit instanceof check for nominal class checks.
         if let Ty::Class(tn, _) | Ty::TypeAlias(tn, _) = ty {
             let class_name_str = tn.display_name.as_str();
             if let Some(&class_obj_idx) = self.class_object_indices.get(class_name_str) {
-                let class_const =
-                    self.add_constant(ConstValue::Object(ObjectIndex::from_raw(class_obj_idx)));
-                let inst = self.emit(Instruction::LoadConst(class_const));
-                self.set_operand(inst, OperandMeta::Const(class_name_str.to_string()));
-                self.emit(Instruction::CmpOp(CmpOp::InstanceOf));
+                let c = self.add_constant(ConstValue::Object(ObjectIndex::from_raw(class_obj_idx)));
+                self.emit(Instruction::IsType(c));
             } else {
                 self.emit(Instruction::Pop(1));
                 let idx = self.add_constant(ConstValue::Bool(false));
@@ -1858,7 +1854,6 @@ impl PullSink for StackifyCodegen<'_, '_> {
             return Ok(());
         }
 
-        // Primitive and builtin runtime kinds use type tags.
         let type_tag = match ty {
             Ty::Int { .. } => Some(baml_type::typetag::INT),
             Ty::String { .. } => Some(baml_type::typetag::STRING),
@@ -1880,11 +1875,8 @@ impl PullSink for StackifyCodegen<'_, '_> {
         };
 
         if let Some(tag) = type_tag {
-            self.emit(Instruction::TypeTag);
-            let idx = self.add_constant(ConstValue::Int(tag));
-            let inst = self.emit(Instruction::LoadConst(idx));
-            self.set_operand(inst, OperandMeta::Const(tag.to_string()));
-            self.emit(Instruction::CmpOp(CmpOp::Eq));
+            let c = self.add_constant(ConstValue::Int(tag));
+            self.emit(Instruction::IsType(c));
         } else {
             self.emit(Instruction::Pop(1));
             let idx = self.add_constant(ConstValue::Bool(false));

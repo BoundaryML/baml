@@ -1387,9 +1387,7 @@ async fn match_string_literal_with_typed_fallback() {
 
       L1:
         load_var s
-        type_tag
-        load_const 1
-        cmp_op ==
+        is_type ?2
         pop_jump_if_false L4
         load_const 0
         jump L4
@@ -2152,9 +2150,7 @@ async fn match_optional_null_pattern() {
 
       L0:
         load_var x
-        type_tag
-        load_const 0
-        cmp_op ==
+        is_type ?1
         pop_jump_if_false L2
         load_const "some"
         jump L2
@@ -2205,9 +2201,7 @@ async fn match_optional_value_pattern() {
 
       L0:
         load_var x
-        type_tag
-        load_const 0
-        cmp_op ==
+        is_type ?1
         pop_jump_if_false L2
         load_const "some"
         jump L2
@@ -2266,9 +2260,7 @@ async fn match_optional_with_literal_and_typed() {
 
       L1:
         load_var x
-        type_tag
-        load_const 0
-        cmp_op ==
+        is_type ?1
         pop_jump_if_false L4
         load_const "other"
         jump L4

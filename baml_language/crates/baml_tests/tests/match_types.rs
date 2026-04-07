@@ -291,8 +291,7 @@ async fn match_guard_true() {
         store_field .value
         store_var s
         load_var s
-        load_const Score
-        cmp_op instanceof
+        is_type ?1
         pop_jump_if_false L0
         load_var s
         load_field .value
@@ -303,8 +302,7 @@ async fn match_guard_true() {
 
       L0:
         load_var s
-        load_const Score
-        cmp_op instanceof
+        is_type ?1
         pop_jump_if_false L1
         load_var s
         load_field .value
@@ -315,8 +313,7 @@ async fn match_guard_true() {
 
       L1:
         load_var s
-        load_const Score
-        cmp_op instanceof
+        is_type ?1
         pop_jump_if_false L4
         load_const "needs work"
         jump L4
@@ -366,8 +363,7 @@ async fn match_guard_fallthrough() {
         store_field .value
         store_var s
         load_var s
-        load_const Score
-        cmp_op instanceof
+        is_type ?1
         pop_jump_if_false L0
         load_var s
         load_field .value
@@ -378,8 +374,7 @@ async fn match_guard_fallthrough() {
 
       L0:
         load_var s
-        load_const Score
-        cmp_op instanceof
+        is_type ?1
         pop_jump_if_false L1
         load_var s
         load_field .value
@@ -390,8 +385,7 @@ async fn match_guard_fallthrough() {
 
       L1:
         load_var s
-        load_const Score
-        cmp_op instanceof
+        is_type ?1
         pop_jump_if_false L4
         load_const "needs work"
         jump L4
@@ -441,8 +435,7 @@ async fn match_guard_all_fail() {
         store_field .value
         store_var s
         load_var s
-        load_const Score
-        cmp_op instanceof
+        is_type ?1
         pop_jump_if_false L0
         load_var s
         load_field .value
@@ -453,8 +446,7 @@ async fn match_guard_all_fail() {
 
       L0:
         load_var s
-        load_const Score
-        cmp_op instanceof
+        is_type ?1
         pop_jump_if_false L1
         load_var s
         load_field .value
@@ -465,8 +457,7 @@ async fn match_guard_all_fail() {
 
       L1:
         load_var s
-        load_const Score
-        cmp_op instanceof
+        is_type ?1
         pop_jump_if_false L4
         load_const "needs work"
         jump L4
@@ -768,9 +759,7 @@ async fn match_mixed_literal_typed_guard() {
 
       L1:
         load_var x
-        type_tag
-        load_const 0
-        cmp_op ==
+        is_type ?0
         pop_jump_if_false L4
         load_const "other int"
         jump L4
@@ -836,9 +825,7 @@ async fn match_mixed_literal_typed_guard_fallthrough() {
 
       L1:
         load_var x
-        type_tag
-        load_const 0
-        cmp_op ==
+        is_type ?0
         pop_jump_if_false L4
         load_const "other int"
         jump L4
@@ -892,8 +879,7 @@ async fn match_guard_on_typed_pattern_field_access() {
     insta::assert_snapshot!(output.bytecode, @r#"
     function classify(result: Success | Failure) -> string {
         load_var result
-        load_const Success
-        cmp_op instanceof
+        is_type ?0
         pop_jump_if_false L0
         load_var result
         load_field .data
@@ -904,15 +890,13 @@ async fn match_guard_on_typed_pattern_field_access() {
 
       L0:
         load_var result
-        load_const Success
-        cmp_op instanceof
+        is_type ?0
         pop_jump_if_false L1
         jump L2
 
       L1:
         load_var result
-        load_const Failure
-        cmp_op instanceof
+        is_type ?2
         pop_jump_if_false L4
         load_const "failure"
         jump L4
@@ -968,8 +952,7 @@ async fn match_guard_on_typed_pattern_field_access_fails() {
     insta::assert_snapshot!(output.bytecode, @r#"
     function classify(result: Success | Failure) -> string {
         load_var result
-        load_const Success
-        cmp_op instanceof
+        is_type ?0
         pop_jump_if_false L0
         load_var result
         load_field .data
@@ -980,15 +963,13 @@ async fn match_guard_on_typed_pattern_field_access_fails() {
 
       L0:
         load_var result
-        load_const Success
-        cmp_op instanceof
+        is_type ?0
         pop_jump_if_false L1
         jump L2
 
       L1:
         load_var result
-        load_const Failure
-        cmp_op instanceof
+        is_type ?2
         pop_jump_if_false L4
         load_const "failure"
         jump L4
@@ -1792,8 +1773,7 @@ async fn match_multiple_typed_patterns_with_guards() {
     insta::assert_snapshot!(output.bytecode, @r#"
     function classify(result: Success | Failure, strict: bool) -> string {
         load_var result
-        load_const Success
-        cmp_op instanceof
+        is_type ?0
         pop_jump_if_false L0
         load_var result
         load_field .code
@@ -1804,8 +1784,7 @@ async fn match_multiple_typed_patterns_with_guards() {
 
       L0:
         load_var result
-        load_const Success
-        cmp_op instanceof
+        is_type ?0
         pop_jump_if_false L1
         load_var strict
         pop_jump_if_false L1
@@ -1813,15 +1792,13 @@ async fn match_multiple_typed_patterns_with_guards() {
 
       L1:
         load_var result
-        load_const Success
-        cmp_op instanceof
+        is_type ?0
         pop_jump_if_false L2
         jump L3
 
       L2:
         load_var result
-        load_const Failure
-        cmp_op instanceof
+        is_type ?2
         pop_jump_if_false L6
         load_const "failure"
         jump L6

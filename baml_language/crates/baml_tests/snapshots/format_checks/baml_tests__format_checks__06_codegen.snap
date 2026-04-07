@@ -3474,9 +3474,7 @@ function user.LoopStmts(items: int[], flag: bool) -> int {
 
   L135:
     load_var _297
-    type_tag
-    load_const 0
-    cmp_op ==
+    is_type ?0
     pop_jump_if_false L136
     load_var _297
     load_const 100
@@ -3486,9 +3484,7 @@ function user.LoopStmts(items: int[], flag: bool) -> int {
 
   L136:
     load_var _297
-    type_tag
-    load_const 0
-    cmp_op ==
+    is_type ?0
     pop_jump_if_false L137
     load_var _297
     store_var val
@@ -4132,9 +4128,7 @@ function user.MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure,
   L4:
     pop 1
     load_var x
-    type_tag
-    load_const 0
-    cmp_op ==
+    is_type ?0
     pop_jump_if_false L5
     load_var x
     load_const 0
@@ -4143,9 +4137,7 @@ function user.MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure,
 
   L5:
     load_var x
-    type_tag
-    load_const 0
-    cmp_op ==
+    is_type ?0
     pop_jump_if_false L6
     load_var x
     load_const 0
@@ -4286,15 +4278,13 @@ function user.MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure,
   L23:
     pop 1
     load_var r
-    load_const MatchSuccess
-    cmp_op instanceof
+    is_type ?11
     pop_jump_if_false L24
     jump L25
 
   L24:
     load_var r
-    load_const MatchFailure
-    cmp_op instanceof
+    is_type ?12
     pop_jump_if_false L25
 
   L25:
@@ -4303,9 +4293,7 @@ function user.MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure,
 
   L26: 5
     load_var r
-    type_tag
-    load_const 0
-    cmp_op ==
+    is_type ?0
     pop_jump_if_false L27
     load_var r
     load_const 0
@@ -4315,9 +4303,7 @@ function user.MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure,
 
   L27:
     load_var r
-    type_tag
-    load_const 0
-    cmp_op ==
+    is_type ?0
     pop_jump_if_false L28
     load_var r
     load_const 0
@@ -4326,9 +4312,7 @@ function user.MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure,
 
   L28:
     load_var r
-    type_tag
-    load_const 0
-    cmp_op ==
+    is_type ?0
     pop_jump_if_false L34
     load_var r
     store_var n
@@ -4452,9 +4436,7 @@ function user.MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure,
 
   L43:
     load_var r
-    type_tag
-    load_const 0
-    cmp_op ==
+    is_type ?0
     pop_jump_if_false L48
     load_var r
     store_var n
@@ -4507,9 +4489,7 @@ function user.MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure,
 
   L48:
     load_var r
-    type_tag
-    load_const 0
-    cmp_op ==
+    is_type ?0
     pop_jump_if_false L53
     load_var r
     store_var n

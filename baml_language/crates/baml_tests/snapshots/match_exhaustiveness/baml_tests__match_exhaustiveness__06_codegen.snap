@@ -3,9 +3,7 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 function user.BoolLiteralAfterTypedBool(b: bool) -> string {
     load_var b
-    type_tag
-    load_const 2
-    cmp_op ==
+    is_type ?0
     pop_jump_if_false L0
     jump L1
 
@@ -222,9 +220,7 @@ function user.DuplicateStringLiteral(role: "user" | "assistant" | "system") -> s
 
 function user.EnumVariantAfterTypedEnum(s: Status) -> string {
     load_var s
-    type_tag
-    load_const 5
-    cmp_op ==
+    is_type ?0
     pop_jump_if_false L0
     jump L1
 
@@ -357,8 +353,7 @@ function user.ExhaustiveBool(b: bool) -> string {
 
 function user.ExhaustiveClassPlusLiteral(x: Success | 200) -> string {
     load_var x
-    load_const Success
-    cmp_op instanceof
+    is_type ?0
     pop_jump_if_false L0
     jump L1
 
@@ -402,15 +397,13 @@ function user.ExhaustiveCustomBool(b: true | false) -> string {
 
 function user.ExhaustiveDoubleMaybe(dm: (Success | Failure)??) -> string {
     load_var dm
-    load_const Success
-    cmp_op instanceof
+    is_type ?0
     pop_jump_if_false L0
     jump L3
 
   L0:
     load_var dm
-    load_const Failure
-    cmp_op instanceof
+    is_type ?1
     pop_jump_if_false L1
     jump L2
 
@@ -493,9 +486,7 @@ function user.ExhaustiveEnumWithCatchAll(s: Status) -> string {
 
 function user.ExhaustiveEnumWithTypedPattern(s: Status) -> string {
     load_var s
-    type_tag
-    load_const 5
-    cmp_op ==
+    is_type ?0
     pop_jump_if_false L0
 
   L0:
@@ -564,9 +555,7 @@ function user.ExhaustiveLiteralWithBaseType(x: int) -> string {
 
   L0:
     load_var x
-    type_tag
-    load_const 0
-    cmp_op ==
+    is_type ?1
     pop_jump_if_false L2
     load_const "other"
     jump L2
@@ -660,9 +649,7 @@ function user.ExhaustiveNullableEnum(s: Status?) -> string {
 
 function user.ExhaustiveNullableEnumWithTypedPattern(s: Status?) -> string {
     load_var s
-    type_tag
-    load_const 5
-    cmp_op ==
+    is_type ?0
     pop_jump_if_false L0
     jump L1
 
@@ -683,9 +670,7 @@ function user.ExhaustiveNullableEnumWithTypedPattern(s: Status?) -> string {
 
 function user.ExhaustiveOptional(x: int?) -> string {
     load_var x
-    type_tag
-    load_const 0
-    cmp_op ==
+    is_type ?0
     pop_jump_if_false L0
     jump L1
 
@@ -895,9 +880,7 @@ function user.GetStatus() -> Status {
 
 function user.GuardedOnlyNonExhaustive(x: int) -> int {
     load_var x
-    type_tag
-    load_const 0
-    cmp_op ==
+    is_type ?0
     pop_jump_if_false L0
     load_var x
     load_const 0
@@ -907,9 +890,7 @@ function user.GuardedOnlyNonExhaustive(x: int) -> int {
 
   L0:
     load_var x
-    type_tag
-    load_const 0
-    cmp_op ==
+    is_type ?0
     pop_jump_if_false L2
     load_var x
     load_const 0
@@ -932,9 +913,7 @@ function user.GuardedOnlyNonExhaustive(x: int) -> int {
 
 function user.GuardedWithFallback(x: int) -> int {
     load_var x
-    type_tag
-    load_const 0
-    cmp_op ==
+    is_type ?0
     pop_jump_if_false L0
     load_var x
     load_const 0
@@ -1124,9 +1103,7 @@ function user.JumpTableTypeTag(value: int | string | bool | float) -> string {
 
 function user.LiteralAfterTypedPattern(x: int) -> string {
     load_var x
-    type_tag
-    load_const 0
-    cmp_op ==
+    is_type ?0
     pop_jump_if_false L0
     jump L1
 
@@ -1320,9 +1297,7 @@ function user.MixedPatterns(x: int) -> string {
 
   L1:
     load_var x
-    type_tag
-    load_const 0
-    cmp_op ==
+    is_type ?0
     pop_jump_if_false L2
     load_var x
     load_const 0
@@ -1616,15 +1591,13 @@ function user.NestedMatchSpans(x: int, y: bool) -> string {
 
 function user.NestedTypeAlias(mr: (Success | Failure)?) -> string {
     load_var mr
-    load_const Success
-    cmp_op instanceof
+    is_type ?0
     pop_jump_if_false L0
     jump L3
 
   L0:
     load_var mr
-    load_const Failure
-    cmp_op instanceof
+    is_type ?1
     pop_jump_if_false L1
     jump L2
 
@@ -1651,22 +1624,19 @@ function user.NestedTypeAlias(mr: (Success | Failure)?) -> string {
 
 function user.NestedTypeBindings(r: Success | Failure) -> int {
     load_var r
-    load_const Success
-    cmp_op instanceof
+    is_type ?0
     pop_jump_if_false L0
     jump L2
 
   L0:
     load_var r
-    load_const Failure
-    cmp_op instanceof
+    is_type ?1
     pop_jump_if_false L1
     jump L2
 
   L1:
     load_var r
-    load_const Failure
-    cmp_op instanceof
+    is_type ?1
     pop_jump_if_false L3
     load_const 1
     jump L3
@@ -2056,22 +2026,19 @@ function user.OptionalWithCatchAll(x: int?) -> string {
 
 function user.OverlappingTypedPatterns(r: Success | Failure) -> string {
     load_var r
-    load_const Success
-    cmp_op instanceof
+    is_type ?0
     pop_jump_if_false L0
     jump L3
 
   L0:
     load_var r
-    load_const Success
-    cmp_op instanceof
+    is_type ?0
     pop_jump_if_false L1
     jump L2
 
   L1:
     load_var r
-    load_const Failure
-    cmp_op instanceof
+    is_type ?1
     pop_jump_if_false L4
 
   L2:
@@ -2087,22 +2054,19 @@ function user.OverlappingTypedPatterns(r: Success | Failure) -> string {
 
 function user.OverlappingWithBindings(r: Success | Failure) -> string {
     load_var r
-    load_const Success
-    cmp_op instanceof
+    is_type ?0
     pop_jump_if_false L0
     jump L3
 
   L0:
     load_var r
-    load_const Success
-    cmp_op instanceof
+    is_type ?0
     pop_jump_if_false L1
     jump L2
 
   L1:
     load_var r
-    load_const Failure
-    cmp_op instanceof
+    is_type ?1
     pop_jump_if_false L4
 
   L2:
@@ -2141,15 +2105,13 @@ function user.ParenthesizedSingleLiteral(b: bool) -> string {
 
 function user.PartialUnionPatternCoverage(r: Success | Failure | Pending) -> string {
     load_var r
-    load_const Success
-    cmp_op instanceof
+    is_type ?0
     pop_jump_if_false L0
     jump L1
 
   L0:
     load_var r
-    load_const Failure
-    cmp_op instanceof
+    is_type ?1
     pop_jump_if_false L1
 
   L1:
@@ -2159,22 +2121,19 @@ function user.PartialUnionPatternCoverage(r: Success | Failure | Pending) -> str
 
 function user.PartialUnionPlusCatchAll(r: Success | Failure | Pending) -> string {
     load_var r
-    load_const Success
-    cmp_op instanceof
+    is_type ?0
     pop_jump_if_false L0
     jump L2
 
   L0:
     load_var r
-    load_const Failure
-    cmp_op instanceof
+    is_type ?1
     pop_jump_if_false L1
     jump L2
 
   L1:
     load_var r
-    load_const Pending
-    cmp_op instanceof
+    is_type ?2
     pop_jump_if_false L3
     load_const "pending"
     jump L3
@@ -2188,9 +2147,7 @@ function user.PartialUnionPlusCatchAll(r: Success | Failure | Pending) -> string
 
 function user.StringLiteralAfterStringType(s: string) -> string {
     load_var s
-    type_tag
-    load_const 1
-    cmp_op ==
+    is_type ?0
     pop_jump_if_false L0
     jump L1
 
@@ -2318,15 +2275,13 @@ function user.ThreeLevelNestedMatch(x: int, y: int, z: int) -> string {
 
 function user.UnionPatternCoversAll(r: Success | Failure) -> string {
     load_var r
-    load_const Success
-    cmp_op instanceof
+    is_type ?0
     pop_jump_if_false L0
     jump L1
 
   L0:
     load_var r
-    load_const Failure
-    cmp_op instanceof
+    is_type ?1
     pop_jump_if_false L1
 
   L1:

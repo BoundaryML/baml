@@ -348,11 +348,19 @@ pub enum Instruction {
     ///
     /// Stack: `[any_value]` -> `[type_tag: Int]`
     ///
-    /// Used for jump table dispatch on union types (instanceof patterns).
+    /// Used for jump table dispatch on union types (type patterns in match).
     /// Type tags are global constants:
     /// - Primitives: `int=0`, `string=1`, `bool=2`, `null=3`, `float=4`
     /// - Classes: assigned unique IDs starting at 100
     TypeTag,
+
+    /// Check if the value on top of the stack matches the type identified by
+    /// the constant at index `i`. The constant is either:
+    /// - `Value::Object(class_ptr)` — class identity check (`inst.class == class_ptr`)
+    /// - `Value::Int(tag)` — type tag check (`value_type_tag(value) == tag`)
+    ///
+    /// Pops the value, pushes `Bool` result.
+    IsType(usize),
 
     /// If the top-of-stack value is a panic instance (`baml.panics.*`), throw it.
     /// Otherwise pop the value and continue to the next instruction.
@@ -531,7 +539,6 @@ pub enum CmpOp {
     LtEq,
     Gt,
     GtEq,
-    InstanceOf,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -566,7 +573,6 @@ impl std::fmt::Display for CmpOp {
             CmpOp::LtEq => "<=",
             CmpOp::Gt => ">",
             CmpOp::GtEq => ">=",
-            CmpOp::InstanceOf => "instanceof",
         })
     }
 }
@@ -625,6 +631,7 @@ impl std::fmt::Display for Instruction {
             }
             Instruction::Discriminant => f.write_str("DISCRIMINANT"),
             Instruction::TypeTag => f.write_str("TYPE_TAG"),
+            Instruction::IsType(i) => write!(f, "IS_TYPE {i}"),
             Instruction::ThrowIfPanic => f.write_str("THROW_IF_PANIC"),
             Instruction::Unreachable => f.write_str("UNREACHABLE"),
             Instruction::MakeClosure(obj_idx, count) => {

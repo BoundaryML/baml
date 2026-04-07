@@ -1893,14 +1893,6 @@ impl BexVm {
                         CmpOp::LtEq => left <= right,
                         CmpOp::Gt => left > right,
                         CmpOp::GtEq => left >= right,
-
-                        CmpOp::InstanceOf => {
-                            return Err(VmError::CannotApplyCmpOp {
-                                left: Type::Int,
-                                right: Type::Int,
-                                op,
-                            });
-                        }
                     }),
 
                     #[allow(clippy::float_cmp)]
@@ -1912,14 +1904,6 @@ impl BexVm {
                         CmpOp::LtEq => left <= right,
                         CmpOp::Gt => left > right,
                         CmpOp::GtEq => left >= right,
-
-                        CmpOp::InstanceOf => {
-                            return Err(VmError::CannotApplyCmpOp {
-                                left: Type::Float,
-                                right: Type::Float,
-                                op,
-                            });
-                        }
                     }),
 
                     // Mixed int/float comparisons: promote int to float.
@@ -1933,14 +1917,6 @@ impl BexVm {
                             CmpOp::LtEq => left <= right,
                             CmpOp::Gt => left > right,
                             CmpOp::GtEq => left >= right,
-
-                            CmpOp::InstanceOf => {
-                                return Err(VmError::CannotApplyCmpOp {
-                                    left: Type::Int,
-                                    right: Type::Float,
-                                    op,
-                                });
-                            }
                         })
                     }
 
@@ -1954,14 +1930,6 @@ impl BexVm {
                             CmpOp::LtEq => left <= right,
                             CmpOp::Gt => left > right,
                             CmpOp::GtEq => left >= right,
-
-                            CmpOp::InstanceOf => {
-                                return Err(VmError::CannotApplyCmpOp {
-                                    left: Type::Float,
-                                    right: Type::Int,
-                                    op,
-                                });
-                            }
                         })
                     }
 
@@ -1979,13 +1947,6 @@ impl BexVm {
                             CmpOp::LtEq => left <= right,
                             CmpOp::Gt => left > right,
                             CmpOp::GtEq => left >= right,
-                            CmpOp::InstanceOf => {
-                                return Err(VmError::CannotApplyCmpOp {
-                                    left: Type::Object(ObjectType::String),
-                                    right: Type::Object(ObjectType::String),
-                                    op,
-                                });
-                            }
                         })
                     }
 
@@ -2042,21 +2003,6 @@ impl BexVm {
                     _ => Value::Bool(match op {
                         CmpOp::Eq => left == right,
                         CmpOp::NotEq => left != right,
-
-                        CmpOp::InstanceOf => {
-                            // null/non-object is never an instance of anything.
-                            match left {
-                                Value::Object(left_ptr) => match self.get_object(left_ptr) {
-                                    Object::Instance(instance) => {
-                                        let right_ptr =
-                                            self.as_object_ptr(&right, ObjectType::Class)?;
-                                        instance.class == right_ptr
-                                    }
-                                    _ => false,
-                                },
-                                _ => false,
-                            }
-                        }
 
                         _ => {
                             return Err(VmError::CannotApplyCmpOp {
@@ -2840,6 +2786,29 @@ impl BexVm {
                 let value = self.stack.ensure_pop()?;
                 let tag = value_type_tag(&value);
                 self.stack.push(Value::Int(tag));
+            }
+
+            Instruction::IsType(const_idx) => {
+                let value = self.stack.ensure_pop()?;
+                let expected = &function.bytecode.resolved_constants[const_idx];
+                let result = match expected {
+                    Value::Object(class_ptr) => {
+                        // Class identity check: is value an instance of this class?
+                        match value {
+                            Value::Object(val_ptr) => match self.get_object(val_ptr) {
+                                Object::Instance(instance) => instance.class == *class_ptr,
+                                _ => false,
+                            },
+                            _ => false,
+                        }
+                    }
+                    Value::Int(tag) => {
+                        // Type tag check: does value's type tag match?
+                        value_type_tag(&value) == *tag
+                    }
+                    _ => false,
+                };
+                self.stack.push(Value::Bool(result));
             }
 
             Instruction::ThrowIfPanic => {
