@@ -25,7 +25,7 @@ on:
 
 jobs:
   build-vscode-matrix:
-    runs-on: ubuntu-latest # Run the packaging matrix on a consistent OS
+    runs-on: blacksmith-4vcpu-ubuntu-2404 # Run the packaging matrix on a consistent OS
     strategy:
       fail-fast: false
       matrix:

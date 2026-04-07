@@ -30,7 +30,7 @@ jobs:
           # - platform: x64-mingw32
           # - platform: x86-mingw-ucrt
 
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     name: ${{ matrix._.platform }}
     defaults:
       run:

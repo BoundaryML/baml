@@ -18,7 +18,7 @@ on:
 jobs:
   test-windows:
     name: Test Windows Go Client
-    runs-on: windows-2022
+    runs-on: blacksmith-4vcpu-windows-2025
 
     steps:
       - name: Checkout code
@@ -90,7 +90,7 @@ jobs:
     strategy:
       fail-fast: false  # Don't cancel other jobs if one fails
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [blacksmith-4vcpu-ubuntu-2404, macos-latest]
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -166,7 +166,7 @@ jobs:
 
   cross-compile-test:
     name: Test Cross-Compilation
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
 
     steps:
       - name: Checkout code
