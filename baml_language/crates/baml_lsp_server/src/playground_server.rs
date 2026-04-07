@@ -63,11 +63,15 @@ pub async fn pick_port(base_port: u16, max_attempts: u16) -> anyhow::Result<(Tcp
 // Shared state for Axum handlers
 // ---------------------------------------------------------------------------
 
+use crate::ReplayStoreMap;
+
 #[derive(Clone)]
 struct WsState {
     bex: Arc<dyn bex_project::BexLsp>,
     broadcast_tx: broadcast::Sender<WsOutMessage>,
     env_state: Arc<PlaygroundEnvState>,
+    #[allow(dead_code)] // Used in Phase 2
+    replay_stores: ReplayStoreMap,
 }
 
 /// Start the playground server on the given listener.
@@ -76,8 +80,9 @@ pub async fn run(
     bex: Arc<dyn bex_project::BexLsp>,
     broadcast_tx: broadcast::Sender<WsOutMessage>,
     env_state: Arc<PlaygroundEnvState>,
+    replay_stores: ReplayStoreMap,
 ) -> anyhow::Result<()> {
-    let app = build_router(bex, broadcast_tx, env_state)?;
+    let app = build_router(bex, broadcast_tx, env_state, replay_stores)?;
 
     tracing::info!(
         "Playground: http://localhost:{}",
@@ -93,11 +98,13 @@ fn build_router(
     bex: Arc<dyn bex_project::BexLsp>,
     broadcast_tx: broadcast::Sender<WsOutMessage>,
     env_state: Arc<PlaygroundEnvState>,
+    replay_stores: ReplayStoreMap,
 ) -> anyhow::Result<Router> {
     let ws_state = WsState {
         bex,
         broadcast_tx,
         env_state,
+        replay_stores,
     };
 
     let api = Router::new()

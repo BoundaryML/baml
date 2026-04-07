@@ -37,6 +37,8 @@ pub mod io {
     include!(concat!(env!("OUT_DIR"), "/io_generated.rs"));
 }
 
+pub mod replay;
+
 // ============================================================================
 // Blanket IO LLM implementation (delegates to sys_llm)
 // ============================================================================
