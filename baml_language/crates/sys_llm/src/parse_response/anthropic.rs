@@ -2,7 +2,7 @@ use serde::Deserialize;
 
 use super::{FinishReason, LlmProviderResponse, ParseResponseError, TokenUsage};
 
-// ── Serde types ───────────────────────────────────────────────────
+// == Serde types ===================================================
 
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -45,7 +45,7 @@ struct AnthropicMessageResponse {
     pub usage: AnthropicUsage,
 }
 
-// ── Parser ────────────────────────────────────────────────────────
+// == Parser ========================================================
 
 /// Parse an Anthropic message response body into a normalized `LlmProviderResponse`.
 pub(super) fn parse_anthropic_response(

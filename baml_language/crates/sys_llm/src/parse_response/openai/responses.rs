@@ -3,7 +3,7 @@ use serde::Deserialize;
 use super::CompletionUsage;
 use crate::parse_response::{FinishReason, LlmProviderResponse, ParseResponseError, TokenUsage};
 
-// ── Serde types ───────────────────────────────────────────────────
+// == Serde types ===================================================
 
 #[derive(Debug, Deserialize)]
 struct ResponsesApiResponse {
@@ -39,7 +39,7 @@ struct OutputContent {
     text: Option<String>,
 }
 
-// ── Parser ────────────────────────────────────────────────────────
+// == Parser ========================================================
 
 /// Parse an `OpenAI` Responses API response body into a normalized [`LlmProviderResponse`].
 pub(in crate::parse_response) fn parse_openai_responses_response(

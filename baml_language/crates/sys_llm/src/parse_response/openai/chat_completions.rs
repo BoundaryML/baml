@@ -3,7 +3,7 @@ use serde::{Deserialize, Deserializer, Serialize};
 use super::CompletionUsage;
 use crate::parse_response::{FinishReason, LlmProviderResponse, ParseResponseError, TokenUsage};
 
-// ── Serde types ───────────────────────────────────────────────────
+// == Serde types ===================================================
 
 #[derive(Debug, Deserialize, Clone, PartialEq)]
 struct ChatCompletionResponse {
@@ -81,7 +81,7 @@ struct TopLogprobs {
     pub bytes: Option<Vec<u8>>,
 }
 
-// ── Parser ────────────────────────────────────────────────────────
+// == Parser ========================================================
 
 /// Parse an OpenAI-compatible chat completion response body into a normalized `LlmProviderResponse`.
 pub(in crate::parse_response) fn parse_openai_response(

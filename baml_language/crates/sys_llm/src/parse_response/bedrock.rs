@@ -8,7 +8,7 @@ use serde::Deserialize;
 
 use super::{FinishReason, LlmProviderResponse, ParseResponseError, TokenUsage};
 
-// ── Serde types ───────────────────────────────────────────────────
+// == Serde types ===================================================
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -50,7 +50,7 @@ enum ContentBlock {
     Other(serde_json::Value),
 }
 
-// ── Parser ────────────────────────────────────────────────────────
+// == Parser ========================================================
 
 /// Parse a Bedrock Converse API response body into a normalized `LlmProviderResponse`.
 pub(super) fn parse_bedrock_response(

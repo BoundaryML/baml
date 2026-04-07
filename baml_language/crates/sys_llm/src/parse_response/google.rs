@@ -2,7 +2,7 @@ use serde::Deserialize;
 
 use super::{FinishReason, LlmProviderResponse, ParseResponseError, TokenUsage};
 
-// ── Shared serde types (Google as superset) ──────────────────────
+// == Shared serde types (Google as superset) ======================
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -41,7 +41,7 @@ struct UsageMetaData {
     cached_content_token_count: Option<u64>,
 }
 
-// ── Helpers ───────────────────────────────────────────────────────
+// == Helpers =======================================================
 
 /// Filter out thought parts and join remaining text.
 /// Mirrors `engine/baml-runtime/.../google/response_handler.rs:107-119`.
@@ -59,7 +59,7 @@ fn text_content_part(parts: &[Part]) -> Option<String> {
     }
 }
 
-// ── Google AI parser ─────────────────────────────────────────────
+// == Google AI parser =============================================
 
 pub(super) fn parse_google_response(body: &str) -> Result<LlmProviderResponse, ParseResponseError> {
     let response: GoogleResponse =
@@ -117,7 +117,7 @@ pub(super) fn parse_google_response(body: &str) -> Result<LlmProviderResponse, P
     })
 }
 
-// ── Vertex AI parser ─────────────────────────────────────────────
+// == Vertex AI parser =============================================
 
 pub(super) fn parse_vertex_response(body: &str) -> Result<LlmProviderResponse, ParseResponseError> {
     let response: GoogleResponse =
@@ -182,7 +182,7 @@ mod tests {
     use super::*;
     use crate::{LlmProvider, parse_response::parse_response};
 
-    // ── Google AI tests ──────────────────────────────────────────
+    // == Google AI tests ==========================================
 
     #[test]
     fn test_google_basic_response() {
@@ -343,7 +343,7 @@ mod tests {
         assert_eq!(resp.content, "hi");
     }
 
-    // ── Vertex AI tests ──────────────────────────────────────────
+    // == Vertex AI tests ==========================================
 
     #[test]
     fn test_vertex_basic_response() {

@@ -31,7 +31,7 @@ pub(crate) enum ParseResponseError {
     UnsupportedProvider(String),
 }
 
-// ── Shared types ──────────────────────────────────────────────────
+// == Shared types ==================================================
 
 // Allows dead_code while consumer only reads content + finish_reason_raw
 #[allow(dead_code)]
@@ -77,7 +77,7 @@ pub(crate) struct TokenUsage {
     pub cached_input_tokens: Option<u64>,
 }
 
-// ── Dispatcher ────────────────────────────────────────────────────
+// == Dispatcher ====================================================
 
 /// Parse a raw HTTP response body into a normalized `LlmProviderResponse`.
 pub(crate) fn parse_response(
@@ -173,7 +173,7 @@ mod tests {
         }
     }"#;
 
-    // ── OpenAI Chat variants all route to the same parser ────────
+    // == OpenAI Chat variants all route to the same parser ========
 
     #[test]
     fn test_openai_variants_route_correctly() {
@@ -190,7 +190,7 @@ mod tests {
         }
     }
 
-    // ── Anthropic ─────────────────────────────────────────────────
+    // == Anthropic =================================================
 
     #[test]
     fn test_anthropic_routes_correctly() {
@@ -199,7 +199,7 @@ mod tests {
         assert_eq!(resp.finish_reason, FinishReason::Stop);
     }
 
-    // ── Bedrock Converse ─────────────────────────────────────────
+    // == Bedrock Converse =========================================
 
     #[test]
     fn test_bedrock_routes_correctly() {
@@ -208,7 +208,7 @@ mod tests {
         assert_eq!(resp.finish_reason, FinishReason::Stop);
     }
 
-    // ── OpenAI Responses API ─────────────────────────────────────
+    // == OpenAI Responses API =====================================
 
     #[test]
     fn test_openai_responses_routes_correctly() {
@@ -217,7 +217,7 @@ mod tests {
         assert_eq!(resp.finish_reason, FinishReason::Stop);
     }
 
-    // ── Google AI ────────────────────────────────────────────────
+    // == Google AI ================================================
 
     #[test]
     fn test_google_ai_routes_correctly() {
@@ -226,7 +226,7 @@ mod tests {
         assert_eq!(resp.finish_reason, FinishReason::Stop);
     }
 
-    // ── Vertex AI ────────────────────────────────────────────────
+    // == Vertex AI ================================================
 
     #[test]
     fn test_vertex_ai_routes_correctly() {
@@ -235,7 +235,7 @@ mod tests {
         assert_eq!(resp.finish_reason, FinishReason::Stop);
     }
 
-    // ── Meta-strategies remain unsupported ───────────────────────
+    // == Meta-strategies remain unsupported =======================
 
     #[test]
     fn test_meta_strategies_unsupported() {
@@ -245,7 +245,7 @@ mod tests {
         }
     }
 
-    // ── cached_input_tokens round-trip per provider ──────────────
+    // == cached_input_tokens round-trip per provider ==============
 
     #[test]
     fn test_openai_cached_tokens_round_trip() {
