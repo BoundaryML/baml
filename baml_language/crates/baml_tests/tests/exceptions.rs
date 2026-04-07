@@ -3594,16 +3594,14 @@ function main() -> int {
 "#
     );
 
-    let Err(bex_engine::EngineError::UnhandledThrow { trace, .. }) = &output.result else {
-        panic!("expected UnhandledThrow, got: {:?}", output.result);
-    };
-
-    // Trace should include frames even when closures are involved
-    assert!(
-        trace.len() >= 2,
-        "expected at least 2 frames, got {}",
-        trace.len()
-    );
+    let err = output.result.unwrap_err();
+    insta::assert_snapshot!(err, @r#"
+    Traceback (most recent call last):
+      File "test.baml", line 12, in user.main
+      File "test.baml", line 8, in user.outer
+      File "test.baml", line 3, in user.inner
+    uncaught throw: String("from_closure")
+    "#);
 }
 
 #[tokio::test]
@@ -3624,20 +3622,12 @@ function main() -> int {
 "#
     );
 
-    let Err(bex_engine::EngineError::UnhandledThrow { trace, .. }) = &output.result else {
-        panic!("expected UnhandledThrow, got: {:?}", output.result);
-    };
-
-    assert!(
-        trace.len() >= 3,
-        "expected at least 3 frames, got {}",
-        trace.len()
-    );
-
-    // The Display output should include the traceback
-    let display = format!("{}", output.result.unwrap_err());
-    assert!(
-        display.contains("Traceback (most recent call last):"),
-        "missing traceback header in: {display}"
-    );
+    let err = output.result.unwrap_err();
+    insta::assert_snapshot!(err, @r#"
+    Traceback (most recent call last):
+      File "test.baml", line 11, in user.main
+      File "test.baml", line 7, in user.caller
+      File "test.baml", line 3, in user.divider
+    uncaught throw: Instance { class_name: "baml.panics.DivisionByZero", fields: {"dividend": Int(42)} }
+    "#);
 }
