@@ -39,20 +39,23 @@ function user.CatchWithFallback(x: int) -> string {
     jump L4
     load_var e
     type_tag
-    load_const 1
+    copy 0
+    load_const string
     cmp_op ==
     pop_jump_if_false L0
+    pop 1
     jump L3
 
   L0:
-    load_var e
-    type_tag
-    load_const 0
+    copy 0
+    load_const int
     cmp_op ==
     pop_jump_if_false L1
+    pop 1
     jump L2
 
   L1:
+    pop 1
     load_var e
     throw
 
@@ -73,12 +76,15 @@ function user.CatchWithTypedArm(x: int) -> string {
     jump L2
     load_var e
     type_tag
-    load_const 1
+    copy 0
+    load_const string
     cmp_op ==
     pop_jump_if_false L0
+    pop 1
     jump L1
 
   L0:
+    pop 1
     load_var e
     throw
 
@@ -95,20 +101,23 @@ function user.ChainedCatchClauses(x: int) -> string {
     jump L4
     load_var e
     type_tag
-    load_const 1
+    copy 0
+    load_const string
     cmp_op ==
     pop_jump_if_false L0
+    pop 1
     jump L3
 
   L0:
-    load_var e
-    type_tag
-    load_const 0
+    copy 0
+    load_const int
     cmp_op ==
     pop_jump_if_false L1
+    pop 1
     jump L2
 
   L1:
+    pop 1
     load_var e
     throw
 
@@ -179,20 +188,23 @@ function user.MultipleCatchArms(x: int) -> string {
     jump L4
     load_var e
     type_tag
-    load_const 1
+    copy 0
+    load_const string
     cmp_op ==
     pop_jump_if_false L0
+    pop 1
     jump L3
 
   L0:
-    load_var e
-    type_tag
-    load_const 0
+    copy 0
+    load_const int
     cmp_op ==
     pop_jump_if_false L1
+    pop 1
     jump L2
 
   L1:
+    pop 1
     load_var e
     throw
 
@@ -235,12 +247,15 @@ function user.SingleCatchTyped(x: int) -> string {
     jump L2
     load_var e
     type_tag
-    load_const 1
+    copy 0
+    load_const string
     cmp_op ==
     pop_jump_if_false L0
+    pop 1
     jump L1
 
   L0:
+    pop 1
     load_var e
     throw
 

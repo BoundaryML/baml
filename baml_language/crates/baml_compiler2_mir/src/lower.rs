@@ -16,14 +16,12 @@ use crate::{
 
 /// Classifies what kind of switch a match expression lowers to.
 ///
-/// `Integer` and `EnumDiscriminant` are currently implemented.
-/// `TypeTag` (union-type dispatch via runtime type tags) is not yet ported
-/// from MIR 1 — it will use `class_type_tags` when implemented.
+/// `Integer` is for integer literal patterns; `EnumDiscriminant` is for
+/// enum variant patterns. Catch-arm switch dispatch uses `Rvalue::TypeTag`
+/// directly in `try_lower_catch_as_switch` without needing this enum.
 enum SwitchKind {
     Integer,
     EnumDiscriminant(Name),
-    #[allow(dead_code)]
-    TypeTag,
 }
 
 struct LoopContext {
@@ -366,8 +364,11 @@ struct LoweringContext<'db> {
     // enum's package at each match site.
     class_fields: IndexMap<TypeName, IndexMap<String, usize>>,
     enum_variants: IndexMap<Name, IndexMap<String, usize>>,
-    // Pre-computed type tags for class types — will be used by SwitchKind::TypeTag
-    // when union-type switch optimization is ported from MIR 1.
+    // Pre-computed type tags for class types.
+    // Built during construction for potential use by switch optimization, but currently
+    // unused because the tag assignment order here differs from the emit crate's order,
+    // making cross-comparison incorrect. Class catch arms use `instanceof` (sequential
+    // dispatch) instead. Kept for future work if tag ordering is unified.
     #[allow(dead_code)]
     class_type_tags: IndexMap<TypeName, i64>,
 
@@ -3838,6 +3839,244 @@ impl LoweringContext<'_> {
     }
 }
 
+// ─── Catch switch dispatch ────────────────────────────────────────────────────
+
+impl LoweringContext<'_> {
+    /// Classify a catch arm pattern into type tag value(s).
+    ///
+    /// Returns `Some(tags)` if the pattern is a pure type test that can be
+    /// dispatched via a type-tag switch. Returns `None` if it contains a
+    /// literal comparison, is a wildcard, or has a type we can't represent
+    /// as a simple integer tag.
+    ///
+    /// Supported patterns:
+    /// - `TypedBinding { name: "_", ty }` — e.g. `_: string =>`
+    /// - `Binding(name)` where TIR resolved `name` to a class type
+    fn classify_catch_arm_type_tag(&self, pat_id: AstPatId) -> Option<Vec<i64>> {
+        let pat = &self.body.patterns[pat_id];
+        match pat {
+            AstPattern::Binding(name) if name.as_str() == "_" => {
+                // Pure wildcard — handled separately, not a type test
+                None
+            }
+            AstPattern::Binding(_) => {
+                // Named binding resolved by TIR to a class type
+                let tir_ty = self.pat_types.get(&(self.current_scope, pat_id))?;
+                let resolved = convert_tir2_ty(tir_ty, &self.resolved_aliases);
+                Self::ty_to_type_tags(&resolved)
+            }
+            AstPattern::TypedBinding { .. } => {
+                // Type-annotated binding — always resolved by TIR
+                let tir_ty = self.pat_types.get(&(self.current_scope, pat_id))?;
+                let resolved = convert_tir2_ty(tir_ty, &self.resolved_aliases);
+                Self::ty_to_type_tags(&resolved)
+            }
+            // Literal, Null, EnumVariant, Union — not type-tag eligible
+            _ => None,
+        }
+    }
+
+    /// Convert a `Ty` to the list of type tag integers it corresponds to.
+    /// Returns `None` if the type has no simple tag representation.
+    ///
+    /// Only primitive types with fixed, globally-stable type tags are eligible.
+    /// Class types are NOT eligible here: the `class_type_tags` map in
+    /// `LoweringContext` assigns tags in a different order than the emit crate,
+    /// so class tags from this map would not match the runtime objects. Class
+    /// catch arms correctly use the `instanceof` path (sequential dispatch fallback).
+    fn ty_to_type_tags(ty: &Ty) -> Option<Vec<i64>> {
+        match ty {
+            Ty::Int { .. } => Some(vec![baml_type::typetag::INT]),
+            Ty::String { .. } => Some(vec![baml_type::typetag::STRING]),
+            Ty::Bool { .. } => Some(vec![baml_type::typetag::BOOL]),
+            Ty::Null { .. } => Some(vec![baml_type::typetag::NULL]),
+            Ty::Float { .. } => Some(vec![baml_type::typetag::FLOAT]),
+            Ty::List(_, _) => Some(vec![baml_type::typetag::LIST]),
+            Ty::Map { .. } => Some(vec![baml_type::typetag::MAP]),
+            Ty::Union(members, _) => {
+                // All members must be primitive-tag-able
+                let mut tags = Vec::new();
+                for m in members {
+                    let member_tags = Self::ty_to_type_tags(m)?;
+                    tags.extend(member_tags);
+                }
+                Some(tags)
+            }
+            // Class, Enum, EnumVariant, Literal, Optional, TypeAlias, Opaque, etc.
+            // — not eligible for type-tag switch dispatch.
+            _ => None,
+        }
+    }
+
+    /// Attempt to lower catch arm dispatch as a `Terminator::Switch` on type tags.
+    ///
+    /// Returns `true` if successful and all dispatch/body blocks have been emitted.
+    /// Returns `false` if the arms are not all type-tag eligible (e.g. contain
+    /// literal patterns), which causes the caller to fall back to sequential dispatch.
+    ///
+    /// Pre-conditions:
+    /// - `arms` is the flattened list of `(CatchArm, body_block, is_wildcard)` tuples
+    /// - `bb_handler` is the current entry block for the handler (empty, no terminator yet)
+    /// - `bb_join` is the join block after the entire catch expression
+    fn try_lower_catch_as_switch(
+        &mut self,
+        arms: &[(baml_compiler2_ast::CatchArm, BlockId, bool)],
+        error_local: Local,
+        bb_handler: BlockId,
+        bb_join: BlockId,
+        dest: &Place,
+        needs_throw_if_panic: bool,
+    ) -> bool {
+        use std::collections::HashMap as StdHashMap;
+
+        // Step 1: classify each arm pattern into type tag value(s).
+        // Wildcard arms are recorded separately for the `otherwise` block.
+        let mut tag_arms: Vec<(i64, usize)> = Vec::new(); // (tag_value, arm_index)
+        let mut wildcard_idx: Option<usize> = None;
+        let mut seen_tags: std::collections::HashSet<i64> = std::collections::HashSet::new();
+
+        for (i, (arm, _body_block, is_wildcard)) in arms.iter().enumerate() {
+            if *is_wildcard {
+                if wildcard_idx.is_none() {
+                    wildcard_idx = Some(i);
+                }
+                continue;
+            }
+            match self.classify_catch_arm_type_tag(arm.pattern) {
+                Some(tags) => {
+                    for tag in tags {
+                        if seen_tags.insert(tag) {
+                            tag_arms.push((tag, i));
+                        }
+                    }
+                }
+                None => return false, // Not eligible — fall back to sequential dispatch
+            }
+        }
+
+        if tag_arms.is_empty() {
+            return false;
+        }
+
+        // Step 2: emit `Rvalue::TypeTag` in `bb_handler` to extract the tag.
+        self.builder.set_current_block(bb_handler);
+        let tag_temp = self.builder.temp(Ty::Int {
+            attr: TyAttr::default(),
+        });
+        self.builder.assign(
+            Place::local(tag_temp),
+            Rvalue::TypeTag(Place::local(error_local)),
+        );
+        let switch_discriminant = Operand::Copy(Place::Local(tag_temp));
+
+        // Step 3: build the `otherwise` block (wildcard arm body or rethrow).
+        let bb_otherwise = self.builder.create_block();
+
+        // Step 4: build switch arms mapping tag values to body blocks.
+        // Multiple tags from the same arm (union patterns) share the same body block.
+        let mut arm_block_map: StdHashMap<usize, BlockId> = StdHashMap::new();
+        let mut switch_arms: Vec<(i64, BlockId)> = Vec::new();
+
+        for &(tag_val, arm_idx) in &tag_arms {
+            let body_bb = if let Some(&existing) = arm_block_map.get(&arm_idx) {
+                existing
+            } else {
+                let (_, body_block, _) = &arms[arm_idx];
+                arm_block_map.insert(arm_idx, *body_block);
+                *body_block
+            };
+            switch_arms.push((tag_val, body_bb));
+        }
+
+        // Build arm_names for debug metadata.
+        let arm_names: Vec<(i64, String)> = tag_arms
+            .iter()
+            .map(|(tag, _)| (*tag, format_type_tag_name(*tag)))
+            .collect();
+
+        // Step 5: emit the Switch terminator in bb_handler.
+        // Catch switches are never exhaustive — unmatched values go to otherwise.
+        self.builder.switch(
+            switch_discriminant,
+            switch_arms,
+            bb_otherwise,
+            false, // not exhaustive
+            arm_names,
+        );
+
+        // Step 6: lower the `otherwise` block.
+        self.builder.set_current_block(bb_otherwise);
+        if let Some(idx) = wildcard_idx {
+            let (arm, _, _) = &arms[idx];
+            if needs_throw_if_panic {
+                let bb_wildcard_body = self.builder.create_block();
+                self.builder
+                    .throw_if_panic(Operand::Copy(Place::Local(error_local)), bb_wildcard_body);
+                self.builder.set_current_block(bb_wildcard_body);
+            }
+            let arm_pattern = arm.pattern;
+            let arm_body = arm.body;
+            self.bind_pattern(error_local, arm_pattern);
+            self.lower_expr(arm_body, dest.clone());
+            if !self.builder.is_current_terminated() {
+                self.builder.goto(bb_join);
+            }
+        } else {
+            // No wildcard arm — rethrow unmatched errors.
+            self.builder.throw(Operand::Copy(Place::Local(error_local)));
+        }
+
+        // Step 7: lower each non-wildcard arm body in its pre-created body block.
+        // For wildcard arms, redirect their pre-created body block to bb_otherwise
+        // (the wildcard body was lowered there in step 6, not in the pre-created block).
+        for (i, (arm, body_block, is_wildcard)) in arms.iter().enumerate() {
+            if *is_wildcard {
+                // The wildcard arm's pre-created body block is unused by the switch —
+                // the switch targets bb_otherwise directly for unmatched values.
+                // Redirect it to bb_otherwise so all blocks are terminated.
+                self.builder.set_current_block(*body_block);
+                self.builder.goto(bb_otherwise);
+                continue;
+            }
+            // Only lower arms that were actually added to the switch
+            // (arm_block_map has one entry per unique arm_idx).
+            if arm_block_map.contains_key(&i) {
+                self.builder.set_current_block(*body_block);
+                self.bind_pattern(error_local, arm.pattern);
+                self.lower_expr(arm.body, dest.clone());
+                if !self.builder.is_current_terminated() {
+                    self.builder.goto(bb_join);
+                }
+            }
+        }
+
+        true
+    }
+}
+
+/// Format a type tag integer as a human-readable name for switch arm debug metadata.
+fn format_type_tag_name(tag: i64) -> String {
+    match tag {
+        baml_type::typetag::INT => "int".to_string(),
+        baml_type::typetag::STRING => "string".to_string(),
+        baml_type::typetag::BOOL => "bool".to_string(),
+        baml_type::typetag::NULL => "null".to_string(),
+        baml_type::typetag::FLOAT => "float".to_string(),
+        baml_type::typetag::LIST => "list".to_string(),
+        baml_type::typetag::MAP => "map".to_string(),
+        baml_type::typetag::ENUM => "enum".to_string(),
+        baml_type::typetag::FUNCTION => "function".to_string(),
+        baml_type::typetag::FUTURE => "future".to_string(),
+        baml_type::typetag::TYPE => "type".to_string(),
+        baml_type::typetag::COLLECTOR => "collector".to_string(),
+        baml_type::typetag::UINT8ARRAY => "uint8array".to_string(),
+        tag if tag >= baml_type::typetag::CLASS_BASE => {
+            format!("class#{}", tag - baml_type::typetag::CLASS_BASE)
+        }
+        _ => format!("tag#{tag}"),
+    }
+}
+
 // ─── Catch lowering ───────────────────────────────────────────────────────────
 
 impl LoweringContext<'_> {
@@ -3917,6 +4156,21 @@ impl LoweringContext<'_> {
         // prevent the wildcard from swallowing panics the programmer didn't
         // explicitly name. Skipped for catch_all_panics (user wants everything).
         let needs_throw_if_panic = has_wildcard && !is_catch_all_panics;
+
+        // Attempt switch-style dispatch on type tags.
+        // If all non-wildcard arms have pure type-test patterns, emit a single
+        // Switch on Rvalue::TypeTag instead of a sequential is_type chain.
+        if self.try_lower_catch_as_switch(
+            &arms,
+            error_local,
+            bb_handler,
+            bb_join,
+            dest,
+            needs_throw_if_panic,
+        ) {
+            self.builder.set_current_block(bb_join);
+            return;
+        }
 
         self.builder.set_current_block(bb_handler);
         for &(ref arm, body_block, is_wildcard) in &arms {
