@@ -100,7 +100,7 @@ function testing.TestCollector.find_testset(self: null, name: string) -> testing
 }
 
 function testing.TestCollector.new(prefix: string) -> testing.TestCollector {
-     0    alloc_instance 85   (TestCollector)
+     0    alloc_instance 97   (TestCollector)
      1    copy 0              
      2    load_var 1          (prefix)
      3    store_field 0       (prefix)
@@ -170,7 +170,7 @@ function testing.TestCollector.register_test(self: null, name: string, body: () 
      53   store_var 12           (final_name)
      54   load_var 1             (self)
      55   load_field 1           (tests)
-     56   alloc_instance 77      (TestRegistration)
+     56   alloc_instance 89      (TestRegistration)
      57   copy 0                 
      58   load_var 12            (final_name)
      59   store_field 0          (name)
@@ -270,7 +270,7 @@ function testing.TestCollector.register_test_set(self: null, name: string, colle
      53   store_var 12           (final_name)
      54   load_var 1             (self)
      55   load_field 2           (testsets)
-     56   alloc_instance 79      (TestSetRegistration)
+     56   alloc_instance 91      (TestSetRegistration)
      57   copy 0                 
      58   load_var 12            (final_name)
      59   store_field 0          (name)
@@ -384,7 +384,7 @@ function testing.TestRegistry.expand_set(self: null, name: string) -> (testing.S
      67    jump -61               (to 6)
      68    call 63                (baml.sys.now_ms)
      69    store_var 6            (start)
-     70    alloc_instance 85      (TestCollector)
+     70    alloc_instance 97      (TestCollector)
      71    copy 0                 
      72    load_var 2             (name)
      73    store_field 0          (prefix)
@@ -405,7 +405,7 @@ function testing.TestRegistry.expand_set(self: null, name: string) -> (testing.S
      88    load_var 1             (self)
      89    load_field 1           (expansions)
      90    load_var 2             (name)
-     91    alloc_instance 84      (TestRegistry)
+     91    alloc_instance 96      (TestRegistry)
      92    copy 0                 
      93    load_var 7             (sub_collector)
      94    store_field 0          (collector)
@@ -425,7 +425,7 @@ function testing.TestRegistry.expand_set(self: null, name: string) -> (testing.S
 }
 
 function testing.TestRegistry.new(collector: testing.TestCollector) -> testing.TestRegistry {
-     0    alloc_instance 84   (TestRegistry)
+     0    alloc_instance 96   (TestRegistry)
      1    copy 0              
      2    load_var 1          (collector)
      3    store_field 0       (collector)
@@ -564,7 +564,7 @@ function testing.TestRegistry.serialize(self: null) -> (testing.SerializedTest |
      45    cmp_op ==               
      46    pop_jump_if_false +35   (to 81)
      47    load_var 2              (items)
-     48    alloc_instance 78       (SerializedTest)
+     48    alloc_instance 90       (SerializedTest)
      49    copy 0                  
      50    load_const 3            ("lazyTestSet")
      51    store_field 0           (type)
@@ -584,7 +584,7 @@ function testing.TestRegistry.serialize(self: null) -> (testing.SerializedTest |
      65    call 128                (testing.TestRegistry.serialize)
      66    store_var 11            (_33)
      67    load_var 2              (items)
-     68    alloc_instance 76       (SerializedTestSet)
+     68    alloc_instance 88       (SerializedTestSet)
      69    copy 0                  
      70    load_var 10             (_31)
      71    store_field 0           (name)
@@ -603,7 +603,7 @@ function testing.TestRegistry.serialize(self: null) -> (testing.SerializedTest |
      84    store_var 6             (__for_idx_1)
      85    jump -65                (to 20)
      86    load_var 2              (items)
-     87    alloc_instance 78       (SerializedTest)
+     87    alloc_instance 90       (SerializedTest)
      88    copy 0                  
      89    load_const 5            ("test")
      90    store_field 0           (type)
@@ -627,7 +627,7 @@ function testing.run_test(body: () -> null, runner: (() -> testing.TestReport) -
      1    make_cell              
      2    store_var 1            
      3    load_var 1             (body)
-     4    make_closure 259 1     
+     4    make_closure 271 1     
      5    store_var 3            (base_run)
      6    load_var 2             (runner)
      7    load_const 0           (null)

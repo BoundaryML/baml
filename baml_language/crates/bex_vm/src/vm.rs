@@ -2112,14 +2112,15 @@ impl BexVm {
                             self.as_object_ptr(&array_value, ObjectType::Array)?;
 
                         // Get the array length for bounds checking.
-                        let array_len = {
-                            let Object::Array(arr) = self.get_object(array_obj_index) else {
+                        let array_len = match self.get_object(array_obj_index) {
+                            Object::Array(arr) => arr.len(),
+                            Object::Uint8Array(bytes) => bytes.len(),
+                            other => {
                                 return Err(VmError::TypeError {
                                     expected: ObjectType::Array.into(),
-                                    got: ObjectType::of(self.get_object(array_obj_index)).into(),
+                                    got: ObjectType::of(other).into(),
                                 });
-                            };
-                            arr.len()
+                            }
                         };
 
                         // Get the index
@@ -2234,6 +2235,7 @@ impl BexVm {
                         // Get the array length for bounds checking.
                         let array_len = match self.get_object(array_object_index) {
                             Object::Array(arr) => arr.len(),
+                            Object::Uint8Array(bytes) => bytes.len(),
                             other => {
                                 return Err(VmError::TypeError {
                                     expected: ObjectType::Array.into(),

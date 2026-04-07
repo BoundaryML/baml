@@ -309,5 +309,5 @@ async fn multiple_defs_preserve_side_effects() {
         return
     }
     ");
-    insta::assert_snapshot!(output.result.unwrap_err().to_string(), @"uncaught throw: Instance { class_name: \"baml.panics.AssertionFailed\", fields: {\"message\": String(\"assertion failed\")} }");
+    insta::assert_snapshot!(output.result.unwrap_err().to_string(), @"failed to call baml.sys.panic: assertion failed: expected true");
 }

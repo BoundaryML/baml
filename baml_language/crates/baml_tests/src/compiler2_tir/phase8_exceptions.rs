@@ -286,8 +286,10 @@ function f(which: int) -> int {
     );
 
     let output = render_tir(&db, file);
+    // Multi-variant union bindings require instanceof narrowing before field
+    // access, so `e.code` should produce a "has no member" error.
     assert!(
-        output.contains("unresolved member") || output.contains("cannot access field"),
+        output.contains("has no member"),
         "mixed union catch bindings should require further narrowing before field access, got:\n{output}"
     );
 }

@@ -1746,7 +1746,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     ));
                     let arm_bind_ty =
                         if self.pattern_has_multiple_variants(arm.pattern, body, arm.body) {
-                            Ty::BuiltinUnknown {
+                            Ty::Error {
                                 attr: TyAttr::default(),
                             }
                         } else {
@@ -2208,7 +2208,10 @@ impl<'db> TypeInferenceBuilder<'db> {
         at_expr: ExprId,
     ) -> Ty {
         if self.pattern_has_multiple_variants(pattern_id, body, at_expr) {
-            Ty::BuiltinUnknown {
+            // Multi-variant union binding — require instanceof narrowing
+            // before field access. Use Error so diagnostics show the actual
+            // type rather than the stdlib `unknown`.
+            Ty::Error {
                 attr: TyAttr::default(),
             }
         } else if matches!(narrowed_binding_ty, Ty::Never { .. }) {
