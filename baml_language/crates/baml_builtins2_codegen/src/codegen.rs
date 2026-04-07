@@ -584,7 +584,7 @@ fn namespace_dispatch_name(name: &str) -> String {
 /// - `BexVm` type
 /// - `Value`, `IndexMap`, `MediaValue` from `bex_vm_types`
 /// - `NativeFunctionResult`, `NativeFunction` type aliases
-/// - `VmError`, `InternalError`, `RuntimeError` from `crate::errors`
+/// - `VmError`, `VmPanic` from `crate::errors`
 /// - `Type` from `bex_vm_types`
 /// - `MediaKind` from `baml_type`
 pub fn generate_native_trait(builtins: &[NativeBuiltin], class_defs: &[NativeClassDef]) -> String {
@@ -959,9 +959,10 @@ fn constructor_media_class(b: &NativeBuiltin) -> Option<&str> {
         return None;
     }
     // Only for media classes
-    match class_seg {
-        "Pdf" | "Audio" | "Video" | "Image" => Some(class_seg),
-        _ => None,
+    if is_media_class(class_seg) {
+        Some(class_seg)
+    } else {
+        None
     }
 }
 
@@ -1007,7 +1008,7 @@ fn emit_single_extraction(out: &mut String, name: &str, idx: usize, ty: &BamlTyp
 
 fn emit_immut_receiver_extraction(out: &mut String, name: &str, idx: usize, recv: &Receiver) {
     match recv.class_name.as_str() {
-        "Pdf" | "Audio" | "Video" | "Image" => {
+        _ if is_media_class(recv.class_name.as_str()) => {
             let cls = &recv.class_name;
             writeln!(
                 out,
@@ -1048,7 +1049,7 @@ fn receiver_immut_extraction_expr(val: &str, recv: &Receiver) -> String {
         "Map" => format!("vm.as_map({val})?.clone()"),
         "String" => format!("vm.as_string({val})?.clone()"),
         "Uint8Array" => format!("vm.as_uint8array({val})?.clone()"),
-        "Pdf" | "Audio" | "Video" | "Image" => {
+        name if is_media_class(name) => {
             let kind = media_kind_expr(&recv.class_name);
             format!("vm.as_media({val}, {kind})?.clone()")
         }
@@ -1066,13 +1067,13 @@ fn extraction_expr(val: &str, ty: &BamlType, is_mut: bool) -> String {
             }
         }
         BamlType::Int => format!(
-            "match {val} {{ Value::Int(i) => *i, other => return Err(InternalError::TypeError {{ expected: Type::Int, got: vm.type_of(other) }}.into()) }}"
+            "match {val} {{ Value::Int(i) => *i, other => return Err(VmError::TypeError {{ expected: Type::Int, got: vm.type_of(other) }}) }}"
         ),
         BamlType::Float => format!(
-            "match {val} {{ Value::Float(f) => *f, other => return Err(InternalError::TypeError {{ expected: Type::Float, got: vm.type_of(other) }}.into()) }}"
+            "match {val} {{ Value::Float(f) => *f, other => return Err(VmError::TypeError {{ expected: Type::Float, got: vm.type_of(other) }}) }}"
         ),
         BamlType::Bool => format!(
-            "match {val} {{ Value::Bool(b) => *b, other => return Err(InternalError::TypeError {{ expected: Type::Bool, got: vm.type_of(other) }}.into()) }}"
+            "match {val} {{ Value::Bool(b) => *b, other => return Err(VmError::TypeError {{ expected: Type::Bool, got: vm.type_of(other) }}) }}"
         ),
         BamlType::List(_) => {
             if is_mut {
@@ -1152,9 +1153,7 @@ fn call_arg_for_type(name: &str, ty: &BamlType) -> String {
         },
         BamlType::Int | BamlType::Float | BamlType::Bool | BamlType::Null => name.to_string(),
         // Media class view types (Pdf, Audio, Video, Image) are Named and need to be passed by ref
-        BamlType::Named(class_name)
-            if matches!(class_name.as_str(), "Pdf" | "Audio" | "Video" | "Image") =>
-        {
+        BamlType::Named(class_name) if is_media_class(class_name.as_str()) => {
             format!("&{name}")
         }
         BamlType::Generic(_) | BamlType::Named(_) | BamlType::RustType => name.to_string(),
@@ -1331,6 +1330,10 @@ fn receiver_baml_type(recv: &Receiver) -> BamlType {
         "Pdf" | "Audio" | "Video" | "Image" => BamlType::Named(recv.class_name.clone()),
         _ => BamlType::Named(recv.class_name.clone()),
     }
+}
+
+fn is_media_class(name: &str) -> bool {
+    matches!(name, "Pdf" | "Audio" | "Video" | "Image")
 }
 
 fn media_kind_expr(class_name: &str) -> String {

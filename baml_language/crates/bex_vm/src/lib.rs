@@ -18,7 +18,7 @@ pub mod types;
 pub mod vm;
 pub mod watch;
 
-pub use errors::{InternalError, RuntimeError, StackTrace};
+pub use errors::{StackTrace, VmPanic};
 pub use indexable::EvalStack;
 pub use package_baml::NativeFunction;
 pub use vm::{BexVm, BytecodeProgram, SpanNotification, VmExecState, convert_program};

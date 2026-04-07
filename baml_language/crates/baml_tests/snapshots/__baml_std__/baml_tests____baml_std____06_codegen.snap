@@ -528,12 +528,12 @@ function baml.llm.Client.execute(self: null, context: void, inherited_delay_ms: 
     load_var _4
     load_const null
     cmp_op ==
-    pop_jump_if_false L10
+    pop_jump_if_false L9
     load_var self
     load_var context
     load_var inherited_delay_ms
     call baml.llm.Client.execute_once
-    jump L10
+    jump L9
 
   L1:
     load_var _4
@@ -607,22 +607,20 @@ function baml.llm.Client.execute(self: null, context: void, inherited_delay_ms: 
     store_var attempt_delay
 
   L8:
-    push_unwind L9, slot 10
     load_var self
     load_var context
     load_var attempt_delay
     call baml.llm.Client.execute_once
-    pop_unwind
-    jump L10
-
-  L9:
+    jump L9
+    load_var e
+    throw_if_panic
     load_var attempt
     load_const 1
     bin_op +
     store_var attempt
     jump L2
 
-  L10:
+  L9:
     return
 }
 
@@ -635,7 +633,7 @@ function baml.llm.Client.execute_once(self: null, context: void, active_delay_ms
     cmp_op ==
     pop_jump_if_false L0
     pop 1
-    jump L8
+    jump L7
 
   L0:
     copy 0
@@ -649,11 +647,11 @@ function baml.llm.Client.execute_once(self: null, context: void, active_delay_ms
     pop 1
     load_var self
     load_field .counter
-    store_var _58
+    store_var _57
     load_var self
     load_field .sub_clients
     call baml.Array.length
-    store_var _59
+    store_var _58
     load_var self
     load_var self
     load_field .counter
@@ -662,25 +660,25 @@ function baml.llm.Client.execute_once(self: null, context: void, active_delay_ms
     store_field .counter
     load_var self
     load_field .sub_clients
+    load_var _57
     load_var _58
-    load_var _59
     bin_op %
     load_array_element
     load_var context
     load_var active_delay_ms
     call baml.llm.Client.execute
-    jump L13
+    jump L11
 
   L2:
     load_var self
     load_field .sub_clients
-    store_var _47
+    store_var _46
     load_const 0
     store_var __for_idx
 
   L3:
     load_var __for_idx
-    load_var _47
+    load_var _46
     call baml.Array.length
     cmp_op <
     pop_jump_if_false L4
@@ -694,27 +692,25 @@ function baml.llm.Client.execute_once(self: null, context: void, active_delay_ms
     throw
 
   L5:
-    push_unwind L6, slot 13
-    load_var _47
+    load_var _46
     load_var __for_idx
     load_array_element
     load_var context
     load_var active_delay_ms
     call baml.llm.Client.execute
-    pop_unwind
-    jump L7
-
-  L6:
+    jump L6
+    load_var e
+    throw_if_panic
     load_var __for_idx
     load_const 1
     bin_op +
     store_var __for_idx
     jump L3
 
-  L7:
-    jump L13
+  L6:
+    jump L11
 
-  L8:
+  L7:
     load_var self
     dispatch_future baml.llm.Client.get_constructor
     await
@@ -748,17 +744,17 @@ function baml.llm.Client.execute_once(self: null, context: void, active_delay_ms
     store_var http_response
     load_var http_response
     call baml.http.Response.ok
-    pop_jump_if_false L9
-    jump L10
+    pop_jump_if_false L8
+    jump L9
 
-  L9:
+  L8:
     alloc_instance DevOther
     copy 0
     load_const "HTTP request failed"
     store_field .message
     throw
 
-  L10:
+  L9:
     load_var http_response
     dispatch_future baml.http.Response.text
     await
@@ -767,26 +763,24 @@ function baml.llm.Client.execute_once(self: null, context: void, active_delay_ms
     load_var body
     load_var return_type
     dispatch_future baml.llm.PrimitiveClient.parse
-    push_unwind L11, slot 10
     await
-    pop_unwind
-    jump L13
-
-  L11:
+    jump L11
+    load_var e
+    throw_if_panic
     load_var active_delay_ms
     load_const 0
     cmp_op >
-    pop_jump_if_false L12
+    pop_jump_if_false L10
     load_var active_delay_ms
     dispatch_future baml.sys.sleep
     await
     pop 1
 
-  L12:
-    load_var _36
+  L10:
+    load_var e
     throw
 
-  L13:
+  L11:
     return
 }
 

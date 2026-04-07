@@ -1,21 +1,21 @@
-//! Post-lowering cleanup pass for MIR functions.
+//! Post-lowering MIR optimization passes.
 //!
 //! Runs after `MirBuilder::build()` and performs:
 //! 1. Dead block elimination (reachability-based)
 //! 2. Copy propagation + dead local elimination
-//! 3. RPO block reordering (Phase 3)
+//! 3. RPO block reordering
 
 use std::collections::{HashMap, HashSet, VecDeque};
 
 use baml_base::Name;
 
 use crate::{
-    BasicBlock, BlockId, Local, MirFunction, MirFunctionBody, MirFunctionKind, Operand, Place,
-    Terminator,
+    BasicBlock, BlockId, CatchRegion, Local, MirFunction, MirFunctionBody, MirFunctionKind,
+    Operand, Place, Terminator,
 };
 
-/// Run all cleanup phases on a MIR function.
-pub(crate) fn cleanup_function(func: &mut MirFunction) {
+/// Run all optimization passes on a MIR function.
+pub(crate) fn optimize_function(func: &mut MirFunction) {
     let MirFunctionKind::Bytecode(body) = &mut func.kind else {
         return; // nothing to clean up on builtins
     };
@@ -32,7 +32,7 @@ pub(crate) fn cleanup_function(func: &mut MirFunction) {
 ///
 /// Used for let-binding initializers, which are lowered as bodies without
 /// the enclosing `MirFunction` wrapper (arity = 0).
-pub(crate) fn cleanup_function_body(body: &mut MirFunctionBody) {
+pub(crate) fn optimize_function_body(body: &mut MirFunctionBody) {
     eliminate_dead_blocks(body);
     propagate_copies(body, 0);
     eliminate_dead_locals(body, 0);
@@ -55,11 +55,18 @@ pub(crate) fn cleanup_function_body(body: &mut MirFunctionBody) {
 
 /// Phase 1: Remove unreachable blocks via BFS from entry.
 fn eliminate_dead_blocks(body: &mut MirFunctionBody) {
-    // BFS to find all reachable blocks
+    // BFS to find all reachable blocks. Seed with entry AND exception
+    // handler blocks — they're reachable at runtime via the exception table
+    // even though they have no incoming CFG edges.
     let mut reachable = HashSet::new();
     let mut queue = VecDeque::new();
     queue.push_back(body.entry);
     reachable.insert(body.entry);
+    for region in &body.catch_regions {
+        if reachable.insert(region.handler) {
+            queue.push_back(region.handler);
+        }
+    }
 
     while let Some(block_id) = queue.pop_front() {
         if let Some(term) = &body.blocks[block_id.0].terminator {
@@ -99,13 +106,7 @@ fn eliminate_dead_blocks(body: &mut MirFunctionBody) {
     // Rewrite entry block
     body.entry = old_to_new[body.entry.0].expect("entry block must be reachable");
 
-    // Rewrite unwind_error_locals keys
-    let old_unwind = std::mem::take(&mut body.unwind_error_locals);
-    for (old_block, local) in old_unwind {
-        if let Some(new_block) = old_to_new[old_block.0] {
-            body.unwind_error_locals.insert(new_block, local);
-        }
-    }
+    rewrite_catch_region_blocks(&mut body.catch_regions, &old_to_new);
 
     body.blocks = new_blocks;
 }
@@ -150,14 +151,30 @@ fn rewrite_block_ids_in_terminator(term: &mut Terminator, map: &[Option<BlockId>
             }
         }
         Terminator::Throw { .. } => {}
+        Terminator::ThrowIfPanic { otherwise, .. } => remap(otherwise),
     }
+}
+
+/// Rewrite `BlockId` references in all catch regions using old->new mapping.
+fn rewrite_catch_region_blocks(regions: &mut Vec<CatchRegion>, map: &[Option<BlockId>]) {
+    regions.retain_mut(|region| {
+        let Some(new_body) = map[region.body_entry.0] else {
+            return false; // body block was removed — drop the region
+        };
+        let Some(new_handler) = map[region.handler.0] else {
+            return false; // handler block was removed — drop the region
+        };
+        region.body_entry = new_body;
+        region.handler = new_handler;
+        true
+    });
 }
 
 // ============================================================================
 // Phase 2a: Copy propagation
 // ============================================================================
 
-/// Count uses of each Local across all blocks and `unwind_error_locals`.
+/// Count uses of each Local across all blocks and catch region error locals.
 /// Collect all locals that appear inside a `Place` projection.
 ///
 /// This includes locals used as `Place::Local` bases of field/index projections
@@ -221,7 +238,9 @@ fn collect_place_index_locals(body: &MirFunctionBody) -> HashSet<Local> {
             crate::Rvalue::Discriminant(p) | crate::Rvalue::TypeTag(p) | crate::Rvalue::Len(p) => {
                 scan_place(p, set);
             }
-            crate::Rvalue::IsType { operand, .. } => scan_operand(operand, set),
+            crate::Rvalue::IsType { operand, .. } => {
+                scan_operand(operand, set);
+            }
             crate::Rvalue::MakeClosure { captures, .. } => {
                 for cap in captures {
                     scan_operand(cap, set);
@@ -272,7 +291,9 @@ fn collect_place_index_locals(body: &MirFunctionBody) -> HashSet<Local> {
                 Terminator::Switch { discriminant, .. } => {
                     scan_operand(discriminant, &mut set);
                 }
-                Terminator::Throw { value } => scan_operand(value, &mut set),
+                Terminator::Throw { value } | Terminator::ThrowIfPanic { value, .. } => {
+                    scan_operand(value, &mut set);
+                }
                 Terminator::Await { destination, .. } => scan_place(destination, &mut set),
                 Terminator::Goto { .. } | Terminator::Return | Terminator::Unreachable => {}
             }
@@ -326,8 +347,8 @@ fn count_local_uses(body: &MirFunctionBody) -> Vec<usize> {
         }
     }
 
-    // Count uses in unwind_error_locals values
-    for local in body.unwind_error_locals.values() {
+    // Count uses in catch region error locals (VM writes into these slots).
+    for (_, local) in body.unwind_error_locals() {
         uses[local.0] += 1;
     }
 
@@ -390,7 +411,9 @@ fn count_in_rvalue(rv: &crate::Rvalue, uses: &mut [usize]) {
         crate::Rvalue::Discriminant(p) => count_in_place(p, uses),
         crate::Rvalue::TypeTag(p) => count_in_place(p, uses),
         crate::Rvalue::Len(p) => count_in_place(p, uses),
-        crate::Rvalue::IsType { operand, .. } => count_in_operand(operand, uses),
+        crate::Rvalue::IsType { operand, .. } => {
+            count_in_operand(operand, uses);
+        }
         crate::Rvalue::MakeClosure { captures, .. } => {
             for cap in captures {
                 count_in_operand(cap, uses);
@@ -477,7 +500,9 @@ fn count_in_terminator(term: &Terminator, uses: &mut [usize]) {
             // destination is a write
             count_dest_place(destination, uses);
         }
-        Terminator::Throw { value } => count_in_operand(value, uses),
+        Terminator::Throw { value } | Terminator::ThrowIfPanic { value, .. } => {
+            count_in_operand(value, uses);
+        }
         Terminator::Goto { .. } | Terminator::Return | Terminator::Unreachable => {}
     }
 }
@@ -665,7 +690,9 @@ fn apply_subst_to_rvalue(rv: &mut crate::Rvalue, subst: &HashMap<Local, Operand>
         crate::Rvalue::Discriminant(p) | crate::Rvalue::TypeTag(p) | crate::Rvalue::Len(p) => {
             apply_subst_to_place_locals(p, subst);
         }
-        crate::Rvalue::IsType { operand, .. } => apply_subst_to_operand(operand, subst),
+        crate::Rvalue::IsType { operand, .. } => {
+            apply_subst_to_operand(operand, subst);
+        }
         crate::Rvalue::MakeClosure { captures, .. } => {
             for cap in captures {
                 apply_subst_to_operand(cap, subst);
@@ -702,7 +729,9 @@ fn apply_subst_to_terminator(term: &mut Terminator, subst: &HashMap<Local, Opera
                 apply_subst_to_operand(arg, subst);
             }
         }
-        Terminator::Throw { value } => apply_subst_to_operand(value, subst),
+        Terminator::Throw { value } | Terminator::ThrowIfPanic { value, .. } => {
+            apply_subst_to_operand(value, subst);
+        }
         Terminator::Goto { .. }
         | Terminator::Return
         | Terminator::Unreachable
@@ -784,11 +813,10 @@ fn eliminate_dead_locals(body: &mut MirFunctionBody, arity: usize) {
         }
     }
 
-    // Rewrite unwind_error_locals values
-    let old_unwind = std::mem::take(&mut body.unwind_error_locals);
-    for (block_id, old_local) in old_unwind {
-        if let Some(new_local) = old_to_new[old_local.0] {
-            body.unwind_error_locals.insert(block_id, new_local);
+    // Rewrite catch_regions error locals
+    for region in &mut body.catch_regions {
+        if let Some(new_local) = old_to_new[region.error_local.0] {
+            region.error_local = new_local;
         }
     }
 
@@ -848,7 +876,9 @@ fn remap_rvalue(rv: &mut crate::Rvalue, map: &[Option<Local>]) {
         crate::Rvalue::Discriminant(p) | crate::Rvalue::TypeTag(p) | crate::Rvalue::Len(p) => {
             remap_place(p, map);
         }
-        crate::Rvalue::IsType { operand, .. } => remap_operand(operand, map),
+        crate::Rvalue::IsType { operand, .. } => {
+            remap_operand(operand, map);
+        }
         crate::Rvalue::MakeClosure { captures, .. } => {
             for cap in captures {
                 remap_operand(cap, map);
@@ -913,18 +943,20 @@ fn rewrite_locals_in_terminator(term: &mut Terminator, map: &[Option<Local>]) {
             remap_place(future, map);
             remap_place(destination, map);
         }
-        Terminator::Throw { value } => remap_operand(value, map),
+        Terminator::Throw { value } | Terminator::ThrowIfPanic { value, .. } => {
+            remap_operand(value, map);
+        }
         Terminator::Goto { .. } | Terminator::Return | Terminator::Unreachable => {}
     }
 }
 
 // ============================================================================
-// Phase 4: Post-cleanup MIR validation (debug only)
+// Phase 4: Post-optimization MIR validation (debug only)
 // ============================================================================
 
-/// Verify MIR structural invariants after cleanup.
+/// Verify MIR structural invariants after optimization.
 ///
-/// Debug-only — catches invariant drift between lowering, cleanup, and
+/// Debug-only — catches invariant drift between lowering, optimization, and
 /// downstream consumers. Modeled after V1's `verifier.rs`.
 #[cfg(debug_assertions)]
 fn verify_mir(body: &MirFunctionBody, name: &crate::ItemRef) {
@@ -1036,7 +1068,9 @@ fn verify_mir(body: &MirFunctionBody, name: &crate::ItemRef) {
                         crate::Rvalue::Discriminant(p)
                         | crate::Rvalue::TypeTag(p)
                         | crate::Rvalue::Len(p) => check_place(p, &blk),
-                        crate::Rvalue::IsType { operand, .. } => check_operand(operand, &blk),
+                        crate::Rvalue::IsType { operand, .. } => {
+                            check_operand(operand, &blk);
+                        }
                         crate::Rvalue::MakeClosure { captures, .. } => {
                             for cap in captures {
                                 check_operand(cap, &blk);
@@ -1095,7 +1129,9 @@ fn verify_mir(body: &MirFunctionBody, name: &crate::ItemRef) {
                     check_place(future, &blk);
                     check_place(destination, &blk);
                 }
-                Terminator::Throw { value } => check_operand(value, &blk),
+                Terminator::Throw { value } | Terminator::ThrowIfPanic { value, .. } => {
+                    check_operand(value, &blk);
+                }
                 Terminator::Goto { .. } | Terminator::Return | Terminator::Unreachable => {}
             }
         }
@@ -1154,19 +1190,26 @@ fn verify_mir(body: &MirFunctionBody, name: &crate::ItemRef) {
         }
     }
 
-    // 7. unwind_error_locals: keys must be valid BlockIds, values must be valid Locals.
-    for (&block_id, &local) in &body.unwind_error_locals {
+    // 7. catch_regions: block IDs and locals must be valid.
+    for (i, region) in body.catch_regions.iter().enumerate() {
         assert!(
-            block_id.0 < num_blocks,
-            "dangling BlockId {block_id:?} in unwind_error_locals of MIR function {name}",
+            region.body_entry.0 < num_blocks,
+            "dangling body_entry {:?} in catch_region[{i}] of MIR function {name}",
+            region.body_entry,
         );
         assert!(
-            local.0 < num_locals,
-            "dangling Local {local} in unwind_error_locals of MIR function {name}",
+            region.handler.0 < num_blocks,
+            "dangling handler {:?} in catch_region[{i}] of MIR function {name}",
+            region.handler,
+        );
+        assert!(
+            region.error_local.0 < num_locals,
+            "dangling error_local {} in catch_region[{i}] of MIR function {name}",
+            region.error_local,
         );
     }
 
-    // 8. Entry block must be valid.
+    // 9. Entry block must be valid.
     assert!(
         body.entry.0 < num_blocks,
         "entry block {:?} out of range in MIR function {}",
@@ -1191,10 +1234,14 @@ fn reorder_blocks_rpo(body: &mut MirFunctionBody) {
         return;
     }
 
-    // Compute RPO via iterative DFS
+    // Compute RPO via iterative DFS. Seed with entry AND exception handler
+    // blocks (reachable at runtime via exception table, not CFG edges).
     let mut visited = vec![false; num_blocks];
     let mut post_order: Vec<BlockId> = Vec::with_capacity(num_blocks);
     let mut stack: Vec<(BlockId, bool)> = vec![(body.entry, false)];
+    for region in &body.catch_regions {
+        stack.push((region.handler, false));
+    }
 
     while let Some((block_id, processed)) = stack.pop() {
         if processed {
@@ -1247,13 +1294,7 @@ fn reorder_blocks_rpo(body: &mut MirFunctionBody) {
     // Rewrite entry
     body.entry = old_to_new[body.entry.0].expect("entry must be in RPO");
 
-    // Rewrite unwind_error_locals keys
-    let old_unwind = std::mem::take(&mut body.unwind_error_locals);
-    for (old_block, local) in old_unwind {
-        if let Some(new_block) = old_to_new[old_block.0] {
-            body.unwind_error_locals.insert(new_block, local);
-        }
-    }
+    rewrite_catch_region_blocks(&mut body.catch_regions, &old_to_new);
 
     body.blocks = new_blocks;
 }

@@ -122,14 +122,6 @@ struct PendingJumpTable {
     table: JumpTableData,
 }
 
-/// Pending unwind handler instruction that needs handler-offset patching.
-struct PendingUnwind {
-    /// Instruction index where `PushUnwind` was emitted.
-    instruction_idx: usize,
-    /// Handler target block (resolved later to a concrete PC).
-    target: PendingJumpTarget,
-}
-
 /// Target kind for a pending jump patch.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum PendingJumpTarget {
@@ -176,9 +168,6 @@ struct StackifyCodegen<'ctx, 'obj> {
 
     /// Pending jumps that need patching: (`instruction_index`, `target_block`).
     pending_jumps: Vec<(usize, PendingJumpTarget)>,
-
-    /// Pending unwind handlers that need offset patching.
-    pending_unwinds: Vec<PendingUnwind>,
 
     /// Pending jump tables that need patching after all blocks are emitted.
     pending_jump_tables: Vec<PendingJumpTable>,
@@ -262,7 +251,6 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             real_local_count: 0,
             block_addresses: HashMap::new(),
             pending_jumps: Vec::new(),
-            pending_unwinds: Vec::new(),
             pending_jump_tables: Vec::new(),
             dead_unreachable_blocks: HashSet::new(),
             trap_pc: None,
@@ -452,10 +440,12 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
 
         // 3. Patch all jump targets and jump tables
         self.patch_jumps();
-        self.patch_unwinds();
         self.patch_jump_tables();
 
-        // 4. Convert MIR VizNodes to VM VizNodeMeta
+        // 4. Build exception table from MIR catch regions
+        self.build_exception_table(mir);
+
+        // 5. Convert MIR VizNodes to VM VizNodeMeta
         let viz_nodes = mir
             .viz_nodes
             .iter()
@@ -488,6 +478,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             },
             param_names: Vec::new(),
             param_types: Vec::new(),
+            throws_type: None,
             body_meta: None,
             trace: false,
         }
@@ -724,10 +715,6 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             .pending_jumps
             .iter()
             .any(|(_, target)| matches!(target, PendingJumpTarget::Trap))
-            || self
-                .pending_unwinds
-                .iter()
-                .any(|pending| matches!(pending.target, PendingJumpTarget::Trap))
             || self.pending_jump_tables.iter().any(|pending| {
                 matches!(pending.otherwise, PendingJumpTarget::Trap)
                     || pending
@@ -943,11 +930,6 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 let inst = self.emit(Instruction::LoadGlobal(GlobalIndex::from_raw(*global_idx)));
                 self.set_operand(inst, OperandMeta::Global(name_str));
             }
-            Constant::Ty(_) => {
-                let idx = self.add_constant(ConstValue::Null);
-                let inst = self.emit(Instruction::LoadConst(idx));
-                self.set_operand(inst, OperandMeta::Const("null".to_string()));
-            }
             Constant::EnumVariant { enum_ref, variant } => {
                 let enum_name_str = enum_ref.to_string();
                 // Gracefully handle undefined enum references (e.g. cross-package
@@ -1125,12 +1107,8 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 args,
                 destination,
                 target,
-                unwind,
+                unwind: _,
             } => {
-                if let Some(unwind_target) = unwind {
-                    self.emit_push_unwind_handler(*unwind_target);
-                }
-
                 let func_name = pull_semantics::resolve_constant_function_name(
                     callee,
                     &self.analysis.classifications,
@@ -1152,10 +1130,6 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                         self, callee, args,
                     ));
                     self.emit(Instruction::CallIndirect);
-                }
-
-                if unwind.is_some() {
-                    self.emit(Instruction::PopUnwind);
                 }
 
                 self.emit_store_place(destination);
@@ -1204,18 +1178,10 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 future,
                 destination,
                 target,
-                unwind,
+                unwind: _,
             } => {
-                if let Some(unwind_target) = unwind {
-                    self.emit_push_unwind_handler(*unwind_target);
-                }
-
                 unwrap_infallible(pull_semantics::walk_await_future(self, future));
                 self.emit(Instruction::Await);
-
-                if unwind.is_some() {
-                    self.emit(Instruction::PopUnwind);
-                }
 
                 self.emit_store_place(destination);
                 self.emit_jump_unless_fallthrough(*target);
@@ -1224,6 +1190,12 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             Terminator::Throw { value } => {
                 self.emit_operand_pull(value);
                 self.emit(Instruction::Throw);
+            }
+
+            Terminator::ThrowIfPanic { value, otherwise } => {
+                self.emit_operand_pull(value);
+                self.emit(Instruction::ThrowIfPanic);
+                self.emit_jump_unless_fallthrough(*otherwise);
             }
         }
     }
@@ -1237,24 +1209,6 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         for (instruction_idx, target) in self.pending_jumps.clone() {
             let target_pc = self.resolve_pending_target_pc(target);
             self.patch_jump_to(instruction_idx, target_pc);
-        }
-    }
-
-    /// Patch all pending unwind handlers with actual handler addresses.
-    #[allow(clippy::cast_possible_wrap)]
-    fn patch_unwinds(&mut self) {
-        for pending in std::mem::take(&mut self.pending_unwinds) {
-            let target_pc = self.resolve_pending_target_pc(pending.target);
-            let offset = target_pc as isize - pending.instruction_idx as isize;
-            match &mut self.bytecode.instructions[pending.instruction_idx] {
-                Instruction::PushUnwind { handler, .. } => {
-                    *handler = offset;
-                }
-                _ => panic!(
-                    "expected PUSH_UNWIND at instruction index {}",
-                    pending.instruction_idx
-                ),
-            }
         }
     }
 
@@ -1318,6 +1272,65 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         }
     }
 
+    /// Build the bytecode exception table from MIR catch regions.
+    ///
+    /// Each `CatchRegion` maps a try-body entry block and handler block to PC
+    /// ranges. The try body spans from the entry block's first instruction up
+    /// to (but not including) the handler block's first instruction.
+    fn build_exception_table(&mut self, mir: &MirFunctionBody) {
+        use bex_vm_types::bytecode::ExceptionTableEntry;
+
+        for region in &mir.catch_regions {
+            let body_entry = self.analysis.resolve_jump_target(region.body_entry);
+            let handler = self.analysis.resolve_jump_target(region.handler);
+
+            let &start_pc = self.block_addresses.get(&body_entry).unwrap_or_else(|| {
+                unreachable!(
+                    "exception table: body entry block {body_entry:?} has no PC address — \
+                     catch region was emitted but its body block was dropped"
+                )
+            });
+            let &handler_pc = self.block_addresses.get(&handler).unwrap_or_else(|| {
+                unreachable!(
+                    "exception table: handler block {handler:?} has no PC address — \
+                     catch region was emitted but its handler block was dropped"
+                )
+            });
+            // If the error local was optimized away (e.g. an inline
+            // `throw X catch ...` that the MIR lowers as a direct jump),
+            // the catch region doesn't need a VM-level exception table entry.
+            let Some(&error_slot) = self.local_slots.get(&region.error_local) else {
+                log::debug!(
+                    "exception table: error local {:?} has no slot (optimized away)",
+                    region.error_local,
+                );
+                continue;
+            };
+
+            // The RPO seeds the entry block first so that body_entry is
+            // always a DFS ancestor of handler, guaranteeing start_pc <
+            // handler_pc.
+            debug_assert!(
+                start_pc < handler_pc,
+                "exception table: handler {handler:?} (pc {handler_pc}) placed before \
+                 body entry {body_entry:?} (pc {start_pc}) — RPO ordering bug"
+            );
+
+            self.bytecode.exception_table.push(ExceptionTableEntry {
+                start_pc,
+                end_pc: handler_pc,
+                handler_pc,
+                error_slot,
+            });
+        }
+
+        // Sort by start_pc so the VM can do a linear scan from most-specific
+        // (innermost) to least-specific. For nested catch blocks the inner
+        // region has a later start_pc, so reverse-sorted order gives innermost
+        // first during a reverse linear scan.
+        self.bytecode.exception_table.sort_by_key(|e| e.start_pc);
+    }
+
     // ========================================================================
     // Switch Emission Strategies
     // ========================================================================
@@ -1349,20 +1362,8 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 return;
             }
 
-            self.emit(Instruction::Copy(0));
-            let idx = self.add_constant(ConstValue::Int(*value));
-            let inst = self.emit(Instruction::LoadConst(idx));
-            let label = name_map
-                .get(value)
-                .map(|n| (*n).to_string())
-                .unwrap_or_else(|| value.to_string());
-            self.set_operand(inst, OperandMeta::Const(label));
-            self.emit(Instruction::CmpOp(CmpOp::Eq));
-            let jump_idx = self.emit(Instruction::PopJumpIfFalse(0));
-            self.emit(Instruction::Pop(1));
-            self.emit_jump_unless_fallthrough(*target);
-            let skip_to = self.current_pc();
-            self.patch_jump_to(jump_idx, skip_to);
+            let label = Self::switch_label(*value, name_map);
+            self.emit_compare_and_branch(*value, *target, label);
         }
 
         self.emit(Instruction::Pop(1));
@@ -1458,45 +1459,16 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         otherwise: BlockId,
         name_map: &std::collections::HashMap<i64, &str>,
     ) {
-        let label_for = |value: &i64| -> String {
-            name_map
-                .get(value)
-                .map(|n| (*n).to_string())
-                .unwrap_or_else(|| value.to_string())
-        };
-
         match arms.len() {
             0 => {
                 // No arms left - just fall through to otherwise
                 // (already handled by caller)
             }
-            1 => {
-                // Single arm - emit direct comparison
-                let (value, target) = &arms[0];
-                self.emit(Instruction::Copy(0));
-                let idx = self.add_constant(ConstValue::Int(*value));
-                let inst = self.emit(Instruction::LoadConst(idx));
-                self.set_operand(inst, OperandMeta::Const(label_for(value)));
-                self.emit(Instruction::CmpOp(CmpOp::Eq));
-                let jump_idx = self.emit(Instruction::PopJumpIfFalse(0));
-                self.emit(Instruction::Pop(1));
-                self.emit_jump_unless_fallthrough(*target);
-                let skip_to = self.current_pc();
-                self.patch_jump_to(jump_idx, skip_to);
-            }
-            2 => {
-                // Two arms - emit both comparisons sequentially
+            1 | 2 => {
+                // One or two arms - emit direct comparisons sequentially
                 for (value, target) in arms {
-                    self.emit(Instruction::Copy(0));
-                    let idx = self.add_constant(ConstValue::Int(*value));
-                    let inst = self.emit(Instruction::LoadConst(idx));
-                    self.set_operand(inst, OperandMeta::Const(label_for(value)));
-                    self.emit(Instruction::CmpOp(CmpOp::Eq));
-                    let jump_idx = self.emit(Instruction::PopJumpIfFalse(0));
-                    self.emit(Instruction::Pop(1));
-                    self.emit_jump_unless_fallthrough(*target);
-                    let skip_to = self.current_pc();
-                    self.patch_jump_to(jump_idx, skip_to);
+                    let label = Self::switch_label(*value, name_map);
+                    self.emit_compare_and_branch(*value, *target, label);
                 }
             }
             _ => {
@@ -1506,24 +1478,15 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 let left = &arms[..mid];
                 let right = &arms[mid + 1..];
 
-                // Compare with pivot
-                self.emit(Instruction::Copy(0));
-                let idx = self.add_constant(ConstValue::Int(*value));
-                let inst = self.emit(Instruction::LoadConst(idx));
-                self.set_operand(inst, OperandMeta::Const(label_for(value)));
-                self.emit(Instruction::CmpOp(CmpOp::Eq));
-                let eq_jump = self.emit(Instruction::PopJumpIfFalse(0));
-
-                // If equal, jump to target
-                self.emit(Instruction::Pop(1));
-                self.emit_jump_unless_fallthrough(*target);
-                let after_eq = self.current_pc();
-                self.patch_jump_to(eq_jump, after_eq);
+                // Compare with pivot — if equal, pop discriminant and jump
+                let label = Self::switch_label(*value, name_map);
+                self.emit_compare_and_branch(*value, *target, label.clone());
 
                 // Compare < pivot for left subtree
                 self.emit(Instruction::Copy(0));
+                let idx = self.add_constant(ConstValue::Int(*value));
                 let inst = self.emit(Instruction::LoadConst(idx));
-                self.set_operand(inst, OperandMeta::Const(label_for(value)));
+                self.set_operand(inst, OperandMeta::Const(label));
                 self.emit(Instruction::CmpOp(CmpOp::Lt));
                 let lt_jump = self.emit(Instruction::PopJumpIfFalse(0));
 
@@ -1540,178 +1503,36 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     }
 
     // ========================================================================
-    // Helpers
+    // Switch helpers
     // ========================================================================
 
-    /// Emit a `PushUnwind` instruction for a MIR unwind edge.
-    fn emit_push_unwind_handler(&mut self, unwind_block: BlockId) {
-        let error_local = self.resolve_unwind_error_local(unwind_block);
-        let error_slot = self.local_slot_or_panic(error_local, "PUSH_UNWIND error local");
-        let target = self.resolve_pending_target(unwind_block);
-        let inst = self.emit(Instruction::PushUnwind {
-            handler: 0,
-            error_slot,
-        });
-        self.set_var_operand(inst, error_slot);
-        self.pending_unwinds.push(PendingUnwind {
-            instruction_idx: inst,
-            target,
-        });
+    /// Resolve a label for a switch arm value from the name map,
+    /// falling back to the integer's string representation.
+    fn switch_label(value: i64, name_map: &std::collections::HashMap<i64, &str>) -> String {
+        name_map
+            .get(&value)
+            .map(|n| (*n).to_string())
+            .unwrap_or_else(|| value.to_string())
     }
 
-    /// Look up the error local for a catch handler block.
-    ///
-    /// Uses the explicit metadata from MIR lowering (`unwind_error_locals`).
-    /// Falls back to heuristic inference for backwards compatibility with
-    /// MIR produced without the metadata (should not happen in practice).
-    fn resolve_unwind_error_local(&self, unwind_block: BlockId) -> Local {
-        if let Some(&local) = self.body.unwind_error_locals.get(&unwind_block) {
-            return local;
-        }
-
-        self.infer_unwind_error_local(unwind_block)
+    /// Emit: copy TOS, compare with `value` for equality; if equal, pop
+    /// discriminant and jump to `target`. On mismatch, fall through.
+    fn emit_compare_and_branch(&mut self, value: i64, target: BlockId, label: String) {
+        self.emit(Instruction::Copy(0));
+        let idx = self.add_constant(ConstValue::Int(value));
+        let inst = self.emit(Instruction::LoadConst(idx));
+        self.set_operand(inst, OperandMeta::Const(label));
+        self.emit(Instruction::CmpOp(CmpOp::Eq));
+        let jump_idx = self.emit(Instruction::PopJumpIfFalse(0));
+        self.emit(Instruction::Pop(1));
+        self.emit_jump_unless_fallthrough(target);
+        let skip_to = self.current_pc();
+        self.patch_jump_to(jump_idx, skip_to);
     }
 
-    /// Heuristic fallback: infer the catch error local by scanning handler
-    /// block reads. Prefer locals with no definition (the synthetic error slot).
-    fn infer_unwind_error_local(&self, unwind_block: BlockId) -> Local {
-        let block = self.body.block(unwind_block);
-        let mut reads = Vec::new();
-
-        for stmt in &block.statements {
-            Self::collect_locals_read_in_statement(&stmt.kind, &mut reads);
-        }
-        if let Some(term) = &block.terminator {
-            Self::collect_locals_read_in_terminator(term, &mut reads);
-        }
-
-        let mut seen = HashSet::new();
-        reads.retain(|local| seen.insert(*local));
-
-        if let Some(local) = reads.iter().copied().find(|local| {
-            let is_parameter = matches!(
-                self.analysis.classifications.get(local),
-                Some(LocalClassification::Parameter)
-            );
-            let has_no_def = self
-                .analysis
-                .def_use
-                .get(local)
-                .is_some_and(|du| du.def.is_none());
-            !is_parameter && has_no_def
-        }) {
-            return local;
-        }
-
-        reads.first().copied().unwrap_or_else(|| {
-            panic!(
-                "unable to infer unwind error local for handler block {unwind_block:?}; no locals read"
-            )
-        })
-    }
-
-    fn collect_locals_in_place(place: &Place, out: &mut Vec<Local>) {
-        match place {
-            Place::Local(local) => out.push(*local),
-            Place::Capture(_) => {}
-            Place::Field { base, .. } => Self::collect_locals_in_place(base, out),
-            Place::Index { base, index, .. } => {
-                Self::collect_locals_in_place(base, out);
-                out.push(*index);
-            }
-        }
-    }
-
-    fn collect_locals_in_operand(operand: &Operand, out: &mut Vec<Local>) {
-        match operand {
-            Operand::Copy(place) | Operand::Move(place) => {
-                Self::collect_locals_in_place(place, out);
-            }
-            Operand::Constant(_) => {}
-        }
-    }
-
-    fn collect_locals_in_rvalue(rvalue: &Rvalue, out: &mut Vec<Local>) {
-        match rvalue {
-            Rvalue::Use(operand) => Self::collect_locals_in_operand(operand, out),
-            Rvalue::BinaryOp { left, right, .. } => {
-                Self::collect_locals_in_operand(left, out);
-                Self::collect_locals_in_operand(right, out);
-            }
-            Rvalue::UnaryOp { operand, .. } => Self::collect_locals_in_operand(operand, out),
-            Rvalue::Array(elements) => {
-                for operand in elements {
-                    Self::collect_locals_in_operand(operand, out);
-                }
-            }
-            Rvalue::Uint8Array(_) => {} // No locals referenced — data is inline
-            Rvalue::Map(entries) => {
-                for (key, value) in entries {
-                    Self::collect_locals_in_operand(key, out);
-                    Self::collect_locals_in_operand(value, out);
-                }
-            }
-            Rvalue::Aggregate { fields, .. } => {
-                for field in fields {
-                    Self::collect_locals_in_operand(field, out);
-                }
-            }
-            Rvalue::Discriminant(place) | Rvalue::TypeTag(place) | Rvalue::Len(place) => {
-                Self::collect_locals_in_place(place, out);
-            }
-            Rvalue::IsType { operand, .. } => Self::collect_locals_in_operand(operand, out),
-            Rvalue::MakeClosure { captures, .. } => {
-                for cap in captures {
-                    Self::collect_locals_in_operand(cap, out);
-                }
-            }
-        }
-    }
-
-    fn collect_locals_read_in_statement(kind: &StatementKind, out: &mut Vec<Local>) {
-        match kind {
-            StatementKind::Assign { destination, value } => {
-                Self::collect_locals_in_rvalue(value, out);
-                match destination {
-                    Place::Local(_) | Place::Capture(_) => {}
-                    Place::Field { base, .. } => Self::collect_locals_in_place(base, out),
-                    Place::Index { base, index, .. } => {
-                        Self::collect_locals_in_place(base, out);
-                        out.push(*index);
-                    }
-                }
-            }
-            StatementKind::Drop(place) => Self::collect_locals_in_place(place, out),
-            StatementKind::Unwatch(local) | StatementKind::WatchNotify(local) => out.push(*local),
-            StatementKind::WatchOptions { local, filter } => {
-                out.push(*local);
-                Self::collect_locals_in_operand(filter, out);
-            }
-            StatementKind::NotifyBlock { .. }
-            | StatementKind::VizEnter(_)
-            | StatementKind::VizExit(_)
-            | StatementKind::Nop => {}
-        }
-    }
-
-    fn collect_locals_read_in_terminator(term: &Terminator, out: &mut Vec<Local>) {
-        match term {
-            Terminator::Goto { .. } | Terminator::Unreachable | Terminator::Return => {}
-            Terminator::Branch { condition, .. } => Self::collect_locals_in_operand(condition, out),
-            Terminator::Switch { discriminant, .. } => {
-                Self::collect_locals_in_operand(discriminant, out);
-            }
-            Terminator::Call { callee, args, .. }
-            | Terminator::DispatchFuture { callee, args, .. } => {
-                Self::collect_locals_in_operand(callee, out);
-                for arg in args {
-                    Self::collect_locals_in_operand(arg, out);
-                }
-            }
-            Terminator::Await { future, .. } => Self::collect_locals_in_place(future, out),
-            Terminator::Throw { value } => Self::collect_locals_in_operand(value, out),
-        }
-    }
+    // ========================================================================
+    // Helpers
+    // ========================================================================
 
     /// Convert MIR `BinOp` to VM instruction.
     fn binop_instruction(op: BinOp) -> Instruction {

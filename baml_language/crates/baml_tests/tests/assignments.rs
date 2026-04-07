@@ -1083,5 +1083,8 @@ async fn virtual_multiple_defs_preserve_side_effects() {
     }
     "#);
 
-    assert!(output.result.is_err());
+    assert!(matches!(
+        output.result,
+        Err(bex_engine::EngineError::UnhandledThrow { .. })
+    ));
 }

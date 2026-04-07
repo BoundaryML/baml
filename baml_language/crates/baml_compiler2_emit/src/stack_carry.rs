@@ -530,6 +530,20 @@ fn simulate_terminator_stack(
             // THROW consumes the thrown value from the stack when unwinding.
             sim.pop_n(1)
         }
+        Terminator::ThrowIfPanic { value, .. } => {
+            let mut sink = StackCarryPullSink {
+                sim,
+                carried_local,
+                classifications,
+                def_use,
+            };
+            if pull_semantics::walk_operand_pull(&mut sink, value).is_err() {
+                return false;
+            }
+            // ThrowIfPanic loads the value, checks it, and either throws (consuming it)
+            // or continues (consuming it). Either way the stack is clean after.
+            sim.pop_n(1)
+        }
     }
 }
 

@@ -306,9 +306,25 @@ fn compute_rpo(body: &MirFunctionBody) -> Vec<BlockId> {
     let mut visited = HashSet::new();
     let mut postorder = Vec::new();
 
+    // Phase 1: DFS from the entry block. Handlers reachable via CFG edges
+    // (Call/Await unwind targets) are visited as descendants of their
+    // try-body entry blocks, so body_entry is a DFS ancestor of handler →
+    // body_entry is pushed AFTER handler in postorder → BEFORE handler in
+    // the reversed RPO. This satisfies start_pc < handler_pc.
     rpo_dfs(body, body.entry, &mut visited, &mut postorder);
-    postorder.reverse();
-    postorder
+
+    // Phase 2: Seed handlers NOT reachable from entry (same-frame panics
+    // like division-by-zero where there's no Call/Await with an unwind
+    // edge). Prepend their subtrees to the postorder so they appear AFTER
+    // all entry-reachable blocks in the reversed RPO (handler_pc > body_pc).
+    let mut handler_postorder = Vec::new();
+    for region in &body.catch_regions {
+        rpo_dfs(body, region.handler, &mut visited, &mut handler_postorder);
+    }
+    handler_postorder.append(&mut postorder);
+
+    handler_postorder.reverse();
+    handler_postorder
 }
 
 // ============================================================================
@@ -617,11 +633,11 @@ fn collect_def_use(body: &MirFunctionBody) -> HashMap<Local, LocalDefUse> {
         }
     }
 
-    // Unwind error locals are implicitly used by PushUnwind instructions —
+    // Unwind error locals are implicitly used by the exception table —
     // the VM writes into these slots when an exception is caught. Without
     // this, the locals may have zero recorded uses and get classified Dead,
     // causing a panic when the emitter tries to allocate a slot for them.
-    for (&block_id, &local) in &body.unwind_error_locals {
+    for (block_id, local) in body.unwind_error_locals() {
         if let Some(du) = def_use.get_mut(&local) {
             du.uses.push(UseLocation {
                 block: block_id,
@@ -689,7 +705,9 @@ fn walk_rvalue_locals(rvalue: &Rvalue, f: &mut impl FnMut(Local)) {
         Rvalue::Discriminant(place) | Rvalue::TypeTag(place) | Rvalue::Len(place) => {
             walk_place_locals(place, f);
         }
-        Rvalue::IsType { operand, .. } => walk_operand_locals(operand, f),
+        Rvalue::IsType { operand, .. } => {
+            walk_operand_locals(operand, f);
+        }
         Rvalue::MakeClosure { captures, .. } => {
             for cap in captures {
                 walk_operand_locals(cap, f);
@@ -838,7 +856,7 @@ fn collect_uses_in_terminator(
                 }
             }
         }
-        Terminator::Throw { value } => {
+        Terminator::Throw { value } | Terminator::ThrowIfPanic { value, .. } => {
             collect_uses_in_operand(value, block, StatementRef::Terminator, def_use);
         }
     }

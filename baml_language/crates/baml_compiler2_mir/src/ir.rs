@@ -13,6 +13,20 @@ use baml_type::Ty;
 // Function
 // ============================================================================
 
+/// A catch region recorded during MIR lowering.
+///
+/// Describes the try-body entry block and the handler block for a `catch`
+/// expression. The emitter uses this to build the bytecode exception table.
+#[derive(Debug, Clone)]
+pub struct CatchRegion {
+    /// First block of the try body.
+    pub body_entry: BlockId,
+    /// Handler block that receives the exception.
+    pub handler: BlockId,
+    /// Frame-local slot for the caught error value.
+    pub error_local: Local,
+}
+
 /// The bytecode body of a MIR function — blocks, locals, and associated data.
 ///
 /// This is the inner data for `MirFunctionKind::Bytecode`. All field accessors
@@ -26,9 +40,9 @@ pub struct MirFunctionBody {
     pub entry: BlockId,
     /// Local variable declarations.
     pub locals: Vec<LocalDecl>,
-    /// Maps unwind handler block IDs to the error local that receives the error value.
-    /// Populated during catch lowering so the emitter doesn't have to infer it.
-    pub unwind_error_locals: std::collections::HashMap<BlockId, Local>,
+    /// Catch regions mapping try-body extents to handler blocks.
+    /// Populated during catch lowering; used by the emitter to build exception tables.
+    pub catch_regions: Vec<CatchRegion>,
     /// Visualization nodes for control flow visualization.
     pub viz_nodes: Vec<VizNode>,
 }
@@ -47,6 +61,15 @@ impl MirFunctionBody {
     /// Get a local declaration by ID.
     pub fn local(&self, id: Local) -> &LocalDecl {
         &self.locals[id.0]
+    }
+
+    /// Iterate `(handler_block, error_local)` pairs derived from catch regions.
+    ///
+    /// Yields one entry per handler.
+    pub fn unwind_error_locals(&self) -> impl Iterator<Item = (BlockId, Local)> + '_ {
+        self.catch_regions
+            .iter()
+            .map(|r| (r.handler, r.error_local))
     }
 }
 
@@ -324,6 +347,13 @@ pub enum Terminator {
         /// The error value to throw.
         value: Operand,
     },
+
+    /// If the value is a panic instance (`baml.panics.*`), throw it.
+    /// Otherwise continue to `otherwise` block.
+    ///
+    /// Used before wildcard catch arms to prevent them from swallowing
+    /// panics the programmer didn't explicitly name.
+    ThrowIfPanic { value: Operand, otherwise: BlockId },
 }
 
 impl Terminator {
@@ -361,6 +391,7 @@ impl Terminator {
                 succs
             }
             Terminator::Throw { .. } => vec![],
+            Terminator::ThrowIfPanic { otherwise, .. } => vec![*otherwise],
         }
     }
 }
@@ -585,9 +616,6 @@ pub enum Constant {
         /// The variant name within the enum.
         variant: Name,
     },
-    /// Placeholder for type info when needed.
-    #[allow(dead_code)]
-    Ty(Ty),
 }
 
 /// A structured reference to a named item (function, method, enum type).

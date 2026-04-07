@@ -21,128 +21,116 @@ function user.AlwaysThrowsStatus(n: int) -> Status {
 }
 
 function user.CatchAllStatusVariants(n: int) -> string {
-    push_unwind L0, slot 2
     load_var n
     call user.ThrowsAllStatusVariants
-    pop_unwind
-    jump L9
-
-  L0:
-    load_var _2
+    jump L8
+    load_var e
     load_const user.Status.HttpError
     alloc_variant user.Status
     cmp_op ==
-    pop_jump_if_false L1
-    jump L8
+    pop_jump_if_false L0
+    jump L7
 
-  L1:
-    load_var _2
+  L0:
+    load_var e
     load_const user.Status.IndexError
     alloc_variant user.Status
     cmp_op ==
-    pop_jump_if_false L2
-    jump L7
+    pop_jump_if_false L1
+    jump L6
 
-  L2:
-    load_var _2
+  L1:
+    load_var e
     load_const user.Status.AuthError
     alloc_variant user.Status
     cmp_op ==
-    pop_jump_if_false L3
-    jump L6
+    pop_jump_if_false L2
+    jump L5
 
-  L3:
-    load_var _2
+  L2:
+    load_var e
     load_const user.Status.SomeOtherError
     alloc_variant user.Status
     cmp_op ==
-    pop_jump_if_false L4
-    jump L5
+    pop_jump_if_false L3
+    jump L4
 
-  L4:
-    load_var _2
+  L3:
+    load_var e
     throw
 
-  L5:
+  L4:
     load_const "other!"
-    jump L9
+    jump L8
+
+  L5:
+    load_const "auth!"
+    jump L8
 
   L6:
-    load_const "auth!"
-    jump L9
+    load_const "index!"
+    jump L8
 
   L7:
-    load_const "index!"
-    jump L9
-
-  L8:
     load_const "http!"
 
-  L9:
+  L8:
     return
 }
 
 function user.CatchAlwaysThrows(n: int) -> string {
-    push_unwind L0, slot 2
     load_var n
     call user.WrapperAlwaysThrows
-    pop_unwind
-    jump L5
-
-  L0:
-    load_var _2
+    jump L4
+    load_var e
     type_tag
     load_const 1
     cmp_op ==
-    pop_jump_if_false L1
-    jump L4
+    pop_jump_if_false L0
+    jump L3
 
-  L1:
-    load_var _2
+  L0:
+    load_var e
     type_tag
     load_const 0
-    cmp_op ==
-    pop_jump_if_false L2
-    jump L3
-
-  L2:
-    load_var _2
-    throw
-
-  L3:
-    load_const "index!"
-    jump L5
-
-  L4:
-    load_const "http!"
-
-  L5:
-    return
-}
-
-function user.CatchRecursiveThrow(n: int) -> string {
-    push_unwind L0, slot 2
-    load_var n
-    call user.RecB
-    pop_unwind
-    jump L3
-
-  L0:
-    load_var _2
-    type_tag
-    load_const 1
     cmp_op ==
     pop_jump_if_false L1
     jump L2
 
   L1:
-    load_var _2
+    load_var e
     throw
 
   L2:
-    load_const "handled"
+    load_const "index!"
+    jump L4
 
   L3:
+    load_const "http!"
+
+  L4:
+    return
+}
+
+function user.CatchRecursiveThrow(n: int) -> string {
+    load_var n
+    call user.RecB
+    jump L2
+    load_var e
+    type_tag
+    load_const 1
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    throw
+
+  L1:
+    load_const "handled"
+
+  L2:
     return
 }
 

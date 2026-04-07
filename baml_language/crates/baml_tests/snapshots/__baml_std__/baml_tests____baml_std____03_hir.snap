@@ -289,6 +289,28 @@ function baml.net.close(self: ?) -> null  [builtin]
 function baml.net.connect(addr: string) -> baml.net.Socket  [builtin]
 function baml.net.read(self: ?) -> string  [builtin]
 
+--- <builtin>/baml/ns_panics/panics.baml ---
+class baml.panics.AssertionFailed {
+  message: string
+}
+class baml.panics.DivisionByZero {
+  dividend: int
+}
+class baml.panics.IndexOutOfBounds {
+  index: int
+  length: int
+}
+class baml.panics.MapKeyNotFound {
+  key: string
+}
+class baml.panics.StackOverflow {
+  message: string
+}
+class baml.panics.Unreachable {
+  message: string
+}
+type baml.panics.Panic = baml.panics.DivisionByZero | baml.panics.IndexOutOfBounds | baml.panics.MapKeyNotFound | baml.panics.StackOverflow | baml.panics.AssertionFailed | baml.panics.Unreachable
+
 --- <builtin>/baml/ns_sys/sys.baml ---
 function baml.sys.now_ms() -> int  [builtin]
 function baml.sys.panic(message: string) -> null  [builtin]

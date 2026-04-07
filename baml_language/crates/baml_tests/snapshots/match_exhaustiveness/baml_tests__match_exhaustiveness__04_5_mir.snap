@@ -2237,36 +2237,42 @@ fn user.NestedTypeBindings(r: Success | Failure) -> int {
     let _1: Success | Failure // r // param
     let _2: bool
     let _3: bool
+    let _4: bool
 
     bb0: {
-        _2 = is_type(copy _1, Union([Class(TypeName { name: "Success", module_path: ["user"], display_name: "Success" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }), Class(TypeName { name: "Failure", module_path: ["user"], display_name: "Failure" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] })], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
-        branch copy _2 -> [bb4, bb1];
+        _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: ["user"], display_name: "Success" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        branch copy _2 -> [bb5, bb1];
     }
 
     bb1: {
         _3 = is_type(copy _1, Class(TypeName { name: "Failure", module_path: ["user"], display_name: "Failure" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
-        branch copy _3 -> [bb3, bb2];
+        branch copy _3 -> [bb5, bb2];
     }
 
     bb2: {
-        goto -> bb5;
+        _4 = is_type(copy _1, Class(TypeName { name: "Failure", module_path: ["user"], display_name: "Failure" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        branch copy _4 -> [bb4, bb3];
     }
 
     bb3: {
-        _0 = const 1_i64;
-        goto -> bb5;
+        goto -> bb6;
     }
 
     bb4: {
-        _0 = const 0_i64;
-        goto -> bb5;
+        _0 = const 1_i64;
+        goto -> bb6;
     }
 
     bb5: {
+        _0 = const 0_i64;
         goto -> bb6;
     }
 
     bb6: {
+        goto -> bb7;
+    }
+
+    bb7: {
         return;
     }
 }
@@ -2964,36 +2970,42 @@ fn user.OverlappingTypedPatterns(r: Success | Failure) -> string {
     let _1: Success | Failure // r // param
     let _2: bool
     let _3: bool
+    let _4: bool
 
     bb0: {
         _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: ["user"], display_name: "Success" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
-        branch copy _2 -> [bb4, bb1];
+        branch copy _2 -> [bb5, bb1];
     }
 
     bb1: {
-        _3 = is_type(copy _1, Union([Class(TypeName { name: "Success", module_path: ["user"], display_name: "Success" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }), Class(TypeName { name: "Failure", module_path: ["user"], display_name: "Failure" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] })], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
-        branch copy _3 -> [bb3, bb2];
+        _3 = is_type(copy _1, Class(TypeName { name: "Success", module_path: ["user"], display_name: "Success" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        branch copy _3 -> [bb4, bb2];
     }
 
     bb2: {
-        goto -> bb5;
+        _4 = is_type(copy _1, Class(TypeName { name: "Failure", module_path: ["user"], display_name: "Failure" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        branch copy _4 -> [bb4, bb3];
     }
 
     bb3: {
-        _0 = const "covers failure only (success already handled)";
-        goto -> bb5;
+        goto -> bb6;
     }
 
     bb4: {
-        _0 = const "success";
-        goto -> bb5;
+        _0 = const "covers failure only (success already handled)";
+        goto -> bb6;
     }
 
     bb5: {
+        _0 = const "success";
         goto -> bb6;
     }
 
     bb6: {
+        goto -> bb7;
+    }
+
+    bb7: {
         return;
     }
 }
@@ -3006,38 +3018,44 @@ fn user.OverlappingWithBindings(r: Success | Failure) -> string {
     let _3: Success // s
     let _4: Success
     let _5: bool
+    let _6: bool
 
     bb0: {
         _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: ["user"], display_name: "Success" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
-        branch copy _2 -> [bb4, bb1];
+        branch copy _2 -> [bb5, bb1];
     }
 
     bb1: {
-        _5 = is_type(copy _1, Union([Class(TypeName { name: "Success", module_path: ["user"], display_name: "Success" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }), Class(TypeName { name: "Failure", module_path: ["user"], display_name: "Failure" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] })], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
-        branch copy _5 -> [bb3, bb2];
+        _5 = is_type(copy _1, Class(TypeName { name: "Success", module_path: ["user"], display_name: "Success" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        branch copy _5 -> [bb4, bb2];
     }
 
     bb2: {
-        goto -> bb5;
+        _6 = is_type(copy _1, Class(TypeName { name: "Failure", module_path: ["user"], display_name: "Failure" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        branch copy _6 -> [bb4, bb3];
     }
 
     bb3: {
-        _0 = const "remaining";
-        goto -> bb5;
+        goto -> bb6;
     }
 
     bb4: {
-        _3 = copy _1;
-        _4 = copy _3;
-        _0 = copy _4.0;
-        goto -> bb5;
+        _0 = const "remaining";
+        goto -> bb6;
     }
 
     bb5: {
+        _3 = copy _1;
+        _4 = copy _3;
+        _0 = copy _4.0;
         goto -> bb6;
     }
 
     bb6: {
+        goto -> bb7;
+    }
+
+    bb7: {
         return;
     }
 }
@@ -3087,26 +3105,32 @@ fn user.PartialUnionPatternCoverage(r: Success | Failure | Pending) -> string {
     let _0: string // _0 // return
     let _1: Success | Failure | Pending // r // param
     let _2: bool
+    let _3: bool
 
     bb0: {
-        _2 = is_type(copy _1, Union([Class(TypeName { name: "Success", module_path: ["user"], display_name: "Success" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }), Class(TypeName { name: "Failure", module_path: ["user"], display_name: "Failure" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] })], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
-        branch copy _2 -> [bb2, bb1];
+        _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: ["user"], display_name: "Success" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        branch copy _2 -> [bb3, bb1];
     }
 
     bb1: {
-        goto -> bb3;
+        _3 = is_type(copy _1, Class(TypeName { name: "Failure", module_path: ["user"], display_name: "Failure" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        branch copy _3 -> [bb3, bb2];
     }
 
     bb2: {
-        _0 = const "not pending";
-        goto -> bb3;
+        goto -> bb4;
     }
 
     bb3: {
+        _0 = const "not pending";
         goto -> bb4;
     }
 
     bb4: {
+        goto -> bb5;
+    }
+
+    bb5: {
         return;
     }
 }
@@ -3117,36 +3141,42 @@ fn user.PartialUnionPlusCatchAll(r: Success | Failure | Pending) -> string {
     let _1: Success | Failure | Pending // r // param
     let _2: bool
     let _3: bool
+    let _4: bool
 
     bb0: {
-        _2 = is_type(copy _1, Union([Class(TypeName { name: "Success", module_path: ["user"], display_name: "Success" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }), Class(TypeName { name: "Failure", module_path: ["user"], display_name: "Failure" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] })], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
-        branch copy _2 -> [bb4, bb1];
+        _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: ["user"], display_name: "Success" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        branch copy _2 -> [bb5, bb1];
     }
 
     bb1: {
-        _3 = is_type(copy _1, Class(TypeName { name: "Pending", module_path: ["user"], display_name: "Pending" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
-        branch copy _3 -> [bb3, bb2];
+        _3 = is_type(copy _1, Class(TypeName { name: "Failure", module_path: ["user"], display_name: "Failure" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        branch copy _3 -> [bb5, bb2];
     }
 
     bb2: {
-        goto -> bb5;
+        _4 = is_type(copy _1, Class(TypeName { name: "Pending", module_path: ["user"], display_name: "Pending" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        branch copy _4 -> [bb4, bb3];
     }
 
     bb3: {
-        _0 = const "pending";
-        goto -> bb5;
+        goto -> bb6;
     }
 
     bb4: {
-        _0 = const "success or failure";
-        goto -> bb5;
+        _0 = const "pending";
+        goto -> bb6;
     }
 
     bb5: {
+        _0 = const "success or failure";
         goto -> bb6;
     }
 
     bb6: {
+        goto -> bb7;
+    }
+
+    bb7: {
         return;
     }
 }
@@ -3343,26 +3373,32 @@ fn user.UnionPatternCoversAll(r: Success | Failure) -> string {
     let _0: string // _0 // return
     let _1: Success | Failure // r // param
     let _2: bool
+    let _3: bool
 
     bb0: {
-        _2 = is_type(copy _1, Union([Class(TypeName { name: "Success", module_path: ["user"], display_name: "Success" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }), Class(TypeName { name: "Failure", module_path: ["user"], display_name: "Failure" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] })], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
-        branch copy _2 -> [bb2, bb1];
+        _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: ["user"], display_name: "Success" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        branch copy _2 -> [bb3, bb1];
     }
 
     bb1: {
-        goto -> bb3;
+        _3 = is_type(copy _1, Class(TypeName { name: "Failure", module_path: ["user"], display_name: "Failure" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        branch copy _3 -> [bb3, bb2];
     }
 
     bb2: {
-        _0 = const "covered";
-        goto -> bb3;
+        goto -> bb4;
     }
 
     bb3: {
+        _0 = const "covered";
         goto -> bb4;
     }
 
     bb4: {
+        goto -> bb5;
+    }
+
+    bb5: {
         return;
     }
 }

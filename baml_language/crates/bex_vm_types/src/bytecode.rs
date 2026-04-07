@@ -289,24 +289,6 @@ pub enum Instruction {
     /// Arity is read from the runtime callee function object.
     CallIndirect,
 
-    /// Push an unwind handler for catch semantics.
-    ///
-    /// The handler remains active until a matching `POP_UNWIND` is executed
-    /// or an exception unwinds control flow to `handler`.
-    ///
-    /// Format: `PUSH_UNWIND handler, error_slot` where:
-    /// - `handler` is the relative jump offset to the catch handler block.
-    /// - `error_slot` is the frame-local slot that receives the exception value.
-    PushUnwind {
-        /// Relative offset from current instruction to handler entry.
-        handler: isize,
-        /// Frame-local slot index for the caught error value.
-        error_slot: usize,
-    },
-
-    /// Pop the most recently pushed unwind handler for the current frame.
-    PopUnwind,
-
     /// Throw the value on top of the stack.
     ///
     /// Stack: `[error_value]` -> `[]` (control transfers to unwind handler or caller)
@@ -371,6 +353,15 @@ pub enum Instruction {
     /// - Primitives: `int=0`, `string=1`, `bool=2`, `null=3`, `float=4`
     /// - Classes: assigned unique IDs starting at 100
     TypeTag,
+
+    /// If the top-of-stack value is a panic instance (`baml.panics.*`), throw it.
+    /// Otherwise pop the value and continue to the next instruction.
+    ///
+    /// Stack: `[value]` -> `[]` (continues) or unwinds (throws)
+    ///
+    /// Used in catch handlers before wildcard arms to prevent them from
+    /// swallowing panics the programmer didn't explicitly name.
+    ThrowIfPanic,
 
     /// Halt execution with an unreachable code error.
     ///
@@ -617,13 +608,6 @@ impl std::fmt::Display for Instruction {
             Instruction::Await => f.write_str("AWAIT"),
             Instruction::Call(callee) => write!(f, "CALL {callee}"),
             Instruction::CallIndirect => f.write_str("CALL_INDIRECT"),
-            Instruction::PushUnwind {
-                handler,
-                error_slot,
-            } => {
-                write!(f, "PUSH_UNWIND {handler:+}, {error_slot}")
-            }
-            Instruction::PopUnwind => f.write_str("POP_UNWIND"),
             Instruction::Throw => f.write_str("THROW"),
 
             Instruction::Return => f.write_str("RETURN"),
@@ -641,6 +625,7 @@ impl std::fmt::Display for Instruction {
             }
             Instruction::Discriminant => f.write_str("DISCRIMINANT"),
             Instruction::TypeTag => f.write_str("TYPE_TAG"),
+            Instruction::ThrowIfPanic => f.write_str("THROW_IF_PANIC"),
             Instruction::Unreachable => f.write_str("UNREACHABLE"),
             Instruction::MakeClosure(obj_idx, count) => {
                 write!(f, "MAKE_CLOSURE {} {}", obj_idx.raw(), count)
@@ -727,6 +712,31 @@ pub struct DebugLocalScope {
     pub scope_span: Span,
 }
 
+/// Exception table entry mapping a PC range to a handler.
+///
+/// Any instruction at PC in `[start_pc, end_pc)` that raises an error
+/// transfers control to `handler_pc`, with the exception value stored
+/// in the frame-local slot `error_slot`.
+///
+/// Entries are sorted by `start_pc`. For nested catch blocks the innermost
+/// (narrowest range) entry appears first.
+///
+/// All exceptions (user-thrown values and VM panics) are routed to the
+/// handler. The handler bytecode is responsible for filtering: a
+/// `ThrowIfPanic` instruction before wildcard arms rethrows panics the
+/// programmer didn't explicitly name.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ExceptionTableEntry {
+    /// First protected instruction (inclusive).
+    pub start_pc: usize,
+    /// End of protected range (exclusive).
+    pub end_pc: usize,
+    /// Instruction pointer of the handler block.
+    pub handler_pc: usize,
+    /// Frame-local slot index for the caught error value.
+    pub error_slot: usize,
+}
+
 /// Executable bytecode.
 ///
 /// Contains the instructions to run and all the associated constants.
@@ -755,6 +765,12 @@ pub struct Bytecode {
     ///
     /// Parallel to `instructions`. Populated by the compiler at emit time.
     pub meta: Vec<InstructionMeta>,
+
+    /// Exception table mapping PC ranges to catch handlers.
+    ///
+    /// Sorted by `start_pc`. The VM searches this table when an error occurs
+    /// to find a handler covering the faulting instruction.
+    pub exception_table: Vec<ExceptionTableEntry>,
 }
 
 impl Default for Bytecode {
@@ -772,6 +788,7 @@ impl Bytecode {
             jump_tables: Vec::new(),
             line_table: Vec::new(),
             meta: Vec::new(),
+            exception_table: Vec::new(),
         }
     }
 
@@ -787,6 +804,20 @@ impl Bytecode {
     /// Get the 1-indexed source line for a bytecode PC.
     pub fn source_line_for_pc(&self, pc: usize) -> usize {
         self.line_entry_for_pc(pc).map_or(0, |entry| entry.line)
+    }
+
+    /// Iterate all exception table entries whose PC range covers `pc`.
+    ///
+    /// Returns entries in table order (innermost / first-declared first).
+    /// The caller is responsible for picking the first entry whose filter
+    /// matches the exception value.
+    pub fn exception_handlers_for_pc(
+        &self,
+        pc: usize,
+    ) -> impl Iterator<Item = &ExceptionTableEntry> {
+        self.exception_table
+            .iter()
+            .filter(move |e| pc >= e.start_pc && pc < e.end_pc)
     }
 
     /// Resolve constants from `ConstValue` to Value using a resolver function.

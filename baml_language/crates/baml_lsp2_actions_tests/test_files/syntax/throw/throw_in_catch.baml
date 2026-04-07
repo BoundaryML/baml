@@ -28,6 +28,16 @@ function ThrowNewInCatch(x: int) -> string {
 //----
 //- diagnostics
 // Warning: unreachable arm
+//     ╭─[ throw_throw_in_catch.baml:9:11 ]
+//     │
+//   9 │ ╭─▶     _ => throw e
+//  10 │ ├─▶   }
+//     │ │         
+//     │ ╰───────── unreachable arm
+//     │     
+//     │     Note: Error code: E0001
+// ────╯
+// Warning: unreachable arm
 //     ╭─[ throw_throw_in_catch.baml:16:20 ]
 //     │
 //  16 │     _: string => "handled string",
@@ -41,6 +51,16 @@ function ThrowNewInCatch(x: int) -> string {
 //     │
 //  17 │ ╭─▶     other => throw other
 //  18 │ ├─▶   }
+//     │ │         
+//     │ ╰───────── unreachable arm
+//     │     
+//     │     Note: Error code: E0001
+// ────╯
+// Warning: unreachable arm
+//     ╭─[ throw_throw_in_catch.baml:24:11 ]
+//     │
+//  24 │ ╭─▶     _ => throw "wrapped: original error"
+//  25 │ ├─▶   }
 //     │ │         
 //     │ ╰───────── unreachable arm
 //     │     

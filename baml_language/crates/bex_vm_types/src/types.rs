@@ -319,6 +319,11 @@ pub struct Function {
     /// Parameter types in declaration order.
     pub param_types: Vec<Ty>,
 
+    /// Inferred throws type — the union of all types this function (and its callees)
+    /// may throw. `None` if the function never throws. Used by the engine to convert
+    /// uncaught throw values to `BexExternalValue`.
+    pub throws_type: Option<Ty>,
+
     /// LLM-specific metadata (prompt template, client name). `None` for non-LLM functions.
     pub body_meta: Option<FunctionMeta>,
 
@@ -512,6 +517,10 @@ impl std::fmt::Display for Value {
         }
     }
 }
+
+// Panic class / instance enums — generated from `panics.baml` class definitions.
+// PanicClass (tag enum), PanicInstance (with Value fields), associated methods.
+include!(concat!(env!("OUT_DIR"), "/panics_generated.rs"));
 
 // ============================================================================
 // Test Cases

@@ -11,7 +11,7 @@ mod verifier;
 use std::collections::HashMap;
 
 pub use analysis::OptLevel;
-use baml_base::Span;
+use baml_base::{Name, Span};
 use baml_compiler2_ast::TypeExpr;
 use baml_compiler2_hir::{
     compiler2_all_files,
@@ -21,7 +21,7 @@ use baml_compiler2_hir::{
     package::{PackageId, package_items},
 };
 use baml_compiler2_mir::{
-    BuiltinKind, MirFunctionKind, def_to_item_ref, lower_function, lower_let_body,
+    BuiltinKind, MirFunctionKind, ResolvedAliases, def_to_item_ref, lower_function, lower_let_body,
 };
 // Use the PPIR item tree (which includes synthetic *$stream items) rather than
 // the bare HIR item tree, to stay consistent with TIR's LocalItemId indices.
@@ -31,6 +31,22 @@ use bex_vm_types::{
     Bytecode, Class, ClassField, ConstValue, Enum, EnumVariant, Function, FunctionKind,
     FunctionMeta, Instruction, Object, ObjectIndex, ObjectPool, Program,
 };
+
+/// Build a per-package `ResolvedAliases` cache, keyed by package name.
+fn build_alias_caches(
+    db: &dyn baml_compiler2_mir::Db,
+    all_files: &[baml_base::SourceFile],
+) -> HashMap<Name, ResolvedAliases> {
+    let mut caches: HashMap<Name, ResolvedAliases> = HashMap::new();
+    for file in all_files {
+        let pkg_info = file_package(db, *file);
+        caches.entry(pkg_info.package.clone()).or_insert_with(|| {
+            let pkg_id = PackageId::new(db, pkg_info.package.clone());
+            ResolvedAliases::for_package(db, pkg_id)
+        });
+    }
+    caches
+}
 pub(crate) use emit::compile_mir_function;
 
 /// Context for MIR codegen.
@@ -194,6 +210,7 @@ pub fn generate_project_bytecode(
 ) -> Result<Program, LoweringError> {
     let mut program = Program::new();
     let all_files = compiler2_all_files(db);
+    let alias_caches = build_alias_caches(db, &all_files);
 
     // --- Pass 1: Build globals map (function name -> global index) ---
     // Functions are allocated first (slots 0..N-1), then let bindings (slots N..M-1).
@@ -244,9 +261,7 @@ pub fn generate_project_bytecode(
         let pkg_info = file_package(db, *file);
         let pkg_id = PackageId::new(db, pkg_info.package.clone());
         let pkg_items = package_items(db, pkg_id);
-        let type_aliases = baml_compiler2_tir::inference::collect_type_aliases(db, pkg_items);
-        let recursive_aliases =
-            baml_compiler2_tir::normalize::find_recursive_aliases(&type_aliases);
+        let cache = &alias_caches[&pkg_info.package];
         for class_data in item_tree.classes.values() {
             // Build fully-qualified name: "user.MyClass" or "baml.ns.MyClass"
             let fq_name = if pkg_info.namespace_path.is_empty() {
@@ -276,11 +291,7 @@ pub fn generate_project_bytecode(
                             &[],
                             &mut diags,
                         );
-                        baml_compiler2_mir::convert_tir2_ty(
-                            &tir_ty,
-                            &type_aliases,
-                            &recursive_aliases,
-                        )
+                        cache.convert(&tir_ty)
                     })
                     .unwrap_or_else(|| baml_type::Ty::Null {
                         attr: baml_type::TyAttr::default(),
@@ -380,6 +391,8 @@ pub fn generate_project_bytecode(
     for file in &all_files {
         let line_starts = build_line_starts(file.text(db));
         let item_tree = file_item_tree(db, *file);
+        let pkg_info_pass4 = file_package(db, *file);
+        let cache_pass4 = &alias_caches[&pkg_info_pass4.package];
         for (local_id, func_data) in &item_tree.functions {
             let func_loc = FunctionLoc::new(db, *file, *local_id);
             let mir = lower_function(db, func_loc);
@@ -436,6 +449,7 @@ pub fn generate_project_bytecode(
                         },
                         param_names: Vec::new(),
                         param_types: Vec::new(),
+                        throws_type: None,
                         body_meta: None,
                         trace: false,
                     }
@@ -456,6 +470,7 @@ pub fn generate_project_bytecode(
                     },
                     param_names: Vec::new(),
                     param_types: Vec::new(),
+                    throws_type: None,
                     body_meta: None,
                     trace: false,
                 },
@@ -463,10 +478,13 @@ pub fn generate_project_bytecode(
 
             // Set function metadata from signature
             let (param_names, param_types, return_type) =
-                compute_function_metadata_from_item_tree(db, *file, func_data);
+                compute_function_metadata_from_item_tree(db, *file, func_data, cache_pass4);
             compiled_fn.return_type = return_type;
             compiled_fn.param_names = param_names;
             compiled_fn.param_types = param_types;
+
+            // Set inferred throws type from TIR throw inference
+            compiled_fn.throws_type = compute_throws_type(db, *file, &func_data.name, cache_pass4);
 
             // Set LLM-specific body_meta if this is an LLM function
             if let Some(baml_compiler2_ast::DeclarativeMeta::Llm(llm_meta)) =
@@ -660,6 +678,7 @@ pub fn generate_project_bytecode(
                 },
                 param_names: vec!["registry".to_string()],
                 param_types: Vec::new(), // type not needed for chainer dispatch
+                throws_type: None,
                 body_meta: None,
                 trace: false,
             };
@@ -716,29 +735,12 @@ pub fn generate_project_bytecode(
     // Mirrors the legacy pipeline: only recursive aliases are stored in
     // `Program.recursive_type_alias_defs`; non-recursive aliases are expanded inline
     // by `convert_tir2_ty`. This is required for correct output_format rendering at runtime.
-    {
-        use std::collections::HashSet as _HashSet;
-        let mut seen_packages: _HashSet<String> = _HashSet::new();
-        for file in &all_files {
-            let pkg_info = file_package(db, *file);
-            if seen_packages.insert(pkg_info.package.to_string()) {
-                let pkg_id = PackageId::new(db, pkg_info.package.clone());
-                let pkg_items = package_items(db, pkg_id);
-                let type_aliases =
-                    baml_compiler2_tir::inference::collect_type_aliases(db, pkg_items);
-                let recursive_aliases =
-                    baml_compiler2_tir::normalize::find_recursive_aliases(&type_aliases);
-                for (qtn, tir_ty) in &type_aliases {
-                    if recursive_aliases.contains(qtn) {
-                        let mir_ty = baml_compiler2_mir::convert_tir2_ty(
-                            tir_ty,
-                            &type_aliases,
-                            &recursive_aliases,
-                        );
-                        let type_name = baml_compiler2_mir::qtn_to_type_name(qtn);
-                        program.recursive_type_alias_defs.insert(type_name, mir_ty);
-                    }
-                }
+    for cache in alias_caches.values() {
+        for (qtn, tir_ty) in &cache.aliases {
+            if cache.recursive.contains(qtn) {
+                let mir_ty = cache.convert(tir_ty);
+                let type_name = baml_compiler2_mir::qtn_to_type_name(qtn);
+                program.recursive_type_alias_defs.insert(type_name, mir_ty);
             }
         }
     }
@@ -808,6 +810,39 @@ fn convert_test_arg_value(
     }
 }
 
+/// Compute the inferred throws type for a function by querying TIR throw inference.
+///
+/// Returns `Some(ty)` if the function (or its callees) may throw, `None` otherwise.
+fn compute_throws_type(
+    db: &dyn baml_compiler2_mir::Db,
+    file: baml_base::SourceFile,
+    func_name: &baml_base::Name,
+    cache: &ResolvedAliases,
+) -> Option<baml_type::Ty> {
+    let pkg_info = file_package(db, file);
+    let pkg_id = PackageId::new(db, pkg_info.package);
+    let throw_sets = baml_compiler2_tir::throw_inference::function_throw_sets(db, pkg_id);
+
+    let key =
+        baml_compiler2_tir::throw_inference::throw_set_key(&pkg_info.namespace_path, func_name);
+
+    let facts = throw_sets.transitive_for(&key)?;
+    if facts.is_empty() {
+        return None;
+    }
+
+    let converted: Vec<baml_type::Ty> = facts.iter().map(|tir_ty| cache.convert(tir_ty)).collect();
+
+    if converted.len() == 1 {
+        Some(converted.into_iter().next().unwrap())
+    } else {
+        Some(baml_type::Ty::Union(
+            converted,
+            baml_type::TyAttr::default(),
+        ))
+    }
+}
+
 /// Extract param names, param types, and return type from an `item_tree` Function.
 ///
 /// Type resolution delegates to TIR's `lower_type_expr` (single source of truth)
@@ -816,6 +851,7 @@ fn compute_function_metadata_from_item_tree(
     db: &dyn baml_compiler2_mir::Db,
     file: baml_base::SourceFile,
     func_data: &baml_compiler2_hir::item_tree::Function,
+    cache: &ResolvedAliases,
 ) -> (Vec<String>, Vec<baml_type::Ty>, baml_type::Ty) {
     let param_names: Vec<String> = func_data
         .params
@@ -826,8 +862,6 @@ fn compute_function_metadata_from_item_tree(
     let pkg_info = file_package(db, file);
     let pkg_id = PackageId::new(db, pkg_info.package);
     let pkg_items = package_items(db, pkg_id);
-    let type_aliases = baml_compiler2_tir::inference::collect_type_aliases(db, pkg_items);
-    let recursive_aliases = baml_compiler2_tir::normalize::find_recursive_aliases(&type_aliases);
     let null_ty = || baml_type::Ty::Null {
         attr: baml_type::TyAttr::default(),
     };
@@ -841,7 +875,7 @@ fn compute_function_metadata_from_item_tree(
             &[],
             &mut diags,
         );
-        baml_compiler2_mir::convert_tir2_ty(&tir_ty, &type_aliases, &recursive_aliases)
+        cache.convert(&tir_ty)
     };
 
     let param_types: Vec<baml_type::Ty> = func_data
@@ -1161,6 +1195,7 @@ fn compile_init_function<'db>(
                     },
                     param_names: Vec::new(),
                     param_types: Vec::new(),
+                    throws_type: None,
                     body_meta: None,
                     trace: false,
                 }
@@ -1212,6 +1247,7 @@ fn compile_init_function<'db>(
         },
         param_names: Vec::new(),
         param_types: Vec::new(),
+        throws_type: None,
         body_meta: None,
         trace: false,
     })

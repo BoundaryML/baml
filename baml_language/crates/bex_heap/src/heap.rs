@@ -232,6 +232,18 @@ impl BexHeap {
         // First, compute pointers for all objects (they're at stable positions in the slice)
         let base_ptr = objects.as_ptr();
 
+        let resolve_idx = |idx: bex_vm_types::ObjectIndex| -> bex_vm_types::HeapPtr {
+            let ptr = unsafe { base_ptr.add(idx.into_raw()) as *mut Object };
+            #[cfg(feature = "heap_debug")]
+            unsafe {
+                bex_vm_types::HeapPtr::from_ptr(ptr, 0)
+            }
+            #[cfg(not(feature = "heap_debug"))]
+            unsafe {
+                bex_vm_types::HeapPtr::from_ptr(ptr)
+            }
+        };
+
         for obj in objects.iter_mut() {
             if let Object::Function(func) = obj {
                 // Resolve each constant, converting ObjectIndex to HeapPtr
@@ -239,21 +251,7 @@ impl BexHeap {
                     .bytecode
                     .constants
                     .iter()
-                    .map(|cv| {
-                        cv.to_value(|idx| {
-                            // Get pointer to object at this index
-                            let ptr = unsafe { base_ptr.add(idx.into_raw()) as *mut Object };
-                            // Compile-time objects have epoch 0
-                            #[cfg(feature = "heap_debug")]
-                            unsafe {
-                                bex_vm_types::HeapPtr::from_ptr(ptr, 0)
-                            }
-                            #[cfg(not(feature = "heap_debug"))]
-                            unsafe {
-                                bex_vm_types::HeapPtr::from_ptr(ptr)
-                            }
-                        })
-                    })
+                    .map(|cv| cv.to_value(resolve_idx))
                     .collect();
             }
         }

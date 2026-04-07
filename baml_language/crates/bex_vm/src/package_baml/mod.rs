@@ -28,10 +28,7 @@ mod unstable;
 use bex_vm_types::types::{Instance, Object, Type, Value};
 use indexmap::IndexMap;
 
-use crate::{
-    BexVm,
-    errors::{InternalError, RuntimeError, VmError},
-};
+use crate::{BexVm, errors::VmError};
 
 /// Result type for native functions.
 pub type NativeFunctionResult = Result<Value, VmError>;
@@ -85,10 +82,10 @@ pub fn attach_builtins(object: Object) -> Result<Object, VmError> {
                         let Some(native_function) =
                             PackageBamlImpl::get_native_fn(function.name.as_str())
                         else {
-                            return Err(VmError::RuntimeError(RuntimeError::Other(format!(
+                            return Err(VmError::InternalError(format!(
                                 "Native function '{}' not found",
                                 function.name
-                            ))));
+                            )));
                         };
                         bex_vm_types::FunctionKind::Native(native_function as *const ())
                     }
@@ -109,6 +106,7 @@ pub fn attach_builtins(object: Object) -> Result<Object, VmError> {
                 return_type: function.return_type,
                 param_names: function.param_names,
                 param_types: function.param_types,
+                throws_type: function.throws_type,
                 body_meta: function.body_meta,
                 trace: function.trace,
             }))

@@ -38,3 +38,13 @@ function InvalidArmSyntax(x: int) -> string {
 //    │ 
 //    │ Note: Error code: E0001
 // ───╯
+// Warning: unreachable arm
+//    ╭─[ catch_invalid_arm_syntax.baml:7:23 ]
+//    │
+//  7 │ ╭─▶     _: string => "ok",
+//  8 │ ├─▶     let y = "hi";
+//    │ │                       
+//    │ ╰─────────────────────── unreachable arm
+//    │     
+//    │     Note: Error code: E0001
+// ───╯

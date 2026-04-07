@@ -5884,58 +5884,58 @@ fn user.MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bo
     let _25: MatchFailure // f
     let _26: MatchFailure
     let _27: bool
-    let _28: MatchSuccess | MatchFailure // x
-    let _29: bool
-    let _30: int // n
-    let _31: bool
-    let _32: int
-    let _33: bool
-    let _34: int // n
-    let _35: bool
-    let _36: int
-    let _37: bool
-    let _38: int // n
-    let _39: bool
+    let _28: bool
+    let _29: MatchSuccess | MatchFailure // x
+    let _30: bool
+    let _31: int // n
+    let _32: bool
+    let _33: int
+    let _34: bool
+    let _35: int // n
+    let _36: bool
+    let _37: int
+    let _38: bool
+    let _39: int // n
     let _40: bool
     let _41: bool
     let _42: bool
     let _43: bool
     let _44: bool
-    let _45: int
+    let _45: bool
     let _46: int
     let _47: int
     let _48: int
     let _49: int
     let _50: int
     let _51: int
-    let _52: string // result
-    let _53: bool
-    let _54: int // n
-    let _55: bool
+    let _52: int
+    let _53: string // result
+    let _54: bool
+    let _55: int // n
     let _56: bool
     let _57: bool
     let _58: bool
     let _59: bool
-    let _60: int
+    let _60: bool
     let _61: int
     let _62: int
     let _63: int
     let _64: int
-    let _65: bool
-    let _66: int // n
-    let _67: bool
+    let _65: int
+    let _66: bool
+    let _67: int // n
     let _68: bool
     let _69: bool
     let _70: bool
     let _71: bool
-    let _72: int
+    let _72: bool
     let _73: int
     let _74: int
     let _75: int
     let _76: int
     let _77: int
     let _78: int
-    let _79: void
+    let _79: int
     let _80: void
     let _81: void
     let _82: void
@@ -5943,42 +5943,43 @@ fn user.MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bo
     let _84: void
     let _85: void
     let _86: void
-    let _87: int
+    let _87: void
     let _88: int
     let _89: int
-    let _90: void
+    let _90: int
     let _91: void
-    let _92: int
+    let _92: void
     let _93: int
     let _94: int
     let _95: int
     let _96: int
     let _97: int
     let _98: int
-    let _99: void
+    let _99: int
     let _100: void
     let _101: void
     let _102: void
-    let _103: int
+    let _103: void
     let _104: int
-    let _105: void
+    let _105: int
     let _106: void
-    let _107: int
+    let _107: void
     let _108: int
     let _109: int
-    let _110: bool
+    let _110: int
     let _111: bool
     let _112: bool
-    let _113: int
-    let _114: bool
+    let _113: bool
+    let _114: int
     let _115: bool
-    let _116: MatchSuccess // s
-    let _117: bool
-    let _118: MatchSuccess
-    let _119: bool
+    let _116: bool
+    let _117: MatchSuccess // s
+    let _118: bool
+    let _119: MatchSuccess
     let _120: bool
-    let _121: MatchFailure
-    let _122: int
+    let _121: bool
+    let _122: MatchFailure
+    let _123: int
 
     bb0: {
         switch copy _1 [0: bb2, otherwise: bb1];
@@ -6295,462 +6296,463 @@ fn user.MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bo
     }
 
     bb73: {
-        _27 = is_type(copy _3, Union([Class(TypeName { name: "MatchSuccess", module_path: ["user"], display_name: "MatchSuccess" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }), Class(TypeName { name: "MatchFailure", module_path: ["user"], display_name: "MatchFailure" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] })], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
-        branch copy _27 -> [bb75, bb74];
+        _27 = is_type(copy _3, Class(TypeName { name: "MatchSuccess", module_path: ["user"], display_name: "MatchSuccess" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        branch copy _27 -> [bb76, bb74];
     }
 
     bb74: {
-        goto -> bb76;
+        _28 = is_type(copy _3, Class(TypeName { name: "MatchFailure", module_path: ["user"], display_name: "MatchFailure" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        branch copy _28 -> [bb76, bb75];
     }
 
     bb75: {
-        _28 = copy _3;
-        goto -> bb76;
+        goto -> bb77;
     }
 
     bb76: {
-        switch copy _28 [0: bb78, 1: bb78, 2: bb78, 3: bb78, 4: bb78, 5: bb78, otherwise: bb77];
+        _29 = copy _3;
+        goto -> bb77;
     }
 
     bb77: {
-        goto -> bb79;
+        switch copy _29 [0: bb79, 1: bb79, 2: bb79, 3: bb79, 4: bb79, 5: bb79, otherwise: bb78];
     }
 
     bb78: {
-        goto -> bb79;
+        goto -> bb80;
     }
 
     bb79: {
-        _29 = is_type(copy _28, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
-        branch copy _29 -> [bb80, bb81];
+        goto -> bb80;
     }
 
     bb80: {
-        _30 = copy _28;
-        _32 = copy _30;
-        _31 = copy _32 > const 0_i64;
-        branch copy _31 -> [bb86, bb81];
+        _30 = is_type(copy _29, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _30 -> [bb81, bb82];
     }
 
     bb81: {
-        _33 = is_type(copy _28, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
-        branch copy _33 -> [bb82, bb83];
+        _31 = copy _29;
+        _33 = copy _31;
+        _32 = copy _33 > const 0_i64;
+        branch copy _32 -> [bb87, bb82];
     }
 
     bb82: {
-        _34 = copy _28;
-        _36 = copy _34;
-        _35 = copy _36 < const 0_i64;
-        branch copy _35 -> [bb85, bb83];
+        _34 = is_type(copy _29, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _34 -> [bb83, bb84];
     }
 
     bb83: {
-        goto -> bb84;
+        _35 = copy _29;
+        _37 = copy _35;
+        _36 = copy _37 < const 0_i64;
+        branch copy _36 -> [bb86, bb84];
     }
 
     bb84: {
-        goto -> bb87;
+        goto -> bb85;
     }
 
     bb85: {
-        goto -> bb87;
+        goto -> bb88;
     }
 
     bb86: {
-        goto -> bb87;
+        goto -> bb88;
     }
 
     bb87: {
-        _37 = is_type(copy _28, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
-        branch copy _37 -> [bb88, bb99];
+        goto -> bb88;
     }
 
     bb88: {
-        _38 = copy _28;
-        _45 = copy _38;
-        _44 = copy _45 > const 0_i64;
-        _43 = copy _44;
-        branch copy _44 -> [bb89, bb90];
+        _38 = is_type(copy _29, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _38 -> [bb89, bb100];
     }
 
     bb89: {
-        _46 = copy _38;
-        _43 = copy _46 < const 100_i64;
-        goto -> bb90;
+        _39 = copy _29;
+        _46 = copy _39;
+        _45 = copy _46 > const 0_i64;
+        _44 = copy _45;
+        branch copy _45 -> [bb90, bb91];
     }
 
     bb90: {
-        _42 = copy _43;
-        branch copy _43 -> [bb91, bb92];
+        _47 = copy _39;
+        _44 = copy _47 < const 100_i64;
+        goto -> bb91;
     }
 
     bb91: {
-        _47 = copy _38;
-        _42 = copy _47 != const 42_i64;
-        goto -> bb92;
+        _43 = copy _44;
+        branch copy _44 -> [bb92, bb93];
     }
 
     bb92: {
-        _41 = copy _42;
-        branch copy _42 -> [bb93, bb94];
+        _48 = copy _39;
+        _43 = copy _48 != const 42_i64;
+        goto -> bb93;
     }
 
     bb93: {
-        _48 = copy _38;
-        _41 = copy _48 != const 13_i64;
-        goto -> bb94;
+        _42 = copy _43;
+        branch copy _43 -> [bb94, bb95];
     }
 
     bb94: {
-        _40 = copy _41;
-        branch copy _41 -> [bb95, bb96];
+        _49 = copy _39;
+        _42 = copy _49 != const 13_i64;
+        goto -> bb95;
     }
 
     bb95: {
-        _49 = copy _38;
-        _40 = copy _49 != const 7_i64;
-        goto -> bb96;
+        _41 = copy _42;
+        branch copy _42 -> [bb96, bb97];
     }
 
     bb96: {
-        _39 = copy _40;
-        branch copy _40 -> [bb97, bb98];
+        _50 = copy _39;
+        _41 = copy _50 != const 7_i64;
+        goto -> bb97;
     }
 
     bb97: {
-        _50 = copy _38;
-        _39 = copy _50 != const 99_i64;
-        goto -> bb98;
+        _40 = copy _41;
+        branch copy _41 -> [bb98, bb99];
     }
 
     bb98: {
-        branch copy _39 -> [bb101, bb99];
+        _51 = copy _39;
+        _40 = copy _51 != const 99_i64;
+        goto -> bb99;
     }
 
     bb99: {
-        goto -> bb100;
+        branch copy _40 -> [bb102, bb100];
     }
 
     bb100: {
-        goto -> bb102;
+        goto -> bb101;
     }
 
     bb101: {
-        goto -> bb102;
+        goto -> bb103;
     }
 
     bb102: {
-        switch copy _28 [0: bb105, 1: bb104, otherwise: bb103];
+        goto -> bb103;
     }
 
     bb103: {
-        goto -> bb106;
+        switch copy _29 [0: bb106, 1: bb105, otherwise: bb104];
     }
 
     bb104: {
-        goto -> bb106;
+        goto -> bb107;
     }
 
     bb105: {
-        goto -> bb106;
+        goto -> bb107;
     }
 
     bb106: {
-        switch copy _28 [0: bb108, 1: bb108, 2: bb108, 3: bb108, 4: bb108, 5: bb108, 6: bb108, 7: bb108, 8: bb108, 9: bb108, 10: bb108, 11: bb108, 12: bb108, 13: bb108, 14: bb108, 15: bb108, 16: bb108, 17: bb108, 18: bb108, 19: bb108, 20: bb108, 21: bb108, 22: bb108, 23: bb108, 24: bb108, otherwise: bb107];
+        goto -> bb107;
     }
 
     bb107: {
-        goto -> bb109;
+        switch copy _29 [0: bb109, 1: bb109, 2: bb109, 3: bb109, 4: bb109, 5: bb109, 6: bb109, 7: bb109, 8: bb109, 9: bb109, 10: bb109, 11: bb109, 12: bb109, 13: bb109, 14: bb109, 15: bb109, 16: bb109, 17: bb109, 18: bb109, 19: bb109, 20: bb109, 21: bb109, 22: bb109, 23: bb109, 24: bb109, otherwise: bb108];
     }
 
     bb108: {
-        goto -> bb109;
+        goto -> bb110;
     }
 
     bb109: {
-        _51 = discriminant(_22);
-        switch copy _51 [MatchStatus.Active: bb111, MatchStatus.Inactive: bb111, MatchStatus.Pending: bb111, otherwise: bb110] (exhaustive);
+        goto -> bb110;
     }
 
     bb110: {
-        unreachable;
+        _52 = discriminant(_22);
+        switch copy _52 [MatchStatus.Active: bb112, MatchStatus.Inactive: bb112, MatchStatus.Pending: bb112, otherwise: bb111] (exhaustive);
     }
 
     bb111: {
-        goto -> bb112;
+        unreachable;
     }
 
     bb112: {
-        switch copy _28 [0: bb114, otherwise: bb113];
+        goto -> bb113;
     }
 
     bb113: {
-        goto -> bb118;
+        switch copy _29 [0: bb115, otherwise: bb114];
     }
 
     bb114: {
-        branch copy _4 -> [bb116, bb115];
+        goto -> bb119;
     }
 
     bb115: {
-        _52 = const "this is the false branch also very long";
-        goto -> bb117;
+        branch copy _4 -> [bb117, bb116];
     }
 
     bb116: {
-        _52 = const "this is the true branch with a very long string";
-        goto -> bb117;
+        _53 = const "this is the false branch also very long";
+        goto -> bb118;
     }
 
     bb117: {
+        _53 = const "this is the true branch with a very long string";
         goto -> bb118;
     }
 
     bb118: {
-        _53 = is_type(copy _28, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
-        branch copy _53 -> [bb119, bb128];
+        goto -> bb119;
     }
 
     bb119: {
-        _54 = copy _28;
-        _60 = copy _54;
-        _59 = copy _60 > const 0_i64;
-        _58 = copy _59;
-        branch copy _59 -> [bb120, bb121];
+        _54 = is_type(copy _29, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _54 -> [bb120, bb129];
     }
 
     bb120: {
-        _61 = copy _54;
-        _58 = copy _61 < const 100_i64;
-        goto -> bb121;
+        _55 = copy _29;
+        _61 = copy _55;
+        _60 = copy _61 > const 0_i64;
+        _59 = copy _60;
+        branch copy _60 -> [bb121, bb122];
     }
 
     bb121: {
-        _57 = copy _58;
-        branch copy _58 -> [bb122, bb123];
+        _62 = copy _55;
+        _59 = copy _62 < const 100_i64;
+        goto -> bb122;
     }
 
     bb122: {
-        _62 = copy _54;
-        _57 = copy _62 != const 42_i64;
-        goto -> bb123;
+        _58 = copy _59;
+        branch copy _59 -> [bb123, bb124];
     }
 
     bb123: {
-        _56 = copy _57;
-        branch copy _57 -> [bb124, bb125];
+        _63 = copy _55;
+        _58 = copy _63 != const 42_i64;
+        goto -> bb124;
     }
 
     bb124: {
-        _63 = copy _54;
-        _56 = copy _63 != const 13_i64;
-        goto -> bb125;
+        _57 = copy _58;
+        branch copy _58 -> [bb125, bb126];
     }
 
     bb125: {
-        _55 = copy _56;
-        branch copy _56 -> [bb126, bb127];
+        _64 = copy _55;
+        _57 = copy _64 != const 13_i64;
+        goto -> bb126;
     }
 
     bb126: {
-        _64 = copy _54;
-        _55 = copy _64 != const 7_i64;
-        goto -> bb127;
+        _56 = copy _57;
+        branch copy _57 -> [bb127, bb128];
     }
 
     bb127: {
-        branch copy _55 -> [bb130, bb128];
+        _65 = copy _55;
+        _56 = copy _65 != const 7_i64;
+        goto -> bb128;
     }
 
     bb128: {
-        goto -> bb129;
+        branch copy _56 -> [bb131, bb129];
     }
 
     bb129: {
-        goto -> bb131;
+        goto -> bb130;
     }
 
     bb130: {
-        goto -> bb131;
+        goto -> bb132;
     }
 
     bb131: {
-        _65 = is_type(copy _28, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
-        branch copy _65 -> [bb132, bb141];
+        goto -> bb132;
     }
 
     bb132: {
-        _66 = copy _28;
-        _72 = copy _66;
-        _71 = copy _72 > const 0_i64;
-        _70 = copy _71;
-        branch copy _71 -> [bb133, bb134];
+        _66 = is_type(copy _29, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _66 -> [bb133, bb142];
     }
 
     bb133: {
-        _73 = copy _66;
-        _70 = copy _73 < const 100_i64;
-        goto -> bb134;
+        _67 = copy _29;
+        _73 = copy _67;
+        _72 = copy _73 > const 0_i64;
+        _71 = copy _72;
+        branch copy _72 -> [bb134, bb135];
     }
 
     bb134: {
-        _69 = copy _70;
-        branch copy _70 -> [bb135, bb136];
+        _74 = copy _67;
+        _71 = copy _74 < const 100_i64;
+        goto -> bb135;
     }
 
     bb135: {
-        _74 = copy _66;
-        _69 = copy _74 != const 42_i64;
-        goto -> bb136;
+        _70 = copy _71;
+        branch copy _71 -> [bb136, bb137];
     }
 
     bb136: {
-        _68 = copy _69;
-        branch copy _69 -> [bb137, bb138];
+        _75 = copy _67;
+        _70 = copy _75 != const 42_i64;
+        goto -> bb137;
     }
 
     bb137: {
-        _75 = copy _66;
-        _68 = copy _75 != const 13_i64;
-        goto -> bb138;
+        _69 = copy _70;
+        branch copy _70 -> [bb138, bb139];
     }
 
     bb138: {
-        _67 = copy _68;
-        branch copy _68 -> [bb139, bb140];
+        _76 = copy _67;
+        _69 = copy _76 != const 13_i64;
+        goto -> bb139;
     }
 
     bb139: {
-        _76 = copy _66;
-        _67 = copy _76 != const 7_i64;
-        goto -> bb140;
+        _68 = copy _69;
+        branch copy _69 -> [bb140, bb141];
     }
 
     bb140: {
-        branch copy _67 -> [bb143, bb141];
+        _77 = copy _67;
+        _68 = copy _77 != const 7_i64;
+        goto -> bb141;
     }
 
     bb141: {
-        goto -> bb142;
+        branch copy _68 -> [bb144, bb142];
     }
 
     bb142: {
-        goto -> bb144;
+        goto -> bb143;
     }
 
     bb143: {
-        goto -> bb144;
+        goto -> bb145;
     }
 
     bb144: {
-        _78 = copy _28;
-        _77 = copy _78 + const 1_i64;
-        switch copy _77 [0: bb146, otherwise: bb145];
+        goto -> bb145;
     }
 
     bb145: {
-        goto -> bb147;
+        _79 = copy _29;
+        _78 = copy _79 + const 1_i64;
+        switch copy _78 [0: bb147, otherwise: bb146];
     }
 
     bb146: {
-        goto -> bb147;
+        goto -> bb148;
     }
 
     bb147: {
-        _88 = copy _28;
-        _89 = copy _28;
-        _87 = copy _88 * copy _89;
-        _90 = copy _4 * copy _4;
-        _86 = copy _87 + copy _90;
-        _92 = copy _28;
-        _91 = copy _92 * copy _4;
-        _85 = copy _86 + copy _91;
-        _93 = copy _28;
-        _84 = copy _85 + copy _93;
-        _83 = copy _84 + copy _4;
-        _96 = copy _28;
-        _97 = copy _28;
-        _95 = copy _96 * copy _97;
-        _98 = copy _28;
-        _94 = copy _95 * copy _98;
-        _82 = copy _83 + copy _94;
-        _100 = copy _4 * copy _4;
-        _99 = copy _100 * copy _4;
-        _81 = copy _82 + copy _99;
-        _103 = copy _28;
-        _102 = copy _103 * copy _4;
-        _104 = copy _28;
-        _101 = copy _102 * copy _104;
-        _80 = copy _81 + copy _101;
-        _107 = copy _28;
-        _106 = copy _4 * copy _107;
-        _105 = copy _106 * copy _4;
-        _79 = copy _80 + copy _105;
-        switch copy _79 [0: bb149, otherwise: bb148];
+        goto -> bb148;
     }
 
     bb148: {
-        goto -> bb150;
+        _89 = copy _29;
+        _90 = copy _29;
+        _88 = copy _89 * copy _90;
+        _91 = copy _4 * copy _4;
+        _87 = copy _88 + copy _91;
+        _93 = copy _29;
+        _92 = copy _93 * copy _4;
+        _86 = copy _87 + copy _92;
+        _94 = copy _29;
+        _85 = copy _86 + copy _94;
+        _84 = copy _85 + copy _4;
+        _97 = copy _29;
+        _98 = copy _29;
+        _96 = copy _97 * copy _98;
+        _99 = copy _29;
+        _95 = copy _96 * copy _99;
+        _83 = copy _84 + copy _95;
+        _101 = copy _4 * copy _4;
+        _100 = copy _101 * copy _4;
+        _82 = copy _83 + copy _100;
+        _104 = copy _29;
+        _103 = copy _104 * copy _4;
+        _105 = copy _29;
+        _102 = copy _103 * copy _105;
+        _81 = copy _82 + copy _102;
+        _108 = copy _29;
+        _107 = copy _4 * copy _108;
+        _106 = copy _107 * copy _4;
+        _80 = copy _81 + copy _106;
+        switch copy _80 [0: bb150, otherwise: bb149];
     }
 
     bb149: {
-        goto -> bb150;
+        goto -> bb151;
     }
 
     bb150: {
-        _109 = copy _28;
-        _108 = copy _109 + const 1_i64;
-        switch copy _108 [0: bb152, otherwise: bb151];
+        goto -> bb151;
     }
 
     bb151: {
-        goto -> bb153;
+        _110 = copy _29;
+        _109 = copy _110 + const 1_i64;
+        switch copy _109 [0: bb153, otherwise: bb152];
     }
 
     bb152: {
-        goto -> bb153;
+        goto -> bb154;
     }
 
     bb153: {
-        switch copy _28 [0: bb155, otherwise: bb154];
+        goto -> bb154;
     }
 
     bb154: {
-        goto -> bb156;
+        switch copy _29 [0: bb156, otherwise: bb155];
     }
 
     bb155: {
-        goto -> bb156;
+        goto -> bb157;
     }
 
     bb156: {
-        switch copy _28 [0: bb158, otherwise: bb157];
+        goto -> bb157;
     }
 
     bb157: {
-        goto -> bb164;
+        switch copy _29 [0: bb159, otherwise: bb158];
     }
 
     bb158: {
-        _110 = copy _4 == const true;
-        branch copy _110 -> [bb162, bb159];
+        goto -> bb165;
     }
 
     bb159: {
-        _111 = copy _4 == const false;
-        branch copy _111 -> [bb161, bb160];
+        _111 = copy _4 == const true;
+        branch copy _111 -> [bb163, bb160];
     }
 
     bb160: {
-        goto -> bb163;
+        _112 = copy _4 == const false;
+        branch copy _112 -> [bb162, bb161];
     }
 
     bb161: {
-        goto -> bb163;
+        goto -> bb164;
     }
 
     bb162: {
-        goto -> bb163;
+        goto -> bb164;
     }
 
     bb163: {
@@ -6758,101 +6760,101 @@ fn user.MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bo
     }
 
     bb164: {
-        switch copy _28 [0: bb177, 1: bb166, otherwise: bb165];
+        goto -> bb165;
     }
 
     bb165: {
-        goto -> bb188;
+        switch copy _29 [0: bb178, 1: bb167, otherwise: bb166];
     }
 
     bb166: {
-        _115 = is_type(copy _3, Class(TypeName { name: "MatchSuccess", module_path: ["user"], display_name: "MatchSuccess" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
-        branch copy _115 -> [bb170, bb167];
+        goto -> bb189;
     }
 
     bb167: {
-        _120 = is_type(copy _3, Class(TypeName { name: "MatchFailure", module_path: ["user"], display_name: "MatchFailure" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
-        branch copy _120 -> [bb169, bb168];
+        _116 = is_type(copy _3, Class(TypeName { name: "MatchSuccess", module_path: ["user"], display_name: "MatchSuccess" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        branch copy _116 -> [bb171, bb168];
     }
 
     bb168: {
-        goto -> bb176;
+        _121 = is_type(copy _3, Class(TypeName { name: "MatchFailure", module_path: ["user"], display_name: "MatchFailure" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        branch copy _121 -> [bb170, bb169];
     }
 
     bb169: {
-        _121 = const null;
-        goto -> bb176;
+        goto -> bb177;
     }
 
     bb170: {
-        _116 = copy _3;
-        _117 = copy _4 == const true;
-        branch copy _117 -> [bb174, bb171];
+        _122 = const null;
+        goto -> bb177;
     }
 
     bb171: {
-        _119 = copy _4 == const false;
-        branch copy _119 -> [bb173, bb172];
+        _117 = copy _3;
+        _118 = copy _4 == const true;
+        branch copy _118 -> [bb175, bb172];
     }
 
     bb172: {
-        goto -> bb175;
+        _120 = copy _4 == const false;
+        branch copy _120 -> [bb174, bb173];
     }
 
     bb173: {
-        goto -> bb175;
+        goto -> bb176;
     }
 
     bb174: {
-        _118 = copy _116;
-        goto -> bb175;
+        goto -> bb176;
     }
 
     bb175: {
+        _119 = copy _117;
         goto -> bb176;
     }
 
     bb176: {
-        goto -> bb188;
+        goto -> bb177;
     }
 
     bb177: {
-        _112 = copy _4 == const true;
-        branch copy _112 -> [bb181, bb178];
+        goto -> bb189;
     }
 
     bb178: {
-        _114 = copy _4 == const false;
-        branch copy _114 -> [bb180, bb179];
+        _113 = copy _4 == const true;
+        branch copy _113 -> [bb182, bb179];
     }
 
     bb179: {
-        goto -> bb187;
+        _115 = copy _4 == const false;
+        branch copy _115 -> [bb181, bb180];
     }
 
     bb180: {
-        goto -> bb187;
+        goto -> bb188;
     }
 
     bb181: {
-        _113 = discriminant(_22);
-        switch copy _113 [MatchStatus.Active: bb185, MatchStatus.Inactive: bb184, MatchStatus.Pending: bb183, otherwise: bb182] (exhaustive);
+        goto -> bb188;
     }
 
     bb182: {
-        unreachable;
+        _114 = discriminant(_22);
+        switch copy _114 [MatchStatus.Active: bb186, MatchStatus.Inactive: bb185, MatchStatus.Pending: bb184, otherwise: bb183] (exhaustive);
     }
 
     bb183: {
-        goto -> bb186;
+        unreachable;
     }
 
     bb184: {
-        goto -> bb186;
+        goto -> bb187;
     }
 
     bb185: {
-        goto -> bb186;
+        goto -> bb187;
     }
 
     bb186: {
@@ -6864,40 +6866,40 @@ fn user.MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bo
     }
 
     bb188: {
-        switch copy _28 [0: bb190, otherwise: bb189];
+        goto -> bb189;
     }
 
     bb189: {
-        goto -> bb199;
+        switch copy _29 [0: bb191, otherwise: bb190];
     }
 
     bb190: {
-        branch copy _4 -> [bb192, bb191];
+        goto -> bb200;
     }
 
     bb191: {
-        goto -> bb198;
+        branch copy _4 -> [bb193, bb192];
     }
 
     bb192: {
-        _122 = discriminant(_116);
-        switch copy _122 [MatchStatus.Active: bb196, MatchStatus.Inactive: bb195, MatchStatus.Pending: bb194, otherwise: bb193] (exhaustive);
+        goto -> bb199;
     }
 
     bb193: {
-        unreachable;
+        _123 = discriminant(_117);
+        switch copy _123 [MatchStatus.Active: bb197, MatchStatus.Inactive: bb196, MatchStatus.Pending: bb195, otherwise: bb194] (exhaustive);
     }
 
     bb194: {
-        goto -> bb197;
+        unreachable;
     }
 
     bb195: {
-        goto -> bb197;
+        goto -> bb198;
     }
 
     bb196: {
-        goto -> bb197;
+        goto -> bb198;
     }
 
     bb197: {
@@ -6909,24 +6911,28 @@ fn user.MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bo
     }
 
     bb199: {
-        switch copy _28 [0: bb201, otherwise: bb200];
+        goto -> bb200;
     }
 
     bb200: {
-        _0 = const "other";
-        goto -> bb202;
+        switch copy _29 [0: bb202, otherwise: bb201];
     }
 
     bb201: {
-        _0 = const "zero";
-        goto -> bb202;
+        _0 = const "other";
+        goto -> bb203;
     }
 
     bb202: {
+        _0 = const "zero";
         goto -> bb203;
     }
 
     bb203: {
+        goto -> bb204;
+    }
+
+    bb204: {
         return;
     }
 }

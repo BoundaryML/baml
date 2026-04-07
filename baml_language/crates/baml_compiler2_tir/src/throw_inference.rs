@@ -241,6 +241,23 @@ pub fn function_throw_sets<'db>(
     FunctionThrowSets { direct, transitive }
 }
 
+/// Build the throw-set lookup key for a function given its namespace path and short name.
+///
+/// For top-level functions the key is just the short name; for namespaced
+/// functions it is `"ns1.ns2.name"`.
+pub fn throw_set_key(namespace_path: &[Name], short_name: &Name) -> Name {
+    if namespace_path.is_empty() {
+        short_name.clone()
+    } else {
+        let mut parts: Vec<String> = namespace_path
+            .iter()
+            .map(|n| n.as_str().to_string())
+            .collect();
+        parts.push(short_name.as_str().to_string());
+        Name::new(parts.join("."))
+    }
+}
+
 fn function_key<'db>(
     db: &'db dyn crate::Db,
     func: baml_compiler2_hir::loc::FunctionLoc<'db>,
@@ -248,17 +265,7 @@ fn function_key<'db>(
 ) -> Name {
     let file = func.file(db);
     let pkg = baml_compiler2_hir::file_package::file_package(db, file);
-    if pkg.namespace_path.is_empty() {
-        short_name.clone()
-    } else {
-        let mut parts: Vec<String> = pkg
-            .namespace_path
-            .iter()
-            .map(|n| n.as_str().to_string())
-            .collect();
-        parts.push(short_name.as_str().to_string());
-        Name::new(parts.join("."))
-    }
+    throw_set_key(&pkg.namespace_path, short_name)
 }
 
 pub fn collect_direct_throws<'db>(

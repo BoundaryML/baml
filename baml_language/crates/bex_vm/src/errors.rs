@@ -1,11 +1,42 @@
 use bex_vm_types::{BinOp, CmpOp, UnaryOp, Value, types::Type};
 use thiserror::Error;
 
-/// Bug in the VM or somehow invalid source code got compiled and executed.
+/// A catchable BAML panic — maps 1:1 to a `baml.panics.*` class.
 ///
-/// If the VM throws this it's either a bug in the compiler or in the VM itself.
+/// These are user-visible runtime errors (division by zero, index out of
+/// bounds, etc.) that can be caught by `catch` handlers. The handler's
+/// `ThrowIfPanic` instruction filters which panics are caught vs rethrown.
 #[derive(Debug, Error, PartialEq, Clone)]
-pub enum InternalError {
+pub enum VmPanic {
+    #[error("division by zero: {left:?} / {right:?}")]
+    DivisionByZero { left: Value, right: Value },
+
+    #[error("array index out of bounds: {index} of {length}")]
+    IndexOutOfBounds { index: i64, length: usize },
+
+    #[error("key not found in map")]
+    MapKeyNotFound,
+
+    #[error("stack overflow")]
+    StackOverflow,
+
+    #[error("assertion failed")]
+    AssertionFailed,
+
+    #[error("unreachable code executed")]
+    Unreachable,
+}
+
+/// Any kind of virtual machine error.
+#[derive(Debug, Error, PartialEq, Clone)]
+pub enum VmError {
+    // ── Catchable panics ────────────────────────────────────────────────
+    /// A BAML-level panic (converted to a `baml.panics.*` instance and
+    /// routed through the exception table).
+    #[error("{0}")]
+    Panic(#[from] VmPanic),
+
+    // ── Fatal errors (not catchable) ────────────────────────────────────
     #[error("invalid argument count: expected {expected}, got {got}")]
     InvalidArgumentCount { expected: usize, got: usize },
 
@@ -30,58 +61,15 @@ pub enum InternalError {
     #[error("cannot apply unary operation: {op} {value}")]
     CannotApplyUnaryOp { op: UnaryOp, value: Type },
 
-    #[error("array index out of bounds: {index} of {length}")]
-    ArrayIndexOutOfBounds { index: usize, length: usize },
-
-    #[error("array index is negative: {0}")]
-    ArrayIndexIsNegative(i64),
-
     #[error("jump offset overflowed instruction pointer")]
     InvalidJump,
 
-    #[error("{0}")]
-    Other(String),
-}
+    // ── Terminal errors ─────────────────────────────────────────────────
+    #[error("uncaught throw: {value:?}")]
+    UnhandledThrow { value: Value },
 
-/// Errors that can happen at runtime.
-///
-/// Either logic errors in the user's source code or bugs in our compiler/VM
-/// stack.
-#[derive(Debug, Error, PartialEq, Clone)]
-pub enum RuntimeError {
-    #[error("stack overflow")]
-    StackOverflow,
-
-    #[error("unreachable code executed")]
-    Unreachable,
-
-    #[error("{0}")]
-    InternalError(#[from] InternalError),
-
-    #[error("key not found in map")]
-    NoSuchKeyInMap,
-
-    #[error("division by zero: {left:?} / {right:?}")]
-    DivisionByZero { left: Value, right: Value },
-
-    #[error("uncaught throw: {value}")]
-    UnhandledThrow { value: String },
-
-    #[error("{0}")]
-    Other(String),
-}
-
-/// Any kind of virtual machine error.
-#[derive(Debug, Error, PartialEq, Clone)]
-pub enum VmError {
-    #[error("{0}")]
-    RuntimeError(#[from] RuntimeError),
-}
-
-impl From<InternalError> for VmError {
-    fn from(error: InternalError) -> Self {
-        VmError::RuntimeError(RuntimeError::InternalError(error))
-    }
+    #[error("internal error: {0}")]
+    InternalError(String),
 }
 
 #[derive(Debug, Clone)]

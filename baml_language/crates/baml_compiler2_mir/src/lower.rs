@@ -1,32 +1,28 @@
 use std::collections::{HashMap, HashSet};
 
 use baml_base::Name;
-use baml_compiler2_ast::ExprId;
 use baml_type::{MediaKind, Ty, TyAttr, TypeName};
 use indexmap::IndexMap;
 
 use crate::{
     builder::MirBuilder,
-    cleanup,
     ir::{
-        AggregateKind, BasicBlock, BinOp, BlockId, Constant, IndexKind, ItemRef, Local, LocalDecl,
-        MirFunction, MirFunctionBody, MirFunctionKind, Operand, Place, Rvalue, StatementKind,
-        Terminator,
+        AggregateKind, BasicBlock, BinOp, BlockId, CatchRegion, Constant, IndexKind, ItemRef,
+        Local, LocalDecl, MirFunction, MirFunctionBody, MirFunctionKind, Operand, Place, Rvalue,
+        StatementKind, Terminator,
     },
+    optimize,
 };
 
-// --- Helper enums carried forward from old code ---
-
-#[allow(dead_code)]
-enum FieldSource {
-    Named(ExprId),
-    Spread(Local, usize),
-}
-
-#[allow(dead_code)]
+/// Classifies what kind of switch a match expression lowers to.
+///
+/// `Integer` and `EnumDiscriminant` are currently implemented.
+/// `TypeTag` (union-type dispatch via runtime type tags) is not yet ported
+/// from MIR 1 — it will use `class_type_tags` when implemented.
 enum SwitchKind {
     Integer,
     EnumDiscriminant(Name),
+    #[allow(dead_code)]
     TypeTag,
 }
 
@@ -39,33 +35,6 @@ struct LoopContext {
 struct CatchContext {
     unwind_target: BlockId,
     error_local: Local,
-}
-
-#[allow(dead_code)]
-struct PendingHeader {
-    name: String,
-}
-
-struct VizContext {
-    #[allow(dead_code)]
-    function_name: String,
-    #[allow(dead_code)]
-    next_node_id: u32,
-    #[allow(dead_code)]
-    parent_keys: Vec<String>,
-    #[allow(dead_code)]
-    ordinal_counters: Vec<u32>,
-}
-
-impl VizContext {
-    fn new(function_name: String) -> Self {
-        Self {
-            function_name,
-            next_node_id: 0,
-            parent_keys: Vec::new(),
-            ordinal_counters: Vec::new(),
-        }
-    }
 }
 
 // ─── Type conversion: TIR Ty → baml_type::Ty ────────────────────────────────
@@ -97,11 +66,38 @@ pub fn qtn_to_type_name(qtn: &QualifiedTypeName) -> TypeName {
     }
 }
 
-pub fn convert_tir2_ty(
-    ty: &Tir2Ty,
-    type_aliases: &HashMap<QualifiedTypeName, Tir2Ty>,
-    recursive_aliases: &HashSet<QualifiedTypeName>,
-) -> Ty {
+/// Pre-computed type alias data for inline expansion in `convert_tir2_ty`.
+///
+/// Bundles the alias map and recursion info that are always passed together.
+pub struct ResolvedAliases {
+    pub aliases: HashMap<QualifiedTypeName, Tir2Ty>,
+    pub recursive: HashSet<QualifiedTypeName>,
+}
+
+impl ResolvedAliases {
+    /// Build resolved aliases for a package, including dependency packages.
+    pub fn for_package(db: &dyn crate::Db, pkg_id: baml_compiler2_hir::package::PackageId) -> Self {
+        use baml_compiler2_hir::package::{package_dependencies, package_items};
+
+        let pkg_items = package_items(db, pkg_id);
+        let mut aliases = baml_compiler2_tir::inference::collect_type_aliases(db, pkg_items);
+        for &dep_id in package_dependencies(db, pkg_id) {
+            let dep_items = package_items(db, dep_id);
+            aliases.extend(baml_compiler2_tir::inference::collect_type_aliases(
+                db, dep_items,
+            ));
+        }
+        let recursive = baml_compiler2_tir::normalize::find_recursive_aliases(&aliases);
+        Self { aliases, recursive }
+    }
+
+    /// Convert a TIR type to `baml_type::Ty` using the cached alias data.
+    pub fn convert(&self, ty: &Tir2Ty) -> Ty {
+        convert_tir2_ty(ty, self)
+    }
+}
+
+pub fn convert_tir2_ty(ty: &Tir2Ty, resolved: &ResolvedAliases) -> Ty {
     let attr = ty.attr().clone();
     match ty {
         // Primitives
@@ -120,12 +116,12 @@ pub fn convert_tir2_ty(
         Tir2Ty::Class(qtn, attr) => Ty::Class(qtn_to_type_name(qtn), attr.clone()),
         Tir2Ty::Enum(qtn, attr) => Ty::Enum(qtn_to_type_name(qtn), attr.clone()),
         Tir2Ty::TypeAlias(qtn, attr) => {
-            if recursive_aliases.contains(qtn) {
+            if resolved.recursive.contains(qtn) {
                 // Keep recursive aliases opaque — they need runtime resolution
                 Ty::TypeAlias(qtn_to_type_name(qtn), attr.clone())
-            } else if let Some(target) = type_aliases.get(qtn) {
+            } else if let Some(target) = resolved.aliases.get(qtn) {
                 // Expand non-recursive aliases inline
-                convert_tir2_ty(target, type_aliases, recursive_aliases)
+                convert_tir2_ty(target, resolved)
             } else {
                 // Unknown alias (e.g. from another package) — keep opaque
                 Ty::TypeAlias(qtn_to_type_name(qtn), attr.clone())
@@ -138,36 +134,33 @@ pub fn convert_tir2_ty(
         }
 
         // Containers
-        Tir2Ty::List(inner, attr) => Ty::List(
-            Box::new(convert_tir2_ty(inner, type_aliases, recursive_aliases)),
-            attr.clone(),
-        ),
+        Tir2Ty::List(inner, attr) => {
+            Ty::List(Box::new(convert_tir2_ty(inner, resolved)), attr.clone())
+        }
         Tir2Ty::Map(k, v, attr) => Ty::Map {
-            key: Box::new(convert_tir2_ty(k, type_aliases, recursive_aliases)),
-            value: Box::new(convert_tir2_ty(v, type_aliases, recursive_aliases)),
+            key: Box::new(convert_tir2_ty(k, resolved)),
+            value: Box::new(convert_tir2_ty(v, resolved)),
             attr: attr.clone(),
         },
         Tir2Ty::Union(members, attr) => Ty::Union(
             members
                 .iter()
-                .map(|m| convert_tir2_ty(m, type_aliases, recursive_aliases))
+                .map(|m| convert_tir2_ty(m, resolved))
                 .collect(),
             attr.clone(),
         ),
-        Tir2Ty::Optional(inner, attr) => Ty::Optional(
-            Box::new(convert_tir2_ty(inner, type_aliases, recursive_aliases)),
-            attr.clone(),
-        ),
+        Tir2Ty::Optional(inner, attr) => {
+            Ty::Optional(Box::new(convert_tir2_ty(inner, resolved)), attr.clone())
+        }
         Tir2Ty::Literal(lit, _freshness, attr) => Ty::Literal(lit.clone(), attr.clone()),
 
         // Evolving containers → freeze to regular containers
-        Tir2Ty::EvolvingList(inner, attr) => Ty::List(
-            Box::new(convert_tir2_ty(inner, type_aliases, recursive_aliases)),
-            attr.clone(),
-        ),
+        Tir2Ty::EvolvingList(inner, attr) => {
+            Ty::List(Box::new(convert_tir2_ty(inner, resolved)), attr.clone())
+        }
         Tir2Ty::EvolvingMap(k, v, attr) => Ty::Map {
-            key: Box::new(convert_tir2_ty(k, type_aliases, recursive_aliases)),
-            value: Box::new(convert_tir2_ty(v, type_aliases, recursive_aliases)),
+            key: Box::new(convert_tir2_ty(k, resolved)),
+            value: Box::new(convert_tir2_ty(v, resolved)),
             attr: attr.clone(),
         },
 
@@ -175,9 +168,9 @@ pub fn convert_tir2_ty(
         Tir2Ty::Function { params, ret, attr } => Ty::Function {
             params: params
                 .iter()
-                .map(|(_, t)| convert_tir2_ty(t, type_aliases, recursive_aliases))
+                .map(|(_, t)| convert_tir2_ty(t, resolved))
                 .collect(),
-            ret: Box::new(convert_tir2_ty(ret, type_aliases, recursive_aliases)),
+            ret: Box::new(convert_tir2_ty(ret, resolved)),
             attr: attr.clone(),
         },
 
@@ -373,19 +366,15 @@ struct LoweringContext<'db> {
     // enum's package at each match site.
     class_fields: IndexMap<TypeName, IndexMap<String, usize>>,
     enum_variants: IndexMap<Name, IndexMap<String, usize>>,
+    // Pre-computed type tags for class types — will be used by SwitchKind::TypeTag
+    // when union-type switch optimization is ported from MIR 1.
     #[allow(dead_code)]
     class_type_tags: IndexMap<TypeName, i64>,
 
-    // Type alias maps for inline expansion in convert_tir2_ty
-    type_aliases: HashMap<QualifiedTypeName, Tir2Ty>,
-    recursive_aliases: HashSet<QualifiedTypeName>,
+    // Pre-computed type alias data for inline expansion in convert_tir2_ty
+    resolved_aliases: ResolvedAliases,
 
-    // Watch/viz state (carried forward as-is)
     watched_locals_stack: Vec<Local>,
-    #[allow(dead_code)]
-    viz_context: VizContext,
-    #[allow(dead_code)]
-    pending_header: Option<PendingHeader>,
 
     // Counter for generating unique synthetic variable names (e.g. __for_idx, __for_idx_1)
     synthetic_name_counts: HashMap<String, usize>,
@@ -604,10 +593,7 @@ impl<'db> LoweringContext<'db> {
             &mut enum_variants,
         );
 
-        // --- Build type alias maps for inline expansion ---
-        let type_aliases = baml_compiler2_tir::inference::collect_type_aliases(db, pkg_items);
-        let recursive_aliases =
-            baml_compiler2_tir::normalize::find_recursive_aliases(&type_aliases);
+        let resolved_aliases = ResolvedAliases::for_package(db, pkg_id);
 
         // --- Determine arity from function signature ---
         let sig = function_signature(db, func_loc);
@@ -658,11 +644,8 @@ impl<'db> LoweringContext<'db> {
             pending_lambdas: Vec::new(),
             capture_indices: None,
             transitive_captures_needed: Vec::new(),
-            type_aliases,
-            recursive_aliases,
+            resolved_aliases,
             watched_locals_stack: Vec::new(),
-            viz_context: VizContext::new(func_data.name.to_string()),
-            pending_header: None,
             synthetic_name_counts: HashMap::new(),
             chain_null_exits: Vec::new(),
         }
@@ -783,10 +766,7 @@ impl<'db> LoweringContext<'db> {
             &mut enum_variants,
         );
 
-        // --- Build type alias maps for inline expansion ---
-        let type_aliases = baml_compiler2_tir::inference::collect_type_aliases(db, pkg_items);
-        let recursive_aliases =
-            baml_compiler2_tir::normalize::find_recursive_aliases(&type_aliases);
+        let resolved_aliases = ResolvedAliases::for_package(db, pkg_id);
 
         LoweringContext {
             db,
@@ -804,15 +784,12 @@ impl<'db> LoweringContext<'db> {
             source_map,
             file,
             func_loc: None,
-            scope_func_name: Some(let_name.clone()),
+            scope_func_name: Some(let_name),
             class_fields,
             enum_variants,
             class_type_tags,
-            type_aliases,
-            recursive_aliases,
+            resolved_aliases,
             watched_locals_stack: Vec::new(),
-            viz_context: VizContext::new(let_name.to_string()),
-            pending_header: None,
             synthetic_name_counts: HashMap::new(),
             pending_lambdas: Vec::new(),
             capture_indices: None,
@@ -841,7 +818,7 @@ impl<'db> LoweringContext<'db> {
     fn expr_ty(&self, expr_id: AstExprId) -> Ty {
         self.expr_types
             .get(&(self.current_scope, expr_id))
-            .map(|ty| convert_tir2_ty(ty, &self.type_aliases, &self.recursive_aliases))
+            .map(|ty| convert_tir2_ty(ty, &self.resolved_aliases))
             .unwrap_or(Ty::Void {
                 attr: TyAttr::default(),
             })
@@ -851,7 +828,7 @@ impl<'db> LoweringContext<'db> {
     fn pat_ty(&self, pat_id: AstPatId) -> Ty {
         self.pat_types
             .get(&(self.current_scope, pat_id))
-            .map(|ty| convert_tir2_ty(ty, &self.type_aliases, &self.recursive_aliases))
+            .map(|ty| convert_tir2_ty(ty, &self.resolved_aliases))
             .unwrap_or(Ty::Void {
                 attr: TyAttr::default(),
             })
@@ -874,7 +851,7 @@ impl<'db> LoweringContext<'db> {
             &[],
             &mut diags,
         );
-        convert_tir2_ty(&tir_ty, &self.type_aliases, &self.recursive_aliases)
+        self.resolved_aliases.convert(&tir_ty)
     }
 }
 
@@ -907,7 +884,7 @@ impl LoweringContext<'_> {
                     &[],
                     &mut diags,
                 );
-                convert_tir2_ty(&tir_ty, &self.type_aliases, &self.recursive_aliases)
+                self.resolved_aliases.convert(&tir_ty)
             })
             .unwrap_or(Ty::Null {
                 attr: TyAttr::default(),
@@ -953,11 +930,7 @@ impl LoweringContext<'_> {
                                     ),
                                     baml_compiler2_tir::ty::TyAttr::default(),
                                 );
-                                convert_tir2_ty(
-                                    &tir_ty,
-                                    &self.type_aliases,
-                                    &self.recursive_aliases,
-                                )
+                                self.resolved_aliases.convert(&tir_ty)
                             })
                     })
                     .unwrap_or(Ty::Null {
@@ -973,7 +946,7 @@ impl LoweringContext<'_> {
                     &[],
                     &mut diags,
                 );
-                convert_tir2_ty(&tir_ty, &self.type_aliases, &self.recursive_aliases)
+                self.resolved_aliases.convert(&tir_ty)
             };
             let local = self
                 .builder
@@ -1024,7 +997,7 @@ impl LoweringContext<'_> {
         let dummy = MirBuilder::new(Name::new("_dummy"), 0);
         let builder = std::mem::replace(&mut self.builder, dummy);
         let mut mir = builder.build();
-        cleanup::cleanup_function(&mut mir);
+        optimize::optimize_function(&mut mir);
 
         // Drain any lambda functions lowered during this function's body into the
         // MirFunction's lambdas list.  The lambda_idx values in MakeClosure rvalues
@@ -1078,7 +1051,7 @@ impl LoweringContext<'_> {
         let dummy = MirBuilder::new(Name::new("_dummy"), 0);
         let builder = std::mem::replace(&mut self.builder, dummy);
         let mut body = builder.build_body();
-        cleanup::cleanup_function_body(&mut body);
+        optimize::optimize_function_body(&mut body);
         body
     }
 
@@ -1225,7 +1198,7 @@ impl LoweringContext<'_> {
                         &[],
                         &mut diags,
                     );
-                    convert_tir2_ty(&tir_ty, &self.type_aliases, &self.recursive_aliases)
+                    self.resolved_aliases.convert(&tir_ty)
                 }
                 None => baml_type::Ty::Null {
                     attr: baml_type::TyAttr::default(),
@@ -1284,7 +1257,7 @@ impl LoweringContext<'_> {
         let dummy = MirBuilder::new(Name::new("_dummy"), 0);
         let lambda_builder = std::mem::replace(&mut self.builder, dummy);
         let mut lambda_mir = lambda_builder.build();
-        cleanup::cleanup_function(&mut lambda_mir);
+        optimize::optimize_function(&mut lambda_mir);
         // Override item_ref with the synthetic name.
         lambda_mir.item_ref = ItemRef::Free {
             package: Name::new(""),
@@ -3402,12 +3375,7 @@ impl LoweringContext<'_> {
 
         // Classify arms: collect (i64_value, arm_index) for int literal or enum variant
         // patterns, and check for a trailing wildcard/binding.
-        //
-        // switch_kind tracks what kind of switch is being built:
-        //   None          = not yet determined
-        //   Some(None)    = integer literal switch
-        //   Some(Some(n)) = enum discriminant switch on enum named `n`
-        let mut switch_kind: Option<Option<Name>> = None;
+        let mut switch_kind: Option<SwitchKind> = None;
         let mut int_arms: Vec<(i64, usize)> = Vec::new();
         let mut otherwise_idx: Option<usize> = None;
         // Deduplicate discriminant values so union patterns don't produce duplicate switch arms.
@@ -3423,9 +3391,9 @@ impl LoweringContext<'_> {
                 AstPattern::Literal(Literal::Int(val)) => {
                     // Integer arm: verify kind consistency
                     match &switch_kind {
-                        None => switch_kind = Some(None),
-                        Some(None) => {}
-                        Some(Some(_)) => return false, // Mixed int + enum
+                        None => switch_kind = Some(SwitchKind::Integer),
+                        Some(SwitchKind::Integer) => {}
+                        Some(_) => return false, // Mixed int + enum
                     }
                     let v = *val;
                     if seen_values.insert(v) {
@@ -3437,8 +3405,8 @@ impl LoweringContext<'_> {
                     let enum_name = enum_name.clone();
                     let variant = variant.clone();
                     match &switch_kind {
-                        None => switch_kind = Some(Some(enum_name.clone())),
-                        Some(Some(n)) if *n == enum_name => {}
+                        None => switch_kind = Some(SwitchKind::EnumDiscriminant(enum_name.clone())),
+                        Some(SwitchKind::EnumDiscriminant(n)) if *n == enum_name => {}
                         _ => return false, // Different enum or mixed with int
                     }
                     // Look up variant index
@@ -3461,9 +3429,9 @@ impl LoweringContext<'_> {
                         match sub_pat {
                             AstPattern::Literal(Literal::Int(val)) => {
                                 match &switch_kind {
-                                    None => switch_kind = Some(None),
-                                    Some(None) => {}
-                                    Some(Some(_)) => return false,
+                                    None => switch_kind = Some(SwitchKind::Integer),
+                                    Some(SwitchKind::Integer) => {}
+                                    Some(_) => return false,
                                 }
                                 let v = *val;
                                 if seen_values.insert(v) {
@@ -3474,8 +3442,11 @@ impl LoweringContext<'_> {
                                 let enum_name = enum_name.clone();
                                 let variant = variant.clone();
                                 match &switch_kind {
-                                    None => switch_kind = Some(Some(enum_name.clone())),
-                                    Some(Some(n)) if *n == enum_name => {}
+                                    None => {
+                                        switch_kind =
+                                            Some(SwitchKind::EnumDiscriminant(enum_name.clone()));
+                                    }
+                                    Some(SwitchKind::EnumDiscriminant(n)) if *n == enum_name => {}
                                     _ => return false,
                                 }
                                 let idx = self
@@ -3519,7 +3490,7 @@ impl LoweringContext<'_> {
         // For enum switches, emit the discriminant extraction before building arm blocks.
         // We must do this before create_block() calls so the assignment goes into bb_entry.
         let switch_operand = match &switch_kind {
-            Some(Some(_enum_name)) => {
+            Some(SwitchKind::EnumDiscriminant(_)) => {
                 let disc = self.builder.temp(Ty::Int {
                     attr: TyAttr::default(),
                 });
@@ -3560,7 +3531,7 @@ impl LoweringContext<'_> {
         // Build arm_names: symbolic labels for the switch arms (debug metadata).
         // For enum switches: "EnumName.VariantName"; for int switches: the integer value.
         let arm_names: Vec<(i64, String)> = match &switch_kind {
-            Some(Some(enum_name)) => {
+            Some(SwitchKind::EnumDiscriminant(enum_name)) => {
                 if let Some(variants) = self.enum_variants.get(enum_name) {
                     // Build reverse map: variant_idx -> variant_name
                     let reverse: std::collections::HashMap<i64, &str> = variants
@@ -3663,6 +3634,45 @@ impl LoweringContext<'_> {
         self.lower_match_chain(scrutinee, rest, dest, join);
     }
 
+    /// Emit an `IsType` check that handles union types by expanding them
+    /// into a chain: try each member, branch to `success` if any matches.
+    fn emit_is_type_branch(
+        &mut self,
+        scrutinee: Local,
+        ty: Ty,
+        success: BlockId,
+        failure: BlockId,
+    ) {
+        if let Ty::Union(members, _) = ty {
+            // For union A | B | C: check A → success, else check B → success,
+            // else check C → success, else failure.
+            let mut remaining = members.into_iter().peekable();
+            while let Some(member) = remaining.next() {
+                if remaining.peek().is_none() {
+                    // Last member: branch directly to success/failure.
+                    self.emit_is_type_branch(scrutinee, member, success, failure);
+                } else {
+                    // Not last: if this member matches, jump to success;
+                    // otherwise try the next member.
+                    let next_check = self.builder.create_block();
+                    self.emit_is_type_branch(scrutinee, member, success, next_check);
+                    self.builder.set_current_block(next_check);
+                }
+            }
+        } else {
+            let test = Rvalue::IsType {
+                operand: Operand::Copy(Place::Local(scrutinee)),
+                ty,
+            };
+            let test_local = self.builder.temp(Ty::Bool {
+                attr: TyAttr::default(),
+            });
+            self.builder.assign(Place::local(test_local), test);
+            self.builder
+                .branch(Operand::Copy(Place::Local(test_local)), success, failure);
+        }
+    }
+
     fn lower_pattern_test(
         &mut self,
         scrutinee: Local,
@@ -3672,24 +3682,29 @@ impl LoweringContext<'_> {
     ) {
         let pat = self.body.patterns[pat_id].clone();
         match pat {
-            AstPattern::Binding(_) => {
-                // Always matches
+            AstPattern::Binding(ref name) => {
+                // Bare type sugar: the TIR resolved this binding name to a
+                // type (e.g. `DivisionByZero =>` resolves to a class).
+                // Generate an IsType test instead of an unconditional match.
+                if name.as_str() != "_" {
+                    if let Some(tir_ty) = self.pat_types.get(&(self.current_scope, pat_id)).cloned()
+                    {
+                        let resolved = self.resolved_aliases.convert(&tir_ty);
+                        self.emit_is_type_branch(scrutinee, resolved, success, failure);
+                        return;
+                    }
+                }
+                // Regular binding — always matches
                 self.builder.goto(success);
             }
-            AstPattern::TypedBinding { ty, .. } => {
-                // Resolve the type annotation directly from the AST TypeExpr,
-                // since TIR may not populate bindings for catch/match arm patterns.
-                let annotation_ty = self.resolve_type_annotation(&ty);
-                let test = Rvalue::IsType {
-                    operand: Operand::Copy(Place::Local(scrutinee)),
-                    ty: annotation_ty,
-                };
-                let test_local = self.builder.temp(Ty::Bool {
-                    attr: TyAttr::default(),
-                });
-                self.builder.assign(Place::local(test_local), test);
-                self.builder
-                    .branch(Operand::Copy(Place::Local(test_local)), success, failure);
+            AstPattern::TypedBinding { .. } => {
+                // TIR always resolves TypedBinding patterns via record_pattern_test_types.
+                let annotation_ty = self
+                    .pat_types
+                    .get(&(self.current_scope, pat_id))
+                    .map(|tir_ty| convert_tir2_ty(tir_ty, &self.resolved_aliases))
+                    .expect("TIR must resolve TypedBinding patterns");
+                self.emit_is_type_branch(scrutinee, annotation_ty, success, failure);
             }
             AstPattern::Literal(lit) => {
                 let constant = Self::lower_literal(&lit);
@@ -3779,7 +3794,7 @@ impl LoweringContext<'_> {
                 let ty = self
                     .pat_types
                     .get(&(self.current_scope, pat_id))
-                    .map(|ty| convert_tir2_ty(ty, &self.type_aliases, &self.recursive_aliases))
+                    .map(|ty| convert_tir2_ty(ty, &self.resolved_aliases))
                     .unwrap_or_else(|| self.builder.local_ty(scrutinee));
                 let local = self
                     .builder
@@ -3818,14 +3833,56 @@ impl LoweringContext<'_> {
         clauses: &[baml_compiler2_ast::CatchClause],
         dest: &Place,
     ) {
+        use baml_compiler2_ast::CatchClauseKind;
+
         let bb_join = self.builder.create_block();
         let bb_handler = self.builder.create_block();
-        let error_local = self.builder.temp(Ty::BuiltinUnknown {
-            attr: TyAttr::default(),
+
+        // Use the user-provided binding name (e.g. `e` from `catch (e)`) so it
+        // shows up in bytecode instead of an anonymous `_N` temp.
+        let binding_name = clauses
+            .first()
+            .and_then(|c| match &self.body.patterns[c.binding] {
+                AstPattern::Binding(name) if name.as_str() != "_" => Some(name.clone()),
+                _ => None,
+            });
+        let error_local = self.builder.declare_local(
+            binding_name.clone(),
+            Ty::BuiltinUnknown {
+                attr: TyAttr::default(),
+            },
+            None,
+            false,
+        );
+        if let Some(name) = binding_name {
+            self.locals.insert(name, error_local);
+        }
+
+        // Flatten all arms from all clauses, pre-creating body blocks.
+        let mut arms = Vec::new();
+        for clause in clauses {
+            for &arm_id in &clause.arms {
+                let arm = self.body.catch_arms[arm_id].clone();
+                let is_wildcard = matches!(
+                    self.body.patterns[arm.pattern],
+                    AstPattern::Binding(ref name) if name.as_str() == "_"
+                );
+                arms.push((arm, self.builder.create_block(), is_wildcard));
+            }
+        }
+
+        let has_wildcard = arms.iter().any(|(_, _, is_wc)| *is_wc);
+        let is_catch_all_panics = clauses
+            .iter()
+            .any(|clause| matches!(clause.kind, CatchClauseKind::CatchAllPanics));
+
+        // Record the catch region (always one handler, one exception table entry).
+        let body_entry = self.builder.current_block();
+        self.builder.catch_regions.push(CatchRegion {
+            body_entry,
+            handler: bb_handler,
+            error_local,
         });
-        self.builder
-            .unwind_error_locals
-            .insert(bb_handler, error_local);
 
         let prev_catch = self.catch_context.take();
         self.catch_context = Some(CatchContext {
@@ -3833,6 +3890,7 @@ impl LoweringContext<'_> {
             error_local,
         });
 
+        // Lower the try body.
         self.lower_expr(base, dest.clone());
         if !self.builder.is_current_terminated() {
             self.builder.goto(bb_join);
@@ -3840,30 +3898,38 @@ impl LoweringContext<'_> {
 
         self.catch_context = prev_catch;
 
+        // Before the wildcard arm (if any), insert a throw_if_panic guard to
+        // prevent the wildcard from swallowing panics the programmer didn't
+        // explicitly name. Skipped for catch_all_panics (user wants everything).
+        let needs_throw_if_panic = has_wildcard && !is_catch_all_panics;
+
         self.builder.set_current_block(bb_handler);
-        for clause in clauses {
-            // Bind the clause's binding pattern to the error local
-            self.bind_pattern(error_local, clause.binding);
-            // Lower each catch arm
-            for &arm_id in &clause.arms {
-                let arm = self.body.catch_arms[arm_id].clone();
-                // Test the arm's pattern against the error local
-                let bb_arm_body = self.builder.create_block();
-                let bb_arm_next = self.builder.create_block();
-                self.lower_pattern_test(error_local, arm.pattern, bb_arm_body, bb_arm_next);
-                self.builder.set_current_block(bb_arm_body);
-                self.bind_pattern(error_local, arm.pattern);
-                self.lower_expr(arm.body, dest.clone());
-                if !self.builder.is_current_terminated() {
-                    self.builder.goto(bb_join);
-                }
-                self.builder.set_current_block(bb_arm_next);
+        for &(ref arm, body_block, is_wildcard) in &arms {
+            if is_wildcard && needs_throw_if_panic {
+                let bb_wildcard = self.builder.create_block();
+                self.builder
+                    .throw_if_panic(Operand::Copy(Place::Local(error_local)), bb_wildcard);
+                self.builder.set_current_block(bb_wildcard);
             }
+
+            let bb_arm_next = self.builder.create_block();
+            self.lower_pattern_test(error_local, arm.pattern, body_block, bb_arm_next);
+            self.builder.set_current_block(bb_arm_next);
         }
 
-        // If no clause matched, re-throw
+        // Rethrow if nothing matched.
         if !self.builder.is_current_terminated() {
             self.builder.throw(Operand::Copy(Place::Local(error_local)));
+        }
+
+        // Lower each arm body.
+        for &(ref arm, body_block, _) in &arms {
+            self.builder.set_current_block(body_block);
+            self.bind_pattern(error_local, arm.pattern);
+            self.lower_expr(arm.body, dest.clone());
+            if !self.builder.is_current_terminated() {
+                self.builder.goto(bb_join);
+            }
         }
 
         self.builder.set_current_block(bb_join);
@@ -3944,7 +4010,7 @@ pub fn lower_function<'db>(db: &'db dyn crate::Db, func_loc: FunctionLoc<'db>) -
                         is_watched: false,
                     })
                     .collect(),
-                unwind_error_locals: std::collections::HashMap::new(),
+                catch_regions: vec![],
                 viz_nodes: vec![],
             }),
             lambdas: vec![],
