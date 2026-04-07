@@ -115,6 +115,7 @@ impl TestArgs {
         // Compile to bytecode (with test cases included).
         let compile_options = baml_compiler2_emit::CompileOptions {
             emit_test_cases: true,
+            mir_optimize: true,
         };
         let bytecode = baml_compiler2_emit::generate_project_bytecode(&db, &compile_options)
             .map_err(|e| anyhow!("Compilation failed: {e:?}"))?;

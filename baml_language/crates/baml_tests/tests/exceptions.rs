@@ -679,9 +679,8 @@ async fn catch_user_class_single_arm() {
     insta::assert_snapshot!(output.bytecode, @r#"
     function fails() -> int {
         alloc_instance NetworkError
-        copy 0
         load_const "http://example.com"
-        store_field .url
+        init_field .url
         throw
     }
 
@@ -738,16 +737,14 @@ async fn catch_two_user_classes_dispatch_first() {
 
       L0:
         alloc_instance ParseError
-        copy 0
         load_const "bad json"
-        store_field .message
+        init_field .message
         throw
 
       L1:
         alloc_instance NetworkError
-        copy 0
         load_const "http://x"
-        store_field .url
+        init_field .url
         throw
     }
 
@@ -843,9 +840,8 @@ async fn catch_user_class_plus_wildcard() {
 
       L1:
         alloc_instance NetworkError
-        copy 0
         load_const "http://x"
-        store_field .url
+        init_field .url
         throw
     }
 
@@ -928,23 +924,20 @@ async fn catch_three_user_classes_plus_wildcard() {
 
       L3:
         alloc_instance RateLimit
-        copy 0
         load_const 30
-        store_field .retryAfter
+        init_field .retryAfter
         throw
 
       L4:
         alloc_instance NotFound
-        copy 0
         load_const "/users"
-        store_field .path
+        init_field .path
         throw
 
       L5:
         alloc_instance AuthError
-        copy 0
         load_const "expired"
-        store_field .reason
+        init_field .reason
         throw
     }
 
@@ -1020,9 +1013,8 @@ async fn named_class_binding_access_field() {
     insta::assert_snapshot!(output.bytecode, @r#"
     function fails() -> string {
         alloc_instance NetworkError
-        copy 0
         load_const "http://example.com"
-        store_field .url
+        init_field .url
         throw
     }
 
@@ -1083,16 +1075,14 @@ async fn named_class_binding_dispatch_access_fields() {
 
       L0:
         alloc_instance ParseError
-        copy 0
         load_const "bad json"
-        store_field .message
+        init_field .message
         throw
 
       L1:
         alloc_instance NetworkError
-        copy 0
         load_const "http://x"
-        store_field .url
+        init_field .url
         throw
     }
 
@@ -1160,9 +1150,8 @@ async fn bare_class_single_arm() {
     insta::assert_snapshot!(output.bytecode, @r#"
     function fails() -> int {
         alloc_instance NetworkError
-        copy 0
         load_const "http://example.com"
-        store_field .url
+        init_field .url
         throw
     }
 
@@ -1219,16 +1208,14 @@ async fn bare_class_dispatch_first() {
 
       L0:
         alloc_instance ParseError
-        copy 0
         load_const "bad"
-        store_field .message
+        init_field .message
         throw
 
       L1:
         alloc_instance NetworkError
-        copy 0
         load_const "http://x"
-        store_field .url
+        init_field .url
         throw
     }
 
@@ -1324,9 +1311,8 @@ async fn bare_class_plus_wildcard() {
 
       L1:
         alloc_instance NetworkError
-        copy 0
         load_const "http://x"
-        store_field .url
+        init_field .url
         throw
     }
 
@@ -2145,9 +2131,8 @@ async fn user_class_plus_panic_plus_wildcard_class_fires() {
 
       L2:
         alloc_instance AppError
-        copy 0
         load_const 500
-        store_field .code
+        init_field .code
         throw
     }
     "#);
@@ -2243,9 +2228,8 @@ async fn user_class_plus_panic_plus_wildcard_panic_fires() {
 
       L3:
         alloc_instance AppError
-        copy 0
         load_const 500
-        store_field .code
+        init_field .code
         throw
     }
     "#);
@@ -2708,9 +2692,8 @@ async fn four_arms_division_by_zero_fires() {
 
       L3:
         alloc_instance AppError
-        copy 0
         load_const 404
-        store_field .code
+        init_field .code
         throw
 
       L4:
@@ -2939,9 +2922,8 @@ async fn four_arms_no_error() {
 
       L5:
         alloc_instance AppError
-        copy 0
         load_const 404
-        store_field .code
+        init_field .code
         throw
 
       L6:

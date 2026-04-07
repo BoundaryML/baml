@@ -16,6 +16,7 @@ fn main() {
 fn force_compile(db: &ProjectDatabase) {
     let opts = CompileOptions {
         emit_test_cases: false,
+        mir_optimize: true,
     };
     let _ = generate_project_bytecode(db, &opts);
 }

@@ -18,6 +18,7 @@ fn compile(db: &ProjectDatabase) -> bex_vm_types::Program {
         db,
         &CompileOptions {
             emit_test_cases: false,
+            mir_optimize: true,
         },
     )
     .expect("compilation should succeed")

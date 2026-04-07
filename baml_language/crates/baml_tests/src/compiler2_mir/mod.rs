@@ -25,7 +25,7 @@ fn render_mir(db: &ProjectDatabase, file: baml_base::SourceFile) -> String {
 
     for (local_id, _func_data) in item_tree.functions.iter() {
         let func_loc = FunctionLoc::new(db, file, *local_id);
-        let mir = lower_function(db, func_loc);
+        let mir = lower_function(db, func_loc, true);
         writeln!(output, "{}", display_function(&mir)).unwrap();
     }
 

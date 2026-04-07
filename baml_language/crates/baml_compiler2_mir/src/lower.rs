@@ -404,6 +404,10 @@ struct LoweringContext<'db> {
     /// When an `OptionalFieldAccess`/`OptionalIndex`/`OptionalCall` encounters null,
     /// it jumps to the top of this stack instead of creating its own null block.
     chain_null_exits: Vec<BlockId>,
+
+    /// Whether to apply MIR-level optimizations (constant folding, catch switch dispatch).
+    /// When false, produces bytecode that closely mirrors the source structure.
+    optimize: bool,
 }
 
 impl<'db> LoweringContext<'db> {
@@ -467,6 +471,7 @@ impl<'db> LoweringContext<'db> {
         func_loc: FunctionLoc<'db>,
         expr_body: AstExprBody,
         source_map: Option<AstSourceMap>,
+        optimize: bool,
     ) -> Self {
         let file = func_loc.file(db);
 
@@ -649,6 +654,7 @@ impl<'db> LoweringContext<'db> {
             watched_locals_stack: Vec::new(),
             synthetic_name_counts: HashMap::new(),
             chain_null_exits: Vec::new(),
+            optimize,
         }
     }
 
@@ -661,6 +667,7 @@ impl<'db> LoweringContext<'db> {
         let_loc: LetLoc<'db>,
         expr_body: AstExprBody,
         source_map: Option<AstSourceMap>,
+        optimize: bool,
     ) -> Self {
         let file = let_loc.file(db);
 
@@ -796,6 +803,7 @@ impl<'db> LoweringContext<'db> {
             capture_indices: None,
             transitive_captures_needed: Vec::new(),
             chain_null_exits: Vec::new(),
+            optimize,
         }
     }
 
@@ -1726,11 +1734,13 @@ impl LoweringContext<'_> {
         }
 
         // Check if TIR already folded this expression to a literal constant
-        if let Ty::Literal(ref lit, _) = self.expr_ty(expr_id) {
-            let constant = Self::lower_literal(lit);
-            self.builder
-                .assign(dest, Rvalue::Use(Operand::Constant(constant)));
-            return;
+        if self.optimize {
+            if let Ty::Literal(ref lit, _) = self.expr_ty(expr_id) {
+                let constant = Self::lower_literal(lit);
+                self.builder
+                    .assign(dest, Rvalue::Use(Operand::Constant(constant)));
+                return;
+            }
         }
 
         let left = self.lower_to_operand(lhs);
@@ -2069,11 +2079,13 @@ impl LoweringContext<'_> {
 
     fn lower_unary(&mut self, expr_id: AstExprId, op: AstUnaryOp, expr: AstExprId, dest: Place) {
         // Check if TIR already folded this expression to a literal constant
-        if let Ty::Literal(ref lit, _) = self.expr_ty(expr_id) {
-            let constant = Self::lower_literal(lit);
-            self.builder
-                .assign(dest, Rvalue::Use(Operand::Constant(constant)));
-            return;
+        if self.optimize {
+            if let Ty::Literal(ref lit, _) = self.expr_ty(expr_id) {
+                let constant = Self::lower_literal(lit);
+                self.builder
+                    .assign(dest, Rvalue::Use(Operand::Constant(constant)));
+                return;
+            }
         }
         let operand = self.lower_to_operand(expr);
         let mir_op = match op {
@@ -4157,17 +4169,19 @@ impl LoweringContext<'_> {
         // explicitly name. Skipped for catch_all_panics (user wants everything).
         let needs_throw_if_panic = has_wildcard && !is_catch_all_panics;
 
-        // Attempt switch-style dispatch on type tags.
+        // Attempt switch-style dispatch on type tags (optimization only).
         // If all non-wildcard arms have pure type-test patterns, emit a single
         // Switch on Rvalue::TypeTag instead of a sequential is_type chain.
-        if self.try_lower_catch_as_switch(
-            &arms,
-            error_local,
-            bb_handler,
-            bb_join,
-            dest,
-            needs_throw_if_panic,
-        ) {
+        if self.optimize
+            && self.try_lower_catch_as_switch(
+                &arms,
+                error_local,
+                bb_handler,
+                bb_join,
+                dest,
+                needs_throw_if_panic,
+            )
+        {
             self.builder.set_current_block(bb_join);
             return;
         }
@@ -4215,13 +4229,15 @@ impl LoweringContext<'_> {
 pub fn lower_let_body<'db>(
     db: &'db dyn crate::Db,
     let_loc: LetLoc<'db>,
+    optimize: bool,
 ) -> Option<(MirFunctionBody, Vec<MirFunction>)> {
     let body = let_body(db, let_loc);
     let source_map = let_body_source_map(db, let_loc);
 
     match body.as_ref() {
         LetBody::Expr(expr_body) => {
-            let mut ctx = LoweringContext::new_for_let(db, let_loc, expr_body.clone(), source_map);
+            let mut ctx =
+                LoweringContext::new_for_let(db, let_loc, expr_body.clone(), source_map, optimize);
             let mir_body = ctx.lower_let_body_inner();
             let lambdas = std::mem::take(&mut ctx.pending_lambdas);
             Some((mir_body, lambdas))
@@ -4230,7 +4246,11 @@ pub fn lower_let_body<'db>(
     }
 }
 
-pub fn lower_function<'db>(db: &'db dyn crate::Db, func_loc: FunctionLoc<'db>) -> MirFunction {
+pub fn lower_function<'db>(
+    db: &'db dyn crate::Db,
+    func_loc: FunctionLoc<'db>,
+    optimize: bool,
+) -> MirFunction {
     let body = function_body(db, func_loc);
     let source_map = function_body_source_map(db, func_loc);
     let item_ref = def_to_item_ref(
@@ -4242,7 +4262,8 @@ pub fn lower_function<'db>(db: &'db dyn crate::Db, func_loc: FunctionLoc<'db>) -
 
     match body.as_ref() {
         FunctionBody::Expr(expr_body) => {
-            let mut ctx = LoweringContext::new(db, func_loc, expr_body.clone(), source_map);
+            let mut ctx =
+                LoweringContext::new(db, func_loc, expr_body.clone(), source_map, optimize);
             let mut mir = ctx.lower_function_body();
             mir.item_ref = item_ref;
             mir

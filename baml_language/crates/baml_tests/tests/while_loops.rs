@@ -27,7 +27,7 @@ async fn while_loop_gcd() {
         args: { "a" => BexExternalValue::Int(21), "b" => BexExternalValue::Int(15) },
     };
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function gcd(a: int, b: int) -> int {
       L0:
         load_var a
@@ -88,7 +88,7 @@ async fn while_with_scope() {
         args: { "n" => BexExternalValue::Int(5) },
     };
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function fib(n: int) -> int {
         load_const 0
         store_var a
@@ -146,7 +146,7 @@ async fn while_with_break() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 1
         store_var a
@@ -200,7 +200,7 @@ async fn break_factorial() {
         args: { "limit" => BexExternalValue::Int(5) },
     };
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function factorial(limit: int) -> int {
         load_const 1
         store_var result
@@ -254,7 +254,7 @@ async fn break_nested() {
         entry: "nested",
     };
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function nested() -> int {
         load_const 5
         store_var a
@@ -303,7 +303,7 @@ async fn break_nested_with_variable_conditions() {
         args: { "x" => BexExternalValue::Bool(true), "y" => BexExternalValue::Bool(true) },
     };
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function nested(x: bool, y: bool) -> int {
         load_const 5
         store_var a
@@ -351,7 +351,7 @@ async fn while_with_conditional_break() {
         args: { "n" => BexExternalValue::Int(3) },
     };
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function count_down(n: int) -> int {
         load_const 0
         store_var result
@@ -411,7 +411,7 @@ async fn continue_factorial() {
         args: { "limit" => BexExternalValue::Int(5) },
     };
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function factorial(limit: int) -> int {
         load_const 1
         store_var result
@@ -473,7 +473,7 @@ async fn continue_nested() {
         entry: "continue_nested",
     };
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function continue_nested() -> int {
         load_const true
         store_var execute

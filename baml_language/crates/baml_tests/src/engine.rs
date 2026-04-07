@@ -88,14 +88,15 @@ pub fn compile_source(source: &str) -> Program {
 }
 
 /// Compile BAML source with a specific optimization level.
-pub fn compile_source_with_opt(source: &str, _opt: OptLevel) -> Program {
+pub fn compile_source_with_opt(source: &str, opt: OptLevel) -> Program {
     let db = setup_test_db(source);
     assert_no_diagnostic_errors(&db);
 
     let opts = baml_compiler2_emit::CompileOptions {
         emit_test_cases: false,
+        mir_optimize: false,
     };
-    baml_compiler2_emit::generate_project_bytecode(&db, &opts)
+    baml_compiler2_emit::generate_project_bytecode_with_opt(&db, &opts, opt)
         .expect("generate_project_bytecode should succeed for valid test source")
 }
 

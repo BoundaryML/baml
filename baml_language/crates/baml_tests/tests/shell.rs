@@ -69,7 +69,7 @@ async fn shell_failing_command() {
         return
     }
     "#);
-    insta::assert_snapshot!(output.result.unwrap_err().to_string(), @"failed to call baml.sys.shell: Command 'exit 1' failed with exit code 1: ");
+    insta::assert_snapshot!(output.result.unwrap_err().to_string(), @"failed to call baml.sys.shell: Command 'exit 1' failed with exit code 1:");
 }
 
 #[tokio::test]
