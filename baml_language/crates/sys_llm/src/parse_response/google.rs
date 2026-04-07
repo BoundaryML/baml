@@ -26,8 +26,7 @@ struct Content {
 
 #[derive(Debug, Deserialize)]
 struct Part {
-    #[serde(default)]
-    text: String,
+    text: Option<String>,
     thought: Option<bool>,
 }
 
@@ -58,7 +57,7 @@ fn text_content_part(parts: &[Part]) -> Option<String> {
     let non_thought_parts: Vec<&str> = parts
         .iter()
         .filter(|part| !part.thought.unwrap_or(false))
-        .map(|part| part.text.as_str())
+        .filter_map(|part| part.text.as_deref())
         .collect();
 
     if non_thought_parts.is_empty() {
@@ -149,7 +148,7 @@ pub(super) fn parse_vertex_response(body: &str) -> Result<LlmProviderResponse, P
         .content
         .as_ref()
         .and_then(|c| c.parts.first())
-        .map(|p| p.text.clone())
+        .and_then(|p| p.text.clone())
         .ok_or_else(|| ParseResponseError::NoContent {
             provider: "vertex-ai",
             detail: "candidate has no content parts".into(),
