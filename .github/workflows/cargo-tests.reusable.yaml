@@ -292,6 +292,9 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: "Install LLVM tools (llvm-strip)"
+        run: choco install llvm -y
+
       - name: "Install Rust toolchain"
         run: rustup show
         working-directory: baml_language
