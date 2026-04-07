@@ -702,7 +702,6 @@ fn render_expr_compact_ast(body: &ast::ExprBody, id: ast::ExprId) -> String {
                 ast::BinaryOp::BitXor => "^",
                 ast::BinaryOp::Shl => "<<",
                 ast::BinaryOp::Shr => ">>",
-                ast::BinaryOp::Instanceof => "instanceof",
                 ast::BinaryOp::NullCoalesce => "??",
             };
             format!(

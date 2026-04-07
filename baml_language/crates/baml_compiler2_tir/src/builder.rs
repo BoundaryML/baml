@@ -2208,7 +2208,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         at_expr: ExprId,
     ) -> Ty {
         if self.pattern_has_multiple_variants(pattern_id, body, at_expr) {
-            // Multi-variant union binding — require instanceof narrowing
+            // Multi-variant union binding — require narrowing (e.g. match)
             // before field access. Use Error so diagnostics show the actual
             // type rather than the stdlib `unknown`.
             Ty::Error {
@@ -4448,8 +4448,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             | BinaryOp::Lt
             | BinaryOp::Le
             | BinaryOp::Gt
-            | BinaryOp::Ge
-            | BinaryOp::Instanceof => Ty::Primitive(PrimitiveType::Bool, TyAttr::default()),
+            | BinaryOp::Ge => Ty::Primitive(PrimitiveType::Bool, TyAttr::default()),
 
             // Logical → bool
             BinaryOp::And | BinaryOp::Or => Ty::Primitive(PrimitiveType::Bool, TyAttr::default()),

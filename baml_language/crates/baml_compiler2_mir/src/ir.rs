@@ -525,7 +525,7 @@ pub enum Rvalue {
 
     /// Extract runtime type tag from any value: `type_tag(_1)`
     ///
-    /// Used for jump table dispatch on union types (instanceof patterns).
+    /// Used for jump table dispatch on union types (type patterns in match).
     /// Type tags are global constants:
     /// - Primitives: `int=0`, `string=1`, `bool=2`, `null=3`, `float=4`
     /// - Classes: assigned unique IDs starting at 100

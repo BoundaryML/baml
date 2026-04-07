@@ -1709,8 +1709,6 @@ impl LoweringContext<'_> {
             AstBinaryOp::Shr => Some(BinOp::Shr),
             // Short-circuit operators handled separately
             AstBinaryOp::And | AstBinaryOp::Or => None,
-            // Instanceof is not a simple binary op at MIR level
-            AstBinaryOp::Instanceof => None,
             // Null coalescing desugars to control flow, not a binary op
             AstBinaryOp::NullCoalesce => None,
         }
@@ -1730,20 +1728,6 @@ impl LoweringContext<'_> {
             }
             AstBinaryOp::Or => {
                 return self.lower_short_circuit(expr_id, lhs, rhs, dest, false);
-            }
-            AstBinaryOp::Instanceof => {
-                // Lower as IsType check
-                let lhs_op = self.lower_to_operand(lhs);
-                // Get the type from the expression type map (the rhs is a type name)
-                let check_ty = self.expr_ty(expr_id);
-                self.builder.assign(
-                    dest,
-                    Rvalue::IsType {
-                        operand: lhs_op,
-                        ty: check_ty,
-                    },
-                );
-                return;
             }
             AstBinaryOp::NullCoalesce => {
                 return self.lower_null_coalesce(expr_id, lhs, rhs, dest);

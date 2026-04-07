@@ -634,7 +634,6 @@ pub enum BinaryOp {
     BitXor,
     Shl,
     Shr,
-    Instanceof,
     /// Null coalescing: `a ?? b` — returns `a` if non-null, else `b`.
     NullCoalesce,
 }
@@ -660,7 +659,6 @@ impl std::fmt::Display for BinaryOp {
             BinaryOp::BitXor => "^",
             BinaryOp::Shl => "<<",
             BinaryOp::Shr => ">>",
-            BinaryOp::Instanceof => "instanceof",
             BinaryOp::NullCoalesce => "??",
         };
         write!(f, "{s}")
