@@ -960,16 +960,16 @@ function user.http_status(code: int) -> string {
 
 function user.score(input: User | ErrorInfo, threshold: int) -> Report {
     load_var input
-    load_const User
-    cmp_op instanceof
+    type_tag
+    copy 0
+    load_const type_tag:104
+    cmp_op ==
     pop_jump_if_false L0
+    pop 1
     jump L1
 
   L0:
-    load_var input
-    load_const ErrorInfo
-    cmp_op instanceof
-    pop_jump_if_false L2
+    pop 1
     load_var input
     load_field .message
     store_var name
@@ -982,16 +982,16 @@ function user.score(input: User | ErrorInfo, threshold: int) -> Report {
 
   L2:
     load_var input
-    load_const User
-    cmp_op instanceof
+    type_tag
+    copy 0
+    load_const type_tag:104
+    cmp_op ==
     pop_jump_if_false L3
+    pop 1
     jump L4
 
   L3:
-    load_var input
-    load_const ErrorInfo
-    cmp_op instanceof
-    pop_jump_if_false L5
+    pop 1
     load_var input
     load_field .code
     unary_op -
@@ -1005,16 +1005,16 @@ function user.score(input: User | ErrorInfo, threshold: int) -> Report {
 
   L5:
     load_var input
-    load_const User
-    cmp_op instanceof
+    type_tag
+    copy 0
+    load_const type_tag:104
+    cmp_op ==
     pop_jump_if_false L6
+    pop 1
     jump L7
 
   L6:
-    load_var input
-    load_const ErrorInfo
-    cmp_op instanceof
-    pop_jump_if_false L12
+    pop 1
     load_var threshold
     store_var role_mult
     jump L12
@@ -1074,15 +1074,15 @@ function user.score(input: User | ErrorInfo, threshold: int) -> Report {
     load_var total
     load_var threshold
     cmp_op >
-    store_var _37
-    load_var _37
+    store_var _34
+    load_var _34
     load_const true
     cmp_op ==
     pop_jump_if_false L16
     jump L17
 
   L16:
-    load_var _37
+    load_var _34
     load_const false
     cmp_op ==
     pop_jump_if_false L18

@@ -786,16 +786,16 @@ function user.ExhaustiveTrueType(t: true) -> string {
 
 function user.ExhaustiveTypeAlias(r: Success | Failure) -> string {
     load_var r
-    load_const Success
-    cmp_op instanceof
+    type_tag
+    copy 0
+    load_const type_tag:110
+    cmp_op ==
     pop_jump_if_false L0
+    pop 1
     jump L1
 
   L0:
-    load_var r
-    load_const Failure
-    cmp_op instanceof
-    pop_jump_if_false L2
+    pop 1
     load_var r
     load_field .reason
     jump L2
@@ -810,12 +810,16 @@ function user.ExhaustiveTypeAlias(r: Success | Failure) -> string {
 
 function user.ExhaustiveTypeAliasWithCatchAll(r: Success | Failure) -> string {
     load_var r
-    load_const Success
-    cmp_op instanceof
+    type_tag
+    copy 0
+    load_const type_tag:110
+    cmp_op ==
     pop_jump_if_false L0
+    pop 1
     jump L1
 
   L0:
+    pop 1
     load_const "fallback"
     jump L2
 
@@ -1005,46 +1009,63 @@ function user.IntLiteralUnionPattern(code: 200 | 201 | 204) -> string {
 
 function user.JumpTableClassTypeTag(pet: Cat | Dog | Bird | Fish) -> string {
     load_var pet
-    load_const Cat
-    cmp_op instanceof
+    type_tag
+    copy 0
+    load_const type_tag:111
+    cmp_op ==
     pop_jump_if_false L0
-    jump L5
+    pop 1
+    jump L6
 
   L0:
-    load_var pet
-    load_const Dog
-    cmp_op instanceof
+    copy 0
+    load_const type_tag:111
+    cmp_op <
+    pop_jump_if_false L2
+    copy 0
+    load_const type_tag:103
+    cmp_op ==
     pop_jump_if_false L1
+    pop 1
     jump L4
 
   L1:
-    load_var pet
-    load_const Bird
-    cmp_op instanceof
+    copy 0
+    load_const type_tag:104
+    cmp_op ==
     pop_jump_if_false L2
-    jump L3
+    pop 1
 
   L2:
-    load_var pet
-    load_const Fish
-    cmp_op instanceof
-    pop_jump_if_false L6
-    load_const "fish"
-    jump L6
+    copy 0
+    load_const type_tag:112
+    cmp_op ==
+    pop_jump_if_false L3
+    pop 1
+    jump L5
 
   L3:
-    load_const "bird"
-    jump L6
+    pop 1
+    jump L8
+    load_const "fish"
+    jump L7
 
   L4:
-    load_const "dog"
-    jump L6
+    load_const "bird"
+    jump L7
 
   L5:
-    load_const "cat"
+    load_const "dog"
+    jump L7
 
   L6:
+    load_const "cat"
+
+  L7:
     return
+
+  L8:
+    unreachable
 }
 
 function user.JumpTableEnumDiscriminant(state: DispatchState) -> int {
@@ -1077,49 +1098,28 @@ function user.JumpTableEnumDiscriminant(state: DispatchState) -> int {
 function user.JumpTableTypeTag(value: int | string | bool | float) -> string {
     load_var value
     type_tag
-    load_const 0
-    cmp_op ==
-    pop_jump_if_false L0
-    jump L5
+    jump_table [L3, L2, L1, _, L0], default L5
 
-  L0:
-    load_var value
-    type_tag
-    load_const 1
-    cmp_op ==
-    pop_jump_if_false L1
+  L0: type_tag:4
+    load_const "float"
     jump L4
 
-  L1:
-    load_var value
-    type_tag
-    load_const 2
-    cmp_op ==
-    pop_jump_if_false L2
-    jump L3
-
-  L2:
-    load_var value
-    type_tag
-    load_const 4
-    cmp_op ==
-    pop_jump_if_false L6
-    load_const "float"
-    jump L6
-
-  L3:
+  L1: type_tag:2
     load_const "bool"
-    jump L6
+    jump L4
 
-  L4:
+  L2: type_tag:1
     load_const "string"
-    jump L6
+    jump L4
 
-  L5:
+  L3: type_tag:0
     load_const "int"
 
-  L6:
+  L4:
     return
+
+  L5:
+    unreachable
 }
 
 function user.LiteralAfterTypedPattern(x: int) -> string {
@@ -1730,13 +1730,10 @@ function user.NonExhaustiveClassPlusLiteralMissingClass(x: Success | 200) -> str
 
 function user.NonExhaustiveClassPlusLiteralMissingLiteral(x: Success | 200) -> string {
     load_var x
-    load_const Success
-    cmp_op instanceof
-    pop_jump_if_false L0
+    type_tag
+    pop 1
     load_var x
     load_field .data
-
-  L0:
     return
 }
 
@@ -1753,16 +1750,16 @@ function user.NonExhaustiveCustomBoolMissing(b: true | false) -> string {
 
 function user.NonExhaustiveDoubleMaybeMissingNull(dm: (Success | Failure)??) -> string {
     load_var dm
-    load_const Success
-    cmp_op instanceof
+    type_tag
+    copy 0
+    load_const type_tag:110
+    cmp_op ==
     pop_jump_if_false L0
+    pop 1
     jump L1
 
   L0:
-    load_var dm
-    load_const Failure
-    cmp_op instanceof
-    pop_jump_if_false L2
+    pop 1
     load_var dm
     load_field .reason
     jump L2
@@ -1822,16 +1819,16 @@ function user.NonExhaustiveEnumMissingOne(s: Status) -> string {
 
 function user.NonExhaustiveFullResultMissingOne(r: Success | Failure | Pending) -> string {
     load_var r
-    load_const Success
-    cmp_op instanceof
+    type_tag
+    copy 0
+    load_const type_tag:110
+    cmp_op ==
     pop_jump_if_false L0
+    pop 1
     jump L1
 
   L0:
-    load_var r
-    load_const Failure
-    cmp_op instanceof
-    pop_jump_if_false L2
+    pop 1
     load_var r
     load_field .reason
     jump L2
@@ -2032,13 +2029,10 @@ function user.NonExhaustiveTrueTypeWrongLiteral(t: true) -> string {
 
 function user.NonExhaustiveTypeAliasMissingOne(r: Success | Failure) -> string {
     load_var r
-    load_const Success
-    cmp_op instanceof
-    pop_jump_if_false L0
+    type_tag
+    pop 1
     load_var r
     load_field .data
-
-  L0:
     return
 }
 

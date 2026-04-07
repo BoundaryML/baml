@@ -2646,7 +2646,7 @@ async fn match_mixed_instanceof_and_literal() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         alloc_instance Result
         copy 0
@@ -2654,13 +2654,10 @@ async fn match_mixed_instanceof_and_literal() {
         store_field .code
         store_var x
         load_var x
-        load_const Result
-        cmp_op instanceof
-        pop_jump_if_false L0
+        type_tag
+        pop 1
         load_var x
         load_field .code
-
-      L0:
         return
     }
     ");

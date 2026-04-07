@@ -17,12 +17,11 @@ use crate::{
 /// Classifies what kind of switch a match expression lowers to.
 ///
 /// `Integer` and `EnumDiscriminant` are currently implemented.
-/// `TypeTag` (union-type dispatch via runtime type tags) is not yet ported
-/// from MIR 1 — it will use `class_type_tags` when implemented.
+/// `TypeTag` dispatches class-type and primitive-type match arms via runtime
+/// type tags, using `Rvalue::TypeTag` for the switch operand.
 enum SwitchKind {
     Integer,
     EnumDiscriminant(Name),
-    #[allow(dead_code)]
     TypeTag,
 }
 
@@ -211,7 +210,9 @@ pub fn convert_tir2_ty(ty: &Tir2Ty, resolved: &ResolvedAliases) -> Ty {
 
 // ─── def_to_item_ref helper ──────────────────────────────────────────────────
 
-use baml_compiler2_hir::{contributions::Definition, file_package::file_package};
+use baml_compiler2_hir::{
+    compiler2_all_files, contributions::Definition, file_package::file_package,
+};
 // Use the PPIR item tree (which includes synthetic *$stream items) rather than
 // the bare HIR item tree. TIR resolves methods using PPIR `LocalItemId`s, so
 // MIR must use the same tree to avoid index mismatches.
@@ -366,9 +367,8 @@ struct LoweringContext<'db> {
     // enum's package at each match site.
     class_fields: IndexMap<TypeName, IndexMap<String, usize>>,
     enum_variants: IndexMap<Name, IndexMap<String, usize>>,
-    // Pre-computed type tags for class types — will be used by SwitchKind::TypeTag
-    // when union-type switch optimization is ported from MIR 1.
-    #[allow(dead_code)]
+    /// Pre-computed type tags for class types, used by `SwitchKind::TypeTag`
+    /// for union-type switch optimization (ported from MIR 1).
     class_type_tags: IndexMap<TypeName, i64>,
 
     // Pre-computed type alias data for inline expansion in convert_tir2_ty
@@ -406,15 +406,15 @@ struct LoweringContext<'db> {
 }
 
 impl<'db> LoweringContext<'db> {
-    /// Populate `class_fields`, `class_type_tags`, and `enum_variants` from a single
-    /// package's items.
+    /// Populate `class_fields` and `enum_variants` from a single package's items.
+    ///
+    /// Note: `class_type_tags` is built separately via `build_class_type_tags` to ensure
+    /// the same file-iteration order as the emitter (`generate_project_bytecode`).
     fn populate_from_package(
         db: &'db dyn crate::Db,
         pkg_items: &baml_compiler2_hir::package::PackageItems<'db>,
         pkg_name: &Name,
         class_fields: &mut IndexMap<TypeName, IndexMap<String, usize>>,
-        class_type_tags: &mut IndexMap<TypeName, i64>,
-        class_type_tag_counter: &mut i64,
         enum_variants: &mut IndexMap<Name, IndexMap<String, usize>>,
     ) {
         for (ns_names, ns) in &pkg_items.namespaces {
@@ -439,9 +439,6 @@ impl<'db> LoweringContext<'db> {
                         for (idx, field) in class_data.fields.iter().enumerate() {
                             fields.insert(field.name.to_string(), idx);
                         }
-                        let type_tag = baml_type::typetag::CLASS_BASE + *class_type_tag_counter;
-                        *class_type_tag_counter += 1;
-                        class_type_tags.insert(tn.clone(), type_tag);
                         class_fields.insert(tn, fields);
                     }
                     Definition::Enum(enum_loc) => {
@@ -459,6 +456,40 @@ impl<'db> LoweringContext<'db> {
                 }
             }
         }
+    }
+
+    /// Build `class_type_tags` by iterating `compiler2_all_files` in the same order as the
+    /// emitter (`generate_project_bytecode` in `baml_compiler2_emit`). This guarantees that
+    /// the integer type tags stored in Switch arms exactly match the `class.type_tag` values
+    /// assigned to runtime Class objects.
+    fn build_class_type_tags(db: &'db dyn crate::Db) -> IndexMap<TypeName, i64> {
+        let all_files = compiler2_all_files(db);
+        let mut class_type_tags: IndexMap<TypeName, i64> = IndexMap::new();
+        let mut class_type_tag_counter = 0i64;
+
+        for file in &all_files {
+            let item_tree = file_item_tree(db, *file);
+            let pkg_info = file_package(db, *file);
+
+            // Build module_path: [package] ++ namespace_path
+            let mut module_path: Vec<Name> = vec![pkg_info.package.clone()];
+            module_path.extend(pkg_info.namespace_path.iter().cloned());
+
+            for class_data in item_tree.classes.values() {
+                let tn = TypeName {
+                    name: class_data.name.clone(),
+                    module_path: module_path.clone(),
+                    display_name: class_data.name.clone(),
+                };
+                let type_tag = baml_type::typetag::CLASS_BASE + class_type_tag_counter;
+                class_type_tag_counter += 1;
+                // Use entry to avoid overwriting if the same class appears via multiple paths
+                // (e.g., both FQ and short names). First encounter wins — consistent with emit.rs.
+                class_type_tags.entry(tn).or_insert(type_tag);
+            }
+        }
+
+        class_type_tags
     }
 
     fn new(
@@ -556,13 +587,11 @@ impl<'db> LoweringContext<'db> {
             );
         }
 
-        // --- Build class_fields / enum_variants / class_type_tags from PackageItems ---
+        // --- Build class_fields / enum_variants from PackageItems ---
         let pkg_info = file_package(db, file);
         let pkg_id = PackageId::new(db, pkg_info.package.clone());
 
         let mut class_fields: IndexMap<TypeName, IndexMap<String, usize>> = IndexMap::new();
-        let mut class_type_tags: IndexMap<TypeName, i64> = IndexMap::new();
-        let mut class_type_tag_counter = 0i64;
         let mut enum_variants: IndexMap<Name, IndexMap<String, usize>> = IndexMap::new();
 
         // Include classes from dependency packages first (e.g., "baml" builtins).
@@ -575,8 +604,6 @@ impl<'db> LoweringContext<'db> {
                 dep_items,
                 &dep_name,
                 &mut class_fields,
-                &mut class_type_tags,
-                &mut class_type_tag_counter,
                 &mut enum_variants,
             );
         }
@@ -588,10 +615,12 @@ impl<'db> LoweringContext<'db> {
             pkg_items,
             &pkg_info.package,
             &mut class_fields,
-            &mut class_type_tags,
-            &mut class_type_tag_counter,
             &mut enum_variants,
         );
+
+        // Build class_type_tags using the same file-iteration order as the emitter,
+        // so that switch arms get the same integer tags as runtime class.type_tag fields.
+        let class_type_tags = Self::build_class_type_tags(db);
 
         let resolved_aliases = ResolvedAliases::for_package(db, pkg_id);
 
@@ -730,13 +759,11 @@ impl<'db> LoweringContext<'db> {
             );
         }
 
-        // --- Build class_fields / enum_variants / class_type_tags from PackageItems ---
+        // --- Build class_fields / enum_variants from PackageItems ---
         let pkg_info = file_package(db, file);
         let pkg_id = PackageId::new(db, pkg_info.package.clone());
 
         let mut class_fields: IndexMap<TypeName, IndexMap<String, usize>> = IndexMap::new();
-        let mut class_type_tags: IndexMap<TypeName, i64> = IndexMap::new();
-        let mut class_type_tag_counter = 0i64;
         let mut enum_variants: IndexMap<Name, IndexMap<String, usize>> = IndexMap::new();
 
         // Include classes from dependency packages first.
@@ -748,8 +775,6 @@ impl<'db> LoweringContext<'db> {
                 dep_items,
                 &dep_name,
                 &mut class_fields,
-                &mut class_type_tags,
-                &mut class_type_tag_counter,
                 &mut enum_variants,
             );
         }
@@ -761,10 +786,12 @@ impl<'db> LoweringContext<'db> {
             pkg_items,
             &pkg_info.package,
             &mut class_fields,
-            &mut class_type_tags,
-            &mut class_type_tag_counter,
             &mut enum_variants,
         );
+
+        // Build class_type_tags using the same file-iteration order as the emitter,
+        // so that switch arms get the same integer tags as runtime class.type_tag fields.
+        let class_type_tags = Self::build_class_type_tags(db);
 
         let resolved_aliases = ResolvedAliases::for_package(db, pkg_id);
 
@@ -3423,7 +3450,7 @@ impl LoweringContext<'_> {
                 }
                 AstPattern::Union(sub_pats) => {
                     // Union pattern: each sub-pattern maps to the same arm body.
-                    // All sub-patterns must be the same kind (int or enum variant).
+                    // All sub-patterns must be the same kind (int, enum variant, or type tag).
                     for sub_pat_id in sub_pats {
                         let sub_pat = &self.body.patterns[*sub_pat_id];
                         match sub_pat {
@@ -3460,16 +3487,118 @@ impl LoweringContext<'_> {
                                     int_arms.push((disc, i));
                                 }
                             }
+                            AstPattern::Binding(_) | AstPattern::TypedBinding { .. } => {
+                                // Type-pattern sub-arm: look up type tag via TIR.
+                                if let Some(tir_ty) = self
+                                    .pat_types
+                                    .get(&(self.current_scope, *sub_pat_id))
+                                    .cloned()
+                                {
+                                    let resolved = self.resolved_aliases.convert(&tir_ty);
+                                    if let Some(tag) = self.type_tag_for_ty(&resolved) {
+                                        match &switch_kind {
+                                            None => switch_kind = Some(SwitchKind::TypeTag),
+                                            Some(SwitchKind::TypeTag) => {}
+                                            Some(_) => return false,
+                                        }
+                                        if seen_values.insert(tag) {
+                                            int_arms.push((tag, i));
+                                        }
+                                    } else {
+                                        return false;
+                                    }
+                                } else {
+                                    return false;
+                                }
+                            }
                             _ => return false,
                         }
                     }
                 }
-                AstPattern::Binding(_) => {
-                    // Wildcard/binding must be last arm
-                    if i != arms.len() - 1 {
+                AstPattern::Binding(name) => {
+                    if name.as_str() == "_" || i == arms.len() - 1 {
+                        // Wildcard or last arm: treat as wildcard/otherwise
+                        if i != arms.len() - 1 {
+                            return false;
+                        }
+                        // Check if this is a type-resolved name (bare class sugar)
+                        if name.as_str() != "_" {
+                            if let Some(tir_ty) = self
+                                .pat_types
+                                .get(&(self.current_scope, arm.pattern))
+                                .cloned()
+                            {
+                                let resolved = self.resolved_aliases.convert(&tir_ty);
+                                if let Some(tag) = self.type_tag_for_ty(&resolved) {
+                                    match &switch_kind {
+                                        None => switch_kind = Some(SwitchKind::TypeTag),
+                                        Some(SwitchKind::TypeTag) => {}
+                                        Some(_) => return false,
+                                    }
+                                    if seen_values.insert(tag) {
+                                        int_arms.push((tag, i));
+                                    }
+                                    // Don't set otherwise_idx — this is a typed arm, not a wildcard
+                                } else {
+                                    // Last arm but not a typed one — treat as wildcard
+                                    otherwise_idx = Some(i);
+                                }
+                            } else {
+                                // No type info — treat as wildcard
+                                otherwise_idx = Some(i);
+                            }
+                        } else {
+                            otherwise_idx = Some(i);
+                        }
+                    } else {
+                        // Non-last, non-wildcard binding: look up type tag
+                        if let Some(tir_ty) = self
+                            .pat_types
+                            .get(&(self.current_scope, arm.pattern))
+                            .cloned()
+                        {
+                            let resolved = self.resolved_aliases.convert(&tir_ty);
+                            if let Some(tag) = self.type_tag_for_ty(&resolved) {
+                                match &switch_kind {
+                                    None => switch_kind = Some(SwitchKind::TypeTag),
+                                    Some(SwitchKind::TypeTag) => {}
+                                    Some(_) => return false,
+                                }
+                                if seen_values.insert(tag) {
+                                    int_arms.push((tag, i));
+                                }
+                            } else {
+                                return false;
+                            }
+                        } else {
+                            // No type info for non-last arm — bail
+                            return false;
+                        }
+                    }
+                }
+                AstPattern::TypedBinding { .. } => {
+                    // Typed binding: `x MyClass =>` — look up type tag.
+                    if let Some(tir_ty) = self
+                        .pat_types
+                        .get(&(self.current_scope, arm.pattern))
+                        .cloned()
+                    {
+                        let resolved = self.resolved_aliases.convert(&tir_ty);
+                        if let Some(tag) = self.type_tag_for_ty(&resolved) {
+                            match &switch_kind {
+                                None => switch_kind = Some(SwitchKind::TypeTag),
+                                Some(SwitchKind::TypeTag) => {}
+                                Some(_) => return false,
+                            }
+                            if seen_values.insert(tag) {
+                                int_arms.push((tag, i));
+                            }
+                        } else {
+                            return false;
+                        }
+                    } else {
                         return false;
                     }
-                    otherwise_idx = Some(i);
                 }
                 _ => return false, // Non-int-literal, non-wildcard pattern
             }
@@ -3480,9 +3609,15 @@ impl LoweringContext<'_> {
             return false;
         }
 
-        // Exhaustiveness is determined by TIR's type checker, not re-derived here.
-        // `(exhaustive)` means: no wildcard arm AND TIR confirmed all cases covered.
-        let is_switch_exhaustive = otherwise_idx.is_none() && is_exhaustive;
+        // Exhaustiveness: for TypeTag switches without a wildcard arm, all
+        // typed arms together cover the union — the otherwise block is dead.
+        // TIR's `required_match_cases` returns None for class types, so class
+        // unions are never marked exhaustive by TIR even when all arms are
+        // covered. For TypeTag, if there's no wildcard (`otherwise_idx = None`),
+        // treat the switch as exhaustive so the last arm skips its comparison
+        // and the otherwise block becomes Unreachable.
+        let is_switch_exhaustive = otherwise_idx.is_none()
+            && (is_exhaustive || matches!(switch_kind, Some(SwitchKind::TypeTag)));
 
         // Save the entry block — this is where the switch terminator goes
         let bb_entry = self.builder.current_block();
@@ -3499,6 +3634,16 @@ impl LoweringContext<'_> {
                     Rvalue::Discriminant(Place::local(scrutinee)),
                 );
                 Operand::Copy(Place::Local(disc))
+            }
+            Some(SwitchKind::TypeTag) => {
+                let tag_local = self.builder.temp(Ty::Int {
+                    attr: TyAttr::default(),
+                });
+                self.builder.assign(
+                    Place::local(tag_local),
+                    Rvalue::TypeTag(Place::local(scrutinee)),
+                );
+                Operand::Copy(Place::Local(tag_local))
             }
             _ => Operand::Copy(Place::Local(scrutinee)),
         };
@@ -3554,6 +3699,14 @@ impl LoweringContext<'_> {
                 } else {
                     vec![]
                 }
+            }
+            Some(SwitchKind::TypeTag) => {
+                // TypeTag arms: use the tag integer as the label.
+                // Future improvement: resolve tag → type name for better debug output.
+                int_arms
+                    .iter()
+                    .map(|(v, _)| (*v, format!("type_tag:{v}")))
+                    .collect()
             }
             _ => int_arms.iter().map(|(v, _)| (*v, v.to_string())).collect(),
         };
@@ -3670,6 +3823,21 @@ impl LoweringContext<'_> {
             self.builder.assign(Place::local(test_local), test);
             self.builder
                 .branch(Operand::Copy(Place::Local(test_local)), success, failure);
+        }
+    }
+
+    /// Look up the integer type tag for a type. Returns `Some(tag)` for
+    /// primitives (INT=0, STRING=1, etc.) and classes (`CLASS_BASE` + index),
+    /// or `None` for types that don't have a tag (unions, generics, etc.).
+    fn type_tag_for_ty(&self, ty: &Ty) -> Option<i64> {
+        match ty {
+            Ty::Int { .. } => Some(baml_type::typetag::INT),
+            Ty::String { .. } => Some(baml_type::typetag::STRING),
+            Ty::Bool { .. } => Some(baml_type::typetag::BOOL),
+            Ty::Null { .. } => Some(baml_type::typetag::NULL),
+            Ty::Float { .. } => Some(baml_type::typetag::FLOAT),
+            Ty::Class(tn, _) => self.class_type_tags.get(tn).copied(),
+            _ => None,
         }
     }
 

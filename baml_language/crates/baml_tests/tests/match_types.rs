@@ -102,16 +102,16 @@ async fn match_typed_pattern_second_arm() {
         store_field .reason
         store_var result
         load_var result
-        load_const Success
-        cmp_op instanceof
+        type_tag
+        copy 0
+        load_const type_tag:102
+        cmp_op ==
         pop_jump_if_false L0
+        pop 1
         jump L1
 
       L0:
-        load_var result
-        load_const Failure
-        cmp_op instanceof
-        pop_jump_if_false L2
+        pop 1
         load_const "failure: "
         load_var result
         load_field .reason
@@ -222,53 +222,32 @@ async fn match_typed_discard_patterns_typetag_switch_path() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function classify(x: int | string | bool | float) -> int {
         load_var x
         type_tag
-        load_const 0
-        cmp_op ==
-        pop_jump_if_false L0
-        jump L5
+        jump_table [L3, L2, L1, _, L0], default L5
 
-      L0:
-        load_var x
-        type_tag
-        load_const 1
-        cmp_op ==
-        pop_jump_if_false L1
+      L0: type_tag:4
+        load_const 4
         jump L4
 
-      L1:
-        load_var x
-        type_tag
-        load_const 2
-        cmp_op ==
-        pop_jump_if_false L2
-        jump L3
-
-      L2:
-        load_var x
-        type_tag
-        load_const 4
-        cmp_op ==
-        pop_jump_if_false L6
-        load_const 4
-        jump L6
-
-      L3:
+      L1: type_tag:2
         load_const 3
-        jump L6
+        jump L4
 
-      L4:
+      L2: type_tag:1
         load_const 2
-        jump L6
+        jump L4
 
-      L5:
+      L3: type_tag:0
         load_const 1
 
-      L6:
+      L4:
         return
+
+      L5:
+        unreachable
     }
 
     function main() -> int {
@@ -1433,23 +1412,24 @@ async fn match_class_types_exhaustive_first() {
     insta::assert_snapshot!(output.bytecode, @r#"
     function classify(animal: Cat | Dog | Bird) -> string {
         load_var animal
-        load_const Cat
-        cmp_op instanceof
+        type_tag
+        copy 0
+        load_const type_tag:103
+        cmp_op ==
         pop_jump_if_false L0
+        pop 1
         jump L3
 
       L0:
-        load_var animal
-        load_const Dog
-        cmp_op instanceof
+        copy 0
+        load_const type_tag:104
+        cmp_op ==
         pop_jump_if_false L1
+        pop 1
         jump L2
 
       L1:
-        load_var animal
-        load_const Bird
-        cmp_op instanceof
-        pop_jump_if_false L4
+        pop 1
         load_const "bird: "
         load_var animal
         load_field .name
@@ -1513,23 +1493,24 @@ async fn match_class_types_exhaustive_last() {
     insta::assert_snapshot!(output.bytecode, @r#"
     function classify(animal: Cat | Dog | Bird) -> string {
         load_var animal
-        load_const Cat
-        cmp_op instanceof
+        type_tag
+        copy 0
+        load_const type_tag:103
+        cmp_op ==
         pop_jump_if_false L0
+        pop 1
         jump L3
 
       L0:
-        load_var animal
-        load_const Dog
-        cmp_op instanceof
+        copy 0
+        load_const type_tag:104
+        cmp_op ==
         pop_jump_if_false L1
+        pop 1
         jump L2
 
       L1:
-        load_var animal
-        load_const Bird
-        cmp_op instanceof
-        pop_jump_if_false L4
+        pop 1
         load_const "bird: "
         load_var animal
         load_field .name
@@ -1593,19 +1574,24 @@ async fn match_class_types_non_exhaustive_wildcard() {
     insta::assert_snapshot!(output.bytecode, @r#"
     function classify(animal: Cat | Dog | Bird) -> string {
         load_var animal
-        load_const Cat
-        cmp_op instanceof
+        type_tag
+        copy 0
+        load_const type_tag:103
+        cmp_op ==
         pop_jump_if_false L0
+        pop 1
         jump L3
 
       L0:
-        load_var animal
-        load_const Dog
-        cmp_op instanceof
+        copy 0
+        load_const type_tag:104
+        cmp_op ==
         pop_jump_if_false L1
+        pop 1
         jump L2
 
       L1:
+        pop 1
         load_const "other"
         jump L4
 
@@ -1666,19 +1652,24 @@ async fn match_class_types_non_exhaustive_matched() {
     insta::assert_snapshot!(output.bytecode, @r#"
     function classify(animal: Cat | Dog | Bird) -> string {
         load_var animal
-        load_const Cat
-        cmp_op instanceof
+        type_tag
+        copy 0
+        load_const type_tag:103
+        cmp_op ==
         pop_jump_if_false L0
+        pop 1
         jump L3
 
       L0:
-        load_var animal
-        load_const Dog
-        cmp_op instanceof
+        copy 0
+        load_const type_tag:104
+        cmp_op ==
         pop_jump_if_false L1
+        pop 1
         jump L2
 
       L1:
+        pop 1
         load_const "other"
         jump L4
 
@@ -1741,49 +1732,28 @@ async fn match_union_type_four_patterns_type_tag() {
     function identify(x: int | string | bool | float) -> string {
         load_var x
         type_tag
-        load_const 0
-        cmp_op ==
-        pop_jump_if_false L0
-        jump L5
+        jump_table [L3, L2, L1, _, L0], default L5
 
-      L0:
-        load_var x
-        type_tag
-        load_const 1
-        cmp_op ==
-        pop_jump_if_false L1
+      L0: type_tag:4
+        load_const "decimal"
         jump L4
 
-      L1:
-        load_var x
-        type_tag
-        load_const 2
-        cmp_op ==
-        pop_jump_if_false L2
-        jump L3
-
-      L2:
-        load_var x
-        type_tag
-        load_const 4
-        cmp_op ==
-        pop_jump_if_false L6
-        load_const "decimal"
-        jump L6
-
-      L3:
+      L1: type_tag:2
         load_const "boolean"
-        jump L6
+        jump L4
 
-      L4:
+      L2: type_tag:1
         load_const "text"
-        jump L6
+        jump L4
 
-      L5:
+      L3: type_tag:0
         load_const "integer"
 
-      L6:
+      L4:
         return
+
+      L5:
+        unreachable
     }
     "#);
 
@@ -1885,5 +1855,283 @@ async fn match_multiple_typed_patterns_with_guards() {
     assert_eq!(
         output.result,
         Ok(BexExternalValue::String("redirect".to_string()))
+    );
+}
+
+// ============================================================================
+// Step 1.6 — Explicit TypeTag dispatch shape verification
+// ============================================================================
+
+/// 4+ sequentially-declared class types → dense type tags → JumpTable dispatch.
+#[tokio::test]
+async fn match_class_type_tag_jump_table() {
+    let output = baml_test!(
+        r#"
+        class Cat  { name string }
+        class Dog  { name string }
+        class Bird { name string }
+        class Fish { name string }
+
+        function describe(animal: Cat | Dog | Bird | Fish) -> string {
+            match (animal) {
+                c: Cat  => "cat",
+                d: Dog  => "dog",
+                b: Bird => "bird",
+                f: Fish => "fish"
+            }
+        }
+        function main() -> string {
+            describe(Dog { name: "Rex" })
+        }
+    "#
+    );
+
+    // Bytecode must use type_tag + jump_table, not instanceof chains.
+    assert!(
+        output.bytecode.contains("type_tag"),
+        "expected type_tag instruction in bytecode:\n{}",
+        output.bytecode
+    );
+    assert!(
+        output.bytecode.contains("jump_table"),
+        "expected jump_table instruction in bytecode:\n{}",
+        output.bytecode
+    );
+    assert!(
+        !output.bytecode.contains("instanceof"),
+        "unexpected instanceof instruction in bytecode:\n{}",
+        output.bytecode
+    );
+
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function describe(animal: Cat | Dog | Bird | Fish) -> string {
+        load_var animal
+        type_tag
+        jump_table [L1, L0, _, L3, L2], default L5
+
+      L0: type_tag:104
+        load_const "fish"
+        jump L4
+
+      L1: type_tag:103
+        load_const "bird"
+        jump L4
+
+      L2: type_tag:107
+        load_const "dog"
+        jump L4
+
+      L3: type_tag:106
+        load_const "cat"
+
+      L4:
+        return
+
+      L5:
+        unreachable
+    }
+
+    function main() -> string {
+        alloc_instance Dog
+        copy 0
+        load_const "Rex"
+        store_field .name
+        call user.describe
+        return
+    }
+    "#);
+
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("dog".to_string()))
+    );
+}
+
+/// <4 class types → type_tag + if_else_chain dispatch (not instanceof chains).
+#[tokio::test]
+async fn match_class_type_tag_if_else() {
+    let output = baml_test!(
+        r#"
+        class Cat { name string }
+        class Dog { name string }
+
+        function describe(animal: Cat | Dog) -> string {
+            match (animal) {
+                c: Cat => "cat",
+                d: Dog => "dog"
+            }
+        }
+        function main() -> string {
+            describe(Cat { name: "Whiskers" })
+        }
+    "#
+    );
+
+    // Bytecode must use type_tag + if_else comparison (copy/load_const type_tag/cmp_op),
+    // not instanceof chains or jump_table.
+    assert!(
+        output.bytecode.contains("type_tag"),
+        "expected type_tag instruction in bytecode:\n{}",
+        output.bytecode
+    );
+    assert!(
+        !output.bytecode.contains("instanceof"),
+        "unexpected instanceof instruction in bytecode:\n{}",
+        output.bytecode
+    );
+    assert!(
+        !output.bytecode.contains("jump_table"),
+        "expected if_else dispatch (no jump_table for <4 arms):\n{}",
+        output.bytecode
+    );
+
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function describe(animal: Cat | Dog) -> string {
+        load_var animal
+        type_tag
+        copy 0
+        load_const type_tag:101
+        cmp_op ==
+        pop_jump_if_false L0
+        pop 1
+        jump L1
+
+      L0:
+        pop 1
+        load_const "dog"
+        jump L2
+
+      L1:
+        load_const "cat"
+
+      L2:
+        return
+    }
+
+    function main() -> string {
+        alloc_instance Cat
+        copy 0
+        load_const "Whiskers"
+        store_field .name
+        call user.describe
+        return
+    }
+    "#);
+
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("cat".to_string()))
+    );
+}
+
+/// Mixed class + primitive union with 4+ typed arms → type_tag + switch.
+#[tokio::test]
+async fn match_mixed_class_primitive_type_tag_switch() {
+    let output = baml_test!(
+        r#"
+        class MyClass { value int }
+
+        function classify(x: MyClass | int | string | bool) -> string {
+            match (x) {
+                c: MyClass => "class",
+                n: int     => "int",
+                s: string  => "string",
+                b: bool    => "bool"
+            }
+        }
+        function main() -> string {
+            classify(MyClass { value: 42 })
+        }
+    "#
+    );
+
+    // Bytecode must use type_tag and some form of switch dispatch (jump_table or
+    // if_else chain), not instanceof chains.
+    assert!(
+        output.bytecode.contains("type_tag"),
+        "expected type_tag instruction in bytecode:\n{}",
+        output.bytecode
+    );
+    assert!(
+        !output.bytecode.contains("instanceof"),
+        "unexpected instanceof instruction in bytecode:\n{}",
+        output.bytecode
+    );
+
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function classify(x: MyClass | int | string | bool) -> string {
+        load_var x
+        type_tag
+        copy 0
+        load_const type_tag:2
+        cmp_op ==
+        pop_jump_if_false L0
+        pop 1
+
+      L0:
+        copy 0
+        load_const type_tag:2
+        cmp_op <
+        pop_jump_if_false L2
+        copy 0
+        load_const type_tag:0
+        cmp_op ==
+        pop_jump_if_false L1
+        pop 1
+        jump L5
+
+      L1:
+        copy 0
+        load_const type_tag:1
+        cmp_op ==
+        pop_jump_if_false L2
+        pop 1
+        jump L4
+
+      L2:
+        copy 0
+        load_const type_tag:101
+        cmp_op ==
+        pop_jump_if_false L3
+        pop 1
+        jump L6
+
+      L3:
+        pop 1
+        jump L8
+        load_const "bool"
+        jump L7
+
+      L4:
+        load_const "string"
+        jump L7
+
+      L5:
+        load_const "int"
+        jump L7
+
+      L6:
+        load_const "class"
+
+      L7:
+        return
+
+      L8:
+        unreachable
+    }
+
+    function main() -> string {
+        alloc_instance MyClass
+        copy 0
+        load_const 42
+        store_field .value
+        call user.classify
+        return
+    }
+    "#);
+
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("class".to_string()))
     );
 }
