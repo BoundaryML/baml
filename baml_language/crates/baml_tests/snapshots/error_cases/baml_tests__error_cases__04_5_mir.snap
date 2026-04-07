@@ -13,41 +13,33 @@ fn user.Broken.BadUnionPattern(x: int | bool) -> string {
 
     bb0: {
         _2 = is_type(copy _1, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
-        branch copy _2 -> [bb7, bb1];
+        branch copy _2 -> [bb5, bb1];
     }
 
     bb1: {
         _3 = is_type(copy _1, Void { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
-        branch copy _3 -> [bb7, bb2];
+        branch copy _3 -> [bb5, bb2];
     }
 
     bb2: {
         _5 = is_type(copy _1, Bool { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
-        branch copy _5 -> [bb4, bb3];
+        branch copy _5 -> [bb3, bb4];
     }
 
     bb3: {
-        goto -> bb5;
+        _0 = const "bad";
+        goto -> bb4;
     }
 
     bb4: {
-        _0 = const "bad";
-        goto -> bb5;
-    }
-
-    bb5: {
-        goto -> bb6;
-    }
-
-    bb6: {
         return;
     }
 
-    bb7: {
-        _4 = call const fn baml.sys.panic(const "parse error") -> [bb8];
+    bb5: {
+        _4 = call const fn baml.sys.panic(const "parse error") -> [bb6];
     }
 
-    bb8: {
+    bb6: {
         unreachable;
     }
 }
@@ -75,28 +67,20 @@ fn user.Broken.MixedLiteralAndTyped(x: int) -> string {
 
     bb0: {
         _2 = copy _1 == const 42_i64;
-        branch copy _2 -> [bb3, bb1];
+        branch copy _2 -> [bb2, bb1];
     }
 
     bb1: {
         _3 = is_type(copy _1, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
-        branch copy _3 -> [bb3, bb2];
+        branch copy _3 -> [bb2, bb3];
     }
 
     bb2: {
-        goto -> bb4;
+        _0 = const "mixed";
+        goto -> bb3;
     }
 
     bb3: {
-        _0 = const "mixed";
-        goto -> bb4;
-    }
-
-    bb4: {
-        goto -> bb5;
-    }
-
-    bb5: {
         return;
     }
 }

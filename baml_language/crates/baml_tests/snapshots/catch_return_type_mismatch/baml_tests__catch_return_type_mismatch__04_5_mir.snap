@@ -23,32 +23,24 @@ fn user.caller() -> bool {
     let _2: bool
 
     bb0: {
-        _0 = call const fn user.callee() -> [bb1, unwind: bb3];
+        _0 = call const fn user.callee() -> [bb4, unwind: bb1];
     }
 
     bb1: {
-        goto -> bb2;
+        _2 = copy _1 == const user.Errors.AuthenticationError;
+        branch copy _2 -> [bb3, bb2];
     }
 
     bb2: {
-        goto -> bb6;
-    }
-
-    bb3: {
-        _2 = copy _1 == const user.Errors.AuthenticationError;
-        branch copy _2 -> [bb5, bb4];
-    }
-
-    bb4: {
         throw copy _1;
     }
 
-    bb5: {
+    bb3: {
         _0 = copy _1;
-        goto -> bb6;
+        goto -> bb4;
     }
 
-    bb6: {
+    bb4: {
         return;
     }
 }

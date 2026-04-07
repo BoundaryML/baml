@@ -24,7 +24,7 @@ fn assert.contains(haystack: string, needle: string) -> null {
 
     bb2: {
         _0 = const null;
-        goto -> bb6;
+        goto -> bb5;
     }
 
     bb3: {
@@ -36,14 +36,6 @@ fn assert.contains(haystack: string, needle: string) -> null {
     }
 
     bb5: {
-        goto -> bb6;
-    }
-
-    bb6: {
-        goto -> bb7;
-    }
-
-    bb7: {
         return;
     }
 }
@@ -63,7 +55,7 @@ fn assert.equal(actual: unknown, expected: unknown) -> null {
 
     bb1: {
         _0 = const null;
-        goto -> bb5;
+        goto -> bb4;
     }
 
     bb2: {
@@ -75,14 +67,6 @@ fn assert.equal(actual: unknown, expected: unknown) -> null {
     }
 
     bb4: {
-        goto -> bb5;
-    }
-
-    bb5: {
-        goto -> bb6;
-    }
-
-    bb6: {
         return;
     }
 }
@@ -101,7 +85,7 @@ fn assert.is_true(condition: bool) -> null {
 
     bb1: {
         _0 = const null;
-        goto -> bb5;
+        goto -> bb4;
     }
 
     bb2: {
@@ -113,14 +97,6 @@ fn assert.is_true(condition: bool) -> null {
     }
 
     bb4: {
-        goto -> bb5;
-    }
-
-    bb5: {
-        goto -> bb6;
-    }
-
-    bb6: {
         return;
     }
 }
@@ -139,7 +115,7 @@ fn assert.not_null(value: unknown?) -> null {
 
     bb1: {
         _0 = const null;
-        goto -> bb5;
+        goto -> bb4;
     }
 
     bb2: {
@@ -151,14 +127,6 @@ fn assert.not_null(value: unknown?) -> null {
     }
 
     bb4: {
-        goto -> bb5;
-    }
-
-    bb5: {
-        goto -> bb6;
-    }
-
-    bb6: {
         return;
     }
 }

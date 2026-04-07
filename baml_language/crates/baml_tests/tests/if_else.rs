@@ -560,7 +560,7 @@ async fn else_if_assignment() {
         args: { "a" => BexExternalValue::Bool(false), "b" => BexExternalValue::Bool(true) },
     };
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main(a: bool, b: bool) -> int {
         load_var a
         pop_jump_if_false L0
@@ -573,20 +573,16 @@ async fn else_if_assignment() {
 
       L1:
         load_const 3
-        store_var result
         jump L4
 
       L2:
         load_const 2
-        store_var result
         jump L4
 
       L3:
         load_const 1
-        store_var result
 
       L4:
-        load_var result
         return
     }
     ");
@@ -666,7 +662,7 @@ async fn else_if_assignment_with_locals() {
         args: { "a" => BexExternalValue::Bool(false), "b" => BexExternalValue::Bool(true) },
     };
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main(a: bool, b: bool) -> int {
         load_var a
         pop_jump_if_false L0
@@ -679,20 +675,16 @@ async fn else_if_assignment_with_locals() {
 
       L1:
         load_const 3
-        store_var result
         jump L4
 
       L2:
         load_const 2
-        store_var result
         jump L4
 
       L3:
         load_const 1
-        store_var result
 
       L4:
-        load_var result
         return
     }
     ");

@@ -127,10 +127,6 @@ fn user.test_return_type(function_name: string) -> type {
     }
 
     bb2: {
-        goto -> bb3;
-    }
-
-    bb3: {
         return;
     }
 }

@@ -17,10 +17,6 @@ fn user.Fn() -> string {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -40,10 +36,6 @@ fn user.Fn$build_request() -> baml.http.Request {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -58,10 +50,6 @@ fn user.Fn$parse(json: string) -> string {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -81,10 +69,6 @@ fn user.Fn$render_prompt() -> baml.llm.PromptAst {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }

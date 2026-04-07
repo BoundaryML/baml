@@ -19,10 +19,6 @@ fn user.test_apply_twice_inferred() -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -60,10 +56,6 @@ fn .<lambda(test_apply_twice_inferred, 1)>(f: (int) -> int, x: int) -> null {
     }
 
     bb2: {
-        goto -> bb3;
-    }
-
-    bb3: {
         return;
     }
 }
@@ -85,10 +77,6 @@ fn user.test_capture_in_map_inferred() -> int[] {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -126,10 +114,6 @@ fn user.test_capture_lambda_inferred() -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -164,10 +148,6 @@ fn .<lambda(test_capture_lambda_inferred, 1)>(x: int) -> null {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -196,10 +176,6 @@ fn user.test_chained_map() -> int[] {
     }
 
     bb2: {
-        goto -> bb3;
-    }
-
-    bb3: {
         return;
     }
 }
@@ -260,10 +236,6 @@ fn user.test_compose_inferred() -> int[] {
     }
 
     bb2: {
-        goto -> bb3;
-    }
-
-    bb3: {
         return;
     }
 }
@@ -315,10 +287,6 @@ fn user.test_deep_capture() -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -338,10 +306,6 @@ fn .<lambda(test_deep_capture, 0)>(b: int) -> null {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -383,10 +347,6 @@ fn user.test_deep_capture_inferred() -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -406,10 +366,6 @@ fn .<lambda(test_deep_capture_inferred, 0)>(b: int) -> null {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -451,10 +407,6 @@ fn user.test_fully_inferred_map() -> int[] {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -490,10 +442,6 @@ fn user.test_generic_apply_inferred() -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -510,10 +458,6 @@ fn .<lambda(test_generic_apply_inferred, 0)>(f: (void) -> void, x: void) -> null
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -600,10 +544,6 @@ fn user.test_higher_order_inferred() -> int {
     }
 
     bb2: {
-        goto -> bb3;
-    }
-
-    bb3: {
         return;
     }
 }
@@ -664,10 +604,6 @@ fn user.test_higher_order_return() -> int {
     }
 
     bb2: {
-        goto -> bb3;
-    }
-
-    bb3: {
         return;
     }
 }
@@ -756,10 +692,6 @@ fn user.test_iife_inferred() -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -797,10 +729,6 @@ fn user.test_lambda_calling_lambda() -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -838,10 +766,6 @@ fn .<lambda(test_lambda_calling_lambda, 1)>(f: (int) -> int, x: int) -> null {
     }
 
     bb2: {
-        goto -> bb3;
-    }
-
-    bb3: {
         return;
     }
 }
@@ -858,43 +782,35 @@ fn user.test_lambda_in_match_inferred() -> int {
     bb0: {
         _1 = const "double";
         _3 = copy _1 == const "double";
-        branch copy _3 -> [bb5, bb1];
+        branch copy _3 -> [bb4, bb1];
     }
 
     bb1: {
         _4 = copy _1 == const "negate";
-        branch copy _4 -> [bb4, bb2];
+        branch copy _4 -> [bb3, bb2];
     }
 
     bb2: {
-        goto -> bb3;
+        _2 = make_closure lambda[2]();
+        goto -> bb5;
     }
 
     bb3: {
-        _2 = make_closure lambda[2]();
-        goto -> bb6;
+        _2 = make_closure lambda[1]();
+        goto -> bb5;
     }
 
     bb4: {
-        _2 = make_closure lambda[1]();
-        goto -> bb6;
+        _2 = make_closure lambda[0]();
+        goto -> bb5;
     }
 
     bb5: {
-        _2 = make_closure lambda[0]();
-        goto -> bb6;
+        _5 = copy _2;
+        _0 = call copy _5(const 21_i64) -> [bb6];
     }
 
     bb6: {
-        _5 = copy _2;
-        _0 = call copy _5(const 21_i64) -> [bb7];
-    }
-
-    bb7: {
-        goto -> bb8;
-    }
-
-    bb8: {
         return;
     }
 }
@@ -964,10 +880,6 @@ fn user.test_lambda_variable_then_pass() -> int[] {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -1003,10 +915,6 @@ fn user.test_lambda_with_if() -> string {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -1021,7 +929,7 @@ fn .<lambda(test_lambda_with_if, 0)>(n: int) -> null {
 
     bb0: {
         _2 = copy _1 < const 0_i64;
-        branch copy _2 -> [bb5, bb1];
+        branch copy _2 -> [bb4, bb1];
     }
 
     bb1: {
@@ -1031,28 +939,20 @@ fn .<lambda(test_lambda_with_if, 0)>(n: int) -> null {
 
     bb2: {
         _0 = const "positive";
-        goto -> bb4;
+        goto -> bb5;
     }
 
     bb3: {
         _0 = const "zero";
-        goto -> bb4;
+        goto -> bb5;
     }
 
     bb4: {
-        goto -> bb6;
+        _0 = const "negative";
+        goto -> bb5;
     }
 
     bb5: {
-        _0 = const "negative";
-        goto -> bb6;
-    }
-
-    bb6: {
-        goto -> bb7;
-    }
-
-    bb7: {
         return;
     }
 }
@@ -1070,10 +970,6 @@ fn user.test_lambda_with_match() -> string {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -1104,10 +1000,6 @@ fn .<lambda(test_lambda_with_match, 0)>(n: int) -> null {
     }
 
     bb4: {
-        goto -> bb5;
-    }
-
-    bb5: {
         return;
     }
 }
@@ -1127,10 +1019,6 @@ fn user.test_literal_return_inference() -> int[] {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -1166,10 +1054,6 @@ fn user.test_map_entries() -> string[] {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -1206,10 +1090,6 @@ fn user.test_map_entries_inferred() -> string[] {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -1246,10 +1126,6 @@ fn user.test_map_keys_transform() -> string[] {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -1285,10 +1161,6 @@ fn user.test_map_multi_statement() -> int[] {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -1332,10 +1204,6 @@ fn user.test_map_optional_inferred() -> int[] {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -1349,28 +1217,20 @@ fn .<lambda(test_map_optional_inferred, 0)>(x: null) -> null {
 
     bb0: {
         _2 = copy _1 == const null;
-        branch copy _2 -> [bb3, bb1];
+        branch copy _2 -> [bb2, bb1];
     }
 
     bb1: {
-        goto -> bb2;
+        _0 = const 1_i64;
+        goto -> bb3;
     }
 
     bb2: {
-        _0 = const 1_i64;
-        goto -> bb4;
+        _0 = const 0_i64;
+        goto -> bb3;
     }
 
     bb3: {
-        _0 = const 0_i64;
-        goto -> bb4;
-    }
-
-    bb4: {
-        goto -> bb5;
-    }
-
-    bb5: {
         return;
     }
 }
@@ -1390,10 +1250,6 @@ fn user.test_map_string_to_int() -> int[] {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -1409,10 +1265,6 @@ fn .<lambda(test_map_string_to_int, 0)>(w: string) -> null {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -1432,10 +1284,6 @@ fn user.test_map_type_change_inferred() -> string[] {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -1466,10 +1314,6 @@ fn .<lambda(test_map_type_change_inferred, 0)>(n: null) -> null {
     }
 
     bb4: {
-        goto -> bb5;
-    }
-
-    bb5: {
         return;
     }
 }
@@ -1489,10 +1333,6 @@ fn user.test_map_values_fully_inferred() -> string[] {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -1520,10 +1360,6 @@ fn .<lambda(test_map_values_fully_inferred, 0)>(v: null) -> null {
     }
 
     bb3: {
-        goto -> bb4;
-    }
-
-    bb4: {
         return;
     }
 }
@@ -1543,10 +1379,6 @@ fn user.test_map_values_transform() -> int[] {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -1584,10 +1416,6 @@ fn user.test_map_with_capture() -> int[] {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -1629,10 +1457,6 @@ fn user.test_nested_map() -> int[][] {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -1650,10 +1474,6 @@ fn .<lambda(test_nested_map, 0)>(row: int[]) -> null {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -1689,10 +1509,6 @@ fn user.test_optional_return() -> int? {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -1720,10 +1536,6 @@ fn .<lambda(test_optional_return, 0)>(x: int) -> null {
     }
 
     bb3: {
-        goto -> bb4;
-    }
-
-    bb4: {
         return;
     }
 }
@@ -1837,10 +1649,6 @@ fn user.test_shadowing_inferred() -> int[] {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -1878,10 +1686,6 @@ fn user.test_two_transforms_inferred() -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -1904,10 +1708,6 @@ fn .<lambda(test_two_transforms_inferred, 0)>(f: (int) -> int, g: (int) -> int, 
     }
 
     bb2: {
-        goto -> bb3;
-    }
-
-    bb3: {
         return;
     }
 }
@@ -2024,10 +1824,6 @@ fn user.test_void_lambda_inferred_captures() -> int {
     }
 
     bb4: {
-        goto -> bb5;
-    }
-
-    bb5: {
         return;
     }
 }

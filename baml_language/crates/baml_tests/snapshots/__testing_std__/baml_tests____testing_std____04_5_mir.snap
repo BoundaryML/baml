@@ -15,10 +15,6 @@ fn testing.$invoke_collector(collector: (testing.TestCollector) -> null, c: test
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -82,7 +78,7 @@ fn testing.TestRegistry.expand_set(self: testing.TestRegistry, name: string) -> 
     bb1: {
         _6 = len(_3);
         _7 = copy _5 < copy _6;
-        branch copy _7 -> [bb13, bb2];
+        branch copy _7 -> [bb11, bb2];
     }
 
     bb2: {
@@ -118,7 +114,7 @@ fn testing.TestRegistry.expand_set(self: testing.TestRegistry, name: string) -> 
     }
 
     bb7: {
-        branch copy _41 -> [bb11, bb8];
+        branch copy _41 -> [bb10, bb8];
     }
 
     bb8: {
@@ -126,64 +122,52 @@ fn testing.TestRegistry.expand_set(self: testing.TestRegistry, name: string) -> 
     }
 
     bb9: {
-        goto -> bb10;
-    }
-
-    bb10: {
         _33 = copy _33 + const 1_i64;
         goto -> bb4;
     }
 
-    bb11: {
+    bb10: {
         _44 = copy _38;
-        _0 = call const fn testing.TestRegistry.expand_set(copy _44, copy _2) -> [bb12];
+        _0 = call const fn testing.TestRegistry.expand_set(copy _44, copy _2) -> [bb19];
     }
 
-    bb12: {
-        goto -> bb23;
-    }
-
-    bb13: {
+    bb11: {
         _8 = copy _3[_5];
         _9 = copy _8;
         _12 = copy _9;
         _11 = copy _12.0;
         _10 = copy _11 == copy _2;
-        branch copy _10 -> [bb17, bb14];
+        branch copy _10 -> [bb14, bb12];
     }
 
-    bb14: {
-        goto -> bb15;
+    bb12: {
+        goto -> bb13;
     }
 
-    bb15: {
-        goto -> bb16;
-    }
-
-    bb16: {
+    bb13: {
         _5 = copy _5 + const 1_i64;
         goto -> bb1;
     }
 
-    bb17: {
-        _13 = call const fn baml.sys.now_ms() -> [bb18];
+    bb14: {
+        _13 = call const fn baml.sys.now_ms() -> [bb15];
     }
 
-    bb18: {
+    bb15: {
         _15 = [];
         _16 = [];
         _14 = TestCollector { copy _2, copy _15, copy _16 };
         _19 = copy _9;
         _18 = copy _19.1;
         _20 = copy _14;
-        _17 = call copy _18(copy _20) -> [bb19];
+        _17 = call copy _18(copy _20) -> [bb16];
     }
 
-    bb19: {
-        _22 = call const fn baml.sys.now_ms() -> [bb20];
+    bb16: {
+        _22 = call const fn baml.sys.now_ms() -> [bb17];
     }
 
-    bb20: {
+    bb17: {
         _23 = copy _13;
         _21 = copy _22 - copy _23;
         _25 = copy _14;
@@ -192,18 +176,14 @@ fn testing.TestRegistry.expand_set(self: testing.TestRegistry, name: string) -> 
         _24 = TestRegistry { copy _25, copy _26, copy _27 };
         _29 = copy _1.1;
         _30 = copy _24;
-        _28 = call const fn baml.Map.set(copy _29, copy _2, copy _30) -> [bb21];
+        _28 = call const fn baml.Map.set(copy _29, copy _2, copy _30) -> [bb18];
     }
 
-    bb21: {
-        _0 = call const fn testing.TestRegistry.serialize(copy _1) -> [bb22];
+    bb18: {
+        _0 = call const fn testing.TestRegistry.serialize(copy _1) -> [bb19];
     }
 
-    bb22: {
-        goto -> bb23;
-    }
-
-    bb23: {
+    bb19: {
         return;
     }
 }
@@ -247,7 +227,7 @@ fn testing.TestCollector.find_testset(self: testing.TestCollector, name: string)
         _11 = copy _8;
         _10 = copy _11.0;
         _9 = copy _10 == copy _2;
-        branch copy _9 -> [bb7, bb4];
+        branch copy _9 -> [bb6, bb4];
     }
 
     bb4: {
@@ -255,20 +235,16 @@ fn testing.TestCollector.find_testset(self: testing.TestCollector, name: string)
     }
 
     bb5: {
-        goto -> bb6;
-    }
-
-    bb6: {
         _4 = copy _4 + const 1_i64;
         goto -> bb1;
     }
 
-    bb7: {
+    bb6: {
         _0 = copy _8;
-        goto -> bb8;
+        goto -> bb7;
     }
 
-    bb8: {
+    bb7: {
         return;
     }
 }
@@ -432,7 +408,7 @@ fn testing.TestCollector.register_test(self: testing.TestCollector, name: string
         _23 = copy _5;
         _20 = copy _21 == copy _23;
         _19 = copy _20;
-        branch copy _20 -> [bb15, bb13];
+        branch copy _20 -> [bb14, bb13];
     }
 
     bb13: {
@@ -443,27 +419,19 @@ fn testing.TestCollector.register_test(self: testing.TestCollector, name: string
     }
 
     bb14: {
-        goto -> bb15;
+        branch copy _19 -> [bb16, bb15];
     }
 
     bb15: {
-        branch copy _19 -> [bb17, bb16];
+        goto -> bb17;
     }
 
     bb16: {
-        goto -> bb18;
+        _10 = copy _10 + const 1_i64;
+        goto -> bb17;
     }
 
     bb17: {
-        _10 = copy _10 + const 1_i64;
-        goto -> bb18;
-    }
-
-    bb18: {
-        goto -> bb19;
-    }
-
-    bb19: {
         _14 = copy _14 + const 1_i64;
         goto -> bb4;
     }
@@ -592,7 +560,7 @@ fn testing.TestCollector.register_test_set(self: testing.TestCollector, name: st
         _23 = copy _5;
         _20 = copy _21 == copy _23;
         _19 = copy _20;
-        branch copy _20 -> [bb15, bb13];
+        branch copy _20 -> [bb14, bb13];
     }
 
     bb13: {
@@ -603,27 +571,19 @@ fn testing.TestCollector.register_test_set(self: testing.TestCollector, name: st
     }
 
     bb14: {
-        goto -> bb15;
+        branch copy _19 -> [bb16, bb15];
     }
 
     bb15: {
-        branch copy _19 -> [bb17, bb16];
+        goto -> bb17;
     }
 
     bb16: {
-        goto -> bb18;
+        _10 = copy _10 + const 1_i64;
+        goto -> bb17;
     }
 
     bb17: {
-        _10 = copy _10 + const 1_i64;
-        goto -> bb18;
-    }
-
-    bb18: {
-        goto -> bb19;
-    }
-
-    bb19: {
         _14 = copy _14 + const 1_i64;
         goto -> bb4;
     }
@@ -646,44 +606,32 @@ fn testing.run_test(body: () -> null, runner: (() -> testing.TestReport) -> () -
     bb0: {
         _3 = make_closure lambda[0](copy _1);
         _5 = copy _2 == const null;
-        branch copy _5 -> [bb5, bb1];
+        branch copy _5 -> [bb3, bb1];
     }
 
     bb1: {
         _6 = is_type(copy _2, Function { params: [Function { params: [], ret: Class(TypeName { name: "TestReport", module_path: ["testing"], display_name: "testing.TestReport" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }), attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }], ret: Function { params: [], ret: Class(TypeName { name: "TestReport", module_path: ["testing"], display_name: "testing.TestReport" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }), attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }, attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
-        branch copy _6 -> [bb3, bb2];
+        branch copy _6 -> [bb2, bb4];
     }
 
     bb2: {
-        goto -> bb6;
-    }
-
-    bb3: {
         _7 = copy _2;
         _8 = copy _7;
         _9 = copy _3;
         _4 = call copy _8(copy _9) -> [bb4];
     }
 
+    bb3: {
+        _4 = copy _3;
+        goto -> bb4;
+    }
+
     bb4: {
-        goto -> bb6;
+        _10 = copy _4;
+        _0 = call copy _10() -> [bb5];
     }
 
     bb5: {
-        _4 = copy _3;
-        goto -> bb6;
-    }
-
-    bb6: {
-        _10 = copy _4;
-        _0 = call copy _10() -> [bb7];
-    }
-
-    bb7: {
-        goto -> bb8;
-    }
-
-    bb8: {
         return;
     }
 }
@@ -718,7 +666,7 @@ fn .<lambda(run_test, 0)>() -> null {
 
     bb2: {
         _2 = RunReport { const "pass", const 0_i64 };
-        goto -> bb6;
+        goto -> bb5;
     }
 
     bb3: {
@@ -726,32 +674,28 @@ fn .<lambda(run_test, 0)>() -> null {
     }
 
     bb4: {
+        _2 = RunReport { const "fail", const 0_i64 };
         goto -> bb5;
     }
 
     bb5: {
-        _2 = RunReport { const "fail", const 0_i64 };
-        goto -> bb6;
-    }
-
-    bb6: {
         _7 = copy _2;
         _6 = copy _7.0;
         _11 = copy _2;
         _10 = copy _11.0;
-        _13 = call const fn baml.sys.now_ms() -> [bb7];
+        _13 = call const fn baml.sys.now_ms() -> [bb6];
     }
 
-    bb7: {
+    bb6: {
         _14 = copy _1;
         _12 = copy _13 - copy _14;
         _9 = RunReport { copy _10, copy _12 };
         _8 = [copy _9];
         _0 = TestReport { copy _6, copy _8 };
-        goto -> bb8;
+        goto -> bb7;
     }
 
-    bb8: {
+    bb7: {
         return;
     }
 }
@@ -801,7 +745,7 @@ fn testing.TestRegistry.run_test(self: testing.TestRegistry, name: string) -> te
     bb1: {
         _6 = len(_3);
         _7 = copy _5 < copy _6;
-        branch copy _7 -> [bb13, bb2];
+        branch copy _7 -> [bb11, bb2];
     }
 
     bb2: {
@@ -837,7 +781,7 @@ fn testing.TestRegistry.run_test(self: testing.TestRegistry, name: string) -> te
     }
 
     bb7: {
-        branch copy _27 -> [bb11, bb8];
+        branch copy _27 -> [bb10, bb8];
     }
 
     bb8: {
@@ -845,58 +789,42 @@ fn testing.TestRegistry.run_test(self: testing.TestRegistry, name: string) -> te
     }
 
     bb9: {
-        goto -> bb10;
-    }
-
-    bb10: {
         _19 = copy _19 + const 1_i64;
         goto -> bb4;
     }
 
-    bb11: {
+    bb10: {
         _30 = copy _24;
-        _0 = call const fn testing.TestRegistry.run_test(copy _30, copy _2) -> [bb12];
+        _0 = call const fn testing.TestRegistry.run_test(copy _30, copy _2) -> [bb15];
     }
 
-    bb12: {
-        goto -> bb19;
-    }
-
-    bb13: {
+    bb11: {
         _8 = copy _3[_5];
         _9 = copy _8;
         _12 = copy _9;
         _11 = copy _12.0;
         _10 = copy _11 == copy _2;
-        branch copy _10 -> [bb17, bb14];
+        branch copy _10 -> [bb14, bb12];
     }
 
-    bb14: {
-        goto -> bb15;
+    bb12: {
+        goto -> bb13;
     }
 
-    bb15: {
-        goto -> bb16;
-    }
-
-    bb16: {
+    bb13: {
         _5 = copy _5 + const 1_i64;
         goto -> bb1;
     }
 
-    bb17: {
+    bb14: {
         _14 = copy _9;
         _13 = copy _14.1;
         _16 = copy _9;
         _15 = copy _16.2;
-        _0 = call const fn testing.run_test(copy _13, copy _15) -> [bb18];
+        _0 = call const fn testing.run_test(copy _13, copy _15) -> [bb15];
     }
 
-    bb18: {
-        goto -> bb19;
-    }
-
-    bb19: {
+    bb15: {
         return;
     }
 }
@@ -915,43 +843,31 @@ fn testing.run_testset(run_children: () -> testing.TestSetReport, runner: (() ->
 
     bb0: {
         _4 = copy _2 == const null;
-        branch copy _4 -> [bb5, bb1];
+        branch copy _4 -> [bb3, bb1];
     }
 
     bb1: {
         _5 = is_type(copy _2, Function { params: [Function { params: [], ret: Class(TypeName { name: "TestSetReport", module_path: ["testing"], display_name: "testing.TestSetReport" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }), attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }], ret: Function { params: [], ret: Class(TypeName { name: "TestSetReport", module_path: ["testing"], display_name: "testing.TestSetReport" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }), attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }, attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
-        branch copy _5 -> [bb3, bb2];
+        branch copy _5 -> [bb2, bb4];
     }
 
     bb2: {
-        goto -> bb6;
-    }
-
-    bb3: {
         _6 = copy _2;
         _7 = copy _6;
         _3 = call copy _7(copy _1) -> [bb4];
     }
 
+    bb3: {
+        _3 = copy _1;
+        goto -> bb4;
+    }
+
     bb4: {
-        goto -> bb6;
+        _8 = copy _3;
+        _0 = call copy _8() -> [bb5];
     }
 
     bb5: {
-        _3 = copy _1;
-        goto -> bb6;
-    }
-
-    bb6: {
-        _8 = copy _3;
-        _0 = call copy _8() -> [bb7];
-    }
-
-    bb7: {
-        goto -> bb8;
-    }
-
-    bb8: {
         return;
     }
 }
@@ -1012,7 +928,7 @@ fn testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.Serial
     bb1: {
         _6 = len(_3);
         _7 = copy _5 < copy _6;
-        branch copy _7 -> [bb17, bb2];
+        branch copy _7 -> [bb13, bb2];
     }
 
     bb2: {
@@ -1048,74 +964,54 @@ fn testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.Serial
 
     bb7: {
         _27 = is_type(copy _23, Class(TypeName { name: "TestRegistry", module_path: ["testing"], display_name: "testing.TestRegistry" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
-        branch copy _27 -> [bb12, bb8];
+        branch copy _27 -> [bb10, bb8];
     }
 
     bb8: {
         _37 = copy _23 == const null;
-        branch copy _37 -> [bb10, bb9];
+        branch copy _37 -> [bb9, bb12];
     }
 
     bb9: {
-        goto -> bb15;
-    }
-
-    bb10: {
         _38 = copy _2;
         _41 = copy _21;
         _40 = copy _41.0;
         _39 = SerializedTest { const "lazyTestSet", copy _40 };
-        _22 = call const fn baml.Array.push(copy _38, copy _39) -> [bb11];
+        _22 = call const fn baml.Array.push(copy _38, copy _39) -> [bb12];
     }
 
-    bb11: {
-        goto -> bb15;
-    }
-
-    bb12: {
+    bb10: {
         _28 = copy _23;
         _29 = copy _2;
         _32 = copy _21;
         _31 = copy _32.0;
         _34 = copy _28;
-        _33 = call const fn testing.TestRegistry.serialize(copy _34) -> [bb13];
+        _33 = call const fn testing.TestRegistry.serialize(copy _34) -> [bb11];
     }
 
-    bb13: {
+    bb11: {
         _36 = copy _28;
         _35 = copy _36.2;
         _30 = SerializedTestSet { copy _31, copy _33, copy _35 };
-        _22 = call const fn baml.Array.push(copy _29, copy _30) -> [bb14];
+        _22 = call const fn baml.Array.push(copy _29, copy _30) -> [bb12];
     }
 
-    bb14: {
-        goto -> bb15;
-    }
-
-    bb15: {
-        goto -> bb16;
-    }
-
-    bb16: {
+    bb12: {
         _17 = copy _17 + const 1_i64;
         goto -> bb3;
     }
 
-    bb17: {
+    bb13: {
         _8 = copy _3[_5];
         _9 = copy _8;
         _11 = copy _2;
         _14 = copy _9;
         _13 = copy _14.0;
         _12 = SerializedTest { const "test", copy _13 };
-        _10 = call const fn baml.Array.push(copy _11, copy _12) -> [bb18];
+        _10 = call const fn baml.Array.push(copy _11, copy _12) -> [bb14];
     }
 
-    bb18: {
-        goto -> bb19;
-    }
-
-    bb19: {
+    bb14: {
         _5 = copy _5 + const 1_i64;
         goto -> bb1;
     }

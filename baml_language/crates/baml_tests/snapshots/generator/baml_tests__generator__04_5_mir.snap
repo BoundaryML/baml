@@ -13,10 +13,6 @@ fn user.GetUser() -> MyClass {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -32,10 +28,6 @@ fn user.GetUser$build_request() -> baml.http.Request {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -50,10 +42,6 @@ fn user.GetUser$parse(json: string) -> MyClass {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -69,10 +57,6 @@ fn user.GetUser$render_prompt() -> baml.llm.PromptAst {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }

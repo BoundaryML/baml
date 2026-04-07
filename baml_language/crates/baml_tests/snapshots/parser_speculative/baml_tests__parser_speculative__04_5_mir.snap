@@ -14,10 +14,6 @@ fn user.Ambiguous(input: string) -> string {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -34,10 +30,6 @@ fn user.Ambiguous$build_request(input: string) -> baml.http.Request {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -52,10 +44,6 @@ fn user.Ambiguous$parse(json: string) -> string {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -72,10 +60,6 @@ fn user.Ambiguous$render_prompt(input: string) -> baml.llm.PromptAst {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -92,10 +76,6 @@ fn user.AnotherLLM(input: string) -> string {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -112,10 +92,6 @@ fn user.AnotherLLM$build_request(input: string) -> baml.http.Request {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -130,10 +106,6 @@ fn user.AnotherLLM$parse(json: string) -> string {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -150,10 +122,6 @@ fn user.AnotherLLM$render_prompt(input: string) -> baml.llm.PromptAst {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -208,10 +176,6 @@ fn user.ExtractData(text: string) -> JsonData {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -228,10 +192,6 @@ fn user.ExtractData$build_request(text: string) -> baml.http.Request {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -246,10 +206,6 @@ fn user.ExtractData$parse(json: string) -> JsonData {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -266,10 +222,6 @@ fn user.ExtractData$render_prompt(text: string) -> baml.llm.PromptAst {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -286,10 +238,6 @@ fn user.ChainedProcess(input: string) -> string {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -306,10 +254,6 @@ fn user.ChainedProcess$build_request(input: string) -> baml.http.Request {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -324,10 +268,6 @@ fn user.ChainedProcess$parse(json: string) -> string {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -344,10 +284,6 @@ fn user.ChainedProcess$render_prompt(input: string) -> baml.llm.PromptAst {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -364,10 +300,6 @@ fn user.LLMAnalyze(text: string) -> Analysis {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -384,10 +316,6 @@ fn user.LLMAnalyze$build_request(text: string) -> baml.http.Request {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -402,10 +330,6 @@ fn user.LLMAnalyze$parse(json: string) -> Analysis {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -422,10 +346,6 @@ fn user.LLMAnalyze$render_prompt(text: string) -> baml.llm.PromptAst {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }

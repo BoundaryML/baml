@@ -20,6 +20,7 @@ pub(crate) fn optimize_function(func: &mut MirFunction) {
         return; // nothing to clean up on builtins
     };
     eliminate_dead_blocks(body);
+    merge_passthrough_blocks(body);
     propagate_copies(body, func.arity);
     eliminate_dead_locals(body, func.arity);
     reorder_blocks_rpo(body);
@@ -34,6 +35,7 @@ pub(crate) fn optimize_function(func: &mut MirFunction) {
 /// the enclosing `MirFunction` wrapper (arity = 0).
 pub(crate) fn optimize_function_body(body: &mut MirFunctionBody) {
     eliminate_dead_blocks(body);
+    merge_passthrough_blocks(body);
     propagate_copies(body, 0);
     eliminate_dead_locals(body, 0);
     reorder_blocks_rpo(body);
@@ -168,6 +170,121 @@ fn rewrite_catch_region_blocks(regions: &mut Vec<CatchRegion>, map: &[Option<Blo
         region.handler = new_handler;
         true
     });
+}
+
+// ============================================================================
+// Phase 1b: Passthrough block merging
+// ============================================================================
+
+/// Rewrite all `BlockId` references in a terminator using a `HashMap` redirect map.
+fn rewrite_block_ids_in_terminator_with_map(
+    term: &mut Terminator,
+    map: &HashMap<BlockId, BlockId>,
+) {
+    let remap = |id: &mut BlockId| {
+        if let Some(&new_id) = map.get(id) {
+            *id = new_id;
+        }
+    };
+
+    match term {
+        Terminator::Goto { target } => remap(target),
+        Terminator::Branch {
+            then_block,
+            else_block,
+            ..
+        } => {
+            remap(then_block);
+            remap(else_block);
+        }
+        Terminator::Switch {
+            arms, otherwise, ..
+        } => {
+            for (_, target) in arms {
+                remap(target);
+            }
+            remap(otherwise);
+        }
+        Terminator::Return => {}
+        Terminator::Call { target, unwind, .. } => {
+            remap(target);
+            if let Some(u) = unwind {
+                remap(u);
+            }
+        }
+        Terminator::Unreachable => {}
+        Terminator::DispatchFuture { resume, .. } => remap(resume),
+        Terminator::Await { target, unwind, .. } => {
+            remap(target);
+            if let Some(u) = unwind {
+                remap(u);
+            }
+        }
+        Terminator::Throw { .. } => {}
+        Terminator::ThrowIfPanic { otherwise, .. } => remap(otherwise),
+    }
+}
+
+/// Merge passthrough blocks: blocks with no statements and a single Goto terminator
+/// are eliminated by redirecting all references to them to their target.
+fn merge_passthrough_blocks(body: &mut MirFunctionBody) {
+    // Step 1: identify passthrough blocks (empty statements + Goto terminator)
+    let mut redirect: HashMap<BlockId, BlockId> = HashMap::new();
+    for block in &body.blocks {
+        if !block.statements.is_empty() {
+            continue;
+        }
+        if let Some(Terminator::Goto { target }) = &block.terminator {
+            // Don't redirect the entry block — it must remain as-is
+            if block.id != body.entry {
+                redirect.insert(block.id, *target);
+            }
+        }
+    }
+
+    if redirect.is_empty() {
+        return;
+    }
+
+    // Step 2: resolve chains (A→B→C becomes A→C)
+    let mut resolved: HashMap<BlockId, BlockId> = HashMap::new();
+    for &src in redirect.keys() {
+        let mut target = redirect[&src];
+        let mut visited = HashSet::new();
+        visited.insert(src);
+        while let Some(&next) = redirect.get(&target) {
+            if !visited.insert(target) {
+                break; // cycle detected, stop
+            }
+            target = next;
+        }
+        resolved.insert(src, target);
+    }
+
+    // Step 3: rewrite all terminators
+    for block in &mut body.blocks {
+        if let Some(term) = &mut block.terminator {
+            rewrite_block_ids_in_terminator_with_map(term, &resolved);
+        }
+    }
+
+    // Step 4: rewrite catch regions
+    for region in &mut body.catch_regions {
+        if let Some(&new_body) = resolved.get(&region.body_entry) {
+            region.body_entry = new_body;
+        }
+        if let Some(&new_handler) = resolved.get(&region.handler) {
+            region.handler = new_handler;
+        }
+    }
+
+    // Step 5: entry block redirect (shouldn't happen since we excluded it, but be safe)
+    if let Some(&new_entry) = resolved.get(&body.entry) {
+        body.entry = new_entry;
+    }
+
+    // Step 6: re-run dead block elimination to compact
+    eliminate_dead_blocks(body);
 }
 
 // ============================================================================

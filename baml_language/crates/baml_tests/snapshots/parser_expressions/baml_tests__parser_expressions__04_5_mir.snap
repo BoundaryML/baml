@@ -120,7 +120,7 @@ fn user.TestPrecedence() -> bool {
         _5 = const 10_i64 + const 2_i64;
         _7 = const true;
         _6 = copy _7;
-        branch copy _7 -> [bb4, bb1];
+        branch copy _7 -> [bb3, bb1];
     }
 
     bb1: {
@@ -135,15 +135,11 @@ fn user.TestPrecedence() -> bool {
     }
 
     bb3: {
+        _0 = copy _6;
         goto -> bb4;
     }
 
     bb4: {
-        _0 = copy _6;
-        goto -> bb5;
-    }
-
-    bb5: {
         return;
     }
 }

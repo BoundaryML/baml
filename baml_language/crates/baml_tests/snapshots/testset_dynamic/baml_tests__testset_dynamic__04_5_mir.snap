@@ -95,10 +95,6 @@ fn .<lambda(<lambda($init_test_19, 0)>, 1)>() -> null {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -155,10 +151,6 @@ fn .<lambda(<lambda($init_test_19, 2)>, 3)>() -> null {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -173,10 +165,6 @@ fn .<lambda(<lambda($init_test_19, 2)>, 4)>() -> null {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
