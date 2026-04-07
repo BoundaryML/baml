@@ -1724,6 +1724,14 @@ impl LoweringContext<'_> {
             _ => {}
         }
 
+        // Check if TIR already folded this expression to a literal constant
+        if let Ty::Literal(ref lit, _) = self.expr_ty(expr_id) {
+            let constant = Self::lower_literal(lit);
+            self.builder
+                .assign(dest, Rvalue::Use(Operand::Constant(constant)));
+            return;
+        }
+
         let left = self.lower_to_operand(lhs);
         let right = self.lower_to_operand(rhs);
         if let Some(mir_op) = Self::convert_binop(op) {
@@ -2058,7 +2066,14 @@ impl LoweringContext<'_> {
         }
     }
 
-    fn lower_unary(&mut self, _expr_id: AstExprId, op: AstUnaryOp, expr: AstExprId, dest: Place) {
+    fn lower_unary(&mut self, expr_id: AstExprId, op: AstUnaryOp, expr: AstExprId, dest: Place) {
+        // Check if TIR already folded this expression to a literal constant
+        if let Ty::Literal(ref lit, _) = self.expr_ty(expr_id) {
+            let constant = Self::lower_literal(lit);
+            self.builder
+                .assign(dest, Rvalue::Use(Operand::Constant(constant)));
+            return;
+        }
         let operand = self.lower_to_operand(expr);
         let mir_op = match op {
             AstUnaryOp::Not => crate::UnaryOp::Not,

@@ -1120,7 +1120,6 @@ fn user.GuardedOnlyNonExhaustive(x: int) -> int {
     let _9: bool
     let _10: int
     let _11: int
-    let _12: -1
 
     bb0: {
         _2 = is_type(copy _1, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
@@ -1148,8 +1147,7 @@ fn user.GuardedOnlyNonExhaustive(x: int) -> int {
 
     bb4: {
         _11 = copy _8;
-        _12 = -const 1_i64;
-        _0 = copy _11 * copy _12;
+        _0 = copy _11 * const -1_i64;
         goto -> bb6;
     }
 

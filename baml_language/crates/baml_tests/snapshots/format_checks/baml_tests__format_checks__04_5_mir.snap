@@ -102,11 +102,11 @@ fn user.BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool) -> in
     let _95: bool
     let _96: bool
     let _97: bool
-    let _98: 8002
-    let _99: 8000
-    let _100: 2
-    let _101: 1005
-    let _102: 1002
+    let _98: int
+    let _99: int
+    let _100: int
+    let _101: int
+    let _102: int
     let _103: int
     let _104: int
     let _105: int
@@ -140,15 +140,15 @@ fn user.BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool) -> in
     let _133: int
     let _134: int
     let _135: int
-    let _136: int
-    let _137: int
-    let _138: int
-    let _139: int
+    let _136: bool
+    let _137: bool
+    let _138: bool
+    let _139: bool
     let _140: int
-    let _141: bool
-    let _142: bool
-    let _143: bool
-    let _144: bool
+    let _141: int
+    let _142: int
+    let _143: int
+    let _144: int
     let _145: int
     let _146: int
     let _147: int
@@ -156,14 +156,14 @@ fn user.BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool) -> in
     let _149: int
     let _150: int
     let _151: int
-    let _152: int
+    let _152: bool
     let _153: int
     let _154: int
     let _155: int
     let _156: int
-    let _157: bool
+    let _157: int
     let _158: int
-    let _159: "a very long string prefix that is already quite long concatenated with "
+    let _159: int
     let _160: int
     let _161: int
     let _162: int
@@ -198,20 +198,14 @@ fn user.BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool) -> in
     let _191: int
     let _192: int
     let _193: int
-    let _194: int
-    let _195: int
-    let _196: int
-    let _197: int
-    let _198: int
-    let _199: int
-    let _200: bool
+    let _194: bool
+    let _195: bool
+    let _196: bool
+    let _197: bool
+    let _198: bool
+    let _199: bool
+    let _200: int
     let _201: bool
-    let _202: bool
-    let _203: bool
-    let _204: bool
-    let _205: bool
-    let _206: int
-    let _207: bool
 
     bb0: {
         branch copy _6 -> [bb1, bb2];
@@ -454,10 +448,7 @@ fn user.BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool) -> in
     }
 
     bb33: {
-        _99 = const 1000_i64 * const 8_i64;
-        _100 = const 1_i64 * const 2_i64;
-        _98 = copy _99 + copy _100;
-        _90 = copy _1 < copy _98;
+        _90 = copy _1 < const 8002_i64;
         goto -> bb34;
     }
 
@@ -486,100 +477,98 @@ fn user.BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool) -> in
     }
 
     bb39: {
-        _102 = const 1000_i64 + const 2_i64;
-        _101 = copy _102 + const 3_i64;
         goto -> bb40;
     }
 
     bb40: {
-        _121 = copy _1 * copy _2;
-        _122 = copy _3 * copy _4;
-        _120 = copy _121 + copy _122;
-        _123 = copy _1 * copy _2;
-        _119 = copy _120 - copy _123;
-        _124 = copy _3 * copy _4;
-        _118 = copy _119 + copy _124;
-        _125 = copy _1 * copy _2;
-        _117 = copy _118 - copy _125;
-        _126 = copy _3 * copy _4;
-        _116 = copy _117 + copy _126;
-        _127 = copy _1 * copy _2;
-        _115 = copy _116 - copy _127;
-        _128 = copy _3 * copy _4;
-        _114 = copy _115 + copy _128;
-        _129 = copy _1 * copy _2;
-        _113 = copy _114 - copy _129;
-        _130 = copy _3 * copy _4;
-        _112 = copy _113 + copy _130;
-        _131 = copy _1 * copy _2;
-        _111 = copy _112 - copy _131;
-        _132 = copy _3 * copy _4;
-        _110 = copy _111 + copy _132;
-        _133 = copy _1 * copy _2;
-        _109 = copy _110 - copy _133;
-        _134 = copy _3 * copy _4;
-        _108 = copy _109 + copy _134;
-        _135 = copy _1 * copy _2;
-        _107 = copy _108 - copy _135;
-        _136 = copy _3 * copy _4;
-        _106 = copy _107 + copy _136;
-        _137 = copy _1 * copy _2;
-        _105 = copy _106 - copy _137;
-        _138 = copy _3 * copy _4;
-        _104 = copy _105 + copy _138;
-        _139 = copy _1 * copy _2;
-        _103 = copy _104 - copy _139;
-        _140 = copy _3 * copy _4;
-        _147 = copy _1 + copy _2;
-        _146 = copy _147 + copy _3;
-        _145 = copy _146 + copy _4;
-        _144 = copy _145 > const 0_i64;
-        _143 = copy _144;
-        branch copy _144 -> [bb41, bb42];
+        _116 = copy _1 * copy _2;
+        _117 = copy _3 * copy _4;
+        _115 = copy _116 + copy _117;
+        _118 = copy _1 * copy _2;
+        _114 = copy _115 - copy _118;
+        _119 = copy _3 * copy _4;
+        _113 = copy _114 + copy _119;
+        _120 = copy _1 * copy _2;
+        _112 = copy _113 - copy _120;
+        _121 = copy _3 * copy _4;
+        _111 = copy _112 + copy _121;
+        _122 = copy _1 * copy _2;
+        _110 = copy _111 - copy _122;
+        _123 = copy _3 * copy _4;
+        _109 = copy _110 + copy _123;
+        _124 = copy _1 * copy _2;
+        _108 = copy _109 - copy _124;
+        _125 = copy _3 * copy _4;
+        _107 = copy _108 + copy _125;
+        _126 = copy _1 * copy _2;
+        _106 = copy _107 - copy _126;
+        _127 = copy _3 * copy _4;
+        _105 = copy _106 + copy _127;
+        _128 = copy _1 * copy _2;
+        _104 = copy _105 - copy _128;
+        _129 = copy _3 * copy _4;
+        _103 = copy _104 + copy _129;
+        _130 = copy _1 * copy _2;
+        _102 = copy _103 - copy _130;
+        _131 = copy _3 * copy _4;
+        _101 = copy _102 + copy _131;
+        _132 = copy _1 * copy _2;
+        _100 = copy _101 - copy _132;
+        _133 = copy _3 * copy _4;
+        _99 = copy _100 + copy _133;
+        _134 = copy _1 * copy _2;
+        _98 = copy _99 - copy _134;
+        _135 = copy _3 * copy _4;
+        _142 = copy _1 + copy _2;
+        _141 = copy _142 + copy _3;
+        _140 = copy _141 + copy _4;
+        _139 = copy _140 > const 0_i64;
+        _138 = copy _139;
+        branch copy _139 -> [bb41, bb42];
     }
 
     bb41: {
-        _150 = copy _1 * copy _2;
-        _149 = copy _150 * copy _3;
-        _148 = copy _149 * copy _4;
-        _143 = copy _148 < const 10000_i64;
+        _145 = copy _1 * copy _2;
+        _144 = copy _145 * copy _3;
+        _143 = copy _144 * copy _4;
+        _138 = copy _143 < const 10000_i64;
         goto -> bb42;
     }
 
     bb42: {
-        _142 = copy _143;
-        branch copy _143 -> [bb43, bb44];
+        _137 = copy _138;
+        branch copy _138 -> [bb43, bb44];
     }
 
     bb43: {
-        _153 = copy _1 - copy _2;
-        _152 = copy _153 - copy _3;
-        _151 = copy _152 - copy _4;
-        _142 = copy _151 != const 0_i64;
+        _148 = copy _1 - copy _2;
+        _147 = copy _148 - copy _3;
+        _146 = copy _147 - copy _4;
+        _137 = copy _146 != const 0_i64;
         goto -> bb44;
     }
 
     bb44: {
-        _141 = copy _142;
-        branch copy _142 -> [bb45, bb46];
+        _136 = copy _137;
+        branch copy _137 -> [bb45, bb46];
     }
 
     bb45: {
-        _155 = copy _1 + copy _2;
-        _156 = copy _3 + copy _4;
-        _154 = copy _155 * copy _156;
-        _141 = copy _154 >= const 100_i64;
+        _150 = copy _1 + copy _2;
+        _151 = copy _3 + copy _4;
+        _149 = copy _150 * copy _151;
+        _136 = copy _149 >= const 100_i64;
         goto -> bb46;
     }
 
     bb46: {
-        branch copy _141 -> [bb49, bb47];
+        branch copy _136 -> [bb49, bb47];
     }
 
     bb47: {
-        _158 = copy _1 * const 1_i64;
-        _157 = copy _158 < const 2_i64;
-        branch copy _157 -> [bb48, bb49];
+        _153 = copy _1 * const 1_i64;
+        _152 = copy _153 < const 2_i64;
+        branch copy _152 -> [bb48, bb49];
     }
 
     bb48: {
@@ -587,100 +576,99 @@ fn user.BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool) -> in
     }
 
     bb49: {
-        _159 = const "a very long string prefix that is already quite long" + const " concatenated with ";
+        _164 = copy _1 * copy _2;
+        _165 = copy _3 * copy _4;
+        _163 = copy _164 + copy _165;
+        _166 = copy _1 * copy _2;
+        _162 = copy _163 + copy _166;
+        _167 = copy _3 * copy _4;
+        _161 = copy _162 + copy _167;
+        _168 = copy _1 * copy _2;
+        _160 = copy _161 + copy _168;
+        _169 = copy _3 * copy _4;
+        _159 = copy _160 + copy _169;
         _170 = copy _1 * copy _2;
+        _158 = copy _159 + copy _170;
         _171 = copy _3 * copy _4;
-        _169 = copy _170 + copy _171;
+        _157 = copy _158 + copy _171;
         _172 = copy _1 * copy _2;
-        _168 = copy _169 + copy _172;
+        _156 = copy _157 + copy _172;
         _173 = copy _3 * copy _4;
-        _167 = copy _168 + copy _173;
-        _174 = copy _1 * copy _2;
-        _166 = copy _167 + copy _174;
-        _175 = copy _3 * copy _4;
-        _165 = copy _166 + copy _175;
-        _176 = copy _1 * copy _2;
-        _164 = copy _165 + copy _176;
-        _177 = copy _3 * copy _4;
-        _163 = copy _164 + copy _177;
-        _178 = copy _1 * copy _2;
-        _162 = copy _163 + copy _178;
-        _179 = copy _3 * copy _4;
-        _161 = copy _162 + copy _179;
-        _160 = copy _161 + copy _1;
-        _7 = copy _7 + copy _160;
-        _189 = copy _1 + copy _2;
+        _155 = copy _156 + copy _173;
+        _154 = copy _155 + copy _1;
+        _7 = copy _7 + copy _154;
+        _183 = copy _1 + copy _2;
+        _182 = copy _183 + copy _3;
+        _181 = copy _182 + copy _4;
+        _180 = copy _181 + copy _1;
+        _179 = copy _180 + copy _2;
+        _178 = copy _179 + copy _3;
+        _177 = copy _178 + copy _4;
+        _176 = copy _177 + copy _1;
+        _175 = copy _176 + copy _2;
+        _174 = copy _175 + copy _3;
+        _193 = copy _1 + copy _2;
+        _192 = copy _193 + copy _3;
+        _191 = copy _192 + copy _4;
+        _190 = copy _191 + copy _1;
+        _189 = copy _190 + copy _2;
         _188 = copy _189 + copy _3;
         _187 = copy _188 + copy _4;
         _186 = copy _187 + copy _1;
         _185 = copy _186 + copy _2;
         _184 = copy _185 + copy _3;
-        _183 = copy _184 + copy _4;
-        _182 = copy _183 + copy _1;
-        _181 = copy _182 + copy _2;
-        _180 = copy _181 + copy _3;
-        _199 = copy _1 + copy _2;
-        _198 = copy _199 + copy _3;
-        _197 = copy _198 + copy _4;
-        _196 = copy _197 + copy _1;
-        _195 = copy _196 + copy _2;
-        _194 = copy _195 + copy _3;
-        _193 = copy _194 + copy _4;
-        _192 = copy _193 + copy _1;
-        _191 = copy _192 + copy _2;
-        _190 = copy _191 + copy _3;
-        _205 = copy _1 > const 0_i64;
-        _204 = copy _205;
-        branch copy _205 -> [bb50, bb51];
+        _199 = copy _1 > const 0_i64;
+        _198 = copy _199;
+        branch copy _199 -> [bb50, bb51];
     }
 
     bb50: {
-        _204 = copy _2 > const 0_i64;
+        _198 = copy _2 > const 0_i64;
         goto -> bb51;
     }
 
     bb51: {
-        _203 = copy _204;
-        branch copy _204 -> [bb52, bb53];
+        _197 = copy _198;
+        branch copy _198 -> [bb52, bb53];
     }
 
     bb52: {
-        _203 = copy _3 > const 0_i64;
+        _197 = copy _3 > const 0_i64;
         goto -> bb53;
     }
 
     bb53: {
-        _202 = copy _203;
-        branch copy _203 -> [bb54, bb55];
+        _196 = copy _197;
+        branch copy _197 -> [bb54, bb55];
     }
 
     bb54: {
-        _202 = copy _4 > const 0_i64;
+        _196 = copy _4 > const 0_i64;
         goto -> bb55;
     }
 
     bb55: {
-        _201 = copy _202;
-        branch copy _202 -> [bb56, bb57];
+        _195 = copy _196;
+        branch copy _196 -> [bb56, bb57];
     }
 
     bb56: {
-        _201 = copy _1 != copy _2;
+        _195 = copy _1 != copy _2;
         goto -> bb57;
     }
 
     bb57: {
-        _200 = copy _201;
-        branch copy _201 -> [bb58, bb59];
+        _194 = copy _195;
+        branch copy _195 -> [bb58, bb59];
     }
 
     bb58: {
-        _200 = copy _2 != copy _3;
+        _194 = copy _2 != copy _3;
         goto -> bb59;
     }
 
     bb59: {
-        branch copy _200 -> [bb60, bb61];
+        branch copy _194 -> [bb60, bb61];
     }
 
     bb60: {
@@ -688,9 +676,9 @@ fn user.BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool) -> in
     }
 
     bb61: {
-        _206 = copy _1 * copy _2;
-        _207 = copy _1 == const 2_i64;
-        branch copy _207 -> [bb62, bb63];
+        _200 = copy _1 * copy _2;
+        _201 = copy _1 == const 2_i64;
+        branch copy _201 -> [bb62, bb63];
     }
 
     bb62: {

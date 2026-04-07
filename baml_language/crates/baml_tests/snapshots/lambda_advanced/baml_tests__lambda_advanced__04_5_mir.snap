@@ -905,13 +905,11 @@ fn user.test_lambda_with_if() -> string {
     let _0: string // _0 // return
     let _1: (int) -> "negative" | "zero" | "positive" // classify
     let _2: (int) -> "negative" | "zero" | "positive"
-    let _3: -5
 
     bb0: {
         _1 = make_closure lambda[0]();
         _2 = copy _1;
-        _3 = -const 5_i64;
-        _0 = call copy _2(copy _3) -> [bb1];
+        _0 = call copy _2(const -5_i64) -> [bb1];
     }
 
     bb1: {
@@ -1499,13 +1497,11 @@ fn user.test_optional_return() -> int? {
     let _0: int? // _0 // return
     let _1: (int) -> int | null // maybe
     let _2: (int) -> int | null
-    let _3: -1
 
     bb0: {
         _1 = make_closure lambda[0]();
         _2 = copy _1;
-        _3 = -const 1_i64;
-        _0 = call copy _2(copy _3) -> [bb1];
+        _0 = call copy _2(const -1_i64) -> [bb1];
     }
 
     bb1: {

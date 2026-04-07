@@ -828,13 +828,7 @@ function user.BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool)
     load_var _91
     pop_jump_if_false L17
     load_var a
-    load_const 1000
-    load_const 8
-    bin_op *
-    load_const 1
-    load_const 2
-    bin_op *
-    bin_op +
+    load_const 8002
     cmp_op <
     store_var _90
 
@@ -872,10 +866,10 @@ function user.BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool)
     bin_op +
     load_const 0
     cmp_op >
-    store_var _144
-    load_var _144
-    store_var _143
-    load_var _144
+    store_var _139
+    load_var _139
+    store_var _138
+    load_var _139
     pop_jump_if_false L21
     load_var a
     load_var b
@@ -886,12 +880,12 @@ function user.BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool)
     bin_op *
     load_const 10000
     cmp_op <
-    store_var _143
+    store_var _138
 
   L21:
-    load_var _143
-    store_var _142
-    load_var _143
+    load_var _138
+    store_var _137
+    load_var _138
     pop_jump_if_false L22
     load_var a
     load_var b
@@ -902,12 +896,12 @@ function user.BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool)
     bin_op -
     load_const 0
     cmp_op !=
-    store_var _142
+    store_var _137
 
   L22:
-    load_var _142
-    store_var _141
-    load_var _142
+    load_var _137
+    store_var _136
+    load_var _137
     pop_jump_if_false L23
     load_var a
     load_var b
@@ -918,10 +912,10 @@ function user.BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool)
     bin_op *
     load_const 100
     cmp_op >=
-    store_var _141
+    store_var _136
 
   L23:
-    load_var _141
+    load_var _136
     pop_jump_if_false L24
     jump L25
 
@@ -981,58 +975,58 @@ function user.BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool)
     load_var a
     load_const 0
     cmp_op >
-    store_var _205
-    load_var _205
-    store_var _204
-    load_var _205
+    store_var _199
+    load_var _199
+    store_var _198
+    load_var _199
     pop_jump_if_false L26
     load_var b
     load_const 0
     cmp_op >
-    store_var _204
+    store_var _198
 
   L26:
-    load_var _204
-    store_var _203
-    load_var _204
+    load_var _198
+    store_var _197
+    load_var _198
     pop_jump_if_false L27
     load_var c
     load_const 0
     cmp_op >
-    store_var _203
+    store_var _197
 
   L27:
-    load_var _203
-    store_var _202
-    load_var _203
+    load_var _197
+    store_var _196
+    load_var _197
     pop_jump_if_false L28
     load_var d
     load_const 0
     cmp_op >
-    store_var _202
+    store_var _196
 
   L28:
-    load_var _202
-    store_var _201
-    load_var _202
+    load_var _196
+    store_var _195
+    load_var _196
     pop_jump_if_false L29
     load_var a
     load_var b
     cmp_op !=
-    store_var _201
+    store_var _195
 
   L29:
-    load_var _201
-    store_var _200
-    load_var _201
+    load_var _195
+    store_var _194
+    load_var _195
     pop_jump_if_false L30
     load_var b
     load_var c
     cmp_op !=
-    store_var _200
+    store_var _194
 
   L30:
-    load_var _200
+    load_var _194
     pop_jump_if_false L31
 
   L31:
