@@ -1307,15 +1307,14 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 continue;
             };
 
-            // The linear layout may place the handler before the body (the
-            // stackifier picks block order to minimise jumps, not to preserve
-            // try/handler ordering). The handler code itself is still
-            // reachable via normal control flow; only the exception-table
-            // entry is useless, so skip it.
-            // TODO: fix the stackifier or MIR lowering so this doesn't happen.
-            if start_pc >= handler_pc {
-                continue;
-            }
+            // The RPO seeds the entry block first so that body_entry is
+            // always a DFS ancestor of handler, guaranteeing start_pc <
+            // handler_pc.
+            debug_assert!(
+                start_pc < handler_pc,
+                "exception table: handler {handler:?} (pc {handler_pc}) placed before \
+                 body entry {body_entry:?} (pc {start_pc}) — RPO ordering bug"
+            );
 
             self.bytecode.exception_table.push(ExceptionTableEntry {
                 start_pc,

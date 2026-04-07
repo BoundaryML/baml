@@ -306,17 +306,25 @@ fn compute_rpo(body: &MirFunctionBody) -> Vec<BlockId> {
     let mut visited = HashSet::new();
     let mut postorder = Vec::new();
 
-    // DFS from exception handler blocks FIRST so they appear last in RPO
-    // (after the try body). They're reachable at runtime via the exception
-    // table, not via CFG edges. Seeding them before the entry DFS ensures
-    // they end up in postorder before the entry, which means after the entry
-    // in the reversed RPO.
-    for region in &body.catch_regions {
-        rpo_dfs(body, region.handler, &mut visited, &mut postorder);
-    }
+    // Phase 1: DFS from the entry block. Handlers reachable via CFG edges
+    // (Call/Await unwind targets) are visited as descendants of their
+    // try-body entry blocks, so body_entry is a DFS ancestor of handler →
+    // body_entry is pushed AFTER handler in postorder → BEFORE handler in
+    // the reversed RPO. This satisfies start_pc < handler_pc.
     rpo_dfs(body, body.entry, &mut visited, &mut postorder);
-    postorder.reverse();
-    postorder
+
+    // Phase 2: Seed handlers NOT reachable from entry (same-frame panics
+    // like division-by-zero where there's no Call/Await with an unwind
+    // edge). Prepend their subtrees to the postorder so they appear AFTER
+    // all entry-reachable blocks in the reversed RPO (handler_pc > body_pc).
+    let mut handler_postorder = Vec::new();
+    for region in &body.catch_regions {
+        rpo_dfs(body, region.handler, &mut visited, &mut handler_postorder);
+    }
+    handler_postorder.append(&mut postorder);
+
+    handler_postorder.reverse();
+    handler_postorder
 }
 
 // ============================================================================

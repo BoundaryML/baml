@@ -3393,11 +3393,14 @@ async fn rethrow_propagates_to_outer() {
 
     function middle() -> int {
         call user.inner
-        return
+        jump L0
         load_var e
         throw_if_panic
         load_const "rethrown"
         throw
+
+      L0:
+        return
     }
     "#);
     assert_eq!(output.result, Ok(BexExternalValue::Int(99)));
