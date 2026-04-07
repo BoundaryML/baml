@@ -63,6 +63,7 @@ use std::{
     },
 };
 
+use ::bex_vm::errors::VmError;
 use async_trait::async_trait;
 pub use bex_events::HostSpanContext;
 use bex_events::{EventKind, FunctionEnd, FunctionEvent, FunctionStart, SpanContext};
@@ -415,7 +416,9 @@ impl BexEngine {
         let package_init_order = bytecode_program.package_init_order.clone();
 
         // Convert the pure bytecode to a VM-ready program with native functions attached
-        let bytecode = bex_vm::convert_program(bytecode_program).map_err(EngineError::VmError)?;
+        let bytecode = bex_vm::convert_program(bytecode_program)
+            .map_err(VmError::InternalError)
+            .map_err(EngineError::VmError)?;
 
         // Extract test cases before consuming other bytecode fields.
         let test_cases = bytecode.test_cases;
@@ -1399,7 +1402,10 @@ impl BexEngine {
                 }
 
                 VmExecState::ScheduleFuture(id) => {
-                    let pending = vm.pending_future(id).map_err(EngineError::VmError)?;
+                    let pending = vm
+                        .pending_future(id)
+                        .map_err(VmError::InternalError)
+                        .map_err(EngineError::VmError)?;
 
                     // Convert arguments to BexExternalValue
                     let args: Vec<BexExternalValue> = pending
@@ -1431,6 +1437,7 @@ impl BexEngine {
                             });
 
                             vm.set_future_ready(id, value)
+                                .map_err(VmError::InternalError)
                                 .map_err(EngineError::VmError)?;
                         }
                         SysOpResult::Async(fut) => {
@@ -1521,6 +1528,7 @@ impl BexEngine {
                             )
                         });
                         vm.fulfil_future(future.id, value)
+                            .map_err(VmError::InternalError)
                             .map_err(EngineError::VmError)?;
                         if future.id == future_id {
                             continue 'vm_exec;
@@ -1550,7 +1558,7 @@ impl BexEngine {
                                         &protected.epoch_guard(),
                                     )
                                 });
-                                vm.fulfil_future(future.id, value).map_err(EngineError::VmError)?;
+                                vm.fulfil_future(future.id, value).map_err(VmError::InternalError).map_err(EngineError::VmError)?;
                                 if future.id == future_id {
                                     break;
                                 }

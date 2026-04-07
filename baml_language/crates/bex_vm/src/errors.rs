@@ -27,16 +27,10 @@ pub enum VmPanic {
     Unreachable,
 }
 
-/// Any kind of virtual machine error.
+/// The VM encountered an internal error. This typically indicates a bug in the VM or compiler.
+/// These are always fatal: they cannot be caught in BAML code.
 #[derive(Debug, Error, PartialEq, Clone)]
-pub enum VmError {
-    // ── Catchable panics ────────────────────────────────────────────────
-    /// A BAML-level panic (converted to a `baml.panics.*` instance and
-    /// routed through the exception table).
-    #[error("{0}")]
-    Panic(#[from] VmPanic),
-
-    // ── Fatal errors (not catchable) ────────────────────────────────────
+pub enum VmInternalError {
     #[error("invalid argument count: expected {expected}, got {got}")]
     InvalidArgumentCount { expected: usize, got: usize },
 
@@ -64,12 +58,27 @@ pub enum VmError {
     #[error("jump offset overflowed instruction pointer")]
     InvalidJump,
 
-    // ── Terminal errors ─────────────────────────────────────────────────
-    #[error("uncaught throw: {value:?}")]
-    UnhandledThrow { value: Value },
-
     #[error("internal error: {0}")]
     InternalError(String),
+}
+
+/// Any kind of virtual machine error.
+#[derive(Debug, Error, PartialEq, Clone)]
+pub enum VmError {
+    // ── Catchable panics ────────────────────────────────────────────────
+    /// A BAML-level panic (converted to a `baml.panics.*` instance and
+    /// routed through the exception table).
+    #[error("{0}")]
+    Panic(#[from] VmPanic),
+
+    // ── Fatal errors (not catchable) ────────────────────────────────────
+    #[error("{0}")]
+    InternalError(#[from] VmInternalError),
+
+    // ── Terminal errors ─────────────────────────────────────────────────
+    /// Only exists in this form it if
+    #[error("uncaught throw: {value:?}")]
+    UnhandledThrow { value: Value },
 }
 
 #[derive(Debug, Clone)]

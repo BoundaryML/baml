@@ -1067,13 +1067,13 @@ fn extraction_expr(val: &str, ty: &BamlType, is_mut: bool) -> String {
             }
         }
         BamlType::Int => format!(
-            "match {val} {{ Value::Int(i) => *i, other => return Err(VmError::TypeError {{ expected: Type::Int, got: vm.type_of(other) }}) }}"
+            "match {val} {{ Value::Int(i) => *i, other => return Err(InternalError::TypeError {{ expected: Type::Int, got: vm.type_of(other) }}.into()) }}"
         ),
         BamlType::Float => format!(
-            "match {val} {{ Value::Float(f) => *f, other => return Err(VmError::TypeError {{ expected: Type::Float, got: vm.type_of(other) }}) }}"
+            "match {val} {{ Value::Float(f) => *f, other => return Err(InternalError::TypeError {{ expected: Type::Float, got: vm.type_of(other) }}.into()) }}"
         ),
         BamlType::Bool => format!(
-            "match {val} {{ Value::Bool(b) => *b, other => return Err(VmError::TypeError {{ expected: Type::Bool, got: vm.type_of(other) }}) }}"
+            "match {val} {{ Value::Bool(b) => *b, other => return Err(InternalError::TypeError {{ expected: Type::Bool, got: vm.type_of(other) }}.into()) }}"
         ),
         BamlType::List(_) => {
             if is_mut {

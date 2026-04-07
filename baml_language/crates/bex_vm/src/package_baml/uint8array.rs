@@ -1,7 +1,7 @@
 use bex_vm_types::Value;
 
 use super::{BamlClassUint8Array, PackageBamlImpl};
-use crate::errors::VmError;
+use crate::errors::{VmError, VmInternalError};
 
 impl BamlClassUint8Array for PackageBamlImpl {
     #[allow(clippy::cast_possible_wrap)]
@@ -59,11 +59,11 @@ impl BamlClassUint8Array for PackageBamlImpl {
 
     fn zeroes(size: i64) -> Result<Vec<u8>, VmError> {
         let size = usize::try_from(size).map_err(|_| {
-            VmError::InternalError(format!("uint8array.zeroes: invalid size {size}"))
+            VmInternalError::InternalError(format!("uint8array.zeroes: invalid size {size}"))
         })?;
         let mut v = Vec::new();
         v.try_reserve(size).map_err(|_| {
-            VmError::InternalError(format!(
+            VmInternalError::InternalError(format!(
                 "uint8array.zeroes: allocation of {size} bytes failed"
             ))
         })?;
@@ -76,12 +76,13 @@ impl BamlClassUint8Array for PackageBamlImpl {
         let mut result = Vec::with_capacity(array.len());
         for (i, val) in array.iter().enumerate() {
             let Value::Int(n) = val else {
-                return Err(VmError::InternalError(format!(
+                return Err(VmInternalError::InternalError(format!(
                     "uint8array.from_array: element at index {i} is not an integer"
-                )));
+                ))
+                .into());
             };
             let byte = u8::try_from(*n).map_err(|_| {
-                VmError::InternalError(format!(
+                VmInternalError::InternalError(format!(
                     "uint8array.from_array: value {n} at index {i} is out of range 0..=255"
                 ))
             })?;
@@ -108,22 +109,23 @@ impl BamlClassUint8Array for PackageBamlImpl {
             }
         }
         let (chunks, &[]) = hex.as_bytes().as_chunks::<2>() else {
-            return Err(VmError::InternalError(
+            return Err(VmInternalError::InternalError(
                 "uint8array.from_hex: hex string must have even length".to_string(),
-            ));
+            )
+            .into());
         };
         chunks
             .iter()
             .enumerate()
             .map(|(i, &[hi, lo]): (usize, &[u8; 2])| {
-                let hi = parse_hex_digit(hi).ok_or(VmError::InternalError(format!(
-                    "uint8array.from_hex: invalid hex at position {}",
-                    i * 2
-                )))?;
-                let lo = parse_hex_digit(lo).ok_or(VmError::InternalError(format!(
-                    "uint8array.from_hex: invalid hex at position {}",
-                    i * 2 + 1
-                )))?;
+                let hi =
+                    parse_hex_digit(hi).ok_or(VmError::from(VmInternalError::InternalError(
+                        format!("uint8array.from_hex: invalid hex at position {}", i * 2),
+                    )))?;
+                let lo =
+                    parse_hex_digit(lo).ok_or(VmError::from(VmInternalError::InternalError(
+                        format!("uint8array.from_hex: invalid hex at position {}", i * 2 + 1),
+                    )))?;
                 Ok(hi << 4 | lo)
             })
             .collect()
@@ -144,7 +146,9 @@ impl BamlClassUint8Array for PackageBamlImpl {
         use base64::Engine;
         base64::engine::general_purpose::STANDARD
             .decode(base64_str)
-            .map_err(|e| VmError::InternalError(format!("uint8array.from_base64: {e}")))
+            .map_err(|e| {
+                VmInternalError::InternalError(format!("uint8array.from_base64: {e}")).into()
+            })
     }
 
     fn to_base64(uint8array: &[u8]) -> String {

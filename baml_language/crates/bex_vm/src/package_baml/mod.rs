@@ -28,7 +28,10 @@ mod unstable;
 use bex_vm_types::types::{Instance, Object, Type, Value};
 use indexmap::IndexMap;
 
-use crate::{BexVm, errors::VmError};
+use crate::{
+    BexVm,
+    errors::{VmError, VmInternalError},
+};
 
 /// Result type for native functions.
 pub type NativeFunctionResult = Result<Value, VmError>;
@@ -67,7 +70,7 @@ pub struct PackageBamlImpl;
 /// other packages (e.g. `assert.*`, `testing.*`) are left as `NativeUnresolved`
 /// so they can be wired up by future package implementations. They will only
 /// fail at runtime if actually called.
-pub fn attach_builtins(object: Object) -> Result<Object, VmError> {
+pub fn attach_builtins(object: Object) -> Result<Object, VmInternalError> {
     Ok(match object {
         Object::Function(function) => {
             let kind = match function.kind {
@@ -82,7 +85,7 @@ pub fn attach_builtins(object: Object) -> Result<Object, VmError> {
                         let Some(native_function) =
                             PackageBamlImpl::get_native_fn(function.name.as_str())
                         else {
-                            return Err(VmError::InternalError(format!(
+                            return Err(VmInternalError::InternalError(format!(
                                 "Native function '{}' not found",
                                 function.name
                             )));

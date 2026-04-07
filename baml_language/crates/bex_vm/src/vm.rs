@@ -29,7 +29,7 @@ use indexmap::IndexMap;
 
 use crate::{
     StackTrace,
-    errors::{ErrorLocation, VmError, VmPanic},
+    errors::{ErrorLocation, VmError, VmInternalError, VmPanic},
     indexable::{EvalStack, EvalStackTrait},
     package_baml::{BamlPackageBaml, NativeFunction},
     types::ObjectTrait,
@@ -325,7 +325,7 @@ pub struct BytecodeProgram {
 /// This is the bridge between compilation output and VM execution. It:
 /// 1. Attaches native function implementations to builtin functions
 /// 2. Builds resolved name lookups for functions, classes, and enums
-pub fn convert_program(program: bex_vm_types::Program) -> Result<BytecodeProgram, VmError> {
+pub fn convert_program(program: bex_vm_types::Program) -> Result<BytecodeProgram, VmInternalError> {
     // Convert objects, attaching native functions
     let objects: Vec<Object> = program
         .objects
@@ -509,9 +509,13 @@ impl BexVm {
     }
 
     /// Helper method to get `HeapPtr` from a Value, with type checking.
-    fn as_object_ptr(&self, value: &Value, object_type: ObjectType) -> Result<HeapPtr, VmError> {
+    fn as_object_ptr(
+        &self,
+        value: &Value,
+        object_type: ObjectType,
+    ) -> Result<HeapPtr, VmInternalError> {
         let Value::Object(ptr) = value else {
-            return Err(VmError::TypeError {
+            return Err(VmInternalError::TypeError {
                 expected: object_type.into(),
                 got: self.type_of(value),
             });
@@ -520,18 +524,18 @@ impl BexVm {
     }
 
     /// Get string from a Value.
-    pub fn as_string(&self, value: &Value) -> Result<&String, VmError> {
+    pub fn as_string(&self, value: &Value) -> Result<&String, VmInternalError> {
         let ptr = self.as_object_ptr(value, ObjectType::String)?;
         self.get_object(ptr).as_string()
     }
 
     /// Get uint8array from a Value.
-    pub fn as_uint8array(&self, value: &Value) -> Result<&Vec<u8>, VmError> {
+    pub fn as_uint8array(&self, value: &Value) -> Result<&Vec<u8>, VmInternalError> {
         let ptr = self.as_object_ptr(value, ObjectType::Uint8Array)?;
         let obj = self.get_object(ptr);
         match obj {
             Object::Uint8Array(bytes) => Ok(bytes),
-            _ => Err(VmError::TypeError {
+            _ => Err(VmInternalError::TypeError {
                 expected: ObjectType::Uint8Array.into(),
                 got: ObjectType::of(obj).into(),
             }),
@@ -539,11 +543,11 @@ impl BexVm {
     }
 
     /// Get mutable uint8array from a Value.
-    pub fn as_uint8array_mut(&mut self, value: &Value) -> Result<&mut Vec<u8>, VmError> {
+    pub fn as_uint8array_mut(&mut self, value: &Value) -> Result<&mut Vec<u8>, VmInternalError> {
         let ptr = self.as_object_ptr(value, ObjectType::Uint8Array)?;
         match self.get_object_mut(ptr) {
             Object::Uint8Array(bytes) => Ok(bytes),
-            other => Err(VmError::TypeError {
+            other => Err(VmInternalError::TypeError {
                 expected: ObjectType::Uint8Array.into(),
                 got: ObjectType::of(other).into(),
             }),
@@ -556,30 +560,31 @@ impl BexVm {
     }
 
     /// Get mutable string from a Value.
-    pub fn as_string_mut(&mut self, value: &Value) -> Result<&mut String, VmError> {
+    pub fn as_string_mut(&mut self, value: &Value) -> Result<&mut String, VmInternalError> {
         let ptr = self.as_object_ptr(value, ObjectType::String)?;
         self.get_object_mut(ptr).as_string_mut()
     }
 
     /// Get array from a Value.
-    pub fn as_array(&self, value: &Value) -> Result<&[Value], VmError> {
+    pub fn as_array(&self, value: &Value) -> Result<&[Value], VmInternalError> {
         let ptr = self.as_object_ptr(value, ObjectType::Array)?;
         let obj = self.get_object(ptr);
         match obj {
             Object::Array(arr) => Ok(arr.as_slice()),
-            _ => Err(VmError::TypeError {
+            _ => Err(VmInternalError::TypeError {
                 expected: ObjectType::Array.into(),
                 got: ObjectType::of(obj).into(),
-            }),
+            }
+            .into()),
         }
     }
 
     /// Get mutable array from a Value.
-    pub fn as_array_mut(&mut self, value: &Value) -> Result<&mut Vec<Value>, VmError> {
+    pub fn as_array_mut(&mut self, value: &Value) -> Result<&mut Vec<Value>, VmInternalError> {
         let ptr = self.as_object_ptr(value, ObjectType::Array)?;
         // Check type first to avoid borrow issues
         if !matches!(self.get_object(ptr), Object::Array(_)) {
-            return Err(VmError::TypeError {
+            return Err(VmInternalError::TypeError {
                 expected: ObjectType::Array.into(),
                 got: ObjectType::of(self.get_object(ptr)).into(),
             });
@@ -591,12 +596,12 @@ impl BexVm {
     }
 
     /// Get map from a Value.
-    pub fn as_map(&self, value: &Value) -> Result<&IndexMap<String, Value>, VmError> {
+    pub fn as_map(&self, value: &Value) -> Result<&IndexMap<String, Value>, VmInternalError> {
         let index = self.as_object_ptr(value, ObjectType::Map)?;
         let obj = self.get_object(index);
         match obj {
             Object::Map(map) => Ok(map),
-            _ => Err(VmError::TypeError {
+            _ => Err(VmInternalError::TypeError {
                 expected: ObjectType::Map.into(),
                 got: ObjectType::of(obj).into(),
             }),
@@ -604,11 +609,14 @@ impl BexVm {
     }
 
     /// Get mutable map from a Value.
-    pub fn as_map_mut(&mut self, value: &Value) -> Result<&mut IndexMap<String, Value>, VmError> {
+    pub fn as_map_mut(
+        &mut self,
+        value: &Value,
+    ) -> Result<&mut IndexMap<String, Value>, VmInternalError> {
         let index = self.as_object_ptr(value, ObjectType::Map)?;
         // Check type first to avoid borrow issues
         if !matches!(self.get_object(index), Object::Map(_)) {
-            return Err(VmError::TypeError {
+            return Err(VmInternalError::TypeError {
                 expected: ObjectType::Map.into(),
                 got: ObjectType::of(self.get_object(index)).into(),
             });
@@ -621,13 +629,13 @@ impl BexVm {
 
     /// Get Value reference (for generic types).
     #[allow(dead_code)]
-    pub fn as_value_mut(&mut self, value: &Value) -> Result<&mut Value, VmError> {
+    pub fn as_value_mut(&mut self, value: &Value) -> Result<&mut Value, VmInternalError> {
         // This is used by macro-generated code for generic type parameters.
         // For now, we don't support mutable access to generic values.
         let Value::Object(ptr) = value else {
-            return Err(VmError::InvalidObjectRef(0));
+            return Err(VmInternalError::InvalidObjectRef(0).into());
         };
-        Err(VmError::InvalidObjectRef(ptr.as_ptr() as usize))
+        Err(VmInternalError::InvalidObjectRef(ptr.as_ptr() as usize).into())
     }
 
     /// TODO: We should remove this API in favor of using `bex_engine` only (vbv)
@@ -635,7 +643,7 @@ impl BexVm {
     ///
     /// This is primarily for testing. In production, use `BexEngine` which
     /// manages the heap across multiple VM instances.
-    pub fn from_program(program: bex_vm_types::Program) -> Result<Self, VmError> {
+    pub fn from_program(program: bex_vm_types::Program) -> Result<Self, VmInternalError> {
         let bytecode = convert_program(program)?;
 
         // Extract compile-time objects for the heap
@@ -696,11 +704,11 @@ impl BexVm {
 
     /// Returns a reference to the pending future.
     ///
-    /// Returns [`VmError::TypeError`] if the future is not pending, or not a future.
-    pub fn pending_future(&self, future_ptr: HeapPtr) -> Result<&PendingFuture, VmError> {
+    /// Returns [`InternalError::TypeError`] if the future is not pending, or not a future.
+    pub fn pending_future(&self, future_ptr: HeapPtr) -> Result<&PendingFuture, VmInternalError> {
         match self.get_object(future_ptr) {
             Object::Future(Future::Pending(future)) => Ok(future),
-            other => Err(VmError::TypeError {
+            other => Err(VmInternalError::TypeError {
                 expected: FutureType::Pending.into(),
                 got: ObjectType::of(other).into(),
             }),
@@ -712,9 +720,13 @@ impl BexVm {
     /// Use this for sync operations that complete during `ScheduleFuture` handling,
     /// before the VM reaches the `Await` instruction. The `Await` instruction will
     /// extract the value from the Ready future.
-    pub fn set_future_ready(&mut self, future_ptr: HeapPtr, value: Value) -> Result<(), VmError> {
+    pub fn set_future_ready(
+        &mut self,
+        future_ptr: HeapPtr,
+        value: Value,
+    ) -> Result<(), VmInternalError> {
         let Object::Future(future) = self.get_object_mut(future_ptr) else {
-            return Err(VmError::TypeError {
+            return Err(VmInternalError::TypeError {
                 expected: FutureType::Any.into(),
                 got: ObjectType::of(self.get_object(future_ptr)).into(),
             });
@@ -729,7 +741,11 @@ impl BexVm {
     /// Use this for async operations that complete while the VM is blocked at
     /// an `Await` instruction. This replaces the future on the stack with the
     /// ready value so execution can continue.
-    pub fn fulfil_future(&mut self, future_ptr: HeapPtr, value: Value) -> Result<(), VmError> {
+    pub fn fulfil_future(
+        &mut self,
+        future_ptr: HeapPtr,
+        value: Value,
+    ) -> Result<(), VmInternalError> {
         self.set_future_ready(future_ptr, value)?;
 
         // At any given moment, the VM can only await a single future, because
@@ -790,12 +806,15 @@ impl BexVm {
     }
 
     /// Get collector ref from a Value.
-    pub fn as_collector(&self, value: &Value) -> Result<&bex_vm_types::CollectorRef, VmError> {
+    pub fn as_collector(
+        &self,
+        value: &Value,
+    ) -> Result<&bex_vm_types::CollectorRef, VmInternalError> {
         let index = self.as_object_ptr(value, ObjectType::Collector)?;
         let obj = self.get_object(index);
         match obj {
             Object::Collector(c) => Ok(c),
-            _ => Err(VmError::TypeError {
+            _ => Err(VmInternalError::TypeError {
                 expected: ObjectType::Collector.into(),
                 got: ObjectType::of(obj).into(),
             }),
@@ -812,11 +831,11 @@ impl BexVm {
     /// Downcast a `Value::Object` pointing to `Object::RustData` to `&T`.
     ///
     /// Used by generated `view::` struct accessors for `$rust_type` fields.
-    pub fn as_rust_data<T: 'static>(&self, value: &Value) -> Result<&T, VmError> {
+    pub fn as_rust_data<T: 'static>(&self, value: &Value) -> Result<&T, VmInternalError> {
         let ptr = match value {
             Value::Object(ptr) => *ptr,
             other => {
-                return Err(VmError::TypeError {
+                return Err(VmInternalError::TypeError {
                     expected: Type::Object(ObjectType::RustData),
                     got: self.type_of(other),
                 });
@@ -825,9 +844,11 @@ impl BexVm {
         let obj = self.get_object(ptr);
         match obj {
             Object::RustData(arc) => arc.downcast_ref::<T>().ok_or_else(|| {
-                VmError::InternalError("RustData downcast failed: wrong concrete type".to_string())
+                VmInternalError::InternalError(
+                    "RustData downcast failed: wrong concrete type".to_string(),
+                )
             }),
-            _ => Err(VmError::TypeError {
+            _ => Err(VmInternalError::TypeError {
                 expected: Type::Object(ObjectType::RustData),
                 got: self.type_of(value),
             }),
@@ -837,11 +858,11 @@ impl BexVm {
     /// Extract an `&Instance` from a `Value::Object`.
     ///
     /// Used by generated glue code to construct `view::` structs.
-    pub fn as_instance(&self, value: &Value) -> Result<&Instance, VmError> {
+    pub fn as_instance(&self, value: &Value) -> Result<&Instance, VmInternalError> {
         let ptr = match value {
             Value::Object(ptr) => *ptr,
             other => {
-                return Err(VmError::TypeError {
+                return Err(VmInternalError::TypeError {
                     expected: Type::Object(ObjectType::Instance),
                     got: self.type_of(other),
                 });
@@ -850,7 +871,7 @@ impl BexVm {
         let obj = self.get_object(ptr);
         match obj {
             Object::Instance(instance) => Ok(instance),
-            _ => Err(VmError::TypeError {
+            _ => Err(VmInternalError::TypeError {
                 expected: Type::Object(ObjectType::Instance),
                 got: self.type_of(value),
             }),
@@ -904,9 +925,9 @@ impl BexVm {
             })
             .collect::<Result<Vec<_>, VmError>>()
             .map_err(|e| {
-                VmError::InternalError(format!(
+                VmError::from(VmInternalError::InternalError(format!(
                     "internal error: Vm::stack_trace() failed to build stack trace: {e}\n\noriginal error: {error}"
-                ))
+                )))
             })
             .unwrap_or_default();
 
@@ -920,9 +941,9 @@ impl BexVm {
     /// then the previosly running bytecode resumes execution.
     fn interrupt(&mut self, function_ptr: HeapPtr, args: &[Value]) -> Result<VmExecState, VmError> {
         if !matches!(self.get_object(function_ptr), Object::Function(_)) {
-            return Err(VmError::InternalError(
-                "Invalid interrupt function".to_string(),
-            ));
+            return Err(
+                VmInternalError::InternalError("Invalid interrupt function".to_string()).into(),
+            );
         }
 
         // Index of the frame that starts the interrupt code.
@@ -945,7 +966,10 @@ impl BexVm {
         self.exec()
     }
 
-    fn allocate_real_locals_for_frame(&mut self, function_ptr: HeapPtr) -> Result<(), VmError> {
+    fn allocate_real_locals_for_frame(
+        &mut self,
+        function_ptr: HeapPtr,
+    ) -> Result<(), VmInternalError> {
         let real_local_count = match self.get_object(function_ptr) {
             Object::Function(function) => function.real_local_count,
             Object::Closure(closure) => {
@@ -955,14 +979,16 @@ impl BexVm {
                 match func_obj {
                     Object::Function(f) => f.real_local_count,
                     _ => {
-                        return Err(VmError::InternalError(
+                        return Err(VmInternalError::InternalError(
                             "Invalid closure inner function".to_string(),
                         ));
                     }
                 }
             }
             _ => {
-                return Err(VmError::InternalError("Invalid frame function".to_string()));
+                return Err(VmInternalError::InternalError(
+                    "Invalid frame function".to_string(),
+                ));
             }
         };
 
@@ -1028,6 +1054,7 @@ impl BexVm {
         Value::Object(instance_ptr)
     }
 
+    /// Unwinds error values (both thrown and panics).
     fn try_unwind_exception(
         &mut self,
         frame_idx: &mut usize,
@@ -1113,7 +1140,10 @@ impl BexVm {
         }
     }
 
-    fn resolve_callable_target(&self, callee_value: Value) -> Result<(HeapPtr, usize), VmError> {
+    fn resolve_callable_target(
+        &self,
+        callee_value: Value,
+    ) -> Result<(HeapPtr, usize), VmInternalError> {
         let expected_type = FunctionType::Callable;
         let callee_ptr = self.as_object_ptr(&callee_value, expected_type.into())?;
         let obj = self.get_object(callee_ptr);
@@ -1125,13 +1155,13 @@ impl BexVm {
                 let func_obj = unsafe { closure.function.get() };
                 match func_obj {
                     Object::Function(callee_fn) => Ok((callee_ptr, callee_fn.arity)),
-                    _ => Err(VmError::TypeError {
+                    _ => Err(VmInternalError::TypeError {
                         expected: expected_type.into(),
                         got: ObjectType::of(func_obj).into(),
                     }),
                 }
             }
-            _ => Err(VmError::TypeError {
+            _ => Err(VmInternalError::TypeError {
                 expected: expected_type.into(),
                 got: ObjectType::of(obj).into(),
             }),
@@ -1156,28 +1186,31 @@ impl BexVm {
                 match func_obj {
                     Object::Function(f) => f,
                     _ => {
-                        return Err(VmError::TypeError {
+                        return Err(VmInternalError::TypeError {
                             expected: FunctionType::Callable.into(),
                             got: ObjectType::of(func_obj).into(),
-                        });
+                        }
+                        .into());
                     }
                 }
             }
             other => {
-                return Err(VmError::TypeError {
+                return Err(VmInternalError::TypeError {
                     expected: FunctionType::Callable.into(),
                     got: ObjectType::of(other).into(),
-                });
+                }
+                .into());
             }
         };
 
         // Compiler should have already checked this so we could
         // skip it but it's an easy and fast check.
         if arg_count != callee.arity {
-            return Err(VmError::InvalidArgumentCount {
+            return Err(VmInternalError::InvalidArgumentCount {
                 expected: callee.arity,
                 got: arg_count,
-            });
+            }
+            .into());
         }
 
         // Check if we've reached the max call stack size.
@@ -1252,10 +1285,11 @@ impl BexVm {
                     "[VM] tried to CALL SysOp function '{}' via bytecode — SysOps must go through the engine yield path",
                     callee.name
                 );
-                return Err(VmError::TypeError {
+                return Err(VmInternalError::TypeError {
                     expected: FunctionType::Callable.into(),
                     got: FunctionType::from(&callee.kind).into(),
-                });
+                }
+                .into());
             }
 
             FunctionKind::NativeUnresolved => {
@@ -1331,9 +1365,10 @@ impl BexVm {
                         }
 
                         other => {
-                            return Err(VmError::InternalError(format!(
+                            return Err(VmInternalError::InternalError(format!(
                                 "Invalid filter function return: {other:?}"
-                            )));
+                            ))
+                            .into());
                         }
                     }
                 }
@@ -1396,7 +1431,7 @@ impl BexVm {
     ///   2. Drop `'static` and re-deref after each GC safepoint (cheap re-deref,
     ///      still no clone).
     #[inline]
-    unsafe fn load_function(&self, frame_idx: usize) -> Result<&'static Function, VmError> {
+    unsafe fn load_function(&self, frame_idx: usize) -> Result<&'static Function, VmInternalError> {
         let ptr = self.frames[frame_idx].function;
         // SAFETY: See doc comment above.
         let obj: &'static Object = unsafe { ptr.get() };
@@ -1408,10 +1443,11 @@ impl BexVm {
                 let func_obj: &'static Object = unsafe { closure.function.get() };
                 func_obj.as_function()
             }
-            _ => Err(VmError::TypeError {
+            _ => Err(VmInternalError::TypeError {
                 expected: FunctionType::Callable.into(),
                 got: ObjectType::of(obj).into(),
-            }),
+            }
+            .into()),
         }
     }
 
@@ -1627,10 +1663,11 @@ impl BexVm {
                 // Extract the field value before pushing to stack
                 let field_value = {
                     let Object::Instance(instance) = self.get_object(reference) else {
-                        return Err(VmError::TypeError {
+                        return Err(VmInternalError::TypeError {
                             expected: ObjectType::Instance.into(),
                             got: ObjectType::of(self.get_object(reference)).into(),
-                        });
+                        }
+                        .into());
                     };
                     instance.fields[index]
                 };
@@ -1652,10 +1689,11 @@ impl BexVm {
                     Object::Instance(instance) => instance.fields[index],
 
                     other => {
-                        return Err(VmError::TypeError {
+                        return Err(VmInternalError::TypeError {
                             expected: ObjectType::Instance.into(),
                             got: ObjectType::of(other).into(),
-                        });
+                        }
+                        .into());
                     }
                 };
 
@@ -1703,7 +1741,7 @@ impl BexVm {
                 // iteration will catch invalid pointers anyway.
                 self.frames[*frame_idx].instruction_ptr = instruction_ptr
                     .checked_add_signed(offset)
-                    .ok_or(VmError::InvalidJump)?;
+                    .ok_or(VmInternalError::InvalidJump)?;
             }
 
             Instruction::PopJumpIfFalse(offset) => {
@@ -1716,17 +1754,18 @@ impl BexVm {
                         if !value {
                             self.frames[*frame_idx].instruction_ptr = instruction_ptr
                                 .checked_add_signed(offset)
-                                .ok_or(VmError::InvalidJump)?;
+                                .ok_or(VmInternalError::InvalidJump)?;
                         }
                     }
 
                     // Type error, we don't have "falsey" values in the language
                     // so we should always check booleans.
                     other => {
-                        return Err(VmError::TypeError {
+                        return Err(VmInternalError::TypeError {
                             expected: Type::Bool,
                             got: self.type_of(&other),
-                        });
+                        }
+                        .into());
                     }
                 }
             }
@@ -1785,11 +1824,12 @@ impl BexVm {
                             | BinOp::BitXor
                             | BinOp::Shl
                             | BinOp::Shr => {
-                                return Err(VmError::CannotApplyBinOp {
+                                return Err(VmInternalError::CannotApplyBinOp {
                                     left: Type::Float,
                                     right: Type::Float,
                                     op,
-                                });
+                                }
+                                .into());
                             }
                         })
                     }
@@ -1818,11 +1858,12 @@ impl BexVm {
                             | BinOp::BitXor
                             | BinOp::Shl
                             | BinOp::Shr => {
-                                return Err(VmError::CannotApplyBinOp {
+                                return Err(VmInternalError::CannotApplyBinOp {
                                     left: Type::Int,
                                     right: Type::Float,
                                     op,
-                                });
+                                }
+                                .into());
                             }
                         })
                     }
@@ -1850,11 +1891,12 @@ impl BexVm {
                             | BinOp::BitXor
                             | BinOp::Shl
                             | BinOp::Shr => {
-                                return Err(VmError::CannotApplyBinOp {
+                                return Err(VmInternalError::CannotApplyBinOp {
                                     left: Type::Float,
                                     right: Type::Int,
                                     op,
-                                });
+                                }
+                                .into());
                             }
                         })
                     }
@@ -1870,11 +1912,12 @@ impl BexVm {
                     }
 
                     _ => {
-                        return Err(VmError::CannotApplyBinOp {
+                        return Err(VmInternalError::CannotApplyBinOp {
                             left: self.type_of(&left),
                             right: self.type_of(&right),
                             op,
-                        });
+                        }
+                        .into());
                     }
                 };
 
@@ -1895,11 +1938,12 @@ impl BexVm {
                         CmpOp::GtEq => left >= right,
 
                         CmpOp::InstanceOf => {
-                            return Err(VmError::CannotApplyCmpOp {
+                            return Err(VmInternalError::CannotApplyCmpOp {
                                 left: Type::Int,
                                 right: Type::Int,
                                 op,
-                            });
+                            }
+                            .into());
                         }
                     }),
 
@@ -1914,11 +1958,12 @@ impl BexVm {
                         CmpOp::GtEq => left >= right,
 
                         CmpOp::InstanceOf => {
-                            return Err(VmError::CannotApplyCmpOp {
+                            return Err(VmInternalError::CannotApplyCmpOp {
                                 left: Type::Float,
                                 right: Type::Float,
                                 op,
-                            });
+                            }
+                            .into());
                         }
                     }),
 
@@ -1935,11 +1980,12 @@ impl BexVm {
                             CmpOp::GtEq => left >= right,
 
                             CmpOp::InstanceOf => {
-                                return Err(VmError::CannotApplyCmpOp {
+                                return Err(VmInternalError::CannotApplyCmpOp {
                                     left: Type::Int,
                                     right: Type::Float,
                                     op,
-                                });
+                                }
+                                .into());
                             }
                         })
                     }
@@ -1956,11 +2002,12 @@ impl BexVm {
                             CmpOp::GtEq => left >= right,
 
                             CmpOp::InstanceOf => {
-                                return Err(VmError::CannotApplyCmpOp {
+                                return Err(VmInternalError::CannotApplyCmpOp {
                                     left: Type::Float,
                                     right: Type::Int,
                                     op,
-                                });
+                                }
+                                .into());
                             }
                         })
                     }
@@ -1980,11 +2027,12 @@ impl BexVm {
                             CmpOp::Gt => left > right,
                             CmpOp::GtEq => left >= right,
                             CmpOp::InstanceOf => {
-                                return Err(VmError::CannotApplyCmpOp {
+                                return Err(VmInternalError::CannotApplyCmpOp {
                                     left: Type::Object(ObjectType::String),
                                     right: Type::Object(ObjectType::String),
                                     op,
-                                });
+                                }
+                                .into());
                             }
                         })
                     }
@@ -2001,11 +2049,12 @@ impl BexVm {
                             CmpOp::Eq => left == right,
                             CmpOp::NotEq => left != right,
                             _ => {
-                                return Err(VmError::CannotApplyCmpOp {
+                                return Err(VmInternalError::CannotApplyCmpOp {
                                     left: Type::Object(ObjectType::Uint8Array),
                                     right: Type::Object(ObjectType::Uint8Array),
                                     op,
-                                });
+                                }
+                                .into());
                             }
                         })
                     }
@@ -2030,11 +2079,12 @@ impl BexVm {
                                 left_var.enm != right_var.enm || left_var.index != right_var.index
                             }
                             _ => {
-                                return Err(VmError::CannotApplyCmpOp {
+                                return Err(VmInternalError::CannotApplyCmpOp {
                                     left: Type::Object(ObjectType::Variant),
                                     right: Type::Object(ObjectType::Variant),
                                     op,
-                                });
+                                }
+                                .into());
                             }
                         })
                     }
@@ -2059,11 +2109,12 @@ impl BexVm {
                         }
 
                         _ => {
-                            return Err(VmError::CannotApplyCmpOp {
+                            return Err(VmInternalError::CannotApplyCmpOp {
                                 left: self.type_of(&left),
                                 right: self.type_of(&right),
                                 op,
-                            });
+                            }
+                            .into());
                         }
                     }),
                 };
@@ -2079,10 +2130,11 @@ impl BexVm {
                     (UnaryOp::Neg, Value::Int(value)) => Value::Int(-value),
                     (UnaryOp::Neg, Value::Float(value)) => Value::Float(-value),
                     _ => {
-                        return Err(VmError::CannotApplyUnaryOp {
+                        return Err(VmInternalError::CannotApplyUnaryOp {
                             op,
                             value: self.type_of(&value),
-                        });
+                        }
+                        .into());
                     }
                 };
 
@@ -2114,10 +2166,11 @@ impl BexVm {
                     Object::Array(arr) => arr.len(),
                     Object::Uint8Array(bytes) => bytes.len(),
                     other => {
-                        return Err(VmError::TypeError {
+                        return Err(VmInternalError::TypeError {
                             expected: ObjectType::Array.into(),
                             got: ObjectType::of(other).into(),
-                        });
+                        }
+                        .into());
                     }
                 };
 
@@ -2136,10 +2189,11 @@ impl BexVm {
                         i as usize
                     }
                     _ => {
-                        return Err(VmError::TypeError {
+                        return Err(VmInternalError::TypeError {
                             expected: Type::Int,
                             got: self.type_of(&index_value),
-                        });
+                        }
+                        .into());
                     }
                 };
 
@@ -2168,10 +2222,11 @@ impl BexVm {
                             Value::Int(i64::from(bytes[index]))
                         }
                         _ => {
-                            return Err(VmError::TypeError {
+                            return Err(VmInternalError::TypeError {
                                 expected: ObjectType::Array.into(),
                                 got: ObjectType::of(self.get_object(array_obj_index)).into(),
-                            });
+                            }
+                            .into());
                         }
                     }
                 };
@@ -2204,10 +2259,11 @@ impl BexVm {
                 let map_index = self.as_object_ptr(&map_value, ObjectType::Map)?;
 
                 let Object::Map(map) = self.get_object(map_index) else {
-                    return Err(VmError::TypeError {
+                    return Err(VmInternalError::TypeError {
                         expected: ObjectType::Map.into(),
                         got: ObjectType::of(self.get_object(map_index)).into(),
-                    });
+                    }
+                    .into());
                 };
 
                 // Get the string key from the objects pool
@@ -2233,10 +2289,11 @@ impl BexVm {
                     Object::Array(arr) => arr.len(),
                     Object::Uint8Array(bytes) => bytes.len(),
                     other => {
-                        return Err(VmError::TypeError {
+                        return Err(VmInternalError::TypeError {
                             expected: ObjectType::Array.into(),
                             got: ObjectType::of(other).into(),
-                        });
+                        }
+                        .into());
                     }
                 };
 
@@ -2255,10 +2312,11 @@ impl BexVm {
                         i as usize
                     }
                     other => {
-                        return Err(VmError::TypeError {
+                        return Err(VmInternalError::TypeError {
                             expected: Type::Int,
                             got: self.type_of(&other),
-                        });
+                        }
+                        .into());
                     }
                 };
 
@@ -2286,10 +2344,11 @@ impl BexVm {
                         Value::Int(i64::from(bytes[index]))
                     }
                     other => {
-                        return Err(VmError::TypeError {
+                        return Err(VmInternalError::TypeError {
                             expected: ObjectType::Array.into(),
                             got: ObjectType::of(other).into(),
-                        });
+                        }
+                        .into());
                     }
                 };
 
@@ -2309,15 +2368,17 @@ impl BexVm {
                     }
                     Object::Uint8Array(bytes) => {
                         let Value::Int(i) = new_value else {
-                            return Err(VmError::TypeError {
+                            return Err(VmInternalError::TypeError {
                                 expected: Type::Int,
                                 got: self.type_of(&new_value),
-                            });
+                            }
+                            .into());
                         };
                         let Ok(i) = u8::try_from(i) else {
-                            return Err(VmError::InternalError(format!(
+                            return Err(VmInternalError::InternalError(format!(
                                 "uint8array store: value {i} out of range 0..=255"
-                            )));
+                            ))
+                            .into());
                         };
                         bytes[index] = i;
                     }
@@ -2357,10 +2418,11 @@ impl BexVm {
                     Object::Map(map) => map.get(&key).copied().unwrap_or(Value::Null),
 
                     other => {
-                        return Err(VmError::TypeError {
+                        return Err(VmInternalError::TypeError {
                             expected: ObjectType::Map.into(),
                             got: ObjectType::of(other).into(),
-                        });
+                        }
+                        .into());
                     }
                 };
 
@@ -2392,10 +2454,11 @@ impl BexVm {
                 // Convert compile-time ObjectIndex to HeapPtr
                 let class_ptr = self.idx_to_ptr(index);
                 let Object::Class(class) = self.get_object(class_ptr) else {
-                    return Err(VmError::TypeError {
+                    return Err(VmInternalError::TypeError {
                         expected: ObjectType::Class.into(),
                         got: ObjectType::of(self.get_object(class_ptr)).into(),
-                    });
+                    }
+                    .into());
                 };
 
                 // Allocate the fields.
@@ -2420,10 +2483,11 @@ impl BexVm {
                 // Extract the variant count before popping from stack to avoid borrow conflicts
                 let variant_count = {
                     let Object::Enum(enm) = self.get_object(enum_ptr) else {
-                        return Err(VmError::TypeError {
+                        return Err(VmInternalError::TypeError {
                             expected: ObjectType::Enum.into(),
                             got: ObjectType::of(self.get_object(enum_ptr)).into(),
-                        });
+                        }
+                        .into());
                     };
                     enm.variants.len()
                 };
@@ -2431,10 +2495,11 @@ impl BexVm {
                 let variant = self.stack.ensure_pop()?;
 
                 let Value::Int(variant_index) = variant else {
-                    return Err(VmError::TypeError {
+                    return Err(VmInternalError::TypeError {
                         expected: Type::Int,
                         got: self.type_of(&variant),
-                    });
+                    }
+                    .into());
                 };
 
                 #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
@@ -2468,25 +2533,25 @@ impl BexVm {
 
                 // Can't dispatch if it's not a function
                 let Object::Function(callable_future) = self.get_object(callee_ptr) else {
-                    return Err(VmError::TypeError {
+                    return Err(VmInternalError::TypeError {
                         expected: expected_type.into(),
                         got: ObjectType::of(self.get_object(callee_ptr)).into(),
-                    });
+                    }
+                    .into());
                 };
 
                 // Must be a sys_op - extract the SysOp.
                 let FunctionKind::SysOp(sys_op) = callable_future.kind else {
-                    return Err(VmError::TypeError {
+                    return Err(VmInternalError::TypeError {
                         expected: FunctionType::SysOp.into(),
                         got: FunctionType::from(&callable_future.kind).into(),
-                    });
+                    }
+                    .into());
                 };
 
-                let args_offset = self
-                    .stack
-                    .len()
-                    .checked_sub(callable_future.arity)
-                    .ok_or(VmError::NotEnoughItemsOnStack(callable_future.arity))?;
+                let args_offset = self.stack.len().checked_sub(callable_future.arity).ok_or(
+                    VmInternalError::NotEnoughItemsOnStack(callable_future.arity),
+                )?;
                 let args_offset = StackIndex::from_raw(args_offset);
 
                 // Collect function call args and cleanup consumed stack.
@@ -2523,10 +2588,11 @@ impl BexVm {
                 // Check if future is ready and extract value if so
                 let ready_value = {
                     let Object::Future(awaiting) = self.get_object(index) else {
-                        return Err(VmError::TypeError {
+                        return Err(VmInternalError::TypeError {
                             expected: wanted_type.into(),
                             got: ObjectType::of(self.get_object(index)).into(),
-                        });
+                        }
+                        .into());
                     };
 
                     match awaiting {
@@ -2556,11 +2622,16 @@ impl BexVm {
                         Object::String(mode) if mode == "manual" => WatchFilter::Manual,
                         Object::String(mode) if mode == "never" => WatchFilter::Paused,
                         _ => {
-                            return Err(VmError::InternalError("Invalid filter".to_string()));
+                            return Err(VmInternalError::InternalError(
+                                "Invalid filter".to_string(),
+                            )
+                            .into());
                         }
                     },
                     _ => {
-                        return Err(VmError::InternalError("Invalid filter".to_string()));
+                        return Err(
+                            VmInternalError::InternalError("Invalid filter".to_string()).into()
+                        );
                     }
                 };
 
@@ -2635,7 +2706,10 @@ impl BexVm {
                 let notifications = self.watch.copy_roots_reaching(var_node);
 
                 if notifications.len() != 1 && notifications.first() != Some(&var_node) {
-                    return Err(VmError::InternalError("Invalid manual notify".to_string()));
+                    return Err(VmInternalError::InternalError(
+                        "Invalid manual notify".to_string(),
+                    )
+                    .into());
                 }
 
                 return Ok(Some(VmExecState::Notify(WatchNotification::Variables(
@@ -2650,18 +2724,16 @@ impl BexVm {
                     .stack
                     .len()
                     .checked_sub(arg_count)
-                    .ok_or(VmError::NotEnoughItemsOnStack(arg_count))?;
+                    .ok_or(VmInternalError::NotEnoughItemsOnStack(arg_count))?;
                 let locals_offset = StackIndex::from_raw(args_offset);
 
-                if let Some(state) = self.execute_call_from_locals_offset(
+                return self.execute_call_from_locals_offset(
                     callee_ptr,
                     locals_offset,
                     arg_count,
                     frame_idx,
                     function,
-                )? {
-                    return Ok(Some(state));
-                }
+                );
             }
 
             Instruction::CallIndirect => {
@@ -2673,7 +2745,7 @@ impl BexVm {
                     .stack
                     .len()
                     .checked_sub(arg_count + 1)
-                    .ok_or(VmError::NotEnoughItemsOnStack(arg_count + 1))?;
+                    .ok_or(VmInternalError::NotEnoughItemsOnStack(arg_count + 1))?;
                 let _popped_callee = self.stack.ensure_pop()?;
                 let locals_offset = StackIndex::from_raw(args_offset);
 
@@ -2717,12 +2789,22 @@ impl BexVm {
                 // Return from interrupt.
                 if Some(self.frames.len()) == self.interrupt_frame {
                     self.interrupt_frame = None;
-                    return self.stack.ensure_pop().map(VmExecState::Complete).map(Some);
+                    return self
+                        .stack
+                        .ensure_pop()
+                        .map_err(VmError::InternalError)
+                        .map(VmExecState::Complete)
+                        .map(Some);
                 }
 
                 // If there are no more frames, we're done.
                 if self.frames.is_empty() {
-                    return self.stack.ensure_pop().map(VmExecState::Complete).map(Some);
+                    return self
+                        .stack
+                        .ensure_pop()
+                        .map_err(VmError::InternalError)
+                        .map(VmExecState::Complete)
+                        .map(Some);
                 }
 
                 // Yield FunctionExit for traced frames (with result value).
@@ -2792,10 +2874,11 @@ impl BexVm {
 
                 // Must be an integer
                 let Value::Int(value) = discriminant else {
-                    return Err(VmError::TypeError {
+                    return Err(VmInternalError::TypeError {
                         expected: Type::Int,
                         got: self.type_of(&discriminant),
-                    });
+                    }
+                    .into());
                 };
 
                 // Lookup in jump table
@@ -2805,7 +2888,7 @@ impl BexVm {
                 // Jump
                 self.frames[*frame_idx].instruction_ptr = instruction_ptr
                     .checked_add_signed(offset)
-                    .ok_or(VmError::InvalidJump)?;
+                    .ok_or(VmInternalError::InvalidJump)?;
             }
 
             Instruction::Discriminant => {
@@ -2814,19 +2897,21 @@ impl BexVm {
 
                 // Must be an object (variants are heap-allocated)
                 let Value::Object(object_idx) = value else {
-                    return Err(VmError::TypeError {
+                    return Err(VmInternalError::TypeError {
                         expected: ObjectType::Variant.into(),
                         got: self.type_of(&value),
-                    });
+                    }
+                    .into());
                 };
 
                 // Must be a Variant object
                 let variant_index = {
                     let Object::Variant(variant) = self.get_object(object_idx) else {
-                        return Err(VmError::TypeError {
+                        return Err(VmInternalError::TypeError {
                             expected: ObjectType::Variant.into(),
                             got: ObjectType::of(self.get_object(object_idx)).into(),
-                        });
+                        }
+                        .into());
                     };
                     variant.index
                 };
@@ -2891,18 +2976,20 @@ impl BexVm {
                 let locals_offset = self.frames[*frame_idx].locals_offset;
                 let cell_value = self.stack[Self::local_slot_stack_index(locals_offset, slot)];
                 let Value::Object(cell_ptr) = cell_value else {
-                    return Err(VmError::TypeError {
+                    return Err(VmInternalError::TypeError {
                         expected: ObjectType::Cell.into(),
                         got: self.type_of(&cell_value),
-                    });
+                    }
+                    .into());
                 };
                 // SAFETY: cell_ptr is a VM-owned Cell object; single-threaded.
                 let obj = unsafe { cell_ptr.get() };
                 let Object::Cell(cell) = obj else {
-                    return Err(VmError::TypeError {
+                    return Err(VmInternalError::TypeError {
                         expected: ObjectType::Cell.into(),
                         got: ObjectType::of(obj).into(),
-                    });
+                    }
+                    .into());
                 };
                 self.stack.push(cell.value);
             }
@@ -2912,18 +2999,20 @@ impl BexVm {
                 let locals_offset = self.frames[*frame_idx].locals_offset;
                 let cell_value = self.stack[Self::local_slot_stack_index(locals_offset, slot)];
                 let Value::Object(cell_ptr) = cell_value else {
-                    return Err(VmError::TypeError {
+                    return Err(VmInternalError::TypeError {
                         expected: ObjectType::Cell.into(),
                         got: self.type_of(&cell_value),
-                    });
+                    }
+                    .into());
                 };
                 // SAFETY: cell_ptr is a VM-owned Cell object; single-threaded.
                 let obj = unsafe { cell_ptr.get_mut() };
                 let Object::Cell(cell) = obj else {
-                    return Err(VmError::TypeError {
+                    return Err(VmInternalError::TypeError {
                         expected: ObjectType::Cell.into(),
                         got: ObjectType::of(obj).into(),
-                    });
+                    }
+                    .into());
                 };
                 cell.value = value;
             }
@@ -2934,25 +3023,28 @@ impl BexVm {
                 // the duration of this frame.
                 let obj = unsafe { closure_ptr.get() };
                 let Object::Closure(closure) = obj else {
-                    return Err(VmError::TypeError {
+                    return Err(VmInternalError::TypeError {
                         expected: ObjectType::Closure.into(),
                         got: ObjectType::of(obj).into(),
-                    });
+                    }
+                    .into());
                 };
                 let cell_value = closure.captures[idx];
                 let Value::Object(cell_ptr) = cell_value else {
-                    return Err(VmError::TypeError {
+                    return Err(VmInternalError::TypeError {
                         expected: ObjectType::Cell.into(),
                         got: self.type_of(&cell_value),
-                    });
+                    }
+                    .into());
                 };
                 // SAFETY: cell_ptr is a VM-owned Cell object; single-threaded.
                 let cell_obj = unsafe { cell_ptr.get() };
                 let Object::Cell(cell) = cell_obj else {
-                    return Err(VmError::TypeError {
+                    return Err(VmInternalError::TypeError {
                         expected: ObjectType::Cell.into(),
                         got: ObjectType::of(cell_obj).into(),
-                    });
+                    }
+                    .into());
                 };
                 self.stack.push(cell.value);
             }
@@ -2964,25 +3056,28 @@ impl BexVm {
                 // the duration of this frame.
                 let obj = unsafe { closure_ptr.get() };
                 let Object::Closure(closure) = obj else {
-                    return Err(VmError::TypeError {
+                    return Err(VmInternalError::TypeError {
                         expected: ObjectType::Closure.into(),
                         got: ObjectType::of(obj).into(),
-                    });
+                    }
+                    .into());
                 };
                 let cell_value = closure.captures[idx];
                 let Value::Object(cell_ptr) = cell_value else {
-                    return Err(VmError::TypeError {
+                    return Err(VmInternalError::TypeError {
                         expected: ObjectType::Cell.into(),
                         got: self.type_of(&cell_value),
-                    });
+                    }
+                    .into());
                 };
                 // SAFETY: cell_ptr is a VM-owned Cell object; single-threaded.
                 let cell_obj = unsafe { cell_ptr.get_mut() };
                 let Object::Cell(cell) = cell_obj else {
-                    return Err(VmError::TypeError {
+                    return Err(VmInternalError::TypeError {
                         expected: ObjectType::Cell.into(),
                         got: ObjectType::of(cell_obj).into(),
-                    });
+                    }
+                    .into());
                 };
                 cell.value = value;
             }
@@ -2996,10 +3091,11 @@ impl BexVm {
                 // the duration of this frame.
                 let obj = unsafe { closure_ptr.get() };
                 let Object::Closure(closure) = obj else {
-                    return Err(VmError::TypeError {
+                    return Err(VmInternalError::TypeError {
                         expected: ObjectType::Closure.into(),
                         got: ObjectType::of(obj).into(),
-                    });
+                    }
+                    .into());
                 };
                 self.stack.push(closure.captures[idx]);
             }
