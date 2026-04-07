@@ -97,21 +97,16 @@ pub(super) fn parse_google_response(body: &str) -> Result<LlmProviderResponse, P
         None => FinishReason::Unknown,
     };
 
-    let usage_metadata =
-        response
-            .usage_metadata
-            .as_ref()
-            .ok_or_else(|| ParseResponseError::NoContent {
-                provider: "google-ai",
-                detail: "response has no usage_metadata".into(),
-            })?;
-
-    let usage = TokenUsage {
-        input_tokens: usage_metadata.prompt_token_count,
-        output_tokens: usage_metadata.candidates_token_count,
-        total_tokens: usage_metadata.total_token_count,
-        cached_input_tokens: usage_metadata.cached_content_token_count,
-    };
+    let usage = response
+        .usage_metadata
+        .as_ref()
+        .map(|u| TokenUsage {
+            input_tokens: u.prompt_token_count,
+            output_tokens: u.candidates_token_count,
+            total_tokens: u.total_token_count,
+            cached_input_tokens: u.cached_content_token_count,
+        })
+        .unwrap_or_default();
 
     Ok(LlmProviderResponse {
         content,
@@ -162,22 +157,16 @@ pub(super) fn parse_vertex_response(body: &str) -> Result<LlmProviderResponse, P
         None => FinishReason::Unknown,
     };
 
-    // Runtime unwraps usage_metadata; we return error instead of panicking
-    let usage_metadata =
-        response
-            .usage_metadata
-            .as_ref()
-            .ok_or_else(|| ParseResponseError::NoContent {
-                provider: "vertex-ai",
-                detail: "response has no usage_metadata".into(),
-            })?;
-
-    let usage = TokenUsage {
-        input_tokens: usage_metadata.prompt_token_count,
-        output_tokens: usage_metadata.candidates_token_count,
-        total_tokens: usage_metadata.total_token_count,
-        cached_input_tokens: usage_metadata.cached_content_token_count,
-    };
+    let usage = response
+        .usage_metadata
+        .as_ref()
+        .map(|u| TokenUsage {
+            input_tokens: u.prompt_token_count,
+            output_tokens: u.candidates_token_count,
+            total_tokens: u.total_token_count,
+            cached_input_tokens: u.cached_content_token_count,
+        })
+        .unwrap_or_default();
 
     Ok(LlmProviderResponse {
         content,

@@ -31,7 +31,7 @@ where
     match Option::<FloatOrInt>::deserialize(deserializer)? {
         Some(FloatOrInt::Int(i)) => Ok(Some(i)),
         #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-        Some(FloatOrInt::Float(f)) => Ok(Some(f.floor() as u32)),
+        Some(FloatOrInt::Float(f)) => Ok(Some(f.clamp(0.0, f64::from(u32::MAX)).floor() as u32)),
         None => Ok(None),
     }
 }

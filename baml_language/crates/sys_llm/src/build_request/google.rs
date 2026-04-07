@@ -136,13 +136,13 @@ fn resolve_url(
 /// Resolved during auth when credentials are available.
 pub(crate) const VERTEX_PROJECT_ID_PLACEHOLDER: &str = "__BAML_VERTEX_PROJECT_ID__";
 
-/// Build the Vertex AI base URL from `location` and `project_id` in provider options.
+/// Extract Vertex AI URL components: `(domain, location, project_id)`.
 ///
 /// `location` is required (the old engine errors with "must specify a GCP region").
 /// `project_id` may use a placeholder that gets resolved during auth.
-fn resolve_vertex_base_url(
+fn vertex_url_components(
     client: &crate::baml_std::PrimitiveClient,
-) -> Result<String, super::BuildRequestError> {
+) -> Result<(String, String, String), super::BuildRequestError> {
     let vertex_opts = match &client.provider_options {
         Some(crate::baml_std::ProviderOptions::VertexAi(opts)) => Some(opts),
         _ => None,
@@ -167,6 +167,14 @@ fn resolve_vertex_base_url(
         format!("{location}-aiplatform.googleapis.com")
     };
 
+    Ok((domain, location.to_string(), project_id.to_string()))
+}
+
+/// Build the Vertex AI base URL from `location` and `project_id` in provider options.
+fn resolve_vertex_base_url(
+    client: &crate::baml_std::PrimitiveClient,
+) -> Result<String, super::BuildRequestError> {
+    let (domain, location, project_id) = vertex_url_components(client)?;
     Ok(format!(
         "https://{domain}/v1/projects/{project_id}/locations/{location}/publishers/google/models"
     ))
@@ -184,31 +192,7 @@ pub(super) fn resolve_vertex_raw_predict_url(
         return Ok(format!("{url}/{}:rawPredict", client.model));
     }
 
-    // Build the URL with publishers/anthropic for Claude models
-    let vertex_opts = match &client.provider_options {
-        Some(crate::baml_std::ProviderOptions::VertexAi(opts)) => Some(opts),
-        _ => None,
-    };
-
-    let location = vertex_opts
-        .and_then(|o| o.location.as_deref())
-        .filter(|s| !s.is_empty())
-        .ok_or_else(|| super::BuildRequestError::InvalidOption {
-            key: "location".to_string(),
-            reason: "vertex-ai requires either base_url or location (e.g. us-central1)".to_string(),
-        })?;
-
-    let project_id = vertex_opts
-        .and_then(|o| o.project_id.as_deref())
-        .filter(|s| !s.is_empty())
-        .unwrap_or(VERTEX_PROJECT_ID_PLACEHOLDER);
-
-    let domain = if location == "global" {
-        "aiplatform.googleapis.com".to_string()
-    } else {
-        format!("{location}-aiplatform.googleapis.com")
-    };
-
+    let (domain, location, project_id) = vertex_url_components(client)?;
     Ok(format!(
         "https://{domain}/v1/projects/{project_id}/locations/{location}/publishers/anthropic/models/{}:rawPredict",
         client.model
