@@ -293,7 +293,9 @@ jobs:
           persist-credentials: false
 
       - name: "Install LLVM tools (llvm-strip)"
-        run: choco install llvm -y
+        run: |
+          choco install llvm -y
+          echo "C:\Program Files\LLVM\bin" >> $GITHUB_PATH
 
       - name: "Install Rust toolchain"
         run: rustup show
