@@ -690,11 +690,11 @@ function baml.llm.Client.execute_once_stream(self: null, context: void, active_d
   L1:
     load_var self
     load_field .counter
-    store_var _52
+    store_var _56
     load_var self
     load_field .sub_clients
     call baml.Array.length
-    store_var _53
+    store_var _57
     load_var self
     load_var self
     load_field .counter
@@ -703,8 +703,8 @@ function baml.llm.Client.execute_once_stream(self: null, context: void, active_d
     store_field .counter
     load_var self
     load_field .sub_clients
-    load_var _52
-    load_var _53
+    load_var _56
+    load_var _57
     bin_op %
     load_array_element
     load_var context
@@ -715,13 +715,13 @@ function baml.llm.Client.execute_once_stream(self: null, context: void, active_d
   L2:
     load_var self
     load_field .sub_clients
-    store_var _41
+    store_var _45
     load_const 0
     store_var __for_idx
 
   L3:
     load_var __for_idx
-    load_var _41
+    load_var _45
     call baml.Array.length
     cmp_op <
     pop_jump_if_false L4
@@ -734,7 +734,7 @@ function baml.llm.Client.execute_once_stream(self: null, context: void, active_d
     throw
 
   L5:
-    load_var _41
+    load_var _45
     load_var __for_idx
     load_array_element
     load_var context
@@ -763,6 +763,11 @@ function baml.llm.Client.execute_once_stream(self: null, context: void, active_d
     dispatch_future baml.llm.get_return_type
     await
     store_var return_type
+    load_var context
+    load_field .function_name
+    dispatch_future baml.llm.get_stream_return_type
+    await
+    store_var stream_return_type
     load_var primitive
     load_var context
     load_field .jinja_string
@@ -789,6 +794,7 @@ function baml.llm.Client.execute_once_stream(self: null, context: void, active_d
     await
     store_var acc
     load_var return_type
+    load_var stream_return_type
     dispatch_future baml.llm.StreamCache.new
     await
     store_var cache
@@ -1317,7 +1323,7 @@ function baml.llm.StreamAccumulator.model(self: null) -> string? {
 function baml.llm.StreamAccumulator.output_tokens(self: null) -> int? {
 }
 
-function baml.llm.StreamCache.new(target: type) -> void {
+function baml.llm.StreamCache.new(target: type, streaming: type) -> void {
 }
 
 function baml.llm.__sap_parse_final(json: string, cache: void) -> void {
@@ -1373,6 +1379,13 @@ function baml.llm.parse(function_name: string, json: string) -> void {
     load_var function_name
     dispatch_future baml.llm.get_return_type
     await
+    store_var return_type
+    load_var function_name
+    dispatch_future baml.llm.get_stream_return_type
+    await
+    store_var stream_return_type
+    load_var return_type
+    load_var stream_return_type
     dispatch_future baml.llm.StreamCache.new
     await
     store_var cache

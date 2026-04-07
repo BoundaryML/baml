@@ -309,8 +309,12 @@ pub fn execute_parse_response_from_owned(
         )));
     }
 
-    let compiled = bex_sap::CompiledSapModel::from_sys_op_context(ctx, return_type.clone())
-        .map_err(|e| LlmOpError::ParseResponseError(e.to_string()))?;
+    let compiled = bex_sap::CompiledSapModel::from_sys_op_context(
+        ctx,
+        return_type.clone(),
+        baml_type::Ty::null(), // no streaming
+    )
+    .map_err(|e| LlmOpError::ParseResponseError(e.to_string()))?;
     let sap = SapStreamCache::new(compiled);
     execute_sap_parse_final(&response.content, &sap, ctx)
 }

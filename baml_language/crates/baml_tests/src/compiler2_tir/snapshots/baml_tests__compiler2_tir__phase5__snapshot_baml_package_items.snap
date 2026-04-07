@@ -49,20 +49,20 @@ namespace baml.llm:
   class PrimitiveClientOptions { methods: [] }
   class PromptAst { methods: [] }
   class RetryPolicy { methods: [] }
-  class Stream<T> { methods: [next, final] }
+  class Stream<T, S> { methods: [next, final] }
   class StreamAccumulator { methods: [add_events, content, is_done, model, finish_reason, input_tokens, output_tokens] }
-  class StreamCache<T> { methods: [new] }
+  class StreamCache<T, S> { methods: [new] }
   class VertexAiOptions { methods: [] }
-  function __sap_parse_final<T>
-  function __sap_parse_partial<T>
+  function __sap_parse_final<T, S>
+  function __sap_parse_partial<T, S>
   function build_request
   function call_llm_function<T>
   function get_jinja_template
   function get_return_type
   function get_stream_return_type
-  function parse<T>
+  function parse<T, S>
   function render_prompt
-  function stream_llm_function<T>
+  function stream_llm_function<T, S>
 namespace baml.math:
   function trunc
 namespace baml.media:

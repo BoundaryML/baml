@@ -202,10 +202,11 @@ function baml.llm.build_request(client: baml.llm.Client, function_name: string, 
     primitive_client.build_request(specialized_prompt) : baml.http.Request
   }
 }
-function baml.llm.parse<T>(function_name: string, json: string) -> T throws never {
+function baml.llm.parse<T, S>(function_name: string, json: string) -> T throws never {
   { : T
     let return_type = get_return_type(function_name) : type
-    let cache = StreamCache.new(return_type) : baml.llm.StreamCache
+    let stream_return_type = get_stream_return_type(function_name) : type
+    let cache = StreamCache.new(return_type, stream_return_type) : baml.llm.StreamCache
     __sap_parse_final<T>(json, cache) : T
   }
 }
@@ -217,7 +218,7 @@ function baml.llm.call_llm_function<T>(client: baml.llm.Client, function_name: s
     result : T
   }
 }
-function baml.llm.stream_llm_function<T>(client: baml.llm.Client, function_name: string, args: map<string, unknown>) -> baml.llm.Stream throws never {
+function baml.llm.stream_llm_function<T, S>(client: baml.llm.Client, function_name: string, args: map<string, unknown>) -> baml.llm.Stream throws never {
   { : baml.llm.Stream
     let jinja_string = get_jinja_template(function_name) : string
     let context = ExecutionContext { jinja_string: jinja_string, args: args, function_name: function_name } : baml.llm.ExecutionContext
@@ -353,7 +354,7 @@ function baml.llm.Client.build_plan_with_state(self: baml.llm.Client, planner_st
         self.build_attempt_with_state(planner_state) : baml.llm.OrchestrationStep[]
   }
 }
-function baml.llm.Client.execute_stream<T>(self: baml.llm.Client, context: baml.llm.ExecutionContext, inherited_delay_ms: int) -> baml.llm.Stream throws never {
+function baml.llm.Client.execute_stream<T, S>(self: baml.llm.Client, context: baml.llm.ExecutionContext, inherited_delay_ms: int) -> baml.llm.Stream throws never {
   { : never
     match (self.retry : baml.llm.RetryPolicy?) : never
       r: RetryPolicy =>
@@ -400,7 +401,7 @@ function baml.llm.Client.execute_stream<T>(self: baml.llm.Client, context: baml.
         }
   }
 }
-function baml.llm.Client.execute_once_stream<T>(self: baml.llm.Client, context: baml.llm.ExecutionContext, active_delay_ms: int) -> baml.llm.Stream throws never {
+function baml.llm.Client.execute_once_stream<T, S>(self: baml.llm.Client, context: baml.llm.ExecutionContext, active_delay_ms: int) -> baml.llm.Stream throws never {
   { : never
     match (self.client_type : baml.llm.ClientType) : never
       ClientType.Primitive =>
@@ -408,12 +409,13 @@ function baml.llm.Client.execute_once_stream<T>(self: baml.llm.Client, context: 
           let resolve_fn = self.get_constructor() : () -> baml.llm.PrimitiveClient
           let primitive = resolve_fn() : baml.llm.PrimitiveClient
           let return_type = get_return_type(context.function_name) : type
+          let stream_return_type = get_stream_return_type(context.function_name) : type
           let prompt = primitive.render_prompt(context.jinja_string, context.args, return_type) : baml.llm.PromptAst
           let specialized = primitive.specialize_prompt(prompt) : baml.llm.PromptAst
           let http_request = primitive.build_request_stream(specialized) : baml.http.Request
           let sse = root.http.fetch_sse(http_request) : baml.http.SseStream
           let acc = primitive.new_stream_accumulator() : baml.llm.StreamAccumulator
-          let cache = StreamCache.new(return_type) : baml.llm.StreamCache
+          let cache = StreamCache.new(return_type, stream_return_type) : baml.llm.StreamCache
           let stream = Stream { _client: primitive, _acc: acc, _sse: sse, _cache: cache } : baml.llm.Stream
           return stream : baml.llm.Stream
         }
@@ -637,15 +639,15 @@ function baml.llm.Stream.next(self: baml.llm.Stream) -> unknown | baml.stream.St
             return StreamFinished {  } : unknown
           }
         let content = self._acc.content() : string
-        let parsed = __sap_parse_partial<T>(content, self._cache) : T | baml.stream.StreamNoYield
-        match (parsed : T | baml.stream.StreamNoYield) : never
+        let parsed = __sap_parse_partial<S>(content, self._cache) : S | baml.stream.StreamNoYield
+        match (parsed : S | baml.stream.StreamNoYield) : never
           _: root.stream.StreamNoYield =>
             { : never
               continue
             }
-          parsed: T =>
+          parsed: S =>
             { : never
-              return parsed : T
+              return parsed : S
             }
       }
     root.sys.panic("Unreachable") : never

@@ -28,11 +28,14 @@ impl CompiledSapModel {
     pub fn from_type_ctx(
         type_ctx: sap_model::TypeCtx,
         target: baml_type::Ty,
+        stream_target: baml_type::Ty,
     ) -> Result<Self, sap_model::ConvertError> {
         let inner = CompiledSapModelInner::try_new(
             type_ctx,
             target,
+            stream_target,
             sap_model::TypeCtx::build_db,
+            sap_model::TypeCtx::convert_ty,
             sap_model::TypeCtx::convert_ty,
         )?;
         Ok(Self { inner })
@@ -40,9 +43,10 @@ impl CompiledSapModel {
     pub fn from_sys_op_context(
         ctx: &::sys_types::SysOpContext,
         target: baml_type::Ty,
+        stream_target: baml_type::Ty,
     ) -> Result<Self, sap_model::ConvertError> {
         let type_ctx = sap_model::TypeCtx::from_sys_op_context(ctx);
-        Self::from_type_ctx(type_ctx, target)
+        Self::from_type_ctx(type_ctx, target, stream_target)
     }
 
     pub fn db(&self) -> &TypeRefDb<'_, TypeName> {
@@ -52,17 +56,25 @@ impl CompiledSapModel {
     pub fn ty(&self) -> &AnnotatedTy<'_, TypeName> {
         self.inner.borrow_ty()
     }
+
+    pub fn stream_ty(&self) -> &AnnotatedTy<'_, TypeName> {
+        self.inner.borrow_stream_ty()
+    }
 }
 
 #[self_referencing]
 struct CompiledSapModelInner {
-    type_ctx: sap_model::TypeCtx,
+    pub type_ctx: sap_model::TypeCtx,
     /// The target type
-    parse_ty: baml_type::Ty,
+    pub parse_ty: baml_type::Ty,
+    pub parse_stream_ty: baml_type::Ty,
     #[borrows(type_ctx)]
     #[covariant]
     pub db: TypeRefDb<'this, TypeName>,
     #[borrows(type_ctx, parse_ty)]
     #[covariant]
     pub ty: AnnotatedTy<'this, TypeName>,
+    #[borrows(type_ctx, parse_stream_ty)]
+    #[covariant]
+    pub stream_ty: AnnotatedTy<'this, TypeName>,
 }
