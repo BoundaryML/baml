@@ -15,6 +15,7 @@ pub use codegen_panics::generate_panic_enums;
 pub use extract::{ExtractNativeBuiltinsError, extract_native_builtins};
 pub use types::{
     BamlType, BuiltinPipeline, NativeBuiltin, NativeClassDef, NativeClassField, Param, Receiver,
+    ReceiverType,
 };
 
 /// Format a `TokenStream` into a pretty-printed Rust source string.

@@ -27,7 +27,7 @@ pub enum ConvertError {
     #[error("Float literals cannot be parsed")]
     FloatLiteral,
     #[error("Non-parsable type: {0:?}")]
-    NonParsableType(baml_type::Ty),
+    NonParsableType(Box<baml_type::Ty>),
     #[error("Unknown class: {0}")]
     UnknownClass(baml_type::TypeName),
     #[error("Unknown enum: {0}")]
@@ -164,7 +164,7 @@ impl TypeCtx {
     }
 
     /// Constructs a full [`TypeRefDb`] from the given context with all types converted.
-    pub fn build_db(&'_ self) -> Result<TypeRefDb<'_, TypeName>, ConvertError> {
+    pub fn build_db(&self) -> Result<TypeRefDb<'_, TypeName>, ConvertError> {
         let mut db = TypeRefDb::new();
         for (name, cls) in &self.class_definitions {
             if self.sap_parseable.get(name).is_some_and(|v| !v) {
@@ -366,7 +366,7 @@ impl TypeCtx {
             ),
             baml_type::Ty::Class(type_name, attr) => {
                 if self.sap_parseable.get(type_name).is_some_and(|v| !v) {
-                    return Err(ConvertError::NonParsableType(ty.clone()));
+                    return Err(ConvertError::NonParsableType(Box::new(ty.clone())));
                 }
                 TyWithMeta::new(
                     // currently [`ClassDefinition`] does not have attributes attached to it.
@@ -458,7 +458,7 @@ impl TypeCtx {
             }
             baml_type::Ty::TypeAlias(type_name, attr) => {
                 if self.sap_parseable.get(type_name).is_some_and(|v| !v) {
-                    return Err(ConvertError::NonParsableType(ty.clone()));
+                    return Err(ConvertError::NonParsableType(Box::new(ty.clone())));
                 }
                 // if it hasn't already, we flatten type aliases:
                 // with `type A = B; type B = C; class C { ... }`,
@@ -504,7 +504,7 @@ impl TypeCtx {
             | baml_type::Ty::WatchAccessor(_, _)
             | baml_type::Ty::BuiltinUnknown { .. }
             | baml_type::Ty::Future(_, _)) => {
-                return Err(ConvertError::NonParsableType(unparsable.clone()));
+                return Err(ConvertError::NonParsableType(Box::new(unparsable.clone())));
             }
         };
         Ok(ty)
@@ -582,7 +582,7 @@ impl TypeCtx {
             | ::baml_type::Ty::WatchAccessor(_, _)
             | ::baml_type::Ty::BuiltinUnknown { .. }
             | ::baml_type::Ty::Future(_, _)) => {
-                return Err(ConvertError::NonParsableType(unparsable.clone()));
+                return Err(ConvertError::NonParsableType(Box::new(unparsable.clone())));
             }
         };
         Ok(field_attrs)

@@ -1449,6 +1449,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "salsa",
+ "serde_json",
  "syn 2.0.117",
  "sys_native",
  "sys_ops",

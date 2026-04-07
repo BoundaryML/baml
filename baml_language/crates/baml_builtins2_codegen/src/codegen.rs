@@ -943,19 +943,21 @@ fn emit_glue_method(out: &mut String, method_name: &str, b: &NativeBuiltin) {
 fn clean_param_list(b: &NativeBuiltin) -> String {
     let mut parts: Vec<String> = Vec::new();
 
-    if let Some(recv) = &b.receiver {
+    let has_instance_receiver = b
+        .receiver
+        .as_ref()
+        .is_some_and(|r| !r.receiver_type.is_static());
+
+    if has_instance_receiver {
+        let recv = b.receiver.as_ref().unwrap();
         parts.push(format!(
             "{}: {}",
             receiver_param_name(recv),
             receiver_input_type(recv)
         ));
-        for p in &b.params {
-            parts.push(format!("{}: {}", p.name, baml_type_to_input(&p.ty, false)));
-        }
-    } else {
-        for p in &b.params {
-            parts.push(format!("{}: {}", p.name, baml_type_to_input(&p.ty, false)));
-        }
+    }
+    for p in &b.params {
+        parts.push(format!("{}: {}", p.name, baml_type_to_input(&p.ty, false)));
     }
 
     parts.join(", ")
@@ -963,7 +965,10 @@ fn clean_param_list(b: &NativeBuiltin) -> String {
 
 fn clean_return_type(b: &NativeBuiltin) -> String {
     // Static constructors on media classes return copy types
-    if b.receiver.is_none() {
+    if b.receiver
+        .as_ref()
+        .is_none_or(|r| r.receiver_type.is_static())
+    {
         if let Some(class_name) = constructor_media_class(b) {
             let ns = constructor_media_namespace(b);
             let inner = format!("copy::{ns}::{class_name}");
@@ -981,10 +986,13 @@ fn clean_return_type(b: &NativeBuiltin) -> String {
     }
 }
 
-/// If this is a static constructor for a media class (no receiver, path has a media class segment),
+/// If this is a static constructor for a media class (no instance receiver, path has a media class segment),
 /// return the class name. Used to determine copy return type.
 fn constructor_media_class(b: &NativeBuiltin) -> Option<&str> {
-    if b.receiver.is_some() {
+    if b.receiver
+        .as_ref()
+        .is_some_and(|r| !r.receiver_type.is_static())
+    {
         return None;
     }
     let rest = b.path.strip_prefix("baml.")?;
@@ -1075,7 +1083,13 @@ fn emit_mut_receiver_extraction_indented(
 /// Like `emit_arg_extractions` but uses `indent` for each line.
 fn emit_arg_extractions_indented(out: &mut String, b: &NativeBuiltin, indent: &str) {
     if let Some(recv) = &b.receiver {
-        if recv.is_mut {
+        if recv.receiver_type.is_static() {
+            // Static methods: no reciever
+            for (i, p) in b.params.iter().enumerate() {
+                let arg_idx = i + 1;
+                emit_single_extraction_indented(out, &p.name, arg_idx, &p.ty, indent);
+            }
+        } else if recv.receiver_type.is_mut() {
             for (i, p) in b.params.iter().enumerate() {
                 let arg_idx = i + 1;
                 emit_single_extraction_indented(out, &p.name, arg_idx, &p.ty, indent);
@@ -1171,19 +1185,17 @@ fn call_arg_list(b: &NativeBuiltin) -> String {
     let mut args: Vec<String> = Vec::new();
 
     if let Some(recv) = &b.receiver {
-        let name = receiver_param_name(recv);
-        if recv.is_mut {
-            args.push(name);
-        } else {
-            args.push(call_arg_for_type(&name, &receiver_baml_type(recv)));
+        if !recv.receiver_type.is_static() {
+            let name = receiver_param_name(recv);
+            if recv.receiver_type.is_mut() {
+                args.push(name);
+            } else {
+                args.push(call_arg_for_type(&name, &receiver_baml_type(recv)));
+            }
         }
-        for p in &b.params {
-            args.push(call_arg_for_type(&p.name, &p.ty));
-        }
-    } else {
-        for p in &b.params {
-            args.push(call_arg_for_type(&p.name, &p.ty));
-        }
+    }
+    for p in &b.params {
+        args.push(call_arg_for_type(&p.name, &p.ty));
     }
 
     args.join(", ")
@@ -1235,7 +1247,11 @@ fn call_arg_needs_ref(ty: &BamlType) -> bool {
 
 /// Emit `Ok(...)` return for the inner closure body with the given indentation.
 fn emit_result_conversion_ok(out: &mut String, b: &NativeBuiltin, indent: &str) {
-    if b.receiver.is_none() && constructor_media_class(b).is_some() {
+    if b.receiver
+        .as_ref()
+        .is_none_or(|r| r.receiver_type.is_static())
+        && constructor_media_class(b).is_some()
+    {
         writeln!(out, "{indent}Ok(result.to_value(vm))").unwrap();
         return;
     }
@@ -1341,28 +1357,28 @@ fn receiver_param_name(recv: &Receiver) -> String {
 fn receiver_input_type(recv: &Receiver) -> String {
     match recv.class_name.as_str() {
         "Array" => {
-            if recv.is_mut {
+            if recv.receiver_type.is_mut() {
                 "&mut Vec<Value>".to_string()
             } else {
                 "&[Value]".to_string()
             }
         }
         "Map" => {
-            if recv.is_mut {
+            if recv.receiver_type.is_mut() {
                 "&mut IndexMap<String, Value>".to_string()
             } else {
                 "&IndexMap<String, Value>".to_string()
             }
         }
         "String" => {
-            if recv.is_mut {
+            if recv.receiver_type.is_mut() {
                 "&mut String".to_string()
             } else {
                 "&str".to_string()
             }
         }
         "Uint8Array" => {
-            if recv.is_mut {
+            if recv.receiver_type.is_mut() {
                 "&mut Vec<u8>".to_string()
             } else {
                 "&[u8]".to_string()
@@ -1625,7 +1641,10 @@ mod tests {
             let segments: Vec<&str> = rest.split('.').collect();
             let baml_name = segments.last().unwrap();
             let name = camel_to_snake(baml_name);
-            let has_mut_receiver = b.receiver.as_ref().is_some_and(|r| r.is_mut);
+            let has_mut_receiver = b
+                .receiver
+                .as_ref()
+                .is_some_and(|r| r.receiver_type.is_mut());
             let has_mut_vm = output.contains(&format!("fn {name}(vm: &mut BexVm,"));
             let has_ref_vm = output.contains(&format!("fn {name}(vm: &BexVm,"));
 

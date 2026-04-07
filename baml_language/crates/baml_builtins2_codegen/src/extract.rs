@@ -15,7 +15,7 @@ use baml_compiler2_ast::ast::{
 
 use crate::types::{
     BamlType, BuiltinPipeline, NativeBuiltin, NativeClassDef, NativeClassField, Param, Receiver,
-    VmUsage,
+    ReceiverType, VmUsage,
 };
 
 /// Convert a byte offset in source text to a 1-based `(line, column)` pair.
@@ -249,16 +249,25 @@ fn extract_from_class(
             vec![]
         };
 
-        let (params, receiver) = if has_self {
-            let params = extract_params_skip_self(method, &all_generics);
-            let receiver = Some(Receiver {
-                class_name: class_name.to_string(),
-                class_generics: class_generics.clone(),
-                is_mut,
-            });
-            (params, receiver)
+        // Always set receiver for class methods — even static methods (no `self`)
+        // need it for dispatch routing. The runtime path is
+        // "baml.llm.StreamCache.new" which dispatches via class name.
+        let receiver_type = if !has_self {
+            ReceiverType::Static
+        } else if is_mut {
+            ReceiverType::MutSelf
         } else {
-            let params: Vec<Param> = method
+            ReceiverType::RefSelf
+        };
+        let receiver = Some(Receiver {
+            class_name: class_name.to_string(),
+            class_generics: class_generics.clone(),
+            receiver_type,
+        });
+        let params = if has_self {
+            extract_params_skip_self(method, &all_generics)
+        } else {
+            method
                 .params
                 .iter()
                 .map(|p| Param {
@@ -269,8 +278,7 @@ fn extract_from_class(
                         .map(|te| type_expr_to_baml_type(&te.expr, &all_generics))
                         .unwrap_or(BamlType::Named("unknown".to_string())),
                 })
-                .collect();
-            (params, None)
+                .collect()
         };
 
         let return_type = method
@@ -903,7 +911,7 @@ mod tests {
             .iter()
             .find(|b| b.path == "baml.Array.push")
             .expect("missing Array.push");
-        assert!(array_push.receiver.as_ref().unwrap().is_mut);
+        assert!(array_push.receiver.as_ref().unwrap().receiver_type.is_mut());
 
         let string_length = vm_builtins
             .iter()

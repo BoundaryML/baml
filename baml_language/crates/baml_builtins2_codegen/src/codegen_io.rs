@@ -1066,8 +1066,16 @@ fn emit_one_class_trait(
             let owned = &paths.owned;
             let ns_ident = format_ident!("{}", ns);
             let class_ident = format_ident!("{}", class_name);
-            let receiver_param_ident = format_ident!("{}", class_name.to_lowercase());
-            let receiver_ty = quote! { #owned::#ns_ident::#class_ident };
+            let Some(receiver) = &m.receiver else {
+                return quote! { compile_error!("missing receiver for method {}", #method_ident); };
+            };
+            let receiver_param = if receiver.receiver_type.is_static() {
+                None
+            } else {
+                let receiver_param_ident = format_ident!("{}", class_name.to_lowercase());
+                let receiver_ty = quote! { #owned::#ns_ident::#class_ident };
+                Some(quote! { #receiver_param_ident: #receiver_ty,})
+            };
 
             let extra_params: Vec<TokenStream> = m
                 .params
@@ -1084,7 +1092,7 @@ fn emit_one_class_trait(
                     &self,
                     heap: &std::sync::Arc<BexHeap>,
                     call_id: CallId,
-                    #receiver_param_ident: #receiver_ty,
+                    #receiver_param
                     #(#extra_params,)*
                     ctx: &SysOpContext,
                 ) -> SysOpOutput<#ret_ty>;
@@ -1142,6 +1150,9 @@ fn emit_glue_method(
     paths: &CodegenPaths,
 ) -> TokenStream {
     let glue_ident = format_ident!("__glue_{}", builtin.fn_name);
+    let Some(receiver) = &builtin.receiver else {
+        return quote! { compile_error!("missing receiver for glue method {}", #glue_ident); };
+    };
     let variant_ident = format_ident!("{}", builtin.sys_op_variant_name());
     let clean_method_ident = format_ident!("{}", io_method_name(builtin));
 
@@ -1150,6 +1161,12 @@ fn emit_glue_method(
     let class_ident = format_ident!("{}", class_name);
 
     // Arg extraction lets
+    let arg_self = if receiver.receiver_type.is_static() {
+        None
+    } else {
+        Some(quote! { let __arg_self = __args.next().unwrap(); })
+    };
+
     let arg_idents: Vec<syn::Ident> = (0..builtin.params.len())
         .map(|i| format_ident!("__arg{}", i))
         .collect();
@@ -1157,6 +1174,16 @@ fn emit_glue_method(
         .iter()
         .map(|id| quote! { let #id = __args.next().unwrap(); })
         .collect();
+
+    let receiver_extraction = if receiver.receiver_type.is_static() {
+        None
+    } else {
+        Some(quote! {
+            let __receiver = __arg_self
+                .as_builtin_class::<#view::#ns_ident::#class_ident>(&__p)?
+                .into_owned(&__p)?;
+        })
+    };
 
     // Extraction inside gc protection
     let param_extractions: Vec<TokenStream> = builtin
@@ -1172,13 +1199,22 @@ fn emit_glue_method(
         .collect();
 
     // Tuple elements for Ok return
-    let tuple_idents: Vec<syn::Ident> = std::iter::once(format_ident!("__receiver"))
-        .chain(builtin.params.iter().map(|p| format_ident!("__{}", p.name)))
+    let receiver_ident = if receiver.receiver_type.is_static() {
+        None
+    } else {
+        Some(quote! { __receiver, })
+    };
+    let tuple_idents: Vec<syn::Ident> = builtin
+        .params
+        .iter()
+        .map(|p| format_ident!("__{}", p.name))
         .collect();
 
     // Call args for clean method
-    let call_param_idents: Vec<syn::Ident> = std::iter::once(format_ident!("__receiver"))
-        .chain(builtin.params.iter().map(|p| format_ident!("__{}", p.name)))
+    let call_param_idents: Vec<syn::Ident> = builtin
+        .params
+        .iter()
+        .map(|p| format_ident!("__{}", p.name))
         .collect();
 
     quote! {
@@ -1190,20 +1226,18 @@ fn emit_glue_method(
             call_id: CallId,
         ) -> SysOpResult {
             let mut __args = args.into_iter();
-            let __arg_self = __args.next().unwrap();
+            #arg_self
             #(#arg_lets)*
 
             let __extraction = heap.with_gc_protection(move |__p| {
-                let __receiver = __arg_self
-                    .as_builtin_class::<#view::#ns_ident::#class_ident>(&__p)?
-                    .into_owned(&__p)?;
+                #receiver_extraction
                 #(#param_extractions)*
-                Ok::<_, AccessError>((#(#tuple_idents),*))
+                Ok::<_, AccessError>((#receiver_ident #(#tuple_idents),*))
             });
 
             match __extraction {
-                Ok((#(#tuple_idents),*)) => {
-                    self.#clean_method_ident(heap, call_id, #(#call_param_idents,)* ctx)
+                Ok((#receiver_ident #(#tuple_idents),*)) => {
+                    self.#clean_method_ident(heap, call_id, #receiver_ident #(#call_param_idents,)* ctx)
                         .into_result(SysOp::#variant_ident)
                 }
                 Err(e) => SysOpResult::Ready(Err(OpError::new(

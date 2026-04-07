@@ -447,6 +447,25 @@ impl<T> io::IoClassLlmStreamAccumulator for T {
     }
 }
 
+/// Blanket impl — `StreamCache.new()` creates a SAP cache from a type descriptor.
+impl<T> io::IoClassLlmStreamCache for T {
+    fn new(
+        &self,
+        _heap: &std::sync::Arc<BexHeap>,
+        _call_id: CallId,
+        target: baml_type::Ty,
+        ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::llm::StreamCache> {
+        let compiled = match ::bex_sap::CompiledSapModel::from_sys_op_context(ctx, target) {
+            Ok(compiled) => compiled,
+            Err(e) => return SysOpOutput::err(OpErrorKind::Other(e.to_string())),
+        };
+        let sap = ::sys_llm::SapStreamCache::new(compiled);
+        let data: std::sync::Arc<dyn std::any::Any + Send + Sync> = std::sync::Arc::new(sap);
+        SysOpOutput::ok(io::owned::llm::StreamCache { _data: data })
+    }
+}
+
 impl<T> io::IoNamespaceLlm for T {
     fn get_jinja_template(
         &self,
@@ -497,22 +516,6 @@ impl<T> io::IoNamespaceLlm for T {
             )));
         };
         SysOpOutput::ok(info.stream_return_type.clone())
-    }
-
-    fn new(
-        &self,
-        _heap: &std::sync::Arc<BexHeap>,
-        _call_id: CallId,
-        target: baml_type::Ty,
-        ctx: &SysOpContext,
-    ) -> SysOpOutput<io::owned::llm::StreamCache> {
-        let compiled = match ::bex_sap::CompiledSapModel::from_sys_op_context(ctx, target) {
-            Ok(compiled) => compiled,
-            Err(e) => return SysOpOutput::err(OpErrorKind::Other(e.to_string())),
-        };
-        let sap = ::sys_llm::SapStreamCache::new(compiled);
-        let data: std::sync::Arc<dyn std::any::Any + Send + Sync> = std::sync::Arc::new(sap);
-        SysOpOutput::ok(io::owned::llm::StreamCache { _data: data })
     }
 
     fn __sap_parse_final(
