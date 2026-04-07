@@ -126,6 +126,63 @@ macro_rules! baml_test {
     }};
 }
 
+/// Like `baml_test!` but with MIR optimizations enabled (`mir_optimize: true`).
+///
+/// Use this for testing optimization passes like catch switch dispatch and
+/// constant folding that are gated on the `mir_optimize` flag.
+#[macro_export]
+macro_rules! baml_test_optimized {
+    // Simple: source only
+    ($source:expr) => {
+        $crate::engine::run_test_mir_optimized(
+            $source,
+            "main",
+            $crate::engine::IndexMap::new(),
+        )
+        .await
+    };
+    // baml only
+    (baml: $source:expr $(,)?) => {
+        $crate::engine::run_test_mir_optimized(
+            $source,
+            "main",
+            $crate::engine::IndexMap::new(),
+        )
+        .await
+    };
+    // baml + entry
+    (baml: $source:expr, entry: $entry:expr $(,)?) => {
+        $crate::engine::run_test_mir_optimized(
+            $source,
+            $entry,
+            $crate::engine::IndexMap::new(),
+        )
+        .await
+    };
+    // baml + args
+    (baml: $source:expr, args: { $($k:literal => $v:expr),* $(,)? } $(,)?) => {{
+        let mut __args = $crate::engine::IndexMap::new();
+        $( __args.insert($k, $v); )*
+        $crate::engine::run_test_mir_optimized(
+            $source,
+            "main",
+            __args,
+        )
+        .await
+    }};
+    // baml + entry + args
+    (baml: $source:expr, entry: $entry:expr, args: { $($k:literal => $v:expr),* $(,)? } $(,)?) => {{
+        let mut __args = $crate::engine::IndexMap::new();
+        $( __args.insert($k, $v); )*
+        $crate::engine::run_test_mir_optimized(
+            $source,
+            $entry,
+            __args,
+        )
+        .await
+    }};
+}
+
 #[cfg(test)]
 pub mod compiler2_hir;
 

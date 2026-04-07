@@ -896,7 +896,9 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             Constant::Float(v) => {
                 let idx = self.add_constant(ConstValue::Float(*v));
                 let inst = self.emit(Instruction::LoadConst(idx));
-                self.set_operand(inst, OperandMeta::Const(v.to_string()));
+                let s = v.to_string();
+                let display = if s.contains('.') { s } else { format!("{s}.0") };
+                self.set_operand(inst, OperandMeta::Const(display));
             }
             Constant::String(s) => {
                 let escaped = s

@@ -410,7 +410,7 @@ function baml.llm.Client.build_plan_with_state(self: null, planner_state: void) 
     store_var result
     load_var r
     load_field .initial_delay_ms
-    load_const 0
+    load_const 0.0
     bin_op +
     store_var current_delay
     load_const 0
@@ -448,7 +448,7 @@ function baml.llm.Client.build_plan_with_state(self: null, planner_state: void) 
     load_var next
     load_var r
     load_field .max_delay_ms
-    load_const 0
+    load_const 0.0
     bin_op +
     cmp_op >
     pop_jump_if_false L6
@@ -462,7 +462,7 @@ function baml.llm.Client.build_plan_with_state(self: null, planner_state: void) 
   L7:
     load_var r
     load_field .max_delay_ms
-    load_const 0
+    load_const 0.0
     bin_op +
     store_var current_delay
 
@@ -534,7 +534,7 @@ function baml.llm.Client.execute(self: null, context: void, inherited_delay_ms: 
     store_var r
     load_var r
     load_field .initial_delay_ms
-    load_const 0
+    load_const 0.0
     bin_op +
     store_var current_delay
     load_const 0
@@ -572,7 +572,7 @@ function baml.llm.Client.execute(self: null, context: void, inherited_delay_ms: 
     load_var next
     load_var r
     load_field .max_delay_ms
-    load_const 0
+    load_const 0.0
     bin_op +
     cmp_op >
     pop_jump_if_false L5
@@ -586,7 +586,7 @@ function baml.llm.Client.execute(self: null, context: void, inherited_delay_ms: 
   L6:
     load_var r
     load_field .max_delay_ms
-    load_const 0
+    load_const 0.0
     bin_op +
     store_var current_delay
 

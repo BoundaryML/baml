@@ -1493,7 +1493,7 @@ async fn match_float_literal() {
     insta::assert_snapshot!(output.bytecode, @r#"
     function main() -> string {
         load_const 1.5
-        load_const 1
+        load_const 1.0
         cmp_op ==
         pop_jump_if_false L0
         jump L5
@@ -1507,7 +1507,7 @@ async fn match_float_literal() {
 
       L1:
         load_const 1.5
-        load_const 2
+        load_const 2.0
         cmp_op ==
         pop_jump_if_false L2
         jump L3

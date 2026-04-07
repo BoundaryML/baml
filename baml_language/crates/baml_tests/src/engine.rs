@@ -89,12 +89,17 @@ pub fn compile_source(source: &str) -> Program {
 
 /// Compile BAML source with a specific optimization level.
 pub fn compile_source_with_opt(source: &str, opt: OptLevel) -> Program {
+    compile_source_with_options(source, opt, false)
+}
+
+/// Compile BAML source with full control over optimization flags.
+pub fn compile_source_with_options(source: &str, opt: OptLevel, mir_optimize: bool) -> Program {
     let db = setup_test_db(source);
     assert_no_diagnostic_errors(&db);
 
     let opts = baml_compiler2_emit::CompileOptions {
         emit_test_cases: false,
-        mir_optimize: false,
+        mir_optimize,
     };
     baml_compiler2_emit::generate_project_bytecode_with_opt(&db, &opts, opt)
         .expect("generate_project_bytecode should succeed for valid test source")
@@ -104,7 +109,7 @@ pub fn compile_source_with_opt(source: &str, opt: OptLevel) -> Program {
 ///
 /// Strips the `"user."` package prefix from function names so snapshots show
 /// `function main()` rather than `function user.main()`.
-fn display_user_functions(program: &Program) -> String {
+pub fn display_user_functions(program: &Program) -> String {
     let mut functions: Vec<(String, &Function)> = program
         .function_indices
         .iter()
@@ -217,6 +222,34 @@ pub async fn run_test(
     let positional_args = resolve_args(&program, entry, args);
 
     // Create engine and execute.
+    let engine = BexEngine::new(program, Arc::new(sys_ops::SysOps::native()), None)
+        .expect("Failed to create BexEngine");
+    let engine = Arc::new(engine);
+
+    let result = engine
+        .call_function(
+            &resolved_entry,
+            positional_args,
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await;
+
+    TestOutput { bytecode, result }
+}
+
+/// Like `run_test` but with full control over MIR optimization.
+pub async fn run_test_mir_optimized(
+    source: &str,
+    entry: &str,
+    args: IndexMap<&str, BexExternalValue>,
+) -> TestOutput {
+    let program = compile_source_with_options(source, OptLevel::One, true);
+
+    let bytecode = display_user_functions(&program);
+    let resolved_entry = resolve_entry_name(&program, entry).clone();
+    let positional_args = resolve_args(&program, entry, args);
+
     let engine = BexEngine::new(program, Arc::new(sys_ops::SysOps::native()), None)
         .expect("Failed to create BexEngine");
     let engine = Arc::new(engine);
