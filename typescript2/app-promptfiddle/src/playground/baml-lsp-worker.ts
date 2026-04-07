@@ -384,6 +384,40 @@ self.onmessage = async (event: MessageEvent) => {
           notification = mapsToRecordsDeep(notification);
           onPlaygroundNotification(notification);
         },
+        replay_notify: (
+          callId: number,
+          fetchId: number,
+          method: string,
+          url: string,
+          requestHeadersJson: string,
+          requestBody: string,
+          status: number,
+          responseHeadersJson: string,
+          responseBody: string,
+        ) => {
+          let requestHeaders: Record<string, string> = {};
+          let responseHeaders: Record<string, string> = {};
+          try { requestHeaders = JSON.parse(requestHeadersJson); } catch {}
+          try { responseHeaders = JSON.parse(responseHeadersJson); } catch {}
+          postOut({
+            type: "fetchLogNew",
+            entry: {
+              id: fetchId,
+              callId,
+              timestamp: Date.now(),
+              method,
+              url,
+              requestHeaders,
+              requestBody,
+              status,
+              responseBody,
+              error: null,
+              durationMs: 0,
+              responseHeaders,
+              replayed: true,
+            },
+          });
+        },
       },
       vfs.wasmVfs,
     );
@@ -637,7 +671,9 @@ self.onmessage = async (event: MessageEvent) => {
       return;
 
     case "toggleReplay":
-      // WASM replay support added in Phase 4.
+      if (runtime) {
+        runtime.toggleReplay(msg.fetchId, msg.pinned);
+      }
       return;
   }
   msg satisfies never;
