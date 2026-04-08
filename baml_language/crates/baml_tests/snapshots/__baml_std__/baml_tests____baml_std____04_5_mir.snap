@@ -94,13 +94,10 @@ fn baml.env.get_or_panic(key: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // key // param
-    let _2: string? // val
+    let _2: string?
     let _3: future<string?>
     let _4: bool
-    let _5: string?
-    let _6: null
-    let _7: string
-    let _8: future<null>
+    let _5: string
 
     bb0: {
         _3 = dispatch_future const fn baml.env.get(copy _1) -> bb1;
@@ -111,35 +108,25 @@ fn baml.env.get_or_panic(key: string) -> string {
     }
 
     bb2: {
-        _5 = copy _2;
-        _4 = copy _5 == const null;
-        branch copy _4 -> [bb4, bb3];
+        _0 = copy _2;
+        _4 = copy _2 == const null;
+        branch copy _4 -> [bb3, bb5];
     }
 
     bb3: {
-        _0 = copy _2;
-        goto -> bb7;
+        _5 = const "env var not found: " + copy _1;
+        _0 = call const fn baml.sys.panic(copy _5) -> [bb4];
     }
 
     bb4: {
-        _7 = const "env var not found: " + copy _1;
-        _8 = dispatch_future const fn baml.sys.panic(copy _7) -> bb5;
+        goto -> bb5;
     }
 
     bb5: {
-        _6 = await _8 -> [bb6];
+        goto -> bb6;
     }
 
     bb6: {
-        _0 = const "";
-        goto -> bb7;
-    }
-
-    bb7: {
-        goto -> bb8;
-    }
-
-    bb8: {
         return;
     }
 }
@@ -1518,7 +1505,7 @@ fn baml.net.Socket.read = builtin(io)
 
 fn baml.sys.now_ms = builtin(vm)
 
-fn baml.sys.panic = builtin(io)
+fn baml.sys.panic = builtin(vm)
 
 fn baml.sys.shell = builtin(io)
 

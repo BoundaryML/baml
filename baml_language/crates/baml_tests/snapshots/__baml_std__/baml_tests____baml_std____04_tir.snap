@@ -29,17 +29,8 @@ class baml.Map$stream {
 
 --- <builtin>/baml/ns_env/env.baml ---
 function baml.env.get_or_panic(key: string) -> string throws never {
-  { : "" | string
-    let val = get(key) : string?
-    if (val == null : bool) : "" | string
-      { : ""
-        root.sys.panic("env var not found: " + key) : null
-        "" : ""
-      }
-    else
-      { : string
-        val : string
-      }
+  { : string
+    get(key) ?? root.sys.panic("env var not found: " + key) : string
   }
 }
 
@@ -618,10 +609,13 @@ class baml.panics.AssertionFailed {
 class baml.panics.Unreachable {
   message: string
 }
+class baml.panics.UserPanic {
+  message: string
+}
 class baml.panics.AllocFailure {
   message: string
 }
-type baml.panics.Panic = baml.panics.DivisionByZero | baml.panics.IndexOutOfBounds | baml.panics.MapKeyNotFound | baml.panics.StackOverflow | baml.panics.AssertionFailed | baml.panics.Unreachable | baml.panics.AllocFailure
+type baml.panics.Panic = baml.panics.DivisionByZero | baml.panics.IndexOutOfBounds | baml.panics.MapKeyNotFound | baml.panics.StackOverflow | baml.panics.AssertionFailed | baml.panics.Unreachable | baml.panics.UserPanic | baml.panics.AllocFailure
 class baml.panics.DivisionByZero$stream {
   dividend: null | int
 }
@@ -641,10 +635,13 @@ class baml.panics.AssertionFailed$stream {
 class baml.panics.Unreachable$stream {
   message: null | string
 }
+class baml.panics.UserPanic$stream {
+  message: null | string
+}
 class baml.panics.AllocFailure$stream {
   message: null | string
 }
-type baml.panics.Panic$stream = baml.panics.DivisionByZero$stream | baml.panics.IndexOutOfBounds$stream | baml.panics.MapKeyNotFound$stream | baml.panics.StackOverflow$stream | baml.panics.AssertionFailed$stream | baml.panics.Unreachable$stream | baml.panics.AllocFailure$stream
+type baml.panics.Panic$stream = baml.panics.DivisionByZero$stream | baml.panics.IndexOutOfBounds$stream | baml.panics.MapKeyNotFound$stream | baml.panics.StackOverflow$stream | baml.panics.AssertionFailed$stream | baml.panics.Unreachable$stream | baml.panics.UserPanic$stream | baml.panics.AllocFailure$stream
 
 --- <builtin>/baml/ns_sys/sys.baml ---
 

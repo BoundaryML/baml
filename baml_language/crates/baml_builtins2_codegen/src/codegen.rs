@@ -25,7 +25,8 @@ fn is_fallible(path: &str) -> bool {
     path.starts_with("baml.unstable.")
         || matches!(
             path,
-            "baml.Uint8Array.zeroes"
+            "baml.sys.panic"
+                | "baml.Uint8Array.zeroes"
                 | "baml.Uint8Array.from_array"
                 | "baml.Uint8Array.from_hex"
                 | "baml.Uint8Array.from_base64"

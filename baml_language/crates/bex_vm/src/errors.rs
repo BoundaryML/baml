@@ -26,6 +26,10 @@ pub enum VmPanic {
     #[error("unreachable code executed")]
     Unreachable,
 
+    /// A user-caused panic from `baml.sys.panic`.
+    #[error("baml.sys.panic: {message}")]
+    UserPanic { message: String },
+
     /// The graceful-ish way to handle potential OOM errors, instead of hard-crashing.
     #[error("memory allocation failed: {message}")]
     AllocFailure { message: String },

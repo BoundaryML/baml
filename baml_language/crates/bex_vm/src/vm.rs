@@ -1103,6 +1103,10 @@ impl BexVm {
                 let msg = self.alloc_string("unreachable code executed".to_string());
                 (PanicClass::Unreachable, vec![msg])
             }
+            VmPanic::UserPanic { message } => {
+                let msg = self.alloc_string(message);
+                (PanicClass::UserPanic, vec![msg])
+            }
             VmPanic::AllocFailure { message } => {
                 let msg = self.alloc_string(message);
                 (PanicClass::AllocFailure, vec![msg])
