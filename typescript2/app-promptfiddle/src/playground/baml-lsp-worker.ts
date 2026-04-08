@@ -684,12 +684,12 @@ self.onmessage = async (event: MessageEvent) => {
           display: {
             method: e.display.method,
             url: e.display.url,
-            bodyPreview: e.display.body_preview,
+            body: e.display.body,
           },
           recordings: (e.recordings ?? []).map((r: any) => ({
             fetchId: r.fetch_id,
             status: r.status,
-            bodyPreview: r.body_preview,
+            body: r.body,
             recordedAt: r.recorded_at ?? 0,
           })),
           pinnedFetchId: e.pinned_fetch_id ?? null,

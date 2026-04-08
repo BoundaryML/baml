@@ -127,7 +127,7 @@ export interface FetchLogEntry {
 export interface ReplayRecording {
   fetchId: number;
   status: number;
-  bodyPreview: string;
+  body: string;
   recordedAt: number;
 }
 
@@ -136,7 +136,7 @@ export interface ReplayGroup {
   display: {
     method: string;
     url: string;
-    bodyPreview: string;
+    body: string;
   };
   recordings: ReplayRecording[];
   pinnedFetchId: number | null;

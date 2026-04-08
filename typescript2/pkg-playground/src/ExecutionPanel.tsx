@@ -11,6 +11,8 @@
 
 import type { ChangeEvent, FC, RefObject } from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useAtom } from 'jotai';
+import { envVarsAtom } from './atoms';
 import { encodeCallArgs } from '@b/pkg-proto';
 import { KeyRound, PanelLeft, RotateCcw, Square } from 'lucide-react';
 import { Button } from './components/ui/button';
@@ -222,7 +224,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
 
   const [diagsExpanded, setDiagsExpanded] = useState(false);
   const [buildTime, setBuildTime] = useState<number | null>(null);
-  const [envVars, setEnvVarsState] = useState<Record<string, string>>({});
+  const [envVars, setEnvVarsState] = useAtom(envVarsAtom);
   // Keys the project is known to need — accumulated from envVarRequests, never shrunk.
   const [knownRequiredKeys, setKnownRequiredKeys] = useState<Set<string>>(new Set());
   // In-flight worker requests waiting for a value: id → variable name. Ref because it doesn't drive renders.
@@ -886,6 +888,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
               <Button
                 variant="ghost"
                 size="icon"
+                aria-label="Record / Replay"
                 className="relative h-7 w-7"
                 onClick={() => setShowReplayManager((prev) => !prev)}
               >

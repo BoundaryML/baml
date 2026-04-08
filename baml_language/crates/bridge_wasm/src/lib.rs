@@ -161,6 +161,11 @@ extern "C" {
 #[wasm_bindgen]
 pub struct BamlWasmRuntime {
     bex: Box<dyn bex_project::BexLsp>,
+    // TODO: This is a single shared store across all projects. In the LSP path,
+    // each project gets its own store via `sys_op_factory`. In practice this is
+    // fine because promptfiddle loads one project at a time, but if multi-project
+    // support is added, this should become a per-project map (requires threading
+    // project context through to the HTTP sys_op layer).
     replay_store: std::sync::Arc<
         std::sync::RwLock<
             sys_ops::replay::RecordReplay<
@@ -474,8 +479,8 @@ impl BamlWasmRuntime {
     /// Return a snapshot of all recorded requests for the Replay Manager popover.
     ///
     /// Returns an array of `ReplayGroupSnapshot` objects as a JS value.
-    /// Each entry has: `key` (hex string), `display` (`method`, `url`, `body_preview`),
-    /// `recordings` (array of `{fetch_id, status, body_preview}`), and `pinned_fetch_id`.
+    /// Each entry has: `key` (hex string), `display` (`method`, `url`, `body`),
+    /// `recordings` (array of `{fetch_id, status, body}`), and `pinned_fetch_id`.
     #[wasm_bindgen(js_name = "replayState")]
     pub fn replay_state(&self) -> JsValue {
         let store = self.replay_store.read().unwrap();

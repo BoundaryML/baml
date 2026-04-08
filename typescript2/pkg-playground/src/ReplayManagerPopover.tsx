@@ -133,7 +133,7 @@ function RequestNavItem({
       ) : (
         <Circle size={10} className="text-vsc-text-faint shrink-0" />
       )}
-      <span className="truncate">{trim(group.display.bodyPreview, 40)}</span>
+      <span className="truncate">{trim(group.display.body, 40)}</span>
       <span className="text-[9px] text-vsc-text-faint shrink-0 ml-auto tabular-nums">
         {group.recordings.length}
       </span>
@@ -280,7 +280,7 @@ function RightPanel({
                 )}
                 <StatusBadge status={rec.status} />
                 <span className="text-[10px] text-vsc-text-muted truncate flex-1">
-                  {trim(rec.bodyPreview, 40)}
+                  {trim(rec.body, 40)}
                 </span>
                 {rec.recordedAt > 0 && (
                   <span className="text-[9px] text-vsc-text-faint shrink-0">{timeAgo(rec.recordedAt)}</span>
@@ -313,8 +313,8 @@ function RightPanel({
       <div className="flex-1 min-h-0 px-3 pb-3 pt-1">
         <pre className="text-[10px] font-mono text-vsc-text bg-vsc-background rounded p-2 overflow-auto h-full whitespace-pre-wrap break-all border border-vsc-border">
           {activeTab === "request"
-            ? tryPrettyJson(group.display.bodyPreview)
-            : selectedRec ? tryPrettyJson(selectedRec.bodyPreview) : "(no response selected)"}
+            ? tryPrettyJson(group.display.body)
+            : selectedRec ? tryPrettyJson(selectedRec.body) : "(no response selected)"}
         </pre>
       </div>
     </div>
@@ -351,7 +351,7 @@ export function ReplayManagerDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="!max-w-[900px] w-[900px] h-[70vh] !flex !flex-col overflow-hidden">
+      <DialogContent className="w-[calc(100vw-2rem)] max-w-[900px] h-[70vh] !flex !flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <RotateCcw size={14} className="text-vsc-text-muted" />

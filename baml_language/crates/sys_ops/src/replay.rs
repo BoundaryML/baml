@@ -27,7 +27,7 @@ use crate::io::{IoClassHttpResponse, IoNamespaceHttp, owned};
 pub struct RequestDisplayInfo {
     pub method: String,
     pub url: String,
-    pub body_preview: String,
+    pub body: String,
 }
 
 /// Snapshot of a single request group for the popover.
@@ -44,7 +44,7 @@ pub struct ReplayGroupSnapshot {
 pub struct RecordingSnapshot {
     pub fetch_id: u64,
     pub status: i64,
-    pub body_preview: String,
+    pub body: String,
     /// Seconds since UNIX epoch when the recording was captured.
     pub recorded_at: u64,
 }
@@ -143,7 +143,7 @@ impl RecordReplay<RequestKey, RecordedResponse> {
                     .map(|e| RecordingSnapshot {
                         fetch_id: e.fetch_id,
                         status: e.value.status,
-                        body_preview: e.value.body.chars().take(1000).collect(),
+                        body: e.value.body.clone(),
                         recorded_at: e.recorded_at,
                     })
                     .collect();
@@ -300,7 +300,21 @@ impl IoClassHttpResponse for ReplayHttp {
                     );
                     Ok(text)
                 }),
-                other @ SysOpOutput::Ready(_) => other,
+                SysOpOutput::Ready(Ok(text)) => {
+                    store.write().unwrap().record(
+                        key,
+                        fetch_id,
+                        RecordedResponse {
+                            status: resp_status,
+                            headers: resp_headers,
+                            body: text.clone(),
+                            url: resp_url,
+                        },
+                        display,
+                    );
+                    SysOpOutput::ok(text)
+                }
+                SysOpOutput::Ready(Err(err)) => SysOpOutput::Ready(Err(err)),
             },
             None => inner_result,
         }
@@ -357,7 +371,7 @@ impl IoNamespaceHttp for ReplayHttp {
         let display = RequestDisplayInfo {
             method: request.method.clone(),
             url: request.url.clone(),
-            body_preview: request.body.chars().take(1000).collect(),
+            body: request.body.clone(),
         };
         // Pre-allocate a unique fetch_id now so it's deterministic (not racy).
         let fetch_id = self.fetch_id_allocator.fetch_add(1, Ordering::Relaxed);
@@ -412,7 +426,7 @@ mod tests {
         RequestDisplayInfo {
             method: "GET".to_string(),
             url: "https://example.com".to_string(),
-            body_preview: String::new(),
+            body: String::new(),
         }
     }
 
@@ -531,7 +545,7 @@ mod tests {
         RequestDisplayInfo {
             method: method.to_string(),
             url: url.to_string(),
-            body_preview: String::new(),
+            body: String::new(),
         }
     }
 
