@@ -1086,8 +1086,9 @@ fn synthesize_register_call(
 
             // Args: (name_expr, collector_lambda, runner_or_null)
             let name_arg = lower_expr_body::lower_runner_element(ctx, name_element);
-            // Use a unique synthetic span for the collector lambda.
-            let collector_lambda_span = ctx.next_lambda_span();
+            // Use the testset body's real CST range so HIR scope lookup works
+            // correctly for name resolution inside the collector lambda body.
+            let collector_lambda_span = body_node.text_range();
             let collector_arg =
                 ctx.alloc_expr(Expr::Lambda(Box::new(collector_def)), collector_lambda_span);
             let runner_arg = lower_runner_element(runner_element.as_ref(), ctx, span);

@@ -186,8 +186,6 @@ async fn collect_tests_testset_inline_for_loop_expands() {
 }
 
 /// A testset with `let` + `for` should expand successfully and find tests.
-/// Regression test: the let initializer is dropped to null during MIR lowering,
-/// causing the for loop to iterate zero times (no tests discovered).
 #[tokio::test]
 async fn collect_tests_testset_let_then_for_loop_expands() {
     let source = r#"
@@ -208,25 +206,16 @@ async fn collect_tests_testset_let_then_for_loop_expands() {
         .expect("collect_tests should succeed");
 
     // Expanding the testset triggers the lambda body (the let + for loop).
-    // BUG: The let initializer gets dropped to null during MIR lowering, so
-    // the for loop tries to call Array.length on null → TypeError.
-    //
-    // When this bug is fixed, change this to:
-    //   let result = expand_testset(&engine, registry, "dynamic")
-    //       .await.expect("expand_set should succeed");
-    //   assert!(!matches!(result, BexExternalValue::Null));
-    let err = expand_testset(&engine, registry, "dynamic")
+    let result = expand_testset(&engine, registry, "dynamic")
         .await
-        .expect_err("BUG: let+for in testset should work, but currently fails with TypeError");
-    let msg = err.to_string();
+        .expect("expand_set should succeed for let+for testset");
     assert!(
-        msg.contains("type error") || msg.contains("TypeError"),
-        "expected type error from null array iteration, got: {msg}"
+        !matches!(result, BexExternalValue::Null),
+        "expected non-null result after expanding testset with let+for loop"
     );
 }
 
-/// Let-bound array indexing in testset body works — only `for` iteration over
-/// a let-bound variable fails (see `collect_tests_testset_let_then_for_loop_expands`).
+/// Let-bound array indexing in testset body works.
 #[tokio::test]
 async fn collect_tests_testset_let_array_index_in_name_and_body() {
     let source = r#"
@@ -262,7 +251,7 @@ async fn collect_tests_testset_let_then_while_loop() {
         testset "whileloop" {
             let names: string[] = ["x", "y", "z"];
             let i = 0;
-            while (i < names.length) {
+            while (i < names.length()) {
                 test "item" {
                     assert.is_true(true)
                 }
@@ -277,19 +266,14 @@ async fn collect_tests_testset_let_then_while_loop() {
         .await
         .expect("collect_tests should succeed");
 
-    // BUG: `let names` and `let i` both become null → `i < names.length` fails.
-    //
-    // When fixed, change to:
-    //   let result = expand_testset(&engine, registry, "whileloop")
-    //       .await.expect("should succeed");
-    //   // verify 3 tests registered
-    let err = expand_testset(&engine, registry, "whileloop")
+    // Should have 3 tests registered (one per iteration: i=0,1,2)
+    let result = expand_testset(&engine, registry, "whileloop")
         .await
-        .expect_err("BUG: let+while in testset should work, but currently fails");
-    let msg = err.to_string();
+        .expect("expand_set should succeed for let+while testset");
+    let repr = format!("{result:?}");
     assert!(
-        msg.contains("comparison") || msg.contains("type error"),
-        "expected comparison/type error, got: {msg}"
+        repr.contains("whileloop/item"),
+        "expected tests registered from while loop: {repr}"
     );
 }
 
@@ -314,17 +298,10 @@ async fn collect_tests_testset_let_used_in_test_name_concat() {
         .await
         .expect("collect_tests should succeed");
 
-    // BUG: `let prefix` and `let suffix` become null → concatenation produces
-    // "null_null" or fails. The test name should be "concat/hello_world".
-    //
-    // When fixed, change assertion to check for "concat/hello_world".
     let result = expand_testset(&engine, registry, "concat")
         .await
-        .expect("expand_set succeeds but with wrong name");
+        .expect("expand_set should succeed for let+concat testset");
     let repr = format!("{result:?}");
-    // Interestingly, let-bound variables used in expressions (string concat)
-    // work correctly — the bug only affects control flow constructs (for, while, if)
-    // that read let-bound variables.
     assert!(
         repr.contains("concat/hello_world"),
         "expected 'concat/hello_world': {repr}"
@@ -332,7 +309,6 @@ async fn collect_tests_testset_let_used_in_test_name_concat() {
 }
 
 /// If-condition reading a let-bound bool in a testset body.
-/// The testset_dynamic MIR snapshot shows `branch const null` for this pattern.
 #[tokio::test]
 async fn collect_tests_testset_let_then_if_condition() {
     let source = r#"
@@ -352,19 +328,14 @@ async fn collect_tests_testset_let_then_if_condition() {
         .await
         .expect("collect_tests should succeed");
 
-    // BUG: `let enabled = true` becomes null → `if(null)` is TypeError (expected Bool).
-    //
-    // When fixed, change to:
-    //   let result = expand_testset(&engine, registry, "ifcond")
-    //       .await.expect("should succeed");
-    //   assert!(format!("{result:?}").contains("ifcond/gated"));
-    let err = expand_testset(&engine, registry, "ifcond")
+    // The test "gated" should be registered since enabled=true
+    let result = expand_testset(&engine, registry, "ifcond")
         .await
-        .expect_err("BUG: let+if in testset should work, but currently fails with TypeError");
-    let msg = err.to_string();
+        .expect("expand_set should succeed for let+if testset");
+    let repr = format!("{result:?}");
     assert!(
-        msg.contains("type error") || msg.contains("TypeError"),
-        "expected type error from null bool, got: {msg}"
+        repr.contains("ifcond/gated"),
+        "expected test 'ifcond/gated' to be registered (enabled=true): {repr}"
     );
 }
 
