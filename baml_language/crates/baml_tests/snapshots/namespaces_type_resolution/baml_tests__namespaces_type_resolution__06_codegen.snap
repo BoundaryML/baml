@@ -35,11 +35,6 @@ function user.RootEnumMatch(s: Status) -> string {
     jump L2
 
   L1:
-    load_var s
-    load_const user.Status.Pending
-    alloc_variant user.Status
-    cmp_op ==
-    pop_jump_if_false L4
     load_const "pending"
     jump L4
 
@@ -241,10 +236,6 @@ function user.auth.AuthMatchesLlmStatus(s: llm.Status) -> string {
     jump L2
 
   L1:
-    load_var s
-    load_const undefined_enum::user.auth.root.llm.Status.Done
-    cmp_op ==
-    pop_jump_if_false L4
     load_const "done"
     jump L4
 
@@ -274,10 +265,6 @@ function user.auth.AuthMatchesRootStatus(s: Status) -> string {
     jump L2
 
   L1:
-    load_var s
-    load_const undefined_enum::user.auth.root.Status.Pending
-    cmp_op ==
-    pop_jump_if_false L4
     load_const "pending"
     jump L4
 
@@ -487,10 +474,6 @@ function user.llm.LlmMatchesRootStatus(s: Status) -> string {
     jump L2
 
   L1:
-    load_var s
-    load_const undefined_enum::user.llm.root.Status.Pending
-    cmp_op ==
-    pop_jump_if_false L4
     load_const "pending"
     jump L4
 
@@ -731,10 +714,6 @@ function user.llm.openai.OpenAIMatchesAuthRole(r: auth.Role) -> string {
     jump L2
 
   L1:
-    load_var r
-    load_const undefined_enum::user.llm.openai.root.auth.Role.Guest
-    cmp_op ==
-    pop_jump_if_false L4
     load_const "guest"
     jump L4
 
@@ -764,10 +743,6 @@ function user.llm.openai.OpenAIMatchesLlmStatus(s: llm.Status) -> string {
     jump L2
 
   L1:
-    load_var s
-    load_const undefined_enum::user.llm.openai.root.llm.Status.Done
-    cmp_op ==
-    pop_jump_if_false L4
     load_const "done"
     jump L4
 
@@ -797,10 +772,6 @@ function user.llm.openai.OpenAIMatchesRootStatus(s: Status) -> string {
     jump L2
 
   L1:
-    load_var s
-    load_const undefined_enum::user.llm.openai.root.Status.Pending
-    cmp_op ==
-    pop_jump_if_false L4
     load_const "pending"
     jump L4
 

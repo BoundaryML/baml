@@ -8,10 +8,6 @@ function user.BoolLiteralAfterTypedBool(b: bool) -> string {
     jump L1
 
   L0:
-    load_var b
-    load_const true
-    cmp_op ==
-    pop_jump_if_false L2
     load_const "unreachable"
     jump L2
 
@@ -23,19 +19,6 @@ function user.BoolLiteralAfterTypedBool(b: bool) -> string {
 }
 
 function user.BoolUnionPattern(b: bool) -> string {
-    load_var b
-    load_const true
-    cmp_op ==
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_var b
-    load_const false
-    cmp_op ==
-    pop_jump_if_false L1
-
-  L1:
     load_const "covered"
     return
 }
@@ -101,10 +84,6 @@ function user.DuplicateBoolLiteral(b: bool) -> string {
     jump L2
 
   L1:
-    load_var b
-    load_const false
-    cmp_op ==
-    pop_jump_if_false L4
     load_const "false"
     jump L4
 
@@ -225,11 +204,6 @@ function user.EnumVariantAfterTypedEnum(s: Status) -> string {
     jump L1
 
   L0:
-    load_var s
-    load_const user.Status.Active
-    alloc_variant user.Status
-    cmp_op ==
-    pop_jump_if_false L2
     load_const "unreachable"
     jump L2
 
@@ -337,10 +311,6 @@ function user.ExhaustiveBool(b: bool) -> string {
     jump L1
 
   L0:
-    load_var b
-    load_const false
-    cmp_op ==
-    pop_jump_if_false L2
     load_const "no"
     jump L2
 
@@ -397,24 +367,21 @@ function user.ExhaustiveCustomBool(b: true | false) -> string {
 
 function user.ExhaustiveDoubleMaybe(dm: (Success | Failure)??) -> string {
     load_var dm
-    type_tag
-    copy 0
-    load_const type_tag:110
-    cmp_op ==
+    is_type ?0
     pop_jump_if_false L0
-    pop 1
     jump L3
 
   L0:
-    copy 0
-    load_const type_tag:107
-    cmp_op ==
+    load_var dm
+    is_type ?1
     pop_jump_if_false L1
-    pop 1
     jump L2
 
   L1:
-    pop 1
+    load_var dm
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L4
     load_const "nothing"
     jump L4
 
@@ -488,11 +455,6 @@ function user.ExhaustiveEnumWithCatchAll(s: Status) -> string {
 }
 
 function user.ExhaustiveEnumWithTypedPattern(s: Status) -> string {
-    load_var s
-    is_type ?0
-    pop_jump_if_false L0
-
-  L0:
     load_const "any status"
     return
 }
@@ -657,10 +619,6 @@ function user.ExhaustiveNullableEnumWithTypedPattern(s: Status?) -> string {
     jump L1
 
   L0:
-    load_var s
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L2
     load_const "no status"
     jump L2
 
@@ -673,16 +631,15 @@ function user.ExhaustiveNullableEnumWithTypedPattern(s: Status?) -> string {
 
 function user.ExhaustiveOptional(x: int?) -> string {
     load_var x
-    type_tag
-    copy 0
-    load_const type_tag:0
-    cmp_op ==
+    is_type ?0
     pop_jump_if_false L0
-    pop 1
     jump L1
 
   L0:
-    pop 1
+    load_var x
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L2
     load_const "no value"
     jump L2
 
@@ -1575,10 +1532,6 @@ function user.NestedMatchSpans(x: int, y: bool) -> string {
     jump L4
 
   L3:
-    load_var y
-    load_const true
-    cmp_op ==
-    pop_jump_if_false L6
     load_const "unreachable nested"
     jump L6
 
@@ -1595,24 +1548,21 @@ function user.NestedMatchSpans(x: int, y: bool) -> string {
 
 function user.NestedTypeAlias(mr: (Success | Failure)?) -> string {
     load_var mr
-    type_tag
-    copy 0
-    load_const type_tag:110
-    cmp_op ==
+    is_type ?0
     pop_jump_if_false L0
-    pop 1
     jump L3
 
   L0:
-    copy 0
-    load_const type_tag:107
-    cmp_op ==
+    load_var mr
+    is_type ?1
     pop_jump_if_false L1
-    pop 1
     jump L2
 
   L1:
-    pop 1
+    load_var mr
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L4
     load_const "nothing"
     jump L4
 
@@ -1958,6 +1908,12 @@ function user.NonExhaustiveOptionalMissingNull(code: 200?) -> string {
 }
 
 function user.NonExhaustiveOptionalMissingValue(code: 200?) -> string {
+    load_var code
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+
+  L0:
     load_const "no code"
     return
 }
@@ -2003,16 +1959,12 @@ function user.NonExhaustiveTypeAliasMissingOne(r: Success | Failure) -> string {
 
 function user.OptionalWithCatchAll(x: int?) -> string {
     load_var x
-    type_tag
-    copy 0
-    load_const type_tag:3
+    load_const null
     cmp_op ==
     pop_jump_if_false L0
-    pop 1
     jump L1
 
   L0:
-    pop 1
     load_const "has value"
     jump L2
 
@@ -2088,10 +2040,6 @@ function user.ParenthesizedSingleLiteral(b: bool) -> string {
     jump L1
 
   L0:
-    load_var b
-    load_const false
-    cmp_op ==
-    pop_jump_if_false L2
     load_const "no"
     jump L2
 

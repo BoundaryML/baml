@@ -3361,7 +3361,7 @@ impl LoweringContext<'_> {
             return;
         }
 
-        self.lower_match_chain(scrutinee_local, &arms, dest, bb_join);
+        self.lower_match_chain(scrutinee_local, &arms, dest, bb_join, is_exhaustive);
 
         self.builder.set_current_block(bb_join);
     }
@@ -3495,17 +3495,6 @@ impl LoweringContext<'_> {
                                     return false;
                                 }
                             }
-                            AstPattern::Null => {
-                                let tag = baml_type::typetag::NULL;
-                                match &switch_kind {
-                                    None => switch_kind = Some(SwitchKind::TypeTag),
-                                    Some(SwitchKind::TypeTag) => {}
-                                    Some(_) => return false,
-                                }
-                                if seen_values.insert(tag) {
-                                    int_arms.push((tag, i));
-                                }
-                            }
                             _ => return false,
                         }
                     }
@@ -3595,19 +3584,7 @@ impl LoweringContext<'_> {
                         return false;
                     }
                 }
-                AstPattern::Null => {
-                    // Null literal: use the NULL type tag for switch dispatch.
-                    let tag = baml_type::typetag::NULL;
-                    match &switch_kind {
-                        None => switch_kind = Some(SwitchKind::TypeTag),
-                        Some(SwitchKind::TypeTag) => {}
-                        Some(_) => return false,
-                    }
-                    if seen_values.insert(tag) {
-                        int_arms.push((tag, i));
-                    }
-                }
-                AstPattern::Literal(_) => return false,
+                AstPattern::Null | AstPattern::Literal(_) => return false,
             }
         }
 
@@ -3759,6 +3736,7 @@ impl LoweringContext<'_> {
         arms: &[baml_compiler2_ast::MatchArm],
         dest: Place,
         join: BlockId,
+        exhaustive: bool,
     ) {
         if arms.is_empty() {
             // No more arms to test. Either a preceding wildcard/binding arm
@@ -3771,6 +3749,16 @@ impl LoweringContext<'_> {
 
         let arm = &arms[0];
         let rest = &arms[1..];
+
+        // Exhaustive last arm: skip the pattern test — it must match.
+        if exhaustive && rest.is_empty() && arm.guard.is_none() {
+            self.bind_pattern(scrutinee, arm.pattern);
+            self.lower_expr(arm.body, dest);
+            if !self.builder.is_current_terminated() {
+                self.builder.goto(join);
+            }
+            return;
+        }
 
         let bb_body = self.builder.create_block();
         let bb_next = self.builder.create_block();
@@ -3791,7 +3779,7 @@ impl LoweringContext<'_> {
         }
 
         self.builder.set_current_block(bb_next);
-        self.lower_match_chain(scrutinee, rest, dest, join);
+        self.lower_match_chain(scrutinee, rest, dest, join, exhaustive);
     }
 
     /// Emit an `IsType` check that handles union types by expanding them

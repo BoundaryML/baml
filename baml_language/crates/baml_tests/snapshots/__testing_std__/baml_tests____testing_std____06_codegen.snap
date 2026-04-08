@@ -611,16 +611,15 @@ function testing.TestRegistry.serialize(self: null) -> (testing.SerializedTest |
     call baml.Map.get
     store_var expanded
     load_var expanded
-    type_tag
-    copy 0
-    load_const type_tag:194
-    cmp_op ==
+    is_type ?1
     pop_jump_if_false L5
-    pop 1
     jump L6
 
   L5:
-    pop 1
+    load_var expanded
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L7
     load_var items
     alloc_instance SerializedTest
     copy 0

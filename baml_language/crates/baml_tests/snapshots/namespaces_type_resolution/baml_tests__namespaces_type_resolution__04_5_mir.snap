@@ -38,47 +38,37 @@ fn user.RootEnumMatch(s: Status) -> string {
     let _1: Status // s // param
     let _2: bool
     let _3: bool
-    let _4: bool
 
     bb0: {
         _2 = copy _1 == const user.Status.Ok;
-        branch copy _2 -> [bb6, bb1];
+        branch copy _2 -> [bb4, bb1];
     }
 
     bb1: {
         _3 = copy _1 == const user.Status.Failed;
-        branch copy _3 -> [bb5, bb2];
+        branch copy _3 -> [bb3, bb2];
     }
 
     bb2: {
-        _4 = copy _1 == const user.Status.Pending;
-        branch copy _4 -> [bb4, bb3];
+        _0 = const "pending";
+        goto -> bb5;
     }
 
     bb3: {
-        goto -> bb7;
+        _0 = const "failed";
+        goto -> bb5;
     }
 
     bb4: {
-        _0 = const "pending";
-        goto -> bb7;
+        _0 = const "ok";
+        goto -> bb5;
     }
 
     bb5: {
-        _0 = const "failed";
-        goto -> bb7;
+        goto -> bb6;
     }
 
     bb6: {
-        _0 = const "ok";
-        goto -> bb7;
-    }
-
-    bb7: {
-        goto -> bb8;
-    }
-
-    bb8: {
         return;
     }
 }
@@ -392,47 +382,37 @@ fn user.auth.AuthMatchesLlmStatus(s: llm.Status) -> string {
     let _1: llm.Status // s // param
     let _2: bool
     let _3: bool
-    let _4: bool
 
     bb0: {
         _2 = copy _1 == const user.auth.root.llm.Status.Ready;
-        branch copy _2 -> [bb6, bb1];
+        branch copy _2 -> [bb4, bb1];
     }
 
     bb1: {
         _3 = copy _1 == const user.auth.root.llm.Status.Generating;
-        branch copy _3 -> [bb5, bb2];
+        branch copy _3 -> [bb3, bb2];
     }
 
     bb2: {
-        _4 = copy _1 == const user.auth.root.llm.Status.Done;
-        branch copy _4 -> [bb4, bb3];
+        _0 = const "done";
+        goto -> bb5;
     }
 
     bb3: {
-        goto -> bb7;
+        _0 = const "generating";
+        goto -> bb5;
     }
 
     bb4: {
-        _0 = const "done";
-        goto -> bb7;
+        _0 = const "ready";
+        goto -> bb5;
     }
 
     bb5: {
-        _0 = const "generating";
-        goto -> bb7;
+        goto -> bb6;
     }
 
     bb6: {
-        _0 = const "ready";
-        goto -> bb7;
-    }
-
-    bb7: {
-        goto -> bb8;
-    }
-
-    bb8: {
         return;
     }
 }
@@ -443,47 +423,37 @@ fn user.auth.AuthMatchesRootStatus(s: Status) -> string {
     let _1: Status // s // param
     let _2: bool
     let _3: bool
-    let _4: bool
 
     bb0: {
         _2 = copy _1 == const user.auth.root.Status.Ok;
-        branch copy _2 -> [bb6, bb1];
+        branch copy _2 -> [bb4, bb1];
     }
 
     bb1: {
         _3 = copy _1 == const user.auth.root.Status.Failed;
-        branch copy _3 -> [bb5, bb2];
+        branch copy _3 -> [bb3, bb2];
     }
 
     bb2: {
-        _4 = copy _1 == const user.auth.root.Status.Pending;
-        branch copy _4 -> [bb4, bb3];
+        _0 = const "pending";
+        goto -> bb5;
     }
 
     bb3: {
-        goto -> bb7;
+        _0 = const "failed";
+        goto -> bb5;
     }
 
     bb4: {
-        _0 = const "pending";
-        goto -> bb7;
+        _0 = const "ok";
+        goto -> bb5;
     }
 
     bb5: {
-        _0 = const "failed";
-        goto -> bb7;
+        goto -> bb6;
     }
 
     bb6: {
-        _0 = const "ok";
-        goto -> bb7;
-    }
-
-    bb7: {
-        goto -> bb8;
-    }
-
-    bb8: {
         return;
     }
 }
@@ -799,47 +769,37 @@ fn user.llm.LlmMatchesRootStatus(s: Status) -> string {
     let _1: Status // s // param
     let _2: bool
     let _3: bool
-    let _4: bool
 
     bb0: {
         _2 = copy _1 == const user.llm.root.Status.Ok;
-        branch copy _2 -> [bb6, bb1];
+        branch copy _2 -> [bb4, bb1];
     }
 
     bb1: {
         _3 = copy _1 == const user.llm.root.Status.Failed;
-        branch copy _3 -> [bb5, bb2];
+        branch copy _3 -> [bb3, bb2];
     }
 
     bb2: {
-        _4 = copy _1 == const user.llm.root.Status.Pending;
-        branch copy _4 -> [bb4, bb3];
+        _0 = const "pending";
+        goto -> bb5;
     }
 
     bb3: {
-        goto -> bb7;
+        _0 = const "failed";
+        goto -> bb5;
     }
 
     bb4: {
-        _0 = const "pending";
-        goto -> bb7;
+        _0 = const "ok";
+        goto -> bb5;
     }
 
     bb5: {
-        _0 = const "failed";
-        goto -> bb7;
+        goto -> bb6;
     }
 
     bb6: {
-        _0 = const "ok";
-        goto -> bb7;
-    }
-
-    bb7: {
-        goto -> bb8;
-    }
-
-    bb8: {
         return;
     }
 }
@@ -1195,47 +1155,37 @@ fn user.llm.openai.OpenAIMatchesAuthRole(r: auth.Role) -> string {
     let _1: auth.Role // r // param
     let _2: bool
     let _3: bool
-    let _4: bool
 
     bb0: {
         _2 = copy _1 == const user.llm.openai.root.auth.Role.Admin;
-        branch copy _2 -> [bb6, bb1];
+        branch copy _2 -> [bb4, bb1];
     }
 
     bb1: {
         _3 = copy _1 == const user.llm.openai.root.auth.Role.User;
-        branch copy _3 -> [bb5, bb2];
+        branch copy _3 -> [bb3, bb2];
     }
 
     bb2: {
-        _4 = copy _1 == const user.llm.openai.root.auth.Role.Guest;
-        branch copy _4 -> [bb4, bb3];
+        _0 = const "guest";
+        goto -> bb5;
     }
 
     bb3: {
-        goto -> bb7;
+        _0 = const "user";
+        goto -> bb5;
     }
 
     bb4: {
-        _0 = const "guest";
-        goto -> bb7;
+        _0 = const "admin";
+        goto -> bb5;
     }
 
     bb5: {
-        _0 = const "user";
-        goto -> bb7;
+        goto -> bb6;
     }
 
     bb6: {
-        _0 = const "admin";
-        goto -> bb7;
-    }
-
-    bb7: {
-        goto -> bb8;
-    }
-
-    bb8: {
         return;
     }
 }
@@ -1246,47 +1196,37 @@ fn user.llm.openai.OpenAIMatchesLlmStatus(s: llm.Status) -> string {
     let _1: llm.Status // s // param
     let _2: bool
     let _3: bool
-    let _4: bool
 
     bb0: {
         _2 = copy _1 == const user.llm.openai.root.llm.Status.Ready;
-        branch copy _2 -> [bb6, bb1];
+        branch copy _2 -> [bb4, bb1];
     }
 
     bb1: {
         _3 = copy _1 == const user.llm.openai.root.llm.Status.Generating;
-        branch copy _3 -> [bb5, bb2];
+        branch copy _3 -> [bb3, bb2];
     }
 
     bb2: {
-        _4 = copy _1 == const user.llm.openai.root.llm.Status.Done;
-        branch copy _4 -> [bb4, bb3];
+        _0 = const "done";
+        goto -> bb5;
     }
 
     bb3: {
-        goto -> bb7;
+        _0 = const "generating";
+        goto -> bb5;
     }
 
     bb4: {
-        _0 = const "done";
-        goto -> bb7;
+        _0 = const "ready";
+        goto -> bb5;
     }
 
     bb5: {
-        _0 = const "generating";
-        goto -> bb7;
+        goto -> bb6;
     }
 
     bb6: {
-        _0 = const "ready";
-        goto -> bb7;
-    }
-
-    bb7: {
-        goto -> bb8;
-    }
-
-    bb8: {
         return;
     }
 }
@@ -1297,47 +1237,37 @@ fn user.llm.openai.OpenAIMatchesRootStatus(s: Status) -> string {
     let _1: Status // s // param
     let _2: bool
     let _3: bool
-    let _4: bool
 
     bb0: {
         _2 = copy _1 == const user.llm.openai.root.Status.Ok;
-        branch copy _2 -> [bb6, bb1];
+        branch copy _2 -> [bb4, bb1];
     }
 
     bb1: {
         _3 = copy _1 == const user.llm.openai.root.Status.Failed;
-        branch copy _3 -> [bb5, bb2];
+        branch copy _3 -> [bb3, bb2];
     }
 
     bb2: {
-        _4 = copy _1 == const user.llm.openai.root.Status.Pending;
-        branch copy _4 -> [bb4, bb3];
+        _0 = const "pending";
+        goto -> bb5;
     }
 
     bb3: {
-        goto -> bb7;
+        _0 = const "failed";
+        goto -> bb5;
     }
 
     bb4: {
-        _0 = const "pending";
-        goto -> bb7;
+        _0 = const "ok";
+        goto -> bb5;
     }
 
     bb5: {
-        _0 = const "failed";
-        goto -> bb7;
+        goto -> bb6;
     }
 
     bb6: {
-        _0 = const "ok";
-        goto -> bb7;
-    }
-
-    bb7: {
-        goto -> bb8;
-    }
-
-    bb8: {
         return;
     }
 }

@@ -687,16 +687,15 @@ function testing.TestRegistry.serialize(self: null) -> (testing.SerializedTest |
     call baml.Map.get
     store_var expanded
     load_var expanded
-    type_tag
-    copy 0
-    load_const type_tag:200
-    cmp_op ==
+    is_type ?1
     pop_jump_if_false L5
-    pop 1
     jump L6
 
   L5:
-    pop 1
+    load_var expanded
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L7
     load_var items
     alloc_instance SerializedTest
     copy 0
@@ -1066,18 +1065,12 @@ function user.score(input: User | ErrorInfo, threshold: int) -> Report {
     load_var total
     load_var threshold
     cmp_op >
-    store_var _34
-    load_var _34
     load_const true
     cmp_op ==
     pop_jump_if_false L16
     jump L17
 
   L16:
-    load_var _34
-    load_const false
-    cmp_op ==
-    pop_jump_if_false L18
     load_const " [LOW]"
     store_var suffix
     jump L18
