@@ -112,6 +112,10 @@ pub struct FetchBytesResponse {
 }
 
 /// Async closure that fetches a URL and returns raw bytes.
+///
+/// NOTE: callers may pass user-supplied URLs (e.g. image URLs from function
+/// arguments), so implementations exposed to untrusted input should validate
+/// the URL scheme and consider blocking private-network addresses (SSRF).
 pub type FetchBytesFn = Arc<
     dyn Fn(String) -> Pin<Box<dyn Future<Output = Result<FetchBytesResponse, LlmOpError>> + Send>>
         + Send

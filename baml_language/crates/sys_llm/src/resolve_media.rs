@@ -211,6 +211,13 @@ async fn resolve_url(
                     BuildRequestError::Other(format!("failed to fetch media URL {url}: {e}"))
                 })?;
 
+            if response.status_code < 200 || response.status_code >= 300 {
+                return Err(BuildRequestError::Other(format!(
+                    "media URL {url} returned status {}",
+                    response.status_code
+                )));
+            }
+
             infer_mime_from_headers_or_bytes(media, &response.headers, &response.bytes);
             Ok(())
         }
@@ -287,7 +294,11 @@ fn infer_mime_from_headers_or_bytes(
     headers: &indexmap::IndexMap<String, String>,
     bytes: &[u8],
 ) {
-    if let Some(ct) = headers.get("content-type") {
+    if let Some(ct) = headers
+        .iter()
+        .find(|(name, _)| name.eq_ignore_ascii_case("content-type"))
+        .map(|(_, value)| value)
+    {
         let mime = ct.split(';').next().unwrap_or(ct).trim();
         if !mime.is_empty() {
             media.set_mime_type(mime.to_string());
@@ -662,6 +673,32 @@ mod tests {
         assert!(format!("{}", err.unwrap_err()).contains("404"));
     }
 
+    #[tokio::test]
+    async fn send_url_add_mime_type_rejects_non_2xx() {
+        let media = make_url_media("https://example.com/missing.png", None);
+        let handler = MediaUrlHandler {
+            image: ResolveMediaUrls::SendUrlAddMimeType,
+            audio: ResolveMediaUrls::SendUrlAddMimeType,
+            video: ResolveMediaUrls::SendUrlAddMimeType,
+            pdf: ResolveMediaUrls::SendUrlAddMimeType,
+        };
+        let callbacks = crate::BuildRequestCallbacks {
+            fetch_bytes: Arc::new(|_url| {
+                Box::pin(async {
+                    Ok(crate::FetchBytesResponse {
+                        status_code: 404,
+                        headers: indexmap::IndexMap::new(),
+                        bytes: vec![],
+                    })
+                })
+            }),
+            ..crate::BuildRequestCallbacks::noop()
+        };
+        let err = resolve_single_media(&media, &handler, &callbacks).await;
+        assert!(err.is_err());
+        assert!(format!("{}", err.unwrap_err()).contains("404"));
+    }
+
     // -- existing mime_type is preserved --------------------------------------
 
     #[tokio::test]
@@ -693,5 +730,37 @@ mod tests {
 
         // Original mime_type should be preserved, not overwritten by Content-Type.
         assert_eq!(media.mime_type().as_deref(), Some("image/webp"));
+    }
+
+    // -- case-insensitive Content-Type header ---------------------------------
+
+    #[tokio::test]
+    async fn content_type_header_case_insensitive() {
+        let media = make_url_media("https://example.com/img.svg", None);
+        let handler = MediaUrlHandler {
+            image: ResolveMediaUrls::SendUrlAddMimeType,
+            audio: ResolveMediaUrls::SendUrlAddMimeType,
+            video: ResolveMediaUrls::SendUrlAddMimeType,
+            pdf: ResolveMediaUrls::SendUrlAddMimeType,
+        };
+        let callbacks = crate::BuildRequestCallbacks {
+            fetch_bytes: Arc::new(|_url| {
+                Box::pin(async {
+                    Ok(crate::FetchBytesResponse {
+                        status_code: 200,
+                        headers: indexmap::indexmap! {
+                            "Content-Type".to_string() => "image/svg+xml".to_string(),
+                        },
+                        bytes: vec![],
+                    })
+                })
+            }),
+            ..crate::BuildRequestCallbacks::noop()
+        };
+        resolve_single_media(&media, &handler, &callbacks)
+            .await
+            .unwrap();
+
+        assert_eq!(media.mime_type().as_deref(), Some("image/svg+xml"));
     }
 }
