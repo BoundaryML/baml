@@ -34,6 +34,7 @@ ctrlc = { workspace = true }
 regex = { workspace = true }
 text-size = { workspace = true }
 tokio = { workspace = true }
+serde_json = { workspace = true }
 
 [features]
 default = [ "native-tls" ]

@@ -11,6 +11,7 @@
 use baml_base::SourceFile;
 use baml_compiler2_hir::contributions::DefinitionKind;
 use baml_compiler_syntax::SyntaxKind;
+use serde::Serialize;
 use text_size::TextRange;
 
 use crate::Db;
@@ -21,17 +22,21 @@ use crate::usages::usages_at;
 // ── Types ────────────────────────────────────────────────────────────────────
 
 /// Complete description of a symbol.
-#[derive(Clone)]
+#[derive(Clone, Serialize)]
 pub struct SymbolDescription {
     /// The symbol's name.
     pub name: String,
     /// Symbol kind (Class, Enum, Function, …).
+    #[serde(serialize_with = "serialize_kind")]
     pub kind: DefinitionKind,
     /// The file where the symbol is defined.
+    #[serde(serialize_with = "serialize_file")]
     pub file: SourceFile,
     /// Byte range of the name token.
+    #[serde(serialize_with = "serialize_range")]
     pub name_span: TextRange,
     /// Byte range of the full item node in the CST.
+    #[serde(serialize_with = "serialize_range")]
     pub item_range: TextRange,
     /// Compact shape representation (e.g. signature + field list).
     pub shape: String,
@@ -48,18 +53,23 @@ pub struct SymbolDescription {
 }
 
 /// A symbol referenced in the signature of another symbol.
-#[derive(Clone)]
+#[derive(Clone, Serialize)]
 pub struct DepRef {
     pub name: String,
+    #[serde(serialize_with = "serialize_kind")]
     pub kind: DefinitionKind,
+    #[serde(serialize_with = "serialize_file")]
     pub file: SourceFile,
+    #[serde(serialize_with = "serialize_range")]
     pub name_span: TextRange,
 }
 
 /// A site where a symbol is used.
-#[derive(Clone)]
+#[derive(Clone, Serialize)]
 pub struct RefSite {
+    #[serde(serialize_with = "serialize_file")]
     pub file: SourceFile,
+    #[serde(serialize_with = "serialize_range")]
     pub range: TextRange,
     /// The full source line containing the reference.
     pub line_text: String,
@@ -145,7 +155,7 @@ fn describe_top_level(
     let docstring = extract_docstring(db, file, item_range);
 
     // ── Dependency discovery ─────────────────────────────────────────────────
-    let dependencies = find_dependencies(db, file, sym);
+    let dependencies = find_dependencies(db, files, file, sym);
 
     // ── Resolved type ────────────────────────────────────────────────────────
     let resolved_type = resolve_type_for_item(db, file, sym);
@@ -270,18 +280,41 @@ fn describe_locals(db: &dyn Db, files: &[SourceFile], name: &str) -> Vec<SymbolD
 
                 let func_name = func.name.as_str().to_string();
 
+                // Find usages of this parameter within the function.
+                let param_refs = usages_at(db, file, param_span.start())
+                    .into_iter()
+                    .filter(|loc| !(loc.file == file && loc.range == param_span))
+                    .map(|loc| {
+                        let text = loc.file.text(db);
+                        let (line_number, line_text) = line_at_offset(text, loc.range.start());
+                        RefSite {
+                            file: loc.file,
+                            range: loc.range,
+                            line_text,
+                            line_number,
+                        }
+                    })
+                    .collect();
+
+                // Get the full function body for context display.
+                let file_text = file.text(db);
+                let func_body = file_text
+                    .get(usize::from(func.span.start())..usize::from(func.span.end()))
+                    .unwrap_or("")
+                    .to_string();
+
                 results.push(SymbolDescription {
                     name: name.to_string(),
                     kind: DefinitionKind::Parameter,
                     file,
                     name_span: param_span,
-                    item_range: param_span,
+                    item_range: func.span,
                     shape: format!("{name}: {type_str}"),
-                    full_body: format!("{name}: {type_str}"),
+                    full_body: func_body,
                     docstring: None,
                     resolved_type: Some(type_str),
                     dependencies: vec![make_function_dep(db, file, func_local_id, &func_name)],
-                    references: Vec::new(), // TODO: find local usages
+                    references: param_refs,
                 });
             }
 
@@ -332,23 +365,48 @@ fn describe_locals(db: &dyn Db, files: &[SourceFile], name: &str) -> Vec<SymbolD
                             .map(crate::utils::display_ty)
                             .unwrap_or_else(|| "unknown".to_string())
                     }
-                    _ => "unknown".to_string(),
+                    baml_compiler2_hir::semantic_index::DefinitionSite::Parameter(_) => {
+                        "unknown".to_string()
+                    }
                 };
 
                 let func_name = func.name.as_str().to_string();
+
+                // Find usages of this binding within the function.
+                let binding_refs = usages_at(db, file, binding_span.start())
+                    .into_iter()
+                    .filter(|loc| !(loc.file == file && loc.range == *binding_span))
+                    .map(|loc| {
+                        let text = loc.file.text(db);
+                        let (line_number, line_text) = line_at_offset(text, loc.range.start());
+                        RefSite {
+                            file: loc.file,
+                            range: loc.range,
+                            line_text,
+                            line_number,
+                        }
+                    })
+                    .collect();
+
+                // Get the full function body for context display.
+                let file_text = file.text(db);
+                let func_body = file_text
+                    .get(usize::from(func.span.start())..usize::from(func.span.end()))
+                    .unwrap_or("")
+                    .to_string();
 
                 results.push(SymbolDescription {
                     name: name.to_string(),
                     kind: DefinitionKind::Binding,
                     file,
                     name_span: *binding_span,
-                    item_range: *binding_span,
+                    item_range: func.span,
                     shape: format!("let {name}: {type_str}"),
-                    full_body: format!("let {name}: {type_str}"),
+                    full_body: func_body,
                     docstring: None,
                     resolved_type: Some(type_str),
                     dependencies: vec![make_function_dep(db, file, func_local_id, &func_name)],
-                    references: Vec::new(), // TODO: find local usages
+                    references: binding_refs,
                 });
             }
         }
@@ -357,7 +415,7 @@ fn describe_locals(db: &dyn Db, files: &[SourceFile], name: &str) -> Vec<SymbolD
     results
 }
 
-/// Build a DepRef pointing to a function.
+/// Build a `DepRef` pointing to a function.
 fn make_function_dep(
     db: &dyn crate::Db,
     file: SourceFile,
@@ -381,7 +439,7 @@ fn make_function_dep(
 
 // ── CST body extraction ──────────────────────────────────────────────────────
 
-/// Map from DefinitionKind to the set of SyntaxKinds that represent item-level
+/// Map from `DefinitionKind` to the set of `SyntaxKinds` that represent item-level
 /// CST nodes for that kind.
 fn is_item_node(kind: SyntaxKind) -> bool {
     matches!(
@@ -400,7 +458,7 @@ fn is_item_node(kind: SyntaxKind) -> bool {
     )
 }
 
-/// Find the text range of a member CST node (FIELD, ENUM_VARIANT) for a name span.
+/// Find the text range of a member CST node (FIELD, `ENUM_VARIANT`) for a name span.
 fn find_member_range(
     db: &dyn Db,
     file: SourceFile,
@@ -461,10 +519,10 @@ fn build_shape(db: &dyn Db, file: SourceFile, sym: &SymbolInfo) -> String {
     let resolved =
         baml_compiler2_tir::resolve::resolve_name_at(db, file, sym.name_span.start(), &name);
 
-    let def = match resolved {
-        baml_compiler2_tir::resolve::ResolvedName::Item(def)
-        | baml_compiler2_tir::resolve::ResolvedName::Builtin(def) => def,
-        _ => return format!("{} {}", sym.kind.as_str(), sym.name),
+    let (baml_compiler2_tir::resolve::ResolvedName::Item(def)
+    | baml_compiler2_tir::resolve::ResolvedName::Builtin(def)) = resolved
+    else {
+        return format!("{} {}", sym.kind.as_str(), sym.name);
     };
 
     let type_info = type_info_for_definition(db, def);
@@ -494,10 +552,10 @@ fn resolve_type_for_item(db: &dyn Db, file: SourceFile, sym: &SymbolInfo) -> Opt
     let resolved =
         baml_compiler2_tir::resolve::resolve_name_at(db, file, sym.name_span.start(), &name);
 
-    let def = match resolved {
-        baml_compiler2_tir::resolve::ResolvedName::Item(def)
-        | baml_compiler2_tir::resolve::ResolvedName::Builtin(def) => def,
-        _ => return None,
+    let (baml_compiler2_tir::resolve::ResolvedName::Item(def)
+    | baml_compiler2_tir::resolve::ResolvedName::Builtin(def)) = resolved
+    else {
+        return None;
     };
 
     let type_info = type_info_for_definition(db, def);
@@ -597,15 +655,15 @@ fn extract_docstring(db: &dyn Db, file: SourceFile, item_range: TextRange) -> Op
 /// For functions: parameter types, return type.
 /// For classes: field types that are user-defined.
 /// For other kinds: empty (self-contained or not applicable).
-fn find_dependencies(db: &dyn Db, file: SourceFile, sym: &SymbolInfo) -> Vec<DepRef> {
+fn find_dependencies(db: &dyn Db, files: &[SourceFile], file: SourceFile, sym: &SymbolInfo) -> Vec<DepRef> {
     let name = baml_base::Name::new(&sym.name);
     let resolved =
         baml_compiler2_tir::resolve::resolve_name_at(db, file, sym.name_span.start(), &name);
 
-    let def = match resolved {
-        baml_compiler2_tir::resolve::ResolvedName::Item(def)
-        | baml_compiler2_tir::resolve::ResolvedName::Builtin(def) => def,
-        _ => return Vec::new(),
+    let (baml_compiler2_tir::resolve::ResolvedName::Item(def)
+    | baml_compiler2_tir::resolve::ResolvedName::Builtin(def)) = resolved
+    else {
+        return Vec::new();
     };
 
     let mut deps = Vec::new();
@@ -626,16 +684,60 @@ fn find_dependencies(db: &dyn Db, file: SourceFile, sym: &SymbolInfo) -> Vec<Dep
         baml_compiler2_hir::contributions::Definition::Class(class_loc) => {
             let resolved = baml_compiler2_tir::inference::resolve_class_fields(db, class_loc);
             for (_field_name, ty, _attrs) in &resolved.fields {
-                collect_ty_deps(db, ty, &mut deps, &mut seen);
+                collect_ty_deps(db, files, ty, &mut deps, &mut seen);
             }
         }
-        _ => {}
+        baml_compiler2_hir::contributions::Definition::Enum(_) => {
+            // Enums are self-contained, no type dependencies.
+        }
+        baml_compiler2_hir::contributions::Definition::TypeAlias(alias_loc) => {
+            // Walk the alias's target type expression.
+            let item_tree = baml_compiler2_hir::file_item_tree(db, file);
+            let alias = &item_tree[alias_loc.id(db)];
+            if let Some(spanned_te) = &alias.type_expr {
+                collect_type_expr_deps(db, file, &spanned_te.expr, &mut deps, &mut seen);
+            }
+        }
+        baml_compiler2_hir::contributions::Definition::Client(client_loc) => {
+            // Surface the retry policy reference if present.
+            let item_tree = baml_compiler2_hir::file_item_tree(db, file);
+            let client = &item_tree[client_loc.id(db)];
+            if let Some(ref policy_name) = client.retry_policy_name {
+                let name_str = policy_name.as_str().to_string();
+                if seen.insert(name_str.clone()) {
+                    if let Some(dep) = resolve_dep_from_outline(db, files, &name_str) {
+                        deps.push(dep);
+                    }
+                }
+            }
+        }
+        baml_compiler2_hir::contributions::Definition::Test(test_loc) => {
+            // Extract the test's function references.
+            let item_tree = baml_compiler2_hir::file_item_tree(db, file);
+            let test = &item_tree[test_loc.id(db)];
+            for func_name in &test.function_refs {
+                let name_str = func_name.as_str().to_string();
+                if seen.insert(name_str.clone()) {
+                    if let Some(dep) = resolve_dep_from_outline(db, files, &name_str) {
+                        deps.push(dep);
+                    }
+                }
+            }
+        }
+        baml_compiler2_hir::contributions::Definition::TemplateString(_) => {
+            // Template string params are plain names with no types; self-contained.
+        }
+        baml_compiler2_hir::contributions::Definition::RetryPolicy(_)
+        | baml_compiler2_hir::contributions::Definition::Generator(_)
+        | baml_compiler2_hir::contributions::Definition::Let(_) => {
+            // These don't have meaningful type dependencies for display.
+        }
     }
 
     deps
 }
 
-/// Walk a TypeExpr and collect user-defined type names as DepRefs.
+/// Walk a `TypeExpr` and collect user-defined type names as `DepRefs`.
 fn collect_type_expr_deps(
     db: &dyn Db,
     file: SourceFile,
@@ -679,9 +781,10 @@ fn collect_type_expr_deps(
     }
 }
 
-/// Walk a resolved Ty and collect user-defined type names as DepRefs.
+/// Walk a resolved Ty and collect user-defined type names as `DepRefs`.
 fn collect_ty_deps(
     db: &dyn Db,
+    files: &[SourceFile],
     ty: &baml_compiler2_tir::ty::Ty,
     deps: &mut Vec<DepRef>,
     seen: &mut std::collections::HashSet<String>,
@@ -692,43 +795,53 @@ fn collect_ty_deps(
             let name_str = qtn.to_string();
             if seen.insert(name_str.clone()) {
                 // Look up the definition location via outline search.
-                if let Some(dep) = resolve_dep_from_outline(db, &name_str) {
+                if let Some(dep) = resolve_dep_from_outline(db, files, &name_str) {
                     deps.push(dep);
                 }
             }
         }
         Ty::Optional(inner, _) | Ty::List(inner, _) | Ty::EvolvingList(inner, _) => {
-            collect_ty_deps(db, inner, deps, seen);
+            collect_ty_deps(db, files, inner, deps, seen);
         }
         Ty::Map(k, v, _) | Ty::EvolvingMap(k, v, _) => {
-            collect_ty_deps(db, k, deps, seen);
-            collect_ty_deps(db, v, deps, seen);
+            collect_ty_deps(db, files, k, deps, seen);
+            collect_ty_deps(db, files, v, deps, seen);
         }
         Ty::Union(members, _) => {
             for m in members {
-                collect_ty_deps(db, m, deps, seen);
+                collect_ty_deps(db, files, m, deps, seen);
             }
         }
         Ty::Function { params, ret, .. } => {
             for (_name, ty) in params {
-                collect_ty_deps(db, ty, deps, seen);
+                collect_ty_deps(db, files, ty, deps, seen);
             }
-            collect_ty_deps(db, ret, deps, seen);
+            collect_ty_deps(db, files, ret, deps, seen);
         }
         _ => {}
     }
 }
 
-/// Try to resolve a type name to a DepRef by looking it up in the outline.
-fn resolve_dep_from_outline(_db: &dyn Db, _name: &str) -> Option<DepRef> {
-    // We need all source files. Use the package_items approach from usages.
-    // For now, we scan all files known to the outline cache.
-    // This is a simplification — in practice we'd need all source files passed in.
-    // TODO: Accept files parameter or find another way to enumerate.
+/// Try to resolve a type name to a `DepRef` by looking it up in the outline.
+fn resolve_dep_from_outline(db: &dyn Db, files: &[SourceFile], name: &str) -> Option<DepRef> {
+    // Search all files' outlines for a symbol matching `name`.
+    for &file in files {
+        let outline = crate::outline::file_outline(db, file);
+        for item in outline {
+            if item.name == name {
+                return Some(DepRef {
+                    name: item.name.clone(),
+                    kind: item.kind,
+                    file,
+                    name_span: item.name_span,
+                });
+            }
+        }
+    }
     None
 }
 
-/// Try to resolve a name to a DepRef using name resolution.
+/// Try to resolve a name to a `DepRef` using name resolution.
 fn resolve_dep(db: &dyn Db, context_file: SourceFile, name: &str) -> Option<DepRef> {
     let baml_name = baml_base::Name::new(name);
     // Use offset 0 — we just need scope-level resolution for the file.
@@ -739,10 +852,10 @@ fn resolve_dep(db: &dyn Db, context_file: SourceFile, name: &str) -> Option<DepR
         &baml_name,
     );
 
-    let def = match resolved {
-        baml_compiler2_tir::resolve::ResolvedName::Item(def)
-        | baml_compiler2_tir::resolve::ResolvedName::Builtin(def) => def,
-        _ => return None,
+    let (baml_compiler2_tir::resolve::ResolvedName::Item(def)
+    | baml_compiler2_tir::resolve::ResolvedName::Builtin(def)) = resolved
+    else {
+        return None;
     };
 
     let (dep_file, name_span) = crate::utils::definition_span(db, def)?;
@@ -810,4 +923,38 @@ fn line_at_offset(text: &str, offset: text_size::TextSize) -> (usize, String) {
         .unwrap_or(text.len());
 
     (line_number, text[line_start..line_end].trim_end().to_string())
+}
+
+// ── Serde helpers ────────────────────────────────────────────────────────────
+
+// serde's `serialize_with` contract requires `&T` — suppress the copy-by-ref lint.
+#[allow(clippy::trivially_copy_pass_by_ref)]
+fn serialize_kind<S: serde::Serializer>(
+    kind: &DefinitionKind,
+    s: S,
+) -> Result<S::Ok, S::Error> {
+    s.serialize_str(kind.as_str())
+}
+
+#[allow(clippy::trivially_copy_pass_by_ref)]
+fn serialize_file<S: serde::Serializer>(
+    _file: &SourceFile,
+    s: S,
+) -> Result<S::Ok, S::Error> {
+    // This stub implementation exists so that we can serialize `SymbolDescription`,
+    // which contains a `SourceFile`, to json, without actually poluting it with the
+    // whole source file.
+    s.serialize_none()
+}
+
+#[allow(clippy::trivially_copy_pass_by_ref)]
+fn serialize_range<S: serde::Serializer>(
+    range: &TextRange,
+    s: S,
+) -> Result<S::Ok, S::Error> {
+    use serde::ser::SerializeStruct;
+    let mut state = s.serialize_struct("Range", 2)?;
+    state.serialize_field("start", &u32::from(range.start()))?;
+    state.serialize_field("end", &u32::from(range.end()))?;
+    state.end()
 }

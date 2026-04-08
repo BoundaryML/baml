@@ -50,6 +50,10 @@ pub struct GrepArgs {
     #[arg(long)]
     pub no_hints: bool,
 
+    /// Output results as JSON
+    #[arg(long)]
+    pub json: bool,
+
     // ── Standard grep flags ─────────────────────────────────────────────────
 
     /// Case-insensitive matching
@@ -125,6 +129,19 @@ impl GrepArgs {
                 eprintln!("No symbol found: {pattern}");
                 return Ok(crate::ExitCode::Other);
             }
+            if self.json {
+                let budget = self.budget;
+                let json_output: Vec<serde_json::Value> = descriptions
+                    .iter()
+                    .map(|d| description_to_json(&db, d, budget, &from))
+                    .collect();
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&json_output)
+                        .context("Failed to serialize output as JSON")?
+                );
+                return Ok(crate::ExitCode::Success);
+            }
             let history: std::collections::HashSet<&str> =
                 self.history.iter().map(|s| s.as_str()).collect();
             for (i, desc) in descriptions.iter().enumerate() {
@@ -162,8 +179,28 @@ impl GrepArgs {
 
         let result = grep(&db, &source_files, &opts);
 
+        if self.json {
+            let budget = self.budget;
+            let json_output: Vec<serde_json::Value> = result
+                .descriptions
+                .iter()
+                .map(|d| description_to_json(&db, d, budget, &from))
+                .collect();
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&json_output)
+                    .context("Failed to serialize output as JSON")?
+            );
+            return Ok(crate::ExitCode::Success);
+        }
+
         match result.mode {
             GrepMode::Semantic => {
+                if result.descriptions.is_empty() {
+                    // Symbol exists but was filtered out by --kind.
+                    eprintln!("No symbol found matching pattern and kind filter: {pattern}");
+                    return Ok(crate::ExitCode::Other);
+                }
                 let history: std::collections::HashSet<&str> =
                     self.history.iter().map(|s| s.as_str()).collect();
                 for (i, desc) in result.descriptions.iter().enumerate() {
@@ -311,4 +348,58 @@ fn relative_path(path: &std::path::Path, root: &std::path::Path) -> std::path::P
 fn line_number_at_offset(text: &str, offset: usize) -> usize {
     let offset = offset.min(text.len());
     text[..offset].chars().filter(|&c| c == '\n').count() + 1
+}
+
+/// Choose the appropriate body representation based on budget.
+///
+/// - If the full body fits in `budget` lines, return it as-is.
+/// - If at least 5 lines are available, return a truncated body.
+/// - Otherwise, return just the shape (compact signature).
+fn budget_body(desc: &SymbolDescription, budget: usize) -> String {
+    let body_lines: Vec<&str> = desc.full_body.lines().collect();
+
+    if body_lines.len() <= budget {
+        desc.full_body.clone()
+    } else if budget >= 5 {
+        crate::describe_command::truncate_body(&body_lines, budget).join("\n")
+    } else {
+        crate::describe_command::shape_with_elision(&desc.shape, &desc.full_body)
+    }
+}
+
+/// Build a budget-aware JSON value for a `SymbolDescription`.
+pub fn description_to_json(
+    db: &ProjectDatabase,
+    desc: &SymbolDescription,
+    budget: usize,
+    project_root: &std::path::Path,
+) -> serde_json::Value {
+    let file_path = relative_path(&desc.file.path(db), project_root);
+    let body = budget_body(desc, budget);
+    serde_json::json!({
+        "name": desc.name,
+        "kind": desc.kind.as_str(),
+        "file": file_path.to_string_lossy(),
+        "line": line_number_at_offset(desc.file.text(db), desc.name_span.start().into()),
+        "shape": desc.shape,
+        "body": body,
+        "docstring": desc.docstring,
+        "dependencies": desc.dependencies.iter().map(|dep| {
+            let dep_path = relative_path(&dep.file.path(db), project_root);
+            serde_json::json!({
+                "name": dep.name,
+                "kind": dep.kind.as_str(),
+                "file": dep_path.to_string_lossy(),
+                "line": line_number_at_offset(dep.file.text(db), dep.name_span.start().into()),
+            })
+        }).collect::<Vec<_>>(),
+        "references": desc.references.iter().map(|r| {
+            let ref_path = relative_path(&r.file.path(db), project_root);
+            serde_json::json!({
+                "file": ref_path.to_string_lossy(),
+                "line": r.line_number,
+                "text": r.line_text.trim(),
+            })
+        }).collect::<Vec<_>>(),
+    })
 }

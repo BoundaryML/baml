@@ -21,7 +21,7 @@ pub struct GrepResult {
     pub mode: GrepMode,
     /// Symbol descriptions (populated in Semantic mode).
     pub descriptions: Vec<SymbolDescription>,
-    /// Text search matches (populated in TextSearch mode).
+    /// Text search matches (populated in `TextSearch` mode).
     pub text_matches: Vec<TextMatch>,
 }
 
@@ -118,6 +118,54 @@ pub fn list_symbols(
 
 // ── Text search ──────────────────────────────────────────────────────────────
 
+/// Index of definition name spans for CST-based annotation.
+struct OutlineIndex {
+    /// Maps (file, offset) to (`symbol_name`, kind) for definition sites.
+    def_spans: std::collections::HashMap<(SourceFile, u32), (String, DefinitionKind)>,
+    /// Maps symbol name to kind for reference annotation.
+    symbol_kinds: std::collections::HashMap<String, DefinitionKind>,
+}
+
+impl OutlineIndex {
+    fn build(db: &dyn Db, files: &[SourceFile]) -> Self {
+        let mut def_spans = std::collections::HashMap::new();
+        let mut symbol_kinds = std::collections::HashMap::new();
+
+        for &file in files {
+            let outline = crate::outline::file_outline(db, file);
+            for item in outline {
+                // Record the name span range for definition detection.
+                let start: u32 = item.name_span.start().into();
+                let end: u32 = item.name_span.end().into();
+                for offset in start..end {
+                    def_spans.insert((file, offset), (item.name.clone(), item.kind));
+                }
+                symbol_kinds.insert(item.name.clone(), item.kind);
+
+                // Also record children (fields, variants).
+                for child in &item.children {
+                    let child_start: u32 = child.name_span.start().into();
+                    let child_end: u32 = child.name_span.end().into();
+                    for offset in child_start..child_end {
+                        def_spans.insert((file, offset), (child.name.clone(), child.kind));
+                    }
+                    symbol_kinds.insert(child.name.clone(), child.kind);
+                }
+            }
+        }
+
+        OutlineIndex { def_spans, symbol_kinds }
+    }
+
+    fn is_definition(&self, file: SourceFile, offset: u32) -> Option<(String, DefinitionKind)> {
+        self.def_spans.get(&(file, offset)).cloned()
+    }
+
+    fn get_kind(&self, name: &str) -> Option<DefinitionKind> {
+        self.symbol_kinds.get(name).copied()
+    }
+}
+
 /// Text search across all source files with semantic annotations.
 fn text_search(db: &dyn Db, files: &[SourceFile], opts: &GrepOptions<'_>) -> Vec<TextMatch> {
     let pattern = if opts.ignore_case {
@@ -126,21 +174,8 @@ fn text_search(db: &dyn Db, files: &[SourceFile], opts: &GrepOptions<'_>) -> Vec
         opts.pattern.to_string()
     };
 
-    // Build an outline lookup for semantic annotation.
-    let mut symbol_names: std::collections::HashMap<String, DefinitionKind> =
-        std::collections::HashMap::new();
-    for &file in files {
-        let outline = crate::outline::file_outline(db, file);
-        for item in outline {
-            symbol_names.insert(item.name.clone(), item.kind);
-            for child in &item.children {
-                symbol_names.insert(
-                    format!("{}.{}", item.name, child.name),
-                    child.kind,
-                );
-            }
-        }
-    }
+    // Build an outline index for CST-based semantic annotation.
+    let index = OutlineIndex::build(db, files);
 
     let mut matches = Vec::new();
 
@@ -157,6 +192,7 @@ fn text_search(db: &dyn Db, files: &[SourceFile], opts: &GrepOptions<'_>) -> Vec
             continue;
         }
 
+        let mut line_start_offset = 0usize;
         for (line_idx, line) in text.lines().enumerate() {
             let line_to_check = if opts.ignore_case {
                 line.to_lowercase()
@@ -164,44 +200,52 @@ fn text_search(db: &dyn Db, files: &[SourceFile], opts: &GrepOptions<'_>) -> Vec
                 line.to_string()
             };
 
-            if !line_to_check.contains(&pattern) {
-                continue;
+            if let Some(match_col) = line_to_check.find(&pattern) {
+                // Try to annotate the match semantically using CST-based lookup.
+                let annotation = annotate_match(
+                    file,
+                    line_start_offset,
+                    match_col,
+                    opts.pattern,
+                    &index,
+                );
+
+                matches.push(TextMatch {
+                    file,
+                    line_number: line_idx + 1,
+                    line_text: line.to_string(),
+                    annotation,
+                });
             }
 
-            // Try to annotate the match semantically.
-            let annotation = annotate_line(line, opts.pattern, &symbol_names);
-
-            matches.push(TextMatch {
-                file,
-                line_number: line_idx + 1,
-                line_text: line.to_string(),
-                annotation,
-            });
+            line_start_offset += line.len() + 1; // +1 for newline
         }
     }
 
     matches
 }
 
-/// Try to annotate a matching line with semantic information.
-fn annotate_line(
-    line: &str,
+/// Try to annotate a match with semantic information using CST-based lookup.
+fn annotate_match(
+    file: SourceFile,
+    line_start_offset: usize,
+    match_col: usize,
     pattern: &str,
-    symbol_names: &std::collections::HashMap<String, DefinitionKind>,
+    index: &OutlineIndex,
 ) -> Option<MatchAnnotation> {
-    // Check if the pattern itself is a known symbol name.
-    if let Some(&kind) = symbol_names.get(pattern) {
-        // Heuristic: if the line looks like a definition (starts with a keyword
-        // followed by the name), mark it as a definition.
-        let trimmed = line.trim();
-        let def_keywords = [
-            "class ", "enum ", "function ", "client ", "client<",
-            "test ", "type ", "retry_policy ", "template_string ",
-            "generator ",
-        ];
-        if def_keywords.iter().any(|kw| trimmed.starts_with(kw)) {
+    #[allow(clippy::cast_possible_truncation)]
+    let match_offset = (line_start_offset + match_col) as u32;
+
+    // Check if this offset falls within a definition's name span.
+    if let Some((name, kind)) = index.is_definition(file, match_offset) {
+        // Verify the match is actually for this symbol (pattern matches the name).
+        if name.contains(pattern) || pattern.contains(&name) || name.eq_ignore_ascii_case(pattern) {
             return Some(MatchAnnotation::Definition { kind });
         }
+    }
+
+    // Otherwise, if the pattern is a known symbol name, it's a reference.
+    if let Some(kind) = index.get_kind(pattern) {
         return Some(MatchAnnotation::Reference {
             target_name: pattern.to_string(),
             target_kind: kind,

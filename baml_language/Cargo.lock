@@ -1078,6 +1078,7 @@ dependencies = [
  "clap-cargo",
  "ctrlc",
  "regex",
+ "serde_json",
  "sys_native",
  "text-size",
  "tokio",
@@ -1309,6 +1310,7 @@ dependencies = [
  "baml_workspace",
  "rowan 0.16.1",
  "salsa",
+ "serde",
  "text-size",
 ]
 
