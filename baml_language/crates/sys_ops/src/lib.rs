@@ -423,15 +423,6 @@ impl io::IoNamespaceSys for DefaultIoOps {
     ) -> SysOpOutput<()> {
         SysOpOutput::err(OpErrorKind::Unsupported)
     }
-    fn panic(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _msg: String,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<()> {
-        SysOpOutput::err(OpErrorKind::Unsupported)
-    }
 }
 
 impl io::IoPackageBaml for DefaultIoOps {}
@@ -586,6 +577,7 @@ impl IoSysOpsBuilder {
     }
 
     /// Override the `sys` namespace with a pre-built instance.
+    #[allow(clippy::needless_pass_by_value)]
     #[must_use]
     pub fn with_sys_instance(
         mut self,
@@ -601,12 +593,6 @@ impl IoSysOpsBuilder {
             let t = instance.clone();
             Arc::new(move |heap, args, ctx, call_id| {
                 t.__glue_baml_sys_sleep(heap, args, ctx, call_id)
-            })
-        };
-        self.inner.baml_sys_panic = {
-            let t = instance;
-            Arc::new(move |heap, args, ctx, call_id| {
-                t.__glue_baml_sys_panic(heap, args, ctx, call_id)
             })
         };
         self

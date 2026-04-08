@@ -23,4 +23,16 @@ class Unreachable {
   message string
 }
 
-type Panic = DivisionByZero | IndexOutOfBounds | MapKeyNotFound | StackOverflow | AssertionFailed | Unreachable
+/// A user-caused panic from `baml.sys.panic`.
+class UserPanic {
+  message string
+}
+
+/// Memory allocation failure. This happens when an operation would have caused an unrecoverable
+/// Out-Of-Memory error so we panic instead. Note that not all memory allocation failures are
+/// guaranteed to panic; some may cause a hard failure.
+class AllocFailure {
+  message string
+}
+
+type Panic = DivisionByZero | IndexOutOfBounds | MapKeyNotFound | StackOverflow | AssertionFailed | Unreachable | UserPanic | AllocFailure

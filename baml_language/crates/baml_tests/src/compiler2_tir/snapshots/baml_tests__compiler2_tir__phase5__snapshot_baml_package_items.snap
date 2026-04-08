@@ -64,6 +64,7 @@ namespace baml.net:
   class Socket { methods: [read, close] }
   function connect
 namespace baml.panics:
+  class AllocFailure { methods: [] }
   class AssertionFailed { methods: [] }
   class DivisionByZero { methods: [] }
   class IndexOutOfBounds { methods: [] }
@@ -71,6 +72,7 @@ namespace baml.panics:
   type Panic
   class StackOverflow { methods: [] }
   class Unreachable { methods: [] }
+  class UserPanic { methods: [] }
 namespace baml.sys:
   function now_ms
   function panic
