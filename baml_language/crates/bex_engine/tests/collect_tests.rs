@@ -138,6 +138,207 @@ async fn collect_tests_dynamic_name_returns_handle() {
     );
 }
 
+/// Helper: expand a testset by name via the registry's `expand_set` method.
+async fn expand_testset(
+    engine: &Arc<BexEngine>,
+    registry: BexExternalValue,
+    name: &str,
+) -> Result<BexExternalValue, bex_engine::EngineError> {
+    engine
+        .call_function(
+            "testing.TestRegistry.expand_set",
+            vec![registry, BexExternalValue::String(name.to_string())],
+            bex_engine::FunctionCallContextBuilder::new(CallId::next()).build(),
+            true,
+        )
+        .await
+}
+
+/// A testset with an inline for loop should expand successfully and find tests.
+/// This is the "working" case from the bug report.
+#[tokio::test]
+async fn collect_tests_testset_inline_for_loop_expands() {
+    let source = r#"
+        testset "dynamic" {
+            for (case in ["a", "b", "c"]) {
+                test "check" {
+                    assert.not_null(case)
+                }
+            }
+        }
+    "#;
+
+    let engine = make_engine(source);
+    let registry = engine
+        .collect_tests("user", CallId::next(), CancellationToken::default())
+        .await
+        .expect("collect_tests should succeed");
+
+    // Expanding the testset triggers the lambda body (the for loop).
+    // With an inline array this should work fine.
+    let result = expand_testset(&engine, registry, "dynamic")
+        .await
+        .expect("expand_set should succeed for inline for loop");
+    assert!(
+        !matches!(result, BexExternalValue::Null),
+        "expected non-null result after expanding testset with inline for loop, got: {result:?}"
+    );
+}
+
+/// A testset with `let` + `for` should expand successfully and find tests.
+#[tokio::test]
+async fn collect_tests_testset_let_then_for_loop_expands() {
+    let source = r#"
+        testset "dynamic" {
+            let cases: string[] = ["a", "b", "c"];
+            for (case in cases) {
+                test "check" {
+                    assert.not_null(case)
+                }
+            }
+        }
+    "#;
+
+    let engine = make_engine(source);
+    let registry = engine
+        .collect_tests("user", CallId::next(), CancellationToken::default())
+        .await
+        .expect("collect_tests should succeed");
+
+    // Expanding the testset triggers the lambda body (the let + for loop).
+    let result = expand_testset(&engine, registry, "dynamic")
+        .await
+        .expect("expand_set should succeed for let+for testset");
+    assert!(
+        !matches!(result, BexExternalValue::Null),
+        "expected non-null result after expanding testset with let+for loop"
+    );
+}
+
+/// Let-bound array indexing in testset body works.
+#[tokio::test]
+async fn collect_tests_testset_let_array_index_in_name_and_body() {
+    let source = r#"
+        testset "suite" {
+            let cases: string[] = ["a", "b", "c"];
+            test "case: " + cases[0] {
+                assert.is_true(cases[0] == "a")
+            }
+        }
+    "#;
+
+    let engine = make_engine(source);
+    let registry = engine
+        .collect_tests("user", CallId::next(), CancellationToken::default())
+        .await
+        .expect("collect_tests should succeed");
+
+    let result = expand_testset(&engine, registry, "suite")
+        .await
+        .expect("expand_set should succeed for simple let string");
+    let repr = format!("{result:?}");
+    assert!(
+        repr.contains("suite/case: a"),
+        "test name should be 'suite/case: a': {repr}"
+    );
+}
+
+/// While loop over a let-bound variable in a testset body.
+/// Tests whether the while condition can read a let-bound variable.
+#[tokio::test]
+async fn collect_tests_testset_let_then_while_loop() {
+    let source = r#"
+        testset "whileloop" {
+            let names: string[] = ["x", "y", "z"];
+            let i = 0;
+            while (i < names.length()) {
+                test "item" {
+                    assert.is_true(true)
+                }
+                i += 1;
+            }
+        }
+    "#;
+
+    let engine = make_engine(source);
+    let registry = engine
+        .collect_tests("user", CallId::next(), CancellationToken::default())
+        .await
+        .expect("collect_tests should succeed");
+
+    // Should have 3 tests registered (one per iteration: i=0,1,2)
+    let result = expand_testset(&engine, registry, "whileloop")
+        .await
+        .expect("expand_set should succeed for let+while testset");
+    let repr = format!("{result:?}");
+    assert!(
+        repr.contains("whileloop/item"),
+        "expected tests registered from while loop: {repr}"
+    );
+}
+
+/// Let-bound variable used in a string concatenation for test name.
+/// Tests whether let-bound values are available for expression evaluation
+/// in the testset body (not just indexing).
+#[tokio::test]
+async fn collect_tests_testset_let_used_in_test_name_concat() {
+    let source = r#"
+        testset "concat" {
+            let prefix = "hello";
+            let suffix = "world";
+            test prefix + "_" + suffix {
+                assert.is_true(true)
+            }
+        }
+    "#;
+
+    let engine = make_engine(source);
+    let registry = engine
+        .collect_tests("user", CallId::next(), CancellationToken::default())
+        .await
+        .expect("collect_tests should succeed");
+
+    let result = expand_testset(&engine, registry, "concat")
+        .await
+        .expect("expand_set should succeed for let+concat testset");
+    let repr = format!("{result:?}");
+    assert!(
+        repr.contains("concat/hello_world"),
+        "expected 'concat/hello_world': {repr}"
+    );
+}
+
+/// If-condition reading a let-bound bool in a testset body.
+#[tokio::test]
+async fn collect_tests_testset_let_then_if_condition() {
+    let source = r#"
+        testset "ifcond" {
+            let enabled = true;
+            if (enabled) {
+                test "gated" {
+                    assert.is_true(true)
+                }
+            }
+        }
+    "#;
+
+    let engine = make_engine(source);
+    let registry = engine
+        .collect_tests("user", CallId::next(), CancellationToken::default())
+        .await
+        .expect("collect_tests should succeed");
+
+    // The test "gated" should be registered since enabled=true
+    let result = expand_testset(&engine, registry, "ifcond")
+        .await
+        .expect("expand_set should succeed for let+if testset");
+    let repr = format!("{result:?}");
+    assert!(
+        repr.contains("ifcond/gated"),
+        "expected test 'ifcond/gated' to be registered (enabled=true): {repr}"
+    );
+}
+
 /// A project with multiple testsets should produce a non-null registry Handle.
 #[tokio::test]
 async fn collect_tests_multiple_testsets_returns_handle() {
