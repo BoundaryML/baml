@@ -42,26 +42,6 @@ source: crates/baml_tests/src/generated_tests.rs
     │ Note: Error code: E0001
 ────╯
 
-  [type] Warning: extraneous throws declaration: string
-    ╭─[ lambda_throws_violation.baml:17:52 ]
-    │
- 17 │   let f: () -> int throws string = () -> int throws string { throw 42 }
-    │                                                    ───┬───  
-    │                                                       ╰───── extraneous throws declaration: string
-    │ 
-    │ Note: Error code: E0001
-────╯
-
-  [type] Error: throws contract violation: `string` is missing int
-    ╭─[ lambda_throws_violation.baml:17:52 ]
-    │
- 17 │   let f: () -> int throws string = () -> int throws string { throw 42 }
-    │                                                    ───┬───  
-    │                                                       ╰───── throws contract violation: `string` is missing int
-    │ 
-    │ Note: Error code: E0001
-────╯
-
   [type] Error: throws contract violation: `string` is missing int
     ╭─[ lambda_throws_violation.baml:17:52 ]
     │

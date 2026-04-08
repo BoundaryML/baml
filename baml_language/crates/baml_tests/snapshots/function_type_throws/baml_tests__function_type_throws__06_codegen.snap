@@ -366,7 +366,7 @@ function user.map_it(x: int, f: (int) -> string) -> string {
     return
 }
 
-function user.optional_call_caught(cb: () -> int throws string?) -> int? {
+function user.optional_call_caught(cb: (() -> int throws string)?) -> int? {
     load_var cb
     load_const null
     cmp_op ==
@@ -389,7 +389,7 @@ function user.optional_call_caught(cb: () -> int throws string?) -> int? {
     return
 }
 
-function user.optional_call_rethrows(cb: () -> int throws string?) -> int? {
+function user.optional_call_rethrows(cb: (() -> int throws string)?) -> int? {
     load_var cb
     load_const null
     cmp_op ==

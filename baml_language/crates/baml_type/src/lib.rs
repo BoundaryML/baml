@@ -611,14 +611,14 @@ impl fmt::Display for Ty {
             Ty::Opaque(tn, _) => write!(f, "{tn}"),
             Ty::TypeAlias(tn, _) => write!(f, "{tn}"),
             Ty::Optional(inner, _) => {
-                if matches!(inner.as_ref(), Ty::Union(..)) {
+                if matches!(inner.as_ref(), Ty::Union(..) | Ty::Function { .. }) {
                     write!(f, "({inner})?")
                 } else {
                     write!(f, "{inner}?")
                 }
             }
             Ty::List(inner, _) => {
-                if matches!(inner.as_ref(), Ty::Union(..)) {
+                if matches!(inner.as_ref(), Ty::Union(..) | Ty::Function { .. }) {
                     write!(f, "({inner})[]")
                 } else {
                     write!(f, "{inner}[]")
@@ -804,6 +804,17 @@ mod tests {
     fn test_display_list_union_parenthesized() {
         let ty = Ty::list(Ty::union([ty_int(), ty_string()]));
         assert_eq!(ty.to_string(), "(int | string)[]");
+    }
+
+    #[test]
+    fn test_display_optional_function_parenthesized() {
+        let ty = Ty::optional(Ty::Function {
+            params: vec![ty_int()],
+            ret: Box::new(ty_string()),
+            throws: Some(Box::new(ty_bool())),
+            attr: TyAttr::default(),
+        });
+        assert_eq!(ty.to_string(), "((int) -> string throws bool)?");
     }
 
     #[test]

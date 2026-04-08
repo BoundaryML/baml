@@ -1102,8 +1102,28 @@ impl<'db> SemanticIndexBuilder<'db> {
             ast::TypeExpr::Never { .. } => "never".to_string(),
             ast::TypeExpr::Uint8Array { .. } => "uint8array".to_string(),
             ast::TypeExpr::Media { kind, .. } => kind.to_string(),
-            ast::TypeExpr::Optional { inner, .. } => format!("{}?", Self::render_type_expr(inner)),
-            ast::TypeExpr::List { inner, .. } => format!("{}[]", Self::render_type_expr(inner)),
+            ast::TypeExpr::Optional { inner, .. } => {
+                let rendered = Self::render_type_expr(inner);
+                if matches!(
+                    **inner,
+                    ast::TypeExpr::Union { .. } | ast::TypeExpr::Function { .. }
+                ) {
+                    format!("({rendered})?")
+                } else {
+                    format!("{rendered}?")
+                }
+            }
+            ast::TypeExpr::List { inner, .. } => {
+                let rendered = Self::render_type_expr(inner);
+                if matches!(
+                    **inner,
+                    ast::TypeExpr::Union { .. } | ast::TypeExpr::Function { .. }
+                ) {
+                    format!("({rendered})[]")
+                } else {
+                    format!("{rendered}[]")
+                }
+            }
             ast::TypeExpr::Map { key, value, .. } => format!(
                 "map<{}, {}>",
                 Self::render_type_expr(key),

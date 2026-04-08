@@ -3199,10 +3199,10 @@ fn .<lambda(<lambda(test_nested_outer_throws, 0)>, 1)>() -> null {
     }
 }
 
-fn user.optional_call_caught(cb: () -> int throws string?) -> int? {
+fn user.optional_call_caught(cb: (() -> int throws string)?) -> int? {
     // Locals:
     let _0: int? // _0 // return
-    let _1: () -> int throws string? // cb // param
+    let _1: (() -> int throws string)? // cb // param
     let _2: unknown // e
     let _3: bool
 
@@ -3250,10 +3250,10 @@ fn user.optional_call_caught(cb: () -> int throws string?) -> int? {
     }
 }
 
-fn user.optional_call_rethrows(cb: () -> int throws string?) -> int? {
+fn user.optional_call_rethrows(cb: (() -> int throws string)?) -> int? {
     // Locals:
     let _0: int? // _0 // return
-    let _1: () -> int throws string? // cb // param
+    let _1: (() -> int throws string)? // cb // param
     let _2: bool
 
     bb0: {

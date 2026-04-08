@@ -883,7 +883,6 @@ function user.test_explicit_throws_wider_than_body() -> int throws string {
         }
     f() : 42
   }
-  ?? 547..554: extraneous throws declaration: string
 }
 lambda user.test_explicit_throws_wider_than_body {
   ?? 547..554: extraneous throws declaration: string
@@ -961,7 +960,6 @@ function user.test_throws_never_but_throws() -> int throws never {
         }
     f() : never
   }
-  !! 213..219: throws contract violation: `never` is missing string
 }
 lambda user.test_throws_never_but_throws {
   !! 213..219: throws contract violation: `never` is missing string
@@ -988,8 +986,6 @@ function user.test_typed_lambda_annotation_underdeclares_body() -> int throws st
         }
     f() : never
   }
-  !! 654..661: throws contract violation: `string` is missing int
-  ?? 654..661: extraneous throws declaration: string
 }
 lambda user.test_typed_lambda_annotation_underdeclares_body {
   !! 654..661: throws contract violation: `string` is missing int

@@ -128,13 +128,25 @@ pub fn display_ty(ty: &Ty) -> String {
             PrimitiveType::Pdf => "pdf".to_string(),
             PrimitiveType::Uint8Array => "uint8array".to_string(),
         },
-        Ty::List(inner, _) => format!("{}[]", display_ty(inner)),
+        Ty::List(inner, _) => {
+            let rendered = display_ty(inner);
+            if matches!(inner.as_ref(), Ty::Union(..) | Ty::Function { .. }) {
+                format!("({rendered})[]")
+            } else {
+                format!("{rendered}[]")
+            }
+        }
         Ty::Map(k, v, _) => format!("map<{}, {}>", display_ty(k), display_ty(v)),
         Ty::EvolvingList(inner, _) => {
             if matches!(**inner, Ty::Never { .. }) {
                 "_[]".to_string()
             } else {
-                format!("{}[]", display_ty(inner))
+                let rendered = display_ty(inner);
+                if matches!(inner.as_ref(), Ty::Union(..) | Ty::Function { .. }) {
+                    format!("({rendered})[]")
+                } else {
+                    format!("{rendered}[]")
+                }
             }
         }
         Ty::EvolvingMap(k, v, _) => {
@@ -148,7 +160,14 @@ pub fn display_ty(ty: &Ty) -> String {
             let parts: Vec<_> = members.iter().map(display_ty).collect();
             parts.join(" | ")
         }
-        Ty::Optional(inner, _) => format!("{}?", display_ty(inner)),
+        Ty::Optional(inner, _) => {
+            let rendered = display_ty(inner);
+            if matches!(inner.as_ref(), Ty::Union(..) | Ty::Function { .. }) {
+                format!("({rendered})?")
+            } else {
+                format!("{rendered}?")
+            }
+        }
         Ty::Literal(lit, _freshness, _) => lit.to_string(),
         Ty::Function {
             params,
@@ -206,7 +225,7 @@ pub fn display_type_expr(te: &TypeExpr) -> String {
         TypeExpr::Media { kind, .. } => format!("{kind:?}").to_lowercase(),
         TypeExpr::Optional { inner, .. } => {
             let s = display_type_expr(inner);
-            if matches!(**inner, TypeExpr::Union { .. }) {
+            if matches!(**inner, TypeExpr::Union { .. } | TypeExpr::Function { .. }) {
                 format!("({s})?")
             } else {
                 format!("{s}?")
@@ -214,7 +233,7 @@ pub fn display_type_expr(te: &TypeExpr) -> String {
         }
         TypeExpr::List { inner, .. } => {
             let s = display_type_expr(inner);
-            if matches!(**inner, TypeExpr::Union { .. }) {
+            if matches!(**inner, TypeExpr::Union { .. } | TypeExpr::Function { .. }) {
                 format!("({s})[]")
             } else {
                 format!("{s}[]")

@@ -1811,7 +1811,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         self.report_throws_contract_diff_at_span(&declared_ty, &effective, span);
     }
 
-    fn lower_lambda_throws_annotation(
+    fn lower_lambda_throws_annotation_silently(
         &mut self,
         throws_annotation: &baml_compiler2_ast::SpannedTypeExpr,
         generic_params: &[Name],
@@ -1825,9 +1825,10 @@ impl<'db> TypeInferenceBuilder<'db> {
             generic_params,
             &mut diags,
         );
-        for diag in diags {
-            self.context.report_at_span(diag, throws_annotation.span);
-        }
+        // Lambda scopes validate explicit throws annotations separately.
+        // Keep parent-scope lambda finalization silent so the same span is not
+        // reported twice in both the enclosing function scope and the lambda scope.
+        drop(diags);
         declared
     }
 
@@ -1840,16 +1841,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         generic_params: &[Name],
     ) -> Ty {
         let throws_ty = if let Some(throws_annotation) = &func_def.throws {
-            let declared_throws_ty =
-                self.lower_lambda_throws_annotation(throws_annotation, generic_params);
-            let effective_throws_facts =
-                throws_semantics::flatten_ty_to_facts(&effective_throws_ty);
-            self.report_throws_contract_diff_at_span(
-                &declared_throws_ty,
-                &effective_throws_facts,
-                throws_annotation.span,
-            );
-            declared_throws_ty
+            self.lower_lambda_throws_annotation_silently(throws_annotation, generic_params)
         } else {
             effective_throws_ty
         };
