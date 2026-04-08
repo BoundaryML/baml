@@ -6,7 +6,7 @@ use thiserror::Error;
 /// These are user-visible runtime errors (division by zero, index out of
 /// bounds, etc.) that can be caught by `catch` handlers. The handler's
 /// `ThrowIfPanic` instruction filters which panics are caught vs rethrown.
-#[derive(Debug, Error, PartialEq, Clone, Copy)]
+#[derive(Debug, Error, PartialEq, Clone)]
 pub enum VmPanic {
     #[error("division by zero: {left:?} / {right:?}")]
     DivisionByZero { left: Value, right: Value },
@@ -25,6 +25,10 @@ pub enum VmPanic {
 
     #[error("unreachable code executed")]
     Unreachable,
+
+    /// The graceful-ish way to handle potential OOM errors, instead of hard-crashing.
+    #[error("memory allocation failed: {message}")]
+    AllocFailure { message: String },
 }
 
 /// An error value from the BAML standard library. Maps 1:1 to a `baml.errors.*` class.

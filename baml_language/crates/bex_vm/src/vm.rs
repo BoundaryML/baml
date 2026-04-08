@@ -1099,6 +1099,10 @@ impl BexVm {
                 let msg = self.alloc_string("unreachable code executed".to_string());
                 (PanicClass::Unreachable, vec![msg])
             }
+            VmPanic::AllocFailure { message } => {
+                let msg = self.alloc_string(message);
+                (PanicClass::AllocFailure, vec![msg])
+            }
         };
         self.alloc_panic_value(class, fields)
     }
@@ -2455,13 +2459,8 @@ impl BexVm {
                             }
                             .into());
                         };
-                        let Ok(i) = u8::try_from(i) else {
-                            return Err(VmInternalError::InternalError(format!(
-                                "uint8array store: value {i} out of range 0..=255"
-                            ))
-                            .into());
-                        };
-                        bytes[index] = i;
+                        // following JS, we truncate the value to 8-bit unsigned integer
+                        bytes[index] = (i.cast_unsigned() & 0xFF) as u8;
                     }
                     _ => {
                         unreachable!(

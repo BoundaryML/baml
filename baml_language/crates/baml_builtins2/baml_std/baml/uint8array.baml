@@ -17,6 +17,7 @@ class Uint8Array {
     $rust_function
   }
 
+  /// Returns a new `uint8array` containing the concatenation of the two arrays.
   function concat(self, other: uint8array) -> uint8array {
     $rust_function
   }
@@ -27,15 +28,24 @@ class Uint8Array {
     $rust_function
   }
 
+  /// Returns a new `uint8array` with the bytes in reverse order.
   function reverse(self) -> uint8array {
     $rust_function
   }
 
+  /// Returns a new `uint8array` containing the bytes in the given range.
+  ///
+  /// - `start` is clamped to the range `[0, length]`.
+  /// - `end` is clamped to the range `[start, length]`.
   function slice(self, start: int, end: int) -> uint8array {
     $rust_function
   }
 
-  function zeroes(size: int) -> uint8array {
+  /// Creates a new `uint8array` of the given size, filled with zeros.
+  ///
+  /// Throws an error if the `size` is out of range (e.g. negative).
+  /// Panics if the allocation would cause an OOM.
+  function zeroes(size: int) -> uint8array throws root.errors.InvalidArgument {
     $rust_function
   }
 
