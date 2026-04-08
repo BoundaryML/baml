@@ -56,7 +56,7 @@ infisical run --env=test -- uv run pytest tests/test_functions.py -k "test_name"
 infisical run --env=test -- uv run pytest
 ```
 
-- Alternatively, you can use a .env file:
+Alternatively, you can use a .env file:
 ```bash
 uv run pytest
 ```

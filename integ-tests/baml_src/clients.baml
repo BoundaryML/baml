@@ -484,6 +484,37 @@ client<llm> AzureO3WithMaxCompletionTokens {
   }
 }
 
+// Azure client using Entra ID (service principal) authentication
+// Uses tenant_id + client_id + client_secret instead of api_key
+// No max_tokens so server default is used (works for both GPT-5 and o1-style deployments)
+client<llm> AzureEntraId {
+  provider azure-openai
+  options {
+    resource_name env.AZURE_OPENAI_RESOURCE_NAME
+    deployment_id env.AZURE_OPENAI_DEPLOYMENT_ID
+    api_version env.AZURE_OPENAI_API_VERSION
+    tenant_id env.AZURE_TENANT_ID
+    client_id env.AZURE_CLIENT_ID
+    client_secret env.AZURE_CLIENT_SECRET
+    max_tokens null
+  }
+}
+
+// Azure client using Entra ID system default credential chain
+// Tries ManagedIdentityCredential first, then DeveloperToolsCredential (Azure CLI / azd)
+// No max_tokens so server default is used (works for both GPT-5 and o1-style deployments)
+client<llm> AzureEntraIdSystemDefault {
+  provider azure-openai
+  options {
+    resource_name env.AZURE_OPENAI_RESOURCE_NAME
+    deployment_id env.AZURE_OPENAI_DEPLOYMENT_ID
+    api_version env.AZURE_OPENAI_API_VERSION
+    tenant_id env.AZURE_TENANT_ID
+    client_id env.AZURE_CLIENT_ID
+    max_tokens null
+  }
+}
+
 // Basic OpenRouter client - uses default OPENROUTER_API_KEY env var
 client<llm> OpenRouterDefault {
   provider openrouter

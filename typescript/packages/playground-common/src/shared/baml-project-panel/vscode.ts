@@ -12,6 +12,8 @@ import {
   type LoadAwsCredsResponse,
   type LoadGcpCredsRequest,
   type LoadGcpCredsResponse,
+  type LoadAzureCredsRequest,
+  type LoadAzureCredsResponse,
   type OpenPlaygroundRequest,
   type OpenPlaygroundResponse,
   type SendLspNotificationToIdeRequest,
@@ -295,6 +297,14 @@ class VSCodeAPIWrapper {
     console.log('calling loadGcpCreds');
     const resp = await this.rpc<LoadGcpCredsRequest, LoadGcpCredsResponse>({
       vscodeCommand: 'LOAD_GCP_CREDS',
+    });
+    return resp;
+  };
+
+  public loadAzureCreds = async () => {
+    console.log('calling loadAzureCreds');
+    const resp = await this.rpc<LoadAzureCredsRequest, LoadAzureCredsResponse>({
+      vscodeCommand: 'LOAD_AZURE_CREDS',
     });
     return resp;
   };

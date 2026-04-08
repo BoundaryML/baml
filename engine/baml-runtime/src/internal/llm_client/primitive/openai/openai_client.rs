@@ -450,6 +450,27 @@ impl RequestBuilder for OpenAIClient {
             req = req.bearer_auth(key.render(expose_secrets));
         }
 
+        // Entra ID bearer token acquisition — uses azure_identity on native, JS callback bridge on WASM.
+        {
+            use internal_llm_client::openai::ResolvedAzureAuthStrategy;
+            if let Some(
+                ResolvedAzureAuthStrategy::EntraId { .. }
+                | ResolvedAzureAuthStrategy::SystemDefault,
+            ) = &self.properties.azure_auth
+            {
+                let azure_auth = super::azure_auth::AzureAuth::get_or_create(
+                    self.properties.azure_auth.as_ref().unwrap(),
+                )
+                .await
+                .map_err(|e| anyhow::anyhow!("Azure Entra ID authentication failed: {e}"))?;
+                let token = azure_auth
+                    .token()
+                    .await
+                    .map_err(|e| anyhow::anyhow!("Azure Entra ID token acquisition failed: {e}"))?;
+                req = req.bearer_auth(&token);
+            }
+        }
+
         // Don't attach BAML creds to localhost requests, i.e. ollama
         if allow_proxy {
             req = req.header("baml-original-url", self.properties.base_url.as_str());
@@ -918,6 +939,7 @@ mod tests {
             properties: ResolvedOpenAI {
                 base_url: "https://api.openai.com/v1".to_string(),
                 api_key: None,
+                azure_auth: None,
                 role_selection: RolesSelection::default(),
                 allowed_metadata: AllowedRoleMetadata::All,
                 supported_request_modes: SupportedRequestModes::default(),
@@ -972,6 +994,7 @@ mod tests {
             properties: ResolvedOpenAI {
                 base_url: "https://api.openai.com/v1".to_string(),
                 api_key: None,
+                azure_auth: None,
                 role_selection: RolesSelection::default(),
                 allowed_metadata: AllowedRoleMetadata::All,
                 supported_request_modes: SupportedRequestModes::default(),
@@ -1068,6 +1091,7 @@ mod tests {
             properties: ResolvedOpenAI {
                 base_url: "https://api.openai.com/v1".to_string(),
                 api_key: None,
+                azure_auth: None,
                 role_selection: RolesSelection::default(),
                 allowed_metadata: AllowedRoleMetadata::All,
                 supported_request_modes: SupportedRequestModes::default(),

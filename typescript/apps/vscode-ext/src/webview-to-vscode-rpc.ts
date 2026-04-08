@@ -106,6 +106,23 @@ export type LoadGcpCredsResponse =
     };
   };
 
+export interface LoadAzureCredsRequest {
+  vscodeCommand: 'LOAD_AZURE_CREDS';
+}
+
+export type LoadAzureCredsResponse =
+  | {
+    ok: {
+      accessToken: string;
+    };
+  }
+  | {
+    error: {
+      name: string;
+      message: string;
+    };
+  };
+
 export interface JumpToFileRequest {
   vscodeCommand: 'JUMP_TO_FILE';
   span: {
@@ -153,6 +170,7 @@ type ApiPairs = [
   [LoadEnvRequest, LoadEnvResponse],
   [LoadAwsCredsRequest, LoadAwsCredsResponse],
   [LoadGcpCredsRequest, LoadGcpCredsResponse],
+  [LoadAzureCredsRequest, LoadAzureCredsResponse],
   [InitializedRequest, InitializedResponse],
   [JumpToFileRequest, JumpToFileResponse],
   [SetFlashingRegionsRequest, SetFlashingRegionsResponse],

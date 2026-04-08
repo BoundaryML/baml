@@ -9,7 +9,7 @@ mod trace_stats;
 
 pub use context_manager::RuntimeContextManager;
 pub use js_callback_provider::{
-    AwsCredResult, JsCallbackProvider, RuntimeCallbackError, RuntimeCallbackResult,
+    AwsCredResult, AzureCredResult, JsCallbackProvider, RuntimeCallbackError, RuntimeCallbackResult,
 };
 pub use response::{FunctionResult, TestFailReason, TestResponse, TestStatus};
 pub use runtime_context::{CallCtx, RuntimeContext};

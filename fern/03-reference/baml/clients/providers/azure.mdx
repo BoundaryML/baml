@@ -8,7 +8,7 @@ title: azure-openai
 
 For `azure-openai`, we provide a client that can be used to interact with the OpenAI API hosted on Azure using the `/chat/completions` endpoint.
 
-Example:
+Example (API key authentication):
 ```baml BAML
 client<llm> MyClient {
   provider azure-openai
@@ -22,6 +22,27 @@ client<llm> MyClient {
   }
 }
 ```
+
+Example (Entra ID / service principal authentication):
+```baml BAML
+client<llm> MyClient {
+  provider azure-openai
+  options {
+    resource_name "my-resource-name"
+    deployment_id "my-deployment-id"
+    api_version "2024-02-01"
+    tenant_id env.AZURE_TENANT_ID
+    client_id env.AZURE_CLIENT_ID
+    client_secret env.AZURE_CLIENT_SECRET
+  }
+}
+```
+
+<Note>
+  When `tenant_id` and `client_id` are present, BAML uses Microsoft Entra ID (formerly Azure Active Directory)
+  OAuth2 bearer token authentication instead of the static `api-key` header. You cannot provide both `api_key`
+  and `tenant_id`/`client_id` — doing so will produce a compile error.
+</Note>
 
 <Warning>
   `api_version` is required. Azure will return not found if the version is not specified.
@@ -43,6 +64,46 @@ You can use this to modify the azure api key, base url, and api version for exam
   Will be injected via the header `API-KEY`. **Default: `env.AZURE_OPENAI_API_KEY`**
 
   `API-KEY: $api_key`
+
+  Not used when `tenant_id` or `client_id` is set (Entra ID auth takes over).
+</ParamField>
+
+<ParamField
+  path="tenant_id"
+  type="string"
+>
+  Microsoft Entra ID tenant ID. When provided (along with `client_id`), BAML switches from API key
+  authentication to Entra ID OAuth2 bearer token authentication.
+
+  Set to `env.AZURE_TENANT_ID` to read from the environment. If only `client_id` is provided without
+  `tenant_id`, the missing value defaults to the `AZURE_TENANT_ID` environment variable.
+
+  If `client_secret` is also provided, BAML uses service principal (client credentials) authentication.
+  If `client_secret` is omitted, BAML uses managed identity authentication only
+  (via `ManagedIdentityCredential` — suitable for Azure VMs, App Service, and AKS).
+</ParamField>
+
+<ParamField
+  path="client_id"
+  type="string"
+>
+  Microsoft Entra ID application (client) ID. Required when using Entra ID authentication.
+
+  Set to `env.AZURE_CLIENT_ID` to read from the environment. If only `tenant_id` is provided without
+  `client_id`, the missing value defaults to the `AZURE_CLIENT_ID` environment variable.
+</ParamField>
+
+<ParamField
+  path="client_secret"
+  type="string"
+>
+  Microsoft Entra ID client secret. Used together with `tenant_id` and `client_id` for service principal
+  (client credentials) authentication.
+
+  Set to `env.AZURE_CLIENT_SECRET` to read from the environment.
+
+  If omitted when `tenant_id`/`client_id` are set, BAML uses managed identity authentication
+  (Azure VMs, App Service, AKS).
 </ParamField>
 
 <ParamField

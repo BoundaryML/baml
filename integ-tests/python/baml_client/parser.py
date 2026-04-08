@@ -887,6 +887,18 @@ class LlmResponseParser:
         __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestAzure", llm_response=llm_response, mode="request")
         return typing.cast(str, __result__)
 
+    def TestAzureEntraId(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestAzureEntraId", llm_response=llm_response, mode="request")
+        return typing.cast(str, __result__)
+
+    def TestAzureEntraIdSystemDefault(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestAzureEntraIdSystemDefault", llm_response=llm_response, mode="request")
+        return typing.cast(str, __result__)
+
     def TestAzureFailure(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> str:
@@ -2645,6 +2657,18 @@ class LlmStreamParser:
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> str:
         __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestAzure", llm_response=llm_response, mode="stream")
+        return typing.cast(str, __result__)
+
+    def TestAzureEntraId(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestAzureEntraId", llm_response=llm_response, mode="stream")
+        return typing.cast(str, __result__)
+
+    def TestAzureEntraIdSystemDefault(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestAzureEntraIdSystemDefault", llm_response=llm_response, mode="stream")
         return typing.cast(str, __result__)
 
     def TestAzureFailure(

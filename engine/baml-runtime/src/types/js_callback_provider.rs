@@ -82,12 +82,21 @@ pub struct GcpCredResult {
     pub project_id: Option<String>,
 }
 
+#[derive(serde::Deserialize, Debug, Clone, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+/// Azure Entra ID access token returned from the JS callback bridge.
+pub struct AzureCredResult {
+    pub access_token: String,
+}
+
 #[derive(new)]
 pub struct JsCallbackProvider {
     aws_req_tx: tokio::sync::mpsc::Sender<Option<String>>,
     aws_resp_rx: tokio::sync::broadcast::Receiver<RuntimeCallbackResult<AwsCredResult>>,
     gcp_req_tx: tokio::sync::mpsc::Sender<Option<String>>,
     gcp_resp_rx: tokio::sync::broadcast::Receiver<RuntimeCallbackResult<GcpCredResult>>,
+    azure_req_tx: tokio::sync::mpsc::Sender<Option<String>>,
+    azure_resp_rx: tokio::sync::broadcast::Receiver<RuntimeCallbackResult<AzureCredResult>>,
 }
 
 impl JsCallbackProvider {
@@ -139,6 +148,29 @@ impl JsCallbackProvider {
 
         Ok(creds)
     }
+
+    pub async fn azure_req(&self) -> RuntimeCallbackResult<AzureCredResult> {
+        let req_tx = self.azure_req_tx.clone();
+        let mut resp_rx = self.azure_resp_rx.resubscribe();
+
+        if let Err(e) = req_tx.send(None).await {
+            log::error!("Failed to send Azure cred request across WASM bridge: {e:?}");
+            return Err(RuntimeCallbackError::SendError(e.to_string()));
+        };
+        let creds = match resp_rx.recv().await {
+            Ok(Ok(creds)) => creds,
+            Ok(Err(e)) => {
+                log::error!("Error in Azure cred provider: {e:?}");
+                return Err(e);
+            }
+            Err(e) => {
+                log::error!("Failed to recv Azure cred response across WASM bridge: {e:?}");
+                return Err(RuntimeCallbackError::RecvError(e.to_string()));
+            }
+        };
+
+        Ok(creds)
+    }
 }
 
 impl Clone for JsCallbackProvider {
@@ -148,6 +180,8 @@ impl Clone for JsCallbackProvider {
             aws_resp_rx: self.aws_resp_rx.resubscribe(),
             gcp_req_tx: self.gcp_req_tx.clone(),
             gcp_resp_rx: self.gcp_resp_rx.resubscribe(),
+            azure_req_tx: self.azure_req_tx.clone(),
+            azure_resp_rx: self.azure_resp_rx.resubscribe(),
         }
     }
 }
@@ -271,6 +305,46 @@ mod tests {
             JsCallbackResult::Err(JsCallbackError {
                 name: "GcpCredentialError".into(),
                 message: "Failed to get GCP credentials".into(),
+            })
+        );
+    }
+
+    #[test]
+    fn test_azure_cred_result_deserialize_ok() {
+        let json = json!({
+            "ok": {
+                "accessToken": "azure_test_access_token"
+            }
+        });
+
+        let result: JsCallbackResult<AzureCredResult> =
+            serde_json::from_value(json).expect("Failed to deserialize Azure credentials result");
+
+        assert_eq!(
+            result,
+            JsCallbackResult::Ok(AzureCredResult {
+                access_token: "azure_test_access_token".into(),
+            })
+        );
+    }
+
+    #[test]
+    fn test_azure_cred_result_deserialize_error() {
+        let json = json!({
+            "error": {
+                "name": "AzureCredentialError",
+                "message": "Failed to get Azure credentials"
+            }
+        });
+
+        let result: JsCallbackResult<AzureCredResult> =
+            serde_json::from_value(json).expect("Failed to deserialize Azure credentials error");
+
+        assert_eq!(
+            result,
+            JsCallbackResult::Err(JsCallbackError {
+                name: "AzureCredentialError".into(),
+                message: "Failed to get Azure credentials".into(),
             })
         );
     }

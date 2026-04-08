@@ -121,11 +121,12 @@ async function getWasmModule(): Promise<BamlWasmModule> {
       await import("@gloo-ai/baml-schema-wasm-web/baml_schema_build");
 
     // CRITICAL: Initialize callback bridge ONCE when module is loaded
-    // This enables AWS/GCP credential loading
+    // This enables AWS/GCP/Azure credential loading
     console.log("[BamlRuntime] Initializing WASM callback bridge");
     wasmModuleCache.init_js_callback_bridge(
       vscode.loadAwsCreds,
       vscode.loadGcpCreds,
+      vscode.loadAzureCreds,
     );
 
     console.log("[BamlRuntime] WASM module loaded and cached ✓");

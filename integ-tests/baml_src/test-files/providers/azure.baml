@@ -96,6 +96,28 @@ function TestAzureO3WithMaxCompletionTokens(input: string) -> string {
   "#
 }
 
+// Test Entra ID (service principal) authentication
+function TestAzureEntraId(input: string) -> string {
+  client AzureEntraId
+  prompt #"
+    {{ _.role("user") }}
+    Write a nice haiku, given the user input. Make sure to reference the input in the haiku.
+
+    Input: {{ input }}
+  "#
+}
+
+// Test Entra ID system default credential chain authentication
+function TestAzureEntraIdSystemDefault(input: string) -> string {
+  client AzureEntraIdSystemDefault
+  prompt #"
+    {{ _.role("user") }}
+    Write a nice haiku, given the user input. Make sure to reference the input in the haiku.
+
+    Input: {{ input }}
+  "#
+}
+
 // Add test cases to verify the behavior
 test TestAzureClients {
   functions [
@@ -105,7 +127,9 @@ test TestAzureClients {
     TestAzureWithMaxTokens,
     TestAzureO1WithMaxCompletionTokens,
     TestAzureO3NoMaxTokens,
-    TestAzureO3WithMaxCompletionTokens
+    TestAzureO3WithMaxCompletionTokens,
+    TestAzureEntraId,
+    TestAzureEntraIdSystemDefault
   ]
   args {
     input "Cherry blossoms"

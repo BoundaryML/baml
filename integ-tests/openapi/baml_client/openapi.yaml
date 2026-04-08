@@ -2066,6 +2066,32 @@ paths:
                 title: TestAzureResponse
                 type: string
       operationId: TestAzure
+  /call/TestAzureEntraId:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestAzureEntraId'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestAzureEntraIdResponse
+                type: string
+      operationId: TestAzureEntraId
+  /call/TestAzureEntraIdSystemDefault:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestAzureEntraIdSystemDefault'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestAzureEntraIdSystemDefaultResponse
+                type: string
+      operationId: TestAzureEntraIdSystemDefault
   /call/TestAzureFailure:
     post:
       requestBody:
@@ -5702,6 +5728,38 @@ components:
         application/json:
           schema:
             title: TestAzureRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
+    TestAzureEntraId:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestAzureEntraIdRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
+    TestAzureEntraIdSystemDefault:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestAzureEntraIdSystemDefaultRequest
             type: object
             properties:
               input:

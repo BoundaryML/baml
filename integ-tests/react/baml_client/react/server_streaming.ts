@@ -2808,6 +2808,44 @@ export const TestAzure = async (
 };
 
 /**
+ * Executes the streaming variant of the "TestAzureEntraId" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const TestAzureEntraId = async (
+  input: string,
+): Promise<ReadableStream<Uint8Array>> => {
+  const __stream__ = b.stream.TestAzureEntraId(
+    input,
+  );
+  return Promise.resolve(__stream__.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "TestAzureEntraIdSystemDefault" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const TestAzureEntraIdSystemDefault = async (
+  input: string,
+): Promise<ReadableStream<Uint8Array>> => {
+  const __stream__ = b.stream.TestAzureEntraIdSystemDefault(
+    input,
+  );
+  return Promise.resolve(__stream__.toStreamable());
+};
+
+/**
  * Executes the streaming variant of the "TestAzureFailure" BAML action.
  *
  * This action initiates a streaming response by calling the corresponding

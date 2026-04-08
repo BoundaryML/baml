@@ -2664,6 +2664,42 @@ export const TestAzure = async (
 };
 
 /**
+ * Executes the "TestAzureEntraId" BAML action.
+ *
+ * This server action calls the underlying BAML function "TestAzureEntraId"
+ * with the specified parameters.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const TestAzureEntraId = async (
+  input: string,
+): Promise<string> => {
+  return b.TestAzureEntraId(
+    input,
+  );
+};
+
+/**
+ * Executes the "TestAzureEntraIdSystemDefault" BAML action.
+ *
+ * This server action calls the underlying BAML function "TestAzureEntraIdSystemDefault"
+ * with the specified parameters.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const TestAzureEntraIdSystemDefault = async (
+  input: string,
+): Promise<string> => {
+  return b.TestAzureEntraIdSystemDefault(
+    input,
+  );
+};
+
+/**
  * Executes the "TestAzureFailure" BAML action.
  *
  * This server action calls the underlying BAML function "TestAzureFailure"

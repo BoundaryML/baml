@@ -211,6 +211,7 @@
     "update-test:syntaxes": "vscode-tmgrammar-snap --config package.json syntaxes/all.test.baml --updateSnapshot"
   },
   "dependencies": {
+    "@azure/identity": "^4.2.1",
     "@aws-sdk/credential-providers": "3.830.0",
     "@baml/common": "workspace:*",
     "@baml/cli": "workspace:*",

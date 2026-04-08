@@ -1,3 +1,4 @@
+import { DefaultAzureCredential } from '@azure/identity';
 import { fromIni } from '@aws-sdk/credential-providers'; // ES6 import
 import type { StringSpan } from '@baml/common';
 import {
@@ -51,6 +52,7 @@ export class WebviewPanelHost {
   private _googleAuth = new GoogleAuth({
     scopes: ['https://www.googleapis.com/auth/cloud-platform'],
   });
+  private _azureCredential = new DefaultAzureCredential();
 
 
   /**
@@ -719,6 +721,38 @@ export class WebviewPanelHost {
                     data: { error },
                   });
                 }
+              }
+            })();
+            return;
+          case 'LOAD_AZURE_CREDS':
+            (async () => {
+              try {
+                const tokenResponse = await this._azureCredential.getToken(
+                  'https://cognitiveservices.azure.com/.default',
+                );
+                if (!tokenResponse?.token) {
+                  throw new Error('Azure Entra ID: no token in response');
+                }
+                this._panel.webview.postMessage({
+                  rpcId: message.rpcId,
+                  rpcMethod: vscodeCommand,
+                  data: {
+                    ok: {
+                      accessToken: tokenResponse.token,
+                    },
+                  },
+                });
+              } catch (error) {
+                console.error('Error loading Azure Entra ID creds:', error);
+                const errPayload =
+                  error instanceof Error
+                    ? { name: error.name, message: error.message }
+                    : { name: 'UnknownError', message: String(error) };
+                this._panel.webview.postMessage({
+                  rpcId: message.rpcId,
+                  rpcMethod: vscodeCommand,
+                  data: { error: errPayload },
+                });
               }
             })();
             return;

@@ -180,6 +180,8 @@ axum-extra = { version = "0.9.3", features = ["erased-json", "typed-header"] }
 criterion = "0.5.1"
 # depends on ring
 gcp_auth = "0.12.3"
+azure_identity = "0.27.0"
+azure_core = "0.27.0"
 hostname = "0.3.1"
 jsonwebtoken = { version = "9.3.0" }
 notify-debouncer-full = "0.3.1"
