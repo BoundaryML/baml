@@ -15,8 +15,7 @@ function assert.contains(haystack: string, needle: string) -> null {
 
   L1:
     load_const "assertion failed: string does not contain expected substring"
-    dispatch_future baml.sys.panic
-    await
+    call baml.sys.panic
 
   L2:
     return
@@ -35,8 +34,7 @@ function assert.equal(actual: unknown, expected: unknown) -> null {
 
   L1:
     load_const "assertion failed: expected equal values"
-    dispatch_future baml.sys.panic
-    await
+    call baml.sys.panic
 
   L2:
     return
@@ -54,8 +52,7 @@ function assert.is_true(condition: bool) -> null {
 
   L1:
     load_const "assertion failed: expected true"
-    dispatch_future baml.sys.panic
-    await
+    call baml.sys.panic
 
   L2:
     return
@@ -74,8 +71,7 @@ function assert.not_null(value: unknown?) -> null {
 
   L1:
     load_const "assertion failed: expected non-null value"
-    dispatch_future baml.sys.panic
-    await
+    call baml.sys.panic
 
   L2:
     return

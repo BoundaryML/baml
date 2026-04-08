@@ -919,13 +919,6 @@ mod tests {
             .unwrap();
         assert_eq!(http_fetch.throws, vec!["Io", "Timeout"]);
 
-        // baml.sys.panic has no throws clause
-        let sys_panic = io_builtins
-            .iter()
-            .find(|b| b.path == "baml.sys.panic")
-            .unwrap();
-        assert!(sys_panic.throws.is_empty());
-
         let render_prompt = io_builtins
             .iter()
             .find(|b| b.path == "baml.llm.PrimitiveClient.render_prompt")

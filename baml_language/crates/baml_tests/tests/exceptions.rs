@@ -3039,51 +3039,63 @@ async fn panic_alias_catches_any_panic() {
 
     function main() -> int {
         call user.divides
-        jump L7
+        jump L9
         load_var e
         is_type ?0
         pop_jump_if_false L0
-        jump L6
+        jump L8
 
       L0:
         load_var e
         is_type ?1
         pop_jump_if_false L1
-        jump L6
+        jump L8
 
       L1:
         load_var e
         is_type ?2
         pop_jump_if_false L2
-        jump L6
+        jump L8
 
       L2:
         load_var e
         is_type ?3
         pop_jump_if_false L3
-        jump L6
+        jump L8
 
       L3:
         load_var e
         is_type ?4
         pop_jump_if_false L4
-        jump L6
+        jump L8
 
       L4:
         load_var e
         is_type ?5
         pop_jump_if_false L5
-        jump L6
+        jump L8
 
       L5:
         load_var e
-        throw
+        is_type ?6
+        pop_jump_if_false L6
+        jump L8
 
       L6:
+        load_var e
+        is_type ?7
+        pop_jump_if_false L7
+        jump L8
+
+      L7:
+        load_var e
+        throw
+
+      L8:
         load_const 1
         unary_op -
 
-      L7:
+      L9:
         return
     }
     ");
@@ -3111,52 +3123,64 @@ async fn panic_alias_plus_wildcard_dispatch() {
     function main() -> int {
         load_const 0
         call user.risky
-        jump L7
+        jump L9
         load_var e
         is_type ?1
         pop_jump_if_false L0
-        jump L6
+        jump L8
 
       L0:
         load_var e
         is_type ?2
         pop_jump_if_false L1
-        jump L6
+        jump L8
 
       L1:
         load_var e
         is_type ?3
         pop_jump_if_false L2
-        jump L6
+        jump L8
 
       L2:
         load_var e
         is_type ?4
         pop_jump_if_false L3
-        jump L6
+        jump L8
 
       L3:
         load_var e
         is_type ?5
         pop_jump_if_false L4
-        jump L6
+        jump L8
 
       L4:
         load_var e
         is_type ?6
         pop_jump_if_false L5
-        jump L6
+        jump L8
 
       L5:
         load_var e
-        throw_if_panic
-        load_const 2
-        jump L7
+        is_type ?7
+        pop_jump_if_false L6
+        jump L8
 
       L6:
-        load_const 1
+        load_var e
+        is_type ?8
+        pop_jump_if_false L7
+        jump L8
 
       L7:
+        load_var e
+        throw_if_panic
+        load_const 2
+        jump L9
+
+      L8:
+        load_const 1
+
+      L9:
         return
     }
 

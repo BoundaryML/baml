@@ -168,27 +168,18 @@ function baml.env.get_or_panic(key: string) -> string {
     load_var key
     dispatch_future baml.env.get
     await
-    store_var val
-    load_var val
+    store_var _2
+    load_var _2
+    load_var _2
     load_const null
     cmp_op ==
     pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_var val
-    jump L2
-
-  L1:
     load_const "env var not found: "
     load_var key
     bin_op +
-    dispatch_future baml.sys.panic
-    await
-    pop 1
-    load_const ""
+    call baml.sys.panic
 
-  L2:
+  L0:
     return
 }
 
@@ -1065,7 +1056,7 @@ function baml.net.connect(addr: string) -> void {
 function baml.sys.now_ms() -> int {
 }
 
-function baml.sys.panic(message: string) -> null {
+function baml.sys.panic(message: string) -> void {
 }
 
 function baml.sys.shell(command: string) -> string {
