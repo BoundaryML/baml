@@ -13,61 +13,43 @@ function user.OpenRouterMistralSmall3_1_24b$new() -> null {
     call baml.env.get_or_panic
     store_var _2
     alloc_instance baml.llm.PrimitiveClient
-    copy 0
     load_const "OpenRouterMistralSmall3_1_24b"
-    store_field .name
-    copy 0
+    init_field .name
     load_const "openai-generic"
-    store_field .provider
-    copy 0
+    init_field .provider
     alloc_instance baml.llm.PrimitiveClientOptions
-    copy 0
     load_const "mistralai/mistral-small-3.1-24b-instruct"
-    store_field .model
-    copy 0
+    init_field .model
     load_const "https://openrouter.ai/api/v1"
-    store_field .base_url
-    copy 0
+    init_field .base_url
     load_const null
-    store_field .allowed_role_metadata
-    copy 0
+    init_field .allowed_role_metadata
     load_const null
-    store_field .finish_reason_allow_list
-    copy 0
+    init_field .finish_reason_allow_list
     load_const null
-    store_field .finish_reason_deny_list
-    copy 0
+    init_field .finish_reason_deny_list
     load_const null
-    store_field .supports_streaming
-    copy 0
+    init_field .supports_streaming
     load_const null
-    store_field .default_role
-    copy 0
+    init_field .default_role
     load_const null
-    store_field .allowed_roles
-    copy 0
+    init_field .allowed_roles
     load_const null
-    store_field .remap_roles
-    copy 0
+    init_field .remap_roles
     load_var _2
-    store_field .api_key
-    copy 0
+    init_field .api_key
     load_const null
-    store_field .provider_options
-    copy 0
+    init_field .provider_options
     load_const null
-    store_field .media_url_handler
-    copy 0
+    init_field .media_url_handler
     alloc_map 0
-    store_field .headers
-    copy 0
+    init_field .headers
     alloc_map 0
-    store_field .query_params
-    copy 0
+    init_field .query_params
     load_const 0.1
     load_const "temperature"
     alloc_map 1
-    store_field .request_body
-    store_field .options
+    init_field .request_body
+    init_field .options
     return
 }
