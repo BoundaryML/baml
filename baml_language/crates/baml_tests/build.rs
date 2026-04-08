@@ -535,7 +535,7 @@ fn generate_mir_test(project: &TestProject, stdlib_package_filter: Option<&str>)
                     functions.sort_by_key(|(_, f)| f.name.as_str().to_string());
                     for (local_id, _func_data) in functions {
                         let func_loc = FunctionLoc::new(&db, sf, *local_id);
-                        let mir = lower_function(&db, func_loc, true);
+                        let mir = lower_function(&db, func_loc, OptLevel::Two);
                         writeln!(output, "{}", display_function(&mir)).unwrap();
                     }
                 }
@@ -549,7 +549,7 @@ fn generate_mir_test(project: &TestProject, stdlib_package_filter: Option<&str>)
         #[test]
         fn test_04_5_mir() {
             use baml_compiler2_hir::{file_item_tree, loc::FunctionLoc};
-            use baml_compiler2_mir::{lower_function, pretty::display_function};
+            use baml_compiler2_mir::{OptLevel, lower_function, pretty::display_function};
 
             let mut db = ProjectDatabase::new();
             let _root = db.set_project_root(std::path::Path::new("."));
@@ -566,7 +566,7 @@ fn generate_mir_test(project: &TestProject, stdlib_package_filter: Option<&str>)
                 functions.sort_by_key(|(_, f)| f.name.as_str().to_string());
                 for (local_id, _func_data) in functions {
                     let func_loc = FunctionLoc::new(&db, *source_file, *local_id);
-                    let mir = lower_function(&db, func_loc, true);
+                    let mir = lower_function(&db, func_loc, OptLevel::Two);
                     writeln!(output, "{}", display_function(&mir)).unwrap();
                 }
             }
@@ -694,7 +694,7 @@ fn generate_codegen_test(
 
             let mut output = String::new();
 
-            let options = baml_compiler2_emit::CompileOptions { emit_test_cases: false, mir_optimize: true };
+            let options = baml_compiler2_emit::CompileOptions { emit_test_cases: false };
             match baml_compiler2_emit::generate_project_bytecode(&db, &options) {
                 Ok(program) => {
                     let mut func_names: Vec<_> = program.function_indices.keys()
@@ -1078,7 +1078,7 @@ fn generate_incremental_benchmark(
 
                 // Initial compilation
                 #initial_loads
-                let opts = baml_compiler2_emit::CompileOptions { emit_test_cases: false, mir_optimize: true };
+                let opts = baml_compiler2_emit::CompileOptions { emit_test_cases: false };
                 let _ = baml_compiler2_emit::generate_project_bytecode(&db, &opts);  // Full compilation
 
                 // Apply incremental changes (re-add files with new content)
@@ -1105,7 +1105,7 @@ fn generate_scale_benchmark(name: &str, path: &Path) -> TokenStream {
                 let mut db = ProjectDatabase::new();
                 let _ = db.set_project_root(std::path::Path::new("."));
                 db.add_file(#file_name, &content);
-                let opts = baml_compiler2_emit::CompileOptions { emit_test_cases: false, mir_optimize: true };
+                let opts = baml_compiler2_emit::CompileOptions { emit_test_cases: false };
                 let _ = black_box(baml_compiler2_emit::generate_project_bytecode(&db, &opts));
             });
         }

@@ -23,58 +23,31 @@ function user.AlwaysThrowsStatus(n: int) -> Status {
 function user.CatchAllStatusVariants(n: int) -> string {
     load_var n
     call user.ThrowsAllStatusVariants
-    jump L8
+    jump L5
     load_var e
-    load_const user.Status.HttpError
-    alloc_variant user.Status
-    cmp_op ==
-    pop_jump_if_false L0
-    jump L7
+    discriminant
+    jump_table [L4, L3, L2, L1], default L0
 
   L0:
     load_var e
-    load_const user.Status.IndexError
-    alloc_variant user.Status
-    cmp_op ==
-    pop_jump_if_false L1
-    jump L6
-
-  L1:
-    load_var e
-    load_const user.Status.AuthError
-    alloc_variant user.Status
-    cmp_op ==
-    pop_jump_if_false L2
-    jump L5
-
-  L2:
-    load_var e
-    load_const user.Status.SomeOtherError
-    alloc_variant user.Status
-    cmp_op ==
-    pop_jump_if_false L3
-    jump L4
-
-  L3:
-    load_var e
     throw
 
-  L4:
+  L1: Status.SomeOtherError
     load_const "other!"
-    jump L8
+    jump L5
 
-  L5:
+  L2: Status.AuthError
     load_const "auth!"
-    jump L8
+    jump L5
 
-  L6:
+  L3: Status.IndexError
     load_const "index!"
-    jump L8
+    jump L5
 
-  L7:
+  L4: Status.HttpError
     load_const "http!"
 
-  L8:
+  L5:
     return
 }
 
@@ -84,23 +57,20 @@ function user.CatchAlwaysThrows(n: int) -> string {
     jump L4
     load_var e
     type_tag
-    copy 0
-    load_const string
+    load_const 1
     cmp_op ==
     pop_jump_if_false L0
-    pop 1
     jump L3
 
   L0:
-    copy 0
-    load_const int
+    load_var e
+    type_tag
+    load_const 0
     cmp_op ==
     pop_jump_if_false L1
-    pop 1
     jump L2
 
   L1:
-    pop 1
     load_var e
     throw
 
@@ -121,15 +91,12 @@ function user.CatchRecursiveThrow(n: int) -> string {
     jump L2
     load_var e
     type_tag
-    copy 0
-    load_const string
+    load_const 1
     cmp_op ==
     pop_jump_if_false L0
-    pop 1
     jump L1
 
   L0:
-    pop 1
     load_var e
     throw
 

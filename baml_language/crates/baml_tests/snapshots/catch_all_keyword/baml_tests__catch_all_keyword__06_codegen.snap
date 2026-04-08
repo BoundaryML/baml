@@ -7,23 +7,20 @@ function user.CatchAllTyped(x: int) -> string {
     jump L4
     load_var e
     type_tag
-    copy 0
-    load_const string
+    load_const 1
     cmp_op ==
     pop_jump_if_false L0
-    pop 1
     jump L3
 
   L0:
-    copy 0
-    load_const int
+    load_var e
+    type_tag
+    load_const 0
     cmp_op ==
     pop_jump_if_false L1
-    pop 1
     jump L2
 
   L1:
-    pop 1
     load_var e
     throw
 
@@ -56,15 +53,12 @@ function user.CatchThenCatchAll(x: int) -> string {
     jump L2
     load_var e
     type_tag
-    copy 0
-    load_const string
+    load_const 1
     cmp_op ==
     pop_jump_if_false L0
-    pop 1
     jump L1
 
   L0:
-    pop 1
     load_var e
     throw_if_panic
     load_const "caught rest"
@@ -114,15 +108,12 @@ function user.PartialCatch(x: int) -> string {
     jump L2
     load_var e
     type_tag
-    copy 0
-    load_const string
+    load_const 1
     cmp_op ==
     pop_jump_if_false L0
-    pop 1
     jump L1
 
   L0:
-    pop 1
     load_var e
     throw
 

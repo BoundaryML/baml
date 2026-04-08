@@ -14,20 +14,10 @@
 
 use std::collections::{HashMap, HashSet};
 
+pub use baml_compiler2_mir::OptLevel;
 use baml_compiler2_mir::{
     BlockId, Constant, Local, MirFunctionBody, Operand, Place, Rvalue, StatementKind, Terminator,
 };
-
-/// Optimization level for bytecode generation.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum OptLevel {
-    /// No inlining of user-named locals. Compiler temps are still optimized.
-    /// Produces bytecode that closely mirrors the source structure.
-    Zero,
-    /// Full optimization: inline single-use locals, copy propagation, stack carry.
-    #[default]
-    One,
-}
 
 use crate::stack_carry;
 

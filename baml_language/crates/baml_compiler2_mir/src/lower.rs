@@ -14,14 +14,28 @@ use crate::{
     optimize,
 };
 
-/// Classifies what kind of switch a match expression lowers to.
+/// Classifies what kind of switch a match/catch expression lowers to.
 ///
 /// `Integer` is for integer literal patterns; `EnumDiscriminant` is for
-/// enum variant patterns. Catch-arm switch dispatch uses `Rvalue::TypeTag`
-/// directly in `try_lower_catch_as_switch` without needing this enum.
+/// enum variant patterns; `TypeTag` is for type-annotated patterns dispatched
+/// via `Rvalue::TypeTag` (e.g. `i: int => ...`, `s: string => ...`).
 enum SwitchKind {
     Integer,
     EnumDiscriminant(Name),
+    TypeTag,
+}
+
+/// What happens in the otherwise block of a switch.
+#[derive(Clone, Copy)]
+enum SwitchOtherwise {
+    /// Match expression: goto join (non-exhaustive) or unreachable (exhaustive).
+    Match { is_exhaustive: bool },
+    /// Catch expression: rethrow unmatched errors.
+    /// If `needs_throw_if_panic` is true, insert a `throw_if_panic` guard before wildcard body.
+    Catch {
+        error_local: Local,
+        needs_throw_if_panic: bool,
+    },
 }
 
 struct LoopContext {
@@ -405,9 +419,9 @@ struct LoweringContext<'db> {
     /// it jumps to the top of this stack instead of creating its own null block.
     chain_null_exits: Vec<BlockId>,
 
-    /// Whether to apply MIR-level optimizations (constant folding, catch switch dispatch).
-    /// When false, produces bytecode that closely mirrors the source structure.
-    optimize: bool,
+    /// Optimization level controlling MIR-level transforms.
+    /// At `OptLevel::Two`, constant folding and advanced transforms are applied.
+    opt: crate::OptLevel,
 }
 
 impl<'db> LoweringContext<'db> {
@@ -471,7 +485,7 @@ impl<'db> LoweringContext<'db> {
         func_loc: FunctionLoc<'db>,
         expr_body: AstExprBody,
         source_map: Option<AstSourceMap>,
-        optimize: bool,
+        opt: crate::OptLevel,
     ) -> Self {
         let file = func_loc.file(db);
 
@@ -654,7 +668,7 @@ impl<'db> LoweringContext<'db> {
             watched_locals_stack: Vec::new(),
             synthetic_name_counts: HashMap::new(),
             chain_null_exits: Vec::new(),
-            optimize,
+            opt,
         }
     }
 
@@ -667,7 +681,7 @@ impl<'db> LoweringContext<'db> {
         let_loc: LetLoc<'db>,
         expr_body: AstExprBody,
         source_map: Option<AstSourceMap>,
-        optimize: bool,
+        opt: crate::OptLevel,
     ) -> Self {
         let file = let_loc.file(db);
 
@@ -803,7 +817,7 @@ impl<'db> LoweringContext<'db> {
             capture_indices: None,
             transitive_captures_needed: Vec::new(),
             chain_null_exits: Vec::new(),
-            optimize,
+            opt,
         }
     }
 
@@ -1734,7 +1748,7 @@ impl LoweringContext<'_> {
         }
 
         // Check if TIR already folded this expression to a literal constant
-        if self.optimize {
+        if self.opt >= crate::OptLevel::Two {
             if let Ty::Literal(ref lit, _) = self.expr_ty(expr_id) {
                 let constant = Self::lower_literal(lit);
                 self.builder
@@ -2079,7 +2093,7 @@ impl LoweringContext<'_> {
 
     fn lower_unary(&mut self, expr_id: AstExprId, op: AstUnaryOp, expr: AstExprId, dest: Place) {
         // Check if TIR already folded this expression to a literal constant
-        if self.optimize {
+        if self.opt >= crate::OptLevel::Two {
             if let Ty::Literal(ref lit, _) = self.expr_ty(expr_id) {
                 let constant = Self::lower_literal(lit);
                 self.builder
@@ -3365,14 +3379,19 @@ impl LoweringContext<'_> {
             .map(|&id| self.body.match_arms[id].clone())
             .collect();
 
-        // Try switch optimization: if all non-wildcard arms are integer literals
-        // with no guards, emit a single Switch terminator.
-        if self.try_lower_match_as_switch(
+        // Try switch optimization: if all non-wildcard arms have compatible patterns
+        // (int literal, enum variant, or type tag) with no guards, emit a Switch.
+        let switch_arms: Vec<(AstPatId, AstExprId, Option<AstExprId>)> = arms
+            .iter()
+            .map(|arm| (arm.pattern, arm.body, arm.guard))
+            .collect();
+        if self.try_lower_as_switch(
             scrutinee_local,
-            &arms,
+            &switch_arms,
             dest.clone(),
             bb_join,
-            is_exhaustive,
+            SwitchOtherwise::Match { is_exhaustive },
+            None,
         ) {
             self.builder.set_current_block(bb_join);
             return;
@@ -3383,15 +3402,22 @@ impl LoweringContext<'_> {
         self.builder.set_current_block(bb_join);
     }
 
-    /// Attempt to lower a match as a Switch terminator.
-    /// Returns true if successful, false if the match isn't switch-eligible.
-    fn try_lower_match_as_switch(
+    /// Attempt to lower a match or catch as a Switch terminator.
+    /// Returns true if successful, false if the arms aren't switch-eligible.
+    ///
+    /// Unified entry point for both match and catch switch dispatch.
+    /// - `arms`: `(pattern, body_expr, optional_guard)` tuples
+    /// - `otherwise`: controls what happens for unmatched values
+    /// - `pre_created_blocks`: if `Some`, use these pre-created body blocks instead
+    ///   of creating new ones (used by catch, which pre-creates blocks)
+    fn try_lower_as_switch(
         &mut self,
         scrutinee: Local,
-        arms: &[baml_compiler2_ast::MatchArm],
+        arms: &[(AstPatId, AstExprId, Option<AstExprId>)],
         dest: Place,
         join: BlockId,
-        is_exhaustive: bool,
+        otherwise: SwitchOtherwise,
+        pre_created_blocks: Option<&[Option<BlockId>]>,
     ) -> bool {
         use std::collections::HashSet;
 
@@ -3401,6 +3427,13 @@ impl LoweringContext<'_> {
             return false;
         }
 
+        let is_exhaustive = matches!(
+            &otherwise,
+            SwitchOtherwise::Match {
+                is_exhaustive: true
+            }
+        );
+
         // Classify arms: collect (i64_value, arm_index) for int literal or enum variant
         // patterns, and check for a trailing wildcard/binding.
         let mut switch_kind: Option<SwitchKind> = None;
@@ -3409,12 +3442,12 @@ impl LoweringContext<'_> {
         // Deduplicate discriminant values so union patterns don't produce duplicate switch arms.
         let mut seen_values: HashSet<i64> = HashSet::new();
 
-        for (i, arm) in arms.iter().enumerate() {
+        for (i, &(pattern, _body, guard)) in arms.iter().enumerate() {
             // Guards disqualify switch optimization
-            if arm.guard.is_some() {
+            if guard.is_some() {
                 return false;
             }
-            let pat = &self.body.patterns[arm.pattern];
+            let pat = &self.body.patterns[pattern];
             match pat {
                 AstPattern::Literal(Literal::Int(val)) => {
                     // Integer arm: verify kind consistency
@@ -3451,7 +3484,7 @@ impl LoweringContext<'_> {
                 }
                 AstPattern::Union(sub_pats) => {
                     // Union pattern: each sub-pattern maps to the same arm body.
-                    // All sub-patterns must be the same kind (int or enum variant).
+                    // All sub-patterns must be the same kind (int, enum variant, or type tag).
                     for sub_pat_id in sub_pats {
                         let sub_pat = &self.body.patterns[*sub_pat_id];
                         match sub_pat {
@@ -3488,23 +3521,117 @@ impl LoweringContext<'_> {
                                     int_arms.push((disc, i));
                                 }
                             }
+                            AstPattern::TypedBinding { .. } => {
+                                match &switch_kind {
+                                    None => switch_kind = Some(SwitchKind::TypeTag),
+                                    Some(SwitchKind::TypeTag) => {}
+                                    Some(_) => return false,
+                                }
+                                match self.classify_pattern_type_tag(*sub_pat_id) {
+                                    Some(tags) => {
+                                        for tag in tags {
+                                            if seen_values.insert(tag) {
+                                                int_arms.push((tag, i));
+                                            }
+                                        }
+                                    }
+                                    None => return false,
+                                }
+                            }
+                            AstPattern::Binding(name) if name.as_str() != "_" => {
+                                if self
+                                    .pat_types
+                                    .contains_key(&(self.current_scope, *sub_pat_id))
+                                {
+                                    match &switch_kind {
+                                        None => switch_kind = Some(SwitchKind::TypeTag),
+                                        Some(SwitchKind::TypeTag) => {}
+                                        Some(_) => return false,
+                                    }
+                                    match self.classify_pattern_type_tag(*sub_pat_id) {
+                                        Some(tags) => {
+                                            for tag in tags {
+                                                if seen_values.insert(tag) {
+                                                    int_arms.push((tag, i));
+                                                }
+                                            }
+                                        }
+                                        None => return false,
+                                    }
+                                } else {
+                                    return false;
+                                }
+                            }
                             _ => return false,
                         }
                     }
                 }
+                AstPattern::TypedBinding { .. } => {
+                    // Type-annotated binding → classify as TypeTag
+                    match &switch_kind {
+                        None => switch_kind = Some(SwitchKind::TypeTag),
+                        Some(SwitchKind::TypeTag) => {}
+                        Some(_) => return false, // Mixed TypeTag + Integer/Enum
+                    }
+                    match self.classify_pattern_type_tag(pattern) {
+                        Some(tags) => {
+                            for tag in tags {
+                                if seen_values.insert(tag) {
+                                    int_arms.push((tag, i));
+                                }
+                            }
+                        }
+                        None => return false,
+                    }
+                }
+                AstPattern::Binding(name) if name.as_str() != "_" => {
+                    // Bare name resolved to a type by TIR (e.g. `DivisionByZero =>`)
+                    if self.pat_types.contains_key(&(self.current_scope, pattern)) {
+                        match &switch_kind {
+                            None => switch_kind = Some(SwitchKind::TypeTag),
+                            Some(SwitchKind::TypeTag) => {}
+                            Some(_) => return false,
+                        }
+                        match self.classify_pattern_type_tag(pattern) {
+                            Some(tags) => {
+                                for tag in tags {
+                                    if seen_values.insert(tag) {
+                                        int_arms.push((tag, i));
+                                    }
+                                }
+                            }
+                            None => return false,
+                        }
+                    } else {
+                        // Regular binding without type info — wildcard-like
+                        if i != arms.len() - 1 {
+                            return false;
+                        }
+                        otherwise_idx = Some(i);
+                    }
+                }
                 AstPattern::Binding(_) => {
-                    // Wildcard/binding must be last arm
+                    // Wildcard `_` — must be last arm
                     if i != arms.len() - 1 {
                         return false;
                     }
                     otherwise_idx = Some(i);
                 }
-                _ => return false, // Non-int-literal, non-wildcard pattern
+                _ => return false, // Non-eligible pattern
             }
         }
 
         // Need at least one int arm to justify a switch
         if int_arms.is_empty() {
+            return false;
+        }
+
+        // TypeTag switches produce copy/pop overhead in the stackified bytecode
+        // because the emitter may fall back to if-else chains for sparse or small
+        // switches. The old IsType + Branch chain avoids this overhead, so we only
+        // use SwitchInt for enum discriminants and integer literals where jump_table
+        // reliably fires.
+        if matches!(switch_kind, Some(SwitchKind::TypeTag)) {
             return false;
         }
 
@@ -3515,7 +3642,7 @@ impl LoweringContext<'_> {
         // Save the entry block — this is where the switch terminator goes
         let bb_entry = self.builder.current_block();
 
-        // For enum switches, emit the discriminant extraction before building arm blocks.
+        // Emit discriminant/type-tag extraction before building arm blocks.
         // We must do this before create_block() calls so the assignment goes into bb_entry.
         let switch_operand = match &switch_kind {
             Some(SwitchKind::EnumDiscriminant(_)) => {
@@ -3527,6 +3654,14 @@ impl LoweringContext<'_> {
                     Rvalue::Discriminant(Place::local(scrutinee)),
                 );
                 Operand::Copy(Place::Local(disc))
+            }
+            Some(SwitchKind::TypeTag) => {
+                let tag = self.builder.temp(Ty::Int {
+                    attr: TyAttr::default(),
+                });
+                self.builder
+                    .assign(Place::local(tag), Rvalue::TypeTag(Place::local(scrutinee)));
+                Operand::Copy(Place::Local(tag))
             }
             _ => Operand::Copy(Place::Local(scrutinee)),
         };
@@ -3543,13 +3678,19 @@ impl LoweringContext<'_> {
                 // Union sub-pattern: reuse the same body block
                 switch_arms.push((val, existing_bb));
             } else {
-                let bb_body = self.builder.create_block();
+                // Use pre-created block if available, otherwise create a new one
+                let bb_body = if let Some(blocks) = pre_created_blocks {
+                    blocks[arm_idx].expect("pre-created block missing for arm")
+                } else {
+                    self.builder.create_block()
+                };
                 switch_arms.push((val, bb_body));
                 arm_blocks.insert(arm_idx, bb_body);
 
                 self.builder.set_current_block(bb_body);
-                self.bind_pattern(scrutinee, arms[arm_idx].pattern);
-                self.lower_expr(arms[arm_idx].body, dest.clone());
+                let (pattern, body, _) = arms[arm_idx];
+                self.bind_pattern(scrutinee, pattern);
+                self.lower_expr(body, dest.clone());
                 if !self.builder.is_current_terminated() {
                     self.builder.goto(join);
                 }
@@ -3557,7 +3698,6 @@ impl LoweringContext<'_> {
         }
 
         // Build arm_names: symbolic labels for the switch arms (debug metadata).
-        // For enum switches: "EnumName.VariantName"; for int switches: the integer value.
         let arm_names: Vec<(i64, String)> = match &switch_kind {
             Some(SwitchKind::EnumDiscriminant(enum_name)) => {
                 if let Some(variants) = self.enum_variants.get(enum_name) {
@@ -3583,38 +3723,76 @@ impl LoweringContext<'_> {
                     vec![]
                 }
             }
+            Some(SwitchKind::TypeTag) => int_arms
+                .iter()
+                .map(|(v, _)| (*v, format_type_tag_name(*v)))
+                .collect(),
             _ => int_arms.iter().map(|(v, _)| (*v, v.to_string())).collect(),
         };
 
-        // Lower the otherwise arm:
-        // - Wildcard present → lower the wildcard body, then goto join
-        // - No wildcard + exhaustive → unreachable (all cases covered by switch arms)
-        // - No wildcard + non-exhaustive → goto join (runtime fallthrough)
+        // Lower the otherwise block
         self.builder.set_current_block(bb_otherwise);
         if let Some(idx) = otherwise_idx {
-            self.bind_pattern(scrutinee, arms[idx].pattern);
-            self.lower_expr(arms[idx].body, dest);
+            // Wildcard arm present
+            if let SwitchOtherwise::Catch {
+                error_local,
+                needs_throw_if_panic: true,
+            } = &otherwise
+            {
+                let bb_wildcard_body = self.builder.create_block();
+                self.builder
+                    .throw_if_panic(Operand::Copy(Place::Local(*error_local)), bb_wildcard_body);
+                self.builder.set_current_block(bb_wildcard_body);
+            }
+            let (pattern, body, _) = arms[idx];
+            self.bind_pattern(scrutinee, pattern);
+            self.lower_expr(body, dest);
             if !self.builder.is_current_terminated() {
                 self.builder.goto(join);
             }
-        } else if is_switch_exhaustive {
-            // No wildcard arm AND exhaustive: this block is provably unreachable.
-            // Marking it Unreachable satisfies the verifier invariant (check 5) and
-            // matches V1's lower_match_as_switch behavior (crates/baml_compiler_mir).
-            self.builder.unreachable();
         } else {
-            // No wildcard, non-exhaustive: fall through to join.
-            self.builder.goto(join);
+            // No wildcard
+            match &otherwise {
+                SwitchOtherwise::Match {
+                    is_exhaustive: true,
+                } => {
+                    self.builder.unreachable();
+                }
+                SwitchOtherwise::Catch { error_local, .. } => {
+                    self.builder
+                        .throw(Operand::Copy(Place::Local(*error_local)));
+                }
+                SwitchOtherwise::Match { .. } => {
+                    self.builder.goto(join);
+                }
+            }
+        }
+
+        // For catch with pre-created blocks: redirect wildcard arm's pre-created block
+        // to bb_otherwise, since the wildcard body was lowered there.
+        if let Some(blocks) = pre_created_blocks {
+            for (i, block_opt) in blocks.iter().enumerate() {
+                if let Some(block) = block_opt {
+                    if otherwise_idx == Some(i) {
+                        // Wildcard arm's pre-created block → redirect to otherwise
+                        self.builder.set_current_block(*block);
+                        self.builder.goto(bb_otherwise);
+                    } else if !arm_blocks.contains_key(&i) {
+                        // Unreachable pre-created block (e.g. duplicate tag) → terminate it
+                        self.builder.set_current_block(*block);
+                        self.builder.goto(bb_otherwise);
+                    }
+                }
+            }
         }
 
         // Emit the switch terminator in the entry block
         self.builder.set_current_block(bb_entry);
-        let exhaustive = is_switch_exhaustive;
         self.builder.switch(
             switch_operand,
             switch_arms,
             bb_otherwise,
-            exhaustive,
+            is_switch_exhaustive,
             arm_names,
         );
 
@@ -3851,20 +4029,17 @@ impl LoweringContext<'_> {
     }
 }
 
-// ─── Catch switch dispatch ────────────────────────────────────────────────────
+// ─── Type tag classification (shared by match/catch switch dispatch) ──────────
 
 impl LoweringContext<'_> {
-    /// Classify a catch arm pattern into type tag value(s).
+    /// Classify a pattern into type tag value(s) for switch dispatch.
+    /// Shared by match and catch lowering.
     ///
-    /// Returns `Some(tags)` if the pattern is a pure type test that can be
-    /// dispatched via a type-tag switch. Returns `None` if it contains a
-    /// literal comparison, is a wildcard, or has a type we can't represent
-    /// as a simple integer tag.
-    ///
-    /// Supported patterns:
-    /// - `TypedBinding { name: "_", ty }` — e.g. `_: string =>`
-    /// - `Binding(name)` where TIR resolved `name` to a class type
-    fn classify_catch_arm_type_tag(&self, pat_id: AstPatId) -> Option<Vec<i64>> {
+    /// Returns `Some(tags)` for `TypedBinding` and Binding-with-TIR-type patterns
+    /// that resolve to primitive types. Returns `None` for literals, wildcards,
+    /// enum variants, and class types (class tag ordering differs between MIR
+    /// and emit, so class dispatch stays sequential).
+    fn classify_pattern_type_tag(&self, pat_id: AstPatId) -> Option<Vec<i64>> {
         let pat = &self.body.patterns[pat_id];
         match pat {
             AstPattern::Binding(name) if name.as_str() == "_" => {
@@ -3918,151 +4093,6 @@ impl LoweringContext<'_> {
             // — not eligible for type-tag switch dispatch.
             _ => None,
         }
-    }
-
-    /// Attempt to lower catch arm dispatch as a `Terminator::Switch` on type tags.
-    ///
-    /// Returns `true` if successful and all dispatch/body blocks have been emitted.
-    /// Returns `false` if the arms are not all type-tag eligible (e.g. contain
-    /// literal patterns), which causes the caller to fall back to sequential dispatch.
-    ///
-    /// Pre-conditions:
-    /// - `arms` is the flattened list of `(CatchArm, body_block, is_wildcard)` tuples
-    /// - `bb_handler` is the current entry block for the handler (empty, no terminator yet)
-    /// - `bb_join` is the join block after the entire catch expression
-    fn try_lower_catch_as_switch(
-        &mut self,
-        arms: &[(baml_compiler2_ast::CatchArm, BlockId, bool)],
-        error_local: Local,
-        bb_handler: BlockId,
-        bb_join: BlockId,
-        dest: &Place,
-        needs_throw_if_panic: bool,
-    ) -> bool {
-        use std::collections::HashMap as StdHashMap;
-
-        // Step 1: classify each arm pattern into type tag value(s).
-        // Wildcard arms are recorded separately for the `otherwise` block.
-        let mut tag_arms: Vec<(i64, usize)> = Vec::new(); // (tag_value, arm_index)
-        let mut wildcard_idx: Option<usize> = None;
-        let mut seen_tags: std::collections::HashSet<i64> = std::collections::HashSet::new();
-
-        for (i, (arm, _body_block, is_wildcard)) in arms.iter().enumerate() {
-            if *is_wildcard {
-                if wildcard_idx.is_none() {
-                    wildcard_idx = Some(i);
-                }
-                continue;
-            }
-            match self.classify_catch_arm_type_tag(arm.pattern) {
-                Some(tags) => {
-                    for tag in tags {
-                        if seen_tags.insert(tag) {
-                            tag_arms.push((tag, i));
-                        }
-                    }
-                }
-                None => return false, // Not eligible — fall back to sequential dispatch
-            }
-        }
-
-        if tag_arms.is_empty() {
-            return false;
-        }
-
-        // Step 2: emit `Rvalue::TypeTag` in `bb_handler` to extract the tag.
-        self.builder.set_current_block(bb_handler);
-        let tag_temp = self.builder.temp(Ty::Int {
-            attr: TyAttr::default(),
-        });
-        self.builder.assign(
-            Place::local(tag_temp),
-            Rvalue::TypeTag(Place::local(error_local)),
-        );
-        let switch_discriminant = Operand::Copy(Place::Local(tag_temp));
-
-        // Step 3: build the `otherwise` block (wildcard arm body or rethrow).
-        let bb_otherwise = self.builder.create_block();
-
-        // Step 4: build switch arms mapping tag values to body blocks.
-        // Multiple tags from the same arm (union patterns) share the same body block.
-        let mut arm_block_map: StdHashMap<usize, BlockId> = StdHashMap::new();
-        let mut switch_arms: Vec<(i64, BlockId)> = Vec::new();
-
-        for &(tag_val, arm_idx) in &tag_arms {
-            let body_bb = if let Some(&existing) = arm_block_map.get(&arm_idx) {
-                existing
-            } else {
-                let (_, body_block, _) = &arms[arm_idx];
-                arm_block_map.insert(arm_idx, *body_block);
-                *body_block
-            };
-            switch_arms.push((tag_val, body_bb));
-        }
-
-        // Build arm_names for debug metadata.
-        let arm_names: Vec<(i64, String)> = tag_arms
-            .iter()
-            .map(|(tag, _)| (*tag, format_type_tag_name(*tag)))
-            .collect();
-
-        // Step 5: emit the Switch terminator in bb_handler.
-        // Catch switches are never exhaustive — unmatched values go to otherwise.
-        self.builder.switch(
-            switch_discriminant,
-            switch_arms,
-            bb_otherwise,
-            false, // not exhaustive
-            arm_names,
-        );
-
-        // Step 6: lower the `otherwise` block.
-        self.builder.set_current_block(bb_otherwise);
-        if let Some(idx) = wildcard_idx {
-            let (arm, _, _) = &arms[idx];
-            if needs_throw_if_panic {
-                let bb_wildcard_body = self.builder.create_block();
-                self.builder
-                    .throw_if_panic(Operand::Copy(Place::Local(error_local)), bb_wildcard_body);
-                self.builder.set_current_block(bb_wildcard_body);
-            }
-            let arm_pattern = arm.pattern;
-            let arm_body = arm.body;
-            self.bind_pattern(error_local, arm_pattern);
-            self.lower_expr(arm_body, dest.clone());
-            if !self.builder.is_current_terminated() {
-                self.builder.goto(bb_join);
-            }
-        } else {
-            // No wildcard arm — rethrow unmatched errors.
-            self.builder.throw(Operand::Copy(Place::Local(error_local)));
-        }
-
-        // Step 7: lower each non-wildcard arm body in its pre-created body block.
-        // For wildcard arms, redirect their pre-created body block to bb_otherwise
-        // (the wildcard body was lowered there in step 6, not in the pre-created block).
-        for (i, (arm, body_block, is_wildcard)) in arms.iter().enumerate() {
-            if *is_wildcard {
-                // The wildcard arm's pre-created body block is unused by the switch —
-                // the switch targets bb_otherwise directly for unmatched values.
-                // Redirect it to bb_otherwise so all blocks are terminated.
-                self.builder.set_current_block(*body_block);
-                self.builder.goto(bb_otherwise);
-                continue;
-            }
-            // Only lower arms that were actually added to the switch
-            // (arm_block_map has one entry per unique arm_idx).
-            if arm_block_map.contains_key(&i) {
-                self.builder.set_current_block(*body_block);
-                self.bind_pattern(error_local, arm.pattern);
-                self.lower_expr(arm.body, dest.clone());
-                if !self.builder.is_current_terminated() {
-                    self.builder.goto(bb_join);
-                }
-            }
-        }
-
-        true
     }
 }
 
@@ -4169,19 +4199,27 @@ impl LoweringContext<'_> {
         // explicitly name. Skipped for catch_all_panics (user wants everything).
         let needs_throw_if_panic = has_wildcard && !is_catch_all_panics;
 
-        // Attempt switch-style dispatch on type tags (optimization only).
+        // Attempt switch-style dispatch on type tags.
         // If all non-wildcard arms have pure type-test patterns, emit a single
         // Switch on Rvalue::TypeTag instead of a sequential is_type chain.
-        if self.optimize
-            && self.try_lower_catch_as_switch(
-                &arms,
+        let switch_arms: Vec<(AstPatId, AstExprId, Option<AstExprId>)> = arms
+            .iter()
+            .map(|(arm, _, _)| (arm.pattern, arm.body, None))
+            .collect();
+        let pre_blocks: Vec<Option<BlockId>> =
+            arms.iter().map(|(_, block, _)| Some(*block)).collect();
+        self.builder.set_current_block(bb_handler);
+        if self.try_lower_as_switch(
+            error_local,
+            &switch_arms,
+            dest.clone(),
+            bb_join,
+            SwitchOtherwise::Catch {
                 error_local,
-                bb_handler,
-                bb_join,
-                dest,
                 needs_throw_if_panic,
-            )
-        {
+            },
+            Some(&pre_blocks),
+        ) {
             self.builder.set_current_block(bb_join);
             return;
         }
@@ -4229,7 +4267,7 @@ impl LoweringContext<'_> {
 pub fn lower_let_body<'db>(
     db: &'db dyn crate::Db,
     let_loc: LetLoc<'db>,
-    optimize: bool,
+    opt: crate::OptLevel,
 ) -> Option<(MirFunctionBody, Vec<MirFunction>)> {
     let body = let_body(db, let_loc);
     let source_map = let_body_source_map(db, let_loc);
@@ -4237,7 +4275,7 @@ pub fn lower_let_body<'db>(
     match body.as_ref() {
         LetBody::Expr(expr_body) => {
             let mut ctx =
-                LoweringContext::new_for_let(db, let_loc, expr_body.clone(), source_map, optimize);
+                LoweringContext::new_for_let(db, let_loc, expr_body.clone(), source_map, opt);
             let mir_body = ctx.lower_let_body_inner();
             let lambdas = std::mem::take(&mut ctx.pending_lambdas);
             Some((mir_body, lambdas))
@@ -4249,7 +4287,7 @@ pub fn lower_let_body<'db>(
 pub fn lower_function<'db>(
     db: &'db dyn crate::Db,
     func_loc: FunctionLoc<'db>,
-    optimize: bool,
+    opt: crate::OptLevel,
 ) -> MirFunction {
     let body = function_body(db, func_loc);
     let source_map = function_body_source_map(db, func_loc);
@@ -4262,8 +4300,7 @@ pub fn lower_function<'db>(
 
     match body.as_ref() {
         FunctionBody::Expr(expr_body) => {
-            let mut ctx =
-                LoweringContext::new(db, func_loc, expr_body.clone(), source_map, optimize);
+            let mut ctx = LoweringContext::new(db, func_loc, expr_body.clone(), source_map, opt);
             let mut mir = ctx.lower_function_body();
             mir.item_ref = item_ref;
             mir

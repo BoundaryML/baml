@@ -71,9 +71,6 @@ pub trait Db: baml_compiler2_mir::Db {}
 /// Compile options.
 pub struct CompileOptions {
     pub emit_test_cases: bool,
-    /// Enable MIR-level optimizations (constant folding, catch switch dispatch).
-    /// Independent of `OptLevel`, which controls emit-stage local classification.
-    pub mir_optimize: bool,
 }
 
 /// Errors that can occur during bytecode generation.
@@ -206,12 +203,12 @@ fn fq_to_type_name(fq: &str) -> baml_type::TypeName {
     }
 }
 
-/// Generate bytecode for the entire project.
+/// Generate bytecode for the entire project (default: `OptLevel::Two`).
 pub fn generate_project_bytecode(
     db: &dyn baml_compiler2_mir::Db,
     options: &CompileOptions,
 ) -> Result<Program, LoweringError> {
-    generate_project_bytecode_with_opt(db, options, OptLevel::One)
+    generate_project_bytecode_with_opt(db, options, OptLevel::Two)
 }
 
 /// Generate bytecode for the entire project with a specific optimization level.
@@ -220,7 +217,6 @@ pub fn generate_project_bytecode_with_opt(
     options: &CompileOptions,
     opt: OptLevel,
 ) -> Result<Program, LoweringError> {
-    let optimize = options.mir_optimize;
     let mut program = Program::new();
     let all_files = compiler2_all_files(db);
     let alias_caches = build_alias_caches(db, &all_files);
@@ -237,7 +233,7 @@ pub fn generate_project_bytecode_with_opt(
         let item_tree = file_item_tree(db, *file);
         for local_id in item_tree.functions.keys() {
             let func_loc = FunctionLoc::new(db, *file, *local_id);
-            let mir = lower_function(db, func_loc, optimize);
+            let mir = lower_function(db, func_loc, opt);
             let fq_name = mir.item_ref.to_string();
             globals.entry(fq_name).or_insert_with(|| {
                 let idx = global_idx;
@@ -408,7 +404,7 @@ pub fn generate_project_bytecode_with_opt(
         let cache_pass4 = &alias_caches[&pkg_info_pass4.package];
         for (local_id, func_data) in &item_tree.functions {
             let func_loc = FunctionLoc::new(db, *file, *local_id);
-            let mir = lower_function(db, func_loc, optimize);
+            let mir = lower_function(db, func_loc, opt);
             let fq_name = mir.item_ref.to_string();
 
             let mut compiled_fn = match &mir.kind {
@@ -1139,7 +1135,6 @@ fn compile_init_function<'db>(
     program: &mut Program,
     opt: OptLevel,
 ) -> Result<Function, LoweringError> {
-    let optimize = opt == OptLevel::One;
     // Build the $init bytecode: a sequence of Call + StoreGlobal pairs.
     let mut init_instructions: Vec<Instruction> = Vec::new();
     let mut init_constants: Vec<bex_vm_types::ConstValue> = Vec::new();
@@ -1153,7 +1148,7 @@ fn compile_init_function<'db>(
         };
 
         // Lower the let initializer through MIR → MirFunctionBody (+ any lambda children).
-        let maybe_body = lower_let_body(db, *let_loc, optimize);
+        let maybe_body = lower_let_body(db, *let_loc, opt);
 
         let helper_fn = match maybe_body {
             Some((mir_body, lambdas)) => {

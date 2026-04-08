@@ -1,20 +1,20 @@
 //! Tests that show the effect of MIR-level optimizations by comparing
-//! bytecode output with `mir_optimize: false` (unoptimized) vs `mir_optimize: true` (optimized).
+//! bytecode output at `OptLevel::One` (no constant folding) vs `OptLevel::Two` (full optimization).
 //!
 //! Each test compiles the same BAML source twice and snapshots both versions
 //! so the optimization effect is visible at a glance in the source file.
 
-use baml_tests::engine::{OptLevel, compile_source_with_options, display_user_functions};
+use baml_tests::engine::{OptLevel, compile_source_with_opt, display_user_functions};
 
-/// Compile source with MIR optimizations disabled and return textual bytecode.
+/// Compile source at OptLevel::One (no constant folding) and return textual bytecode.
 fn unoptimized(source: &str) -> String {
-    let program = compile_source_with_options(source, OptLevel::One, false);
+    let program = compile_source_with_opt(source, OptLevel::One);
     display_user_functions(&program)
 }
 
-/// Compile source with MIR optimizations enabled and return textual bytecode.
+/// Compile source at OptLevel::Two (with constant folding) and return textual bytecode.
 fn optimized(source: &str) -> String {
-    let program = compile_source_with_options(source, OptLevel::One, true);
+    let program = compile_source_with_opt(source, OptLevel::Two);
     display_user_functions(&program)
 }
 

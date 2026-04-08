@@ -6,7 +6,7 @@
 //! - 4+ sparse arms → binary search
 //! - <4 arms → if-else chain
 //!
-//! All tests use `baml_test_optimized!` which enables `mir_optimize: true`,
+//! All tests use `baml_test_optimized!` which compiles at `OptLevel::Two`,
 //! activating the catch-to-switch lowering path.
 
 use baml_tests::baml_test_optimized;
@@ -46,33 +46,60 @@ async fn catch_jump_table_four_primitive_types() {
 
     function main() -> int {
         call user.fails
-        jump L5
+        jump L8
         load_var e
         type_tag
-        jump_table [L3, L4, L2, L1], default L0
+        load_const 1
+        cmp_op ==
+        pop_jump_if_false L0
+        jump L7
 
       L0:
         load_var e
+        type_tag
+        load_const 0
+        cmp_op ==
+        pop_jump_if_false L1
+        jump L6
+
+      L1:
+        load_var e
+        type_tag
+        load_const 2
+        cmp_op ==
+        pop_jump_if_false L2
+        jump L5
+
+      L2:
+        load_var e
+        type_tag
+        load_const 3
+        cmp_op ==
+        pop_jump_if_false L3
+        jump L4
+
+      L3:
+        load_var e
         throw_if_panic
         load_const 0
-        jump L5
+        jump L8
 
-      L1: null
+      L4:
         load_const 4
-        jump L5
-
-      L2: bool
-        load_const 3
-        jump L5
-
-      L3: int
-        load_const 2
-        jump L5
-
-      L4: string
-        load_const 1
+        jump L8
 
       L5:
+        load_const 3
+        jump L8
+
+      L6:
+        load_const 2
+        jump L8
+
+      L7:
+        load_const 1
+
+      L8:
         return
     }
     "#);
@@ -100,7 +127,7 @@ async fn catch_jump_table_hits_int_arm() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r#"
+    insta::assert_snapshot!(output.bytecode, @"
     function fails() -> int {
         load_const 42
         throw
@@ -108,36 +135,63 @@ async fn catch_jump_table_hits_int_arm() {
 
     function main() -> int {
         call user.fails
-        jump L5
+        jump L8
         load_var e
         type_tag
-        jump_table [L3, L4, L2, L1], default L0
+        load_const 1
+        cmp_op ==
+        pop_jump_if_false L0
+        jump L7
 
       L0:
         load_var e
+        type_tag
+        load_const 0
+        cmp_op ==
+        pop_jump_if_false L1
+        jump L6
+
+      L1:
+        load_var e
+        type_tag
+        load_const 2
+        cmp_op ==
+        pop_jump_if_false L2
+        jump L5
+
+      L2:
+        load_var e
+        type_tag
+        load_const 3
+        cmp_op ==
+        pop_jump_if_false L3
+        jump L4
+
+      L3:
+        load_var e
         throw_if_panic
         load_const 0
-        jump L5
+        jump L8
 
-      L1: null
+      L4:
         load_const 4
-        jump L5
-
-      L2: bool
-        load_const 3
-        jump L5
-
-      L3: int
-        load_const 2
-        jump L5
-
-      L4: string
-        load_const 1
+        jump L8
 
       L5:
+        load_const 3
+        jump L8
+
+      L6:
+        load_const 2
+        jump L8
+
+      L7:
+        load_const 1
+
+      L8:
         return
     }
-    "#);
+    ");
 
     assert_eq!(output.result, Ok(BexExternalValue::Int(2)));
 }
@@ -163,7 +217,7 @@ async fn catch_jump_table_hits_wildcard() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r#"
+    insta::assert_snapshot!(output.bytecode, @"
     function fails() -> int {
         load_const 3.14
         throw
@@ -171,36 +225,63 @@ async fn catch_jump_table_hits_wildcard() {
 
     function main() -> int {
         call user.fails
-        jump L5
+        jump L8
         load_var e
         type_tag
-        jump_table [L3, L4, L2, L1], default L0
+        load_const 1
+        cmp_op ==
+        pop_jump_if_false L0
+        jump L7
 
       L0:
         load_var e
+        type_tag
+        load_const 0
+        cmp_op ==
+        pop_jump_if_false L1
+        jump L6
+
+      L1:
+        load_var e
+        type_tag
+        load_const 2
+        cmp_op ==
+        pop_jump_if_false L2
+        jump L5
+
+      L2:
+        load_var e
+        type_tag
+        load_const 3
+        cmp_op ==
+        pop_jump_if_false L3
+        jump L4
+
+      L3:
+        load_var e
         throw_if_panic
         load_const 0
-        jump L5
+        jump L8
 
-      L1: null
+      L4:
         load_const 4
-        jump L5
-
-      L2: bool
-        load_const 3
-        jump L5
-
-      L3: int
-        load_const 2
-        jump L5
-
-      L4: string
-        load_const 1
+        jump L8
 
       L5:
+        load_const 3
+        jump L8
+
+      L6:
+        load_const 2
+        jump L8
+
+      L7:
+        load_const 1
+
+      L8:
         return
     }
-    "#);
+    ");
 
     assert_eq!(output.result, Ok(BexExternalValue::Int(0)));
 }
@@ -239,23 +320,20 @@ async fn catch_if_else_two_type_arms() {
         jump L4
         load_var e
         type_tag
-        copy 0
-        load_const string
+        load_const 1
         cmp_op ==
         pop_jump_if_false L0
-        pop 1
         jump L3
 
       L0:
-        copy 0
-        load_const int
+        load_var e
+        type_tag
+        load_const 0
         cmp_op ==
         pop_jump_if_false L1
-        pop 1
         jump L2
 
       L1:
-        pop 1
         load_var e
         throw_if_panic
         load_const 0
@@ -307,31 +385,28 @@ async fn catch_if_else_three_type_arms() {
         jump L6
         load_var e
         type_tag
-        copy 0
-        load_const string
+        load_const 1
         cmp_op ==
         pop_jump_if_false L0
-        pop 1
         jump L5
 
       L0:
-        copy 0
-        load_const int
+        load_var e
+        type_tag
+        load_const 0
         cmp_op ==
         pop_jump_if_false L1
-        pop 1
         jump L4
 
       L1:
-        copy 0
-        load_const bool
+        load_var e
+        type_tag
+        load_const 2
         cmp_op ==
         pop_jump_if_false L2
-        pop 1
         jump L3
 
       L2:
-        pop 1
         load_var e
         throw_if_panic
         load_const 0

@@ -126,10 +126,10 @@ macro_rules! baml_test {
     }};
 }
 
-/// Like `baml_test!` but with MIR optimizations enabled (`mir_optimize: true`).
+/// Like `baml_test!` but at `OptLevel::Two` (includes MIR constant folding).
 ///
 /// Use this for testing optimization passes like catch switch dispatch and
-/// constant folding that are gated on the `mir_optimize` flag.
+/// constant folding that require `OptLevel::Two`.
 #[macro_export]
 macro_rules! baml_test_optimized {
     // Simple: source only
