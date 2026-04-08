@@ -985,7 +985,7 @@ fn testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.Serial
     let _24: map<string, testing.TestRegistry>
     let _25: string
     let _26: testing.TestSetRegistration
-    let _27: bool
+    let _27: int
     let _28: testing.TestRegistry // sub
     let _29: (testing.SerializedTest | testing.SerializedTestSet)[]
     let _30: testing.SerializedTestSet
@@ -995,11 +995,10 @@ fn testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.Serial
     let _34: testing.TestRegistry
     let _35: int
     let _36: testing.TestRegistry
-    let _37: bool
-    let _38: (testing.SerializedTest | testing.SerializedTestSet)[]
-    let _39: testing.SerializedTest
-    let _40: string
-    let _41: testing.TestSetRegistration
+    let _37: (testing.SerializedTest | testing.SerializedTestSet)[]
+    let _38: testing.SerializedTest
+    let _39: string
+    let _40: testing.TestSetRegistration
 
     bb0: {
         _2 = [];
@@ -1012,7 +1011,7 @@ fn testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.Serial
     bb1: {
         _6 = len(_3);
         _7 = copy _5 < copy _6;
-        branch copy _7 -> [bb17, bb2];
+        branch copy _7 -> [bb16, bb2];
     }
 
     bb2: {
@@ -1047,45 +1046,44 @@ fn testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.Serial
     }
 
     bb7: {
-        _27 = is_type(copy _23, Class(TypeName { name: "TestRegistry", module_path: ["testing"], display_name: "testing.TestRegistry" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
-        branch copy _27 -> [bb12, bb8];
+        _27 = type_tag(_23);
+        switch copy _27 [type_tag:194: bb11, type_tag:3: bb9, otherwise: bb8] (exhaustive);
     }
 
     bb8: {
-        _37 = copy _23 == const null;
-        branch copy _37 -> [bb10, bb9];
+        unreachable;
     }
 
     bb9: {
-        goto -> bb15;
+        _37 = copy _2;
+        _40 = copy _21;
+        _39 = copy _40.0;
+        _38 = SerializedTest { const "lazyTestSet", copy _39 };
+        _22 = call const fn baml.Array.push(copy _37, copy _38) -> [bb10];
     }
 
     bb10: {
-        _38 = copy _2;
-        _41 = copy _21;
-        _40 = copy _41.0;
-        _39 = SerializedTest { const "lazyTestSet", copy _40 };
-        _22 = call const fn baml.Array.push(copy _38, copy _39) -> [bb11];
+        goto -> bb14;
     }
 
     bb11: {
-        goto -> bb15;
-    }
-
-    bb12: {
         _28 = copy _23;
         _29 = copy _2;
         _32 = copy _21;
         _31 = copy _32.0;
         _34 = copy _28;
-        _33 = call const fn testing.TestRegistry.serialize(copy _34) -> [bb13];
+        _33 = call const fn testing.TestRegistry.serialize(copy _34) -> [bb12];
     }
 
-    bb13: {
+    bb12: {
         _36 = copy _28;
         _35 = copy _36.2;
         _30 = SerializedTestSet { copy _31, copy _33, copy _35 };
-        _22 = call const fn baml.Array.push(copy _29, copy _30) -> [bb14];
+        _22 = call const fn baml.Array.push(copy _29, copy _30) -> [bb13];
+    }
+
+    bb13: {
+        goto -> bb14;
     }
 
     bb14: {
@@ -1093,29 +1091,25 @@ fn testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.Serial
     }
 
     bb15: {
-        goto -> bb16;
-    }
-
-    bb16: {
         _17 = copy _17 + const 1_i64;
         goto -> bb3;
     }
 
-    bb17: {
+    bb16: {
         _8 = copy _3[_5];
         _9 = copy _8;
         _11 = copy _2;
         _14 = copy _9;
         _13 = copy _14.0;
         _12 = SerializedTest { const "test", copy _13 };
-        _10 = call const fn baml.Array.push(copy _11, copy _12) -> [bb18];
+        _10 = call const fn baml.Array.push(copy _11, copy _12) -> [bb17];
+    }
+
+    bb17: {
+        goto -> bb18;
     }
 
     bb18: {
-        goto -> bb19;
-    }
-
-    bb19: {
         _5 = copy _5 + const 1_i64;
         goto -> bb1;
     }

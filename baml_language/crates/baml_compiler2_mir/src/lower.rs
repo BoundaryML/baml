@@ -3495,6 +3495,17 @@ impl LoweringContext<'_> {
                                     return false;
                                 }
                             }
+                            AstPattern::Null => {
+                                let tag = baml_type::typetag::NULL;
+                                match &switch_kind {
+                                    None => switch_kind = Some(SwitchKind::TypeTag),
+                                    Some(SwitchKind::TypeTag) => {}
+                                    Some(_) => return false,
+                                }
+                                if seen_values.insert(tag) {
+                                    int_arms.push((tag, i));
+                                }
+                            }
                             _ => return false,
                         }
                     }
@@ -3584,7 +3595,19 @@ impl LoweringContext<'_> {
                         return false;
                     }
                 }
-                _ => return false, // Non-int-literal, non-wildcard pattern
+                AstPattern::Null => {
+                    // Null literal: use the NULL type tag for switch dispatch.
+                    let tag = baml_type::typetag::NULL;
+                    match &switch_kind {
+                        None => switch_kind = Some(SwitchKind::TypeTag),
+                        Some(SwitchKind::TypeTag) => {}
+                        Some(_) => return false,
+                    }
+                    if seen_values.insert(tag) {
+                        int_arms.push((tag, i));
+                    }
+                }
+                AstPattern::Literal(_) => return false,
             }
         }
 

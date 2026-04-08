@@ -397,21 +397,24 @@ function user.ExhaustiveCustomBool(b: true | false) -> string {
 
 function user.ExhaustiveDoubleMaybe(dm: (Success | Failure)??) -> string {
     load_var dm
-    is_type ?0
+    type_tag
+    copy 0
+    load_const type_tag:110
+    cmp_op ==
     pop_jump_if_false L0
+    pop 1
     jump L3
 
   L0:
-    load_var dm
-    is_type ?1
+    copy 0
+    load_const type_tag:107
+    cmp_op ==
     pop_jump_if_false L1
+    pop 1
     jump L2
 
   L1:
-    load_var dm
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L4
+    pop 1
     load_const "nothing"
     jump L4
 
@@ -670,15 +673,16 @@ function user.ExhaustiveNullableEnumWithTypedPattern(s: Status?) -> string {
 
 function user.ExhaustiveOptional(x: int?) -> string {
     load_var x
-    is_type ?0
+    type_tag
+    copy 0
+    load_const type_tag:0
+    cmp_op ==
     pop_jump_if_false L0
+    pop 1
     jump L1
 
   L0:
-    load_var x
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L2
+    pop 1
     load_const "no value"
     jump L2
 
@@ -1591,21 +1595,24 @@ function user.NestedMatchSpans(x: int, y: bool) -> string {
 
 function user.NestedTypeAlias(mr: (Success | Failure)?) -> string {
     load_var mr
-    is_type ?0
+    type_tag
+    copy 0
+    load_const type_tag:110
+    cmp_op ==
     pop_jump_if_false L0
+    pop 1
     jump L3
 
   L0:
-    load_var mr
-    is_type ?1
+    copy 0
+    load_const type_tag:107
+    cmp_op ==
     pop_jump_if_false L1
+    pop 1
     jump L2
 
   L1:
-    load_var mr
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L4
+    pop 1
     load_const "nothing"
     jump L4
 
@@ -1951,12 +1958,6 @@ function user.NonExhaustiveOptionalMissingNull(code: 200?) -> string {
 }
 
 function user.NonExhaustiveOptionalMissingValue(code: 200?) -> string {
-    load_var code
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L0
-
-  L0:
     load_const "no code"
     return
 }
@@ -2002,12 +2003,16 @@ function user.NonExhaustiveTypeAliasMissingOne(r: Success | Failure) -> string {
 
 function user.OptionalWithCatchAll(x: int?) -> string {
     load_var x
-    load_const null
+    type_tag
+    copy 0
+    load_const type_tag:3
     cmp_op ==
     pop_jump_if_false L0
+    pop 1
     jump L1
 
   L0:
+    pop 1
     load_const "has value"
     jump L2
 

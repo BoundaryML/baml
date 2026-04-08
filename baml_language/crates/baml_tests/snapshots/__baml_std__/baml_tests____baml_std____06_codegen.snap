@@ -383,15 +383,16 @@ function baml.llm.Client.build_plan_with_state(self: null, planner_state: void) 
     load_field .retry
     store_var _3
     load_var _3
-    is_type ?0
+    type_tag
+    copy 0
+    load_const type_tag:173
+    cmp_op ==
     pop_jump_if_false L0
+    pop 1
     jump L1
 
   L0:
-    load_var _3
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L4
+    pop 1
     load_var self
     load_var planner_state
     call baml.llm.Client.build_attempt_with_state
@@ -509,15 +510,16 @@ function baml.llm.Client.execute(self: null, context: void, inherited_delay_ms: 
     load_field .retry
     store_var _4
     load_var _4
-    is_type ?0
+    type_tag
+    copy 0
+    load_const type_tag:173
+    cmp_op ==
     pop_jump_if_false L0
+    pop 1
     jump L1
 
   L0:
-    load_var _4
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L9
+    pop 1
     load_var self
     load_var context
     load_var inherited_delay_ms

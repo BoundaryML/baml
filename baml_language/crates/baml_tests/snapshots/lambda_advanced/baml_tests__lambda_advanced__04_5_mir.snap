@@ -1345,32 +1345,28 @@ fn .<lambda(test_map_optional_inferred, 0)>(x: null) -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: null // x // param
-    let _2: bool
+    let _2: int
 
     bb0: {
-        _2 = copy _1 == const null;
-        branch copy _2 -> [bb3, bb1];
+        _2 = type_tag(_1);
+        switch copy _2 [type_tag:3: bb2, otherwise: bb1];
     }
 
     bb1: {
-        goto -> bb2;
+        _0 = const 1_i64;
+        goto -> bb3;
     }
 
     bb2: {
-        _0 = const 1_i64;
-        goto -> bb4;
+        _0 = const 0_i64;
+        goto -> bb3;
     }
 
     bb3: {
-        _0 = const 0_i64;
         goto -> bb4;
     }
 
     bb4: {
-        goto -> bb5;
-    }
-
-    bb5: {
         return;
     }
 }

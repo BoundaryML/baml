@@ -280,12 +280,6 @@ async fn match_literal_null() {
 
     insta::assert_snapshot!(output.bytecode, @r#"
     function main() -> string {
-        load_const null
-        load_const null
-        cmp_op ==
-        pop_jump_if_false L0
-
-      L0:
         load_const "was null"
         return
     }
@@ -2141,15 +2135,16 @@ async fn match_optional_null_pattern() {
 
     function process(x: int?) -> string {
         load_var x
-        load_const null
+        type_tag
+        copy 0
+        load_const type_tag:3
         cmp_op ==
         pop_jump_if_false L0
+        pop 1
         jump L1
 
       L0:
-        load_var x
-        is_type ?1
-        pop_jump_if_false L2
+        pop 1
         load_const "some"
         jump L2
 
@@ -2192,15 +2187,16 @@ async fn match_optional_value_pattern() {
 
     function process(x: int?) -> string {
         load_var x
-        load_const null
+        type_tag
+        copy 0
+        load_const type_tag:3
         cmp_op ==
         pop_jump_if_false L0
+        pop 1
         jump L1
 
       L0:
-        load_var x
-        is_type ?1
-        pop_jump_if_false L2
+        pop 1
         load_const "some"
         jump L2
 
