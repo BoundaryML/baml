@@ -1349,6 +1349,12 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         exhaustive: bool,
         name_map: &std::collections::HashMap<i64, &str>,
     ) {
+        // Single exhaustive arm: no comparison needed, skip the discriminant entirely.
+        if exhaustive && arms.len() == 1 {
+            self.emit_jump_unless_fallthrough(arms[0].1);
+            return;
+        }
+
         self.emit_operand_pull(discriminant);
 
         let num_arms = arms.len();

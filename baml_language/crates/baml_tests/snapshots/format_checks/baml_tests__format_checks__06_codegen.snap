@@ -4203,9 +4203,6 @@ function user.MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure,
 
   L14:
     pop 1
-    load_var x
-    type_tag
-    pop 1
     load_var s
     discriminant
     copy 0

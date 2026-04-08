@@ -255,10 +255,8 @@ async fn match_literal_int_single_arm() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
-        load_const 1
-        pop 1
         load_const 100
         return
     }
@@ -2645,9 +2643,6 @@ async fn match_mixed_instanceof_and_literal() {
         load_const 200
         store_field .code
         store_var x
-        load_var x
-        type_tag
-        pop 1
         load_var x
         load_field .code
         return

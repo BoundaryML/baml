@@ -1700,9 +1700,6 @@ function user.NonExhaustiveClassPlusLiteralMissingClass(x: Success | 200) -> str
 
 function user.NonExhaustiveClassPlusLiteralMissingLiteral(x: Success | 200) -> string {
     load_var x
-    type_tag
-    pop 1
-    load_var x
     load_field .data
     return
 }
@@ -1998,9 +1995,6 @@ function user.NonExhaustiveTrueTypeWrongLiteral(t: true) -> string {
 }
 
 function user.NonExhaustiveTypeAliasMissingOne(r: Success | Failure) -> string {
-    load_var r
-    type_tag
-    pop 1
     load_var r
     load_field .data
     return
