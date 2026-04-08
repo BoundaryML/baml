@@ -500,10 +500,10 @@ fn baml.llm.Client.build_attempt_with_state(self: baml.llm.Client, planner_state
     let _2: baml.llm.PlannerState // planner_state // param
     let _3: baml.llm.ClientType
     let _4: int
-    let _5: () -> baml.llm.PrimitiveClient // resolve_fn
-    let _6: future<() -> baml.llm.PrimitiveClient>
+    let _5: () -> baml.llm.PrimitiveClient throws baml.errors.InvalidArgument // resolve_fn
+    let _6: future<() -> baml.llm.PrimitiveClient throws baml.errors.InvalidArgument>
     let _7: baml.llm.PrimitiveClient // primitive
-    let _8: () -> baml.llm.PrimitiveClient
+    let _8: () -> baml.llm.PrimitiveClient throws baml.errors.InvalidArgument
     let _9: baml.llm.OrchestrationStep
     let _10: baml.llm.PrimitiveClient
     let _11: baml.llm.OrchestrationStep[] // steps
@@ -1094,10 +1094,10 @@ fn baml.llm.Client.execute_once(self: baml.llm.Client, context: baml.llm.Executi
     let _3: int // active_delay_ms // param
     let _4: baml.llm.ClientType
     let _5: int
-    let _6: () -> baml.llm.PrimitiveClient // resolve_fn
-    let _7: future<() -> baml.llm.PrimitiveClient>
+    let _6: () -> baml.llm.PrimitiveClient throws baml.errors.InvalidArgument // resolve_fn
+    let _7: future<() -> baml.llm.PrimitiveClient throws baml.errors.InvalidArgument>
     let _8: baml.llm.PrimitiveClient // primitive
-    let _9: () -> baml.llm.PrimitiveClient
+    let _9: () -> baml.llm.PrimitiveClient throws baml.errors.InvalidArgument
     let _10: type // return_type
     let _11: string
     let _12: future<type>
@@ -1408,8 +1408,8 @@ fn baml.llm.Client.to_primitive_client(self: baml.llm.Client) -> baml.llm.Primit
     let _4: void
     let _5: string
     let _6: string
-    let _7: () -> baml.llm.PrimitiveClient
-    let _8: future<() -> baml.llm.PrimitiveClient>
+    let _7: () -> baml.llm.PrimitiveClient throws baml.errors.InvalidArgument
+    let _8: future<() -> baml.llm.PrimitiveClient throws baml.errors.InvalidArgument>
 
     bb0: {
         _3 = copy _1.0;

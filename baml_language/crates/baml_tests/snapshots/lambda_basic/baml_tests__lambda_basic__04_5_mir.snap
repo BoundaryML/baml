@@ -296,8 +296,8 @@ fn .<lambda(<lambda(test_nested, 0)>, 1)>(y: int) -> null {
 fn user.test_throws() -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: (int) -> int // risky
-    let _2: (int) -> int
+    let _1: (int) -> int throws string // risky
+    let _2: (int) -> int throws string
 
     bb0: {
         _1 = make_closure lambda[0]();
