@@ -1,0 +1,53 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  TYPE_ALIAS_DEF
+    WORD "type"
+    WORD "ThrowingFn"
+    EQUALS "="
+    TYPE_EXPR
+      L_PAREN "("
+      R_PAREN ")"
+      ARROW "->"
+      TYPE_EXPR "int"
+        WORD "int"
+      THROWS_CLAUSE
+        KW_THROWS "throws"
+        TYPE_EXPR "string"
+          WORD "string"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "takes_throwing"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "f"
+        COLON ":"
+        TYPE_EXPR
+          L_PAREN "("
+          R_PAREN ")"
+          ARROW "->"
+          TYPE_EXPR "int"
+            WORD "int"
+          THROWS_CLAUSE
+            KW_THROWS "throws"
+            TYPE_EXPR "string"
+              WORD "string"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        CALL_EXPR
+          WORD "f"
+          CALL_ARGS "()"
+            L_PAREN "("
+            R_PAREN ")"
+        R_BRACE "}"
+
+=== ERRORS ===
+None

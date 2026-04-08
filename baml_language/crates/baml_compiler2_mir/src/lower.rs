@@ -164,13 +164,22 @@ pub fn convert_tir2_ty(ty: &Tir2Ty, resolved: &ResolvedAliases) -> Ty {
             attr: attr.clone(),
         },
 
-        // Functions — drop param names
-        Tir2Ty::Function { params, ret, attr } => Ty::Function {
+        // Functions — drop param names; map Never throws to None
+        Tir2Ty::Function {
+            params,
+            ret,
+            throws,
+            attr,
+        } => Ty::Function {
             params: params
                 .iter()
                 .map(|(_, t)| convert_tir2_ty(t, resolved))
                 .collect(),
             ret: Box::new(convert_tir2_ty(ret, resolved)),
+            throws: match throws.as_ref() {
+                Tir2Ty::Never { .. } => None,
+                t => Some(Box::new(convert_tir2_ty(t, resolved))),
+            },
             attr: attr.clone(),
         },
 

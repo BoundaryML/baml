@@ -161,10 +161,11 @@ pub enum Ty {
     // --- Compiler-specific: present in VIR/MIR, absent at runtime ---
     /// Only recursive aliases survive lower_ty; non-recursive are expanded.
     TypeAlias(TypeName, TyAttr),
-    /// Function/arrow type: `(T1, T2, ...) -> R`
+    /// Function/arrow type: `(T1, T2, ...) -> R [throws E]`
     Function {
         params: Vec<Ty>,
         ret: Box<Ty>,
+        throws: Option<Box<Ty>>,
         attr: TyAttr,
     },
     /// Void type — the type of effectful expressions (was VIR `Unit`).
@@ -233,7 +234,17 @@ impl Ty {
             Ty::Union(members, _) => Ty::Union(members, attr),
             Ty::Opaque(tn, _) => Ty::Opaque(tn, attr),
             Ty::TypeAlias(tn, _) => Ty::TypeAlias(tn, attr),
-            Ty::Function { params, ret, .. } => Ty::Function { params, ret, attr },
+            Ty::Function {
+                params,
+                ret,
+                throws,
+                ..
+            } => Ty::Function {
+                params,
+                ret,
+                throws,
+                attr,
+            },
             Ty::WatchAccessor(inner, _) => Ty::WatchAccessor(inner, attr),
             Ty::Future(inner, _) => Ty::Future(inner, attr),
         }

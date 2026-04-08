@@ -97,10 +97,11 @@ pub enum TypeExpr {
         value: baml_base::Literal,
         attrs: Vec<RawAttribute>,
     },
-    /// Function type: (params) -> return
+    /// Function type: (params) -> return [throws E]
     Function {
         params: Vec<FunctionTypeParam>,
         ret: Box<TypeExpr>,
+        throws: Option<Box<TypeExpr>>,
         attrs: Vec<RawAttribute>,
     },
     /// The `unknown` keyword type

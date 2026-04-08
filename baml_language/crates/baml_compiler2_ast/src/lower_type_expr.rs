@@ -164,9 +164,16 @@ fn lower_base_terminal(type_expr: &CstTypeExpr) -> TypeExpr {
             .function_return_type()
             .map(|t| lower_type_expr_inner(&t, false))
             .unwrap_or(TypeExpr::Unknown { attrs: vec![] });
+        let throws = type_expr.function_throws_type().map(|throws_clause| {
+            let throws_type = throws_clause
+                .type_expr()
+                .expect("THROWS_CLAUSE should have a type");
+            Box::new(lower_type_expr_inner(&throws_type, false))
+        });
         return TypeExpr::Function {
             params,
             ret: Box::new(ret),
+            throws,
             attrs: vec![],
         };
     }

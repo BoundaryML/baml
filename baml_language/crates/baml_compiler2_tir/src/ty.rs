@@ -159,10 +159,11 @@ pub enum Ty {
     /// Evolving map — created from empty map literal at mutable binding sites.
     /// Same semantics as `EvolvingList` but for maps (see doc on `EvolvingList`).
     EvolvingMap(Box<Ty>, Box<Ty>, TyAttr),
-    /// Function type: (params) -> return.
+    /// Function type: (params) -> return [throws E].
     Function {
         params: Vec<(Option<Name>, Ty)>,
         ret: Box<Ty>,
+        throws: Box<Ty>,
         attr: TyAttr,
     },
     /// A type variable (generic parameter) — e.g. `T` in `Array<T>`.
@@ -491,7 +492,12 @@ impl fmt::Display for Ty {
                 write!(f, "?")
             }
             Ty::Literal(lit, _freshness, _) => write!(f, "{lit}"),
-            Ty::Function { params, ret, .. } => {
+            Ty::Function {
+                params,
+                ret,
+                throws,
+                ..
+            } => {
                 let ps: Vec<String> = params
                     .iter()
                     .map(|(name, ty)| {
@@ -500,7 +506,11 @@ impl fmt::Display for Ty {
                             .unwrap_or_else(|| ty.to_string())
                     })
                     .collect();
-                write!(f, "({}) -> {ret}", ps.join(", "))
+                write!(f, "({}) -> {ret}", ps.join(", "))?;
+                if !matches!(throws.as_ref(), Ty::Never { .. }) {
+                    write!(f, " throws {throws}")?;
+                }
+                Ok(())
             }
             Ty::TypeVar(name, _) => write!(f, "{name}"),
             Ty::Never { .. } => write!(f, "never"),

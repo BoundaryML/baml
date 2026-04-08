@@ -1,0 +1,21 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== MIR2 ===
+fn user.takes_throwing(f: () -> int) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: () -> int // f // param
+
+    bb0: {
+        _0 = call copy _1() -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}

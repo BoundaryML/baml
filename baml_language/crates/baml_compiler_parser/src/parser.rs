@@ -2011,6 +2011,13 @@ impl<'a> Parser<'a> {
             // Note: The tokens are already emitted, we just need to parse the return type
             self.bump(); // ->
             self.parse_type(); // return type
+            // Optional throws clause on function type
+            if self.at(TokenKind::Throws) {
+                self.with_node(SyntaxKind::THROWS_CLAUSE, |p| {
+                    p.bump(); // throws
+                    p.parse_type();
+                });
+            }
         // The caller's with_node(TYPE_EXPR) will wrap this appropriately
         } else {
             // Not a function type - should be a parenthesized type

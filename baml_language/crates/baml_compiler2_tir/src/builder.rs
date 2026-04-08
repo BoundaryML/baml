@@ -725,6 +725,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                 Ty::Function {
                     params: param_tys,
                     ret: Box::new(ret_ty),
+                    throws: Box::new(Ty::Never {
+                        attr: TyAttr::default(),
+                    }),
                     attr: TyAttr::default(),
                 }
             }
@@ -1174,6 +1177,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                         let result = Ty::Function {
                             params: param_tys,
                             ret: Box::new(ret_ty),
+                            throws: Box::new(Ty::Never {
+                                attr: TyAttr::default(),
+                            }),
                             attr: TyAttr::default(),
                         };
                         self.record_expr_type(expr_id, result.clone());
@@ -3042,6 +3048,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                             attr: TyAttr::default(),
                         }),
                 ),
+                throws: Box::new(Ty::Never {
+                    attr: TyAttr::default(),
+                }),
                 attr: TyAttr::default(),
             };
             return Some(ty);
@@ -3130,6 +3139,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                                     attr: TyAttr::default(),
                                 }),
                         ),
+                        throws: Box::new(Ty::Never {
+                            attr: TyAttr::default(),
+                        }),
                         attr: TyAttr::default(),
                     }
                 }
@@ -3635,6 +3647,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                                 attr: TyAttr::default(),
                             }),
                     ),
+                    throws: Box::new(Ty::Never {
+                        attr: TyAttr::default(),
+                    }),
                     attr: TyAttr::default(),
                 };
                 // Note: diags from method signatures are reported at definition site.
@@ -4043,6 +4058,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                     ty: Ty::Function {
                         params,
                         ret: Box::new(ret),
+                        throws: Box::new(Ty::Never {
+                            attr: TyAttr::default(),
+                        }),
                         attr: TyAttr::default(),
                     },
                     class_loc,

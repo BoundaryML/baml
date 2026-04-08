@@ -2760,6 +2760,14 @@ impl ThrowsClause {
     }
 }
 
+impl TypeExpr {
+    /// Returns the throws clause of a function type expression, if present.
+    /// Only meaningful when `self.is_function_type()` is true.
+    pub fn function_throws_type(&self) -> Option<ThrowsClause> {
+        self.syntax.children().find_map(ThrowsClause::cast)
+    }
+}
+
 impl CatchExpr {
     /// Get the base expression before the first catch clause.
     pub fn base(&self) -> Option<SyntaxNode> {

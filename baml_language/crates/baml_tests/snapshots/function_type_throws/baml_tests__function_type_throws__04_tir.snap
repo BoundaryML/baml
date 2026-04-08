@@ -1,0 +1,11 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== TIR2 ===
+type user.ThrowingFn = () -> int throws string
+function user.takes_throwing(f: () -> int throws string) -> int throws never {
+  { : int
+    f() : int
+  }
+}
+type user.ThrowingFn$stream = unknown

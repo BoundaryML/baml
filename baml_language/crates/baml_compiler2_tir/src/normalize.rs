@@ -72,6 +72,7 @@ enum StructuralTy {
     Function {
         params: Vec<StructuralTy>,
         ret: Box<StructuralTy>,
+        throws: Box<StructuralTy>,
     },
     // Recursion
     Mu {
@@ -229,18 +230,24 @@ impl StructuralTy {
             // EnumVariant(E, V) <: Enum(E)
             (StructuralTy::EnumVariant(e, _), StructuralTy::Enum(sup_e)) => e == sup_e,
 
-            // Function subtyping: contravariant params, covariant return
+            // Function subtyping: contravariant params, covariant return and throws
             (
                 StructuralTy::Function {
                     params: params1,
                     ret: ret1,
+                    throws: throws1,
                 },
                 StructuralTy::Function {
                     params: params2,
                     ret: ret2,
+                    throws: throws2,
                 },
             ) => {
                 if !ret1.is_subtype_of(ret2, assumptions) {
+                    return false;
+                }
+                // Throws is covariant: fewer throws is more specific
+                if !throws1.is_subtype_of(throws2, assumptions) {
                     return false;
                 }
                 if params2.len() > params1.len() {
@@ -286,12 +293,17 @@ fn substitute(
                 .map(|t| substitute(t, var, replacement))
                 .collect(),
         ),
-        StructuralTy::Function { params, ret } => StructuralTy::Function {
+        StructuralTy::Function {
+            params,
+            ret,
+            throws,
+        } => StructuralTy::Function {
             params: params
                 .iter()
                 .map(|t| substitute(t, var, replacement))
                 .collect(),
             ret: Box::new(substitute(ret, var, replacement)),
+            throws: Box::new(substitute(throws, var, replacement)),
         },
         StructuralTy::Mu { var: v, body } if v != var => StructuralTy::Mu {
             var: v.clone(),
@@ -381,12 +393,18 @@ fn normalize_impl(
                 .map(|t| normalize_impl(t, aliases, recursive, expanding))
                 .collect(),
         ),
-        Ty::Function { params, ret, .. } => StructuralTy::Function {
+        Ty::Function {
+            params,
+            ret,
+            throws,
+            ..
+        } => StructuralTy::Function {
             params: params
                 .iter()
                 .map(|(_, t)| normalize_impl(t, aliases, recursive, expanding))
                 .collect(),
             ret: Box::new(normalize_impl(ret, aliases, recursive, expanding)),
+            throws: Box::new(normalize_impl(throws, aliases, recursive, expanding)),
         },
         Ty::TypeVar(name, _) => StructuralTy::TypeVar(name.clone()),
         // `$rust_type` — opaque Rust-managed state. Treated as Unknown
@@ -1147,11 +1165,17 @@ mod tests {
         let f1 = Ty::Function {
             params: vec![(None, Ty::Primitive(PrimitiveType::Int, TyAttr::default()))],
             ret: Box::new(Ty::Primitive(PrimitiveType::Int, TyAttr::default())),
+            throws: Box::new(Ty::Never {
+                attr: TyAttr::default(),
+            }),
             attr: TyAttr::default(),
         };
         let f2 = Ty::Function {
             params: vec![(None, Ty::Primitive(PrimitiveType::Int, TyAttr::default()))],
             ret: Box::new(Ty::Primitive(PrimitiveType::Float, TyAttr::default())),
+            throws: Box::new(Ty::Never {
+                attr: TyAttr::default(),
+            }),
             attr: TyAttr::default(),
         };
         assert!(is_subtype_of(&f1, &f2, &aliases));
@@ -1164,11 +1188,17 @@ mod tests {
         let f1 = Ty::Function {
             params: vec![(None, Ty::Primitive(PrimitiveType::Float, TyAttr::default()))],
             ret: Box::new(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
+            throws: Box::new(Ty::Never {
+                attr: TyAttr::default(),
+            }),
             attr: TyAttr::default(),
         };
         let f2 = Ty::Function {
             params: vec![(None, Ty::Primitive(PrimitiveType::Int, TyAttr::default()))],
             ret: Box::new(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
+            throws: Box::new(Ty::Never {
+                attr: TyAttr::default(),
+            }),
             attr: TyAttr::default(),
         };
         assert!(is_subtype_of(&f1, &f2, &aliases));

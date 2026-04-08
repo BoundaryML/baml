@@ -178,7 +178,12 @@ mod tests {
                 value: value.clone(),
                 attrs: strip_attrs(attrs),
             },
-            TypeExpr::Function { params, ret, attrs } => TypeExpr::Function {
+            TypeExpr::Function {
+                params,
+                ret,
+                throws,
+                attrs,
+            } => TypeExpr::Function {
                 params: params
                     .iter()
                     .map(|p| crate::ast::FunctionTypeParam {
@@ -187,6 +192,7 @@ mod tests {
                     })
                     .collect(),
                 ret: Box::new(strip_spans(ret)),
+                throws: throws.as_ref().map(|t| Box::new(strip_spans(t))),
                 attrs: strip_attrs(attrs),
             },
             TypeExpr::Media { kind, attrs } => TypeExpr::Media {
