@@ -447,6 +447,7 @@ impl<E: Send + Sync + 'static> Clone for SysOpContext<E> {
 pub struct SysOpIoCallbacks {
     pub http_send: SysOpFn,
     pub http_response_text: SysOpFn,
+    pub http_response_bytes: SysOpFn,
     pub env_get: SysOpFn,
     pub fs_open: SysOpFn,
     pub fs_file_read: SysOpFn,
@@ -465,6 +466,7 @@ impl SysOpIoCallbacks {
         Self {
             http_send: make_unsupported(SysOp::BamlHttpSend),
             http_response_text: make_unsupported(SysOp::BamlHttpResponseText),
+            http_response_bytes: make_unsupported(SysOp::BamlHttpResponseBytes),
             env_get: make_unsupported(SysOp::BamlEnvGet),
             fs_open: make_unsupported(SysOp::BamlFsOpen),
             fs_file_read: make_unsupported(SysOp::BamlFsFileRead),

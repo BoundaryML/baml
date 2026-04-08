@@ -91,6 +91,22 @@ impl io::IoClassHttpResponse for PlaygroundHttp {
             None => native_result,
         }
     }
+
+    fn bytes(
+        &self,
+        heap: &Arc<BexHeap>,
+        call_id: CallId,
+        response: owned::http::Response,
+        ctx: &SysOpContext,
+    ) -> SysOpOutput<Vec<u8>> {
+        <sys_native::NativeSysOps as io::IoClassHttpResponse>::bytes(
+            &sys_native::NativeSysOps,
+            heap,
+            call_id,
+            response,
+            ctx,
+        )
+    }
 }
 
 impl io::IoNamespaceHttp for PlaygroundHttp {

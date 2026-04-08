@@ -18,6 +18,9 @@ baml-py = { path = "../../crates/bridge_python", editable = true }
 [tool.uv]
 package = true
 
+[dependency-groups]
+dev = []
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 timeout = 30

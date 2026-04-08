@@ -227,6 +227,13 @@ class Client {
 
 // @providers-no-options: openai, openai-generic, openai-responses, ollama, openrouter, google-ai, fallback, round-robin
 
+class MediaUrlHandler {
+  image string | null
+  audio string | null
+  video string | null
+  pdf string | null
+}
+
 class PrimitiveClientOptions {
   model string | null
   base_url string | null
@@ -239,6 +246,7 @@ class PrimitiveClientOptions {
   remap_roles map<string, string> | null
   api_key string | null
   provider_options AnthropicOptions | AzureOpenAiOptions | BedrockOptions | VertexAiOptions | null
+  media_url_handler MediaUrlHandler | null
 
   // request stuff here
   headers map<string, string>

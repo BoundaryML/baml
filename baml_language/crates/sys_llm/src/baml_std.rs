@@ -208,6 +208,55 @@ fn apply_provider_defaults(provider: LlmProvider, options: &mut PrimitiveClientO
             _ => None,
         };
     }
+
+    if options.media_url_handler.is_none() {
+        let handler = match provider {
+            LlmProvider::OpenAi
+            | LlmProvider::OpenAiGeneric
+            | LlmProvider::AzureOpenAi
+            | LlmProvider::Ollama
+            | LlmProvider::OpenRouter
+            | LlmProvider::OpenAiResponses => sys_types::generated::owned::llm::MediaUrlHandler {
+                image: Some("send_url".into()),
+                audio: Some("send_base64".into()),
+                video: Some("send_url".into()),
+                pdf: Some("send_url".into()),
+            },
+            LlmProvider::Anthropic => sys_types::generated::owned::llm::MediaUrlHandler {
+                image: Some("send_url".into()),
+                audio: Some("send_url".into()),
+                video: Some("send_url".into()),
+                pdf: Some("send_url".into()),
+            },
+            LlmProvider::GoogleAi => sys_types::generated::owned::llm::MediaUrlHandler {
+                image: Some("send_base64_unless_google_url".into()),
+                audio: Some("send_base64".into()),
+                video: Some("send_base64".into()),
+                pdf: Some("send_base64".into()),
+            },
+            LlmProvider::VertexAi => sys_types::generated::owned::llm::MediaUrlHandler {
+                image: Some("send_url_add_mime_type".into()),
+                audio: Some("send_url_add_mime_type".into()),
+                video: Some("send_url".into()),
+                pdf: Some("send_url".into()),
+            },
+            LlmProvider::AwsBedrock => sys_types::generated::owned::llm::MediaUrlHandler {
+                image: Some("send_base64".into()),
+                audio: Some("send_base64".into()),
+                video: Some("send_url".into()),
+                pdf: Some("send_base64".into()),
+            },
+            LlmProvider::BamlFallback | LlmProvider::BamlRoundRobin => {
+                sys_types::generated::owned::llm::MediaUrlHandler {
+                    image: Some("send_base64".into()),
+                    audio: Some("send_base64".into()),
+                    video: Some("send_base64".into()),
+                    pdf: Some("send_base64".into()),
+                }
+            }
+        };
+        options.media_url_handler = Some(handler);
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

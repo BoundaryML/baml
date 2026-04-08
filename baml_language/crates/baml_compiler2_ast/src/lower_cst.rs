@@ -1719,14 +1719,19 @@ fn synthesize_client_new_companion(
         entries: request_body_entries,
     });
 
-    // Insert provider_options before "headers" to match PrimitiveClientOptions
+    // Insert provider_options before "media_url_handler" to match PrimitiveClientOptions
     // class-definition order, then append request_body at the end.
-    let headers_pos = options_fields
+    let insert_pos = options_fields
         .iter()
-        .position(|(n, _)| n.as_str() == "headers")
-        .unwrap_or(options_fields.len());
+        .position(|(n, _)| n.as_str() == "media_url_handler")
+        .unwrap_or_else(|| {
+            options_fields
+                .iter()
+                .position(|(n, _)| n.as_str() == "headers")
+                .unwrap_or(options_fields.len())
+        });
     options_fields.insert(
-        headers_pos,
+        insert_pos,
         (Name::new("provider_options"), provider_options),
     );
     options_fields.push((Name::new("request_body"), request_body));

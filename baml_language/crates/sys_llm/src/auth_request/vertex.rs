@@ -787,6 +787,9 @@ mod wasm {
                 shell: Arc::new(|_cmd| {
                     Box::pin(async { Err(crate::LlmOpError::Other("unsupported".into())) })
                 }),
+                fetch_bytes: Arc::new(|_url| {
+                    Box::pin(async { Err(crate::LlmOpError::Other("unsupported".into())) })
+                }),
             }
         }
 
@@ -1078,6 +1081,9 @@ mod tests {
             shell: Arc::new(|_cmd| {
                 Box::pin(async { Err(crate::LlmOpError::Other("unsupported".into())) })
             }),
+            fetch_bytes: Arc::new(|_url| {
+                Box::pin(async { Err(crate::LlmOpError::Other("unsupported".into())) })
+            }),
         };
         let client = make_client("vertex-ai");
         let mut req = fake_request();
@@ -1149,6 +1155,9 @@ mod tests {
             shell: Arc::new(|_cmd| {
                 Box::pin(async { Err(crate::LlmOpError::Other("unsupported".into())) })
             }),
+            fetch_bytes: Arc::new(|_url| {
+                Box::pin(async { Err(crate::LlmOpError::Other("unsupported".into())) })
+            }),
         }
     }
 
@@ -1216,6 +1225,9 @@ mod tests {
             shell: Arc::new(|_cmd| {
                 Box::pin(async { Err(crate::LlmOpError::Other("unsupported".into())) })
             }),
+            fetch_bytes: Arc::new(|_url| {
+                Box::pin(async { Err(crate::LlmOpError::Other("unsupported".into())) })
+            }),
         };
         let mut req = fake_request();
         auth_vertex(&mut req, &client, &callbacks).await.unwrap();
@@ -1262,6 +1274,9 @@ mod tests {
                 Box::pin(async { Err(crate::LlmOpError::Other("not found".into())) })
             }),
             shell: Arc::new(|_cmd| {
+                Box::pin(async { Err(crate::LlmOpError::Other("unsupported".into())) })
+            }),
+            fetch_bytes: Arc::new(|_url| {
                 Box::pin(async { Err(crate::LlmOpError::Other("unsupported".into())) })
             }),
         };
@@ -1323,6 +1338,9 @@ mod tests {
                 })
             }),
             shell: Arc::new(|_cmd| {
+                Box::pin(async { Err(crate::LlmOpError::Other("unsupported".into())) })
+            }),
+            fetch_bytes: Arc::new(|_url| {
                 Box::pin(async { Err(crate::LlmOpError::Other("unsupported".into())) })
             }),
         };

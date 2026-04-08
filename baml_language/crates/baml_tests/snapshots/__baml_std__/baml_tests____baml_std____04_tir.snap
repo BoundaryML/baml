@@ -440,6 +440,12 @@ function baml.llm.Client.execute_once<T>(self: baml.llm.Client, context: baml.ll
         }
   }
 }
+class baml.llm.MediaUrlHandler {
+  image: string | null
+  audio: string | null
+  video: string | null
+  pdf: string | null
+}
 class baml.llm.PrimitiveClientOptions {
   model: string | null
   base_url: string | null
@@ -452,6 +458,7 @@ class baml.llm.PrimitiveClientOptions {
   remap_roles: map<string, string> | null
   api_key: string | null
   provider_options: baml.llm.AnthropicOptions | baml.llm.AzureOpenAiOptions | baml.llm.BedrockOptions | baml.llm.VertexAiOptions | null
+  media_url_handler: baml.llm.MediaUrlHandler | null
   headers: map<string, string>
   query_params: map<string, string>
   request_body: map<string, unknown>
@@ -504,6 +511,12 @@ class baml.llm.Client$stream {
   retry: null | baml.llm.RetryPolicy$stream
   counter: null | int
 }
+class baml.llm.MediaUrlHandler$stream {
+  image: string | null
+  audio: string | null
+  video: string | null
+  pdf: string | null
+}
 class baml.llm.PrimitiveClientOptions$stream {
   model: string | null
   base_url: string | null
@@ -516,6 +529,7 @@ class baml.llm.PrimitiveClientOptions$stream {
   remap_roles: map<string, string> | null
   api_key: string | null
   provider_options: baml.llm.AnthropicOptions$stream | baml.llm.AzureOpenAiOptions$stream | baml.llm.BedrockOptions$stream | baml.llm.VertexAiOptions$stream | null
+  media_url_handler: baml.llm.MediaUrlHandler$stream | null
   headers: map<string, string>
   query_params: map<string, string>
   request_body: map<string, unknown>

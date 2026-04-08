@@ -97,6 +97,7 @@ class baml.http.Response {
   url: string
   _body: $rust_type
 }
+function baml.http.bytes(self: ?) -> uint8array  [builtin]
 function baml.http.fetch(url: string) -> baml.http.Response  [builtin]
 function baml.http.ok(self: ?) -> bool  [expr] {
   {  } self.status_code Ge 200 And self.status_code Lt 300
@@ -169,6 +170,12 @@ class baml.llm.Client {
   retry: baml.llm.RetryPolicy?
   counter: int
 }
+class baml.llm.MediaUrlHandler {
+  image: string | null
+  audio: string | null
+  video: string | null
+  pdf: string | null
+}
 class baml.llm.PrimitiveClient {
   name: string
   provider: string
@@ -186,6 +193,7 @@ class baml.llm.PrimitiveClientOptions {
   remap_roles: map<string, string> | null
   api_key: string | null
   provider_options: baml.llm.AnthropicOptions | baml.llm.AzureOpenAiOptions | baml.llm.BedrockOptions | baml.llm.VertexAiOptions | null
+  media_url_handler: baml.llm.MediaUrlHandler | null
   headers: map<string, string>
   query_params: map<string, string>
   request_body: map<string, unknown>

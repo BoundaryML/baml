@@ -31,7 +31,7 @@ impl BamlClassMediaPdf for PackageBamlImpl {
 
     fn mime_type(vm: &BexVm, pdf: &view::media::Pdf<'_>) -> Option<String> {
         let media: &baml_builtins2::MediaValue = pdf._data(vm);
-        media.mime_type.clone()
+        media.mime_type()
     }
 
     fn from_url(url: &str, mime_type: Option<&str>) -> copy::media::Pdf {
@@ -76,7 +76,7 @@ impl BamlClassMediaAudio for PackageBamlImpl {
 
     fn mime_type(vm: &BexVm, audio: &view::media::Audio<'_>) -> Option<String> {
         let media: &baml_builtins2::MediaValue = audio._data(vm);
-        media.mime_type.clone()
+        media.mime_type()
     }
 
     fn from_url(url: &str, mime_type: Option<&str>) -> copy::media::Audio {
@@ -121,7 +121,7 @@ impl BamlClassMediaVideo for PackageBamlImpl {
 
     fn mime_type(vm: &BexVm, video: &view::media::Video<'_>) -> Option<String> {
         let media: &baml_builtins2::MediaValue = video._data(vm);
-        media.mime_type.clone()
+        media.mime_type()
     }
 
     fn from_url(url: &str, mime_type: Option<&str>) -> copy::media::Video {
@@ -166,7 +166,7 @@ impl BamlClassMediaImage for PackageBamlImpl {
 
     fn mime_type(vm: &BexVm, image: &view::media::Image<'_>) -> Option<String> {
         let media: &baml_builtins2::MediaValue = image._data(vm);
-        media.mime_type.clone()
+        media.mime_type()
     }
 
     fn from_url(url: &str, mime_type: Option<&str>) -> copy::media::Image {

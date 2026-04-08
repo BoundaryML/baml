@@ -14,6 +14,7 @@ mod model_features;
 pub(crate) mod parse_response;
 mod provider;
 mod render_prompt;
+pub(crate) mod resolve_media;
 mod specialize_prompt;
 pub(crate) mod types;
 #[cfg(target_arch = "wasm32")]
@@ -103,20 +104,32 @@ pub type ShellFn = Arc<
         + RefUnwindSafe,
 >;
 
-/// IO callbacks needed by `auth_request` (especially Bedrock credential resolution).
-///
-/// These bridge the BAML runtime's IO capabilities into the auth pipeline,
-/// allowing credential resolution to work on both native and WASM targets.
+/// Response from a binary HTTP fetch (used by media resolution).
+pub struct FetchBytesResponse {
+    pub status_code: u16,
+    pub headers: indexmap::IndexMap<String, String>,
+    pub bytes: Vec<u8>,
+}
+
+/// Async closure that fetches a URL and returns raw bytes.
+pub type FetchBytesFn = Arc<
+    dyn Fn(String) -> Pin<Box<dyn Future<Output = Result<FetchBytesResponse, LlmOpError>> + Send>>
+        + Send
+        + Sync
+        + UnwindSafe
+        + RefUnwindSafe,
+>;
+
+/// IO callbacks needed by `build_request` (auth, media resolution).
 pub struct BuildRequestCallbacks {
     pub http_send: HttpSendFn,
     pub env_read: EnvReadFn,
     pub fs_read: FsReadFn,
     pub shell: ShellFn,
+    pub fetch_bytes: FetchBytesFn,
 }
 
 impl BuildRequestCallbacks {
-    /// Returns a no-op callbacks instance where every operation fails or returns
-    /// nothing. Useful for tests targeting providers that don't need IO callbacks.
     #[cfg(test)]
     pub(crate) fn noop() -> Self {
         use std::sync::Arc;
@@ -125,6 +138,7 @@ impl BuildRequestCallbacks {
             env_read: Arc::new(|_| Box::pin(async { Ok(None) })),
             fs_read: Arc::new(|_| Box::pin(async { Err(LlmOpError::Other("noop".into())) })),
             shell: Arc::new(|_| Box::pin(async { Err(LlmOpError::Other("noop".into())) })),
+            fetch_bytes: Arc::new(|_| Box::pin(async { Err(LlmOpError::Other("noop".into())) })),
         }
     }
 }

@@ -3,8 +3,6 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 function $init() -> null {
     call ?
-    store_global ?225
-    call ?
     store_global ?226
     call ?
     store_global ?227
@@ -70,6 +68,8 @@ function $init() -> null {
     store_global ?257
     call ?
     store_global ?258
+    call ?
+    store_global ?259
     load_const ?
     return
 }
@@ -117,6 +117,9 @@ function user.ArrayConfigClient$new() -> null {
     copy 0
     load_const null
     store_field .provider_options
+    copy 0
+    load_const null
+    store_field .media_url_handler
     copy 0
     alloc_map 0
     store_field .headers
@@ -178,6 +181,9 @@ function user.ArrayOfObjectsClient$new() -> null {
     copy 0
     load_const null
     store_field .provider_options
+    copy 0
+    load_const null
+    store_field .media_url_handler
     copy 0
     alloc_map 0
     store_field .headers
@@ -617,6 +623,9 @@ function user.BasicClient$new() -> null {
     copy 0
     load_const null
     store_field .provider_options
+    copy 0
+    load_const null
+    store_field .media_url_handler
     copy 0
     alloc_map 0
     store_field .headers
@@ -1083,6 +1092,9 @@ function user.C$new() -> null {
     load_const null
     store_field .provider_options
     copy 0
+    load_const null
+    store_field .media_url_handler
+    copy 0
     alloc_map 0
     store_field .headers
     copy 0
@@ -1258,6 +1270,9 @@ function user.CommaClient$new() -> null {
     copy 0
     load_const null
     store_field .provider_options
+    copy 0
+    load_const null
+    store_field .media_url_handler
     copy 0
     alloc_map 0
     store_field .headers
@@ -1489,6 +1504,9 @@ function user.DeeplyNestedClient$new() -> null {
     load_const null
     store_field .provider_options
     copy 0
+    load_const null
+    store_field .media_url_handler
+    copy 0
     load_const true
     load_const 30000
     load_const "platform"
@@ -1560,6 +1578,9 @@ function user.EnvClient$new() -> null {
     load_const null
     store_field .provider_options
     copy 0
+    load_const null
+    store_field .media_url_handler
+    copy 0
     alloc_map 0
     store_field .headers
     copy 0
@@ -1630,6 +1651,9 @@ function user.ExtraWhitespaceClient$new() -> null {
     load_const null
     store_field .provider_options
     copy 0
+    load_const null
+    store_field .media_url_handler
+    copy 0
     alloc_map 0
     store_field .headers
     copy 0
@@ -1697,6 +1721,9 @@ function user.FullClient$new() -> null {
     copy 0
     load_const null
     store_field .provider_options
+    copy 0
+    load_const null
+    store_field .media_url_handler
     copy 0
     alloc_map 0
     store_field .headers
@@ -2011,6 +2038,9 @@ function user.LongArrayClient$new() -> null {
     load_const null
     store_field .provider_options
     copy 0
+    load_const null
+    store_field .media_url_handler
+    copy 0
     alloc_map 0
     store_field .headers
     copy 0
@@ -2073,6 +2103,9 @@ function user.LongArrayOfObjectsClient$new() -> null {
     copy 0
     load_const null
     store_field .provider_options
+    copy 0
+    load_const null
+    store_field .media_url_handler
     copy 0
     alloc_map 0
     store_field .headers
@@ -2146,6 +2179,9 @@ function user.LongNestedValuesClient$new() -> null {
     load_const null
     store_field .provider_options
     copy 0
+    load_const null
+    store_field .media_url_handler
+    copy 0
     alloc_map 0
     store_field .headers
     copy 0
@@ -2201,6 +2237,9 @@ function user.LongOptionClient$new() -> null {
     copy 0
     load_const null
     store_field .provider_options
+    copy 0
+    load_const null
+    store_field .media_url_handler
     copy 0
     alloc_map 0
     store_field .headers
@@ -4012,6 +4051,9 @@ function user.ManyOptionsClient$new() -> null {
     load_const null
     store_field .provider_options
     copy 0
+    load_const null
+    store_field .media_url_handler
+    copy 0
     alloc_map 0
     store_field .headers
     copy 0
@@ -4806,6 +4848,9 @@ function user.MixedValuesClient$new() -> null {
     load_const null
     store_field .provider_options
     copy 0
+    load_const null
+    store_field .media_url_handler
+    copy 0
     alloc_map 0
     store_field .headers
     copy 0
@@ -4938,6 +4983,9 @@ function user.NestedConfigClient$new() -> null {
     copy 0
     load_const null
     store_field .provider_options
+    copy 0
+    load_const null
+    store_field .media_url_handler
     copy 0
     alloc_map 0
     store_field .headers
@@ -5175,6 +5223,9 @@ function user.RawStringConfigClient$new() -> null {
     load_const null
     store_field .provider_options
     copy 0
+    load_const null
+    store_field .media_url_handler
+    copy 0
     alloc_map 0
     store_field .headers
     copy 0
@@ -5232,6 +5283,9 @@ function user.SameLineClient$new() -> null {
     copy 0
     load_const null
     store_field .provider_options
+    copy 0
+    load_const null
+    store_field .media_url_handler
     copy 0
     alloc_map 0
     store_field .headers
@@ -5298,6 +5352,9 @@ function user.StringProviderClient$new() -> null {
     copy 0
     load_const null
     store_field .provider_options
+    copy 0
+    load_const null
+    store_field .media_url_handler
     copy 0
     alloc_map 0
     store_field .headers
@@ -5386,6 +5443,9 @@ function user.ThisIsAnExtremelyLongClientNameThatDefinitelyExceedsTheDefaultLine
     load_const null
     store_field .provider_options
     copy 0
+    load_const null
+    store_field .media_url_handler
+    copy 0
     alloc_map 0
     store_field .headers
     copy 0
@@ -5447,6 +5507,9 @@ function user.TriviaClient$new() -> null {
     load_const null
     store_field .provider_options
     copy 0
+    load_const null
+    store_field .media_url_handler
+    copy 0
     alloc_map 0
     store_field .headers
     copy 0
@@ -5502,6 +5565,9 @@ function user.TriviaClientBlock$new() -> null {
     copy 0
     load_const null
     store_field .provider_options
+    copy 0
+    load_const null
+    store_field .media_url_handler
     copy 0
     alloc_map 0
     store_field .headers
@@ -5559,6 +5625,9 @@ function user.TriviaDeeplyNestedClient$new() -> null {
     load_const null
     store_field .provider_options
     copy 0
+    load_const null
+    store_field .media_url_handler
+    copy 0
     alloc_map 0
     store_field .headers
     copy 0
@@ -5614,6 +5683,9 @@ function user.TriviaDeeplyNestedClientBlock$new() -> null {
     copy 0
     load_const null
     store_field .provider_options
+    copy 0
+    load_const null
+    store_field .media_url_handler
     copy 0
     alloc_map 0
     store_field .headers
@@ -5695,6 +5767,9 @@ function user.TriviaLongValueClient$new() -> null {
     load_const null
     store_field .provider_options
     copy 0
+    load_const null
+    store_field .media_url_handler
+    copy 0
     alloc_map 0
     store_field .headers
     copy 0
@@ -5750,6 +5825,9 @@ function user.TriviaLongValueClientBlock$new() -> null {
     copy 0
     load_const null
     store_field .provider_options
+    copy 0
+    load_const null
+    store_field .media_url_handler
     copy 0
     alloc_map 0
     store_field .headers
@@ -5826,6 +5904,9 @@ function user.TypedValuesClient$new() -> null {
     copy 0
     load_const null
     store_field .provider_options
+    copy 0
+    load_const null
+    store_field .media_url_handler
     copy 0
     alloc_map 0
     store_field .headers

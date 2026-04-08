@@ -3,9 +3,9 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 function $init() -> null {
     call ?
-    store_global ?133
-    call ?
     store_global ?134
+    call ?
+    store_global ?135
     load_const ?
     return
 }
@@ -53,6 +53,9 @@ function user.MyClient$new() -> null {
     copy 0
     load_const null
     store_field .provider_options
+    copy 0
+    load_const null
+    store_field .media_url_handler
     copy 0
     alloc_map 0
     store_field .headers

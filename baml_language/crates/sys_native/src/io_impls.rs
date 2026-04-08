@@ -245,6 +245,41 @@ impl io::IoClassHttpResponse for NativeSysOps {
     ) -> SysOpOutput<String> {
         SysOpOutput::err(OpErrorKind::Unsupported)
     }
+
+    #[cfg(feature = "bundle-http")]
+    fn bytes(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        response: owned::http::Response,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Vec<u8>> {
+        SysOpOutput::async_op(async move {
+            let body: Arc<tokio::sync::Mutex<Option<reqwest::Response>>> = response
+                ._body
+                .downcast::<tokio::sync::Mutex<Option<reqwest::Response>>>()
+                .map_err(|_| OpErrorKind::Other("Invalid response body handle".into()))?;
+            let mut guard = body.lock().await;
+            let resp = guard.take().ok_or_else(|| {
+                OpErrorKind::Other("Response body has already been consumed".into())
+            })?;
+            resp.bytes()
+                .await
+                .map(|b| b.to_vec())
+                .map_err(|e| OpErrorKind::Other(format!("Failed to read response body: {e}")))
+        })
+    }
+
+    #[cfg(not(feature = "bundle-http"))]
+    fn bytes(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _response: owned::http::Response,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Vec<u8>> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
 }
 
 #[cfg(feature = "bundle-http")]

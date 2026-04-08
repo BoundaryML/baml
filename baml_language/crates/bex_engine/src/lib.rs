@@ -550,6 +550,7 @@ impl BexEngine {
             io_callbacks: sys_types::SysOpIoCallbacks {
                 http_send: sys_ops.baml_http_send.clone(),
                 http_response_text: sys_ops.baml_http_response_text.clone(),
+                http_response_bytes: sys_ops.baml_http_response_bytes.clone(),
                 env_get: sys_ops.baml_env_get.clone(),
                 fs_open: sys_ops.baml_fs_open.clone(),
                 fs_file_read: sys_ops.baml_fs_file_read.clone(),

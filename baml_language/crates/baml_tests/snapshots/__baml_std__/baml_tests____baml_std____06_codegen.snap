@@ -192,6 +192,9 @@ function baml.fs.File.read(self: null) -> string {
 function baml.fs.open(path: string) -> void {
 }
 
+function baml.http.Response.bytes(self: null) -> uint8array {
+}
+
 function baml.http.Response.ok(self: null) -> bool {
     load_var self
     load_field .status_code

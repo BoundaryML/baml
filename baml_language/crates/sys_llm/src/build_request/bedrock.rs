@@ -411,7 +411,7 @@ fn media_to_content_block(
 
     match media.kind {
         MediaKind::Image => {
-            let format = parse_image_format(mime)?;
+            let format = parse_image_format(&mime)?;
             let img_source = match source {
                 ResolvedMedia::S3Uri(uri) => ImageSource::S3Location(s3_location(uri)),
                 ResolvedMedia::Bytes(bytes) => {
@@ -428,7 +428,7 @@ fn media_to_content_block(
             Ok(vec![ContentBlock::Image(block)])
         }
         MediaKind::Video => {
-            let format = parse_video_format(mime)?;
+            let format = parse_video_format(&mime)?;
             let vid_source = match source {
                 ResolvedMedia::S3Uri(uri) => VideoSource::S3Location(s3_location(uri)),
                 ResolvedMedia::Bytes(bytes) => {
@@ -464,7 +464,7 @@ fn media_to_content_block(
             Ok(vec![ContentBlock::Document(block)])
         }
         MediaKind::Audio => {
-            let format = parse_audio_format(mime)?;
+            let format = parse_audio_format(&mime)?;
             let aud_source = match source {
                 ResolvedMedia::S3Uri(_) => {
                     return Err(BuildRequestError::UnsupportedMedia(

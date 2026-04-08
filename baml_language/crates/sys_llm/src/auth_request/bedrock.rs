@@ -507,6 +507,9 @@ mod tests {
             shell: Arc::new(|_cmd| {
                 Box::pin(async { Err(crate::LlmOpError::Other("unsupported".into())) })
             }),
+            fetch_bytes: Arc::new(|_url| {
+                Box::pin(async { Err(crate::LlmOpError::Other("unsupported".into())) })
+            }),
         }
     }
 
@@ -722,6 +725,9 @@ aws_secret_access_key = wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
                 Box::pin(async { Err(crate::LlmOpError::Other("not found".into())) })
             }),
             shell: Arc::new(|_cmd| {
+                Box::pin(async { Err(crate::LlmOpError::Other("unsupported".into())) })
+            }),
+            fetch_bytes: Arc::new(|_url| {
                 Box::pin(async { Err(crate::LlmOpError::Other("unsupported".into())) })
             }),
         };

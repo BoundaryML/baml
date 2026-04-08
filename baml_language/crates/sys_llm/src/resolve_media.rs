@@ -1,34 +1,31 @@
 //! Media resolution: fetch URLs / read files and populate `MediaValue` content
 //! before provider-specific request building.
 
-use std::sync::Arc;
+use std::{str::FromStr, sync::Arc};
 
 use baml_base::MediaKind;
 use baml_builtins2::{MediaContent, MediaValue, PromptAstSimple};
 use base64::Engine as _;
 
-use crate::build_request::BuildRequestError;
-use crate::BuildRequestCallbacks;
-use crate::LlmProvider;
+use crate::{BuildRequestCallbacks, build_request::BuildRequestError};
 
 // ============================================================================
 // Resolution strategy
 // ============================================================================
 
 /// How a media URL should be handled before sending to the provider.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+///
+/// String values match what users write in `media_url_handler` config blocks
+/// and what `apply_provider_defaults()` sets.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, strum::EnumString)]
+#[strum(serialize_all = "snake_case")]
 pub(crate) enum ResolveMediaUrls {
-    /// Always download and convert to base64.
     SendBase64,
-    /// Pass the URL through unchanged.
     SendUrl,
-    /// Keep the URL but ensure a MIME type is present (may fetch to infer).
     SendUrlAddMimeType,
-    /// Convert to base64 unless the URL is a Google Cloud Storage (`gs://`) URI.
     SendBase64UnlessGoogleUrl,
 }
 
-/// Per-media-type resolution strategy for a provider.
 pub(crate) struct MediaUrlHandler {
     pub image: ResolveMediaUrls,
     pub audio: ResolveMediaUrls,
@@ -37,62 +34,16 @@ pub(crate) struct MediaUrlHandler {
 }
 
 impl MediaUrlHandler {
-    /// Build handler from client options, falling back to provider defaults.
-    pub fn from_client(client: &crate::baml_std::PrimitiveClient, provider: LlmProvider) -> Self {
-        let defaults = Self::defaults_for_provider(provider);
-        let Some(ref user_handler) = client.options.media_url_handler else {
-            return defaults;
-        };
+    /// Build handler from client options. Defaults are already applied by
+    /// `apply_provider_defaults()` in `baml_std.rs`, so this just parses
+    /// the string values into the enum.
+    pub(crate) fn from_client(client: &crate::baml_std::PrimitiveClient) -> Self {
+        let handler = client.options.media_url_handler.as_ref();
         Self {
-            image: parse_strategy(&user_handler.image).unwrap_or(defaults.image),
-            audio: parse_strategy(&user_handler.audio).unwrap_or(defaults.audio),
-            video: parse_strategy(&user_handler.video).unwrap_or(defaults.video),
-            pdf: parse_strategy(&user_handler.pdf).unwrap_or(defaults.pdf),
-        }
-    }
-
-    /// Provider defaults, matching the old engine's per-provider configuration.
-    fn defaults_for_provider(provider: LlmProvider) -> Self {
-        use LlmProvider::*;
-        use ResolveMediaUrls::*;
-
-        match provider {
-            OpenAi | OpenAiGeneric | AzureOpenAi | Ollama | OpenRouter | OpenAiResponses => Self {
-                image: SendUrl,
-                audio: SendBase64,
-                video: SendUrl,
-                pdf: SendUrl,
-            },
-            Anthropic => Self {
-                image: SendUrl,
-                audio: SendUrl,
-                video: SendUrl,
-                pdf: SendUrl,
-            },
-            GoogleAi => Self {
-                image: SendBase64UnlessGoogleUrl,
-                audio: SendBase64,
-                video: SendBase64,
-                pdf: SendBase64,
-            },
-            VertexAi => Self {
-                image: SendUrlAddMimeType,
-                audio: SendUrlAddMimeType,
-                video: SendUrl,
-                pdf: SendUrl,
-            },
-            AwsBedrock => Self {
-                image: SendBase64,
-                audio: SendBase64,
-                video: SendUrl,
-                pdf: SendBase64,
-            },
-            BamlFallback | BamlRoundRobin => Self {
-                image: SendBase64,
-                audio: SendBase64,
-                video: SendBase64,
-                pdf: SendBase64,
-            },
+            image: parse_field(handler.and_then(|h| h.image.as_deref())),
+            audio: parse_field(handler.and_then(|h| h.audio.as_deref())),
+            video: parse_field(handler.and_then(|h| h.video.as_deref())),
+            pdf: parse_field(handler.and_then(|h| h.pdf.as_deref())),
         }
     }
 
@@ -107,17 +58,23 @@ impl MediaUrlHandler {
     }
 }
 
+/// Parse a strategy string into the enum, defaulting to `SendBase64` if missing or invalid.
+fn parse_field(value: Option<&str>) -> ResolveMediaUrls {
+    value
+        .and_then(|s| ResolveMediaUrls::from_str(s).ok())
+        .unwrap_or(ResolveMediaUrls::SendBase64)
+}
+
 // ============================================================================
 // Resolution pass
 // ============================================================================
 
-/// Walk the prompt tree and resolve all media according to the handler strategy.
 pub(crate) async fn resolve_media(
     prompt: &bex_vm_types::PromptAst,
     handler: &MediaUrlHandler,
     callbacks: &BuildRequestCallbacks,
 ) -> Result<(), BuildRequestError> {
-    resolve_prompt_node(&**prompt, handler, callbacks).await
+    resolve_prompt_node(prompt, handler, callbacks).await
 }
 
 fn resolve_prompt_node<'a>(
@@ -153,9 +110,7 @@ fn resolve_content_node<'a>(
     Box::pin(async move {
         match content {
             PromptAstSimple::String(_) => Ok(()),
-            PromptAstSimple::Media(media) => {
-                resolve_single_media(media, handler, callbacks).await
-            }
+            PromptAstSimple::Media(media) => resolve_single_media(media, handler, callbacks).await,
             PromptAstSimple::Multiple(items) => {
                 for item in items {
                     resolve_content_node(item, handler, callbacks).await?;
@@ -173,13 +128,11 @@ async fn resolve_single_media(
 ) -> Result<(), BuildRequestError> {
     let strategy = handler.strategy_for(media.kind);
 
-    // Check if already resolved (base64 data present).
     let already_resolved = media.read_content(|c| c.base64_data().is_some());
     if already_resolved && strategy != ResolveMediaUrls::SendUrlAddMimeType {
         return Ok(());
     }
 
-    // Read the current content state to decide what to do.
     let content_info = media.read_content(|c| match c {
         MediaContent::Url { url, .. } => ContentInfo::Url(url.clone()),
         MediaContent::File { file, .. } => ContentInfo::File(file.clone()),
@@ -205,6 +158,19 @@ async fn resolve_url(
     strategy: ResolveMediaUrls,
     callbacks: &BuildRequestCallbacks,
 ) -> Result<(), BuildRequestError> {
+    // Handle data: URLs inline -- no HTTP fetch needed.
+    if let Some((mime, b64)) = parse_data_url(url) {
+        if media.mime_type().is_none() {
+            media.set_mime_type(mime);
+        }
+        media.write_content(|c| {
+            if let MediaContent::Url { base64_data, .. } = c {
+                *base64_data = Some(b64);
+            }
+        });
+        return Ok(());
+    }
+
     match strategy {
         ResolveMediaUrls::SendUrl => Ok(()),
         ResolveMediaUrls::SendBase64UnlessGoogleUrl if url.starts_with("gs://") => Ok(()),
@@ -224,13 +190,8 @@ async fn resolve_url(
 
             let b64 = base64::engine::general_purpose::STANDARD.encode(&response.bytes);
 
-            // Infer MIME type from Content-Type header if not already set.
             if media.mime_type().is_none() {
-                if let Some(ct) = response.headers.get("content-type") {
-                    // Strip parameters (e.g., "image/png; charset=utf-8" -> "image/png")
-                    let mime = ct.split(';').next().unwrap_or(ct).trim();
-                    media.set_mime_type(mime.to_string());
-                }
+                infer_mime_from_headers_or_bytes(media, &response.headers, &response.bytes);
             }
 
             media.write_content(|c| {
@@ -244,17 +205,13 @@ async fn resolve_url(
             if media.mime_type().is_some() {
                 return Ok(());
             }
-            // Need to fetch just to infer MIME type.
             let response = (callbacks.fetch_bytes)(url.to_string())
                 .await
                 .map_err(|e| {
                     BuildRequestError::Other(format!("failed to fetch media URL {url}: {e}"))
                 })?;
 
-            if let Some(ct) = response.headers.get("content-type") {
-                let mime = ct.split(';').next().unwrap_or(ct).trim();
-                media.set_mime_type(mime.to_string());
-            }
+            infer_mime_from_headers_or_bytes(media, &response.headers, &response.bytes);
             Ok(())
         }
     }
@@ -271,10 +228,11 @@ async fn resolve_file(
 
     let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
 
-    // Infer MIME from file extension if not set.
     if media.mime_type().is_none() {
         if let Some(mime) = mime_from_extension(path) {
             media.set_mime_type(mime.to_string());
+        } else if let Some(kind) = infer::get(&bytes) {
+            media.set_mime_type(kind.mime_type().to_string());
         }
     }
 
@@ -286,40 +244,454 @@ async fn resolve_file(
     Ok(())
 }
 
-/// Infer MIME type from a file extension.
 fn mime_from_extension(path: &str) -> Option<&'static str> {
     let ext = path.rsplit('.').next()?.to_ascii_lowercase();
     match ext.as_str() {
-        // Images
         "png" => Some("image/png"),
         "jpg" | "jpeg" => Some("image/jpeg"),
         "gif" => Some("image/gif"),
         "webp" => Some("image/webp"),
         "svg" => Some("image/svg+xml"),
-        // Audio
         "mp3" => Some("audio/mpeg"),
         "wav" => Some("audio/wav"),
         "ogg" => Some("audio/ogg"),
         "flac" => Some("audio/flac"),
-        "webm" => Some("audio/webm"),
-        // Video
         "mp4" => Some("video/mp4"),
         "avi" => Some("video/x-msvideo"),
         "mov" => Some("video/quicktime"),
         "mkv" => Some("video/x-matroska"),
-        // Documents
+        "webm" => Some("video/webm"),
         "pdf" => Some("application/pdf"),
         _ => None,
     }
 }
 
-/// Parse a strategy string (from user config) into the enum.
-fn parse_strategy(value: &Option<String>) -> Option<ResolveMediaUrls> {
-    value.as_deref().and_then(|s| match s {
-        "send_base64" => Some(ResolveMediaUrls::SendBase64),
-        "send_url" => Some(ResolveMediaUrls::SendUrl),
-        "send_url_add_mime_type" => Some(ResolveMediaUrls::SendUrlAddMimeType),
-        "send_base64_unless_google_url" => Some(ResolveMediaUrls::SendBase64UnlessGoogleUrl),
-        _ => None,
-    })
+/// Parse a `data:` URL into (`mime_type`, `base64_data`).
+/// Supports the format: `data:<mime>;base64,<data>`
+fn parse_data_url(url: &str) -> Option<(String, String)> {
+    let rest = url.strip_prefix("data:")?;
+    let (meta, data) = rest.split_once(',')?;
+    if !meta.ends_with(";base64") {
+        return None;
+    }
+    let mime = meta.strip_suffix(";base64")?.trim();
+    if mime.is_empty() {
+        return None;
+    }
+    Some((mime.to_string(), data.to_string()))
+}
+
+/// Infer MIME type from HTTP headers, falling back to byte-level detection.
+fn infer_mime_from_headers_or_bytes(
+    media: &MediaValue,
+    headers: &indexmap::IndexMap<String, String>,
+    bytes: &[u8],
+) {
+    if let Some(ct) = headers.get("content-type") {
+        let mime = ct.split(';').next().unwrap_or(ct).trim();
+        if !mime.is_empty() {
+            media.set_mime_type(mime.to_string());
+            return;
+        }
+    }
+    if let Some(kind) = infer::get(bytes) {
+        media.set_mime_type(kind.mime_type().to_string());
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use super::*;
+
+    fn make_url_media(url: &str, mime: Option<&str>) -> Arc<MediaValue> {
+        Arc::new(MediaValue::new(
+            MediaKind::Image,
+            MediaContent::Url {
+                url: url.to_string(),
+                base64_data: None,
+            },
+            mime.map(String::from),
+        ))
+    }
+
+    fn make_file_media(path: &str, mime: Option<&str>) -> Arc<MediaValue> {
+        Arc::new(MediaValue::new(
+            MediaKind::Image,
+            MediaContent::File {
+                file: path.to_string(),
+                base64_data: None,
+            },
+            mime.map(String::from),
+        ))
+    }
+
+    fn make_base64_media(data: &str, mime: Option<&str>) -> Arc<MediaValue> {
+        Arc::new(MediaValue::new(
+            MediaKind::Image,
+            MediaContent::Base64 {
+                base64_data: data.to_string(),
+            },
+            mime.map(String::from),
+        ))
+    }
+
+    // -- parse_data_url -------------------------------------------------------
+
+    #[test]
+    fn data_url_valid() {
+        let (mime, data) = parse_data_url("data:image/png;base64,iVBOR").unwrap();
+        assert_eq!(mime, "image/png");
+        assert_eq!(data, "iVBOR");
+    }
+
+    #[test]
+    fn data_url_no_base64_marker() {
+        assert!(parse_data_url("data:image/png,raw_data").is_none());
+    }
+
+    #[test]
+    fn data_url_not_data_scheme() {
+        assert!(parse_data_url("https://example.com/img.png").is_none());
+    }
+
+    #[test]
+    fn data_url_empty_mime() {
+        assert!(parse_data_url("data:;base64,abc").is_none());
+    }
+
+    // -- mime_from_extension --------------------------------------------------
+
+    #[test]
+    fn extension_png() {
+        assert_eq!(mime_from_extension("photo.png"), Some("image/png"));
+    }
+
+    #[test]
+    fn extension_jpeg() {
+        assert_eq!(mime_from_extension("photo.jpg"), Some("image/jpeg"));
+        assert_eq!(mime_from_extension("photo.jpeg"), Some("image/jpeg"));
+    }
+
+    #[test]
+    fn extension_pdf() {
+        assert_eq!(mime_from_extension("doc.pdf"), Some("application/pdf"));
+    }
+
+    #[test]
+    fn extension_unknown() {
+        assert_eq!(mime_from_extension("file.xyz"), None);
+    }
+
+    #[test]
+    fn extension_no_ext() {
+        // Single-component filename -- rsplit('.') returns the whole name, which
+        // won't match any known extension.
+        assert_eq!(mime_from_extension("Makefile"), None);
+    }
+
+    // -- parse_field (strum EnumString) ---------------------------------------
+
+    #[test]
+    fn parse_field_valid_strategies() {
+        assert_eq!(
+            parse_field(Some("send_base64")),
+            ResolveMediaUrls::SendBase64
+        );
+        assert_eq!(parse_field(Some("send_url")), ResolveMediaUrls::SendUrl);
+        assert_eq!(
+            parse_field(Some("send_url_add_mime_type")),
+            ResolveMediaUrls::SendUrlAddMimeType
+        );
+        assert_eq!(
+            parse_field(Some("send_base64_unless_google_url")),
+            ResolveMediaUrls::SendBase64UnlessGoogleUrl
+        );
+    }
+
+    #[test]
+    fn parse_field_invalid_falls_back() {
+        assert_eq!(parse_field(Some("unknown")), ResolveMediaUrls::SendBase64);
+        assert_eq!(parse_field(None), ResolveMediaUrls::SendBase64);
+    }
+
+    // -- resolve_single_media (data URL) --------------------------------------
+
+    #[tokio::test]
+    async fn data_url_resolved_without_fetch() {
+        let media = make_url_media("data:image/png;base64,iVBORw0KGgo=", None);
+        let handler = MediaUrlHandler {
+            image: ResolveMediaUrls::SendBase64,
+            audio: ResolveMediaUrls::SendBase64,
+            video: ResolveMediaUrls::SendBase64,
+            pdf: ResolveMediaUrls::SendBase64,
+        };
+        let callbacks = crate::BuildRequestCallbacks::noop();
+        resolve_single_media(&media, &handler, &callbacks)
+            .await
+            .unwrap();
+
+        assert_eq!(media.mime_type().as_deref(), Some("image/png"));
+        media.read_content(|c| {
+            assert_eq!(c.base64_data(), Some("iVBORw0KGgo="));
+        });
+    }
+
+    // -- resolve_single_media (base64 already set) ----------------------------
+
+    #[tokio::test]
+    async fn base64_content_is_noop() {
+        let media = make_base64_media("abc123", Some("image/jpeg"));
+        let handler = MediaUrlHandler {
+            image: ResolveMediaUrls::SendBase64,
+            audio: ResolveMediaUrls::SendBase64,
+            video: ResolveMediaUrls::SendBase64,
+            pdf: ResolveMediaUrls::SendBase64,
+        };
+        let callbacks = crate::BuildRequestCallbacks::noop();
+        resolve_single_media(&media, &handler, &callbacks)
+            .await
+            .unwrap();
+
+        // Should remain unchanged.
+        media.read_content(|c| {
+            assert_eq!(c.base64_data(), Some("abc123"));
+        });
+    }
+
+    // -- resolve_single_media (SendUrl skips fetch) ---------------------------
+
+    #[tokio::test]
+    async fn send_url_skips_fetch() {
+        let media = make_url_media("https://example.com/img.png", None);
+        let handler = MediaUrlHandler {
+            image: ResolveMediaUrls::SendUrl,
+            audio: ResolveMediaUrls::SendBase64,
+            video: ResolveMediaUrls::SendBase64,
+            pdf: ResolveMediaUrls::SendBase64,
+        };
+        // noop callbacks would error if called -- proving no fetch happens.
+        let callbacks = crate::BuildRequestCallbacks::noop();
+        resolve_single_media(&media, &handler, &callbacks)
+            .await
+            .unwrap();
+
+        // base64_data should still be None.
+        media.read_content(|c| {
+            assert!(c.base64_data().is_none());
+            assert_eq!(c.url(), Some("https://example.com/img.png"));
+        });
+    }
+
+    // -- resolve_single_media (gs:// skipped for SendBase64UnlessGoogleUrl) ---
+
+    #[tokio::test]
+    async fn google_url_skipped() {
+        let media = make_url_media("gs://bucket/object.png", None);
+        let handler = MediaUrlHandler {
+            image: ResolveMediaUrls::SendBase64UnlessGoogleUrl,
+            audio: ResolveMediaUrls::SendBase64,
+            video: ResolveMediaUrls::SendBase64,
+            pdf: ResolveMediaUrls::SendBase64,
+        };
+        let callbacks = crate::BuildRequestCallbacks::noop();
+        resolve_single_media(&media, &handler, &callbacks)
+            .await
+            .unwrap();
+
+        media.read_content(|c| {
+            assert!(c.base64_data().is_none());
+        });
+    }
+
+    // -- resolve_single_media (SendBase64 fetches) ----------------------------
+
+    #[tokio::test]
+    async fn send_base64_fetches_url() {
+        let png_bytes: Vec<u8> = vec![0x89, 0x50, 0x4E, 0x47]; // PNG magic bytes
+        let media = make_url_media("https://example.com/img.png", None);
+        let handler = MediaUrlHandler {
+            image: ResolveMediaUrls::SendBase64,
+            audio: ResolveMediaUrls::SendBase64,
+            video: ResolveMediaUrls::SendBase64,
+            pdf: ResolveMediaUrls::SendBase64,
+        };
+        let callbacks = crate::BuildRequestCallbacks {
+            fetch_bytes: Arc::new(move |_url| {
+                let bytes = png_bytes.clone();
+                Box::pin(async move {
+                    Ok(crate::FetchBytesResponse {
+                        status_code: 200,
+                        headers: indexmap::indexmap! {
+                            "content-type".to_string() => "image/png".to_string(),
+                        },
+                        bytes,
+                    })
+                })
+            }),
+            ..crate::BuildRequestCallbacks::noop()
+        };
+        resolve_single_media(&media, &handler, &callbacks)
+            .await
+            .unwrap();
+
+        assert_eq!(media.mime_type().as_deref(), Some("image/png"));
+        media.read_content(|c| {
+            assert!(c.base64_data().is_some());
+        });
+    }
+
+    // -- resolve_single_media (infer MIME from bytes) -------------------------
+
+    #[tokio::test]
+    async fn infer_mime_from_bytes_when_no_header() {
+        // Real PNG header bytes so `infer` can detect it.
+        let png_bytes: Vec<u8> = vec![
+            0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, // PNG signature
+            0x00, 0x00, 0x00, 0x0D, // IHDR chunk length
+        ];
+        let media = make_url_media("https://example.com/noext", None);
+        let handler = MediaUrlHandler {
+            image: ResolveMediaUrls::SendBase64,
+            audio: ResolveMediaUrls::SendBase64,
+            video: ResolveMediaUrls::SendBase64,
+            pdf: ResolveMediaUrls::SendBase64,
+        };
+        let callbacks = crate::BuildRequestCallbacks {
+            fetch_bytes: Arc::new(move |_url| {
+                let bytes = png_bytes.clone();
+                Box::pin(async move {
+                    Ok(crate::FetchBytesResponse {
+                        status_code: 200,
+                        headers: indexmap::IndexMap::new(), // no content-type
+                        bytes,
+                    })
+                })
+            }),
+            ..crate::BuildRequestCallbacks::noop()
+        };
+        resolve_single_media(&media, &handler, &callbacks)
+            .await
+            .unwrap();
+
+        assert_eq!(media.mime_type().as_deref(), Some("image/png"));
+    }
+
+    // -- resolve_file with infer fallback -------------------------------------
+
+    #[tokio::test]
+    async fn resolve_file_infers_mime_from_bytes() {
+        let png_bytes: Vec<u8> = vec![
+            0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D,
+        ];
+        let media = make_file_media("/tmp/noext", None);
+        let handler = MediaUrlHandler {
+            image: ResolveMediaUrls::SendBase64,
+            audio: ResolveMediaUrls::SendBase64,
+            video: ResolveMediaUrls::SendBase64,
+            pdf: ResolveMediaUrls::SendBase64,
+        };
+        let callbacks = crate::BuildRequestCallbacks {
+            fs_read: Arc::new(move |_path| {
+                let bytes = png_bytes.clone();
+                Box::pin(async move { Ok(bytes) })
+            }),
+            ..crate::BuildRequestCallbacks::noop()
+        };
+        resolve_single_media(&media, &handler, &callbacks)
+            .await
+            .unwrap();
+
+        assert_eq!(media.mime_type().as_deref(), Some("image/png"));
+        media.read_content(|c| {
+            assert!(c.base64_data().is_some());
+        });
+    }
+
+    // -- resolve_file prefers extension over infer ----------------------------
+
+    #[tokio::test]
+    async fn resolve_file_prefers_extension() {
+        let media = make_file_media("/tmp/photo.jpeg", None);
+        let callbacks = crate::BuildRequestCallbacks {
+            fs_read: Arc::new(|_path| {
+                Box::pin(async { Ok(vec![0x00, 0x01, 0x02]) }) // random bytes
+            }),
+            ..crate::BuildRequestCallbacks::noop()
+        };
+        let handler = MediaUrlHandler {
+            image: ResolveMediaUrls::SendBase64,
+            audio: ResolveMediaUrls::SendBase64,
+            video: ResolveMediaUrls::SendBase64,
+            pdf: ResolveMediaUrls::SendBase64,
+        };
+        resolve_single_media(&media, &handler, &callbacks)
+            .await
+            .unwrap();
+
+        // Extension wins over infer (which would return None for random bytes).
+        assert_eq!(media.mime_type().as_deref(), Some("image/jpeg"));
+    }
+
+    // -- HTTP error -----------------------------------------------------------
+
+    #[tokio::test]
+    async fn fetch_returns_error_on_http_failure() {
+        let media = make_url_media("https://example.com/missing.png", None);
+        let handler = MediaUrlHandler {
+            image: ResolveMediaUrls::SendBase64,
+            audio: ResolveMediaUrls::SendBase64,
+            video: ResolveMediaUrls::SendBase64,
+            pdf: ResolveMediaUrls::SendBase64,
+        };
+        let callbacks = crate::BuildRequestCallbacks {
+            fetch_bytes: Arc::new(|_url| {
+                Box::pin(async {
+                    Ok(crate::FetchBytesResponse {
+                        status_code: 404,
+                        headers: indexmap::IndexMap::new(),
+                        bytes: vec![],
+                    })
+                })
+            }),
+            ..crate::BuildRequestCallbacks::noop()
+        };
+        let err = resolve_single_media(&media, &handler, &callbacks).await;
+        assert!(err.is_err());
+        assert!(format!("{}", err.unwrap_err()).contains("404"));
+    }
+
+    // -- existing mime_type is preserved --------------------------------------
+
+    #[tokio::test]
+    async fn existing_mime_type_not_overwritten() {
+        let media = make_url_media("https://example.com/img", Some("image/webp"));
+        let handler = MediaUrlHandler {
+            image: ResolveMediaUrls::SendBase64,
+            audio: ResolveMediaUrls::SendBase64,
+            video: ResolveMediaUrls::SendBase64,
+            pdf: ResolveMediaUrls::SendBase64,
+        };
+        let callbacks = crate::BuildRequestCallbacks {
+            fetch_bytes: Arc::new(|_url| {
+                Box::pin(async {
+                    Ok(crate::FetchBytesResponse {
+                        status_code: 200,
+                        headers: indexmap::indexmap! {
+                            "content-type".to_string() => "image/png".to_string(),
+                        },
+                        bytes: vec![0x89, 0x50, 0x4E, 0x47],
+                    })
+                })
+            }),
+            ..crate::BuildRequestCallbacks::noop()
+        };
+        resolve_single_media(&media, &handler, &callbacks)
+            .await
+            .unwrap();
+
+        // Original mime_type should be preserved, not overwritten by Content-Type.
+        assert_eq!(media.mime_type().as_deref(), Some("image/webp"));
+    }
 }

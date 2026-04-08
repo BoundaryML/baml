@@ -278,6 +278,7 @@ fn convert_io_primitive_client(
             remap_roles: options.remap_roles.clone(),
             api_key: options.api_key.clone(),
             provider_options: options.provider_options.clone(),
+            media_url_handler: options.media_url_handler.clone(),
             headers: options.headers.clone(),
             query_params: options.query_params.clone(),
             request_body: options.request_body.clone(),
@@ -334,6 +335,15 @@ impl io::IoClassHttpResponse for DefaultIoOps {
         _r: io::owned::http::Response,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<String> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+    fn bytes(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _r: io::owned::http::Response,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Vec<u8>> {
         SysOpOutput::err(OpErrorKind::Unsupported)
     }
 }
@@ -845,11 +855,82 @@ fn build_io_callbacks(
         })
     };
 
+    // -- fetch_bytes: String (URL) -> FetchBytesResponse ----------------------
+    let fetch_bytes: sys_llm::FetchBytesFn = {
+        let send_env = Env {
+            fn_ptr: io.http_send.clone(),
+            heap: heap.clone(),
+            ctx: ctx.clone(),
+        };
+        let bytes_env = Env {
+            fn_ptr: io.http_response_bytes.clone(),
+            heap: heap.clone(),
+            ctx: ctx.clone(),
+        };
+        Arc::new(move |url: String| {
+            let send_env = send_env.clone();
+            let bytes_env = bytes_env.clone();
+            Box::pin(async move {
+                let io_req = io::owned::http::Request {
+                    method: "GET".to_string(),
+                    url,
+                    headers: indexmap::IndexMap::new(),
+                    body: String::new(),
+                };
+                let arg = io_req.into_bex_external_value();
+
+                let result = (send_env.fn_ptr)(
+                    &send_env.heap,
+                    vec![BexValue::ExternalValue(&arg)],
+                    &send_env.ctx,
+                    CallId::next(),
+                );
+                let response_val = resolve_sys_op_result(result).await?;
+
+                let response = io::owned::http::Response::from_external(response_val.clone())
+                    .map_err(|e| {
+                        sys_llm::LlmOpError::Other(format!("http.send response parse error: {e:?}"))
+                    })?;
+                let status_code = u16::try_from(response.status_code).map_err(|_| {
+                    sys_llm::LlmOpError::Other(format!(
+                        "http.send returned invalid status_code: {}",
+                        response.status_code
+                    ))
+                })?;
+                let headers = response.headers;
+
+                let bytes_result = (bytes_env.fn_ptr)(
+                    &bytes_env.heap,
+                    vec![BexValue::ExternalValue(&response_val)],
+                    &bytes_env.ctx,
+                    CallId::next(),
+                );
+                let body_val = resolve_sys_op_result(bytes_result).await?;
+                let bytes = match body_val {
+                    BexExternalValue::Uint8Array(b) => b,
+                    other => {
+                        return Err(sys_llm::LlmOpError::Other(format!(
+                            "http.Response.bytes() returned unexpected type: {}",
+                            other.type_name()
+                        )));
+                    }
+                };
+
+                Ok(sys_llm::FetchBytesResponse {
+                    status_code,
+                    headers,
+                    bytes,
+                })
+            }) as std::pin::Pin<Box<dyn std::future::Future<Output = _> + Send>>
+        })
+    };
+
     sys_llm::BuildRequestCallbacks {
         http_send,
         env_read,
         fs_read,
         shell,
+        fetch_bytes,
     }
 }
 

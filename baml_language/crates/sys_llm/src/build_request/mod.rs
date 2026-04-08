@@ -31,6 +31,10 @@ pub(crate) async fn build_request(
     let provider = LlmProvider::from_str(&client.provider)
         .map_err(|_| BuildRequestError::UnsupportedLlmProvider(client.provider.clone()))?;
 
+    // Resolve media (fetch URLs, read files) before building the provider-specific request.
+    let handler = crate::resolve_media::MediaUrlHandler::from_client(client);
+    crate::resolve_media::resolve_media(&prompt, &handler, callbacks).await?;
+
     let mut request = match provider {
         LlmProvider::OpenAi
         | LlmProvider::OpenAiGeneric
@@ -118,10 +122,9 @@ fn build_vertex_anthropic_request(
 /// Extract a MIME type from a `MediaValue`, returning an error if none is set.
 pub(super) fn mime_type_as_ok(
     media: &baml_builtins2::MediaValue,
-) -> Result<&str, BuildRequestError> {
+) -> Result<String, BuildRequestError> {
     media
-        .mime_type
-        .as_deref()
+        .mime_type()
         .ok_or_else(|| BuildRequestError::UnsupportedMedia("missing MIME type on media".into()))
 }
 

@@ -3,8 +3,6 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 function $init() -> null {
     call ?
-    store_global ?138
-    call ?
     store_global ?139
     call ?
     store_global ?140
@@ -14,6 +12,8 @@ function $init() -> null {
     store_global ?142
     call ?
     store_global ?143
+    call ?
+    store_global ?144
     load_const ?
     return
 }
@@ -74,6 +74,9 @@ function user.BadAzureMissingUrl$new() -> null {
     store_field .max_tokens
     store_field .provider_options
     copy 0
+    load_const null
+    store_field .media_url_handler
+    copy 0
     alloc_map 0
     store_field .headers
     copy 0
@@ -129,6 +132,9 @@ function user.BadMaxTokens$new() -> null {
     copy 0
     load_const null
     store_field .provider_options
+    copy 0
+    load_const null
+    store_field .media_url_handler
     copy 0
     alloc_map 0
     store_field .headers
@@ -187,6 +193,9 @@ function user.BadTemperature$new() -> null {
     copy 0
     load_const null
     store_field .provider_options
+    copy 0
+    load_const null
+    store_field .media_url_handler
     copy 0
     alloc_map 0
     store_field .headers
@@ -258,6 +267,9 @@ function user.ValidAzure$new() -> null {
     store_field .max_tokens
     store_field .provider_options
     copy 0
+    load_const null
+    store_field .media_url_handler
+    copy 0
     alloc_map 0
     store_field .headers
     copy 0
@@ -326,6 +338,9 @@ function user.ValidAzureBaseUrl$new() -> null {
     store_field .max_tokens
     store_field .provider_options
     copy 0
+    load_const null
+    store_field .media_url_handler
+    copy 0
     alloc_map 0
     store_field .headers
     copy 0
@@ -381,6 +396,9 @@ function user.ValidOpenAI$new() -> null {
     copy 0
     load_const null
     store_field .provider_options
+    copy 0
+    load_const null
+    store_field .media_url_handler
     copy 0
     alloc_map 0
     store_field .headers
