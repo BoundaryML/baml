@@ -31,7 +31,7 @@ lambda user.test_no_annotation_no_context {
 function user.test_arity_mismatch() -> int[] throws never {
   { : int[]
     let items = [1, 2, 3] : int[]
-    items.map<U>((x, y) -> { ... }) : int[]
+    items.map((x, y) -> { ... }) : int[]
       (x, y) -> { ... } : (x: int, y: unknown) -> int
         {
           x
@@ -44,7 +44,7 @@ lambda user.test_arity_mismatch {
 function user.test_param_type_mismatch() -> int[] throws never {
   { : (int | string)[]
     let items = [1, 2, 3] : int[]
-    items.map<U>((x: string) -> { ... }) : (int | string)[]
+    items.map((x: string) -> { ... }) : (int | string)[]
       (x: string) -> { ... } : (x: string) -> string
         {
           x

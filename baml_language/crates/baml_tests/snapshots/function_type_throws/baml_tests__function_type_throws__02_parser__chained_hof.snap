@@ -1,0 +1,127 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "apply_inner"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "f"
+        COLON ":"
+        TYPE_EXPR
+          L_PAREN "("
+          R_PAREN ")"
+          ARROW "->"
+          TYPE_EXPR "int"
+            WORD "int"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        CALL_EXPR
+          WORD "f"
+          CALL_ARGS "()"
+            L_PAREN "("
+            R_PAREN ")"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "apply_outer"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "g"
+        COLON ":"
+        TYPE_EXPR
+          L_PAREN "("
+          R_PAREN ")"
+          ARROW "->"
+          TYPE_EXPR "int"
+            WORD "int"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        CALL_EXPR
+          WORD "apply_inner"
+          CALL_ARGS "(g)"
+            L_PAREN "("
+            WORD "g"
+            R_PAREN ")"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "test_chained_pure"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        CALL_EXPR
+          WORD "apply_outer"
+          CALL_ARGS
+            L_PAREN "("
+            LAMBDA_EXPR
+              PARAMETER_LIST "()"
+                L_PAREN "("
+                R_PAREN ")"
+              ARROW "->"
+              TYPE_EXPR "int"
+                WORD "int"
+              BLOCK_EXPR "{ 42 }"
+                L_BRACE "{"
+                INTEGER_LITERAL "42"
+                R_BRACE "}"
+            R_PAREN ")"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "test_chained_throwing"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        CALL_EXPR
+          WORD "apply_outer"
+          CALL_ARGS
+            L_PAREN "("
+            LAMBDA_EXPR
+              PARAMETER_LIST "()"
+                L_PAREN "("
+                R_PAREN ")"
+              ARROW "->"
+              TYPE_EXPR "int"
+                WORD "int"
+              BLOCK_EXPR
+                L_BRACE "{"
+                THROW_STMT
+                  THROW_EXPR
+                    KW_THROW "throw"
+                    STRING_LITERAL "deep"
+                      QUOTE """
+                      WORD "deep"
+                      QUOTE """
+                R_BRACE "}"
+            R_PAREN ")"
+        R_BRACE "}"
+
+=== ERRORS ===
+None

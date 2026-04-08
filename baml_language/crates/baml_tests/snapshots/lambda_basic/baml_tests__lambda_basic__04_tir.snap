@@ -41,7 +41,7 @@ lambda user.test_zero_param {
 function user.test_map_inferred() -> int[] throws never {
   { : int[]
     let items = [1, 2, 3] : int[]
-    items.map<U>((x) -> { ... }) : int[]
+    items.map((x) -> { ... }) : int[]
       (x) -> { ... } : (x: int) -> int
         {
           x * 2
@@ -50,7 +50,7 @@ function user.test_map_inferred() -> int[] throws never {
 }
 lambda user.test_map_inferred {
 }
-function user.test_throws() -> int throws never {
+function user.test_throws() -> int throws string {
   { : int
     let risky = : (x: int) -> int throws string
       (x: int) -> int throws string { ... } : (x: int) -> int throws string

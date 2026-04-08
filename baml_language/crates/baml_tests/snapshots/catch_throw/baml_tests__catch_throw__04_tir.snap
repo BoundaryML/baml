@@ -2,7 +2,7 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === TIR2 ===
-function user.MayFail(x: int) -> string throws never {
+function user.MayFail(x: int) -> string throws string {
   { : "ok"
     match (x : int) : "ok"
       0 =>
@@ -11,7 +11,7 @@ function user.MayFail(x: int) -> string throws never {
         "ok" : "ok"
   }
 }
-function user.MayFailIntOrString(x: int) -> string throws never {
+function user.MayFailIntOrString(x: int) -> string throws int | string {
   { : "ok"
     match (x : int) : "ok"
       0 =>
@@ -22,7 +22,7 @@ function user.MayFailIntOrString(x: int) -> string throws never {
         "ok" : "ok"
   }
 }
-function user.AlsoMayFail(x: int) -> string throws never {
+function user.AlsoMayFail(x: int) -> string throws string {
   { : "also ok"
     match (x : int) : "also ok"
       0 =>
@@ -89,7 +89,7 @@ function user.NestedCatch(x: int) -> string throws never {
           inner : string
   }
 }
-function user.CatchAndRethrow(x: int) -> string throws never {
+function user.CatchAndRethrow(x: int) -> string throws string {
   { : string
     catch (MayFail(x) : string) : unknown
       catch (e)
@@ -97,7 +97,7 @@ function user.CatchAndRethrow(x: int) -> string throws never {
           throw e : never
   }
 }
-function user.ThrowStatement(x: int) -> string throws never {
+function user.ThrowStatement(x: int) -> string throws string {
   { : never
     throw "error" : "error"
     "unreachable" : unknown

@@ -8,7 +8,7 @@ type user.MetaUnion = type | string
 type user.MetaAlias$stream = unknown
 type user.MetaList$stream = unknown[]
 type user.MetaUnion$stream = unknown | string
-function user.test_type_annotation(function_name: string) -> string throws never {
+function user.test_type_annotation(function_name: string) -> string throws baml.errors.InvalidArgument {
   { : never
     let t = baml.llm.get_return_type(function_name) : type
     return "ok" : "ok"
@@ -29,7 +29,7 @@ class user.RiskFactor$stream {
 class user.MetaField$stream {
   type: unknown
 }
-function user.test_let_binding(function_name: string) -> string throws never {
+function user.test_let_binding(function_name: string) -> string throws baml.errors.InvalidArgument {
   { : never
     let t = baml.llm.get_return_type(function_name) : type
     return "ok" : "ok"
@@ -40,7 +40,7 @@ function user.test_param(t: type) -> string throws never {
     return "ok" : "ok"
   }
 }
-function user.test_return_type(function_name: string) -> type throws never {
+function user.test_return_type(function_name: string) -> type throws baml.errors.InvalidArgument {
   { : never
     return baml.llm.get_return_type(function_name) : type
   }

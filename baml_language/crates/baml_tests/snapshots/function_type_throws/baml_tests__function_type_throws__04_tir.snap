@@ -2,13 +2,111 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === TIR2 ===
+function user.test_map_pure() -> int[] throws never {
+  { : int[]
+    let items = [1, 2, 3] : int[]
+    items.map((x) -> { ... }) : int[]
+      (x) -> { ... } : (x: int) -> int
+        {
+          x * 2
+        }
+  }
+}
+lambda user.test_map_pure {
+}
+function user.test_map_throwing() -> int[] throws string {
+  { : int[]
+    let items = [1, 2, 3] : int[]
+    items.map((x) -> { ... }) : int[]
+      (x) -> { ... } : (x: int) -> int throws string
+        {
+          if (x == 2)
+            {
+              throw "found two"
+            }
+          x * 2
+        }
+  }
+}
+lambda user.test_map_throwing {
+}
 type user.ThrowingFn = () -> int throws string
-function user.takes_throwing(f: () -> int throws string) -> int throws never {
+function user.takes_throwing(f: () -> int throws string) -> int throws string {
   { : int
     f() : int
   }
 }
 type user.ThrowingFn$stream = unknown
+function user.may_fail(x: int) -> string throws string {
+  { : "ok"
+    if (x == 0 : bool) : void
+      { : never
+        throw "zero" : "zero"
+      }
+    "ok" : "ok"
+  }
+}
+function user.test_no_catch() -> string throws string {
+  { : string
+    may_fail(1) : string
+  }
+}
+function user.test_catch_all() -> string throws never {
+  { : string | "caught"
+    catch (may_fail(1) : string) : unknown
+      catch (e)
+        _ =>
+          "caught" : "caught"
+  }
+}
+function user.test_catch_string() -> string throws never {
+  { : string | "caught string"
+    catch (may_fail(1) : string) : unknown
+      catch (e)
+        _: string =>
+          "caught string" : "caught string"
+  }
+}
+function user.test_catch_rethrow() -> string throws int {
+  { : string
+    catch (may_fail(1) : string) : unknown
+      catch (e)
+        _ =>
+          throw 42 : never
+  }
+}
+function user.apply_inner(f: () -> int throws __throws_f) -> int throws __throws_f {
+  { : int
+    f() : int
+  }
+}
+function user.apply_outer(g: () -> int throws __throws_g) -> int throws __throws_g {
+  { : int
+    apply_inner(g) : int
+  }
+}
+function user.test_chained_pure() -> int throws never {
+  { : int
+    apply_outer(() -> int { ... }) : int
+      () -> int { ... } : () -> 42
+        {
+          42
+        }
+  }
+}
+lambda user.test_chained_pure {
+}
+function user.test_chained_throwing() -> int throws string {
+  { : int
+    apply_outer(() -> int { ... }) : int
+      () -> int { ... } : () -> never throws string
+        {
+          throw "deep"
+        }
+  }
+}
+lambda user.test_chained_throwing {
+}
 class user.PureHandler {
   run: () -> null
 }
@@ -43,6 +141,49 @@ class user.MixedHandler$stream {
   safe: unknown
   risky: unknown
 }
+function user.apply_explicit(f: () -> int throws string) -> int throws string {
+  { : int
+    f() : int
+  }
+}
+function user.test_explicit_param_pure() -> int throws string {
+  { : int
+    apply_explicit(() -> int { ... }) : int
+      () -> int { ... } : () -> 42
+        {
+          42
+        }
+  }
+}
+lambda user.test_explicit_param_pure {
+}
+function user.test_explicit_param_throwing() -> int throws string {
+  { : int
+    apply_explicit(() -> int { ... }) : int
+      () -> int { ... } : () -> never throws string
+        {
+          throw "ok"
+        }
+  }
+}
+lambda user.test_explicit_param_throwing {
+}
+function user.apply_pure_only(f: () -> int) -> int throws never {
+  { : int
+    f() : int
+  }
+}
+function user.test_pure_only_pure() -> int throws never {
+  { : int
+    apply_pure_only(() -> int { ... }) : int
+      () -> int { ... } : () -> 42
+        {
+          42
+        }
+  }
+}
+lambda user.test_pure_only_pure {
+}
 function user.may_fail(x: int) -> string throws string {
   { : "ok"
     if (x == 0 : bool) : void
@@ -57,7 +198,7 @@ function user.always_ok(x: int) -> string throws never {
     "always ok" : "always ok"
   }
 }
-function user.caller() -> string throws never {
+function user.caller() -> string throws string {
   { : string
     may_fail(1) : string
   }
@@ -80,7 +221,154 @@ type user.PureCallback$stream = unknown
 type user.ExplicitPure$stream = unknown
 type user.Mapper$stream = unknown
 type user.Wrapper$stream = unknown
-function user.apply(f: () -> int) -> int throws never {
+function user.apply_guarded(f: () -> int throws __throws_f) -> int throws string | __throws_f {
+  { : int
+    let result = f() : int
+    if (result < 0 : bool) : void
+      { : never
+        throw "negative result" : "negative result"
+      }
+    result : int
+  }
+}
+function user.test_guarded_pure() -> int throws string {
+  { : int
+    apply_guarded(() -> int { ... }) : int
+      () -> int { ... } : () -> 42
+        {
+          42
+        }
+  }
+}
+lambda user.test_guarded_pure {
+}
+function user.test_guarded_throwing() -> int throws int | string {
+  { : int
+    apply_guarded(() -> int { ... }) : int
+      () -> int { ... } : () -> never throws int
+        {
+          throw 99
+        }
+  }
+}
+lambda user.test_guarded_throwing {
+}
+function user.run_pure(f: () -> int throws __throws_f) -> int throws __throws_f {
+  { : int
+    f() : int
+  }
+}
+function user.test_run_pure() -> int throws never {
+  { : int
+    run_pure(() -> int { ... }) : int
+      () -> int { ... } : () -> 42
+        {
+          42
+        }
+  }
+}
+lambda user.test_run_pure {
+}
+function user.run_throwing(f: () -> int throws __throws_f) -> int throws __throws_f {
+  { : int
+    f() : int
+  }
+}
+function user.test_run_throwing() -> int throws string {
+  { : int
+    run_throwing(() -> int { ... }) : int
+      () -> int { ... } : () -> never throws string
+        {
+          throw "boom"
+        }
+  }
+}
+lambda user.test_run_throwing {
+}
+function user.run_two(f: () -> int throws __throws_f, g: () -> int throws __throws_g) -> int throws __throws_f | __throws_g {
+  { : int
+    f() + g() : int
+  }
+}
+function user.test_two_pure() -> int throws never {
+  { : int
+    run_two(() -> int { ... }, () -> int { ... }) : int
+      () -> int { ... } : () -> 1
+        {
+          1
+        }
+      () -> int { ... } : () -> 2
+        {
+          2
+        }
+  }
+}
+lambda user.test_two_pure {
+}
+lambda user.test_two_pure {
+}
+function user.test_two_one_throws() -> int throws string {
+  { : int
+    run_two(() -> int { ... }, () -> int { ... }) : int
+      () -> int { ... } : () -> 1
+        {
+          1
+        }
+      () -> int { ... } : () -> never throws string
+        {
+          throw "boom"
+        }
+  }
+}
+lambda user.test_two_one_throws {
+}
+lambda user.test_two_one_throws {
+}
+function user.test_two_both_throw() -> int throws int | string {
+  { : int
+    run_two(() -> int { ... }, () -> int { ... }) : int
+      () -> int { ... } : () -> never throws string
+        {
+          throw "a"
+        }
+      () -> int { ... } : () -> never throws int
+        {
+          throw 42
+        }
+  }
+}
+lambda user.test_two_both_throw {
+}
+lambda user.test_two_both_throw {
+}
+function user.map_it(x: int, f: (int) -> string throws __throws_f) -> string throws __throws_f {
+  { : string
+    f(x) : string
+  }
+}
+function user.test_map_pure() -> string throws never {
+  { : string
+    map_it(1, (n: int) -> string { ... }) : string
+      (n: int) -> string { ... } : (n: int) -> "ok"
+        {
+          "ok"
+        }
+  }
+}
+lambda user.test_map_pure {
+}
+function user.test_map_throwing() -> string throws string {
+  { : string
+    map_it(1, (n: int) -> string { ... }) : string
+      (n: int) -> string { ... } : (n: int) -> never throws string
+        {
+          throw "bad"
+        }
+  }
+}
+lambda user.test_map_throwing {
+}
+function user.apply(f: () -> int throws __throws_f) -> int throws __throws_f {
   { : int
     f() : int
   }
@@ -96,7 +384,7 @@ function user.test_apply_pure() -> int throws never {
 }
 lambda user.test_apply_pure {
 }
-function user.test_apply_throwing() -> int throws never {
+function user.test_apply_throwing() -> int throws string {
   { : int
     apply(() -> int { ... }) : int
       () -> int { ... } : () -> never throws string
@@ -107,12 +395,12 @@ function user.test_apply_throwing() -> int throws never {
 }
 lambda user.test_apply_throwing {
 }
-function user.apply_throwing(f: () -> int throws string) -> int throws never {
+function user.apply_throwing(f: () -> int throws string) -> int throws string {
   { : int
     f() : int
   }
 }
-function user.test_apply_explicit_throws() -> int throws never {
+function user.test_apply_explicit_throws() -> int throws string {
   { : int
     apply_throwing(() -> int { ... }) : int
       () -> int { ... } : () -> never throws string
@@ -123,7 +411,7 @@ function user.test_apply_explicit_throws() -> int throws never {
 }
 lambda user.test_apply_explicit_throws {
 }
-function user.apply_and_throw(f: () -> int) -> int throws never {
+function user.apply_and_throw(f: () -> int throws __throws_f) -> int throws string | __throws_f {
   { : int
     let result = f() : int
     if (result < 0 : bool) : void
@@ -133,7 +421,7 @@ function user.apply_and_throw(f: () -> int) -> int throws never {
     result : int
   }
 }
-function user.test_apply_and_throw_pure() -> int throws never {
+function user.test_apply_and_throw_pure() -> int throws string {
   { : int
     apply_and_throw(() -> int { ... }) : int
       () -> int { ... } : () -> 42
@@ -144,7 +432,40 @@ function user.test_apply_and_throw_pure() -> int throws never {
 }
 lambda user.test_apply_and_throw_pure {
 }
-function user.test_explicit_throws_match() -> int throws never {
+function user.helper_with_body_throw() -> int throws string {
+  { : never
+    throw "helper boom" : "helper boom"
+  }
+}
+function user.apply_with_helper(f: () -> int throws __throws_f) -> int throws string | __throws_f {
+  { : int
+    helper_with_body_throw() : int
+    f() : int
+  }
+}
+function user.test_apply_with_helper_pure() -> int throws string {
+  { : int
+    apply_with_helper(() -> int { ... }) : int
+      () -> int { ... } : () -> 42
+        {
+          42
+        }
+  }
+}
+lambda user.test_apply_with_helper_pure {
+}
+function user.test_apply_with_helper_throwing() -> int throws int | string {
+  { : int
+    apply_with_helper(() -> int { ... }) : int
+      () -> int { ... } : () -> never throws int
+        {
+          throw 42
+        }
+  }
+}
+lambda user.test_apply_with_helper_throwing {
+}
+function user.test_explicit_throws_match() -> int throws string {
   { : never
     let f = : () -> never throws string
       () -> int throws string { ... } : () -> never throws string
@@ -168,7 +489,7 @@ function user.test_explicit_throws_never_pure() -> int throws never {
 }
 lambda user.test_explicit_throws_never_pure {
 }
-function user.test_explicit_throws_wider_than_body() -> int throws never {
+function user.test_explicit_throws_wider_than_body() -> int throws string {
   { : 42
     let f = : () -> 42 throws string
       () -> int throws string { ... } : () -> 42 throws string
@@ -193,7 +514,7 @@ function user.test_pure_lambda() -> int throws never {
 }
 lambda user.test_pure_lambda {
 }
-function user.test_throwing_lambda() -> int throws never {
+function user.test_throwing_lambda() -> int throws string {
   { : never
     let f = : () -> never throws string
       () -> int { ... } : () -> never throws string
@@ -205,7 +526,7 @@ function user.test_throwing_lambda() -> int throws never {
 }
 lambda user.test_throwing_lambda {
 }
-function user.test_throwing_int() -> string throws never {
+function user.test_throwing_int() -> string throws int {
   { : never
     let f = : () -> never throws int
       () -> string { ... } : () -> never throws int
@@ -217,7 +538,7 @@ function user.test_throwing_int() -> string throws never {
 }
 lambda user.test_throwing_int {
 }
-function user.test_conditional_throw(x: int) -> int throws never {
+function user.test_conditional_throw(x: int) -> int throws string {
   { : int
     let f = : (n: int) -> int throws string
       (n: int) -> int { ... } : (n: int) -> int throws string
@@ -233,7 +554,7 @@ function user.test_conditional_throw(x: int) -> int throws never {
 }
 lambda user.test_conditional_throw {
 }
-function user.test_multi_throw_types(x: int) -> string throws never {
+function user.test_multi_throw_types(x: int) -> string throws int | string {
   { : "ok"
     let f = : (n: int) -> "ok" throws int | string
       (n: int) -> string { ... } : (n: int) -> "ok" throws int | string
@@ -258,7 +579,54 @@ function user.test_throws_never_but_throws() -> int throws never {
 lambda user.test_throws_never_but_throws {
   !! 213..219: throws contract violation: `never` is missing string
 }
-function user.test_nested_inner_throws() -> int throws never {
+function user.apply_with_arg(x: int, f: (int) -> int throws __throws_f) -> int throws __throws_f {
+  { : int
+    f(x) : int
+  }
+}
+function user.test_mixed_pure() -> int throws never {
+  { : int
+    apply_with_arg(5, (n: int) -> int { ... }) : int
+      (n: int) -> int { ... } : (n: int) -> int
+        {
+          n * 2
+        }
+  }
+}
+lambda user.test_mixed_pure {
+}
+function user.test_mixed_throwing() -> int throws string {
+  { : int
+    apply_with_arg(5, (n: int) -> int { ... }) : int
+      (n: int) -> int { ... } : (n: int) -> int throws string
+        {
+          if (n < 0)
+            {
+              throw "negative"
+            }
+          n * 2
+        }
+  }
+}
+lambda user.test_mixed_throwing {
+}
+function user.apply_with_many_args(a: int, b: string, f: (int, string) -> string throws __throws_f) -> string throws __throws_f {
+  { : string
+    f(a, b) : string
+  }
+}
+function user.test_many_args_pure() -> string throws never {
+  { : string
+    apply_with_many_args(1, "hello", (n: int, s: string) -> string { ... }) : string
+      (n: int, s: string) -> string { ... } : (n: int, s: string) -> string
+        {
+          s
+        }
+  }
+}
+lambda user.test_many_args_pure {
+}
+function user.test_nested_inner_throws() -> int throws string {
   { : never
     let outer = : () -> never throws string
       () -> int { ... } : () -> never throws string
@@ -277,7 +645,7 @@ lambda user.test_nested_inner_throws {
 }
 lambda user.test_nested_inner_throws {
 }
-function user.test_nested_outer_throws() -> int throws never {
+function user.test_nested_outer_throws() -> int throws string {
   { : never
     let outer = : () -> never throws string
       () -> int { ... } : () -> never throws string
@@ -296,10 +664,10 @@ lambda user.test_nested_outer_throws {
 }
 lambda user.test_nested_outer_throws {
 }
-function user.test_nested_both_throw() -> int throws never {
+function user.test_nested_both_throw() -> int throws int | string {
   { : never
-    let outer = : () -> never throws int | unknown
-      () -> int { ... } : () -> never throws int | unknown
+    let outer = : () -> never throws int | string
+      () -> int { ... } : () -> never throws int | string
         {
           let inner = ...
             () -> int { ... }
@@ -317,4 +685,26 @@ lambda user.test_nested_both_throw {
   ?? 568..575: unreachable code: 1 statement(s) after diverging statement
 }
 lambda user.test_nested_both_throw {
+}
+function user.make_pure() -> () -> int throws never {
+  { : () -> int
+  }
+  !! 142..165: missing return: expected `() -> int`
+}
+function user.make_thrower() -> () -> int throws string throws never {
+  { : () -> int throws string
+  }
+  !! 263..297: missing return: expected `() -> int throws string`
+}
+function user.test_use_pure() -> int throws never {
+  { : int
+    let f = make_pure() : () -> int
+    f() : int
+  }
+}
+function user.test_use_thrower() -> int throws string {
+  { : int
+    let f = make_thrower() : () -> int throws string
+    f() : int
+  }
 }

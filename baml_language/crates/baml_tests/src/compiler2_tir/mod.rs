@@ -39,7 +39,9 @@ pub(crate) mod support {
             ScopeInference, infer_scope_types, render_scope_diagnostics, resolve_class_fields,
             resolve_type_alias,
         },
-        lower_type_expr::lower_type_expr_in_ns,
+        lower_type_expr::{
+            FnTypeLoweringContext, lower_type_expr_in_ns, lower_type_expr_with_fn_context,
+        },
     };
     use baml_project::ProjectDatabase;
 
@@ -1034,6 +1036,7 @@ pub(crate) mod support {
                             format!("<{}>", names.join(", "))
                         };
 
+                        let mut synthetic_display_vars: Vec<baml_base::Name> = Vec::new();
                         let params: Vec<String> = sig
                             .params
                             .iter()
@@ -1048,7 +1051,18 @@ pub(crate) mod support {
                                     )
                                 } else {
                                     let mut diags = Vec::new();
-                                    lower_type_expr_in_ns(db, ptype, pkg_items, ns, gp, &mut diags)
+                                    lower_type_expr_with_fn_context(
+                                        db,
+                                        ptype,
+                                        pkg_items,
+                                        ns,
+                                        gp,
+                                        &mut diags,
+                                        &FnTypeLoweringContext::DirectParamRoot {
+                                            param_name: pname.clone(),
+                                        },
+                                        &mut synthetic_display_vars,
+                                    )
                                 };
                                 format!("{}: {}", pname, ty)
                             })
@@ -1075,6 +1089,27 @@ pub(crate) mod support {
                                 })
                         };
 
+                        // Compute post-inference effective throws from the function body.
+                        // This captures HOF effect propagation that the pre-inference
+                        // throw_sets cannot see.
+                        let post_inference_throws: Option<String> = {
+                            if let Some(ref fb) = func_body_opt {
+                                if let baml_compiler2_hir::body::FunctionBody::Expr(ref body) = **fb
+                                {
+                                    let ty = inference.effective_throws(db, pkg_id, body);
+                                    if matches!(ty, baml_compiler2_tir::ty::Ty::Never { .. }) {
+                                        None
+                                    } else {
+                                        Some(ty.to_string())
+                                    }
+                                } else {
+                                    None
+                                }
+                            } else {
+                                None
+                            }
+                        };
+
                         let throws = if let Some(t) = &sig.throws {
                             let mut diags = Vec::new();
                             let declared =
@@ -1085,8 +1120,51 @@ pub(crate) mod support {
                                 }
                                 None => format!(" throws {declared}"),
                             }
-                        } else {
+                        } else if !synthetic_display_vars.is_empty() {
+                            // Function has implicit effect vars from callback params.
+                            // Union the effect vars with the body's own concrete throws.
+                            let mut all_throws: Vec<String> = synthetic_display_vars
+                                .iter()
+                                .map(|v| v.to_string())
+                                .collect();
+                            // Add body's own throws (post_inference_throws excludes TypeVars,
+                            // so these are the function's own concrete throws).
+                            if let Some(ref body_throws) = post_inference_throws {
+                                // Split the body throws string and add each component.
+                                for component in body_throws.split(" | ") {
+                                    let trimmed = component.trim();
+                                    if !trimmed.is_empty()
+                                        && !all_throws.contains(&trimmed.to_string())
+                                    {
+                                        all_throws.push(trimmed.to_string());
+                                    }
+                                }
+                            }
+                            // Sort for deterministic output: effect vars first, then others.
+                            all_throws.sort_by(|a, b| {
+                                let a_is_effect = a.starts_with("__throws_");
+                                let b_is_effect = b.starts_with("__throws_");
+                                match (a_is_effect, b_is_effect) {
+                                    (true, false) => std::cmp::Ordering::Greater,
+                                    (false, true) => std::cmp::Ordering::Less,
+                                    _ => a.cmp(b),
+                                }
+                            });
+                            let throws_str = all_throws.join(" | ");
                             match &inferred_throws {
+                                Some(inferred) => {
+                                    format!(" throws {throws_str} infers {inferred}")
+                                }
+                                None => format!(" throws {throws_str}"),
+                            }
+                        } else {
+                            // No explicit throws, no effect vars.
+                            // Use post-inference effective throws if available,
+                            // falling back to pre-inference transitive throws.
+                            match post_inference_throws
+                                .as_deref()
+                                .or(inferred_throws.as_deref())
+                            {
                                 Some(inferred) => format!(" throws {inferred}"),
                                 None => " throws never".to_string(),
                             }

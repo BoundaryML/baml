@@ -1,0 +1,183 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "may_fail"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "x"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    THROWS_CLAUSE
+      KW_THROWS "throws"
+      TYPE_EXPR "string"
+        WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        IF_EXPR
+          KW_IF "if"
+          PAREN_EXPR
+            L_PAREN "("
+            BINARY_EXPR "x == 0"
+              WORD "x"
+              EQUALS_EQUALS "=="
+              INTEGER_LITERAL "0"
+            R_PAREN ")"
+          BLOCK_EXPR
+            L_BRACE "{"
+            THROW_STMT
+              THROW_EXPR
+                KW_THROW "throw"
+                STRING_LITERAL "zero"
+                  QUOTE """
+                  WORD "zero"
+                  QUOTE """
+            R_BRACE "}"
+        STRING_LITERAL "ok"
+          QUOTE """
+          WORD "ok"
+          QUOTE """
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "test_no_catch"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        CALL_EXPR
+          WORD "may_fail"
+          CALL_ARGS "(1)"
+            L_PAREN "("
+            INTEGER_LITERAL "1"
+            R_PAREN ")"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "test_catch_all"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        CATCH_EXPR
+          CALL_EXPR
+            WORD "may_fail"
+            CALL_ARGS "(1)"
+              L_PAREN "("
+              INTEGER_LITERAL "1"
+              R_PAREN ")"
+          CATCH_CLAUSE
+            KW_CATCH "catch"
+            L_PAREN "("
+            CATCH_PATTERN "e"
+              WORD "e"
+            R_PAREN ")"
+            L_BRACE "{"
+            CATCH_ARM
+              CATCH_PATTERN "_"
+                WORD "_"
+              FAT_ARROW "=>"
+              STRING_LITERAL "caught"
+                QUOTE """
+                WORD "caught"
+                QUOTE """
+            R_BRACE "}"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "test_catch_string"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        CATCH_EXPR
+          CALL_EXPR
+            WORD "may_fail"
+            CALL_ARGS "(1)"
+              L_PAREN "("
+              INTEGER_LITERAL "1"
+              R_PAREN ")"
+          CATCH_CLAUSE
+            KW_CATCH "catch"
+            L_PAREN "("
+            CATCH_PATTERN "e"
+              WORD "e"
+            R_PAREN ")"
+            L_BRACE "{"
+            CATCH_ARM
+              CATCH_PATTERN
+                WORD "_"
+                COLON ":"
+                TYPE_EXPR "string"
+                  WORD "string"
+              FAT_ARROW "=>"
+              STRING_LITERAL "caught string"
+                QUOTE """
+                WORD "caught"
+                WORD "string"
+                QUOTE """
+            R_BRACE "}"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "test_catch_rethrow"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        CATCH_EXPR
+          CALL_EXPR
+            WORD "may_fail"
+            CALL_ARGS "(1)"
+              L_PAREN "("
+              INTEGER_LITERAL "1"
+              R_PAREN ")"
+          CATCH_CLAUSE
+            KW_CATCH "catch"
+            L_PAREN "("
+            CATCH_PATTERN "e"
+              WORD "e"
+            R_PAREN ")"
+            L_BRACE "{"
+            CATCH_ARM
+              CATCH_PATTERN "_"
+                WORD "_"
+              FAT_ARROW "=>"
+              THROW_EXPR "throw 42"
+                KW_THROW "throw"
+                INTEGER_LITERAL "42"
+            R_BRACE "}"
+        R_BRACE "}"
+
+=== ERRORS ===
+None

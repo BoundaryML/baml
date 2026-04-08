@@ -3,7 +3,7 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 === TIR2 ===
 enum user.Status
-function user.AlwaysThrowsStatus(n: int) -> user.Status throws never {
+function user.AlwaysThrowsStatus(n: int) -> user.Status throws int | string {
   { : never
     match (n : int) : never
       0 =>
@@ -12,7 +12,7 @@ function user.AlwaysThrowsStatus(n: int) -> user.Status throws never {
         throw 404 : never
   }
 }
-function user.WrapperAlwaysThrows(n: int) -> user.Status throws never {
+function user.WrapperAlwaysThrows(n: int) -> user.Status throws int | string {
   { : user.Status
     AlwaysThrowsStatus(n) : user.Status
   }
@@ -29,7 +29,7 @@ function user.CatchAlwaysThrows(n: int) -> string throws never {
   }
   !! 622..644: type mismatch: expected string, got user.Status
 }
-function user.ThrowsAllStatusVariants(n: int) -> user.Status throws never {
+function user.ThrowsAllStatusVariants(n: int) -> user.Status throws user.Status.AuthError | user.Status.HttpError | user.Status.IndexError | user.Status.SomeOtherError {
   { : never
     match (n : int) : never
       1 =>
@@ -60,7 +60,7 @@ function user.CatchAllStatusVariants(n: int) -> string throws never {
   }
   !! 1115..1141: type mismatch: expected string, got user.Status
 }
-function user.RecA(n: int) -> string throws never {
+function user.RecA(n: int) -> string throws string {
   { : string
     match (n : int) : string
       0 =>
@@ -69,7 +69,7 @@ function user.RecA(n: int) -> string throws never {
         RecB(n) : string
   }
 }
-function user.RecB(n: int) -> string throws never {
+function user.RecB(n: int) -> string throws string {
   { : string
     RecA(n) : string
   }
@@ -82,7 +82,7 @@ function user.CatchRecursiveThrow(n: int) -> string throws never {
           "handled" : "handled"
   }
 }
-function user.UnreachableTailStillChecked() -> string throws never {
+function user.UnreachableTailStillChecked() -> string throws string {
   { : never
     { : never
       throw "error" : "error"

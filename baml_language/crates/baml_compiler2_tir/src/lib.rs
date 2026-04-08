@@ -19,6 +19,7 @@
 pub mod analysis;
 pub mod builder;
 pub mod cycle_detector;
+pub mod effective_throws;
 pub mod generics;
 pub mod infer_context;
 pub mod inference;

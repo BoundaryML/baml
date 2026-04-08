@@ -1,5 +1,6 @@
 //! `TypeExpr → Ty` lowering using package-level name resolution.
 
+use baml_base::Name;
 use baml_compiler2_ast::TypeExpr;
 use baml_compiler2_hir::{
     contributions::Definition,
@@ -10,6 +11,123 @@ use crate::{
     infer_context::TirTypeError,
     ty::{Freshness, PrimitiveType, QualifiedTypeName, Ty, TyAttr},
 };
+
+/// Context for lowering function types — determines how an omitted `throws`
+/// clause is interpreted.
+///
+/// - `DefaultClosed`: omitted throws ⇒ `Ty::Never` (pure by default).
+///   Used for class fields, type aliases, return types, locals, and nested
+///   function types inside parameter/return positions.
+/// - `DirectParamRoot { param_name }`: omitted throws ⇒ fresh effect `TypeVar`
+///   named `__throws_<param_name>`.  Used only for the *outermost* function
+///   type of a direct callback parameter.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum FnTypeLoweringContext {
+    /// Omitted throws ⇒ `Ty::Never`.
+    DefaultClosed,
+    /// Omitted throws ⇒ fresh effect `TypeVar` named `__throws_<param_name>`.
+    DirectParamRoot { param_name: Name },
+}
+
+/// Lower a function-typed `TypeExpr` with implicit effect polymorphism.
+///
+/// When `ctx` is `DirectParamRoot { param_name }` and the function type has no
+/// explicit `throws` clause, a fresh `TypeVar` named `__throws_<param_name>` is
+/// generated and recorded in `synthetic_effect_vars`.  All nested positions
+/// (params, return type, nested function types) are lowered with
+/// `DefaultClosed`.
+///
+/// Returns the lowered `Ty`.  Any generated effect var names are pushed into
+/// `synthetic_effect_vars` so the caller can include them in the generic
+/// binding set.
+#[allow(clippy::too_many_arguments)]
+pub fn lower_type_expr_with_fn_context(
+    db: &dyn crate::Db,
+    type_expr: &TypeExpr,
+    package_items: &PackageItems<'_>,
+    ns_context: &[Name],
+    generic_params: &[Name],
+    diagnostics: &mut Vec<TirTypeError>,
+    ctx: &FnTypeLoweringContext,
+    synthetic_effect_vars: &mut Vec<Name>,
+) -> Ty {
+    match type_expr {
+        TypeExpr::Function {
+            params,
+            ret,
+            throws,
+            ..
+        } => {
+            // Nested function types inside params/return are always DefaultClosed.
+            let param_tys: Vec<(Option<Name>, Ty)> = params
+                .iter()
+                .map(|p| {
+                    (
+                        p.name.clone(),
+                        lower_type_expr_in_ns(
+                            db,
+                            &p.ty,
+                            package_items,
+                            ns_context,
+                            generic_params,
+                            diagnostics,
+                        ),
+                    )
+                })
+                .collect();
+
+            let ret_ty = lower_type_expr_in_ns(
+                db,
+                ret,
+                package_items,
+                ns_context,
+                generic_params,
+                diagnostics,
+            );
+
+            let throws_ty = match throws {
+                Some(t) => {
+                    // Explicit throws clause — lower normally.
+                    lower_type_expr_in_ns(
+                        db,
+                        t,
+                        package_items,
+                        ns_context,
+                        generic_params,
+                        diagnostics,
+                    )
+                }
+                None => match ctx {
+                    FnTypeLoweringContext::DirectParamRoot { param_name } => {
+                        // No explicit throws + direct param ⇒ fresh effect TypeVar.
+                        let var_name = Name::new(format!("__throws_{param_name}"));
+                        synthetic_effect_vars.push(var_name.clone());
+                        Ty::TypeVar(var_name, TyAttr::default())
+                    }
+                    FnTypeLoweringContext::DefaultClosed => Ty::Never {
+                        attr: TyAttr::default(),
+                    },
+                },
+            };
+
+            Ty::Function {
+                params: param_tys,
+                ret: Box::new(ret_ty),
+                throws: Box::new(throws_ty),
+                attr: TyAttr::default(),
+            }
+        }
+        // Non-function types fall through to normal lowering.
+        _ => lower_type_expr_in_ns(
+            db,
+            type_expr,
+            package_items,
+            ns_context,
+            generic_params,
+            diagnostics,
+        ),
+    }
+}
 
 /// Resolve an AST `TypeExpr` to a `Ty` using package-level name resolution.
 ///

@@ -72,7 +72,7 @@ function user.OptionalIndex(node: user.Node?, items: int[]?, lookup: map<string,
   !! 3611..3636: `unknown?` is not a function — it cannot be called
   !! 3926..3943: did you mean `nonNullItems[0]`? `nonNullItems?.[0]` is unnecessary, because `nonNullItems` cannot be null
 }
-function user.OptionalCall(callback: (int) -> string?, nonNullCb: (int) -> string, name: string?) -> string throws never {
+function user.OptionalCall(callback: (int) -> string? throws __throws_callback, nonNullCb: (int) -> string throws __throws_nonNullCb, name: string?) -> string throws __throws_callback | __throws_nonNullCb {
   { : never
     let c1 = callback?.(42) : string?
     let c2 = callback?.(42).length : ((self: baml.String) -> int)?

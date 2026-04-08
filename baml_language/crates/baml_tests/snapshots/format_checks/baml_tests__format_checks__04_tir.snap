@@ -670,7 +670,7 @@ function user.DeepFnReturn() -> (x: int) -> (y: int) -> (z: int) -> (w: int) -> 
   }
   !! 2354..2355: type mismatch: expected (x: int) -> (y: int) -> (z: int) -> (w: int) -> map<string, int | string | bool>, got 1
 }
-function user.DeepParamTypes(nested: map<string, map<string, map<string, int[]>>>, callback: (x: int) -> (y: int) -> (z: int) -> string) -> string throws never {
+function user.DeepParamTypes(nested: map<string, map<string, map<string, int[]>>>, callback: (x: int) -> (y: int) -> (z: int) -> string throws __throws_callback) -> string throws __throws_callback {
   { : "done"
     "done" : "done"
   }

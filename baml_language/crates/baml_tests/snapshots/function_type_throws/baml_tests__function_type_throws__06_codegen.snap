@@ -31,7 +31,73 @@ function user.apply_and_throw(f: () -> int) -> int {
     throw
 }
 
+function user.apply_explicit(f: () -> int) -> int {
+    load_var f
+    call_indirect
+    return
+}
+
+function user.apply_guarded(f: () -> int) -> int {
+    load_var f
+    call_indirect
+    store_var result
+    load_var result
+    load_const 0
+    cmp_op <
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var result
+    return
+
+  L1:
+    load_const "negative result"
+    throw
+}
+
+function user.apply_inner(f: () -> int) -> int {
+    load_var f
+    call_indirect
+    return
+}
+
+function user.apply_outer(g: () -> int) -> int {
+    load_var g
+    call user.apply_inner
+    return
+}
+
+function user.apply_pure_only(f: () -> int) -> int {
+    load_var f
+    call_indirect
+    return
+}
+
 function user.apply_throwing(f: () -> int) -> int {
+    load_var f
+    call_indirect
+    return
+}
+
+function user.apply_with_arg(x: int, f: (int) -> int) -> int {
+    load_var x
+    load_var f
+    call_indirect
+    return
+}
+
+function user.apply_with_helper(f: () -> int) -> int {
+    call user.helper_with_body_throw
+    pop 1
+    load_var f
+    call_indirect
+    return
+}
+
+function user.apply_with_many_args(a: int, b: string, f: (int, string) -> string) -> string {
+    load_var a
+    load_var b
     load_var f
     call_indirect
     return
@@ -43,6 +109,16 @@ function user.caller() -> string {
     return
 }
 
+function user.helper_with_body_throw() -> int {
+    load_const "helper boom"
+    throw
+}
+
+function user.make_pure() -> () -> int {
+    load_const null
+    return
+}
+
 function user.make_pure_handler() -> PureHandler {
     alloc_instance PureHandler
     copy 0
@@ -51,11 +127,23 @@ function user.make_pure_handler() -> PureHandler {
     return
 }
 
+function user.make_thrower() -> () -> int {
+    load_const null
+    return
+}
+
 function user.make_throwing_handler() -> ThrowingHandler {
     alloc_instance ThrowingHandler
     copy 0
     make_closure .<lambda(make_throwing_handler, 0)>, 0
     store_field .run
+    return
+}
+
+function user.map_it(x: int, f: (int) -> string) -> string {
+    load_var x
+    load_var f
+    call_indirect
     return
 }
 
@@ -73,6 +161,31 @@ function user.may_fail(x: int) -> string {
   L1:
     load_const "zero"
     throw
+}
+
+function user.run_pure(f: () -> int) -> int {
+    load_var f
+    call_indirect
+    return
+}
+
+function user.run_throwing(f: () -> int) -> int {
+    load_var f
+    call_indirect
+    return
+}
+
+function user.run_two(f: () -> int, g: () -> int) -> int {
+    load_var f
+    call_indirect
+    store_var _3
+    load_var g
+    call_indirect
+    store_var _4
+    load_var _3
+    load_var _4
+    bin_op +
+    return
 }
 
 function user.safe_caller() -> string {
@@ -117,10 +230,93 @@ function user.test_apply_throwing() -> int {
     return
 }
 
+function user.test_apply_with_helper_pure() -> int {
+    make_closure .<lambda(test_apply_with_helper_pure, 0)>, 0
+    call user.apply_with_helper
+    return
+}
+
+function user.test_apply_with_helper_throwing() -> int {
+    make_closure .<lambda(test_apply_with_helper_throwing, 0)>, 0
+    call user.apply_with_helper
+    return
+}
+
+function user.test_catch_all() -> string {
+    load_const 1
+    call user.may_fail
+    jump L0
+    load_var e
+    throw_if_panic
+    load_const "caught"
+
+  L0:
+    return
+}
+
+function user.test_catch_rethrow() -> string {
+    load_const 1
+    call user.may_fail
+    jump L0
+    load_var e
+    throw_if_panic
+    load_const 42
+    throw
+
+  L0:
+    return
+}
+
+function user.test_catch_string() -> string {
+    load_const 1
+    call user.may_fail
+    jump L2
+    load_var e
+    type_tag
+    load_const 1
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    throw
+
+  L1:
+    load_const "caught string"
+
+  L2:
+    return
+}
+
+function user.test_chained_pure() -> int {
+    make_closure .<lambda(test_chained_pure, 0)>, 0
+    call user.apply_outer
+    return
+}
+
+function user.test_chained_throwing() -> int {
+    make_closure .<lambda(test_chained_throwing, 0)>, 0
+    call user.apply_outer
+    return
+}
+
 function user.test_conditional_throw(x: int) -> int {
     load_var x
     make_closure .<lambda(test_conditional_throw, 0)>, 0
     call_indirect
+    return
+}
+
+function user.test_explicit_param_pure() -> int {
+    make_closure .<lambda(test_explicit_param_pure, 0)>, 0
+    call user.apply_explicit
+    return
+}
+
+function user.test_explicit_param_throwing() -> int {
+    make_closure .<lambda(test_explicit_param_throwing, 0)>, 0
+    call user.apply_explicit
     return
 }
 
@@ -139,6 +335,54 @@ function user.test_explicit_throws_never_pure() -> int {
 function user.test_explicit_throws_wider_than_body() -> int {
     make_closure .<lambda(test_explicit_throws_wider_than_body, 0)>, 0
     call_indirect
+    return
+}
+
+function user.test_guarded_pure() -> int {
+    make_closure .<lambda(test_guarded_pure, 0)>, 0
+    call user.apply_guarded
+    return
+}
+
+function user.test_guarded_throwing() -> int {
+    make_closure .<lambda(test_guarded_throwing, 0)>, 0
+    call user.apply_guarded
+    return
+}
+
+function user.test_many_args_pure() -> string {
+    load_const 1
+    load_const "hello"
+    make_closure .<lambda(test_many_args_pure, 0)>, 0
+    call user.apply_with_many_args
+    return
+}
+
+function user.test_map_pure() -> string {
+    load_const 1
+    make_closure .<lambda(test_map_pure, 0)>, 0
+    call user.map_it
+    return
+}
+
+function user.test_map_throwing() -> string {
+    load_const 1
+    make_closure .<lambda(test_map_throwing, 0)>, 0
+    call user.map_it
+    return
+}
+
+function user.test_mixed_pure() -> int {
+    load_const 5
+    make_closure .<lambda(test_mixed_pure, 0)>, 0
+    call user.apply_with_arg
+    return
+}
+
+function user.test_mixed_throwing() -> int {
+    load_const 5
+    make_closure .<lambda(test_mixed_throwing, 0)>, 0
+    call user.apply_with_arg
     return
 }
 
@@ -167,9 +411,33 @@ function user.test_nested_outer_throws() -> int {
     return
 }
 
+function user.test_no_catch() -> string {
+    load_const 1
+    call user.may_fail
+    return
+}
+
 function user.test_pure_lambda() -> int {
     make_closure .<lambda(test_pure_lambda, 0)>, 0
     call_indirect
+    return
+}
+
+function user.test_pure_only_pure() -> int {
+    make_closure .<lambda(test_pure_only_pure, 0)>, 0
+    call user.apply_pure_only
+    return
+}
+
+function user.test_run_pure() -> int {
+    make_closure .<lambda(test_run_pure, 0)>, 0
+    call user.run_pure
+    return
+}
+
+function user.test_run_throwing() -> int {
+    make_closure .<lambda(test_run_throwing, 0)>, 0
+    call user.run_throwing
     return
 }
 
@@ -187,6 +455,39 @@ function user.test_throwing_lambda() -> int {
 
 function user.test_throws_never_but_throws() -> int {
     make_closure .<lambda(test_throws_never_but_throws, 0)>, 0
+    call_indirect
+    return
+}
+
+function user.test_two_both_throw() -> int {
+    make_closure .<lambda(test_two_both_throw, 0)>, 0
+    make_closure .<lambda(test_two_both_throw, 1)>, 0
+    call user.run_two
+    return
+}
+
+function user.test_two_one_throws() -> int {
+    make_closure .<lambda(test_two_one_throws, 0)>, 0
+    make_closure .<lambda(test_two_one_throws, 1)>, 0
+    call user.run_two
+    return
+}
+
+function user.test_two_pure() -> int {
+    make_closure .<lambda(test_two_pure, 0)>, 0
+    make_closure .<lambda(test_two_pure, 1)>, 0
+    call user.run_two
+    return
+}
+
+function user.test_use_pure() -> int {
+    call user.make_pure
+    call_indirect
+    return
+}
+
+function user.test_use_thrower() -> int {
+    call user.make_thrower
     call_indirect
     return
 }

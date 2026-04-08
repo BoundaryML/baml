@@ -2,9 +2,42 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === HIR2 ===
+function user.test_map_pure() -> int[]  [expr] {
+  { let items: int[] = [1, 2, 3] } items.map((x) -> { {  } x Mul 2 })
+}
+function user.test_map_throwing() -> int[]  [expr] {
+  { let items: int[] = [1, 2, 3] } items.map((x) -> { { if (x Eq 2) { throw "found two" } } x Mul 2 })
+}
 type user.ThrowingFn = () -> int
 function user.takes_throwing(f: () -> int) -> int  [expr] {
   {  } f()
+}
+function user.may_fail(x: int) -> string  [expr] {
+  { if (x Eq 0) { throw "zero" } } "ok"
+}
+function user.test_catch_all() -> string  [expr] {
+  {  } may_fail(1) catch (e) { _ => "caught" }
+}
+function user.test_catch_rethrow() -> string  [expr] {
+  {  } may_fail(1) catch (e) { _ => throw 42 }
+}
+function user.test_catch_string() -> string  [expr] {
+  {  } may_fail(1) catch (e) { _: string => "caught string" }
+}
+function user.test_no_catch() -> string  [expr] {
+  {  } may_fail(1)
+}
+function user.apply_inner(f: () -> int) -> int  [expr] {
+  {  } f()
+}
+function user.apply_outer(g: () -> int) -> int  [expr] {
+  {  } apply_inner(g)
+}
+function user.test_chained_pure() -> int  [expr] {
+  {  } apply_outer(() -> int { {  } 42 })
+}
+function user.test_chained_throwing() -> int  [expr] {
+  {  } apply_outer(() -> int { { throw "deep" } })
 }
 class user.MixedHandler {
   safe: () -> int
@@ -21,6 +54,21 @@ function user.make_pure_handler() -> user.PureHandler  [expr] {
 }
 function user.make_throwing_handler() -> user.ThrowingHandler  [expr] {
   {  } user.ThrowingHandler { run: () -> null { { throw "error" } } }
+}
+function user.apply_explicit(f: () -> int) -> int  [expr] {
+  {  } f()
+}
+function user.apply_pure_only(f: () -> int) -> int  [expr] {
+  {  } f()
+}
+function user.test_explicit_param_pure() -> int  [expr] {
+  {  } apply_explicit(() -> int { {  } 42 })
+}
+function user.test_explicit_param_throwing() -> int  [expr] {
+  {  } apply_explicit(() -> int { { throw "ok" } })
+}
+function user.test_pure_only_pure() -> int  [expr] {
+  {  } apply_pure_only(() -> int { {  } 42 })
 }
 function user.always_ok(x: int) -> string  [expr] {
   {  } "always ok"
@@ -39,6 +87,48 @@ type user.Mapper = (int) -> string
 type user.PureCallback = () -> int
 type user.ThrowingCallback = () -> int
 type user.Wrapper = (() -> int) -> int
+function user.apply_guarded(f: () -> int) -> int  [expr] {
+  { let result = f(); if (result Lt 0) { throw "negative result" } } result
+}
+function user.test_guarded_pure() -> int  [expr] {
+  {  } apply_guarded(() -> int { {  } 42 })
+}
+function user.test_guarded_throwing() -> int  [expr] {
+  {  } apply_guarded(() -> int { { throw 99 } })
+}
+function user.map_it(x: int, f: (int) -> string) -> string  [expr] {
+  {  } f(x)
+}
+function user.run_pure(f: () -> int) -> int  [expr] {
+  {  } f()
+}
+function user.run_throwing(f: () -> int) -> int  [expr] {
+  {  } f()
+}
+function user.run_two(f: () -> int, g: () -> int) -> int  [expr] {
+  {  } f() Add g()
+}
+function user.test_map_pure() -> string  [expr] {
+  {  } map_it(1, (n: int) -> string { {  } "ok" })
+}
+function user.test_map_throwing() -> string  [expr] {
+  {  } map_it(1, (n: int) -> string { { throw "bad" } })
+}
+function user.test_run_pure() -> int  [expr] {
+  {  } run_pure(() -> int { {  } 42 })
+}
+function user.test_run_throwing() -> int  [expr] {
+  {  } run_throwing(() -> int { { throw "boom" } })
+}
+function user.test_two_both_throw() -> int  [expr] {
+  {  } run_two(() -> int { { throw "a" } }, () -> int { { throw 42 } })
+}
+function user.test_two_one_throws() -> int  [expr] {
+  {  } run_two(() -> int { {  } 1 }, () -> int { { throw "boom" } })
+}
+function user.test_two_pure() -> int  [expr] {
+  {  } run_two(() -> int { {  } 1 }, () -> int { {  } 2 })
+}
 function user.apply(f: () -> int) -> int  [expr] {
   {  } f()
 }
@@ -47,6 +137,12 @@ function user.apply_and_throw(f: () -> int) -> int  [expr] {
 }
 function user.apply_throwing(f: () -> int) -> int  [expr] {
   {  } f()
+}
+function user.apply_with_helper(f: () -> int) -> int  [expr] {
+  { helper_with_body_throw() } f()
+}
+function user.helper_with_body_throw() -> int  [expr] {
+  { throw "helper boom" }
 }
 function user.test_apply_and_throw_pure() -> int  [expr] {
   {  } apply_and_throw(() -> int { {  } 42 })
@@ -59,6 +155,12 @@ function user.test_apply_pure() -> int  [expr] {
 }
 function user.test_apply_throwing() -> int  [expr] {
   {  } apply(() -> int { { throw "boom" } })
+}
+function user.test_apply_with_helper_pure() -> int  [expr] {
+  {  } apply_with_helper(() -> int { {  } 42 })
+}
+function user.test_apply_with_helper_throwing() -> int  [expr] {
+  {  } apply_with_helper(() -> int { { throw 42 } })
 }
 function user.test_explicit_throws_match() -> int  [expr] {
   { let f = () -> int throws string { { throw "boom" } } } f()
@@ -87,6 +189,21 @@ function user.test_throwing_lambda() -> int  [expr] {
 function user.test_throws_never_but_throws() -> int  [expr] {
   { let f = () -> int throws never { { throw "boom" } } } f()
 }
+function user.apply_with_arg(x: int, f: (int) -> int) -> int  [expr] {
+  {  } f(x)
+}
+function user.apply_with_many_args(a: int, b: string, f: (int, string) -> string) -> string  [expr] {
+  {  } f(a, b)
+}
+function user.test_many_args_pure() -> string  [expr] {
+  {  } apply_with_many_args(1, "hello", (n: int, s: string) -> string { {  } s })
+}
+function user.test_mixed_pure() -> int  [expr] {
+  {  } apply_with_arg(5, (n: int) -> int { {  } n Mul 2 })
+}
+function user.test_mixed_throwing() -> int  [expr] {
+  {  } apply_with_arg(5, (n: int) -> int { { if (n Lt 0) { throw "negative" } } n Mul 2 })
+}
 function user.test_nested_both_throw() -> int  [expr] {
   { let outer = () -> int { { let inner = () -> int { { throw 42 } }; inner(); throw "outer" } } } outer()
 }
@@ -95,4 +212,16 @@ function user.test_nested_inner_throws() -> int  [expr] {
 }
 function user.test_nested_outer_throws() -> int  [expr] {
   { let outer = () -> int { { let inner = () -> int { {  } 42 }; throw "outer boom" } } } outer()
+}
+function user.make_pure() -> () -> int  [expr] {
+  {  }
+}
+function user.make_thrower() -> () -> int  [expr] {
+  {  }
+}
+function user.test_use_pure() -> int  [expr] {
+  { let f = make_pure() } f()
+}
+function user.test_use_thrower() -> int  [expr] {
+  { let f = make_thrower() } f()
 }

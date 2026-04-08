@@ -34,3 +34,22 @@ function apply_and_throw(f: () -> int) -> int {
 function test_apply_and_throw_pure() -> int {
   apply_and_throw(() -> int { 42 })
 }
+
+// Function with omitted throws that still throws from its body.
+function helper_with_body_throw() -> int {
+  throw "helper boom"
+}
+
+// Wrapper should keep the helper's concrete body throw alongside callback effects.
+function apply_with_helper(f: () -> int) -> int {
+  helper_with_body_throw()
+  f()
+}
+
+function test_apply_with_helper_pure() -> int {
+  apply_with_helper(() -> int { 42 })
+}
+
+function test_apply_with_helper_throwing() -> int {
+  apply_with_helper(() -> int { throw 42 })
+}

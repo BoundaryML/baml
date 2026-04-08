@@ -1,0 +1,89 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+// === HOF rethrows: effect propagation through higher-order functions ===
+
+// Basic rethrows - pure callback
+function run_pure(f: () -> int) -> int {
+    f()
+}
+function test_run_pure() -> int {
+    run_pure(
+        () -> int {
+            42
+        },
+    )
+}
+
+// Basic rethrows - throwing callback
+function run_throwing(f: () -> int) -> int {
+    f()
+}
+function test_run_throwing() -> int {
+    run_throwing(
+        () -> int {
+            throw "boom"
+        },
+    )
+}
+
+// Rethrows with multiple callback params
+function run_two(f: () -> int, g: () -> int) -> int {
+    f() + g()
+}
+
+function test_two_pure() -> int {
+    run_two(
+        () -> int {
+            1
+        },
+        () -> int {
+            2
+        },
+    )
+}
+
+function test_two_one_throws() -> int {
+    run_two(
+        () -> int {
+            1
+        },
+        () -> int {
+            throw "boom"
+        },
+    )
+}
+
+function test_two_both_throw() -> int {
+    run_two(
+        () -> int {
+            throw "a"
+        },
+        () -> int {
+            throw 42
+        },
+    )
+}
+
+// Rethrows with parametric callback
+function map_it(x: int, f: (int) -> string) -> string {
+    f(x)
+}
+
+function test_map_pure() -> string {
+    map_it(
+        1,
+        (n: int) -> string {
+            "ok"
+        },
+    )
+}
+
+function test_map_throwing() -> string {
+    map_it(
+        1,
+        (n: int) -> string {
+            throw "bad"
+        },
+    )
+}

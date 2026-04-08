@@ -85,6 +85,9 @@ pub struct ScopeInference<'db> {
     resolutions: FxHashMap<ExprId, MemberResolution<'db>>,
     /// Match expressions that the exhaustiveness checker determined cover all cases.
     exhaustive_matches: FxHashSet<ExprId>,
+    /// Residual throws for each catch expression: the types that propagate
+    /// out of the catch (types thrown but not handled by any arm).
+    catch_residual_throws: FxHashMap<ExprId, std::collections::BTreeSet<Ty>>,
     /// Diagnostics and other rare data. Heap-allocated only when non-empty.
     extra: Option<Box<ScopeInferenceExtra<'db>>>,
 }
@@ -155,6 +158,56 @@ impl<'db> ScopeInference<'db> {
     /// Iterate over all exhaustive match `ExprIds` in this scope.
     pub fn iter_exhaustive_matches(&self) -> impl Iterator<Item = &ExprId> {
         self.exhaustive_matches.iter()
+    }
+
+    /// Compute the concrete escaping throws for a body using post-inference
+    /// expression types plus the package throw graph fallback for named calls.
+    ///
+    /// This intentionally excludes `Ty::TypeVar` facts so callers can use it as
+    /// the function body's own concrete throws and union it with synthetic
+    /// callback effect vars separately.
+    pub fn effective_throws(
+        &self,
+        db: &'db dyn crate::Db,
+        package_id: PackageId<'db>,
+        body: &baml_compiler2_ast::ExprBody,
+    ) -> crate::ty::Ty {
+        use std::collections::BTreeSet;
+
+        use crate::ty::{PrimitiveType, TyAttr};
+
+        let mut facts: BTreeSet<crate::ty::Ty> = crate::effective_throws::collect_effective_throws(
+            db,
+            package_id,
+            body,
+            &self.expressions,
+            &self.catch_residual_throws,
+            false,
+            false,
+        );
+
+        // Remove Never and Void facts (they don't represent thrown exceptions).
+        facts.retain(|f| !matches!(f, Ty::Never { .. } | Ty::Void { .. }));
+
+        // Widen string literals to string primitive (matches throw_inference behavior).
+        let widened: BTreeSet<crate::ty::Ty> = facts
+            .into_iter()
+            .map(|f| match &f {
+                Ty::Literal(baml_compiler2_ast::Literal::String(_), _, _) => {
+                    Ty::Primitive(PrimitiveType::String, TyAttr::default())
+                }
+                other => other.clone(),
+            })
+            .collect();
+
+        let mut members: Vec<crate::ty::Ty> = widened.into_iter().collect();
+        match members.len() {
+            0 => Ty::Never {
+                attr: TyAttr::default(),
+            },
+            1 => members.remove(0),
+            _ => Ty::Union(members, TyAttr::default()),
+        }
     }
 
     /// Get diagnostics for this scope (empty slice if none).
@@ -582,7 +635,14 @@ pub fn infer_scope_types<'db>(
         }
     }
 
-    let (expressions, bindings, resolutions, exhaustive_matches, diagnostics) = builder.finish();
+    let (
+        expressions,
+        bindings,
+        resolutions,
+        exhaustive_matches,
+        catch_residual_throws,
+        diagnostics,
+    ) = builder.finish();
 
     let extra = if diagnostics.is_empty() {
         None
@@ -595,6 +655,7 @@ pub fn infer_scope_types<'db>(
         bindings,
         resolutions,
         exhaustive_matches,
+        catch_residual_throws,
         extra,
     }
 }

@@ -2,6 +2,98 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR2 ===
+fn user.test_map_pure() -> int[] {
+    // Locals:
+    let _0: int[] // _0 // return
+    let _1: int[] // items
+    let _2: int[]
+    let _3: (int) -> int
+
+    bb0: {
+        _1 = [const 1_i64, const 2_i64, const 3_i64];
+        _2 = copy _1;
+        _3 = make_closure lambda[0]();
+        _0 = call const fn baml.Array.map(copy _2, copy _3) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(test_map_pure, 0)>(x: null) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: null // x // param
+
+    bb0: {
+        _0 = copy _1 * const 2_i64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.test_map_throwing() -> int[] {
+    // Locals:
+    let _0: int[] // _0 // return
+    let _1: int[] // items
+    let _2: int[]
+    let _3: (int) -> int
+
+    bb0: {
+        _1 = [const 1_i64, const 2_i64, const 3_i64];
+        _2 = copy _1;
+        _3 = make_closure lambda[0]();
+        _0 = call const fn baml.Array.map(copy _2, copy _3) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(test_map_throwing, 0)>(x: null) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: null // x // param
+    let _2: bool
+
+    bb0: {
+        _2 = copy _1 == const 2_i64;
+        branch copy _2 -> [bb4, bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        _0 = copy _1 * const 2_i64;
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+
+    bb4: {
+        throw const "found two";
+    }
+}
+
 fn user.takes_throwing(f: () -> int) -> int {
     // Locals:
     let _0: int // _0 // return
@@ -17,6 +109,257 @@ fn user.takes_throwing(f: () -> int) -> int {
 
     bb2: {
         return;
+    }
+}
+
+fn user.may_fail(x: int) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: int // x // param
+    let _2: bool
+
+    bb0: {
+        _2 = copy _1 == const 0_i64;
+        branch copy _2 -> [bb4, bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        _0 = const "ok";
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+
+    bb4: {
+        throw const "zero";
+    }
+}
+
+fn user.test_catch_all() -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: unknown // e
+
+    bb0: {
+        _0 = call const fn user.may_fail(const 1_i64) -> [bb1, unwind: bb2];
+    }
+
+    bb1: {
+        goto -> bb5;
+    }
+
+    bb2: {
+        throw_if_panic copy _1 -> bb3;
+    }
+
+    bb3: {
+        goto -> bb4;
+    }
+
+    bb4: {
+        _0 = const "caught";
+        goto -> bb5;
+    }
+
+    bb5: {
+        goto -> bb6;
+    }
+
+    bb6: {
+        return;
+    }
+}
+
+fn user.test_catch_rethrow() -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: unknown // e
+
+    bb0: {
+        _0 = call const fn user.may_fail(const 1_i64) -> [bb1, unwind: bb4];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+
+    bb4: {
+        throw_if_panic copy _1 -> bb5;
+    }
+
+    bb5: {
+        goto -> bb6;
+    }
+
+    bb6: {
+        throw const 42_i64;
+    }
+}
+
+fn user.test_catch_string() -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: unknown // e
+    let _2: bool
+
+    bb0: {
+        _0 = call const fn user.may_fail(const 1_i64) -> [bb1, unwind: bb2];
+    }
+
+    bb1: {
+        goto -> bb5;
+    }
+
+    bb2: {
+        _2 = is_type(copy _1, String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _2 -> [bb4, bb3];
+    }
+
+    bb3: {
+        throw copy _1;
+    }
+
+    bb4: {
+        _0 = const "caught string";
+        goto -> bb5;
+    }
+
+    bb5: {
+        goto -> bb6;
+    }
+
+    bb6: {
+        return;
+    }
+}
+
+fn user.test_no_catch() -> string {
+    // Locals:
+    let _0: string // _0 // return
+
+    bb0: {
+        _0 = call const fn user.may_fail(const 1_i64) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.apply_inner(f: () -> int) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: () -> int // f // param
+
+    bb0: {
+        _0 = call copy _1() -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.apply_outer(g: () -> int) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: () -> int // g // param
+
+    bb0: {
+        _0 = call const fn user.apply_inner(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.test_chained_pure() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: () -> 42
+
+    bb0: {
+        _1 = make_closure lambda[0]();
+        _0 = call const fn user.apply_outer(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(test_chained_pure, 0)>() -> null {
+    // Locals:
+    let _0: null // _0 // return
+
+    bb0: {
+        _0 = const 42_i64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.test_chained_throwing() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: () -> void
+
+    bb0: {
+        _1 = make_closure lambda[0]();
+        _0 = call const fn user.apply_outer(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(test_chained_throwing, 0)>() -> null {
+    // Locals:
+    let _0: null // _0 // return
+
+    bb0: {
+        throw const "deep";
     }
 }
 
@@ -74,6 +417,139 @@ fn .<lambda(make_throwing_handler, 0)>() -> null {
 
     bb0: {
         throw const "error";
+    }
+}
+
+fn user.apply_explicit(f: () -> int) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: () -> int // f // param
+
+    bb0: {
+        _0 = call copy _1() -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.apply_pure_only(f: () -> int) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: () -> int // f // param
+
+    bb0: {
+        _0 = call copy _1() -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.test_explicit_param_pure() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: () -> 42
+
+    bb0: {
+        _1 = make_closure lambda[0]();
+        _0 = call const fn user.apply_explicit(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(test_explicit_param_pure, 0)>() -> null {
+    // Locals:
+    let _0: null // _0 // return
+
+    bb0: {
+        _0 = const 42_i64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.test_explicit_param_throwing() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: () -> void
+
+    bb0: {
+        _1 = make_closure lambda[0]();
+        _0 = call const fn user.apply_explicit(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(test_explicit_param_throwing, 0)>() -> null {
+    // Locals:
+    let _0: null // _0 // return
+
+    bb0: {
+        throw const "ok";
+    }
+}
+
+fn user.test_pure_only_pure() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: () -> 42
+
+    bb0: {
+        _1 = make_closure lambda[0]();
+        _0 = call const fn user.apply_pure_only(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(test_pure_only_pure, 0)>() -> null {
+    // Locals:
+    let _0: null // _0 // return
+
+    bb0: {
+        _0 = const 42_i64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
     }
 }
 
@@ -173,6 +649,452 @@ fn user.safe_caller() -> string {
     }
 }
 
+fn user.apply_guarded(f: () -> int) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: () -> int // f // param
+    let _2: int // result
+    let _3: bool
+    let _4: int
+
+    bb0: {
+        _2 = call copy _1() -> [bb1];
+    }
+
+    bb1: {
+        _4 = copy _2;
+        _3 = copy _4 < const 0_i64;
+        branch copy _3 -> [bb5, bb2];
+    }
+
+    bb2: {
+        goto -> bb3;
+    }
+
+    bb3: {
+        _0 = copy _2;
+        goto -> bb4;
+    }
+
+    bb4: {
+        return;
+    }
+
+    bb5: {
+        throw const "negative result";
+    }
+}
+
+fn user.test_guarded_pure() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: () -> 42
+
+    bb0: {
+        _1 = make_closure lambda[0]();
+        _0 = call const fn user.apply_guarded(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(test_guarded_pure, 0)>() -> null {
+    // Locals:
+    let _0: null // _0 // return
+
+    bb0: {
+        _0 = const 42_i64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.test_guarded_throwing() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: () -> void
+
+    bb0: {
+        _1 = make_closure lambda[0]();
+        _0 = call const fn user.apply_guarded(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(test_guarded_throwing, 0)>() -> null {
+    // Locals:
+    let _0: null // _0 // return
+
+    bb0: {
+        throw const 99_i64;
+    }
+}
+
+fn user.map_it(x: int, f: (int) -> string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: int // x // param
+    let _2: (int) -> string // f // param
+
+    bb0: {
+        _0 = call copy _2(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.run_pure(f: () -> int) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: () -> int // f // param
+
+    bb0: {
+        _0 = call copy _1() -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.run_throwing(f: () -> int) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: () -> int // f // param
+
+    bb0: {
+        _0 = call copy _1() -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.run_two(f: () -> int, g: () -> int) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: () -> int // f // param
+    let _2: () -> int // g // param
+    let _3: int
+    let _4: int
+
+    bb0: {
+        _3 = call copy _1() -> [bb1];
+    }
+
+    bb1: {
+        _4 = call copy _2() -> [bb2];
+    }
+
+    bb2: {
+        _0 = copy _3 + copy _4;
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+fn user.test_map_pure() -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: (int) -> "ok"
+
+    bb0: {
+        _1 = make_closure lambda[0]();
+        _0 = call const fn user.map_it(const 1_i64, copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(test_map_pure, 0)>(n: int) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: int // n // param
+
+    bb0: {
+        _0 = const "ok";
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.test_map_throwing() -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: (int) -> void
+
+    bb0: {
+        _1 = make_closure lambda[0]();
+        _0 = call const fn user.map_it(const 1_i64, copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(test_map_throwing, 0)>(n: int) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: int // n // param
+
+    bb0: {
+        throw const "bad";
+    }
+}
+
+fn user.test_run_pure() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: () -> 42
+
+    bb0: {
+        _1 = make_closure lambda[0]();
+        _0 = call const fn user.run_pure(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(test_run_pure, 0)>() -> null {
+    // Locals:
+    let _0: null // _0 // return
+
+    bb0: {
+        _0 = const 42_i64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.test_run_throwing() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: () -> void
+
+    bb0: {
+        _1 = make_closure lambda[0]();
+        _0 = call const fn user.run_throwing(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(test_run_throwing, 0)>() -> null {
+    // Locals:
+    let _0: null // _0 // return
+
+    bb0: {
+        throw const "boom";
+    }
+}
+
+fn user.test_two_both_throw() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: () -> void
+    let _2: () -> void
+
+    bb0: {
+        _1 = make_closure lambda[0]();
+        _2 = make_closure lambda[1]();
+        _0 = call const fn user.run_two(copy _1, copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(test_two_both_throw, 0)>() -> null {
+    // Locals:
+    let _0: null // _0 // return
+
+    bb0: {
+        throw const "a";
+    }
+}
+
+// lambda[1]
+fn .<lambda(test_two_both_throw, 1)>() -> null {
+    // Locals:
+    let _0: null // _0 // return
+
+    bb0: {
+        throw const 42_i64;
+    }
+}
+
+fn user.test_two_one_throws() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: () -> 1
+    let _2: () -> void
+
+    bb0: {
+        _1 = make_closure lambda[0]();
+        _2 = make_closure lambda[1]();
+        _0 = call const fn user.run_two(copy _1, copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(test_two_one_throws, 0)>() -> null {
+    // Locals:
+    let _0: null // _0 // return
+
+    bb0: {
+        _0 = const 1_i64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+// lambda[1]
+fn .<lambda(test_two_one_throws, 1)>() -> null {
+    // Locals:
+    let _0: null // _0 // return
+
+    bb0: {
+        throw const "boom";
+    }
+}
+
+fn user.test_two_pure() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: () -> 1
+    let _2: () -> 2
+
+    bb0: {
+        _1 = make_closure lambda[0]();
+        _2 = make_closure lambda[1]();
+        _0 = call const fn user.run_two(copy _1, copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(test_two_pure, 0)>() -> null {
+    // Locals:
+    let _0: null // _0 // return
+
+    bb0: {
+        _0 = const 1_i64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+// lambda[1]
+fn .<lambda(test_two_pure, 1)>() -> null {
+    // Locals:
+    let _0: null // _0 // return
+
+    bb0: {
+        _0 = const 2_i64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
 fn user.apply(f: () -> int) -> int {
     // Locals:
     let _0: int // _0 // return
@@ -242,6 +1164,38 @@ fn user.apply_throwing(f: () -> int) -> int {
 
     bb2: {
         return;
+    }
+}
+
+fn user.apply_with_helper(f: () -> int) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: () -> int // f // param
+    let _2: int
+
+    bb0: {
+        _2 = call const fn user.helper_with_body_throw() -> [bb1];
+    }
+
+    bb1: {
+        _0 = call copy _1() -> [bb2];
+    }
+
+    bb2: {
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+fn user.helper_with_body_throw() -> int {
+    // Locals:
+    let _0: int // _0 // return
+
+    bb0: {
+        throw const "helper boom";
     }
 }
 
@@ -368,6 +1322,69 @@ fn .<lambda(test_apply_throwing, 0)>() -> null {
 
     bb0: {
         throw const "boom";
+    }
+}
+
+fn user.test_apply_with_helper_pure() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: () -> 42
+
+    bb0: {
+        _1 = make_closure lambda[0]();
+        _0 = call const fn user.apply_with_helper(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(test_apply_with_helper_pure, 0)>() -> null {
+    // Locals:
+    let _0: null // _0 // return
+
+    bb0: {
+        _0 = const 42_i64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.test_apply_with_helper_throwing() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: () -> void
+
+    bb0: {
+        _1 = make_closure lambda[0]();
+        _0 = call const fn user.apply_with_helper(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(test_apply_with_helper_throwing, 0)>() -> null {
+    // Locals:
+    let _0: null // _0 // return
+
+    bb0: {
+        throw const 42_i64;
     }
 }
 
@@ -709,6 +1726,165 @@ fn .<lambda(test_throws_never_but_throws, 0)>() -> null {
     }
 }
 
+fn user.apply_with_arg(x: int, f: (int) -> int) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: int // x // param
+    let _2: (int) -> int // f // param
+
+    bb0: {
+        _0 = call copy _2(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.apply_with_many_args(a: int, b: string, f: (int, string) -> string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: int // a // param
+    let _2: string // b // param
+    let _3: (int, string) -> string // f // param
+
+    bb0: {
+        _0 = call copy _3(copy _1, copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.test_many_args_pure() -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: (int, string) -> string
+
+    bb0: {
+        _1 = make_closure lambda[0]();
+        _0 = call const fn user.apply_with_many_args(const 1_i64, const "hello", copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(test_many_args_pure, 0)>(n: int, s: string) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: int // n // param
+    let _2: string // s // param
+
+    bb0: {
+        _0 = copy _2;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.test_mixed_pure() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: (int) -> int
+
+    bb0: {
+        _1 = make_closure lambda[0]();
+        _0 = call const fn user.apply_with_arg(const 5_i64, copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(test_mixed_pure, 0)>(n: int) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: int // n // param
+
+    bb0: {
+        _0 = copy _1 * const 2_i64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.test_mixed_throwing() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: (int) -> int
+
+    bb0: {
+        _1 = make_closure lambda[0]();
+        _0 = call const fn user.apply_with_arg(const 5_i64, copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(test_mixed_throwing, 0)>(n: int) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: int // n // param
+    let _2: bool
+
+    bb0: {
+        _2 = copy _1 < const 0_i64;
+        branch copy _2 -> [bb4, bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        _0 = copy _1 * const 2_i64;
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+
+    bb4: {
+        throw const "negative";
+    }
+}
+
 fn user.test_nested_both_throw() -> int {
     // Locals:
     let _0: int // _0 // return
@@ -854,6 +2030,82 @@ fn .<lambda(<lambda(test_nested_outer_throws, 0)>, 1)>() -> null {
     }
 
     bb1: {
+        return;
+    }
+}
+
+fn user.make_pure() -> () -> int {
+    // Locals:
+    let _0: () -> int // _0 // return
+
+    bb0: {
+        _0 = const null;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.make_thrower() -> () -> int {
+    // Locals:
+    let _0: () -> int // _0 // return
+
+    bb0: {
+        _0 = const null;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.test_use_pure() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: () -> int // f
+    let _2: () -> int
+
+    bb0: {
+        _1 = call const fn user.make_pure() -> [bb1];
+    }
+
+    bb1: {
+        _2 = copy _1;
+        _0 = call copy _2() -> [bb2];
+    }
+
+    bb2: {
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+fn user.test_use_thrower() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: () -> int // f
+    let _2: () -> int
+
+    bb0: {
+        _1 = call const fn user.make_thrower() -> [bb1];
+    }
+
+    bb1: {
+        _2 = copy _1;
+        _0 = call copy _2() -> [bb2];
+    }
+
+    bb2: {
+        goto -> bb3;
+    }
+
+    bb3: {
         return;
     }
 }

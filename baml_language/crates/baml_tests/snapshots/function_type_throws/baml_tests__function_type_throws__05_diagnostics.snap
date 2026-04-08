@@ -2,6 +2,54 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
+  [validation] Error: Duplicate function `may_fail`
+   ╭─[ catch_absorbs_throws.baml:3:10 ]
+   │
+ 3 │ function may_fail(x: int) -> string throws string {
+   │          ────┬───  
+   │              ╰───── first defined as function here
+   │
+   ├─[ fn_decl_throws.baml:4:10 ]
+   │
+ 4 │ function may_fail(x: int) -> string throws string {
+   │          ────┬───  
+   │              ╰───── duplicate function definition
+   │ 
+   │ Note: Error code: E0011
+───╯
+
+  [validation] Error: Duplicate function `test_map_pure`
+    ╭─[ array_map_throws.baml:4:10 ]
+    │
+  4 │ function test_map_pure() -> int[] {
+    │          ──────┬──────  
+    │                ╰──────── first defined as function here
+    │
+    ├─[ hof_rethrows.baml:37:10 ]
+    │
+ 37 │ function test_map_pure() -> string {
+    │          ──────┬──────  
+    │                ╰──────── duplicate function definition
+    │ 
+    │ Note: Error code: E0011
+────╯
+
+  [validation] Error: Duplicate function `test_map_throwing`
+    ╭─[ array_map_throws.baml:10:10 ]
+    │
+ 10 │ function test_map_throwing() -> int[] {
+    │          ────────┬────────  
+    │                  ╰────────── first defined as function here
+    │
+    ├─[ hof_rethrows.baml:41:10 ]
+    │
+ 41 │ function test_map_throwing() -> string {
+    │          ────────┬────────  
+    │                  ╰────────── duplicate function definition
+    │ 
+    │ Note: Error code: E0011
+────╯
+
   [type] Warning: extraneous throws declaration: string
     ╭─[ lambda_throws_explicit.baml:17:27 ]
     │
@@ -40,4 +88,28 @@ source: crates/baml_tests/src/generated_tests.rs
     │        ╰───── unreachable code: 1 statement(s) after diverging statement
     │ 
     │ Note: Error code: E0001
+────╯
+
+  [type] Error: missing return: expected `() -> int`
+   ╭─[ returned_closures.baml:4:36 ]
+   │
+ 4 │ ╭─▶ function make_pure() -> (() -> int) {
+   ┆ ┆   
+ 6 │ ├─▶ }
+   │ │       
+   │ ╰─────── missing return: expected `() -> int`
+   │     
+   │     Note: Error code: E0001
+───╯
+
+  [type] Error: missing return: expected `() -> int throws string`
+    ╭─[ returned_closures.baml:9:53 ]
+    │
+  9 │ ╭─▶ function make_thrower() -> (() -> int throws string) {
+    ┆ ┆   
+ 11 │ ├─▶ }
+    │ │       
+    │ ╰─────── missing return: expected `() -> int throws string`
+    │     
+    │     Note: Error code: E0001
 ────╯

@@ -2,7 +2,7 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === TIR2 ===
-function user.MayFailIntOrString(x: int) -> string throws never {
+function user.MayFailIntOrString(x: int) -> string throws int | string {
   { : "ok"
     match (x : int) : "ok"
       0 =>
@@ -13,7 +13,7 @@ function user.MayFailIntOrString(x: int) -> string throws never {
         "ok" : "ok"
   }
 }
-function user.PartialCatch(x: int) -> string throws never {
+function user.PartialCatch(x: int) -> string throws int {
   { : string | "caught string"
     catch (MayFailIntOrString(x) : string) : unknown
       catch (e)

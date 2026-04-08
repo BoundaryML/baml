@@ -15,7 +15,7 @@
 
 use std::collections::{BTreeSet, HashMap};
 
-use baml_base::Name;
+use baml_base::{Name, SourceFile};
 use baml_compiler2_ast::{Expr, ExprBody, ExprId, PatId, Stmt, StmtId, TypeExpr};
 use baml_compiler2_hir::{
     contributions::Definition,
@@ -188,6 +188,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         FxHashMap<PatId, Ty>,
         FxHashMap<ExprId, crate::inference::MemberResolution<'db>>,
         FxHashSet<ExprId>,
+        FxHashMap<ExprId, BTreeSet<Ty>>,
         TypeCheckDiagnostics<'db>,
     ) {
         let diagnostics = self.context.finish();
@@ -196,6 +197,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             self.bindings,
             self.resolutions,
             self.exhaustive_matches,
+            self.catch_residual_throws,
             diagnostics,
         )
     }
@@ -721,7 +723,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                     return_annotation.as_ref(),
                     expr_id,
                 );
-
                 // Determine throws: explicit annotation takes precedence,
                 // otherwise infer from the body.
                 let throws_ty = if let Some(te) = &func_def.throws {
@@ -956,7 +957,12 @@ impl<'db> TypeInferenceBuilder<'db> {
                 };
 
                 match &callee_ty {
-                    Ty::Function { params, ret, .. } => {
+                    Ty::Function {
+                        params,
+                        ret,
+                        throws: callee_throws,
+                        ..
+                    } => {
                         let effective_params = if is_method_call {
                             crate::generics::skip_self_param(params)
                         } else {
@@ -1047,6 +1053,17 @@ impl<'db> TypeInferenceBuilder<'db> {
                         );
                         for d in erase_diags {
                             self.context.report_simple(d, expr_id);
+                        }
+
+                        // Phase 2b: if we have bindings and the callee has effect vars
+                        // in its throws, substitute them and update the callee's recorded
+                        // type so that collect_effective_throws_from_expr sees the
+                        // resolved throws rather than unbound TypeVars.
+                        if !bindings.is_empty() && crate::generics::contains_typevar(callee_throws)
+                        {
+                            let substituted_callee_ty =
+                                crate::generics::substitute_ty(&callee_ty, &bindings);
+                            self.record_expr_type(*callee, substituted_callee_ty);
                         }
 
                         // Subtype check against expected type (skip if we did generic
@@ -1192,7 +1209,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                             Some(effective_ret),
                             expr_id,
                         );
-
                         // Determine throws: explicit annotation > expected > inferred from body
                         let throws_ty = if let Some(te) = &func_def.throws {
                             let mut diags = Vec::new();
@@ -2509,204 +2525,15 @@ impl<'db> TypeInferenceBuilder<'db> {
     }
 
     fn collect_effective_throws(&self, body: &ExprBody) -> BTreeSet<Ty> {
-        let mut out = BTreeSet::new();
-        if let Some(root) = body.root_expr {
-            self.collect_effective_throws_from_expr(root, body, &mut out);
-        }
-        out
-    }
-
-    fn collect_effective_throws_from_expr(
-        &self,
-        expr_id: ExprId,
-        body: &ExprBody,
-        out: &mut BTreeSet<Ty>,
-    ) {
-        match &body.exprs[expr_id] {
-            Expr::Throw { value } => {
-                self.collect_effective_throws_from_expr(*value, body, out);
-                self.collect_throw_facts_from_value(*value, out);
-            }
-            Expr::Call { callee, args } => {
-                self.collect_effective_throws_from_expr(*callee, body, out);
-                for arg in args {
-                    self.collect_effective_throws_from_expr(*arg, body, out);
-                }
-                if let Some(target) = self.call_target_name(*callee, body) {
-                    let throws = crate::throw_inference::function_throw_sets(
-                        self.context.db(),
-                        self.package_id,
-                    );
-                    if let Some(transitive) = throws.transitive_for(&target) {
-                        out.extend(transitive.iter().cloned());
-                    } else {
-                        // Target not in throw set registry (function parameter,
-                        // external function, etc.). Check if the callee has a
-                        // type-level throws annotation before falling back to Unknown.
-                        if let Some(Ty::Function { throws, .. }) = self.expressions.get(callee) {
-                            let facts = crate::throw_inference::flatten_ty_to_facts(throws);
-                            out.extend(facts);
-                        } else {
-                            out.insert(Ty::Unknown {
-                                attr: TyAttr::default(),
-                            });
-                        }
-                    }
-                } else {
-                    // No resolvable target name — check type-level throws.
-                    if let Some(Ty::Function { throws, .. }) = self.expressions.get(callee) {
-                        let facts = crate::throw_inference::flatten_ty_to_facts(throws);
-                        out.extend(facts);
-                    } else {
-                        out.insert(Ty::Unknown {
-                            attr: TyAttr::default(),
-                        });
-                    }
-                }
-            }
-            Expr::Catch { clauses, .. } => {
-                if let Some(residual) = self.catch_residual_throws.get(&expr_id) {
-                    out.extend(residual.iter().cloned());
-                }
-                for clause in clauses {
-                    for arm_id in &clause.arms {
-                        let arm = &body.catch_arms[*arm_id];
-                        self.collect_effective_throws_from_expr(arm.body, body, out);
-                    }
-                }
-            }
-            Expr::If {
-                condition,
-                then_branch,
-                else_branch,
-            } => {
-                self.collect_effective_throws_from_expr(*condition, body, out);
-                self.collect_effective_throws_from_expr(*then_branch, body, out);
-                if let Some(else_expr) = else_branch {
-                    self.collect_effective_throws_from_expr(*else_expr, body, out);
-                }
-            }
-            Expr::Match {
-                scrutinee, arms, ..
-            } => {
-                self.collect_effective_throws_from_expr(*scrutinee, body, out);
-                for arm_id in arms {
-                    let arm = &body.match_arms[*arm_id];
-                    if let Some(guard) = arm.guard {
-                        self.collect_effective_throws_from_expr(guard, body, out);
-                    }
-                    self.collect_effective_throws_from_expr(arm.body, body, out);
-                }
-            }
-            Expr::Binary { lhs, rhs, .. } => {
-                self.collect_effective_throws_from_expr(*lhs, body, out);
-                self.collect_effective_throws_from_expr(*rhs, body, out);
-            }
-            Expr::Unary { expr, .. } => {
-                self.collect_effective_throws_from_expr(*expr, body, out);
-            }
-            Expr::Object {
-                fields, spreads, ..
-            } => {
-                for (_, value) in fields {
-                    self.collect_effective_throws_from_expr(*value, body, out);
-                }
-                for spread in spreads {
-                    self.collect_effective_throws_from_expr(spread.expr, body, out);
-                }
-            }
-            Expr::Array { elements } => {
-                for elem in elements {
-                    self.collect_effective_throws_from_expr(*elem, body, out);
-                }
-            }
-            Expr::Map { entries } => {
-                for (key, value) in entries {
-                    self.collect_effective_throws_from_expr(*key, body, out);
-                    self.collect_effective_throws_from_expr(*value, body, out);
-                }
-            }
-            Expr::Block { stmts, tail_expr } => {
-                for stmt_id in stmts {
-                    self.collect_effective_throws_from_stmt(*stmt_id, body, out);
-                }
-                if let Some(tail) = tail_expr {
-                    self.collect_effective_throws_from_expr(*tail, body, out);
-                }
-            }
-            Expr::FieldAccess { base, .. } | Expr::OptionalFieldAccess { base, .. } => {
-                self.collect_effective_throws_from_expr(*base, body, out);
-            }
-            Expr::Index { base, index } | Expr::OptionalIndex { base, index } => {
-                self.collect_effective_throws_from_expr(*base, body, out);
-                self.collect_effective_throws_from_expr(*index, body, out);
-            }
-            Expr::OptionalCall { callee, args } => {
-                self.collect_effective_throws_from_expr(*callee, body, out);
-                for arg in args {
-                    self.collect_effective_throws_from_expr(*arg, body, out);
-                }
-            }
-            Expr::OptionalChain { expr } => {
-                self.collect_effective_throws_from_expr(*expr, body, out);
-            }
-            Expr::Lambda(_)
-            | Expr::Literal(_)
-            | Expr::ByteStringLiteral(_)
-            | Expr::Null
-            | Expr::Path(_)
-            | Expr::Missing => {}
-        }
-    }
-
-    fn collect_effective_throws_from_stmt(
-        &self,
-        stmt_id: StmtId,
-        body: &ExprBody,
-        out: &mut BTreeSet<Ty>,
-    ) {
-        match &body.stmts[stmt_id] {
-            Stmt::Expr(expr) => self.collect_effective_throws_from_expr(*expr, body, out),
-            Stmt::Let { initializer, .. } => {
-                if let Some(init) = initializer {
-                    self.collect_effective_throws_from_expr(*init, body, out);
-                }
-            }
-            Stmt::While {
-                condition,
-                body: while_body,
-                after,
-                ..
-            } => {
-                self.collect_effective_throws_from_expr(*condition, body, out);
-                self.collect_effective_throws_from_expr(*while_body, body, out);
-                if let Some(after_stmt) = after {
-                    self.collect_effective_throws_from_stmt(*after_stmt, body, out);
-                }
-            }
-            Stmt::For {
-                collection,
-                body: for_body,
-                ..
-            } => {
-                self.collect_effective_throws_from_expr(*collection, body, out);
-                self.collect_effective_throws_from_expr(*for_body, body, out);
-            }
-            Stmt::Return(expr) => {
-                if let Some(expr) = expr {
-                    self.collect_effective_throws_from_expr(*expr, body, out);
-                }
-            }
-            Stmt::Assign { target, value } | Stmt::AssignOp { target, value, .. } => {
-                self.collect_effective_throws_from_expr(*target, body, out);
-                self.collect_effective_throws_from_expr(*value, body, out);
-            }
-            Stmt::Throw { value } => {
-                self.collect_effective_throws_from_expr(*value, body, out);
-                self.collect_throw_facts_from_value(*value, out);
-            }
-            Stmt::Break | Stmt::Continue | Stmt::Missing | Stmt::HeaderComment { .. } => {}
-        }
+        crate::effective_throws::collect_effective_throws(
+            self.context.db(),
+            self.package_id,
+            body,
+            &self.expressions,
+            &self.catch_residual_throws,
+            true,
+            true,
+        )
     }
 
     fn collect_throw_facts_from_expr(
@@ -2718,14 +2545,23 @@ impl<'db> TypeInferenceBuilder<'db> {
         match &body.exprs[expr_id] {
             Expr::Throw { value } => {
                 self.collect_throw_facts_from_expr(*value, body, out);
-                self.collect_throw_facts_from_value(*value, out);
+                self.collect_throw_facts_from_value(*value, body, out);
             }
             Expr::Call { callee, args } => {
                 self.collect_throw_facts_from_expr(*callee, body, out);
                 for arg in args {
                     self.collect_throw_facts_from_expr(*arg, body, out);
                 }
-                if let Some(target) = self.call_target_name(*callee, body) {
+                let type_level_facts = self.expressions.get(callee).and_then(|ty| match ty {
+                    Ty::Function { throws, .. } => {
+                        let facts = crate::throw_inference::flatten_ty_to_facts(throws);
+                        if facts.is_empty() { None } else { Some(facts) }
+                    }
+                    _ => None,
+                });
+                if let Some(facts) = type_level_facts {
+                    out.extend(facts);
+                } else if let Some(target) = self.call_target_name(*callee, body) {
                     let throws = crate::throw_inference::function_throw_sets(
                         self.context.db(),
                         self.package_id,
@@ -2872,18 +2708,39 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
             Stmt::Throw { value } => {
                 self.collect_throw_facts_from_expr(*value, body, out);
-                self.collect_throw_facts_from_value(*value, out);
+                self.collect_throw_facts_from_value(*value, body, out);
             }
             Stmt::Break | Stmt::Continue | Stmt::Missing | Stmt::HeaderComment { .. } => {}
         }
     }
 
-    fn collect_throw_facts_from_value(&self, value_expr_id: ExprId, out: &mut BTreeSet<Ty>) {
-        let unknown_ty = Ty::Unknown {
-            attr: TyAttr::default(),
-        };
-        let thrown_ty = self.expressions.get(&value_expr_id).unwrap_or(&unknown_ty);
-        out.extend(crate::throw_inference::flatten_ty_to_facts(thrown_ty));
+    fn collect_throw_facts_from_value(
+        &self,
+        value_expr_id: ExprId,
+        body: &ExprBody,
+        out: &mut BTreeSet<Ty>,
+    ) {
+        if let Some(thrown_ty) = self.expressions.get(&value_expr_id) {
+            out.extend(crate::throw_inference::flatten_ty_to_facts(thrown_ty));
+            return;
+        }
+
+        match &body.exprs[value_expr_id] {
+            Expr::Literal(lit) => out.extend(crate::throw_inference::flatten_ty_to_facts(
+                &Ty::Literal(lit.clone(), Freshness::Regular, TyAttr::default()),
+            )),
+            Expr::ByteStringLiteral(_) => {
+                out.insert(Ty::Primitive(PrimitiveType::Uint8Array, TyAttr::default()));
+            }
+            Expr::Null => {
+                out.insert(Ty::Primitive(PrimitiveType::Null, TyAttr::default()));
+            }
+            _ => {
+                out.insert(Ty::Unknown {
+                    attr: TyAttr::default(),
+                });
+            }
+        }
     }
 
     fn call_target_name(&self, callee_expr_id: ExprId, body: &ExprBody) -> Option<Name> {
@@ -2918,6 +2775,185 @@ impl<'db> TypeInferenceBuilder<'db> {
                     .collect::<Vec<_>>()
                     .join("."),
             ))
+        }
+    }
+
+    fn find_function_scope_id(
+        &self,
+        file: SourceFile,
+        span: TextRange,
+        name: &Name,
+    ) -> ScopeId<'db> {
+        let db = self.context.db();
+        let index = baml_compiler2_hir::file_semantic_index(db, file);
+        let file_scope_id = index
+            .scopes
+            .iter()
+            .enumerate()
+            .find_map(|(i, scope)| {
+                if scope.kind == baml_compiler2_hir::scope::ScopeKind::Function
+                    && scope.range == span
+                    && scope.name.as_ref() == Some(name)
+                {
+                    #[allow(clippy::cast_possible_truncation)]
+                    Some(baml_compiler2_hir::scope::FileScopeId::new(i as u32))
+                } else {
+                    None
+                }
+            })
+            .unwrap_or_else(|| index.scope_at_offset(span.start(), Some(name)));
+        file_scope_id.to_scope_id(db, file)
+    }
+
+    fn infer_concrete_body_throws(
+        &self,
+        body_scope: ScopeId<'db>,
+        body_package_id: PackageId<'db>,
+        body: &baml_compiler2_hir::body::FunctionBody,
+    ) -> BTreeSet<Ty> {
+        let db = self.context.db();
+        if let baml_compiler2_hir::body::FunctionBody::Expr(ref expr_body) = *body {
+            let scope_inference = crate::inference::infer_scope_types(db, body_scope);
+            crate::throw_inference::flatten_ty_to_facts(&scope_inference.effective_throws(
+                db,
+                body_package_id,
+                expr_body,
+            ))
+            .into_iter()
+            .filter(|fact| !matches!(fact, Ty::TypeVar(_, _)))
+            .collect()
+        } else {
+            BTreeSet::new()
+        }
+    }
+
+    fn combine_effect_vars_with_body_throws(
+        synthetic_effect_vars: &[Name],
+        body_throws_facts: BTreeSet<Ty>,
+    ) -> Ty {
+        let mut all_throws: Vec<Ty> = synthetic_effect_vars
+            .iter()
+            .map(|v| Ty::TypeVar(v.clone(), TyAttr::default()))
+            .collect();
+        all_throws.extend(body_throws_facts);
+        all_throws.retain(|t| !matches!(t, Ty::Never { .. } | Ty::Void { .. }));
+
+        match all_throws.len() {
+            0 => Ty::Never {
+                attr: TyAttr::default(),
+            },
+            1 => all_throws.remove(0),
+            _ => Ty::Union(all_throws, TyAttr::default()),
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn build_function_ty_from_signature(
+        &self,
+        pkg_items: &PackageItems<'db>,
+        ns_context: &[Name],
+        generic_params: &[Name],
+        sig: &baml_compiler2_hir::signature::FunctionSignature,
+        body_scope: Option<ScopeId<'db>>,
+        body_package_id: Option<PackageId<'db>>,
+        body: Option<&baml_compiler2_hir::body::FunctionBody>,
+        self_param_ty: Option<&Ty>,
+    ) -> Ty {
+        let db = self.context.db();
+        let mut diags = Vec::new();
+        let mut synthetic_effect_vars: Vec<Name> = Vec::new();
+
+        let params: Vec<(Option<Name>, Ty)> = sig
+            .params
+            .iter()
+            .map(|(n, te)| {
+                let param_ty = if n.as_str() == "self"
+                    && matches!(te, baml_compiler2_ast::TypeExpr::Unknown { .. })
+                {
+                    self_param_ty.cloned().unwrap_or(Ty::Unknown {
+                        attr: TyAttr::default(),
+                    })
+                } else {
+                    crate::lower_type_expr::lower_type_expr_with_fn_context(
+                        db,
+                        te,
+                        pkg_items,
+                        ns_context,
+                        generic_params,
+                        &mut diags,
+                        &crate::lower_type_expr::FnTypeLoweringContext::DirectParamRoot {
+                            param_name: n.clone(),
+                        },
+                        &mut synthetic_effect_vars,
+                    )
+                };
+                (Some(n.clone()), param_ty)
+            })
+            .collect();
+
+        let effective_generic_params: Vec<Name> = generic_params
+            .iter()
+            .cloned()
+            .chain(synthetic_effect_vars.iter().cloned())
+            .collect();
+
+        let ret_ty = sig
+            .return_type
+            .as_ref()
+            .map(|te| {
+                crate::lower_type_expr::lower_type_expr_in_ns(
+                    db,
+                    te,
+                    pkg_items,
+                    ns_context,
+                    &effective_generic_params,
+                    &mut diags,
+                )
+            })
+            .unwrap_or(Ty::Unknown {
+                attr: TyAttr::default(),
+            });
+
+        let throws_ty = sig
+            .throws
+            .as_ref()
+            .map(|te| {
+                crate::lower_type_expr::lower_type_expr_in_ns(
+                    db,
+                    te,
+                    pkg_items,
+                    ns_context,
+                    generic_params,
+                    &mut diags,
+                )
+            })
+            .unwrap_or_else(|| {
+                let has_callback_param = params
+                    .iter()
+                    .any(|(_, ty)| matches!(ty, Ty::Function { .. }));
+                if !has_callback_param {
+                    return Ty::Never {
+                        attr: TyAttr::default(),
+                    };
+                }
+
+                let body_throws_facts = match (body_scope, body_package_id, body) {
+                    (Some(body_scope), Some(body_package_id), Some(body)) => {
+                        self.infer_concrete_body_throws(body_scope, body_package_id, body)
+                    }
+                    _ => BTreeSet::new(),
+                };
+                Self::combine_effect_vars_with_body_throws(
+                    &synthetic_effect_vars,
+                    body_throws_facts,
+                )
+            });
+
+        Ty::Function {
+            params,
+            ret: Box::new(ret_ty),
+            throws: Box::new(throws_ty),
+            attr: TyAttr::default(),
         }
     }
 
@@ -3061,61 +3097,22 @@ impl<'db> TypeInferenceBuilder<'db> {
                 crate::inference::MemberResolution::Free { func_loc },
             );
             let sig = baml_compiler2_hir::signature::function_signature(db, func_loc);
-            let mut diags = Vec::new();
-            let ty = Ty::Function {
-                params: sig
-                    .params
-                    .iter()
-                    .map(|(n, te)| {
-                        (
-                            Some(n.clone()),
-                            crate::lower_type_expr::lower_type_expr_in_ns(
-                                db,
-                                te,
-                                pkg_items,
-                                &ns_context,
-                                generic_params,
-                                &mut diags,
-                            ),
-                        )
-                    })
-                    .collect(),
-                ret: Box::new(
-                    sig.return_type
-                        .as_ref()
-                        .map(|te| {
-                            crate::lower_type_expr::lower_type_expr_in_ns(
-                                db,
-                                te,
-                                pkg_items,
-                                &ns_context,
-                                generic_params,
-                                &mut diags,
-                            )
-                        })
-                        .unwrap_or(Ty::Unknown {
-                            attr: TyAttr::default(),
-                        }),
-                ),
-                throws: Box::new(
-                    sig.throws
-                        .as_ref()
-                        .map(|te| {
-                            crate::lower_type_expr::lower_type_expr_in_ns(
-                                db,
-                                te,
-                                pkg_items,
-                                &ns_context,
-                                generic_params,
-                                &mut diags,
-                            )
-                        })
-                        .unwrap_or(Ty::Never {
-                            attr: TyAttr::default(),
-                        }),
-                ),
-                attr: TyAttr::default(),
-            };
+            let func_scope = self.find_function_scope_id(
+                func_loc.file(db),
+                func_data_for_sig.span,
+                &func_data_for_sig.name,
+            );
+            let func_body = baml_compiler2_hir::body::function_body(db, func_loc);
+            let ty = self.build_function_ty_from_signature(
+                pkg_items,
+                &ns_context,
+                generic_params,
+                sig.as_ref(),
+                Some(func_scope),
+                Some(PackageId::new(db, pkg_info.package)),
+                Some(func_body.as_ref()),
+                None,
+            );
             return Some(ty);
         }
 
@@ -3160,67 +3157,25 @@ impl<'db> TypeInferenceBuilder<'db> {
                     let item_tree = baml_compiler2_ppir::file_item_tree(db, func_loc.file(db));
                     let func_data = &item_tree[func_loc.id(db)];
                     let generic_params = &func_data.generic_params;
-                    let sig_ns =
-                        baml_compiler2_hir::file_package::file_package(db, func_loc.file(db))
-                            .namespace_path;
-                    let mut diags = Vec::new();
-
-                    // Note: diags from referenced function signatures are not
-                    // reported here — they'll be reported at the definition site.
-                    Ty::Function {
-                        params: sig
-                            .params
-                            .iter()
-                            .map(|(n, te)| {
-                                (
-                                    Some(n.clone()),
-                                    crate::lower_type_expr::lower_type_expr_in_ns(
-                                        db,
-                                        te,
-                                        self.package_items,
-                                        &sig_ns,
-                                        generic_params,
-                                        &mut diags,
-                                    ),
-                                )
-                            })
-                            .collect(),
-                        ret: Box::new(
-                            sig.return_type
-                                .as_ref()
-                                .map(|te| {
-                                    crate::lower_type_expr::lower_type_expr_in_ns(
-                                        db,
-                                        te,
-                                        self.package_items,
-                                        &sig_ns,
-                                        generic_params,
-                                        &mut diags,
-                                    )
-                                })
-                                .unwrap_or(Ty::Unknown {
-                                    attr: TyAttr::default(),
-                                }),
-                        ),
-                        throws: Box::new(
-                            sig.throws
-                                .as_ref()
-                                .map(|te| {
-                                    crate::lower_type_expr::lower_type_expr_in_ns(
-                                        db,
-                                        te,
-                                        self.package_items,
-                                        &sig_ns,
-                                        generic_params,
-                                        &mut diags,
-                                    )
-                                })
-                                .unwrap_or(Ty::Never {
-                                    attr: TyAttr::default(),
-                                }),
-                        ),
-                        attr: TyAttr::default(),
-                    }
+                    let sig_pkg =
+                        baml_compiler2_hir::file_package::file_package(db, func_loc.file(db));
+                    let sig_ns = sig_pkg.namespace_path;
+                    let func_scope = self.find_function_scope_id(
+                        func_loc.file(db),
+                        func_data.span,
+                        &func_data.name,
+                    );
+                    let func_body = baml_compiler2_hir::body::function_body(db, func_loc);
+                    self.build_function_ty_from_signature(
+                        self.package_items,
+                        &sig_ns,
+                        generic_params,
+                        sig.as_ref(),
+                        Some(func_scope),
+                        Some(PackageId::new(db, sig_pkg.package)),
+                        Some(func_body.as_ref()),
+                        None,
+                    )
                 }
                 _ => Ty::Unknown {
                     attr: TyAttr::default(),
@@ -3682,67 +3637,23 @@ impl<'db> TypeInferenceBuilder<'db> {
                 all_generic_params.extend(method_data.generic_params.iter().cloned());
                 let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(db, file, method_id);
                 let sig = baml_compiler2_hir::signature::function_signature(db, func_loc);
-                let mut diags = Vec::new();
                 let class_ty = Ty::Class(class_name.clone(), TyAttr::default());
-                let ty = Ty::Function {
-                    params: sig
-                        .params
-                        .iter()
-                        .map(|(n, te)| {
-                            let param_ty = if n.as_str() == "self"
-                                && matches!(te, baml_compiler2_ast::TypeExpr::Unknown { .. })
-                            {
-                                // self with no annotation → use the enclosing class type
-                                class_ty.clone()
-                            } else {
-                                crate::lower_type_expr::lower_type_expr_in_ns(
-                                    db,
-                                    te,
-                                    pkg_items_for_class,
-                                    &ns_context,
-                                    &all_generic_params,
-                                    &mut diags,
-                                )
-                            };
-                            (Some(n.clone()), param_ty)
-                        })
-                        .collect(),
-                    ret: Box::new(
-                        sig.return_type
-                            .as_ref()
-                            .map(|te| {
-                                crate::lower_type_expr::lower_type_expr_in_ns(
-                                    db,
-                                    te,
-                                    pkg_items_for_class,
-                                    &ns_context,
-                                    &all_generic_params,
-                                    &mut diags,
-                                )
-                            })
-                            .unwrap_or(Ty::Unknown {
-                                attr: TyAttr::default(),
-                            }),
-                    ),
-                    throws: Box::new(
-                        sig.throws
-                            .as_ref()
-                            .map(|te| {
-                                crate::lower_type_expr::lower_type_expr_in_ns(
-                                    db,
-                                    te,
-                                    pkg_items_for_class,
-                                    &ns_context,
-                                    &all_generic_params,
-                                    &mut diags,
-                                )
-                            })
-                            .unwrap_or(Ty::Never {
-                                attr: TyAttr::default(),
-                            }),
-                    ),
-                    attr: TyAttr::default(),
-                };
+                let method_scope =
+                    self.find_function_scope_id(file, method_data.span, &method_data.name);
+                let method_body = baml_compiler2_hir::body::function_body(db, func_loc);
+                let ty = self.build_function_ty_from_signature(
+                    pkg_items_for_class,
+                    &ns_context,
+                    &all_generic_params,
+                    sig.as_ref(),
+                    Some(method_scope),
+                    Some(PackageId::new(
+                        db,
+                        baml_compiler2_hir::file_package::file_package(db, file).package,
+                    )),
+                    Some(method_body.as_ref()),
+                    Some(&class_ty),
+                );
                 // Note: diags from method signatures are reported at definition site.
                 return Some((ty, class_loc, func_loc));
             }
@@ -4104,6 +4015,15 @@ impl<'db> TypeInferenceBuilder<'db> {
                     )
                 };
 
+                // Collect generic params for this method (class + method generics).
+                let method_generic_params: Vec<Name> = class_data
+                    .generic_params
+                    .iter()
+                    .chain(method_data.generic_params.iter())
+                    .cloned()
+                    .collect();
+
+                let mut synthetic_effect_vars: Vec<Name> = Vec::new();
                 let params: Vec<(Option<Name>, Ty)> = sig
                     .params
                     .iter()
@@ -4112,6 +4032,22 @@ impl<'db> TypeInferenceBuilder<'db> {
                             && matches!(te, baml_compiler2_ast::TypeExpr::Unknown { .. })
                         {
                             builtin_class_ty.clone()
+                        } else if matches!(te, baml_compiler2_ast::TypeExpr::Function { .. }) {
+                            // Function-typed parameter: use DirectParamRoot to create effect var.
+                            let lowered = crate::lower_type_expr::lower_type_expr_with_fn_context(
+                                db,
+                                te,
+                                baml_items,
+                                stub_ns,
+                                &method_generic_params,
+                                &mut diags,
+                                &crate::lower_type_expr::FnTypeLoweringContext::DirectParamRoot {
+                                    param_name: n.clone(),
+                                },
+                                &mut synthetic_effect_vars,
+                            );
+                            // Apply generic bindings to substitute type args.
+                            crate::generics::substitute_ty(&lowered, &bindings)
                         } else {
                             crate::generics::lower_type_expr_with_generics(
                                 db,
@@ -4141,6 +4077,22 @@ impl<'db> TypeInferenceBuilder<'db> {
                     .unwrap_or(Ty::Void {
                         attr: TyAttr::default(),
                     });
+
+                // Compute throws: if we have synthetic effect vars, use them.
+                let throws_ty = match synthetic_effect_vars.len() {
+                    0 => Ty::Never {
+                        attr: TyAttr::default(),
+                    },
+                    1 => Ty::TypeVar(synthetic_effect_vars[0].clone(), TyAttr::default()),
+                    _ => Ty::Union(
+                        synthetic_effect_vars
+                            .iter()
+                            .map(|v| Ty::TypeVar(v.clone(), TyAttr::default()))
+                            .collect(),
+                        TyAttr::default(),
+                    ),
+                };
+
                 // Discard diags — they will be reported at the definition site
                 // (the builtin .baml stub). We don't want to spam user code
                 // with unresolved-type errors from builtin signatures.
@@ -4149,9 +4101,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     ty: Ty::Function {
                         params,
                         ret: Box::new(ret),
-                        throws: Box::new(Ty::Never {
-                            attr: TyAttr::default(),
-                        }),
+                        throws: Box::new(throws_ty),
                         attr: TyAttr::default(),
                     },
                     class_loc,

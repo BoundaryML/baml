@@ -2,18 +2,18 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === TIR2 ===
-function user.ReadFile() -> string throws never {
+function user.ReadFile() -> string throws baml.errors.Io {
   { : string
     let f = baml.fs.open("example.txt") : baml.fs.File
     f.read() : string
   }
 }
-function user.ReadFileInline() -> string throws never {
+function user.ReadFileInline() -> string throws baml.errors.Io {
   { : string
     baml.fs.open("data.json").read() : string
   }
 }
-function user.ReadMultipleFiles() -> string throws never {
+function user.ReadMultipleFiles() -> string throws baml.errors.Io {
   { : string
     let f1 = baml.fs.open("file1.txt") : baml.fs.File
     let f2 = baml.fs.open("file2.txt") : baml.fs.File
@@ -22,7 +22,7 @@ function user.ReadMultipleFiles() -> string throws never {
     content1 + content2 : string
   }
 }
-function user.ReadAndClose() -> string throws never {
+function user.ReadAndClose() -> string throws baml.errors.Io {
   { : string
     let f = baml.fs.open("example.txt") : baml.fs.File
     let content = f.read() : string
@@ -30,18 +30,18 @@ function user.ReadAndClose() -> string throws never {
     content : string
   }
 }
-function user.ConnectAndRead() -> string throws never {
+function user.ConnectAndRead() -> string throws baml.errors.Io | baml.errors.Timeout {
   { : string
     let sock = baml.net.connect("127.0.0.1:8080") : baml.net.Socket
     sock.read() : string
   }
 }
-function user.ConnectAndReadInline() -> string throws never {
+function user.ConnectAndReadInline() -> string throws baml.errors.Io | baml.errors.Timeout {
   { : string
     baml.net.connect("localhost:3000").read() : string
   }
 }
-function user.MultipleConnections() -> string throws never {
+function user.MultipleConnections() -> string throws baml.errors.Io | baml.errors.Timeout {
   { : string
     let s1 = baml.net.connect("server1:80") : baml.net.Socket
     let s2 = baml.net.connect("server2:80") : baml.net.Socket
@@ -50,7 +50,7 @@ function user.MultipleConnections() -> string throws never {
     data1 + data2 : string
   }
 }
-function user.ConnectReadAndClose() -> string throws never {
+function user.ConnectReadAndClose() -> string throws baml.errors.Io | baml.errors.Timeout {
   { : string
     let sock = baml.net.connect("127.0.0.1:8080") : baml.net.Socket
     let data = sock.read() : string
@@ -58,18 +58,18 @@ function user.ConnectReadAndClose() -> string throws never {
     data : string
   }
 }
-function user.RunCommand() -> string throws never {
+function user.RunCommand() -> string throws baml.errors.Io {
   { : string
     baml.sys.shell("echo hello") : string
   }
 }
-function user.RunCommandWithVar() -> string throws never {
+function user.RunCommandWithVar() -> string throws baml.errors.Io {
   { : string
     let cmd = "ls -la" : "ls -la" -> string
     baml.sys.shell(cmd) : string
   }
 }
-function user.ChainCommands() -> string throws never {
+function user.ChainCommands() -> string throws baml.errors.Io {
   { : string
     let result1 = baml.sys.shell("pwd") : string
     let result2 = baml.sys.shell("whoami") : string

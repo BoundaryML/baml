@@ -1,0 +1,238 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "apply_with_arg"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "x"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      COMMA ","
+      PARAMETER
+        WORD "f"
+        COLON ":"
+        TYPE_EXPR
+          L_PAREN "("
+          FUNCTION_TYPE_PARAM
+            TYPE_EXPR "int"
+              WORD "int"
+          R_PAREN ")"
+          ARROW "->"
+          TYPE_EXPR "int"
+            WORD "int"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        CALL_EXPR
+          WORD "f"
+          CALL_ARGS "(x)"
+            L_PAREN "("
+            WORD "x"
+            R_PAREN ")"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "test_mixed_pure"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        CALL_EXPR
+          WORD "apply_with_arg"
+          CALL_ARGS
+            L_PAREN "("
+            INTEGER_LITERAL "5"
+            COMMA ","
+            LAMBDA_EXPR
+              PARAMETER_LIST
+                L_PAREN "("
+                PARAMETER
+                  WORD "n"
+                  COLON ":"
+                  TYPE_EXPR "int"
+                    WORD "int"
+                R_PAREN ")"
+              ARROW "->"
+              TYPE_EXPR "int"
+                WORD "int"
+              BLOCK_EXPR
+                L_BRACE "{"
+                BINARY_EXPR "n * 2"
+                  WORD "n"
+                  STAR "*"
+                  INTEGER_LITERAL "2"
+                R_BRACE "}"
+            R_PAREN ")"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "test_mixed_throwing"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        CALL_EXPR
+          WORD "apply_with_arg"
+          CALL_ARGS
+            L_PAREN "("
+            INTEGER_LITERAL "5"
+            COMMA ","
+            LAMBDA_EXPR
+              PARAMETER_LIST
+                L_PAREN "("
+                PARAMETER
+                  WORD "n"
+                  COLON ":"
+                  TYPE_EXPR "int"
+                    WORD "int"
+                R_PAREN ")"
+              ARROW "->"
+              TYPE_EXPR "int"
+                WORD "int"
+              BLOCK_EXPR
+                L_BRACE "{"
+                IF_EXPR
+                  KW_IF "if"
+                  PAREN_EXPR
+                    L_PAREN "("
+                    BINARY_EXPR "n < 0"
+                      WORD "n"
+                      LESS "<"
+                      INTEGER_LITERAL "0"
+                    R_PAREN ")"
+                  BLOCK_EXPR
+                    L_BRACE "{"
+                    THROW_STMT
+                      THROW_EXPR
+                        KW_THROW "throw"
+                        STRING_LITERAL "negative"
+                          QUOTE """
+                          WORD "negative"
+                          QUOTE """
+                    R_BRACE "}"
+                BINARY_EXPR "n * 2"
+                  WORD "n"
+                  STAR "*"
+                  INTEGER_LITERAL "2"
+                R_BRACE "}"
+            R_PAREN ")"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "apply_with_many_args"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "a"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      COMMA ","
+      PARAMETER
+        WORD "b"
+        COLON ":"
+        TYPE_EXPR "string"
+          WORD "string"
+      COMMA ","
+      PARAMETER
+        WORD "f"
+        COLON ":"
+        TYPE_EXPR
+          L_PAREN "("
+          FUNCTION_TYPE_PARAM
+            TYPE_EXPR "int"
+              WORD "int"
+          COMMA ","
+          FUNCTION_TYPE_PARAM
+            TYPE_EXPR "string"
+              WORD "string"
+          R_PAREN ")"
+          ARROW "->"
+          TYPE_EXPR "string"
+            WORD "string"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        CALL_EXPR
+          WORD "f"
+          CALL_ARGS "(a, b)"
+            L_PAREN "("
+            WORD "a"
+            COMMA ","
+            WORD "b"
+            R_PAREN ")"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "test_many_args_pure"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        CALL_EXPR
+          WORD "apply_with_many_args"
+          CALL_ARGS
+            L_PAREN "("
+            INTEGER_LITERAL "1"
+            COMMA ","
+            STRING_LITERAL "hello"
+              QUOTE """
+              WORD "hello"
+              QUOTE """
+            COMMA ","
+            LAMBDA_EXPR
+              PARAMETER_LIST
+                L_PAREN "("
+                PARAMETER
+                  WORD "n"
+                  COLON ":"
+                  TYPE_EXPR "int"
+                    WORD "int"
+                COMMA ","
+                PARAMETER
+                  WORD "s"
+                  COLON ":"
+                  TYPE_EXPR "string"
+                    WORD "string"
+                R_PAREN ")"
+              ARROW "->"
+              TYPE_EXPR "string"
+                WORD "string"
+              BLOCK_EXPR "{ s }"
+                L_BRACE "{"
+                WORD "s"
+                R_BRACE "}"
+            R_PAREN ")"
+        R_BRACE "}"
+
+=== ERRORS ===
+None

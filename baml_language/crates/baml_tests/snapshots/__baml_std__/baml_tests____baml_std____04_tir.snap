@@ -10,12 +10,12 @@ class baml.Array {
 }
 class baml.Map {
 }
-function baml.Map.map_keys<U>(self: baml.Map, f: (unknown) -> U) -> U[] throws never {
+function baml.Map.map_keys<U>(self: baml.Map, f: (unknown) -> U throws __throws_f) -> U[] throws __throws_f {
   { : U[]
     self.keys().map<K, U>(f) : U[]
   }
 }
-function baml.Map.map_values<U>(self: baml.Map, f: (unknown) -> U) -> U[] throws never {
+function baml.Map.map_values<U>(self: baml.Map, f: (unknown) -> U throws __throws_f) -> U[] throws __throws_f {
   { : U[]
     self.values().map<V, U>(f) : U[]
   }
@@ -28,7 +28,7 @@ class baml.Map$stream {
 --- <builtin>/baml/core.baml ---
 
 --- <builtin>/baml/ns_env/env.baml ---
-function baml.env.get_or_panic(key: string) -> string throws never {
+function baml.env.get_or_panic(key: string) -> string throws baml.errors.Io {
   { : "" | string
     let val = get(key) : string?
     if (val == null : bool) : "" | string
@@ -183,7 +183,7 @@ function baml.llm.PlannerState.rr_pick_index(self: baml.llm.PlannerState, client
     counter + local_offset % sub_client_count : int
   }
 }
-function baml.llm.render_prompt(client: baml.llm.Client, function_name: string, args: map<string, unknown>) -> baml.llm.PromptAst throws never {
+function baml.llm.render_prompt(client: baml.llm.Client, function_name: string, args: map<string, unknown>) -> baml.llm.PromptAst throws baml.errors.InvalidArgument | baml.errors.LlmClient | baml.errors.RenderPrompt | unknown {
   { : baml.llm.PromptAst
     let jinja_string = get_jinja_template(function_name) : string
     let return_type = get_return_type(function_name) : type
@@ -192,20 +192,20 @@ function baml.llm.render_prompt(client: baml.llm.Client, function_name: string, 
     primitive_client.specialize_prompt(prompt) : baml.llm.PromptAst
   }
 }
-function baml.llm.build_request(client: baml.llm.Client, function_name: string, args: map<string, unknown>) -> baml.http.Request throws never {
+function baml.llm.build_request(client: baml.llm.Client, function_name: string, args: map<string, unknown>) -> baml.http.Request throws baml.errors.LlmClient | unknown {
   { : baml.http.Request
     let primitive_client = client.to_primitive_client() : baml.llm.PrimitiveClient
     let specialized_prompt = render_prompt(client, function_name, args) : baml.llm.PromptAst
     primitive_client.build_request(specialized_prompt) : baml.http.Request
   }
 }
-function baml.llm.parse<T>(function_name: string, json: string) -> T throws never {
+function baml.llm.parse<T>(function_name: string, json: string) -> T throws baml.errors.InvalidArgument | baml.errors.LlmClient {
   { : T
     let return_type = get_return_type(function_name) : type
     __sap_parse<T>(json, return_type) : T
   }
 }
-function baml.llm.call_llm_function<T>(client: baml.llm.Client, function_name: string, args: map<string, unknown>) -> T throws never {
+function baml.llm.call_llm_function<T>(client: baml.llm.Client, function_name: string, args: map<string, unknown>) -> T throws baml.errors.InvalidArgument | unknown {
   { : T
     let jinja_string = get_jinja_template(function_name) : string
     let context = ExecutionContext { jinja_string: jinja_string, args: args, function_name: function_name } : baml.llm.ExecutionContext
@@ -248,7 +248,7 @@ class baml.llm.Client {
   retry: baml.llm.RetryPolicy?
   counter: int
 }
-function baml.llm.Client.to_primitive_client(self: baml.llm.Client) -> baml.llm.PrimitiveClient throws never {
+function baml.llm.Client.to_primitive_client(self: baml.llm.Client) -> baml.llm.PrimitiveClient throws baml.errors.InvalidArgument | unknown {
   { : baml.llm.PrimitiveClient
     if (self.name.includes("/") : bool) : baml.llm.PrimitiveClient
       { : never
@@ -266,7 +266,7 @@ function baml.llm.Client.build_attempt(self: baml.llm.Client) -> baml.llm.Orches
     self.build_attempt_with_state(planner_state) : baml.llm.OrchestrationStep[]
   }
 }
-function baml.llm.Client.build_attempt_with_state(self: baml.llm.Client, planner_state: baml.llm.PlannerState) -> baml.llm.OrchestrationStep[] throws never {
+function baml.llm.Client.build_attempt_with_state(self: baml.llm.Client, planner_state: baml.llm.PlannerState) -> baml.llm.OrchestrationStep[] throws baml.errors.InvalidArgument {
   { : baml.llm.OrchestrationStep[] | never[]
     match (self.client_type : baml.llm.ClientType) : baml.llm.OrchestrationStep[] | never[]
       ClientType.Primitive =>
@@ -345,7 +345,7 @@ function baml.llm.Client.build_plan_with_state(self: baml.llm.Client, planner_st
         self.build_attempt_with_state(planner_state) : baml.llm.OrchestrationStep[]
   }
 }
-function baml.llm.Client.execute<T>(self: baml.llm.Client, context: baml.llm.ExecutionContext, inherited_delay_ms: int) -> T throws never {
+function baml.llm.Client.execute<T>(self: baml.llm.Client, context: baml.llm.ExecutionContext, inherited_delay_ms: int) -> T throws unknown {
   { : never
     match (self.retry : baml.llm.RetryPolicy?) : never
       r: RetryPolicy =>
@@ -392,7 +392,7 @@ function baml.llm.Client.execute<T>(self: baml.llm.Client, context: baml.llm.Exe
         }
   }
 }
-function baml.llm.Client.execute_once<T>(self: baml.llm.Client, context: baml.llm.ExecutionContext, active_delay_ms: int) -> T throws never {
+function baml.llm.Client.execute_once<T>(self: baml.llm.Client, context: baml.llm.ExecutionContext, active_delay_ms: int) -> T throws baml.errors.InvalidArgument | baml.errors.Io | baml.errors.LlmClient | baml.errors.RenderPrompt | baml.errors.Timeout | unknown {
   { : T
     match (self.client_type : baml.llm.ClientType) : T
       ClientType.Primitive =>

@@ -43,7 +43,7 @@ function user.RootAliasParam(cfg: user.ConfigAlias) -> string throws never {
     cfg.key : string
   }
 }
-function user.RootThrowClass(x: int) -> string throws never {
+function user.RootThrowClass(x: int) -> string throws user.Error {
   { : "ok"
     match (x : int) : "ok"
       0 =>
@@ -52,7 +52,7 @@ function user.RootThrowClass(x: int) -> string throws never {
         "ok" : "ok"
   }
 }
-function user.RootThrowEnum(x: int) -> string throws never {
+function user.RootThrowEnum(x: int) -> string throws user.Status.Failed {
   { : "ok"
     match (x : int) : "ok"
       0 =>
@@ -176,7 +176,7 @@ function user.auth.AuthAliasParam(t: user.auth.TokenAlias) -> string throws neve
     t.value : string
   }
 }
-function user.auth.AuthThrowClass(x: int) -> string throws never {
+function user.auth.AuthThrowClass(x: int) -> string throws user.auth.Error {
   { : "ok"
     match (x : int) : "ok"
       0 =>
@@ -185,7 +185,7 @@ function user.auth.AuthThrowClass(x: int) -> string throws never {
         "ok" : "ok"
   }
 }
-function user.auth.AuthThrowEnum(x: int) -> string throws never {
+function user.auth.AuthThrowEnum(x: int) -> string throws user.auth.Role.Guest {
   { : "ok"
     match (x : int) : "ok"
       0 =>
@@ -220,7 +220,7 @@ function user.auth.AuthMatchesRootStatus(s: user.Status) -> string throws never 
         "pending" : "pending"
   }
 }
-function user.auth.AuthThrowsRootError(x: int) -> string throws never {
+function user.auth.AuthThrowsRootError(x: int) -> string throws user.auth.Error {
   { : "ok"
     match (x : int) : "ok"
       0 =>
@@ -330,7 +330,7 @@ function user.llm.LlmAliasParam(cfg: user.llm.ConfigAlias) -> string throws neve
     cfg.model : string
   }
 }
-function user.llm.LlmThrowClass(x: int) -> string throws never {
+function user.llm.LlmThrowClass(x: int) -> string throws user.llm.Error {
   { : "ok"
     match (x : int) : "ok"
       0 =>
@@ -339,7 +339,7 @@ function user.llm.LlmThrowClass(x: int) -> string throws never {
         "ok" : "ok"
   }
 }
-function user.llm.LlmThrowEnum(x: int) -> string throws never {
+function user.llm.LlmThrowEnum(x: int) -> string throws user.llm.Status.Done {
   { : "ok"
     match (x : int) : "ok"
       0 =>
@@ -384,7 +384,7 @@ function user.llm.LlmUsesRootAlias(cfg: user.ConfigAlias) -> string throws never
     cfg.key : string
   }
 }
-function user.llm.LlmThrowsRootError(x: int) -> string throws never {
+function user.llm.LlmThrowsRootError(x: int) -> string throws user.llm.Error {
   { : "ok"
     match (x : int) : "ok"
       0 =>
@@ -393,7 +393,7 @@ function user.llm.LlmThrowsRootError(x: int) -> string throws never {
         "ok" : "ok"
   }
 }
-function user.llm.LlmThrowsRootEnum(x: int) -> string throws never {
+function user.llm.LlmThrowsRootEnum(x: int) -> string throws user.Status.Failed {
   { : "ok"
     match (x : int) : "ok"
       0 =>
@@ -506,7 +506,7 @@ function user.llm.openai.OpenAIEnumMatch(m: user.llm.openai.Model) -> string thr
         "o3" : "o3"
   }
 }
-function user.llm.openai.OpenAIThrowClass(x: int) -> string throws never {
+function user.llm.openai.OpenAIThrowClass(x: int) -> string throws user.llm.openai.Error {
   { : "ok"
     match (x : int) : "ok"
       0 =>
@@ -515,7 +515,7 @@ function user.llm.openai.OpenAIThrowClass(x: int) -> string throws never {
         "ok" : "ok"
   }
 }
-function user.llm.openai.OpenAIThrowEnum(x: int) -> string throws never {
+function user.llm.openai.OpenAIThrowEnum(x: int) -> string throws user.llm.openai.Model.O3 {
   { : "ok"
     match (x : int) : "ok"
       0 =>
