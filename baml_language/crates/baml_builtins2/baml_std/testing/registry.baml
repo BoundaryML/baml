@@ -4,13 +4,13 @@
 
 class TestRegistration {
   name string
-  body () -> null
+  body () -> null throws unknown
   runner TestRunner?
 }
 
 class TestSetRegistration {
   name string
-  collector (TestCollector) -> null
+  collector (TestCollector) -> null throws unknown
   runner TestSetRunner?
 }
 

@@ -141,6 +141,387 @@ class user.MixedHandler$stream {
   safe: unknown
   risky: unknown
 }
+function user.compose<A, B, C>(f: (A) -> B throws __throws_f, g: (B) -> C throws __throws_g) -> (A) -> C throws __throws_f | __throws_g {
+  { : (A) -> C
+  }
+  !! 193..223: missing return: expected `(A) -> C`
+}
+function user.test_compose_pure() -> (int) -> string throws never {
+  { : (int) -> string | "result"
+    compose((x: int) -> int { ... }, (y: int) -> string { ... }) : (int) -> string | "result"
+      (x: int) -> int { ... } : (x: int) -> int
+        {
+          x * 2
+        }
+      (y: int) -> string { ... } : (y: int) -> "result"
+        {
+          "result"
+        }
+  }
+}
+lambda user.test_compose_pure {
+}
+lambda user.test_compose_pure {
+}
+function user.test_compose_first_throws() -> (int) -> string throws string {
+  { : (int) -> string | "result"
+    compose((x: int) -> int { ... }, (y: int) -> string { ... }) : (int) -> string | "result"
+      (x: int) -> int { ... } : (x: int) -> never throws string
+        {
+          throw "f failed"
+        }
+      (y: int) -> string { ... } : (y: int) -> "result"
+        {
+          "result"
+        }
+  }
+}
+lambda user.test_compose_first_throws {
+}
+lambda user.test_compose_first_throws {
+}
+function user.test_compose_second_throws() -> (int) -> string throws string {
+  { : (int) -> string | never
+    compose((x: int) -> int { ... }, (y: int) -> string { ... }) : (int) -> string | never
+      (x: int) -> int { ... } : (x: int) -> int
+        {
+          x * 2
+        }
+      (y: int) -> string { ... } : (y: int) -> never throws string
+        {
+          throw "g failed"
+        }
+  }
+}
+lambda user.test_compose_second_throws {
+}
+lambda user.test_compose_second_throws {
+}
+function user.test_compose_both_throw() -> (int) -> string throws int | string {
+  { : (int) -> string | never
+    compose((x: int) -> int { ... }, (y: int) -> string { ... }) : (int) -> string | never
+      (x: int) -> int { ... } : (x: int) -> never throws string
+        {
+          throw "string error"
+        }
+      (y: int) -> string { ... } : (y: int) -> never throws int
+        {
+          throw 42
+        }
+  }
+}
+lambda user.test_compose_both_throw {
+}
+lambda user.test_compose_both_throw {
+}
+enum user.ErrorKind
+class user.ApiError {
+  code: int
+  message: string
+}
+class user.ValidationError {
+  field: string
+  reason: string
+}
+function user.throw_enum_variant(x: int) -> string throws user.ErrorKind {
+  { : "ok"
+    if (x == 0 : bool) : void
+      { : never
+        throw ErrorKind.NotFound : user.ErrorKind.NotFound
+      }
+    if (x == 1 : bool) : void
+      { : never
+        throw ErrorKind.Unauthorized : user.ErrorKind.Unauthorized
+      }
+    "ok" : "ok"
+  }
+  !! 411..421: throws contract violation: `user.ErrorKind` is missing user.ErrorKind.NotFound, user.ErrorKind.Unauthorized
+  ?? 411..421: extraneous throws declaration: user.ErrorKind
+}
+function user.test_lambda_throws_enum() -> int throws user.ErrorKind.ValidationFailed {
+  { : never
+    let f = : () -> never throws user.ErrorKind.ValidationFailed
+      () -> int { ... } : () -> never throws user.ErrorKind.ValidationFailed
+        {
+          throw ErrorKind.ValidationFailed
+        }
+    f() : never
+  }
+}
+lambda user.test_lambda_throws_enum {
+}
+function user.throw_class_instance(x: int) -> string throws user.ApiError {
+  { : "ok"
+    if (x < 0 : bool) : void
+      { : never
+        throw ApiError { code: 500, message: "internal error" } : user.ApiError
+      }
+    "ok" : "ok"
+  }
+}
+function user.test_lambda_throws_class() -> int throws user.ValidationError {
+  { : never
+    let f = : () -> never throws user.ValidationError
+      () -> int { ... } : () -> never throws user.ValidationError
+        {
+          throw ValidationError { field: "email", reason: "invalid format" }
+        }
+    f() : never
+  }
+}
+lambda user.test_lambda_throws_class {
+}
+function user.throw_various_errors(x: int) -> string throws user.ErrorKind {
+  { : "ok"
+    match (x : int) : "ok"
+      0 =>
+        throw ErrorKind.NotFound : never
+      1 =>
+        throw ErrorKind.Unauthorized : never
+      2 =>
+        throw ErrorKind.ValidationFailed : never
+      _ =>
+        "ok" : "ok"
+  }
+  !! 1204..1214: throws contract violation: `user.ErrorKind` is missing user.ErrorKind.NotFound, user.ErrorKind.Unauthorized, user.ErrorKind.ValidationFailed
+  ?? 1204..1214: extraneous throws declaration: user.ErrorKind
+}
+function user.throw_mixed_classes(x: int) -> string throws user.ApiError | user.ValidationError {
+  { : "ok"
+    if (x == 0 : bool) : void
+      { : never
+        throw ApiError { code: 404, message: "not found" } : user.ApiError
+      }
+    if (x == 1 : bool) : void
+      { : never
+        throw ValidationError { field: "id", reason: "required" } : user.ValidationError
+      }
+    "ok" : "ok"
+  }
+}
+function user.throw_enum_or_class(x: int) -> string throws user.ErrorKind | user.ApiError {
+  { : "ok"
+    if (x == 0 : bool) : void
+      { : never
+        throw ErrorKind.RateLimited : user.ErrorKind.RateLimited
+      }
+    if (x == 1 : bool) : void
+      { : never
+        throw ApiError { code: 503, message: "unavailable" } : user.ApiError
+      }
+    "ok" : "ok"
+  }
+  !! 1729..1750: throws contract violation: `user.ErrorKind | user.ApiError` is missing user.ErrorKind.RateLimited
+  ?? 1729..1750: extraneous throws declaration: user.ErrorKind
+}
+function user.throw_any_error(x: int) -> string throws string | user.ErrorKind | user.ApiError {
+  { : "ok"
+    match (x : int) : "ok"
+      0 =>
+        throw "simple string error" : never
+      1 =>
+        throw ErrorKind.NotFound : never
+      2 =>
+        throw ApiError { code: 400, message: "bad request" } : never
+      _ =>
+        "ok" : "ok"
+  }
+  !! 1968..1998: throws contract violation: `string | user.ErrorKind | user.ApiError` is missing user.ErrorKind.NotFound
+  ?? 1968..1998: extraneous throws declaration: user.ErrorKind
+}
+function user.apply_may_throw_enum(f: () -> int throws user.ErrorKind) -> int throws user.ErrorKind {
+  { : int
+    f() : int
+  }
+}
+function user.test_apply_enum_thrower() -> int throws user.ErrorKind {
+  { : int
+    apply_may_throw_enum(() -> int { ... }) : int
+      () -> int { ... } : () -> never throws user.ErrorKind.Unauthorized
+        {
+          throw ErrorKind.Unauthorized
+        }
+  }
+}
+lambda user.test_apply_enum_thrower {
+}
+function user.apply_may_throw_class(f: () -> int throws user.ApiError) -> int throws user.ApiError {
+  { : int
+    f() : int
+  }
+}
+function user.test_apply_class_thrower() -> int throws user.ApiError {
+  { : int
+    apply_may_throw_class(() -> int { ... }) : int
+      () -> int { ... } : () -> never throws user.ApiError
+        {
+          throw ApiError { code: 401, message: "unauthorized" }
+        }
+  }
+}
+lambda user.test_apply_class_thrower {
+}
+function user.apply_generic_enum(f: () -> int throws __throws_f) -> int throws __throws_f {
+  { : int
+    f() : int
+  }
+}
+function user.test_rethrows_enum() -> int throws user.ErrorKind.NotFound {
+  { : int
+    apply_generic_enum(() -> int { ... }) : int
+      () -> int { ... } : () -> never throws user.ErrorKind.NotFound
+        {
+          throw ErrorKind.NotFound
+        }
+  }
+}
+lambda user.test_rethrows_enum {
+}
+function user.apply_generic_class(f: () -> int throws __throws_f) -> int throws __throws_f {
+  { : int
+    f() : int
+  }
+}
+function user.test_rethrows_class() -> int throws user.ValidationError {
+  { : int
+    apply_generic_class(() -> int { ... }) : int
+      () -> int { ... } : () -> never throws user.ValidationError
+        {
+          throw ValidationError { field: "name", reason: "too short" }
+        }
+  }
+}
+lambda user.test_rethrows_class {
+}
+function user.catch_enum_variants(x: int) -> string throws never {
+  { : string | "not found" | "unauthorized" | "other error"
+    catch (throw_enum_variant(x) : string) : unknown
+      catch (e)
+        ErrorKind.NotFound =>
+          "not found" : "not found"
+        ErrorKind.Unauthorized =>
+          "unauthorized" : "unauthorized"
+        _ =>
+          "other error" : "other error"
+  }
+  ?? 3367..3381: unreachable arm
+  ?? 3392..3405: unreachable arm
+}
+function user.catch_class_error(x: int) -> string throws never {
+  { : string
+    catch (throw_class_instance(x) : string) : unknown
+      catch (e)
+        _: ApiError =>
+          "api error: " + e.message : string
+  }
+}
+function user.catch_mixed_errors(x: int) -> string throws never {
+  { : string | "rate limited" | "api error" | "unknown"
+    catch (throw_enum_or_class(x) : string) : unknown
+      catch (e)
+        ErrorKind.RateLimited =>
+          "rate limited" : "rate limited"
+        _: ApiError =>
+          "api error" : "api error"
+        _ =>
+          "unknown" : "unknown"
+  }
+  ?? 3721..3730: unreachable arm
+}
+class user.EnumThrowingHandler {
+  run: () -> null throws user.ErrorKind
+}
+class user.ClassThrowingHandler {
+  run: () -> null throws user.ApiError
+}
+class user.MixedThrowingHandler {
+  run: () -> null throws user.ErrorKind | user.ApiError
+}
+function user.make_enum_handler() -> user.EnumThrowingHandler throws never {
+  { : user.EnumThrowingHandler
+    EnumThrowingHandler { run: () -> null { ... } } : user.EnumThrowingHandler
+  }
+}
+lambda user.make_enum_handler {
+}
+function user.make_class_handler() -> user.ClassThrowingHandler throws never {
+  { : user.ClassThrowingHandler
+    ClassThrowingHandler { run: () -> null { ... } } : user.ClassThrowingHandler
+  }
+}
+lambda user.make_class_handler {
+}
+type user.EnumThrower = () -> int throws user.ErrorKind
+type user.ClassThrower = () -> int throws user.ApiError
+type user.MixedThrower = () -> int throws user.ErrorKind | user.ApiError | string
+function user.use_enum_thrower(f: user.EnumThrower) -> int throws never {
+  { : int
+    f() : int
+  }
+}
+function user.use_class_thrower(f: user.ClassThrower) -> int throws never {
+  { : int
+    f() : int
+  }
+}
+function user.use_mixed_thrower(f: user.MixedThrower) -> int throws never {
+  { : int
+    f() : int
+  }
+}
+function user.test_type_alias_enum() -> int throws never {
+  { : int
+    use_enum_thrower(() -> int { ... }) : int
+      () -> int { ... } : () -> never throws user.ErrorKind.ValidationFailed
+        {
+          throw ErrorKind.ValidationFailed
+        }
+  }
+}
+lambda user.test_type_alias_enum {
+}
+function user.test_type_alias_class() -> int throws never {
+  { : int
+    use_class_thrower(() -> int { ... }) : int
+      () -> int { ... } : () -> never throws user.ApiError
+        {
+          throw ApiError { code: 422, message: "invalid" }
+        }
+  }
+}
+lambda user.test_type_alias_class {
+}
+function user.test_type_alias_mixed() -> int throws never {
+  { : int
+    use_mixed_thrower(() -> int { ... }) : int
+      () -> int { ... } : () -> never throws string
+        {
+          throw "string error"
+        }
+  }
+}
+lambda user.test_type_alias_mixed {
+}
+class user.ApiError$stream {
+  code: null | int
+  message: null | string
+}
+class user.ValidationError$stream {
+  field: null | string
+  reason: null | string
+}
+class user.EnumThrowingHandler$stream {
+  run: unknown
+}
+class user.ClassThrowingHandler$stream {
+  run: unknown
+}
+class user.MixedThrowingHandler$stream {
+  run: unknown
+}
+type user.EnumThrower$stream = unknown
+type user.ClassThrower$stream = unknown
+type user.MixedThrower$stream = unknown
 function user.apply_explicit(f: () -> int throws string) -> int throws string {
   { : int
     f() : int

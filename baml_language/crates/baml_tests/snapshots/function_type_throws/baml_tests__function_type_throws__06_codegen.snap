@@ -37,6 +37,18 @@ function user.apply_explicit(f: () -> int) -> int {
     return
 }
 
+function user.apply_generic_class(f: () -> int) -> int {
+    load_var f
+    call_indirect
+    return
+}
+
+function user.apply_generic_enum(f: () -> int) -> int {
+    load_var f
+    call_indirect
+    return
+}
+
 function user.apply_guarded(f: () -> int) -> int {
     load_var f
     call_indirect
@@ -57,6 +69,18 @@ function user.apply_guarded(f: () -> int) -> int {
 }
 
 function user.apply_inner(f: () -> int) -> int {
+    load_var f
+    call_indirect
+    return
+}
+
+function user.apply_may_throw_class(f: () -> int) -> int {
+    load_var f
+    call_indirect
+    return
+}
+
+function user.apply_may_throw_enum(f: () -> int) -> int {
     load_var f
     call_indirect
     return
@@ -109,6 +133,106 @@ function user.caller() -> string {
     return
 }
 
+function user.catch_class_error(x: int) -> string {
+    load_var x
+    call user.throw_class_instance
+    jump L2
+    load_var e
+    load_const ApiError
+    cmp_op instanceof
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    throw
+
+  L1:
+    load_const "api error: "
+    load_var e
+    load_field .message
+    bin_op +
+
+  L2:
+    return
+}
+
+function user.catch_enum_variants(x: int) -> string {
+    load_var x
+    call user.throw_enum_variant
+    jump L4
+    load_var e
+    load_const user.ErrorKind.NotFound
+    alloc_variant user.ErrorKind
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_var e
+    load_const user.ErrorKind.Unauthorized
+    alloc_variant user.ErrorKind
+    cmp_op ==
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var e
+    throw_if_panic
+    load_const "other error"
+    jump L4
+
+  L2:
+    load_const "unauthorized"
+    jump L4
+
+  L3:
+    load_const "not found"
+
+  L4:
+    return
+}
+
+function user.catch_mixed_errors(x: int) -> string {
+    load_var x
+    call user.throw_enum_or_class
+    jump L4
+    load_var e
+    load_const user.ErrorKind.RateLimited
+    alloc_variant user.ErrorKind
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_var e
+    load_const ApiError
+    cmp_op instanceof
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var e
+    throw_if_panic
+    load_const "unknown"
+    jump L4
+
+  L2:
+    load_const "api error"
+    jump L4
+
+  L3:
+    load_const "rate limited"
+
+  L4:
+    return
+}
+
+function user.compose(f: (void) -> void, g: (void) -> void) -> (void) -> void {
+    load_const null
+    return
+}
+
 function user.helper_with_body_throw() -> int {
     load_const "helper boom"
     throw
@@ -118,6 +242,22 @@ function user.make_bad_stored_handler() -> StoredPureHandler {
     alloc_instance StoredPureHandler
     copy 0
     make_closure .<lambda(make_bad_stored_handler, 0)>, 0
+    store_field .run
+    return
+}
+
+function user.make_class_handler() -> ClassThrowingHandler {
+    alloc_instance ClassThrowingHandler
+    copy 0
+    make_closure .<lambda(make_class_handler, 0)>, 0
+    store_field .run
+    return
+}
+
+function user.make_enum_handler() -> EnumThrowingHandler {
+    alloc_instance EnumThrowingHandler
+    copy 0
+    make_closure .<lambda(make_enum_handler, 0)>, 0
     store_field .run
     return
 }
@@ -251,6 +391,18 @@ function user.test_apply_and_throw_pure() -> int {
     return
 }
 
+function user.test_apply_class_thrower() -> int {
+    make_closure .<lambda(test_apply_class_thrower, 0)>, 0
+    call user.apply_may_throw_class
+    return
+}
+
+function user.test_apply_enum_thrower() -> int {
+    make_closure .<lambda(test_apply_enum_thrower, 0)>, 0
+    call user.apply_may_throw_enum
+    return
+}
+
 function user.test_apply_explicit_throws() -> int {
     make_closure .<lambda(test_apply_explicit_throws, 0)>, 0
     call user.apply_throwing
@@ -340,6 +492,34 @@ function user.test_chained_throwing() -> int {
     return
 }
 
+function user.test_compose_both_throw() -> (int) -> string {
+    make_closure .<lambda(test_compose_both_throw, 0)>, 0
+    make_closure .<lambda(test_compose_both_throw, 1)>, 0
+    call user.compose
+    return
+}
+
+function user.test_compose_first_throws() -> (int) -> string {
+    make_closure .<lambda(test_compose_first_throws, 0)>, 0
+    make_closure .<lambda(test_compose_first_throws, 1)>, 0
+    call user.compose
+    return
+}
+
+function user.test_compose_pure() -> (int) -> string {
+    make_closure .<lambda(test_compose_pure, 0)>, 0
+    make_closure .<lambda(test_compose_pure, 1)>, 0
+    call user.compose
+    return
+}
+
+function user.test_compose_second_throws() -> (int) -> string {
+    make_closure .<lambda(test_compose_second_throws, 0)>, 0
+    make_closure .<lambda(test_compose_second_throws, 1)>, 0
+    call user.compose
+    return
+}
+
 function user.test_conditional_throw(x: int) -> int {
     load_var x
     make_closure .<lambda(test_conditional_throw, 0)>, 0
@@ -386,6 +566,18 @@ function user.test_guarded_pure() -> int {
 function user.test_guarded_throwing() -> int {
     make_closure .<lambda(test_guarded_throwing, 0)>, 0
     call user.apply_guarded
+    return
+}
+
+function user.test_lambda_throws_class() -> int {
+    make_closure .<lambda(test_lambda_throws_class, 0)>, 0
+    call_indirect
+    return
+}
+
+function user.test_lambda_throws_enum() -> int {
+    make_closure .<lambda(test_lambda_throws_enum, 0)>, 0
+    call_indirect
     return
 }
 
@@ -468,6 +660,18 @@ function user.test_pure_only_pure() -> int {
     return
 }
 
+function user.test_rethrows_class() -> int {
+    make_closure .<lambda(test_rethrows_class, 0)>, 0
+    call user.apply_generic_class
+    return
+}
+
+function user.test_rethrows_enum() -> int {
+    make_closure .<lambda(test_rethrows_enum, 0)>, 0
+    call user.apply_generic_enum
+    return
+}
+
 function user.test_run_pure() -> int {
     make_closure .<lambda(test_run_pure, 0)>, 0
     call user.run_pure
@@ -544,6 +748,24 @@ function user.test_two_pure() -> int {
     return
 }
 
+function user.test_type_alias_class() -> int {
+    make_closure .<lambda(test_type_alias_class, 0)>, 0
+    call user.use_class_thrower
+    return
+}
+
+function user.test_type_alias_enum() -> int {
+    make_closure .<lambda(test_type_alias_enum, 0)>, 0
+    call user.use_enum_thrower
+    return
+}
+
+function user.test_type_alias_mixed() -> int {
+    make_closure .<lambda(test_type_alias_mixed, 0)>, 0
+    call user.use_mixed_thrower
+    return
+}
+
 function user.test_use_pure() -> int {
     call user.make_pure
     call_indirect
@@ -552,6 +774,244 @@ function user.test_use_pure() -> int {
 
 function user.test_use_thrower() -> int {
     call user.make_thrower
+    call_indirect
+    return
+}
+
+function user.throw_any_error(x: int) -> string {
+    load_var x
+    copy 0
+    load_const 0
+    cmp_op ==
+    pop_jump_if_false L0
+    pop 1
+    jump L5
+
+  L0:
+    copy 0
+    load_const 1
+    cmp_op ==
+    pop_jump_if_false L1
+    pop 1
+    jump L4
+
+  L1:
+    copy 0
+    load_const 2
+    cmp_op ==
+    pop_jump_if_false L2
+    pop 1
+    jump L3
+
+  L2:
+    pop 1
+    load_const "ok"
+    return
+
+  L3:
+    alloc_instance ApiError
+    copy 0
+    load_const 400
+    store_field .code
+    copy 0
+    load_const "bad request"
+    store_field .message
+    throw
+
+  L4:
+    load_const user.ErrorKind.NotFound
+    alloc_variant user.ErrorKind
+    throw
+
+  L5:
+    load_const "simple string error"
+    throw
+}
+
+function user.throw_class_instance(x: int) -> string {
+    load_var x
+    load_const 0
+    cmp_op <
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "ok"
+    return
+
+  L1:
+    alloc_instance ApiError
+    copy 0
+    load_const 500
+    store_field .code
+    copy 0
+    load_const "internal error"
+    store_field .message
+    throw
+}
+
+function user.throw_enum_or_class(x: int) -> string {
+    load_var x
+    load_const 0
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_var x
+    load_const 1
+    cmp_op ==
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const "ok"
+    return
+
+  L2:
+    alloc_instance ApiError
+    copy 0
+    load_const 503
+    store_field .code
+    copy 0
+    load_const "unavailable"
+    store_field .message
+    throw
+
+  L3:
+    load_const user.ErrorKind.RateLimited
+    alloc_variant user.ErrorKind
+    throw
+}
+
+function user.throw_enum_variant(x: int) -> string {
+    load_var x
+    load_const 0
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_var x
+    load_const 1
+    cmp_op ==
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const "ok"
+    return
+
+  L2:
+    load_const user.ErrorKind.Unauthorized
+    alloc_variant user.ErrorKind
+    throw
+
+  L3:
+    load_const user.ErrorKind.NotFound
+    alloc_variant user.ErrorKind
+    throw
+}
+
+function user.throw_mixed_classes(x: int) -> string {
+    load_var x
+    load_const 0
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_var x
+    load_const 1
+    cmp_op ==
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const "ok"
+    return
+
+  L2:
+    alloc_instance ValidationError
+    copy 0
+    load_const "id"
+    store_field .field
+    copy 0
+    load_const "required"
+    store_field .reason
+    throw
+
+  L3:
+    alloc_instance ApiError
+    copy 0
+    load_const 404
+    store_field .code
+    copy 0
+    load_const "not found"
+    store_field .message
+    throw
+}
+
+function user.throw_various_errors(x: int) -> string {
+    load_var x
+    copy 0
+    load_const 0
+    cmp_op ==
+    pop_jump_if_false L0
+    pop 1
+    jump L5
+
+  L0:
+    copy 0
+    load_const 1
+    cmp_op ==
+    pop_jump_if_false L1
+    pop 1
+    jump L4
+
+  L1:
+    copy 0
+    load_const 2
+    cmp_op ==
+    pop_jump_if_false L2
+    pop 1
+    jump L3
+
+  L2:
+    pop 1
+    load_const "ok"
+    return
+
+  L3:
+    load_const user.ErrorKind.ValidationFailed
+    alloc_variant user.ErrorKind
+    throw
+
+  L4:
+    load_const user.ErrorKind.Unauthorized
+    alloc_variant user.ErrorKind
+    throw
+
+  L5:
+    load_const user.ErrorKind.NotFound
+    alloc_variant user.ErrorKind
+    throw
+}
+
+function user.use_class_thrower(f: () -> int) -> int {
+    load_var f
+    call_indirect
+    return
+}
+
+function user.use_enum_thrower(f: () -> int) -> int {
+    load_var f
+    call_indirect
+    return
+}
+
+function user.use_mixed_thrower(f: () -> int) -> int {
+    load_var f
     call_indirect
     return
 }

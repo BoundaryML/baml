@@ -2,6 +2,128 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
+  [type] Error: missing return: expected `(A) -> C`
+   ╭─[ compose_hof.baml:7:14 ]
+   │
+ 7 │ ╭─▶ ) -> (A) -> C {
+   ┆ ┆   
+ 9 │ ├─▶ }
+   │ │       
+   │ ╰─────── missing return: expected `(A) -> C`
+   │     
+   │     Note: Error code: E0001
+───╯
+
+  [type] Warning: extraneous throws declaration: user.ErrorKind
+    ╭─[ enum_class_throws.baml:27:53 ]
+    │
+ 27 │ function throw_enum_variant(x: int) -> string throws ErrorKind {
+    │                                                     ─────┬────  
+    │                                                          ╰────── extraneous throws declaration: user.ErrorKind
+    │ 
+    │ Note: Error code: E0001
+────╯
+
+  [type] Error: throws contract violation: `user.ErrorKind` is missing user.ErrorKind.NotFound, user.ErrorKind.Unauthorized
+    ╭─[ enum_class_throws.baml:27:53 ]
+    │
+ 27 │ function throw_enum_variant(x: int) -> string throws ErrorKind {
+    │                                                     ─────┬────  
+    │                                                          ╰────── throws contract violation: `user.ErrorKind` is missing user.ErrorKind.NotFound, user.ErrorKind.Unauthorized
+    │ 
+    │ Note: Error code: E0001
+────╯
+
+  [type] Warning: extraneous throws declaration: user.ErrorKind
+    ╭─[ enum_class_throws.baml:60:55 ]
+    │
+ 60 │ function throw_various_errors(x: int) -> string throws ErrorKind {
+    │                                                       ─────┬────  
+    │                                                            ╰────── extraneous throws declaration: user.ErrorKind
+    │ 
+    │ Note: Error code: E0001
+────╯
+
+  [type] Error: throws contract violation: `user.ErrorKind` is missing user.ErrorKind.NotFound, user.ErrorKind.Unauthorized, user.ErrorKind.ValidationFailed
+    ╭─[ enum_class_throws.baml:60:55 ]
+    │
+ 60 │ function throw_various_errors(x: int) -> string throws ErrorKind {
+    │                                                       ─────┬────  
+    │                                                            ╰────── throws contract violation: `user.ErrorKind` is missing user.ErrorKind.NotFound, user.ErrorKind.Unauthorized, user.ErrorKind.ValidationFailed
+    │ 
+    │ Note: Error code: E0001
+────╯
+
+  [type] Warning: extraneous throws declaration: user.ErrorKind
+    ╭─[ enum_class_throws.baml:81:54 ]
+    │
+ 81 │ function throw_enum_or_class(x: int) -> string throws ErrorKind | ApiError {
+    │                                                      ──────────┬──────────  
+    │                                                                ╰──────────── extraneous throws declaration: user.ErrorKind
+    │ 
+    │ Note: Error code: E0001
+────╯
+
+  [type] Error: throws contract violation: `user.ErrorKind | user.ApiError` is missing user.ErrorKind.RateLimited
+    ╭─[ enum_class_throws.baml:81:54 ]
+    │
+ 81 │ function throw_enum_or_class(x: int) -> string throws ErrorKind | ApiError {
+    │                                                      ──────────┬──────────  
+    │                                                                ╰──────────── throws contract violation: `user.ErrorKind | user.ApiError` is missing user.ErrorKind.RateLimited
+    │ 
+    │ Note: Error code: E0001
+────╯
+
+  [type] Warning: extraneous throws declaration: user.ErrorKind
+    ╭─[ enum_class_throws.baml:88:50 ]
+    │
+ 88 │ function throw_any_error(x: int) -> string throws string | ErrorKind | ApiError {
+    │                                                  ───────────────┬──────────────  
+    │                                                                 ╰──────────────── extraneous throws declaration: user.ErrorKind
+    │ 
+    │ Note: Error code: E0001
+────╯
+
+  [type] Error: throws contract violation: `string | user.ErrorKind | user.ApiError` is missing user.ErrorKind.NotFound
+    ╭─[ enum_class_throws.baml:88:50 ]
+    │
+ 88 │ function throw_any_error(x: int) -> string throws string | ErrorKind | ApiError {
+    │                                                  ───────────────┬──────────────  
+    │                                                                 ╰──────────────── throws contract violation: `string | user.ErrorKind | user.ApiError` is missing user.ErrorKind.NotFound
+    │ 
+    │ Note: Error code: E0001
+────╯
+
+  [type] Warning: unreachable arm
+     ╭─[ enum_class_throws.baml:140:31 ]
+     │
+ 140 │     ErrorKind.Unauthorized => "unauthorized",
+     │                               ───────┬──────  
+     │                                      ╰──────── unreachable arm
+     │ 
+     │ Note: Error code: E0001
+─────╯
+
+  [type] Warning: unreachable arm
+     ╭─[ enum_class_throws.baml:141:10 ]
+     │
+ 141 │     _ => "other error"
+     │          ──────┬──────  
+     │                ╰──────── unreachable arm
+     │ 
+     │ Note: Error code: E0001
+─────╯
+
+  [type] Warning: unreachable arm
+     ╭─[ enum_class_throws.baml:155:10 ]
+     │
+ 155 │     _ => "unknown"
+     │          ────┬────  
+     │              ╰────── unreachable arm
+     │ 
+     │ Note: Error code: E0001
+─────╯
+
   [validation] Error: Duplicate function `may_fail`
    ╭─[ catch_absorbs_throws.baml:3:10 ]
    │

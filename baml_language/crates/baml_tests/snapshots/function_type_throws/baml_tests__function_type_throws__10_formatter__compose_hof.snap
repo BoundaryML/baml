@@ -1,0 +1,5 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== STRONG AST ERROR ===
+Expected token/node of kind PARAMETER_LIST, but found GENERIC_PARAM_LIST at compose_hof.baml:4:17

@@ -1,0 +1,1440 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  ENUM_DEF
+    KW_ENUM "enum"
+    WORD "ErrorKind"
+    L_BRACE "{"
+    ENUM_VARIANT "NotFound"
+      WORD "NotFound"
+    ENUM_VARIANT "Unauthorized"
+      WORD "Unauthorized"
+    ENUM_VARIANT "ValidationFailed"
+      WORD "ValidationFailed"
+    ENUM_VARIANT "RateLimited"
+      WORD "RateLimited"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "ApiError"
+    L_BRACE "{"
+    FIELD
+      WORD "code"
+      COLON ":"
+      TYPE_EXPR "int"
+        WORD "int"
+    FIELD
+      WORD "message"
+      COLON ":"
+      TYPE_EXPR "string"
+        WORD "string"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "ValidationError"
+    L_BRACE "{"
+    FIELD
+      WORD "field"
+      COLON ":"
+      TYPE_EXPR "string"
+        WORD "string"
+    FIELD
+      WORD "reason"
+      COLON ":"
+      TYPE_EXPR "string"
+        WORD "string"
+    R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "throw_enum_variant"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "x"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    THROWS_CLAUSE
+      KW_THROWS "throws"
+      TYPE_EXPR "ErrorKind"
+        WORD "ErrorKind"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        IF_EXPR
+          KW_IF "if"
+          PAREN_EXPR
+            L_PAREN "("
+            BINARY_EXPR "x == 0"
+              WORD "x"
+              EQUALS_EQUALS "=="
+              INTEGER_LITERAL "0"
+            R_PAREN ")"
+          BLOCK_EXPR
+            L_BRACE "{"
+            THROW_STMT
+              THROW_EXPR
+                KW_THROW "throw"
+                PATH_EXPR "ErrorKind.NotFound"
+                  WORD "ErrorKind"
+                  DOT "."
+                  WORD "NotFound"
+            R_BRACE "}"
+        IF_EXPR
+          KW_IF "if"
+          PAREN_EXPR
+            L_PAREN "("
+            BINARY_EXPR "x == 1"
+              WORD "x"
+              EQUALS_EQUALS "=="
+              INTEGER_LITERAL "1"
+            R_PAREN ")"
+          BLOCK_EXPR
+            L_BRACE "{"
+            THROW_STMT
+              THROW_EXPR
+                KW_THROW "throw"
+                PATH_EXPR "ErrorKind.Unauthorized"
+                  WORD "ErrorKind"
+                  DOT "."
+                  WORD "Unauthorized"
+            R_BRACE "}"
+        STRING_LITERAL "ok"
+          QUOTE """
+          WORD "ok"
+          QUOTE """
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "test_lambda_throws_enum"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        LET_STMT
+          KW_LET "let"
+          WORD "f"
+          EQUALS "="
+          LAMBDA_EXPR
+            PARAMETER_LIST "()"
+              L_PAREN "("
+              R_PAREN ")"
+            ARROW "->"
+            TYPE_EXPR "int"
+              WORD "int"
+            BLOCK_EXPR
+              L_BRACE "{"
+              THROW_STMT
+                THROW_EXPR
+                  KW_THROW "throw"
+                  PATH_EXPR "ErrorKind.ValidationFailed"
+                    WORD "ErrorKind"
+                    DOT "."
+                    WORD "ValidationFailed"
+              R_BRACE "}"
+        CALL_EXPR
+          WORD "f"
+          CALL_ARGS "()"
+            L_PAREN "("
+            R_PAREN ")"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "throw_class_instance"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "x"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    THROWS_CLAUSE
+      KW_THROWS "throws"
+      TYPE_EXPR "ApiError"
+        WORD "ApiError"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        IF_EXPR
+          KW_IF "if"
+          PAREN_EXPR
+            L_PAREN "("
+            BINARY_EXPR "x < 0"
+              WORD "x"
+              LESS "<"
+              INTEGER_LITERAL "0"
+            R_PAREN ")"
+          BLOCK_EXPR
+            L_BRACE "{"
+            THROW_STMT
+              THROW_EXPR
+                KW_THROW "throw"
+                OBJECT_LITERAL
+                  WORD "ApiError"
+                  L_BRACE "{"
+                  OBJECT_FIELD "code: 500"
+                    WORD "code"
+                    COLON ":"
+                    INTEGER_LITERAL "500"
+                  COMMA ","
+                  OBJECT_FIELD
+                    WORD "message"
+                    COLON ":"
+                    STRING_LITERAL "internal error"
+                      QUOTE """
+                      WORD "internal"
+                      WORD "error"
+                      QUOTE """
+                  R_BRACE "}"
+            R_BRACE "}"
+        STRING_LITERAL "ok"
+          QUOTE """
+          WORD "ok"
+          QUOTE """
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "test_lambda_throws_class"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        LET_STMT
+          KW_LET "let"
+          WORD "f"
+          EQUALS "="
+          LAMBDA_EXPR
+            PARAMETER_LIST "()"
+              L_PAREN "("
+              R_PAREN ")"
+            ARROW "->"
+            TYPE_EXPR "int"
+              WORD "int"
+            BLOCK_EXPR
+              L_BRACE "{"
+              THROW_STMT
+                THROW_EXPR
+                  KW_THROW "throw"
+                  OBJECT_LITERAL
+                    WORD "ValidationError"
+                    L_BRACE "{"
+                    OBJECT_FIELD
+                      WORD "field"
+                      COLON ":"
+                      STRING_LITERAL "email"
+                        QUOTE """
+                        WORD "email"
+                        QUOTE """
+                    COMMA ","
+                    OBJECT_FIELD
+                      WORD "reason"
+                      COLON ":"
+                      STRING_LITERAL "invalid format"
+                        QUOTE """
+                        WORD "invalid"
+                        WORD "format"
+                        QUOTE """
+                    R_BRACE "}"
+              R_BRACE "}"
+        CALL_EXPR
+          WORD "f"
+          CALL_ARGS "()"
+            L_PAREN "("
+            R_PAREN ")"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "throw_various_errors"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "x"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    THROWS_CLAUSE
+      KW_THROWS "throws"
+      TYPE_EXPR "ErrorKind"
+        WORD "ErrorKind"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        MATCH_EXPR
+          KW_MATCH "match"
+          L_PAREN "("
+          WORD "x"
+          R_PAREN ")"
+          L_BRACE "{"
+          MATCH_ARM
+            MATCH_PATTERN "0"
+              INTEGER_LITERAL "0"
+            FAT_ARROW "=>"
+            THROW_EXPR
+              KW_THROW "throw"
+              PATH_EXPR "ErrorKind.NotFound"
+                WORD "ErrorKind"
+                DOT "."
+                WORD "NotFound"
+            COMMA ","
+          MATCH_ARM
+            MATCH_PATTERN "1"
+              INTEGER_LITERAL "1"
+            FAT_ARROW "=>"
+            THROW_EXPR
+              KW_THROW "throw"
+              PATH_EXPR "ErrorKind.Unauthorized"
+                WORD "ErrorKind"
+                DOT "."
+                WORD "Unauthorized"
+            COMMA ","
+          MATCH_ARM
+            MATCH_PATTERN "2"
+              INTEGER_LITERAL "2"
+            FAT_ARROW "=>"
+            THROW_EXPR
+              KW_THROW "throw"
+              PATH_EXPR "ErrorKind.ValidationFailed"
+                WORD "ErrorKind"
+                DOT "."
+                WORD "ValidationFailed"
+            COMMA ","
+          MATCH_ARM
+            MATCH_PATTERN "_"
+              WORD "_"
+            FAT_ARROW "=>"
+            STRING_LITERAL "ok"
+              QUOTE """
+              WORD "ok"
+              QUOTE """
+          R_BRACE "}"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "throw_mixed_classes"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "x"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    THROWS_CLAUSE
+      KW_THROWS "throws"
+      TYPE_EXPR "ApiError | ValidationError"
+        WORD "ApiError"
+        PIPE "|"
+        WORD "ValidationError"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        IF_EXPR
+          KW_IF "if"
+          PAREN_EXPR
+            L_PAREN "("
+            BINARY_EXPR "x == 0"
+              WORD "x"
+              EQUALS_EQUALS "=="
+              INTEGER_LITERAL "0"
+            R_PAREN ")"
+          BLOCK_EXPR
+            L_BRACE "{"
+            THROW_STMT
+              THROW_EXPR
+                KW_THROW "throw"
+                OBJECT_LITERAL
+                  WORD "ApiError"
+                  L_BRACE "{"
+                  OBJECT_FIELD "code: 404"
+                    WORD "code"
+                    COLON ":"
+                    INTEGER_LITERAL "404"
+                  COMMA ","
+                  OBJECT_FIELD
+                    WORD "message"
+                    COLON ":"
+                    STRING_LITERAL "not found"
+                      QUOTE """
+                      WORD "not"
+                      WORD "found"
+                      QUOTE """
+                  R_BRACE "}"
+            R_BRACE "}"
+        IF_EXPR
+          KW_IF "if"
+          PAREN_EXPR
+            L_PAREN "("
+            BINARY_EXPR "x == 1"
+              WORD "x"
+              EQUALS_EQUALS "=="
+              INTEGER_LITERAL "1"
+            R_PAREN ")"
+          BLOCK_EXPR
+            L_BRACE "{"
+            THROW_STMT
+              THROW_EXPR
+                KW_THROW "throw"
+                OBJECT_LITERAL
+                  WORD "ValidationError"
+                  L_BRACE "{"
+                  OBJECT_FIELD
+                    WORD "field"
+                    COLON ":"
+                    STRING_LITERAL "id"
+                      QUOTE """
+                      WORD "id"
+                      QUOTE """
+                  COMMA ","
+                  OBJECT_FIELD
+                    WORD "reason"
+                    COLON ":"
+                    STRING_LITERAL "required"
+                      QUOTE """
+                      WORD "required"
+                      QUOTE """
+                  R_BRACE "}"
+            R_BRACE "}"
+        STRING_LITERAL "ok"
+          QUOTE """
+          WORD "ok"
+          QUOTE """
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "throw_enum_or_class"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "x"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    THROWS_CLAUSE
+      KW_THROWS "throws"
+      TYPE_EXPR "ErrorKind | ApiError"
+        WORD "ErrorKind"
+        PIPE "|"
+        WORD "ApiError"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        IF_EXPR
+          KW_IF "if"
+          PAREN_EXPR
+            L_PAREN "("
+            BINARY_EXPR "x == 0"
+              WORD "x"
+              EQUALS_EQUALS "=="
+              INTEGER_LITERAL "0"
+            R_PAREN ")"
+          BLOCK_EXPR
+            L_BRACE "{"
+            THROW_STMT
+              THROW_EXPR
+                KW_THROW "throw"
+                PATH_EXPR "ErrorKind.RateLimited"
+                  WORD "ErrorKind"
+                  DOT "."
+                  WORD "RateLimited"
+            R_BRACE "}"
+        IF_EXPR
+          KW_IF "if"
+          PAREN_EXPR
+            L_PAREN "("
+            BINARY_EXPR "x == 1"
+              WORD "x"
+              EQUALS_EQUALS "=="
+              INTEGER_LITERAL "1"
+            R_PAREN ")"
+          BLOCK_EXPR
+            L_BRACE "{"
+            THROW_STMT
+              THROW_EXPR
+                KW_THROW "throw"
+                OBJECT_LITERAL
+                  WORD "ApiError"
+                  L_BRACE "{"
+                  OBJECT_FIELD "code: 503"
+                    WORD "code"
+                    COLON ":"
+                    INTEGER_LITERAL "503"
+                  COMMA ","
+                  OBJECT_FIELD
+                    WORD "message"
+                    COLON ":"
+                    STRING_LITERAL "unavailable"
+                      QUOTE """
+                      WORD "unavailable"
+                      QUOTE """
+                  R_BRACE "}"
+            R_BRACE "}"
+        STRING_LITERAL "ok"
+          QUOTE """
+          WORD "ok"
+          QUOTE """
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "throw_any_error"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "x"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    THROWS_CLAUSE
+      KW_THROWS "throws"
+      TYPE_EXPR "string | ErrorKind | ApiError"
+        WORD "string"
+        PIPE "|"
+        WORD "ErrorKind"
+        PIPE "|"
+        WORD "ApiError"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        MATCH_EXPR
+          KW_MATCH "match"
+          L_PAREN "("
+          WORD "x"
+          R_PAREN ")"
+          L_BRACE "{"
+          MATCH_ARM
+            MATCH_PATTERN "0"
+              INTEGER_LITERAL "0"
+            FAT_ARROW "=>"
+            THROW_EXPR
+              KW_THROW "throw"
+              STRING_LITERAL "simple string error"
+                QUOTE """
+                WORD "simple"
+                WORD "string"
+                WORD "error"
+                QUOTE """
+            COMMA ","
+          MATCH_ARM
+            MATCH_PATTERN "1"
+              INTEGER_LITERAL "1"
+            FAT_ARROW "=>"
+            THROW_EXPR
+              KW_THROW "throw"
+              PATH_EXPR "ErrorKind.NotFound"
+                WORD "ErrorKind"
+                DOT "."
+                WORD "NotFound"
+            COMMA ","
+          MATCH_ARM
+            MATCH_PATTERN "2"
+              INTEGER_LITERAL "2"
+            FAT_ARROW "=>"
+            THROW_EXPR
+              KW_THROW "throw"
+              OBJECT_LITERAL
+                WORD "ApiError"
+                L_BRACE "{"
+                OBJECT_FIELD "code: 400"
+                  WORD "code"
+                  COLON ":"
+                  INTEGER_LITERAL "400"
+                COMMA ","
+                OBJECT_FIELD
+                  WORD "message"
+                  COLON ":"
+                  STRING_LITERAL "bad request"
+                    QUOTE """
+                    WORD "bad"
+                    WORD "request"
+                    QUOTE """
+                R_BRACE "}"
+            COMMA ","
+          MATCH_ARM
+            MATCH_PATTERN "_"
+              WORD "_"
+            FAT_ARROW "=>"
+            STRING_LITERAL "ok"
+              QUOTE """
+              WORD "ok"
+              QUOTE """
+          R_BRACE "}"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "apply_may_throw_enum"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "f"
+        COLON ":"
+        TYPE_EXPR
+          L_PAREN "("
+          R_PAREN ")"
+          ARROW "->"
+          TYPE_EXPR "int"
+            WORD "int"
+          THROWS_CLAUSE
+            KW_THROWS "throws"
+            TYPE_EXPR "ErrorKind"
+              WORD "ErrorKind"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        CALL_EXPR
+          WORD "f"
+          CALL_ARGS "()"
+            L_PAREN "("
+            R_PAREN ")"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "test_apply_enum_thrower"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        CALL_EXPR
+          WORD "apply_may_throw_enum"
+          CALL_ARGS
+            L_PAREN "("
+            LAMBDA_EXPR
+              PARAMETER_LIST "()"
+                L_PAREN "("
+                R_PAREN ")"
+              ARROW "->"
+              TYPE_EXPR "int"
+                WORD "int"
+              BLOCK_EXPR
+                L_BRACE "{"
+                THROW_STMT
+                  THROW_EXPR
+                    KW_THROW "throw"
+                    PATH_EXPR "ErrorKind.Unauthorized"
+                      WORD "ErrorKind"
+                      DOT "."
+                      WORD "Unauthorized"
+                R_BRACE "}"
+            R_PAREN ")"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "apply_may_throw_class"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "f"
+        COLON ":"
+        TYPE_EXPR
+          L_PAREN "("
+          R_PAREN ")"
+          ARROW "->"
+          TYPE_EXPR "int"
+            WORD "int"
+          THROWS_CLAUSE
+            KW_THROWS "throws"
+            TYPE_EXPR "ApiError"
+              WORD "ApiError"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        CALL_EXPR
+          WORD "f"
+          CALL_ARGS "()"
+            L_PAREN "("
+            R_PAREN ")"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "test_apply_class_thrower"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        CALL_EXPR
+          WORD "apply_may_throw_class"
+          CALL_ARGS
+            L_PAREN "("
+            LAMBDA_EXPR
+              PARAMETER_LIST "()"
+                L_PAREN "("
+                R_PAREN ")"
+              ARROW "->"
+              TYPE_EXPR "int"
+                WORD "int"
+              BLOCK_EXPR
+                L_BRACE "{"
+                THROW_STMT
+                  THROW_EXPR
+                    KW_THROW "throw"
+                    OBJECT_LITERAL
+                      WORD "ApiError"
+                      L_BRACE "{"
+                      OBJECT_FIELD "code: 401"
+                        WORD "code"
+                        COLON ":"
+                        INTEGER_LITERAL "401"
+                      COMMA ","
+                      OBJECT_FIELD
+                        WORD "message"
+                        COLON ":"
+                        STRING_LITERAL "unauthorized"
+                          QUOTE """
+                          WORD "unauthorized"
+                          QUOTE """
+                      R_BRACE "}"
+                R_BRACE "}"
+            R_PAREN ")"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "apply_generic_enum"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "f"
+        COLON ":"
+        TYPE_EXPR
+          L_PAREN "("
+          R_PAREN ")"
+          ARROW "->"
+          TYPE_EXPR "int"
+            WORD "int"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        CALL_EXPR
+          WORD "f"
+          CALL_ARGS "()"
+            L_PAREN "("
+            R_PAREN ")"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "test_rethrows_enum"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        CALL_EXPR
+          WORD "apply_generic_enum"
+          CALL_ARGS
+            L_PAREN "("
+            LAMBDA_EXPR
+              PARAMETER_LIST "()"
+                L_PAREN "("
+                R_PAREN ")"
+              ARROW "->"
+              TYPE_EXPR "int"
+                WORD "int"
+              BLOCK_EXPR
+                L_BRACE "{"
+                THROW_STMT
+                  THROW_EXPR
+                    KW_THROW "throw"
+                    PATH_EXPR "ErrorKind.NotFound"
+                      WORD "ErrorKind"
+                      DOT "."
+                      WORD "NotFound"
+                R_BRACE "}"
+            R_PAREN ")"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "apply_generic_class"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "f"
+        COLON ":"
+        TYPE_EXPR
+          L_PAREN "("
+          R_PAREN ")"
+          ARROW "->"
+          TYPE_EXPR "int"
+            WORD "int"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        CALL_EXPR
+          WORD "f"
+          CALL_ARGS "()"
+            L_PAREN "("
+            R_PAREN ")"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "test_rethrows_class"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        CALL_EXPR
+          WORD "apply_generic_class"
+          CALL_ARGS
+            L_PAREN "("
+            LAMBDA_EXPR
+              PARAMETER_LIST "()"
+                L_PAREN "("
+                R_PAREN ")"
+              ARROW "->"
+              TYPE_EXPR "int"
+                WORD "int"
+              BLOCK_EXPR
+                L_BRACE "{"
+                THROW_STMT
+                  THROW_EXPR
+                    KW_THROW "throw"
+                    OBJECT_LITERAL
+                      WORD "ValidationError"
+                      L_BRACE "{"
+                      OBJECT_FIELD
+                        WORD "field"
+                        COLON ":"
+                        STRING_LITERAL "name"
+                          QUOTE """
+                          WORD "name"
+                          QUOTE """
+                      COMMA ","
+                      OBJECT_FIELD
+                        WORD "reason"
+                        COLON ":"
+                        STRING_LITERAL "too short"
+                          QUOTE """
+                          WORD "too"
+                          WORD "short"
+                          QUOTE """
+                      R_BRACE "}"
+                R_BRACE "}"
+            R_PAREN ")"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "catch_enum_variants"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "x"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        CATCH_EXPR
+          CALL_EXPR
+            WORD "throw_enum_variant"
+            CALL_ARGS "(x)"
+              L_PAREN "("
+              WORD "x"
+              R_PAREN ")"
+          CATCH_CLAUSE
+            KW_CATCH "catch"
+            L_PAREN "("
+            CATCH_PATTERN "e"
+              WORD "e"
+            R_PAREN ")"
+            L_BRACE "{"
+            CATCH_ARM
+              CATCH_PATTERN "ErrorKind.NotFound"
+                WORD "ErrorKind"
+                DOT "."
+                WORD "NotFound"
+              FAT_ARROW "=>"
+              STRING_LITERAL "not found"
+                QUOTE """
+                WORD "not"
+                WORD "found"
+                QUOTE """
+              COMMA ","
+            CATCH_ARM
+              CATCH_PATTERN "ErrorKind.Unauthorized"
+                WORD "ErrorKind"
+                DOT "."
+                WORD "Unauthorized"
+              FAT_ARROW "=>"
+              STRING_LITERAL "unauthorized"
+                QUOTE """
+                WORD "unauthorized"
+                QUOTE """
+              COMMA ","
+            CATCH_ARM
+              CATCH_PATTERN "_"
+                WORD "_"
+              FAT_ARROW "=>"
+              STRING_LITERAL "other error"
+                QUOTE """
+                WORD "other"
+                WORD "error"
+                QUOTE """
+            R_BRACE "}"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "catch_class_error"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "x"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        CATCH_EXPR
+          CALL_EXPR
+            WORD "throw_class_instance"
+            CALL_ARGS "(x)"
+              L_PAREN "("
+              WORD "x"
+              R_PAREN ")"
+          CATCH_CLAUSE
+            KW_CATCH "catch"
+            L_PAREN "("
+            CATCH_PATTERN "e"
+              WORD "e"
+            R_PAREN ")"
+            L_BRACE "{"
+            CATCH_ARM
+              CATCH_PATTERN
+                WORD "_"
+                COLON ":"
+                TYPE_EXPR "ApiError"
+                  WORD "ApiError"
+              FAT_ARROW "=>"
+              BINARY_EXPR
+                STRING_LITERAL "api error: "
+                  QUOTE """
+                  WORD "api"
+                  WORD "error"
+                  COLON ":"
+                  QUOTE """
+                PLUS "+"
+                PATH_EXPR "e.message"
+                  WORD "e"
+                  DOT "."
+                  WORD "message"
+            R_BRACE "}"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "catch_mixed_errors"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "x"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        CATCH_EXPR
+          CALL_EXPR
+            WORD "throw_enum_or_class"
+            CALL_ARGS "(x)"
+              L_PAREN "("
+              WORD "x"
+              R_PAREN ")"
+          CATCH_CLAUSE
+            KW_CATCH "catch"
+            L_PAREN "("
+            CATCH_PATTERN "e"
+              WORD "e"
+            R_PAREN ")"
+            L_BRACE "{"
+            CATCH_ARM
+              CATCH_PATTERN "ErrorKind.RateLimited"
+                WORD "ErrorKind"
+                DOT "."
+                WORD "RateLimited"
+              FAT_ARROW "=>"
+              STRING_LITERAL "rate limited"
+                QUOTE """
+                WORD "rate"
+                WORD "limited"
+                QUOTE """
+              COMMA ","
+            CATCH_ARM
+              CATCH_PATTERN
+                WORD "_"
+                COLON ":"
+                TYPE_EXPR "ApiError"
+                  WORD "ApiError"
+              FAT_ARROW "=>"
+              STRING_LITERAL "api error"
+                QUOTE """
+                WORD "api"
+                WORD "error"
+                QUOTE """
+              COMMA ","
+            CATCH_ARM
+              CATCH_PATTERN "_"
+                WORD "_"
+              FAT_ARROW "=>"
+              STRING_LITERAL "unknown"
+                QUOTE """
+                WORD "unknown"
+                QUOTE """
+            R_BRACE "}"
+        R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "EnumThrowingHandler"
+    L_BRACE "{"
+    FIELD
+      WORD "run"
+      COLON ":"
+      TYPE_EXPR
+        L_PAREN "("
+        R_PAREN ")"
+        ARROW "->"
+        TYPE_EXPR "null"
+          WORD "null"
+        THROWS_CLAUSE
+          KW_THROWS "throws"
+          TYPE_EXPR "ErrorKind"
+            WORD "ErrorKind"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "ClassThrowingHandler"
+    L_BRACE "{"
+    FIELD
+      WORD "run"
+      COLON ":"
+      TYPE_EXPR
+        L_PAREN "("
+        R_PAREN ")"
+        ARROW "->"
+        TYPE_EXPR "null"
+          WORD "null"
+        THROWS_CLAUSE
+          KW_THROWS "throws"
+          TYPE_EXPR "ApiError"
+            WORD "ApiError"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "MixedThrowingHandler"
+    L_BRACE "{"
+    FIELD
+      WORD "run"
+      COLON ":"
+      TYPE_EXPR
+        L_PAREN "("
+        R_PAREN ")"
+        ARROW "->"
+        TYPE_EXPR "null"
+          WORD "null"
+        THROWS_CLAUSE
+          KW_THROWS "throws"
+          TYPE_EXPR "ErrorKind | ApiError"
+            WORD "ErrorKind"
+            PIPE "|"
+            WORD "ApiError"
+    R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "make_enum_handler"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "EnumThrowingHandler"
+      WORD "EnumThrowingHandler"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        OBJECT_LITERAL
+          WORD "EnumThrowingHandler"
+          L_BRACE "{"
+          OBJECT_FIELD
+            WORD "run"
+            COLON ":"
+            LAMBDA_EXPR
+              PARAMETER_LIST "()"
+                L_PAREN "("
+                R_PAREN ")"
+              ARROW "->"
+              TYPE_EXPR "null"
+                WORD "null"
+              BLOCK_EXPR
+                L_BRACE "{"
+                THROW_STMT
+                  THROW_EXPR
+                    KW_THROW "throw"
+                    PATH_EXPR "ErrorKind.NotFound"
+                      WORD "ErrorKind"
+                      DOT "."
+                      WORD "NotFound"
+                R_BRACE "}"
+          R_BRACE "}"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "make_class_handler"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "ClassThrowingHandler"
+      WORD "ClassThrowingHandler"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        OBJECT_LITERAL
+          WORD "ClassThrowingHandler"
+          L_BRACE "{"
+          OBJECT_FIELD
+            WORD "run"
+            COLON ":"
+            LAMBDA_EXPR
+              PARAMETER_LIST "()"
+                L_PAREN "("
+                R_PAREN ")"
+              ARROW "->"
+              TYPE_EXPR "null"
+                WORD "null"
+              BLOCK_EXPR
+                L_BRACE "{"
+                THROW_STMT
+                  THROW_EXPR
+                    KW_THROW "throw"
+                    OBJECT_LITERAL
+                      WORD "ApiError"
+                      L_BRACE "{"
+                      OBJECT_FIELD "code: 500"
+                        WORD "code"
+                        COLON ":"
+                        INTEGER_LITERAL "500"
+                      COMMA ","
+                      OBJECT_FIELD
+                        WORD "message"
+                        COLON ":"
+                        STRING_LITERAL "fail"
+                          QUOTE """
+                          WORD "fail"
+                          QUOTE """
+                      R_BRACE "}"
+                R_BRACE "}"
+          R_BRACE "}"
+        R_BRACE "}"
+  TYPE_ALIAS_DEF
+    WORD "type"
+    WORD "EnumThrower"
+    EQUALS "="
+    TYPE_EXPR
+      L_PAREN "("
+      R_PAREN ")"
+      ARROW "->"
+      TYPE_EXPR "int"
+        WORD "int"
+      THROWS_CLAUSE
+        KW_THROWS "throws"
+        TYPE_EXPR "ErrorKind"
+          WORD "ErrorKind"
+  TYPE_ALIAS_DEF
+    WORD "type"
+    WORD "ClassThrower"
+    EQUALS "="
+    TYPE_EXPR
+      L_PAREN "("
+      R_PAREN ")"
+      ARROW "->"
+      TYPE_EXPR "int"
+        WORD "int"
+      THROWS_CLAUSE
+        KW_THROWS "throws"
+        TYPE_EXPR "ApiError"
+          WORD "ApiError"
+  TYPE_ALIAS_DEF
+    WORD "type"
+    WORD "MixedThrower"
+    EQUALS "="
+    TYPE_EXPR
+      L_PAREN "("
+      R_PAREN ")"
+      ARROW "->"
+      TYPE_EXPR "int"
+        WORD "int"
+      THROWS_CLAUSE
+        KW_THROWS "throws"
+        TYPE_EXPR "ErrorKind | ApiError | string"
+          WORD "ErrorKind"
+          PIPE "|"
+          WORD "ApiError"
+          PIPE "|"
+          WORD "string"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "use_enum_thrower"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "f"
+        COLON ":"
+        TYPE_EXPR "EnumThrower"
+          WORD "EnumThrower"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        CALL_EXPR
+          WORD "f"
+          CALL_ARGS "()"
+            L_PAREN "("
+            R_PAREN ")"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "use_class_thrower"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "f"
+        COLON ":"
+        TYPE_EXPR "ClassThrower"
+          WORD "ClassThrower"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        CALL_EXPR
+          WORD "f"
+          CALL_ARGS "()"
+            L_PAREN "("
+            R_PAREN ")"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "use_mixed_thrower"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "f"
+        COLON ":"
+        TYPE_EXPR "MixedThrower"
+          WORD "MixedThrower"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        CALL_EXPR
+          WORD "f"
+          CALL_ARGS "()"
+            L_PAREN "("
+            R_PAREN ")"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "test_type_alias_enum"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        CALL_EXPR
+          WORD "use_enum_thrower"
+          CALL_ARGS
+            L_PAREN "("
+            LAMBDA_EXPR
+              PARAMETER_LIST "()"
+                L_PAREN "("
+                R_PAREN ")"
+              ARROW "->"
+              TYPE_EXPR "int"
+                WORD "int"
+              BLOCK_EXPR
+                L_BRACE "{"
+                THROW_STMT
+                  THROW_EXPR
+                    KW_THROW "throw"
+                    PATH_EXPR "ErrorKind.ValidationFailed"
+                      WORD "ErrorKind"
+                      DOT "."
+                      WORD "ValidationFailed"
+                R_BRACE "}"
+            R_PAREN ")"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "test_type_alias_class"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        CALL_EXPR
+          WORD "use_class_thrower"
+          CALL_ARGS
+            L_PAREN "("
+            LAMBDA_EXPR
+              PARAMETER_LIST "()"
+                L_PAREN "("
+                R_PAREN ")"
+              ARROW "->"
+              TYPE_EXPR "int"
+                WORD "int"
+              BLOCK_EXPR
+                L_BRACE "{"
+                THROW_STMT
+                  THROW_EXPR
+                    KW_THROW "throw"
+                    OBJECT_LITERAL
+                      WORD "ApiError"
+                      L_BRACE "{"
+                      OBJECT_FIELD "code: 422"
+                        WORD "code"
+                        COLON ":"
+                        INTEGER_LITERAL "422"
+                      COMMA ","
+                      OBJECT_FIELD
+                        WORD "message"
+                        COLON ":"
+                        STRING_LITERAL "invalid"
+                          QUOTE """
+                          WORD "invalid"
+                          QUOTE """
+                      R_BRACE "}"
+                R_BRACE "}"
+            R_PAREN ")"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "test_type_alias_mixed"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        CALL_EXPR
+          WORD "use_mixed_thrower"
+          CALL_ARGS
+            L_PAREN "("
+            LAMBDA_EXPR
+              PARAMETER_LIST "()"
+                L_PAREN "("
+                R_PAREN ")"
+              ARROW "->"
+              TYPE_EXPR "int"
+                WORD "int"
+              BLOCK_EXPR
+                L_BRACE "{"
+                THROW_STMT
+                  THROW_EXPR
+                    KW_THROW "throw"
+                    STRING_LITERAL "string error"
+                      QUOTE """
+                      WORD "string"
+                      WORD "error"
+                      QUOTE """
+                R_BRACE "}"
+            R_PAREN ")"
+        R_BRACE "}"
+
+=== ERRORS ===
+None

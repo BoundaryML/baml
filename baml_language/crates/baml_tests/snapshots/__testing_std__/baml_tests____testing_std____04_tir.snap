@@ -8,12 +8,12 @@ source: crates/baml_tests/src/generated_tests.rs
 --- <builtin>/testing/registry.baml ---
 class testing.TestRegistration {
   name: string
-  body: () -> null
+  body: () -> null throws unknown
   runner: testing.TestRunner?
 }
 class testing.TestSetRegistration {
   name: string
-  collector: (testing.TestCollector) -> null
+  collector: (testing.TestCollector) -> null throws unknown
   runner: testing.TestSetRunner?
 }
 class testing.TestCollector {
@@ -160,7 +160,7 @@ function testing.TestRegistry.serialize(self: testing.TestRegistry) -> testing.S
     return items : testing.SerializedTestDef[]
   }
 }
-function testing.TestRegistry.run_test(self: testing.TestRegistry, name: string) -> testing.TestReport throws string | unknown {
+function testing.TestRegistry.run_test(self: testing.TestRegistry, name: string) -> testing.TestReport throws string | unknown | unknown {
   { : never
     for t in self.collector.tests
       { : void
@@ -180,7 +180,7 @@ function testing.TestRegistry.run_test(self: testing.TestRegistry, name: string)
     throw "Test not found: " + name : string
   }
 }
-function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: string) -> testing.SerializedTestDef[] throws string | unknown {
+function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: string) -> testing.SerializedTestDef[] throws string | unknown | unknown {
   { : never
     for ts in self.collector.testsets
       { : void

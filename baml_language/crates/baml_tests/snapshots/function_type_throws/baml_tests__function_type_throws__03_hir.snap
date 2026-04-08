@@ -55,6 +55,123 @@ function user.make_pure_handler() -> user.PureHandler  [expr] {
 function user.make_throwing_handler() -> user.ThrowingHandler  [expr] {
   {  } user.ThrowingHandler { run: () -> null { { throw "error" } } }
 }
+function user.compose(f: (user.A) -> user.B, g: (user.B) -> user.C) -> (user.A) -> user.C  [expr] {
+  {  }
+}
+function user.test_compose_both_throw() -> (int) -> string  [expr] {
+  {  } compose((x: int) -> int { { throw "string error" } }, (y: int) -> string { { throw 42 } })
+}
+function user.test_compose_first_throws() -> (int) -> string  [expr] {
+  {  } compose((x: int) -> int { { throw "f failed" } }, (y: int) -> string { {  } "result" })
+}
+function user.test_compose_pure() -> (int) -> string  [expr] {
+  {  } compose((x: int) -> int { {  } x Mul 2 }, (y: int) -> string { {  } "result" })
+}
+function user.test_compose_second_throws() -> (int) -> string  [expr] {
+  {  } compose((x: int) -> int { {  } x Mul 2 }, (y: int) -> string { { throw "g failed" } })
+}
+class user.ApiError {
+  code: int
+  message: string
+}
+class user.ClassThrowingHandler {
+  run: () -> null
+}
+class user.EnumThrowingHandler {
+  run: () -> null
+}
+class user.MixedThrowingHandler {
+  run: () -> null
+}
+class user.ValidationError {
+  field: string
+  reason: string
+}
+enum user.ErrorKind {NotFound, Unauthorized, ValidationFailed, RateLimited}
+type user.ClassThrower = () -> int
+type user.EnumThrower = () -> int
+type user.MixedThrower = () -> int
+function user.apply_generic_class(f: () -> int) -> int  [expr] {
+  {  } f()
+}
+function user.apply_generic_enum(f: () -> int) -> int  [expr] {
+  {  } f()
+}
+function user.apply_may_throw_class(f: () -> int) -> int  [expr] {
+  {  } f()
+}
+function user.apply_may_throw_enum(f: () -> int) -> int  [expr] {
+  {  } f()
+}
+function user.catch_class_error(x: int) -> string  [expr] {
+  {  } throw_class_instance(x) catch (e) { _: user.ApiError => "api error: " Add e.message }
+}
+function user.catch_enum_variants(x: int) -> string  [expr] {
+  {  } throw_enum_variant(x) catch (e) { user.ErrorKind.NotFound => "not found", user.ErrorKind.Unauthorized => "unauthorized", _ => "other error" }
+}
+function user.catch_mixed_errors(x: int) -> string  [expr] {
+  {  } throw_enum_or_class(x) catch (e) { user.ErrorKind.RateLimited => "rate limited", _: user.ApiError => "api error", _ => "unknown" }
+}
+function user.make_class_handler() -> user.ClassThrowingHandler  [expr] {
+  {  } user.ClassThrowingHandler { run: () -> null { { throw user.ApiError { code: 500, message: "fail" } } } }
+}
+function user.make_enum_handler() -> user.EnumThrowingHandler  [expr] {
+  {  } user.EnumThrowingHandler { run: () -> null { { throw ErrorKind.NotFound } } }
+}
+function user.test_apply_class_thrower() -> int  [expr] {
+  {  } apply_may_throw_class(() -> int { { throw user.ApiError { code: 401, message: "unauthorized" } } })
+}
+function user.test_apply_enum_thrower() -> int  [expr] {
+  {  } apply_may_throw_enum(() -> int { { throw ErrorKind.Unauthorized } })
+}
+function user.test_lambda_throws_class() -> int  [expr] {
+  { let f = () -> int { { throw user.ValidationError { field: "email", reason: "invalid format" } } } } f()
+}
+function user.test_lambda_throws_enum() -> int  [expr] {
+  { let f = () -> int { { throw ErrorKind.ValidationFailed } } } f()
+}
+function user.test_rethrows_class() -> int  [expr] {
+  {  } apply_generic_class(() -> int { { throw user.ValidationError { field: "name", reason: "too short" } } })
+}
+function user.test_rethrows_enum() -> int  [expr] {
+  {  } apply_generic_enum(() -> int { { throw ErrorKind.NotFound } })
+}
+function user.test_type_alias_class() -> int  [expr] {
+  {  } use_class_thrower(() -> int { { throw user.ApiError { code: 422, message: "invalid" } } })
+}
+function user.test_type_alias_enum() -> int  [expr] {
+  {  } use_enum_thrower(() -> int { { throw ErrorKind.ValidationFailed } })
+}
+function user.test_type_alias_mixed() -> int  [expr] {
+  {  } use_mixed_thrower(() -> int { { throw "string error" } })
+}
+function user.throw_any_error(x: int) -> string  [expr] {
+  {  } match (x) { 0 => throw "simple string error", 1 => throw ErrorKind.NotFound, 2 => throw user.ApiError { code: 400, message: "bad request" }, _ => "ok" }
+}
+function user.throw_class_instance(x: int) -> string  [expr] {
+  { if (x Lt 0) { throw user.ApiError { code: 500, message: "internal error" } } } "ok"
+}
+function user.throw_enum_or_class(x: int) -> string  [expr] {
+  { if (x Eq 0) { throw ErrorKind.RateLimited }; if (x Eq 1) { throw user.ApiError { code: 503, message: "unavailable" } } } "ok"
+}
+function user.throw_enum_variant(x: int) -> string  [expr] {
+  { if (x Eq 0) { throw ErrorKind.NotFound }; if (x Eq 1) { throw ErrorKind.Unauthorized } } "ok"
+}
+function user.throw_mixed_classes(x: int) -> string  [expr] {
+  { if (x Eq 0) { throw user.ApiError { code: 404, message: "not found" } }; if (x Eq 1) { throw user.ValidationError { field: "id", reason: "required" } } } "ok"
+}
+function user.throw_various_errors(x: int) -> string  [expr] {
+  {  } match (x) { 0 => throw ErrorKind.NotFound, 1 => throw ErrorKind.Unauthorized, 2 => throw ErrorKind.ValidationFailed, _ => "ok" }
+}
+function user.use_class_thrower(f: user.ClassThrower) -> int  [expr] {
+  {  } f()
+}
+function user.use_enum_thrower(f: user.EnumThrower) -> int  [expr] {
+  {  } f()
+}
+function user.use_mixed_thrower(f: user.MixedThrower) -> int  [expr] {
+  {  } f()
+}
 function user.apply_explicit(f: () -> int) -> int  [expr] {
   {  } f()
 }

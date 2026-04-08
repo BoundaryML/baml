@@ -1,0 +1,358 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "compose"
+    GENERIC_PARAM_LIST
+      LESS "<"
+      GENERIC_PARAM "A"
+        WORD "A"
+      COMMA ","
+      GENERIC_PARAM "B"
+        WORD "B"
+      COMMA ","
+      GENERIC_PARAM "C"
+        WORD "C"
+      GREATER ">"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "f"
+        COLON ":"
+        TYPE_EXPR
+          L_PAREN "("
+          FUNCTION_TYPE_PARAM
+            TYPE_EXPR "A"
+              WORD "A"
+          R_PAREN ")"
+          ARROW "->"
+          TYPE_EXPR "B"
+            WORD "B"
+      COMMA ","
+      PARAMETER
+        WORD "g"
+        COLON ":"
+        TYPE_EXPR
+          L_PAREN "("
+          FUNCTION_TYPE_PARAM
+            TYPE_EXPR "B"
+              WORD "B"
+          R_PAREN ")"
+          ARROW "->"
+          TYPE_EXPR "C"
+            WORD "C"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR
+      L_PAREN "("
+      FUNCTION_TYPE_PARAM
+        TYPE_EXPR "A"
+          WORD "A"
+      R_PAREN ")"
+      ARROW "->"
+      TYPE_EXPR "C"
+        WORD "C"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        LAMBDA_EXPR
+          PARAMETER_LIST
+            L_PAREN "("
+            PARAMETER
+              WORD "a"
+              COLON ":"
+              TYPE_EXPR "A"
+                WORD "A"
+            R_PAREN ")"
+          ARROW "->"
+          TYPE_EXPR "C"
+            WORD "C"
+          BLOCK_EXPR
+            L_BRACE "{"
+            CALL_EXPR
+              WORD "g"
+              CALL_ARGS
+                L_PAREN "("
+                CALL_EXPR
+                  WORD "f"
+                  CALL_ARGS "(a)"
+                    L_PAREN "("
+                    WORD "a"
+                    R_PAREN ")"
+                R_PAREN ")"
+            R_BRACE "}"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "test_compose_pure"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR
+      L_PAREN "("
+      FUNCTION_TYPE_PARAM
+        TYPE_EXPR "int"
+          WORD "int"
+      R_PAREN ")"
+      ARROW "->"
+      TYPE_EXPR "string"
+        WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        CALL_EXPR
+          WORD "compose"
+          CALL_ARGS
+            L_PAREN "("
+            LAMBDA_EXPR
+              PARAMETER_LIST
+                L_PAREN "("
+                PARAMETER
+                  WORD "x"
+                  COLON ":"
+                  TYPE_EXPR "int"
+                    WORD "int"
+                R_PAREN ")"
+              ARROW "->"
+              TYPE_EXPR "int"
+                WORD "int"
+              BLOCK_EXPR
+                L_BRACE "{"
+                BINARY_EXPR "x * 2"
+                  WORD "x"
+                  STAR "*"
+                  INTEGER_LITERAL "2"
+                R_BRACE "}"
+            COMMA ","
+            LAMBDA_EXPR
+              PARAMETER_LIST
+                L_PAREN "("
+                PARAMETER
+                  WORD "y"
+                  COLON ":"
+                  TYPE_EXPR "int"
+                    WORD "int"
+                R_PAREN ")"
+              ARROW "->"
+              TYPE_EXPR "string"
+                WORD "string"
+              BLOCK_EXPR
+                L_BRACE "{"
+                STRING_LITERAL "result"
+                  QUOTE """
+                  WORD "result"
+                  QUOTE """
+                R_BRACE "}"
+            R_PAREN ")"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "test_compose_first_throws"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR
+      L_PAREN "("
+      FUNCTION_TYPE_PARAM
+        TYPE_EXPR "int"
+          WORD "int"
+      R_PAREN ")"
+      ARROW "->"
+      TYPE_EXPR "string"
+        WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        CALL_EXPR
+          WORD "compose"
+          CALL_ARGS
+            L_PAREN "("
+            LAMBDA_EXPR
+              PARAMETER_LIST
+                L_PAREN "("
+                PARAMETER
+                  WORD "x"
+                  COLON ":"
+                  TYPE_EXPR "int"
+                    WORD "int"
+                R_PAREN ")"
+              ARROW "->"
+              TYPE_EXPR "int"
+                WORD "int"
+              BLOCK_EXPR
+                L_BRACE "{"
+                THROW_STMT
+                  THROW_EXPR
+                    KW_THROW "throw"
+                    STRING_LITERAL "f failed"
+                      QUOTE """
+                      WORD "f"
+                      WORD "failed"
+                      QUOTE """
+                R_BRACE "}"
+            COMMA ","
+            LAMBDA_EXPR
+              PARAMETER_LIST
+                L_PAREN "("
+                PARAMETER
+                  WORD "y"
+                  COLON ":"
+                  TYPE_EXPR "int"
+                    WORD "int"
+                R_PAREN ")"
+              ARROW "->"
+              TYPE_EXPR "string"
+                WORD "string"
+              BLOCK_EXPR
+                L_BRACE "{"
+                STRING_LITERAL "result"
+                  QUOTE """
+                  WORD "result"
+                  QUOTE """
+                R_BRACE "}"
+            R_PAREN ")"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "test_compose_second_throws"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR
+      L_PAREN "("
+      FUNCTION_TYPE_PARAM
+        TYPE_EXPR "int"
+          WORD "int"
+      R_PAREN ")"
+      ARROW "->"
+      TYPE_EXPR "string"
+        WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        CALL_EXPR
+          WORD "compose"
+          CALL_ARGS
+            L_PAREN "("
+            LAMBDA_EXPR
+              PARAMETER_LIST
+                L_PAREN "("
+                PARAMETER
+                  WORD "x"
+                  COLON ":"
+                  TYPE_EXPR "int"
+                    WORD "int"
+                R_PAREN ")"
+              ARROW "->"
+              TYPE_EXPR "int"
+                WORD "int"
+              BLOCK_EXPR
+                L_BRACE "{"
+                BINARY_EXPR "x * 2"
+                  WORD "x"
+                  STAR "*"
+                  INTEGER_LITERAL "2"
+                R_BRACE "}"
+            COMMA ","
+            LAMBDA_EXPR
+              PARAMETER_LIST
+                L_PAREN "("
+                PARAMETER
+                  WORD "y"
+                  COLON ":"
+                  TYPE_EXPR "int"
+                    WORD "int"
+                R_PAREN ")"
+              ARROW "->"
+              TYPE_EXPR "string"
+                WORD "string"
+              BLOCK_EXPR
+                L_BRACE "{"
+                THROW_STMT
+                  THROW_EXPR
+                    KW_THROW "throw"
+                    STRING_LITERAL "g failed"
+                      QUOTE """
+                      WORD "g"
+                      WORD "failed"
+                      QUOTE """
+                R_BRACE "}"
+            R_PAREN ")"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "test_compose_both_throw"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR
+      L_PAREN "("
+      FUNCTION_TYPE_PARAM
+        TYPE_EXPR "int"
+          WORD "int"
+      R_PAREN ")"
+      ARROW "->"
+      TYPE_EXPR "string"
+        WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        CALL_EXPR
+          WORD "compose"
+          CALL_ARGS
+            L_PAREN "("
+            LAMBDA_EXPR
+              PARAMETER_LIST
+                L_PAREN "("
+                PARAMETER
+                  WORD "x"
+                  COLON ":"
+                  TYPE_EXPR "int"
+                    WORD "int"
+                R_PAREN ")"
+              ARROW "->"
+              TYPE_EXPR "int"
+                WORD "int"
+              BLOCK_EXPR
+                L_BRACE "{"
+                THROW_STMT
+                  THROW_EXPR
+                    KW_THROW "throw"
+                    STRING_LITERAL "string error"
+                      QUOTE """
+                      WORD "string"
+                      WORD "error"
+                      QUOTE """
+                R_BRACE "}"
+            COMMA ","
+            LAMBDA_EXPR
+              PARAMETER_LIST
+                L_PAREN "("
+                PARAMETER
+                  WORD "y"
+                  COLON ":"
+                  TYPE_EXPR "int"
+                    WORD "int"
+                R_PAREN ")"
+              ARROW "->"
+              TYPE_EXPR "string"
+                WORD "string"
+              BLOCK_EXPR
+                L_BRACE "{"
+                THROW_STMT
+                  THROW_EXPR "throw 42"
+                    KW_THROW "throw"
+                    INTEGER_LITERAL "42"
+                R_BRACE "}"
+            R_PAREN ")"
+        R_BRACE "}"
+
+=== ERRORS ===
+None
