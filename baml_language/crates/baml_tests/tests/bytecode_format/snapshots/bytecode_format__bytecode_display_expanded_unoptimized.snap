@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/tests/bytecode_format/main.rs
+assertion_line: 43
 ---
 function assert.contains(haystack: string, needle: string) -> null {
      0    load_var 1             (haystack)
@@ -113,7 +114,7 @@ function testing.TestCollector.new(prefix: string) -> testing.TestCollector {
      10   return              
 }
 
-function testing.TestCollector.register_test(self: null, name: string, body: () -> null, runner: (() -> testing.TestReport) -> () -> testing.TestReport?) -> null {
+function testing.TestCollector.register_test(self: null, name: string, body: () -> null, runner: ((() -> testing.TestReport) -> () -> testing.TestReport)?) -> null {
      0    load_var 1             (self)
      1    load_field 0           (prefix)
      2    load_const 0           ("")
@@ -213,7 +214,7 @@ function testing.TestCollector.register_test(self: null, name: string, body: () 
      96   jump -69               (to 27)
 }
 
-function testing.TestCollector.register_test_set(self: null, name: string, collector: (testing.TestCollector) -> null, runner: (() -> testing.TestSetReport) -> () -> testing.TestSetReport?) -> null {
+function testing.TestCollector.register_test_set(self: null, name: string, collector: (testing.TestCollector) -> null, runner: ((() -> testing.TestSetReport) -> () -> testing.TestSetReport)?) -> null {
      0    load_var 1             (self)
      1    load_field 0           (prefix)
      2    load_const 0           ("")
@@ -622,7 +623,7 @@ function testing.TestRegistry.serialize(self: null) -> (testing.SerializedTest |
      103   jump -95                (to 8)
 }
 
-function testing.run_test(body: () -> null, runner: (() -> testing.TestReport) -> () -> testing.TestReport?) -> testing.TestReport {
+function testing.run_test(body: () -> null, runner: ((() -> testing.TestReport) -> () -> testing.TestReport)?) -> testing.TestReport {
      0    load_var 1             
      1    make_cell              
      2    store_var 1            
@@ -651,7 +652,7 @@ function testing.run_test(body: () -> null, runner: (() -> testing.TestReport) -
      25   return                 
 }
 
-function testing.run_testset(run_children: () -> testing.TestSetReport, runner: (() -> testing.TestSetReport) -> () -> testing.TestSetReport?) -> testing.TestSetReport {
+function testing.run_testset(run_children: () -> testing.TestSetReport, runner: ((() -> testing.TestSetReport) -> () -> testing.TestSetReport)?) -> testing.TestSetReport {
      0    load_var 2             (runner)
      1    load_const 0           (null)
      2    cmp_op ==              
