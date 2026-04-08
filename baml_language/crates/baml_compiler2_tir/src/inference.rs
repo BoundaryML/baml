@@ -74,6 +74,8 @@ pub enum MemberResolution<'db> {
 pub struct ScopeInference<'db> {
     /// Type of every expression within this scope (NOT nested child scopes).
     expressions: FxHashMap<ExprId, Ty>,
+    /// Fully resolved type aliases visible to this scope, including dependency exports.
+    aliases: HashMap<crate::ty::QualifiedTypeName, Ty>,
     /// Binding types: the type a variable is bound to after widening/annotation.
     /// May differ from the initializer expression type (e.g. `let x = 1` has
     /// expression type `Literal(1, Fresh)` but binding type `int`).
@@ -172,16 +174,13 @@ impl<'db> ScopeInference<'db> {
         package_id: PackageId<'db>,
         body: &baml_compiler2_ast::ExprBody,
     ) -> crate::ty::Ty {
-        let pkg_items = baml_compiler2_ppir::package_items(db, package_id);
-        let aliases = collect_type_aliases(db, pkg_items);
-
         let facts = crate::effective_throws::collect_effective_throws(
             db,
             package_id,
             body,
             &self.expressions,
             &self.catch_residual_throws,
-            &aliases,
+            &self.aliases,
             false,
             false,
         );
@@ -249,6 +248,19 @@ fn find_lambda_by_span<'a>(
     None
 }
 
+fn extend_generic_params_with_enclosing_lambdas(
+    generic_params: &mut Vec<Name>,
+    body: &ExprBody,
+    source_map: &AstSourceMap,
+    enclosing_lambda_spans: &[TextRange],
+) {
+    for lambda_span in enclosing_lambda_spans.iter().rev() {
+        if let Some((lambda_def, _, _, _)) = find_lambda_by_span(body, source_map, *lambda_span) {
+            generic_params.extend(lambda_def.generic_params.iter().cloned());
+        }
+    }
+}
+
 /// Per-scope type inference — the primary Salsa query for type checking.
 ///
 /// Returns expression types for a single scope. Lambda/closure bodies are
@@ -288,7 +300,8 @@ pub fn infer_scope_types<'db>(
         }
     }
     let context = InferContext::new(db, scope_id);
-    let mut builder = TypeInferenceBuilder::new(context, res_ctx, pkg_id, scope_id, aliases);
+    let mut builder =
+        TypeInferenceBuilder::new(context, res_ctx, pkg_id, scope_id, aliases.clone());
 
     // Dispatch based on scope kind
     match &scope.kind {
@@ -462,9 +475,13 @@ pub fn infer_scope_types<'db>(
             }
 
             // Walk ancestors to find a Function or Let scope that has a body.
+            let mut enclosing_lambda_spans = Vec::new();
             'ancestor_walk: for ancestor_fsi in index.ancestor_scopes(file_scope) {
                 let ancestor_scope = &index.scopes[ancestor_fsi.index() as usize];
                 match &ancestor_scope.kind {
+                    ScopeKind::Lambda => {
+                        enclosing_lambda_spans.push(ancestor_scope.range);
+                    }
                     ScopeKind::Function => {
                         // Find the function by span + name in the item tree
                         for func_data in item_tree.functions.values() {
@@ -483,8 +500,33 @@ pub fn infer_scope_types<'db>(
                                 if let Some((func_def, lambda_body, _lambda_sm, _lambda_expr_id)) =
                                     find_lambda_by_span(func_body, func_sm, lambda_span)
                                 {
-                                    // Seed builder with lambda params
-                                    let generic_params: Vec<Name> = func_def.generic_params.clone();
+                                    // Seed builder with the full generic scope:
+                                    // enclosing class/function generics, then outer lambda
+                                    // generics, then the lambda's own generic params.
+                                    let mut generic_params = func_data.generic_params.clone();
+                                    if let Some(parent_idx) = ancestor_scope.parent {
+                                        let parent = &index.scopes[parent_idx.index() as usize];
+                                        if matches!(parent.kind, ScopeKind::Class) {
+                                            if let Some(class_name) = &parent.name {
+                                                for class_data in item_tree.classes.values() {
+                                                    if class_data.name == *class_name {
+                                                        let mut merged =
+                                                            class_data.generic_params.clone();
+                                                        merged.extend(generic_params);
+                                                        generic_params = merged;
+                                                        break;
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                    extend_generic_params_with_enclosing_lambdas(
+                                        &mut generic_params,
+                                        func_body,
+                                        func_sm,
+                                        &enclosing_lambda_spans,
+                                    );
+                                    generic_params.extend(func_def.generic_params.iter().cloned());
                                     builder.set_generic_params(generic_params.clone());
                                     for param in &func_def.params {
                                         let param_ty = param
@@ -540,8 +582,17 @@ pub fn infer_scope_types<'db>(
                                 if let Some((func_def, lambda_body, _lambda_sm, _lambda_expr_id)) =
                                     find_lambda_by_span(let_body, &let_sm, lambda_span)
                                 {
-                                    // Seed builder with lambda params
-                                    let generic_params: Vec<Name> = func_def.generic_params.clone();
+                                    // Top-level lets have no own generic params, but nested
+                                    // lambdas can still inherit generic params from enclosing
+                                    // lambdas inside the initializer.
+                                    let mut generic_params = Vec::new();
+                                    extend_generic_params_with_enclosing_lambdas(
+                                        &mut generic_params,
+                                        let_body,
+                                        &let_sm,
+                                        &enclosing_lambda_spans,
+                                    );
+                                    generic_params.extend(func_def.generic_params.iter().cloned());
                                     builder.set_generic_params(generic_params.clone());
                                     for param in &func_def.params {
                                         let param_ty = param
@@ -630,6 +681,7 @@ pub fn infer_scope_types<'db>(
 
     ScopeInference {
         expressions,
+        aliases,
         bindings,
         resolutions,
         exhaustive_matches,

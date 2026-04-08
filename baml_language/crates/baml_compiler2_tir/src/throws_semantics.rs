@@ -185,8 +185,15 @@ pub(crate) fn function_shape_matches_ignoring_outer_throws(
     expected: &Ty,
     aliases: &HashMap<QualifiedTypeName, Ty>,
 ) -> bool {
-    let got_resolved = resolve_alias_chain(got, aliases);
-    let expected_resolved = resolve_alias_chain(expected, aliases);
+    let mut got_resolved = resolve_alias_chain(got, aliases);
+    let mut expected_resolved = resolve_alias_chain(expected, aliases);
+
+    while let (Ty::Optional(got_inner, _), Ty::Optional(expected_inner, _)) =
+        (&got_resolved, &expected_resolved)
+    {
+        got_resolved = resolve_alias_chain(got_inner.as_ref(), aliases);
+        expected_resolved = resolve_alias_chain(expected_inner.as_ref(), aliases);
+    }
 
     match (got_resolved, expected_resolved) {
         (
@@ -246,5 +253,40 @@ fn declared_covers_fact(
             )
         }
         _ => normalize::is_subtype_of(fact, declared, aliases),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use super::function_shape_matches_ignoring_outer_throws;
+    use crate::ty::{PrimitiveType, Ty, TyAttr};
+
+    #[test]
+    fn optional_function_shapes_match_ignoring_outer_throws() {
+        let aliases = HashMap::new();
+        let got = Ty::Optional(
+            Box::new(Ty::Function {
+                params: vec![(None, Ty::Primitive(PrimitiveType::Int, TyAttr::default()))],
+                ret: Box::new(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
+                throws: Box::new(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
+                attr: TyAttr::default(),
+            }),
+            TyAttr::default(),
+        );
+        let expected = Ty::Optional(
+            Box::new(Ty::Function {
+                params: vec![(None, Ty::Primitive(PrimitiveType::Int, TyAttr::default()))],
+                ret: Box::new(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
+                throws: Box::new(Ty::Primitive(PrimitiveType::Bool, TyAttr::default())),
+                attr: TyAttr::default(),
+            }),
+            TyAttr::default(),
+        );
+
+        assert!(function_shape_matches_ignoring_outer_throws(
+            &got, &expected, &aliases
+        ));
     }
 }
