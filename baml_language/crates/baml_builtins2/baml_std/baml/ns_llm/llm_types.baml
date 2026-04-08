@@ -225,6 +225,8 @@ class Client {
   }
 }
 
+// @providers-no-options: openai, openai-generic, openai-responses, ollama, openrouter, google-ai, fallback, round-robin
+
 class PrimitiveClientOptions {
   model string | null
   base_url string | null
@@ -244,6 +246,7 @@ class PrimitiveClientOptions {
   request_body map<string, unknown>
 }
 
+// @providers: azure-openai
 class AzureOpenAiOptions {
   resource_name string | null
   deployment_id string | null
@@ -251,10 +254,12 @@ class AzureOpenAiOptions {
   max_tokens int | null
 }
 
+// @providers: anthropic
 class AnthropicOptions {
   max_tokens int | null
 }
 
+// @providers: vertex-ai
 class VertexAiOptions {
   credentials string | null
   credentials_content string | null
@@ -262,6 +267,7 @@ class VertexAiOptions {
   project_id string | null
 }
 
+// @providers: aws-bedrock
 class BedrockOptions {
   region string | null
   endpoint_url string | null

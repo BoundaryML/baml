@@ -76,92 +76,120 @@ function $init() -> null {
 
 function user.ArrayConfigClient$new() -> null {
     alloc_instance baml.llm.PrimitiveClient
+    copy 0
     load_const "ArrayConfigClient"
-    init_field .name
+    store_field .name
+    copy 0
     load_const "openai"
-    init_field .provider
+    store_field .provider
+    copy 0
     alloc_instance baml.llm.PrimitiveClientOptions
+    copy 0
     load_const "gpt-4"
-    init_field .model
-    load_const "https://api.openai.com/v1"
-    init_field .base_url
+    store_field .model
+    copy 0
     load_const null
-    init_field .allowed_role_metadata
+    store_field .base_url
+    copy 0
     load_const null
-    init_field .finish_reason_allow_list
+    store_field .allowed_role_metadata
+    copy 0
     load_const null
-    init_field .finish_reason_deny_list
+    store_field .finish_reason_allow_list
+    copy 0
     load_const null
-    init_field .supports_streaming
-    load_const "system"
-    init_field .default_role
-    load_const "system"
-    load_const "user"
-    load_const "assistant"
-    alloc_array 3
-    init_field .allowed_roles
+    store_field .finish_reason_deny_list
+    copy 0
     load_const null
-    init_field .remap_roles
+    store_field .supports_streaming
+    copy 0
     load_const null
-    init_field .api_key
+    store_field .default_role
+    copy 0
     load_const null
-    init_field .provider_options
+    store_field .allowed_roles
+    copy 0
+    load_const null
+    store_field .remap_roles
+    copy 0
+    load_const null
+    store_field .api_key
+    copy 0
+    load_const null
+    store_field .provider_options
+    copy 0
     alloc_map 0
-    init_field .headers
+    store_field .headers
+    copy 0
     alloc_map 0
-    init_field .query_params
+    store_field .query_params
+    copy 0
     load_const "END"
     load_const "STOP"
     load_const "DONE"
     alloc_array 3
     load_const "stop_sequences"
     alloc_map 1
-    init_field .request_body
-    init_field .options
+    store_field .request_body
+    store_field .options
     return
 }
 
 function user.ArrayOfObjectsClient$new() -> null {
     alloc_instance baml.llm.PrimitiveClient
+    copy 0
     load_const "ArrayOfObjectsClient"
-    init_field .name
+    store_field .name
+    copy 0
     load_const "openai"
-    init_field .provider
+    store_field .provider
+    copy 0
     alloc_instance baml.llm.PrimitiveClientOptions
+    copy 0
     load_const "gpt-4"
-    init_field .model
-    load_const "https://api.openai.com/v1"
-    init_field .base_url
+    store_field .model
+    copy 0
     load_const null
-    init_field .allowed_role_metadata
+    store_field .base_url
+    copy 0
     load_const null
-    init_field .finish_reason_allow_list
+    store_field .allowed_role_metadata
+    copy 0
     load_const null
-    init_field .finish_reason_deny_list
+    store_field .finish_reason_allow_list
+    copy 0
     load_const null
-    init_field .supports_streaming
-    load_const "system"
-    init_field .default_role
-    load_const "system"
-    load_const "user"
-    load_const "assistant"
-    alloc_array 3
-    init_field .allowed_roles
+    store_field .finish_reason_deny_list
+    copy 0
     load_const null
-    init_field .remap_roles
+    store_field .supports_streaming
+    copy 0
     load_const null
-    init_field .api_key
+    store_field .default_role
+    copy 0
     load_const null
-    init_field .provider_options
+    store_field .allowed_roles
+    copy 0
+    load_const null
+    store_field .remap_roles
+    copy 0
+    load_const null
+    store_field .api_key
+    copy 0
+    load_const null
+    store_field .provider_options
+    copy 0
     alloc_map 0
-    init_field .headers
+    store_field .headers
+    copy 0
     alloc_map 0
-    init_field .query_params
+    store_field .query_params
+    copy 0
     alloc_array 0
     load_const "tools"
     alloc_map 1
-    init_field .request_body
-    init_field .options
+    store_field .request_body
+    store_field .options
     return
 }
 
@@ -548,43 +576,57 @@ function user.AssertStmts(x: int, y: int) -> int {
 
 function user.BasicClient$new() -> null {
     alloc_instance baml.llm.PrimitiveClient
+    copy 0
     load_const "BasicClient"
-    init_field .name
+    store_field .name
+    copy 0
     load_const "openai"
-    init_field .provider
+    store_field .provider
+    copy 0
     alloc_instance baml.llm.PrimitiveClientOptions
+    copy 0
     load_const "gpt-4"
-    init_field .model
-    load_const "https://api.openai.com/v1"
-    init_field .base_url
+    store_field .model
+    copy 0
     load_const null
-    init_field .allowed_role_metadata
+    store_field .base_url
+    copy 0
     load_const null
-    init_field .finish_reason_allow_list
+    store_field .allowed_role_metadata
+    copy 0
     load_const null
-    init_field .finish_reason_deny_list
+    store_field .finish_reason_allow_list
+    copy 0
     load_const null
-    init_field .supports_streaming
-    load_const "system"
-    init_field .default_role
-    load_const "system"
-    load_const "user"
-    load_const "assistant"
-    alloc_array 3
-    init_field .allowed_roles
+    store_field .finish_reason_deny_list
+    copy 0
     load_const null
-    init_field .remap_roles
+    store_field .supports_streaming
+    copy 0
     load_const null
-    init_field .api_key
+    store_field .default_role
+    copy 0
     load_const null
-    init_field .provider_options
+    store_field .allowed_roles
+    copy 0
+    load_const null
+    store_field .remap_roles
+    copy 0
+    load_const null
+    store_field .api_key
+    copy 0
+    load_const null
+    store_field .provider_options
+    copy 0
     alloc_map 0
-    init_field .headers
+    store_field .headers
+    copy 0
     alloc_map 0
-    init_field .query_params
+    store_field .query_params
+    copy 0
     alloc_map 0
-    init_field .request_body
-    init_field .options
+    store_field .request_body
+    store_field .options
     return
 }
 
@@ -777,7 +819,13 @@ function user.BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool)
     load_var _91
     pop_jump_if_false L17
     load_var a
-    load_const 8002
+    load_const 1000
+    load_const 8
+    bin_op *
+    load_const 1
+    load_const 2
+    bin_op *
+    bin_op +
     cmp_op <
     store_var _90
 
@@ -815,10 +863,10 @@ function user.BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool)
     bin_op +
     load_const 0
     cmp_op >
-    store_var _139
-    load_var _139
-    store_var _138
-    load_var _139
+    store_var _144
+    load_var _144
+    store_var _143
+    load_var _144
     pop_jump_if_false L21
     load_var a
     load_var b
@@ -829,12 +877,12 @@ function user.BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool)
     bin_op *
     load_const 10000
     cmp_op <
-    store_var _138
+    store_var _143
 
   L21:
-    load_var _138
-    store_var _137
-    load_var _138
+    load_var _143
+    store_var _142
+    load_var _143
     pop_jump_if_false L22
     load_var a
     load_var b
@@ -845,12 +893,12 @@ function user.BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool)
     bin_op -
     load_const 0
     cmp_op !=
-    store_var _137
+    store_var _142
 
   L22:
-    load_var _137
-    store_var _136
-    load_var _137
+    load_var _142
+    store_var _141
+    load_var _142
     pop_jump_if_false L23
     load_var a
     load_var b
@@ -861,10 +909,10 @@ function user.BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool)
     bin_op *
     load_const 100
     cmp_op >=
-    store_var _136
+    store_var _141
 
   L23:
-    load_var _136
+    load_var _141
     pop_jump_if_false L24
     jump L25
 
@@ -924,58 +972,58 @@ function user.BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool)
     load_var a
     load_const 0
     cmp_op >
-    store_var _199
-    load_var _199
-    store_var _198
-    load_var _199
+    store_var _205
+    load_var _205
+    store_var _204
+    load_var _205
     pop_jump_if_false L26
     load_var b
     load_const 0
     cmp_op >
-    store_var _198
+    store_var _204
 
   L26:
-    load_var _198
-    store_var _197
-    load_var _198
+    load_var _204
+    store_var _203
+    load_var _204
     pop_jump_if_false L27
     load_var c
     load_const 0
     cmp_op >
-    store_var _197
+    store_var _203
 
   L27:
-    load_var _197
-    store_var _196
-    load_var _197
+    load_var _203
+    store_var _202
+    load_var _203
     pop_jump_if_false L28
     load_var d
     load_const 0
     cmp_op >
-    store_var _196
+    store_var _202
 
   L28:
-    load_var _196
-    store_var _195
-    load_var _196
+    load_var _202
+    store_var _201
+    load_var _202
     pop_jump_if_false L29
     load_var a
     load_var b
     cmp_op !=
-    store_var _195
+    store_var _201
 
   L29:
-    load_var _195
-    store_var _194
-    load_var _195
+    load_var _201
+    store_var _200
+    load_var _201
     pop_jump_if_false L30
     load_var b
     load_var c
     cmp_op !=
-    store_var _194
+    store_var _200
 
   L30:
-    load_var _194
+    load_var _200
     pop_jump_if_false L31
 
   L31:
@@ -993,43 +1041,57 @@ function user.BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool)
 
 function user.C$new() -> null {
     alloc_instance baml.llm.PrimitiveClient
+    copy 0
     load_const "C"
-    init_field .name
+    store_field .name
+    copy 0
     load_const "openai"
-    init_field .provider
+    store_field .provider
+    copy 0
     alloc_instance baml.llm.PrimitiveClientOptions
+    copy 0
     load_const "gpt-4"
-    init_field .model
-    load_const "https://api.openai.com/v1"
-    init_field .base_url
+    store_field .model
+    copy 0
     load_const null
-    init_field .allowed_role_metadata
+    store_field .base_url
+    copy 0
     load_const null
-    init_field .finish_reason_allow_list
+    store_field .allowed_role_metadata
+    copy 0
     load_const null
-    init_field .finish_reason_deny_list
+    store_field .finish_reason_allow_list
+    copy 0
     load_const null
-    init_field .supports_streaming
-    load_const "system"
-    init_field .default_role
-    load_const "system"
-    load_const "user"
-    load_const "assistant"
-    alloc_array 3
-    init_field .allowed_roles
+    store_field .finish_reason_deny_list
+    copy 0
     load_const null
-    init_field .remap_roles
+    store_field .supports_streaming
+    copy 0
     load_const null
-    init_field .api_key
+    store_field .default_role
+    copy 0
     load_const null
-    init_field .provider_options
+    store_field .allowed_roles
+    copy 0
+    load_const null
+    store_field .remap_roles
+    copy 0
+    load_const null
+    store_field .api_key
+    copy 0
+    load_const null
+    store_field .provider_options
+    copy 0
     alloc_map 0
-    init_field .headers
+    store_field .headers
+    copy 0
     alloc_map 0
-    init_field .query_params
+    store_field .query_params
+    copy 0
     alloc_map 0
-    init_field .request_body
-    init_field .options
+    store_field .request_body
+    store_field .options
     return
 }
 
@@ -1155,45 +1217,59 @@ function user.ChainExprs(user: ChainUser, items: ChainItem[], m: map<string, int
 
 function user.CommaClient$new() -> null {
     alloc_instance baml.llm.PrimitiveClient
+    copy 0
     load_const "CommaClient"
-    init_field .name
+    store_field .name
+    copy 0
     load_const "openai"
-    init_field .provider
+    store_field .provider
+    copy 0
     alloc_instance baml.llm.PrimitiveClientOptions
+    copy 0
     load_const "gpt-4"
-    init_field .model
-    load_const "https://api.openai.com/v1"
-    init_field .base_url
+    store_field .model
+    copy 0
     load_const null
-    init_field .allowed_role_metadata
+    store_field .base_url
+    copy 0
     load_const null
-    init_field .finish_reason_allow_list
+    store_field .allowed_role_metadata
+    copy 0
     load_const null
-    init_field .finish_reason_deny_list
+    store_field .finish_reason_allow_list
+    copy 0
     load_const null
-    init_field .supports_streaming
-    load_const "system"
-    init_field .default_role
-    load_const "system"
-    load_const "user"
-    load_const "assistant"
-    alloc_array 3
-    init_field .allowed_roles
+    store_field .finish_reason_deny_list
+    copy 0
     load_const null
-    init_field .remap_roles
+    store_field .supports_streaming
+    copy 0
     load_const null
-    init_field .api_key
+    store_field .default_role
+    copy 0
     load_const null
-    init_field .provider_options
+    store_field .allowed_roles
+    copy 0
+    load_const null
+    store_field .remap_roles
+    copy 0
+    load_const null
+    store_field .api_key
+    copy 0
+    load_const null
+    store_field .provider_options
+    copy 0
     alloc_map 0
-    init_field .headers
+    store_field .headers
+    copy 0
     alloc_map 0
-    init_field .query_params
+    store_field .query_params
+    copy 0
     load_const 100
     load_const "max_tokens"
     alloc_map 1
-    init_field .request_body
-    init_field .options
+    store_field .request_body
+    store_field .options
     return
 }
 
@@ -1371,36 +1447,48 @@ function user.DeeplyNestedBody(a: int, b: int, c: int) -> int {
 
 function user.DeeplyNestedClient$new() -> null {
     alloc_instance baml.llm.PrimitiveClient
+    copy 0
     load_const "DeeplyNestedClient"
-    init_field .name
+    store_field .name
+    copy 0
     load_const "openai"
-    init_field .provider
+    store_field .provider
+    copy 0
     alloc_instance baml.llm.PrimitiveClientOptions
+    copy 0
     load_const "gpt-4"
-    init_field .model
-    load_const "https://api.openai.com/v1"
-    init_field .base_url
+    store_field .model
+    copy 0
     load_const null
-    init_field .allowed_role_metadata
+    store_field .base_url
+    copy 0
     load_const null
-    init_field .finish_reason_allow_list
+    store_field .allowed_role_metadata
+    copy 0
     load_const null
-    init_field .finish_reason_deny_list
+    store_field .finish_reason_allow_list
+    copy 0
     load_const null
-    init_field .supports_streaming
-    load_const "system"
-    init_field .default_role
-    load_const "system"
-    load_const "user"
-    load_const "assistant"
-    alloc_array 3
-    init_field .allowed_roles
+    store_field .finish_reason_deny_list
+    copy 0
     load_const null
-    init_field .remap_roles
+    store_field .supports_streaming
+    copy 0
     load_const null
-    init_field .api_key
+    store_field .default_role
+    copy 0
     load_const null
-    init_field .provider_options
+    store_field .allowed_roles
+    copy 0
+    load_const null
+    store_field .remap_roles
+    copy 0
+    load_const null
+    store_field .api_key
+    copy 0
+    load_const null
+    store_field .provider_options
+    copy 0
     load_const true
     load_const 30000
     load_const "platform"
@@ -1414,57 +1502,73 @@ function user.DeeplyNestedClient$new() -> null {
     alloc_map 3
     load_const "custom_config"
     alloc_map 1
-    init_field .headers
+    store_field .headers
+    copy 0
     alloc_map 0
-    init_field .query_params
+    store_field .query_params
+    copy 0
     alloc_map 0
-    init_field .request_body
-    init_field .options
+    store_field .request_body
+    store_field .options
     return
 }
 
 function user.EnvClient$new() -> null {
     load_const "OPENAI_API_KEY"
     call baml.env.get_or_panic
-    store_var _3
+    store_var _2
     alloc_instance baml.llm.PrimitiveClient
+    copy 0
     load_const "EnvClient"
-    init_field .name
+    store_field .name
+    copy 0
     load_const "openai"
-    init_field .provider
+    store_field .provider
+    copy 0
     alloc_instance baml.llm.PrimitiveClientOptions
+    copy 0
     load_const "gpt-4"
-    init_field .model
-    load_const "https://api.openai.com/v1"
-    init_field .base_url
+    store_field .model
+    copy 0
     load_const null
-    init_field .allowed_role_metadata
+    store_field .base_url
+    copy 0
     load_const null
-    init_field .finish_reason_allow_list
+    store_field .allowed_role_metadata
+    copy 0
     load_const null
-    init_field .finish_reason_deny_list
+    store_field .finish_reason_allow_list
+    copy 0
     load_const null
-    init_field .supports_streaming
-    load_const "system"
-    init_field .default_role
-    load_const "system"
-    load_const "user"
-    load_const "assistant"
-    alloc_array 3
-    init_field .allowed_roles
+    store_field .finish_reason_deny_list
+    copy 0
     load_const null
-    init_field .remap_roles
-    load_var _3
-    init_field .api_key
+    store_field .supports_streaming
+    copy 0
     load_const null
-    init_field .provider_options
+    store_field .default_role
+    copy 0
+    load_const null
+    store_field .allowed_roles
+    copy 0
+    load_const null
+    store_field .remap_roles
+    copy 0
+    load_var _2
+    store_field .api_key
+    copy 0
+    load_const null
+    store_field .provider_options
+    copy 0
     alloc_map 0
-    init_field .headers
+    store_field .headers
+    copy 0
     alloc_map 0
-    init_field .query_params
+    store_field .query_params
+    copy 0
     alloc_map 0
-    init_field .request_body
-    init_field .options
+    store_field .request_body
+    store_field .options
     return
 }
 
@@ -1484,43 +1588,57 @@ function user.ExtraWhitespace(a: int, b: int) -> int {
 
 function user.ExtraWhitespaceClient$new() -> null {
     alloc_instance baml.llm.PrimitiveClient
+    copy 0
     load_const "ExtraWhitespaceClient"
-    init_field .name
+    store_field .name
+    copy 0
     load_const "openai"
-    init_field .provider
+    store_field .provider
+    copy 0
     alloc_instance baml.llm.PrimitiveClientOptions
+    copy 0
     load_const "gpt-4"
-    init_field .model
-    load_const "https://api.openai.com/v1"
-    init_field .base_url
+    store_field .model
+    copy 0
     load_const null
-    init_field .allowed_role_metadata
+    store_field .base_url
+    copy 0
     load_const null
-    init_field .finish_reason_allow_list
+    store_field .allowed_role_metadata
+    copy 0
     load_const null
-    init_field .finish_reason_deny_list
+    store_field .finish_reason_allow_list
+    copy 0
     load_const null
-    init_field .supports_streaming
-    load_const "system"
-    init_field .default_role
-    load_const "system"
-    load_const "user"
-    load_const "assistant"
-    alloc_array 3
-    init_field .allowed_roles
+    store_field .finish_reason_deny_list
+    copy 0
     load_const null
-    init_field .remap_roles
+    store_field .supports_streaming
+    copy 0
     load_const null
-    init_field .api_key
+    store_field .default_role
+    copy 0
     load_const null
-    init_field .provider_options
+    store_field .allowed_roles
+    copy 0
+    load_const null
+    store_field .remap_roles
+    copy 0
+    load_const null
+    store_field .api_key
+    copy 0
+    load_const null
+    store_field .provider_options
+    copy 0
     alloc_map 0
-    init_field .headers
+    store_field .headers
+    copy 0
     alloc_map 0
-    init_field .query_params
+    store_field .query_params
+    copy 0
     alloc_map 0
-    init_field .request_body
-    init_field .options
+    store_field .request_body
+    store_field .options
     return
 }
 
@@ -1538,40 +1656,54 @@ function user.FinalExpr(a: int, b: int) -> int {
 
 function user.FullClient$new() -> null {
     alloc_instance baml.llm.PrimitiveClient
+    copy 0
     load_const "FullClient"
-    init_field .name
+    store_field .name
+    copy 0
     load_const "openai"
-    init_field .provider
+    store_field .provider
+    copy 0
     alloc_instance baml.llm.PrimitiveClientOptions
+    copy 0
     load_const "gpt-4"
-    init_field .model
-    load_const "https://api.openai.com/v1"
-    init_field .base_url
+    store_field .model
+    copy 0
     load_const null
-    init_field .allowed_role_metadata
+    store_field .base_url
+    copy 0
     load_const null
-    init_field .finish_reason_allow_list
+    store_field .allowed_role_metadata
+    copy 0
     load_const null
-    init_field .finish_reason_deny_list
+    store_field .finish_reason_allow_list
+    copy 0
     load_const null
-    init_field .supports_streaming
-    load_const "system"
-    init_field .default_role
-    load_const "system"
-    load_const "user"
-    load_const "assistant"
-    alloc_array 3
-    init_field .allowed_roles
+    store_field .finish_reason_deny_list
+    copy 0
     load_const null
-    init_field .remap_roles
+    store_field .supports_streaming
+    copy 0
     load_const null
-    init_field .api_key
+    store_field .default_role
+    copy 0
     load_const null
-    init_field .provider_options
+    store_field .allowed_roles
+    copy 0
+    load_const null
+    store_field .remap_roles
+    copy 0
+    load_const null
+    store_field .api_key
+    copy 0
+    load_const null
+    store_field .provider_options
+    copy 0
     alloc_map 0
-    init_field .headers
+    store_field .headers
+    copy 0
     alloc_map 0
-    init_field .query_params
+    store_field .query_params
+    copy 0
     load_const 100
     load_const 0.7
     load_const 0.9
@@ -1579,8 +1711,8 @@ function user.FullClient$new() -> null {
     load_const "temperature"
     load_const "top_p"
     alloc_map 3
-    init_field .request_body
-    init_field .options
+    store_field .request_body
+    store_field .options
     return
 }
 
@@ -1697,17 +1829,22 @@ function user.LlmReversedOrder$render_prompt(text: string) -> baml.llm.PromptAst
 
 function user.LlmStringClient(text: string) -> string {
     alloc_instance baml.llm.Client
+    copy 0
     load_const "openai/gpt-4o"
-    init_field .name
+    store_field .name
+    copy 0
     load_const baml.llm.ClientType.Primitive
     alloc_variant baml.llm.ClientType
-    init_field .client_type
+    store_field .client_type
+    copy 0
     alloc_array 0
-    init_field .sub_clients
+    store_field .sub_clients
+    copy 0
     load_const null
-    init_field .retry
+    store_field .retry
+    copy 0
     load_const 0
-    init_field .counter
+    store_field .counter
     load_const "LlmStringClient"
     load_var text
     load_const "text"
@@ -1718,17 +1855,22 @@ function user.LlmStringClient(text: string) -> string {
 
 function user.LlmStringClient$build_request(text: string) -> baml.http.Request {
     alloc_instance baml.llm.Client
+    copy 0
     load_const "openai/gpt-4o"
-    init_field .name
+    store_field .name
+    copy 0
     load_const baml.llm.ClientType.Primitive
     alloc_variant baml.llm.ClientType
-    init_field .client_type
+    store_field .client_type
+    copy 0
     alloc_array 0
-    init_field .sub_clients
+    store_field .sub_clients
+    copy 0
     load_const null
-    init_field .retry
+    store_field .retry
+    copy 0
     load_const 0
-    init_field .counter
+    store_field .counter
     load_const "LlmStringClient"
     load_var text
     load_const "text"
@@ -1746,17 +1888,22 @@ function user.LlmStringClient$parse(json: string) -> string {
 
 function user.LlmStringClient$render_prompt(text: string) -> baml.llm.PromptAst {
     alloc_instance baml.llm.Client
+    copy 0
     load_const "openai/gpt-4o"
-    init_field .name
+    store_field .name
+    copy 0
     load_const baml.llm.ClientType.Primitive
     alloc_variant baml.llm.ClientType
-    init_field .client_type
+    store_field .client_type
+    copy 0
     alloc_array 0
-    init_field .sub_clients
+    store_field .sub_clients
+    copy 0
     load_const null
-    init_field .retry
+    store_field .retry
+    copy 0
     load_const 0
-    init_field .counter
+    store_field .counter
     load_const "LlmStringClient"
     load_var text
     load_const "text"
@@ -1822,40 +1969,54 @@ function user.LlmWithLongSignature$render_prompt(first_context: string, second_c
 
 function user.LongArrayClient$new() -> null {
     alloc_instance baml.llm.PrimitiveClient
+    copy 0
     load_const "LongArrayClient"
-    init_field .name
+    store_field .name
+    copy 0
     load_const "openai"
-    init_field .provider
+    store_field .provider
+    copy 0
     alloc_instance baml.llm.PrimitiveClientOptions
+    copy 0
     load_const "gpt-4"
-    init_field .model
-    load_const "https://api.openai.com/v1"
-    init_field .base_url
+    store_field .model
+    copy 0
     load_const null
-    init_field .allowed_role_metadata
+    store_field .base_url
+    copy 0
     load_const null
-    init_field .finish_reason_allow_list
+    store_field .allowed_role_metadata
+    copy 0
     load_const null
-    init_field .finish_reason_deny_list
+    store_field .finish_reason_allow_list
+    copy 0
     load_const null
-    init_field .supports_streaming
-    load_const "system"
-    init_field .default_role
-    load_const "system"
-    load_const "user"
-    load_const "assistant"
-    alloc_array 3
-    init_field .allowed_roles
+    store_field .finish_reason_deny_list
+    copy 0
     load_const null
-    init_field .remap_roles
+    store_field .supports_streaming
+    copy 0
     load_const null
-    init_field .api_key
+    store_field .default_role
+    copy 0
     load_const null
-    init_field .provider_options
+    store_field .allowed_roles
+    copy 0
+    load_const null
+    store_field .remap_roles
+    copy 0
+    load_const null
+    store_field .api_key
+    copy 0
+    load_const null
+    store_field .provider_options
+    copy 0
     alloc_map 0
-    init_field .headers
+    store_field .headers
+    copy 0
     alloc_map 0
-    init_field .query_params
+    store_field .query_params
+    copy 0
     load_const "STOP_GENERATION_NOW"
     load_const "END_OF_RESPONSE_MARKER"
     load_const "COMPLETION_FINISHED_SIGNAL"
@@ -1864,52 +2025,66 @@ function user.LongArrayClient$new() -> null {
     alloc_array 5
     load_const "stop_sequences"
     alloc_map 1
-    init_field .request_body
-    init_field .options
+    store_field .request_body
+    store_field .options
     return
 }
 
 function user.LongArrayOfObjectsClient$new() -> null {
     alloc_instance baml.llm.PrimitiveClient
+    copy 0
     load_const "LongArrayOfObjectsClient"
-    init_field .name
+    store_field .name
+    copy 0
     load_const "openai"
-    init_field .provider
+    store_field .provider
+    copy 0
     alloc_instance baml.llm.PrimitiveClientOptions
+    copy 0
     load_const "gpt-4"
-    init_field .model
-    load_const "https://api.openai.com/v1"
-    init_field .base_url
+    store_field .model
+    copy 0
     load_const null
-    init_field .allowed_role_metadata
+    store_field .base_url
+    copy 0
     load_const null
-    init_field .finish_reason_allow_list
+    store_field .allowed_role_metadata
+    copy 0
     load_const null
-    init_field .finish_reason_deny_list
+    store_field .finish_reason_allow_list
+    copy 0
     load_const null
-    init_field .supports_streaming
-    load_const "system"
-    init_field .default_role
-    load_const "system"
-    load_const "user"
-    load_const "assistant"
-    alloc_array 3
-    init_field .allowed_roles
+    store_field .finish_reason_deny_list
+    copy 0
     load_const null
-    init_field .remap_roles
+    store_field .supports_streaming
+    copy 0
     load_const null
-    init_field .api_key
+    store_field .default_role
+    copy 0
     load_const null
-    init_field .provider_options
+    store_field .allowed_roles
+    copy 0
+    load_const null
+    store_field .remap_roles
+    copy 0
+    load_const null
+    store_field .api_key
+    copy 0
+    load_const null
+    store_field .provider_options
+    copy 0
     alloc_map 0
-    init_field .headers
+    store_field .headers
+    copy 0
     alloc_map 0
-    init_field .query_params
+    store_field .query_params
+    copy 0
     alloc_array 0
     load_const "tools"
     alloc_map 1
-    init_field .request_body
-    init_field .options
+    store_field .request_body
+    store_field .options
     return
 }
 
@@ -1929,85 +2104,113 @@ function user.LongNameWithManyParameters_ThisFunctionExceedsLimit(first_argument
 
 function user.LongNestedValuesClient$new() -> null {
     alloc_instance baml.llm.PrimitiveClient
+    copy 0
     load_const "LongNestedValuesClient"
-    init_field .name
+    store_field .name
+    copy 0
     load_const "openai"
-    init_field .provider
+    store_field .provider
+    copy 0
     alloc_instance baml.llm.PrimitiveClientOptions
+    copy 0
     load_const "anthropic/claude-3.5-sonnet-20250101-with-some-extremely-long-suffix-that-pushes-past-the-line-limit-easily"
-    init_field .model
+    store_field .model
+    copy 0
     load_const "https://some-extremely-long-api-gateway-subdomain.internal.production.cluster.example.com/api/v2/chat/completions/streaming"
-    init_field .base_url
+    store_field .base_url
+    copy 0
     load_const null
-    init_field .allowed_role_metadata
+    store_field .allowed_role_metadata
+    copy 0
     load_const null
-    init_field .finish_reason_allow_list
+    store_field .finish_reason_allow_list
+    copy 0
     load_const null
-    init_field .finish_reason_deny_list
+    store_field .finish_reason_deny_list
+    copy 0
     load_const null
-    init_field .supports_streaming
-    load_const "system"
-    init_field .default_role
-    load_const "system"
-    load_const "user"
-    load_const "assistant"
-    alloc_array 3
-    init_field .allowed_roles
+    store_field .supports_streaming
+    copy 0
     load_const null
-    init_field .remap_roles
+    store_field .default_role
+    copy 0
     load_const null
-    init_field .api_key
+    store_field .allowed_roles
+    copy 0
     load_const null
-    init_field .provider_options
+    store_field .remap_roles
+    copy 0
+    load_const null
+    store_field .api_key
+    copy 0
+    load_const null
+    store_field .provider_options
+    copy 0
     alloc_map 0
-    init_field .headers
+    store_field .headers
+    copy 0
     alloc_map 0
-    init_field .query_params
+    store_field .query_params
+    copy 0
     alloc_map 0
-    init_field .request_body
-    init_field .options
+    store_field .request_body
+    store_field .options
     return
 }
 
 function user.LongOptionClient$new() -> null {
     alloc_instance baml.llm.PrimitiveClient
+    copy 0
     load_const "LongOptionClient"
-    init_field .name
+    store_field .name
+    copy 0
     load_const "openai"
-    init_field .provider
+    store_field .provider
+    copy 0
     alloc_instance baml.llm.PrimitiveClientOptions
+    copy 0
     load_const "some-extremely-long-model-name-that-goes-on-and-on-and-should-push-well-past-the-line-width-limit"
-    init_field .model
+    store_field .model
+    copy 0
     load_const "https://some-really-long-domain-name-for-testing.example.com/api/v1/chat/completions"
-    init_field .base_url
+    store_field .base_url
+    copy 0
     load_const null
-    init_field .allowed_role_metadata
+    store_field .allowed_role_metadata
+    copy 0
     load_const null
-    init_field .finish_reason_allow_list
+    store_field .finish_reason_allow_list
+    copy 0
     load_const null
-    init_field .finish_reason_deny_list
+    store_field .finish_reason_deny_list
+    copy 0
     load_const null
-    init_field .supports_streaming
-    load_const "system"
-    init_field .default_role
-    load_const "system"
-    load_const "user"
-    load_const "assistant"
-    alloc_array 3
-    init_field .allowed_roles
+    store_field .supports_streaming
+    copy 0
     load_const null
-    init_field .remap_roles
+    store_field .default_role
+    copy 0
     load_const null
-    init_field .api_key
+    store_field .allowed_roles
+    copy 0
     load_const null
-    init_field .provider_options
+    store_field .remap_roles
+    copy 0
+    load_const null
+    store_field .api_key
+    copy 0
+    load_const null
+    store_field .provider_options
+    copy 0
     alloc_map 0
-    init_field .headers
+    store_field .headers
+    copy 0
     alloc_map 0
-    init_field .query_params
+    store_field .query_params
+    copy 0
     alloc_map 0
-    init_field .request_body
-    init_field .options
+    store_field .request_body
+    store_field .options
     return
 }
 
@@ -3765,42 +3968,56 @@ function user.ManyNestedExprs(items: int[]) -> int {
 function user.ManyOptionsClient$new() -> null {
     load_const "OPENAI_API_KEY"
     call baml.env.get_or_panic
-    store_var _3
+    store_var _2
     alloc_instance baml.llm.PrimitiveClient
+    copy 0
     load_const "ManyOptionsClient"
-    init_field .name
+    store_field .name
+    copy 0
     load_const "openai"
-    init_field .provider
+    store_field .provider
+    copy 0
     alloc_instance baml.llm.PrimitiveClientOptions
+    copy 0
     load_const "gpt-4"
-    init_field .model
+    store_field .model
+    copy 0
     load_const "https://api.openai.com/v1"
-    init_field .base_url
+    store_field .base_url
+    copy 0
     load_const null
-    init_field .allowed_role_metadata
+    store_field .allowed_role_metadata
+    copy 0
     load_const null
-    init_field .finish_reason_allow_list
+    store_field .finish_reason_allow_list
+    copy 0
     load_const null
-    init_field .finish_reason_deny_list
+    store_field .finish_reason_deny_list
+    copy 0
     load_const null
-    init_field .supports_streaming
-    load_const "system"
-    init_field .default_role
-    load_const "system"
-    load_const "user"
-    load_const "assistant"
-    alloc_array 3
-    init_field .allowed_roles
+    store_field .supports_streaming
+    copy 0
     load_const null
-    init_field .remap_roles
-    load_var _3
-    init_field .api_key
+    store_field .default_role
+    copy 0
     load_const null
-    init_field .provider_options
+    store_field .allowed_roles
+    copy 0
+    load_const null
+    store_field .remap_roles
+    copy 0
+    load_var _2
+    store_field .api_key
+    copy 0
+    load_const null
+    store_field .provider_options
+    copy 0
     alloc_map 0
-    init_field .headers
+    store_field .headers
+    copy 0
     alloc_map 0
-    init_field .query_params
+    store_field .query_params
+    copy 0
     load_const 4096
     load_const 0.7
     load_const 0.95
@@ -3821,8 +4038,8 @@ function user.ManyOptionsClient$new() -> null {
     load_const "stream"
     load_const "stop_sequences"
     alloc_map 7
-    init_field .request_body
-    init_field .options
+    store_field .request_body
+    store_field .options
     return
 }
 
@@ -4547,40 +4764,54 @@ function user.Minimal() -> int {
 
 function user.MixedValuesClient$new() -> null {
     alloc_instance baml.llm.PrimitiveClient
+    copy 0
     load_const "MixedValuesClient"
-    init_field .name
+    store_field .name
+    copy 0
     load_const "openai"
-    init_field .provider
+    store_field .provider
+    copy 0
     alloc_instance baml.llm.PrimitiveClientOptions
+    copy 0
     load_const "gpt-4"
-    init_field .model
-    load_const "https://api.openai.com/v1"
-    init_field .base_url
+    store_field .model
+    copy 0
     load_const null
-    init_field .allowed_role_metadata
+    store_field .base_url
+    copy 0
     load_const null
-    init_field .finish_reason_allow_list
+    store_field .allowed_role_metadata
+    copy 0
     load_const null
-    init_field .finish_reason_deny_list
+    store_field .finish_reason_allow_list
+    copy 0
     load_const null
-    init_field .supports_streaming
-    load_const "system"
-    init_field .default_role
-    load_const "system"
-    load_const "user"
-    load_const "assistant"
-    alloc_array 3
-    init_field .allowed_roles
+    store_field .finish_reason_deny_list
+    copy 0
     load_const null
-    init_field .remap_roles
+    store_field .supports_streaming
+    copy 0
     load_const null
-    init_field .api_key
+    store_field .default_role
+    copy 0
     load_const null
-    init_field .provider_options
+    store_field .allowed_roles
+    copy 0
+    load_const null
+    store_field .remap_roles
+    copy 0
+    load_const null
+    store_field .api_key
+    copy 0
+    load_const null
+    store_field .provider_options
+    copy 0
     alloc_map 0
-    init_field .headers
+    store_field .headers
+    copy 0
     alloc_map 0
-    init_field .query_params
+    store_field .query_params
+    copy 0
     load_const 100
     load_const 0.7
     load_const true
@@ -4593,8 +4824,8 @@ function user.MixedValuesClient$new() -> null {
     load_const "stop"
     load_const "inline_string"
     alloc_map 5
-    init_field .request_body
-    init_field .options
+    store_field .request_body
+    store_field .options
     return
 }
 
@@ -4666,43 +4897,57 @@ function user.MyFunction(a: int, b: int) -> int {
 
 function user.NestedConfigClient$new() -> null {
     alloc_instance baml.llm.PrimitiveClient
+    copy 0
     load_const "NestedConfigClient"
-    init_field .name
+    store_field .name
+    copy 0
     load_const "openai"
-    init_field .provider
+    store_field .provider
+    copy 0
     alloc_instance baml.llm.PrimitiveClientOptions
+    copy 0
     load_const "gpt-4"
-    init_field .model
-    load_const "https://api.openai.com/v1"
-    init_field .base_url
+    store_field .model
+    copy 0
     load_const null
-    init_field .allowed_role_metadata
+    store_field .base_url
+    copy 0
     load_const null
-    init_field .finish_reason_allow_list
+    store_field .allowed_role_metadata
+    copy 0
     load_const null
-    init_field .finish_reason_deny_list
+    store_field .finish_reason_allow_list
+    copy 0
     load_const null
-    init_field .supports_streaming
-    load_const "system"
-    init_field .default_role
-    load_const "system"
-    load_const "user"
-    load_const "assistant"
-    alloc_array 3
-    init_field .allowed_roles
+    store_field .finish_reason_deny_list
+    copy 0
     load_const null
-    init_field .remap_roles
+    store_field .supports_streaming
+    copy 0
     load_const null
-    init_field .api_key
+    store_field .default_role
+    copy 0
     load_const null
-    init_field .provider_options
+    store_field .allowed_roles
+    copy 0
+    load_const null
+    store_field .remap_roles
+    copy 0
+    load_const null
+    store_field .api_key
+    copy 0
+    load_const null
+    store_field .provider_options
+    copy 0
     alloc_map 0
-    init_field .headers
+    store_field .headers
+    copy 0
     alloc_map 0
-    init_field .query_params
+    store_field .query_params
+    copy 0
     alloc_map 0
-    init_field .request_body
-    init_field .options
+    store_field .request_body
+    store_field .options
     return
 }
 
@@ -4888,87 +5133,115 @@ function user.OtherExprs(a: int, b: int) -> int {
 
 function user.RawStringConfigClient$new() -> null {
     alloc_instance baml.llm.PrimitiveClient
+    copy 0
     load_const "RawStringConfigClient"
-    init_field .name
+    store_field .name
+    copy 0
     load_const "openai"
-    init_field .provider
+    store_field .provider
+    copy 0
     alloc_instance baml.llm.PrimitiveClientOptions
+    copy 0
     load_const "gpt-4"
-    init_field .model
-    load_const "https://api.openai.com/v1"
-    init_field .base_url
+    store_field .model
+    copy 0
     load_const null
-    init_field .allowed_role_metadata
+    store_field .base_url
+    copy 0
     load_const null
-    init_field .finish_reason_allow_list
+    store_field .allowed_role_metadata
+    copy 0
     load_const null
-    init_field .finish_reason_deny_list
+    store_field .finish_reason_allow_list
+    copy 0
     load_const null
-    init_field .supports_streaming
-    load_const "system"
-    init_field .default_role
-    load_const "system"
-    load_const "user"
-    load_const "assistant"
-    alloc_array 3
-    init_field .allowed_roles
+    store_field .finish_reason_deny_list
+    copy 0
     load_const null
-    init_field .remap_roles
+    store_field .supports_streaming
+    copy 0
     load_const null
-    init_field .api_key
+    store_field .default_role
+    copy 0
     load_const null
-    init_field .provider_options
+    store_field .allowed_roles
+    copy 0
+    load_const null
+    store_field .remap_roles
+    copy 0
+    load_const null
+    store_field .api_key
+    copy 0
+    load_const null
+    store_field .provider_options
+    copy 0
     alloc_map 0
-    init_field .headers
+    store_field .headers
+    copy 0
     alloc_map 0
-    init_field .query_params
+    store_field .query_params
+    copy 0
     load_const "#Youareahelpfulassistant.Alwaysbeconcise.#"
     load_const "system_prompt"
     alloc_map 1
-    init_field .request_body
-    init_field .options
+    store_field .request_body
+    store_field .options
     return
 }
 
 function user.SameLineClient$new() -> null {
     alloc_instance baml.llm.PrimitiveClient
+    copy 0
     load_const "SameLineClient"
-    init_field .name
+    store_field .name
+    copy 0
     load_const "openai"
-    init_field .provider
+    store_field .provider
+    copy 0
     alloc_instance baml.llm.PrimitiveClientOptions
+    copy 0
     load_const "gpt-4"
-    init_field .model
-    load_const "https://api.openai.com/v1"
-    init_field .base_url
+    store_field .model
+    copy 0
     load_const null
-    init_field .allowed_role_metadata
+    store_field .base_url
+    copy 0
     load_const null
-    init_field .finish_reason_allow_list
+    store_field .allowed_role_metadata
+    copy 0
     load_const null
-    init_field .finish_reason_deny_list
+    store_field .finish_reason_allow_list
+    copy 0
     load_const null
-    init_field .supports_streaming
-    load_const "system"
-    init_field .default_role
-    load_const "system"
-    load_const "user"
-    load_const "assistant"
-    alloc_array 3
-    init_field .allowed_roles
+    store_field .finish_reason_deny_list
+    copy 0
     load_const null
-    init_field .remap_roles
+    store_field .supports_streaming
+    copy 0
     load_const null
-    init_field .api_key
+    store_field .default_role
+    copy 0
     load_const null
-    init_field .provider_options
+    store_field .allowed_roles
+    copy 0
+    load_const null
+    store_field .remap_roles
+    copy 0
+    load_const null
+    store_field .api_key
+    copy 0
+    load_const null
+    store_field .provider_options
+    copy 0
     alloc_map 0
-    init_field .headers
+    store_field .headers
+    copy 0
     alloc_map 0
-    init_field .query_params
+    store_field .query_params
+    copy 0
     alloc_map 0
-    init_field .request_body
-    init_field .options
+    store_field .request_body
+    store_field .options
     return
 }
 
@@ -4984,43 +5257,57 @@ function user.SixLongParams(first_parameter_name: map<string, int>, second_param
 
 function user.StringProviderClient$new() -> null {
     alloc_instance baml.llm.PrimitiveClient
+    copy 0
     load_const "StringProviderClient"
-    init_field .name
+    store_field .name
+    copy 0
     load_const "openai-generic"
-    init_field .provider
+    store_field .provider
+    copy 0
     alloc_instance baml.llm.PrimitiveClientOptions
+    copy 0
     load_const "mistralai/mistral-small-3.1-24b-instruct"
-    init_field .model
+    store_field .model
+    copy 0
     load_const "https://openrouter.ai/api/v1"
-    init_field .base_url
+    store_field .base_url
+    copy 0
     load_const null
-    init_field .allowed_role_metadata
+    store_field .allowed_role_metadata
+    copy 0
     load_const null
-    init_field .finish_reason_allow_list
+    store_field .finish_reason_allow_list
+    copy 0
     load_const null
-    init_field .finish_reason_deny_list
+    store_field .finish_reason_deny_list
+    copy 0
     load_const null
-    init_field .supports_streaming
-    load_const "system"
-    init_field .default_role
-    load_const "system"
-    load_const "user"
-    load_const "assistant"
-    alloc_array 3
-    init_field .allowed_roles
+    store_field .supports_streaming
+    copy 0
     load_const null
-    init_field .remap_roles
+    store_field .default_role
+    copy 0
     load_const null
-    init_field .api_key
+    store_field .allowed_roles
+    copy 0
     load_const null
-    init_field .provider_options
+    store_field .remap_roles
+    copy 0
+    load_const null
+    store_field .api_key
+    copy 0
+    load_const null
+    store_field .provider_options
+    copy 0
     alloc_map 0
-    init_field .headers
+    store_field .headers
+    copy 0
     alloc_map 0
-    init_field .query_params
+    store_field .query_params
+    copy 0
     alloc_map 0
-    init_field .request_body
-    init_field .options
+    store_field .request_body
+    store_field .options
     return
 }
 
@@ -5057,43 +5344,57 @@ function user.TestTarget$render_prompt() -> baml.llm.PromptAst {
 
 function user.ThisIsAnExtremelyLongClientNameThatDefinitelyExceedsTheDefaultLineLimitOfOneHundredColumns$new() -> null {
     alloc_instance baml.llm.PrimitiveClient
+    copy 0
     load_const "ThisIsAnExtremelyLongClientNameThatDefinitelyExceedsTheDefaultLineLimitOfOneHundredColumns"
-    init_field .name
+    store_field .name
+    copy 0
     load_const "openai"
-    init_field .provider
+    store_field .provider
+    copy 0
     alloc_instance baml.llm.PrimitiveClientOptions
+    copy 0
     load_const "gpt-4"
-    init_field .model
-    load_const "https://api.openai.com/v1"
-    init_field .base_url
+    store_field .model
+    copy 0
     load_const null
-    init_field .allowed_role_metadata
+    store_field .base_url
+    copy 0
     load_const null
-    init_field .finish_reason_allow_list
+    store_field .allowed_role_metadata
+    copy 0
     load_const null
-    init_field .finish_reason_deny_list
+    store_field .finish_reason_allow_list
+    copy 0
     load_const null
-    init_field .supports_streaming
-    load_const "system"
-    init_field .default_role
-    load_const "system"
-    load_const "user"
-    load_const "assistant"
-    alloc_array 3
-    init_field .allowed_roles
+    store_field .finish_reason_deny_list
+    copy 0
     load_const null
-    init_field .remap_roles
+    store_field .supports_streaming
+    copy 0
     load_const null
-    init_field .api_key
+    store_field .default_role
+    copy 0
     load_const null
-    init_field .provider_options
+    store_field .allowed_roles
+    copy 0
+    load_const null
+    store_field .remap_roles
+    copy 0
+    load_const null
+    store_field .api_key
+    copy 0
+    load_const null
+    store_field .provider_options
+    copy 0
     alloc_map 0
-    init_field .headers
+    store_field .headers
+    copy 0
     alloc_map 0
-    init_field .query_params
+    store_field .query_params
+    copy 0
     alloc_map 0
-    init_field .request_body
-    init_field .options
+    store_field .request_body
+    store_field .options
     return
 }
 
@@ -5104,169 +5405,225 @@ function user.ThisIsAnExtremelyLongFunctionNameThatDefinitelyCausesWrappingAllBy
 
 function user.TriviaClient$new() -> null {
     alloc_instance baml.llm.PrimitiveClient
+    copy 0
     load_const "TriviaClient"
-    init_field .name
+    store_field .name
+    copy 0
     load_const "openai"
-    init_field .provider
+    store_field .provider
+    copy 0
     alloc_instance baml.llm.PrimitiveClientOptions
+    copy 0
     load_const "gpt-4"
-    init_field .model
-    load_const "https://api.openai.com/v1"
-    init_field .base_url
+    store_field .model
+    copy 0
     load_const null
-    init_field .allowed_role_metadata
+    store_field .base_url
+    copy 0
     load_const null
-    init_field .finish_reason_allow_list
+    store_field .allowed_role_metadata
+    copy 0
     load_const null
-    init_field .finish_reason_deny_list
+    store_field .finish_reason_allow_list
+    copy 0
     load_const null
-    init_field .supports_streaming
-    load_const "system"
-    init_field .default_role
-    load_const "system"
-    load_const "user"
-    load_const "assistant"
-    alloc_array 3
-    init_field .allowed_roles
+    store_field .finish_reason_deny_list
+    copy 0
     load_const null
-    init_field .remap_roles
+    store_field .supports_streaming
+    copy 0
     load_const null
-    init_field .api_key
+    store_field .default_role
+    copy 0
     load_const null
-    init_field .provider_options
+    store_field .allowed_roles
+    copy 0
+    load_const null
+    store_field .remap_roles
+    copy 0
+    load_const null
+    store_field .api_key
+    copy 0
+    load_const null
+    store_field .provider_options
+    copy 0
     alloc_map 0
-    init_field .headers
+    store_field .headers
+    copy 0
     alloc_map 0
-    init_field .query_params
+    store_field .query_params
+    copy 0
     alloc_map 0
-    init_field .request_body
-    init_field .options
+    store_field .request_body
+    store_field .options
     return
 }
 
 function user.TriviaClientBlock$new() -> null {
     alloc_instance baml.llm.PrimitiveClient
+    copy 0
     load_const "TriviaClientBlock"
-    init_field .name
+    store_field .name
+    copy 0
     load_const "openai"
-    init_field .provider
+    store_field .provider
+    copy 0
     alloc_instance baml.llm.PrimitiveClientOptions
+    copy 0
     load_const "gpt-4"
-    init_field .model
-    load_const "https://api.openai.com/v1"
-    init_field .base_url
+    store_field .model
+    copy 0
     load_const null
-    init_field .allowed_role_metadata
+    store_field .base_url
+    copy 0
     load_const null
-    init_field .finish_reason_allow_list
+    store_field .allowed_role_metadata
+    copy 0
     load_const null
-    init_field .finish_reason_deny_list
+    store_field .finish_reason_allow_list
+    copy 0
     load_const null
-    init_field .supports_streaming
-    load_const "system"
-    init_field .default_role
-    load_const "system"
-    load_const "user"
-    load_const "assistant"
-    alloc_array 3
-    init_field .allowed_roles
+    store_field .finish_reason_deny_list
+    copy 0
     load_const null
-    init_field .remap_roles
+    store_field .supports_streaming
+    copy 0
     load_const null
-    init_field .api_key
+    store_field .default_role
+    copy 0
     load_const null
-    init_field .provider_options
+    store_field .allowed_roles
+    copy 0
+    load_const null
+    store_field .remap_roles
+    copy 0
+    load_const null
+    store_field .api_key
+    copy 0
+    load_const null
+    store_field .provider_options
+    copy 0
     alloc_map 0
-    init_field .headers
+    store_field .headers
+    copy 0
     alloc_map 0
-    init_field .query_params
+    store_field .query_params
+    copy 0
     alloc_map 0
-    init_field .request_body
-    init_field .options
+    store_field .request_body
+    store_field .options
     return
 }
 
 function user.TriviaDeeplyNestedClient$new() -> null {
     alloc_instance baml.llm.PrimitiveClient
+    copy 0
     load_const "TriviaDeeplyNestedClient"
-    init_field .name
+    store_field .name
+    copy 0
     load_const "openai"
-    init_field .provider
+    store_field .provider
+    copy 0
     alloc_instance baml.llm.PrimitiveClientOptions
+    copy 0
     load_const "gpt-4"
-    init_field .model
-    load_const "https://api.openai.com/v1"
-    init_field .base_url
+    store_field .model
+    copy 0
     load_const null
-    init_field .allowed_role_metadata
+    store_field .base_url
+    copy 0
     load_const null
-    init_field .finish_reason_allow_list
+    store_field .allowed_role_metadata
+    copy 0
     load_const null
-    init_field .finish_reason_deny_list
+    store_field .finish_reason_allow_list
+    copy 0
     load_const null
-    init_field .supports_streaming
-    load_const "system"
-    init_field .default_role
-    load_const "system"
-    load_const "user"
-    load_const "assistant"
-    alloc_array 3
-    init_field .allowed_roles
+    store_field .finish_reason_deny_list
+    copy 0
     load_const null
-    init_field .remap_roles
+    store_field .supports_streaming
+    copy 0
     load_const null
-    init_field .api_key
+    store_field .default_role
+    copy 0
     load_const null
-    init_field .provider_options
+    store_field .allowed_roles
+    copy 0
+    load_const null
+    store_field .remap_roles
+    copy 0
+    load_const null
+    store_field .api_key
+    copy 0
+    load_const null
+    store_field .provider_options
+    copy 0
     alloc_map 0
-    init_field .headers
+    store_field .headers
+    copy 0
     alloc_map 0
-    init_field .query_params
+    store_field .query_params
+    copy 0
     alloc_map 0
-    init_field .request_body
-    init_field .options
+    store_field .request_body
+    store_field .options
     return
 }
 
 function user.TriviaDeeplyNestedClientBlock$new() -> null {
     alloc_instance baml.llm.PrimitiveClient
+    copy 0
     load_const "TriviaDeeplyNestedClientBlock"
-    init_field .name
+    store_field .name
+    copy 0
     load_const "openai"
-    init_field .provider
+    store_field .provider
+    copy 0
     alloc_instance baml.llm.PrimitiveClientOptions
+    copy 0
     load_const "gpt-4"
-    init_field .model
-    load_const "https://api.openai.com/v1"
-    init_field .base_url
+    store_field .model
+    copy 0
     load_const null
-    init_field .allowed_role_metadata
+    store_field .base_url
+    copy 0
     load_const null
-    init_field .finish_reason_allow_list
+    store_field .allowed_role_metadata
+    copy 0
     load_const null
-    init_field .finish_reason_deny_list
+    store_field .finish_reason_allow_list
+    copy 0
     load_const null
-    init_field .supports_streaming
-    load_const "system"
-    init_field .default_role
-    load_const "system"
-    load_const "user"
-    load_const "assistant"
-    alloc_array 3
-    init_field .allowed_roles
+    store_field .finish_reason_deny_list
+    copy 0
     load_const null
-    init_field .remap_roles
+    store_field .supports_streaming
+    copy 0
     load_const null
-    init_field .api_key
+    store_field .default_role
+    copy 0
     load_const null
-    init_field .provider_options
+    store_field .allowed_roles
+    copy 0
+    load_const null
+    store_field .remap_roles
+    copy 0
+    load_const null
+    store_field .api_key
+    copy 0
+    load_const null
+    store_field .provider_options
+    copy 0
     alloc_map 0
-    init_field .headers
+    store_field .headers
+    copy 0
     alloc_map 0
-    init_field .query_params
+    store_field .query_params
+    copy 0
     alloc_map 0
-    init_field .request_body
-    init_field .options
+    store_field .request_body
+    store_field .options
     return
 }
 
@@ -5296,85 +5653,113 @@ function user.TriviaFuncBlock(x: int) -> int {
 
 function user.TriviaLongValueClient$new() -> null {
     alloc_instance baml.llm.PrimitiveClient
+    copy 0
     load_const "TriviaLongValueClient"
-    init_field .name
+    store_field .name
+    copy 0
     load_const "openai"
-    init_field .provider
+    store_field .provider
+    copy 0
     alloc_instance baml.llm.PrimitiveClientOptions
+    copy 0
     load_const "some-extremely-long-model-name-that-goes-on-and-on-and-should-push-well-past-the-line-width-limit"
-    init_field .model
+    store_field .model
+    copy 0
     load_const "https://some-really-long-domain-name-for-testing.example.com/api/v1/chat/completions"
-    init_field .base_url
+    store_field .base_url
+    copy 0
     load_const null
-    init_field .allowed_role_metadata
+    store_field .allowed_role_metadata
+    copy 0
     load_const null
-    init_field .finish_reason_allow_list
+    store_field .finish_reason_allow_list
+    copy 0
     load_const null
-    init_field .finish_reason_deny_list
+    store_field .finish_reason_deny_list
+    copy 0
     load_const null
-    init_field .supports_streaming
-    load_const "system"
-    init_field .default_role
-    load_const "system"
-    load_const "user"
-    load_const "assistant"
-    alloc_array 3
-    init_field .allowed_roles
+    store_field .supports_streaming
+    copy 0
     load_const null
-    init_field .remap_roles
+    store_field .default_role
+    copy 0
     load_const null
-    init_field .api_key
+    store_field .allowed_roles
+    copy 0
     load_const null
-    init_field .provider_options
+    store_field .remap_roles
+    copy 0
+    load_const null
+    store_field .api_key
+    copy 0
+    load_const null
+    store_field .provider_options
+    copy 0
     alloc_map 0
-    init_field .headers
+    store_field .headers
+    copy 0
     alloc_map 0
-    init_field .query_params
+    store_field .query_params
+    copy 0
     alloc_map 0
-    init_field .request_body
-    init_field .options
+    store_field .request_body
+    store_field .options
     return
 }
 
 function user.TriviaLongValueClientBlock$new() -> null {
     alloc_instance baml.llm.PrimitiveClient
+    copy 0
     load_const "TriviaLongValueClientBlock"
-    init_field .name
+    store_field .name
+    copy 0
     load_const "openai"
-    init_field .provider
+    store_field .provider
+    copy 0
     alloc_instance baml.llm.PrimitiveClientOptions
+    copy 0
     load_const "some-extremely-long-model-name-that-goes-on-and-on-and-should-push-well-past-the-line-width-limit"
-    init_field .model
+    store_field .model
+    copy 0
     load_const "https://some-really-long-domain-name-for-testing.example.com/api/v1/chat/completions"
-    init_field .base_url
+    store_field .base_url
+    copy 0
     load_const null
-    init_field .allowed_role_metadata
+    store_field .allowed_role_metadata
+    copy 0
     load_const null
-    init_field .finish_reason_allow_list
+    store_field .finish_reason_allow_list
+    copy 0
     load_const null
-    init_field .finish_reason_deny_list
+    store_field .finish_reason_deny_list
+    copy 0
     load_const null
-    init_field .supports_streaming
-    load_const "system"
-    init_field .default_role
-    load_const "system"
-    load_const "user"
-    load_const "assistant"
-    alloc_array 3
-    init_field .allowed_roles
+    store_field .supports_streaming
+    copy 0
     load_const null
-    init_field .remap_roles
+    store_field .default_role
+    copy 0
     load_const null
-    init_field .api_key
+    store_field .allowed_roles
+    copy 0
     load_const null
-    init_field .provider_options
+    store_field .remap_roles
+    copy 0
+    load_const null
+    store_field .api_key
+    copy 0
+    load_const null
+    store_field .provider_options
+    copy 0
     alloc_map 0
-    init_field .headers
+    store_field .headers
+    copy 0
     alloc_map 0
-    init_field .query_params
+    store_field .query_params
+    copy 0
     alloc_map 0
-    init_field .request_body
-    init_field .options
+    store_field .request_body
+    store_field .options
     return
 }
 
@@ -5400,40 +5785,54 @@ function user.TriviaWrapReturnTypeBlock(x: int) -> int | string | bool | null {
 
 function user.TypedValuesClient$new() -> null {
     alloc_instance baml.llm.PrimitiveClient
+    copy 0
     load_const "TypedValuesClient"
-    init_field .name
+    store_field .name
+    copy 0
     load_const "openai"
-    init_field .provider
+    store_field .provider
+    copy 0
     alloc_instance baml.llm.PrimitiveClientOptions
+    copy 0
     load_const "gpt-4"
-    init_field .model
-    load_const "https://api.openai.com/v1"
-    init_field .base_url
+    store_field .model
+    copy 0
     load_const null
-    init_field .allowed_role_metadata
+    store_field .base_url
+    copy 0
     load_const null
-    init_field .finish_reason_allow_list
+    store_field .allowed_role_metadata
+    copy 0
     load_const null
-    init_field .finish_reason_deny_list
+    store_field .finish_reason_allow_list
+    copy 0
     load_const null
-    init_field .supports_streaming
-    load_const "system"
-    init_field .default_role
-    load_const "system"
-    load_const "user"
-    load_const "assistant"
-    alloc_array 3
-    init_field .allowed_roles
+    store_field .finish_reason_deny_list
+    copy 0
     load_const null
-    init_field .remap_roles
+    store_field .supports_streaming
+    copy 0
     load_const null
-    init_field .api_key
+    store_field .default_role
+    copy 0
     load_const null
-    init_field .provider_options
+    store_field .allowed_roles
+    copy 0
+    load_const null
+    store_field .remap_roles
+    copy 0
+    load_const null
+    store_field .api_key
+    copy 0
+    load_const null
+    store_field .provider_options
+    copy 0
     alloc_map 0
-    init_field .headers
+    store_field .headers
+    copy 0
     alloc_map 0
-    init_field .query_params
+    store_field .query_params
+    copy 0
     load_const 0.5
     load_const 2048
     load_const true
@@ -5441,8 +5840,8 @@ function user.TypedValuesClient$new() -> null {
     load_const "max_tokens"
     load_const "stream"
     alloc_map 3
-    init_field .request_body
-    init_field .options
+    store_field .request_body
+    store_field .options
     return
 }
 

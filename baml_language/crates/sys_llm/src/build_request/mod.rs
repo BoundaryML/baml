@@ -1168,11 +1168,6 @@ mod tests {
                         .to_string(),
                 ),
                 query_params: IndexMap::from([("key".to_string(), "test-key".to_string())]),
-                // Matches what lower_cst.rs sets for vertex-ai.
-                remap_roles: Some(IndexMap::from([(
-                    "assistant".to_string(),
-                    "model".to_string(),
-                )])),
                 ..crate::baml_std::PrimitiveClientOptions::default()
             },
         );
@@ -1215,10 +1210,6 @@ mod tests {
                         .to_string(),
                 ),
                 query_params: IndexMap::from([("key".to_string(), "test-key".to_string())]),
-                remap_roles: Some(IndexMap::from([(
-                    "assistant".to_string(),
-                    "model".to_string(),
-                )])),
                 ..crate::baml_std::PrimitiveClientOptions::default()
             },
         );
