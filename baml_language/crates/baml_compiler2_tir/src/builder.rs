@@ -715,19 +715,37 @@ impl<'db> TypeInferenceBuilder<'db> {
                 });
 
                 // Infer the lambda body using save/restore approach
-                let (ret_ty, _lambda_expressions) = self.infer_lambda_body(
+                let (ret_ty, e_body, _lambda_expressions) = self.infer_lambda_body(
                     func_def,
                     &param_tys,
                     return_annotation.as_ref(),
                     expr_id,
                 );
 
+                // Determine throws: explicit annotation takes precedence,
+                // otherwise infer from the body.
+                let throws_ty = if let Some(te) = &func_def.throws {
+                    let mut diags = Vec::new();
+                    let declared = crate::lower_type_expr::lower_type_expr_in_ns(
+                        self.context.db(),
+                        &te.expr,
+                        self.package_items,
+                        &self.ns_context,
+                        &self.generic_params,
+                        &mut diags,
+                    );
+                    for diag in diags {
+                        self.context.report_at_span(diag, te.span);
+                    }
+                    declared
+                } else {
+                    e_body
+                };
+
                 Ty::Function {
                     params: param_tys,
                     ret: Box::new(ret_ty),
-                    throws: Box::new(Ty::Never {
-                        attr: TyAttr::default(),
-                    }),
+                    throws: Box::new(throws_ty),
                     attr: TyAttr::default(),
                 }
             }
@@ -1088,6 +1106,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     Ty::Function {
                         params: expected_params,
                         ret: expected_ret,
+                        throws: expected_throws,
                         ..
                     } => {
                         // Checking mode: decompose expected function type.
@@ -1167,19 +1186,38 @@ impl<'db> TypeInferenceBuilder<'db> {
                             return_annotation.as_ref().unwrap_or(expected_ret.as_ref());
 
                         // Infer/check the lambda body using save/restore approach
-                        let (ret_ty, _lambda_expressions) = self.infer_lambda_body(
+                        let (ret_ty, e_body, _lambda_expressions) = self.infer_lambda_body(
                             func_def,
                             &param_tys,
                             Some(effective_ret),
                             expr_id,
                         );
 
+                        // Determine throws: explicit annotation > expected > inferred from body
+                        let throws_ty = if let Some(te) = &func_def.throws {
+                            let mut diags = Vec::new();
+                            let declared = crate::lower_type_expr::lower_type_expr_in_ns(
+                                self.context.db(),
+                                &te.expr,
+                                self.package_items,
+                                &self.ns_context,
+                                &self.generic_params,
+                                &mut diags,
+                            );
+                            for diag in diags {
+                                self.context.report_at_span(diag, te.span);
+                            }
+                            declared
+                        } else {
+                            // No annotation: infer from body, use expected_throws for TypeVar binding
+                            let _ = expected_throws;
+                            e_body
+                        };
+
                         let result = Ty::Function {
                             params: param_tys,
                             ret: Box::new(ret_ty),
-                            throws: Box::new(Ty::Never {
-                                attr: TyAttr::default(),
-                            }),
+                            throws: Box::new(throws_ty),
                             attr: TyAttr::default(),
                         };
                         self.record_expr_type(expr_id, result.clone());
@@ -2503,16 +2541,27 @@ impl<'db> TypeInferenceBuilder<'db> {
                         out.extend(transitive.iter().cloned());
                     } else {
                         // Target not in throw set registry (function parameter,
-                        // external function, etc.) — conservatively assume it
-                        // could throw anything.
+                        // external function, etc.). Check if the callee has a
+                        // type-level throws annotation before falling back to Unknown.
+                        if let Some(Ty::Function { throws, .. }) = self.expressions.get(callee) {
+                            let facts = crate::throw_inference::flatten_ty_to_facts(throws);
+                            out.extend(facts);
+                        } else {
+                            out.insert(Ty::Unknown {
+                                attr: TyAttr::default(),
+                            });
+                        }
+                    }
+                } else {
+                    // No resolvable target name — check type-level throws.
+                    if let Some(Ty::Function { throws, .. }) = self.expressions.get(callee) {
+                        let facts = crate::throw_inference::flatten_ty_to_facts(throws);
+                        out.extend(facts);
+                    } else {
                         out.insert(Ty::Unknown {
                             attr: TyAttr::default(),
                         });
                     }
-                } else {
-                    out.insert(Ty::Unknown {
-                        attr: TyAttr::default(),
-                    });
                 }
             }
             Expr::Catch { clauses, .. } => {
@@ -3048,9 +3097,23 @@ impl<'db> TypeInferenceBuilder<'db> {
                             attr: TyAttr::default(),
                         }),
                 ),
-                throws: Box::new(Ty::Never {
-                    attr: TyAttr::default(),
-                }),
+                throws: Box::new(
+                    sig.throws
+                        .as_ref()
+                        .map(|te| {
+                            crate::lower_type_expr::lower_type_expr_in_ns(
+                                db,
+                                te,
+                                pkg_items,
+                                &ns_context,
+                                generic_params,
+                                &mut diags,
+                            )
+                        })
+                        .unwrap_or(Ty::Never {
+                            attr: TyAttr::default(),
+                        }),
+                ),
                 attr: TyAttr::default(),
             };
             return Some(ty);
@@ -3139,9 +3202,23 @@ impl<'db> TypeInferenceBuilder<'db> {
                                     attr: TyAttr::default(),
                                 }),
                         ),
-                        throws: Box::new(Ty::Never {
-                            attr: TyAttr::default(),
-                        }),
+                        throws: Box::new(
+                            sig.throws
+                                .as_ref()
+                                .map(|te| {
+                                    crate::lower_type_expr::lower_type_expr_in_ns(
+                                        db,
+                                        te,
+                                        self.package_items,
+                                        &sig_ns,
+                                        generic_params,
+                                        &mut diags,
+                                    )
+                                })
+                                .unwrap_or(Ty::Never {
+                                    attr: TyAttr::default(),
+                                }),
+                        ),
                         attr: TyAttr::default(),
                     }
                 }
@@ -3647,9 +3724,23 @@ impl<'db> TypeInferenceBuilder<'db> {
                                 attr: TyAttr::default(),
                             }),
                     ),
-                    throws: Box::new(Ty::Never {
-                        attr: TyAttr::default(),
-                    }),
+                    throws: Box::new(
+                        sig.throws
+                            .as_ref()
+                            .map(|te| {
+                                crate::lower_type_expr::lower_type_expr_in_ns(
+                                    db,
+                                    te,
+                                    pkg_items_for_class,
+                                    &ns_context,
+                                    &all_generic_params,
+                                    &mut diags,
+                                )
+                            })
+                            .unwrap_or(Ty::Never {
+                                attr: TyAttr::default(),
+                            }),
+                    ),
                     attr: TyAttr::default(),
                 };
                 // Note: diags from method signatures are reported at definition site.
@@ -4882,6 +4973,22 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
+    /// Collapse a set of throw fact types into a single `Ty`.
+    ///
+    /// - Empty set → `Ty::Never` (pure, no throws)
+    /// - Single element → that element
+    /// - Multiple elements → `Ty::Union`
+    fn collapse_throw_set(set: std::collections::BTreeSet<Ty>) -> Ty {
+        let mut members: Vec<Ty> = set.into_iter().collect();
+        match members.len() {
+            0 => Ty::Never {
+                attr: TyAttr::default(),
+            },
+            1 => members.remove(0),
+            _ => Ty::Union(members, TyAttr::default()),
+        }
+    }
+
     /// Infer/check a lambda body using a save/restore approach.
     ///
     /// Saves the current locals, `declared_types`, `declared_return_ty`,
@@ -4889,7 +4996,8 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// the lambda's arena and the parent's arena). After inference, restores all
     /// saved state and returns the lambda's expression types separately.
     ///
-    /// Returns `(inferred_return_ty, lambda_expressions)` where
+    /// Returns `(inferred_return_ty, effective_throws_ty, lambda_expressions)` where
+    /// `effective_throws_ty` is the inferred throws effect from the lambda body, and
     /// `lambda_expressions` contains the expression types for the lambda body
     /// only (keyed by the lambda's own `ExprId`s, which start at 0).
     pub fn infer_lambda_body(
@@ -4898,13 +5006,16 @@ impl<'db> TypeInferenceBuilder<'db> {
         param_tys: &[(Option<baml_base::Name>, Ty)],
         expected_ret: Option<&Ty>,
         _lambda_expr_id: ExprId,
-    ) -> (Ty, FxHashMap<ExprId, Ty>) {
+    ) -> (Ty, Ty, FxHashMap<ExprId, Ty>) {
         use baml_compiler2_ast::FunctionBodyDef;
 
         // Get the lambda's ExprBody
         let Some(FunctionBodyDef::Expr(lambda_body, _source_map)) = &func_def.body else {
             return (
                 Ty::Unknown {
+                    attr: TyAttr::default(),
+                },
+                Ty::Never {
                     attr: TyAttr::default(),
                 },
                 FxHashMap::default(),
@@ -4914,6 +5025,9 @@ impl<'db> TypeInferenceBuilder<'db> {
         let Some(root_expr) = lambda_body.root_expr else {
             return (
                 Ty::Void {
+                    attr: TyAttr::default(),
+                },
+                Ty::Never {
                     attr: TyAttr::default(),
                 },
                 FxHashMap::default(),
@@ -4993,6 +5107,11 @@ impl<'db> TypeInferenceBuilder<'db> {
             self.infer_expr(root_expr, lambda_body)
         };
 
+        // Collect effective throws from the lambda body BEFORE restoring state,
+        // since collect_effective_throws uses catch_residual_throws and expressions.
+        let effective_throws_set = self.collect_effective_throws(lambda_body);
+        let effective_throws_ty = Self::collapse_throw_set(effective_throws_set);
+
         // Collect the lambda's expression types and restore parent state
         let lambda_expressions = std::mem::replace(&mut self.expressions, saved_expressions);
         self.bindings = saved_bindings;
@@ -5004,7 +5123,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         self.declared_return_ty = saved_return_ty;
         self.generic_params = saved_generic_params;
 
-        (ret_ty, lambda_expressions)
+        (ret_ty, effective_throws_ty, lambda_expressions)
     }
 }
 

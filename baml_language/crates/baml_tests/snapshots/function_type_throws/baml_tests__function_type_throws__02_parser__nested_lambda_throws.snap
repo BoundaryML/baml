@@ -1,0 +1,184 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "test_nested_inner_throws"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        LET_STMT
+          KW_LET "let"
+          WORD "outer"
+          EQUALS "="
+          LAMBDA_EXPR
+            PARAMETER_LIST "()"
+              L_PAREN "("
+              R_PAREN ")"
+            ARROW "->"
+            TYPE_EXPR "int"
+              WORD "int"
+            BLOCK_EXPR
+              L_BRACE "{"
+              LET_STMT
+                KW_LET "let"
+                WORD "inner"
+                EQUALS "="
+                LAMBDA_EXPR
+                  PARAMETER_LIST "()"
+                    L_PAREN "("
+                    R_PAREN ")"
+                  ARROW "->"
+                  TYPE_EXPR "int"
+                    WORD "int"
+                  BLOCK_EXPR
+                    L_BRACE "{"
+                    THROW_STMT
+                      THROW_EXPR
+                        KW_THROW "throw"
+                        STRING_LITERAL "inner boom"
+                          QUOTE """
+                          WORD "inner"
+                          WORD "boom"
+                          QUOTE """
+                    R_BRACE "}"
+              CALL_EXPR
+                WORD "inner"
+                CALL_ARGS "()"
+                  L_PAREN "("
+                  R_PAREN ")"
+              R_BRACE "}"
+        CALL_EXPR
+          WORD "outer"
+          CALL_ARGS "()"
+            L_PAREN "("
+            R_PAREN ")"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "test_nested_outer_throws"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        LET_STMT
+          KW_LET "let"
+          WORD "outer"
+          EQUALS "="
+          LAMBDA_EXPR
+            PARAMETER_LIST "()"
+              L_PAREN "("
+              R_PAREN ")"
+            ARROW "->"
+            TYPE_EXPR "int"
+              WORD "int"
+            BLOCK_EXPR
+              L_BRACE "{"
+              LET_STMT
+                KW_LET "let"
+                WORD "inner"
+                EQUALS "="
+                LAMBDA_EXPR
+                  PARAMETER_LIST "()"
+                    L_PAREN "("
+                    R_PAREN ")"
+                  ARROW "->"
+                  TYPE_EXPR "int"
+                    WORD "int"
+                  BLOCK_EXPR "{ 42 }"
+                    L_BRACE "{"
+                    INTEGER_LITERAL "42"
+                    R_BRACE "}"
+              THROW_STMT
+                THROW_EXPR
+                  KW_THROW "throw"
+                  STRING_LITERAL "outer boom"
+                    QUOTE """
+                    WORD "outer"
+                    WORD "boom"
+                    QUOTE """
+              R_BRACE "}"
+        CALL_EXPR
+          WORD "outer"
+          CALL_ARGS "()"
+            L_PAREN "("
+            R_PAREN ")"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "test_nested_both_throw"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        LET_STMT
+          KW_LET "let"
+          WORD "outer"
+          EQUALS "="
+          LAMBDA_EXPR
+            PARAMETER_LIST "()"
+              L_PAREN "("
+              R_PAREN ")"
+            ARROW "->"
+            TYPE_EXPR "int"
+              WORD "int"
+            BLOCK_EXPR
+              L_BRACE "{"
+              LET_STMT
+                KW_LET "let"
+                WORD "inner"
+                EQUALS "="
+                LAMBDA_EXPR
+                  PARAMETER_LIST "()"
+                    L_PAREN "("
+                    R_PAREN ")"
+                  ARROW "->"
+                  TYPE_EXPR "int"
+                    WORD "int"
+                  BLOCK_EXPR
+                    L_BRACE "{"
+                    THROW_STMT
+                      THROW_EXPR "throw 42"
+                        KW_THROW "throw"
+                        INTEGER_LITERAL "42"
+                    R_BRACE "}"
+              CALL_EXPR
+                WORD "inner"
+                CALL_ARGS "()"
+                  L_PAREN "("
+                  R_PAREN ")"
+              THROW_STMT
+                THROW_EXPR
+                  KW_THROW "throw"
+                  STRING_LITERAL "outer"
+                    QUOTE """
+                    WORD "outer"
+                    QUOTE """
+              R_BRACE "}"
+        CALL_EXPR
+          WORD "outer"
+          CALL_ARGS "()"
+            L_PAREN "("
+            R_PAREN ")"
+        R_BRACE "}"
+
+=== ERRORS ===
+None

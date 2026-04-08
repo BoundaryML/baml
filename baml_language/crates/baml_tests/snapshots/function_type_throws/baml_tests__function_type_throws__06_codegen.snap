@@ -1,8 +1,192 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
+function user.always_ok(x: int) -> string {
+    load_const "always ok"
+    return
+}
+
+function user.apply(f: () -> int) -> int {
+    load_var f
+    call_indirect
+    return
+}
+
+function user.apply_and_throw(f: () -> int) -> int {
+    load_var f
+    call_indirect
+    store_var result
+    load_var result
+    load_const 0
+    cmp_op <
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var result
+    return
+
+  L1:
+    load_const "negative result"
+    throw
+}
+
+function user.apply_throwing(f: () -> int) -> int {
+    load_var f
+    call_indirect
+    return
+}
+
+function user.caller() -> string {
+    load_const 1
+    call user.may_fail
+    return
+}
+
+function user.make_pure_handler() -> PureHandler {
+    alloc_instance PureHandler
+    copy 0
+    make_closure .<lambda(make_pure_handler, 0)>, 0
+    store_field .run
+    return
+}
+
+function user.make_throwing_handler() -> ThrowingHandler {
+    alloc_instance ThrowingHandler
+    copy 0
+    make_closure .<lambda(make_throwing_handler, 0)>, 0
+    store_field .run
+    return
+}
+
+function user.may_fail(x: int) -> string {
+    load_var x
+    load_const 0
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "ok"
+    return
+
+  L1:
+    load_const "zero"
+    throw
+}
+
+function user.safe_caller() -> string {
+    load_const 1
+    call user.may_fail
+    jump L0
+    load_var e
+    throw_if_panic
+    load_const "caught"
+
+  L0:
+    return
+}
+
 function user.takes_throwing(f: () -> int) -> int {
     load_var f
+    call_indirect
+    return
+}
+
+function user.test_apply_and_throw_pure() -> int {
+    make_closure .<lambda(test_apply_and_throw_pure, 0)>, 0
+    call user.apply_and_throw
+    return
+}
+
+function user.test_apply_explicit_throws() -> int {
+    make_closure .<lambda(test_apply_explicit_throws, 0)>, 0
+    call user.apply_throwing
+    return
+}
+
+function user.test_apply_pure() -> int {
+    make_closure .<lambda(test_apply_pure, 0)>, 0
+    call user.apply
+    return
+}
+
+function user.test_apply_throwing() -> int {
+    make_closure .<lambda(test_apply_throwing, 0)>, 0
+    call user.apply
+    return
+}
+
+function user.test_conditional_throw(x: int) -> int {
+    load_var x
+    make_closure .<lambda(test_conditional_throw, 0)>, 0
+    call_indirect
+    return
+}
+
+function user.test_explicit_throws_match() -> int {
+    make_closure .<lambda(test_explicit_throws_match, 0)>, 0
+    call_indirect
+    return
+}
+
+function user.test_explicit_throws_never_pure() -> int {
+    make_closure .<lambda(test_explicit_throws_never_pure, 0)>, 0
+    call_indirect
+    return
+}
+
+function user.test_explicit_throws_wider_than_body() -> int {
+    make_closure .<lambda(test_explicit_throws_wider_than_body, 0)>, 0
+    call_indirect
+    return
+}
+
+function user.test_multi_throw_types(x: int) -> string {
+    load_var x
+    make_closure .<lambda(test_multi_throw_types, 0)>, 0
+    call_indirect
+    return
+}
+
+function user.test_nested_both_throw() -> int {
+    make_closure .<lambda(test_nested_both_throw, 0)>, 0
+    call_indirect
+    return
+}
+
+function user.test_nested_inner_throws() -> int {
+    make_closure .<lambda(test_nested_inner_throws, 0)>, 0
+    call_indirect
+    return
+}
+
+function user.test_nested_outer_throws() -> int {
+    make_closure .<lambda(test_nested_outer_throws, 0)>, 0
+    call_indirect
+    return
+}
+
+function user.test_pure_lambda() -> int {
+    make_closure .<lambda(test_pure_lambda, 0)>, 0
+    call_indirect
+    return
+}
+
+function user.test_throwing_int() -> string {
+    make_closure .<lambda(test_throwing_int, 0)>, 0
+    call_indirect
+    return
+}
+
+function user.test_throwing_lambda() -> int {
+    make_closure .<lambda(test_throwing_lambda, 0)>, 0
+    call_indirect
+    return
+}
+
+function user.test_throws_never_but_throws() -> int {
+    make_closure .<lambda(test_throws_never_but_throws, 0)>, 0
     call_indirect
     return
 }

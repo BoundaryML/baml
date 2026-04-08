@@ -9,3 +9,312 @@ function user.takes_throwing(f: () -> int throws string) -> int throws never {
   }
 }
 type user.ThrowingFn$stream = unknown
+class user.PureHandler {
+  run: () -> null
+}
+class user.ThrowingHandler {
+  run: () -> null throws string
+}
+class user.MixedHandler {
+  safe: () -> int
+  risky: () -> int throws string
+}
+function user.make_pure_handler() -> user.PureHandler throws never {
+  { : user.PureHandler
+    PureHandler { run: () -> null { ... } } : user.PureHandler
+  }
+}
+lambda user.make_pure_handler {
+}
+function user.make_throwing_handler() -> user.ThrowingHandler throws never {
+  { : user.ThrowingHandler
+    ThrowingHandler { run: () -> null { ... } } : user.ThrowingHandler
+  }
+}
+lambda user.make_throwing_handler {
+}
+class user.PureHandler$stream {
+  run: unknown
+}
+class user.ThrowingHandler$stream {
+  run: unknown
+}
+class user.MixedHandler$stream {
+  safe: unknown
+  risky: unknown
+}
+function user.may_fail(x: int) -> string throws string {
+  { : "ok"
+    if (x == 0 : bool) : void
+      { : never
+        throw "zero" : "zero"
+      }
+    "ok" : "ok"
+  }
+}
+function user.always_ok(x: int) -> string throws never {
+  { : "always ok"
+    "always ok" : "always ok"
+  }
+}
+function user.caller() -> string throws never {
+  { : string
+    may_fail(1) : string
+  }
+}
+function user.safe_caller() -> string throws never {
+  { : string | "caught"
+    catch (may_fail(1) : string) : unknown
+      catch (e)
+        _ =>
+          "caught" : "caught"
+  }
+}
+type user.ThrowingCallback = () -> int throws string
+type user.PureCallback = () -> int
+type user.ExplicitPure = () -> int
+type user.Mapper = (int) -> string throws string
+type user.Wrapper = (() -> int) -> int throws string
+type user.ThrowingCallback$stream = unknown
+type user.PureCallback$stream = unknown
+type user.ExplicitPure$stream = unknown
+type user.Mapper$stream = unknown
+type user.Wrapper$stream = unknown
+function user.apply(f: () -> int) -> int throws never {
+  { : int
+    f() : int
+  }
+}
+function user.test_apply_pure() -> int throws never {
+  { : int
+    apply(() -> int { ... }) : int
+      () -> int { ... } : () -> 42
+        {
+          42
+        }
+  }
+}
+lambda user.test_apply_pure {
+}
+function user.test_apply_throwing() -> int throws never {
+  { : int
+    apply(() -> int { ... }) : int
+      () -> int { ... } : () -> never throws string
+        {
+          throw "boom"
+        }
+  }
+}
+lambda user.test_apply_throwing {
+}
+function user.apply_throwing(f: () -> int throws string) -> int throws never {
+  { : int
+    f() : int
+  }
+}
+function user.test_apply_explicit_throws() -> int throws never {
+  { : int
+    apply_throwing(() -> int { ... }) : int
+      () -> int { ... } : () -> never throws string
+        {
+          throw "boom"
+        }
+  }
+}
+lambda user.test_apply_explicit_throws {
+}
+function user.apply_and_throw(f: () -> int) -> int throws never {
+  { : int
+    let result = f() : int
+    if (result < 0 : bool) : void
+      { : never
+        throw "negative result" : "negative result"
+      }
+    result : int
+  }
+}
+function user.test_apply_and_throw_pure() -> int throws never {
+  { : int
+    apply_and_throw(() -> int { ... }) : int
+      () -> int { ... } : () -> 42
+        {
+          42
+        }
+  }
+}
+lambda user.test_apply_and_throw_pure {
+}
+function user.test_explicit_throws_match() -> int throws never {
+  { : never
+    let f = : () -> never throws string
+      () -> int throws string { ... } : () -> never throws string
+        {
+          throw "boom"
+        }
+    f() : never
+  }
+}
+lambda user.test_explicit_throws_match {
+}
+function user.test_explicit_throws_never_pure() -> int throws never {
+  { : 42
+    let f = : () -> 42
+      () -> int throws never { ... } : () -> 42
+        {
+          42
+        }
+    f() : 42
+  }
+}
+lambda user.test_explicit_throws_never_pure {
+}
+function user.test_explicit_throws_wider_than_body() -> int throws never {
+  { : 42
+    let f = : () -> 42 throws string
+      () -> int throws string { ... } : () -> 42 throws string
+        {
+          42
+        }
+    f() : 42
+  }
+}
+lambda user.test_explicit_throws_wider_than_body {
+  ?? 547..554: extraneous throws declaration: string
+}
+function user.test_pure_lambda() -> int throws never {
+  { : 42
+    let f = : () -> 42
+      () -> int { ... } : () -> 42
+        {
+          42
+        }
+    f() : 42
+  }
+}
+lambda user.test_pure_lambda {
+}
+function user.test_throwing_lambda() -> int throws never {
+  { : never
+    let f = : () -> never throws string
+      () -> int { ... } : () -> never throws string
+        {
+          throw "boom"
+        }
+    f() : never
+  }
+}
+lambda user.test_throwing_lambda {
+}
+function user.test_throwing_int() -> string throws never {
+  { : never
+    let f = : () -> never throws int
+      () -> string { ... } : () -> never throws int
+        {
+          throw 42
+        }
+    f() : never
+  }
+}
+lambda user.test_throwing_int {
+}
+function user.test_conditional_throw(x: int) -> int throws never {
+  { : int
+    let f = : (n: int) -> int throws string
+      (n: int) -> int { ... } : (n: int) -> int throws string
+        {
+          if (n < 0)
+            {
+              throw "negative"
+            }
+          n
+        }
+    f(x) : int
+  }
+}
+lambda user.test_conditional_throw {
+}
+function user.test_multi_throw_types(x: int) -> string throws never {
+  { : "ok"
+    let f = : (n: int) -> "ok" throws int | string
+      (n: int) -> string { ... } : (n: int) -> "ok" throws int | string
+        {
+          match (n) { 0 => throw "string error", 1 => throw 1, _ => "ok" }
+        }
+    f(x) : "ok"
+  }
+}
+lambda user.test_multi_throw_types {
+}
+function user.test_throws_never_but_throws() -> int throws never {
+  { : never
+    let f = : () -> never
+      () -> int throws never { ... } : () -> never
+        {
+          throw "boom"
+        }
+    f() : never
+  }
+}
+lambda user.test_throws_never_but_throws {
+  !! 213..219: throws contract violation: `never` is missing string
+}
+function user.test_nested_inner_throws() -> int throws never {
+  { : never
+    let outer = : () -> never throws string
+      () -> int { ... } : () -> never throws string
+        {
+          let inner = ...
+            () -> int { ... }
+              {
+                throw "inner boom"
+              }
+          inner()
+        }
+    outer() : never
+  }
+}
+lambda user.test_nested_inner_throws {
+}
+lambda user.test_nested_inner_throws {
+}
+function user.test_nested_outer_throws() -> int throws never {
+  { : never
+    let outer = : () -> never throws string
+      () -> int { ... } : () -> never throws string
+        {
+          let inner = ...
+            () -> int { ... }
+              {
+                42
+              }
+          throw "outer boom"
+        }
+    outer() : never
+  }
+}
+lambda user.test_nested_outer_throws {
+}
+lambda user.test_nested_outer_throws {
+}
+function user.test_nested_both_throw() -> int throws never {
+  { : never
+    let outer = : () -> never throws int | unknown
+      () -> int { ... } : () -> never throws int | unknown
+        {
+          let inner = ...
+            () -> int { ... }
+              {
+                throw 42
+              }
+          inner()
+          throw "outer"
+        }
+    outer() : never
+  }
+  ?? 0..0: unreachable code: 1 statement(s) after diverging statement
+}
+lambda user.test_nested_both_throw {
+  ?? 568..575: unreachable code: 1 statement(s) after diverging statement
+}
+lambda user.test_nested_both_throw {
+}

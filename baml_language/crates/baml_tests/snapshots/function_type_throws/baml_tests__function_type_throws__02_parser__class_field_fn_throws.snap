@@ -1,0 +1,135 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "PureHandler"
+    L_BRACE "{"
+    FIELD
+      WORD "run"
+      COLON ":"
+      TYPE_EXPR
+        L_PAREN "("
+        R_PAREN ")"
+        ARROW "->"
+        TYPE_EXPR "null"
+          WORD "null"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "ThrowingHandler"
+    L_BRACE "{"
+    FIELD
+      WORD "run"
+      COLON ":"
+      TYPE_EXPR
+        L_PAREN "("
+        R_PAREN ")"
+        ARROW "->"
+        TYPE_EXPR "null"
+          WORD "null"
+        THROWS_CLAUSE
+          KW_THROWS "throws"
+          TYPE_EXPR "string"
+            WORD "string"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "MixedHandler"
+    L_BRACE "{"
+    FIELD
+      WORD "safe"
+      COLON ":"
+      TYPE_EXPR
+        L_PAREN "("
+        R_PAREN ")"
+        ARROW "->"
+        TYPE_EXPR "int"
+          WORD "int"
+    FIELD
+      WORD "risky"
+      COLON ":"
+      TYPE_EXPR
+        L_PAREN "("
+        R_PAREN ")"
+        ARROW "->"
+        TYPE_EXPR "int"
+          WORD "int"
+        THROWS_CLAUSE
+          KW_THROWS "throws"
+          TYPE_EXPR "string"
+            WORD "string"
+    R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "make_pure_handler"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "PureHandler"
+      WORD "PureHandler"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        OBJECT_LITERAL
+          WORD "PureHandler"
+          L_BRACE "{"
+          OBJECT_FIELD
+            WORD "run"
+            COLON ":"
+            LAMBDA_EXPR
+              PARAMETER_LIST "()"
+                L_PAREN "("
+                R_PAREN ")"
+              ARROW "->"
+              TYPE_EXPR "null"
+                WORD "null"
+              BLOCK_EXPR "{ null }"
+                L_BRACE "{"
+                WORD "null"
+                R_BRACE "}"
+          R_BRACE "}"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "make_throwing_handler"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "ThrowingHandler"
+      WORD "ThrowingHandler"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        OBJECT_LITERAL
+          WORD "ThrowingHandler"
+          L_BRACE "{"
+          OBJECT_FIELD
+            WORD "run"
+            COLON ":"
+            LAMBDA_EXPR
+              PARAMETER_LIST "()"
+                L_PAREN "("
+                R_PAREN ")"
+              ARROW "->"
+              TYPE_EXPR "null"
+                WORD "null"
+              BLOCK_EXPR
+                L_BRACE "{"
+                THROW_STMT
+                  THROW_EXPR
+                    KW_THROW "throw"
+                    STRING_LITERAL "error"
+                      QUOTE """
+                      WORD "error"
+                      QUOTE """
+                R_BRACE "}"
+          R_BRACE "}"
+        R_BRACE "}"
+
+=== ERRORS ===
+None

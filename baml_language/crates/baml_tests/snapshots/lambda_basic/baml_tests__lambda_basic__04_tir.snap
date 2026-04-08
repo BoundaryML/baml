@@ -52,8 +52,8 @@ lambda user.test_map_inferred {
 }
 function user.test_throws() -> int throws never {
   { : int
-    let risky = : (x: int) -> int
-      (x: int) -> int throws string { ... } : (x: int) -> int
+    let risky = : (x: int) -> int throws string
+      (x: int) -> int throws string { ... } : (x: int) -> int throws string
         {
           if (x < 0)
             {

@@ -478,6 +478,13 @@ pub fn infer_scope_types<'db>(
                                     if let Some(root_expr) = lambda_body.root_expr {
                                         builder.infer_expr(root_expr, lambda_body);
                                     }
+                                    // Validate declared `throws` against effective escaping throws.
+                                    builder.check_throws_contract(
+                                        lambda_body,
+                                        func_def.throws.as_ref().map(|te| &te.expr),
+                                        func_def.throws.as_ref().map(|te| te.span),
+                                        func_def.span,
+                                    );
                                 }
                             }
                             break 'ancestor_walk;
@@ -527,6 +534,13 @@ pub fn infer_scope_types<'db>(
                                     if let Some(root_expr) = lambda_body.root_expr {
                                         builder.infer_expr(root_expr, lambda_body);
                                     }
+                                    // Validate declared `throws` against effective escaping throws.
+                                    builder.check_throws_contract(
+                                        lambda_body,
+                                        func_def.throws.as_ref().map(|te| &te.expr),
+                                        func_def.throws.as_ref().map(|te| te.span),
+                                        func_def.span,
+                                    );
                                 }
                             }
                             break 'ancestor_walk;

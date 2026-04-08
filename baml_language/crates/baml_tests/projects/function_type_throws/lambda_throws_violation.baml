@@ -1,0 +1,7 @@
+// === Lambda throws contract violations (should produce errors) ===
+
+// Lambda with explicit throws never but body throws - should error
+function test_throws_never_but_throws() -> int {
+  let f = () -> int throws never { throw "boom" }
+  f()
+}

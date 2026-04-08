@@ -2,4 +2,42 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-No errors found.
+  [type] Warning: extraneous throws declaration: string
+    ╭─[ lambda_throws_explicit.baml:17:27 ]
+    │
+ 17 │   let f = () -> int throws string { 42 }
+    │                           ───┬───  
+    │                              ╰───── extraneous throws declaration: string
+    │ 
+    │ Note: Error code: E0001
+────╯
+
+  [type] Error: throws contract violation: `never` is missing string
+   ╭─[ lambda_throws_violation.baml:5:27 ]
+   │
+ 5 │   let f = () -> int throws never { throw "boom" }
+   │                           ───┬──  
+   │                              ╰──── throws contract violation: `never` is missing string
+   │ 
+   │ Note: Error code: E0001
+───╯
+
+  [type] Warning: unreachable code: 1 statement(s) after diverging statement
+   ╭─[ nested_lambda_throws.baml:1:1 ]
+   │
+ 1 │ // === Nested lambda throws behavior ===
+   │ │ 
+   │ ╰─ unreachable code: 1 statement(s) after diverging statement
+   │ 
+   │ Note: Error code: E0001
+───╯
+
+  [type] Warning: unreachable code: 1 statement(s) after diverging statement
+    ╭─[ nested_lambda_throws.baml:25:5 ]
+    │
+ 25 │     inner()
+    │     ───┬───  
+    │        ╰───── unreachable code: 1 statement(s) after diverging statement
+    │ 
+    │ Note: Error code: E0001
+────╯

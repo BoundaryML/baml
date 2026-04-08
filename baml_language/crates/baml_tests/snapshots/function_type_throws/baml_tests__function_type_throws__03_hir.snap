@@ -6,3 +6,93 @@ type user.ThrowingFn = () -> int
 function user.takes_throwing(f: () -> int) -> int  [expr] {
   {  } f()
 }
+class user.MixedHandler {
+  safe: () -> int
+  risky: () -> int
+}
+class user.PureHandler {
+  run: () -> null
+}
+class user.ThrowingHandler {
+  run: () -> null
+}
+function user.make_pure_handler() -> user.PureHandler  [expr] {
+  {  } user.PureHandler { run: () -> null { {  } null } }
+}
+function user.make_throwing_handler() -> user.ThrowingHandler  [expr] {
+  {  } user.ThrowingHandler { run: () -> null { { throw "error" } } }
+}
+function user.always_ok(x: int) -> string  [expr] {
+  {  } "always ok"
+}
+function user.caller() -> string  [expr] {
+  {  } may_fail(1)
+}
+function user.may_fail(x: int) -> string  [expr] {
+  { if (x Eq 0) { throw "zero" } } "ok"
+}
+function user.safe_caller() -> string  [expr] {
+  {  } may_fail(1) catch (e) { _ => "caught" }
+}
+type user.ExplicitPure = () -> int
+type user.Mapper = (int) -> string
+type user.PureCallback = () -> int
+type user.ThrowingCallback = () -> int
+type user.Wrapper = (() -> int) -> int
+function user.apply(f: () -> int) -> int  [expr] {
+  {  } f()
+}
+function user.apply_and_throw(f: () -> int) -> int  [expr] {
+  { let result = f(); if (result Lt 0) { throw "negative result" } } result
+}
+function user.apply_throwing(f: () -> int) -> int  [expr] {
+  {  } f()
+}
+function user.test_apply_and_throw_pure() -> int  [expr] {
+  {  } apply_and_throw(() -> int { {  } 42 })
+}
+function user.test_apply_explicit_throws() -> int  [expr] {
+  {  } apply_throwing(() -> int { { throw "boom" } })
+}
+function user.test_apply_pure() -> int  [expr] {
+  {  } apply(() -> int { {  } 42 })
+}
+function user.test_apply_throwing() -> int  [expr] {
+  {  } apply(() -> int { { throw "boom" } })
+}
+function user.test_explicit_throws_match() -> int  [expr] {
+  { let f = () -> int throws string { { throw "boom" } } } f()
+}
+function user.test_explicit_throws_never_pure() -> int  [expr] {
+  { let f = () -> int throws never { {  } 42 } } f()
+}
+function user.test_explicit_throws_wider_than_body() -> int  [expr] {
+  { let f = () -> int throws string { {  } 42 } } f()
+}
+function user.test_conditional_throw(x: int) -> int  [expr] {
+  { let f = (n: int) -> int { { if (n Lt 0) { throw "negative" } } n } } f(x)
+}
+function user.test_multi_throw_types(x: int) -> string  [expr] {
+  { let f = (n: int) -> string { {  } match (n) { 0 => throw "string error", 1 => throw 1, _ => "ok" } } } f(x)
+}
+function user.test_pure_lambda() -> int  [expr] {
+  { let f = () -> int { {  } 42 } } f()
+}
+function user.test_throwing_int() -> string  [expr] {
+  { let f = () -> string { { throw 42 } } } f()
+}
+function user.test_throwing_lambda() -> int  [expr] {
+  { let f = () -> int { { throw "boom" } } } f()
+}
+function user.test_throws_never_but_throws() -> int  [expr] {
+  { let f = () -> int throws never { { throw "boom" } } } f()
+}
+function user.test_nested_both_throw() -> int  [expr] {
+  { let outer = () -> int { { let inner = () -> int { { throw 42 } }; inner(); throw "outer" } } } outer()
+}
+function user.test_nested_inner_throws() -> int  [expr] {
+  { let outer = () -> int { { let inner = () -> int { { throw "inner boom" } } } inner() } } outer()
+}
+function user.test_nested_outer_throws() -> int  [expr] {
+  { let outer = () -> int { { let inner = () -> int { {  } 42 }; throw "outer boom" } } } outer()
+}
