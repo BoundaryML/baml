@@ -142,24 +142,20 @@ fn user.ProcessData(data: JsonData) -> string {
         _2 = copy _3 + copy _4;
         _6 = copy _2;
         _5 = copy _6 > const 100_i64;
-        branch copy _5 -> [bb3, bb1];
+        branch copy _5 -> [bb2, bb1];
     }
 
     bb1: {
-        goto -> bb2;
+        _0 = const "low";
+        goto -> bb3;
     }
 
     bb2: {
-        _0 = const "low";
-        goto -> bb4;
+        _0 = const "high";
+        goto -> bb3;
     }
 
     bb3: {
-        _0 = const "high";
-        goto -> bb4;
-    }
-
-    bb4: {
         return;
     }
 }

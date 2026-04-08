@@ -383,19 +383,15 @@ fn baml.llm.PlannerState.rr_local_offset(self: baml.llm.PlannerState, client_nam
         _9 = copy _8;
         _11 = copy _9;
         _10 = copy _11 == copy _2;
-        branch copy _10 -> [bb6, bb5];
+        branch copy _10 -> [bb5, bb6];
     }
 
     bb5: {
-        goto -> bb7;
+        _3 = copy _3 + const 1_i64;
+        goto -> bb6;
     }
 
     bb6: {
-        _3 = copy _3 + const 1_i64;
-        goto -> bb7;
-    }
-
-    bb7: {
         _5 = copy _5 + const 1_i64;
         goto -> bb1;
     }
@@ -502,7 +498,7 @@ fn baml.llm.Client.build_attempt_with_state(self: baml.llm.Client, planner_state
     bb0: {
         _3 = copy _1.1;
         _4 = discriminant(_3);
-        switch copy _4 [ClientType.Primitive: bb18, ClientType.Fallback: bb8, ClientType.RoundRobin: bb2, otherwise: bb1] (exhaustive);
+        switch copy _4 [ClientType.Primitive: bb17, ClientType.Fallback: bb8, ClientType.RoundRobin: bb2, otherwise: bb1] (exhaustive);
     }
 
     bb1: {
@@ -534,12 +530,12 @@ fn baml.llm.Client.build_attempt_with_state(self: baml.llm.Client, planner_state
         _37 = copy _1.2;
         _38 = copy _31;
         _36 = copy _37[_38];
-        _0 = call const fn baml.llm.Client.build_plan_with_state(copy _36, copy _2) -> [bb22];
+        _0 = call const fn baml.llm.Client.build_plan_with_state(copy _36, copy _2) -> [bb21];
     }
 
     bb7: {
         _0 = [];
-        goto -> bb22;
+        goto -> bb21;
     }
 
     bb8: {
@@ -557,7 +553,7 @@ fn baml.llm.Client.build_attempt_with_state(self: baml.llm.Client, planner_state
 
     bb10: {
         _0 = copy _11;
-        goto -> bb22;
+        goto -> bb21;
     }
 
     bb11: {
@@ -575,52 +571,48 @@ fn baml.llm.Client.build_attempt_with_state(self: baml.llm.Client, planner_state
     bb13: {
         _21 = len(_18);
         _22 = copy _20 < copy _21;
-        branch copy _22 -> [bb16, bb14];
+        branch copy _22 -> [bb15, bb14];
     }
 
     bb14: {
-        goto -> bb15;
-    }
-
-    bb15: {
         _13 = copy _13 + const 1_i64;
         goto -> bb9;
     }
 
-    bb16: {
+    bb15: {
         _23 = copy _18[_20];
         _24 = copy _23;
         _26 = copy _11;
         _27 = copy _24;
-        _25 = call const fn baml.Array.push(copy _26, copy _27) -> [bb17];
+        _25 = call const fn baml.Array.push(copy _26, copy _27) -> [bb16];
     }
 
-    bb17: {
+    bb16: {
         _20 = copy _20 + const 1_i64;
         goto -> bb13;
     }
 
+    bb17: {
+        _6 = dispatch_future const fn baml.llm.Client.get_constructor(copy _1) -> bb18;
+    }
+
     bb18: {
-        _6 = dispatch_future const fn baml.llm.Client.get_constructor(copy _1) -> bb19;
+        _5 = await _6 -> [bb19];
     }
 
     bb19: {
-        _5 = await _6 -> [bb20];
+        _8 = copy _5;
+        _7 = call copy _8() -> [bb20];
     }
 
     bb20: {
-        _8 = copy _5;
-        _7 = call copy _8() -> [bb21];
-    }
-
-    bb21: {
         _10 = copy _7;
         _9 = OrchestrationStep { copy _10, const 0_i64 };
         _0 = [copy _9];
-        goto -> bb22;
+        goto -> bb21;
     }
 
-    bb22: {
+    bb21: {
         return;
     }
 }
@@ -738,19 +730,15 @@ fn baml.llm.Client.build_plan_with_state(self: baml.llm.Client, planner_state: b
         _15 = const 0_i64;
         _17 = copy _10;
         _16 = copy _17 > const 0_i64;
-        branch copy _16 -> [bb9, bb8];
+        branch copy _16 -> [bb8, bb12];
     }
 
     bb8: {
-        goto -> bb13;
+        _18 = copy _7;
+        _15 = call const fn baml.math.trunc(copy _18) -> [bb9];
     }
 
     bb9: {
-        _18 = copy _7;
-        _15 = call const fn baml.math.trunc(copy _18) -> [bb10];
-    }
-
-    bb10: {
         _20 = copy _7;
         _22 = copy _5;
         _21 = copy _22.2;
@@ -760,47 +748,43 @@ fn baml.llm.Client.build_plan_with_state(self: baml.llm.Client, planner_state: b
         _26 = copy _27.3;
         _25 = copy _26 + const 0_f64;
         _23 = copy _24 > copy _25;
-        branch copy _23 -> [bb12, bb11];
+        branch copy _23 -> [bb11, bb10];
+    }
+
+    bb10: {
+        _7 = copy _19;
+        goto -> bb12;
     }
 
     bb11: {
-        _7 = copy _19;
-        goto -> bb13;
-    }
-
-    bb12: {
         _29 = copy _5;
         _28 = copy _29.3;
         _7 = copy _28 + const 0_f64;
-        goto -> bb13;
+        goto -> bb12;
+    }
+
+    bb12: {
+        _30 = call const fn baml.llm.Client.build_attempt_with_state(copy _1, copy _2) -> [bb13];
     }
 
     bb13: {
-        _30 = call const fn baml.llm.Client.build_attempt_with_state(copy _1, copy _2) -> [bb14];
+        _31 = copy _30;
+        _32 = const 0_i64;
+        goto -> bb14;
     }
 
     bb14: {
-        _31 = copy _30;
-        _32 = const 0_i64;
-        goto -> bb15;
+        _33 = len(_31);
+        _34 = copy _32 < copy _33;
+        branch copy _34 -> [bb16, bb15];
     }
 
     bb15: {
-        _33 = len(_31);
-        _34 = copy _32 < copy _33;
-        branch copy _34 -> [bb18, bb16];
-    }
-
-    bb16: {
-        goto -> bb17;
-    }
-
-    bb17: {
         _10 = copy _10 + const 1_i64;
         goto -> bb4;
     }
 
-    bb18: {
+    bb16: {
         _35 = copy _31[_32];
         _36 = copy _35;
         _38 = copy _6;
@@ -808,16 +792,12 @@ fn baml.llm.Client.build_plan_with_state(self: baml.llm.Client, planner_state: b
         _40 = copy _41.0;
         _42 = copy _15;
         _39 = OrchestrationStep { copy _40, copy _42 };
-        _37 = call const fn baml.Array.push(copy _38, copy _39) -> [bb19];
+        _37 = call const fn baml.Array.push(copy _38, copy _39) -> [bb17];
     }
 
-    bb19: {
-        goto -> bb20;
-    }
-
-    bb20: {
+    bb17: {
         _32 = copy _32 + const 1_i64;
-        goto -> bb15;
+        goto -> bb14;
     }
 }
 
@@ -874,7 +854,7 @@ fn baml.llm.Client.execute(self: baml.llm.Client, context: baml.llm.ExecutionCon
 
     bb1: {
         _38 = copy _4 == const null;
-        branch copy _38 -> [bb2, bb20];
+        branch copy _38 -> [bb2, bb18];
     }
 
     bb2: {
@@ -883,7 +863,7 @@ fn baml.llm.Client.execute(self: baml.llm.Client, context: baml.llm.ExecutionCon
 
     bb3: {
         _0 = copy _39;
-        goto -> bb20;
+        goto -> bb18;
     }
 
     bb4: {
@@ -921,19 +901,15 @@ fn baml.llm.Client.execute(self: baml.llm.Client, context: baml.llm.ExecutionCon
         _15 = copy _3;
         _17 = copy _10;
         _16 = copy _17 > const 0_i64;
-        branch copy _16 -> [bb11, bb10];
+        branch copy _16 -> [bb10, bb14];
     }
 
     bb10: {
-        goto -> bb15;
+        _18 = copy _7;
+        _15 = call const fn baml.math.trunc(copy _18) -> [bb11];
     }
 
     bb11: {
-        _18 = copy _7;
-        _15 = call const fn baml.math.trunc(copy _18) -> [bb12];
-    }
-
-    bb12: {
         _20 = copy _7;
         _22 = copy _6;
         _21 = copy _22.2;
@@ -943,49 +919,45 @@ fn baml.llm.Client.execute(self: baml.llm.Client, context: baml.llm.ExecutionCon
         _26 = copy _27.3;
         _25 = copy _26 + const 0_f64;
         _23 = copy _24 > copy _25;
-        branch copy _23 -> [bb14, bb13];
+        branch copy _23 -> [bb13, bb12];
+    }
+
+    bb12: {
+        _7 = copy _19;
+        goto -> bb14;
     }
 
     bb13: {
-        _7 = copy _19;
-        goto -> bb15;
-    }
-
-    bb14: {
         _29 = copy _6;
         _28 = copy _29.3;
         _7 = copy _28 + const 0_f64;
-        goto -> bb15;
+        goto -> bb14;
     }
 
-    bb15: {
+    bb14: {
         _31 = copy _10;
         _33 = copy _6;
         _32 = copy _33.0;
         _30 = copy _31 == copy _32;
-        branch copy _30 -> [bb17, bb16];
+        branch copy _30 -> [bb15, bb16];
+    }
+
+    bb15: {
+        _15 = copy _3;
+        goto -> bb16;
     }
 
     bb16: {
-        goto -> bb18;
+        _36 = copy _15;
+        _34 = call const fn baml.llm.Client.execute_once(copy _1, copy _2, copy _36) -> [bb17, unwind: bb5];
     }
 
     bb17: {
-        _15 = copy _3;
+        _0 = copy _34;
         goto -> bb18;
     }
 
     bb18: {
-        _36 = copy _15;
-        _34 = call const fn baml.llm.Client.execute_once(copy _1, copy _2, copy _36) -> [bb19, unwind: bb5];
-    }
-
-    bb19: {
-        _0 = copy _34;
-        goto -> bb20;
-    }
-
-    bb20: {
         return;
     }
 }

@@ -1595,19 +1595,15 @@ fn user.test_shadowing() -> string {
         _14 = copy _12;
         _15 = copy _11;
         _13 = copy _14 < copy _15;
-        branch copy _13 -> [bb9, bb7];
+        branch copy _13 -> [bb8, bb7];
     }
 
     bb7: {
-        goto -> bb8;
-    }
-
-    bb8: {
         _7 = copy _7 + const 1_i64;
         goto -> bb2;
     }
 
-    bb9: {
+    bb8: {
         _1 = copy _1 + const "1";
         _12 = copy _12 + const 1_i64;
         goto -> bb6;

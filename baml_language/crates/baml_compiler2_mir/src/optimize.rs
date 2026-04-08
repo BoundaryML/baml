@@ -23,6 +23,7 @@ pub(crate) fn optimize_function(func: &mut MirFunction) {
     merge_passthrough_blocks(body);
     propagate_copies(body, func.arity);
     eliminate_dead_locals(body, func.arity);
+    merge_passthrough_blocks(body); // catch blocks emptied by copy-prop / dead-local elim
     reorder_blocks_rpo(body);
 
     #[cfg(debug_assertions)]
@@ -38,6 +39,7 @@ pub(crate) fn optimize_function_body(body: &mut MirFunctionBody) {
     merge_passthrough_blocks(body);
     propagate_copies(body, 0);
     eliminate_dead_locals(body, 0);
+    merge_passthrough_blocks(body); // catch blocks emptied by copy-prop / dead-local elim
     reorder_blocks_rpo(body);
 
     #[cfg(debug_assertions)]
