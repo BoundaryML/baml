@@ -6235,6 +6235,52 @@ func (*build_request) TestAws(input string, opts ...CallOptionFunc) (baml.HTTPRe
 	return bamlRuntime.BuildRequest(context.Background(), "TestAws", encoded)
 }
 
+// Build HTTP request for TestAwsCaching (returns baml.HTTPRequest)
+func (*build_request) TestAwsCaching(input string, not_cached string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	// Resolve client option to clientRegistry (client takes precedence)
+	if callOpts.client != nil {
+		if callOpts.clientRegistry == nil {
+			callOpts.clientRegistry = baml.NewClientRegistry()
+		}
+		callOpts.clientRegistry.SetPrimaryClient(*callOpts.client)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input, "not_cached": not_cached, "stream": false},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
+	encoded, err := args.Encode()
+	if err != nil {
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestAwsCaching: %w", err)
+		panic(wrapped_err)
+	}
+
+	return bamlRuntime.BuildRequest(context.Background(), "TestAwsCaching", encoded)
+}
+
 // Build HTTP request for TestAwsClaude37 (returns baml.HTTPRequest)
 func (*build_request) TestAwsClaude37(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
