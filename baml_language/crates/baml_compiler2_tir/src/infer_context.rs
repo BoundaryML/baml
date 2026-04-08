@@ -142,6 +142,14 @@ pub enum TirTypeError {
         /// The full expression text (e.g. `a.name`)
         expr: String,
     },
+    /// A throwing function is assigned to a stored position (class field, type alias,
+    /// return type, local variable) that defaults to `throws never`.
+    ///
+    /// The fix is to add an explicit `throws` annotation to the stored function type.
+    StoredFunctionRequiresExplicitThrows {
+        /// The inferred throws type of the actual function being stored.
+        actual_throws: Ty,
+    },
 }
 
 impl fmt::Display for TirTypeError {
@@ -308,6 +316,13 @@ impl fmt::Display for TirTypeError {
                 write!(
                     f,
                     "did you mean `{suggested}`? `{expr}` does not handle the case when `{base}` is null"
+                )
+            }
+            TirTypeError::StoredFunctionRequiresExplicitThrows { actual_throws } => {
+                write!(
+                    f,
+                    "function that `throws {actual_throws}` cannot be stored in a position typed `throws never`; \
+                    add an explicit `throws {actual_throws}` annotation to the stored function type"
                 )
             }
         }

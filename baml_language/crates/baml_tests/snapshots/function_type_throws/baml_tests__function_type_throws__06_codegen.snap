@@ -114,6 +114,22 @@ function user.helper_with_body_throw() -> int {
     throw
 }
 
+function user.make_bad_stored_handler() -> StoredPureHandler {
+    alloc_instance StoredPureHandler
+    copy 0
+    make_closure .<lambda(make_bad_stored_handler, 0)>, 0
+    store_field .run
+    return
+}
+
+function user.make_good_stored_handler() -> StoredPureHandler {
+    alloc_instance StoredPureHandler
+    copy 0
+    make_closure .<lambda(make_good_stored_handler, 0)>, 0
+    store_field .run
+    return
+}
+
 function user.make_pure() -> () -> int {
     load_const null
     return
@@ -123,6 +139,29 @@ function user.make_pure_handler() -> PureHandler {
     alloc_instance PureHandler
     copy 0
     make_closure .<lambda(make_pure_handler, 0)>, 0
+    store_field .run
+    return
+}
+
+function user.make_stored_closure_bad() -> () -> int {
+    make_closure .<lambda(make_stored_closure_bad, 0)>, 0
+    return
+}
+
+function user.make_stored_closure_good() -> () -> int {
+    make_closure .<lambda(make_stored_closure_good, 0)>, 0
+    return
+}
+
+function user.make_stored_closure_with_throws() -> () -> int {
+    make_closure .<lambda(make_stored_closure_with_throws, 0)>, 0
+    return
+}
+
+function user.make_stored_throwing_handler() -> StoredThrowingHandler {
+    alloc_instance StoredThrowingHandler
+    copy 0
+    make_closure .<lambda(make_stored_throwing_handler, 0)>, 0
     store_field .run
     return
 }
@@ -438,6 +477,31 @@ function user.test_run_pure() -> int {
 function user.test_run_throwing() -> int {
     make_closure .<lambda(test_run_throwing, 0)>, 0
     call user.run_throwing
+    return
+}
+
+function user.test_stored_alias_error() -> null {
+    load_const null
+    return
+}
+
+function user.test_stored_alias_ok() -> null {
+    load_const null
+    return
+}
+
+function user.test_stored_local_error() -> null {
+    load_const null
+    return
+}
+
+function user.test_stored_local_ok() -> null {
+    load_const null
+    return
+}
+
+function user.test_stored_local_with_throws() -> null {
+    load_const null
     return
 }
 

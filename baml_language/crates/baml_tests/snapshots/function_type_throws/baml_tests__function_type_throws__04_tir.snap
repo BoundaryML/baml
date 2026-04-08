@@ -708,3 +708,135 @@ function user.test_use_thrower() -> int throws string {
     f() : int
   }
 }
+class user.StoredPureHandler {
+  run: () -> null
+}
+function user.make_bad_stored_handler() -> user.StoredPureHandler throws never {
+  { : user.StoredPureHandler
+    StoredPureHandler { run: () -> null { ... } } : user.StoredPureHandler
+  }
+  !! 378..407: function that `throws string` cannot be stored in a position typed `throws never`; add an explicit `throws string` annotation to the stored function type
+}
+lambda user.make_bad_stored_handler {
+}
+function user.make_good_stored_handler() -> user.StoredPureHandler throws never {
+  { : user.StoredPureHandler
+    StoredPureHandler { run: () -> null { ... } } : user.StoredPureHandler
+  }
+}
+lambda user.make_good_stored_handler {
+}
+class user.StoredThrowingHandler {
+  run: () -> null throws string
+}
+function user.make_stored_throwing_handler() -> user.StoredThrowingHandler throws never {
+  { : user.StoredThrowingHandler
+    StoredThrowingHandler { run: () -> null { ... } } : user.StoredThrowingHandler
+  }
+}
+lambda user.make_stored_throwing_handler {
+}
+function user.test_stored_local_error() -> null throws never {
+  { : null
+    let f = : () -> never throws string
+      () -> null { ... } : () -> never throws string
+        {
+          throw "oops"
+        }
+    null : null
+  }
+  !! 1059..1087: function that `throws string` cannot be stored in a position typed `throws never`; add an explicit `throws string` annotation to the stored function type
+}
+lambda user.test_stored_local_error {
+}
+function user.test_stored_local_ok() -> null throws never {
+  { : null
+    let f = : () -> null
+      () -> null { ... } : () -> null
+        {
+          null
+        }
+    null : null
+  }
+}
+lambda user.test_stored_local_ok {
+}
+function user.test_stored_local_with_throws() -> null throws never {
+  { : null
+    let f = : () -> never throws string
+      () -> null { ... } : () -> never throws string
+        {
+          throw "oops"
+        }
+    null : null
+  }
+}
+lambda user.test_stored_local_with_throws {
+}
+type user.StoredPureCb = () -> int
+function user.test_stored_alias_error() -> null throws never {
+  { : null
+    let cb = : () -> never throws string
+      () -> int { ... } : () -> never throws string
+        {
+          throw "error"
+        }
+    null : null
+  }
+  !! 1651..1679: function that `throws string` cannot be stored in a position typed `throws never`; add an explicit `throws string` annotation to the stored function type
+}
+lambda user.test_stored_alias_error {
+}
+function user.test_stored_alias_ok() -> null throws never {
+  { : null
+    let cb = : () -> 42
+      () -> int { ... } : () -> 42
+        {
+          42
+        }
+    null : null
+  }
+}
+lambda user.test_stored_alias_ok {
+}
+function user.make_stored_closure_bad() -> () -> int throws never {
+  { : never
+    return : () -> never throws string
+      () -> int { ... } : () -> never throws string
+        {
+          throw "oops"
+        }
+  }
+  !! 1980..2007: function that `throws string` cannot be stored in a position typed `throws never`; add an explicit `throws string` annotation to the stored function type
+}
+lambda user.make_stored_closure_bad {
+}
+function user.make_stored_closure_good() -> () -> int throws never {
+  { : never
+    return : () -> 42
+      () -> int { ... } : () -> 42
+        {
+          42
+        }
+  }
+}
+lambda user.make_stored_closure_good {
+}
+function user.make_stored_closure_with_throws() -> () -> int throws string throws never {
+  { : never
+    return : () -> never throws string
+      () -> int { ... } : () -> never throws string
+        {
+          throw "oops"
+        }
+  }
+}
+lambda user.make_stored_closure_with_throws {
+}
+class user.StoredPureHandler$stream {
+  run: unknown
+}
+class user.StoredThrowingHandler$stream {
+  run: unknown
+}
+type user.StoredPureCb$stream = unknown

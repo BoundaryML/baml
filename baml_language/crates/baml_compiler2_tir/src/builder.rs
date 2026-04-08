@@ -914,14 +914,8 @@ impl<'db> TypeInferenceBuilder<'db> {
                     // let the subtype check report the error.
                     let inferred = self.infer_expr(expr_id, body);
                     if !self.is_subtype(&inferred, expected) {
-                        self.context.report(
-                            TirTypeError::TypeMismatch {
-                                expected: expected.clone(),
-                                got: inferred.clone(),
-                            },
-                            expr_id,
-                            Vec::new(),
-                        );
+                        // Literals won't be functions, but use the helper for consistency
+                        self.report_type_mismatch(expected, &inferred, expr_id);
                     }
                     inferred
                 }
@@ -1119,7 +1113,9 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
             // Lambda: bidirectional checking against expected function type
             Expr::Lambda(func_def) => {
-                match expected {
+                // Resolve type aliases so we can decompose function types
+                let expected_resolved = self.resolve_alias_chain(expected);
+                match &expected_resolved {
                     Ty::Function {
                         params: expected_params,
                         ret: expected_ret,
@@ -1233,9 +1229,23 @@ impl<'db> TypeInferenceBuilder<'db> {
                         let result = Ty::Function {
                             params: param_tys,
                             ret: Box::new(ret_ty),
-                            throws: Box::new(throws_ty),
+                            throws: Box::new(throws_ty.clone()),
                             attr: TyAttr::default(),
                         };
+
+                        // Check throws compatibility: if expected is `throws never` but
+                        // lambda body throws, report the stored function diagnostic
+                        if matches!(expected_throws.as_ref(), Ty::Never { .. })
+                            && !matches!(throws_ty, Ty::Never { .. })
+                        {
+                            self.context.report_simple(
+                                TirTypeError::StoredFunctionRequiresExplicitThrows {
+                                    actual_throws: throws_ty,
+                                },
+                                expr_id,
+                            );
+                        }
+
                         self.record_expr_type(expr_id, result.clone());
                         result
                     }
@@ -1265,14 +1275,8 @@ impl<'db> TypeInferenceBuilder<'db> {
                     self.context
                         .report_simple(TirTypeError::VoidUsedAsValue, expr_id);
                 } else if !self.is_subtype(&inferred, expected) {
-                    self.context.report(
-                        TirTypeError::TypeMismatch {
-                            expected: expected.clone(),
-                            got: inferred.clone(),
-                        },
-                        expr_id,
-                        Vec::new(),
-                    );
+                    // Use specialized diagnostic for stored function throws mismatch
+                    self.report_type_mismatch(expected, &inferred, expr_id);
                 }
                 inferred
             }
@@ -1437,14 +1441,8 @@ impl<'db> TypeInferenceBuilder<'db> {
                         && !matches!(value_ty, Ty::Unknown { .. } | Ty::Error { .. })
                         && !self.is_subtype(&value_ty, decl_ty)
                     {
-                        self.context.report(
-                            TirTypeError::TypeMismatch {
-                                expected: decl_ty.clone(),
-                                got: value_ty.clone(),
-                            },
-                            *value,
-                            Vec::new(),
-                        );
+                        // Use specialized diagnostic for stored function throws mismatch
+                        self.report_type_mismatch(decl_ty, &value_ty, *value);
                     }
                     // Update the local to the assigned value's type (invalidates narrowing)
                     if let Expr::Path(segments) = &body.exprs[*target] {
@@ -4486,6 +4484,69 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// and performs equirecursive structural subtyping.
     fn is_subtype(&self, sub: &Ty, sup: &Ty) -> bool {
         crate::normalize::is_subtype_of(sub, sup, &self.aliases)
+    }
+
+    /// Report a type mismatch, with special handling for stored function throws.
+    ///
+    /// When assigning a throwing function to a stored position (class field, type alias,
+    /// return type, local) that defaults to `throws never`, emit a more specific diagnostic
+    /// explaining that explicit `throws` annotation is required.
+    fn report_type_mismatch(&self, expected: &Ty, got: &Ty, at: ExprId) {
+        // Resolve type aliases for comparison
+        let expected_resolved = self.resolve_alias_chain(expected);
+        let got_resolved = self.resolve_alias_chain(got);
+
+        // Check for stored function throws mismatch
+        if let (
+            Ty::Function {
+                throws: expected_throws,
+                ..
+            },
+            Ty::Function {
+                throws: actual_throws,
+                ..
+            },
+        ) = (&expected_resolved, &got_resolved)
+        {
+            // If expected is `throws never` but actual throws something else,
+            // emit the specific stored-function diagnostic
+            if matches!(expected_throws.as_ref(), Ty::Never { .. })
+                && !matches!(actual_throws.as_ref(), Ty::Never { .. })
+            {
+                self.context.report_simple(
+                    TirTypeError::StoredFunctionRequiresExplicitThrows {
+                        actual_throws: actual_throws.as_ref().clone(),
+                    },
+                    at,
+                );
+                return;
+            }
+        }
+
+        // Default: report generic type mismatch
+        self.context.report(
+            TirTypeError::TypeMismatch {
+                expected: expected.clone(),
+                got: got.clone(),
+            },
+            at,
+            Vec::new(),
+        );
+    }
+
+    /// Resolve a type alias chain to its underlying type (up to a depth limit).
+    fn resolve_alias_chain(&self, ty: &Ty) -> Ty {
+        let mut resolved = ty.clone();
+        for _ in 0..64 {
+            match &resolved {
+                Ty::TypeAlias(qtn, _) => match self.aliases.get(qtn) {
+                    Some(expanded) => resolved = expanded.clone(),
+                    None => break,
+                },
+                _ => break,
+            }
+        }
+        resolved
     }
 
     fn infer_binary_op(

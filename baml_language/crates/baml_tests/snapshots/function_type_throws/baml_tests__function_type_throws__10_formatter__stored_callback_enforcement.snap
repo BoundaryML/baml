@@ -1,0 +1,5 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== STRONG AST ERROR ===
+Unexpected additional element at stored_callback_enforcement.baml:23:18

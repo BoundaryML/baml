@@ -2109,3 +2109,293 @@ fn user.test_use_thrower() -> int {
         return;
     }
 }
+
+fn user.make_bad_stored_handler() -> StoredPureHandler {
+    // Locals:
+    let _0: StoredPureHandler // _0 // return
+    let _1: () -> void
+
+    bb0: {
+        _1 = make_closure lambda[0]();
+        _0 = StoredPureHandler { copy _1 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(make_bad_stored_handler, 0)>() -> null {
+    // Locals:
+    let _0: null // _0 // return
+
+    bb0: {
+        throw const "error";
+    }
+}
+
+fn user.make_good_stored_handler() -> StoredPureHandler {
+    // Locals:
+    let _0: StoredPureHandler // _0 // return
+    let _1: () -> null
+
+    bb0: {
+        _1 = make_closure lambda[0]();
+        _0 = StoredPureHandler { copy _1 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(make_good_stored_handler, 0)>() -> null {
+    // Locals:
+    let _0: null // _0 // return
+
+    bb0: {
+        _0 = const null;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.make_stored_closure_bad() -> () -> int {
+    // Locals:
+    let _0: () -> int // _0 // return
+
+    bb0: {
+        _0 = make_closure lambda[0]();
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(make_stored_closure_bad, 0)>() -> null {
+    // Locals:
+    let _0: null // _0 // return
+
+    bb0: {
+        throw const "oops";
+    }
+}
+
+fn user.make_stored_closure_good() -> () -> int {
+    // Locals:
+    let _0: () -> int // _0 // return
+
+    bb0: {
+        _0 = make_closure lambda[0]();
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(make_stored_closure_good, 0)>() -> null {
+    // Locals:
+    let _0: null // _0 // return
+
+    bb0: {
+        _0 = const 42_i64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.make_stored_closure_with_throws() -> () -> int {
+    // Locals:
+    let _0: () -> int // _0 // return
+
+    bb0: {
+        _0 = make_closure lambda[0]();
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(make_stored_closure_with_throws, 0)>() -> null {
+    // Locals:
+    let _0: null // _0 // return
+
+    bb0: {
+        throw const "oops";
+    }
+}
+
+fn user.make_stored_throwing_handler() -> StoredThrowingHandler {
+    // Locals:
+    let _0: StoredThrowingHandler // _0 // return
+    let _1: () -> void
+
+    bb0: {
+        _1 = make_closure lambda[0]();
+        _0 = StoredThrowingHandler { copy _1 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(make_stored_throwing_handler, 0)>() -> null {
+    // Locals:
+    let _0: null // _0 // return
+
+    bb0: {
+        throw const "error";
+    }
+}
+
+fn user.test_stored_alias_error() -> null {
+    // Locals:
+    let _0: null // _0 // return
+
+    bb0: {
+        _0 = const null;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(test_stored_alias_error, 0)>() -> null {
+    // Locals:
+    let _0: null // _0 // return
+
+    bb0: {
+        throw const "error";
+    }
+}
+
+fn user.test_stored_alias_ok() -> null {
+    // Locals:
+    let _0: null // _0 // return
+
+    bb0: {
+        _0 = const null;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(test_stored_alias_ok, 0)>() -> null {
+    // Locals:
+    let _0: null // _0 // return
+
+    bb0: {
+        _0 = const 42_i64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.test_stored_local_error() -> null {
+    // Locals:
+    let _0: null // _0 // return
+
+    bb0: {
+        _0 = const null;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(test_stored_local_error, 0)>() -> null {
+    // Locals:
+    let _0: null // _0 // return
+
+    bb0: {
+        throw const "oops";
+    }
+}
+
+fn user.test_stored_local_ok() -> null {
+    // Locals:
+    let _0: null // _0 // return
+
+    bb0: {
+        _0 = const null;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(test_stored_local_ok, 0)>() -> null {
+    // Locals:
+    let _0: null // _0 // return
+
+    bb0: {
+        _0 = const null;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.test_stored_local_with_throws() -> null {
+    // Locals:
+    let _0: null // _0 // return
+
+    bb0: {
+        _0 = const null;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(test_stored_local_with_throws, 0)>() -> null {
+    // Locals:
+    let _0: null // _0 // return
+
+    bb0: {
+        throw const "oops";
+    }
+}

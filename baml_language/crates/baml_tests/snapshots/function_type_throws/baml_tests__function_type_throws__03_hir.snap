@@ -225,3 +225,43 @@ function user.test_use_pure() -> int  [expr] {
 function user.test_use_thrower() -> int  [expr] {
   { let f = make_thrower() } f()
 }
+class user.StoredPureHandler {
+  run: () -> null
+}
+class user.StoredThrowingHandler {
+  run: () -> null
+}
+type user.StoredPureCb = () -> int
+function user.make_bad_stored_handler() -> user.StoredPureHandler  [expr] {
+  {  } user.StoredPureHandler { run: () -> null { { throw "error" } } }
+}
+function user.make_good_stored_handler() -> user.StoredPureHandler  [expr] {
+  {  } user.StoredPureHandler { run: () -> null { {  } null } }
+}
+function user.make_stored_closure_bad() -> () -> int  [expr] {
+  { return () -> int { { throw "oops" } } }
+}
+function user.make_stored_closure_good() -> () -> int  [expr] {
+  { return () -> int { {  } 42 } }
+}
+function user.make_stored_closure_with_throws() -> () -> int  [expr] {
+  { return () -> int { { throw "oops" } } }
+}
+function user.make_stored_throwing_handler() -> user.StoredThrowingHandler  [expr] {
+  {  } user.StoredThrowingHandler { run: () -> null { { throw "error" } } }
+}
+function user.test_stored_alias_error() -> null  [expr] {
+  { let cb: user.StoredPureCb = () -> int { { throw "error" } } } null
+}
+function user.test_stored_alias_ok() -> null  [expr] {
+  { let cb: user.StoredPureCb = () -> int { {  } 42 } } null
+}
+function user.test_stored_local_error() -> null  [expr] {
+  { let f: () -> null = () -> null { { throw "oops" } } } null
+}
+function user.test_stored_local_ok() -> null  [expr] {
+  { let f: () -> null = () -> null { {  } null } } null
+}
+function user.test_stored_local_with_throws() -> null  [expr] {
+  { let f: () -> null = () -> null { { throw "oops" } } } null
+}

@@ -299,6 +299,8 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::SuggestNullCoalesce { .. } => DiagnosticId::InvalidOperator,
         TirTypeError::NullCoalesceWithNull { .. } => DiagnosticId::InvalidOperator,
         TirTypeError::NullableMemberAccess { .. } => DiagnosticId::TypeMismatch,
+        // Stored function throws mismatch
+        TirTypeError::StoredFunctionRequiresExplicitThrows { .. } => DiagnosticId::TypeMismatch,
     }
 }
 
