@@ -30,11 +30,11 @@ use indexmap::IndexMap;
 
 use crate::{
     BexVm,
-    errors::{VmError, VmInternalError},
+    errors::{VmInternalError, VmRustFnError},
 };
 
 /// Result type for native functions.
-pub type NativeFunctionResult = Result<Value, VmError>;
+pub type NativeFunctionResult = Result<Value, VmRustFnError>;
 
 /// Native function type alias.
 pub type NativeFunction = fn(&mut BexVm, &[Value]) -> NativeFunctionResult;

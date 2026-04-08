@@ -6,7 +6,7 @@ use thiserror::Error;
 /// These are user-visible runtime errors (division by zero, index out of
 /// bounds, etc.) that can be caught by `catch` handlers. The handler's
 /// `ThrowIfPanic` instruction filters which panics are caught vs rethrown.
-#[derive(Debug, Error, PartialEq, Clone)]
+#[derive(Debug, Error, PartialEq, Clone, Copy)]
 pub enum VmPanic {
     #[error("division by zero: {left:?} / {right:?}")]
     DivisionByZero { left: Value, right: Value },
@@ -25,6 +25,43 @@ pub enum VmPanic {
 
     #[error("unreachable code executed")]
     Unreachable,
+}
+
+/// An error value from the BAML standard library. Maps 1:1 to a `baml.errors.*` class.
+#[derive(Debug, Error, PartialEq, Clone)]
+pub enum VmBamlError {
+    #[error("invalid argument: {message}")]
+    InvalidArgument { message: String },
+
+    #[error("I/O error: {message}")]
+    Io { message: String },
+
+    #[error("timeout: {message}")]
+    Timeout {
+        message: String,
+        duration_ms: Option<i64>,
+    },
+
+    #[error("unsupported: {message}")]
+    Unsupported { message: String },
+
+    #[error("access error: {message}")]
+    AccessError { message: String },
+
+    #[error("render prompt: {message}")]
+    RenderPrompt { message: String },
+
+    #[error("not implemented: {message}")]
+    NotImplemented { message: String },
+
+    #[error("LLM client error: {message}")]
+    LlmClient { message: String },
+
+    #[error("developer error: {message}")]
+    DevOther { message: String },
+
+    #[error("host panic: {message}")]
+    HostPanic { message: String },
 }
 
 /// The VM encountered an internal error. This typically indicates a bug in the VM or compiler.
@@ -65,20 +102,25 @@ pub enum VmInternalError {
 /// Any kind of virtual machine error.
 #[derive(Debug, Error, PartialEq, Clone)]
 pub enum VmError {
-    // ── Catchable panics ────────────────────────────────────────────────
-    /// A BAML-level panic (converted to a `baml.panics.*` instance and
-    /// routed through the exception table).
-    #[error("{0}")]
-    Panic(#[from] VmPanic),
-
-    // ── Fatal errors (not catchable) ────────────────────────────────────
+    /// Catchable (panics and error values)
+    #[error("uncaught throw: {0:?}")]
+    Thrown(Value),
+    /// Fatal VM errors
     #[error("{0}")]
     InternalError(#[from] VmInternalError),
+}
 
-    // ── Terminal errors ─────────────────────────────────────────────────
-    /// Only exists in this form it if
-    #[error("uncaught throw: {value:?}")]
-    UnhandledThrow { value: Value },
+/// An error returned by a Rust function. Will generally be turned into a [`VmError`].
+/// This is separate from [`VmError`] so native Rust functions can return standard errors
+/// without needing to handle heap allocation.
+#[derive(Debug, Error, PartialEq, Clone)]
+pub enum VmRustFnError {
+    #[error("{0}")]
+    Panic(#[from] VmPanic),
+    #[error("{0}")]
+    BamlError(#[from] VmBamlError),
+    #[error("{0}")]
+    InternalError(#[from] VmInternalError),
 }
 
 #[derive(Debug, Clone)]

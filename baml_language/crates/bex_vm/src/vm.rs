@@ -16,6 +16,7 @@
 
 use std::{collections::HashMap, sync::Arc};
 
+use ::bex_vm_types::types::ErrorClass;
 use bex_heap::{BexHeap, Tlab};
 use bex_vm_types::{
     BinOp, CmpOp, FunctionKind, GlobalPool, HeapPtr, Instruction, Object, ObjectIndex, ObjectPool,
@@ -29,7 +30,7 @@ use indexmap::IndexMap;
 
 use crate::{
     StackTrace,
-    errors::{ErrorLocation, VmError, VmInternalError, VmPanic},
+    errors::{ErrorLocation, VmBamlError, VmError, VmInternalError, VmPanic, VmRustFnError},
     indexable::{EvalStack, EvalStackTrait},
     package_baml::{BamlPackageBaml, NativeFunction},
     types::ObjectTrait,
@@ -196,6 +197,10 @@ pub struct BexVm {
     /// Used by `resolve_class()` for generated `copy::` struct `to_value()` methods.
     /// Populated at VM construction time from the compiled program's class index.
     pub resolved_class_names: HashMap<String, HeapPtr>,
+
+    /// Pre-resolved heap pointers for `baml.errors.*` classes, indexed by
+    /// `ErrorClass` discriminant.
+    error_class_ptrs: Vec<HeapPtr>,
 
     /// Pre-resolved heap pointers for `baml.panics.*` classes, indexed by
     /// `PanicClass` discriminant.
@@ -424,6 +429,16 @@ impl BexVm {
     ) -> Self {
         let tlab = Tlab::new(Arc::clone(&heap));
 
+        // Pre-resolve error class pointers indexed by Error discriminant.
+        let error_class_ptrs: Vec<HeapPtr> = ErrorClass::ALL
+            .iter()
+            .map(|ec| {
+                *resolved_class_names.get(ec.fqn()).unwrap_or_else(|| {
+                    panic!("error class {:?} not in resolved_class_names", ec.fqn())
+                })
+            })
+            .collect();
+
         // Pre-resolve panic class pointers indexed by PanicClass discriminant.
         let panic_class_ptrs: Vec<HeapPtr> = PanicClass::ALL
             .iter()
@@ -441,6 +456,7 @@ impl BexVm {
             tlab,
             globals,
             resolved_class_names,
+            error_class_ptrs,
             panic_class_ptrs,
             watch: Watch::new(),
             watched_vars: HashMap::new(),
@@ -574,8 +590,7 @@ impl BexVm {
             _ => Err(VmInternalError::TypeError {
                 expected: ObjectType::Array.into(),
                 got: ObjectType::of(obj).into(),
-            }
-            .into()),
+            }),
         }
     }
 
@@ -633,9 +648,9 @@ impl BexVm {
         // This is used by macro-generated code for generic type parameters.
         // For now, we don't support mutable access to generic values.
         let Value::Object(ptr) = value else {
-            return Err(VmInternalError::InvalidObjectRef(0).into());
+            return Err(VmInternalError::InvalidObjectRef(0));
         };
-        Err(VmInternalError::InvalidObjectRef(ptr.as_ptr() as usize).into())
+        Err(VmInternalError::InvalidObjectRef(ptr.as_ptr() as usize))
     }
 
     /// TODO: We should remove this API in favor of using `bex_engine` only (vbv)
@@ -704,7 +719,7 @@ impl BexVm {
 
     /// Returns a reference to the pending future.
     ///
-    /// Returns [`InternalError::TypeError`] if the future is not pending, or not a future.
+    /// Returns [`VmInternalError::TypeError`] if the future is not pending, or not a future.
     pub fn pending_future(&self, future_ptr: HeapPtr) -> Result<&PendingFuture, VmInternalError> {
         match self.get_object(future_ptr) {
             Object::Future(Future::Pending(future)) => Ok(future),
@@ -1006,22 +1021,66 @@ impl BexVm {
         StackIndex::from_raw(locals_offset.raw() + slot - 1)
     }
 
-    /// Convert a `VmError` into a `Value` for exception handling. Errors that
-    /// correspond to a `baml.panics.*` class get their instance allocated on the
-    /// heap. Everything else is a fatal error.
-    fn error_to_exception_value(&mut self, error: VmError) -> Result<Value, VmError> {
-        let panic = match error {
-            VmError::Panic(panic) => panic,
-            other => return Err(other),
+    pub fn error_to_exception_value(&mut self, error: VmBamlError) -> Value {
+        let (class, fields) = match error {
+            VmBamlError::InvalidArgument { message } => (
+                ErrorClass::InvalidArgument,
+                vec![self.alloc_string(message)],
+            ),
+            VmBamlError::Io { message } => (ErrorClass::Io, vec![self.alloc_string(message)]),
+            VmBamlError::Timeout {
+                message,
+                duration_ms,
+            } => (
+                ErrorClass::Timeout,
+                vec![
+                    self.alloc_string(message),
+                    duration_ms.map_or(Value::Null, Value::Int),
+                ],
+            ),
+            VmBamlError::Unsupported { message } => {
+                (ErrorClass::Unsupported, vec![self.alloc_string(message)])
+            }
+            VmBamlError::AccessError { message } => {
+                (ErrorClass::AccessError, vec![self.alloc_string(message)])
+            }
+            VmBamlError::RenderPrompt { message } => {
+                (ErrorClass::RenderPrompt, vec![self.alloc_string(message)])
+            }
+            VmBamlError::NotImplemented { message } => {
+                (ErrorClass::NotImplemented, vec![self.alloc_string(message)])
+            }
+            VmBamlError::LlmClient { message } => {
+                (ErrorClass::LlmClient, vec![self.alloc_string(message)])
+            }
+            VmBamlError::DevOther { message } => {
+                (ErrorClass::DevOther, vec![self.alloc_string(message)])
+            }
+            VmBamlError::HostPanic { message } => {
+                (ErrorClass::HostPanic, vec![self.alloc_string(message)])
+            }
         };
-        let (class, fields) = match &panic {
-            VmPanic::DivisionByZero { left, .. } => (PanicClass::DivisionByZero, vec![*left]),
+        self.alloc_error_value(class, fields)
+    }
+
+    pub(crate) fn alloc_error_value(&mut self, class: ErrorClass, fields: Vec<Value>) -> Value {
+        let class_ptr = self.error_class_ptrs[class as usize];
+        let instance_ptr = self.tlab.alloc(Object::Instance(Instance {
+            class: class_ptr,
+            fields,
+        }));
+        Value::Object(instance_ptr)
+    }
+
+    pub(crate) fn panic_to_exception_value(&mut self, panic: VmPanic) -> Value {
+        let (class, fields) = match panic {
+            VmPanic::DivisionByZero { left, .. } => (PanicClass::DivisionByZero, vec![left]),
             VmPanic::IndexOutOfBounds { index, length } =>
             {
                 #[allow(clippy::cast_possible_wrap)]
                 (
                     PanicClass::IndexOutOfBounds,
-                    vec![Value::Int(*index), Value::Int(*length as i64)],
+                    vec![Value::Int(index), Value::Int(length as i64)],
                 )
             }
             VmPanic::MapKeyNotFound => {
@@ -1041,11 +1100,11 @@ impl BexVm {
                 (PanicClass::Unreachable, vec![msg])
             }
         };
-        Ok(self.alloc_panic_value(class, fields))
+        self.alloc_panic_value(class, fields)
     }
 
     /// Allocate a `baml.panics.*` class instance using pre-resolved pointers.
-    fn alloc_panic_value(&mut self, class: PanicClass, fields: Vec<Value>) -> Value {
+    pub fn alloc_panic_value(&mut self, class: PanicClass, fields: Vec<Value>) -> Value {
         let class_ptr = self.panic_class_ptrs[class as usize];
         let instance_ptr = self.tlab.alloc(Object::Instance(Instance {
             class: class_ptr,
@@ -1115,9 +1174,7 @@ impl BexVm {
             // No handler in this frame -- pop it and try the caller.
             if self.frames.len() <= 1 {
                 // No more frames to unwind through.
-                return Err(VmError::UnhandledThrow {
-                    value: exception_value,
-                });
+                return Err(VmError::Thrown(exception_value));
             }
 
             let popped = self.frames.pop().expect("frame stack is not empty");
@@ -1215,7 +1272,9 @@ impl BexVm {
 
         // Check if we've reached the max call stack size.
         if self.frames.len() >= MAX_FRAMES {
-            return Err(VmError::Panic(VmPanic::StackOverflow));
+            return Err(VmError::Thrown(
+                self.panic_to_exception_value(VmPanic::StackOverflow),
+            ));
         }
 
         let is_traced = callee.trace;
@@ -1234,8 +1293,19 @@ impl BexVm {
                 // reference in the stack, using `swap` to insert the result.
                 let args = self.stack[locals_offset..].to_owned();
 
-                // Run Rust native function.
-                let result = func(self, &args)?;
+                // Run Rust native function, converting VmRustFnError → VmError.
+                let result = match func(self, &args) {
+                    Ok(v) => v,
+                    Err(VmRustFnError::Panic(panic)) => {
+                        return Err(VmError::Thrown(self.panic_to_exception_value(panic)));
+                    }
+                    Err(VmRustFnError::BamlError(err)) => {
+                        return Err(VmError::Thrown(self.error_to_exception_value(err)));
+                    }
+                    Err(VmRustFnError::InternalError(err)) => {
+                        return Err(VmError::InternalError(err));
+                    }
+                };
 
                 // Drop function call and place result on top.
                 self.stack.drain(locals_offset..);
@@ -1446,8 +1516,7 @@ impl BexVm {
             _ => Err(VmInternalError::TypeError {
                 expected: FunctionType::Callable.into(),
                 got: ObjectType::of(obj).into(),
-            }
-            .into()),
+            }),
         }
     }
 
@@ -1512,8 +1581,8 @@ impl BexVm {
             match step_result {
                 Ok(Some(state)) => return Ok(state),
                 Ok(None) => {}
-                Err(error) => {
-                    let exception_value = self.error_to_exception_value(error)?;
+                Err(VmError::InternalError(err)) => return Err(VmError::InternalError(err)),
+                Err(VmError::Thrown(exception_value)) => {
                     self.try_unwind_exception(&mut frame_idx, &mut function, exception_value)?;
                 }
             }
@@ -1560,10 +1629,10 @@ impl BexVm {
 
                 #[allow(clippy::cast_possible_wrap)]
                 let node = function.viz_nodes.get(index).ok_or({
-                    VmPanic::IndexOutOfBounds {
+                    VmError::Thrown(self.panic_to_exception_value(VmPanic::IndexOutOfBounds {
                         index: index as i64,
                         length: function.viz_nodes.len(),
-                    }
+                    }))
                 })?;
 
                 let event = bytecode::VizExecEvent {
@@ -1782,11 +1851,12 @@ impl BexVm {
                 let result = match (left, right) {
                     (Value::Int(left), Value::Int(right)) => Value::Int(match op {
                         BinOp::Div if right == 0 => {
-                            return Err(VmPanic::DivisionByZero {
-                                left: Value::Int(left),
-                                right: Value::Int(right),
-                            }
-                            .into());
+                            return Err(VmError::Thrown(self.panic_to_exception_value(
+                                VmPanic::DivisionByZero {
+                                    left: Value::Int(left),
+                                    right: Value::Int(right),
+                                },
+                            )));
                         }
 
                         BinOp::Add => left + right,
@@ -1805,11 +1875,12 @@ impl BexVm {
                     (Value::Float(left), Value::Float(right)) => {
                         Value::Float(match op {
                             BinOp::Div if right == 0.0 => {
-                                return Err(VmPanic::DivisionByZero {
-                                    left: Value::Float(left),
-                                    right: Value::Float(right),
-                                }
-                                .into());
+                                return Err(VmError::Thrown(self.panic_to_exception_value(
+                                    VmPanic::DivisionByZero {
+                                        left: Value::Float(left),
+                                        right: Value::Float(right),
+                                    },
+                                )));
                             }
 
                             BinOp::Add => left + right,
@@ -1840,11 +1911,12 @@ impl BexVm {
                         let left = left as f64;
                         Value::Float(match op {
                             BinOp::Div if right == 0.0 => {
-                                return Err(VmPanic::DivisionByZero {
-                                    left: Value::Float(left),
-                                    right: Value::Float(right),
-                                }
-                                .into());
+                                return Err(VmError::Thrown(self.panic_to_exception_value(
+                                    VmPanic::DivisionByZero {
+                                        left: Value::Float(left),
+                                        right: Value::Float(right),
+                                    },
+                                )));
                             }
 
                             BinOp::Add => left + right,
@@ -1873,11 +1945,12 @@ impl BexVm {
                         let right = right as f64;
                         Value::Float(match op {
                             BinOp::Div if right == 0.0 => {
-                                return Err(VmPanic::DivisionByZero {
-                                    left: Value::Float(left),
-                                    right: Value::Float(right),
-                                }
-                                .into());
+                                return Err(VmError::Thrown(self.panic_to_exception_value(
+                                    VmPanic::DivisionByZero {
+                                        left: Value::Float(left),
+                                        right: Value::Float(right),
+                                    },
+                                )));
                             }
 
                             BinOp::Add => left + right,
@@ -2180,11 +2253,12 @@ impl BexVm {
                 let index = match index_value {
                     Value::Int(i) => {
                         if i < 0 || i as usize >= array_len {
-                            return Err(VmPanic::IndexOutOfBounds {
-                                index: i,
-                                length: array_len,
-                            }
-                            .into());
+                            return Err(VmError::Thrown(self.panic_to_exception_value(
+                                VmPanic::IndexOutOfBounds {
+                                    index: i,
+                                    length: array_len,
+                                },
+                            )));
                         }
                         i as usize
                     }
@@ -2203,21 +2277,23 @@ impl BexVm {
                     match self.get_object(array_obj_index) {
                         Object::Array(array) => {
                             if index >= array.len() {
-                                return Err(VmPanic::IndexOutOfBounds {
-                                    index: index as i64,
-                                    length: array.len(),
-                                }
-                                .into());
+                                return Err(VmError::Thrown(self.panic_to_exception_value(
+                                    VmPanic::IndexOutOfBounds {
+                                        index: index as i64,
+                                        length: array.len(),
+                                    },
+                                )));
                             }
                             array[index]
                         }
                         Object::Uint8Array(bytes) => {
                             if index >= bytes.len() {
-                                return Err(VmPanic::IndexOutOfBounds {
-                                    index: index as i64,
-                                    length: bytes.len(),
-                                }
-                                .into());
+                                return Err(VmError::Thrown(self.panic_to_exception_value(
+                                    VmPanic::IndexOutOfBounds {
+                                        index: index as i64,
+                                        length: bytes.len(),
+                                    },
+                                )));
                             }
                             Value::Int(i64::from(bytes[index]))
                         }
@@ -2271,7 +2347,9 @@ impl BexVm {
                 let key = self.get_object(key_index).as_string()?;
 
                 // Look up the value in the map
-                let value = map.get(key).copied().ok_or(VmPanic::MapKeyNotFound)?;
+                let value = map.get(key).copied().ok_or(VmError::Thrown(
+                    self.panic_to_exception_value(VmPanic::MapKeyNotFound),
+                ))?;
 
                 // Push the value onto the stack
                 self.stack.push(value);
@@ -2303,11 +2381,12 @@ impl BexVm {
                 let index = match index_value {
                     Value::Int(i) => {
                         if i < 0 || i as usize >= array_len {
-                            return Err(VmPanic::IndexOutOfBounds {
-                                index: i,
-                                length: array_len,
-                            }
-                            .into());
+                            return Err(VmError::Thrown(self.panic_to_exception_value(
+                                VmPanic::IndexOutOfBounds {
+                                    index: i,
+                                    length: array_len,
+                                },
+                            )));
                         }
                         i as usize
                     }
@@ -2325,21 +2404,23 @@ impl BexVm {
                 let old_value = match self.get_object(array_object_index) {
                     Object::Array(array) => {
                         if index >= array.len() {
-                            return Err(VmPanic::IndexOutOfBounds {
-                                index: index as i64,
-                                length: array.len(),
-                            }
-                            .into());
+                            return Err(VmError::Thrown(self.panic_to_exception_value(
+                                VmPanic::IndexOutOfBounds {
+                                    index: index as i64,
+                                    length: array.len(),
+                                },
+                            )));
                         }
                         array[index]
                     }
                     Object::Uint8Array(bytes) => {
                         if index >= bytes.len() {
-                            return Err(VmPanic::IndexOutOfBounds {
-                                index: index as i64,
-                                length: bytes.len(),
-                            }
-                            .into());
+                            return Err(VmError::Thrown(self.panic_to_exception_value(
+                                VmPanic::IndexOutOfBounds {
+                                    index: index as i64,
+                                    length: bytes.len(),
+                                },
+                            )));
                         }
                         Value::Int(i64::from(bytes[index]))
                     }
@@ -2506,11 +2587,12 @@ impl BexVm {
                 // Safe: we check variant_index < 0 first, so the cast
                 // only executes for non-negative values.
                 if variant_index < 0 || variant_index as usize >= variant_count {
-                    return Err(VmPanic::IndexOutOfBounds {
-                        index: variant_index,
-                        length: variant_count,
-                    }
-                    .into());
+                    return Err(VmError::Thrown(self.panic_to_exception_value(
+                        VmPanic::IndexOutOfBounds {
+                            index: variant_index,
+                            length: variant_count,
+                        },
+                    )));
                 }
 
                 #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
@@ -2946,7 +3028,9 @@ impl BexVm {
             Instruction::Unreachable => {
                 // This instruction should never be executed. If we reach it,
                 // there's a bug in the compiler or type system.
-                return Err(VmPanic::Unreachable.into());
+                return Err(VmError::Thrown(
+                    self.panic_to_exception_value(VmPanic::Unreachable),
+                ));
             }
 
             Instruction::MakeCell => {

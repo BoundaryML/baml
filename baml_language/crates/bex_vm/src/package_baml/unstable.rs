@@ -5,16 +5,20 @@ use bex_vm_types::types::{Object, Value};
 use super::{BamlNamespaceUnstable, PackageBamlImpl};
 use crate::{
     BexVm,
-    errors::{VmError, VmInternalError, VmPanic},
+    errors::{VmInternalError, VmPanic, VmRustFnError},
 };
 
 impl BamlNamespaceUnstable for PackageBamlImpl {
-    fn string(vm: &mut BexVm, value: &Value) -> Result<String, VmError> {
+    fn string(vm: &mut BexVm, value: &Value) -> Result<String, VmRustFnError> {
         format_value_recursive(vm, value, 0)
     }
 }
 
-fn format_value_recursive(vm: &mut BexVm, value: &Value, depth: usize) -> Result<String, VmError> {
+fn format_value_recursive(
+    vm: &mut BexVm,
+    value: &Value,
+    depth: usize,
+) -> Result<String, VmRustFnError> {
     let available_frames = crate::vm::MAX_FRAMES.saturating_sub(vm.frames.len());
 
     if depth >= available_frames {

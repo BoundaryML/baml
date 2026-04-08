@@ -1,10 +1,12 @@
 mod codegen;
+mod codegen_errors;
 mod codegen_io;
 mod codegen_panics;
 mod extract;
 mod types;
 
 pub use codegen::generate_native_trait;
+pub use codegen_errors::generate_error_enums;
 pub use codegen_io::{generate_io_structs, generate_io_traits, generate_sys_op_enum};
 pub use codegen_panics::generate_panic_enums;
 pub use extract::{ExtractNativeBuiltinsError, extract_native_builtins};
