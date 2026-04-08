@@ -43,6 +43,26 @@ SOURCE_FILE
           WORD "never"
   TYPE_ALIAS_DEF
     WORD "type"
+    WORD "NoThrow"
+    EQUALS "="
+    TYPE_EXPR "never"
+      WORD "never"
+  TYPE_ALIAS_DEF
+    WORD "type"
+    WORD "AliasPure"
+    EQUALS "="
+    TYPE_EXPR
+      L_PAREN "("
+      R_PAREN ")"
+      ARROW "->"
+      TYPE_EXPR "int"
+        WORD "int"
+      THROWS_CLAUSE
+        KW_THROWS "throws"
+        TYPE_EXPR "NoThrow"
+          WORD "NoThrow"
+  TYPE_ALIAS_DEF
+    WORD "type"
     WORD "Mapper"
     EQUALS "="
     TYPE_EXPR
@@ -79,6 +99,29 @@ SOURCE_FILE
         KW_THROWS "throws"
         TYPE_EXPR "string"
           WORD "string"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "use_alias_pure"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "f"
+        COLON ":"
+        TYPE_EXPR "AliasPure"
+          WORD "AliasPure"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        CALL_EXPR
+          WORD "f"
+          CALL_ARGS "()"
+            L_PAREN "("
+            R_PAREN ")"
+        R_BRACE "}"
 
 === ERRORS ===
 None

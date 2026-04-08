@@ -9,8 +9,16 @@ type PureCallback = () -> int
 // Type alias with throws never explicitly
 type ExplicitPure = () -> int throws never
 
+// Throws alias resolving to never should still lower to a closed function type
+type NoThrow = never
+type AliasPure = () -> int throws NoThrow
+
 // Parameterized function type with throws
 type Mapper = (int) -> string throws string
 
 // Nested function type - outer throws, inner pure
 type Wrapper = (() -> int) -> int throws string
+
+function use_alias_pure(f: AliasPure) -> int {
+  f()
+}

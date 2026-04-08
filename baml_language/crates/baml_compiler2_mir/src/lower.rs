@@ -170,18 +170,22 @@ pub fn convert_tir2_ty(ty: &Tir2Ty, resolved: &ResolvedAliases) -> Ty {
             ret,
             throws,
             attr,
-        } => Ty::Function {
-            params: params
-                .iter()
-                .map(|(_, t)| convert_tir2_ty(t, resolved))
-                .collect(),
-            ret: Box::new(convert_tir2_ty(ret, resolved)),
-            throws: match throws.as_ref() {
-                Tir2Ty::Never { .. } => None,
-                t => Some(Box::new(convert_tir2_ty(t, resolved))),
-            },
-            attr: attr.clone(),
-        },
+        } => {
+            let converted_throws = convert_tir2_ty(throws, resolved);
+            Ty::Function {
+                params: params
+                    .iter()
+                    .map(|(_, t)| convert_tir2_ty(t, resolved))
+                    .collect(),
+                ret: Box::new(convert_tir2_ty(ret, resolved)),
+                throws: if matches!(converted_throws, Ty::Void { .. }) {
+                    None
+                } else {
+                    Some(Box::new(converted_throws))
+                },
+                attr: attr.clone(),
+            }
+        }
 
         // Bottom / sentinel types
         Tir2Ty::Never { attr } => Ty::Void { attr: attr.clone() },

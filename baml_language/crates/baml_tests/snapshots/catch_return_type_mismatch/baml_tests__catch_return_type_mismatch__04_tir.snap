@@ -9,7 +9,7 @@ function user.callee() -> bool throws user.Errors {
   }
   ?? 218..225: extraneous throws declaration: user.Errors
 }
-function user.caller() -> bool throws never {
+function user.caller() -> bool throws user.Errors {
   { : bool
     catch (callee() : bool) : unknown
       catch (e)

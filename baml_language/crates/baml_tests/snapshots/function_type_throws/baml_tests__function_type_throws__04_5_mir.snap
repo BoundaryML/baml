@@ -2,7 +2,7 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR2 ===
-fn user.test_map_pure() -> int[] {
+fn user.test_array_map_pure() -> int[] {
     // Locals:
     let _0: int[] // _0 // return
     let _1: int[] // items
@@ -26,7 +26,7 @@ fn user.test_map_pure() -> int[] {
 }
 
 // lambda[0]
-fn .<lambda(test_map_pure, 0)>(x: null) -> null {
+fn .<lambda(test_array_map_pure, 0)>(x: null) -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: null // x // param
@@ -41,12 +41,12 @@ fn .<lambda(test_map_pure, 0)>(x: null) -> null {
     }
 }
 
-fn user.test_map_throwing() -> int[] {
+fn user.test_array_map_throwing() -> int[] {
     // Locals:
     let _0: int[] // _0 // return
     let _1: int[] // items
     let _2: int[]
-    let _3: (int) -> int
+    let _3: (int) -> int throws string
 
     bb0: {
         _1 = [const 1_i64, const 2_i64, const 3_i64];
@@ -65,7 +65,7 @@ fn user.test_map_throwing() -> int[] {
 }
 
 // lambda[0]
-fn .<lambda(test_map_throwing, 0)>(x: null) -> null {
+fn .<lambda(test_array_map_throwing, 0)>(x: null) -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: null // x // param
@@ -94,10 +94,10 @@ fn .<lambda(test_map_throwing, 0)>(x: null) -> null {
     }
 }
 
-fn user.takes_throwing(f: () -> int) -> int {
+fn user.takes_throwing(f: () -> int throws string) -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: () -> int // f // param
+    let _1: () -> int throws string // f // param
 
     bb0: {
         _0 = call copy _1() -> [bb1];
@@ -112,7 +112,7 @@ fn user.takes_throwing(f: () -> int) -> int {
     }
 }
 
-fn user.may_fail(x: int) -> string {
+fn user.caught_may_fail(x: int) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: int // x // param
@@ -147,7 +147,7 @@ fn user.test_catch_all() -> string {
     let _1: unknown // e
 
     bb0: {
-        _0 = call const fn user.may_fail(const 1_i64) -> [bb1, unwind: bb2];
+        _0 = call const fn user.caught_may_fail(const 1_i64) -> [bb1, unwind: bb2];
     }
 
     bb1: {
@@ -182,7 +182,7 @@ fn user.test_catch_rethrow() -> string {
     let _1: unknown // e
 
     bb0: {
-        _0 = call const fn user.may_fail(const 1_i64) -> [bb1, unwind: bb4];
+        _0 = call const fn user.caught_may_fail(const 1_i64) -> [bb1, unwind: bb4];
     }
 
     bb1: {
@@ -217,7 +217,7 @@ fn user.test_catch_string() -> string {
     let _2: bool
 
     bb0: {
-        _0 = call const fn user.may_fail(const 1_i64) -> [bb1, unwind: bb2];
+        _0 = call const fn user.caught_may_fail(const 1_i64) -> [bb1, unwind: bb2];
     }
 
     bb1: {
@@ -252,7 +252,7 @@ fn user.test_no_catch() -> string {
     let _0: string // _0 // return
 
     bb0: {
-        _0 = call const fn user.may_fail(const 1_i64) -> [bb1];
+        _0 = call const fn user.caught_may_fail(const 1_i64) -> [bb1];
     }
 
     bb1: {
@@ -337,7 +337,7 @@ fn .<lambda(test_chained_pure, 0)>() -> null {
 fn user.test_chained_throwing() -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: () -> void
+    let _1: () -> void throws string
 
     bb0: {
         _1 = make_closure lambda[0]();
@@ -397,7 +397,7 @@ fn .<lambda(make_pure_handler, 0)>() -> null {
 fn user.make_throwing_handler() -> ThrowingHandler {
     // Locals:
     let _0: ThrowingHandler // _0 // return
-    let _1: () -> void
+    let _1: () -> void throws string
 
     bb0: {
         _1 = make_closure lambda[0]();
@@ -467,8 +467,8 @@ fn .<lambda(compose, 0)>(a: void) -> null {
 fn user.test_compose_both_throw() -> (int) -> string {
     // Locals:
     let _0: (int) -> string // _0 // return
-    let _1: (int) -> void
-    let _2: (int) -> void
+    let _1: (int) -> void throws string
+    let _2: (int) -> void throws int
 
     bb0: {
         _1 = make_closure lambda[0]();
@@ -510,7 +510,7 @@ fn .<lambda(test_compose_both_throw, 1)>(y: int) -> null {
 fn user.test_compose_first_throws() -> (int) -> string {
     // Locals:
     let _0: (int) -> string // _0 // return
-    let _1: (int) -> void
+    let _1: (int) -> void throws string
     let _2: (int) -> "result"
 
     bb0: {
@@ -612,7 +612,7 @@ fn user.test_compose_second_throws() -> (int) -> string {
     // Locals:
     let _0: (int) -> string // _0 // return
     let _1: (int) -> int
-    let _2: (int) -> void
+    let _2: (int) -> void throws string
 
     bb0: {
         _1 = make_closure lambda[0]();
@@ -692,10 +692,10 @@ fn user.apply_generic_enum(f: () -> int) -> int {
     }
 }
 
-fn user.apply_may_throw_class(f: () -> int) -> int {
+fn user.apply_may_throw_class(f: () -> int throws ApiError) -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: () -> int // f // param
+    let _1: () -> int throws ApiError // f // param
 
     bb0: {
         _0 = call copy _1() -> [bb1];
@@ -710,10 +710,10 @@ fn user.apply_may_throw_class(f: () -> int) -> int {
     }
 }
 
-fn user.apply_may_throw_enum(f: () -> int) -> int {
+fn user.apply_may_throw_enum(f: () -> int throws ErrorKind) -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: () -> int // f // param
+    let _1: () -> int throws ErrorKind // f // param
 
     bb0: {
         _0 = call copy _1() -> [bb1];
@@ -889,7 +889,7 @@ fn user.catch_mixed_errors(x: int) -> string {
 fn user.make_class_handler() -> ClassThrowingHandler {
     // Locals:
     let _0: ClassThrowingHandler // _0 // return
-    let _1: () -> void
+    let _1: () -> void throws ApiError
 
     bb0: {
         _1 = make_closure lambda[0]();
@@ -917,7 +917,7 @@ fn .<lambda(make_class_handler, 0)>() -> null {
 fn user.make_enum_handler() -> EnumThrowingHandler {
     // Locals:
     let _0: EnumThrowingHandler // _0 // return
-    let _1: () -> void
+    let _1: () -> void throws ErrorKind.NotFound
 
     bb0: {
         _1 = make_closure lambda[0]();
@@ -943,7 +943,7 @@ fn .<lambda(make_enum_handler, 0)>() -> null {
 fn user.test_apply_class_thrower() -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: () -> void
+    let _1: () -> void throws ApiError
 
     bb0: {
         _1 = make_closure lambda[0]();
@@ -974,7 +974,7 @@ fn .<lambda(test_apply_class_thrower, 0)>() -> null {
 fn user.test_apply_enum_thrower() -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: () -> void
+    let _1: () -> void throws ErrorKind.Unauthorized
 
     bb0: {
         _1 = make_closure lambda[0]();
@@ -1003,8 +1003,8 @@ fn .<lambda(test_apply_enum_thrower, 0)>() -> null {
 fn user.test_lambda_throws_class() -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: () -> void // f
-    let _2: () -> void
+    let _1: () -> void throws ValidationError // f
+    let _2: () -> void throws ValidationError
 
     bb0: {
         _1 = make_closure lambda[0]();
@@ -1036,8 +1036,8 @@ fn .<lambda(test_lambda_throws_class, 0)>() -> null {
 fn user.test_lambda_throws_enum() -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: () -> void // f
-    let _2: () -> void
+    let _1: () -> void throws ErrorKind.ValidationFailed // f
+    let _2: () -> void throws ErrorKind.ValidationFailed
 
     bb0: {
         _1 = make_closure lambda[0]();
@@ -1067,7 +1067,7 @@ fn .<lambda(test_lambda_throws_enum, 0)>() -> null {
 fn user.test_rethrows_class() -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: () -> void
+    let _1: () -> void throws ValidationError
 
     bb0: {
         _1 = make_closure lambda[0]();
@@ -1098,7 +1098,7 @@ fn .<lambda(test_rethrows_class, 0)>() -> null {
 fn user.test_rethrows_enum() -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: () -> void
+    let _1: () -> void throws ErrorKind.NotFound
 
     bb0: {
         _1 = make_closure lambda[0]();
@@ -1127,7 +1127,7 @@ fn .<lambda(test_rethrows_enum, 0)>() -> null {
 fn user.test_type_alias_class() -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: () -> void
+    let _1: () -> void throws ApiError
 
     bb0: {
         _1 = make_closure lambda[0]();
@@ -1158,7 +1158,7 @@ fn .<lambda(test_type_alias_class, 0)>() -> null {
 fn user.test_type_alias_enum() -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: () -> void
+    let _1: () -> void throws ErrorKind.ValidationFailed
 
     bb0: {
         _1 = make_closure lambda[0]();
@@ -1187,7 +1187,7 @@ fn .<lambda(test_type_alias_enum, 0)>() -> null {
 fn user.test_type_alias_mixed() -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: () -> void
+    let _1: () -> void throws string
 
     bb0: {
         _1 = make_closure lambda[0]();
@@ -1451,10 +1451,10 @@ fn user.throw_various_errors(x: int) -> string {
     }
 }
 
-fn user.use_class_thrower(f: () -> int) -> int {
+fn user.use_class_thrower(f: () -> int throws ApiError) -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: () -> int // f // param
+    let _1: () -> int throws ApiError // f // param
 
     bb0: {
         _0 = call copy _1() -> [bb1];
@@ -1469,10 +1469,10 @@ fn user.use_class_thrower(f: () -> int) -> int {
     }
 }
 
-fn user.use_enum_thrower(f: () -> int) -> int {
+fn user.use_enum_thrower(f: () -> int throws ErrorKind) -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: () -> int // f // param
+    let _1: () -> int throws ErrorKind // f // param
 
     bb0: {
         _0 = call copy _1() -> [bb1];
@@ -1487,10 +1487,10 @@ fn user.use_enum_thrower(f: () -> int) -> int {
     }
 }
 
-fn user.use_mixed_thrower(f: () -> int) -> int {
+fn user.use_mixed_thrower(f: () -> int throws ErrorKind | ApiError | string) -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: () -> int // f // param
+    let _1: () -> int throws ErrorKind | ApiError | string // f // param
 
     bb0: {
         _0 = call copy _1() -> [bb1];
@@ -1505,10 +1505,10 @@ fn user.use_mixed_thrower(f: () -> int) -> int {
     }
 }
 
-fn user.apply_explicit(f: () -> int) -> int {
+fn user.apply_explicit(f: () -> int throws string) -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: () -> int // f // param
+    let _1: () -> int throws string // f // param
 
     bb0: {
         _0 = call copy _1() -> [bb1];
@@ -1578,7 +1578,7 @@ fn .<lambda(test_explicit_param_pure, 0)>() -> null {
 fn user.test_explicit_param_throwing() -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: () -> void
+    let _1: () -> void throws string
 
     bb0: {
         _1 = make_closure lambda[0]();
@@ -1658,7 +1658,7 @@ fn user.caller() -> string {
     let _0: string // _0 // return
 
     bb0: {
-        _0 = call const fn user.may_fail(const 1_i64) -> [bb1];
+        _0 = call const fn user.declared_may_fail(const 1_i64) -> [bb1];
     }
 
     bb1: {
@@ -1670,7 +1670,7 @@ fn user.caller() -> string {
     }
 }
 
-fn user.may_fail(x: int) -> string {
+fn user.declared_may_fail(x: int) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: int // x // param
@@ -1705,7 +1705,7 @@ fn user.safe_caller() -> string {
     let _1: unknown // e
 
     bb0: {
-        _0 = call const fn user.may_fail(const 1_i64) -> [bb1, unwind: bb2];
+        _0 = call const fn user.declared_may_fail(const 1_i64) -> [bb1, unwind: bb2];
     }
 
     bb1: {
@@ -1730,6 +1730,24 @@ fn user.safe_caller() -> string {
     }
 
     bb6: {
+        return;
+    }
+}
+
+fn user.use_alias_pure(f: () -> int) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: () -> int // f // param
+
+    bb0: {
+        _0 = call copy _1() -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
         return;
     }
 }
@@ -1807,7 +1825,7 @@ fn .<lambda(test_guarded_pure, 0)>() -> null {
 fn user.test_guarded_throwing() -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: () -> void
+    let _1: () -> void throws int
 
     bb0: {
         _1 = make_closure lambda[0]();
@@ -1914,7 +1932,7 @@ fn user.run_two(f: () -> int, g: () -> int) -> int {
     }
 }
 
-fn user.test_map_pure() -> string {
+fn user.test_map_it_pure() -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: (int) -> "ok"
@@ -1934,7 +1952,7 @@ fn user.test_map_pure() -> string {
 }
 
 // lambda[0]
-fn .<lambda(test_map_pure, 0)>(n: int) -> null {
+fn .<lambda(test_map_it_pure, 0)>(n: int) -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: int // n // param
@@ -1949,10 +1967,10 @@ fn .<lambda(test_map_pure, 0)>(n: int) -> null {
     }
 }
 
-fn user.test_map_throwing() -> string {
+fn user.test_map_it_throwing() -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: (int) -> void
+    let _1: (int) -> void throws string
 
     bb0: {
         _1 = make_closure lambda[0]();
@@ -1969,7 +1987,7 @@ fn user.test_map_throwing() -> string {
 }
 
 // lambda[0]
-fn .<lambda(test_map_throwing, 0)>(n: int) -> null {
+fn .<lambda(test_map_it_throwing, 0)>(n: int) -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: int // n // param
@@ -2016,7 +2034,7 @@ fn .<lambda(test_run_pure, 0)>() -> null {
 fn user.test_run_throwing() -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: () -> void
+    let _1: () -> void throws string
 
     bb0: {
         _1 = make_closure lambda[0]();
@@ -2045,8 +2063,8 @@ fn .<lambda(test_run_throwing, 0)>() -> null {
 fn user.test_two_both_throw() -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: () -> void
-    let _2: () -> void
+    let _1: () -> void throws string
+    let _2: () -> void throws int
 
     bb0: {
         _1 = make_closure lambda[0]();
@@ -2087,7 +2105,7 @@ fn user.test_two_one_throws() -> int {
     // Locals:
     let _0: int // _0 // return
     let _1: () -> 1
-    let _2: () -> void
+    let _2: () -> void throws string
 
     bb0: {
         _1 = make_closure lambda[0]();
@@ -2234,10 +2252,10 @@ fn user.apply_and_throw(f: () -> int) -> int {
     }
 }
 
-fn user.apply_throwing(f: () -> int) -> int {
+fn user.apply_throwing(f: () -> int throws string) -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: () -> int // f // param
+    let _1: () -> int throws string // f // param
 
     bb0: {
         _0 = call copy _1() -> [bb1];
@@ -2321,7 +2339,7 @@ fn .<lambda(test_apply_and_throw_pure, 0)>() -> null {
 fn user.test_apply_explicit_throws() -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: () -> void
+    let _1: () -> void throws string
 
     bb0: {
         _1 = make_closure lambda[0]();
@@ -2384,7 +2402,7 @@ fn .<lambda(test_apply_pure, 0)>() -> null {
 fn user.test_apply_throwing() -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: () -> void
+    let _1: () -> void throws string
 
     bb0: {
         _1 = make_closure lambda[0]();
@@ -2447,7 +2465,7 @@ fn .<lambda(test_apply_with_helper_pure, 0)>() -> null {
 fn user.test_apply_with_helper_throwing() -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: () -> void
+    let _1: () -> void throws int
 
     bb0: {
         _1 = make_closure lambda[0]();
@@ -2476,8 +2494,8 @@ fn .<lambda(test_apply_with_helper_throwing, 0)>() -> null {
 fn user.test_explicit_throws_match() -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: () -> void // f
-    let _2: () -> void
+    let _1: () -> void throws string // f
+    let _2: () -> void throws string
 
     bb0: {
         _1 = make_closure lambda[0]();
@@ -2543,8 +2561,8 @@ fn .<lambda(test_explicit_throws_never_pure, 0)>() -> null {
 fn user.test_explicit_throws_wider_than_body() -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: () -> 42 // f
-    let _2: () -> 42
+    let _1: () -> 42 throws string // f
+    let _2: () -> 42 throws string
 
     bb0: {
         _1 = make_closure lambda[0]();
@@ -2580,8 +2598,8 @@ fn user.test_conditional_throw(x: int) -> int {
     // Locals:
     let _0: int // _0 // return
     let _1: int // x // param
-    let _2: (int) -> int // f
-    let _3: (int) -> int
+    let _2: (int) -> int throws string // f
+    let _3: (int) -> int throws string
 
     bb0: {
         _2 = make_closure lambda[0]();
@@ -2632,8 +2650,8 @@ fn user.test_multi_throw_types(x: int) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: int // x // param
-    let _2: (int) -> "ok" // f
-    let _3: (int) -> "ok"
+    let _2: (int) -> "ok" throws int | string // f
+    let _3: (int) -> "ok" throws int | string
 
     bb0: {
         _2 = make_closure lambda[0]();
@@ -2721,8 +2739,8 @@ fn .<lambda(test_pure_lambda, 0)>() -> null {
 fn user.test_throwing_int() -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: () -> void // f
-    let _2: () -> void
+    let _1: () -> void throws int // f
+    let _2: () -> void throws int
 
     bb0: {
         _1 = make_closure lambda[0]();
@@ -2752,8 +2770,8 @@ fn .<lambda(test_throwing_int, 0)>() -> null {
 fn user.test_throwing_lambda() -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: () -> void // f
-    let _2: () -> void
+    let _1: () -> void throws string // f
+    let _2: () -> void throws string
 
     bb0: {
         _1 = make_closure lambda[0]();
@@ -2808,6 +2826,68 @@ fn .<lambda(test_throws_never_but_throws, 0)>() -> null {
 
     bb0: {
         throw const "boom";
+    }
+}
+
+fn user.test_typed_lambda_annotation_underdeclares_body() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: () -> void throws string // f
+    let _2: () -> void throws string
+
+    bb0: {
+        _1 = make_closure lambda[0]();
+        _2 = copy _1;
+        _0 = call copy _2() -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(test_typed_lambda_annotation_underdeclares_body, 0)>() -> null {
+    // Locals:
+    let _0: null // _0 // return
+
+    bb0: {
+        throw const 42_i64;
+    }
+}
+
+fn user.test_typed_lambda_throws_mismatch() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: () -> void throws int // f
+    let _2: () -> void throws int
+
+    bb0: {
+        _1 = make_closure lambda[0]();
+        _2 = copy _1;
+        _0 = call copy _2() -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(test_typed_lambda_throws_mismatch, 0)>() -> null {
+    // Locals:
+    let _0: null // _0 // return
+
+    bb0: {
+        throw const 42_i64;
     }
 }
 
@@ -2924,7 +3004,7 @@ fn .<lambda(test_mixed_pure, 0)>(n: int) -> null {
 fn user.test_mixed_throwing() -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: (int) -> int
+    let _1: (int) -> int throws string
 
     bb0: {
         _1 = make_closure lambda[0]();
@@ -2973,8 +3053,8 @@ fn .<lambda(test_mixed_throwing, 0)>(n: int) -> null {
 fn user.test_nested_both_throw() -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: () -> void // outer
-    let _2: () -> void
+    let _1: () -> void throws int | string // outer
+    let _2: () -> void throws int | string
 
     bb0: {
         _1 = make_closure lambda[0]();
@@ -2995,9 +3075,9 @@ fn user.test_nested_both_throw() -> int {
 fn .<lambda(test_nested_both_throw, 0)>() -> null {
     // Locals:
     let _0: null // _0 // return
-    let _1: () -> void // inner
+    let _1: () -> void throws int // inner
     let _2: void
-    let _3: () -> void
+    let _3: () -> void throws int
 
     bb0: {
         _1 = make_closure lambda[0]();
@@ -3023,8 +3103,8 @@ fn .<lambda(<lambda(test_nested_both_throw, 0)>, 1)>() -> null {
 fn user.test_nested_inner_throws() -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: () -> void // outer
-    let _2: () -> void
+    let _1: () -> void throws string // outer
+    let _2: () -> void throws string
 
     bb0: {
         _1 = make_closure lambda[0]();
@@ -3045,8 +3125,8 @@ fn user.test_nested_inner_throws() -> int {
 fn .<lambda(test_nested_inner_throws, 0)>() -> null {
     // Locals:
     let _0: null // _0 // return
-    let _1: () -> void // inner
-    let _2: () -> void
+    let _1: () -> void throws string // inner
+    let _2: () -> void throws string
 
     bb0: {
         _1 = make_closure lambda[0]();
@@ -3076,8 +3156,8 @@ fn .<lambda(<lambda(test_nested_inner_throws, 0)>, 1)>() -> null {
 fn user.test_nested_outer_throws() -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: () -> void // outer
-    let _2: () -> void
+    let _1: () -> void throws string // outer
+    let _2: () -> void throws string
 
     bb0: {
         _1 = make_closure lambda[0]();
@@ -3119,6 +3199,119 @@ fn .<lambda(<lambda(test_nested_outer_throws, 0)>, 1)>() -> null {
     }
 }
 
+fn user.optional_call_caught(cb: () -> int throws string?) -> int? {
+    // Locals:
+    let _0: int? // _0 // return
+    let _1: () -> int throws string? // cb // param
+    let _2: unknown // e
+    let _3: bool
+
+    bb0: {
+        _3 = copy _1 == const null;
+        branch copy _3 -> [bb3, bb1];
+    }
+
+    bb1: {
+        _0 = call copy _1() -> [bb2, unwind: bb5];
+    }
+
+    bb2: {
+        goto -> bb4;
+    }
+
+    bb3: {
+        _0 = const null;
+        goto -> bb4;
+    }
+
+    bb4: {
+        goto -> bb8;
+    }
+
+    bb5: {
+        throw_if_panic copy _2 -> bb6;
+    }
+
+    bb6: {
+        goto -> bb7;
+    }
+
+    bb7: {
+        _0 = const null;
+        goto -> bb8;
+    }
+
+    bb8: {
+        goto -> bb9;
+    }
+
+    bb9: {
+        return;
+    }
+}
+
+fn user.optional_call_rethrows(cb: () -> int throws string?) -> int? {
+    // Locals:
+    let _0: int? // _0 // return
+    let _1: () -> int throws string? // cb // param
+    let _2: bool
+
+    bb0: {
+        _2 = copy _1 == const null;
+        branch copy _2 -> [bb3, bb1];
+    }
+
+    bb1: {
+        _0 = call copy _1() -> [bb2];
+    }
+
+    bb2: {
+        goto -> bb4;
+    }
+
+    bb3: {
+        _0 = const null;
+        goto -> bb4;
+    }
+
+    bb4: {
+        goto -> bb5;
+    }
+
+    bb5: {
+        return;
+    }
+}
+
+fn user.test_optional_call_with_throwing_callback() -> int? {
+    // Locals:
+    let _0: int? // _0 // return
+    let _1: () -> void throws string
+
+    bb0: {
+        _1 = make_closure lambda[0]();
+        _0 = call const fn user.optional_call_rethrows(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(test_optional_call_with_throwing_callback, 0)>() -> null {
+    // Locals:
+    let _0: null // _0 // return
+
+    bb0: {
+        throw const "boom";
+    }
+}
+
 fn user.make_pure() -> () -> int {
     // Locals:
     let _0: () -> int // _0 // return
@@ -3148,9 +3341,9 @@ fn .<lambda(make_pure, 0)>() -> null {
     }
 }
 
-fn user.make_thrower() -> () -> int {
+fn user.make_thrower() -> () -> int throws string {
     // Locals:
-    let _0: () -> int // _0 // return
+    let _0: () -> int throws string // _0 // return
 
     bb0: {
         _0 = make_closure lambda[0]();
@@ -3199,8 +3392,8 @@ fn user.test_use_pure() -> int {
 fn user.test_use_thrower() -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: () -> int // f
-    let _2: () -> int
+    let _1: () -> int throws string // f
+    let _2: () -> int throws string
 
     bb0: {
         _1 = call const fn user.make_thrower() -> [bb1];
@@ -3223,7 +3416,7 @@ fn user.test_use_thrower() -> int {
 fn user.make_bad_stored_handler() -> StoredPureHandler {
     // Locals:
     let _0: StoredPureHandler // _0 // return
-    let _1: () -> void
+    let _1: () -> void throws string
 
     bb0: {
         _1 = make_closure lambda[0]();
@@ -3330,9 +3523,9 @@ fn .<lambda(make_stored_closure_good, 0)>() -> null {
     }
 }
 
-fn user.make_stored_closure_with_throws() -> () -> int {
+fn user.make_stored_closure_with_throws() -> () -> int throws string {
     // Locals:
-    let _0: () -> int // _0 // return
+    let _0: () -> int throws string // _0 // return
 
     bb0: {
         _0 = make_closure lambda[0]();
@@ -3357,7 +3550,7 @@ fn .<lambda(make_stored_closure_with_throws, 0)>() -> null {
 fn user.make_stored_throwing_handler() -> StoredThrowingHandler {
     // Locals:
     let _0: StoredThrowingHandler // _0 // return
-    let _1: () -> void
+    let _1: () -> void throws string
 
     bb0: {
         _1 = make_closure lambda[0]();

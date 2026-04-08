@@ -5,7 +5,7 @@ source: crates/baml_tests/src/generated_tests.rs
 SOURCE_FILE
   FUNCTION_DEF
     KW_FUNCTION "function"
-    WORD "may_fail"
+    WORD "caught_may_fail"
     PARAMETER_LIST
       L_PAREN "("
       PARAMETER
@@ -61,7 +61,7 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         CALL_EXPR
-          WORD "may_fail"
+          WORD "caught_may_fail"
           CALL_ARGS "(1)"
             L_PAREN "("
             INTEGER_LITERAL "1"
@@ -81,7 +81,7 @@ SOURCE_FILE
         L_BRACE "{"
         CATCH_EXPR
           CALL_EXPR
-            WORD "may_fail"
+            WORD "caught_may_fail"
             CALL_ARGS "(1)"
               L_PAREN "("
               INTEGER_LITERAL "1"
@@ -117,7 +117,7 @@ SOURCE_FILE
         L_BRACE "{"
         CATCH_EXPR
           CALL_EXPR
-            WORD "may_fail"
+            WORD "caught_may_fail"
             CALL_ARGS "(1)"
               L_PAREN "("
               INTEGER_LITERAL "1"
@@ -157,7 +157,7 @@ SOURCE_FILE
         L_BRACE "{"
         CATCH_EXPR
           CALL_EXPR
-            WORD "may_fail"
+            WORD "caught_may_fail"
             CALL_ARGS "(1)"
               L_PAREN "("
               INTEGER_LITERAL "1"

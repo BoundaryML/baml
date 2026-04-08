@@ -440,6 +440,19 @@ fn collect_effective_throws_from_expr<'db>(
                     out,
                 );
             }
+            collect_effective_throws_from_call(
+                db,
+                package_id,
+                *callee,
+                body,
+                expressions,
+                aliases,
+                CallResolutionOptions {
+                    include_typevars,
+                    unknown_on_unresolved_call,
+                },
+                out,
+            );
         }
         Expr::OptionalChain { expr } => {
             collect_effective_throws_from_expr(
@@ -657,7 +670,7 @@ fn collect_effective_throws_from_call<'db>(
         .get(&callee_expr_id)
         .and_then(|ty| function_throws_facts(ty, aliases));
 
-    if let Some(facts) = type_level_facts {
+    if let Some(facts) = type_level_facts.as_ref() {
         let filtered: BTreeSet<Ty> = facts
             .iter()
             .filter(|fact| options.include_typevars || !matches!(fact, Ty::TypeVar(_, _)))
@@ -680,12 +693,7 @@ fn collect_effective_throws_from_call<'db>(
         }
     }
 
-    if options.unknown_on_unresolved_call
-        && expressions
-            .get(&callee_expr_id)
-            .and_then(|ty| function_throws_facts(ty, aliases))
-            .is_none()
-    {
+    if options.unknown_on_unresolved_call && type_level_facts.is_none() {
         out.insert(Ty::Unknown {
             attr: TyAttr::default(),
         });

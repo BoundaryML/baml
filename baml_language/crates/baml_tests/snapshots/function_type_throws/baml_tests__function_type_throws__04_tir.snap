@@ -2,7 +2,7 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === TIR2 ===
-function user.test_map_pure() -> int[] throws never {
+function user.test_array_map_pure() -> int[] throws never {
   { : int[]
     let items = [1, 2, 3] : int[]
     items.map((x) -> { ... }) : int[]
@@ -12,9 +12,9 @@ function user.test_map_pure() -> int[] throws never {
         }
   }
 }
-lambda user.test_map_pure {
+lambda user.test_array_map_pure {
 }
-function user.test_map_throwing() -> int[] throws string {
+function user.test_array_map_throwing() -> int[] throws string {
   { : int[]
     let items = [1, 2, 3] : int[]
     items.map((x) -> { ... }) : int[]
@@ -28,7 +28,7 @@ function user.test_map_throwing() -> int[] throws string {
         }
   }
 }
-lambda user.test_map_throwing {
+lambda user.test_array_map_throwing {
 }
 type user.ThrowingFn = () -> int throws string
 function user.takes_throwing(f: () -> int throws string) -> int throws string {
@@ -37,7 +37,7 @@ function user.takes_throwing(f: () -> int throws string) -> int throws string {
   }
 }
 type user.ThrowingFn$stream = unknown
-function user.may_fail(x: int) -> string throws string {
+function user.caught_may_fail(x: int) -> string throws string {
   { : "ok"
     if (x == 0 : bool) : void
       { : never
@@ -48,12 +48,12 @@ function user.may_fail(x: int) -> string throws string {
 }
 function user.test_no_catch() -> string throws string {
   { : string
-    may_fail(1) : string
+    caught_may_fail(1) : string
   }
 }
 function user.test_catch_all() -> string throws never {
   { : string | "caught"
-    catch (may_fail(1) : string) : unknown
+    catch (caught_may_fail(1) : string) : unknown
       catch (e)
         _ =>
           "caught" : "caught"
@@ -61,7 +61,7 @@ function user.test_catch_all() -> string throws never {
 }
 function user.test_catch_string() -> string throws never {
   { : string | "caught string"
-    catch (may_fail(1) : string) : unknown
+    catch (caught_may_fail(1) : string) : unknown
       catch (e)
         _: string =>
           "caught string" : "caught string"
@@ -69,7 +69,7 @@ function user.test_catch_string() -> string throws never {
 }
 function user.test_catch_rethrow() -> string throws int {
   { : string
-    catch (may_fail(1) : string) : unknown
+    catch (caught_may_fail(1) : string) : unknown
       catch (e)
         _ =>
           throw 42 : never
@@ -560,7 +560,7 @@ function user.test_pure_only_pure() -> int throws never {
 }
 lambda user.test_pure_only_pure {
 }
-function user.may_fail(x: int) -> string throws string {
+function user.declared_may_fail(x: int) -> string throws string {
   { : "ok"
     if (x == 0 : bool) : void
       { : never
@@ -576,12 +576,12 @@ function user.always_ok(x: int) -> string throws never {
 }
 function user.caller() -> string throws string {
   { : string
-    may_fail(1) : string
+    declared_may_fail(1) : string
   }
 }
 function user.safe_caller() -> string throws never {
   { : string | "caught"
-    catch (may_fail(1) : string) : unknown
+    catch (declared_may_fail(1) : string) : unknown
       catch (e)
         _ =>
           "caught" : "caught"
@@ -590,11 +590,20 @@ function user.safe_caller() -> string throws never {
 type user.ThrowingCallback = () -> int throws string
 type user.PureCallback = () -> int
 type user.ExplicitPure = () -> int
+type user.NoThrow = never
+type user.AliasPure = () -> int throws user.NoThrow
 type user.Mapper = (int) -> string throws string
 type user.Wrapper = (() -> int) -> int throws string
+function user.use_alias_pure(f: user.AliasPure) -> int throws user.NoThrow {
+  { : int
+    f() : int
+  }
+}
 type user.ThrowingCallback$stream = unknown
 type user.PureCallback$stream = unknown
 type user.ExplicitPure$stream = unknown
+type user.NoThrow$stream = never
+type user.AliasPure$stream = unknown
 type user.Mapper$stream = unknown
 type user.Wrapper$stream = unknown
 function user.apply_guarded(f: () -> int throws __throws_f) -> int throws __throws_f | string {
@@ -722,7 +731,7 @@ function user.map_it(x: int, f: (int) -> string throws __throws_f) -> string thr
     f(x) : string
   }
 }
-function user.test_map_pure() -> string throws never {
+function user.test_map_it_pure() -> string throws never {
   { : string
     map_it(1, (n: int) -> string { ... }) : string
       (n: int) -> string { ... } : (n: int) -> "ok"
@@ -731,9 +740,9 @@ function user.test_map_pure() -> string throws never {
         }
   }
 }
-lambda user.test_map_pure {
+lambda user.test_map_it_pure {
 }
-function user.test_map_throwing() -> string throws string {
+function user.test_map_it_throwing() -> string throws string {
   { : string
     map_it(1, (n: int) -> string { ... }) : string
       (n: int) -> string { ... } : (n: int) -> never throws string
@@ -742,7 +751,7 @@ function user.test_map_throwing() -> string throws string {
         }
   }
 }
-lambda user.test_map_throwing {
+lambda user.test_map_it_throwing {
 }
 function user.apply(f: () -> int throws __throws_f) -> int throws __throws_f {
   { : int
@@ -874,6 +883,7 @@ function user.test_explicit_throws_wider_than_body() -> int throws string {
         }
     f() : 42
   }
+  ?? 547..554: extraneous throws declaration: string
 }
 lambda user.test_explicit_throws_wider_than_body {
   ?? 547..554: extraneous throws declaration: string
@@ -951,9 +961,39 @@ function user.test_throws_never_but_throws() -> int throws never {
         }
     f() : never
   }
+  !! 213..219: throws contract violation: `never` is missing string
 }
 lambda user.test_throws_never_but_throws {
   !! 213..219: throws contract violation: `never` is missing string
+}
+function user.test_typed_lambda_throws_mismatch() -> int throws int {
+  { : never
+    let f = : () -> never throws int
+      () -> int { ... } : () -> never throws int
+        {
+          throw 42
+        }
+    f() : never
+  }
+  !! 419..442: type mismatch: expected () -> int throws string, got () -> never throws int
+}
+lambda user.test_typed_lambda_throws_mismatch {
+}
+function user.test_typed_lambda_annotation_underdeclares_body() -> int throws string {
+  { : never
+    let f = : () -> never throws string
+      () -> int throws string { ... } : () -> never throws string
+        {
+          throw 42
+        }
+    f() : never
+  }
+  !! 654..661: throws contract violation: `string` is missing int
+  ?? 654..661: extraneous throws declaration: string
+}
+lambda user.test_typed_lambda_annotation_underdeclares_body {
+  !! 654..661: throws contract violation: `string` is missing int
+  ?? 654..661: extraneous throws declaration: string
 }
 function user.apply_with_arg(x: int, f: (int) -> int throws __throws_f) -> int throws __throws_f {
   { : int
@@ -1062,6 +1102,30 @@ lambda user.test_nested_both_throw {
 }
 lambda user.test_nested_both_throw {
 }
+function user.optional_call_rethrows(cb: (() -> int throws string)?) -> int? throws string {
+  { : int?
+    cb?.() : int?
+  }
+}
+function user.optional_call_caught(cb: (() -> int throws string)?) -> int? throws never {
+  { : int? | null
+    catch (cb?.() : int?) : unknown
+      catch (e)
+        _ =>
+          null : null
+  }
+}
+function user.test_optional_call_with_throwing_callback() -> int? throws string {
+  { : int?
+    optional_call_rethrows(() -> int { ... }) : int?
+      () -> int { ... } : () -> never throws string
+        {
+          throw "boom"
+        }
+  }
+}
+lambda user.test_optional_call_with_throwing_callback {
+}
 function user.make_pure() -> () -> int throws never {
   { : never
     return : () -> 42
@@ -1147,6 +1211,7 @@ function user.test_stored_local_shape_mismatch() -> null throws never {
     null : null
   }
   !! 1283..1311: expected 1 argument(s), got 0
+  !! 1283..1311: type mismatch: expected (int) -> null, got () -> never throws string
 }
 lambda user.test_stored_local_shape_mismatch {
 }

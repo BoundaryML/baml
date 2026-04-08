@@ -555,11 +555,20 @@ impl Ty {
                 Ok(())
             }
             // All other variants are fine at runtime
-            Ty::Function { params, ret, .. } => {
+            Ty::Function {
+                params,
+                ret,
+                throws,
+                ..
+            } => {
                 for p in params {
                     p.validate_runtime()?;
                 }
-                ret.validate_runtime()
+                ret.validate_runtime()?;
+                if let Some(throws) = throws {
+                    throws.validate_runtime()?;
+                }
+                Ok(())
             }
             Ty::Future(_, _) => {
                 Err("Future type should not reach runtime (must be awaited)".to_string())
@@ -621,12 +630,21 @@ impl fmt::Display for Ty {
                     types.iter().map(std::string::ToString::to_string).collect();
                 write!(f, "{}", parts.join(" | "))
             }
-            Ty::Function { params, ret, .. } => {
+            Ty::Function {
+                params,
+                ret,
+                throws,
+                ..
+            } => {
                 let param_strs: Vec<std::string::String> = params
                     .iter()
                     .map(std::string::ToString::to_string)
                     .collect();
-                write!(f, "({}) -> {}", param_strs.join(", "), ret)
+                write!(f, "({}) -> {}", param_strs.join(", "), ret)?;
+                if let Some(throws) = throws {
+                    write!(f, " throws {}", throws)?;
+                }
+                Ok(())
             }
             Ty::Void { .. } => write!(f, "void"),
             Ty::WatchAccessor(inner, _) => write!(f, "{inner}.$watch"),
@@ -786,6 +804,31 @@ mod tests {
     fn test_display_list_union_parenthesized() {
         let ty = Ty::list(Ty::union([ty_int(), ty_string()]));
         assert_eq!(ty.to_string(), "(int | string)[]");
+    }
+
+    #[test]
+    fn test_display_function_includes_throws() {
+        let ty = Ty::Function {
+            params: vec![ty_int()],
+            ret: Box::new(ty_string()),
+            throws: Some(Box::new(ty_bool())),
+            attr: TyAttr::default(),
+        };
+        assert_eq!(ty.to_string(), "(int) -> string throws bool");
+    }
+
+    #[test]
+    fn test_validate_runtime_checks_function_throws() {
+        let ty = Ty::Function {
+            params: vec![],
+            ret: Box::new(ty_int()),
+            throws: Some(Box::new(Ty::Future(
+                Box::new(ty_string()),
+                TyAttr::default(),
+            ))),
+            attr: TyAttr::default(),
+        };
+        assert!(ty.validate_runtime().is_err());
     }
 
     #[test]

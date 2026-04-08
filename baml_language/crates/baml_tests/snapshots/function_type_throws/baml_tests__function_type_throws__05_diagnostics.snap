@@ -2,54 +2,6 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [validation] Error: Duplicate function `may_fail`
-   ╭─[ catch_absorbs_throws.baml:3:10 ]
-   │
- 3 │ function may_fail(x: int) -> string throws string {
-   │          ────┬───  
-   │              ╰───── first defined as function here
-   │
-   ├─[ fn_decl_throws.baml:4:10 ]
-   │
- 4 │ function may_fail(x: int) -> string throws string {
-   │          ────┬───  
-   │              ╰───── duplicate function definition
-   │ 
-   │ Note: Error code: E0011
-───╯
-
-  [validation] Error: Duplicate function `test_map_pure`
-    ╭─[ array_map_throws.baml:4:10 ]
-    │
-  4 │ function test_map_pure() -> int[] {
-    │          ──────┬──────  
-    │                ╰──────── first defined as function here
-    │
-    ├─[ hof_rethrows.baml:37:10 ]
-    │
- 37 │ function test_map_pure() -> string {
-    │          ──────┬──────  
-    │                ╰──────── duplicate function definition
-    │ 
-    │ Note: Error code: E0011
-────╯
-
-  [validation] Error: Duplicate function `test_map_throwing`
-    ╭─[ array_map_throws.baml:10:10 ]
-    │
- 10 │ function test_map_throwing() -> int[] {
-    │          ────────┬────────  
-    │                  ╰────────── first defined as function here
-    │
-    ├─[ hof_rethrows.baml:41:10 ]
-    │
- 41 │ function test_map_throwing() -> string {
-    │          ────────┬────────  
-    │                  ╰────────── duplicate function definition
-    │ 
-    │ Note: Error code: E0011
-────╯
-
   [type] Warning: extraneous throws declaration: string
     ╭─[ lambda_throws_explicit.baml:17:27 ]
     │
@@ -69,6 +21,56 @@ source: crates/baml_tests/src/generated_tests.rs
    │ 
    │ Note: Error code: E0001
 ───╯
+
+  [type] Error: type mismatch: expected () -> int throws string, got () -> never throws int
+    ╭─[ lambda_throws_violation.baml:11:35 ]
+    │
+ 11 │   let f: () -> int throws string = () -> int { throw 42 }
+    │                                   ───────────┬───────────  
+    │                                              ╰───────────── type mismatch: expected () -> int throws string, got () -> never throws int
+    │ 
+    │ Note: Error code: E0001
+────╯
+
+  [type] Warning: extraneous throws declaration: string
+    ╭─[ lambda_throws_violation.baml:17:52 ]
+    │
+ 17 │   let f: () -> int throws string = () -> int throws string { throw 42 }
+    │                                                    ───┬───  
+    │                                                       ╰───── extraneous throws declaration: string
+    │ 
+    │ Note: Error code: E0001
+────╯
+
+  [type] Warning: extraneous throws declaration: string
+    ╭─[ lambda_throws_violation.baml:17:52 ]
+    │
+ 17 │   let f: () -> int throws string = () -> int throws string { throw 42 }
+    │                                                    ───┬───  
+    │                                                       ╰───── extraneous throws declaration: string
+    │ 
+    │ Note: Error code: E0001
+────╯
+
+  [type] Error: throws contract violation: `string` is missing int
+    ╭─[ lambda_throws_violation.baml:17:52 ]
+    │
+ 17 │   let f: () -> int throws string = () -> int throws string { throw 42 }
+    │                                                    ───┬───  
+    │                                                       ╰───── throws contract violation: `string` is missing int
+    │ 
+    │ Note: Error code: E0001
+────╯
+
+  [type] Error: throws contract violation: `string` is missing int
+    ╭─[ lambda_throws_violation.baml:17:52 ]
+    │
+ 17 │   let f: () -> int throws string = () -> int throws string { throw 42 }
+    │                                                    ───┬───  
+    │                                                       ╰───── throws contract violation: `string` is missing int
+    │ 
+    │ Note: Error code: E0001
+────╯
 
   [type] Warning: unreachable code: 1 statement(s) after diverging statement
    ╭─[ nested_lambda_throws.baml:1:1 ]
@@ -116,6 +118,16 @@ source: crates/baml_tests/src/generated_tests.rs
  42 │   let f: (int) -> null = () -> null { throw "oops" }
     │                         ──────────────┬─────────────  
     │                                       ╰─────────────── expected 1 argument(s), got 0
+    │ 
+    │ Note: Error code: E0001
+────╯
+
+  [type] Error: type mismatch: expected (int) -> null, got () -> never throws string
+    ╭─[ stored_callback_enforcement.baml:42:25 ]
+    │
+ 42 │   let f: (int) -> null = () -> null { throw "oops" }
+    │                         ──────────────┬─────────────  
+    │                                       ╰─────────────── type mismatch: expected (int) -> null, got () -> never throws string
     │ 
     │ Note: Error code: E0001
 ────╯

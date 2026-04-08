@@ -342,7 +342,7 @@ SOURCE_FILE
         R_BRACE "}"
   FUNCTION_DEF
     KW_FUNCTION "function"
-    WORD "test_map_pure"
+    WORD "test_map_it_pure"
     PARAMETER_LIST "()"
       L_PAREN "("
       R_PAREN ")"
@@ -381,7 +381,7 @@ SOURCE_FILE
         R_BRACE "}"
   FUNCTION_DEF
     KW_FUNCTION "function"
-    WORD "test_map_throwing"
+    WORD "test_map_it_throwing"
     PARAMETER_LIST "()"
       L_PAREN "("
       R_PAREN ")"

@@ -150,7 +150,12 @@ pub fn display_ty(ty: &Ty) -> String {
         }
         Ty::Optional(inner, _) => format!("{}?", display_ty(inner)),
         Ty::Literal(lit, _freshness, _) => lit.to_string(),
-        Ty::Function { params, ret, .. } => {
+        Ty::Function {
+            params,
+            ret,
+            throws,
+            ..
+        } => {
             let ps: Vec<String> = params
                 .iter()
                 .map(|(name, ty)| {
@@ -159,7 +164,12 @@ pub fn display_ty(ty: &Ty) -> String {
                         .unwrap_or_else(|| display_ty(ty))
                 })
                 .collect();
-            format!("({}) -> {}", ps.join(", "), display_ty(ret))
+            let mut rendered = format!("({}) -> {}", ps.join(", "), display_ty(ret));
+            if !matches!(throws.as_ref(), Ty::Never { .. }) {
+                rendered.push_str(" throws ");
+                rendered.push_str(&display_ty(throws));
+            }
+            rendered
         }
         Ty::TypeVar(name, _) => name.to_string(),
         Ty::Never { .. } => "never".to_string(),
@@ -222,7 +232,12 @@ pub fn display_type_expr(te: &TypeExpr) -> String {
             parts.join(" | ")
         }
         TypeExpr::Literal { value, .. } => value.to_string(),
-        TypeExpr::Function { params, ret, .. } => {
+        TypeExpr::Function {
+            params,
+            ret,
+            throws,
+            ..
+        } => {
             let ps: Vec<String> = params
                 .iter()
                 .map(|p| {
@@ -232,7 +247,12 @@ pub fn display_type_expr(te: &TypeExpr) -> String {
                         .unwrap_or_else(|| display_type_expr(&p.ty))
                 })
                 .collect();
-            format!("({}) -> {}", ps.join(", "), display_type_expr(ret))
+            let mut rendered = format!("({}) -> {}", ps.join(", "), display_type_expr(ret));
+            if let Some(throws) = throws {
+                rendered.push_str(" throws ");
+                rendered.push_str(&display_type_expr(throws));
+            }
+            rendered
         }
         TypeExpr::BuiltinUnknown { .. } => "unknown".to_string(),
         TypeExpr::Never { .. } => "never".to_string(),

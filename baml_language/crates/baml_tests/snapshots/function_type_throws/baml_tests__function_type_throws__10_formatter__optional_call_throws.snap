@@ -2,4 +2,4 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === STRONG AST ERROR ===
-Unexpected additional element at lambda_throws_violation.baml:11:19
+Unexpected additional element at optional_call_throws.baml:3:47

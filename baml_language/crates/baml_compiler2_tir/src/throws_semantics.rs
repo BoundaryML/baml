@@ -31,9 +31,22 @@ pub(crate) fn function_throws_facts(
     ty: &Ty,
     aliases: &HashMap<QualifiedTypeName, Ty>,
 ) -> Option<BTreeSet<Ty>> {
-    match resolve_alias_chain(ty, aliases) {
+    match resolve_callable_function_ty(ty, aliases)? {
         Ty::Function { throws, .. } => Some(flatten_ty_to_facts(&throws)),
         _ => None,
+    }
+}
+
+fn resolve_callable_function_ty(ty: &Ty, aliases: &HashMap<QualifiedTypeName, Ty>) -> Option<Ty> {
+    let mut resolved = resolve_alias_chain(ty, aliases);
+    loop {
+        match resolved {
+            Ty::Function { .. } => return Some(resolved),
+            Ty::Optional(inner, _) => {
+                resolved = resolve_alias_chain(inner.as_ref(), aliases);
+            }
+            _ => return None,
+        }
     }
 }
 

@@ -1,7 +1,7 @@
 // === Function declaration throws preserved in type ===
 
 // Function with explicit throws - should show throws string in type
-function may_fail(x: int) -> string throws string {
+function declared_may_fail(x: int) -> string throws string {
   if (x == 0) { throw "zero" }
   "ok"
 }
@@ -13,12 +13,12 @@ function always_ok(x: int) -> string {
 
 // Function calling a throwing function - should propagate throws
 function caller() -> string {
-  may_fail(1)
+  declared_may_fail(1)
 }
 
 // Function calling a throwing function with catch - should not propagate
 function safe_caller() -> string {
-  may_fail(1) catch (e) {
+  declared_may_fail(1) catch (e) {
     _ => "caught"
   }
 }

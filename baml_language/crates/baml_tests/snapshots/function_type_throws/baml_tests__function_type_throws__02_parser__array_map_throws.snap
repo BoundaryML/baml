@@ -5,7 +5,7 @@ source: crates/baml_tests/src/generated_tests.rs
 SOURCE_FILE
   FUNCTION_DEF
     KW_FUNCTION "function"
-    WORD "test_map_pure"
+    WORD "test_array_map_pure"
     PARAMETER_LIST "()"
       L_PAREN "("
       R_PAREN ")"
@@ -59,7 +59,7 @@ SOURCE_FILE
         R_BRACE "}"
   FUNCTION_DEF
     KW_FUNCTION "function"
-    WORD "test_map_throwing"
+    WORD "test_array_map_throwing"
     PARAMETER_LIST "()"
       L_PAREN "("
       R_PAREN ")"

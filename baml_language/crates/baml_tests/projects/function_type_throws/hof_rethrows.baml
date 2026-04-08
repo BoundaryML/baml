@@ -34,10 +34,10 @@ function map_it(x: int, f: (int) -> string) -> string {
   f(x)
 }
 
-function test_map_pure() -> string {
+function test_map_it_pure() -> string {
   map_it(1, (n: int) -> string { "ok" })
 }
 
-function test_map_throwing() -> string {
+function test_map_it_throwing() -> string {
   map_it(1, (n: int) -> string { throw "bad" })
 }

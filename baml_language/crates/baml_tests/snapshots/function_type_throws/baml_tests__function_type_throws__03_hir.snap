@@ -2,30 +2,30 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === HIR2 ===
-function user.test_map_pure() -> int[]  [expr] {
+function user.test_array_map_pure() -> int[]  [expr] {
   { let items: int[] = [1, 2, 3] } items.map((x) -> { {  } x Mul 2 })
 }
-function user.test_map_throwing() -> int[]  [expr] {
+function user.test_array_map_throwing() -> int[]  [expr] {
   { let items: int[] = [1, 2, 3] } items.map((x) -> { { if (x Eq 2) { throw "found two" } } x Mul 2 })
 }
 type user.ThrowingFn = () -> int
 function user.takes_throwing(f: () -> int) -> int  [expr] {
   {  } f()
 }
-function user.may_fail(x: int) -> string  [expr] {
+function user.caught_may_fail(x: int) -> string  [expr] {
   { if (x Eq 0) { throw "zero" } } "ok"
 }
 function user.test_catch_all() -> string  [expr] {
-  {  } may_fail(1) catch (e) { _ => "caught" }
+  {  } caught_may_fail(1) catch (e) { _ => "caught" }
 }
 function user.test_catch_rethrow() -> string  [expr] {
-  {  } may_fail(1) catch (e) { _ => throw 42 }
+  {  } caught_may_fail(1) catch (e) { _ => throw 42 }
 }
 function user.test_catch_string() -> string  [expr] {
-  {  } may_fail(1) catch (e) { _: string => "caught string" }
+  {  } caught_may_fail(1) catch (e) { _: string => "caught string" }
 }
 function user.test_no_catch() -> string  [expr] {
-  {  } may_fail(1)
+  {  } caught_may_fail(1)
 }
 function user.apply_inner(f: () -> int) -> int  [expr] {
   {  } f()
@@ -194,19 +194,24 @@ function user.always_ok(x: int) -> string  [expr] {
   {  } "always ok"
 }
 function user.caller() -> string  [expr] {
-  {  } may_fail(1)
+  {  } declared_may_fail(1)
 }
-function user.may_fail(x: int) -> string  [expr] {
+function user.declared_may_fail(x: int) -> string  [expr] {
   { if (x Eq 0) { throw "zero" } } "ok"
 }
 function user.safe_caller() -> string  [expr] {
-  {  } may_fail(1) catch (e) { _ => "caught" }
+  {  } declared_may_fail(1) catch (e) { _ => "caught" }
 }
+type user.AliasPure = () -> int
 type user.ExplicitPure = () -> int
 type user.Mapper = (int) -> string
+type user.NoThrow = never
 type user.PureCallback = () -> int
 type user.ThrowingCallback = () -> int
 type user.Wrapper = (() -> int) -> int
+function user.use_alias_pure(f: user.AliasPure) -> int  [expr] {
+  {  } f()
+}
 function user.apply_guarded(f: () -> int) -> int  [expr] {
   { let result = f(); if (result Lt 0) { throw "negative result" } } result
 }
@@ -228,10 +233,10 @@ function user.run_throwing(f: () -> int) -> int  [expr] {
 function user.run_two(f: () -> int, g: () -> int) -> int  [expr] {
   {  } f() Add g()
 }
-function user.test_map_pure() -> string  [expr] {
+function user.test_map_it_pure() -> string  [expr] {
   {  } map_it(1, (n: int) -> string { {  } "ok" })
 }
-function user.test_map_throwing() -> string  [expr] {
+function user.test_map_it_throwing() -> string  [expr] {
   {  } map_it(1, (n: int) -> string { { throw "bad" } })
 }
 function user.test_run_pure() -> int  [expr] {
@@ -309,6 +314,12 @@ function user.test_throwing_lambda() -> int  [expr] {
 function user.test_throws_never_but_throws() -> int  [expr] {
   { let f = () -> int throws never { { throw "boom" } } } f()
 }
+function user.test_typed_lambda_annotation_underdeclares_body() -> int  [expr] {
+  { let f: () -> int = () -> int throws string { { throw 42 } } } f()
+}
+function user.test_typed_lambda_throws_mismatch() -> int  [expr] {
+  { let f: () -> int = () -> int { { throw 42 } } } f()
+}
 function user.apply_with_arg(x: int, f: (int) -> int) -> int  [expr] {
   {  } f(x)
 }
@@ -332,6 +343,15 @@ function user.test_nested_inner_throws() -> int  [expr] {
 }
 function user.test_nested_outer_throws() -> int  [expr] {
   { let outer = () -> int { { let inner = () -> int { {  } 42 }; throw "outer boom" } } } outer()
+}
+function user.optional_call_caught(cb: () -> int?) -> int?  [expr] {
+  {  } cb?.() catch (e) { _ => null }
+}
+function user.optional_call_rethrows(cb: () -> int?) -> int?  [expr] {
+  {  } cb?.()
+}
+function user.test_optional_call_with_throwing_callback() -> int?  [expr] {
+  {  } optional_call_rethrows(() -> int { { throw "boom" } })
 }
 function user.make_pure() -> () -> int  [expr] {
   { return () -> int { {  } 42 } }
