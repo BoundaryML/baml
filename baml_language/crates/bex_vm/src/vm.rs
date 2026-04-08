@@ -17,6 +17,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use ::bex_vm_types::types::ErrorClass;
+use ::core::any::TypeId;
 use bex_heap::{BexHeap, Tlab};
 use bex_vm_types::{
     BinOp, CmpOp, FunctionKind, GlobalPool, HeapPtr, Instruction, Object, ObjectIndex, ObjectPool,
@@ -858,11 +859,13 @@ impl BexVm {
         };
         let obj = self.get_object(ptr);
         match obj {
-            Object::RustData(arc) => arc.downcast_ref::<T>().ok_or_else(|| {
-                VmInternalError::InternalError(
-                    "RustData downcast failed: wrong concrete type".to_string(),
-                )
-            }),
+            Object::RustData(arc) => {
+                arc.downcast_ref::<T>()
+                    .ok_or_else(|| VmInternalError::RustTypeError {
+                        expected: TypeId::of::<T>(),
+                        got: arc.as_ref().type_id(),
+                    })
+            }
             _ => Err(VmInternalError::TypeError {
                 expected: Type::Object(ObjectType::RustData),
                 got: self.type_of(value),
@@ -939,11 +942,6 @@ impl BexVm {
                 })
             })
             .collect::<Result<Vec<_>, VmError>>()
-            .map_err(|e| {
-                VmError::from(VmInternalError::InternalError(format!(
-                    "internal error: Vm::stack_trace() failed to build stack trace: {e}\n\noriginal error: {error}"
-                )))
-            })
             .unwrap_or_default();
 
         StackTrace { error, trace }
@@ -955,10 +953,13 @@ impl BexVm {
     /// When the new control flow ends (given functions pops from the stack)
     /// then the previosly running bytecode resumes execution.
     fn interrupt(&mut self, function_ptr: HeapPtr, args: &[Value]) -> Result<VmExecState, VmError> {
-        if !matches!(self.get_object(function_ptr), Object::Function(_)) {
-            return Err(
-                VmInternalError::InternalError("Invalid interrupt function".to_string()).into(),
-            );
+        let obj = self.get_object(function_ptr);
+        if !matches!(obj, Object::Function(_)) {
+            return Err(VmInternalError::TypeError {
+                expected: Type::Object(ObjectType::Function(FunctionType::Any)),
+                got: Type::Object(ObjectType::of(obj)),
+            }
+            .into());
         }
 
         // Index of the frame that starts the interrupt code.
@@ -985,7 +986,8 @@ impl BexVm {
         &mut self,
         function_ptr: HeapPtr,
     ) -> Result<(), VmInternalError> {
-        let real_local_count = match self.get_object(function_ptr) {
+        let obj = self.get_object(function_ptr);
+        let real_local_count = match obj {
             Object::Function(function) => function.real_local_count,
             Object::Closure(closure) => {
                 // SAFETY: closure.function points to a Function object with
@@ -994,16 +996,18 @@ impl BexVm {
                 match func_obj {
                     Object::Function(f) => f.real_local_count,
                     _ => {
-                        return Err(VmInternalError::InternalError(
-                            "Invalid closure inner function".to_string(),
-                        ));
+                        return Err(VmInternalError::TypeError {
+                            expected: Type::Object(ObjectType::Function(FunctionType::Any)),
+                            got: Type::Object(ObjectType::of(func_obj)),
+                        });
                     }
                 }
             }
             _ => {
-                return Err(VmInternalError::InternalError(
-                    "Invalid frame function".to_string(),
-                ));
+                return Err(VmInternalError::TypeError {
+                    expected: Type::Object(ObjectType::Any),
+                    got: Type::Object(ObjectType::of(obj)),
+                });
             }
         };
 
@@ -1437,13 +1441,17 @@ impl BexVm {
                                 filtered_notifications.push(notification);
                             }
                         }
-
-                        other => {
-                            return Err(VmInternalError::InternalError(format!(
-                                "Invalid filter function return: {other:?}"
-                            ))
+                        Ok(VmExecState::Complete(other)) => {
+                            return Err(VmInternalError::TypeError {
+                                expected: Type::Bool,
+                                got: self.type_of(&other),
+                            }
                             .into());
                         }
+                        Ok(_) => {
+                            return Err(VmInternalError::ExpectedCompletion.into());
+                        }
+                        Err(err) => return Err(err),
                     }
                 }
             }
@@ -2703,16 +2711,11 @@ impl BexVm {
                         Object::String(mode) if mode == "manual" => WatchFilter::Manual,
                         Object::String(mode) if mode == "never" => WatchFilter::Paused,
                         _ => {
-                            return Err(VmInternalError::InternalError(
-                                "Invalid filter".to_string(),
-                            )
-                            .into());
+                            return Err(VmInternalError::InvalidFilter.into());
                         }
                     },
                     _ => {
-                        return Err(
-                            VmInternalError::InternalError("Invalid filter".to_string()).into()
-                        );
+                        return Err(VmInternalError::InvalidFilter.into());
                     }
                 };
 
@@ -2787,10 +2790,7 @@ impl BexVm {
                 let notifications = self.watch.copy_roots_reaching(var_node);
 
                 if notifications.len() != 1 && notifications.first() != Some(&var_node) {
-                    return Err(VmInternalError::InternalError(
-                        "Invalid manual notify".to_string(),
-                    )
-                    .into());
+                    return Err(VmInternalError::InvalidManualNotify.into());
                 }
 
                 return Ok(Some(VmExecState::Notify(WatchNotification::Variables(

@@ -33,10 +33,16 @@ fn format_value_recursive(
 
         Value::Object(obj_idx) => match vm.get_object(*obj_idx) {
             Object::Instance(instance) => {
-                let Object::Class(class) = vm.get_object(instance.class) else {
-                    return Err(VmInternalError::InternalError(
-                        "Invalid class reference".to_string(),
-                    )
+                let class = vm.get_object(instance.class);
+                let Object::Class(class) = class else {
+                    return Err(VmInternalError::TypeError {
+                        expected: ::bex_vm_types::types::Type::Object(
+                            ::bex_vm_types::ObjectType::Class,
+                        ),
+                        got: ::bex_vm_types::types::Type::Object(::bex_vm_types::ObjectType::of(
+                            class,
+                        )),
+                    }
                     .into());
                 };
 
@@ -98,10 +104,16 @@ fn format_value_recursive(
             Object::String(s) => Ok(format!("\"{s}\"")),
             Object::Enum(e) => Ok(e.name.display_name.to_string()),
             Object::Variant(variant) => {
-                let Object::Enum(enm) = vm.get_object(variant.enm) else {
-                    return Err(VmInternalError::InternalError(
-                        "Invalid enum reference".to_string(),
-                    )
+                let enm = vm.get_object(variant.enm);
+                let Object::Enum(enm) = enm else {
+                    return Err(VmInternalError::TypeError {
+                        expected: ::bex_vm_types::types::Type::Object(
+                            ::bex_vm_types::ObjectType::Enum,
+                        ),
+                        got: ::bex_vm_types::types::Type::Object(::bex_vm_types::ObjectType::of(
+                            enm,
+                        )),
+                    }
                     .into());
                 };
 

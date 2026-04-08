@@ -85,10 +85,9 @@ pub fn attach_builtins(object: Object) -> Result<Object, VmInternalError> {
                         let Some(native_function) =
                             PackageBamlImpl::get_native_fn(function.name.as_str())
                         else {
-                            return Err(VmInternalError::InternalError(format!(
-                                "Native function '{}' not found",
-                                function.name
-                            )));
+                            return Err(VmInternalError::MissingNativeFunction {
+                                name: function.name.clone(),
+                            });
                         };
                         bex_vm_types::FunctionKind::Native(native_function as *const ())
                     }

@@ -99,11 +99,10 @@ impl BamlClassUint8Array for PackageBamlImpl {
 
     fn from_hex(hex: &str) -> Result<Vec<u8>, VmRustFnError> {
         #[inline]
-        fn parse_hex_digit(c: u8) -> Option<u8> {
+        const fn parse_hex_digit(c: u8) -> Option<u8> {
             match c {
                 b'0'..=b'9' => Some(c - b'0'),
-                b'a'..=b'f' => Some(c - b'a' + 10),
-                b'A'..=b'F' => Some(c - b'A' + 10),
+                b'a'..=b'f' | b'A'..=b'F' => Some((c & 0x1F) + 9),
                 _ => None,
             }
         }

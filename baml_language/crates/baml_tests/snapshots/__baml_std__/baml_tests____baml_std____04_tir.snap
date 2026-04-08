@@ -618,7 +618,10 @@ class baml.panics.AssertionFailed {
 class baml.panics.Unreachable {
   message: string
 }
-type baml.panics.Panic = baml.panics.DivisionByZero | baml.panics.IndexOutOfBounds | baml.panics.MapKeyNotFound | baml.panics.StackOverflow | baml.panics.AssertionFailed | baml.panics.Unreachable
+class baml.panics.AllocFailure {
+  message: string
+}
+type baml.panics.Panic = baml.panics.DivisionByZero | baml.panics.IndexOutOfBounds | baml.panics.MapKeyNotFound | baml.panics.StackOverflow | baml.panics.AssertionFailed | baml.panics.Unreachable | baml.panics.AllocFailure
 class baml.panics.DivisionByZero$stream {
   dividend: null | int
 }
@@ -638,7 +641,10 @@ class baml.panics.AssertionFailed$stream {
 class baml.panics.Unreachable$stream {
   message: null | string
 }
-type baml.panics.Panic$stream = baml.panics.DivisionByZero$stream | baml.panics.IndexOutOfBounds$stream | baml.panics.MapKeyNotFound$stream | baml.panics.StackOverflow$stream | baml.panics.AssertionFailed$stream | baml.panics.Unreachable$stream
+class baml.panics.AllocFailure$stream {
+  message: null | string
+}
+type baml.panics.Panic$stream = baml.panics.DivisionByZero$stream | baml.panics.IndexOutOfBounds$stream | baml.panics.MapKeyNotFound$stream | baml.panics.StackOverflow$stream | baml.panics.AssertionFailed$stream | baml.panics.Unreachable$stream | baml.panics.AllocFailure$stream
 
 --- <builtin>/baml/ns_sys/sys.baml ---
 

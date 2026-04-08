@@ -87,6 +87,14 @@ pub enum VmInternalError {
     #[error("type error: expected {expected}, got {got}")]
     TypeError { expected: Type, got: Type },
 
+    /// A Rust type error during downcasting from an `Arc<dyn Any + Send + Sync>`.
+    /// The message currently uses typeids which are not very human-readable.
+    #[error("rust type error during downcasting: expected typeid {expected:?}, got typeid {got:?}")]
+    RustTypeError {
+        expected: ::core::any::TypeId,
+        got: ::core::any::TypeId,
+    },
+
     #[error("cannot apply binary operation: {left} {op} {right}")]
     CannotApplyBinOp { left: Type, right: Type, op: BinOp },
 
@@ -99,8 +107,21 @@ pub enum VmInternalError {
     #[error("jump offset overflowed instruction pointer")]
     InvalidJump,
 
-    #[error("internal error: {0}")]
-    InternalError(String),
+    #[error("missing native function: {name}")]
+    MissingNativeFunction { name: String },
+
+    /// We expected a function to return [`crate::vm::VmExecState::Complete`],
+    /// but it returned a different (yielding) variant.
+    #[error(
+        "Expected a function to return completed, but it instead yielded at some incomplete state."
+    )]
+    ExpectedCompletion,
+
+    #[error("Invalid watch filter")]
+    InvalidFilter,
+
+    #[error("Invalid manual notify")]
+    InvalidManualNotify,
 }
 
 /// Any kind of virtual machine error.
