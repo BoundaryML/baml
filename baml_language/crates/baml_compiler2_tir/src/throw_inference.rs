@@ -5,7 +5,7 @@
 //! firewalls: their declared set becomes caller-visible, replacing body-derived
 //! facts for propagation.
 
-use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 use baml_base::Name;
 use baml_compiler2_ast::{Expr, ExprBody, Literal, Pattern, TypeExpr};
@@ -15,7 +15,9 @@ use baml_compiler2_hir::{
 };
 
 use crate::{
+    inference::collect_type_aliases,
     lower_type_expr::{lower_type_expr_in_ns, qualify_def},
+    throws_semantics::function_throws_facts,
     ty::{PrimitiveType, Ty, TyAttr},
 };
 
@@ -64,6 +66,7 @@ pub fn function_throw_sets<'db>(
     package_id: PackageId<'db>,
 ) -> FunctionThrowSets {
     let pkg_items = package_items(db, package_id);
+    let aliases = collect_type_aliases(db, pkg_items);
     // Load dependency interfaces for cross-package throw lookup
     let dep_interfaces: Vec<(Name, &crate::package_interface::PackageInterface)> =
         package_dependencies(db, package_id)
@@ -92,13 +95,13 @@ pub fn function_throw_sets<'db>(
             let key = function_key(db, *func_loc, short_name);
             let sig = baml_compiler2_hir::signature::function_signature(db, *func_loc);
             let body = baml_compiler2_hir::body::function_body(db, *func_loc);
+            let item_tree = baml_compiler2_hir::file_item_tree(db, func_loc.file(db));
+            let func_data = &item_tree[func_loc.id(db)];
             let func_ns = baml_compiler2_hir::file_package::file_package(db, func_loc.file(db))
                 .namespace_path;
 
             let declared_throws = sig.throws.as_ref().map(|te| {
                 let mut diags = Vec::new();
-                let item_tree = baml_compiler2_hir::file_item_tree(db, func_loc.file(db));
-                let func_data = &item_tree[func_loc.id(db)];
                 let lowered = lower_type_expr_in_ns(
                     db,
                     te,
@@ -114,7 +117,17 @@ pub fn function_throw_sets<'db>(
             let direct = if let Some(declared) = declared_throws.clone() {
                 declared
             } else if let baml_compiler2_hir::body::FunctionBody::Expr(expr_body) = body.as_ref() {
-                collect_direct_throws(db, pkg_items, &func_ns, expr_body)
+                let mut direct = collect_direct_throws(db, pkg_items, &func_ns, expr_body);
+                direct.extend(collect_direct_param_call_throws(
+                    db,
+                    pkg_items,
+                    &func_ns,
+                    &func_data.generic_params,
+                    sig.as_ref(),
+                    expr_body,
+                    &aliases,
+                ));
+                direct
             } else {
                 BTreeSet::new()
             };
@@ -149,6 +162,8 @@ pub fn function_throw_sets<'db>(
 
                 let method_ns =
                     baml_compiler2_hir::file_package::file_package(db, file).namespace_path;
+                let mut method_generic_params = class_data.generic_params.clone();
+                method_generic_params.extend(method_data.generic_params.iter().cloned());
                 let declared_throws = sig.throws.as_ref().map(|te| {
                     let mut diags = Vec::new();
                     let lowered = lower_type_expr_in_ns(
@@ -156,7 +171,7 @@ pub fn function_throw_sets<'db>(
                         te,
                         pkg_items,
                         &method_ns,
-                        &method_data.generic_params,
+                        &method_generic_params,
                         &mut diags,
                     );
                     drop(diags);
@@ -168,7 +183,17 @@ pub fn function_throw_sets<'db>(
                 } else if let baml_compiler2_hir::body::FunctionBody::Expr(expr_body) =
                     body.as_ref()
                 {
-                    collect_direct_throws(db, pkg_items, &method_ns, expr_body)
+                    let mut direct = collect_direct_throws(db, pkg_items, &method_ns, expr_body);
+                    direct.extend(collect_direct_param_call_throws(
+                        db,
+                        pkg_items,
+                        &method_ns,
+                        &method_generic_params,
+                        sig.as_ref(),
+                        expr_body,
+                        &aliases,
+                    ));
+                    direct
                 } else {
                     BTreeSet::new()
                 };
@@ -482,39 +507,74 @@ fn expr_to_path(expr_id: baml_compiler2_ast::ExprId, body: &ExprBody) -> Option<
     }
 }
 
-/// Flatten a compound `Ty` into its leaf throw facts.
-/// Unions and optionals are decomposed; leaf types are kept as-is.
 pub fn flatten_ty_to_facts(ty: &Ty) -> BTreeSet<ThrowFact> {
+    crate::throws_semantics::flatten_ty_to_facts(ty)
+}
+
+fn collect_direct_param_call_throws<'db>(
+    db: &'db dyn crate::Db,
+    pkg_items: &PackageItems<'db>,
+    ns_context: &[Name],
+    generic_params: &[Name],
+    sig: &baml_compiler2_hir::signature::FunctionSignature,
+    body: &ExprBody,
+    aliases: &HashMap<crate::ty::QualifiedTypeName, Ty>,
+) -> BTreeSet<ThrowFact> {
+    let mut direct_param_throws: HashMap<Name, BTreeSet<ThrowFact>> = HashMap::new();
+
+    for (param_name, param_ty_expr) in &sig.params {
+        let mut diags = Vec::new();
+        let lowered = lower_type_expr_in_ns(
+            db,
+            param_ty_expr,
+            pkg_items,
+            ns_context,
+            generic_params,
+            &mut diags,
+        );
+        drop(diags);
+
+        let Some(facts) = function_throws_facts(&lowered, aliases) else {
+            continue;
+        };
+
+        let concrete_facts: BTreeSet<ThrowFact> = facts
+            .into_iter()
+            .filter(|fact| !matches!(fact, Ty::TypeVar(_, _) | Ty::Never { .. } | Ty::Void { .. }))
+            .collect();
+
+        if !concrete_facts.is_empty() {
+            direct_param_throws.insert(param_name.clone(), concrete_facts);
+        }
+    }
+
+    if direct_param_throws.is_empty() {
+        return BTreeSet::new();
+    }
+
     let mut out = BTreeSet::new();
-    collect_leaf_types(ty, &mut out);
+    for (_, expr) in body.exprs.iter() {
+        let callee = match expr {
+            Expr::Call { callee, .. } | Expr::OptionalCall { callee, .. } => *callee,
+            _ => continue,
+        };
+
+        let Some(param_name) = direct_param_callee_name(callee, body) else {
+            continue;
+        };
+
+        if let Some(facts) = direct_param_throws.get(&param_name) {
+            out.extend(facts.iter().cloned());
+        }
+    }
+
     out
 }
 
-fn collect_leaf_types(ty: &Ty, out: &mut BTreeSet<Ty>) {
-    match ty {
-        // Compound types: decompose
-        Ty::Optional(inner, _) => {
-            collect_leaf_types(inner, out);
-            out.insert(Ty::Primitive(PrimitiveType::Null, TyAttr::default()));
-        }
-        Ty::Union(members, _) => {
-            for member in members {
-                collect_leaf_types(member, out);
-            }
-        }
-        // Literal types: widen to primitive for throw fact purposes
-        Ty::Literal(lit, _, _) => {
-            out.insert(Ty::Primitive(
-                PrimitiveType::from_literal(lit),
-                TyAttr::default(),
-            ));
-        }
-        // Bottom/void: no facts
-        Ty::Never { .. } | Ty::Void { .. } => {}
-        // Everything else: keep as-is
-        _ => {
-            out.insert(ty.clone());
-        }
+fn direct_param_callee_name(expr_id: baml_compiler2_ast::ExprId, body: &ExprBody) -> Option<Name> {
+    match &body.exprs[expr_id] {
+        Expr::Path(segments) if segments.len() == 1 => Some(segments[0].clone()),
+        _ => None,
     }
 }
 

@@ -172,42 +172,20 @@ impl<'db> ScopeInference<'db> {
         package_id: PackageId<'db>,
         body: &baml_compiler2_ast::ExprBody,
     ) -> crate::ty::Ty {
-        use std::collections::BTreeSet;
+        let pkg_items = baml_compiler2_ppir::package_items(db, package_id);
+        let aliases = collect_type_aliases(db, pkg_items);
 
-        use crate::ty::{PrimitiveType, TyAttr};
-
-        let mut facts: BTreeSet<crate::ty::Ty> = crate::effective_throws::collect_effective_throws(
+        let facts = crate::effective_throws::collect_effective_throws(
             db,
             package_id,
             body,
             &self.expressions,
             &self.catch_residual_throws,
+            &aliases,
             false,
             false,
         );
-
-        // Remove Never and Void facts (they don't represent thrown exceptions).
-        facts.retain(|f| !matches!(f, Ty::Never { .. } | Ty::Void { .. }));
-
-        // Widen string literals to string primitive (matches throw_inference behavior).
-        let widened: BTreeSet<crate::ty::Ty> = facts
-            .into_iter()
-            .map(|f| match &f {
-                Ty::Literal(baml_compiler2_ast::Literal::String(_), _, _) => {
-                    Ty::Primitive(PrimitiveType::String, TyAttr::default())
-                }
-                other => other.clone(),
-            })
-            .collect();
-
-        let mut members: Vec<crate::ty::Ty> = widened.into_iter().collect();
-        match members.len() {
-            0 => Ty::Never {
-                attr: TyAttr::default(),
-            },
-            1 => members.remove(0),
-            _ => Ty::Union(members, TyAttr::default()),
-        }
+        crate::throws_semantics::concrete_throws_ty_from_facts(facts)
     }
 
     /// Get diagnostics for this scope (empty slice if none).

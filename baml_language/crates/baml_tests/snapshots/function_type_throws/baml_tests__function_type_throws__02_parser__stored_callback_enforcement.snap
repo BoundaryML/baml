@@ -184,6 +184,51 @@ SOURCE_FILE
         R_BRACE "}"
   FUNCTION_DEF
     KW_FUNCTION "function"
+    WORD "test_stored_local_shape_mismatch"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "null"
+      WORD "null"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        LET_STMT
+          KW_LET "let"
+          WORD "f"
+          COLON ":"
+          TYPE_EXPR
+            L_PAREN "("
+            FUNCTION_TYPE_PARAM
+              TYPE_EXPR "int"
+                WORD "int"
+            R_PAREN ")"
+            ARROW "->"
+            TYPE_EXPR "null"
+              WORD "null"
+          EQUALS "="
+          LAMBDA_EXPR
+            PARAMETER_LIST "()"
+              L_PAREN "("
+              R_PAREN ")"
+            ARROW "->"
+            TYPE_EXPR "null"
+              WORD "null"
+            BLOCK_EXPR
+              L_BRACE "{"
+              THROW_STMT
+                THROW_EXPR
+                  KW_THROW "throw"
+                  STRING_LITERAL "oops"
+                    QUOTE """
+                    WORD "oops"
+                    QUOTE """
+              R_BRACE "}"
+        WORD "null"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
     WORD "test_stored_local_ok"
     PARAMETER_LIST "()"
       L_PAREN "("

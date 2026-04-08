@@ -5,7 +5,7 @@ function compose<A, B, C>(
   f: (A) -> B,
   g: (B) -> C
 ) -> (A) -> C {
-  (a: A) -> C { g(f(a)) }
+  return (a: A) -> C { g(f(a)) }
 }
 
 // Pure composition

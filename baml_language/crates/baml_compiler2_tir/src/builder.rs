@@ -28,6 +28,7 @@ use text_size::TextRange;
 use crate::{
     infer_context::{InferContext, RelatedLocation, TirTypeError, TypeCheckDiagnostics},
     package_interface::PackageResolutionContext,
+    throws_semantics,
     ty::{Freshness, PrimitiveType, Ty, TyAttr},
 };
 
@@ -936,19 +937,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // Expand type alias chains so alias-over-function types are callable.
                 // Bare alias cycles are already caught by find_invalid_alias_cycles (Tarjan SCC)
                 // before we reach here, so the depth guard is cheap insurance.
-                let callee_ty = {
-                    let mut ty = callee_ty;
-                    for _ in 0..64 {
-                        match &ty {
-                            Ty::TypeAlias(qtn, _) => match self.aliases.get(qtn) {
-                                Some(expanded) => ty = expanded.clone(),
-                                None => break,
-                            },
-                            _ => break,
-                        }
-                    }
-                    ty
-                };
+                let callee_ty = throws_semantics::resolve_alias_chain(&callee_ty, &self.aliases);
 
                 match &callee_ty {
                     Ty::Function {
@@ -1114,7 +1103,8 @@ impl<'db> TypeInferenceBuilder<'db> {
             // Lambda: bidirectional checking against expected function type
             Expr::Lambda(func_def) => {
                 // Resolve type aliases so we can decompose function types
-                let expected_resolved = self.resolve_alias_chain(expected);
+                let expected_resolved =
+                    throws_semantics::resolve_alias_chain(expected, &self.aliases);
                 match &expected_resolved {
                     Ty::Function {
                         params: expected_params,
@@ -1237,6 +1227,11 @@ impl<'db> TypeInferenceBuilder<'db> {
                         // lambda body throws, report the stored function diagnostic
                         if matches!(expected_throws.as_ref(), Ty::Never { .. })
                             && !matches!(throws_ty, Ty::Never { .. })
+                            && throws_semantics::function_shape_matches_ignoring_outer_throws(
+                                &result,
+                                &expected_resolved,
+                                &self.aliases,
+                            )
                         {
                             self.context.report_simple(
                                 TirTypeError::StoredFunctionRequiresExplicitThrows {
@@ -1869,16 +1864,18 @@ impl<'db> TypeInferenceBuilder<'db> {
             self.context.report_at_span(diag, span);
         }
 
-        let declared = crate::throw_inference::flatten_ty_to_facts(&declared_ty);
         let effective = self.collect_effective_throws(body);
+        let diff = throws_semantics::throws_contract_diff(&declared_ty, &effective, &self.aliases);
 
-        let mut extra: Vec<String> = effective
-            .difference(&declared)
-            .map(std::string::ToString::to_string)
+        let mut extra: Vec<String> = diff
+            .uncovered_effective
+            .into_iter()
+            .map(|ty| ty.to_string())
             .collect();
-        let mut extraneous: Vec<String> = declared
-            .difference(&effective)
-            .map(std::string::ToString::to_string)
+        let mut extraneous: Vec<String> = diff
+            .extraneous_declared
+            .into_iter()
+            .map(|ty| ty.to_string())
             .collect();
         extra.sort();
         extraneous.sort();
@@ -2412,7 +2409,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                             at_expr,
                         )
                     };
-                    if Self::ty_covers_fact(&lowered, throw_fact) {
+                    if self.ty_covers_fact(&lowered, throw_fact) {
                         PatternMatchStrength::DefiniteMatch
                     } else if is_unknown {
                         PatternMatchStrength::MayMatch
@@ -2425,7 +2422,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
             baml_compiler2_ast::Pattern::TypedBinding { ty, .. } => {
                 let lowered = self.lower_pattern_type_expr(ty, at_expr);
-                if Self::ty_covers_fact(&lowered, throw_fact) {
+                if self.ty_covers_fact(&lowered, throw_fact) {
                     PatternMatchStrength::DefiniteMatch
                 } else if is_unknown {
                     PatternMatchStrength::MayMatch
@@ -2454,13 +2451,19 @@ impl<'db> TypeInferenceBuilder<'db> {
                 }
             }
             baml_compiler2_ast::Pattern::EnumVariant { enum_name, variant } => {
-                let matches_variant = match throw_fact {
-                    Ty::EnumVariant(qn, v, _) => {
-                        Self::enum_name_matches(enum_name, qn) && v == variant
-                    }
-                    Ty::Enum(qn, _) => Self::enum_name_matches(enum_name, qn),
-                    _ => false,
-                };
+                let matches_variant =
+                    match throws_semantics::resolve_alias_chain(throw_fact, &self.aliases) {
+                        Ty::EnumVariant(qn, v, _) => {
+                            Self::enum_name_matches(enum_name, &qn) && v == *variant
+                        }
+                        Ty::Enum(qn, _) => {
+                            if Self::enum_name_matches(enum_name, &qn) {
+                                return PatternMatchStrength::MayMatch;
+                            }
+                            false
+                        }
+                        _ => false,
+                    };
                 if matches_variant {
                     PatternMatchStrength::DefiniteMatch
                 } else if is_unknown {
@@ -2489,37 +2492,8 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
-    /// Check if a pattern type covers a throw fact type.
-    fn ty_covers_fact(pattern_ty: &Ty, fact: &Ty) -> bool {
-        match pattern_ty {
-            Ty::Primitive(p, _) => match fact {
-                Ty::Primitive(fp, _) => p == fp,
-                Ty::Literal(lit, _, _) => *p == PrimitiveType::from_literal(lit),
-                _ => false,
-            },
-            Ty::Literal(lit, _, _) => {
-                let widened = Ty::Primitive(PrimitiveType::from_literal(lit), TyAttr::default());
-                &widened == fact
-            }
-            Ty::Optional(inner, _) => {
-                matches!(fact, Ty::Primitive(PrimitiveType::Null, _))
-                    || Self::ty_covers_fact(inner, fact)
-            }
-            Ty::Union(parts, _) => parts.iter().any(|part| Self::ty_covers_fact(part, fact)),
-            Ty::Class(qn, _) => matches!(fact, Ty::Class(fqn, _) if fqn == qn),
-            Ty::Enum(qn, _) => match fact {
-                Ty::Enum(fqn, _) => fqn == qn,
-                Ty::EnumVariant(fqn, _, _) => fqn == qn,
-                _ => false,
-            },
-            Ty::TypeAlias(qn, _) => matches!(fact, Ty::TypeAlias(fqn, _) if fqn == qn),
-            Ty::EnumVariant(qn, variant, _) => {
-                matches!(fact, Ty::EnumVariant(fqn, fv, _) if fqn == qn && fv == variant)
-                    || matches!(fact, Ty::Enum(fqn, _) if fqn == qn)
-            }
-            Ty::BuiltinUnknown { .. } | Ty::Unknown { .. } | Ty::Error { .. } => true,
-            _ => false,
-        }
+    fn ty_covers_fact(&self, pattern_ty: &Ty, fact: &Ty) -> bool {
+        throws_semantics::type_covers_throw_fact(pattern_ty, fact, &self.aliases)
     }
 
     fn collect_effective_throws(&self, body: &ExprBody) -> BTreeSet<Ty> {
@@ -2529,6 +2503,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             body,
             &self.expressions,
             &self.catch_residual_throws,
+            &self.aliases,
             true,
             true,
         )
@@ -2550,13 +2525,11 @@ impl<'db> TypeInferenceBuilder<'db> {
                 for arg in args {
                     self.collect_throw_facts_from_expr(*arg, body, out);
                 }
-                let type_level_facts = self.expressions.get(callee).and_then(|ty| match ty {
-                    Ty::Function { throws, .. } => {
-                        let facts = crate::throw_inference::flatten_ty_to_facts(throws);
-                        if facts.is_empty() { None } else { Some(facts) }
-                    }
-                    _ => None,
-                });
+                let type_level_facts = self
+                    .expressions
+                    .get(callee)
+                    .and_then(|ty| throws_semantics::function_throws_facts(ty, &self.aliases))
+                    .and_then(|facts| if facts.is_empty() { None } else { Some(facts) });
                 if let Some(facts) = type_level_facts {
                     out.extend(facts);
                 } else if let Some(target) = self.call_target_name(*callee, body) {
@@ -2719,14 +2692,16 @@ impl<'db> TypeInferenceBuilder<'db> {
         out: &mut BTreeSet<Ty>,
     ) {
         if let Some(thrown_ty) = self.expressions.get(&value_expr_id) {
-            out.extend(crate::throw_inference::flatten_ty_to_facts(thrown_ty));
+            out.extend(throws_semantics::flatten_ty_to_facts(thrown_ty));
             return;
         }
 
         match &body.exprs[value_expr_id] {
-            Expr::Literal(lit) => out.extend(crate::throw_inference::flatten_ty_to_facts(
-                &Ty::Literal(lit.clone(), Freshness::Regular, TyAttr::default()),
-            )),
+            Expr::Literal(lit) => out.extend(throws_semantics::flatten_ty_to_facts(&Ty::Literal(
+                lit.clone(),
+                Freshness::Regular,
+                TyAttr::default(),
+            ))),
             Expr::ByteStringLiteral(_) => {
                 out.insert(Ty::Primitive(PrimitiveType::Uint8Array, TyAttr::default()));
             }
@@ -2812,7 +2787,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         let db = self.context.db();
         if let baml_compiler2_hir::body::FunctionBody::Expr(ref expr_body) = *body {
             let scope_inference = crate::inference::infer_scope_types(db, body_scope);
-            crate::throw_inference::flatten_ty_to_facts(&scope_inference.effective_throws(
+            throws_semantics::flatten_ty_to_facts(&scope_inference.effective_throws(
                 db,
                 body_package_id,
                 expr_body,
@@ -2825,26 +2800,6 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
-    fn combine_effect_vars_with_body_throws(
-        synthetic_effect_vars: &[Name],
-        body_throws_facts: BTreeSet<Ty>,
-    ) -> Ty {
-        let mut all_throws: Vec<Ty> = synthetic_effect_vars
-            .iter()
-            .map(|v| Ty::TypeVar(v.clone(), TyAttr::default()))
-            .collect();
-        all_throws.extend(body_throws_facts);
-        all_throws.retain(|t| !matches!(t, Ty::Never { .. } | Ty::Void { .. }));
-
-        match all_throws.len() {
-            0 => Ty::Never {
-                attr: TyAttr::default(),
-            },
-            1 => all_throws.remove(0),
-            _ => Ty::Union(all_throws, TyAttr::default()),
-        }
-    }
-
     #[allow(clippy::too_many_arguments)]
     fn build_function_ty_from_signature(
         &self,
@@ -2852,6 +2807,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         ns_context: &[Name],
         generic_params: &[Name],
         sig: &baml_compiler2_hir::signature::FunctionSignature,
+        function_key: Option<&Name>,
         body_scope: Option<ScopeId<'db>>,
         body_package_id: Option<PackageId<'db>>,
         body: Option<&baml_compiler2_hir::body::FunctionBody>,
@@ -2926,25 +2882,33 @@ impl<'db> TypeInferenceBuilder<'db> {
                 )
             })
             .unwrap_or_else(|| {
-                let has_callback_param = params
-                    .iter()
-                    .any(|(_, ty)| matches!(ty, Ty::Function { .. }));
-                if !has_callback_param {
-                    return Ty::Never {
-                        attr: TyAttr::default(),
-                    };
-                }
-
-                let body_throws_facts = match (body_scope, body_package_id, body) {
-                    (Some(body_scope), Some(body_package_id), Some(body)) => {
-                        self.infer_concrete_body_throws(body_scope, body_package_id, body)
+                if synthetic_effect_vars.is_empty() {
+                    match (function_key, body_package_id) {
+                        (Some(function_key), Some(body_package_id)) => {
+                            crate::throw_inference::function_throw_sets(db, body_package_id)
+                                .transitive_for(function_key)
+                                .cloned()
+                                .map(throws_semantics::concrete_throws_ty_from_facts)
+                                .unwrap_or(Ty::Never {
+                                    attr: TyAttr::default(),
+                                })
+                        }
+                        _ => Ty::Never {
+                            attr: TyAttr::default(),
+                        },
                     }
-                    _ => BTreeSet::new(),
-                };
-                Self::combine_effect_vars_with_body_throws(
-                    &synthetic_effect_vars,
-                    body_throws_facts,
-                )
+                } else {
+                    let body_throws_facts = match (body_scope, body_package_id, body) {
+                        (Some(body_scope), Some(body_package_id), Some(body)) => {
+                            self.infer_concrete_body_throws(body_scope, body_package_id, body)
+                        }
+                        _ => BTreeSet::new(),
+                    };
+                    throws_semantics::combine_effect_vars_with_body_throws(
+                        &synthetic_effect_vars,
+                        body_throws_facts,
+                    )
+                }
             });
 
         Ty::Function {
@@ -3089,6 +3053,10 @@ impl<'db> TypeInferenceBuilder<'db> {
             let func_data_for_sig = &item_tree_for_func[func_loc.id(db)];
             let generic_params = &func_data_for_sig.generic_params;
             let pkg_info = baml_compiler2_hir::file_package::file_package(db, func_loc.file(db));
+            let function_key = crate::throw_inference::throw_set_key(
+                &pkg_info.namespace_path,
+                &func_data_for_sig.name,
+            );
             let ns_context = pkg_info.namespace_path;
             self.resolutions.insert(
                 expr_id,
@@ -3106,6 +3074,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 &ns_context,
                 generic_params,
                 sig.as_ref(),
+                Some(&function_key),
                 Some(func_scope),
                 Some(PackageId::new(db, pkg_info.package)),
                 Some(func_body.as_ref()),
@@ -3158,6 +3127,8 @@ impl<'db> TypeInferenceBuilder<'db> {
                     let sig_pkg =
                         baml_compiler2_hir::file_package::file_package(db, func_loc.file(db));
                     let sig_ns = sig_pkg.namespace_path;
+                    let function_key =
+                        crate::throw_inference::throw_set_key(&sig_ns, &func_data.name);
                     let func_scope = self.find_function_scope_id(
                         func_loc.file(db),
                         func_data.span,
@@ -3169,6 +3140,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                         &sig_ns,
                         generic_params,
                         sig.as_ref(),
+                        Some(&function_key),
                         Some(func_scope),
                         Some(PackageId::new(db, sig_pkg.package)),
                         Some(func_body.as_ref()),
@@ -3636,6 +3608,10 @@ impl<'db> TypeInferenceBuilder<'db> {
                 let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(db, file, method_id);
                 let sig = baml_compiler2_hir::signature::function_signature(db, func_loc);
                 let class_ty = Ty::Class(class_name.clone(), TyAttr::default());
+                let function_key = crate::throw_inference::throw_set_key(
+                    &ns_context,
+                    &Name::new(format!("{}.{}", class_name.name(), method_data.name)),
+                );
                 let method_scope =
                     self.find_function_scope_id(file, method_data.span, &method_data.name);
                 let method_body = baml_compiler2_hir::body::function_body(db, func_loc);
@@ -3644,6 +3620,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     &ns_context,
                     &all_generic_params,
                     sig.as_ref(),
+                    Some(&function_key),
                     Some(method_scope),
                     Some(PackageId::new(
                         db,
@@ -4493,8 +4470,8 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// explaining that explicit `throws` annotation is required.
     fn report_type_mismatch(&self, expected: &Ty, got: &Ty, at: ExprId) {
         // Resolve type aliases for comparison
-        let expected_resolved = self.resolve_alias_chain(expected);
-        let got_resolved = self.resolve_alias_chain(got);
+        let expected_resolved = throws_semantics::resolve_alias_chain(expected, &self.aliases);
+        let got_resolved = throws_semantics::resolve_alias_chain(got, &self.aliases);
 
         // Check for stored function throws mismatch
         if let (
@@ -4512,6 +4489,11 @@ impl<'db> TypeInferenceBuilder<'db> {
             // emit the specific stored-function diagnostic
             if matches!(expected_throws.as_ref(), Ty::Never { .. })
                 && !matches!(actual_throws.as_ref(), Ty::Never { .. })
+                && throws_semantics::function_shape_matches_ignoring_outer_throws(
+                    got,
+                    expected,
+                    &self.aliases,
+                )
             {
                 self.context.report_simple(
                     TirTypeError::StoredFunctionRequiresExplicitThrows {
@@ -4532,21 +4514,6 @@ impl<'db> TypeInferenceBuilder<'db> {
             at,
             Vec::new(),
         );
-    }
-
-    /// Resolve a type alias chain to its underlying type (up to a depth limit).
-    fn resolve_alias_chain(&self, ty: &Ty) -> Ty {
-        let mut resolved = ty.clone();
-        for _ in 0..64 {
-            match &resolved {
-                Ty::TypeAlias(qtn, _) => match self.aliases.get(qtn) {
-                    Some(expanded) => resolved = expanded.clone(),
-                    None => break,
-                },
-                _ => break,
-            }
-        }
-        resolved
     }
 
     fn infer_binary_op(

@@ -58,32 +58,34 @@ SOURCE_FILE
     EXPR_FUNCTION_BODY
       BLOCK_EXPR
         L_BRACE "{"
-        LAMBDA_EXPR
-          PARAMETER_LIST
-            L_PAREN "("
-            PARAMETER
-              WORD "a"
-              COLON ":"
-              TYPE_EXPR "A"
-                WORD "A"
-            R_PAREN ")"
-          ARROW "->"
-          TYPE_EXPR "C"
-            WORD "C"
-          BLOCK_EXPR
-            L_BRACE "{"
-            CALL_EXPR
-              WORD "g"
-              CALL_ARGS
-                L_PAREN "("
-                CALL_EXPR
-                  WORD "f"
-                  CALL_ARGS "(a)"
-                    L_PAREN "("
-                    WORD "a"
-                    R_PAREN ")"
-                R_PAREN ")"
-            R_BRACE "}"
+        RETURN_STMT
+          KW_RETURN "return"
+          LAMBDA_EXPR
+            PARAMETER_LIST
+              L_PAREN "("
+              PARAMETER
+                WORD "a"
+                COLON ":"
+                TYPE_EXPR "A"
+                  WORD "A"
+              R_PAREN ")"
+            ARROW "->"
+            TYPE_EXPR "C"
+              WORD "C"
+            BLOCK_EXPR
+              L_BRACE "{"
+              CALL_EXPR
+                WORD "g"
+                CALL_ARGS
+                  L_PAREN "("
+                  CALL_EXPR
+                    WORD "f"
+                    CALL_ARGS "(a)"
+                      L_PAREN "("
+                      WORD "a"
+                      R_PAREN ")"
+                  R_PAREN ")"
+              R_BRACE "}"
         R_BRACE "}"
   FUNCTION_DEF
     KW_FUNCTION "function"

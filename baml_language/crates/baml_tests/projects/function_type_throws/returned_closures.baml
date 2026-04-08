@@ -2,12 +2,12 @@
 
 // Returning a pure closure - should be fine
 function make_pure() -> (() -> int) {
-  () -> int { 42 }
+  return () -> int { 42 }
 }
 
 // Returning a closure with explicit throws
 function make_thrower() -> (() -> int throws string) {
-  () -> int { throw "error" }
+  return () -> int { throw "error" }
 }
 
 // Using a returned closure

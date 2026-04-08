@@ -29,6 +29,7 @@ pub mod normalize;
 pub mod package_interface;
 pub mod resolve;
 pub mod throw_inference;
+pub mod throws_semantics;
 pub mod ty;
 
 // ── Db trait ──────────────────────────────────────────────────────────────────

@@ -42,6 +42,10 @@ pub(crate) mod support {
         lower_type_expr::{
             FnTypeLoweringContext, lower_type_expr_in_ns, lower_type_expr_with_fn_context,
         },
+        throws_semantics::{
+            combine_effect_vars_with_body_throws, concrete_throws_ty_from_facts,
+            flatten_ty_to_facts,
+        },
     };
     use baml_project::ProjectDatabase;
 
@@ -1077,22 +1081,18 @@ pub(crate) mod support {
                             })
                             .unwrap_or_else(|| "?".into());
                         // Compute inferred throws from transitive throw set
-                        let inferred_throws: Option<String> = {
+                        let inferred_throws: Option<baml_compiler2_tir::ty::Ty> = {
                             let key = baml_base::Name::new(&*fqn);
                             throw_sets
                                 .transitive_for(&key)
                                 .filter(|facts| !facts.is_empty())
-                                .map(|facts| {
-                                    let types: Vec<String> =
-                                        facts.iter().map(|f| f.to_string()).collect();
-                                    types.join(" | ")
-                                })
+                                .map(|facts| concrete_throws_ty_from_facts(facts.clone()))
                         };
 
                         // Compute post-inference effective throws from the function body.
                         // This captures HOF effect propagation that the pre-inference
                         // throw_sets cannot see.
-                        let post_inference_throws: Option<String> = {
+                        let post_inference_throws: Option<baml_compiler2_tir::ty::Ty> = {
                             if let Some(ref fb) = func_body_opt {
                                 if let baml_compiler2_hir::body::FunctionBody::Expr(ref body) = **fb
                                 {
@@ -1100,7 +1100,7 @@ pub(crate) mod support {
                                     if matches!(ty, baml_compiler2_tir::ty::Ty::Never { .. }) {
                                         None
                                     } else {
-                                        Some(ty.to_string())
+                                        Some(ty)
                                     }
                                 } else {
                                     None
@@ -1121,50 +1121,25 @@ pub(crate) mod support {
                                 None => format!(" throws {declared}"),
                             }
                         } else if !synthetic_display_vars.is_empty() {
-                            // Function has implicit effect vars from callback params.
-                            // Union the effect vars with the body's own concrete throws.
-                            let mut all_throws: Vec<String> = synthetic_display_vars
-                                .iter()
-                                .map(|v| v.to_string())
-                                .collect();
-                            // Add body's own throws (post_inference_throws excludes TypeVars,
-                            // so these are the function's own concrete throws).
-                            if let Some(ref body_throws) = post_inference_throws {
-                                // Split the body throws string and add each component.
-                                for component in body_throws.split(" | ") {
-                                    let trimmed = component.trim();
-                                    if !trimmed.is_empty()
-                                        && !all_throws.contains(&trimmed.to_string())
-                                    {
-                                        all_throws.push(trimmed.to_string());
-                                    }
-                                }
-                            }
-                            // Sort for deterministic output: effect vars first, then others.
-                            all_throws.sort_by(|a, b| {
-                                let a_is_effect = a.starts_with("__throws_");
-                                let b_is_effect = b.starts_with("__throws_");
-                                match (a_is_effect, b_is_effect) {
-                                    (true, false) => std::cmp::Ordering::Greater,
-                                    (false, true) => std::cmp::Ordering::Less,
-                                    _ => a.cmp(b),
-                                }
-                            });
-                            let throws_str = all_throws.join(" | ");
+                            let body_facts = post_inference_throws
+                                .as_ref()
+                                .map(flatten_ty_to_facts)
+                                .unwrap_or_default();
+                            let throws_ty = combine_effect_vars_with_body_throws(
+                                &synthetic_display_vars,
+                                body_facts,
+                            );
                             match &inferred_throws {
                                 Some(inferred) => {
-                                    format!(" throws {throws_str} infers {inferred}")
+                                    format!(" throws {throws_ty} infers {inferred}")
                                 }
-                                None => format!(" throws {throws_str}"),
+                                None => format!(" throws {throws_ty}"),
                             }
                         } else {
                             // No explicit throws, no effect vars.
                             // Use post-inference effective throws if available,
                             // falling back to pre-inference transitive throws.
-                            match post_inference_throws
-                                .as_deref()
-                                .or(inferred_throws.as_deref())
-                            {
+                            match post_inference_throws.as_ref().or(inferred_throws.as_ref()) {
                                 Some(inferred) => format!(" throws {inferred}"),
                                 None => " throws never".to_string(),
                             }

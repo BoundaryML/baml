@@ -23,17 +23,19 @@ SOURCE_FILE
     EXPR_FUNCTION_BODY
       BLOCK_EXPR
         L_BRACE "{"
-        LAMBDA_EXPR
-          PARAMETER_LIST "()"
-            L_PAREN "("
-            R_PAREN ")"
-          ARROW "->"
-          TYPE_EXPR "int"
-            WORD "int"
-          BLOCK_EXPR "{ 42 }"
-            L_BRACE "{"
-            INTEGER_LITERAL "42"
-            R_BRACE "}"
+        RETURN_STMT
+          KW_RETURN "return"
+          LAMBDA_EXPR
+            PARAMETER_LIST "()"
+              L_PAREN "("
+              R_PAREN ")"
+            ARROW "->"
+            TYPE_EXPR "int"
+              WORD "int"
+            BLOCK_EXPR "{ 42 }"
+              L_BRACE "{"
+              INTEGER_LITERAL "42"
+              R_BRACE "}"
         R_BRACE "}"
   FUNCTION_DEF
     KW_FUNCTION "function"
@@ -59,23 +61,25 @@ SOURCE_FILE
     EXPR_FUNCTION_BODY
       BLOCK_EXPR
         L_BRACE "{"
-        LAMBDA_EXPR
-          PARAMETER_LIST "()"
-            L_PAREN "("
-            R_PAREN ")"
-          ARROW "->"
-          TYPE_EXPR "int"
-            WORD "int"
-          BLOCK_EXPR
-            L_BRACE "{"
-            THROW_STMT
-              THROW_EXPR
-                KW_THROW "throw"
-                STRING_LITERAL "error"
-                  QUOTE """
-                  WORD "error"
-                  QUOTE """
-            R_BRACE "}"
+        RETURN_STMT
+          KW_RETURN "return"
+          LAMBDA_EXPR
+            PARAMETER_LIST "()"
+              L_PAREN "("
+              R_PAREN ")"
+            ARROW "->"
+            TYPE_EXPR "int"
+              WORD "int"
+            BLOCK_EXPR
+              L_BRACE "{"
+              THROW_STMT
+                THROW_EXPR
+                  KW_THROW "throw"
+                  STRING_LITERAL "error"
+                    QUOTE """
+                    WORD "error"
+                    QUOTE """
+              R_BRACE "}"
         R_BRACE "}"
   FUNCTION_DEF
     KW_FUNCTION "function"

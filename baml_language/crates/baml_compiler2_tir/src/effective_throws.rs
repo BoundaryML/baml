@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashMap};
 
 use baml_base::Name;
 use baml_compiler2_ast::{Expr, ExprBody, ExprId, Stmt, StmtId};
@@ -6,16 +6,19 @@ use baml_compiler2_hir::package::PackageId;
 use rustc_hash::FxHashMap;
 
 use crate::{
-    throw_inference::{flatten_ty_to_facts, function_throw_sets},
+    throw_inference::function_throw_sets,
+    throws_semantics::{flatten_ty_to_facts, function_throws_facts},
     ty::{Freshness, QualifiedTypeName, Ty, TyAttr},
 };
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn collect_effective_throws<'db>(
     db: &'db dyn crate::Db,
     package_id: PackageId<'db>,
     body: &ExprBody,
     expressions: &FxHashMap<ExprId, Ty>,
     catch_residual_throws: &FxHashMap<ExprId, BTreeSet<Ty>>,
+    aliases: &HashMap<QualifiedTypeName, Ty>,
     include_typevars: bool,
     unknown_on_unresolved_call: bool,
 ) -> BTreeSet<Ty> {
@@ -28,6 +31,7 @@ pub(crate) fn collect_effective_throws<'db>(
             body,
             expressions,
             catch_residual_throws,
+            aliases,
             include_typevars,
             unknown_on_unresolved_call,
             &mut out,
@@ -50,6 +54,7 @@ fn collect_effective_throws_from_expr<'db>(
     body: &ExprBody,
     expressions: &FxHashMap<ExprId, Ty>,
     catch_residual_throws: &FxHashMap<ExprId, BTreeSet<Ty>>,
+    aliases: &HashMap<QualifiedTypeName, Ty>,
     include_typevars: bool,
     unknown_on_unresolved_call: bool,
     out: &mut BTreeSet<Ty>,
@@ -63,6 +68,7 @@ fn collect_effective_throws_from_expr<'db>(
                 body,
                 expressions,
                 catch_residual_throws,
+                aliases,
                 include_typevars,
                 unknown_on_unresolved_call,
                 out,
@@ -77,6 +83,7 @@ fn collect_effective_throws_from_expr<'db>(
                 body,
                 expressions,
                 catch_residual_throws,
+                aliases,
                 include_typevars,
                 unknown_on_unresolved_call,
                 out,
@@ -89,6 +96,7 @@ fn collect_effective_throws_from_expr<'db>(
                     body,
                     expressions,
                     catch_residual_throws,
+                    aliases,
                     include_typevars,
                     unknown_on_unresolved_call,
                     out,
@@ -100,6 +108,7 @@ fn collect_effective_throws_from_expr<'db>(
                 *callee,
                 body,
                 expressions,
+                aliases,
                 CallResolutionOptions {
                     include_typevars,
                     unknown_on_unresolved_call,
@@ -121,6 +130,7 @@ fn collect_effective_throws_from_expr<'db>(
                         body,
                         expressions,
                         catch_residual_throws,
+                        aliases,
                         include_typevars,
                         unknown_on_unresolved_call,
                         out,
@@ -140,6 +150,7 @@ fn collect_effective_throws_from_expr<'db>(
                 body,
                 expressions,
                 catch_residual_throws,
+                aliases,
                 include_typevars,
                 unknown_on_unresolved_call,
                 out,
@@ -151,6 +162,7 @@ fn collect_effective_throws_from_expr<'db>(
                 body,
                 expressions,
                 catch_residual_throws,
+                aliases,
                 include_typevars,
                 unknown_on_unresolved_call,
                 out,
@@ -163,6 +175,7 @@ fn collect_effective_throws_from_expr<'db>(
                     body,
                     expressions,
                     catch_residual_throws,
+                    aliases,
                     include_typevars,
                     unknown_on_unresolved_call,
                     out,
@@ -179,6 +192,7 @@ fn collect_effective_throws_from_expr<'db>(
                 body,
                 expressions,
                 catch_residual_throws,
+                aliases,
                 include_typevars,
                 unknown_on_unresolved_call,
                 out,
@@ -193,6 +207,7 @@ fn collect_effective_throws_from_expr<'db>(
                         body,
                         expressions,
                         catch_residual_throws,
+                        aliases,
                         include_typevars,
                         unknown_on_unresolved_call,
                         out,
@@ -205,6 +220,7 @@ fn collect_effective_throws_from_expr<'db>(
                     body,
                     expressions,
                     catch_residual_throws,
+                    aliases,
                     include_typevars,
                     unknown_on_unresolved_call,
                     out,
@@ -219,6 +235,7 @@ fn collect_effective_throws_from_expr<'db>(
                 body,
                 expressions,
                 catch_residual_throws,
+                aliases,
                 include_typevars,
                 unknown_on_unresolved_call,
                 out,
@@ -230,6 +247,7 @@ fn collect_effective_throws_from_expr<'db>(
                 body,
                 expressions,
                 catch_residual_throws,
+                aliases,
                 include_typevars,
                 unknown_on_unresolved_call,
                 out,
@@ -243,6 +261,7 @@ fn collect_effective_throws_from_expr<'db>(
                 body,
                 expressions,
                 catch_residual_throws,
+                aliases,
                 include_typevars,
                 unknown_on_unresolved_call,
                 out,
@@ -259,6 +278,7 @@ fn collect_effective_throws_from_expr<'db>(
                     body,
                     expressions,
                     catch_residual_throws,
+                    aliases,
                     include_typevars,
                     unknown_on_unresolved_call,
                     out,
@@ -272,6 +292,7 @@ fn collect_effective_throws_from_expr<'db>(
                     body,
                     expressions,
                     catch_residual_throws,
+                    aliases,
                     include_typevars,
                     unknown_on_unresolved_call,
                     out,
@@ -287,6 +308,7 @@ fn collect_effective_throws_from_expr<'db>(
                     body,
                     expressions,
                     catch_residual_throws,
+                    aliases,
                     include_typevars,
                     unknown_on_unresolved_call,
                     out,
@@ -302,6 +324,7 @@ fn collect_effective_throws_from_expr<'db>(
                     body,
                     expressions,
                     catch_residual_throws,
+                    aliases,
                     include_typevars,
                     unknown_on_unresolved_call,
                     out,
@@ -313,6 +336,7 @@ fn collect_effective_throws_from_expr<'db>(
                     body,
                     expressions,
                     catch_residual_throws,
+                    aliases,
                     include_typevars,
                     unknown_on_unresolved_call,
                     out,
@@ -328,6 +352,7 @@ fn collect_effective_throws_from_expr<'db>(
                     body,
                     expressions,
                     catch_residual_throws,
+                    aliases,
                     include_typevars,
                     unknown_on_unresolved_call,
                     out,
@@ -341,6 +366,7 @@ fn collect_effective_throws_from_expr<'db>(
                     body,
                     expressions,
                     catch_residual_throws,
+                    aliases,
                     include_typevars,
                     unknown_on_unresolved_call,
                     out,
@@ -355,6 +381,7 @@ fn collect_effective_throws_from_expr<'db>(
                 body,
                 expressions,
                 catch_residual_throws,
+                aliases,
                 include_typevars,
                 unknown_on_unresolved_call,
                 out,
@@ -368,6 +395,7 @@ fn collect_effective_throws_from_expr<'db>(
                 body,
                 expressions,
                 catch_residual_throws,
+                aliases,
                 include_typevars,
                 unknown_on_unresolved_call,
                 out,
@@ -379,6 +407,7 @@ fn collect_effective_throws_from_expr<'db>(
                 body,
                 expressions,
                 catch_residual_throws,
+                aliases,
                 include_typevars,
                 unknown_on_unresolved_call,
                 out,
@@ -392,6 +421,7 @@ fn collect_effective_throws_from_expr<'db>(
                 body,
                 expressions,
                 catch_residual_throws,
+                aliases,
                 include_typevars,
                 unknown_on_unresolved_call,
                 out,
@@ -404,6 +434,7 @@ fn collect_effective_throws_from_expr<'db>(
                     body,
                     expressions,
                     catch_residual_throws,
+                    aliases,
                     include_typevars,
                     unknown_on_unresolved_call,
                     out,
@@ -418,6 +449,7 @@ fn collect_effective_throws_from_expr<'db>(
                 body,
                 expressions,
                 catch_residual_throws,
+                aliases,
                 include_typevars,
                 unknown_on_unresolved_call,
                 out,
@@ -440,6 +472,7 @@ fn collect_effective_throws_from_stmt<'db>(
     body: &ExprBody,
     expressions: &FxHashMap<ExprId, Ty>,
     catch_residual_throws: &FxHashMap<ExprId, BTreeSet<Ty>>,
+    aliases: &HashMap<QualifiedTypeName, Ty>,
     include_typevars: bool,
     unknown_on_unresolved_call: bool,
     out: &mut BTreeSet<Ty>,
@@ -452,6 +485,7 @@ fn collect_effective_throws_from_stmt<'db>(
             body,
             expressions,
             catch_residual_throws,
+            aliases,
             include_typevars,
             unknown_on_unresolved_call,
             out,
@@ -465,6 +499,7 @@ fn collect_effective_throws_from_stmt<'db>(
                     body,
                     expressions,
                     catch_residual_throws,
+                    aliases,
                     include_typevars,
                     unknown_on_unresolved_call,
                     out,
@@ -484,6 +519,7 @@ fn collect_effective_throws_from_stmt<'db>(
                 body,
                 expressions,
                 catch_residual_throws,
+                aliases,
                 include_typevars,
                 unknown_on_unresolved_call,
                 out,
@@ -495,6 +531,7 @@ fn collect_effective_throws_from_stmt<'db>(
                 body,
                 expressions,
                 catch_residual_throws,
+                aliases,
                 include_typevars,
                 unknown_on_unresolved_call,
                 out,
@@ -507,6 +544,7 @@ fn collect_effective_throws_from_stmt<'db>(
                     body,
                     expressions,
                     catch_residual_throws,
+                    aliases,
                     include_typevars,
                     unknown_on_unresolved_call,
                     out,
@@ -525,6 +563,7 @@ fn collect_effective_throws_from_stmt<'db>(
                 body,
                 expressions,
                 catch_residual_throws,
+                aliases,
                 include_typevars,
                 unknown_on_unresolved_call,
                 out,
@@ -536,6 +575,7 @@ fn collect_effective_throws_from_stmt<'db>(
                 body,
                 expressions,
                 catch_residual_throws,
+                aliases,
                 include_typevars,
                 unknown_on_unresolved_call,
                 out,
@@ -550,6 +590,7 @@ fn collect_effective_throws_from_stmt<'db>(
                     body,
                     expressions,
                     catch_residual_throws,
+                    aliases,
                     include_typevars,
                     unknown_on_unresolved_call,
                     out,
@@ -564,6 +605,7 @@ fn collect_effective_throws_from_stmt<'db>(
                 body,
                 expressions,
                 catch_residual_throws,
+                aliases,
                 include_typevars,
                 unknown_on_unresolved_call,
                 out,
@@ -575,6 +617,7 @@ fn collect_effective_throws_from_stmt<'db>(
                 body,
                 expressions,
                 catch_residual_throws,
+                aliases,
                 include_typevars,
                 unknown_on_unresolved_call,
                 out,
@@ -588,6 +631,7 @@ fn collect_effective_throws_from_stmt<'db>(
                 body,
                 expressions,
                 catch_residual_throws,
+                aliases,
                 include_typevars,
                 unknown_on_unresolved_call,
                 out,
@@ -598,19 +642,20 @@ fn collect_effective_throws_from_stmt<'db>(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn collect_effective_throws_from_call<'db>(
     db: &'db dyn crate::Db,
     package_id: PackageId<'db>,
     callee_expr_id: ExprId,
     body: &ExprBody,
     expressions: &FxHashMap<ExprId, Ty>,
+    aliases: &HashMap<QualifiedTypeName, Ty>,
     options: CallResolutionOptions,
     out: &mut BTreeSet<Ty>,
 ) {
-    let type_level_facts = expressions.get(&callee_expr_id).and_then(|ty| match ty {
-        Ty::Function { throws, .. } => Some(flatten_ty_to_facts(throws)),
-        _ => None,
-    });
+    let type_level_facts = expressions
+        .get(&callee_expr_id)
+        .and_then(|ty| function_throws_facts(ty, aliases));
 
     if let Some(facts) = type_level_facts {
         let filtered: BTreeSet<Ty> = facts
@@ -636,7 +681,10 @@ fn collect_effective_throws_from_call<'db>(
     }
 
     if options.unknown_on_unresolved_call
-        && !matches!(expressions.get(&callee_expr_id), Some(Ty::Function { .. }))
+        && expressions
+            .get(&callee_expr_id)
+            .and_then(|ty| function_throws_facts(ty, aliases))
+            .is_none()
     {
         out.insert(Ty::Unknown {
             attr: TyAttr::default(),

@@ -36,6 +36,13 @@ function test_stored_local_error() -> null {
   null
 }
 
+// ERROR: wrong function shape should report the structural mismatch, not the
+// stored-throws diagnostic.
+function test_stored_local_shape_mismatch() -> null {
+  let f: (int) -> null = () -> null { throw "oops" }
+  null
+}
+
 // OK: assigning pure lambda to variable typed throws never
 function test_stored_local_ok() -> null {
   let f: () -> null = () -> null { null }

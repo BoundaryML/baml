@@ -142,9 +142,15 @@ class user.MixedHandler$stream {
   risky: unknown
 }
 function user.compose<A, B, C>(f: (A) -> B throws __throws_f, g: (B) -> C throws __throws_g) -> (A) -> C throws __throws_f | __throws_g {
-  { : (A) -> C
+  { : never
+    return : (a: A) -> C
+      (a: A) -> C { ... } : (a: A) -> C
+        {
+          g(f(a))
+        }
   }
-  !! 193..223: missing return: expected `(A) -> C`
+}
+lambda user.compose {
 }
 function user.test_compose_pure() -> (int) -> string throws never {
   { : (int) -> string | "result"
@@ -235,8 +241,6 @@ function user.throw_enum_variant(x: int) -> string throws user.ErrorKind {
       }
     "ok" : "ok"
   }
-  !! 411..421: throws contract violation: `user.ErrorKind` is missing user.ErrorKind.NotFound, user.ErrorKind.Unauthorized
-  ?? 411..421: extraneous throws declaration: user.ErrorKind
 }
 function user.test_lambda_throws_enum() -> int throws user.ErrorKind.ValidationFailed {
   { : never
@@ -283,8 +287,6 @@ function user.throw_various_errors(x: int) -> string throws user.ErrorKind {
       _ =>
         "ok" : "ok"
   }
-  !! 1204..1214: throws contract violation: `user.ErrorKind` is missing user.ErrorKind.NotFound, user.ErrorKind.Unauthorized, user.ErrorKind.ValidationFailed
-  ?? 1204..1214: extraneous throws declaration: user.ErrorKind
 }
 function user.throw_mixed_classes(x: int) -> string throws user.ApiError | user.ValidationError {
   { : "ok"
@@ -311,8 +313,6 @@ function user.throw_enum_or_class(x: int) -> string throws user.ErrorKind | user
       }
     "ok" : "ok"
   }
-  !! 1729..1750: throws contract violation: `user.ErrorKind | user.ApiError` is missing user.ErrorKind.RateLimited
-  ?? 1729..1750: extraneous throws declaration: user.ErrorKind
 }
 function user.throw_any_error(x: int) -> string throws string | user.ErrorKind | user.ApiError {
   { : "ok"
@@ -326,8 +326,6 @@ function user.throw_any_error(x: int) -> string throws string | user.ErrorKind |
       _ =>
         "ok" : "ok"
   }
-  !! 1968..1998: throws contract violation: `string | user.ErrorKind | user.ApiError` is missing user.ErrorKind.NotFound
-  ?? 1968..1998: extraneous throws declaration: user.ErrorKind
 }
 function user.apply_may_throw_enum(f: () -> int throws user.ErrorKind) -> int throws user.ErrorKind {
   { : int
@@ -404,8 +402,6 @@ function user.catch_enum_variants(x: int) -> string throws never {
         _ =>
           "other error" : "other error"
   }
-  ?? 3367..3381: unreachable arm
-  ?? 3392..3405: unreachable arm
 }
 function user.catch_class_error(x: int) -> string throws never {
   { : string
@@ -426,7 +422,6 @@ function user.catch_mixed_errors(x: int) -> string throws never {
         _ =>
           "unknown" : "unknown"
   }
-  ?? 3721..3730: unreachable arm
 }
 class user.EnumThrowingHandler {
   run: () -> null throws user.ErrorKind
@@ -454,22 +449,22 @@ lambda user.make_class_handler {
 type user.EnumThrower = () -> int throws user.ErrorKind
 type user.ClassThrower = () -> int throws user.ApiError
 type user.MixedThrower = () -> int throws user.ErrorKind | user.ApiError | string
-function user.use_enum_thrower(f: user.EnumThrower) -> int throws never {
+function user.use_enum_thrower(f: user.EnumThrower) -> int throws user.ErrorKind {
   { : int
     f() : int
   }
 }
-function user.use_class_thrower(f: user.ClassThrower) -> int throws never {
+function user.use_class_thrower(f: user.ClassThrower) -> int throws user.ApiError {
   { : int
     f() : int
   }
 }
-function user.use_mixed_thrower(f: user.MixedThrower) -> int throws never {
+function user.use_mixed_thrower(f: user.MixedThrower) -> int throws user.ApiError | user.ErrorKind | string {
   { : int
     f() : int
   }
 }
-function user.test_type_alias_enum() -> int throws never {
+function user.test_type_alias_enum() -> int throws user.ErrorKind {
   { : int
     use_enum_thrower(() -> int { ... }) : int
       () -> int { ... } : () -> never throws user.ErrorKind.ValidationFailed
@@ -480,7 +475,7 @@ function user.test_type_alias_enum() -> int throws never {
 }
 lambda user.test_type_alias_enum {
 }
-function user.test_type_alias_class() -> int throws never {
+function user.test_type_alias_class() -> int throws user.ApiError {
   { : int
     use_class_thrower(() -> int { ... }) : int
       () -> int { ... } : () -> never throws user.ApiError
@@ -491,7 +486,7 @@ function user.test_type_alias_class() -> int throws never {
 }
 lambda user.test_type_alias_class {
 }
-function user.test_type_alias_mixed() -> int throws never {
+function user.test_type_alias_mixed() -> int throws user.ApiError | user.ErrorKind | string {
   { : int
     use_mixed_thrower(() -> int { ... }) : int
       () -> int { ... } : () -> never throws string
@@ -602,7 +597,7 @@ type user.PureCallback$stream = unknown
 type user.ExplicitPure$stream = unknown
 type user.Mapper$stream = unknown
 type user.Wrapper$stream = unknown
-function user.apply_guarded(f: () -> int throws __throws_f) -> int throws string | __throws_f {
+function user.apply_guarded(f: () -> int throws __throws_f) -> int throws __throws_f | string {
   { : int
     let result = f() : int
     if (result < 0 : bool) : void
@@ -792,7 +787,7 @@ function user.test_apply_explicit_throws() -> int throws string {
 }
 lambda user.test_apply_explicit_throws {
 }
-function user.apply_and_throw(f: () -> int throws __throws_f) -> int throws string | __throws_f {
+function user.apply_and_throw(f: () -> int throws __throws_f) -> int throws __throws_f | string {
   { : int
     let result = f() : int
     if (result < 0 : bool) : void
@@ -818,7 +813,7 @@ function user.helper_with_body_throw() -> int throws string {
     throw "helper boom" : "helper boom"
   }
 }
-function user.apply_with_helper(f: () -> int throws __throws_f) -> int throws string | __throws_f {
+function user.apply_with_helper(f: () -> int throws __throws_f) -> int throws __throws_f | string {
   { : int
     helper_with_body_throw() : int
     f() : int
@@ -1068,14 +1063,26 @@ lambda user.test_nested_both_throw {
 lambda user.test_nested_both_throw {
 }
 function user.make_pure() -> () -> int throws never {
-  { : () -> int
+  { : never
+    return : () -> 42
+      () -> int { ... } : () -> 42
+        {
+          42
+        }
   }
-  !! 142..165: missing return: expected `() -> int`
+}
+lambda user.make_pure {
 }
 function user.make_thrower() -> () -> int throws string throws never {
-  { : () -> int throws string
+  { : never
+    return : () -> never throws string
+      () -> int { ... } : () -> never throws string
+        {
+          throw "error"
+        }
   }
-  !! 263..297: missing return: expected `() -> int throws string`
+}
+lambda user.make_thrower {
 }
 function user.test_use_pure() -> int throws never {
   { : int
@@ -1130,6 +1137,19 @@ function user.test_stored_local_error() -> null throws never {
 }
 lambda user.test_stored_local_error {
 }
+function user.test_stored_local_shape_mismatch() -> null throws never {
+  { : null
+    let f = : () -> never throws string
+      () -> null { ... } : () -> never throws string
+        {
+          throw "oops"
+        }
+    null : null
+  }
+  !! 1283..1311: expected 1 argument(s), got 0
+}
+lambda user.test_stored_local_shape_mismatch {
+}
 function user.test_stored_local_ok() -> null throws never {
   { : null
     let f = : () -> null
@@ -1164,7 +1184,7 @@ function user.test_stored_alias_error() -> null throws never {
         }
     null : null
   }
-  !! 1651..1679: function that `throws string` cannot be stored in a position typed `throws never`; add an explicit `throws string` annotation to the stored function type
+  !! 1875..1903: function that `throws string` cannot be stored in a position typed `throws never`; add an explicit `throws string` annotation to the stored function type
 }
 lambda user.test_stored_alias_error {
 }
@@ -1188,7 +1208,7 @@ function user.make_stored_closure_bad() -> () -> int throws never {
           throw "oops"
         }
   }
-  !! 1980..2007: function that `throws string` cannot be stored in a position typed `throws never`; add an explicit `throws string` annotation to the stored function type
+  !! 2204..2231: function that `throws string` cannot be stored in a position typed `throws never`; add an explicit `throws string` annotation to the stored function type
 }
 lambda user.make_stored_closure_bad {
 }
