@@ -185,6 +185,9 @@ strum = { version = "0.26", features = [ "derive" ] }
 pyo3 = { version = "0.23.3", default-features = false }
 pyo3-async-runtimes = { version = "0.23" }
 pyo3-build-config = "0.23"
+napi = { version = "3.8.4", default-features = false }
+napi-derive = "3.5.3"
+napi-build = "2.3.1"
 wee_alloc = "0.4"
 wiremock = "0.6"
 vfs = "0.12"
