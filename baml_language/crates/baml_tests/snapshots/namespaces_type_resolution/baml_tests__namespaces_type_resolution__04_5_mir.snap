@@ -42,43 +42,35 @@ fn user.RootEnumMatch(s: Status) -> string {
 
     bb0: {
         _2 = copy _1 == const user.Status.Ok;
-        branch copy _2 -> [bb6, bb1];
+        branch copy _2 -> [bb5, bb1];
     }
 
     bb1: {
         _3 = copy _1 == const user.Status.Failed;
-        branch copy _3 -> [bb5, bb2];
+        branch copy _3 -> [bb4, bb2];
     }
 
     bb2: {
         _4 = copy _1 == const user.Status.Pending;
-        branch copy _4 -> [bb4, bb3];
+        branch copy _4 -> [bb3, bb6];
     }
 
     bb3: {
-        goto -> bb7;
+        _0 = const "pending";
+        goto -> bb6;
     }
 
     bb4: {
-        _0 = const "pending";
-        goto -> bb7;
+        _0 = const "failed";
+        goto -> bb6;
     }
 
     bb5: {
-        _0 = const "failed";
-        goto -> bb7;
+        _0 = const "ok";
+        goto -> bb6;
     }
 
     bb6: {
-        _0 = const "ok";
-        goto -> bb7;
-    }
-
-    bb7: {
-        goto -> bb8;
-    }
-
-    bb8: {
         return;
     }
 }
@@ -135,7 +127,7 @@ fn user.RootThrowClass(x: int) -> string {
     let _2: Error
 
     bb0: {
-        switch copy _1 [0: bb4, otherwise: bb1];
+        switch copy _1 [0: bb3, otherwise: bb1];
     }
 
     bb1: {
@@ -144,14 +136,10 @@ fn user.RootThrowClass(x: int) -> string {
     }
 
     bb2: {
-        goto -> bb3;
-    }
-
-    bb3: {
         return;
     }
 
-    bb4: {
+    bb3: {
         _2 = Error { const 500_i64, const "root error" };
         throw copy _2;
     }
@@ -163,7 +151,7 @@ fn user.RootThrowEnum(x: int) -> string {
     let _1: int // x // param
 
     bb0: {
-        switch copy _1 [0: bb4, otherwise: bb1];
+        switch copy _1 [0: bb3, otherwise: bb1];
     }
 
     bb1: {
@@ -172,14 +160,10 @@ fn user.RootThrowEnum(x: int) -> string {
     }
 
     bb2: {
-        goto -> bb3;
-    }
-
-    bb3: {
         return;
     }
 
-    bb4: {
+    bb3: {
         throw const user.Status.Failed;
     }
 }
@@ -334,10 +318,6 @@ fn user.auth.AuthEnumMatch(r: auth.Role) -> string {
     }
 
     bb5: {
-        goto -> bb6;
-    }
-
-    bb6: {
         return;
     }
 }
@@ -396,43 +376,35 @@ fn user.auth.AuthMatchesLlmStatus(s: llm.Status) -> string {
 
     bb0: {
         _2 = copy _1 == const user.auth.root.llm.Status.Ready;
-        branch copy _2 -> [bb6, bb1];
+        branch copy _2 -> [bb5, bb1];
     }
 
     bb1: {
         _3 = copy _1 == const user.auth.root.llm.Status.Generating;
-        branch copy _3 -> [bb5, bb2];
+        branch copy _3 -> [bb4, bb2];
     }
 
     bb2: {
         _4 = copy _1 == const user.auth.root.llm.Status.Done;
-        branch copy _4 -> [bb4, bb3];
+        branch copy _4 -> [bb3, bb6];
     }
 
     bb3: {
-        goto -> bb7;
+        _0 = const "done";
+        goto -> bb6;
     }
 
     bb4: {
-        _0 = const "done";
-        goto -> bb7;
+        _0 = const "generating";
+        goto -> bb6;
     }
 
     bb5: {
-        _0 = const "generating";
-        goto -> bb7;
+        _0 = const "ready";
+        goto -> bb6;
     }
 
     bb6: {
-        _0 = const "ready";
-        goto -> bb7;
-    }
-
-    bb7: {
-        goto -> bb8;
-    }
-
-    bb8: {
         return;
     }
 }
@@ -447,43 +419,35 @@ fn user.auth.AuthMatchesRootStatus(s: Status) -> string {
 
     bb0: {
         _2 = copy _1 == const user.auth.root.Status.Ok;
-        branch copy _2 -> [bb6, bb1];
+        branch copy _2 -> [bb5, bb1];
     }
 
     bb1: {
         _3 = copy _1 == const user.auth.root.Status.Failed;
-        branch copy _3 -> [bb5, bb2];
+        branch copy _3 -> [bb4, bb2];
     }
 
     bb2: {
         _4 = copy _1 == const user.auth.root.Status.Pending;
-        branch copy _4 -> [bb4, bb3];
+        branch copy _4 -> [bb3, bb6];
     }
 
     bb3: {
-        goto -> bb7;
+        _0 = const "pending";
+        goto -> bb6;
     }
 
     bb4: {
-        _0 = const "pending";
-        goto -> bb7;
+        _0 = const "failed";
+        goto -> bb6;
     }
 
     bb5: {
-        _0 = const "failed";
-        goto -> bb7;
+        _0 = const "ok";
+        goto -> bb6;
     }
 
     bb6: {
-        _0 = const "ok";
-        goto -> bb7;
-    }
-
-    bb7: {
-        goto -> bb8;
-    }
-
-    bb8: {
         return;
     }
 }
@@ -529,7 +493,7 @@ fn user.auth.AuthThrowClass(x: int) -> string {
     let _2: auth.Error
 
     bb0: {
-        switch copy _1 [0: bb4, otherwise: bb1];
+        switch copy _1 [0: bb3, otherwise: bb1];
     }
 
     bb1: {
@@ -538,14 +502,10 @@ fn user.auth.AuthThrowClass(x: int) -> string {
     }
 
     bb2: {
-        goto -> bb3;
-    }
-
-    bb3: {
         return;
     }
 
-    bb4: {
+    bb3: {
         _2 = Error { const "auth failed", const true };
         throw copy _2;
     }
@@ -557,7 +517,7 @@ fn user.auth.AuthThrowEnum(x: int) -> string {
     let _1: int // x // param
 
     bb0: {
-        switch copy _1 [0: bb4, otherwise: bb1];
+        switch copy _1 [0: bb3, otherwise: bb1];
     }
 
     bb1: {
@@ -566,14 +526,10 @@ fn user.auth.AuthThrowEnum(x: int) -> string {
     }
 
     bb2: {
-        goto -> bb3;
-    }
-
-    bb3: {
         return;
     }
 
-    bb4: {
+    bb3: {
         throw const user.auth.Role.Guest;
     }
 }
@@ -585,7 +541,7 @@ fn user.auth.AuthThrowsRootError(x: int) -> string {
     let _2: auth.Error
 
     bb0: {
-        switch copy _1 [0: bb4, otherwise: bb1];
+        switch copy _1 [0: bb3, otherwise: bb1];
     }
 
     bb1: {
@@ -594,14 +550,10 @@ fn user.auth.AuthThrowsRootError(x: int) -> string {
     }
 
     bb2: {
-        goto -> bb3;
-    }
-
-    bb3: {
         return;
     }
 
-    bb4: {
+    bb3: {
         _2 = Error { const 403_i64, const "forbidden" };
         throw copy _2;
     }
@@ -756,10 +708,6 @@ fn user.llm.LlmEnumMatch(s: llm.Status) -> string {
     }
 
     bb5: {
-        goto -> bb6;
-    }
-
-    bb6: {
         return;
     }
 }
@@ -803,43 +751,35 @@ fn user.llm.LlmMatchesRootStatus(s: Status) -> string {
 
     bb0: {
         _2 = copy _1 == const user.llm.root.Status.Ok;
-        branch copy _2 -> [bb6, bb1];
+        branch copy _2 -> [bb5, bb1];
     }
 
     bb1: {
         _3 = copy _1 == const user.llm.root.Status.Failed;
-        branch copy _3 -> [bb5, bb2];
+        branch copy _3 -> [bb4, bb2];
     }
 
     bb2: {
         _4 = copy _1 == const user.llm.root.Status.Pending;
-        branch copy _4 -> [bb4, bb3];
+        branch copy _4 -> [bb3, bb6];
     }
 
     bb3: {
-        goto -> bb7;
+        _0 = const "pending";
+        goto -> bb6;
     }
 
     bb4: {
-        _0 = const "pending";
-        goto -> bb7;
+        _0 = const "failed";
+        goto -> bb6;
     }
 
     bb5: {
-        _0 = const "failed";
-        goto -> bb7;
+        _0 = const "ok";
+        goto -> bb6;
     }
 
     bb6: {
-        _0 = const "ok";
-        goto -> bb7;
-    }
-
-    bb7: {
-        goto -> bb8;
-    }
-
-    bb8: {
         return;
     }
 }
@@ -883,7 +823,7 @@ fn user.llm.LlmThrowClass(x: int) -> string {
     let _2: llm.Error
 
     bb0: {
-        switch copy _1 [0: bb4, otherwise: bb1];
+        switch copy _1 [0: bb3, otherwise: bb1];
     }
 
     bb1: {
@@ -892,14 +832,10 @@ fn user.llm.LlmThrowClass(x: int) -> string {
     }
 
     bb2: {
-        goto -> bb3;
-    }
-
-    bb3: {
         return;
     }
 
-    bb4: {
+    bb3: {
         _2 = Error { const "llm failed", const true };
         throw copy _2;
     }
@@ -911,7 +847,7 @@ fn user.llm.LlmThrowEnum(x: int) -> string {
     let _1: int // x // param
 
     bb0: {
-        switch copy _1 [0: bb4, otherwise: bb1];
+        switch copy _1 [0: bb3, otherwise: bb1];
     }
 
     bb1: {
@@ -920,14 +856,10 @@ fn user.llm.LlmThrowEnum(x: int) -> string {
     }
 
     bb2: {
-        goto -> bb3;
-    }
-
-    bb3: {
         return;
     }
 
-    bb4: {
+    bb3: {
         throw const user.llm.Status.Done;
     }
 }
@@ -938,7 +870,7 @@ fn user.llm.LlmThrowsRootEnum(x: int) -> string {
     let _1: int // x // param
 
     bb0: {
-        switch copy _1 [0: bb4, otherwise: bb1];
+        switch copy _1 [0: bb3, otherwise: bb1];
     }
 
     bb1: {
@@ -947,14 +879,10 @@ fn user.llm.LlmThrowsRootEnum(x: int) -> string {
     }
 
     bb2: {
-        goto -> bb3;
-    }
-
-    bb3: {
         return;
     }
 
-    bb4: {
+    bb3: {
         throw const user.Status.Failed;
     }
 }
@@ -966,7 +894,7 @@ fn user.llm.LlmThrowsRootError(x: int) -> string {
     let _2: llm.Error
 
     bb0: {
-        switch copy _1 [0: bb4, otherwise: bb1];
+        switch copy _1 [0: bb3, otherwise: bb1];
     }
 
     bb1: {
@@ -975,14 +903,10 @@ fn user.llm.LlmThrowsRootError(x: int) -> string {
     }
 
     bb2: {
-        goto -> bb3;
-    }
-
-    bb3: {
         return;
     }
 
-    bb4: {
+    bb3: {
         _2 = Error { const 404_i64, const "not found" };
         throw copy _2;
     }
@@ -1152,10 +1076,6 @@ fn user.llm.openai.OpenAIEnumMatch(m: llm.openai.Model) -> string {
     }
 
     bb5: {
-        goto -> bb6;
-    }
-
-    bb6: {
         return;
     }
 }
@@ -1199,43 +1119,35 @@ fn user.llm.openai.OpenAIMatchesAuthRole(r: auth.Role) -> string {
 
     bb0: {
         _2 = copy _1 == const user.llm.openai.root.auth.Role.Admin;
-        branch copy _2 -> [bb6, bb1];
+        branch copy _2 -> [bb5, bb1];
     }
 
     bb1: {
         _3 = copy _1 == const user.llm.openai.root.auth.Role.User;
-        branch copy _3 -> [bb5, bb2];
+        branch copy _3 -> [bb4, bb2];
     }
 
     bb2: {
         _4 = copy _1 == const user.llm.openai.root.auth.Role.Guest;
-        branch copy _4 -> [bb4, bb3];
+        branch copy _4 -> [bb3, bb6];
     }
 
     bb3: {
-        goto -> bb7;
+        _0 = const "guest";
+        goto -> bb6;
     }
 
     bb4: {
-        _0 = const "guest";
-        goto -> bb7;
+        _0 = const "user";
+        goto -> bb6;
     }
 
     bb5: {
-        _0 = const "user";
-        goto -> bb7;
+        _0 = const "admin";
+        goto -> bb6;
     }
 
     bb6: {
-        _0 = const "admin";
-        goto -> bb7;
-    }
-
-    bb7: {
-        goto -> bb8;
-    }
-
-    bb8: {
         return;
     }
 }
@@ -1250,43 +1162,35 @@ fn user.llm.openai.OpenAIMatchesLlmStatus(s: llm.Status) -> string {
 
     bb0: {
         _2 = copy _1 == const user.llm.openai.root.llm.Status.Ready;
-        branch copy _2 -> [bb6, bb1];
+        branch copy _2 -> [bb5, bb1];
     }
 
     bb1: {
         _3 = copy _1 == const user.llm.openai.root.llm.Status.Generating;
-        branch copy _3 -> [bb5, bb2];
+        branch copy _3 -> [bb4, bb2];
     }
 
     bb2: {
         _4 = copy _1 == const user.llm.openai.root.llm.Status.Done;
-        branch copy _4 -> [bb4, bb3];
+        branch copy _4 -> [bb3, bb6];
     }
 
     bb3: {
-        goto -> bb7;
+        _0 = const "done";
+        goto -> bb6;
     }
 
     bb4: {
-        _0 = const "done";
-        goto -> bb7;
+        _0 = const "generating";
+        goto -> bb6;
     }
 
     bb5: {
-        _0 = const "generating";
-        goto -> bb7;
+        _0 = const "ready";
+        goto -> bb6;
     }
 
     bb6: {
-        _0 = const "ready";
-        goto -> bb7;
-    }
-
-    bb7: {
-        goto -> bb8;
-    }
-
-    bb8: {
         return;
     }
 }
@@ -1301,43 +1205,35 @@ fn user.llm.openai.OpenAIMatchesRootStatus(s: Status) -> string {
 
     bb0: {
         _2 = copy _1 == const user.llm.openai.root.Status.Ok;
-        branch copy _2 -> [bb6, bb1];
+        branch copy _2 -> [bb5, bb1];
     }
 
     bb1: {
         _3 = copy _1 == const user.llm.openai.root.Status.Failed;
-        branch copy _3 -> [bb5, bb2];
+        branch copy _3 -> [bb4, bb2];
     }
 
     bb2: {
         _4 = copy _1 == const user.llm.openai.root.Status.Pending;
-        branch copy _4 -> [bb4, bb3];
+        branch copy _4 -> [bb3, bb6];
     }
 
     bb3: {
-        goto -> bb7;
+        _0 = const "pending";
+        goto -> bb6;
     }
 
     bb4: {
-        _0 = const "pending";
-        goto -> bb7;
+        _0 = const "failed";
+        goto -> bb6;
     }
 
     bb5: {
-        _0 = const "failed";
-        goto -> bb7;
+        _0 = const "ok";
+        goto -> bb6;
     }
 
     bb6: {
-        _0 = const "ok";
-        goto -> bb7;
-    }
-
-    bb7: {
-        goto -> bb8;
-    }
-
-    bb8: {
         return;
     }
 }
@@ -1392,10 +1288,6 @@ fn user.llm.openai.OpenAIMixedModels(openai_model: llm.openai.Model, llm_model: 
     }
 
     bb5: {
-        goto -> bb6;
-    }
-
-    bb6: {
         return;
     }
 }
@@ -1407,7 +1299,7 @@ fn user.llm.openai.OpenAIThrowClass(x: int) -> string {
     let _2: llm.openai.Error
 
     bb0: {
-        switch copy _1 [0: bb4, otherwise: bb1];
+        switch copy _1 [0: bb3, otherwise: bb1];
     }
 
     bb1: {
@@ -1416,14 +1308,10 @@ fn user.llm.openai.OpenAIThrowClass(x: int) -> string {
     }
 
     bb2: {
-        goto -> bb3;
-    }
-
-    bb3: {
         return;
     }
 
-    bb4: {
+    bb3: {
         _2 = Error { const 429_i64, const "rate limited" };
         throw copy _2;
     }
@@ -1435,7 +1323,7 @@ fn user.llm.openai.OpenAIThrowEnum(x: int) -> string {
     let _1: int // x // param
 
     bb0: {
-        switch copy _1 [0: bb4, otherwise: bb1];
+        switch copy _1 [0: bb3, otherwise: bb1];
     }
 
     bb1: {
@@ -1444,14 +1332,10 @@ fn user.llm.openai.OpenAIThrowEnum(x: int) -> string {
     }
 
     bb2: {
-        goto -> bb3;
-    }
-
-    bb3: {
         return;
     }
 
-    bb4: {
+    bb3: {
         throw const user.llm.openai.Model.O3;
     }
 }

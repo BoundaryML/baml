@@ -41,8 +41,7 @@ pub(crate) trait PullSink {
     fn alloc_map(&mut self, len: usize) -> Result<(), Self::Error>;
 
     fn alloc_class_instance(&mut self, class_name: &str) -> Result<(), Self::Error>;
-    fn copy_top(&mut self, offset: usize) -> Result<(), Self::Error>;
-    fn store_field(&mut self, field_idx: usize, name: &str) -> Result<(), Self::Error>;
+    fn init_field(&mut self, field_idx: usize, name: &str) -> Result<(), Self::Error>;
 
     fn alloc_enum_variant(&mut self, enum_name: &str, variant: &str) -> Result<(), Self::Error>;
 
@@ -351,9 +350,8 @@ pub(crate) fn walk_rvalue_pull<S: PullSink>(sink: &mut S, rvalue: &Rvalue) -> Re
                 sink.alloc_class_instance(class_name)?;
                 for (field_idx, field_operand) in fields.iter().enumerate() {
                     let name = sink.class_field_name(class_name, field_idx);
-                    sink.copy_top(0)?;
                     walk_operand_pull(sink, field_operand)?;
-                    sink.store_field(field_idx, &name)?;
+                    sink.init_field(field_idx, &name)?;
                 }
                 Ok(())
             }

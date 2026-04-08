@@ -1806,6 +1806,52 @@ impl BexVm {
                 }
             }
 
+            Instruction::InitField(index) => {
+                // Consume the new value to be set from the stack.
+                let new_value = self.stack.ensure_pop()?;
+
+                // Peek — do NOT pop the instance; it stays on the stack for the next field.
+                let instance_slot = self.stack.ensure_slot_from_top(0)?;
+                let instance_value = self.stack[instance_slot];
+                let instance_index = self.as_object_ptr(&instance_value, ObjectType::Instance)?;
+
+                // Read old value for watch graph update (and typecheck).
+                let old_value = match self.get_object(instance_index) {
+                    Object::Instance(instance) => instance.fields[index],
+
+                    other => {
+                        return Err(VmInternalError::TypeError {
+                            expected: ObjectType::Instance.into(),
+                            got: ObjectType::of(other).into(),
+                        }
+                        .into());
+                    }
+                };
+
+                // Change graph topology.
+                let watched_node = NodeId::HeapObject(instance_index);
+
+                self.update_watched_node(
+                    watched_node,
+                    watch::Path::InstanceField(index),
+                    old_value,
+                    new_value,
+                );
+
+                // Set the new value.
+                if let Object::Instance(instance) = self.get_object_mut(instance_index) {
+                    instance.fields[index] = new_value;
+                }
+
+                let notifications = self.process_notifications(watched_node)?;
+
+                if !notifications.is_empty() {
+                    return Ok(Some(VmExecState::Notify(WatchNotification::Variables(
+                        notifications,
+                    ))));
+                }
+            }
+
             Instruction::Pop(n) => {
                 let drain_start = self.stack.len() - n;
                 let drain_range = StackIndex::from_raw(drain_start)..;

@@ -18,10 +18,6 @@ fn user.TypeBuilderFn(from_text: string) -> Resume {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -42,10 +38,6 @@ fn user.TypeBuilderFn$build_request(from_text: string) -> baml.http.Request {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -60,10 +52,6 @@ fn user.TypeBuilderFn$parse(json: string) -> Resume {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -84,10 +72,6 @@ fn user.TypeBuilderFn$render_prompt(from_text: string) -> baml.llm.PromptAst {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }

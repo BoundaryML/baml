@@ -15,10 +15,6 @@ fn user.array_length() -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -71,10 +67,6 @@ fn user.GreetBaz(n: string) -> string {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -118,10 +110,6 @@ fn user.param_in_if_statement(b: bool) -> int {
     }
 
     bb3: {
-        goto -> bb4;
-    }
-
-    bb4: {
         return;
     }
 }

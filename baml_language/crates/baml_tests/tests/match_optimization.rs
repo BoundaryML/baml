@@ -27,7 +27,7 @@ async fn match_jump_table_first_arm() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 0
         jump_table [L4, L3, L2, L1], default L0
@@ -76,7 +76,7 @@ async fn match_jump_table_middle_arm() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 2
         jump_table [L4, L3, L2, L1], default L0
@@ -125,7 +125,7 @@ async fn match_jump_table_last_arm() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 3
         jump_table [L4, L3, L2, L1], default L0
@@ -174,7 +174,7 @@ async fn match_jump_table_fallback() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 10
         jump_table [L4, L3, L2, L1], default L0
@@ -223,7 +223,7 @@ async fn match_jump_table_negative_fallback() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 1
         unary_op -
@@ -275,7 +275,7 @@ async fn match_jump_table_with_holes_miss() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 1
         jump_table [L4, _, L3, _, L2, _, L1], default L0
@@ -324,7 +324,7 @@ async fn match_jump_table_with_holes_hit() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 4
         jump_table [L4, _, L3, _, L2, _, L1], default L0
@@ -374,7 +374,7 @@ async fn match_jump_table_offset_values() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 11
         jump_table [L4, L3, L2, L1], default L0
@@ -428,7 +428,7 @@ async fn match_jump_table_large() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 5
         jump_table [L8, L7, L6, L5, L4, L3, L2, L1], default L0
@@ -496,7 +496,7 @@ async fn match_jump_table_dense_four_arms_param() {
         args: { "x" => BexExternalValue::Int(2) },
     };
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function classify(x: int) -> int {
         load_var x
         jump_table [L4, L3, L2, L1], default L0
@@ -549,7 +549,7 @@ async fn match_binary_search_first_arm() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 0
         copy 0
@@ -632,7 +632,7 @@ async fn match_binary_search_middle_arm() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 60
         copy 0
@@ -715,7 +715,7 @@ async fn match_binary_search_last_arm() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 99
         copy 0
@@ -798,7 +798,7 @@ async fn match_binary_search_fallback() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 50
         copy 0
@@ -883,7 +883,7 @@ async fn match_binary_search_very_sparse() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 500
         copy 0
@@ -995,7 +995,7 @@ async fn match_binary_search_large_values() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 750
         copy 0
@@ -1092,7 +1092,7 @@ async fn match_binary_search_sparse_four_arms_param() {
         args: { "x" => BexExternalValue::Int(30) },
     };
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function classify(x: int) -> int {
         load_var x
         copy 0
@@ -1179,7 +1179,7 @@ async fn match_if_else_chain_three_arms() {
         args: { "x" => BexExternalValue::Int(0) },
     };
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function classify(x: int) -> int {
         load_var x
         copy 0
@@ -1239,7 +1239,7 @@ async fn match_density_exactly_50_percent() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 4
         jump_table [L4, _, L3, _, L2, _, L1], default L0
@@ -1289,7 +1289,7 @@ async fn match_density_below_50_percent() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 6
         copy 0
@@ -1374,7 +1374,7 @@ async fn match_density_above_50_percent() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 4
         jump_table [L5, L4, L3, _, L2, L1], default L0
@@ -1432,7 +1432,7 @@ async fn match_large_range_dense() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 102
         jump_table [L4, L3, L2, L1], default L0
@@ -1482,7 +1482,7 @@ async fn match_large_range_sparse() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 1000
         copy 0
@@ -1565,7 +1565,7 @@ async fn match_zero_in_range() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 0
         jump_table [L4, L3, L2, L1], default L0
@@ -2126,7 +2126,7 @@ async fn match_range_at_limit_uses_jump_table() {
         args: { "x" => BexExternalValue::Int(254) },
     };
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function classify(x: int) -> int {
         load_var x
         jump_table [L4, L3, L2, L1], default L0
@@ -2177,7 +2177,7 @@ async fn match_range_exceeds_limit_uses_binary_search() {
         args: { "x" => BexExternalValue::Int(200) },
     };
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function classify(x: int) -> int {
         load_var x
         copy 0
@@ -2272,7 +2272,7 @@ async fn match_large_jump_table() {
         args: { "x" => BexExternalValue::Int(7) },
     };
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function classify(x: int) -> int {
         load_var x
         jump_table [L10, L9, L8, L7, L6, L5, L4, L3, L2, L1], default L0
@@ -2354,7 +2354,7 @@ async fn match_binary_search_eight_arms() {
         args: { "x" => BexExternalValue::Int(50) },
     };
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function classify(x: int) -> int {
         load_var x
         copy 0

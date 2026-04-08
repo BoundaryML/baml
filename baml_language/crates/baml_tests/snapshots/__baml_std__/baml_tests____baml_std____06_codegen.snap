@@ -225,9 +225,8 @@ function baml.http.send(request: void) -> void {
 function baml.llm.Client.build_attempt(self: null) -> void[] {
     load_var self
     alloc_instance PlannerState
-    copy 0
     alloc_array 0
-    store_field .rr_client_names
+    init_field .rr_client_names
     call baml.llm.Client.build_attempt_with_state
     return
 }
@@ -356,12 +355,10 @@ function baml.llm.Client.build_attempt_with_state(self: null, planner_state: voi
     call_indirect
     store_var primitive
     alloc_instance OrchestrationStep
-    copy 0
     load_var primitive
-    store_field .primitive_client
-    copy 0
+    init_field .primitive_client
     load_const 0
-    store_field .delay_ms
+    init_field .delay_ms
     alloc_array 1
 
   L12:
@@ -371,9 +368,8 @@ function baml.llm.Client.build_attempt_with_state(self: null, planner_state: voi
 function baml.llm.Client.build_plan(self: null) -> void[] {
     load_var self
     alloc_instance PlannerState
-    copy 0
     alloc_array 0
-    store_field .rr_client_names
+    init_field .rr_client_names
     call baml.llm.Client.build_plan_with_state
     return
 }
@@ -405,7 +401,7 @@ function baml.llm.Client.build_plan_with_state(self: null, planner_state: void) 
     store_var result
     load_var r
     load_field .initial_delay_ms
-    load_const 0
+    load_const 0.0
     bin_op +
     store_var current_delay
     load_const 0
@@ -443,7 +439,7 @@ function baml.llm.Client.build_plan_with_state(self: null, planner_state: void) 
     load_var next
     load_var r
     load_field .max_delay_ms
-    load_const 0
+    load_const 0.0
     bin_op +
     cmp_op >
     pop_jump_if_false L6
@@ -457,7 +453,7 @@ function baml.llm.Client.build_plan_with_state(self: null, planner_state: void) 
   L7:
     load_var r
     load_field .max_delay_ms
-    load_const 0
+    load_const 0.0
     bin_op +
     store_var current_delay
 
@@ -487,15 +483,13 @@ function baml.llm.Client.build_plan_with_state(self: null, planner_state: void) 
   L11:
     load_var result
     alloc_instance OrchestrationStep
-    copy 0
     load_var _31
     load_var __for_idx
     load_array_element
     load_field .primitive_client
-    store_field .primitive_client
-    copy 0
+    init_field .primitive_client
     load_var delay
-    store_field .delay_ms
+    init_field .delay_ms
     call baml.Array.push
     pop 1
     load_var __for_idx
@@ -531,7 +525,7 @@ function baml.llm.Client.execute(self: null, context: void, inherited_delay_ms: 
     store_var r
     load_var r
     load_field .initial_delay_ms
-    load_const 0
+    load_const 0.0
     bin_op +
     store_var current_delay
     load_const 0
@@ -547,9 +541,8 @@ function baml.llm.Client.execute(self: null, context: void, inherited_delay_ms: 
 
   L3:
     alloc_instance DevOther
-    copy 0
     load_const "All orchestration steps failed"
-    store_field .message
+    init_field .message
     throw
 
   L4:
@@ -570,7 +563,7 @@ function baml.llm.Client.execute(self: null, context: void, inherited_delay_ms: 
     load_var next
     load_var r
     load_field .max_delay_ms
-    load_const 0
+    load_const 0.0
     bin_op +
     cmp_op >
     pop_jump_if_false L5
@@ -584,7 +577,7 @@ function baml.llm.Client.execute(self: null, context: void, inherited_delay_ms: 
   L6:
     load_var r
     load_field .max_delay_ms
-    load_const 0
+    load_const 0.0
     bin_op +
     store_var current_delay
 
@@ -677,9 +670,8 @@ function baml.llm.Client.execute_once(self: null, context: void, active_delay_ms
 
   L4:
     alloc_instance DevOther
-    copy 0
     load_const "All orchestration steps failed"
-    store_field .message
+    init_field .message
     throw
 
   L5:
@@ -740,9 +732,8 @@ function baml.llm.Client.execute_once(self: null, context: void, active_delay_ms
 
   L8:
     alloc_instance DevOther
-    copy 0
     load_const "HTTP request failed"
-    store_field .message
+    init_field .message
     throw
 
   L9:
@@ -795,12 +786,11 @@ function baml.llm.Client.to_primitive_client(self: null) -> void {
 
   L1:
     alloc_instance InvalidArgument
-    copy 0
     load_const "Invalid short hand name: "
     load_var self
     load_field .name
     bin_op +
-    store_field .message
+    init_field .message
     throw
 }
 
@@ -901,15 +891,12 @@ function baml.llm.call_llm_function(client: void, function_name: string, args: m
     store_var jinja_string
     load_var client
     alloc_instance ExecutionContext
-    copy 0
     load_var jinja_string
-    store_field .jinja_string
-    copy 0
+    init_field .jinja_string
     load_var args
-    store_field .args
-    copy 0
+    init_field .args
     load_var function_name
-    store_field .function_name
+    init_field .function_name
     load_const 0
     call baml.llm.Client.execute
     return
