@@ -11,7 +11,6 @@ fn assert.contains(haystack: string, needle: string) -> null {
     let _2: string // needle // param
     let _3: bool
     let _4: bool
-    let _5: future<null>
 
     bb0: {
         _4 = call const fn baml.String.includes(copy _1, copy _2) -> [bb1];
@@ -28,14 +27,18 @@ fn assert.contains(haystack: string, needle: string) -> null {
     }
 
     bb3: {
-        _5 = dispatch_future const fn baml.sys.panic(const "assertion failed: string does not contain expected substring") -> bb4;
+        _0 = call const fn baml.sys.panic(const "assertion failed: string does not contain expected substring") -> [bb4];
     }
 
     bb4: {
-        _0 = await _5 -> [bb5];
+        goto -> bb5;
     }
 
     bb5: {
+        goto -> bb6;
+    }
+
+    bb6: {
         return;
     }
 }
@@ -46,7 +49,6 @@ fn assert.equal(actual: unknown, expected: unknown) -> null {
     let _1: unknown // actual // param
     let _2: unknown // expected // param
     let _3: bool
-    let _4: future<null>
 
     bb0: {
         _3 = copy _1 != copy _2;
@@ -59,14 +61,18 @@ fn assert.equal(actual: unknown, expected: unknown) -> null {
     }
 
     bb2: {
-        _4 = dispatch_future const fn baml.sys.panic(const "assertion failed: expected equal values") -> bb3;
+        _0 = call const fn baml.sys.panic(const "assertion failed: expected equal values") -> [bb3];
     }
 
     bb3: {
-        _0 = await _4 -> [bb4];
+        goto -> bb4;
     }
 
     bb4: {
+        goto -> bb5;
+    }
+
+    bb5: {
         return;
     }
 }
@@ -76,7 +82,6 @@ fn assert.is_true(condition: bool) -> null {
     let _0: null // _0 // return
     let _1: bool // condition // param
     let _2: bool
-    let _3: future<null>
 
     bb0: {
         _2 = !copy _1;
@@ -89,14 +94,18 @@ fn assert.is_true(condition: bool) -> null {
     }
 
     bb2: {
-        _3 = dispatch_future const fn baml.sys.panic(const "assertion failed: expected true") -> bb3;
+        _0 = call const fn baml.sys.panic(const "assertion failed: expected true") -> [bb3];
     }
 
     bb3: {
-        _0 = await _3 -> [bb4];
+        goto -> bb4;
     }
 
     bb4: {
+        goto -> bb5;
+    }
+
+    bb5: {
         return;
     }
 }
@@ -106,7 +115,6 @@ fn assert.not_null(value: unknown?) -> null {
     let _0: null // _0 // return
     let _1: unknown? // value // param
     let _2: bool
-    let _3: future<null>
 
     bb0: {
         _2 = copy _1 == const null;
@@ -119,14 +127,18 @@ fn assert.not_null(value: unknown?) -> null {
     }
 
     bb2: {
-        _3 = dispatch_future const fn baml.sys.panic(const "assertion failed: expected non-null value") -> bb3;
+        _0 = call const fn baml.sys.panic(const "assertion failed: expected non-null value") -> [bb3];
     }
 
     bb3: {
-        _0 = await _3 -> [bb4];
+        goto -> bb4;
     }
 
     bb4: {
+        goto -> bb5;
+    }
+
+    bb5: {
         return;
     }
 }

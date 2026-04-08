@@ -31,16 +31,6 @@ impl IoNamespaceSys for WasmSys {
         SysOpOutput::err(OpErrorKind::Unsupported)
     }
 
-    fn panic(
-        &self,
-        _heap: &Arc<BexHeap>,
-        _call_id: CallId,
-        message: String,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<()> {
-        SysOpOutput::err(OpErrorKind::Other(message))
-    }
-
     fn sleep(
         &self,
         _heap: &Arc<BexHeap>,

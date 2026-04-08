@@ -10,19 +10,19 @@ import (
 
 func TestEnvVar(t *testing.T) {
 	var tests = map[string]struct {
-		envVar string
+		envVar   string
 		envValue string
-		err string
+		err      string
 	}{
 		"required env var": {
-			envVar: "OPENAI_API_KEY",
+			envVar:   "OPENAI_API_KEY",
 			envValue: "sk-proj-1234567890",
-			err: "InvalidAuthentication (401)",
+			err:      "InvalidAuthentication (401)",
 		},
 		"not required env var": {
-			envVar: "NOT_REQUIRED_ENV_VAR",
+			envVar:   "NOT_REQUIRED_ENV_VAR",
 			envValue: "",
-			err: "",
+			err:      "",
 		},
 	}
 
@@ -43,21 +43,20 @@ func TestEnvVar(t *testing.T) {
 
 func TestEnvVarWithOptions(t *testing.T) {
 	var tests = map[string]struct {
-		envVar string
+		envVar   string
 		envValue string
-		err string
+		err      string
 	}{
 		"test override with env var": {
-			envVar: "OPENAI_API_KEY",
+			envVar:   "OPENAI_API_KEY",
 			envValue: "sk-proj-1234567890",
-			err: "InvalidAuthentication (401)",
+			err:      "InvalidAuthentication (401)",
 		},
 		"test override with unsetting env var": {
-			envVar: "OPENAI_API_KEY",
+			envVar:   "OPENAI_API_KEY",
 			envValue: "",
-			err: "InvalidAuthentication (401)",
+			err:      "InvalidAuthentication (401)",
 		},
-		
 	}
 
 	for name, test := range tests {

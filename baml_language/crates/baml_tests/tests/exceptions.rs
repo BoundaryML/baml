@@ -3077,57 +3077,71 @@ async fn panic_alias_catches_any_panic() {
 
     function main() -> int {
         call user.divides
-        jump L7
+        jump L9
         load_var e
         load_const baml.panics.DivisionByZero
         cmp_op instanceof
         pop_jump_if_false L0
-        jump L6
+        jump L8
 
       L0:
         load_var e
         load_const baml.panics.IndexOutOfBounds
         cmp_op instanceof
         pop_jump_if_false L1
-        jump L6
+        jump L8
 
       L1:
         load_var e
         load_const baml.panics.MapKeyNotFound
         cmp_op instanceof
         pop_jump_if_false L2
-        jump L6
+        jump L8
 
       L2:
         load_var e
         load_const baml.panics.StackOverflow
         cmp_op instanceof
         pop_jump_if_false L3
-        jump L6
+        jump L8
 
       L3:
         load_var e
         load_const baml.panics.AssertionFailed
         cmp_op instanceof
         pop_jump_if_false L4
-        jump L6
+        jump L8
 
       L4:
         load_var e
         load_const baml.panics.Unreachable
         cmp_op instanceof
         pop_jump_if_false L5
-        jump L6
+        jump L8
 
       L5:
         load_var e
-        throw
+        load_const baml.panics.UserPanic
+        cmp_op instanceof
+        pop_jump_if_false L6
+        jump L8
 
       L6:
+        load_var e
+        load_const baml.panics.AllocFailure
+        cmp_op instanceof
+        pop_jump_if_false L7
+        jump L8
+
+      L7:
+        load_var e
+        throw
+
+      L8:
         load_const 1
         unary_op -
 
-      L7:
+      L9:
         return
     }
     ");
@@ -3155,58 +3169,72 @@ async fn panic_alias_plus_wildcard_dispatch() {
     function main() -> int {
         load_const 0
         call user.risky
-        jump L7
+        jump L9
         load_var e
         load_const baml.panics.DivisionByZero
         cmp_op instanceof
         pop_jump_if_false L0
-        jump L6
+        jump L8
 
       L0:
         load_var e
         load_const baml.panics.IndexOutOfBounds
         cmp_op instanceof
         pop_jump_if_false L1
-        jump L6
+        jump L8
 
       L1:
         load_var e
         load_const baml.panics.MapKeyNotFound
         cmp_op instanceof
         pop_jump_if_false L2
-        jump L6
+        jump L8
 
       L2:
         load_var e
         load_const baml.panics.StackOverflow
         cmp_op instanceof
         pop_jump_if_false L3
-        jump L6
+        jump L8
 
       L3:
         load_var e
         load_const baml.panics.AssertionFailed
         cmp_op instanceof
         pop_jump_if_false L4
-        jump L6
+        jump L8
 
       L4:
         load_var e
         load_const baml.panics.Unreachable
         cmp_op instanceof
         pop_jump_if_false L5
-        jump L6
+        jump L8
 
       L5:
         load_var e
-        throw_if_panic
-        load_const 2
-        jump L7
+        load_const baml.panics.UserPanic
+        cmp_op instanceof
+        pop_jump_if_false L6
+        jump L8
 
       L6:
-        load_const 1
+        load_var e
+        load_const baml.panics.AllocFailure
+        cmp_op instanceof
+        pop_jump_if_false L7
+        jump L8
 
       L7:
+        load_var e
+        throw_if_panic
+        load_const 2
+        jump L9
+
+      L8:
+        load_const 1
+
+      L9:
         return
     }
 

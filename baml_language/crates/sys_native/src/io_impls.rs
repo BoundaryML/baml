@@ -144,16 +144,6 @@ impl io::IoNamespaceSys for NativeSysOps {
             Ok(())
         })
     }
-
-    fn panic(
-        &self,
-        _heap: &Arc<BexHeap>,
-        _call_id: CallId,
-        message: String,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<()> {
-        SysOpOutput::err(OpErrorKind::Other(message))
-    }
 }
 
 // ============================================================================

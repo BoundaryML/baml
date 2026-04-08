@@ -152,23 +152,23 @@ func TestParseJSONExtraction(t *testing.T) {
 		expected bool // whether parsing should succeed
 	}{
 		{
-			name: "SimpleJSON",
-			input: `{"name": "John", "age": 30}`,
+			name:     "SimpleJSON",
+			input:    `{"name": "John", "age": 30}`,
 			expected: true,
 		},
 		{
-			name: "JSONWithCodeBlocks",
-			input: "```json\n{\"name\": \"John\", \"age\": 30}\n```",
+			name:     "JSONWithCodeBlocks",
+			input:    "```json\n{\"name\": \"John\", \"age\": 30}\n```",
 			expected: true,
 		},
 		{
-			name: "JSONInText",
-			input: "Here is the data: {\"name\": \"John\", \"age\": 30} and more text",
+			name:     "JSONInText",
+			input:    "Here is the data: {\"name\": \"John\", \"age\": 30} and more text",
 			expected: true,
 		},
 		{
-			name: "NoJSON",
-			input: "This is just plain text with no JSON",
+			name:     "NoJSON",
+			input:    "This is just plain text with no JSON",
 			expected: true,
 		},
 	}
@@ -177,7 +177,7 @@ func TestParseJSONExtraction(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			// Test with a simple parsing function
 			_, err := b.Parse.JsonTypeAliasCycle(tc.input)
-			
+
 			if tc.expected {
 				assert.NoError(t, err, "Expected successful parsing for %s", tc.name)
 			} else {
@@ -221,7 +221,7 @@ func TestParseComplexStructures(t *testing.T) {
 	assert.Len(t, parsed.Experience, 2)
 	assert.Len(t, parsed.Education, 1)
 	assert.Len(t, parsed.Skills, 3)
-	
+
 	// Check education details
 	education := parsed.Education[0]
 	assert.Equal(t, "MIT", education.Institution)
@@ -276,7 +276,7 @@ func TestParsePartialStreaming(t *testing.T) {
 	for i, partial := range partialResponses {
 		t.Run(fmt.Sprintf("Partial%d", i), func(t *testing.T) {
 			parsed, err := b.ParseStream.ExtractResume(partial)
-			
+
 			if err != nil {
 				// Some partial responses might fail, which is expected
 				t.Logf("Partial response %d failed as expected: %v", i, err)
