@@ -76,10 +76,6 @@ fn .<lambda($init_test_19, 0)>(testset: testing.TestCollector) -> null {
     }
 
     bb5: {
-        goto -> bb6;
-    }
-
-    bb6: {
         _4 = copy _4 + const 1_i64;
         goto -> bb1;
     }
@@ -97,10 +93,6 @@ fn .<lambda(<lambda($init_test_19, 0)>, 1)>() -> null {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -125,28 +117,20 @@ fn .<lambda($init_test_19, 2)>(testset: testing.TestCollector) -> null {
 
     bb1: {
         _5 = copy _2;
-        branch copy _5 -> [bb3, bb2];
+        branch copy _5 -> [bb2, bb3];
     }
 
     bb2: {
-        goto -> bb5;
+        _7 = make_closure lambda[1]();
+        _6 = call const fn testing.TestCollector.register_test(copy _1, const "only when slow", copy _7, const null) -> [bb3];
     }
 
     bb3: {
-        _7 = make_closure lambda[1]();
-        _6 = call const fn testing.TestCollector.register_test(copy _1, const "only when slow", copy _7, const null) -> [bb4];
+        _0 = const null;
+        goto -> bb4;
     }
 
     bb4: {
-        goto -> bb5;
-    }
-
-    bb5: {
-        _0 = const null;
-        goto -> bb6;
-    }
-
-    bb6: {
         return;
     }
 }
@@ -161,10 +145,6 @@ fn .<lambda(<lambda($init_test_19, 2)>, 3)>() -> null {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -179,10 +159,6 @@ fn .<lambda(<lambda($init_test_19, 2)>, 4)>() -> null {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
