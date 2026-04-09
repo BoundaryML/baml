@@ -150,6 +150,9 @@ mod tests {
             TypeExpr::Never { attrs } => TypeExpr::Never {
                 attrs: strip_attrs(attrs),
             },
+            TypeExpr::Void { attrs } => TypeExpr::Void {
+                attrs: strip_attrs(attrs),
+            },
             TypeExpr::Rust { attrs } => TypeExpr::Rust {
                 attrs: strip_attrs(attrs),
             },

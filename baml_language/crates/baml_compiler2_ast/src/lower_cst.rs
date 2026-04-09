@@ -193,6 +193,14 @@ fn lower_function(node: &SyntaxNode, diags: &mut Vec<LoweringDiagnostic>) -> Opt
         let expr = lower_type_expr::lower_type_expr_node(&te);
         let te_span = te.syntax().text_range();
         check_unknown_type(&expr, format!("return type of `{name}`"), te_span, diags);
+        // void is allowed as a bare return type, but not wrapped (void?, void[], etc.).
+        lower_type_expr::check_void_type(
+            &expr,
+            format!("return type of `{name}`"),
+            te_span,
+            true,
+            diags,
+        );
         SpannedTypeExpr {
             expr,
             span: te_span,
@@ -312,6 +320,13 @@ pub(crate) fn lower_param(
                 &expr,
                 format!("parameter `{param_name_str}` in `{function_name}`"),
                 te_span,
+                diags,
+            );
+            lower_type_expr::check_void_type(
+                &expr,
+                "a parameter type".to_string(),
+                te_span,
+                false,
                 diags,
             );
             SpannedTypeExpr {
@@ -611,6 +626,13 @@ fn lower_class(
                     te_span,
                     diags,
                 );
+                lower_type_expr::check_void_type(
+                    &expr,
+                    "a class field type".to_string(),
+                    te_span,
+                    false,
+                    diags,
+                );
 
                 // Hoist field attrs from the outermost TypeExpr to FieldDef.
                 // Only attrs that are direct ATTRIBUTE children of the outermost
@@ -754,6 +776,13 @@ fn lower_type_alias(
             let expr = lower_type_expr::lower_type_expr_node(&te);
             let te_span = te.syntax().text_range();
             check_unknown_type(&expr, format!("type alias `{alias_name}`"), te_span, diags);
+            lower_type_expr::check_void_type(
+                &expr,
+                "a type alias".to_string(),
+                te_span,
+                false,
+                diags,
+            );
             SpannedTypeExpr {
                 expr,
                 span: te_span,

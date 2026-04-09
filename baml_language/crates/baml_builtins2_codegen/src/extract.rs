@@ -483,6 +483,7 @@ fn type_expr_to_baml_type(ty: &TypeExpr, generics: &[String]) -> BamlType {
         TypeExpr::Bool { .. } => BamlType::Bool,
         TypeExpr::Null { .. } => BamlType::Null,
         TypeExpr::Never { .. } => BamlType::Null,
+        TypeExpr::Void { .. } => BamlType::Null,
 
         TypeExpr::Media { kind, .. } => {
             // Map MediaKind to the class name string.
