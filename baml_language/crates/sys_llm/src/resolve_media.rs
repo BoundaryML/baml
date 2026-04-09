@@ -195,20 +195,29 @@ async fn resolve_url(
             if media.mime_type().is_some() {
                 return Ok(());
             }
-            let (resp, bytes) = fetch_url_bytes(io, url).await?;
+            let resp = fetch_url_response(io, url).await?;
 
-            infer_mime_from_headers_or_bytes(media, &resp.headers, &bytes);
+            // Try headers first to avoid downloading the full body.
+            if infer_mime_from_headers(media, &resp.headers) {
+                return Ok(());
+            }
+
+            let bytes = io.http_response_bytes(&resp).await.map_err(|e| {
+                BuildRequestError::Other(format!("failed to read response bytes for {url}: {e}"))
+            })?;
+            if let Some(kind) = infer::get(&bytes) {
+                media.set_mime_type(kind.mime_type().to_string());
+            }
             Ok(())
         }
     }
 }
 
-/// Build a GET request, send it via `RuntimeIo`, check the status, and return
-/// the response handle together with the body bytes.
-async fn fetch_url_bytes(
+/// Build a GET request, send it via `RuntimeIo`, and check the status.
+async fn fetch_url_response(
     io: &dyn RuntimeIo,
     url: &str,
-) -> Result<(sys_types::runtime_io::HttpResponseHandle, Vec<u8>), BuildRequestError> {
+) -> Result<sys_types::runtime_io::HttpResponseHandle, BuildRequestError> {
     let req = sys_types::generated::owned::http::Request {
         method: "GET".into(),
         url: url.to_string(),
@@ -226,6 +235,17 @@ async fn fetch_url_bytes(
             resp.status_code
         )));
     }
+
+    Ok(resp)
+}
+
+/// Build a GET request, send it via `RuntimeIo`, check the status, and return
+/// the response handle together with the body bytes.
+async fn fetch_url_bytes(
+    io: &dyn RuntimeIo,
+    url: &str,
+) -> Result<(sys_types::runtime_io::HttpResponseHandle, Vec<u8>), BuildRequestError> {
+    let resp = fetch_url_response(io, url).await?;
 
     let bytes = io.http_response_bytes(&resp).await.map_err(|e| {
         BuildRequestError::Other(format!("failed to read response bytes for {url}: {e}"))
@@ -295,19 +315,19 @@ fn parse_data_url(url: &str) -> Option<(String, String)> {
     if !meta.ends_with(";base64") {
         return None;
     }
-    let mime = meta.strip_suffix(";base64")?.trim();
+    let mime = meta.strip_suffix(";base64")?.split(';').next()?.trim();
     if mime.is_empty() {
         return None;
     }
     Some((mime.to_string(), data.to_string()))
 }
 
-/// Infer MIME type from HTTP headers, falling back to byte-level detection.
-fn infer_mime_from_headers_or_bytes(
+/// Try to extract a MIME type from the `Content-Type` header alone.
+/// Returns `true` if a MIME was found and set.
+fn infer_mime_from_headers(
     media: &MediaValue,
     headers: &indexmap::IndexMap<String, String>,
-    bytes: &[u8],
-) {
+) -> bool {
     if let Some(ct) = headers
         .iter()
         .find(|(name, _)| name.eq_ignore_ascii_case("content-type"))
@@ -316,8 +336,20 @@ fn infer_mime_from_headers_or_bytes(
         let mime = ct.split(';').next().unwrap_or(ct).trim();
         if !mime.is_empty() {
             media.set_mime_type(mime.to_string());
-            return;
+            return true;
         }
+    }
+    false
+}
+
+/// Infer MIME type from HTTP headers, falling back to byte-level detection.
+fn infer_mime_from_headers_or_bytes(
+    media: &MediaValue,
+    headers: &indexmap::IndexMap<String, String>,
+    bytes: &[u8],
+) {
+    if infer_mime_from_headers(media, headers) {
+        return;
     }
     if let Some(kind) = infer::get(bytes) {
         media.set_mime_type(kind.mime_type().to_string());
@@ -700,6 +732,14 @@ mod tests {
     #[test]
     fn data_url_empty_mime() {
         assert!(parse_data_url("data:;base64,abc").is_none());
+    }
+
+    #[test]
+    fn data_url_strips_extra_params() {
+        let (mime, data) =
+            parse_data_url("data:image/svg+xml;charset=utf-8;base64,PHN2Zz4=").unwrap();
+        assert_eq!(mime, "image/svg+xml");
+        assert_eq!(data, "PHN2Zz4=");
     }
 
     // -- mime_from_extension --------------------------------------------------
