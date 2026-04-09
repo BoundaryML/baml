@@ -3,22 +3,17 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 function user.Fn() -> string {
     alloc_instance baml.llm.Client
-    copy 0
     load_const "openai/gpt-4o"
-    store_field .name
-    copy 0
+    init_field .name
     load_const baml.llm.ClientType.Primitive
     alloc_variant baml.llm.ClientType
-    store_field .client_type
-    copy 0
+    init_field .client_type
     alloc_array 0
-    store_field .sub_clients
-    copy 0
+    init_field .sub_clients
     load_const null
-    store_field .retry
-    copy 0
+    init_field .retry
     load_const 0
-    store_field .counter
+    init_field .counter
     load_const "Fn"
     alloc_map 0
     call baml.llm.call_llm_function
@@ -27,22 +22,17 @@ function user.Fn() -> string {
 
 function user.Fn$build_request() -> baml.http.Request {
     alloc_instance baml.llm.Client
-    copy 0
     load_const "openai/gpt-4o"
-    store_field .name
-    copy 0
+    init_field .name
     load_const baml.llm.ClientType.Primitive
     alloc_variant baml.llm.ClientType
-    store_field .client_type
-    copy 0
+    init_field .client_type
     alloc_array 0
-    store_field .sub_clients
-    copy 0
+    init_field .sub_clients
     load_const null
-    store_field .retry
-    copy 0
+    init_field .retry
     load_const 0
-    store_field .counter
+    init_field .counter
     load_const "Fn"
     alloc_map 0
     call baml.llm.build_request
@@ -58,22 +48,17 @@ function user.Fn$parse(json: string) -> string {
 
 function user.Fn$render_prompt() -> baml.llm.PromptAst {
     alloc_instance baml.llm.Client
-    copy 0
     load_const "openai/gpt-4o"
-    store_field .name
-    copy 0
+    init_field .name
     load_const baml.llm.ClientType.Primitive
     alloc_variant baml.llm.ClientType
-    store_field .client_type
-    copy 0
+    init_field .client_type
     alloc_array 0
-    store_field .sub_clients
-    copy 0
+    init_field .sub_clients
     load_const null
-    store_field .retry
-    copy 0
+    init_field .retry
     load_const 0
-    store_field .counter
+    init_field .counter
     load_const "Fn"
     alloc_map 0
     call baml.llm.render_prompt

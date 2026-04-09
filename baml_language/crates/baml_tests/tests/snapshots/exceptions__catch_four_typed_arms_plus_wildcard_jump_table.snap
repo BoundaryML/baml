@@ -69,29 +69,25 @@ function risky(mode: int) -> int {
 
   L4:
     alloc_instance ErrD
-    copy 0
     load_const 4
-    store_field .x
+    init_field .x
     throw
 
   L5:
     alloc_instance ErrC
-    copy 0
     load_const 3
-    store_field .x
+    init_field .x
     throw
 
   L6:
     alloc_instance ErrB
-    copy 0
     load_const 2
-    store_field .x
+    init_field .x
     throw
 
   L7:
     alloc_instance ErrA
-    copy 0
     load_const 1
-    store_field .x
+    init_field .x
     throw
 }

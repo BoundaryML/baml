@@ -11,9 +11,8 @@ function fails(mode: int) -> int {
 
   L0:
     alloc_instance AppError
-    copy 0
     load_const 404
-    store_field .code
+    init_field .code
     throw
 
   L1:

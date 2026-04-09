@@ -1006,7 +1006,13 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             Constant::Float(v) => {
                 let idx = self.add_constant(ConstValue::Float(*v));
                 let inst = self.emit(Instruction::LoadConst(idx));
-                self.set_operand(inst, OperandMeta::Const(v.to_string()));
+                let s = v.to_string();
+                let display = if s.contains('.') || !v.is_finite() {
+                    s
+                } else {
+                    format!("{s}.0")
+                };
+                self.set_operand(inst, OperandMeta::Const(display));
             }
             Constant::String(s) => {
                 let escaped = s
@@ -1997,13 +2003,8 @@ impl PullSink for StackifyCodegen<'_, '_> {
         Ok(())
     }
 
-    fn copy_top(&mut self, offset: usize) -> Result<(), Self::Error> {
-        self.emit(Instruction::Copy(offset));
-        Ok(())
-    }
-
-    fn store_field(&mut self, field_idx: usize, name: &str) -> Result<(), Self::Error> {
-        let idx = self.emit(Instruction::StoreField(field_idx));
+    fn init_field(&mut self, field_idx: usize, name: &str) -> Result<(), Self::Error> {
+        let idx = self.emit(Instruction::InitField(field_idx));
         self.set_operand(idx, OperandMeta::Field(name.to_string()));
         Ok(())
     }

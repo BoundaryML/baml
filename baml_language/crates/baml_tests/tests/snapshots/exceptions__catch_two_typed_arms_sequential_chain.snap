@@ -11,16 +11,14 @@ function fails(mode: int) -> int {
 
   L0:
     alloc_instance ParseError
-    copy 0
     load_const "bad"
-    store_field .msg
+    init_field .msg
     throw
 
   L1:
     alloc_instance NetworkError
-    copy 0
     load_const "http://x"
-    store_field .url
+    init_field .url
     throw
 }
 

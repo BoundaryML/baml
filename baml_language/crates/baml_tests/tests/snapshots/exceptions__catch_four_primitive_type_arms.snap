@@ -1,0 +1,40 @@
+---
+source: crates/baml_tests/tests/exceptions.rs
+expression: output.bytecode
+---
+function fails() -> int {
+    load_const "oops"
+    throw
+}
+
+function main() -> int {
+    call user.fails
+    jump L5
+    load_var e
+    type_tag
+    jump_table [L3, L4, L2, L1], default L0
+
+  L0:
+    load_var e
+    throw_if_panic
+    load_const 0
+    jump L5
+
+  L1: null
+    load_const 4
+    jump L5
+
+  L2: bool
+    load_const 3
+    jump L5
+
+  L3: int
+    load_const 2
+    jump L5
+
+  L4: string
+    load_const 1
+
+  L5:
+    return
+}

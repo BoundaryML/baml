@@ -9,12 +9,10 @@ function user.RootAliasParam(cfg: Config) -> string {
 
 function user.RootConstruct(key: string) -> Config {
     alloc_instance Config
-    copy 0
     load_var key
-    store_field .key
-    copy 0
+    init_field .key
     load_const "prod"
-    store_field .env
+    init_field .env
     return
 }
 
@@ -82,12 +80,10 @@ function user.RootThrowClass(x: int) -> string {
 
   L1:
     alloc_instance Error
-    copy 0
     load_const 500
-    store_field .code
-    copy 0
+    init_field .code
     load_const "root error"
-    store_field .message
+    init_field .message
     throw
 }
 
@@ -155,12 +151,10 @@ function user.auth.AuthAliasParam(t: void) -> string {
 
 function user.auth.AuthConstruct(provider: string) -> Config {
     alloc_instance Config
-    copy 0
     load_var provider
-    store_field .key
-    copy 0
+    init_field .key
     load_const "s3cret"
-    store_field .env
+    init_field .env
     return
 }
 
@@ -211,13 +205,11 @@ function user.auth.AuthIdentity(cfg: Config) -> Config {
 
 function user.auth.AuthMakeToken(v: string) -> void {
     alloc_instance Token
-    copy 0
     load_var v
-    store_field .value
-    copy 0
+    init_field .value
     load_const user.auth.Role.User
     alloc_variant user.auth.Role
-    store_field .role
+    init_field .role
     return
 }
 
@@ -307,12 +299,10 @@ function user.auth.AuthThrowClass(x: int) -> string {
 
   L1:
     alloc_instance Error
-    copy 0
     load_const "auth failed"
-    store_field .code
-    copy 0
+    init_field .code
     load_const true
-    store_field .message
+    init_field .message
     throw
 }
 
@@ -352,12 +342,10 @@ function user.auth.AuthThrowsRootError(x: int) -> string {
 
   L1:
     alloc_instance Error
-    copy 0
     load_const 403
-    store_field .code
-    copy 0
+    init_field .code
     load_const "forbidden"
-    store_field .message
+    init_field .message
     throw
 }
 
@@ -405,12 +393,10 @@ function user.llm.LlmAliasParam(cfg: Config) -> string {
 
 function user.llm.LlmConstruct(model: string) -> Config {
     alloc_instance Config
-    copy 0
     load_var model
-    store_field .key
-    copy 0
+    init_field .key
     load_const 0.7
-    store_field .env
+    init_field .env
     return
 }
 
@@ -496,12 +482,10 @@ function user.llm.LlmMixedConfigs(llm_cfg: Config, root_cfg: Config, auth_cfg: a
 
 function user.llm.LlmResponseConstruct(text: string) -> void {
     alloc_instance Response
-    copy 0
     load_var text
-    store_field .text
-    copy 0
+    init_field .text
     load_const 42
-    store_field .tokens
+    init_field .tokens
     return
 }
 
@@ -521,12 +505,10 @@ function user.llm.LlmThrowClass(x: int) -> string {
 
   L1:
     alloc_instance Error
-    copy 0
     load_const "llm failed"
-    store_field .code
-    copy 0
+    init_field .code
     load_const true
-    store_field .message
+    init_field .message
     throw
 }
 
@@ -586,12 +568,10 @@ function user.llm.LlmThrowsRootError(x: int) -> string {
 
   L1:
     alloc_instance Error
-    copy 0
     load_const 404
-    store_field .code
-    copy 0
+    init_field .code
     load_const "not found"
-    store_field .message
+    init_field .message
     throw
 }
 
@@ -645,12 +625,10 @@ function user.llm.LlmUsesRootStatus() -> Status {
 
 function user.llm.openai.OpenAIConstruct(key: string) -> void {
     alloc_instance Client
-    copy 0
     load_var key
-    store_field .api_key
-    copy 0
+    init_field .api_key
     load_const "org-123"
-    store_field .org_id
+    init_field .org_id
     return
 }
 
@@ -842,12 +820,10 @@ function user.llm.openai.OpenAIThrowClass(x: int) -> string {
 
   L1:
     alloc_instance Error
-    copy 0
     load_const 429
-    store_field .code
-    copy 0
+    init_field .code
     load_const "rate limited"
-    store_field .message
+    init_field .message
     throw
 }
 

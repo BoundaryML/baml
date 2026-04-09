@@ -142,9 +142,11 @@ pub(crate) fn display_instruction(
             Some(name) => format!("({name})"),
             None => "(?)".to_string(),
         },
-        Instruction::LoadField(_) | Instruction::StoreField(_) => operand_meta
-            .map(|m| format!("({})", m.as_str()))
-            .unwrap_or_default(),
+        Instruction::LoadField(_) | Instruction::StoreField(_) | Instruction::InitField(_) => {
+            operand_meta
+                .map(|m| format!("({})", m.as_str()))
+                .unwrap_or_default()
+        }
         Instruction::Jump(offset) | Instruction::PopJumpIfFalse(offset) => {
             format!("(to {})", instruction_ptr.wrapping_add_signed(*offset))
         }
@@ -307,6 +309,7 @@ fn instruction_color(instruction: &Instruction) -> Color {
         Instruction::StoreVar(_)
         | Instruction::StoreGlobal(_)
         | Instruction::StoreField(_)
+        | Instruction::InitField(_)
         | Instruction::StoreArrayElement
         | Instruction::StoreMapElement => Color::Green,
         Instruction::BinOp(_) | Instruction::CmpOp(_) | Instruction::UnaryOp(_) => {
@@ -640,6 +643,10 @@ fn display_instruction_textual(
             let name = meta_str(idx);
             format!("store_field .{name}")
         }
+        Instruction::InitField(idx) => {
+            let name = meta_str(idx);
+            format!("init_field .{name}")
+        }
 
         // --- Stack ---
         Instruction::Pop(n) => format!("pop {n}"),
@@ -944,6 +951,7 @@ fn display_expanded_metadata(ip: usize, instruction: &Instruction, function: &Fu
         | Instruction::StoreGlobal(_)
         | Instruction::LoadField(_)
         | Instruction::StoreField(_)
+        | Instruction::InitField(_)
         | Instruction::Call(_)
         | Instruction::DispatchFuture(_)
         | Instruction::AllocInstance(_)

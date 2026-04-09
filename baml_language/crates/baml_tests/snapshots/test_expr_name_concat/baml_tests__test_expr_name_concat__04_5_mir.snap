@@ -30,22 +30,18 @@ fn .<lambda($init_test_19, 0)>(testset: testing.TestCollector) -> null {
     let _0: null // _0 // return
     let _1: testing.TestCollector // testset // param
     let _2: null
-    let _3: "prefix_suffix"
-    let _4: () -> null
-    let _5: null
-    let _6: "nested_group"
-    let _7: (testing.TestCollector) -> null
+    let _3: () -> null
+    let _4: null
+    let _5: (testing.TestCollector) -> null
 
     bb0: {
-        _3 = const "prefix_" + const "suffix";
-        _4 = make_closure lambda[0]();
-        _2 = call const fn testing.TestCollector.register_test(copy _1, copy _3, copy _4, const null) -> [bb1];
+        _3 = make_closure lambda[0]();
+        _2 = call const fn testing.TestCollector.register_test(copy _1, const "prefix_suffix", copy _3, const null) -> [bb1];
     }
 
     bb1: {
-        _6 = const "nested_" + const "group";
-        _7 = make_closure lambda[1]();
-        _5 = call const fn testing.TestCollector.register_test_set(copy _1, copy _6, copy _7, const null) -> [bb2];
+        _5 = make_closure lambda[1]();
+        _4 = call const fn testing.TestCollector.register_test_set(copy _1, const "nested_group", copy _5, const null) -> [bb2];
     }
 
     bb2: {

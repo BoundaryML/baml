@@ -851,8 +851,7 @@ function user.GuardedOnlyNonExhaustive(x: int) -> int {
     cmp_op <
     pop_jump_if_false L2
     load_var x
-    load_const 1
-    unary_op -
+    load_const -1
     bin_op *
     jump L2
 

@@ -211,8 +211,7 @@ function user.test_lambda_variable_then_pass() -> int[] {
 }
 
 function user.test_lambda_with_if() -> string {
-    load_const 5
-    unary_op -
+    load_const -5
     make_closure .<lambda(test_lambda_with_if, 0)>, 0
     call_indirect
     return
@@ -357,8 +356,7 @@ function user.test_nested_map() -> int[][] {
 }
 
 function user.test_optional_return() -> int? {
-    load_const 1
-    unary_op -
+    load_const -1
     make_closure .<lambda(test_optional_return, 0)>, 0
     call_indirect
     return

@@ -10,7 +10,7 @@
 //!   - Panics vs user throws
 //!   - Nested, rethrow, sequential
 
-use baml_tests::baml_test;
+use baml_tests::{baml_test, baml_test_optimized};
 use bex_engine::BexExternalValue;
 
 /// Assert that execution failed with an uncaught panic of the given class.
@@ -153,12 +153,15 @@ async fn catch_literal_int_match() {
         call user.fails
         jump L2
         load_var e
+        copy 0
         load_const 42
         cmp_op ==
         pop_jump_if_false L0
+        pop 1
         jump L1
 
       L0:
+        pop 1
         load_var e
         throw_if_panic
         load_const 2
@@ -661,9 +664,8 @@ async fn catch_user_class_single_arm() {
     insta::assert_snapshot!(output.bytecode, @r#"
     function fails() -> int {
         alloc_instance NetworkError
-        copy 0
         load_const "http://example.com"
-        store_field .url
+        init_field .url
         throw
     }
 
@@ -719,16 +721,14 @@ async fn catch_two_user_classes_dispatch_first() {
 
       L0:
         alloc_instance ParseError
-        copy 0
         load_const "bad json"
-        store_field .message
+        init_field .message
         throw
 
       L1:
         alloc_instance NetworkError
-        copy 0
         load_const "http://x"
-        store_field .url
+        init_field .url
         throw
     }
 
@@ -822,9 +822,8 @@ async fn catch_user_class_plus_wildcard() {
 
       L1:
         alloc_instance NetworkError
-        copy 0
         load_const "http://x"
-        store_field .url
+        init_field .url
         throw
     }
 
@@ -906,23 +905,20 @@ async fn catch_three_user_classes_plus_wildcard() {
 
       L3:
         alloc_instance RateLimit
-        copy 0
         load_const 30
-        store_field .retryAfter
+        init_field .retryAfter
         throw
 
       L4:
         alloc_instance NotFound
-        copy 0
         load_const "/users"
-        store_field .path
+        init_field .path
         throw
 
       L5:
         alloc_instance AuthError
-        copy 0
         load_const "expired"
-        store_field .reason
+        init_field .reason
         throw
     }
 
@@ -995,9 +991,8 @@ async fn named_class_binding_access_field() {
     insta::assert_snapshot!(output.bytecode, @r#"
     function fails() -> string {
         alloc_instance NetworkError
-        copy 0
         load_const "http://example.com"
-        store_field .url
+        init_field .url
         throw
     }
 
@@ -1057,16 +1052,14 @@ async fn named_class_binding_dispatch_access_fields() {
 
       L0:
         alloc_instance ParseError
-        copy 0
         load_const "bad json"
-        store_field .message
+        init_field .message
         throw
 
       L1:
         alloc_instance NetworkError
-        copy 0
         load_const "http://x"
-        store_field .url
+        init_field .url
         throw
     }
 
@@ -1132,9 +1125,8 @@ async fn bare_class_single_arm() {
     insta::assert_snapshot!(output.bytecode, @r#"
     function fails() -> int {
         alloc_instance NetworkError
-        copy 0
         load_const "http://example.com"
-        store_field .url
+        init_field .url
         throw
     }
 
@@ -1190,16 +1182,14 @@ async fn bare_class_dispatch_first() {
 
       L0:
         alloc_instance ParseError
-        copy 0
         load_const "bad"
-        store_field .message
+        init_field .message
         throw
 
       L1:
         alloc_instance NetworkError
-        copy 0
         load_const "http://x"
-        store_field .url
+        init_field .url
         throw
     }
 
@@ -1293,9 +1283,8 @@ async fn bare_class_plus_wildcard() {
 
       L1:
         alloc_instance NetworkError
-        copy 0
         load_const "http://x"
-        store_field .url
+        init_field .url
         throw
     }
 
@@ -2101,9 +2090,8 @@ async fn user_class_plus_panic_plus_wildcard_class_fires() {
 
       L2:
         alloc_instance AppError
-        copy 0
         load_const 500
-        store_field .code
+        init_field .code
         throw
     }
     "#);
@@ -2197,9 +2185,8 @@ async fn user_class_plus_panic_plus_wildcard_panic_fires() {
 
       L3:
         alloc_instance AppError
-        copy 0
         load_const 500
-        store_field .code
+        init_field .code
         throw
     }
     "#);
@@ -2659,9 +2646,8 @@ async fn four_arms_division_by_zero_fires() {
 
       L3:
         alloc_instance AppError
-        copy 0
         load_const 404
-        store_field .code
+        init_field .code
         throw
 
       L4:
@@ -2887,9 +2873,8 @@ async fn four_arms_no_error() {
 
       L5:
         alloc_instance AppError
-        copy 0
         load_const 404
-        store_field .code
+        init_field .code
         throw
 
       L6:
@@ -3039,63 +3024,20 @@ async fn panic_alias_catches_any_panic() {
 
     function main() -> int {
         call user.divides
-        jump L9
+        jump L2
         load_var e
-        is_type baml.panics.DivisionByZero
-        pop_jump_if_false L0
-        jump L8
+        type_tag
+        jump_table [L1, L1, L1, _, _, L1, _, _, _, L1, L1, _, L1, L1], default L0
 
       L0:
         load_var e
-        is_type baml.panics.IndexOutOfBounds
-        pop_jump_if_false L1
-        jump L8
-
-      L1:
-        load_var e
-        is_type baml.panics.MapKeyNotFound
-        pop_jump_if_false L2
-        jump L8
-
-      L2:
-        load_var e
-        is_type baml.panics.StackOverflow
-        pop_jump_if_false L3
-        jump L8
-
-      L3:
-        load_var e
-        is_type baml.panics.AssertionFailed
-        pop_jump_if_false L4
-        jump L8
-
-      L4:
-        load_var e
-        is_type baml.panics.Unreachable
-        pop_jump_if_false L5
-        jump L8
-
-      L5:
-        load_var e
-        is_type baml.panics.UserPanic
-        pop_jump_if_false L6
-        jump L8
-
-      L6:
-        load_var e
-        is_type baml.panics.AllocFailure
-        pop_jump_if_false L7
-        jump L8
-
-      L7:
-        load_var e
         throw
 
-      L8:
+      L1: Unreachable
         load_const 1
         unary_op -
 
-      L9:
+      L2:
         return
     }
     ");
@@ -3123,64 +3065,21 @@ async fn panic_alias_plus_wildcard_dispatch() {
     function main() -> int {
         load_const 0
         call user.risky
-        jump L9
+        jump L2
         load_var e
-        is_type baml.panics.DivisionByZero
-        pop_jump_if_false L0
-        jump L8
+        type_tag
+        jump_table [L1, L1, L1, _, _, L1, _, _, _, L1, L1, _, L1, L1], default L0
 
       L0:
         load_var e
-        is_type baml.panics.IndexOutOfBounds
-        pop_jump_if_false L1
-        jump L8
-
-      L1:
-        load_var e
-        is_type baml.panics.MapKeyNotFound
-        pop_jump_if_false L2
-        jump L8
-
-      L2:
-        load_var e
-        is_type baml.panics.StackOverflow
-        pop_jump_if_false L3
-        jump L8
-
-      L3:
-        load_var e
-        is_type baml.panics.AssertionFailed
-        pop_jump_if_false L4
-        jump L8
-
-      L4:
-        load_var e
-        is_type baml.panics.Unreachable
-        pop_jump_if_false L5
-        jump L8
-
-      L5:
-        load_var e
-        is_type baml.panics.UserPanic
-        pop_jump_if_false L6
-        jump L8
-
-      L6:
-        load_var e
-        is_type baml.panics.AllocFailure
-        pop_jump_if_false L7
-        jump L8
-
-      L7:
-        load_var e
         throw_if_panic
         load_const 2
-        jump L9
+        jump L2
 
-      L8:
+      L1: Unreachable
         load_const 1
 
-      L9:
+      L2:
         return
     }
 
@@ -3648,4 +3547,178 @@ async fn catch_mixed_literal_and_typed_no_switch() {
 
     insta::assert_snapshot!(output.bytecode);
     assert_eq!(output.result, Ok(BexExternalValue::Int(1)));
+}
+
+// ============================================================================
+// §13 — Optimized catch dispatch (from canary: primitive TypeTag + instanceof tests)
+// ============================================================================
+
+#[tokio::test]
+async fn catch_four_primitive_type_arms() {
+    // 4 primitive type arms: string, int, bool, null + wildcard.
+    let output = baml_test_optimized!(
+        r#"
+        function fails() -> int {
+            throw "oops"
+        }
+
+        function main() -> int {
+            fails() catch (e) {
+                _: string => 1,
+                _: int => 2,
+                _: bool => 3,
+                _: null => 4,
+                _ => 0
+            }
+        }
+    "#
+    );
+
+    insta::assert_snapshot!(output.bytecode);
+    assert_eq!(output.result, Ok(BexExternalValue::Int(1)));
+}
+
+#[tokio::test]
+async fn catch_four_primitive_wildcard_on_float() {
+    // Throw a float — no arm matches, falls through to wildcard.
+    let output = baml_test_optimized!(
+        r#"
+        function fails() -> int {
+            throw 3.14
+        }
+
+        function main() -> int {
+            fails() catch (e) {
+                _: string => 1,
+                _: int => 2,
+                _: bool => 3,
+                _: null => 4,
+                _ => 0
+            }
+        }
+    "#
+    );
+
+    insta::assert_snapshot!(output.bytecode);
+    assert_eq!(output.result, Ok(BexExternalValue::Int(0)));
+}
+
+#[tokio::test]
+async fn catch_three_type_arms_bool_throw() {
+    // 3 type arms + wildcard, throw bool.
+    let output = baml_test_optimized!(
+        r#"
+        function fails() -> int {
+            throw true
+        }
+
+        function main() -> int {
+            fails() catch (e) {
+                _: string => 1,
+                _: int => 2,
+                _: bool => 3,
+                _ => 0
+            }
+        }
+    "#
+    );
+
+    insta::assert_snapshot!(output.bytecode);
+    assert_eq!(output.result, Ok(BexExternalValue::Int(3)));
+}
+
+#[tokio::test]
+async fn catch_four_user_classes_instanceof_chain() {
+    // User class arms — with this branch, 4+ class arms use TypeTag dispatch.
+    let output = baml_test_optimized!(
+        r#"
+        class AuthError { reason: string }
+        class NotFound { path: string }
+        class RateLimit { retryAfter: int }
+        class Timeout { ms: int }
+
+        function api(mode: int) -> int {
+            if (mode == 0) { throw AuthError { reason: "expired" } }
+            if (mode == 1) { throw NotFound { path: "/users" } }
+            if (mode == 2) { throw RateLimit { retryAfter: 30 } }
+            if (mode == 3) { throw Timeout { ms: 5000 } }
+            throw "unknown"
+        }
+
+        function main() -> int {
+            api(2) catch (e) {
+                _: AuthError => 1,
+                _: NotFound => 2,
+                _: RateLimit => 3,
+                _: Timeout => 4,
+                _ => 0
+            }
+        }
+    "#
+    );
+
+    insta::assert_snapshot!(output.bytecode);
+    assert_eq!(output.result, Ok(BexExternalValue::Int(3)));
+}
+
+#[tokio::test]
+async fn catch_four_literal_arms() {
+    // Literal patterns use sequential dispatch even with 4+ arms.
+    let output = baml_test_optimized!(
+        r#"
+        function fails(x: int) -> int {
+            if (x == 0) { throw "boom" }
+            if (x == 1) { throw "bang" }
+            if (x == 2) { throw "crash" }
+            throw "other"
+        }
+
+        function main() -> int {
+            fails(1) catch (e) {
+                "boom" => 10,
+                "bang" => 20,
+                "crash" => 30,
+                "other" => 40,
+                _ => 0
+            }
+        }
+    "#
+    );
+
+    insta::assert_snapshot!(output.bytecode);
+    assert_eq!(output.result, Ok(BexExternalValue::Int(20)));
+}
+
+#[tokio::test]
+async fn catch_mixed_named_and_anonymous_bindings() {
+    // Mixed named (err: ClassName) and anonymous (_: ClassName) bindings
+    // in the same catch block with field access.
+    let output = baml_test_optimized!(
+        r#"
+        class NetworkError { url: string }
+        class AuthError { reason: string }
+        class NotFound { path: string }
+        class RateLimit { retryAfter: int }
+
+        function fails() -> string {
+            throw NetworkError { url: "http://example.com" }
+        }
+
+        function main() -> string {
+            fails() catch (e) {
+                err: NetworkError => err.url,
+                err: AuthError => err.reason,
+                err: NotFound => err.path,
+                _: RateLimit => "rate limited",
+                _ => "unknown"
+            }
+        }
+    "#
+    );
+
+    insta::assert_snapshot!(output.bytecode);
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("http://example.com".into()))
+    );
 }

@@ -24,10 +24,6 @@ fn user.BoolLiteralAfterTypedBool(b: bool) -> string {
     }
 
     bb3: {
-        goto -> bb4;
-    }
-
-    bb4: {
         return;
     }
 }
@@ -43,10 +39,6 @@ fn user.BoolUnionPattern(b: bool) -> string {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -73,10 +65,6 @@ fn user.BoolWithCatchAll(b: bool) -> string {
     }
 
     bb3: {
-        goto -> bb4;
-    }
-
-    bb4: {
         return;
     }
 }
@@ -87,23 +75,15 @@ fn user.DeeplyNestedLiterals(x: 200 | 201 | 204) -> string {
     let _1: 200 | 201 | 204 // x // param
 
     bb0: {
-        switch copy _1 [200: bb2, 201: bb2, 204: bb2, otherwise: bb1];
+        switch copy _1 [200: bb1, 201: bb1, 204: bb1, otherwise: bb2];
     }
 
     bb1: {
-        goto -> bb3;
+        _0 = const "all success codes";
+        goto -> bb2;
     }
 
     bb2: {
-        _0 = const "all success codes";
-        goto -> bb3;
-    }
-
-    bb3: {
-        goto -> bb4;
-    }
-
-    bb4: {
         return;
     }
 }
@@ -141,10 +121,6 @@ fn user.DuplicateBoolLiteral(b: bool) -> string {
     }
 
     bb5: {
-        goto -> bb6;
-    }
-
-    bb6: {
         return;
     }
 }
@@ -180,10 +156,6 @@ fn user.DuplicateEnumVariant(s: Status) -> string {
     }
 
     bb5: {
-        goto -> bb6;
-    }
-
-    bb6: {
         return;
     }
 }
@@ -208,10 +180,6 @@ fn user.DuplicateIntLiteral(x: int) -> string {
     }
 
     bb3: {
-        goto -> bb4;
-    }
-
-    bb4: {
         return;
     }
 }
@@ -227,53 +195,45 @@ fn user.DuplicateStringLiteral(role: "user" | "assistant" | "system") -> string 
 
     bb0: {
         _2 = copy _1 == const "user";
-        branch copy _2 -> [bb8, bb1];
+        branch copy _2 -> [bb7, bb1];
     }
 
     bb1: {
         _3 = copy _1 == const "user";
-        branch copy _3 -> [bb7, bb2];
+        branch copy _3 -> [bb6, bb2];
     }
 
     bb2: {
         _4 = copy _1 == const "assistant";
-        branch copy _4 -> [bb6, bb3];
+        branch copy _4 -> [bb5, bb3];
     }
 
     bb3: {
         _5 = copy _1 == const "system";
-        branch copy _5 -> [bb5, bb4];
+        branch copy _5 -> [bb4, bb8];
     }
 
     bb4: {
-        goto -> bb9;
+        _0 = const "system";
+        goto -> bb8;
     }
 
     bb5: {
-        _0 = const "system";
-        goto -> bb9;
+        _0 = const "assistant";
+        goto -> bb8;
     }
 
     bb6: {
-        _0 = const "assistant";
-        goto -> bb9;
+        _0 = const "second user";
+        goto -> bb8;
     }
 
     bb7: {
-        _0 = const "second user";
-        goto -> bb9;
+        _0 = const "first user";
+        goto -> bb8;
     }
 
     bb8: {
-        _0 = const "first user";
-        goto -> bb9;
-    }
-
-    bb9: {
-        goto -> bb10;
-    }
-
-    bb10: {
         return;
     }
 }
@@ -300,10 +260,6 @@ fn user.EnumVariantAfterTypedEnum(s: Status) -> string {
     }
 
     bb3: {
-        goto -> bb4;
-    }
-
-    bb4: {
         return;
     }
 }
@@ -334,10 +290,6 @@ fn user.EnumVariantUnion(s: Status) -> string {
     }
 
     bb4: {
-        goto -> bb5;
-    }
-
-    bb5: {
         return;
     }
 }
@@ -364,10 +316,6 @@ fn user.EnumVariantUnionWithCatchAll(s: Status) -> string {
     }
 
     bb3: {
-        goto -> bb4;
-    }
-
-    bb4: {
         return;
     }
 }
@@ -378,28 +326,20 @@ fn user.ExhaustiveAliasOfLiterals(code: 200 | 201) -> string {
     let _1: 200 | 201 // code // param
 
     bb0: {
-        switch copy _1 [200: bb3, 201: bb2, otherwise: bb1];
+        switch copy _1 [200: bb2, 201: bb1, otherwise: bb3];
     }
 
     bb1: {
-        goto -> bb4;
+        _0 = const "created";
+        goto -> bb3;
     }
 
     bb2: {
-        _0 = const "created";
-        goto -> bb4;
+        _0 = const "ok";
+        goto -> bb3;
     }
 
     bb3: {
-        _0 = const "ok";
-        goto -> bb4;
-    }
-
-    bb4: {
-        goto -> bb5;
-    }
-
-    bb5: {
         return;
     }
 }
@@ -426,10 +366,6 @@ fn user.ExhaustiveBool(b: bool) -> string {
     }
 
     bb3: {
-        goto -> bb4;
-    }
-
-    bb4: {
         return;
     }
 }
@@ -445,35 +381,27 @@ fn user.ExhaustiveClassPlusLiteral(x: Success | 200) -> string {
 
     bb0: {
         _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: ["user"], display_name: "Success" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
-        branch copy _2 -> [bb4, bb1];
+        branch copy _2 -> [bb3, bb1];
     }
 
     bb1: {
         _5 = copy _1 == const 200_i64;
-        branch copy _5 -> [bb3, bb2];
+        branch copy _5 -> [bb2, bb4];
     }
 
     bb2: {
-        goto -> bb5;
+        _0 = const "http ok";
+        goto -> bb4;
     }
 
     bb3: {
-        _0 = const "http ok";
-        goto -> bb5;
-    }
-
-    bb4: {
         _3 = copy _1;
         _4 = copy _3;
         _0 = copy _4.0;
-        goto -> bb5;
+        goto -> bb4;
     }
 
-    bb5: {
-        goto -> bb6;
-    }
-
-    bb6: {
+    bb4: {
         return;
     }
 }
@@ -487,33 +415,25 @@ fn user.ExhaustiveCustomBool(b: true | false) -> string {
 
     bb0: {
         _2 = copy _1 == const true;
-        branch copy _2 -> [bb4, bb1];
+        branch copy _2 -> [bb3, bb1];
     }
 
     bb1: {
         _3 = copy _1 == const false;
-        branch copy _3 -> [bb3, bb2];
+        branch copy _3 -> [bb2, bb4];
     }
 
     bb2: {
-        goto -> bb5;
+        _0 = const "no";
+        goto -> bb4;
     }
 
     bb3: {
-        _0 = const "no";
-        goto -> bb5;
+        _0 = const "yes";
+        goto -> bb4;
     }
 
     bb4: {
-        _0 = const "yes";
-        goto -> bb5;
-    }
-
-    bb5: {
-        goto -> bb6;
-    }
-
-    bb6: {
         return;
     }
 }
@@ -532,47 +452,39 @@ fn user.ExhaustiveDoubleMaybe(dm: (Success | Failure)??) -> string {
 
     bb0: {
         _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: ["user"], display_name: "Success" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
-        branch copy _2 -> [bb6, bb1];
+        branch copy _2 -> [bb5, bb1];
     }
 
     bb1: {
         _5 = is_type(copy _1, Class(TypeName { name: "Failure", module_path: ["user"], display_name: "Failure" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
-        branch copy _5 -> [bb5, bb2];
+        branch copy _5 -> [bb4, bb2];
     }
 
     bb2: {
         _8 = copy _1 == const null;
-        branch copy _8 -> [bb4, bb3];
+        branch copy _8 -> [bb3, bb6];
     }
 
     bb3: {
-        goto -> bb7;
+        _0 = const "nothing";
+        goto -> bb6;
     }
 
     bb4: {
-        _0 = const "nothing";
-        goto -> bb7;
-    }
-
-    bb5: {
         _6 = copy _1;
         _7 = copy _6;
         _0 = copy _7.0;
-        goto -> bb7;
+        goto -> bb6;
     }
 
-    bb6: {
+    bb5: {
         _3 = copy _1;
         _4 = copy _3;
         _0 = copy _4.0;
-        goto -> bb7;
+        goto -> bb6;
     }
 
-    bb7: {
-        goto -> bb8;
-    }
-
-    bb8: {
+    bb6: {
         return;
     }
 }
@@ -608,10 +520,6 @@ fn user.ExhaustiveEnumAllVariants(s: Status) -> string {
     }
 
     bb5: {
-        goto -> bb6;
-    }
-
-    bb6: {
         return;
     }
 }
@@ -638,10 +546,6 @@ fn user.ExhaustiveEnumWithCatchAll(s: Status) -> string {
     }
 
     bb3: {
-        goto -> bb4;
-    }
-
-    bb4: {
         return;
     }
 }
@@ -657,10 +561,6 @@ fn user.ExhaustiveEnumWithTypedPattern(s: Status) -> string {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -673,23 +573,15 @@ fn user.ExhaustiveFalseType(f: false) -> string {
 
     bb0: {
         _2 = copy _1 == const false;
-        branch copy _2 -> [bb2, bb1];
+        branch copy _2 -> [bb1, bb2];
     }
 
     bb1: {
-        goto -> bb3;
+        _0 = const "always false";
+        goto -> bb2;
     }
 
     bb2: {
-        _0 = const "always false";
-        goto -> bb3;
-    }
-
-    bb3: {
-        goto -> bb4;
-    }
-
-    bb4: {
         return;
     }
 }
@@ -700,33 +592,25 @@ fn user.ExhaustiveIntLiterals(code: 200 | 201 | 204) -> string {
     let _1: 200 | 201 | 204 // code // param
 
     bb0: {
-        switch copy _1 [200: bb4, 201: bb3, 204: bb2, otherwise: bb1];
+        switch copy _1 [200: bb3, 201: bb2, 204: bb1, otherwise: bb4];
     }
 
     bb1: {
-        goto -> bb5;
+        _0 = const "No Content";
+        goto -> bb4;
     }
 
     bb2: {
-        _0 = const "No Content";
-        goto -> bb5;
+        _0 = const "Created";
+        goto -> bb4;
     }
 
     bb3: {
-        _0 = const "Created";
-        goto -> bb5;
+        _0 = const "OK";
+        goto -> bb4;
     }
 
     bb4: {
-        _0 = const "OK";
-        goto -> bb5;
-    }
-
-    bb5: {
-        goto -> bb6;
-    }
-
-    bb6: {
         return;
     }
 }
@@ -740,33 +624,25 @@ fn user.ExhaustiveLiteralWithBaseType(x: int) -> string {
 
     bb0: {
         _2 = copy _1 == const 200_i64;
-        branch copy _2 -> [bb4, bb1];
+        branch copy _2 -> [bb3, bb1];
     }
 
     bb1: {
         _3 = is_type(copy _1, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
-        branch copy _3 -> [bb3, bb2];
+        branch copy _3 -> [bb2, bb4];
     }
 
     bb2: {
-        goto -> bb5;
+        _0 = const "other";
+        goto -> bb4;
     }
 
     bb3: {
-        _0 = const "other";
-        goto -> bb5;
+        _0 = const "ok";
+        goto -> bb4;
     }
 
     bb4: {
-        _0 = const "ok";
-        goto -> bb5;
-    }
-
-    bb5: {
-        goto -> bb6;
-    }
-
-    bb6: {
         return;
     }
 }
@@ -781,43 +657,35 @@ fn user.ExhaustiveMixedLiterals(x: 200 | "success" | true) -> string {
 
     bb0: {
         _2 = copy _1 == const 200_i64;
-        branch copy _2 -> [bb6, bb1];
+        branch copy _2 -> [bb5, bb1];
     }
 
     bb1: {
         _3 = copy _1 == const "success";
-        branch copy _3 -> [bb5, bb2];
+        branch copy _3 -> [bb4, bb2];
     }
 
     bb2: {
         _4 = copy _1 == const true;
-        branch copy _4 -> [bb4, bb3];
+        branch copy _4 -> [bb3, bb6];
     }
 
     bb3: {
-        goto -> bb7;
+        _0 = const "boolean true";
+        goto -> bb6;
     }
 
     bb4: {
-        _0 = const "boolean true";
-        goto -> bb7;
+        _0 = const "string success";
+        goto -> bb6;
     }
 
     bb5: {
-        _0 = const "string success";
-        goto -> bb7;
+        _0 = const "http ok";
+        goto -> bb6;
     }
 
     bb6: {
-        _0 = const "http ok";
-        goto -> bb7;
-    }
-
-    bb7: {
-        goto -> bb8;
-    }
-
-    bb8: {
         return;
     }
 }
@@ -833,53 +701,45 @@ fn user.ExhaustiveNullableEnum(s: Status?) -> string {
 
     bb0: {
         _2 = copy _1 == const user.Status.Active;
-        branch copy _2 -> [bb8, bb1];
+        branch copy _2 -> [bb7, bb1];
     }
 
     bb1: {
         _3 = copy _1 == const user.Status.Inactive;
-        branch copy _3 -> [bb7, bb2];
+        branch copy _3 -> [bb6, bb2];
     }
 
     bb2: {
         _4 = copy _1 == const user.Status.Pending;
-        branch copy _4 -> [bb6, bb3];
+        branch copy _4 -> [bb5, bb3];
     }
 
     bb3: {
         _5 = copy _1 == const null;
-        branch copy _5 -> [bb5, bb4];
+        branch copy _5 -> [bb4, bb8];
     }
 
     bb4: {
-        goto -> bb9;
+        _0 = const "no status";
+        goto -> bb8;
     }
 
     bb5: {
-        _0 = const "no status";
-        goto -> bb9;
+        _0 = const "pending";
+        goto -> bb8;
     }
 
     bb6: {
-        _0 = const "pending";
-        goto -> bb9;
+        _0 = const "inactive";
+        goto -> bb8;
     }
 
     bb7: {
-        _0 = const "inactive";
-        goto -> bb9;
+        _0 = const "active";
+        goto -> bb8;
     }
 
     bb8: {
-        _0 = const "active";
-        goto -> bb9;
-    }
-
-    bb9: {
-        goto -> bb10;
-    }
-
-    bb10: {
         return;
     }
 }
@@ -906,10 +766,6 @@ fn user.ExhaustiveNullableEnumWithTypedPattern(s: Status?) -> string {
     }
 
     bb3: {
-        goto -> bb4;
-    }
-
-    bb4: {
         return;
     }
 }
@@ -923,33 +779,25 @@ fn user.ExhaustiveOptional(x: int?) -> string {
 
     bb0: {
         _2 = is_type(copy _1, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
-        branch copy _2 -> [bb4, bb1];
+        branch copy _2 -> [bb3, bb1];
     }
 
     bb1: {
         _3 = copy _1 == const null;
-        branch copy _3 -> [bb3, bb2];
+        branch copy _3 -> [bb2, bb4];
     }
 
     bb2: {
-        goto -> bb5;
+        _0 = const "no value";
+        goto -> bb4;
     }
 
     bb3: {
-        _0 = const "no value";
-        goto -> bb5;
+        _0 = const "has value";
+        goto -> bb4;
     }
 
     bb4: {
-        _0 = const "has value";
-        goto -> bb5;
-    }
-
-    bb5: {
-        goto -> bb6;
-    }
-
-    bb6: {
         return;
     }
 }
@@ -963,33 +811,25 @@ fn user.ExhaustiveOptionalSingleton(code: 200?) -> string {
 
     bb0: {
         _2 = copy _1 == const 200_i64;
-        branch copy _2 -> [bb4, bb1];
+        branch copy _2 -> [bb3, bb1];
     }
 
     bb1: {
         _3 = copy _1 == const null;
-        branch copy _3 -> [bb3, bb2];
+        branch copy _3 -> [bb2, bb4];
     }
 
     bb2: {
-        goto -> bb5;
+        _0 = const "no code";
+        goto -> bb4;
     }
 
     bb3: {
-        _0 = const "no code";
-        goto -> bb5;
+        _0 = const "OK";
+        goto -> bb4;
     }
 
     bb4: {
-        _0 = const "OK";
-        goto -> bb5;
-    }
-
-    bb5: {
-        goto -> bb6;
-    }
-
-    bb6: {
         return;
     }
 }
@@ -1000,23 +840,15 @@ fn user.ExhaustiveSingletonInt(code: 200) -> string {
     let _1: 200 // code // param
 
     bb0: {
-        switch copy _1 [200: bb2, otherwise: bb1];
+        switch copy _1 [200: bb1, otherwise: bb2];
     }
 
     bb1: {
-        goto -> bb3;
+        _0 = const "OK";
+        goto -> bb2;
     }
 
     bb2: {
-        _0 = const "OK";
-        goto -> bb3;
-    }
-
-    bb3: {
-        goto -> bb4;
-    }
-
-    bb4: {
         return;
     }
 }
@@ -1031,43 +863,35 @@ fn user.ExhaustiveStringLiterals(role: "user" | "assistant" | "system") -> strin
 
     bb0: {
         _2 = copy _1 == const "user";
-        branch copy _2 -> [bb6, bb1];
+        branch copy _2 -> [bb5, bb1];
     }
 
     bb1: {
         _3 = copy _1 == const "assistant";
-        branch copy _3 -> [bb5, bb2];
+        branch copy _3 -> [bb4, bb2];
     }
 
     bb2: {
         _4 = copy _1 == const "system";
-        branch copy _4 -> [bb4, bb3];
+        branch copy _4 -> [bb3, bb6];
     }
 
     bb3: {
-        goto -> bb7;
+        _0 = const "System";
+        goto -> bb6;
     }
 
     bb4: {
-        _0 = const "System";
-        goto -> bb7;
+        _0 = const "Assistant";
+        goto -> bb6;
     }
 
     bb5: {
-        _0 = const "Assistant";
-        goto -> bb7;
+        _0 = const "User";
+        goto -> bb6;
     }
 
     bb6: {
-        _0 = const "User";
-        goto -> bb7;
-    }
-
-    bb7: {
-        goto -> bb8;
-    }
-
-    bb8: {
         return;
     }
 }
@@ -1080,23 +904,15 @@ fn user.ExhaustiveTrueType(t: true) -> string {
 
     bb0: {
         _2 = copy _1 == const true;
-        branch copy _2 -> [bb2, bb1];
+        branch copy _2 -> [bb1, bb2];
     }
 
     bb1: {
-        goto -> bb3;
+        _0 = const "always true";
+        goto -> bb2;
     }
 
     bb2: {
-        _0 = const "always true";
-        goto -> bb3;
-    }
-
-    bb3: {
-        goto -> bb4;
-    }
-
-    bb4: {
         return;
     }
 }
@@ -1114,37 +930,29 @@ fn user.ExhaustiveTypeAlias(r: Success | Failure) -> string {
 
     bb0: {
         _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: ["user"], display_name: "Success" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
-        branch copy _2 -> [bb4, bb1];
+        branch copy _2 -> [bb3, bb1];
     }
 
     bb1: {
         _5 = is_type(copy _1, Class(TypeName { name: "Failure", module_path: ["user"], display_name: "Failure" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
-        branch copy _5 -> [bb3, bb2];
+        branch copy _5 -> [bb2, bb4];
     }
 
     bb2: {
-        goto -> bb5;
-    }
-
-    bb3: {
         _6 = copy _1;
         _7 = copy _6;
         _0 = copy _7.0;
-        goto -> bb5;
+        goto -> bb4;
     }
 
-    bb4: {
+    bb3: {
         _3 = copy _1;
         _4 = copy _3;
         _0 = copy _4.0;
-        goto -> bb5;
+        goto -> bb4;
     }
 
-    bb5: {
-        goto -> bb6;
-    }
-
-    bb6: {
+    bb4: {
         return;
     }
 }
@@ -1159,30 +967,22 @@ fn user.ExhaustiveTypeAliasWithCatchAll(r: Success | Failure) -> string {
 
     bb0: {
         _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: ["user"], display_name: "Success" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
-        branch copy _2 -> [bb3, bb1];
+        branch copy _2 -> [bb2, bb1];
     }
 
     bb1: {
-        goto -> bb2;
+        _0 = const "fallback";
+        goto -> bb3;
     }
 
     bb2: {
-        _0 = const "fallback";
-        goto -> bb4;
-    }
-
-    bb3: {
         _3 = copy _1;
         _4 = copy _3;
         _0 = copy _4.0;
-        goto -> bb4;
+        goto -> bb3;
     }
 
-    bb4: {
-        goto -> bb5;
-    }
-
-    bb5: {
+    bb3: {
         return;
     }
 }
@@ -1211,10 +1011,6 @@ fn user.ExhaustiveWithNamedCatchAll(x: int) -> int {
     }
 
     bb3: {
-        goto -> bb4;
-    }
-
-    bb4: {
         return;
     }
 }
@@ -1244,10 +1040,6 @@ fn user.ExhaustiveWithUnderscore(x: int) -> int {
     }
 
     bb4: {
-        goto -> bb5;
-    }
-
-    bb5: {
         return;
     }
 }
@@ -1280,7 +1072,6 @@ fn user.GuardedOnlyNonExhaustive(x: int) -> int {
     let _9: bool
     let _10: int
     let _11: int
-    let _12: -1
 
     bb0: {
         _2 = is_type(copy _1, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
@@ -1291,43 +1082,34 @@ fn user.GuardedOnlyNonExhaustive(x: int) -> int {
         _3 = copy _1;
         _5 = copy _3;
         _4 = copy _5 > const 0_i64;
-        branch copy _4 -> [bb6, bb2];
+        branch copy _4 -> [bb5, bb2];
     }
 
     bb2: {
         _7 = is_type(copy _1, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
-        branch copy _7 -> [bb3, bb4];
+        branch copy _7 -> [bb3, bb6];
     }
 
     bb3: {
         _8 = copy _1;
         _10 = copy _8;
         _9 = copy _10 < const 0_i64;
-        branch copy _9 -> [bb5, bb4];
+        branch copy _9 -> [bb4, bb6];
     }
 
     bb4: {
-        goto -> bb7;
+        _11 = copy _8;
+        _0 = copy _11 * const -1_i64;
+        goto -> bb6;
     }
 
     bb5: {
-        _11 = copy _8;
-        _12 = -const 1_i64;
-        _0 = copy _11 * copy _12;
-        goto -> bb7;
+        _6 = copy _3;
+        _0 = copy _6 * const 2_i64;
+        goto -> bb6;
     }
 
     bb6: {
-        _6 = copy _3;
-        _0 = copy _6 * const 2_i64;
-        goto -> bb7;
-    }
-
-    bb7: {
-        goto -> bb8;
-    }
-
-    bb8: {
         return;
     }
 }
@@ -1351,29 +1133,21 @@ fn user.GuardedWithFallback(x: int) -> int {
         _3 = copy _1;
         _5 = copy _3;
         _4 = copy _5 > const 0_i64;
-        branch copy _4 -> [bb4, bb2];
+        branch copy _4 -> [bb3, bb2];
     }
 
     bb2: {
-        goto -> bb3;
+        _0 = const 0_i64;
+        goto -> bb4;
     }
 
     bb3: {
-        _0 = const 0_i64;
-        goto -> bb5;
+        _6 = copy _3;
+        _0 = copy _6 * const 2_i64;
+        goto -> bb4;
     }
 
     bb4: {
-        _6 = copy _3;
-        _0 = copy _6 * const 2_i64;
-        goto -> bb5;
-    }
-
-    bb5: {
-        goto -> bb6;
-    }
-
-    bb6: {
         return;
     }
 }
@@ -1386,23 +1160,15 @@ fn user.HighLineNumberNonExhaustive(s: Status) -> string {
 
     bb0: {
         _2 = discriminant(_1);
-        switch copy _2 [Status.Active: bb2, otherwise: bb1];
+        switch copy _2 [Status.Active: bb1, otherwise: bb2];
     }
 
     bb1: {
-        goto -> bb3;
+        _0 = const "active only";
+        goto -> bb2;
     }
 
     bb2: {
-        _0 = const "active only";
-        goto -> bb3;
-    }
-
-    bb3: {
-        goto -> bb4;
-    }
-
-    bb4: {
         return;
     }
 }
@@ -1413,28 +1179,20 @@ fn user.IntLiteralUnionPattern(code: 200 | 201 | 204) -> string {
     let _1: 200 | 201 | 204 // code // param
 
     bb0: {
-        switch copy _1 [200: bb3, 201: bb3, 204: bb2, otherwise: bb1];
+        switch copy _1 [200: bb2, 201: bb2, 204: bb1, otherwise: bb3];
     }
 
     bb1: {
-        goto -> bb4;
+        _0 = const "no content";
+        goto -> bb3;
     }
 
     bb2: {
-        _0 = const "no content";
-        goto -> bb4;
+        _0 = const "success with body";
+        goto -> bb3;
     }
 
     bb3: {
-        _0 = const "success with body";
-        goto -> bb4;
-    }
-
-    bb4: {
-        goto -> bb5;
-    }
-
-    bb5: {
         return;
     }
 }
@@ -1475,10 +1233,6 @@ fn user.JumpTableClassTypeTag(pet: Cat | Dog | Bird | Fish) -> string {
     }
 
     bb6: {
-        goto -> bb7;
-    }
-
-    bb7: {
         return;
     }
 }
@@ -1519,10 +1273,6 @@ fn user.JumpTableEnumDiscriminant(state: DispatchState) -> int {
     }
 
     bb6: {
-        goto -> bb7;
-    }
-
-    bb7: {
         return;
     }
 }
@@ -1563,10 +1313,6 @@ fn user.JumpTableTypeTag(value: int | string | bool | float) -> string {
     }
 
     bb6: {
-        goto -> bb7;
-    }
-
-    bb7: {
         return;
     }
 }
@@ -1580,33 +1326,25 @@ fn user.LiteralAfterTypedPattern(x: int) -> string {
 
     bb0: {
         _2 = is_type(copy _1, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
-        branch copy _2 -> [bb4, bb1];
+        branch copy _2 -> [bb3, bb1];
     }
 
     bb1: {
         _3 = copy _1 == const 42_i64;
-        branch copy _3 -> [bb3, bb2];
+        branch copy _3 -> [bb2, bb4];
     }
 
     bb2: {
-        goto -> bb5;
+        _0 = const "unreachable";
+        goto -> bb4;
     }
 
     bb3: {
-        _0 = const "unreachable";
-        goto -> bb5;
+        _0 = const "int";
+        goto -> bb4;
     }
 
     bb4: {
-        _0 = const "int";
-        goto -> bb5;
-    }
-
-    bb5: {
-        goto -> bb6;
-    }
-
-    bb6: {
         return;
     }
 }
@@ -1636,10 +1374,6 @@ fn user.LiteralUnionWithCatchAll(code: int) -> string {
     }
 
     bb4: {
-        goto -> bb5;
-    }
-
-    bb5: {
         return;
     }
 }
@@ -1672,10 +1406,6 @@ fn user.MatchArithmeticScrutinee(a: int, b: int) -> string {
     }
 
     bb4: {
-        goto -> bb5;
-    }
-
-    bb5: {
         return;
     }
 }
@@ -1709,10 +1439,6 @@ fn user.MatchComplexScrutinee(x: int) -> string {
     }
 
     bb4: {
-        goto -> bb5;
-    }
-
-    bb5: {
         return;
     }
 }
@@ -1752,10 +1478,6 @@ fn user.MatchFunctionCallScrutinee() -> string {
     }
 
     bb6: {
-        goto -> bb7;
-    }
-
-    bb7: {
         return;
     }
 }
@@ -1773,12 +1495,12 @@ fn user.MixedPatterns(x: int) -> string {
 
     bb0: {
         _2 = copy _1 == const 0_i64;
-        branch copy _2 -> [bb8, bb1];
+        branch copy _2 -> [bb7, bb1];
     }
 
     bb1: {
         _3 = copy _1 == const 1_i64;
-        branch copy _3 -> [bb7, bb2];
+        branch copy _3 -> [bb6, bb2];
     }
 
     bb2: {
@@ -1790,38 +1512,30 @@ fn user.MixedPatterns(x: int) -> string {
         _5 = copy _1;
         _7 = copy _5;
         _6 = copy _7 > const 0_i64;
-        branch copy _6 -> [bb6, bb4];
+        branch copy _6 -> [bb5, bb4];
     }
 
     bb4: {
-        goto -> bb5;
+        _0 = const "negative";
+        goto -> bb8;
     }
 
     bb5: {
-        _0 = const "negative";
-        goto -> bb9;
+        _0 = const "positive";
+        goto -> bb8;
     }
 
     bb6: {
-        _0 = const "positive";
-        goto -> bb9;
+        _0 = const "one";
+        goto -> bb8;
     }
 
     bb7: {
-        _0 = const "one";
-        goto -> bb9;
+        _0 = const "zero";
+        goto -> bb8;
     }
 
     bb8: {
-        _0 = const "zero";
-        goto -> bb9;
-    }
-
-    bb9: {
-        goto -> bb10;
-    }
-
-    bb10: {
         return;
     }
 }
@@ -1857,10 +1571,6 @@ fn user.MultipleUnreachableSpans(s: Status) -> string {
     }
 
     bb5: {
-        goto -> bb6;
-    }
-
-    bb6: {
         return;
     }
 }
@@ -1884,12 +1594,12 @@ fn user.NestedEnumMatch(s1: Status, s2: Status) -> string {
 
     bb2: {
         _0 = const "first pending";
-        goto -> bb10;
+        goto -> bb9;
     }
 
     bb3: {
         _0 = const "first inactive";
-        goto -> bb10;
+        goto -> bb9;
     }
 
     bb4: {
@@ -1917,14 +1627,6 @@ fn user.NestedEnumMatch(s1: Status, s2: Status) -> string {
     }
 
     bb9: {
-        goto -> bb10;
-    }
-
-    bb10: {
-        goto -> bb11;
-    }
-
-    bb11: {
         return;
     }
 }
@@ -1950,10 +1652,6 @@ fn user.NestedEnumVariantUnions(s: Status) -> string {
     }
 
     bb3: {
-        goto -> bb4;
-    }
-
-    bb4: {
         return;
     }
 }
@@ -1983,10 +1681,6 @@ fn user.NestedLiteralUnions(code: int) -> string {
     }
 
     bb4: {
-        goto -> bb5;
-    }
-
-    bb5: {
         return;
     }
 }
@@ -2005,7 +1699,7 @@ fn user.NestedMatchSpans(x: int, y: bool) -> string {
 
     bb1: {
         _0 = const "other";
-        goto -> bb8;
+        goto -> bb7;
     }
 
     bb2: {
@@ -2034,14 +1728,6 @@ fn user.NestedMatchSpans(x: int, y: bool) -> string {
     }
 
     bb7: {
-        goto -> bb8;
-    }
-
-    bb8: {
-        goto -> bb9;
-    }
-
-    bb9: {
         return;
     }
 }
@@ -2060,47 +1746,39 @@ fn user.NestedTypeAlias(mr: (Success | Failure)?) -> string {
 
     bb0: {
         _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: ["user"], display_name: "Success" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
-        branch copy _2 -> [bb6, bb1];
+        branch copy _2 -> [bb5, bb1];
     }
 
     bb1: {
         _5 = is_type(copy _1, Class(TypeName { name: "Failure", module_path: ["user"], display_name: "Failure" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
-        branch copy _5 -> [bb5, bb2];
+        branch copy _5 -> [bb4, bb2];
     }
 
     bb2: {
         _8 = copy _1 == const null;
-        branch copy _8 -> [bb4, bb3];
+        branch copy _8 -> [bb3, bb6];
     }
 
     bb3: {
-        goto -> bb7;
+        _0 = const "nothing";
+        goto -> bb6;
     }
 
     bb4: {
-        _0 = const "nothing";
-        goto -> bb7;
-    }
-
-    bb5: {
         _6 = copy _1;
         _7 = copy _6;
         _0 = copy _7.0;
-        goto -> bb7;
+        goto -> bb6;
     }
 
-    bb6: {
+    bb5: {
         _3 = copy _1;
         _4 = copy _3;
         _0 = copy _4.0;
-        goto -> bb7;
+        goto -> bb6;
     }
 
-    bb7: {
-        goto -> bb8;
-    }
-
-    bb8: {
+    bb6: {
         return;
     }
 }
@@ -2115,38 +1793,30 @@ fn user.NestedTypeBindings(r: Success | Failure) -> int {
 
     bb0: {
         _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: ["user"], display_name: "Success" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
-        branch copy _2 -> [bb5, bb1];
+        branch copy _2 -> [bb4, bb1];
     }
 
     bb1: {
         _3 = is_type(copy _1, Class(TypeName { name: "Failure", module_path: ["user"], display_name: "Failure" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
-        branch copy _3 -> [bb5, bb2];
+        branch copy _3 -> [bb4, bb2];
     }
 
     bb2: {
         _4 = is_type(copy _1, Class(TypeName { name: "Failure", module_path: ["user"], display_name: "Failure" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
-        branch copy _4 -> [bb4, bb3];
+        branch copy _4 -> [bb3, bb5];
     }
 
     bb3: {
-        goto -> bb6;
+        _0 = const 1_i64;
+        goto -> bb5;
     }
 
     bb4: {
-        _0 = const 1_i64;
-        goto -> bb6;
+        _0 = const 0_i64;
+        goto -> bb5;
     }
 
     bb5: {
-        _0 = const 0_i64;
-        goto -> bb6;
-    }
-
-    bb6: {
-        goto -> bb7;
-    }
-
-    bb7: {
         return;
     }
 }
@@ -2157,23 +1827,15 @@ fn user.NonExhaustiveAliasOfLiterals(code: 200 | 201) -> string {
     let _1: 200 | 201 // code // param
 
     bb0: {
-        switch copy _1 [200: bb2, otherwise: bb1];
+        switch copy _1 [200: bb1, otherwise: bb2];
     }
 
     bb1: {
-        goto -> bb3;
+        _0 = const "ok";
+        goto -> bb2;
     }
 
     bb2: {
-        _0 = const "ok";
-        goto -> bb3;
-    }
-
-    bb3: {
-        goto -> bb4;
-    }
-
-    bb4: {
         return;
     }
 }
@@ -2186,23 +1848,15 @@ fn user.NonExhaustiveBoolMissingFalse(b: bool) -> string {
 
     bb0: {
         _2 = copy _1 == const true;
-        branch copy _2 -> [bb2, bb1];
+        branch copy _2 -> [bb1, bb2];
     }
 
     bb1: {
-        goto -> bb3;
+        _0 = const "yes";
+        goto -> bb2;
     }
 
     bb2: {
-        _0 = const "yes";
-        goto -> bb3;
-    }
-
-    bb3: {
-        goto -> bb4;
-    }
-
-    bb4: {
         return;
     }
 }
@@ -2215,23 +1869,15 @@ fn user.NonExhaustiveBoolMissingTrue(b: bool) -> string {
 
     bb0: {
         _2 = copy _1 == const false;
-        branch copy _2 -> [bb2, bb1];
+        branch copy _2 -> [bb1, bb2];
     }
 
     bb1: {
-        goto -> bb3;
+        _0 = const "no";
+        goto -> bb2;
     }
 
     bb2: {
-        _0 = const "no";
-        goto -> bb3;
-    }
-
-    bb3: {
-        goto -> bb4;
-    }
-
-    bb4: {
         return;
     }
 }
@@ -2242,23 +1888,15 @@ fn user.NonExhaustiveClassPlusLiteralMissingClass(x: Success | 200) -> string {
     let _1: Success | 200 // x // param
 
     bb0: {
-        switch copy _1 [200: bb2, otherwise: bb1];
+        switch copy _1 [200: bb1, otherwise: bb2];
     }
 
     bb1: {
-        goto -> bb3;
+        _0 = const "http ok";
+        goto -> bb2;
     }
 
     bb2: {
-        _0 = const "http ok";
-        goto -> bb3;
-    }
-
-    bb3: {
-        goto -> bb4;
-    }
-
-    bb4: {
         return;
     }
 }
@@ -2273,25 +1911,17 @@ fn user.NonExhaustiveClassPlusLiteralMissingLiteral(x: Success | 200) -> string 
 
     bb0: {
         _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: ["user"], display_name: "Success" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
-        branch copy _2 -> [bb2, bb1];
+        branch copy _2 -> [bb1, bb2];
     }
 
     bb1: {
-        goto -> bb3;
-    }
-
-    bb2: {
         _3 = copy _1;
         _4 = copy _3;
         _0 = copy _4.0;
-        goto -> bb3;
+        goto -> bb2;
     }
 
-    bb3: {
-        goto -> bb4;
-    }
-
-    bb4: {
+    bb2: {
         return;
     }
 }
@@ -2304,23 +1934,15 @@ fn user.NonExhaustiveCustomBoolMissing(b: true | false) -> string {
 
     bb0: {
         _2 = copy _1 == const true;
-        branch copy _2 -> [bb2, bb1];
+        branch copy _2 -> [bb1, bb2];
     }
 
     bb1: {
-        goto -> bb3;
+        _0 = const "yes";
+        goto -> bb2;
     }
 
     bb2: {
-        _0 = const "yes";
-        goto -> bb3;
-    }
-
-    bb3: {
-        goto -> bb4;
-    }
-
-    bb4: {
         return;
     }
 }
@@ -2338,37 +1960,29 @@ fn user.NonExhaustiveDoubleMaybeMissingNull(dm: (Success | Failure)??) -> string
 
     bb0: {
         _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: ["user"], display_name: "Success" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
-        branch copy _2 -> [bb4, bb1];
+        branch copy _2 -> [bb3, bb1];
     }
 
     bb1: {
         _5 = is_type(copy _1, Class(TypeName { name: "Failure", module_path: ["user"], display_name: "Failure" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
-        branch copy _5 -> [bb3, bb2];
+        branch copy _5 -> [bb2, bb4];
     }
 
     bb2: {
-        goto -> bb5;
-    }
-
-    bb3: {
         _6 = copy _1;
         _7 = copy _6;
         _0 = copy _7.0;
-        goto -> bb5;
+        goto -> bb4;
     }
 
-    bb4: {
+    bb3: {
         _3 = copy _1;
         _4 = copy _3;
         _0 = copy _4.0;
-        goto -> bb5;
+        goto -> bb4;
     }
 
-    bb5: {
-        goto -> bb6;
-    }
-
-    bb6: {
+    bb4: {
         return;
     }
 }
@@ -2381,23 +1995,15 @@ fn user.NonExhaustiveEnumMissingMultiple(s: Status) -> string {
 
     bb0: {
         _2 = discriminant(_1);
-        switch copy _2 [Status.Active: bb2, otherwise: bb1];
+        switch copy _2 [Status.Active: bb1, otherwise: bb2];
     }
 
     bb1: {
-        goto -> bb3;
+        _0 = const "active";
+        goto -> bb2;
     }
 
     bb2: {
-        _0 = const "active";
-        goto -> bb3;
-    }
-
-    bb3: {
-        goto -> bb4;
-    }
-
-    bb4: {
         return;
     }
 }
@@ -2410,28 +2016,20 @@ fn user.NonExhaustiveEnumMissingOne(s: Status) -> string {
 
     bb0: {
         _2 = discriminant(_1);
-        switch copy _2 [Status.Active: bb3, Status.Inactive: bb2, otherwise: bb1];
+        switch copy _2 [Status.Active: bb2, Status.Inactive: bb1, otherwise: bb3];
     }
 
     bb1: {
-        goto -> bb4;
+        _0 = const "inactive";
+        goto -> bb3;
     }
 
     bb2: {
-        _0 = const "inactive";
-        goto -> bb4;
+        _0 = const "active";
+        goto -> bb3;
     }
 
     bb3: {
-        _0 = const "active";
-        goto -> bb4;
-    }
-
-    bb4: {
-        goto -> bb5;
-    }
-
-    bb5: {
         return;
     }
 }
@@ -2449,37 +2047,29 @@ fn user.NonExhaustiveFullResultMissingOne(r: Success | Failure | Pending) -> str
 
     bb0: {
         _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: ["user"], display_name: "Success" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
-        branch copy _2 -> [bb4, bb1];
+        branch copy _2 -> [bb3, bb1];
     }
 
     bb1: {
         _5 = is_type(copy _1, Class(TypeName { name: "Failure", module_path: ["user"], display_name: "Failure" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
-        branch copy _5 -> [bb3, bb2];
+        branch copy _5 -> [bb2, bb4];
     }
 
     bb2: {
-        goto -> bb5;
-    }
-
-    bb3: {
         _6 = copy _1;
         _7 = copy _6;
         _0 = copy _7.0;
-        goto -> bb5;
+        goto -> bb4;
     }
 
-    bb4: {
+    bb3: {
         _3 = copy _1;
         _4 = copy _3;
         _0 = copy _4.0;
-        goto -> bb5;
+        goto -> bb4;
     }
 
-    bb5: {
-        goto -> bb6;
-    }
-
-    bb6: {
+    bb4: {
         return;
     }
 }
@@ -2490,28 +2080,20 @@ fn user.NonExhaustiveIntLiteral(code: 200 | 201 | 204) -> string {
     let _1: 200 | 201 | 204 // code // param
 
     bb0: {
-        switch copy _1 [200: bb3, 201: bb2, otherwise: bb1];
+        switch copy _1 [200: bb2, 201: bb1, otherwise: bb3];
     }
 
     bb1: {
-        goto -> bb4;
+        _0 = const "Created";
+        goto -> bb3;
     }
 
     bb2: {
-        _0 = const "Created";
-        goto -> bb4;
+        _0 = const "OK";
+        goto -> bb3;
     }
 
     bb3: {
-        _0 = const "OK";
-        goto -> bb4;
-    }
-
-    bb4: {
-        goto -> bb5;
-    }
-
-    bb5: {
         return;
     }
 }
@@ -2525,33 +2107,25 @@ fn user.NonExhaustiveMixedLiterals(x: 200 | "success" | true) -> string {
 
     bb0: {
         _2 = copy _1 == const 200_i64;
-        branch copy _2 -> [bb4, bb1];
+        branch copy _2 -> [bb3, bb1];
     }
 
     bb1: {
         _3 = copy _1 == const "success";
-        branch copy _3 -> [bb3, bb2];
+        branch copy _3 -> [bb2, bb4];
     }
 
     bb2: {
-        goto -> bb5;
+        _0 = const "string success";
+        goto -> bb4;
     }
 
     bb3: {
-        _0 = const "string success";
-        goto -> bb5;
+        _0 = const "http ok";
+        goto -> bb4;
     }
 
     bb4: {
-        _0 = const "http ok";
-        goto -> bb5;
-    }
-
-    bb5: {
-        goto -> bb6;
-    }
-
-    bb6: {
         return;
     }
 }
@@ -2564,33 +2138,25 @@ fn user.NonExhaustiveNullableEnumMissingNull(s: Status?) -> string {
 
     bb0: {
         _2 = discriminant(_1);
-        switch copy _2 [Status.Active: bb4, Status.Inactive: bb3, Status.Pending: bb2, otherwise: bb1];
+        switch copy _2 [Status.Active: bb3, Status.Inactive: bb2, Status.Pending: bb1, otherwise: bb4];
     }
 
     bb1: {
-        goto -> bb5;
+        _0 = const "pending";
+        goto -> bb4;
     }
 
     bb2: {
-        _0 = const "pending";
-        goto -> bb5;
+        _0 = const "inactive";
+        goto -> bb4;
     }
 
     bb3: {
-        _0 = const "inactive";
-        goto -> bb5;
+        _0 = const "active";
+        goto -> bb4;
     }
 
     bb4: {
-        _0 = const "active";
-        goto -> bb5;
-    }
-
-    bb5: {
-        goto -> bb6;
-    }
-
-    bb6: {
         return;
     }
 }
@@ -2605,43 +2171,35 @@ fn user.NonExhaustiveNullableEnumMissingVariant(s: Status?) -> string {
 
     bb0: {
         _2 = copy _1 == const user.Status.Active;
-        branch copy _2 -> [bb6, bb1];
+        branch copy _2 -> [bb5, bb1];
     }
 
     bb1: {
         _3 = copy _1 == const user.Status.Inactive;
-        branch copy _3 -> [bb5, bb2];
+        branch copy _3 -> [bb4, bb2];
     }
 
     bb2: {
         _4 = copy _1 == const null;
-        branch copy _4 -> [bb4, bb3];
+        branch copy _4 -> [bb3, bb6];
     }
 
     bb3: {
-        goto -> bb7;
+        _0 = const "no status";
+        goto -> bb6;
     }
 
     bb4: {
-        _0 = const "no status";
-        goto -> bb7;
+        _0 = const "inactive";
+        goto -> bb6;
     }
 
     bb5: {
-        _0 = const "inactive";
-        goto -> bb7;
+        _0 = const "active";
+        goto -> bb6;
     }
 
     bb6: {
-        _0 = const "active";
-        goto -> bb7;
-    }
-
-    bb7: {
-        goto -> bb8;
-    }
-
-    bb8: {
         return;
     }
 }
@@ -2652,23 +2210,15 @@ fn user.NonExhaustiveOptionalMissingNull(code: 200?) -> string {
     let _1: 200? // code // param
 
     bb0: {
-        switch copy _1 [200: bb2, otherwise: bb1];
+        switch copy _1 [200: bb1, otherwise: bb2];
     }
 
     bb1: {
-        goto -> bb3;
+        _0 = const "OK";
+        goto -> bb2;
     }
 
     bb2: {
-        _0 = const "OK";
-        goto -> bb3;
-    }
-
-    bb3: {
-        goto -> bb4;
-    }
-
-    bb4: {
         return;
     }
 }
@@ -2681,23 +2231,15 @@ fn user.NonExhaustiveOptionalMissingValue(code: 200?) -> string {
 
     bb0: {
         _2 = copy _1 == const null;
-        branch copy _2 -> [bb2, bb1];
+        branch copy _2 -> [bb1, bb2];
     }
 
     bb1: {
-        goto -> bb3;
+        _0 = const "no code";
+        goto -> bb2;
     }
 
     bb2: {
-        _0 = const "no code";
-        goto -> bb3;
-    }
-
-    bb3: {
-        goto -> bb4;
-    }
-
-    bb4: {
         return;
     }
 }
@@ -2711,33 +2253,25 @@ fn user.NonExhaustiveStringLiteral(role: "user" | "assistant" | "system") -> str
 
     bb0: {
         _2 = copy _1 == const "user";
-        branch copy _2 -> [bb4, bb1];
+        branch copy _2 -> [bb3, bb1];
     }
 
     bb1: {
         _3 = copy _1 == const "assistant";
-        branch copy _3 -> [bb3, bb2];
+        branch copy _3 -> [bb2, bb4];
     }
 
     bb2: {
-        goto -> bb5;
+        _0 = const "Assistant";
+        goto -> bb4;
     }
 
     bb3: {
-        _0 = const "Assistant";
-        goto -> bb5;
+        _0 = const "User";
+        goto -> bb4;
     }
 
     bb4: {
-        _0 = const "User";
-        goto -> bb5;
-    }
-
-    bb5: {
-        goto -> bb6;
-    }
-
-    bb6: {
         return;
     }
 }
@@ -2750,23 +2284,15 @@ fn user.NonExhaustiveTrueTypeWrongLiteral(t: true) -> string {
 
     bb0: {
         _2 = copy _1 == const false;
-        branch copy _2 -> [bb2, bb1];
+        branch copy _2 -> [bb1, bb2];
     }
 
     bb1: {
-        goto -> bb3;
+        _0 = const "wrong!";
+        goto -> bb2;
     }
 
     bb2: {
-        _0 = const "wrong!";
-        goto -> bb3;
-    }
-
-    bb3: {
-        goto -> bb4;
-    }
-
-    bb4: {
         return;
     }
 }
@@ -2781,25 +2307,17 @@ fn user.NonExhaustiveTypeAliasMissingOne(r: Success | Failure) -> string {
 
     bb0: {
         _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: ["user"], display_name: "Success" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
-        branch copy _2 -> [bb2, bb1];
+        branch copy _2 -> [bb1, bb2];
     }
 
     bb1: {
-        goto -> bb3;
-    }
-
-    bb2: {
         _3 = copy _1;
         _4 = copy _3;
         _0 = copy _4.0;
-        goto -> bb3;
+        goto -> bb2;
     }
 
-    bb3: {
-        goto -> bb4;
-    }
-
-    bb4: {
+    bb2: {
         return;
     }
 }
@@ -2812,28 +2330,20 @@ fn user.OptionalWithCatchAll(x: int?) -> string {
 
     bb0: {
         _2 = copy _1 == const null;
-        branch copy _2 -> [bb3, bb1];
+        branch copy _2 -> [bb2, bb1];
     }
 
     bb1: {
-        goto -> bb2;
+        _0 = const "has value";
+        goto -> bb3;
     }
 
     bb2: {
-        _0 = const "has value";
-        goto -> bb4;
+        _0 = const "no value";
+        goto -> bb3;
     }
 
     bb3: {
-        _0 = const "no value";
-        goto -> bb4;
-    }
-
-    bb4: {
-        goto -> bb5;
-    }
-
-    bb5: {
         return;
     }
 }
@@ -2848,38 +2358,30 @@ fn user.OverlappingTypedPatterns(r: Success | Failure) -> string {
 
     bb0: {
         _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: ["user"], display_name: "Success" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
-        branch copy _2 -> [bb5, bb1];
+        branch copy _2 -> [bb4, bb1];
     }
 
     bb1: {
         _3 = is_type(copy _1, Class(TypeName { name: "Success", module_path: ["user"], display_name: "Success" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
-        branch copy _3 -> [bb4, bb2];
+        branch copy _3 -> [bb3, bb2];
     }
 
     bb2: {
         _4 = is_type(copy _1, Class(TypeName { name: "Failure", module_path: ["user"], display_name: "Failure" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
-        branch copy _4 -> [bb4, bb3];
+        branch copy _4 -> [bb3, bb5];
     }
 
     bb3: {
-        goto -> bb6;
+        _0 = const "covers failure only (success already handled)";
+        goto -> bb5;
     }
 
     bb4: {
-        _0 = const "covers failure only (success already handled)";
-        goto -> bb6;
+        _0 = const "success";
+        goto -> bb5;
     }
 
     bb5: {
-        _0 = const "success";
-        goto -> bb6;
-    }
-
-    bb6: {
-        goto -> bb7;
-    }
-
-    bb7: {
         return;
     }
 }
@@ -2896,40 +2398,32 @@ fn user.OverlappingWithBindings(r: Success | Failure) -> string {
 
     bb0: {
         _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: ["user"], display_name: "Success" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
-        branch copy _2 -> [bb5, bb1];
+        branch copy _2 -> [bb4, bb1];
     }
 
     bb1: {
         _5 = is_type(copy _1, Class(TypeName { name: "Success", module_path: ["user"], display_name: "Success" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
-        branch copy _5 -> [bb4, bb2];
+        branch copy _5 -> [bb3, bb2];
     }
 
     bb2: {
         _6 = is_type(copy _1, Class(TypeName { name: "Failure", module_path: ["user"], display_name: "Failure" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
-        branch copy _6 -> [bb4, bb3];
+        branch copy _6 -> [bb3, bb5];
     }
 
     bb3: {
-        goto -> bb6;
+        _0 = const "remaining";
+        goto -> bb5;
     }
 
     bb4: {
-        _0 = const "remaining";
-        goto -> bb6;
-    }
-
-    bb5: {
         _3 = copy _1;
         _4 = copy _3;
         _0 = copy _4.0;
-        goto -> bb6;
+        goto -> bb5;
     }
 
-    bb6: {
-        goto -> bb7;
-    }
-
-    bb7: {
+    bb5: {
         return;
     }
 }
@@ -2956,10 +2450,6 @@ fn user.ParenthesizedSingleLiteral(b: bool) -> string {
     }
 
     bb3: {
-        goto -> bb4;
-    }
-
-    bb4: {
         return;
     }
 }
@@ -2973,28 +2463,20 @@ fn user.PartialUnionPatternCoverage(r: Success | Failure | Pending) -> string {
 
     bb0: {
         _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: ["user"], display_name: "Success" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
-        branch copy _2 -> [bb3, bb1];
+        branch copy _2 -> [bb2, bb1];
     }
 
     bb1: {
         _3 = is_type(copy _1, Class(TypeName { name: "Failure", module_path: ["user"], display_name: "Failure" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
-        branch copy _3 -> [bb3, bb2];
+        branch copy _3 -> [bb2, bb3];
     }
 
     bb2: {
-        goto -> bb4;
+        _0 = const "not pending";
+        goto -> bb3;
     }
 
     bb3: {
-        _0 = const "not pending";
-        goto -> bb4;
-    }
-
-    bb4: {
-        goto -> bb5;
-    }
-
-    bb5: {
         return;
     }
 }
@@ -3009,38 +2491,30 @@ fn user.PartialUnionPlusCatchAll(r: Success | Failure | Pending) -> string {
 
     bb0: {
         _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: ["user"], display_name: "Success" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
-        branch copy _2 -> [bb5, bb1];
+        branch copy _2 -> [bb4, bb1];
     }
 
     bb1: {
         _3 = is_type(copy _1, Class(TypeName { name: "Failure", module_path: ["user"], display_name: "Failure" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
-        branch copy _3 -> [bb5, bb2];
+        branch copy _3 -> [bb4, bb2];
     }
 
     bb2: {
         _4 = is_type(copy _1, Class(TypeName { name: "Pending", module_path: ["user"], display_name: "Pending" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
-        branch copy _4 -> [bb4, bb3];
+        branch copy _4 -> [bb3, bb5];
     }
 
     bb3: {
-        goto -> bb6;
+        _0 = const "pending";
+        goto -> bb5;
     }
 
     bb4: {
-        _0 = const "pending";
-        goto -> bb6;
+        _0 = const "success or failure";
+        goto -> bb5;
     }
 
     bb5: {
-        _0 = const "success or failure";
-        goto -> bb6;
-    }
-
-    bb6: {
-        goto -> bb7;
-    }
-
-    bb7: {
         return;
     }
 }
@@ -3054,33 +2528,25 @@ fn user.StringLiteralAfterStringType(s: string) -> string {
 
     bb0: {
         _2 = is_type(copy _1, String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
-        branch copy _2 -> [bb4, bb1];
+        branch copy _2 -> [bb3, bb1];
     }
 
     bb1: {
         _3 = copy _1 == const "hello";
-        branch copy _3 -> [bb3, bb2];
+        branch copy _3 -> [bb2, bb4];
     }
 
     bb2: {
-        goto -> bb5;
+        _0 = const "unreachable";
+        goto -> bb4;
     }
 
     bb3: {
-        _0 = const "unreachable";
-        goto -> bb5;
+        _0 = const "any string";
+        goto -> bb4;
     }
 
     bb4: {
-        _0 = const "any string";
-        goto -> bb5;
-    }
-
-    bb5: {
-        goto -> bb6;
-    }
-
-    bb6: {
         return;
     }
 }
@@ -3095,38 +2561,30 @@ fn user.StringLiteralUnionPattern(role: "user" | "assistant" | "system") -> stri
 
     bb0: {
         _2 = copy _1 == const "user";
-        branch copy _2 -> [bb5, bb1];
+        branch copy _2 -> [bb4, bb1];
     }
 
     bb1: {
         _3 = copy _1 == const "assistant";
-        branch copy _3 -> [bb5, bb2];
+        branch copy _3 -> [bb4, bb2];
     }
 
     bb2: {
         _4 = copy _1 == const "system";
-        branch copy _4 -> [bb4, bb3];
+        branch copy _4 -> [bb3, bb5];
     }
 
     bb3: {
-        goto -> bb6;
+        _0 = const "system";
+        goto -> bb5;
     }
 
     bb4: {
-        _0 = const "system";
-        goto -> bb6;
+        _0 = const "chat participant";
+        goto -> bb5;
     }
 
     bb5: {
-        _0 = const "chat participant";
-        goto -> bb6;
-    }
-
-    bb6: {
-        goto -> bb7;
-    }
-
-    bb7: {
         return;
     }
 }
@@ -3140,38 +2598,30 @@ fn user.StringLiteralWithCatchAll(role: "user" | "assistant" | "system") -> stri
 
     bb0: {
         _2 = copy _1 == const "user";
-        branch copy _2 -> [bb5, bb1];
+        branch copy _2 -> [bb4, bb1];
     }
 
     bb1: {
         _3 = copy _1 == const "assistant";
-        branch copy _3 -> [bb4, bb2];
+        branch copy _3 -> [bb3, bb2];
     }
 
     bb2: {
-        goto -> bb3;
+        _0 = const "Other";
+        goto -> bb5;
     }
 
     bb3: {
-        _0 = const "Other";
-        goto -> bb6;
+        _0 = const "Assistant message";
+        goto -> bb5;
     }
 
     bb4: {
-        _0 = const "Assistant message";
-        goto -> bb6;
+        _0 = const "User message";
+        goto -> bb5;
     }
 
     bb5: {
-        _0 = const "User message";
-        goto -> bb6;
-    }
-
-    bb6: {
-        goto -> bb7;
-    }
-
-    bb7: {
         return;
     }
 }
@@ -3189,7 +2639,7 @@ fn user.ThreeLevelNestedMatch(x: int, y: int, z: int) -> string {
 
     bb1: {
         _0 = const "x nonzero";
-        goto -> bb9;
+        goto -> bb7;
     }
 
     bb2: {
@@ -3198,7 +2648,7 @@ fn user.ThreeLevelNestedMatch(x: int, y: int, z: int) -> string {
 
     bb3: {
         _0 = const "y nonzero";
-        goto -> bb8;
+        goto -> bb7;
     }
 
     bb4: {
@@ -3216,18 +2666,6 @@ fn user.ThreeLevelNestedMatch(x: int, y: int, z: int) -> string {
     }
 
     bb7: {
-        goto -> bb8;
-    }
-
-    bb8: {
-        goto -> bb9;
-    }
-
-    bb9: {
-        goto -> bb10;
-    }
-
-    bb10: {
         return;
     }
 }
@@ -3241,28 +2679,20 @@ fn user.UnionPatternCoversAll(r: Success | Failure) -> string {
 
     bb0: {
         _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: ["user"], display_name: "Success" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
-        branch copy _2 -> [bb3, bb1];
+        branch copy _2 -> [bb2, bb1];
     }
 
     bb1: {
         _3 = is_type(copy _1, Class(TypeName { name: "Failure", module_path: ["user"], display_name: "Failure" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
-        branch copy _3 -> [bb3, bb2];
+        branch copy _3 -> [bb2, bb3];
     }
 
     bb2: {
-        goto -> bb4;
+        _0 = const "covered";
+        goto -> bb3;
     }
 
     bb3: {
-        _0 = const "covered";
-        goto -> bb4;
-    }
-
-    bb4: {
-        goto -> bb5;
-    }
-
-    bb5: {
         return;
     }
 }
@@ -3282,10 +2712,6 @@ fn user.UnreachableAfterCatchAll(x: int) -> string {
     }
 
     bb2: {
-        goto -> bb3;
-    }
-
-    bb3: {
         return;
     }
 }
@@ -3305,10 +2731,6 @@ fn user.UnreachableMultiple(x: int) -> string {
     }
 
     bb2: {
-        goto -> bb3;
-    }
-
-    bb3: {
         return;
     }
 }
@@ -3319,23 +2741,15 @@ fn user.WrongLiteralTypeBoolWithInt(b: bool) -> string {
     let _1: bool // b // param
 
     bb0: {
-        switch copy _1 [42: bb2, otherwise: bb1];
+        switch copy _1 [42: bb1, otherwise: bb2];
     }
 
     bb1: {
-        goto -> bb3;
+        _0 = const "wrong type";
+        goto -> bb2;
     }
 
     bb2: {
-        _0 = const "wrong type";
-        goto -> bb3;
-    }
-
-    bb3: {
-        goto -> bb4;
-    }
-
-    bb4: {
         return;
     }
 }
@@ -3348,23 +2762,15 @@ fn user.WrongLiteralTypeIntWithString(x: int) -> string {
 
     bb0: {
         _2 = copy _1 == const "hello";
-        branch copy _2 -> [bb2, bb1];
+        branch copy _2 -> [bb1, bb2];
     }
 
     bb1: {
-        goto -> bb3;
+        _0 = const "wrong type";
+        goto -> bb2;
     }
 
     bb2: {
-        _0 = const "wrong type";
-        goto -> bb3;
-    }
-
-    bb3: {
-        goto -> bb4;
-    }
-
-    bb4: {
         return;
     }
 }

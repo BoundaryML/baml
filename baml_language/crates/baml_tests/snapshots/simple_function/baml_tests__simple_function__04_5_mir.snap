@@ -14,10 +14,6 @@ fn user.HelloWorld(name: string) -> string {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -34,10 +30,6 @@ fn user.HelloWorld$build_request(name: string) -> baml.http.Request {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -52,10 +44,6 @@ fn user.HelloWorld$parse(json: string) -> string {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -72,10 +60,6 @@ fn user.HelloWorld$render_prompt(name: string) -> baml.llm.PromptAst {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
