@@ -76,10 +76,6 @@ fn user.ReadFile() -> string {
     }
 
     bb4: {
-        goto -> bb5;
-    }
-
-    bb5: {
         return;
     }
 }
@@ -108,10 +104,6 @@ fn user.ReadFileInline() -> string {
     }
 
     bb4: {
-        goto -> bb5;
-    }
-
-    bb5: {
         return;
     }
 }
@@ -204,10 +196,6 @@ fn user.ConnectAndRead() -> string {
     }
 
     bb4: {
-        goto -> bb5;
-    }
-
-    bb5: {
         return;
     }
 }
@@ -236,10 +224,6 @@ fn user.ConnectAndReadInline() -> string {
     }
 
     bb4: {
-        goto -> bb5;
-    }
-
-    bb5: {
         return;
     }
 }
@@ -408,10 +392,6 @@ fn user.RunCommand() -> string {
     }
 
     bb2: {
-        goto -> bb3;
-    }
-
-    bb3: {
         return;
     }
 }
@@ -434,10 +414,6 @@ fn user.RunCommandWithVar() -> string {
     }
 
     bb2: {
-        goto -> bb3;
-    }
-
-    bb3: {
         return;
     }
 }

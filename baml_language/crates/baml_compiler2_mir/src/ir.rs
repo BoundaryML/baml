@@ -10,6 +10,27 @@ pub use baml_compiler2_ast::BuiltinKind;
 use baml_type::Ty;
 
 // ============================================================================
+// Optimization Level
+// ============================================================================
+
+/// Optimization level controlling both MIR lowering and bytecode emission.
+///
+/// - `Zero`: No inlining of user-named locals. Compiler temps are still optimized.
+///   Produces bytecode that closely mirrors the source structure.
+/// - `One` (default): Full emit optimization — inline single-use locals, copy
+///   propagation, stack carry — but no MIR-level constant folding. Useful for
+///   testing individual instructions (e.g. `unary_op -` for `-5`).
+/// - `Two`: Everything in `One` plus MIR-level constant folding and future
+///   advanced transforms (e.g. type-tag switch dispatch).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
+pub enum OptLevel {
+    Zero,
+    #[default]
+    One,
+    Two,
+}
+
+// ============================================================================
 // Function
 // ============================================================================
 

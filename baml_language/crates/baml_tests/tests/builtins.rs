@@ -14,7 +14,7 @@ async fn builtin_method_call() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 1
         load_const 2
@@ -40,7 +40,7 @@ async fn bind_method_call() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 1
         load_const 2
@@ -89,33 +89,26 @@ async fn any_value_to_string() {
     insta::assert_snapshot!(output.bytecode, @r#"
     function main() -> string {
         alloc_instance Person
-        copy 0
         load_const "Alice"
-        store_field .name
-        copy 0
+        init_field .name
         load_const 25
-        store_field .age
-        copy 0
+        init_field .age
         alloc_instance Point
-        copy 0
         load_const 10
-        store_field .x
-        copy 0
+        init_field .x
         load_const 20
-        store_field .y
-        store_field .location
-        copy 0
+        init_field .y
+        init_field .location
         load_const "reading"
         load_const "coding"
         alloc_array 2
-        store_field .hobbies
-        copy 0
+        init_field .hobbies
         load_const 95
         load_const 88
         load_const "math"
         load_const "english"
         alloc_map 2
-        store_field .scores
+        init_field .scores
         call baml.unstable.string
         return
     }

@@ -28,26 +28,20 @@ async fn deep_copy_object() {
     insta::assert_snapshot!(output.bytecode, @r#"
     function main() -> Tree {
         alloc_instance Tree
-        copy 0
         load_const "1"
-        store_field .value
-        copy 0
+        init_field .value
         alloc_instance Tree
-        copy 0
         load_const "2"
-        store_field .value
-        copy 0
+        init_field .value
         alloc_array 0
-        store_field .children
+        init_field .children
         alloc_instance Tree
-        copy 0
         load_const "3"
-        store_field .value
-        copy 0
+        init_field .value
         alloc_array 0
-        store_field .children
+        init_field .children
         alloc_array 2
-        store_field .children
+        init_field .children
         call baml.deep_copy
         return
     }
@@ -86,29 +80,23 @@ async fn deep_copy_independence() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         alloc_instance Node
-        copy 0
         load_const 1
-        store_field .value
-        copy 0
+        init_field .value
         alloc_instance Node
-        copy 0
         load_const 2
-        store_field .value
-        copy 0
+        init_field .value
         alloc_array 0
-        store_field .children
+        init_field .children
         alloc_instance Node
-        copy 0
         load_const 3
-        store_field .value
-        copy 0
+        init_field .value
         alloc_array 0
-        store_field .children
+        init_field .children
         alloc_array 2
-        store_field .children
+        init_field .children
         store_var original
         load_var original
         call baml.deep_copy
@@ -150,10 +138,9 @@ async fn deep_copy_nested_arrays_in_class() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         alloc_instance Matrix
-        copy 0
         load_const 1
         load_const 2
         alloc_array 2
@@ -161,7 +148,7 @@ async fn deep_copy_nested_arrays_in_class() {
         load_const 4
         alloc_array 2
         alloc_array 2
-        store_field .data
+        init_field .data
         store_var original
         load_var original
         call baml.deep_copy
@@ -210,13 +197,12 @@ async fn deep_copy_map_in_class() {
     insta::assert_snapshot!(output.bytecode, @r#"
     function main() -> int {
         alloc_instance Container
-        copy 0
         load_const 1
         load_const 2
         load_const "a"
         load_const "b"
         alloc_map 2
-        store_field .values
+        init_field .values
         store_var original
         load_var original
         call baml.deep_copy
@@ -282,39 +268,30 @@ async fn deep_copy_complex_nested_structure() {
     insta::assert_snapshot!(output.bytecode, @r#"
     function main() -> int {
         alloc_instance Outer
-        copy 0
         alloc_instance Middle
-        copy 0
         alloc_instance Inner
-        copy 0
         load_const 1
-        store_field .value
-        store_field .inner
-        copy 0
+        init_field .value
+        init_field .inner
         alloc_instance Inner
-        copy 0
         load_const 2
-        store_field .value
+        init_field .value
         alloc_instance Inner
-        copy 0
         load_const 3
-        store_field .value
+        init_field .value
         alloc_array 2
-        store_field .list
-        store_field .middle
-        copy 0
+        init_field .list
+        init_field .middle
         alloc_instance Inner
-        copy 0
         load_const 4
-        store_field .value
+        init_field .value
         alloc_instance Inner
-        copy 0
         load_const 5
-        store_field .value
+        init_field .value
         load_const "first"
         load_const "second"
         alloc_map 2
-        store_field .data
+        init_field .data
         store_var original
         load_var original
         call baml.deep_copy
@@ -388,25 +365,21 @@ async fn deep_copy_circular_reference() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         alloc_instance Node
-        copy 0
         load_const 1
-        store_field .value
-        copy 0
+        init_field .value
         alloc_array 0
-        store_field .children
+        init_field .children
         store_var a
         load_var a
         alloc_instance Node
-        copy 0
         load_const 2
-        store_field .value
-        copy 0
+        init_field .value
         load_var a
         alloc_array 1
-        store_field .children
+        init_field .children
         alloc_array 1
         store_field .children
         load_var a
@@ -436,7 +409,7 @@ async fn deep_equals_primitives() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> bool {
         load_const 42
         load_const 42
@@ -460,7 +433,7 @@ async fn deep_equals_different_primitives() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> bool {
         load_const 42
         load_const 43
@@ -489,22 +462,18 @@ async fn deep_equals_simple_objects() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> bool {
         alloc_instance Point
-        copy 0
         load_const 10
-        store_field .x
-        copy 0
+        init_field .x
         load_const 20
-        store_field .y
+        init_field .y
         alloc_instance Point
-        copy 0
         load_const 10
-        store_field .x
-        copy 0
+        init_field .x
         load_const 20
-        store_field .y
+        init_field .y
         call baml.deep_equals
         return
     }
@@ -530,22 +499,18 @@ async fn deep_equals_different_objects() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> bool {
         alloc_instance Point
-        copy 0
         load_const 10
-        store_field .x
-        copy 0
+        init_field .x
         load_const 20
-        store_field .y
+        init_field .y
         alloc_instance Point
-        copy 0
         load_const 10
-        store_field .x
-        copy 0
+        init_field .x
         load_const 21
-        store_field .y
+        init_field .y
         call baml.deep_equals
         return
     }
@@ -579,50 +544,38 @@ async fn deep_equals_nested_objects() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> bool {
         alloc_instance Node
-        copy 0
         load_const 1
-        store_field .value
-        copy 0
+        init_field .value
         alloc_instance Node
-        copy 0
         load_const 2
-        store_field .value
-        copy 0
+        init_field .value
         alloc_array 0
-        store_field .children
+        init_field .children
         alloc_instance Node
-        copy 0
         load_const 3
-        store_field .value
-        copy 0
+        init_field .value
         alloc_array 0
-        store_field .children
+        init_field .children
         alloc_array 2
-        store_field .children
+        init_field .children
         alloc_instance Node
-        copy 0
         load_const 1
-        store_field .value
-        copy 0
+        init_field .value
         alloc_instance Node
-        copy 0
         load_const 2
-        store_field .value
-        copy 0
+        init_field .value
         alloc_array 0
-        store_field .children
+        init_field .children
         alloc_instance Node
-        copy 0
         load_const 3
-        store_field .value
-        copy 0
+        init_field .value
         alloc_array 0
-        store_field .children
+        init_field .children
         alloc_array 2
-        store_field .children
+        init_field .children
         call baml.deep_equals
         return
     }
@@ -656,50 +609,38 @@ async fn deep_equals_nested_objects_different() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> bool {
         alloc_instance Node
-        copy 0
         load_const 1
-        store_field .value
-        copy 0
+        init_field .value
         alloc_instance Node
-        copy 0
         load_const 2
-        store_field .value
-        copy 0
+        init_field .value
         alloc_array 0
-        store_field .children
+        init_field .children
         alloc_instance Node
-        copy 0
         load_const 3
-        store_field .value
-        copy 0
+        init_field .value
         alloc_array 0
-        store_field .children
+        init_field .children
         alloc_array 2
-        store_field .children
+        init_field .children
         alloc_instance Node
-        copy 0
         load_const 1
-        store_field .value
-        copy 0
+        init_field .value
         alloc_instance Node
-        copy 0
         load_const 2
-        store_field .value
-        copy 0
+        init_field .value
         alloc_array 0
-        store_field .children
+        init_field .children
         alloc_instance Node
-        copy 0
         load_const 4
-        store_field .value
-        copy 0
+        init_field .value
         alloc_array 0
-        store_field .children
+        init_field .children
         alloc_array 2
-        store_field .children
+        init_field .children
         call baml.deep_equals
         return
     }
@@ -724,24 +665,22 @@ async fn deep_equals_with_arrays() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> bool {
         alloc_instance Container
-        copy 0
         load_const 1
         load_const 2
         load_const 3
         load_const 4
         alloc_array 4
-        store_field .data
+        init_field .data
         alloc_instance Container
-        copy 0
         load_const 1
         load_const 2
         load_const 3
         load_const 4
         alloc_array 4
-        store_field .data
+        init_field .data
         call baml.deep_equals
         return
     }
@@ -769,21 +708,19 @@ async fn deep_equals_with_maps() {
     insta::assert_snapshot!(output.bytecode, @r#"
     function main() -> bool {
         alloc_instance MapContainer
-        copy 0
         load_const 1
         load_const 2
         load_const "a"
         load_const "b"
         alloc_map 2
-        store_field .values
+        init_field .values
         alloc_instance MapContainer
-        copy 0
         load_const 1
         load_const 2
         load_const "a"
         load_const "b"
         alloc_map 2
-        store_field .values
+        init_field .values
         call baml.deep_equals
         return
     }
@@ -808,15 +745,13 @@ async fn deep_equals_same_reference() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> bool {
         alloc_instance Node
-        copy 0
         load_const 1
-        store_field .value
-        copy 0
+        init_field .value
         alloc_array 0
-        store_field .children
+        init_field .children
         store_var n
         load_var n
         load_var n
@@ -852,44 +787,36 @@ async fn deep_equals_circular_structure() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> bool {
         alloc_instance Node
-        copy 0
         load_const 1
-        store_field .value
-        copy 0
+        init_field .value
         alloc_array 0
-        store_field .children
+        init_field .children
         store_var a1
         load_var a1
         alloc_instance Node
-        copy 0
         load_const 2
-        store_field .value
-        copy 0
+        init_field .value
         load_var a1
         alloc_array 1
-        store_field .children
+        init_field .children
         alloc_array 1
         store_field .children
         alloc_instance Node
-        copy 0
         load_const 1
-        store_field .value
-        copy 0
+        init_field .value
         alloc_array 0
-        store_field .children
+        init_field .children
         store_var a2
         load_var a2
         alloc_instance Node
-        copy 0
         load_const 2
-        store_field .value
-        copy 0
+        init_field .value
         load_var a2
         alloc_array 1
-        store_field .children
+        init_field .children
         alloc_array 1
         store_field .children
         load_var a1

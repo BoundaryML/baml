@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/tests/bytecode_format/main.rs
-assertion_line: 41
 ---
 function assert.contains(haystack: string, needle: string) -> null {
     load_var haystack
@@ -16,8 +15,7 @@ function assert.contains(haystack: string, needle: string) -> null {
 
   L1:
     load_const "assertion failed: string does not contain expected substring"
-    dispatch_future baml.sys.panic
-    await
+    call baml.sys.panic
 
   L2:
     return
@@ -36,8 +34,7 @@ function assert.equal(actual: unknown, expected: unknown) -> null {
 
   L1:
     load_const "assertion failed: expected equal values"
-    dispatch_future baml.sys.panic
-    await
+    call baml.sys.panic
 
   L2:
     return
@@ -55,8 +52,7 @@ function assert.is_true(condition: bool) -> null {
 
   L1:
     load_const "assertion failed: expected true"
-    dispatch_future baml.sys.panic
-    await
+    call baml.sys.panic
 
   L2:
     return
@@ -75,8 +71,7 @@ function assert.not_null(value: unknown?) -> null {
 
   L1:
     load_const "assertion failed: expected non-null value"
-    dispatch_future baml.sys.panic
-    await
+    call baml.sys.panic
 
   L2:
     return
@@ -136,19 +131,16 @@ function testing.TestCollector.find_testset(self: null, name: string) -> testing
 
 function testing.TestCollector.new(prefix: string) -> testing.TestCollector {
     alloc_instance TestCollector
-    copy 0
     load_var prefix
-    store_field .prefix
-    copy 0
+    init_field .prefix
     alloc_array 0
-    store_field .tests
-    copy 0
+    init_field .tests
     alloc_array 0
-    store_field .testsets
+    init_field .testsets
     return
 }
 
-function testing.TestCollector.register_test(self: null, name: string, body: () -> null, runner: ((() -> testing.TestReport) -> () -> testing.TestReport)?) -> null {
+function testing.TestCollector.register_test(self: null, name: string, body: () -> null, runner: ((() -> testing.TestReport throws unknown) -> () -> testing.TestReport throws unknown)?) -> null {
     load_var self
     load_field .prefix
     load_const ""
@@ -222,15 +214,12 @@ function testing.TestCollector.register_test(self: null, name: string, body: () 
     load_var self
     load_field .tests
     alloc_instance TestRegistration
-    copy 0
     load_var final_name
-    store_field .name
-    copy 0
+    init_field .name
     load_var body
-    store_field .body
-    copy 0
+    init_field .body
     load_var runner
-    store_field .runner
+    init_field .runner
     call baml.Array.push
     pop 1
     load_const null
@@ -272,7 +261,7 @@ function testing.TestCollector.register_test(self: null, name: string, body: () 
     jump L3
 }
 
-function testing.TestCollector.register_test_set(self: null, name: string, collector: (testing.TestCollector) -> null, runner: ((() -> testing.TestSetReport) -> () -> testing.TestSetReport)?) -> null {
+function testing.TestCollector.register_test_set(self: null, name: string, collector: (testing.TestCollector) -> null, runner: ((() -> testing.TestSetReport throws unknown) -> () -> testing.TestSetReport throws unknown)?) -> null {
     load_var self
     load_field .prefix
     load_const ""
@@ -346,15 +335,12 @@ function testing.TestCollector.register_test_set(self: null, name: string, colle
     load_var self
     load_field .testsets
     alloc_instance TestSetRegistration
-    copy 0
     load_var final_name
-    store_field .name
-    copy 0
+    init_field .name
     load_var collector
-    store_field .collector
-    copy 0
+    init_field .collector
     load_var runner
-    store_field .runner
+    init_field .runner
     call baml.Array.push
     pop 1
     load_const null
@@ -488,15 +474,12 @@ function testing.TestRegistry.expand_set(self: null, name: string) -> (testing.S
     call baml.sys.now_ms
     store_var start
     alloc_instance TestCollector
-    copy 0
     load_var name
-    store_field .prefix
-    copy 0
+    init_field .prefix
     alloc_array 0
-    store_field .tests
-    copy 0
+    init_field .tests
     alloc_array 0
-    store_field .testsets
+    init_field .testsets
     store_var sub_collector
     load_var sub_collector
     load_var ts
@@ -509,17 +492,14 @@ function testing.TestRegistry.expand_set(self: null, name: string) -> (testing.S
     load_field .expansions
     load_var name
     alloc_instance TestRegistry
-    copy 0
     load_var sub_collector
-    store_field .collector
-    copy 0
+    init_field .collector
     alloc_map 0
-    store_field .expansions
-    copy 0
+    init_field .expansions
     load_var _22
     load_var start
     bin_op -
-    store_field .loading_time_ms
+    init_field .loading_time_ms
     call baml.Map.set
     pop 1
     load_var self
@@ -531,15 +511,12 @@ function testing.TestRegistry.expand_set(self: null, name: string) -> (testing.S
 
 function testing.TestRegistry.new(collector: testing.TestCollector) -> testing.TestRegistry {
     alloc_instance TestRegistry
-    copy 0
     load_var collector
-    store_field .collector
-    copy 0
+    init_field .collector
     alloc_map 0
-    store_field .expansions
-    copy 0
+    init_field .expansions
     load_const 0
-    store_field .loading_time_ms
+    init_field .loading_time_ms
     return
 }
 
@@ -704,13 +681,11 @@ function testing.TestRegistry.serialize(self: null) -> (testing.SerializedTest |
     pop_jump_if_false L7
     load_var items
     alloc_instance SerializedTest
-    copy 0
     load_const "lazyTestSet"
-    store_field .type
-    copy 0
+    init_field .type
     load_var ts
     load_field .name
-    store_field .name
+    init_field .name
     call baml.Array.push
     pop 1
     jump L7
@@ -726,16 +701,13 @@ function testing.TestRegistry.serialize(self: null) -> (testing.SerializedTest |
     store_var _33
     load_var items
     alloc_instance SerializedTestSet
-    copy 0
     load_var _31
-    store_field .name
-    copy 0
+    init_field .name
     load_var _33
-    store_field .items
-    copy 0
+    init_field .items
     load_var sub
     load_field .loading_time_ms
-    store_field .loadingTimeMs
+    init_field .loadingTimeMs
     call baml.Array.push
     pop 1
 
@@ -749,15 +721,13 @@ function testing.TestRegistry.serialize(self: null) -> (testing.SerializedTest |
   L8:
     load_var items
     alloc_instance SerializedTest
-    copy 0
     load_const "test"
-    store_field .type
-    copy 0
+    init_field .type
     load_var _3
     load_var __for_idx
     load_array_element
     load_field .name
-    store_field .name
+    init_field .name
     call baml.Array.push
     pop 1
     load_var __for_idx
@@ -767,7 +737,7 @@ function testing.TestRegistry.serialize(self: null) -> (testing.SerializedTest |
     jump L0
 }
 
-function testing.run_test(body: () -> null, runner: ((() -> testing.TestReport) -> () -> testing.TestReport)?) -> testing.TestReport {
+function testing.run_test(body: () -> null, runner: ((() -> testing.TestReport throws unknown) -> () -> testing.TestReport throws unknown)?) -> testing.TestReport {
     load_var ?1
     make_cell
     store_var ?1
@@ -789,20 +759,18 @@ function testing.run_test(body: () -> null, runner: ((() -> testing.TestReport) 
     load_var base_run
     load_var runner
     call_indirect
-    store_var effective_run
+    call_indirect
     jump L2
 
   L1:
     load_var base_run
-    store_var effective_run
+    call_indirect
 
   L2:
-    load_var effective_run
-    call_indirect
     return
 }
 
-function testing.run_testset(run_children: () -> testing.TestSetReport, runner: ((() -> testing.TestSetReport) -> () -> testing.TestSetReport)?) -> testing.TestSetReport {
+function testing.run_testset(run_children: () -> testing.TestSetReport, runner: ((() -> testing.TestSetReport throws unknown) -> () -> testing.TestSetReport throws unknown)?) -> testing.TestSetReport {
     load_var runner
     load_const null
     cmp_op ==
@@ -818,16 +786,14 @@ function testing.run_testset(run_children: () -> testing.TestSetReport, runner: 
     load_var run_children
     load_var runner
     call_indirect
-    store_var effective_run
+    call_indirect
     jump L2
 
   L1:
     load_var run_children
-    store_var effective_run
+    call_indirect
 
   L2:
-    load_var effective_run
-    call_indirect
     return
 }
 
@@ -843,20 +809,17 @@ function user.User.promote(self: null, bonus: int) -> Report {
     call user.score
     store_var base
     alloc_instance Report
-    copy 0
     load_var base
     load_field .score
     load_var bonus
     bin_op +
-    store_field .score
-    copy 0
+    init_field .score
     load_var base
     load_field .label
-    store_field .label
-    copy 0
+    init_field .label
     load_var base
     load_field .breakdown
-    store_field .breakdown
+    init_field .breakdown
     return
 }
 
@@ -1106,23 +1069,20 @@ function user.score(input: User | ErrorInfo, threshold: int) -> Report {
     load_var total
     store_array_element
     alloc_instance Report
-    copy 0
     load_var scores
     load_const 0
     load_array_element
-    store_field .score
-    copy 0
+    init_field .score
     load_var name
     load_var suffix
     bin_op +
-    store_field .label
-    copy 0
+    init_field .label
     load_var base
     load_var role_mult
     load_const "base"
     load_const "role"
     alloc_map 2
-    store_field .breakdown
+    init_field .breakdown
     return
 
   L19:

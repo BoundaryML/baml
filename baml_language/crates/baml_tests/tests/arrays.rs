@@ -14,7 +14,7 @@ async fn array_literal() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int[] {
         load_const 1
         load_const 2
@@ -48,7 +48,7 @@ async fn array_assign_to_variable() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int[] {
         load_const 1
         load_const 2
@@ -83,7 +83,7 @@ async fn array_push() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int[] {
         load_const 1
         load_const 2

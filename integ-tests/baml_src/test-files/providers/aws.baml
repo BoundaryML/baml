@@ -101,6 +101,33 @@ test TestName {
 }
 
 
+function TestAwsCaching(input: string, not_cached: string) -> string {
+  client AwsBedrockWithCaching
+  prompt #"
+    {{ _.role('system', cache_control={"type": "default"}) }}
+    Generate the following story
+    {{ input }}
+
+    {# Claude on Bedrock requires 1024+ tokens to cache. Repeat to meet minimum. -#}
+    {{ input }}
+    {{ input }}
+    {{ input }}
+
+    {{ _.role('user') }}
+    {{ not_cached }}
+  "#
+}
+
+client<llm> AwsBedrockWithCaching {
+  provider "aws-bedrock"
+  options {
+    model "arn:aws:bedrock:us-east-1:404337120808:inference-profile/us.anthropic.claude-haiku-4-5-20251001-v1:0"
+    inference_configuration {
+      max_tokens 512
+    }
+  }
+}
+
 client<llm> AwsBedrockClaude37Client {
   provider "aws-bedrock"
   options {

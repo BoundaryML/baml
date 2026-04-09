@@ -97,9 +97,8 @@ async fn match_typed_pattern_second_arm() {
     insta::assert_snapshot!(output.bytecode, @r#"
     function main() -> string {
         alloc_instance Failure
-        copy 0
         load_const "error"
-        store_field .reason
+        init_field .reason
         store_var result
         load_var result
         load_const Success
@@ -222,7 +221,7 @@ async fn match_typed_discard_patterns_typetag_switch_path() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function classify(x: int | string | bool | float) -> int {
         load_var x
         type_tag
@@ -307,9 +306,8 @@ async fn match_guard_true() {
     insta::assert_snapshot!(output.bytecode, @r#"
     function main() -> string {
         alloc_instance Score
-        copy 0
         load_const 95
-        store_field .value
+        init_field .value
         store_var s
         load_var s
         load_const Score
@@ -382,9 +380,8 @@ async fn match_guard_fallthrough() {
     insta::assert_snapshot!(output.bytecode, @r#"
     function main() -> string {
         alloc_instance Score
-        copy 0
         load_const 75
-        store_field .value
+        init_field .value
         store_var s
         load_var s
         load_const Score
@@ -457,9 +454,8 @@ async fn match_guard_all_fail() {
     insta::assert_snapshot!(output.bytecode, @r#"
     function main() -> string {
         alloc_instance Score
-        copy 0
         load_const 50
-        store_field .value
+        init_field .value
         store_var s
         load_var s
         load_const Score
@@ -951,9 +947,8 @@ async fn match_guard_on_typed_pattern_field_access() {
 
     function main() -> string {
         alloc_instance Success
-        copy 0
         load_const "hello"
-        store_field .data
+        init_field .data
         call user.classify
         return
     }
@@ -1027,9 +1022,8 @@ async fn match_guard_on_typed_pattern_field_access_fails() {
 
     function main() -> string {
         alloc_instance Success
-        copy 0
         load_const ""
-        store_field .data
+        init_field .data
         call user.classify
         return
     }
@@ -1475,9 +1469,8 @@ async fn match_class_types_exhaustive_first() {
 
     function main() -> string {
         alloc_instance Cat
-        copy 0
         load_const "Whiskers"
-        store_field .name
+        init_field .name
         call user.classify
         return
     }
@@ -1555,9 +1548,8 @@ async fn match_class_types_exhaustive_last() {
 
     function main() -> string {
         alloc_instance Bird
-        copy 0
         load_const "Tweety"
-        store_field .name
+        init_field .name
         call user.classify
         return
     }
@@ -1628,9 +1620,8 @@ async fn match_class_types_non_exhaustive_wildcard() {
 
     function main() -> string {
         alloc_instance Bird
-        copy 0
         load_const "Tweety"
-        store_field .name
+        init_field .name
         call user.classify
         return
     }
@@ -1701,9 +1692,8 @@ async fn match_class_types_non_exhaustive_matched() {
 
     function main() -> string {
         alloc_instance Dog
-        copy 0
         load_const "Rex"
-        store_field .name
+        init_field .name
         call user.classify
         return
     }
@@ -1873,9 +1863,8 @@ async fn match_multiple_typed_patterns_with_guards() {
 
     function main() -> string {
         alloc_instance Success
-        copy 0
         load_const 301
-        store_field .code
+        init_field .code
         load_const false
         call user.classify
         return

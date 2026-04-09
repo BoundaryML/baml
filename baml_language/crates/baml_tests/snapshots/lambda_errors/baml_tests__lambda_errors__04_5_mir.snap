@@ -17,10 +17,6 @@ fn user.test_arity_mismatch() -> int[] {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -87,10 +83,6 @@ fn user.test_param_type_mismatch() -> int[] {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }

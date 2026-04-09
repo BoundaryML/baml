@@ -102,11 +102,11 @@ fn user.BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool) -> in
     let _95: bool
     let _96: bool
     let _97: bool
-    let _98: 8002
-    let _99: 8000
-    let _100: 2
-    let _101: 1005
-    let _102: 1002
+    let _98: int
+    let _99: int
+    let _100: int
+    let _101: int
+    let _102: int
     let _103: int
     let _104: int
     let _105: int
@@ -140,15 +140,15 @@ fn user.BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool) -> in
     let _133: int
     let _134: int
     let _135: int
-    let _136: int
-    let _137: int
-    let _138: int
-    let _139: int
+    let _136: bool
+    let _137: bool
+    let _138: bool
+    let _139: bool
     let _140: int
-    let _141: bool
-    let _142: bool
-    let _143: bool
-    let _144: bool
+    let _141: int
+    let _142: int
+    let _143: int
+    let _144: int
     let _145: int
     let _146: int
     let _147: int
@@ -156,14 +156,14 @@ fn user.BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool) -> in
     let _149: int
     let _150: int
     let _151: int
-    let _152: int
+    let _152: bool
     let _153: int
     let _154: int
     let _155: int
     let _156: int
-    let _157: bool
+    let _157: int
     let _158: int
-    let _159: "a very long string prefix that is already quite long concatenated with "
+    let _159: int
     let _160: int
     let _161: int
     let _162: int
@@ -198,38 +198,24 @@ fn user.BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool) -> in
     let _191: int
     let _192: int
     let _193: int
-    let _194: int
-    let _195: int
-    let _196: int
-    let _197: int
-    let _198: int
-    let _199: int
-    let _200: bool
+    let _194: bool
+    let _195: bool
+    let _196: bool
+    let _197: bool
+    let _198: bool
+    let _199: bool
+    let _200: int
     let _201: bool
-    let _202: bool
-    let _203: bool
-    let _204: bool
-    let _205: bool
-    let _206: int
-    let _207: bool
 
     bb0: {
-        branch copy _6 -> [bb1, bb2];
+        branch copy _6 -> [bb1, bb1];
     }
 
     bb1: {
-        goto -> bb2;
+        branch copy _6 -> [bb2, bb2];
     }
 
     bb2: {
-        branch copy _6 -> [bb4, bb3];
-    }
-
-    bb3: {
-        goto -> bb4;
-    }
-
-    bb4: {
         _7 = copy _1;
         _7 = copy _7 + copy _2;
         _7 = copy _7 - copy _2;
@@ -250,80 +236,60 @@ fn user.BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool) -> in
         _15 = copy _1 * copy _2;
         _14 = copy _15 / copy _3;
         _16 = copy _1 > const 0_i64;
-        branch copy _16 -> [bb5, bb6];
+        branch copy _16 -> [bb3, bb3];
+    }
+
+    bb3: {
+        _17 = copy _1 > const 0_i64;
+        branch copy _17 -> [bb4, bb4];
+    }
+
+    bb4: {
+        _19 = copy _1 > const 0_i64;
+        _18 = copy _19;
+        branch copy _19 -> [bb5, bb6];
     }
 
     bb5: {
+        _18 = copy _2 > const 0_i64;
         goto -> bb6;
     }
 
     bb6: {
-        _17 = copy _1 > const 0_i64;
-        branch copy _17 -> [bb8, bb7];
+        branch copy _18 -> [bb7, bb7];
     }
 
     bb7: {
-        goto -> bb8;
+        _21 = copy _1 > const 0_i64;
+        _20 = copy _21;
+        branch copy _21 -> [bb9, bb8];
     }
 
     bb8: {
-        _19 = copy _1 > const 0_i64;
-        _18 = copy _19;
-        branch copy _19 -> [bb9, bb10];
+        _20 = copy _2 > const 0_i64;
+        goto -> bb9;
     }
 
     bb9: {
-        _18 = copy _2 > const 0_i64;
-        goto -> bb10;
+        branch copy _20 -> [bb10, bb10];
     }
 
     bb10: {
-        branch copy _18 -> [bb11, bb12];
+        _23 = copy _1 > const 0_i64;
+        _22 = copy _23;
+        branch copy _23 -> [bb11, bb12];
     }
 
     bb11: {
+        _22 = copy _2 > const 0_i64;
         goto -> bb12;
     }
 
     bb12: {
-        _21 = copy _1 > const 0_i64;
-        _20 = copy _21;
-        branch copy _21 -> [bb14, bb13];
+        branch copy _22 -> [bb13, bb13];
     }
 
     bb13: {
-        _20 = copy _2 > const 0_i64;
-        goto -> bb14;
-    }
-
-    bb14: {
-        branch copy _20 -> [bb16, bb15];
-    }
-
-    bb15: {
-        goto -> bb16;
-    }
-
-    bb16: {
-        _23 = copy _1 > const 0_i64;
-        _22 = copy _23;
-        branch copy _23 -> [bb17, bb18];
-    }
-
-    bb17: {
-        _22 = copy _2 > const 0_i64;
-        goto -> bb18;
-    }
-
-    bb18: {
-        branch copy _22 -> [bb20, bb19];
-    }
-
-    bb19: {
-        goto -> bb20;
-    }
-
-    bb20: {
         _24 = copy _2 * copy _3;
         _25 = copy _1 + copy _2;
         _26 = copy _1 * copy _2;
@@ -390,323 +356,297 @@ fn user.BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool) -> in
         _64 = copy _65 + copy _1;
         _97 = copy _1 > const 0_i64;
         _96 = copy _97;
-        branch copy _97 -> [bb21, bb22];
+        branch copy _97 -> [bb14, bb15];
+    }
+
+    bb14: {
+        _96 = copy _2 > const 0_i64;
+        goto -> bb15;
+    }
+
+    bb15: {
+        _95 = copy _96;
+        branch copy _96 -> [bb16, bb17];
+    }
+
+    bb16: {
+        _95 = copy _3 > const 0_i64;
+        goto -> bb17;
+    }
+
+    bb17: {
+        _94 = copy _95;
+        branch copy _95 -> [bb18, bb19];
+    }
+
+    bb18: {
+        _94 = copy _4 > const 0_i64;
+        goto -> bb19;
+    }
+
+    bb19: {
+        _93 = copy _94;
+        branch copy _94 -> [bb20, bb21];
+    }
+
+    bb20: {
+        _93 = copy _1 != copy _2;
+        goto -> bb21;
     }
 
     bb21: {
-        _96 = copy _2 > const 0_i64;
-        goto -> bb22;
+        _92 = copy _93;
+        branch copy _93 -> [bb22, bb23];
     }
 
     bb22: {
-        _95 = copy _96;
-        branch copy _96 -> [bb23, bb24];
+        _92 = copy _2 != copy _3;
+        goto -> bb23;
     }
 
     bb23: {
-        _95 = copy _3 > const 0_i64;
-        goto -> bb24;
+        _91 = copy _92;
+        branch copy _92 -> [bb24, bb25];
     }
 
     bb24: {
-        _94 = copy _95;
-        branch copy _95 -> [bb25, bb26];
+        _91 = copy _3 != copy _4;
+        goto -> bb25;
     }
 
     bb25: {
-        _94 = copy _4 > const 0_i64;
-        goto -> bb26;
+        _90 = copy _91;
+        branch copy _91 -> [bb26, bb27];
     }
 
     bb26: {
-        _93 = copy _94;
-        branch copy _94 -> [bb27, bb28];
+        _90 = copy _1 < const 8002_i64;
+        goto -> bb27;
     }
 
     bb27: {
-        _93 = copy _1 != copy _2;
-        goto -> bb28;
+        _89 = copy _90;
+        branch copy _90 -> [bb28, bb29];
     }
 
     bb28: {
-        _92 = copy _93;
-        branch copy _93 -> [bb29, bb30];
+        _89 = copy _2 < const 1000_i64;
+        goto -> bb29;
     }
 
     bb29: {
-        _92 = copy _2 != copy _3;
-        goto -> bb30;
+        _88 = copy _89;
+        branch copy _89 -> [bb30, bb31];
     }
 
     bb30: {
-        _91 = copy _92;
-        branch copy _92 -> [bb31, bb32];
+        _88 = copy _3 < const 1000_i64;
+        goto -> bb31;
     }
 
     bb31: {
-        _91 = copy _3 != copy _4;
-        goto -> bb32;
+        branch copy _88 -> [bb32, bb32];
     }
 
     bb32: {
-        _90 = copy _91;
-        branch copy _91 -> [bb33, bb34];
+        _116 = copy _1 * copy _2;
+        _117 = copy _3 * copy _4;
+        _115 = copy _116 + copy _117;
+        _118 = copy _1 * copy _2;
+        _114 = copy _115 - copy _118;
+        _119 = copy _3 * copy _4;
+        _113 = copy _114 + copy _119;
+        _120 = copy _1 * copy _2;
+        _112 = copy _113 - copy _120;
+        _121 = copy _3 * copy _4;
+        _111 = copy _112 + copy _121;
+        _122 = copy _1 * copy _2;
+        _110 = copy _111 - copy _122;
+        _123 = copy _3 * copy _4;
+        _109 = copy _110 + copy _123;
+        _124 = copy _1 * copy _2;
+        _108 = copy _109 - copy _124;
+        _125 = copy _3 * copy _4;
+        _107 = copy _108 + copy _125;
+        _126 = copy _1 * copy _2;
+        _106 = copy _107 - copy _126;
+        _127 = copy _3 * copy _4;
+        _105 = copy _106 + copy _127;
+        _128 = copy _1 * copy _2;
+        _104 = copy _105 - copy _128;
+        _129 = copy _3 * copy _4;
+        _103 = copy _104 + copy _129;
+        _130 = copy _1 * copy _2;
+        _102 = copy _103 - copy _130;
+        _131 = copy _3 * copy _4;
+        _101 = copy _102 + copy _131;
+        _132 = copy _1 * copy _2;
+        _100 = copy _101 - copy _132;
+        _133 = copy _3 * copy _4;
+        _99 = copy _100 + copy _133;
+        _134 = copy _1 * copy _2;
+        _98 = copy _99 - copy _134;
+        _135 = copy _3 * copy _4;
+        _142 = copy _1 + copy _2;
+        _141 = copy _142 + copy _3;
+        _140 = copy _141 + copy _4;
+        _139 = copy _140 > const 0_i64;
+        _138 = copy _139;
+        branch copy _139 -> [bb33, bb34];
     }
 
     bb33: {
-        _99 = const 1000_i64 * const 8_i64;
-        _100 = const 1_i64 * const 2_i64;
-        _98 = copy _99 + copy _100;
-        _90 = copy _1 < copy _98;
+        _145 = copy _1 * copy _2;
+        _144 = copy _145 * copy _3;
+        _143 = copy _144 * copy _4;
+        _138 = copy _143 < const 10000_i64;
         goto -> bb34;
     }
 
     bb34: {
-        _89 = copy _90;
-        branch copy _90 -> [bb35, bb36];
+        _137 = copy _138;
+        branch copy _138 -> [bb35, bb36];
     }
 
     bb35: {
-        _89 = copy _2 < const 1000_i64;
+        _148 = copy _1 - copy _2;
+        _147 = copy _148 - copy _3;
+        _146 = copy _147 - copy _4;
+        _137 = copy _146 != const 0_i64;
         goto -> bb36;
     }
 
     bb36: {
-        _88 = copy _89;
-        branch copy _89 -> [bb37, bb38];
+        _136 = copy _137;
+        branch copy _137 -> [bb37, bb38];
     }
 
     bb37: {
-        _88 = copy _3 < const 1000_i64;
+        _150 = copy _1 + copy _2;
+        _151 = copy _3 + copy _4;
+        _149 = copy _150 * copy _151;
+        _136 = copy _149 >= const 100_i64;
         goto -> bb38;
     }
 
     bb38: {
-        branch copy _88 -> [bb39, bb40];
+        branch copy _136 -> [bb40, bb39];
     }
 
     bb39: {
-        _102 = const 1000_i64 + const 2_i64;
-        _101 = copy _102 + const 3_i64;
-        goto -> bb40;
+        _153 = copy _1 * const 1_i64;
+        _152 = copy _153 < const 2_i64;
+        branch copy _152 -> [bb40, bb40];
     }
 
     bb40: {
-        _121 = copy _1 * copy _2;
-        _122 = copy _3 * copy _4;
-        _120 = copy _121 + copy _122;
-        _123 = copy _1 * copy _2;
-        _119 = copy _120 - copy _123;
-        _124 = copy _3 * copy _4;
-        _118 = copy _119 + copy _124;
-        _125 = copy _1 * copy _2;
-        _117 = copy _118 - copy _125;
-        _126 = copy _3 * copy _4;
-        _116 = copy _117 + copy _126;
-        _127 = copy _1 * copy _2;
-        _115 = copy _116 - copy _127;
-        _128 = copy _3 * copy _4;
-        _114 = copy _115 + copy _128;
-        _129 = copy _1 * copy _2;
-        _113 = copy _114 - copy _129;
-        _130 = copy _3 * copy _4;
-        _112 = copy _113 + copy _130;
-        _131 = copy _1 * copy _2;
-        _111 = copy _112 - copy _131;
-        _132 = copy _3 * copy _4;
-        _110 = copy _111 + copy _132;
-        _133 = copy _1 * copy _2;
-        _109 = copy _110 - copy _133;
-        _134 = copy _3 * copy _4;
-        _108 = copy _109 + copy _134;
-        _135 = copy _1 * copy _2;
-        _107 = copy _108 - copy _135;
-        _136 = copy _3 * copy _4;
-        _106 = copy _107 + copy _136;
-        _137 = copy _1 * copy _2;
-        _105 = copy _106 - copy _137;
-        _138 = copy _3 * copy _4;
-        _104 = copy _105 + copy _138;
-        _139 = copy _1 * copy _2;
-        _103 = copy _104 - copy _139;
-        _140 = copy _3 * copy _4;
-        _147 = copy _1 + copy _2;
-        _146 = copy _147 + copy _3;
-        _145 = copy _146 + copy _4;
-        _144 = copy _145 > const 0_i64;
-        _143 = copy _144;
-        branch copy _144 -> [bb41, bb42];
-    }
-
-    bb41: {
-        _150 = copy _1 * copy _2;
-        _149 = copy _150 * copy _3;
-        _148 = copy _149 * copy _4;
-        _143 = copy _148 < const 10000_i64;
-        goto -> bb42;
-    }
-
-    bb42: {
-        _142 = copy _143;
-        branch copy _143 -> [bb43, bb44];
-    }
-
-    bb43: {
-        _153 = copy _1 - copy _2;
-        _152 = copy _153 - copy _3;
-        _151 = copy _152 - copy _4;
-        _142 = copy _151 != const 0_i64;
-        goto -> bb44;
-    }
-
-    bb44: {
-        _141 = copy _142;
-        branch copy _142 -> [bb45, bb46];
-    }
-
-    bb45: {
-        _155 = copy _1 + copy _2;
-        _156 = copy _3 + copy _4;
-        _154 = copy _155 * copy _156;
-        _141 = copy _154 >= const 100_i64;
-        goto -> bb46;
-    }
-
-    bb46: {
-        branch copy _141 -> [bb50, bb47];
-    }
-
-    bb47: {
-        _158 = copy _1 * const 1_i64;
-        _157 = copy _158 < const 2_i64;
-        branch copy _157 -> [bb48, bb49];
-    }
-
-    bb48: {
-        goto -> bb49;
-    }
-
-    bb49: {
-        goto -> bb50;
-    }
-
-    bb50: {
-        _159 = const "a very long string prefix that is already quite long" + const " concatenated with ";
+        _164 = copy _1 * copy _2;
+        _165 = copy _3 * copy _4;
+        _163 = copy _164 + copy _165;
+        _166 = copy _1 * copy _2;
+        _162 = copy _163 + copy _166;
+        _167 = copy _3 * copy _4;
+        _161 = copy _162 + copy _167;
+        _168 = copy _1 * copy _2;
+        _160 = copy _161 + copy _168;
+        _169 = copy _3 * copy _4;
+        _159 = copy _160 + copy _169;
         _170 = copy _1 * copy _2;
+        _158 = copy _159 + copy _170;
         _171 = copy _3 * copy _4;
-        _169 = copy _170 + copy _171;
+        _157 = copy _158 + copy _171;
         _172 = copy _1 * copy _2;
-        _168 = copy _169 + copy _172;
+        _156 = copy _157 + copy _172;
         _173 = copy _3 * copy _4;
-        _167 = copy _168 + copy _173;
-        _174 = copy _1 * copy _2;
-        _166 = copy _167 + copy _174;
-        _175 = copy _3 * copy _4;
-        _165 = copy _166 + copy _175;
-        _176 = copy _1 * copy _2;
-        _164 = copy _165 + copy _176;
-        _177 = copy _3 * copy _4;
-        _163 = copy _164 + copy _177;
-        _178 = copy _1 * copy _2;
-        _162 = copy _163 + copy _178;
-        _179 = copy _3 * copy _4;
-        _161 = copy _162 + copy _179;
-        _160 = copy _161 + copy _1;
-        _7 = copy _7 + copy _160;
-        _189 = copy _1 + copy _2;
+        _155 = copy _156 + copy _173;
+        _154 = copy _155 + copy _1;
+        _7 = copy _7 + copy _154;
+        _183 = copy _1 + copy _2;
+        _182 = copy _183 + copy _3;
+        _181 = copy _182 + copy _4;
+        _180 = copy _181 + copy _1;
+        _179 = copy _180 + copy _2;
+        _178 = copy _179 + copy _3;
+        _177 = copy _178 + copy _4;
+        _176 = copy _177 + copy _1;
+        _175 = copy _176 + copy _2;
+        _174 = copy _175 + copy _3;
+        _193 = copy _1 + copy _2;
+        _192 = copy _193 + copy _3;
+        _191 = copy _192 + copy _4;
+        _190 = copy _191 + copy _1;
+        _189 = copy _190 + copy _2;
         _188 = copy _189 + copy _3;
         _187 = copy _188 + copy _4;
         _186 = copy _187 + copy _1;
         _185 = copy _186 + copy _2;
         _184 = copy _185 + copy _3;
-        _183 = copy _184 + copy _4;
-        _182 = copy _183 + copy _1;
-        _181 = copy _182 + copy _2;
-        _180 = copy _181 + copy _3;
-        _199 = copy _1 + copy _2;
-        _198 = copy _199 + copy _3;
-        _197 = copy _198 + copy _4;
-        _196 = copy _197 + copy _1;
-        _195 = copy _196 + copy _2;
-        _194 = copy _195 + copy _3;
-        _193 = copy _194 + copy _4;
-        _192 = copy _193 + copy _1;
-        _191 = copy _192 + copy _2;
-        _190 = copy _191 + copy _3;
-        _205 = copy _1 > const 0_i64;
-        _204 = copy _205;
-        branch copy _205 -> [bb51, bb52];
+        _199 = copy _1 > const 0_i64;
+        _198 = copy _199;
+        branch copy _199 -> [bb41, bb42];
+    }
+
+    bb41: {
+        _198 = copy _2 > const 0_i64;
+        goto -> bb42;
+    }
+
+    bb42: {
+        _197 = copy _198;
+        branch copy _198 -> [bb43, bb44];
+    }
+
+    bb43: {
+        _197 = copy _3 > const 0_i64;
+        goto -> bb44;
+    }
+
+    bb44: {
+        _196 = copy _197;
+        branch copy _197 -> [bb45, bb46];
+    }
+
+    bb45: {
+        _196 = copy _4 > const 0_i64;
+        goto -> bb46;
+    }
+
+    bb46: {
+        _195 = copy _196;
+        branch copy _196 -> [bb47, bb48];
+    }
+
+    bb47: {
+        _195 = copy _1 != copy _2;
+        goto -> bb48;
+    }
+
+    bb48: {
+        _194 = copy _195;
+        branch copy _195 -> [bb49, bb50];
+    }
+
+    bb49: {
+        _194 = copy _2 != copy _3;
+        goto -> bb50;
+    }
+
+    bb50: {
+        branch copy _194 -> [bb51, bb51];
     }
 
     bb51: {
-        _204 = copy _2 > const 0_i64;
-        goto -> bb52;
+        _200 = copy _1 * copy _2;
+        _201 = copy _1 == const 2_i64;
+        branch copy _201 -> [bb52, bb52];
     }
 
     bb52: {
-        _203 = copy _204;
-        branch copy _204 -> [bb53, bb54];
+        _0 = copy _1 + copy _2;
+        goto -> bb53;
     }
 
     bb53: {
-        _203 = copy _3 > const 0_i64;
-        goto -> bb54;
-    }
-
-    bb54: {
-        _202 = copy _203;
-        branch copy _203 -> [bb55, bb56];
-    }
-
-    bb55: {
-        _202 = copy _4 > const 0_i64;
-        goto -> bb56;
-    }
-
-    bb56: {
-        _201 = copy _202;
-        branch copy _202 -> [bb57, bb58];
-    }
-
-    bb57: {
-        _201 = copy _1 != copy _2;
-        goto -> bb58;
-    }
-
-    bb58: {
-        _200 = copy _201;
-        branch copy _201 -> [bb59, bb60];
-    }
-
-    bb59: {
-        _200 = copy _2 != copy _3;
-        goto -> bb60;
-    }
-
-    bb60: {
-        branch copy _200 -> [bb61, bb62];
-    }
-
-    bb61: {
-        goto -> bb62;
-    }
-
-    bb62: {
-        _206 = copy _1 * copy _2;
-        _207 = copy _1 == const 2_i64;
-        branch copy _207 -> [bb63, bb64];
-    }
-
-    bb63: {
-        goto -> bb64;
-    }
-
-    bb64: {
-        _0 = copy _1 + copy _2;
-        goto -> bb65;
-    }
-
-    bb65: {
         return;
     }
 }
@@ -1527,10 +1467,6 @@ fn user.TestTarget() -> string {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -1546,10 +1482,6 @@ fn user.TestTarget$build_request() -> baml.http.Request {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -1564,10 +1496,6 @@ fn user.TestTarget$parse(json: string) -> string {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -1583,10 +1511,6 @@ fn user.TestTarget$render_prompt() -> baml.llm.PromptAst {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -2085,10 +2009,6 @@ fn user.LlmBasic(name: string) -> string {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -2105,10 +2025,6 @@ fn user.LlmBasic$build_request(name: string) -> baml.http.Request {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -2123,10 +2039,6 @@ fn user.LlmBasic$parse(json: string) -> string {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -2143,10 +2055,6 @@ fn user.LlmBasic$render_prompt(name: string) -> baml.llm.PromptAst {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -2163,10 +2071,6 @@ fn user.LlmMultiLine(text: string) -> string {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -2183,10 +2087,6 @@ fn user.LlmMultiLine$build_request(text: string) -> baml.http.Request {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -2201,10 +2101,6 @@ fn user.LlmMultiLine$parse(json: string) -> string {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -2221,10 +2117,6 @@ fn user.LlmMultiLine$render_prompt(text: string) -> baml.llm.PromptAst {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -2241,10 +2133,6 @@ fn user.LlmReversedOrder(text: string) -> string {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -2261,10 +2149,6 @@ fn user.LlmReversedOrder$build_request(text: string) -> baml.http.Request {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -2279,10 +2163,6 @@ fn user.LlmReversedOrder$parse(json: string) -> string {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -2299,10 +2179,6 @@ fn user.LlmReversedOrder$render_prompt(text: string) -> baml.llm.PromptAst {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -2323,10 +2199,6 @@ fn user.LlmStringClient(text: string) -> string {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -2347,10 +2219,6 @@ fn user.LlmStringClient$build_request(text: string) -> baml.http.Request {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -2365,10 +2233,6 @@ fn user.LlmStringClient$parse(json: string) -> string {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -2389,10 +2253,6 @@ fn user.LlmStringClient$render_prompt(text: string) -> baml.llm.PromptAst {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -2412,10 +2272,6 @@ fn user.LlmWithLongSignature(first_context: string, second_context: string, thir
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -2435,10 +2291,6 @@ fn user.LlmWithLongSignature$build_request(first_context: string, second_context
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -2453,10 +2305,6 @@ fn user.LlmWithLongSignature$parse(json: string) -> string {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -2476,10 +2324,6 @@ fn user.LlmWithLongSignature$render_prompt(first_context: string, second_context
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -2688,24 +2532,20 @@ fn user.MultiStatement(a: int, b: int) -> int {
         _4 = copy _5 * const 2_i64;
         _7 = copy _4;
         _6 = copy _7 > const 10_i64;
-        branch copy _6 -> [bb3, bb1];
+        branch copy _6 -> [bb2, bb1];
     }
 
     bb1: {
-        goto -> bb2;
+        _0 = copy _3;
+        goto -> bb3;
     }
 
     bb2: {
-        _0 = copy _3;
-        goto -> bb4;
+        _0 = copy _4;
+        goto -> bb3;
     }
 
     bb3: {
-        _0 = copy _4;
-        goto -> bb4;
-    }
-
-    bb4: {
         return;
     }
 }
@@ -2804,7 +2644,7 @@ fn user.NestedLoops(matrix: int[][]) -> int {
     bb5: {
         _10 = len(_8);
         _11 = copy _9 < copy _10;
-        branch copy _11 -> [bb6, bb16];
+        branch copy _11 -> [bb6, bb13];
     }
 
     bb6: {
@@ -2812,70 +2652,50 @@ fn user.NestedLoops(matrix: int[][]) -> int {
         _13 = copy _12;
         _15 = copy _13;
         _14 = copy _15 < const 0_i64;
-        branch copy _14 -> [bb18, bb7];
+        branch copy _14 -> [bb14, bb7];
     }
 
     bb7: {
-        goto -> bb8;
+        _17 = copy _13;
+        _16 = copy _17 > const 1000_i64;
+        branch copy _16 -> [bb13, bb8];
     }
 
     bb8: {
-        _17 = copy _13;
-        _16 = copy _17 > const 1000_i64;
-        branch copy _16 -> [bb15, bb9];
+        _20 = copy _13;
+        _19 = copy _20 % const 3_i64;
+        switch copy _19 [0: bb11, 1: bb10, otherwise: bb9];
     }
 
     bb9: {
-        goto -> bb10;
+        _18 = copy _13;
+        goto -> bb12;
     }
 
     bb10: {
-        _20 = copy _13;
-        _19 = copy _20 % const 3_i64;
-        switch copy _19 [0: bb13, 1: bb12, otherwise: bb11];
+        _22 = copy _13;
+        _18 = copy _22 + const 1_i64;
+        goto -> bb12;
     }
 
     bb11: {
-        _18 = copy _13;
-        goto -> bb14;
+        _21 = copy _13;
+        _18 = copy _21 * const 2_i64;
+        goto -> bb12;
     }
 
     bb12: {
-        _22 = copy _13;
-        _18 = copy _22 + const 1_i64;
+        _23 = copy _18;
+        _2 = copy _2 + copy _23;
         goto -> bb14;
     }
 
     bb13: {
-        _21 = copy _13;
-        _18 = copy _21 * const 2_i64;
-        goto -> bb14;
-    }
-
-    bb14: {
-        _23 = copy _18;
-        _2 = copy _2 + copy _23;
-        goto -> bb19;
-    }
-
-    bb15: {
-        goto -> bb16;
-    }
-
-    bb16: {
-        goto -> bb17;
-    }
-
-    bb17: {
         _3 = copy _3 + const 1_i64;
         goto -> bb1;
     }
 
-    bb18: {
-        goto -> bb19;
-    }
-
-    bb19: {
+    bb14: {
         _9 = copy _9 + const 1_i64;
         goto -> bb5;
     }
@@ -3086,49 +2906,25 @@ fn user.MyFunction(a: int, b: int) -> int {
 
     bb0: {
         _3 = copy _1 > copy _2;
-        branch copy _3 -> [bb2, bb1];
+        branch copy _3 -> [bb1, bb1];
     }
 
     bb1: {
-        goto -> bb3;
+        _4 = copy _1 > copy _2;
+        branch copy _4 -> [bb2, bb2];
     }
 
     bb2: {
-        goto -> bb3;
+        _5 = copy _1 > copy _2;
+        branch copy _5 -> [bb3, bb3];
     }
 
     bb3: {
-        _4 = copy _1 > copy _2;
-        branch copy _4 -> [bb5, bb4];
+        _0 = const 1_i64;
+        goto -> bb4;
     }
 
     bb4: {
-        goto -> bb6;
-    }
-
-    bb5: {
-        goto -> bb6;
-    }
-
-    bb6: {
-        _5 = copy _1 > copy _2;
-        branch copy _5 -> [bb8, bb7];
-    }
-
-    bb7: {
-        goto -> bb9;
-    }
-
-    bb8: {
-        goto -> bb9;
-    }
-
-    bb9: {
-        _0 = const 1_i64;
-        goto -> bb10;
-    }
-
-    bb10: {
         return;
     }
 }
@@ -4107,388 +3903,352 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     bb1: {
         _5 = copy _3;
         _4 = copy _5 < const 10_i64;
-        branch copy _4 -> [bb279, bb2];
+        branch copy _4 -> [bb250, bb2];
     }
 
     bb2: {
-        goto -> bb3;
-    }
-
-    bb3: {
         _8 = copy _3;
         _7 = copy _8 < const 100_i64;
         _6 = copy _7;
-        branch copy _7 -> [bb4, bb5];
+        branch copy _7 -> [bb3, bb4];
+    }
+
+    bb3: {
+        _6 = copy _2;
+        goto -> bb4;
     }
 
     bb4: {
-        _6 = copy _2;
-        goto -> bb5;
+        branch copy _6 -> [bb249, bb5];
     }
 
     bb5: {
-        branch copy _6 -> [bb278, bb6];
+        branch const true -> [bb6, bb8];
     }
 
     bb6: {
-        goto -> bb7;
+        _10 = copy _3;
+        _9 = copy _10 > const 50_i64;
+        branch copy _9 -> [bb8, bb7];
     }
 
     bb7: {
-        branch const true -> [bb8, bb12];
+        _3 = copy _3 + const 1_i64;
+        goto -> bb5;
     }
 
     bb8: {
-        _10 = copy _3;
-        _9 = copy _10 > const 50_i64;
-        branch copy _9 -> [bb11, bb9];
+        _12 = copy _3;
+        _11 = copy _12 < const 100_i64;
+        branch copy _11 -> [bb248, bb9];
     }
 
     bb9: {
-        goto -> bb10;
+        _17 = copy _3;
+        _16 = copy _17 < const 10_i64;
+        branch copy _16 -> [bb247, bb10];
     }
 
     bb10: {
-        _3 = copy _3 + const 1_i64;
-        goto -> bb7;
+        _19 = copy _3;
+        _18 = copy _19 < const 10_i64;
+        branch copy _18 -> [bb246, bb11];
     }
 
     bb11: {
+        _20 = const 0_i64;
+        _21 = const 0_i64;
         goto -> bb12;
     }
 
     bb12: {
-        goto -> bb13;
+        _23 = copy _21;
+        _22 = copy _23 < const 10_i64;
+        branch copy _22 -> [bb244, bb13];
     }
 
     bb13: {
-        _12 = copy _3;
-        _11 = copy _12 < const 100_i64;
-        branch copy _11 -> [bb274, bb14];
+        _25 = const 0_i64;
+        goto -> bb14;
     }
 
     bb14: {
-        goto -> bb15;
-    }
-
-    bb15: {
-        _17 = copy _3;
-        _16 = copy _17 < const 10_i64;
-        branch copy _16 -> [bb273, bb16];
-    }
-
-    bb16: {
-        goto -> bb17;
-    }
-
-    bb17: {
-        _19 = copy _3;
-        _18 = copy _19 < const 10_i64;
-        branch copy _18 -> [bb272, bb18];
-    }
-
-    bb18: {
-        _20 = const 0_i64;
-        _21 = const 0_i64;
-        goto -> bb19;
-    }
-
-    bb19: {
-        _23 = copy _21;
-        _22 = copy _23 < const 10_i64;
-        branch copy _22 -> [bb270, bb20];
-    }
-
-    bb20: {
-        _25 = const 0_i64;
-        goto -> bb21;
-    }
-
-    bb21: {
         _28 = copy _25;
         _27 = copy _28 < const 100_i64;
         _26 = copy _27;
-        branch copy _27 -> [bb22, bb23];
+        branch copy _27 -> [bb15, bb16];
+    }
+
+    bb15: {
+        _26 = copy _2;
+        goto -> bb16;
+    }
+
+    bb16: {
+        branch copy _26 -> [bb242, bb17];
+    }
+
+    bb17: {
+        _30 = const 0_i64;
+        goto -> bb18;
+    }
+
+    bb18: {
+        _31 = len(_1);
+        _32 = copy _30 < copy _31;
+        branch copy _32 -> [bb240, bb19];
+    }
+
+    bb19: {
+        _36 = [const 1_i64, const 2_i64, const 3_i64, const 4_i64, const 5_i64];
+        _37 = const 0_i64;
+        goto -> bb20;
+    }
+
+    bb20: {
+        _38 = len(_36);
+        _39 = copy _37 < copy _38;
+        branch copy _39 -> [bb238, bb21];
+    }
+
+    bb21: {
+        _43 = [const 1_i64, const 2_i64, const 3_i64];
+        _44 = const 0_i64;
+        goto -> bb22;
     }
 
     bb22: {
-        _26 = copy _2;
-        goto -> bb23;
+        _45 = len(_43);
+        _46 = copy _44 < copy _45;
+        branch copy _46 -> [bb233, bb23];
     }
 
     bb23: {
-        branch copy _26 -> [bb268, bb24];
+        _58 = const 0_i64;
+        goto -> bb24;
     }
 
     bb24: {
-        _30 = const 0_i64;
-        goto -> bb25;
+        _60 = copy _58;
+        _59 = copy _60 < const 10_i64;
+        branch copy _59 -> [bb231, bb25];
     }
 
     bb25: {
-        _31 = len(_1);
-        _32 = copy _30 < copy _31;
-        branch copy _32 -> [bb266, bb26];
+        _62 = const 0_i64;
+        goto -> bb26;
     }
 
     bb26: {
-        _36 = [const 1_i64, const 2_i64, const 3_i64, const 4_i64, const 5_i64];
-        _37 = const 0_i64;
-        goto -> bb27;
+        _64 = copy _62;
+        _63 = copy _64 < const 10_i64;
+        branch copy _63 -> [bb229, bb27];
     }
 
     bb27: {
-        _38 = len(_36);
-        _39 = copy _37 < copy _38;
-        branch copy _39 -> [bb264, bb28];
+        _66 = const 0_i64;
+        goto -> bb28;
     }
 
     bb28: {
-        _43 = [const 1_i64, const 2_i64, const 3_i64];
-        _44 = const 0_i64;
-        goto -> bb29;
+        _67 = len(_1);
+        _68 = copy _66 < copy _67;
+        branch copy _68 -> [bb227, bb29];
     }
 
     bb29: {
-        _45 = len(_43);
-        _46 = copy _44 < copy _45;
-        branch copy _46 -> [bb258, bb30];
+        _72 = const 0_i64;
+        goto -> bb30;
     }
 
     bb30: {
-        _58 = const 0_i64;
-        goto -> bb31;
+        _73 = len(_1);
+        _74 = copy _72 < copy _73;
+        branch copy _74 -> [bb225, bb31];
     }
 
     bb31: {
-        _60 = copy _58;
-        _59 = copy _60 < const 10_i64;
-        branch copy _59 -> [bb256, bb32];
+        _85 = copy _3;
+        _84 = copy _85 < const 100_i64;
+        _83 = copy _84;
+        branch copy _84 -> [bb32, bb33];
     }
 
     bb32: {
-        _62 = const 0_i64;
+        _86 = copy _20;
+        _83 = copy _86 > const 0_i64;
         goto -> bb33;
     }
 
     bb33: {
-        _64 = copy _62;
-        _63 = copy _64 < const 10_i64;
-        branch copy _63 -> [bb254, bb34];
+        _82 = copy _83;
+        branch copy _83 -> [bb34, bb35];
     }
 
     bb34: {
-        _66 = const 0_i64;
+        _82 = copy _2;
         goto -> bb35;
     }
 
     bb35: {
-        _67 = len(_1);
-        _68 = copy _66 < copy _67;
-        branch copy _68 -> [bb252, bb36];
+        _81 = copy _82;
+        branch copy _82 -> [bb36, bb37];
     }
 
     bb36: {
-        _72 = const 0_i64;
+        _87 = copy _3;
+        _88 = copy _20;
+        _81 = copy _87 != copy _88;
         goto -> bb37;
     }
 
     bb37: {
-        _73 = len(_1);
-        _74 = copy _72 < copy _73;
-        branch copy _74 -> [bb250, bb38];
+        _80 = copy _81;
+        branch copy _81 -> [bb38, bb39];
     }
 
     bb38: {
-        goto -> bb39;
-    }
-
-    bb39: {
-        _85 = copy _3;
-        _84 = copy _85 < const 100_i64;
-        _83 = copy _84;
-        branch copy _84 -> [bb40, bb41];
-    }
-
-    bb40: {
-        _86 = copy _20;
-        _83 = copy _86 > const 0_i64;
-        goto -> bb41;
-    }
-
-    bb41: {
-        _82 = copy _83;
-        branch copy _83 -> [bb42, bb43];
-    }
-
-    bb42: {
-        _82 = copy _2;
-        goto -> bb43;
-    }
-
-    bb43: {
-        _81 = copy _82;
-        branch copy _82 -> [bb44, bb45];
-    }
-
-    bb44: {
-        _87 = copy _3;
-        _88 = copy _20;
-        _81 = copy _87 != copy _88;
-        goto -> bb45;
-    }
-
-    bb45: {
-        _80 = copy _81;
-        branch copy _81 -> [bb46, bb47];
-    }
-
-    bb46: {
         _90 = copy _3;
         _91 = copy _20;
         _89 = copy _90 + copy _91;
         _80 = copy _89 < const 10000_i64;
-        goto -> bb47;
+        goto -> bb39;
     }
 
-    bb47: {
+    bb39: {
         _79 = copy _80;
-        branch copy _80 -> [bb48, bb49];
+        branch copy _80 -> [bb40, bb41];
     }
 
-    bb48: {
+    bb40: {
         _93 = copy _3;
         _94 = copy _20;
         _92 = copy _93 * copy _94;
         _79 = copy _92 > const 500_i64;
-        goto -> bb49;
+        goto -> bb41;
     }
 
-    bb49: {
+    bb41: {
         _78 = copy _79;
-        branch copy _79 -> [bb50, bb51];
+        branch copy _79 -> [bb42, bb43];
     }
 
-    bb50: {
+    bb42: {
         _96 = copy _3;
         _97 = copy _20;
         _95 = copy _96 - copy _97;
         _78 = copy _95 != const 42_i64;
-        goto -> bb51;
+        goto -> bb43;
     }
 
-    bb51: {
-        branch copy _78 -> [bb249, bb52];
+    bb43: {
+        branch copy _78 -> [bb224, bb44];
     }
 
-    bb52: {
-        goto -> bb53;
-    }
-
-    bb53: {
+    bb44: {
         _108 = copy _3;
         _107 = copy _108 < const 100_i64;
         _106 = copy _107;
-        branch copy _107 -> [bb54, bb55];
+        branch copy _107 -> [bb45, bb46];
     }
 
-    bb54: {
+    bb45: {
         _109 = copy _20;
         _106 = copy _109 > const 0_i64;
-        goto -> bb55;
+        goto -> bb46;
     }
 
-    bb55: {
+    bb46: {
         _105 = copy _106;
-        branch copy _106 -> [bb56, bb57];
+        branch copy _106 -> [bb47, bb48];
     }
 
-    bb56: {
+    bb47: {
         _105 = copy _2;
-        goto -> bb57;
+        goto -> bb48;
     }
 
-    bb57: {
+    bb48: {
         _104 = copy _105;
-        branch copy _105 -> [bb58, bb59];
+        branch copy _105 -> [bb49, bb50];
     }
 
-    bb58: {
+    bb49: {
         _110 = copy _3;
         _111 = copy _20;
         _104 = copy _110 != copy _111;
-        goto -> bb59;
+        goto -> bb50;
     }
 
-    bb59: {
+    bb50: {
         _103 = copy _104;
-        branch copy _104 -> [bb60, bb61];
+        branch copy _104 -> [bb51, bb52];
     }
 
-    bb60: {
+    bb51: {
         _113 = copy _3;
         _114 = copy _20;
         _112 = copy _113 + copy _114;
         _103 = copy _112 < const 10000_i64;
-        goto -> bb61;
+        goto -> bb52;
     }
 
-    bb61: {
+    bb52: {
         _102 = copy _103;
-        branch copy _103 -> [bb62, bb63];
+        branch copy _103 -> [bb53, bb54];
     }
 
-    bb62: {
+    bb53: {
         _116 = copy _3;
         _117 = copy _20;
         _115 = copy _116 * copy _117;
         _102 = copy _115 > const 500_i64;
-        goto -> bb63;
+        goto -> bb54;
     }
 
-    bb63: {
+    bb54: {
         _101 = copy _102;
-        branch copy _102 -> [bb64, bb65];
+        branch copy _102 -> [bb55, bb56];
     }
 
-    bb64: {
+    bb55: {
         _119 = copy _3;
         _120 = copy _20;
         _118 = copy _119 - copy _120;
         _101 = copy _118 != const 42_i64;
-        goto -> bb65;
+        goto -> bb56;
     }
 
-    bb65: {
+    bb56: {
         _100 = copy _101;
-        branch copy _101 -> [bb66, bb67];
+        branch copy _101 -> [bb57, bb58];
     }
 
-    bb66: {
+    bb57: {
         _122 = copy _3;
         _121 = copy _122 % const 7_i64;
         _100 = copy _121 == const 0_i64;
-        goto -> bb67;
+        goto -> bb58;
     }
 
-    bb67: {
+    bb58: {
         _99 = copy _100;
-        branch copy _100 -> [bb68, bb69];
+        branch copy _100 -> [bb59, bb60];
     }
 
-    bb68: {
+    bb59: {
         _124 = copy _20;
         _123 = copy _124 % const 3_i64;
         _99 = copy _123 == const 0_i64;
-        goto -> bb69;
+        goto -> bb60;
     }
 
-    bb69: {
+    bb60: {
         _98 = copy _99;
-        branch copy _99 -> [bb70, bb71];
+        branch copy _99 -> [bb61, bb62];
     }
 
-    bb70: {
+    bb61: {
         _127 = copy _3;
         _128 = copy _20;
         _126 = copy _127 + copy _128;
@@ -4497,35 +4257,35 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
         _129 = copy _130 * copy _131;
         _125 = copy _126 + copy _129;
         _98 = copy _125 > const 99999_i64;
-        goto -> bb71;
+        goto -> bb62;
     }
 
-    bb71: {
-        branch copy _98 -> [bb248, bb72];
+    bb62: {
+        branch copy _98 -> [bb223, bb63];
     }
 
-    bb72: {
+    bb63: {
         _132 = const 0_i64;
-        goto -> bb73;
+        goto -> bb64;
     }
 
-    bb73: {
+    bb64: {
         _135 = copy _132;
         _134 = copy _135 < const 1000_i64;
         _133 = copy _134;
-        branch copy _134 -> [bb74, bb75];
+        branch copy _134 -> [bb65, bb66];
     }
 
-    bb74: {
+    bb65: {
         _133 = copy _2;
-        goto -> bb75;
+        goto -> bb66;
     }
 
-    bb75: {
-        branch copy _133 -> [bb246, bb76];
+    bb66: {
+        branch copy _133 -> [bb221, bb67];
     }
 
-    bb76: {
+    bb67: {
         _139 = copy _3;
         _140 = copy _3;
         _138 = copy _139 * copy _140;
@@ -4533,225 +4293,217 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
         _143 = copy _20;
         _141 = copy _142 * copy _143;
         _137 = copy _138 + copy _141;
-        goto -> bb77;
+        goto -> bb68;
     }
 
-    bb77: {
+    bb68: {
         _147 = copy _137;
         _146 = copy _147 < const 1000000_i64;
         _145 = copy _146;
-        branch copy _146 -> [bb78, bb79];
+        branch copy _146 -> [bb69, bb70];
+    }
+
+    bb69: {
+        _145 = copy _2;
+        goto -> bb70;
+    }
+
+    bb70: {
+        _144 = copy _145;
+        branch copy _145 -> [bb71, bb72];
+    }
+
+    bb71: {
+        _148 = copy _3;
+        _144 = copy _148 > const 0_i64;
+        goto -> bb72;
+    }
+
+    bb72: {
+        branch copy _144 -> [bb219, bb73];
+    }
+
+    bb73: {
+        _153 = [const "very long string one", const "very long string two", const "very long string three", const "very long string four"];
+        _154 = const 0_i64;
+        goto -> bb74;
+    }
+
+    bb74: {
+        _155 = len(_153);
+        _156 = copy _154 < copy _155;
+        branch copy _156 -> [bb217, bb75];
+    }
+
+    bb75: {
+        _158 = [const "alpha bravo charlie", const "delta echo foxtrot", const "golf hotel india", const "juliet kilo lima", const "mike november oscar", const "papa quebec romeo"];
+        _159 = const 0_i64;
+        goto -> bb76;
+    }
+
+    bb76: {
+        _160 = len(_158);
+        _161 = copy _159 < copy _160;
+        branch copy _161 -> [bb215, bb77];
+    }
+
+    bb77: {
+        _170 = copy _3;
+        _169 = copy _170 < const 100_i64;
+        _168 = copy _169;
+        branch copy _169 -> [bb78, bb79];
     }
 
     bb78: {
-        _145 = copy _2;
+        _171 = copy _20;
+        _168 = copy _171 > const 0_i64;
         goto -> bb79;
     }
 
     bb79: {
-        _144 = copy _145;
-        branch copy _145 -> [bb80, bb81];
+        _167 = copy _168;
+        branch copy _168 -> [bb80, bb81];
     }
 
     bb80: {
-        _148 = copy _3;
-        _144 = copy _148 > const 0_i64;
+        _167 = copy _2;
         goto -> bb81;
     }
 
     bb81: {
-        branch copy _144 -> [bb244, bb82];
+        _166 = copy _167;
+        branch copy _167 -> [bb82, bb83];
     }
 
     bb82: {
-        _153 = [const "very long string one", const "very long string two", const "very long string three", const "very long string four"];
-        _154 = const 0_i64;
+        _172 = copy _3;
+        _173 = copy _20;
+        _166 = copy _172 != copy _173;
         goto -> bb83;
     }
 
     bb83: {
-        _155 = len(_153);
-        _156 = copy _154 < copy _155;
-        branch copy _156 -> [bb242, bb84];
+        _165 = copy _166;
+        branch copy _166 -> [bb84, bb85];
     }
 
     bb84: {
-        _158 = [const "alpha bravo charlie", const "delta echo foxtrot", const "golf hotel india", const "juliet kilo lima", const "mike november oscar", const "papa quebec romeo"];
-        _159 = const 0_i64;
-        goto -> bb85;
-    }
-
-    bb85: {
-        _160 = len(_158);
-        _161 = copy _159 < copy _160;
-        branch copy _161 -> [bb240, bb86];
-    }
-
-    bb86: {
-        goto -> bb87;
-    }
-
-    bb87: {
-        _170 = copy _3;
-        _169 = copy _170 < const 100_i64;
-        _168 = copy _169;
-        branch copy _169 -> [bb88, bb89];
-    }
-
-    bb88: {
-        _171 = copy _20;
-        _168 = copy _171 > const 0_i64;
-        goto -> bb89;
-    }
-
-    bb89: {
-        _167 = copy _168;
-        branch copy _168 -> [bb90, bb91];
-    }
-
-    bb90: {
-        _167 = copy _2;
-        goto -> bb91;
-    }
-
-    bb91: {
-        _166 = copy _167;
-        branch copy _167 -> [bb92, bb93];
-    }
-
-    bb92: {
-        _172 = copy _3;
-        _173 = copy _20;
-        _166 = copy _172 != copy _173;
-        goto -> bb93;
-    }
-
-    bb93: {
-        _165 = copy _166;
-        branch copy _166 -> [bb94, bb95];
-    }
-
-    bb94: {
         _175 = copy _3;
         _176 = copy _20;
         _174 = copy _175 + copy _176;
         _165 = copy _174 < const 10000_i64;
-        goto -> bb95;
+        goto -> bb85;
     }
 
-    bb95: {
+    bb85: {
         _164 = copy _165;
-        branch copy _165 -> [bb96, bb97];
+        branch copy _165 -> [bb86, bb87];
     }
 
-    bb96: {
+    bb86: {
         _178 = copy _3;
         _179 = copy _20;
         _177 = copy _178 * copy _179;
         _164 = copy _177 > const 500_i64;
-        goto -> bb97;
+        goto -> bb87;
     }
 
-    bb97: {
+    bb87: {
         _163 = copy _164;
-        branch copy _164 -> [bb98, bb99];
+        branch copy _164 -> [bb88, bb89];
     }
 
-    bb98: {
+    bb88: {
         _181 = copy _3;
         _182 = copy _20;
         _180 = copy _181 - copy _182;
         _163 = copy _180 != const 42_i64;
-        goto -> bb99;
+        goto -> bb89;
     }
 
-    bb99: {
-        branch copy _163 -> [bb239, bb100];
+    bb89: {
+        branch copy _163 -> [bb214, bb90];
     }
 
-    bb100: {
-        goto -> bb101;
-    }
-
-    bb101: {
+    bb90: {
         _190 = copy _3;
         _189 = copy _190 < const 100_i64;
         _188 = copy _189;
-        branch copy _189 -> [bb102, bb103];
+        branch copy _189 -> [bb91, bb92];
     }
 
-    bb102: {
+    bb91: {
         _191 = copy _20;
         _188 = copy _191 > const 0_i64;
-        goto -> bb103;
+        goto -> bb92;
     }
 
-    bb103: {
+    bb92: {
         _187 = copy _188;
-        branch copy _188 -> [bb104, bb105];
+        branch copy _188 -> [bb93, bb94];
     }
 
-    bb104: {
+    bb93: {
         _187 = copy _2;
-        goto -> bb105;
+        goto -> bb94;
     }
 
-    bb105: {
+    bb94: {
         _186 = copy _187;
-        branch copy _187 -> [bb106, bb107];
+        branch copy _187 -> [bb95, bb96];
     }
 
-    bb106: {
+    bb95: {
         _192 = copy _3;
         _193 = copy _20;
         _186 = copy _192 != copy _193;
-        goto -> bb107;
+        goto -> bb96;
     }
 
-    bb107: {
+    bb96: {
         _185 = copy _186;
-        branch copy _186 -> [bb108, bb109];
+        branch copy _186 -> [bb97, bb98];
     }
 
-    bb108: {
+    bb97: {
         _195 = copy _3;
         _196 = copy _20;
         _194 = copy _195 + copy _196;
         _185 = copy _194 < const 10000_i64;
-        goto -> bb109;
+        goto -> bb98;
     }
 
-    bb109: {
+    bb98: {
         _184 = copy _185;
-        branch copy _185 -> [bb110, bb111];
+        branch copy _185 -> [bb99, bb100];
     }
 
-    bb110: {
+    bb99: {
         _198 = copy _3;
         _199 = copy _20;
         _197 = copy _198 * copy _199;
         _184 = copy _197 > const 500_i64;
-        goto -> bb111;
+        goto -> bb100;
     }
 
-    bb111: {
+    bb100: {
         _183 = copy _184;
-        branch copy _184 -> [bb112, bb113];
+        branch copy _184 -> [bb101, bb102];
     }
 
-    bb112: {
+    bb101: {
         _201 = copy _3;
         _202 = copy _20;
         _200 = copy _201 - copy _202;
         _183 = copy _200 != const 42_i64;
-        goto -> bb113;
+        goto -> bb102;
     }
 
-    bb113: {
-        branch copy _183 -> [bb238, bb114];
+    bb102: {
+        branch copy _183 -> [bb213, bb103];
     }
 
-    bb114: {
+    bb103: {
         _205 = copy _3;
         _206 = copy _3;
         _204 = copy _205 * copy _206;
@@ -4759,37 +4511,37 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
         _209 = copy _20;
         _207 = copy _208 * copy _209;
         _203 = copy _204 + copy _207;
-        goto -> bb115;
+        goto -> bb104;
     }
 
-    bb115: {
+    bb104: {
         _213 = copy _203;
         _212 = copy _213 < const 1000000_i64;
         _211 = copy _212;
-        branch copy _212 -> [bb116, bb117];
+        branch copy _212 -> [bb105, bb106];
     }
 
-    bb116: {
+    bb105: {
         _211 = copy _2;
-        goto -> bb117;
+        goto -> bb106;
     }
 
-    bb117: {
+    bb106: {
         _210 = copy _211;
-        branch copy _211 -> [bb118, bb119];
+        branch copy _211 -> [bb107, bb108];
     }
 
-    bb118: {
+    bb107: {
         _214 = copy _3;
         _210 = copy _214 > const 0_i64;
-        goto -> bb119;
+        goto -> bb108;
     }
 
-    bb119: {
-        branch copy _210 -> [bb236, bb120];
+    bb108: {
+        branch copy _210 -> [bb211, bb109];
     }
 
-    bb120: {
+    bb109: {
         _221 = copy _3;
         _222 = copy _3;
         _220 = copy _221 * copy _222;
@@ -4797,162 +4549,158 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
         _225 = copy _20;
         _223 = copy _224 * copy _225;
         _219 = copy _220 + copy _223;
-        goto -> bb121;
+        goto -> bb110;
     }
 
-    bb121: {
+    bb110: {
         _229 = copy _219;
         _228 = copy _229 < const 1000000_i64;
         _227 = copy _228;
-        branch copy _228 -> [bb122, bb123];
+        branch copy _228 -> [bb111, bb112];
+    }
+
+    bb111: {
+        _227 = copy _2;
+        goto -> bb112;
+    }
+
+    bb112: {
+        _226 = copy _227;
+        branch copy _227 -> [bb113, bb114];
+    }
+
+    bb113: {
+        _230 = copy _3;
+        _226 = copy _230 > const 0_i64;
+        goto -> bb114;
+    }
+
+    bb114: {
+        branch copy _226 -> [bb209, bb115];
+    }
+
+    bb115: {
+        _235 = [const "alpha bravo charlie", const "delta echo foxtrot", const "golf hotel india", const "juliet kilo lima", const "mike november oscar", const "papa quebec romeo"];
+        _236 = const 0_i64;
+        goto -> bb116;
+    }
+
+    bb116: {
+        _237 = len(_235);
+        _238 = copy _236 < copy _237;
+        branch copy _238 -> [bb207, bb117];
+    }
+
+    bb117: {
+        _240 = [const "alpha bravo charlie", const "delta echo foxtrot", const "golf hotel india", const "juliet kilo lima", const "mike november oscar", const "papa quebec romeo"];
+        _241 = const 0_i64;
+        goto -> bb118;
+    }
+
+    bb118: {
+        _242 = len(_240);
+        _243 = copy _241 < copy _242;
+        branch copy _243 -> [bb205, bb119];
+    }
+
+    bb119: {
+        _245 = [const 1_i64, const 2_i64, const 3_i64];
+        _246 = const 0_i64;
+        goto -> bb120;
+    }
+
+    bb120: {
+        _247 = len(_245);
+        _248 = copy _246 < copy _247;
+        branch copy _248 -> [bb197, bb121];
+    }
+
+    bb121: {
+        _268 = const 0_i64;
+        goto -> bb122;
     }
 
     bb122: {
-        _227 = copy _2;
-        goto -> bb123;
+        _270 = copy _268;
+        _269 = copy _270 < const 3_i64;
+        branch copy _269 -> [bb190, bb123];
     }
 
     bb123: {
-        _226 = copy _227;
-        branch copy _227 -> [bb124, bb125];
+        _282 = [const 1_i64, const 2_i64, const 3_i64, const 4_i64, const 5_i64];
+        _283 = const 0_i64;
+        goto -> bb124;
     }
 
     bb124: {
-        _230 = copy _3;
-        _226 = copy _230 > const 0_i64;
-        goto -> bb125;
+        _284 = len(_282);
+        _285 = copy _283 < copy _284;
+        branch copy _285 -> [bb179, bb125];
     }
 
     bb125: {
-        branch copy _226 -> [bb234, bb126];
+        _308 = const 0_i64;
+        goto -> bb126;
     }
 
     bb126: {
-        _235 = [const "alpha bravo charlie", const "delta echo foxtrot", const "golf hotel india", const "juliet kilo lima", const "mike november oscar", const "papa quebec romeo"];
-        _236 = const 0_i64;
-        goto -> bb127;
+        _310 = copy _308;
+        _309 = copy _310 < const 2_i64;
+        branch copy _309 -> [bb169, bb127];
     }
 
     bb127: {
-        _237 = len(_235);
-        _238 = copy _236 < copy _237;
-        branch copy _238 -> [bb232, bb128];
+        _330 = const 0_i64;
+        goto -> bb128;
     }
 
     bb128: {
-        _240 = [const "alpha bravo charlie", const "delta echo foxtrot", const "golf hotel india", const "juliet kilo lima", const "mike november oscar", const "papa quebec romeo"];
-        _241 = const 0_i64;
-        goto -> bb129;
+        _331 = len(_1);
+        _332 = copy _330 < copy _331;
+        branch copy _332 -> [bb156, bb129];
     }
 
     bb129: {
-        _242 = len(_240);
-        _243 = copy _241 < copy _242;
-        branch copy _243 -> [bb230, bb130];
+        _356 = [const 1_i64, const 2_i64, const 3_i64, const 4_i64, const 5_i64, const 6_i64, const 7_i64, const 8_i64, const 9_i64, const 10_i64];
+        _357 = const 0_i64;
+        goto -> bb130;
     }
 
     bb130: {
-        _245 = [const 1_i64, const 2_i64, const 3_i64];
-        _246 = const 0_i64;
-        goto -> bb131;
+        _358 = len(_356);
+        _359 = copy _357 < copy _358;
+        branch copy _359 -> [bb143, bb131];
     }
 
     bb131: {
-        _247 = len(_245);
-        _248 = copy _246 < copy _247;
-        branch copy _248 -> [bb220, bb132];
+        _391 = copy _3;
+        _390 = copy _391 < const 10_i64;
+        branch copy _390 -> [bb142, bb132];
     }
 
     bb132: {
-        _268 = const 0_i64;
+        _392 = const 0_i64;
         goto -> bb133;
     }
 
     bb133: {
-        _270 = copy _268;
-        _269 = copy _270 < const 3_i64;
-        branch copy _269 -> [bb213, bb134];
+        _394 = copy _392;
+        _393 = copy _394 < const 10_i64;
+        branch copy _393 -> [bb140, bb134];
     }
 
     bb134: {
-        _282 = [const 1_i64, const 2_i64, const 3_i64, const 4_i64, const 5_i64];
-        _283 = const 0_i64;
+        _396 = const 0_i64;
         goto -> bb135;
     }
 
     bb135: {
-        _284 = len(_282);
-        _285 = copy _283 < copy _284;
-        branch copy _285 -> [bb196, bb136];
+        _397 = len(_1);
+        _398 = copy _396 < copy _397;
+        branch copy _398 -> [bb138, bb136];
     }
 
     bb136: {
-        _308 = const 0_i64;
-        goto -> bb137;
-    }
-
-    bb137: {
-        _310 = copy _308;
-        _309 = copy _310 < const 2_i64;
-        branch copy _309 -> [bb184, bb138];
-    }
-
-    bb138: {
-        _330 = const 0_i64;
-        goto -> bb139;
-    }
-
-    bb139: {
-        _331 = len(_1);
-        _332 = copy _330 < copy _331;
-        branch copy _332 -> [bb170, bb140];
-    }
-
-    bb140: {
-        _356 = [const 1_i64, const 2_i64, const 3_i64, const 4_i64, const 5_i64, const 6_i64, const 7_i64, const 8_i64, const 9_i64, const 10_i64];
-        _357 = const 0_i64;
-        goto -> bb141;
-    }
-
-    bb141: {
-        _358 = len(_356);
-        _359 = copy _357 < copy _358;
-        branch copy _359 -> [bb155, bb142];
-    }
-
-    bb142: {
-        goto -> bb143;
-    }
-
-    bb143: {
-        _391 = copy _3;
-        _390 = copy _391 < const 10_i64;
-        branch copy _390 -> [bb154, bb144];
-    }
-
-    bb144: {
-        _392 = const 0_i64;
-        goto -> bb145;
-    }
-
-    bb145: {
-        _394 = copy _392;
-        _393 = copy _394 < const 10_i64;
-        branch copy _393 -> [bb152, bb146];
-    }
-
-    bb146: {
-        _396 = const 0_i64;
-        goto -> bb147;
-    }
-
-    bb147: {
-        _397 = len(_1);
-        _398 = copy _396 < copy _397;
-        branch copy _398 -> [bb150, bb148];
-    }
-
-    bb148: {
         _402 = copy _3;
         _403 = copy _20;
         _412 = copy _3;
@@ -5072,66 +4820,62 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
         _519 = copy _20;
         _515 = copy _516 * copy _519;
         _0 = copy _20;
-        goto -> bb149;
+        goto -> bb137;
     }
 
-    bb149: {
+    bb137: {
         return;
     }
 
-    bb150: {
+    bb138: {
         _399 = copy _1[_396];
         _400 = copy _399;
         _401 = copy _400;
         _20 = copy _20 + copy _401;
-        goto -> bb151;
+        goto -> bb139;
     }
 
-    bb151: {
+    bb139: {
         _396 = copy _396 + const 1_i64;
-        goto -> bb147;
+        goto -> bb135;
     }
 
-    bb152: {
+    bb140: {
         _395 = copy _392;
         _20 = copy _20 + copy _395;
-        goto -> bb153;
+        goto -> bb141;
     }
 
-    bb153: {
+    bb141: {
         _392 = copy _392 + const 1_i64;
-        goto -> bb145;
+        goto -> bb133;
     }
 
-    bb154: {
+    bb142: {
         _3 = copy _3 + const 1_i64;
-        goto -> bb143;
+        goto -> bb131;
     }
 
-    bb155: {
+    bb143: {
         _360 = copy _356[_357];
         _361 = copy _360;
         _362 = [const 10_i64, const 20_i64, const 30_i64, const 40_i64, const 50_i64, const 60_i64, const 70_i64, const 80_i64, const 90_i64, const 100_i64];
         _363 = const 0_i64;
-        goto -> bb156;
+        goto -> bb144;
     }
 
-    bb156: {
+    bb144: {
         _364 = len(_362);
         _365 = copy _363 < copy _364;
-        branch copy _365 -> [bb159, bb157];
+        branch copy _365 -> [bb146, bb145];
     }
 
-    bb157: {
-        goto -> bb158;
-    }
-
-    bb158: {
+    bb145: {
         _357 = copy _357 + const 1_i64;
-        goto -> bb141;
+        goto -> bb130;
     }
 
-    bb159: {
+    bb146: {
         _366 = copy _362[_363];
         _367 = copy _366;
         _372 = copy _361;
@@ -5139,73 +4883,69 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
         _371 = copy _372 * copy _373;
         _370 = copy _371 > const 500_i64;
         _369 = copy _370;
-        branch copy _370 -> [bb160, bb161];
+        branch copy _370 -> [bb147, bb148];
     }
 
-    bb160: {
+    bb147: {
         _375 = copy _361;
         _376 = copy _367;
         _374 = copy _375 + copy _376;
         _369 = copy _374 < const 100_i64;
-        goto -> bb161;
+        goto -> bb148;
     }
 
-    bb161: {
-        branch copy _369 -> [bb163, bb162];
+    bb148: {
+        branch copy _369 -> [bb150, bb149];
     }
 
-    bb162: {
+    bb149: {
         _368 = const 0_i64;
-        goto -> bb168;
+        goto -> bb154;
     }
 
-    bb163: {
+    bb150: {
         _378 = copy _361;
         _377 = copy _378 % const 3_i64;
-        switch copy _377 [0: bb166, 1: bb165, otherwise: bb164];
+        switch copy _377 [0: bb153, 1: bb152, otherwise: bb151];
     }
 
-    bb164: {
+    bb151: {
         _387 = copy _361;
         _388 = copy _367;
         _368 = copy _387 * copy _388;
-        goto -> bb167;
+        goto -> bb154;
     }
 
-    bb165: {
+    bb152: {
         _384 = copy _361;
         _385 = copy _367;
         _383 = copy _384 * copy _385;
         _386 = copy _20;
         _368 = copy _383 - copy _386;
-        goto -> bb167;
+        goto -> bb154;
     }
 
-    bb166: {
+    bb153: {
         _380 = copy _361;
         _381 = copy _367;
         _379 = copy _380 * copy _381;
         _382 = copy _20;
         _368 = copy _379 + copy _382;
-        goto -> bb167;
+        goto -> bb154;
     }
 
-    bb167: {
-        goto -> bb168;
-    }
-
-    bb168: {
+    bb154: {
         _389 = copy _368;
         _20 = copy _20 + copy _389;
-        goto -> bb169;
+        goto -> bb155;
     }
 
-    bb169: {
+    bb155: {
         _363 = copy _363 + const 1_i64;
-        goto -> bb156;
+        goto -> bb144;
     }
 
-    bb170: {
+    bb156: {
         _333 = copy _1[_330];
         _334 = copy _333;
         _337 = copy _334;
@@ -5215,142 +4955,130 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
         _341 = copy _20;
         _339 = copy _340 * copy _341;
         _335 = copy _336 + copy _339;
-        goto -> bb171;
+        goto -> bb157;
     }
 
-    bb171: {
+    bb157: {
         _347 = copy _335;
         _346 = copy _347 < const 1000000_i64;
         _345 = copy _346;
-        branch copy _346 -> [bb172, bb173];
+        branch copy _346 -> [bb158, bb159];
     }
 
-    bb172: {
+    bb158: {
         _345 = copy _2;
-        goto -> bb173;
+        goto -> bb159;
     }
 
-    bb173: {
+    bb159: {
         _344 = copy _345;
-        branch copy _345 -> [bb174, bb175];
+        branch copy _345 -> [bb160, bb161];
     }
 
-    bb174: {
+    bb160: {
         _348 = copy _334;
         _344 = copy _348 > const 0_i64;
-        goto -> bb175;
+        goto -> bb161;
     }
 
-    bb175: {
+    bb161: {
         _343 = copy _344;
-        branch copy _344 -> [bb176, bb177];
+        branch copy _344 -> [bb162, bb163];
     }
 
-    bb176: {
+    bb162: {
         _349 = copy _20;
         _343 = copy _349 > const 0_i64;
-        goto -> bb177;
+        goto -> bb163;
     }
 
-    bb177: {
+    bb163: {
         _342 = copy _343;
-        branch copy _343 -> [bb178, bb179];
+        branch copy _343 -> [bb164, bb165];
     }
 
-    bb178: {
+    bb164: {
         _350 = copy _335;
         _342 = copy _350 != const 42_i64;
-        goto -> bb179;
+        goto -> bb165;
     }
 
-    bb179: {
-        branch copy _342 -> [bb182, bb180];
+    bb165: {
+        branch copy _342 -> [bb167, bb166];
     }
 
-    bb180: {
-        goto -> bb181;
-    }
-
-    bb181: {
+    bb166: {
         _330 = copy _330 + const 1_i64;
-        goto -> bb139;
+        goto -> bb128;
     }
 
-    bb182: {
+    bb167: {
         _351 = copy _335;
         _20 = copy _20 + copy _351;
-        goto -> bb183;
+        goto -> bb168;
     }
 
-    bb183: {
+    bb168: {
         _354 = copy _334;
         _355 = copy _20;
         _353 = copy _354 + copy _355;
         _352 = copy _353 + const 1_i64;
         _335 = copy _335 + copy _352;
-        goto -> bb171;
+        goto -> bb157;
     }
 
-    bb184: {
+    bb169: {
         _311 = [const 1_i64, const 2_i64];
         _312 = const 0_i64;
-        goto -> bb185;
+        goto -> bb170;
     }
 
-    bb185: {
+    bb170: {
         _313 = len(_311);
         _314 = copy _312 < copy _313;
-        branch copy _314 -> [bb187, bb186];
+        branch copy _314 -> [bb172, bb171];
     }
 
-    bb186: {
+    bb171: {
         _308 = copy _308 + const 1_i64;
-        goto -> bb137;
+        goto -> bb126;
     }
 
-    bb187: {
+    bb172: {
         _315 = copy _311[_312];
         _316 = copy _315;
         _317 = const 0_i64;
-        goto -> bb188;
+        goto -> bb173;
     }
 
-    bb188: {
+    bb173: {
         _319 = copy _317;
         _318 = copy _319 < const 2_i64;
-        branch copy _318 -> [bb191, bb189];
+        branch copy _318 -> [bb175, bb174];
     }
 
-    bb189: {
-        goto -> bb190;
-    }
-
-    bb190: {
+    bb174: {
         _312 = copy _312 + const 1_i64;
-        goto -> bb185;
+        goto -> bb170;
     }
 
-    bb191: {
+    bb175: {
         _320 = const 0_i64;
-        goto -> bb192;
+        goto -> bb176;
     }
 
-    bb192: {
+    bb176: {
         _322 = copy _320;
         _321 = copy _322 < const 2_i64;
-        branch copy _321 -> [bb195, bb193];
+        branch copy _321 -> [bb178, bb177];
     }
 
-    bb193: {
-        goto -> bb194;
-    }
-
-    bb194: {
+    bb177: {
         _317 = copy _317 + const 1_i64;
-        goto -> bb188;
+        goto -> bb173;
     }
 
-    bb195: {
+    bb178: {
         _326 = copy _308;
         _327 = copy _316;
         _325 = copy _326 + copy _327;
@@ -5360,135 +5088,111 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
         _323 = copy _324 + copy _329;
         _20 = copy _20 + copy _323;
         _320 = copy _320 + const 1_i64;
-        goto -> bb192;
+        goto -> bb176;
     }
 
-    bb196: {
+    bb179: {
         _286 = copy _282[_283];
         _287 = copy _286;
         _289 = copy _287;
         _288 = copy _289 == const 3_i64;
-        branch copy _288 -> [bb211, bb197];
+        branch copy _288 -> [bb189, bb180];
     }
 
-    bb197: {
-        goto -> bb198;
-    }
-
-    bb198: {
+    bb180: {
         _290 = [const 10_i64, const 20_i64, const 30_i64, const 40_i64, const 50_i64];
         _291 = const 0_i64;
-        goto -> bb199;
+        goto -> bb181;
     }
 
-    bb199: {
+    bb181: {
         _292 = len(_290);
         _293 = copy _291 < copy _292;
-        branch copy _293 -> [bb200, bb210];
+        branch copy _293 -> [bb182, bb189];
     }
 
-    bb200: {
+    bb182: {
         _294 = copy _290[_291];
         _295 = copy _294;
         _298 = copy _287;
         _299 = copy _295;
         _297 = copy _298 * copy _299;
         _300 = copy _297 == const 0_i64;
-        branch copy _300 -> [bb209, bb201];
+        branch copy _300 -> [bb189, bb183];
     }
 
-    bb201: {
+    bb183: {
         _301 = is_type(copy _297, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
-        branch copy _301 -> [bb202, bb203];
+        branch copy _301 -> [bb184, bb185];
     }
 
-    bb202: {
+    bb184: {
         _302 = copy _297;
         _304 = copy _302;
         _303 = copy _304 > const 100_i64;
-        branch copy _303 -> [bb207, bb203];
+        branch copy _303 -> [bb188, bb185];
     }
 
-    bb203: {
+    bb185: {
         _305 = is_type(copy _297, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
-        branch copy _305 -> [bb205, bb204];
+        branch copy _305 -> [bb186, bb187];
     }
 
-    bb204: {
-        goto -> bb206;
-    }
-
-    bb205: {
+    bb186: {
         _306 = copy _297;
         _296 = copy _306;
-        goto -> bb206;
+        goto -> bb187;
     }
 
-    bb206: {
+    bb187: {
         _307 = copy _296;
         _20 = copy _20 + copy _307;
-        goto -> bb208;
+        goto -> bb188;
     }
 
-    bb207: {
-        goto -> bb208;
-    }
-
-    bb208: {
+    bb188: {
         _291 = copy _291 + const 1_i64;
-        goto -> bb199;
+        goto -> bb181;
     }
 
-    bb209: {
-        goto -> bb210;
-    }
-
-    bb210: {
-        goto -> bb212;
-    }
-
-    bb211: {
-        goto -> bb212;
-    }
-
-    bb212: {
+    bb189: {
         _283 = copy _283 + const 1_i64;
-        goto -> bb135;
+        goto -> bb124;
     }
 
-    bb213: {
+    bb190: {
         _271 = const 0_i64;
-        goto -> bb214;
+        goto -> bb191;
     }
 
-    bb214: {
+    bb191: {
         _273 = copy _271;
         _272 = copy _273 < const 3_i64;
-        branch copy _272 -> [bb216, bb215];
+        branch copy _272 -> [bb193, bb192];
     }
 
-    bb215: {
+    bb192: {
         _268 = copy _268 + const 1_i64;
-        goto -> bb133;
+        goto -> bb122;
     }
 
-    bb216: {
+    bb193: {
         _274 = const 0_i64;
-        goto -> bb217;
+        goto -> bb194;
     }
 
-    bb217: {
+    bb194: {
         _276 = copy _274;
         _275 = copy _276 < const 3_i64;
-        branch copy _275 -> [bb219, bb218];
+        branch copy _275 -> [bb196, bb195];
     }
 
-    bb218: {
+    bb195: {
         _271 = copy _271 + const 1_i64;
-        goto -> bb214;
+        goto -> bb191;
     }
 
-    bb219: {
+    bb196: {
         _279 = copy _268;
         _280 = copy _271;
         _278 = copy _279 + copy _280;
@@ -5496,56 +5200,48 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
         _277 = copy _278 + copy _281;
         _20 = copy _20 + copy _277;
         _274 = copy _274 + const 1_i64;
-        goto -> bb217;
+        goto -> bb194;
     }
 
-    bb220: {
+    bb197: {
         _249 = copy _245[_246];
         _250 = copy _249;
         _251 = [const 4_i64, const 5_i64, const 6_i64];
         _252 = const 0_i64;
-        goto -> bb221;
+        goto -> bb198;
     }
 
-    bb221: {
+    bb198: {
         _253 = len(_251);
         _254 = copy _252 < copy _253;
-        branch copy _254 -> [bb224, bb222];
+        branch copy _254 -> [bb200, bb199];
     }
 
-    bb222: {
-        goto -> bb223;
-    }
-
-    bb223: {
+    bb199: {
         _246 = copy _246 + const 1_i64;
-        goto -> bb131;
+        goto -> bb120;
     }
 
-    bb224: {
+    bb200: {
         _255 = copy _251[_252];
         _256 = copy _255;
         _257 = [const 7_i64, const 8_i64, const 9_i64];
         _258 = const 0_i64;
-        goto -> bb225;
+        goto -> bb201;
     }
 
-    bb225: {
+    bb201: {
         _259 = len(_257);
         _260 = copy _258 < copy _259;
-        branch copy _260 -> [bb228, bb226];
+        branch copy _260 -> [bb203, bb202];
     }
 
-    bb226: {
-        goto -> bb227;
-    }
-
-    bb227: {
+    bb202: {
         _252 = copy _252 + const 1_i64;
-        goto -> bb221;
+        goto -> bb198;
     }
 
-    bb228: {
+    bb203: {
         _261 = copy _257[_258];
         _262 = copy _261;
         _265 = copy _250;
@@ -5554,301 +5250,285 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
         _267 = copy _262;
         _263 = copy _264 * copy _267;
         _20 = copy _20 + copy _263;
-        goto -> bb229;
+        goto -> bb204;
     }
 
-    bb229: {
+    bb204: {
         _258 = copy _258 + const 1_i64;
-        goto -> bb225;
+        goto -> bb201;
     }
 
-    bb230: {
+    bb205: {
         _244 = copy _240[_241];
         _20 = copy _20 + const 1_i64;
-        goto -> bb231;
+        goto -> bb206;
     }
 
-    bb231: {
+    bb206: {
         _241 = copy _241 + const 1_i64;
-        goto -> bb129;
+        goto -> bb118;
     }
 
-    bb232: {
+    bb207: {
         _239 = copy _235[_236];
         _20 = copy _20 + const 1_i64;
-        goto -> bb233;
+        goto -> bb208;
     }
 
-    bb233: {
+    bb208: {
         _236 = copy _236 + const 1_i64;
-        goto -> bb127;
+        goto -> bb116;
     }
 
-    bb234: {
+    bb209: {
         _231 = copy _219;
         _20 = copy _20 + copy _231;
-        goto -> bb235;
+        goto -> bb210;
     }
 
-    bb235: {
+    bb210: {
         _233 = copy _3;
         _234 = copy _20;
         _232 = copy _233 + copy _234;
         _219 = copy _219 + copy _232;
-        goto -> bb121;
+        goto -> bb110;
     }
 
-    bb236: {
+    bb211: {
         _215 = copy _203;
         _20 = copy _20 + copy _215;
-        goto -> bb237;
+        goto -> bb212;
     }
 
-    bb237: {
+    bb212: {
         _217 = copy _3;
         _218 = copy _20;
         _216 = copy _217 + copy _218;
         _203 = copy _203 + copy _216;
-        goto -> bb115;
+        goto -> bb104;
     }
 
-    bb238: {
+    bb213: {
         _3 = copy _3 + const 1_i64;
-        goto -> bb101;
+        goto -> bb90;
     }
 
-    bb239: {
+    bb214: {
         _3 = copy _3 + const 1_i64;
-        goto -> bb87;
+        goto -> bb77;
     }
 
-    bb240: {
+    bb215: {
         _162 = copy _158[_159];
         _20 = copy _20 + const 1_i64;
-        goto -> bb241;
+        goto -> bb216;
     }
 
-    bb241: {
+    bb216: {
         _159 = copy _159 + const 1_i64;
-        goto -> bb85;
+        goto -> bb76;
     }
 
-    bb242: {
+    bb217: {
         _157 = copy _153[_154];
         _20 = copy _20 + const 1_i64;
-        goto -> bb243;
+        goto -> bb218;
     }
 
-    bb243: {
+    bb218: {
         _154 = copy _154 + const 1_i64;
-        goto -> bb83;
+        goto -> bb74;
     }
 
-    bb244: {
+    bb219: {
         _149 = copy _137;
         _20 = copy _20 + copy _149;
-        goto -> bb245;
+        goto -> bb220;
     }
 
-    bb245: {
+    bb220: {
         _151 = copy _3;
         _152 = copy _20;
         _150 = copy _151 + copy _152;
         _137 = copy _137 + copy _150;
-        goto -> bb77;
+        goto -> bb68;
     }
 
-    bb246: {
+    bb221: {
         _136 = copy _132;
         _20 = copy _20 + copy _136;
-        goto -> bb247;
+        goto -> bb222;
     }
 
-    bb247: {
+    bb222: {
         _132 = copy _132 + const 1_i64;
-        goto -> bb73;
+        goto -> bb64;
     }
 
-    bb248: {
+    bb223: {
         _3 = copy _3 + const 1_i64;
-        goto -> bb53;
+        goto -> bb44;
     }
 
-    bb249: {
+    bb224: {
         _3 = copy _3 + const 1_i64;
-        goto -> bb39;
+        goto -> bb31;
     }
 
-    bb250: {
+    bb225: {
         _75 = copy _1[_72];
         _76 = copy _75;
         _77 = copy _76;
         _20 = copy _20 + copy _77;
-        goto -> bb251;
+        goto -> bb226;
     }
 
-    bb251: {
+    bb226: {
         _72 = copy _72 + const 1_i64;
-        goto -> bb37;
+        goto -> bb30;
     }
 
-    bb252: {
+    bb227: {
         _69 = copy _1[_66];
         _70 = copy _69;
         _71 = copy _70;
         _20 = copy _20 + copy _71;
-        goto -> bb253;
+        goto -> bb228;
     }
 
-    bb253: {
+    bb228: {
         _66 = copy _66 + const 1_i64;
-        goto -> bb35;
+        goto -> bb28;
     }
 
-    bb254: {
+    bb229: {
         _65 = copy _62;
         _20 = copy _20 + copy _65;
-        goto -> bb255;
+        goto -> bb230;
     }
 
-    bb255: {
+    bb230: {
         _62 = copy _62 + const 1_i64;
-        goto -> bb33;
+        goto -> bb26;
     }
 
-    bb256: {
+    bb231: {
         _61 = copy _58;
         _20 = copy _20 + copy _61;
-        goto -> bb257;
+        goto -> bb232;
     }
 
-    bb257: {
+    bb232: {
         _58 = copy _58 + const 1_i64;
-        goto -> bb31;
+        goto -> bb24;
     }
 
-    bb258: {
+    bb233: {
         _47 = copy _43[_44];
         _48 = copy _47;
         _49 = [const 4_i64, const 5_i64, const 6_i64];
         _50 = const 0_i64;
-        goto -> bb259;
+        goto -> bb234;
     }
 
-    bb259: {
+    bb234: {
         _51 = len(_49);
         _52 = copy _50 < copy _51;
-        branch copy _52 -> [bb262, bb260];
+        branch copy _52 -> [bb236, bb235];
     }
 
-    bb260: {
-        goto -> bb261;
-    }
-
-    bb261: {
+    bb235: {
         _44 = copy _44 + const 1_i64;
-        goto -> bb29;
+        goto -> bb22;
     }
 
-    bb262: {
+    bb236: {
         _53 = copy _49[_50];
         _54 = copy _53;
         _56 = copy _48;
         _57 = copy _54;
         _55 = copy _56 * copy _57;
         _20 = copy _20 + copy _55;
-        goto -> bb263;
+        goto -> bb237;
     }
 
-    bb263: {
+    bb237: {
         _50 = copy _50 + const 1_i64;
-        goto -> bb259;
+        goto -> bb234;
     }
 
-    bb264: {
+    bb238: {
         _40 = copy _36[_37];
         _41 = copy _40;
         _42 = copy _41;
         _20 = copy _20 + copy _42;
-        goto -> bb265;
+        goto -> bb239;
     }
 
-    bb265: {
+    bb239: {
         _37 = copy _37 + const 1_i64;
-        goto -> bb27;
+        goto -> bb20;
     }
 
-    bb266: {
+    bb240: {
         _33 = copy _1[_30];
         _34 = copy _33;
         _35 = copy _34;
         _20 = copy _20 + copy _35;
-        goto -> bb267;
+        goto -> bb241;
     }
 
-    bb267: {
+    bb241: {
         _30 = copy _30 + const 1_i64;
-        goto -> bb25;
+        goto -> bb18;
     }
 
-    bb268: {
+    bb242: {
         _29 = copy _25;
         _20 = copy _20 + copy _29;
-        goto -> bb269;
+        goto -> bb243;
     }
 
-    bb269: {
+    bb243: {
         _25 = copy _25 + const 2_i64;
-        goto -> bb21;
+        goto -> bb14;
     }
 
-    bb270: {
+    bb244: {
         _24 = copy _21;
         _20 = copy _20 + copy _24;
-        goto -> bb271;
+        goto -> bb245;
     }
 
-    bb271: {
+    bb245: {
         _21 = copy _21 + const 1_i64;
-        goto -> bb19;
+        goto -> bb12;
     }
 
-    bb272: {
+    bb246: {
         _3 = copy _3 + const 1_i64;
-        goto -> bb17;
+        goto -> bb10;
     }
 
-    bb273: {
+    bb247: {
         _3 = copy _3 + const 1_i64;
-        goto -> bb15;
+        goto -> bb9;
     }
 
-    bb274: {
+    bb248: {
         _3 = copy _3 + const 1_i64;
         _15 = copy _3;
         _14 = copy _15 % const 2_i64;
         _13 = copy _14 == const 0_i64;
-        branch copy _13 -> [bb277, bb275];
+        branch copy _13 -> [bb8, bb8];
     }
 
-    bb275: {
-        goto -> bb276;
-    }
-
-    bb276: {
-        goto -> bb13;
-    }
-
-    bb277: {
-        goto -> bb13;
-    }
-
-    bb278: {
+    bb249: {
         _3 = copy _3 + const 1_i64;
-        goto -> bb3;
+        goto -> bb2;
     }
 
-    bb279: {
+    bb250: {
         _3 = copy _3 + const 1_i64;
         goto -> bb1;
     }
@@ -5982,687 +5662,395 @@ fn user.MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bo
     let _123: int
 
     bb0: {
-        switch copy _1 [0: bb2, otherwise: bb1];
+        switch copy _1 [0: bb1, otherwise: bb1];
     }
 
     bb1: {
-        goto -> bb3;
+        switch copy _1 [0: bb2, 1: bb2, 2: bb2, 3: bb2, 4: bb2, otherwise: bb2];
     }
 
     bb2: {
-        goto -> bb3;
+        switch copy _1 [0: bb3, otherwise: bb3];
     }
 
     bb3: {
-        switch copy _1 [0: bb9, 1: bb8, 2: bb7, 3: bb6, 4: bb5, otherwise: bb4];
+        switch copy _1 [0: bb4, otherwise: bb4];
     }
 
     bb4: {
-        goto -> bb10;
+        switch copy _1 [0: bb5, otherwise: bb5];
     }
 
     bb5: {
-        goto -> bb10;
+        _5 = is_type(copy _1, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _5 -> [bb6, bb7];
     }
 
     bb6: {
-        goto -> bb10;
-    }
-
-    bb7: {
-        goto -> bb10;
-    }
-
-    bb8: {
-        goto -> bb10;
-    }
-
-    bb9: {
-        goto -> bb10;
-    }
-
-    bb10: {
-        switch copy _1 [0: bb12, otherwise: bb11];
-    }
-
-    bb11: {
-        goto -> bb13;
-    }
-
-    bb12: {
-        goto -> bb13;
-    }
-
-    bb13: {
-        switch copy _1 [0: bb15, otherwise: bb14];
-    }
-
-    bb14: {
-        goto -> bb16;
-    }
-
-    bb15: {
-        goto -> bb16;
-    }
-
-    bb16: {
-        switch copy _1 [0: bb18, otherwise: bb17];
-    }
-
-    bb17: {
-        goto -> bb19;
-    }
-
-    bb18: {
-        goto -> bb19;
-    }
-
-    bb19: {
-        _5 = is_type(copy _1, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
-        branch copy _5 -> [bb20, bb21];
-    }
-
-    bb20: {
         _6 = copy _1;
         _8 = copy _6;
         _7 = copy _8 > const 0_i64;
-        branch copy _7 -> [bb23, bb21];
+        branch copy _7 -> [bb7, bb7];
     }
 
-    bb21: {
-        goto -> bb22;
-    }
-
-    bb22: {
-        goto -> bb24;
-    }
-
-    bb23: {
-        goto -> bb24;
-    }
-
-    bb24: {
+    bb7: {
         _9 = is_type(copy _1, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
-        branch copy _9 -> [bb25, bb26];
+        branch copy _9 -> [bb8, bb9];
     }
 
-    bb25: {
+    bb8: {
         _10 = copy _1;
         _12 = copy _10;
         _11 = copy _12 > const 0_i64;
-        branch copy _11 -> [bb28, bb26];
+        branch copy _11 -> [bb9, bb9];
+    }
+
+    bb9: {
+        switch copy _1 [0: bb10, 1: bb10, 42: bb10, otherwise: bb10];
+    }
+
+    bb10: {
+        _13 = const "hello";
+        _14 = copy _13 == const "hello";
+        branch copy _14 -> [bb12, bb11];
+    }
+
+    bb11: {
+        _15 = copy _13 == const "bye";
+        branch copy _15 -> [bb12, bb12];
+    }
+
+    bb12: {
+        _16 = copy _4 == const true;
+        branch copy _16 -> [bb14, bb13];
+    }
+
+    bb13: {
+        _17 = copy _4 == const false;
+        branch copy _17 -> [bb14, bb14];
+    }
+
+    bb14: {
+        switch copy _1 [0: bb15, otherwise: bb15];
+    }
+
+    bb15: {
+        _18 = is_type(copy _1, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _18 -> [bb16, bb16];
+    }
+
+    bb16: {
+        _19 = discriminant(_2);
+        switch copy _19 [MatchStatus.Active: bb18, MatchStatus.Inactive: bb18, MatchStatus.Pending: bb18, otherwise: bb17] (exhaustive);
+    }
+
+    bb17: {
+        unreachable;
+    }
+
+    bb18: {
+        switch copy _1 [0: bb19, 1: bb19, 2: bb19, 3: bb19, 4: bb19, otherwise: bb19];
+    }
+
+    bb19: {
+        switch copy _1 [0: bb20, 1: bb20, 2: bb20, otherwise: bb20];
+    }
+
+    bb20: {
+        _20 = discriminant(_2);
+        switch copy _20 [MatchStatus.Active: bb22, MatchStatus.Pending: bb22, MatchStatus.Inactive: bb22, otherwise: bb21] (exhaustive);
+    }
+
+    bb21: {
+        unreachable;
+    }
+
+    bb22: {
+        _21 = is_type(copy _3, Class(TypeName { name: "MatchSuccess", module_path: ["user"], display_name: "MatchSuccess" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        branch copy _21 -> [bb25, bb23];
+    }
+
+    bb23: {
+        _24 = is_type(copy _3, Class(TypeName { name: "MatchFailure", module_path: ["user"], display_name: "MatchFailure" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        branch copy _24 -> [bb24, bb26];
+    }
+
+    bb24: {
+        _25 = copy _3;
+        _26 = copy _25;
+        goto -> bb26;
+    }
+
+    bb25: {
+        _22 = copy _3;
+        _23 = copy _22;
+        goto -> bb26;
     }
 
     bb26: {
-        goto -> bb27;
+        _27 = is_type(copy _3, Class(TypeName { name: "MatchSuccess", module_path: ["user"], display_name: "MatchSuccess" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        branch copy _27 -> [bb28, bb27];
     }
 
     bb27: {
-        goto -> bb29;
+        _28 = is_type(copy _3, Class(TypeName { name: "MatchFailure", module_path: ["user"], display_name: "MatchFailure" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        branch copy _28 -> [bb28, bb29];
     }
 
     bb28: {
+        _29 = copy _3;
         goto -> bb29;
     }
 
     bb29: {
-        switch copy _1 [0: bb33, 1: bb32, 42: bb31, otherwise: bb30];
+        switch copy _29 [0: bb30, 1: bb30, 2: bb30, 3: bb30, 4: bb30, 5: bb30, otherwise: bb30];
     }
 
     bb30: {
-        goto -> bb34;
+        _30 = is_type(copy _29, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _30 -> [bb31, bb32];
     }
 
     bb31: {
-        goto -> bb34;
-    }
-
-    bb32: {
-        goto -> bb34;
-    }
-
-    bb33: {
-        goto -> bb34;
-    }
-
-    bb34: {
-        _13 = const "hello";
-        _14 = copy _13 == const "hello";
-        branch copy _14 -> [bb39, bb35];
-    }
-
-    bb35: {
-        _15 = copy _13 == const "bye";
-        branch copy _15 -> [bb38, bb36];
-    }
-
-    bb36: {
-        goto -> bb37;
-    }
-
-    bb37: {
-        goto -> bb40;
-    }
-
-    bb38: {
-        goto -> bb40;
-    }
-
-    bb39: {
-        goto -> bb40;
-    }
-
-    bb40: {
-        _16 = copy _4 == const true;
-        branch copy _16 -> [bb44, bb41];
-    }
-
-    bb41: {
-        _17 = copy _4 == const false;
-        branch copy _17 -> [bb43, bb42];
-    }
-
-    bb42: {
-        goto -> bb45;
-    }
-
-    bb43: {
-        goto -> bb45;
-    }
-
-    bb44: {
-        goto -> bb45;
-    }
-
-    bb45: {
-        switch copy _1 [0: bb47, otherwise: bb46];
-    }
-
-    bb46: {
-        goto -> bb48;
-    }
-
-    bb47: {
-        goto -> bb48;
-    }
-
-    bb48: {
-        _18 = is_type(copy _1, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
-        branch copy _18 -> [bb50, bb49];
-    }
-
-    bb49: {
-        goto -> bb51;
-    }
-
-    bb50: {
-        goto -> bb51;
-    }
-
-    bb51: {
-        _19 = discriminant(_2);
-        switch copy _19 [MatchStatus.Active: bb55, MatchStatus.Inactive: bb54, MatchStatus.Pending: bb53, otherwise: bb52] (exhaustive);
-    }
-
-    bb52: {
-        unreachable;
-    }
-
-    bb53: {
-        goto -> bb56;
-    }
-
-    bb54: {
-        goto -> bb56;
-    }
-
-    bb55: {
-        goto -> bb56;
-    }
-
-    bb56: {
-        switch copy _1 [0: bb59, 1: bb59, 2: bb58, 3: bb58, 4: bb58, otherwise: bb57];
-    }
-
-    bb57: {
-        goto -> bb60;
-    }
-
-    bb58: {
-        goto -> bb60;
-    }
-
-    bb59: {
-        goto -> bb60;
-    }
-
-    bb60: {
-        switch copy _1 [0: bb63, 1: bb62, 2: bb62, otherwise: bb61];
-    }
-
-    bb61: {
-        goto -> bb64;
-    }
-
-    bb62: {
-        goto -> bb64;
-    }
-
-    bb63: {
-        goto -> bb64;
-    }
-
-    bb64: {
-        _20 = discriminant(_2);
-        switch copy _20 [MatchStatus.Active: bb67, MatchStatus.Pending: bb67, MatchStatus.Inactive: bb66, otherwise: bb65] (exhaustive);
-    }
-
-    bb65: {
-        unreachable;
-    }
-
-    bb66: {
-        goto -> bb68;
-    }
-
-    bb67: {
-        goto -> bb68;
-    }
-
-    bb68: {
-        _21 = is_type(copy _3, Class(TypeName { name: "MatchSuccess", module_path: ["user"], display_name: "MatchSuccess" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
-        branch copy _21 -> [bb72, bb69];
-    }
-
-    bb69: {
-        _24 = is_type(copy _3, Class(TypeName { name: "MatchFailure", module_path: ["user"], display_name: "MatchFailure" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
-        branch copy _24 -> [bb71, bb70];
-    }
-
-    bb70: {
-        goto -> bb73;
-    }
-
-    bb71: {
-        _25 = copy _3;
-        _26 = copy _25;
-        goto -> bb73;
-    }
-
-    bb72: {
-        _22 = copy _3;
-        _23 = copy _22;
-        goto -> bb73;
-    }
-
-    bb73: {
-        _27 = is_type(copy _3, Class(TypeName { name: "MatchSuccess", module_path: ["user"], display_name: "MatchSuccess" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
-        branch copy _27 -> [bb76, bb74];
-    }
-
-    bb74: {
-        _28 = is_type(copy _3, Class(TypeName { name: "MatchFailure", module_path: ["user"], display_name: "MatchFailure" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
-        branch copy _28 -> [bb76, bb75];
-    }
-
-    bb75: {
-        goto -> bb77;
-    }
-
-    bb76: {
-        _29 = copy _3;
-        goto -> bb77;
-    }
-
-    bb77: {
-        switch copy _29 [0: bb79, 1: bb79, 2: bb79, 3: bb79, 4: bb79, 5: bb79, otherwise: bb78];
-    }
-
-    bb78: {
-        goto -> bb80;
-    }
-
-    bb79: {
-        goto -> bb80;
-    }
-
-    bb80: {
-        _30 = is_type(copy _29, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
-        branch copy _30 -> [bb81, bb82];
-    }
-
-    bb81: {
         _31 = copy _29;
         _33 = copy _31;
         _32 = copy _33 > const 0_i64;
-        branch copy _32 -> [bb87, bb82];
+        branch copy _32 -> [bb34, bb32];
     }
 
-    bb82: {
+    bb32: {
         _34 = is_type(copy _29, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
-        branch copy _34 -> [bb83, bb84];
+        branch copy _34 -> [bb33, bb34];
     }
 
-    bb83: {
+    bb33: {
         _35 = copy _29;
         _37 = copy _35;
         _36 = copy _37 < const 0_i64;
-        branch copy _36 -> [bb86, bb84];
+        branch copy _36 -> [bb34, bb34];
     }
 
-    bb84: {
-        goto -> bb85;
-    }
-
-    bb85: {
-        goto -> bb88;
-    }
-
-    bb86: {
-        goto -> bb88;
-    }
-
-    bb87: {
-        goto -> bb88;
-    }
-
-    bb88: {
+    bb34: {
         _38 = is_type(copy _29, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
-        branch copy _38 -> [bb89, bb100];
+        branch copy _38 -> [bb35, bb46];
     }
 
-    bb89: {
+    bb35: {
         _39 = copy _29;
         _46 = copy _39;
         _45 = copy _46 > const 0_i64;
         _44 = copy _45;
-        branch copy _45 -> [bb90, bb91];
+        branch copy _45 -> [bb36, bb37];
     }
 
-    bb90: {
+    bb36: {
         _47 = copy _39;
         _44 = copy _47 < const 100_i64;
-        goto -> bb91;
+        goto -> bb37;
     }
 
-    bb91: {
+    bb37: {
         _43 = copy _44;
-        branch copy _44 -> [bb92, bb93];
+        branch copy _44 -> [bb38, bb39];
     }
 
-    bb92: {
+    bb38: {
         _48 = copy _39;
         _43 = copy _48 != const 42_i64;
-        goto -> bb93;
+        goto -> bb39;
     }
 
-    bb93: {
+    bb39: {
         _42 = copy _43;
-        branch copy _43 -> [bb94, bb95];
+        branch copy _43 -> [bb40, bb41];
     }
 
-    bb94: {
+    bb40: {
         _49 = copy _39;
         _42 = copy _49 != const 13_i64;
-        goto -> bb95;
+        goto -> bb41;
     }
 
-    bb95: {
+    bb41: {
         _41 = copy _42;
-        branch copy _42 -> [bb96, bb97];
+        branch copy _42 -> [bb42, bb43];
     }
 
-    bb96: {
+    bb42: {
         _50 = copy _39;
         _41 = copy _50 != const 7_i64;
-        goto -> bb97;
+        goto -> bb43;
     }
 
-    bb97: {
+    bb43: {
         _40 = copy _41;
-        branch copy _41 -> [bb98, bb99];
+        branch copy _41 -> [bb44, bb45];
     }
 
-    bb98: {
+    bb44: {
         _51 = copy _39;
         _40 = copy _51 != const 99_i64;
-        goto -> bb99;
+        goto -> bb45;
     }
 
-    bb99: {
-        branch copy _40 -> [bb102, bb100];
+    bb45: {
+        branch copy _40 -> [bb46, bb46];
     }
 
-    bb100: {
-        goto -> bb101;
+    bb46: {
+        switch copy _29 [0: bb47, 1: bb47, otherwise: bb47];
     }
 
-    bb101: {
-        goto -> bb103;
+    bb47: {
+        switch copy _29 [0: bb48, 1: bb48, 2: bb48, 3: bb48, 4: bb48, 5: bb48, 6: bb48, 7: bb48, 8: bb48, 9: bb48, 10: bb48, 11: bb48, 12: bb48, 13: bb48, 14: bb48, 15: bb48, 16: bb48, 17: bb48, 18: bb48, 19: bb48, 20: bb48, 21: bb48, 22: bb48, 23: bb48, 24: bb48, otherwise: bb48];
     }
 
-    bb102: {
-        goto -> bb103;
-    }
-
-    bb103: {
-        switch copy _29 [0: bb106, 1: bb105, otherwise: bb104];
-    }
-
-    bb104: {
-        goto -> bb107;
-    }
-
-    bb105: {
-        goto -> bb107;
-    }
-
-    bb106: {
-        goto -> bb107;
-    }
-
-    bb107: {
-        switch copy _29 [0: bb109, 1: bb109, 2: bb109, 3: bb109, 4: bb109, 5: bb109, 6: bb109, 7: bb109, 8: bb109, 9: bb109, 10: bb109, 11: bb109, 12: bb109, 13: bb109, 14: bb109, 15: bb109, 16: bb109, 17: bb109, 18: bb109, 19: bb109, 20: bb109, 21: bb109, 22: bb109, 23: bb109, 24: bb109, otherwise: bb108];
-    }
-
-    bb108: {
-        goto -> bb110;
-    }
-
-    bb109: {
-        goto -> bb110;
-    }
-
-    bb110: {
+    bb48: {
         _52 = discriminant(_22);
-        switch copy _52 [MatchStatus.Active: bb112, MatchStatus.Inactive: bb112, MatchStatus.Pending: bb112, otherwise: bb111] (exhaustive);
+        switch copy _52 [MatchStatus.Active: bb50, MatchStatus.Inactive: bb50, MatchStatus.Pending: bb50, otherwise: bb49] (exhaustive);
     }
 
-    bb111: {
+    bb49: {
         unreachable;
     }
 
-    bb112: {
-        goto -> bb113;
+    bb50: {
+        switch copy _29 [0: bb51, otherwise: bb54];
     }
 
-    bb113: {
-        switch copy _29 [0: bb115, otherwise: bb114];
+    bb51: {
+        branch copy _4 -> [bb53, bb52];
     }
 
-    bb114: {
-        goto -> bb119;
-    }
-
-    bb115: {
-        branch copy _4 -> [bb117, bb116];
-    }
-
-    bb116: {
+    bb52: {
         _53 = const "this is the false branch also very long";
-        goto -> bb118;
+        goto -> bb54;
     }
 
-    bb117: {
+    bb53: {
         _53 = const "this is the true branch with a very long string";
-        goto -> bb118;
+        goto -> bb54;
     }
 
-    bb118: {
-        goto -> bb119;
-    }
-
-    bb119: {
+    bb54: {
         _54 = is_type(copy _29, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
-        branch copy _54 -> [bb120, bb129];
+        branch copy _54 -> [bb55, bb64];
     }
 
-    bb120: {
+    bb55: {
         _55 = copy _29;
         _61 = copy _55;
         _60 = copy _61 > const 0_i64;
         _59 = copy _60;
-        branch copy _60 -> [bb121, bb122];
+        branch copy _60 -> [bb56, bb57];
     }
 
-    bb121: {
+    bb56: {
         _62 = copy _55;
         _59 = copy _62 < const 100_i64;
-        goto -> bb122;
+        goto -> bb57;
     }
 
-    bb122: {
+    bb57: {
         _58 = copy _59;
-        branch copy _59 -> [bb123, bb124];
+        branch copy _59 -> [bb58, bb59];
     }
 
-    bb123: {
+    bb58: {
         _63 = copy _55;
         _58 = copy _63 != const 42_i64;
-        goto -> bb124;
+        goto -> bb59;
     }
 
-    bb124: {
+    bb59: {
         _57 = copy _58;
-        branch copy _58 -> [bb125, bb126];
+        branch copy _58 -> [bb60, bb61];
     }
 
-    bb125: {
+    bb60: {
         _64 = copy _55;
         _57 = copy _64 != const 13_i64;
-        goto -> bb126;
+        goto -> bb61;
     }
 
-    bb126: {
+    bb61: {
         _56 = copy _57;
-        branch copy _57 -> [bb127, bb128];
+        branch copy _57 -> [bb62, bb63];
     }
 
-    bb127: {
+    bb62: {
         _65 = copy _55;
         _56 = copy _65 != const 7_i64;
-        goto -> bb128;
+        goto -> bb63;
     }
 
-    bb128: {
-        branch copy _56 -> [bb131, bb129];
+    bb63: {
+        branch copy _56 -> [bb64, bb64];
     }
 
-    bb129: {
-        goto -> bb130;
-    }
-
-    bb130: {
-        goto -> bb132;
-    }
-
-    bb131: {
-        goto -> bb132;
-    }
-
-    bb132: {
+    bb64: {
         _66 = is_type(copy _29, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
-        branch copy _66 -> [bb133, bb142];
+        branch copy _66 -> [bb65, bb74];
     }
 
-    bb133: {
+    bb65: {
         _67 = copy _29;
         _73 = copy _67;
         _72 = copy _73 > const 0_i64;
         _71 = copy _72;
-        branch copy _72 -> [bb134, bb135];
+        branch copy _72 -> [bb66, bb67];
     }
 
-    bb134: {
+    bb66: {
         _74 = copy _67;
         _71 = copy _74 < const 100_i64;
-        goto -> bb135;
+        goto -> bb67;
     }
 
-    bb135: {
+    bb67: {
         _70 = copy _71;
-        branch copy _71 -> [bb136, bb137];
+        branch copy _71 -> [bb68, bb69];
     }
 
-    bb136: {
+    bb68: {
         _75 = copy _67;
         _70 = copy _75 != const 42_i64;
-        goto -> bb137;
+        goto -> bb69;
     }
 
-    bb137: {
+    bb69: {
         _69 = copy _70;
-        branch copy _70 -> [bb138, bb139];
+        branch copy _70 -> [bb70, bb71];
     }
 
-    bb138: {
+    bb70: {
         _76 = copy _67;
         _69 = copy _76 != const 13_i64;
-        goto -> bb139;
+        goto -> bb71;
     }
 
-    bb139: {
+    bb71: {
         _68 = copy _69;
-        branch copy _69 -> [bb140, bb141];
+        branch copy _69 -> [bb72, bb73];
     }
 
-    bb140: {
+    bb72: {
         _77 = copy _67;
         _68 = copy _77 != const 7_i64;
-        goto -> bb141;
+        goto -> bb73;
     }
 
-    bb141: {
-        branch copy _68 -> [bb144, bb142];
+    bb73: {
+        branch copy _68 -> [bb74, bb74];
     }
 
-    bb142: {
-        goto -> bb143;
-    }
-
-    bb143: {
-        goto -> bb145;
-    }
-
-    bb144: {
-        goto -> bb145;
-    }
-
-    bb145: {
+    bb74: {
         _79 = copy _29;
         _78 = copy _79 + const 1_i64;
-        switch copy _78 [0: bb147, otherwise: bb146];
+        switch copy _78 [0: bb75, otherwise: bb75];
     }
 
-    bb146: {
-        goto -> bb148;
-    }
-
-    bb147: {
-        goto -> bb148;
-    }
-
-    bb148: {
+    bb75: {
         _89 = copy _29;
         _90 = copy _29;
         _88 = copy _89 * copy _90;
@@ -6692,247 +6080,119 @@ fn user.MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bo
         _107 = copy _4 * copy _108;
         _106 = copy _107 * copy _4;
         _80 = copy _81 + copy _106;
-        switch copy _80 [0: bb150, otherwise: bb149];
+        switch copy _80 [0: bb76, otherwise: bb76];
     }
 
-    bb149: {
-        goto -> bb151;
-    }
-
-    bb150: {
-        goto -> bb151;
-    }
-
-    bb151: {
+    bb76: {
         _110 = copy _29;
         _109 = copy _110 + const 1_i64;
-        switch copy _109 [0: bb153, otherwise: bb152];
+        switch copy _109 [0: bb77, otherwise: bb77];
     }
 
-    bb152: {
-        goto -> bb154;
+    bb77: {
+        switch copy _29 [0: bb78, otherwise: bb78];
     }
 
-    bb153: {
-        goto -> bb154;
+    bb78: {
+        switch copy _29 [0: bb79, otherwise: bb81];
     }
 
-    bb154: {
-        switch copy _29 [0: bb156, otherwise: bb155];
-    }
-
-    bb155: {
-        goto -> bb157;
-    }
-
-    bb156: {
-        goto -> bb157;
-    }
-
-    bb157: {
-        switch copy _29 [0: bb159, otherwise: bb158];
-    }
-
-    bb158: {
-        goto -> bb165;
-    }
-
-    bb159: {
+    bb79: {
         _111 = copy _4 == const true;
-        branch copy _111 -> [bb163, bb160];
+        branch copy _111 -> [bb81, bb80];
     }
 
-    bb160: {
+    bb80: {
         _112 = copy _4 == const false;
-        branch copy _112 -> [bb162, bb161];
+        branch copy _112 -> [bb81, bb81];
     }
 
-    bb161: {
-        goto -> bb164;
+    bb81: {
+        switch copy _29 [0: bb88, 1: bb82, otherwise: bb92];
     }
 
-    bb162: {
-        goto -> bb164;
-    }
-
-    bb163: {
-        goto -> bb164;
-    }
-
-    bb164: {
-        goto -> bb165;
-    }
-
-    bb165: {
-        switch copy _29 [0: bb178, 1: bb167, otherwise: bb166];
-    }
-
-    bb166: {
-        goto -> bb189;
-    }
-
-    bb167: {
+    bb82: {
         _116 = is_type(copy _3, Class(TypeName { name: "MatchSuccess", module_path: ["user"], display_name: "MatchSuccess" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
-        branch copy _116 -> [bb171, bb168];
+        branch copy _116 -> [bb85, bb83];
     }
 
-    bb168: {
+    bb83: {
         _121 = is_type(copy _3, Class(TypeName { name: "MatchFailure", module_path: ["user"], display_name: "MatchFailure" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
-        branch copy _121 -> [bb170, bb169];
+        branch copy _121 -> [bb84, bb92];
     }
 
-    bb169: {
-        goto -> bb177;
-    }
-
-    bb170: {
+    bb84: {
         _122 = const null;
-        goto -> bb177;
+        goto -> bb92;
     }
 
-    bb171: {
+    bb85: {
         _117 = copy _3;
         _118 = copy _4 == const true;
-        branch copy _118 -> [bb175, bb172];
+        branch copy _118 -> [bb87, bb86];
     }
 
-    bb172: {
+    bb86: {
         _120 = copy _4 == const false;
-        branch copy _120 -> [bb174, bb173];
+        branch copy _120 -> [bb92, bb92];
     }
 
-    bb173: {
-        goto -> bb176;
-    }
-
-    bb174: {
-        goto -> bb176;
-    }
-
-    bb175: {
+    bb87: {
         _119 = copy _117;
-        goto -> bb176;
+        goto -> bb92;
     }
 
-    bb176: {
-        goto -> bb177;
-    }
-
-    bb177: {
-        goto -> bb189;
-    }
-
-    bb178: {
+    bb88: {
         _113 = copy _4 == const true;
-        branch copy _113 -> [bb182, bb179];
+        branch copy _113 -> [bb90, bb89];
     }
 
-    bb179: {
+    bb89: {
         _115 = copy _4 == const false;
-        branch copy _115 -> [bb181, bb180];
+        branch copy _115 -> [bb92, bb92];
     }
 
-    bb180: {
-        goto -> bb188;
-    }
-
-    bb181: {
-        goto -> bb188;
-    }
-
-    bb182: {
+    bb90: {
         _114 = discriminant(_22);
-        switch copy _114 [MatchStatus.Active: bb186, MatchStatus.Inactive: bb185, MatchStatus.Pending: bb184, otherwise: bb183] (exhaustive);
+        switch copy _114 [MatchStatus.Active: bb92, MatchStatus.Inactive: bb92, MatchStatus.Pending: bb92, otherwise: bb91] (exhaustive);
     }
 
-    bb183: {
+    bb91: {
         unreachable;
     }
 
-    bb184: {
-        goto -> bb187;
+    bb92: {
+        switch copy _29 [0: bb93, otherwise: bb96];
     }
 
-    bb185: {
-        goto -> bb187;
+    bb93: {
+        branch copy _4 -> [bb94, bb96];
     }
 
-    bb186: {
-        goto -> bb187;
-    }
-
-    bb187: {
-        goto -> bb188;
-    }
-
-    bb188: {
-        goto -> bb189;
-    }
-
-    bb189: {
-        switch copy _29 [0: bb191, otherwise: bb190];
-    }
-
-    bb190: {
-        goto -> bb200;
-    }
-
-    bb191: {
-        branch copy _4 -> [bb193, bb192];
-    }
-
-    bb192: {
-        goto -> bb199;
-    }
-
-    bb193: {
+    bb94: {
         _123 = discriminant(_117);
-        switch copy _123 [MatchStatus.Active: bb197, MatchStatus.Inactive: bb196, MatchStatus.Pending: bb195, otherwise: bb194] (exhaustive);
+        switch copy _123 [MatchStatus.Active: bb96, MatchStatus.Inactive: bb96, MatchStatus.Pending: bb96, otherwise: bb95] (exhaustive);
     }
 
-    bb194: {
+    bb95: {
         unreachable;
     }
 
-    bb195: {
-        goto -> bb198;
+    bb96: {
+        switch copy _29 [0: bb98, otherwise: bb97];
     }
 
-    bb196: {
-        goto -> bb198;
-    }
-
-    bb197: {
-        goto -> bb198;
-    }
-
-    bb198: {
-        goto -> bb199;
-    }
-
-    bb199: {
-        goto -> bb200;
-    }
-
-    bb200: {
-        switch copy _29 [0: bb202, otherwise: bb201];
-    }
-
-    bb201: {
+    bb97: {
         _0 = const "other";
-        goto -> bb203;
+        goto -> bb99;
     }
 
-    bb202: {
+    bb98: {
         _0 = const "zero";
-        goto -> bb203;
+        goto -> bb99;
     }
 
-    bb203: {
-        goto -> bb204;
-    }
-
-    bb204: {
+    bb99: {
         return;
     }
 }
@@ -7086,7 +6346,7 @@ fn user.OtherExprs(a: int, b: int) -> int {
 
     bb1: {
         _69 = copy _2;
-        goto -> bb6;
+        goto -> bb5;
     }
 
     bb2: {
@@ -7106,15 +6366,11 @@ fn user.OtherExprs(a: int, b: int) -> int {
     }
 
     bb5: {
+        _0 = copy _1 + copy _2;
         goto -> bb6;
     }
 
     bb6: {
-        _0 = copy _1 + copy _2;
-        goto -> bb7;
-    }
-
-    bb7: {
         return;
     }
 }

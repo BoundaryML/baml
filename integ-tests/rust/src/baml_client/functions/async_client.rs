@@ -399,6 +399,8 @@ baml_function_async!(TestAnthropicShorthand(input: impl AsRef<str> + BamlEncode,
 
 baml_function_async!(TestAws(input: impl AsRef<str> + BamlEncode, ) -> (String, String));
 
+baml_function_async!(TestAwsCaching(input: impl AsRef<str> + BamlEncode, not_cached: impl AsRef<str> + BamlEncode, ) -> (String, String));
+
 baml_function_async!(TestAwsClaude37(input: impl AsRef<str> + BamlEncode, ) -> (String, String));
 
 baml_function_async!(TestAwsInferenceProfile(input: impl AsRef<str> + BamlEncode, ) -> (String, String));
@@ -990,6 +992,8 @@ pub struct BamlAsyncClient {
     pub TestAnthropicShorthand: TestAnthropicShorthand,
 
     pub TestAws: TestAws,
+
+    pub TestAwsCaching: TestAwsCaching,
 
     pub TestAwsClaude37: TestAwsClaude37,
 
@@ -1583,6 +1587,8 @@ impl BamlAsyncClient {
             TestAnthropicShorthand: TestAnthropicShorthand::new(),
 
             TestAws: TestAws::new(),
+
+            TestAwsCaching: TestAwsCaching::new(),
 
             TestAwsClaude37: TestAwsClaude37::new(),
 
@@ -2448,6 +2454,10 @@ impl BamlAsyncClient {
             },
 
             TestAws: TestAws {
+                options: options.clone(),
+            },
+
+            TestAwsCaching: TestAwsCaching {
                 options: options.clone(),
             },
 

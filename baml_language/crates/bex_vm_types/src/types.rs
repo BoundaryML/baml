@@ -518,6 +518,9 @@ impl std::fmt::Display for Value {
     }
 }
 
+// Error class / instance enums — generated from `errors.baml` class definitions.
+// ErrorClass (tag enum), ErrorInstance (with Value fields), associated methods.
+include!(concat!(env!("OUT_DIR"), "/errors_generated.rs"));
 // Panic class / instance enums — generated from `panics.baml` class definitions.
 // PanicClass (tag enum), PanicInstance (with Value fields), associated methods.
 include!(concat!(env!("OUT_DIR"), "/panics_generated.rs"));

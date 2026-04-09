@@ -14,10 +14,6 @@ fn user.FormatMessage(name: string) -> string {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -34,10 +30,6 @@ fn user.FormatMessage$build_request(name: string) -> baml.http.Request {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -52,10 +44,6 @@ fn user.FormatMessage$parse(json: string) -> string {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -72,10 +60,6 @@ fn user.FormatMessage$render_prompt(name: string) -> baml.llm.PromptAst {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -92,10 +76,6 @@ fn user.ProcessText(input: string) -> string {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -112,10 +92,6 @@ fn user.ProcessText$build_request(input: string) -> baml.http.Request {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -130,10 +106,6 @@ fn user.ProcessText$parse(json: string) -> string {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -150,10 +122,6 @@ fn user.ProcessText$render_prompt(input: string) -> baml.llm.PromptAst {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
