@@ -195,7 +195,10 @@ class Client {
           };
           result
         } else {
-          throw root.errors.DevOther { message: "HTTP request failed" };
+          let error_body = http_response.text() catch (e) {
+            _ => { "" }
+          };
+          throw root.errors.DevOther { message: "HTTP request failed: " + error_body };
         }
       }
 

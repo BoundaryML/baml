@@ -614,7 +614,7 @@ function testing.run_test(body: () -> null, runner: (() -> testing.TestReport) -
      1    make_cell               
      2    store_var 1             
      3    load_var 1              (body)
-     4    make_closure 277 1      
+     4    make_closure 278 1      
      5    store_var 3             (base_run)
      6    load_var 2              (runner)
      7    load_const 0            (null)

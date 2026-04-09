@@ -413,7 +413,14 @@ function baml.llm.Client.execute_once<T>(self: baml.llm.Client, context: baml.ll
             }
           else
             { : never
-              throw DevOther { message: "HTTP request failed" } : unknown
+              let error_body = : string | "" -> string
+                catch (http_response.text() : string) : string | ""
+                  catch (e)
+                    _ =>
+                      { : ""
+                        "" : ""
+                      }
+              throw DevOther { message: "HTTP request fail..." + error_body } : unknown
             }
         }
       ClientType.Fallback =>
