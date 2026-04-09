@@ -148,6 +148,12 @@ pub enum Instruction {
     /// object's fields array.
     StoreField(usize),
 
+    /// Initialize a field during construction: pops the value, stores it in the field,
+    /// and keeps the instance on the stack (unlike `StoreField` which pops both).
+    ///
+    /// Format: `INIT_FIELD i` where `i` is the index of the field.
+    InitField(usize),
+
     /// Pop N values from the top of `Vm::stack` (the evaluation stack).
     ///
     /// Format: `POP n` where `n` is the number of values to pop.
@@ -590,6 +596,7 @@ impl std::fmt::Display for Instruction {
             Instruction::StoreGlobal(i) => write!(f, "STORE_GLOBAL {i}"),
             Instruction::LoadField(i) => write!(f, "LOAD_FIELD {i}"),
             Instruction::StoreField(i) => write!(f, "STORE_FIELD {i}"),
+            Instruction::InitField(i) => write!(f, "INIT_FIELD {i}"),
             Instruction::Pop(n) => write!(f, "POP {n}"),
             Instruction::Copy(i) => write!(f, "COPY {i}"),
             Instruction::Jump(o) => write!(f, "JUMP {o:+}"),

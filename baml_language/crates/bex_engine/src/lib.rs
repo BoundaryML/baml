@@ -242,9 +242,10 @@ pub enum EngineError {
     #[error("Future channel closed unexpectedly")]
     FutureChannelClosed,
 
-    #[error("VM error: {0}")]
-    VmError(bex_vm::errors::VmError),
+    #[error("VM internal error: {0}")]
+    VmInternalError(bex_vm::errors::VmInternalError),
 
+    /// Either a BAML panic or a BAML error value.
     #[error("uncaught throw: {value:?}")]
     UnhandledThrow { value: Box<BexExternalValue> },
 
@@ -415,7 +416,8 @@ impl BexEngine {
         let package_init_order = bytecode_program.package_init_order.clone();
 
         // Convert the pure bytecode to a VM-ready program with native functions attached
-        let bytecode = bex_vm::convert_program(bytecode_program).map_err(EngineError::VmError)?;
+        let bytecode =
+            bex_vm::convert_program(bytecode_program).map_err(EngineError::VmInternalError)?;
 
         // Extract test cases before consuming other bytecode fields.
         let test_cases = bytecode.test_cases;
@@ -1314,7 +1316,7 @@ impl BexEngine {
 
             let exec_result = match vm.exec() {
                 Ok(state) => state,
-                Err(bex_vm::errors::VmError::UnhandledThrow { value }) => {
+                Err(bex_vm::errors::VmError::Thrown(value)) => {
                     let external = if let Some(ref ty) = throws_type {
                         self.heap.with_gc_protection(|protected| {
                             self.convert_vm_value_to_external_with_type(
@@ -1330,7 +1332,9 @@ impl BexEngine {
                         value: Box::new(external),
                     });
                 }
-                Err(other) => return Err(EngineError::VmError(other)),
+                Err(bex_vm::errors::VmError::InternalError(err)) => {
+                    return Err(EngineError::VmInternalError(err));
+                }
             };
             match exec_result {
                 VmExecState::Complete(value) => {
@@ -1399,7 +1403,9 @@ impl BexEngine {
                 }
 
                 VmExecState::ScheduleFuture(id) => {
-                    let pending = vm.pending_future(id).map_err(EngineError::VmError)?;
+                    let pending = vm
+                        .pending_future(id)
+                        .map_err(EngineError::VmInternalError)?;
 
                     // Convert arguments to BexExternalValue
                     let args: Vec<BexExternalValue> = pending
@@ -1431,7 +1437,7 @@ impl BexEngine {
                             });
 
                             vm.set_future_ready(id, value)
-                                .map_err(EngineError::VmError)?;
+                                .map_err(EngineError::VmInternalError)?;
                         }
                         SysOpResult::Async(fut) => {
                             // Guard the "spawn side effect" boundary.
@@ -1521,7 +1527,8 @@ impl BexEngine {
                             )
                         });
                         vm.fulfil_future(future.id, value)
-                            .map_err(EngineError::VmError)?;
+                            .map_err(EngineError::VmInternalError)?;
+
                         if future.id == future_id {
                             continue 'vm_exec;
                         }
@@ -1550,7 +1557,9 @@ impl BexEngine {
                                         &protected.epoch_guard(),
                                     )
                                 });
-                                vm.fulfil_future(future.id, value).map_err(EngineError::VmError)?;
+                                vm.fulfil_future(future.id, value)
+                                                        .map_err(EngineError::VmInternalError)?;
+
                                 if future.id == future_id {
                                     break;
                                 }

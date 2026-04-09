@@ -117,10 +117,6 @@ fn .<lambda($init_test_19, 2)>(testset: testing.TestCollector) -> null {
     }
 
     bb5: {
-        goto -> bb6;
-    }
-
-    bb6: {
         _3 = copy _3 + const 1_i64;
         goto -> bb1;
     }

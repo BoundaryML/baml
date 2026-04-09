@@ -20,35 +20,27 @@ fn user.caller() -> bool {
     // Locals:
     let _0: bool // _0 // return
     let _1: unknown // e
-    let _2: bool
+    let _2: int
 
     bb0: {
-        _0 = call const fn user.callee() -> [bb1, unwind: bb3];
+        _0 = call const fn user.callee() -> [bb4, unwind: bb1];
     }
 
     bb1: {
-        goto -> bb2;
+        _2 = discriminant(_1);
+        switch copy _2 [Errors.AuthenticationError: bb3, otherwise: bb2];
     }
 
     bb2: {
-        goto -> bb6;
-    }
-
-    bb3: {
-        _2 = copy _1 == const user.Errors.AuthenticationError;
-        branch copy _2 -> [bb5, bb4];
-    }
-
-    bb4: {
         throw copy _1;
     }
 
-    bb5: {
+    bb3: {
         _0 = copy _1;
-        goto -> bb6;
+        goto -> bb4;
     }
 
-    bb6: {
+    bb4: {
         return;
     }
 }

@@ -25,68 +25,42 @@ fn user.CatchAllStatusVariants(n: int) -> string {
     let _0: string // _0 // return
     let _1: int // n // param
     let _2: unknown // e
-    let _3: bool
-    let _4: bool
-    let _5: bool
-    let _6: bool
+    let _3: int
 
     bb0: {
-        _0 = call const fn user.ThrowsAllStatusVariants(copy _1) -> [bb1, unwind: bb2];
+        _0 = call const fn user.ThrowsAllStatusVariants(copy _1) -> [bb7, unwind: bb1];
     }
 
     bb1: {
-        goto -> bb11;
+        _3 = discriminant(_2);
+        switch copy _3 [Status.HttpError: bb6, Status.IndexError: bb5, Status.AuthError: bb4, Status.SomeOtherError: bb3, otherwise: bb2];
     }
 
     bb2: {
-        _3 = copy _2 == const user.Status.HttpError;
-        branch copy _3 -> [bb10, bb3];
-    }
-
-    bb3: {
-        _4 = copy _2 == const user.Status.IndexError;
-        branch copy _4 -> [bb9, bb4];
-    }
-
-    bb4: {
-        _5 = copy _2 == const user.Status.AuthError;
-        branch copy _5 -> [bb8, bb5];
-    }
-
-    bb5: {
-        _6 = copy _2 == const user.Status.SomeOtherError;
-        branch copy _6 -> [bb7, bb6];
-    }
-
-    bb6: {
         throw copy _2;
     }
 
-    bb7: {
+    bb3: {
         _0 = const "other!";
-        goto -> bb11;
+        goto -> bb7;
     }
 
-    bb8: {
+    bb4: {
         _0 = const "auth!";
-        goto -> bb11;
+        goto -> bb7;
     }
 
-    bb9: {
+    bb5: {
         _0 = const "index!";
-        goto -> bb11;
+        goto -> bb7;
     }
 
-    bb10: {
+    bb6: {
         _0 = const "http!";
-        goto -> bb11;
+        goto -> bb7;
     }
 
-    bb11: {
-        goto -> bb12;
-    }
-
-    bb12: {
+    bb7: {
         return;
     }
 }
@@ -100,42 +74,34 @@ fn user.CatchAlwaysThrows(n: int) -> string {
     let _4: bool
 
     bb0: {
-        _0 = call const fn user.WrapperAlwaysThrows(copy _1) -> [bb1, unwind: bb2];
+        _0 = call const fn user.WrapperAlwaysThrows(copy _1) -> [bb6, unwind: bb1];
     }
 
     bb1: {
-        goto -> bb7;
+        _3 = is_type(copy _2, String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _3 -> [bb5, bb2];
     }
 
     bb2: {
-        _3 = is_type(copy _2, String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
-        branch copy _3 -> [bb6, bb3];
+        _4 = is_type(copy _2, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _4 -> [bb4, bb3];
     }
 
     bb3: {
-        _4 = is_type(copy _2, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
-        branch copy _4 -> [bb5, bb4];
-    }
-
-    bb4: {
         throw copy _2;
     }
 
-    bb5: {
+    bb4: {
         _0 = const "index!";
-        goto -> bb7;
+        goto -> bb6;
+    }
+
+    bb5: {
+        _0 = const "http!";
+        goto -> bb6;
     }
 
     bb6: {
-        _0 = const "http!";
-        goto -> bb7;
-    }
-
-    bb7: {
-        goto -> bb8;
-    }
-
-    bb8: {
         return;
     }
 }
@@ -148,32 +114,24 @@ fn user.CatchRecursiveThrow(n: int) -> string {
     let _3: bool
 
     bb0: {
-        _0 = call const fn user.RecB(copy _1) -> [bb1, unwind: bb2];
+        _0 = call const fn user.RecB(copy _1) -> [bb4, unwind: bb1];
     }
 
     bb1: {
-        goto -> bb5;
+        _3 = is_type(copy _2, String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _3 -> [bb3, bb2];
     }
 
     bb2: {
-        _3 = is_type(copy _2, String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
-        branch copy _3 -> [bb4, bb3];
-    }
-
-    bb3: {
         throw copy _2;
     }
 
-    bb4: {
+    bb3: {
         _0 = const "handled";
-        goto -> bb5;
+        goto -> bb4;
     }
 
-    bb5: {
-        goto -> bb6;
-    }
-
-    bb6: {
+    bb4: {
         return;
     }
 }
@@ -184,7 +142,7 @@ fn user.RecA(n: int) -> string {
     let _1: int // n // param
 
     bb0: {
-        switch copy _1 [0: bb5, otherwise: bb1];
+        switch copy _1 [0: bb3, otherwise: bb1];
     }
 
     bb1: {
@@ -192,18 +150,10 @@ fn user.RecA(n: int) -> string {
     }
 
     bb2: {
-        goto -> bb3;
-    }
-
-    bb3: {
-        goto -> bb4;
-    }
-
-    bb4: {
         return;
     }
 
-    bb5: {
+    bb3: {
         throw const "boom";
     }
 }
@@ -218,10 +168,6 @@ fn user.RecB(n: int) -> string {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -271,10 +217,6 @@ fn user.WrapperAlwaysThrows(n: int) -> Status {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }

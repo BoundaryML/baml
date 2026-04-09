@@ -713,16 +713,9 @@ impl PullSink for StackCarryPullSink<'_> {
         Ok(())
     }
 
-    fn copy_top(&mut self, _offset: usize) -> Result<(), Self::Error> {
-        // Copy duplicates a stack value without consuming the source.
-        self.sim.push();
-        Ok(())
-    }
-
-    fn store_field(&mut self, _field_idx: usize, _name: &str) -> Result<(), Self::Error> {
-        // StoreField consumes object + value; class construction leaves original
-        // instance below those two entries.
-        if !self.sim.pop_n(2) {
+    fn init_field(&mut self, _field_idx: usize, _name: &str) -> Result<(), Self::Error> {
+        // InitField pops only the value; the instance stays on the stack.
+        if !self.sim.pop_n(1) {
             return Err(());
         }
         Ok(())

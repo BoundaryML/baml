@@ -203,10 +203,19 @@ fn fq_to_type_name(fq: &str) -> baml_type::TypeName {
     }
 }
 
-/// Generate bytecode for the entire project.
+/// Generate bytecode for the entire project (default: `OptLevel::Two`).
 pub fn generate_project_bytecode(
     db: &dyn baml_compiler2_mir::Db,
     options: &CompileOptions,
+) -> Result<Program, LoweringError> {
+    generate_project_bytecode_with_opt(db, options, OptLevel::Two)
+}
+
+/// Generate bytecode for the entire project with a specific optimization level.
+pub fn generate_project_bytecode_with_opt(
+    db: &dyn baml_compiler2_mir::Db,
+    options: &CompileOptions,
+    opt: OptLevel,
 ) -> Result<Program, LoweringError> {
     let mut program = Program::new();
     let all_files = compiler2_all_files(db);
@@ -224,7 +233,7 @@ pub fn generate_project_bytecode(
         let item_tree = file_item_tree(db, *file);
         for local_id in item_tree.functions.keys() {
             let func_loc = FunctionLoc::new(db, *file, *local_id);
-            let mir = lower_function(db, func_loc);
+            let mir = lower_function(db, func_loc, opt);
             let fq_name = mir.item_ref.to_string();
             globals.entry(fq_name).or_insert_with(|| {
                 let idx = global_idx;
@@ -395,7 +404,7 @@ pub fn generate_project_bytecode(
         let cache_pass4 = &alias_caches[&pkg_info_pass4.package];
         for (local_id, func_data) in &item_tree.functions {
             let func_loc = FunctionLoc::new(db, *file, *local_id);
-            let mir = lower_function(db, func_loc);
+            let mir = lower_function(db, func_loc, opt);
             let fq_name = mir.item_ref.to_string();
 
             let mut compiled_fn = match &mir.kind {
@@ -410,6 +419,7 @@ pub fn generate_project_bytecode(
                         &enum_object_indices,
                         &enum_variants,
                         &mut program.objects,
+                        opt,
                     );
                     let lambda_obj_indices: Vec<usize> =
                         lambda_info.iter().map(|(idx, _)| *idx).collect();
@@ -425,8 +435,7 @@ pub fn generate_project_bytecode(
                         lambda_object_indices: &lambda_obj_indices,
                         lambda_names: &lambda_names_vec,
                     };
-                    let mut f =
-                        compile_mir_function(body, mir.arity, &line_starts, ctx, OptLevel::One);
+                    let mut f = compile_mir_function(body, mir.arity, &line_starts, ctx, opt);
                     f.name.clone_from(&fq_name);
                     f
                 }
@@ -564,6 +573,7 @@ pub fn generate_project_bytecode(
                 &enum_object_indices,
                 &enum_variants,
                 &mut program,
+                opt,
             )?;
 
             let init_fq_name = if pkg_name.as_str() == "user" {
@@ -1057,6 +1067,7 @@ fn compile_lambdas_flat(
     enum_object_indices: &HashMap<String, usize>,
     enum_variants: &HashMap<String, HashMap<String, usize>>,
     objects: &mut ObjectPool,
+    opt: OptLevel,
 ) -> Vec<(usize, String)> {
     let mut result = Vec::with_capacity(lambdas.len());
     for lambda in lambdas {
@@ -1073,6 +1084,7 @@ fn compile_lambdas_flat(
                     enum_object_indices,
                     enum_variants,
                     objects,
+                    opt,
                 );
                 let nested_obj_indices: Vec<usize> =
                     nested_info.iter().map(|(idx, _)| *idx).collect();
@@ -1088,8 +1100,7 @@ fn compile_lambdas_flat(
                     lambda_object_indices: &nested_obj_indices,
                     lambda_names: &nested_names,
                 };
-                let mut f =
-                    compile_mir_function(body, lambda.arity, line_starts, ctx, OptLevel::One);
+                let mut f = compile_mir_function(body, lambda.arity, line_starts, ctx, opt);
                 f.name.clone_from(&lambda_name);
                 let idx = objects.len();
                 objects.push(Object::Function(Box::new(f)));
@@ -1122,6 +1133,7 @@ fn compile_init_function<'db>(
     enum_object_indices: &HashMap<String, usize>,
     enum_variants: &HashMap<String, HashMap<String, usize>>,
     program: &mut Program,
+    opt: OptLevel,
 ) -> Result<Function, LoweringError> {
     // Build the $init bytecode: a sequence of Call + StoreGlobal pairs.
     let mut init_instructions: Vec<Instruction> = Vec::new();
@@ -1136,7 +1148,7 @@ fn compile_init_function<'db>(
         };
 
         // Lower the let initializer through MIR → MirFunctionBody (+ any lambda children).
-        let maybe_body = lower_let_body(db, *let_loc);
+        let maybe_body = lower_let_body(db, *let_loc, opt);
 
         let helper_fn = match maybe_body {
             Some((mir_body, lambdas)) => {
@@ -1151,6 +1163,7 @@ fn compile_init_function<'db>(
                     enum_object_indices,
                     enum_variants,
                     &mut program.objects,
+                    opt,
                 );
                 let lambda_let_obj_indices: Vec<usize> =
                     lambda_info.iter().map(|(idx, _)| *idx).collect();
@@ -1166,8 +1179,7 @@ fn compile_init_function<'db>(
                     lambda_object_indices: &lambda_let_obj_indices,
                     lambda_names: &lambda_let_names,
                 };
-                let mut helper =
-                    compile_mir_function(&mir_body, 0, &line_starts, ctx, OptLevel::One);
+                let mut helper = compile_mir_function(&mir_body, 0, &line_starts, ctx, opt);
                 helper.name = format!("$init_let_{i}");
                 helper.arity = 0;
                 helper

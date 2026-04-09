@@ -15,7 +15,7 @@ fn array_length_returns_int() {
         "test.baml",
         "function f(arr: int[]) -> int { return arr.length(); }",
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f(arr: int[]) -> int throws never {
       { : never
         return arr.length() : int
@@ -31,7 +31,7 @@ fn array_at_returns_element_type_int() {
         "test.baml",
         "function f(arr: int[]) -> int? { return arr.at(0); }",
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f(arr: int[]) -> int? throws never {
       { : never
         return arr.at(0) : int?
@@ -47,7 +47,7 @@ fn array_at_returns_element_type_string() {
         "test.baml",
         "function f(arr: string[]) -> string? { return arr.at(0); }",
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f(arr: string[]) -> string? throws never {
       { : never
         return arr.at(0) : string?
@@ -81,7 +81,7 @@ fn map_keys_returns_key_type_array() {
         "test.baml",
         "function f(m: map<string, int>) -> string[] { return m.keys(); }",
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f(m: map<string, int>) -> string[] throws never {
       { : never
         return m.keys() : string[]
@@ -97,7 +97,7 @@ fn map_values_returns_value_type_array() {
         "test.baml",
         "function f(m: map<string, int>) -> int[] { return m.values(); }",
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f(m: map<string, int>) -> int[] throws never {
       { : never
         return m.values() : int[]
@@ -129,7 +129,7 @@ fn map_length_returns_int() {
         "test.baml",
         "function f(m: map<string, int>) -> int { return m.length(); }",
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f(m: map<string, int>) -> int throws never {
       { : never
         return m.length() : int
@@ -147,7 +147,7 @@ fn string_length_returns_int() {
         "test.baml",
         r#"function f(s: string) -> int { return s.length(); }"#,
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f(s: string) -> int throws never {
       { : never
         return s.length() : int
@@ -195,7 +195,7 @@ fn string_to_lower_case_returns_string() {
         "test.baml",
         "function f(s: string) -> string { return s.toLowerCase(); }",
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f(s: string) -> string throws never {
       { : never
         return s.toLowerCase() : string
@@ -213,7 +213,7 @@ fn let_inferred_from_array_length() {
         "test.baml",
         "function f(arr: int[]) -> int { let len = arr.length(); return len; }",
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f(arr: int[]) -> int throws never {
       { : never
         let len = arr.length() : int
@@ -230,7 +230,7 @@ fn let_inferred_from_array_at() {
         "test.baml",
         "function f(arr: int[]) -> int? { let x = arr.at(0); return x; }",
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f(arr: int[]) -> int? throws never {
       { : never
         let x = arr.at(0) : int?
@@ -247,7 +247,7 @@ fn let_inferred_from_map_keys() {
         "test.baml",
         "function f(m: map<string, int>) -> string[] { let k = m.keys(); return k; }",
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f(m: map<string, int>) -> string[] throws never {
       { : never
         let k = m.keys() : string[]
@@ -266,7 +266,7 @@ fn image_url_returns_optional_string() {
         "test.baml",
         "function f(img: image) -> string? { return img.url(); }",
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f(img: image) -> string? throws never {
       { : never
         return img.url() : string?
@@ -282,7 +282,7 @@ fn image_base64_returns_string() {
         "test.baml",
         "function f(img: image) -> string { return img.base64(); }",
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f(img: image) -> string throws never {
       { : never
         return img.base64() : string
@@ -298,7 +298,7 @@ fn image_mime_type_returns_optional_string() {
         "test.baml",
         "function f(img: image) -> string? { return img.mime_type(); }",
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f(img: image) -> string? throws never {
       { : never
         return img.mime_type() : string?
@@ -314,7 +314,7 @@ fn pdf_url_returns_optional_string() {
         "test.baml",
         "function f(doc: pdf) -> string? { return doc.url(); }",
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f(doc: pdf) -> string? throws never {
       { : never
         return doc.url() : string?
@@ -330,7 +330,7 @@ fn audio_base64_returns_string() {
         "test.baml",
         "function f(a: audio) -> string { return a.base64(); }",
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f(a: audio) -> string throws never {
       { : never
         return a.base64() : string
@@ -346,7 +346,7 @@ fn video_file_returns_optional_string() {
         "test.baml",
         "function f(v: video) -> string? { return v.file(); }",
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f(v: video) -> string? throws never {
       { : never
         return v.file() : string?

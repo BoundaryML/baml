@@ -15,7 +15,7 @@ async fn add() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 1
         load_const 2
@@ -37,7 +37,7 @@ async fn subtract() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 1
         load_const 2
@@ -59,7 +59,7 @@ async fn multiply() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 1
         load_const 2
@@ -81,7 +81,7 @@ async fn divide() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 10
         load_const 2
@@ -103,7 +103,7 @@ async fn modulo() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 10
         load_const 3
@@ -127,7 +127,7 @@ async fn bitwise_and() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 10
         load_const 3
@@ -149,7 +149,7 @@ async fn bitwise_or() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 10
         load_const 3
@@ -171,7 +171,7 @@ async fn bitwise_xor() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 10
         load_const 3
@@ -193,7 +193,7 @@ async fn shift_left() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 10
         load_const 3
@@ -215,7 +215,7 @@ async fn shift_right() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 10
         load_const 3
@@ -239,7 +239,7 @@ async fn unary_negate() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 1
         unary_op -
@@ -260,7 +260,7 @@ async fn unary_not() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> bool {
         load_const true
         unary_op !
@@ -282,7 +282,7 @@ async fn negative_int_in_let() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 5
         unary_op -
@@ -303,7 +303,7 @@ async fn negative_int_arithmetic() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 5
         unary_op -
@@ -326,7 +326,7 @@ async fn negative_int_comparison() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> bool {
         load_const 5
         unary_op -
@@ -350,7 +350,7 @@ async fn negative_float_in_let() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> float {
         load_const 2.5
         unary_op -
@@ -371,7 +371,7 @@ async fn double_negation() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 5
         unary_op -
@@ -394,7 +394,7 @@ async fn double_negation_variable() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 10
         unary_op -
@@ -419,7 +419,7 @@ async fn equal() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> bool {
         load_const 1
         load_const 2
@@ -441,7 +441,7 @@ async fn not_equal() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> bool {
         load_const 1
         load_const 2
@@ -463,7 +463,7 @@ async fn greater_than() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> bool {
         load_const 1
         load_const 2
@@ -485,7 +485,7 @@ async fn greater_than_or_equal() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> bool {
         load_const 1
         load_const 2
@@ -507,7 +507,7 @@ async fn less_than() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> bool {
         load_const 1
         load_const 2
@@ -529,7 +529,7 @@ async fn less_than_or_equal() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> bool {
         load_const 1
         load_const 2
@@ -553,7 +553,7 @@ async fn logical_and() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> bool {
         load_const true
         store_var _0
@@ -581,7 +581,7 @@ async fn logical_or() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> bool {
         load_const true
         store_var _0
@@ -616,7 +616,7 @@ async fn short_circuit_and() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> bool {
         load_const true
         load_const true
@@ -650,7 +650,7 @@ async fn short_circuit_or() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> bool {
         load_const true
         load_const true
@@ -687,7 +687,7 @@ async fn assign_add() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 1
         store_var x
@@ -715,7 +715,7 @@ async fn assign_subtract() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 1
         store_var x
@@ -743,7 +743,7 @@ async fn assign_multiply() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 1
         store_var x
@@ -771,7 +771,7 @@ async fn assign_divide() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 10
         store_var x
@@ -799,7 +799,7 @@ async fn assign_modulo() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 10
         store_var x
@@ -827,7 +827,7 @@ async fn assign_bitwise_and() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 10
         store_var x
@@ -855,7 +855,7 @@ async fn assign_bitwise_or() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 10
         store_var x
@@ -883,7 +883,7 @@ async fn assign_bitwise_xor() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 10
         store_var x

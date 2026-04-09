@@ -13,10 +13,6 @@ fn user.GetMixedList() -> (int | string)[] {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -32,10 +28,6 @@ fn user.GetMixedList$build_request() -> baml.http.Request {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -50,10 +42,6 @@ fn user.GetMixedList$parse(json: string) -> (int | string)[] {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -69,10 +57,6 @@ fn user.GetMixedList$render_prompt() -> baml.llm.PromptAst {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -88,10 +72,6 @@ fn user.GetMixedMap() -> map<string, int | string> {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -107,10 +87,6 @@ fn user.GetMixedMap$build_request() -> baml.http.Request {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -125,10 +101,6 @@ fn user.GetMixedMap$parse(json: string) -> map<string, int | string> {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -144,10 +116,6 @@ fn user.GetMixedMap$render_prompt() -> baml.llm.PromptAst {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -163,10 +131,6 @@ fn user.GetStatus() -> Status {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -182,10 +146,6 @@ fn user.GetStatus$build_request() -> baml.http.Request {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -200,10 +160,6 @@ fn user.GetStatus$parse(json: string) -> Status {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -219,10 +175,6 @@ fn user.GetStatus$render_prompt() -> baml.llm.PromptAst {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -243,10 +195,6 @@ fn user.GetUser(id: int) -> User {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -267,10 +215,6 @@ fn user.GetUser$build_request(id: int) -> baml.http.Request {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -285,10 +229,6 @@ fn user.GetUser$parse(json: string) -> User {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -309,10 +249,6 @@ fn user.GetUser$render_prompt(id: int) -> baml.llm.PromptAst {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }

@@ -6,7 +6,7 @@ use super::support::{make_db, render_tir};
 fn literal_int() {
     let mut db = make_db();
     let file = db.add_file("test.baml", "function f() -> int { return 1; }");
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f() -> int throws never {
       { : never
         return 1 : 1
@@ -19,7 +19,7 @@ fn literal_int() {
 fn let_binding_widens() {
     let mut db = make_db();
     let file = db.add_file("test.baml", "function f() -> int { let x = 1; return x; }");
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f() -> int throws never {
       { : never
         let x = 1 : 1 -> int
@@ -36,7 +36,7 @@ fn class_field_access() {
         "test.baml",
         "class Foo { name string }\nfunction f(x: Foo) -> string { return x.name; }",
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     class user.Foo {
       name: string
     }
@@ -55,7 +55,7 @@ fn class_field_access() {
 fn type_mismatch() {
     let mut db = make_db();
     let file = db.add_file("test.baml", "function f() -> string { return 1; }");
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f() -> string throws never {
       { : never
         return 1 : 1
@@ -72,7 +72,7 @@ fn unresolved_field() {
         "test.baml",
         "class Foo { name string }\nfunction f(x: Foo) -> string { return x.missing; }",
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     class user.Foo {
       name: string
     }
@@ -103,7 +103,7 @@ function f(data: Data) -> string {
   return data.inner.foo;
 }",
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     class user.Data {
       name: string
     }
@@ -134,7 +134,7 @@ function f(s: Sentiment) -> string {
   return s.feelin;
 }",
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     class user.Sentiment {
       feeling: string
     }
@@ -157,7 +157,7 @@ fn binary_op_int_add() {
         "test.baml",
         "function f(a: int, b: int) -> int { return a + b; }",
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f(a: int, b: int) -> int throws never {
       { : never
         return a + b : int
@@ -173,7 +173,7 @@ fn if_else_joins_types() {
         "test.baml",
         "function f(x: bool) -> int { return if (x) { 1 } else { 2 }; }",
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f(x: bool) -> int throws never {
       { : never
         return : 1 | 2
@@ -197,7 +197,7 @@ fn enum_variant_resolution() {
         "test.baml",
         "enum Color { Red\nGreen\nBlue }\nfunction f() -> Color { return Color.Red; }",
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     enum user.Color
     function user.f() -> user.Color throws never {
       { : never
@@ -211,7 +211,7 @@ fn enum_variant_resolution() {
 fn resolve_class_fields_query() {
     let mut db = make_db();
     let file = db.add_file("test.baml", "class Point { x int\ny float\nlabel string }");
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     class user.Point {
       x: int
       y: float
@@ -229,7 +229,7 @@ fn resolve_class_fields_query() {
 fn resolve_type_alias_query() {
     let mut db = make_db();
     let file = db.add_file("test.baml", "type MyStr = string");
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     type user.MyStr = string
     type user.MyStr$stream = string
     ");
@@ -242,7 +242,7 @@ fn two_functions_independent() {
         "test.baml",
         "function ok() -> int { return 1; }\nfunction bad() -> string { return 42; }",
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     function user.ok() -> int throws never {
       { : never
         return 1 : 1

@@ -12,7 +12,7 @@ fn type_alias_direct_self_reference() {
     // type A = A — direct self-reference with no base case.
     let mut db = make_db();
     let file = db.add_file("test.baml", "type A = A");
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     type user.A = user.A
       !! 0..10: recursive type alias cycle: A
     type user.A$stream = user.A$stream
@@ -25,7 +25,7 @@ fn type_alias_mutual_recursion() {
     // type A = B, type B = A — mutual cycle with no base case.
     let mut db = make_db();
     let file = db.add_file("test.baml", "type A = B\ntype B = A");
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     type user.A = user.B
       !! 0..10: recursive type alias cycle: A
     type user.B = user.A
@@ -42,7 +42,7 @@ fn type_alias_indirect_cycle_three() {
     // type A = B, type B = C, type C = A — three-way cycle with no base case.
     let mut db = make_db();
     let file = db.add_file("test.baml", "type A = B\ntype B = C\ntype C = A");
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     type user.A = user.B
       !! 0..10: recursive type alias cycle: A
     type user.B = user.C
@@ -67,7 +67,7 @@ fn type_alias_valid_recursive_via_container() {
         "test.baml",
         "type JSON = string | int | bool | null | JSON[] | map<string, JSON>",
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     type user.JSON = string | int | bool | null | user.JSON[] | map<string, user.JSON>
     type user.JSON$stream = string | int | bool | null | user.JSON$stream[] | map<string, user.JSON$stream>
     ");
@@ -81,7 +81,7 @@ fn type_alias_cycle_used_in_function() {
         "test.baml",
         "type Loop = Loop\nfunction f(x: Loop) -> Loop { return x; }",
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     type user.Loop = user.Loop
       !! 0..16: recursive type alias cycle: Loop
     function user.f(x: user.Loop) -> user.Loop throws never {
@@ -100,7 +100,7 @@ fn class_field_self_reference() {
     // Unconstructable: you can't build a Node without already having a Node.
     let mut db = make_db();
     let file = db.add_file("test.baml", "class Node { next Node }");
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     class user.Node {
       next: user.Node
     }
@@ -120,7 +120,7 @@ fn class_field_mutual_reference() {
         "test.baml",
         "class Husband { wife Wife }\nclass Wife { husband Husband }",
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     class user.Husband {
       wife: user.Wife
     }
@@ -150,7 +150,7 @@ fn type_alias_optional_self_reference() {
     // Optional does NOT provide structural termination — this is invalid.
     let mut db = make_db();
     let file = db.add_file("test.baml", "type A = A?");
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     type user.A = user.A?
       !! 0..11: recursive type alias cycle: A
     type user.A$stream = null | user.A$stream
@@ -164,7 +164,7 @@ fn type_alias_union_with_base_case() {
     // Union does NOT provide structural termination — this is invalid.
     let mut db = make_db();
     let file = db.add_file("test.baml", "type A = A | string");
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     type user.A = user.A | string
       !! 0..19: recursive type alias cycle: A
     type user.A$stream = user.A$stream | string
@@ -178,7 +178,7 @@ fn type_alias_list_in_union() {
     // List provides structural guard — this is valid.
     let mut db = make_db();
     let file = db.add_file("test.baml", "type A = A[] | string");
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     type user.A = user.A[] | string
     type user.A$stream = user.A$stream[] | string
     ");
@@ -190,7 +190,7 @@ fn type_alias_optional_list_self_reference() {
     // List provides structural guard — this is valid.
     let mut db = make_db();
     let file = db.add_file("test.baml", "type A = A[]?");
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     type user.A = user.A[]?
     type user.A$stream = null | user.A$stream[]
     ");
@@ -202,7 +202,7 @@ fn type_alias_map_in_union() {
     // Map provides structural guard — this is valid.
     let mut db = make_db();
     let file = db.add_file("test.baml", "type A = map<string, A> | string");
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     type user.A = map<string, user.A> | string
     type user.A$stream = map<string, user.A$stream> | string
     ");
@@ -214,7 +214,7 @@ fn type_alias_mutual_cycle_through_optional() {
     // Optional does NOT provide structural termination — both are invalid.
     let mut db = make_db();
     let file = db.add_file("test.baml", "type A = B?\ntype B = A");
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     type user.A = user.B?
       !! 0..11: recursive type alias cycle: A
     type user.B = user.A
@@ -232,7 +232,7 @@ fn type_alias_mutual_cycle_through_list() {
     // List provides structural guard — both are valid.
     let mut db = make_db();
     let file = db.add_file("test.baml", "type A = B[]\ntype B = A");
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     type user.A = user.B[]
     type user.B = user.A
     type user.A$stream = user.B$stream[]
@@ -253,7 +253,7 @@ fn class_required_field_mutual_cycle() {
     // Impossible to construct either.
     let mut db = make_db();
     let file = db.add_file("test.baml", "class A { b B }\nclass B { a A }");
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     class user.A {
       b: user.B
     }
@@ -277,7 +277,7 @@ fn class_required_field_self_cycle() {
     // Impossible to construct.
     let mut db = make_db();
     let file = db.add_file("test.baml", "class A { self_ref A }");
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     class user.A {
       self_ref: user.A
     }
@@ -296,7 +296,7 @@ fn class_required_field_three_way_cycle() {
         "test.baml",
         "class A { b B }\nclass B { c C }\nclass C { a A }",
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     class user.A {
       b: user.B
     }
@@ -328,7 +328,7 @@ fn class_optional_field_breaks_cycle() {
     // Should NOT be an error.
     let mut db = make_db();
     let file = db.add_file("test.baml", "class A { b B? }\nclass B { a A }");
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     class user.A {
       b: user.B?
     }
@@ -351,7 +351,7 @@ fn class_list_field_breaks_cycle() {
     // Should NOT be an error.
     let mut db = make_db();
     let file = db.add_file("test.baml", "class A { bs B[] }\nclass B { a A }");
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     class user.A {
       bs: user.B[]
     }
@@ -377,7 +377,7 @@ fn class_map_field_breaks_cycle() {
         "test.baml",
         "class A { bm map<string, B> }\nclass B { a A }",
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     class user.A {
       bm: map<string, user.B>
     }
@@ -402,7 +402,7 @@ fn class_cycle_through_type_alias() {
         "test.baml",
         "class A { b AliasB }\ntype AliasB = B\nclass B { a A }",
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     class user.A {
       b: user.AliasB
     }
@@ -431,7 +431,7 @@ fn class_cycle_broken_by_alias_to_optional() {
         "test.baml",
         "class A { b AliasB }\ntype AliasB = B?\nclass B { a A }",
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     class user.A {
       b: user.AliasB
     }
@@ -455,7 +455,7 @@ fn class_union_field_all_variants_same_class() {
     // Union where ALL variants resolve to the same class — still a hard dependency.
     let mut db = make_db();
     let file = db.add_file("test.baml", "class A { b B | B }\nclass B { a A }");
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     class user.A {
       b: user.B | user.B
     }
@@ -480,7 +480,7 @@ fn class_union_field_different_variants_breaks_cycle() {
     // Should NOT be an error.
     let mut db = make_db();
     let file = db.add_file("test.baml", "class A { b B | string }\nclass B { a A }");
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     class user.A {
       b: user.B | string
     }
