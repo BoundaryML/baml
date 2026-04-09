@@ -29,9 +29,11 @@ pub struct SymbolDescription {
     /// Symbol kind (Class, Enum, Function, …).
     #[serde(serialize_with = "serialize_kind")]
     pub kind: DefinitionKind,
-    /// The file where the symbol is defined.
-    #[serde(serialize_with = "serialize_file")]
+    /// The file where the symbol is defined (in-memory handle, not serialized).
+    #[serde(skip)]
     pub file: SourceFile,
+    /// File path as a string, for JSON consumers.
+    pub file_path: String,
     /// Byte range of the name token.
     #[serde(serialize_with = "serialize_range")]
     pub name_span: TextRange,
@@ -58,8 +60,9 @@ pub struct DepRef {
     pub name: String,
     #[serde(serialize_with = "serialize_kind")]
     pub kind: DefinitionKind,
-    #[serde(serialize_with = "serialize_file")]
+    #[serde(skip)]
     pub file: SourceFile,
+    pub file_path: String,
     #[serde(serialize_with = "serialize_range")]
     pub name_span: TextRange,
 }
@@ -67,8 +70,9 @@ pub struct DepRef {
 /// A site where a symbol is used.
 #[derive(Clone, Serialize)]
 pub struct RefSite {
-    #[serde(serialize_with = "serialize_file")]
+    #[serde(skip)]
     pub file: SourceFile,
+    pub file_path: String,
     #[serde(serialize_with = "serialize_range")]
     pub range: TextRange,
     /// The full source line containing the reference.
@@ -166,6 +170,7 @@ fn describe_top_level(
     Some(SymbolDescription {
         name: sym.name.clone(),
         kind: sym.kind,
+        file_path: file_path_string(db, file),
         file,
         name_span: sym.name_span,
         item_range,
@@ -216,6 +221,7 @@ fn describe_member(
             dependencies.push(DepRef {
                 name: container.name.clone(),
                 kind: container.kind,
+                file_path: file_path_string(db, container.file),
                 file: container.file,
                 name_span: container.name_span,
             });
@@ -232,6 +238,7 @@ fn describe_member(
     Some(SymbolDescription {
         name: sym.name.clone(),
         kind: sym.kind,
+        file_path: file_path_string(db, file),
         file,
         name_span: sym.name_span,
         item_range: member_range,
@@ -289,6 +296,7 @@ fn describe_locals(db: &dyn Db, files: &[SourceFile], name: &str) -> Vec<SymbolD
                         let text = loc.file.text(db);
                         let (line_number, line_text) = line_at_offset(text, loc.range.start());
                         RefSite {
+                            file_path: file_path_string(db, loc.file),
                             file: loc.file,
                             range: loc.range,
                             line_text,
@@ -307,6 +315,7 @@ fn describe_locals(db: &dyn Db, files: &[SourceFile], name: &str) -> Vec<SymbolD
                 results.push(SymbolDescription {
                     name: name.to_string(),
                     kind: DefinitionKind::Parameter,
+                    file_path: file_path_string(db, file),
                     file,
                     name_span: param_span,
                     item_range: func.span,
@@ -355,6 +364,12 @@ fn describe_locals(db: &dyn Db, files: &[SourceFile], name: &str) -> Vec<SymbolD
                     let inference =
                         baml_compiler2_tir::inference::infer_scope_types(db, scope_id);
 
+                    // Parameters are already handled by the sig.params pass above;
+                    // skip them here to avoid duplicate results.
+                    if matches!(def_site, baml_compiler2_hir::semantic_index::DefinitionSite::Parameter(_)) {
+                        continue;
+                    }
+
                     let type_str = match def_site {
                         baml_compiler2_hir::semantic_index::DefinitionSite::Statement(stmt_id) => {
                             let body = baml_compiler2_hir::body::function_body(db, func_loc);
@@ -378,7 +393,7 @@ fn describe_locals(db: &dyn Db, files: &[SourceFile], name: &str) -> Vec<SymbolD
                                 .unwrap_or_else(|| "unknown".to_string())
                         }
                         baml_compiler2_hir::semantic_index::DefinitionSite::Parameter(_) => {
-                            "unknown".to_string()
+                            unreachable!("Parameters are skipped above")
                         }
                     };
 
@@ -391,6 +406,7 @@ fn describe_locals(db: &dyn Db, files: &[SourceFile], name: &str) -> Vec<SymbolD
                             let text = loc.file.text(db);
                             let (line_number, line_text) = line_at_offset(text, loc.range.start());
                             RefSite {
+                                file_path: file_path_string(db, loc.file),
                                 file: loc.file,
                                 range: loc.range,
                                 line_text,
@@ -408,6 +424,7 @@ fn describe_locals(db: &dyn Db, files: &[SourceFile], name: &str) -> Vec<SymbolD
                     results.push(SymbolDescription {
                         name: name.to_string(),
                         kind: DefinitionKind::Binding,
+                        file_path: file_path_string(db, file),
                         file,
                         name_span: *binding_span,
                         item_range: func.span,
@@ -443,6 +460,7 @@ fn make_function_dep(
     DepRef {
         name: func_name.to_string(),
         kind: DefinitionKind::Function,
+        file_path: file_path_string(db, file),
         file,
         name_span,
     }
@@ -879,6 +897,7 @@ fn resolve_dep_from_outline(db: &dyn Db, files: &[SourceFile], name: &str) -> Op
                 return Some(DepRef {
                     name: item.name.clone(),
                     kind: item.kind,
+                    file_path: file_path_string(db, file),
                     file,
                     name_span: item.name_span,
                 });
@@ -910,6 +929,7 @@ fn resolve_dep(db: &dyn Db, context_file: SourceFile, name: &str) -> Option<DepR
     Some(DepRef {
         name: name.to_string(),
         kind: def.kind(),
+        file_path: file_path_string(db, dep_file),
         file: dep_file,
         name_span,
     })
@@ -934,6 +954,7 @@ fn find_references(
             let text = loc.file.text(db);
             let (line_number, line_text) = line_at_offset(text, loc.range.start());
             RefSite {
+                file_path: file_path_string(db, loc.file),
                 file: loc.file,
                 range: loc.range,
                 line_text,
@@ -944,6 +965,11 @@ fn find_references(
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
+
+/// Get the file path as a displayable string.
+fn file_path_string(db: &dyn Db, file: SourceFile) -> String {
+    file.path(db).display().to_string()
+}
 
 /// Slice a text range from file text, trimming leading blank lines.
 fn slice_text(text: &str, range: TextRange) -> String {
@@ -981,17 +1007,6 @@ fn serialize_kind<S: serde::Serializer>(
     s: S,
 ) -> Result<S::Ok, S::Error> {
     s.serialize_str(kind.as_str())
-}
-
-#[allow(clippy::trivially_copy_pass_by_ref)]
-fn serialize_file<S: serde::Serializer>(
-    _file: &SourceFile,
-    s: S,
-) -> Result<S::Ok, S::Error> {
-    // This stub implementation exists so that we can serialize `SymbolDescription`,
-    // which contains a `SourceFile`, to json, without actually poluting it with the
-    // whole source file.
-    s.serialize_none()
 }
 
 #[allow(clippy::trivially_copy_pass_by_ref)]

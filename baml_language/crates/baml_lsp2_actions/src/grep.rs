@@ -37,6 +37,8 @@ pub enum GrepMode {
 /// A single text search match with optional semantic annotation.
 pub struct TextMatch {
     pub file: SourceFile,
+    /// File path as a string, for display and JSON consumers.
+    pub file_path: String,
     /// 1-based line number.
     pub line_number: usize,
     /// The full text of the matching line.
@@ -193,7 +195,10 @@ fn text_search(db: &dyn Db, files: &[SourceFile], opts: &GrepOptions<'_>) -> Vec
         }
 
         let mut line_start_offset = 0usize;
-        for (line_idx, line) in text.lines().enumerate() {
+        for (line_idx, raw_line) in text.split_inclusive('\n').enumerate() {
+            // Strip trailing newline chars for matching and display.
+            let line = raw_line.trim_end_matches(['\n', '\r']);
+
             let line_to_check = if opts.ignore_case {
                 line.to_lowercase()
             } else {
@@ -211,6 +216,7 @@ fn text_search(db: &dyn Db, files: &[SourceFile], opts: &GrepOptions<'_>) -> Vec
                 );
 
                 matches.push(TextMatch {
+                    file_path: file.path(db).display().to_string(),
                     file,
                     line_number: line_idx + 1,
                     line_text: line.to_string(),
@@ -218,7 +224,8 @@ fn text_search(db: &dyn Db, files: &[SourceFile], opts: &GrepOptions<'_>) -> Vec
                 });
             }
 
-            line_start_offset += line.len() + 1; // +1 for newline
+            // Advance by the full raw slice length (includes \n or \r\n).
+            line_start_offset += raw_line.len();
         }
     }
 
