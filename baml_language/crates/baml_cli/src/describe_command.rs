@@ -74,10 +74,7 @@ impl DescribeArgs {
             }
             for sym in &symbols {
                 let rel = relative_path(&sym.file.path(&db), &from);
-                let line = line_number_at_offset(
-                    sym.file.text(&db),
-                    sym.name_span.start().into(),
-                );
+                let line = line_number_at_offset(sym.file.text(&db), sym.name_span.start().into());
                 println!(
                     "{:<16} {:<10} {}:{}",
                     sym.name,
@@ -154,8 +151,7 @@ pub fn render_description(
     let path_display = rel_path.display();
     let is_local = matches!(
         desc.kind,
-        baml_lsp2_actions::DefinitionKind::Parameter
-            | baml_lsp2_actions::DefinitionKind::Binding
+        baml_lsp2_actions::DefinitionKind::Parameter | baml_lsp2_actions::DefinitionKind::Binding
     );
     if desc.kind.is_member() || is_local {
         let container = desc
@@ -166,10 +162,7 @@ pub fn render_description(
         if is_local {
             // For params/bindings, put the type in the header — no separate
             // type line or body needed.
-            let ty = desc
-                .resolved_type
-                .as_deref()
-                .unwrap_or("unknown");
+            let ty = desc.resolved_type.as_deref().unwrap_or("unknown");
             println!(
                 "── {kind_str}: {container}{} : {ty} ──── {path_display}:{line_num}",
                 desc.name
@@ -181,9 +174,7 @@ pub fn render_description(
             );
         }
     } else {
-        println!(
-            "── {kind_str} ──────────────────────────────── {path_display}:{line_num}"
-        );
+        println!("── {kind_str} ──────────────────────────────── {path_display}:{line_num}");
     }
 
     let mut lines_used = 1; // header
@@ -221,7 +212,11 @@ pub fn render_description(
         // For locals, show function body with context around the variable.
         // Find which line within the body contains the variable.
         let var_line_in_body = find_line_in_body(&desc.full_body, desc.item_range, desc.name_span);
-        lines_used += render_body_with_context(&body_lines, var_line_in_body, budget.saturating_sub(lines_used));
+        lines_used += render_body_with_context(
+            &body_lines,
+            var_line_in_body,
+            budget.saturating_sub(lines_used),
+        );
     } else {
         let available_for_body = budget.saturating_sub(lines_used);
 
@@ -272,7 +267,10 @@ pub fn render_description(
     // ── References ───────────────────────────────────────────────────────────
     if !desc.references.is_empty() && lines_used < budget {
         println!();
-        println!("── references ({}) ─────────────────────────", desc.references.len());
+        println!(
+            "── references ({}) ─────────────────────────",
+            desc.references.len()
+        );
         lines_used += 2;
 
         for (refs_printed, r) in desc.references.iter().enumerate() {
@@ -317,7 +315,8 @@ pub fn render_description(
             println!("── see also ───────────────────────────────");
             for dep in &unseen_deps {
                 let dep_path = relative_path(&dep.file.path(db), project_root);
-                let dep_line = line_number_at_offset(dep.file.text(db), dep.name_span.start().into());
+                let dep_line =
+                    line_number_at_offset(dep.file.text(db), dep.name_span.start().into());
                 let history_str = shown_names.join(",");
                 println!(
                     "  {:<16} {:<10} {}:{}  → baml describe {} --history {history_str}",
@@ -340,9 +339,7 @@ fn line_number_at_offset(text: &str, offset: usize) -> usize {
 
 /// Make a path relative to the project root.
 fn relative_path(path: &std::path::Path, root: &std::path::Path) -> std::path::PathBuf {
-    path.strip_prefix(root)
-        .unwrap_or(path)
-        .to_path_buf()
+    path.strip_prefix(root).unwrap_or(path).to_path_buf()
 }
 
 /// Find the 0-based line index within a body where a span starts.
@@ -367,7 +364,11 @@ fn find_line_in_body(
 /// Render body lines with context around a target line, using truncation if needed.
 /// Always shows the function header (first line), then context around the target.
 /// Returns the number of lines printed.
-fn render_body_with_context(body_lines: &[&str], target_line: usize, available_budget: usize) -> usize {
+fn render_body_with_context(
+    body_lines: &[&str],
+    target_line: usize,
+    available_budget: usize,
+) -> usize {
     let total_lines = body_lines.len();
 
     if total_lines == 0 {

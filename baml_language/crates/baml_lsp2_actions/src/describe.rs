@@ -9,15 +9,17 @@
 //! Salsa-cached queries (`file_outline`, `file_item_tree`, `syntax_tree`, etc.).
 
 use baml_base::SourceFile;
-use baml_compiler2_hir::contributions::DefinitionKind;
 use baml_compiler_syntax::SyntaxKind;
+use baml_compiler2_hir::contributions::DefinitionKind;
 use serde::Serialize;
 use text_size::TextRange;
 
-use crate::Db;
-use crate::search::{SymbolInfo, search_symbols};
-use crate::type_info::type_info_for_definition;
-use crate::usages::usages_at;
+use crate::{
+    Db,
+    search::{SymbolInfo, search_symbols},
+    type_info::type_info_for_definition,
+    usages::usages_at,
+};
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -278,13 +280,12 @@ fn describe_locals(db: &dyn Db, files: &[SourceFile], name: &str) -> Vec<SymbolD
                 let type_str = crate::utils::display_type_expr(param_type_expr);
 
                 // Find the parameter's source span from the signature source map.
-                let param_span = baml_compiler2_hir::signature::function_signature_source_map(
-                    db, func_loc,
-                )
-                .param_spans
-                .get(param_idx)
-                .copied()
-                .unwrap_or_else(|| text_size::TextRange::empty(func.span.start()));
+                let param_span =
+                    baml_compiler2_hir::signature::function_signature_source_map(db, func_loc)
+                        .param_spans
+                        .get(param_idx)
+                        .copied()
+                        .unwrap_or_else(|| text_size::TextRange::empty(func.span.start()));
 
                 let func_name = func.name.as_str().to_string();
 
@@ -361,20 +362,26 @@ fn describe_locals(db: &dyn Db, files: &[SourceFile], name: &str) -> Vec<SymbolD
                     // handles lambdas that get separate inference, while
                     // block-scoped lets fall back to the function's inference.
                     let scope_id = index.scope_ids[scope_idx];
-                    let inference =
-                        baml_compiler2_tir::inference::infer_scope_types(db, scope_id);
+                    let inference = baml_compiler2_tir::inference::infer_scope_types(db, scope_id);
 
                     // Parameters are already handled by the sig.params pass above;
                     // skip them here to avoid duplicate results.
-                    if matches!(def_site, baml_compiler2_hir::semantic_index::DefinitionSite::Parameter(_)) {
+                    if matches!(
+                        def_site,
+                        baml_compiler2_hir::semantic_index::DefinitionSite::Parameter(_)
+                    ) {
                         continue;
                     }
 
                     let type_str = match def_site {
                         baml_compiler2_hir::semantic_index::DefinitionSite::Statement(stmt_id) => {
                             let body = baml_compiler2_hir::body::function_body(db, func_loc);
-                            if let baml_compiler2_hir::body::FunctionBody::Expr(expr_body) = body.as_ref() {
-                                if let baml_compiler2_ast::Stmt::Let { pattern, .. } = &expr_body.stmts[*stmt_id] {
+                            if let baml_compiler2_hir::body::FunctionBody::Expr(expr_body) =
+                                body.as_ref()
+                            {
+                                if let baml_compiler2_ast::Stmt::Let { pattern, .. } =
+                                    &expr_body.stmts[*stmt_id]
+                                {
                                     inference
                                         .binding_type(*pattern)
                                         .map(crate::utils::display_ty)
@@ -386,12 +393,12 @@ fn describe_locals(db: &dyn Db, files: &[SourceFile], name: &str) -> Vec<SymbolD
                                 "unknown".to_string()
                             }
                         }
-                        baml_compiler2_hir::semantic_index::DefinitionSite::PatternBinding(pat_id) => {
-                            inference
-                                .binding_type(*pat_id)
-                                .map(crate::utils::display_ty)
-                                .unwrap_or_else(|| "unknown".to_string())
-                        }
+                        baml_compiler2_hir::semantic_index::DefinitionSite::PatternBinding(
+                            pat_id,
+                        ) => inference
+                            .binding_type(*pat_id)
+                            .map(crate::utils::display_ty)
+                            .unwrap_or_else(|| "unknown".to_string()),
                         baml_compiler2_hir::semantic_index::DefinitionSite::Parameter(_) => {
                             unreachable!("Parameters are skipped above")
                         }
@@ -586,7 +593,10 @@ fn resolve_member_type(db: &dyn Db, file: SourceFile, sym: &SymbolInfo) -> Optio
     };
 
     match (sym.kind, def) {
-        (DefinitionKind::Field, baml_compiler2_hir::contributions::Definition::Class(class_loc)) => {
+        (
+            DefinitionKind::Field,
+            baml_compiler2_hir::contributions::Definition::Class(class_loc),
+        ) => {
             let resolved_fields =
                 baml_compiler2_tir::inference::resolve_class_fields(db, class_loc);
             resolved_fields
@@ -630,11 +640,8 @@ fn resolve_type_for_item(db: &dyn Db, file: SourceFile, sym: &SymbolInfo) -> Opt
             return_type,
             ..
         } => {
-            let param_strs: Vec<String> =
-                params.iter().map(|(n, t)| format!("{n}: {t}")).collect();
-            let ret = return_type
-                .map(|r| format!(" -> {r}"))
-                .unwrap_or_default();
+            let param_strs: Vec<String> = params.iter().map(|(n, t)| format!("{n}: {t}")).collect();
+            let ret = return_type.map(|r| format!(" -> {r}")).unwrap_or_default();
             Some(format!("({}){}", param_strs.join(", "), ret))
         }
         TypeInfo::Class { fields, .. } => {
@@ -667,9 +674,7 @@ fn extract_docstring(db: &dyn Db, file: SourceFile, item_range: TextRange) -> Op
         rowan::TokenAtOffset::None => return None,
     };
 
-    let item_node = token
-        .parent_ancestors()
-        .find(|n| is_item_node(n.kind()))?;
+    let item_node = token.parent_ancestors().find(|n| is_item_node(n.kind()))?;
 
     // Walk backward through siblings/trivia before the item node looking for
     // consecutive /// comments.
@@ -720,7 +725,12 @@ fn extract_docstring(db: &dyn Db, file: SourceFile, item_range: TextRange) -> Op
 /// For functions: parameter types, return type.
 /// For classes: field types that are user-defined.
 /// For other kinds: empty (self-contained or not applicable).
-fn find_dependencies(db: &dyn Db, files: &[SourceFile], file: SourceFile, sym: &SymbolInfo) -> Vec<DepRef> {
+fn find_dependencies(
+    db: &dyn Db,
+    files: &[SourceFile],
+    file: SourceFile,
+    sym: &SymbolInfo,
+) -> Vec<DepRef> {
     let name = baml_base::Name::new(&sym.name);
     let resolved =
         baml_compiler2_tir::resolve::resolve_name_at(db, file, sym.name_span.start(), &name);
@@ -995,25 +1005,22 @@ fn line_at_offset(text: &str, offset: text_size::TextSize) -> (usize, String) {
         .map(|p| offset + p)
         .unwrap_or(text.len());
 
-    (line_number, text[line_start..line_end].trim_end().to_string())
+    (
+        line_number,
+        text[line_start..line_end].trim_end().to_string(),
+    )
 }
 
 // ── Serde helpers ────────────────────────────────────────────────────────────
 
 // serde's `serialize_with` contract requires `&T` — suppress the copy-by-ref lint.
 #[allow(clippy::trivially_copy_pass_by_ref)]
-fn serialize_kind<S: serde::Serializer>(
-    kind: &DefinitionKind,
-    s: S,
-) -> Result<S::Ok, S::Error> {
+fn serialize_kind<S: serde::Serializer>(kind: &DefinitionKind, s: S) -> Result<S::Ok, S::Error> {
     s.serialize_str(kind.as_str())
 }
 
 #[allow(clippy::trivially_copy_pass_by_ref)]
-fn serialize_range<S: serde::Serializer>(
-    range: &TextRange,
-    s: S,
-) -> Result<S::Ok, S::Error> {
+fn serialize_range<S: serde::Serializer>(range: &TextRange, s: S) -> Result<S::Ok, S::Error> {
     use serde::ser::SerializeStruct;
     let mut state = s.serialize_struct("Range", 2)?;
     state.serialize_field("start", &u32::from(range.start()))?;

@@ -8,7 +8,6 @@ workspace = true
 
 [dependencies]
 baml_base = { workspace = true }
-serde = { workspace = true, features = ["derive"] }
 baml_compiler2_ast = { workspace = true }
 baml_compiler2_hir = { workspace = true }
 baml_compiler2_tir = { workspace = true }
@@ -17,6 +16,7 @@ baml_compiler_parser = { workspace = true }
 baml_compiler_syntax = { workspace = true }
 rowan = { workspace = true }
 salsa = { workspace = true }
+serde = { workspace = true, features = [ "derive" ] }
 text-size = { workspace = true }
 
 [dev-dependencies]

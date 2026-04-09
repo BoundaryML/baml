@@ -9,9 +9,11 @@
 use baml_base::SourceFile;
 use baml_compiler2_hir::contributions::DefinitionKind;
 
-use crate::Db;
-use crate::describe::{SymbolDescription, describe};
-use crate::search::{SymbolInfo, search_symbols};
+use crate::{
+    Db,
+    describe::{SymbolDescription, describe},
+    search::{SymbolInfo, search_symbols},
+};
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -53,7 +55,10 @@ pub enum MatchAnnotation {
     /// This match is a definition site.
     Definition { kind: DefinitionKind },
     /// This match is a reference to a known symbol.
-    Reference { target_name: String, target_kind: DefinitionKind },
+    Reference {
+        target_name: String,
+        target_kind: DefinitionKind,
+    },
 }
 
 // ── grep ─────────────────────────────────────────────────────────────────────
@@ -156,7 +161,10 @@ impl OutlineIndex {
             }
         }
 
-        OutlineIndex { def_spans, symbol_kinds }
+        OutlineIndex {
+            def_spans,
+            symbol_kinds,
+        }
     }
 
     fn is_definition(&self, file: SourceFile, offset: u32) -> Option<(String, DefinitionKind)> {
@@ -207,13 +215,8 @@ fn text_search(db: &dyn Db, files: &[SourceFile], opts: &GrepOptions<'_>) -> Vec
 
             if let Some(match_col) = line_to_check.find(&pattern) {
                 // Try to annotate the match semantically using CST-based lookup.
-                let annotation = annotate_match(
-                    file,
-                    line_start_offset,
-                    match_col,
-                    opts.pattern,
-                    &index,
-                );
+                let annotation =
+                    annotate_match(file, line_start_offset, match_col, opts.pattern, &index);
 
                 matches.push(TextMatch {
                     file_path: file.path(db).display().to_string(),

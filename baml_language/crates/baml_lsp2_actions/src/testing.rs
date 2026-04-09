@@ -425,7 +425,10 @@ impl ProjectTestBuilder {
         }
 
         // Update the project's file list.
-        db.project.unwrap().set_files(&mut db).to(user_files.clone());
+        db.project
+            .unwrap()
+            .set_files(&mut db)
+            .to(user_files.clone());
 
         ProjectTest {
             db,

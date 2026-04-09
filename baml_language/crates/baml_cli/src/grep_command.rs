@@ -4,8 +4,8 @@ use std::path::PathBuf;
 
 use anyhow::{Context, Result};
 use baml_lsp2_actions::{
-    DefinitionKind, GrepMode, GrepOptions, MatchAnnotation, SymbolDescription, TextMatch,
-    describe, grep, list_symbols,
+    DefinitionKind, GrepMode, GrepOptions, MatchAnnotation, SymbolDescription, TextMatch, describe,
+    grep, list_symbols,
 };
 use baml_project::ProjectDatabase;
 use baml_workspace::discover_baml_files;
@@ -18,7 +18,6 @@ pub struct GrepArgs {
     pub pattern: Option<String>,
 
     // ── Semantic mode flags ──────────────────────────────────────────────────
-
     /// Show the definition of a symbol
     #[arg(long)]
     pub def: bool,
@@ -37,7 +36,6 @@ pub struct GrepArgs {
     pub kind: Vec<String>,
 
     // ── Budget/history ───────────────────────────────────────────────────────
-
     /// Soft line budget for output (default 30)
     #[arg(long, default_value_t = 30)]
     pub budget: usize,
@@ -55,13 +53,11 @@ pub struct GrepArgs {
     pub json: bool,
 
     // ── Standard grep flags ─────────────────────────────────────────────────
-
     /// Case-insensitive matching
     #[arg(short = 'i', long)]
     pub ignore_case: bool,
 
     // ── Project ─────────────────────────────────────────────────────────────
-
     /// Project root directory
     #[arg(long, default_value = ".")]
     pub from: PathBuf,
@@ -122,10 +118,7 @@ impl GrepArgs {
             }
             for sym in &symbols {
                 let rel = relative_path(&sym.file.path(&db), &from);
-                let line = line_number_at_offset(
-                    sym.file.text(&db),
-                    sym.name_span.start().into(),
-                );
+                let line = line_number_at_offset(sym.file.text(&db), sym.name_span.start().into());
                 println!(
                     "{:<16} {:<10} {}:{}",
                     sym.name,
@@ -274,9 +267,7 @@ impl GrepArgs {
                         println!();
                         println!();
                     }
-                    render_description(
-                        &db, desc, self.budget, &history, self.no_hints, &from,
-                    );
+                    render_description(&db, desc, self.budget, &history, self.no_hints, &from);
                 }
             }
             GrepMode::TextSearch => {
@@ -314,10 +305,7 @@ fn render_refs_only(
     project_root: &std::path::Path,
 ) {
     let file_path = relative_path(&desc.file.path(db), project_root);
-    let line_num = line_number_at_offset(
-        desc.file.text(db),
-        desc.name_span.start().into(),
-    );
+    let line_num = line_number_at_offset(desc.file.text(db), desc.name_span.start().into());
 
     // Show which symbol's refs we're listing.
     let kind_str = desc.kind.as_str();
@@ -366,7 +354,11 @@ fn render_text_matches(
                 target_name,
                 target_kind,
             }) => {
-                format!("  ← reference to {} ({})", target_name, target_kind.as_str())
+                format!(
+                    "  ← reference to {} ({})",
+                    target_name,
+                    target_kind.as_str()
+                )
             }
             None => String::new(),
         };
