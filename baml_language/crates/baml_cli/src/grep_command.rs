@@ -480,6 +480,7 @@ pub fn description_to_json(
         "shape": desc.shape,
         "body": body,
         "docstring": desc.docstring,
+        "resolved_type": desc.resolved_type,
         "dependencies": desc.dependencies.iter().map(|dep| {
             let dep_path = relative_path(&dep.file.path(db), project_root);
             serde_json::json!({

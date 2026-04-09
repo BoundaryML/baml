@@ -222,8 +222,9 @@ fn describe_member(
         }
     }
 
-    // Resolved type for members (field type, variant name).
-    let resolved_type = resolve_type_for_item(db, file, sym);
+    // Resolved type for members — look up via the parent class/enum rather than
+    // `resolve_name_at`, which only handles top-level `Definition` items.
+    let resolved_type = resolve_member_type(db, file, sym);
 
     // References to this field/variant.
     let references = find_references(db, files, file, sym.name_span);
@@ -537,14 +538,50 @@ fn build_shape(db: &dyn Db, file: SourceFile, sym: &SymbolInfo) -> String {
 
 // ── Type resolution ──────────────────────────────────────────────────────────
 
-/// Resolve the type of a symbol to a user-friendly string.
+/// Resolve the type of a field or variant by looking it up in the parent
+/// class/enum's resolved fields, rather than going through `resolve_name_at`
+/// (which only handles top-level `Definition` items, not members).
+fn resolve_member_type(db: &dyn Db, file: SourceFile, sym: &SymbolInfo) -> Option<String> {
+    let container_name = sym.container_name.as_ref()?;
+    let container_baml_name = baml_base::Name::new(container_name);
+    let resolved = baml_compiler2_tir::resolve::resolve_name_at(
+        db,
+        file,
+        sym.name_span.start(),
+        &container_baml_name,
+    );
+
+    let (baml_compiler2_tir::resolve::ResolvedName::Item(def)
+    | baml_compiler2_tir::resolve::ResolvedName::Builtin(def)) = resolved
+    else {
+        return None;
+    };
+
+    match (sym.kind, def) {
+        (DefinitionKind::Field, baml_compiler2_hir::contributions::Definition::Class(class_loc)) => {
+            let resolved_fields =
+                baml_compiler2_tir::inference::resolve_class_fields(db, class_loc);
+            resolved_fields
+                .fields
+                .iter()
+                .find(|(field_name, _, _)| field_name.as_str() == sym.name)
+                .map(|(_, ty, _)| crate::utils::display_ty(ty))
+        }
+        (DefinitionKind::Variant, baml_compiler2_hir::contributions::Definition::Enum(_)) => {
+            // Enum variants don't have a meaningful type beyond the enum itself.
+            Some(container_name.clone())
+        }
+        _ => None,
+    }
+}
+
+/// Resolve the type of a top-level symbol to a user-friendly string.
 ///
 /// For functions: `(a: string, b: int) -> ReturnType`
 /// For classes: field list with types
 /// For enums: variant list
 /// For type aliases: the expansion
 /// For locals: the inferred type
-/// For members: the field/variant type from the parent
 fn resolve_type_for_item(db: &dyn Db, file: SourceFile, sym: &SymbolInfo) -> Option<String> {
     use crate::type_info::TypeInfo;
 
