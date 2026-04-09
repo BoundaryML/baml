@@ -35,6 +35,7 @@ pub(crate) mod support {
         signature::function_signature,
     };
     use baml_compiler2_tir::{
+        callable_boundary::directly_invoked_callback_params,
         inference::{
             ScopeInference, infer_scope_types, render_scope_diagnostics, resolve_class_fields,
             resolve_type_alias,
@@ -1110,6 +1111,16 @@ pub(crate) mod support {
                             }
                         };
 
+                        // Extract expr_body for use in throws display filtering.
+                        let display_expr_body = func_body_opt.as_ref().and_then(|fb| {
+                            if let baml_compiler2_hir::body::FunctionBody::Expr(body) = fb.as_ref()
+                            {
+                                Some(body)
+                            } else {
+                                None
+                            }
+                        });
+
                         let throws = if let Some(t) = &sig.throws {
                             let mut diags = Vec::new();
                             let declared =
@@ -1121,19 +1132,48 @@ pub(crate) mod support {
                                 None => format!(" throws {declared}"),
                             }
                         } else if !synthetic_display_vars.is_empty() {
-                            let body_facts = post_inference_throws
-                                .as_ref()
-                                .map(flatten_ty_to_facts)
-                                .unwrap_or_default();
-                            let throws_ty = combine_effect_vars_with_body_throws(
-                                &synthetic_display_vars,
-                                body_facts,
-                            );
-                            match &inferred_throws {
-                                Some(inferred) => {
-                                    format!(" throws {throws_ty} infers {inferred}")
+                            // Filter to only effect vars whose source callback param
+                            // is actually directly invoked in the body.
+                            let used_display_vars: Vec<baml_base::Name> =
+                                if let Some(body) = display_expr_body.as_ref() {
+                                    let invoked = directly_invoked_callback_params(body);
+                                    synthetic_display_vars
+                                        .iter()
+                                        .filter(|var| {
+                                            // Effect var name is "__throws_<param>", extract param name.
+                                            let param = var
+                                                .as_str()
+                                                .strip_prefix("__throws_")
+                                                .unwrap_or(var.as_str());
+                                            invoked.iter().any(|n| n.as_str() == param)
+                                        })
+                                        .cloned()
+                                        .collect()
+                                } else {
+                                    synthetic_display_vars.clone()
+                                };
+
+                            if used_display_vars.is_empty() {
+                                // All effect vars are unused — fall through to Branch 3 logic.
+                                match post_inference_throws.as_ref().or(inferred_throws.as_ref()) {
+                                    Some(inferred) => format!(" throws {inferred}"),
+                                    None => " throws never".to_string(),
                                 }
-                                None => format!(" throws {throws_ty}"),
+                            } else {
+                                let body_facts = post_inference_throws
+                                    .as_ref()
+                                    .map(flatten_ty_to_facts)
+                                    .unwrap_or_default();
+                                let throws_ty = combine_effect_vars_with_body_throws(
+                                    &used_display_vars,
+                                    body_facts,
+                                );
+                                match &inferred_throws {
+                                    Some(inferred) => {
+                                        format!(" throws {throws_ty} infers {inferred}")
+                                    }
+                                    None => format!(" throws {throws_ty}"),
+                                }
                             }
                         } else {
                             // No explicit throws, no effect vars.

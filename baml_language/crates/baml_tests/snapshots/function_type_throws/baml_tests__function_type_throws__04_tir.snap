@@ -80,7 +80,7 @@ function user.apply_inner(f: () -> int throws __throws_f) -> int throws __throws
     f() : int
   }
 }
-function user.apply_outer(g: () -> int throws __throws_g) -> int throws __throws_g {
+function user.apply_outer(g: () -> int throws __throws_g) -> int throws never {
   { : int
     apply_inner(g) : int
   }
@@ -171,7 +171,7 @@ class user.MixedHandler$stream {
 class user.MethodRunner$stream {
   value: null | unknown
 }
-function user.compose<A, B, C>(f: (A) -> B throws __throws_f, g: (B) -> C throws __throws_g) -> (A) -> C throws __throws_f | __throws_g {
+function user.compose<A, B, C>(f: (A) -> B throws __throws_f, g: (B) -> C throws __throws_g) -> (A) -> C throws never {
   { : never
     return : (a: A) -> C throws __throws_f | __throws_g
       (a: A) -> C { ... } : (a: A) -> C throws __throws_f | __throws_g
@@ -888,7 +888,7 @@ function user.apply_underdeclared(f: () -> int throws __throws_f) -> int throws 
   }
   !! 1490..1496: throws contract violation: `never` is missing throws from callback parameter `f`
 }
-function user.ignore_callback(f: () -> int throws __throws_f) -> int throws __throws_f {
+function user.ignore_callback(f: () -> int throws __throws_f) -> int throws never {
   { : 42
     42 : 42
   }
@@ -905,7 +905,7 @@ function user.test_ignore_callback_throwing() -> int throws never {
 }
 lambda user.test_ignore_callback_throwing {
 }
-function user.apply_aliased(f: () -> int throws __throws_f) -> int throws __throws_f {
+function user.apply_aliased(f: () -> int throws __throws_f) -> int throws never {
   { : int
     let g = f : () -> int throws __throws_f
     g() : int
@@ -923,7 +923,7 @@ function user.test_apply_aliased_throwing() -> int throws never {
 }
 lambda user.test_apply_aliased_throwing {
 }
-function user.ignore_callback_but_throw(f: () -> int throws __throws_f) -> int throws __throws_f | string {
+function user.ignore_callback_but_throw(f: () -> int throws __throws_f) -> int throws string {
   { : int
     helper_with_body_throw() : int
   }
@@ -1385,7 +1385,7 @@ function user.make_stored_closure_with_throws() -> () -> int throws string throw
 }
 lambda user.make_stored_closure_with_throws {
 }
-function user.test_store_direct_callback_param(f: () -> int throws __throws_f) -> int throws __throws_f {
+function user.test_store_direct_callback_param(f: () -> int throws __throws_f) -> int throws never {
   { : int
     let stored = f : () -> int throws __throws_f
     stored() : int

@@ -153,7 +153,7 @@ pub(crate) fn lower_callable_boundary<'db>(
 /// so the wrapper's outward throws will not include the callback's throws in
 /// that case. A future extension could follow simple single-assignment `let`
 /// aliases.
-pub(crate) fn directly_invoked_callback_params(body: &ExprBody) -> FxHashSet<Name> {
+pub fn directly_invoked_callback_params(body: &ExprBody) -> FxHashSet<Name> {
     let mut invoked = FxHashSet::default();
     for (_, expr) in body.exprs.iter() {
         let callee = match expr {
