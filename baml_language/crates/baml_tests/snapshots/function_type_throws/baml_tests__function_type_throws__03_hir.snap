@@ -39,6 +39,9 @@ function user.test_chained_pure() -> int  [expr] {
 function user.test_chained_throwing() -> int  [expr] {
   {  } apply_outer(() -> int { { throw "deep" } })
 }
+class user.MethodRunner {
+  value: user.T
+}
 class user.MixedHandler {
   safe: () -> int
   risky: () -> int
@@ -49,11 +52,20 @@ class user.PureHandler {
 class user.ThrowingHandler {
   run: () -> null
 }
+function user.apply(self: ?, f: (user.T) -> int) -> int  [expr] {
+  {  } f(self.value)
+}
+function user.apply_underdeclared(self: ?, f: (user.T) -> int) -> int  [expr] {
+  {  } f(self.value)
+}
 function user.make_pure_handler() -> user.PureHandler  [expr] {
   {  } user.PureHandler { run: () -> null { {  } null } }
 }
 function user.make_throwing_handler() -> user.ThrowingHandler  [expr] {
   {  } user.ThrowingHandler { run: () -> null { { throw "error" } } }
+}
+function user.test_method_runner() -> int  [expr] {
+  { let runner = user.MethodRunner { value: 1 } } runner.apply((x: int) -> int { {  } x Add 1 })
 }
 function user.compose(f: (user.A) -> user.B, g: (user.B) -> user.C) -> (user.A) -> user.C  [expr] {
   { return (a: A) -> C { {  } g(f(a)) } }
@@ -263,11 +275,20 @@ function user.apply_and_throw(f: () -> int) -> int  [expr] {
 function user.apply_throwing(f: () -> int) -> int  [expr] {
   {  } f()
 }
+function user.apply_underdeclared(f: () -> int) -> int  [expr] {
+  {  } f()
+}
 function user.apply_with_helper(f: () -> int) -> int  [expr] {
   { helper_with_body_throw() } f()
 }
 function user.helper_with_body_throw() -> int  [expr] {
   { throw "helper boom" }
+}
+function user.ignore_callback(f: () -> int) -> int  [expr] {
+  {  } 42
+}
+function user.ignore_callback_but_throw(f: () -> int) -> int  [expr] {
+  {  } helper_with_body_throw()
 }
 function user.test_apply_and_throw_pure() -> int  [expr] {
   {  } apply_and_throw(() -> int { {  } 42 })
@@ -286,6 +307,12 @@ function user.test_apply_with_helper_pure() -> int  [expr] {
 }
 function user.test_apply_with_helper_throwing() -> int  [expr] {
   {  } apply_with_helper(() -> int { { throw 42 } })
+}
+function user.test_ignore_callback_but_throw() -> int  [expr] {
+  {  } ignore_callback_but_throw(() -> int { { throw 42 } })
+}
+function user.test_ignore_callback_throwing() -> int  [expr] {
+  {  } ignore_callback(() -> int { { throw "unused" } })
 }
 function user.test_explicit_throws_match() -> int  [expr] {
   { let f = () -> int throws string { { throw "boom" } } } f()
@@ -389,6 +416,9 @@ function user.make_stored_closure_with_throws() -> () -> int  [expr] {
 }
 function user.make_stored_throwing_handler() -> user.StoredThrowingHandler  [expr] {
   {  } user.StoredThrowingHandler { run: () -> null { { throw "error" } } }
+}
+function user.test_store_direct_callback_param(f: () -> int) -> int  [expr] {
+  { let stored: () -> int = f } stored()
 }
 function user.test_stored_alias_error() -> null  [expr] {
   { let cb: user.StoredPureCb = () -> int { { throw "error" } } } null

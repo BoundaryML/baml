@@ -363,6 +363,48 @@ fn .<lambda(test_chained_throwing, 0)>() -> null {
     }
 }
 
+fn user.MethodRunner.apply(self: MethodRunner, f: (void) -> int) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: MethodRunner // self // param
+    let _2: (void) -> int // f // param
+    let _3: void
+
+    bb0: {
+        _3 = copy _1.0;
+        _0 = call copy _2(copy _3) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.MethodRunner.apply_underdeclared(self: MethodRunner, f: (void) -> int) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: MethodRunner // self // param
+    let _2: (void) -> int // f // param
+    let _3: void
+
+    bb0: {
+        _3 = copy _1.0;
+        _0 = call copy _2(copy _3) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.make_pure_handler() -> PureHandler {
     // Locals:
     let _0: PureHandler // _0 // return
@@ -417,6 +459,45 @@ fn .<lambda(make_throwing_handler, 0)>() -> null {
 
     bb0: {
         throw const "error";
+    }
+}
+
+fn user.test_method_runner() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: MethodRunner // runner
+    let _2: MethodRunner
+    let _3: (int) -> int
+
+    bb0: {
+        _1 = MethodRunner { const 1_i64 };
+        _2 = copy _1;
+        _3 = make_closure lambda[0]();
+        _0 = call const fn user.MethodRunner.apply(copy _2, copy _3) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(test_method_runner, 0)>(x: int) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: int // x // param
+
+    bb0: {
+        _0 = copy _1 + const 1_i64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
     }
 }
 
@@ -2270,6 +2351,24 @@ fn user.apply_throwing(f: () -> int throws string) -> int {
     }
 }
 
+fn user.apply_underdeclared(f: () -> int) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: () -> int // f // param
+
+    bb0: {
+        _0 = call copy _1() -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.apply_with_helper(f: () -> int) -> int {
     // Locals:
     let _0: int // _0 // return
@@ -2299,6 +2398,39 @@ fn user.helper_with_body_throw() -> int {
 
     bb0: {
         throw const "helper boom";
+    }
+}
+
+fn user.ignore_callback(f: () -> int) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: () -> int // f // param
+
+    bb0: {
+        _0 = const 42_i64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.ignore_callback_but_throw(f: () -> int) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: () -> int // f // param
+
+    bb0: {
+        _0 = call const fn user.helper_with_body_throw() -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
     }
 }
 
@@ -2488,6 +2620,64 @@ fn .<lambda(test_apply_with_helper_throwing, 0)>() -> null {
 
     bb0: {
         throw const 42_i64;
+    }
+}
+
+fn user.test_ignore_callback_but_throw() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: () -> void throws int
+
+    bb0: {
+        _1 = make_closure lambda[0]();
+        _0 = call const fn user.ignore_callback_but_throw(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(test_ignore_callback_but_throw, 0)>() -> null {
+    // Locals:
+    let _0: null // _0 // return
+
+    bb0: {
+        throw const 42_i64;
+    }
+}
+
+fn user.test_ignore_callback_throwing() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: () -> void throws string
+
+    bb0: {
+        _1 = make_closure lambda[0]();
+        _0 = call const fn user.ignore_callback(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(test_ignore_callback_throwing, 0)>() -> null {
+    // Locals:
+    let _0: null // _0 // return
+
+    bb0: {
+        throw const "unused";
     }
 }
 
@@ -3570,6 +3760,28 @@ fn .<lambda(make_stored_throwing_handler, 0)>() -> null {
 
     bb0: {
         throw const "error";
+    }
+}
+
+fn user.test_store_direct_callback_param(f: () -> int) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: () -> int // f // param
+    let _2: () -> int // stored
+    let _3: () -> int
+
+    bb0: {
+        _2 = copy _1;
+        _3 = copy _2;
+        _0 = call copy _3() -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
     }
 }
 

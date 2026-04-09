@@ -1,6 +1,22 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
+function user.MethodRunner.apply(self: null, f: (void) -> int) -> int {
+    load_var self
+    load_field .value
+    load_var f
+    call_indirect
+    return
+}
+
+function user.MethodRunner.apply_underdeclared(self: null, f: (void) -> int) -> int {
+    load_var self
+    load_field .value
+    load_var f
+    call_indirect
+    return
+}
+
 function user.always_ok(x: int) -> string {
     load_const "always ok"
     return
@@ -99,6 +115,12 @@ function user.apply_pure_only(f: () -> int) -> int {
 }
 
 function user.apply_throwing(f: () -> int throws string) -> int {
+    load_var f
+    call_indirect
+    return
+}
+
+function user.apply_underdeclared(f: () -> int) -> int {
     load_var f
     call_indirect
     return
@@ -276,6 +298,16 @@ function user.declared_may_fail(x: int) -> string {
 function user.helper_with_body_throw() -> int {
     load_const "helper boom"
     throw
+}
+
+function user.ignore_callback(f: () -> int) -> int {
+    load_const 42
+    return
+}
+
+function user.ignore_callback_but_throw(f: () -> int) -> int {
+    call user.helper_with_body_throw
+    return
 }
 
 function user.make_bad_stored_handler() -> StoredPureHandler {
@@ -655,6 +687,18 @@ function user.test_guarded_throwing() -> int {
     return
 }
 
+function user.test_ignore_callback_but_throw() -> int {
+    make_closure .<lambda(test_ignore_callback_but_throw, 0)>, 0
+    call user.ignore_callback_but_throw
+    return
+}
+
+function user.test_ignore_callback_throwing() -> int {
+    make_closure .<lambda(test_ignore_callback_throwing, 0)>, 0
+    call user.ignore_callback
+    return
+}
+
 function user.test_lambda_throws_class() -> int {
     make_closure .<lambda(test_lambda_throws_class, 0)>, 0
     call_indirect
@@ -686,6 +730,16 @@ function user.test_map_it_throwing() -> string {
     load_const 1
     make_closure .<lambda(test_map_it_throwing, 0)>, 0
     call user.map_it
+    return
+}
+
+function user.test_method_runner() -> int {
+    alloc_instance MethodRunner
+    copy 0
+    load_const 1
+    store_field .value
+    make_closure .<lambda(test_method_runner, 0)>, 0
+    call user.MethodRunner.apply
     return
 }
 
@@ -773,6 +827,12 @@ function user.test_run_pure() -> int {
 function user.test_run_throwing() -> int {
     make_closure .<lambda(test_run_throwing, 0)>, 0
     call user.run_throwing
+    return
+}
+
+function user.test_store_direct_callback_param(f: () -> int) -> int {
+    load_var f
+    call_indirect
     return
 }
 

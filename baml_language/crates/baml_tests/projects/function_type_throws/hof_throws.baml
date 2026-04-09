@@ -53,3 +53,26 @@ function test_apply_with_helper_pure() -> int {
 function test_apply_with_helper_throwing() -> int {
   apply_with_helper(() -> int { throw 42 })
 }
+
+// Explicitly under-declaring a direct callback rethrow should fail contract checking.
+function apply_underdeclared(f: () -> int) -> int throws never {
+  f()
+}
+
+// Unused callback params should not widen the wrapper outward throws.
+function ignore_callback(f: () -> int) -> int {
+  42
+}
+
+function test_ignore_callback_throwing() -> int {
+  ignore_callback(() -> int { throw "unused" })
+}
+
+// Concrete body throws still escape even when the callback is never invoked.
+function ignore_callback_but_throw(f: () -> int) -> int {
+  helper_with_body_throw()
+}
+
+function test_ignore_callback_but_throw() -> int {
+  ignore_callback_but_throw(() -> int { throw 42 })
+}

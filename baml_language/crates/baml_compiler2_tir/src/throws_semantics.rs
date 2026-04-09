@@ -232,6 +232,119 @@ pub(crate) fn function_shape_matches_ignoring_outer_throws(
     }
 }
 
+pub(crate) fn format_throw_fact_for_diagnostic(ty: &Ty) -> String {
+    match ty {
+        Ty::TypeVar(name, _) if name.as_str().starts_with("__throws_") => {
+            format!(
+                "throws from callback parameter `{}`",
+                &name.as_str()["__throws_".len()..]
+            )
+        }
+        _ => format_ty_for_diagnostic(ty),
+    }
+}
+
+pub(crate) fn format_throws_ty_for_diagnostic(ty: &Ty) -> String {
+    match ty {
+        Ty::Union(members, _) => members
+            .iter()
+            .map(format_throw_fact_for_diagnostic)
+            .collect::<Vec<_>>()
+            .join(" | "),
+        other => format_throw_fact_for_diagnostic(other),
+    }
+}
+
+fn needs_postfix_parens_for_diagnostic(ty: &Ty) -> bool {
+    matches!(ty, Ty::Union(..) | Ty::Function { .. })
+}
+
+fn format_postfix_base_for_diagnostic(ty: &Ty) -> String {
+    let rendered = format_ty_for_diagnostic(ty);
+    if needs_postfix_parens_for_diagnostic(ty) {
+        format!("({rendered})")
+    } else {
+        rendered
+    }
+}
+
+pub(crate) fn format_ty_for_diagnostic(ty: &Ty) -> String {
+    match ty {
+        Ty::Class(qn, _) | Ty::Enum(qn, _) | Ty::TypeAlias(qn, _) => qn.to_string(),
+        Ty::EnumVariant(qn, variant, _) => format!("{qn}.{variant}"),
+        Ty::Primitive(p, _) => p.to_string(),
+        Ty::List(inner, _) => format!("{}[]", format_postfix_base_for_diagnostic(inner)),
+        Ty::Map(key, value, _) => {
+            format!(
+                "map<{}, {}>",
+                format_ty_for_diagnostic(key),
+                format_ty_for_diagnostic(value)
+            )
+        }
+        Ty::Union(members, _) => members
+            .iter()
+            .map(format_ty_for_diagnostic)
+            .collect::<Vec<_>>()
+            .join(" | "),
+        Ty::Optional(inner, _) => format!("{}?", format_postfix_base_for_diagnostic(inner)),
+        Ty::Literal(lit, _, _) => lit.to_string(),
+        Ty::EvolvingList(inner, _) => {
+            if matches!(inner.as_ref(), Ty::Never { .. }) {
+                "_[]".to_string()
+            } else {
+                format!("{}[] (evolving)", format_postfix_base_for_diagnostic(inner))
+            }
+        }
+        Ty::EvolvingMap(key, value, _) => {
+            if matches!(key.as_ref(), Ty::Never { .. })
+                && matches!(value.as_ref(), Ty::Never { .. })
+            {
+                "map<_, _>".to_string()
+            } else {
+                format!(
+                    "map<{}, {}> (evolving)",
+                    format_ty_for_diagnostic(key),
+                    format_ty_for_diagnostic(value)
+                )
+            }
+        }
+        Ty::Function {
+            params,
+            ret,
+            throws,
+            ..
+        } => {
+            let rendered_params = params
+                .iter()
+                .map(|(name, ty)| match name {
+                    Some(name) => format!("{name}: {}", format_ty_for_diagnostic(ty)),
+                    None => format_ty_for_diagnostic(ty),
+                })
+                .collect::<Vec<_>>()
+                .join(", ");
+            let mut rendered = format!("({rendered_params}) -> {}", format_ty_for_diagnostic(ret));
+            if !matches!(throws.as_ref(), Ty::Never { .. }) {
+                rendered.push_str(" throws ");
+                rendered.push_str(&format_throws_ty_for_diagnostic(throws));
+            }
+            rendered
+        }
+        Ty::TypeVar(name, _) if name.as_str().starts_with("__throws_") => {
+            format!(
+                "throws from callback parameter `{}`",
+                &name.as_str()["__throws_".len()..]
+            )
+        }
+        Ty::TypeVar(name, _) => name.to_string(),
+        Ty::Never { .. } => "never".to_string(),
+        Ty::Void { .. } => "void".to_string(),
+        Ty::BuiltinUnknown { .. } | Ty::Unknown { .. } => "unknown".to_string(),
+        Ty::RustType { .. } => "$rust_type".to_string(),
+        Ty::Type { .. } => "type".to_string(),
+        Ty::Error { .. } => "!error".to_string(),
+    }
+}
+
 fn declared_covers_fact(
     declared: &Ty,
     fact: &Ty,

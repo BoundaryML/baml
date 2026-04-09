@@ -15,6 +15,7 @@ use baml_compiler2_hir::{
 };
 
 use crate::{
+    callable_boundary::{directly_invoked_callback_params, lower_callable_boundary},
     inference::collect_type_aliases,
     lower_type_expr::{lower_type_expr_in_ns, qualify_def},
     throws_semantics::function_throws_facts,
@@ -520,62 +521,35 @@ fn collect_direct_param_call_throws<'db>(
     body: &ExprBody,
     aliases: &HashMap<crate::ty::QualifiedTypeName, Ty>,
 ) -> BTreeSet<ThrowFact> {
-    let mut direct_param_throws: HashMap<Name, BTreeSet<ThrowFact>> = HashMap::new();
+    let boundary = lower_callable_boundary(
+        db,
+        pkg_items,
+        ns_context,
+        generic_params,
+        sig,
+        None,
+        &mut Vec::new(),
+    );
+    let directly_invoked = directly_invoked_callback_params(body);
 
-    for (param_name, param_ty_expr) in &sig.params {
-        let mut diags = Vec::new();
-        let lowered = lower_type_expr_in_ns(
-            db,
-            param_ty_expr,
-            pkg_items,
-            ns_context,
-            generic_params,
-            &mut diags,
-        );
-        drop(diags);
-
-        let Some(facts) = function_throws_facts(&lowered, aliases) else {
-            continue;
-        };
-
-        let concrete_facts: BTreeSet<ThrowFact> = facts
-            .into_iter()
-            .filter(|fact| !matches!(fact, Ty::TypeVar(_, _) | Ty::Never { .. } | Ty::Void { .. }))
-            .collect();
-
-        if !concrete_facts.is_empty() {
-            direct_param_throws.insert(param_name.clone(), concrete_facts);
-        }
-    }
-
-    if direct_param_throws.is_empty() {
+    if directly_invoked.is_empty() {
         return BTreeSet::new();
     }
 
     let mut out = BTreeSet::new();
-    for (_, expr) in body.exprs.iter() {
-        let callee = match expr {
-            Expr::Call { callee, .. } | Expr::OptionalCall { callee, .. } => *callee,
-            _ => continue,
-        };
-
-        let Some(param_name) = direct_param_callee_name(callee, body) else {
+    for ((param_name, _), (_, param_ty)) in sig.params.iter().zip(boundary.params.iter()) {
+        if !directly_invoked.contains(param_name) {
+            continue;
+        }
+        let Some(facts) = function_throws_facts(param_ty, aliases) else {
             continue;
         };
-
-        if let Some(facts) = direct_param_throws.get(&param_name) {
-            out.extend(facts.iter().cloned());
-        }
+        out.extend(facts.into_iter().filter(|fact| {
+            !matches!(fact, Ty::TypeVar(_, _) | Ty::Never { .. } | Ty::Void { .. })
+        }));
     }
 
     out
-}
-
-fn direct_param_callee_name(expr_id: baml_compiler2_ast::ExprId, body: &ExprBody) -> Option<Name> {
-    match &body.exprs[expr_id] {
-        Expr::Path(segments) if segments.len() == 1 => Some(segments[0].clone()),
-        _ => None,
-    }
 }
 
 /// Look up a function's transitive throw set from dependency interfaces.

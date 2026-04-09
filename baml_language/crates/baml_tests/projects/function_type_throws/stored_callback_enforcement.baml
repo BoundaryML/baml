@@ -87,3 +87,10 @@ function make_stored_closure_good() -> (() -> int) {
 function make_stored_closure_with_throws() -> (() -> int throws string) {
   return () -> int { throw "oops" }
 }
+
+// ERROR: direct callback params become effect polymorphic at the function boundary,
+// but storing them still requires an explicit stored function throws annotation.
+function test_store_direct_callback_param(f: () -> int) -> int {
+  let stored: () -> int = f
+  stored()
+}

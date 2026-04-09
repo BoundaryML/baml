@@ -507,6 +507,45 @@ SOURCE_FILE
                     QUOTE """
               R_BRACE "}"
         R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "test_store_direct_callback_param"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "f"
+        COLON ":"
+        TYPE_EXPR
+          L_PAREN "("
+          R_PAREN ")"
+          ARROW "->"
+          TYPE_EXPR "int"
+            WORD "int"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        LET_STMT
+          KW_LET "let"
+          WORD "stored"
+          COLON ":"
+          TYPE_EXPR
+            L_PAREN "("
+            R_PAREN ")"
+            ARROW "->"
+            TYPE_EXPR "int"
+              WORD "int"
+          EQUALS "="
+          WORD "f"
+        CALL_EXPR
+          WORD "stored"
+          CALL_ARGS "()"
+            L_PAREN "("
+            R_PAREN ")"
+        R_BRACE "}"
 
 === ERRORS ===
 None

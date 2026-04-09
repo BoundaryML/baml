@@ -18,6 +18,7 @@
 
 pub mod analysis;
 pub mod builder;
+pub mod callable_boundary;
 pub mod cycle_detector;
 pub mod effective_throws;
 pub mod generics;

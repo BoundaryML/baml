@@ -206,7 +206,7 @@ function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: strin
     throw "TestSet not found..." + name : string
   }
 }
-function testing.run_test(body: () -> null throws __throws_body, runner: testing.TestRunner?) -> testing.TestReport throws __throws_body {
+function testing.run_test(body: () -> null throws __throws_body, runner: testing.TestRunner?) -> testing.TestReport throws __throws_body | unknown {
   { : testing.TestReport
     let base_run = : () -> testing.TestReport
       () -> TestReport { ... } : () -> testing.TestReport
@@ -216,26 +216,22 @@ function testing.run_test(body: () -> null throws __throws_body, runner: testing
             { 1 stmts + tail } catch_all (e) { _ => { 0 stmts + tail } }
           TestReport { outcome: result.outcome, runs: [RunReport { outcome: result.outcome, duration_ms: baml.sys.now_ms() - start }] }
         }
-    let effective_run = : () -> testing.TestReport
-      match (runner : testing.TestRunner?) : () -> testing.TestReport
-        null =>
-          base_run : () -> testing.TestReport
-        r: TestRunner =>
-          r(base_run) : () -> testing.TestReport
-    effective_run() : testing.TestReport
+    match (runner : testing.TestRunner?) : testing.TestReport
+      null =>
+        base_run() : testing.TestReport
+      r: TestRunner =>
+        r(base_run)() : testing.TestReport
   }
 }
 lambda testing.run_test {
 }
-function testing.run_testset(run_children: () -> testing.TestSetReport throws __throws_run_children, runner: testing.TestSetRunner?) -> testing.TestSetReport throws __throws_run_children {
+function testing.run_testset(run_children: () -> testing.TestSetReport throws __throws_run_children, runner: testing.TestSetRunner?) -> testing.TestSetReport throws __throws_run_children | unknown {
   { : testing.TestSetReport
-    let effective_run = : () -> testing.TestSetReport
-      match (runner : testing.TestSetRunner?) : () -> testing.TestSetReport
-        null =>
-          run_children : () -> testing.TestSetReport
-        r: TestSetRunner =>
-          r(run_children) : () -> testing.TestSetReport
-    effective_run() : testing.TestSetReport
+    match (runner : testing.TestSetRunner?) : testing.TestSetReport
+      null =>
+        run_children() : testing.TestSetReport
+      r: TestSetRunner =>
+        r(run_children)() : testing.TestSetReport
   }
 }
 class testing.TestRegistration$stream {
@@ -287,8 +283,8 @@ class testing.TestSetReport {
   results: testing.ChildReport[]
 }
 type testing.ChildReport = testing.TestReport | testing.TestSetReport
-type testing.TestRunner = (() -> testing.TestReport) -> () -> testing.TestReport
-type testing.TestSetRunner = (() -> testing.TestSetReport) -> () -> testing.TestSetReport
+type testing.TestRunner = (() -> testing.TestReport throws unknown) -> () -> testing.TestReport throws unknown
+type testing.TestSetRunner = (() -> testing.TestSetReport throws unknown) -> () -> testing.TestSetReport throws unknown
 type testing.Outcome$stream = "pass" | "fail" | "error"
 class testing.RunReport$stream {
   outcome: null | testing.Outcome$stream

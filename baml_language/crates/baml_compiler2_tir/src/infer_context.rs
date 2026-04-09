@@ -156,9 +156,12 @@ impl fmt::Display for TirTypeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             TirTypeError::TypeMismatch { expected, got } => {
+                let expected = crate::throws_semantics::format_ty_for_diagnostic(expected);
+                let got = crate::throws_semantics::format_ty_for_diagnostic(got);
                 write!(f, "type mismatch: expected {expected}, got {got}")
             }
             TirTypeError::UnresolvedMember { base_type, member } => {
+                let base_type = crate::throws_semantics::format_ty_for_diagnostic(base_type);
                 write!(f, "type `{base_type}` has no member `{member}`")
             }
             TirTypeError::UnresolvedName { name } => {
@@ -179,21 +182,27 @@ impl fmt::Display for TirTypeError {
                 )
             }
             TirTypeError::NotCallable { ty } => {
+                let ty = crate::throws_semantics::format_ty_for_diagnostic(ty);
                 write!(f, "`{ty}` is not a function — it cannot be called")
             }
             TirTypeError::NotIterable { ty } => {
+                let ty = crate::throws_semantics::format_ty_for_diagnostic(ty);
                 write!(f, "cannot iterate over type `{ty}`")
             }
             TirTypeError::NotIndexable { ty } => {
+                let ty = crate::throws_semantics::format_ty_for_diagnostic(ty);
                 write!(f, "type `{ty}` is not indexable")
             }
             TirTypeError::InvalidBinaryOp { op, lhs, rhs } => {
+                let lhs = crate::throws_semantics::format_ty_for_diagnostic(lhs);
+                let rhs = crate::throws_semantics::format_ty_for_diagnostic(rhs);
                 write!(
                     f,
                     "operator `{op:?}` cannot be applied to `{lhs}` and `{rhs}`"
                 )
             }
             TirTypeError::InvalidUnaryOp { op, operand } => {
+                let operand = crate::throws_semantics::format_ty_for_diagnostic(operand);
                 write!(f, "operator `{op:?}` cannot be applied to `{operand}`")
             }
             TirTypeError::UnresolvedType { name, suggestions } => {
@@ -217,6 +226,7 @@ impl fmt::Display for TirTypeError {
                 write!(f, "expected {expected} argument(s), got {got}")
             }
             TirTypeError::MissingReturn { expected } => {
+                let expected = crate::throws_semantics::format_ty_for_diagnostic(expected);
                 write!(f, "missing return: expected `{expected}`")
             }
             TirTypeError::AliasCycle { name } => {
@@ -229,6 +239,8 @@ impl fmt::Display for TirTypeError {
                 scrutinee_type,
                 missing_cases,
             } => {
+                let scrutinee_type =
+                    crate::throws_semantics::format_ty_for_diagnostic(scrutinee_type);
                 write!(
                     f,
                     "non-exhaustive match on `{scrutinee_type}`; missing: {}",
@@ -243,11 +255,14 @@ impl fmt::Display for TirTypeError {
             TirTypeError::ThrowsContractViolation {
                 declared,
                 extra_types,
-            } => write!(
-                f,
-                "throws contract violation: `{declared}` is missing {}",
-                extra_types.join(", ")
-            ),
+            } => {
+                let declared = crate::throws_semantics::format_throws_ty_for_diagnostic(declared);
+                write!(
+                    f,
+                    "throws contract violation: `{declared}` is missing {}",
+                    extra_types.join(", ")
+                )
+            }
             TirTypeError::ExtraneousThrowsDeclaration { extra_types } => write!(
                 f,
                 "extraneous throws declaration: {}",
@@ -319,10 +334,12 @@ impl fmt::Display for TirTypeError {
                 )
             }
             TirTypeError::StoredFunctionRequiresExplicitThrows { actual_throws } => {
+                let actual_throws =
+                    crate::throws_semantics::format_throws_ty_for_diagnostic(actual_throws);
                 write!(
                     f,
-                    "function that `throws {actual_throws}` cannot be stored in a position typed `throws never`; \
-                    add an explicit `throws {actual_throws}` annotation to the stored function type"
+                    "function whose escaping throws are {actual_throws} cannot be stored in a position typed `throws never`; \
+                     add an explicit `throws` annotation to the stored function type"
                 )
             }
         }

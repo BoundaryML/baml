@@ -2,6 +2,26 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
+  [type] Error: throws contract violation: `never` is missing throws from callback parameter `f`
+    ╭─[ class_field_fn_throws.baml:23:66 ]
+    │
+ 23 │   function apply_underdeclared(self, f: (T) -> int) -> int throws never {
+    │                                                                  ───┬──  
+    │                                                                     ╰──── throws contract violation: `never` is missing throws from callback parameter `f`
+    │ 
+    │ Note: Error code: E0001
+────╯
+
+  [type] Error: throws contract violation: `never` is missing throws from callback parameter `f`
+    ╭─[ hof_throws.baml:58:57 ]
+    │
+ 58 │ function apply_underdeclared(f: () -> int) -> int throws never {
+    │                                                         ───┬──  
+    │                                                            ╰──── throws contract violation: `never` is missing throws from callback parameter `f`
+    │ 
+    │ Note: Error code: E0001
+────╯
+
   [type] Warning: extraneous throws declaration: string
     ╭─[ lambda_throws_explicit.baml:17:27 ]
     │
@@ -72,22 +92,22 @@ source: crates/baml_tests/src/generated_tests.rs
     │ Note: Error code: E0001
 ────╯
 
-  [type] Error: function that `throws string` cannot be stored in a position typed `throws never`; add an explicit `throws string` annotation to the stored function type
+  [type] Error: function whose escaping throws are string cannot be stored in a position typed `throws never`; add an explicit `throws` annotation to the stored function type
     ╭─[ stored_callback_enforcement.baml:12:27 ]
     │
  12 │   StoredPureHandler { run: () -> null { throw "error" } }
     │                           ──────────────┬──────────────  
-    │                                         ╰──────────────── function that `throws string` cannot be stored in a position typed `throws never`; add an explicit `throws string` annotation to the stored function type
+    │                                         ╰──────────────── function whose escaping throws are string cannot be stored in a position typed `throws never`; add an explicit `throws` annotation to the stored function type
     │ 
     │ Note: Error code: E0001
 ────╯
 
-  [type] Error: function that `throws string` cannot be stored in a position typed `throws never`; add an explicit `throws string` annotation to the stored function type
+  [type] Error: function whose escaping throws are string cannot be stored in a position typed `throws never`; add an explicit `throws` annotation to the stored function type
     ╭─[ stored_callback_enforcement.baml:35:22 ]
     │
  35 │   let f: () -> null = () -> null { throw "oops" }
     │                      ──────────────┬─────────────  
-    │                                    ╰─────────────── function that `throws string` cannot be stored in a position typed `throws never`; add an explicit `throws string` annotation to the stored function type
+    │                                    ╰─────────────── function whose escaping throws are string cannot be stored in a position typed `throws never`; add an explicit `throws` annotation to the stored function type
     │ 
     │ Note: Error code: E0001
 ────╯
@@ -112,22 +132,32 @@ source: crates/baml_tests/src/generated_tests.rs
     │ Note: Error code: E0001
 ────╯
 
-  [type] Error: function that `throws string` cannot be stored in a position typed `throws never`; add an explicit `throws string` annotation to the stored function type
+  [type] Error: function whose escaping throws are string cannot be stored in a position typed `throws never`; add an explicit `throws` annotation to the stored function type
     ╭─[ stored_callback_enforcement.baml:64:25 ]
     │
  64 │   let cb: StoredPureCb = () -> int { throw "error" }
     │                         ──────────────┬─────────────  
-    │                                       ╰─────────────── function that `throws string` cannot be stored in a position typed `throws never`; add an explicit `throws string` annotation to the stored function type
+    │                                       ╰─────────────── function whose escaping throws are string cannot be stored in a position typed `throws never`; add an explicit `throws` annotation to the stored function type
     │ 
     │ Note: Error code: E0001
 ────╯
 
-  [type] Error: function that `throws string` cannot be stored in a position typed `throws never`; add an explicit `throws string` annotation to the stored function type
+  [type] Error: function whose escaping throws are string cannot be stored in a position typed `throws never`; add an explicit `throws` annotation to the stored function type
     ╭─[ stored_callback_enforcement.baml:78:9 ]
     │
  78 │   return () -> int { throw "oops" }
     │         ─────────────┬─────────────  
-    │                      ╰─────────────── function that `throws string` cannot be stored in a position typed `throws never`; add an explicit `throws string` annotation to the stored function type
+    │                      ╰─────────────── function whose escaping throws are string cannot be stored in a position typed `throws never`; add an explicit `throws` annotation to the stored function type
+    │ 
+    │ Note: Error code: E0001
+────╯
+
+  [type] Error: function whose escaping throws are throws from callback parameter `f` cannot be stored in a position typed `throws never`; add an explicit `throws` annotation to the stored function type
+    ╭─[ stored_callback_enforcement.baml:94:27 ]
+    │
+ 94 │   let stored: () -> int = f
+    │                           ┬  
+    │                           ╰── function whose escaping throws are throws from callback parameter `f` cannot be stored in a position typed `throws never`; add an explicit `throws` annotation to the stored function type
     │ 
     │ Note: Error code: E0001
 ────╯

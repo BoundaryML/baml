@@ -96,7 +96,7 @@ function user.test_chained_pure() -> int throws never {
 }
 lambda user.test_chained_pure {
 }
-function user.test_chained_throwing() -> int throws string {
+function user.test_chained_throwing() -> int throws never {
   { : int
     apply_outer(() -> int { ... }) : int
       () -> int { ... } : () -> never throws string
@@ -117,6 +117,20 @@ class user.MixedHandler {
   safe: () -> int
   risky: () -> int throws string
 }
+class user.MethodRunner {
+  value: T
+}
+function user.MethodRunner.apply(self: user.MethodRunner, f: (unknown) -> int throws __throws_f) -> int throws __throws_f {
+  { : int
+    f<T>(self.value) : int
+  }
+}
+function user.MethodRunner.apply_underdeclared(self: user.MethodRunner, f: (unknown) -> int throws __throws_f) -> int throws never {
+  { : int
+    f<T>(self.value) : int
+  }
+  !! 402..408: throws contract violation: `never` is missing throws from callback parameter `f`
+}
 function user.make_pure_handler() -> user.PureHandler throws never {
   { : user.PureHandler
     PureHandler { run: () -> null { ... } } : user.PureHandler
@@ -131,6 +145,18 @@ function user.make_throwing_handler() -> user.ThrowingHandler throws never {
 }
 lambda user.make_throwing_handler {
 }
+function user.test_method_runner() -> int throws never {
+  { : int
+    let runner = MethodRunner { value: 1 } : user.MethodRunner
+    runner.apply((x: int) -> int { ... }) : int
+      (x: int) -> int { ... } : (x: int) -> int
+        {
+          x + 1
+        }
+  }
+}
+lambda user.test_method_runner {
+}
 class user.PureHandler$stream {
   run: unknown
 }
@@ -141,10 +167,13 @@ class user.MixedHandler$stream {
   safe: unknown
   risky: unknown
 }
+class user.MethodRunner$stream {
+  value: null | unknown
+}
 function user.compose<A, B, C>(f: (A) -> B throws __throws_f, g: (B) -> C throws __throws_g) -> (A) -> C throws __throws_f | __throws_g {
   { : never
-    return : (a: A) -> C
-      (a: A) -> C { ... } : (a: A) -> C
+    return : (a: A) -> C throws __throws_f | __throws_g
+      (a: A) -> C { ... } : (a: A) -> C throws __throws_f | __throws_g
         {
           g(f(a))
         }
@@ -154,7 +183,7 @@ lambda user.compose {
 }
 function user.test_compose_pure() -> (int) -> string throws never {
   { : (int) -> string | "result"
-    compose((x: int) -> int { ... }, (y: int) -> string { ... }) : (int) -> string | "result"
+    compose<A, B, C>((x: int) -> int { ... }, (y: int) -> string { ... }) : (int) -> string | "result"
       (x: int) -> int { ... } : (x: int) -> int
         {
           x * 2
@@ -169,9 +198,9 @@ lambda user.test_compose_pure {
 }
 lambda user.test_compose_pure {
 }
-function user.test_compose_first_throws() -> (int) -> string throws string {
+function user.test_compose_first_throws() -> (int) -> string throws never {
   { : (int) -> string | "result"
-    compose((x: int) -> int { ... }, (y: int) -> string { ... }) : (int) -> string | "result"
+    compose<A, B, C>((x: int) -> int { ... }, (y: int) -> string { ... }) : (int) -> string | "result"
       (x: int) -> int { ... } : (x: int) -> never throws string
         {
           throw "f failed"
@@ -186,9 +215,9 @@ lambda user.test_compose_first_throws {
 }
 lambda user.test_compose_first_throws {
 }
-function user.test_compose_second_throws() -> (int) -> string throws string {
+function user.test_compose_second_throws() -> (int) -> string throws never {
   { : (int) -> string | never
-    compose((x: int) -> int { ... }, (y: int) -> string { ... }) : (int) -> string | never
+    compose<A, B, C>((x: int) -> int { ... }, (y: int) -> string { ... }) : (int) -> string | never
       (x: int) -> int { ... } : (x: int) -> int
         {
           x * 2
@@ -203,9 +232,9 @@ lambda user.test_compose_second_throws {
 }
 lambda user.test_compose_second_throws {
 }
-function user.test_compose_both_throw() -> (int) -> string throws int | string {
+function user.test_compose_both_throw() -> (int) -> string throws never {
   { : (int) -> string | never
-    compose((x: int) -> int { ... }, (y: int) -> string { ... }) : (int) -> string | never
+    compose<A, B, C>((x: int) -> int { ... }, (y: int) -> string { ... }) : (int) -> string | never
       (x: int) -> int { ... } : (x: int) -> never throws string
         {
           throw "string error"
@@ -850,6 +879,44 @@ function user.test_apply_with_helper_throwing() -> int throws int | string {
 }
 lambda user.test_apply_with_helper_throwing {
 }
+function user.apply_underdeclared(f: () -> int throws __throws_f) -> int throws never {
+  { : int
+    f() : int
+  }
+  !! 1490..1496: throws contract violation: `never` is missing throws from callback parameter `f`
+}
+function user.ignore_callback(f: () -> int throws __throws_f) -> int throws __throws_f {
+  { : 42
+    42 : 42
+  }
+}
+function user.test_ignore_callback_throwing() -> int throws never {
+  { : int
+    ignore_callback(() -> int { ... }) : int
+      () -> int { ... } : () -> never throws string
+        {
+          throw "unused"
+        }
+  }
+}
+lambda user.test_ignore_callback_throwing {
+}
+function user.ignore_callback_but_throw(f: () -> int throws __throws_f) -> int throws __throws_f | string {
+  { : int
+    helper_with_body_throw() : int
+  }
+}
+function user.test_ignore_callback_but_throw() -> int throws string {
+  { : int
+    ignore_callback_but_throw(() -> int { ... }) : int
+      () -> int { ... } : () -> never throws int
+        {
+          throw 42
+        }
+  }
+}
+lambda user.test_ignore_callback_but_throw {
+}
 function user.test_explicit_throws_match() -> int throws string {
   { : never
     let f = : () -> never throws string
@@ -1163,7 +1230,7 @@ function user.make_bad_stored_handler() -> user.StoredPureHandler throws never {
   { : user.StoredPureHandler
     StoredPureHandler { run: () -> null { ... } } : user.StoredPureHandler
   }
-  !! 378..407: function that `throws string` cannot be stored in a position typed `throws never`; add an explicit `throws string` annotation to the stored function type
+  !! 378..407: function whose escaping throws are string cannot be stored in a position typed `throws never`; add an explicit `throws` annotation to the stored function type
 }
 lambda user.make_bad_stored_handler {
 }
@@ -1193,7 +1260,7 @@ function user.test_stored_local_error() -> null throws never {
         }
     null : null
   }
-  !! 1059..1087: function that `throws string` cannot be stored in a position typed `throws never`; add an explicit `throws string` annotation to the stored function type
+  !! 1059..1087: function whose escaping throws are string cannot be stored in a position typed `throws never`; add an explicit `throws` annotation to the stored function type
 }
 lambda user.test_stored_local_error {
 }
@@ -1245,7 +1312,7 @@ function user.test_stored_alias_error() -> null throws never {
         }
     null : null
   }
-  !! 1875..1903: function that `throws string` cannot be stored in a position typed `throws never`; add an explicit `throws string` annotation to the stored function type
+  !! 1875..1903: function whose escaping throws are string cannot be stored in a position typed `throws never`; add an explicit `throws` annotation to the stored function type
 }
 lambda user.test_stored_alias_error {
 }
@@ -1269,7 +1336,7 @@ function user.make_stored_closure_bad() -> () -> int throws never {
           throw "oops"
         }
   }
-  !! 2204..2231: function that `throws string` cannot be stored in a position typed `throws never`; add an explicit `throws string` annotation to the stored function type
+  !! 2204..2231: function whose escaping throws are string cannot be stored in a position typed `throws never`; add an explicit `throws` annotation to the stored function type
 }
 lambda user.make_stored_closure_bad {
 }
@@ -1294,6 +1361,13 @@ function user.make_stored_closure_with_throws() -> () -> int throws string throw
   }
 }
 lambda user.make_stored_closure_with_throws {
+}
+function user.test_store_direct_callback_param(f: () -> int throws __throws_f) -> int throws __throws_f {
+  { : int
+    let stored = f : () -> int throws __throws_f
+    stored() : int
+  }
+  !! 2789..2790: function whose escaping throws are throws from callback parameter `f` cannot be stored in a position typed `throws never`; add an explicit `throws` annotation to the stored function type
 }
 class user.StoredPureHandler$stream {
   run: unknown

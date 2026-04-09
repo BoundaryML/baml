@@ -22,21 +22,48 @@ pub(crate) fn collect_effective_throws<'db>(
     include_typevars: bool,
     unknown_on_unresolved_call: bool,
 ) -> BTreeSet<Ty> {
+    body.root_expr
+        .map(|root| {
+            collect_effective_throws_from_root_expr(
+                db,
+                package_id,
+                root,
+                body,
+                expressions,
+                catch_residual_throws,
+                aliases,
+                include_typevars,
+                unknown_on_unresolved_call,
+            )
+        })
+        .unwrap_or_default()
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn collect_effective_throws_from_root_expr<'db>(
+    db: &'db dyn crate::Db,
+    package_id: PackageId<'db>,
+    root_expr: ExprId,
+    body: &ExprBody,
+    expressions: &FxHashMap<ExprId, Ty>,
+    catch_residual_throws: &FxHashMap<ExprId, BTreeSet<Ty>>,
+    aliases: &HashMap<QualifiedTypeName, Ty>,
+    include_typevars: bool,
+    unknown_on_unresolved_call: bool,
+) -> BTreeSet<Ty> {
     let mut out = BTreeSet::new();
-    if let Some(root) = body.root_expr {
-        collect_effective_throws_from_expr(
-            db,
-            package_id,
-            root,
-            body,
-            expressions,
-            catch_residual_throws,
-            aliases,
-            include_typevars,
-            unknown_on_unresolved_call,
-            &mut out,
-        );
-    }
+    collect_effective_throws_from_expr(
+        db,
+        package_id,
+        root_expr,
+        body,
+        expressions,
+        catch_residual_throws,
+        aliases,
+        include_typevars,
+        unknown_on_unresolved_call,
+        &mut out,
+    );
     out
 }
 

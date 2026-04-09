@@ -309,13 +309,13 @@ fn testing.TestCollector.new(prefix: string) -> testing.TestCollector {
     }
 }
 
-fn testing.TestCollector.register_test(self: testing.TestCollector, name: string, body: () -> null, runner: ((() -> testing.TestReport) -> () -> testing.TestReport)?) -> null {
+fn testing.TestCollector.register_test(self: testing.TestCollector, name: string, body: () -> null, runner: ((() -> testing.TestReport throws unknown) -> () -> testing.TestReport throws unknown)?) -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: testing.TestCollector // self // param
     let _2: string // name // param
     let _3: () -> null // body // param
-    let _4: ((() -> testing.TestReport) -> () -> testing.TestReport)? // runner // param
+    let _4: ((() -> testing.TestReport throws unknown) -> () -> testing.TestReport throws unknown)? // runner // param
     let _5: string // full_name
     let _6: bool
     let _7: string
@@ -469,13 +469,13 @@ fn testing.TestCollector.register_test(self: testing.TestCollector, name: string
     }
 }
 
-fn testing.TestCollector.register_test_set(self: testing.TestCollector, name: string, collector: (testing.TestCollector) -> null, runner: ((() -> testing.TestSetReport) -> () -> testing.TestSetReport)?) -> null {
+fn testing.TestCollector.register_test_set(self: testing.TestCollector, name: string, collector: (testing.TestCollector) -> null, runner: ((() -> testing.TestSetReport throws unknown) -> () -> testing.TestSetReport throws unknown)?) -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: testing.TestCollector // self // param
     let _2: string // name // param
     let _3: (testing.TestCollector) -> null // collector // param
-    let _4: ((() -> testing.TestSetReport) -> () -> testing.TestSetReport)? // runner // param
+    let _4: ((() -> testing.TestSetReport throws unknown) -> () -> testing.TestSetReport throws unknown)? // runner // param
     let _5: string // full_name
     let _6: bool
     let _7: string
@@ -629,54 +629,53 @@ fn testing.TestCollector.register_test_set(self: testing.TestCollector, name: st
     }
 }
 
-fn testing.run_test(body: () -> null, runner: ((() -> testing.TestReport) -> () -> testing.TestReport)?) -> testing.TestReport {
+fn testing.run_test(body: () -> null, runner: ((() -> testing.TestReport throws unknown) -> () -> testing.TestReport throws unknown)?) -> testing.TestReport {
     // Locals:
     let _0: testing.TestReport // _0 // return
     let _1: () -> null // body // param [captured]
-    let _2: ((() -> testing.TestReport) -> () -> testing.TestReport)? // runner // param
+    let _2: ((() -> testing.TestReport throws unknown) -> () -> testing.TestReport throws unknown)? // runner // param
     let _3: () -> testing.TestReport // base_run
-    let _4: () -> testing.TestReport // effective_run
-    let _5: bool
+    let _4: bool
+    let _5: () -> testing.TestReport
     let _6: bool
-    let _7: (() -> testing.TestReport) -> () -> testing.TestReport // r
-    let _8: (() -> testing.TestReport) -> () -> testing.TestReport
-    let _9: () -> testing.TestReport
+    let _7: (() -> testing.TestReport throws unknown) -> () -> testing.TestReport throws unknown // r
+    let _8: () -> testing.TestReport throws unknown
+    let _9: (() -> testing.TestReport throws unknown) -> () -> testing.TestReport throws unknown
     let _10: () -> testing.TestReport
 
     bb0: {
         _3 = make_closure lambda[0](copy _1);
-        _5 = copy _2 == const null;
-        branch copy _5 -> [bb5, bb1];
+        _4 = copy _2 == const null;
+        branch copy _4 -> [bb6, bb1];
     }
 
     bb1: {
-        _6 = is_type(copy _2, Function { params: [Function { params: [], ret: Class(TypeName { name: "TestReport", module_path: ["testing"], display_name: "testing.TestReport" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }), throws: None, attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }], ret: Function { params: [], ret: Class(TypeName { name: "TestReport", module_path: ["testing"], display_name: "testing.TestReport" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }), throws: None, attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }, throws: None, attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        _6 = is_type(copy _2, Function { params: [Function { params: [], ret: Class(TypeName { name: "TestReport", module_path: ["testing"], display_name: "testing.TestReport" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }), throws: Some(BuiltinUnknown { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }), attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }], ret: Function { params: [], ret: Class(TypeName { name: "TestReport", module_path: ["testing"], display_name: "testing.TestReport" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }), throws: Some(BuiltinUnknown { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }), attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }, throws: None, attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
         branch copy _6 -> [bb3, bb2];
     }
 
     bb2: {
-        goto -> bb6;
+        goto -> bb8;
     }
 
     bb3: {
         _7 = copy _2;
-        _8 = copy _7;
-        _9 = copy _3;
-        _4 = call copy _8(copy _9) -> [bb4];
+        _9 = copy _7;
+        _10 = copy _3;
+        _8 = call copy _9(copy _10) -> [bb4];
     }
 
     bb4: {
-        goto -> bb6;
+        _0 = call copy _8() -> [bb5];
     }
 
     bb5: {
-        _4 = copy _3;
-        goto -> bb6;
+        goto -> bb8;
     }
 
     bb6: {
-        _10 = copy _4;
-        _0 = call copy _10() -> [bb7];
+        _5 = copy _3;
+        _0 = call copy _5() -> [bb7];
     }
 
     bb7: {
@@ -684,6 +683,10 @@ fn testing.run_test(body: () -> null, runner: ((() -> testing.TestReport) -> () 
     }
 
     bb8: {
+        goto -> bb9;
+    }
+
+    bb9: {
         return;
     }
 }
@@ -773,7 +776,7 @@ fn testing.TestRegistry.run_test(self: testing.TestRegistry, name: string) -> te
     let _12: testing.TestRegistration
     let _13: () -> null throws unknown
     let _14: testing.TestRegistration
-    let _15: ((() -> testing.TestReport) -> () -> testing.TestReport)?
+    let _15: ((() -> testing.TestReport throws unknown) -> () -> testing.TestReport throws unknown)?
     let _16: testing.TestRegistration
     let _17: string[]
     let _18: map<string, testing.TestRegistry>
@@ -901,50 +904,47 @@ fn testing.TestRegistry.run_test(self: testing.TestRegistry, name: string) -> te
     }
 }
 
-fn testing.run_testset(run_children: () -> testing.TestSetReport, runner: ((() -> testing.TestSetReport) -> () -> testing.TestSetReport)?) -> testing.TestSetReport {
+fn testing.run_testset(run_children: () -> testing.TestSetReport, runner: ((() -> testing.TestSetReport throws unknown) -> () -> testing.TestSetReport throws unknown)?) -> testing.TestSetReport {
     // Locals:
     let _0: testing.TestSetReport // _0 // return
     let _1: () -> testing.TestSetReport // run_children // param
-    let _2: ((() -> testing.TestSetReport) -> () -> testing.TestSetReport)? // runner // param
-    let _3: () -> testing.TestSetReport // effective_run
+    let _2: ((() -> testing.TestSetReport throws unknown) -> () -> testing.TestSetReport throws unknown)? // runner // param
+    let _3: bool
     let _4: bool
-    let _5: bool
-    let _6: (() -> testing.TestSetReport) -> () -> testing.TestSetReport // r
-    let _7: (() -> testing.TestSetReport) -> () -> testing.TestSetReport
-    let _8: () -> testing.TestSetReport
+    let _5: (() -> testing.TestSetReport throws unknown) -> () -> testing.TestSetReport throws unknown // r
+    let _6: () -> testing.TestSetReport throws unknown
+    let _7: (() -> testing.TestSetReport throws unknown) -> () -> testing.TestSetReport throws unknown
 
     bb0: {
-        _4 = copy _2 == const null;
-        branch copy _4 -> [bb5, bb1];
+        _3 = copy _2 == const null;
+        branch copy _3 -> [bb6, bb1];
     }
 
     bb1: {
-        _5 = is_type(copy _2, Function { params: [Function { params: [], ret: Class(TypeName { name: "TestSetReport", module_path: ["testing"], display_name: "testing.TestSetReport" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }), throws: None, attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }], ret: Function { params: [], ret: Class(TypeName { name: "TestSetReport", module_path: ["testing"], display_name: "testing.TestSetReport" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }), throws: None, attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }, throws: None, attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
-        branch copy _5 -> [bb3, bb2];
+        _4 = is_type(copy _2, Function { params: [Function { params: [], ret: Class(TypeName { name: "TestSetReport", module_path: ["testing"], display_name: "testing.TestSetReport" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }), throws: Some(BuiltinUnknown { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }), attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }], ret: Function { params: [], ret: Class(TypeName { name: "TestSetReport", module_path: ["testing"], display_name: "testing.TestSetReport" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }), throws: Some(BuiltinUnknown { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }), attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }, throws: None, attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _4 -> [bb3, bb2];
     }
 
     bb2: {
-        goto -> bb6;
+        goto -> bb8;
     }
 
     bb3: {
-        _6 = copy _2;
-        _7 = copy _6;
-        _3 = call copy _7(copy _1) -> [bb4];
+        _5 = copy _2;
+        _7 = copy _5;
+        _6 = call copy _7(copy _1) -> [bb4];
     }
 
     bb4: {
-        goto -> bb6;
+        _0 = call copy _6() -> [bb5];
     }
 
     bb5: {
-        _3 = copy _1;
-        goto -> bb6;
+        goto -> bb8;
     }
 
     bb6: {
-        _8 = copy _3;
-        _0 = call copy _8() -> [bb7];
+        _0 = call copy _1() -> [bb7];
     }
 
     bb7: {
@@ -952,6 +952,10 @@ fn testing.run_testset(run_children: () -> testing.TestSetReport, runner: ((() -
     }
 
     bb8: {
+        goto -> bb9;
+    }
+
+    bb9: {
         return;
     }
 }

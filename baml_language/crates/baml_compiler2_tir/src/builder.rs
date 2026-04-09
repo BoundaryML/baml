@@ -26,6 +26,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use text_size::TextRange;
 
 use crate::{
+    callable_boundary::lower_callable_boundary,
     infer_context::{InferContext, RelatedLocation, TirTypeError, TypeCheckDiagnostics},
     package_interface::PackageResolutionContext,
     throws_semantics,
@@ -1866,12 +1867,12 @@ impl<'db> TypeInferenceBuilder<'db> {
         let mut extra: Vec<String> = diff
             .uncovered_effective
             .into_iter()
-            .map(|ty| ty.to_string())
+            .map(|ty| throws_semantics::format_throw_fact_for_diagnostic(&ty))
             .collect();
         let mut extraneous: Vec<String> = diff
             .extraneous_declared
             .into_iter()
-            .map(|ty| ty.to_string())
+            .map(|ty| throws_semantics::format_throw_fact_for_diagnostic(&ty))
             .collect();
         extra.sort();
         extraneous.sort();
@@ -2340,9 +2341,17 @@ impl<'db> TypeInferenceBuilder<'db> {
     }
 
     fn catch_base_throw_types(&self, base_expr_id: ExprId, body: &ExprBody) -> BTreeSet<Ty> {
-        let mut out = BTreeSet::new();
-        self.collect_throw_facts_from_expr(base_expr_id, body, &mut out);
-        out
+        crate::effective_throws::collect_effective_throws_from_root_expr(
+            self.context.db(),
+            self.package_id,
+            base_expr_id,
+            body,
+            &self.expressions,
+            &self.catch_residual_throws,
+            &self.aliases,
+            true,
+            true,
+        )
     }
 
     /// Join a set of throw fact types into a single type.
@@ -2505,272 +2514,6 @@ impl<'db> TypeInferenceBuilder<'db> {
         )
     }
 
-    fn collect_throw_facts_from_expr(
-        &self,
-        expr_id: ExprId,
-        body: &ExprBody,
-        out: &mut BTreeSet<Ty>,
-    ) {
-        match &body.exprs[expr_id] {
-            Expr::Throw { value } => {
-                self.collect_throw_facts_from_expr(*value, body, out);
-                self.collect_throw_facts_from_value(*value, body, out);
-            }
-            Expr::Call { callee, args } => {
-                self.collect_throw_facts_from_expr(*callee, body, out);
-                for arg in args {
-                    self.collect_throw_facts_from_expr(*arg, body, out);
-                }
-                let type_level_facts = self
-                    .expressions
-                    .get(callee)
-                    .and_then(|ty| throws_semantics::function_throws_facts(ty, &self.aliases))
-                    .and_then(|facts| if facts.is_empty() { None } else { Some(facts) });
-                if let Some(facts) = type_level_facts {
-                    out.extend(facts);
-                } else if let Some(target) = self.call_target_name(*callee, body) {
-                    let throws = crate::throw_inference::function_throw_sets(
-                        self.context.db(),
-                        self.package_id,
-                    );
-                    if let Some(transitive) = throws.transitive_for(&target) {
-                        out.extend(transitive.iter().cloned());
-                    } else {
-                        out.insert(Ty::Unknown {
-                            attr: TyAttr::default(),
-                        });
-                    }
-                } else {
-                    out.insert(Ty::Unknown {
-                        attr: TyAttr::default(),
-                    });
-                }
-            }
-            Expr::If {
-                condition,
-                then_branch,
-                else_branch,
-            } => {
-                self.collect_throw_facts_from_expr(*condition, body, out);
-                self.collect_throw_facts_from_expr(*then_branch, body, out);
-                if let Some(else_expr) = else_branch {
-                    self.collect_throw_facts_from_expr(*else_expr, body, out);
-                }
-            }
-            Expr::Match {
-                scrutinee, arms, ..
-            } => {
-                self.collect_throw_facts_from_expr(*scrutinee, body, out);
-                for arm_id in arms {
-                    let arm = &body.match_arms[*arm_id];
-                    if let Some(guard) = arm.guard {
-                        self.collect_throw_facts_from_expr(guard, body, out);
-                    }
-                    self.collect_throw_facts_from_expr(arm.body, body, out);
-                }
-            }
-            Expr::Binary { lhs, rhs, .. } => {
-                self.collect_throw_facts_from_expr(*lhs, body, out);
-                self.collect_throw_facts_from_expr(*rhs, body, out);
-            }
-            Expr::Unary { expr, .. } => self.collect_throw_facts_from_expr(*expr, body, out),
-            Expr::Object {
-                fields, spreads, ..
-            } => {
-                for (_, value) in fields {
-                    self.collect_throw_facts_from_expr(*value, body, out);
-                }
-                for spread in spreads {
-                    self.collect_throw_facts_from_expr(spread.expr, body, out);
-                }
-            }
-            Expr::Array { elements } => {
-                for elem in elements {
-                    self.collect_throw_facts_from_expr(*elem, body, out);
-                }
-            }
-            Expr::Map { entries } => {
-                for (key, value) in entries {
-                    self.collect_throw_facts_from_expr(*key, body, out);
-                    self.collect_throw_facts_from_expr(*value, body, out);
-                }
-            }
-            Expr::Block { stmts, tail_expr } => {
-                for stmt in stmts {
-                    self.collect_throw_facts_from_stmt(*stmt, body, out);
-                }
-                if let Some(tail) = tail_expr {
-                    self.collect_throw_facts_from_expr(*tail, body, out);
-                }
-            }
-            Expr::FieldAccess { base, .. } | Expr::OptionalFieldAccess { base, .. } => {
-                self.collect_throw_facts_from_expr(*base, body, out);
-            }
-            Expr::Index { base, index } | Expr::OptionalIndex { base, index } => {
-                self.collect_throw_facts_from_expr(*base, body, out);
-                self.collect_throw_facts_from_expr(*index, body, out);
-            }
-            Expr::OptionalCall { callee, args } => {
-                self.collect_throw_facts_from_expr(*callee, body, out);
-                for arg in args {
-                    self.collect_throw_facts_from_expr(*arg, body, out);
-                }
-                let type_level_facts = self
-                    .expressions
-                    .get(callee)
-                    .and_then(|ty| throws_semantics::function_throws_facts(ty, &self.aliases))
-                    .and_then(|facts| if facts.is_empty() { None } else { Some(facts) });
-                if let Some(facts) = type_level_facts {
-                    out.extend(facts);
-                } else if let Some(target) = self.call_target_name(*callee, body) {
-                    let throws = crate::throw_inference::function_throw_sets(
-                        self.context.db(),
-                        self.package_id,
-                    );
-                    if let Some(transitive) = throws.transitive_for(&target) {
-                        out.extend(transitive.iter().cloned());
-                    } else {
-                        out.insert(Ty::Unknown {
-                            attr: TyAttr::default(),
-                        });
-                    }
-                } else {
-                    out.insert(Ty::Unknown {
-                        attr: TyAttr::default(),
-                    });
-                }
-            }
-            Expr::Catch { base, .. } => {
-                self.collect_throw_facts_from_expr(*base, body, out);
-            }
-            Expr::OptionalChain { expr } => {
-                self.collect_throw_facts_from_expr(*expr, body, out);
-            }
-            Expr::Lambda(_)
-            | Expr::Literal(_)
-            | Expr::ByteStringLiteral(_)
-            | Expr::Null
-            | Expr::Path(_)
-            | Expr::Missing => {}
-        }
-    }
-
-    fn collect_throw_facts_from_stmt(
-        &self,
-        stmt_id: StmtId,
-        body: &ExprBody,
-        out: &mut BTreeSet<Ty>,
-    ) {
-        match &body.stmts[stmt_id] {
-            Stmt::Expr(expr_id) => self.collect_throw_facts_from_expr(*expr_id, body, out),
-            Stmt::Let { initializer, .. } => {
-                if let Some(init) = initializer {
-                    self.collect_throw_facts_from_expr(*init, body, out);
-                }
-            }
-            Stmt::While {
-                condition,
-                body: while_body,
-                after,
-                ..
-            } => {
-                self.collect_throw_facts_from_expr(*condition, body, out);
-                self.collect_throw_facts_from_expr(*while_body, body, out);
-                if let Some(after_stmt) = after {
-                    self.collect_throw_facts_from_stmt(*after_stmt, body, out);
-                }
-            }
-            Stmt::For {
-                collection,
-                body: for_body,
-                ..
-            } => {
-                self.collect_throw_facts_from_expr(*collection, body, out);
-                self.collect_throw_facts_from_expr(*for_body, body, out);
-            }
-            Stmt::Return(expr) => {
-                if let Some(expr) = expr {
-                    self.collect_throw_facts_from_expr(*expr, body, out);
-                }
-            }
-            Stmt::Assign { target, value } | Stmt::AssignOp { target, value, .. } => {
-                self.collect_throw_facts_from_expr(*target, body, out);
-                self.collect_throw_facts_from_expr(*value, body, out);
-            }
-            Stmt::Throw { value } => {
-                self.collect_throw_facts_from_expr(*value, body, out);
-                self.collect_throw_facts_from_value(*value, body, out);
-            }
-            Stmt::Break | Stmt::Continue | Stmt::Missing | Stmt::HeaderComment { .. } => {}
-        }
-    }
-
-    fn collect_throw_facts_from_value(
-        &self,
-        value_expr_id: ExprId,
-        body: &ExprBody,
-        out: &mut BTreeSet<Ty>,
-    ) {
-        if let Some(thrown_ty) = self.expressions.get(&value_expr_id) {
-            out.extend(throws_semantics::flatten_ty_to_facts(thrown_ty));
-            return;
-        }
-
-        match &body.exprs[value_expr_id] {
-            Expr::Literal(lit) => out.extend(throws_semantics::flatten_ty_to_facts(&Ty::Literal(
-                lit.clone(),
-                Freshness::Regular,
-                TyAttr::default(),
-            ))),
-            Expr::ByteStringLiteral(_) => {
-                out.insert(Ty::Primitive(PrimitiveType::Uint8Array, TyAttr::default()));
-            }
-            Expr::Null => {
-                out.insert(Ty::Primitive(PrimitiveType::Null, TyAttr::default()));
-            }
-            _ => {
-                out.insert(Ty::Unknown {
-                    attr: TyAttr::default(),
-                });
-            }
-        }
-    }
-
-    fn call_target_name(&self, callee_expr_id: ExprId, body: &ExprBody) -> Option<Name> {
-        let segments = Self::expr_to_path_segments(callee_expr_id, body)?;
-        if segments.len() < 2 {
-            // Single-segment path (free function) — return as-is.
-            return if segments.is_empty() {
-                None
-            } else {
-                Some(segments[0].clone())
-            };
-        }
-        // Multi-segment: receiver.method — resolve the receiver's type to get
-        // the class name so the target matches throw_inference's "Class.method" keys.
-        let receiver = &segments[0];
-        let method = &segments[1];
-        if let Some(Ty::Class(qn, _)) = self.locals.get(receiver) {
-            let ns = qn.namespace();
-            let key = if ns.is_empty() {
-                format!("{}.{}", qn.name(), method)
-            } else {
-                let ns_str = ns.iter().map(Name::as_str).collect::<Vec<_>>().join(".");
-                format!("{}.{}.{}", ns_str, qn.name(), method)
-            };
-            Some(Name::new(key))
-        } else {
-            // Receiver not a known local or not a class — fall back to raw path
-            Some(Name::new(
-                segments
-                    .iter()
-                    .map(Name::as_str)
-                    .collect::<Vec<_>>()
-                    .join("."),
-            ))
-        }
-    }
-
     fn find_function_scope_id(
         &self,
         file: SourceFile,
@@ -2835,101 +2578,51 @@ impl<'db> TypeInferenceBuilder<'db> {
     ) -> Ty {
         let db = self.context.db();
         let mut diags = Vec::new();
-        let mut synthetic_effect_vars: Vec<Name> = Vec::new();
+        let boundary = lower_callable_boundary(
+            db,
+            pkg_items,
+            ns_context,
+            generic_params,
+            sig,
+            self_param_ty,
+            &mut diags,
+        );
 
-        let params: Vec<(Option<Name>, Ty)> = sig
-            .params
-            .iter()
-            .map(|(n, te)| {
-                let param_ty = if n.as_str() == "self"
-                    && matches!(te, baml_compiler2_ast::TypeExpr::Unknown { .. })
-                {
-                    self_param_ty.cloned().unwrap_or(Ty::Unknown {
-                        attr: TyAttr::default(),
-                    })
-                } else {
-                    crate::lower_type_expr::lower_type_expr_with_fn_context(
-                        db,
-                        te,
-                        pkg_items,
-                        ns_context,
-                        generic_params,
-                        &mut diags,
-                        &crate::lower_type_expr::FnTypeLoweringContext::DirectParamRoot {
-                            param_name: n.clone(),
-                        },
-                        &mut synthetic_effect_vars,
-                    )
-                };
-                (Some(n.clone()), param_ty)
-            })
-            .collect();
-
-        let effective_generic_params: Vec<Name> = generic_params
-            .iter()
-            .cloned()
-            .chain(synthetic_effect_vars.iter().cloned())
-            .collect();
-
-        let ret_ty = sig
-            .return_type
-            .as_ref()
-            .map(|te| {
-                crate::lower_type_expr::lower_type_expr_in_ns(
-                    db,
-                    te,
-                    pkg_items,
-                    ns_context,
-                    &effective_generic_params,
-                    &mut diags,
-                )
-            })
-            .unwrap_or(Ty::Unknown {
-                attr: TyAttr::default(),
-            });
-
-        let throws_ty = sig
-            .throws
-            .as_ref()
-            .map(|te| {
-                crate::lower_type_expr::lower_type_expr_in_ns(
-                    db,
-                    te,
-                    pkg_items,
-                    ns_context,
-                    generic_params,
-                    &mut diags,
-                )
-            })
-            .unwrap_or_else(|| {
-                if synthetic_effect_vars.is_empty() {
-                    match (function_key, body_package_id) {
-                        (Some(function_key), Some(body_package_id)) => {
-                            crate::throw_inference::function_throw_sets(db, body_package_id)
-                                .transitive_for(function_key)
-                                .cloned()
-                                .map(throws_semantics::concrete_throws_ty_from_facts)
-                                .unwrap_or(Ty::Never {
-                                    attr: TyAttr::default(),
-                                })
-                        }
-                        _ => Ty::Never {
-                            attr: TyAttr::default(),
-                        },
+        let throws_ty = boundary.explicit_throws.clone().unwrap_or_else(|| {
+            if boundary.direct_callback_effect_vars.is_empty() {
+                match (function_key, body_package_id) {
+                    (Some(function_key), Some(body_package_id)) => {
+                        crate::throw_inference::function_throw_sets(db, body_package_id)
+                            .transitive_for(function_key)
+                            .cloned()
+                            .map(throws_semantics::concrete_throws_ty_from_facts)
+                            .unwrap_or(Ty::Never {
+                                attr: TyAttr::default(),
+                            })
                     }
-                } else {
-                    let body_throws_facts = match (body_scope, body_package_id, body) {
-                        (Some(body_scope), Some(body_package_id), Some(body)) => {
-                            self.infer_concrete_body_throws(body_scope, body_package_id, body)
-                        }
-                        _ => BTreeSet::new(),
-                    };
-                    throws_semantics::combine_effect_vars_with_body_throws(
-                        &synthetic_effect_vars,
-                        body_throws_facts,
-                    )
+                    _ => Ty::Never {
+                        attr: TyAttr::default(),
+                    },
                 }
-            });
+            } else {
+                let body_throws_facts = match (body_scope, body_package_id, body) {
+                    (Some(body_scope), Some(body_package_id), Some(body)) => {
+                        self.infer_concrete_body_throws(body_scope, body_package_id, body)
+                    }
+                    _ => BTreeSet::new(),
+                };
+                let used_effect_vars = match body {
+                    Some(baml_compiler2_hir::body::FunctionBody::Expr(expr_body)) => {
+                        boundary.used_direct_callback_effect_vars(expr_body)
+                    }
+                    _ => Vec::new(),
+                };
+                throws_semantics::combine_effect_vars_with_body_throws(
+                    &used_effect_vars,
+                    body_throws_facts,
+                )
+            }
+        });
 
         // This helper reconstructs function types during lookup/inference rather than
         // at the defining declaration site, so any lowering diagnostics must stay
@@ -2937,22 +2630,10 @@ impl<'db> TypeInferenceBuilder<'db> {
         drop(diags);
 
         Ty::Function {
-            params,
-            ret: Box::new(ret_ty),
+            params: boundary.params,
+            ret: Box::new(boundary.ret),
             throws: Box::new(throws_ty),
             attr: TyAttr::default(),
-        }
-    }
-
-    fn expr_to_path_segments(expr_id: ExprId, body: &ExprBody) -> Option<Vec<Name>> {
-        match &body.exprs[expr_id] {
-            Expr::Path(segments) if !segments.is_empty() => Some(segments.clone()),
-            Expr::FieldAccess { base, field } => {
-                let mut base_segments = Self::expr_to_path_segments(*base, body)?;
-                base_segments.push(field.clone());
-                Some(base_segments)
-            }
-            _ => None,
         }
     }
 

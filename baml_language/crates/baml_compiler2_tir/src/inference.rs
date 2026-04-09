@@ -26,6 +26,7 @@ use text_size::TextRange;
 
 use crate::{
     builder::TypeInferenceBuilder,
+    callable_boundary::lower_callable_boundary,
     infer_context::{InferContext, TypeCheckDiagnostics},
     ty::{Ty, TyAttr},
 };
@@ -338,24 +339,48 @@ pub fn infer_scope_types<'db>(
                     builder.set_generic_params(generic_params.clone());
 
                     if let FunctionBody::Expr(expr_body) = body.as_ref() {
-                        // Get declared return type
-                        let mut diags = Vec::new();
-                        let return_ty = sig
-                            .return_type
-                            .as_ref()
-                            .map(|te| {
-                                crate::lower_type_expr::lower_type_expr_in_ns(
-                                    db,
-                                    te,
-                                    pkg_items,
-                                    &pkg_info.namespace_path,
-                                    &generic_params,
-                                    &mut diags,
+                        let enclosing_class_name: Option<Name> =
+                            scope.parent.and_then(|parent_idx| {
+                                let parent = &index.scopes[parent_idx.index() as usize];
+                                if matches!(parent.kind, ScopeKind::Class) {
+                                    parent.name.clone()
+                                } else {
+                                    None
+                                }
+                            });
+                        let self_param_ty = enclosing_class_name.as_ref().and_then(|cn| {
+                            let ns_path = &pkg_info.namespace_path;
+                            pkg_items.lookup_type(ns_path, cn).map(|def| {
+                                Ty::Class(
+                                    crate::lower_type_expr::qualify_def(db, def, cn),
+                                    TyAttr::default(),
                                 )
                             })
-                            .unwrap_or(Ty::Unknown {
-                                attr: TyAttr::default(),
-                            });
+                        });
+
+                        let boundary = lower_callable_boundary(
+                            db,
+                            pkg_items,
+                            &pkg_info.namespace_path,
+                            &generic_params,
+                            sig.as_ref(),
+                            self_param_ty.as_ref(),
+                            &mut Vec::new(),
+                        );
+
+                        // Get declared return type
+                        let mut diags = Vec::new();
+                        if let Some(te) = sig.return_type.as_ref() {
+                            let _ = crate::lower_type_expr::lower_type_expr_in_ns(
+                                db,
+                                te,
+                                pkg_items,
+                                &pkg_info.namespace_path,
+                                &generic_params,
+                                &mut diags,
+                            );
+                        }
+                        let return_ty = boundary.ret.clone();
 
                         // Report unresolved type diagnostics for return type
                         if !diags.is_empty() {
@@ -373,49 +398,29 @@ pub fn infer_scope_types<'db>(
                         // Set declared return type for return statement checking
                         builder.set_return_type(return_ty.clone());
 
-                        // Determine enclosing class name for `self` parameter resolution
-                        let enclosing_class_name: Option<Name> =
-                            scope.parent.and_then(|parent_idx| {
-                                let parent = &index.scopes[parent_idx.index() as usize];
-                                if matches!(parent.kind, ScopeKind::Class) {
-                                    parent.name.clone()
-                                } else {
-                                    None
-                                }
-                            });
-
                         // Add parameter bindings as locals
                         let sig_sm = baml_compiler2_hir::signature::function_signature_source_map(
                             db, func_loc,
                         );
-                        for (i, (param_name, param_te)) in sig.params.iter().enumerate() {
-                            let param_ty = if param_name.as_str() == "self"
-                                && matches!(param_te, baml_compiler2_ast::TypeExpr::Unknown { .. })
+                        for (i, ((param_name, param_te), (_, param_ty))) in
+                            sig.params.iter().zip(boundary.params.iter()).enumerate()
+                        {
+                            if !(param_name.as_str() == "self"
+                                && matches!(param_te, baml_compiler2_ast::TypeExpr::Unknown { .. }))
                             {
-                                // `self` parameter with no type annotation — infer from enclosing class
-                                enclosing_class_name
-                                    .as_ref()
-                                    .and_then(|cn| {
-                                        let ns_path = &pkg_info.namespace_path;
-                                        pkg_items.lookup_type(ns_path, cn).map(|def| {
-                                            Ty::Class(
-                                                crate::lower_type_expr::qualify_def(db, def, cn),
-                                                TyAttr::default(),
-                                            )
-                                        })
-                                    })
-                                    .unwrap_or(Ty::Unknown {
-                                        attr: TyAttr::default(),
-                                    })
-                            } else {
                                 let mut param_diags = Vec::new();
-                                let ty = crate::lower_type_expr::lower_type_expr_in_ns(
+                                let mut param_effect_vars = Vec::new();
+                                let _ = crate::lower_type_expr::lower_type_expr_with_fn_context(
                                     db,
                                     param_te,
                                     pkg_items,
                                     &pkg_info.namespace_path,
                                     &generic_params,
                                     &mut param_diags,
+                                    &crate::lower_type_expr::FnTypeLoweringContext::DirectParamRoot {
+                                        param_name: param_name.clone(),
+                                    },
+                                    &mut param_effect_vars,
                                 );
                                 if !param_diags.is_empty() {
                                     let span = sig_sm
@@ -429,9 +434,8 @@ pub fn infer_scope_types<'db>(
                                         builder.report_at_span(diag, span);
                                     }
                                 }
-                                ty
-                            };
-                            builder.add_local(param_name.clone(), param_ty);
+                            }
+                            builder.add_local(param_name.clone(), param_ty.clone());
                         }
 
                         // Check root expression against declared return type

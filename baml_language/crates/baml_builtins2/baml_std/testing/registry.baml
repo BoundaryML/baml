@@ -187,18 +187,16 @@ function run_test(body: () -> null, runner: TestRunner?) -> TestReport {
       runs: [RunReport { outcome: result.outcome, duration_ms: baml.sys.now_ms() - start }],
     }
   }
-  let effective_run = match (runner) {
-    null => base_run,
-    r: TestRunner => r(base_run)
+  match (runner) {
+    null => base_run(),
+    r: TestRunner => r(base_run)()
   }
-  effective_run()
 }
 
 // Run all children of a testset with optional runner middleware.
 function run_testset(run_children: () -> TestSetReport, runner: TestSetRunner?) -> TestSetReport {
-  let effective_run = match (runner) {
-    null => run_children,
-    r: TestSetRunner => r(run_children)
+  match (runner) {
+    null => run_children(),
+    r: TestSetRunner => r(run_children)()
   }
-  effective_run()
 }
