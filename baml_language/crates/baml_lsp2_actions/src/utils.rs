@@ -209,12 +209,21 @@ pub fn display_ty(ty: &Ty) -> String {
 /// produces output that matches the user's source syntax.
 pub fn display_type_expr(te: &TypeExpr) -> String {
     match te {
-        TypeExpr::Path { segments, .. } => {
-            // Use only the last segment for brevity (e.g. `baml.Foo` → `Foo`).
-            segments
+        TypeExpr::Path {
+            segments,
+            type_args,
+            ..
+        } => {
+            let base = segments
                 .last()
                 .map(|n| n.as_str().to_string())
-                .unwrap_or_else(|| "unknown".to_string())
+                .unwrap_or_else(|| "unknown".to_string());
+            if type_args.is_empty() {
+                base
+            } else {
+                let args: Vec<_> = type_args.iter().map(display_type_expr).collect();
+                format!("{}<{}>", base, args.join(", "))
+            }
         }
         TypeExpr::Int { .. } => "int".to_string(),
         TypeExpr::Float { .. } => "float".to_string(),

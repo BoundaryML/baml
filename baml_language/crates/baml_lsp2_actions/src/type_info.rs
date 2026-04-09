@@ -193,6 +193,18 @@ fn type_info_for_definition(db: &dyn Db, def: Definition<'_>) -> TypeInfo {
     match def {
         Definition::Function(func_loc) => {
             let sig = baml_compiler2_hir::signature::function_signature(db, func_loc);
+            let item_tree = baml_compiler2_hir::file_item_tree(db, func_loc.file(db));
+            let func_data = &item_tree[func_loc.id(db)];
+            let func_name = if func_data.generic_params.is_empty() {
+                sig.name.as_str().to_string()
+            } else {
+                let gparams: Vec<&str> = func_data
+                    .generic_params
+                    .iter()
+                    .map(baml_base::Name::as_str)
+                    .collect();
+                format!("{}<{}>", sig.name.as_str(), gparams.join(", "))
+            };
             let params = sig
                 .params
                 .iter()
@@ -205,7 +217,7 @@ fn type_info_for_definition(db: &dyn Db, def: Definition<'_>) -> TypeInfo {
                 .collect();
             let return_type = sig.return_type.as_ref().map(utils::display_type_expr);
             TypeInfo::Function {
-                name: sig.name.as_str().to_string(),
+                name: func_name,
                 params,
                 return_type,
             }
@@ -214,7 +226,16 @@ fn type_info_for_definition(db: &dyn Db, def: Definition<'_>) -> TypeInfo {
         Definition::Class(class_loc) => {
             let item_tree = baml_compiler2_hir::file_item_tree(db, class_loc.file(db));
             let class_data = &item_tree[class_loc.id(db)];
-            let class_name = class_data.name.as_str().to_string();
+            let class_name = if class_data.generic_params.is_empty() {
+                class_data.name.as_str().to_string()
+            } else {
+                let params: Vec<&str> = class_data
+                    .generic_params
+                    .iter()
+                    .map(baml_base::Name::as_str)
+                    .collect();
+                format!("{}<{}>", class_data.name.as_str(), params.join(", "))
+            };
 
             // Use resolved field types (Salsa-cached).
             let resolved = baml_compiler2_tir::inference::resolve_class_fields(db, class_loc);

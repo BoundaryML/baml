@@ -144,6 +144,11 @@ impl CursorTest {
         definition_at(&self.db, self.cursor.file, self.cursor.offset)
     }
 
+    /// Get hover type info at the cursor position.
+    pub(crate) fn type_info(&self) -> Option<crate::type_info::TypeInfo> {
+        crate::type_info::type_at(&self.db, self.cursor.file, self.cursor.offset)
+    }
+
     /// Find all usages/references at the cursor position.
     pub(crate) fn find_all_usages(&self) -> Vec<Location> {
         usages_at(&self.db, self.cursor.file, self.cursor.offset)
