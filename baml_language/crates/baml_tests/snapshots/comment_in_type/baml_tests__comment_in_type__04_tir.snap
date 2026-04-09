@@ -29,9 +29,9 @@ function user.CommentAfterArrow$build_request() -> baml.http.Request throws neve
 function user.CommentAfterArrow$parse(json: string) -> string throws never {
   baml.llm.parse<T>("CommentAfterArrow", json) : string
 }
-function user.FunctionWithComments$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream throws never {
+function user.FunctionWithComments$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<string, null | string> throws never {
   baml.llm.__make_stream(sse, "FunctionWithComments", TestClient) : unknown
 }
-function user.CommentAfterArrow$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream throws never {
+function user.CommentAfterArrow$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<string, null | string> throws never {
   baml.llm.__make_stream(sse, "CommentAfterArrow", TestClient) : unknown
 }

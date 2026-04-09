@@ -25,6 +25,6 @@ class user.MyClass$stream {
   name: null | string
   age: null | int
 }
-function user.GetUser$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream throws never {
+function user.GetUser$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<user.MyClass, null | user.MyClass$stream> throws never {
   baml.llm.__make_stream(sse, "GetUser", null) : unknown
 }

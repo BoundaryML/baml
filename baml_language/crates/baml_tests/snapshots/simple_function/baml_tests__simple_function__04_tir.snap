@@ -21,7 +21,7 @@ class user.User {
   name: string
   age: int
 }
-function user.HelloWorld$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream throws never {
+function user.HelloWorld$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<string, null | string> throws never {
   baml.llm.__make_stream(sse, "HelloWorld", GPT4) : unknown
   !! 0..104: unresolved name: GPT4
 }

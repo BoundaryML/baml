@@ -206,7 +206,7 @@ function baml.llm.parse<T, S>(function_name: string, json: string) -> T throws n
   { : T
     let return_type = get_return_type(function_name) : type
     let stream_return_type = get_stream_return_type(function_name) : type
-    let cache = StreamCache.new(return_type, stream_return_type) : baml.llm.StreamCache
+    let cache = StreamCache.new(return_type, stream_return_type) : baml.llm.StreamCache<T, S>
     __sap_parse_final<T>(json, cache) : T
   }
 }
@@ -218,12 +218,12 @@ function baml.llm.call_llm_function<T>(client: baml.llm.Client, function_name: s
     result : T
   }
 }
-function baml.llm.stream_llm_function<T, S>(client: baml.llm.Client, function_name: string, args: map<string, unknown>) -> baml.llm.Stream throws never {
-  { : baml.llm.Stream
+function baml.llm.stream_llm_function<T, S>(client: baml.llm.Client, function_name: string, args: map<string, unknown>) -> baml.llm.Stream<T, S> throws never {
+  { : baml.llm.Stream<T, S>
     let jinja_string = get_jinja_template(function_name) : string
     let context = ExecutionContext { jinja_string: jinja_string, args: args, function_name: function_name } : baml.llm.ExecutionContext
-    let result = client.execute_stream(context, 0) : baml.llm.Stream
-    result : baml.llm.Stream
+    let result = client.execute_stream(context, 0) : baml.llm.Stream<T, S>
+    result : baml.llm.Stream<T, S>
   }
 }
 class baml.llm.OrchestrationStep$stream {
@@ -354,7 +354,7 @@ function baml.llm.Client.build_plan_with_state(self: baml.llm.Client, planner_st
         self.build_attempt_with_state(planner_state) : baml.llm.OrchestrationStep[]
   }
 }
-function baml.llm.Client.execute_stream<T, S>(self: baml.llm.Client, context: baml.llm.ExecutionContext, inherited_delay_ms: int) -> baml.llm.Stream throws never {
+function baml.llm.Client.execute_stream<T, S>(self: baml.llm.Client, context: baml.llm.ExecutionContext, inherited_delay_ms: int) -> baml.llm.Stream<T, S> throws never {
   { : never
     match (self.retry : baml.llm.RetryPolicy?) : never
       r: RetryPolicy =>
@@ -382,26 +382,26 @@ function baml.llm.Client.execute_stream<T, S>(self: baml.llm.Client, context: ba
                   { : void
                     attempt_delay = inherited_delay_ms : int
                   }
-                let result2 = : unknown -> baml.llm.Stream
-                  catch (self.execute_once_stream(context, attempt_delay) : baml.llm.Stream) : unknown
+                let result2 = : unknown -> baml.llm.Stream<T, S>
+                  catch (self.execute_once_stream(context, attempt_delay) : baml.llm.Stream<T, S>) : unknown
                     catch (e)
                       _ =>
                         { : never
                           continue
                         }
-                return result2 : baml.llm.Stream
+                return result2 : baml.llm.Stream<T, S>
               }
           }
           throw DevOther { message: "All orchestration..." } : unknown
         }
       null =>
         { : never
-          let result = self.execute_once_stream(context, inherited_delay_ms) : baml.llm.Stream
-          return result : baml.llm.Stream
+          let result = self.execute_once_stream(context, inherited_delay_ms) : baml.llm.Stream<T, S>
+          return result : baml.llm.Stream<T, S>
         }
   }
 }
-function baml.llm.Client.execute_once_stream<T, S>(self: baml.llm.Client, context: baml.llm.ExecutionContext, active_delay_ms: int) -> baml.llm.Stream throws never {
+function baml.llm.Client.execute_once_stream<T, S>(self: baml.llm.Client, context: baml.llm.ExecutionContext, active_delay_ms: int) -> baml.llm.Stream<T, S> throws never {
   { : never
     match (self.client_type : baml.llm.ClientType) : never
       ClientType.Primitive =>
@@ -415,22 +415,22 @@ function baml.llm.Client.execute_once_stream<T, S>(self: baml.llm.Client, contex
           let http_request = primitive.build_request_stream(specialized) : baml.http.Request
           let sse = root.http.fetch_sse(http_request) : baml.http.SseStream
           let acc = primitive.new_stream_accumulator() : baml.llm.StreamAccumulator
-          let cache = StreamCache.new(return_type, stream_return_type) : baml.llm.StreamCache
-          let stream = Stream { _client: primitive, _acc: acc, _sse: sse, _cache: cache } : baml.llm.Stream
-          return stream : baml.llm.Stream
+          let cache = StreamCache.new(return_type, stream_return_type) : baml.llm.StreamCache<T, S>
+          let stream = Stream { _client: primitive, _acc: acc, _sse: sse, _cache: cache } : baml.llm.Stream<T, S>
+          return stream : baml.llm.Stream<T, S>
         }
       ClientType.Fallback =>
         { : never
           for sub in self.sub_clients
             { : never
-              let result2 = : unknown -> baml.llm.Stream
-                catch (sub.execute_stream(context, active_delay_ms) : baml.llm.Stream) : unknown
+              let result2 = : unknown -> baml.llm.Stream<T, S>
+                catch (sub.execute_stream(context, active_delay_ms) : baml.llm.Stream<T, S>) : unknown
                   catch (e)
                     _ =>
                       { : never
                         continue
                       }
-              return result2 : baml.llm.Stream
+              return result2 : baml.llm.Stream<T, S>
             }
           throw DevOther { message: "All orchestration..." } : unknown
         }
@@ -438,8 +438,8 @@ function baml.llm.Client.execute_once_stream<T, S>(self: baml.llm.Client, contex
         { : never
           let idx = self.counter % self.sub_clients.length() : int
           self.counter Add= 1 : int
-          let result3 = self.sub_clients[idx].execute_stream(context, active_delay_ms) : baml.llm.Stream
-          return result3 : baml.llm.Stream
+          let result3 = self.sub_clients[idx].execute_stream(context, active_delay_ms) : baml.llm.Stream<T, S>
+          return result3 : baml.llm.Stream<T, S>
         }
   }
 }
@@ -618,7 +618,7 @@ class baml.llm.Stream {
   _client: baml.llm.PrimitiveClient
   _acc: baml.llm.StreamAccumulator
   _sse: baml.http.SseStream
-  _cache: baml.llm.StreamCache
+  _cache: baml.llm.StreamCache<T, S>
 }
 function baml.llm.Stream.next(self: baml.llm.Stream) -> unknown | baml.stream.StreamFinished throws never {
   { : never

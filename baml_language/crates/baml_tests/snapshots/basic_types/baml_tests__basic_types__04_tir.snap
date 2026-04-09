@@ -83,18 +83,18 @@ function user.GetMixedMap$build_request() -> baml.http.Request throws never {
 function user.GetMixedMap$parse(json: string) -> map<string, int | string> throws never {
   baml.llm.parse<T>("GetMixedMap", json) : map<string, int | string>
 }
-function user.GetUser$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream throws never {
+function user.GetUser$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<user.User, null | user.User$stream> throws never {
   baml.llm.__make_stream(sse, "GetUser", baml.llm.Client { name: "openai/gpt-4o", client_type: baml.llm.ClientType.Primitive, sub_clients: [], retry: null, counter: 0 }) : unknown
 }
-function user.GetStatus$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream throws never {
+function user.GetStatus$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<user.Status, null | user.Status> throws never {
   baml.llm.__make_stream(sse, "GetStatus", GPT4) : unknown
   !! 95..173: unresolved name: GPT4
 }
-function user.GetMixedList$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream throws never {
+function user.GetMixedList$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<(int | string)[], (int | string)[]> throws never {
   baml.llm.__make_stream(sse, "GetMixedList", GPT4) : unknown
   !! 173..308: unresolved name: GPT4
 }
-function user.GetMixedMap$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream throws never {
+function user.GetMixedMap$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<map<string, int | string>, map<string, int | string>> throws never {
   baml.llm.__make_stream(sse, "GetMixedMap", GPT4) : unknown
   !! 308..410: unresolved name: GPT4
 }

@@ -294,6 +294,7 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::ExtraneousThrowsDeclaration { .. } => DiagnosticId::ThrowsContractExtraneous,
         TirTypeError::CannotInferTypeParameter { .. } => DiagnosticId::UnknownType,
         TirTypeError::CannotInferLambdaParamType { .. } => DiagnosticId::UnknownType,
+        TirTypeError::WrongNumberOfTypeArgs { .. } => DiagnosticId::TypeMismatch,
         // Optional chaining diagnostics
         TirTypeError::UnnecessaryOptionalChaining { .. } => DiagnosticId::InvalidOperator,
         TirTypeError::UnnecessaryNullCoalesce { .. } => DiagnosticId::InvalidOperator,

@@ -866,7 +866,19 @@ fn collect_ty_deps(
 ) {
     use baml_compiler2_tir::ty::Ty;
     match ty {
-        Ty::Class(qtn, _) | Ty::Enum(qtn, _) | Ty::TypeAlias(qtn, _) => {
+        Ty::Class(qtn, generics, _) => {
+            let name_str = qtn.to_string();
+            if seen.insert(name_str.clone()) {
+                // Look up the definition location via outline search.
+                if let Some(dep) = resolve_dep_from_outline(db, files, &name_str) {
+                    deps.push(dep);
+                }
+            }
+            for generic in generics {
+                collect_ty_deps(db, files, generic, deps, seen);
+            }
+        }
+        Ty::Enum(qtn, _) | Ty::TypeAlias(qtn, _) => {
             let name_str = qtn.to_string();
             if seen.insert(name_str.clone()) {
                 // Look up the definition location via outline search.
