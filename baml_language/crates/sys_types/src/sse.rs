@@ -5,10 +5,19 @@
 //! - Events are delimited by blank lines (double newline)
 //! - Lines starting with `:` are comments (ignored)
 
-use crate::registry::SseEvent;
+/// A single Server-Sent Event.
+#[derive(Debug, Clone)]
+pub struct SseEvent {
+    /// Event type (e.g., "message", "error").
+    pub event: String,
+    /// Event data payload.
+    pub data: String,
+    /// Optional event ID.
+    pub id: Option<String>,
+}
 
 /// Incremental SSE parser that buffers incomplete lines.
-pub(crate) struct SseParser {
+pub struct SseParser {
     /// Buffered bytes from incomplete lines.
     buffer: Vec<u8>,
     /// Current event being assembled.
@@ -18,7 +27,7 @@ pub(crate) struct SseParser {
 }
 
 impl SseParser {
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             buffer: Vec::new(),
             event_type: String::new(),
@@ -28,7 +37,7 @@ impl SseParser {
     }
 
     /// Feed raw bytes into the parser and return any complete events.
-    pub(crate) fn feed(&mut self, chunk: &[u8]) -> Vec<SseEvent> {
+    pub fn feed(&mut self, chunk: &[u8]) -> Vec<SseEvent> {
         self.buffer.extend_from_slice(chunk);
 
         let mut events = Vec::new();
@@ -116,6 +125,12 @@ impl SseParser {
             }
         }
         None
+    }
+}
+
+impl Default for SseParser {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -227,21 +242,12 @@ mod tests {
         assert_eq!(events2[0].data, "hello");
     }
 
-    // ========================================================================
-    // Line ending variants
-    // ========================================================================
-
     #[test]
     fn test_bare_cr_line_endings() {
-        // A trailing \r is held by the parser to handle split CRLF. We need a
-        // follow-up byte (or another \r) to resolve it. In practice this means
-        // bare-CR-only streams dispatch on the next chunk.
         let mut parser = SseParser::new();
         let events = parser.feed(b"data: hello\r\r");
-        // Second \r is held (could be start of \r\n), so no event yet.
         assert!(events.is_empty());
 
-        // Any non-\n byte resolves the held \r as a bare CR blank line.
         let events = parser.feed(b"\r");
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].data, "hello");
@@ -258,17 +264,11 @@ mod tests {
     #[test]
     fn test_mixed_line_endings() {
         let mut parser = SseParser::new();
-        // event line uses \n, first data uses \r\n, second data uses bare \r,
-        // blank line uses \r\n
         let events = parser.feed(b"event: x\ndata: a\r\ndata: b\r\r\n");
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].event, "x");
         assert_eq!(events[0].data, "a\nb");
     }
-
-    // ========================================================================
-    // Field parsing edge cases
-    // ========================================================================
 
     #[test]
     fn test_field_no_space_after_colon() {
@@ -288,9 +288,6 @@ mod tests {
 
     #[test]
     fn test_field_value_with_leading_spaces() {
-        // Per spec, only ONE space after colon is stripped.
-        // "data:  two spaces" → field="data", value starts at index 6 (colon+space),
-        // so value = " two spaces" (one leading space preserved).
         let mut parser = SseParser::new();
         let events = parser.feed(b"data:  two spaces\n\n");
         assert_eq!(events.len(), 1);
@@ -299,7 +296,6 @@ mod tests {
 
     #[test]
     fn test_field_name_only_no_colon() {
-        // "data" with no colon → treated as field with empty string value.
         let mut parser = SseParser::new();
         let events = parser.feed(b"data\n\n");
         assert_eq!(events.len(), 1);
@@ -325,7 +321,6 @@ mod tests {
 
     #[test]
     fn test_empty_data_field() {
-        // "data:" with no value → empty string pushed to data_lines.
         let mut parser = SseParser::new();
         let events = parser.feed(b"data:\n\n");
         assert_eq!(events.len(), 1);
@@ -334,20 +329,14 @@ mod tests {
 
     #[test]
     fn test_empty_data_field_with_space() {
-        // "data: " → space is stripped, producing empty string.
         let mut parser = SseParser::new();
         let events = parser.feed(b"data: \n\n");
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].data, "");
     }
 
-    // ========================================================================
-    // Comment handling
-    // ========================================================================
-
     #[test]
     fn test_comment_only_no_event() {
-        // Comment followed by blank line should NOT produce event.
         let mut parser = SseParser::new();
         let events = parser.feed(b": comment\n\n");
         assert!(events.is_empty());
@@ -355,7 +344,6 @@ mod tests {
 
     #[test]
     fn test_comment_between_data_lines() {
-        // Comment in middle of event fields doesn't split the event.
         let mut parser = SseParser::new();
         let events = parser.feed(b"data: a\n: comment\ndata: b\n\n");
         assert_eq!(events.len(), 1);
@@ -364,19 +352,13 @@ mod tests {
 
     #[test]
     fn test_empty_comment() {
-        // Line with just ":" is an empty comment. No event produced.
         let mut parser = SseParser::new();
         let events = parser.feed(b":\n\n");
         assert!(events.is_empty());
     }
 
-    // ========================================================================
-    // Event type behavior
-    // ========================================================================
-
     #[test]
     fn test_event_type_cleared_after_dispatch() {
-        // After dispatching, event_type is cleared. Second event defaults to "message".
         let mut parser = SseParser::new();
         let events = parser.feed(b"event: custom\ndata: first\n\ndata: second\n\n");
         assert_eq!(events.len(), 2);
@@ -388,22 +370,14 @@ mod tests {
 
     #[test]
     fn test_event_type_set_then_overridden() {
-        // Last event: field wins within the same event block.
         let mut parser = SseParser::new();
         let events = parser.feed(b"event: first\nevent: second\ndata: hello\n\n");
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].event, "second");
     }
 
-    // ========================================================================
-    // ID behavior
-    // ========================================================================
-
     #[test]
     fn test_id_consumed_after_dispatch() {
-        // Our impl uses `self.id.take()`, so id is consumed by the first event
-        // and not carried forward to the next event (unlike W3C spec which says
-        // last event ID persists). This test pins our current behavior.
         let mut parser = SseParser::new();
         let events = parser.feed(b"id: 1\ndata: a\n\ndata: b\n\n");
         assert_eq!(events.len(), 2);
@@ -413,23 +387,14 @@ mod tests {
 
     #[test]
     fn test_id_with_null_byte() {
-        // Per W3C spec, id field containing U+0000 should be ignored.
-        // Our impl does NOT check for this — it stores the value as-is.
-        // This test documents our current (spec-deviating) behavior.
         let mut parser = SseParser::new();
         let events = parser.feed(b"id: abc\x00def\ndata: hello\n\n");
         assert_eq!(events.len(), 1);
-        // from_utf8_lossy replaces invalid sequences but \x00 is valid UTF-8
         assert_eq!(events[0].id, Some("abc\x00def".to_string()));
     }
 
-    // ========================================================================
-    // Chunking / streaming edge cases
-    // ========================================================================
-
     #[test]
     fn test_event_split_across_many_chunks() {
-        // Feed one byte at a time.
         let mut parser = SseParser::new();
         let input = b"data: hello\n\n";
         let mut all_events = Vec::new();
@@ -442,7 +407,6 @@ mod tests {
 
     #[test]
     fn test_multiple_blank_lines_between_events() {
-        // Extra blank lines should NOT produce extra events (no data = no dispatch).
         let mut parser = SseParser::new();
         let events = parser.feed(b"data: a\n\n\n\ndata: b\n\n");
         assert_eq!(events.len(), 2);
@@ -452,12 +416,10 @@ mod tests {
 
     #[test]
     fn test_no_trailing_blank_line() {
-        // Without a blank line, the event is not dispatched — data is buffered.
         let mut parser = SseParser::new();
         let events = parser.feed(b"data: hello\n");
         assert!(events.is_empty());
 
-        // Now send the blank line to dispatch.
         let events = parser.feed(b"\n");
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].data, "hello");

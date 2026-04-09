@@ -492,12 +492,10 @@ impl io::IoNamespaceHttp for NativeSysOps {
         use std::sync::atomic::{AtomicBool, Ordering};
 
         use futures::StreamExt;
+        use sys_types::sse::SseParser;
         use tokio::sync::{Mutex as TokioMutex, Notify};
 
-        use crate::{
-            registry::{REGISTRY, SseBuffer},
-            sse_parser::SseParser,
-        };
+        use crate::registry::{REGISTRY, SseBuffer};
 
         SysOpOutput::async_op(async move {
             let method = reqwest::Method::from_bytes(request.method.as_bytes()).map_err(|e| {

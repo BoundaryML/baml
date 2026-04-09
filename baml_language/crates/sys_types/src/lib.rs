@@ -21,6 +21,8 @@ pub use bex_heap::BexHeap;
 pub use bex_vm_types::SysOp;
 pub use tokio_util::sync::CancellationToken;
 
+pub mod sse;
+
 /// Types generated from `llm_types.baml`.
 /// NOTE: sys_ops also generates the same code via its own build.rs because the
 /// generated IO traits contain blanket impls that must live in the crate that

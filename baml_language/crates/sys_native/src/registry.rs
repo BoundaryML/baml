@@ -11,6 +11,7 @@ use std::{
 };
 
 use bex_resource_types::{ResourceHandle, ResourceRegistryRef, ResourceType};
+use sys_types::sse::SseEvent;
 #[cfg(feature = "bundle-http")]
 use tokio::task::AbortHandle;
 use tokio::{
@@ -44,17 +45,6 @@ pub enum ResponseBody {
 pub struct ResponseResource {
     #[cfg(feature = "bundle-http")]
     pub body: Arc<TokioMutex<ResponseBody>>,
-}
-
-/// A single Server-Sent Event.
-#[derive(Debug, Clone)]
-pub struct SseEvent {
-    /// Event type (e.g., "message", "error").
-    pub event: String,
-    /// Event data payload.
-    pub data: String,
-    /// Optional event ID.
-    pub id: Option<String>,
 }
 
 /// Buffer for SSE events accumulated by a background task.

@@ -918,9 +918,27 @@ impl IoSysOpsBuilder {
             })
         };
         self.inner.baml_http_response_bytes = {
-            let t = instance;
+            let t = instance.clone();
             Arc::new(move |heap, args, ctx, call_id| {
                 t.__glue_baml_http_response_bytes(heap, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_http_fetch_sse = {
+            let t = instance.clone();
+            Arc::new(move |heap, args, ctx, call_id| {
+                t.__glue_baml_http_fetch_sse(heap, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_http_ssestream_next = {
+            let t = instance.clone();
+            Arc::new(move |heap, args, ctx, call_id| {
+                t.__glue_baml_http_ssestream_next(heap, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_http_ssestream_close = {
+            let t = instance;
+            Arc::new(move |heap, args, ctx, call_id| {
+                t.__glue_baml_http_ssestream_close(heap, args, ctx, call_id)
             })
         };
         self

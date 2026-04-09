@@ -1,7 +1,8 @@
-//! WASM HTTP implementation via JS callback.
+//! WASM HTTP implementation.
 //!
-//! `WasmHttp` holds the JS fetch function and implements the HTTP `sys_ops`.
-//! Each `BamlWasmRuntime` gets its own `WasmHttp` instance, so there are no globals.
+//! `WasmHttp` holds the JS fetch function for regular HTTP requests and uses
+//! reqwest directly for SSE streaming. Each `BamlWasmRuntime` gets its own
+//! `WasmHttp` instance, so there are no globals.
 
 use std::sync::Arc;
 
@@ -12,19 +13,17 @@ use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::JsFuture;
 
 use crate::{
-    registry::{WasmRegistry, WasmResponseBody},
+    registry::{WasmRegistry, WasmResponseBody, WasmSseStreamHandle},
     send_wrapper::SendFuture,
 };
 
 /// WASM HTTP implementation that holds the JS fetch function and response registry.
 ///
-/// Each runtime creates its own `WasmHttp` with the fetch callback;
-/// the instance is captured in the `SysOps` closures so no global state is needed.
+/// Regular HTTP uses the JS fetch callback. SSE streaming uses reqwest directly
+/// (its WASM backend calls browser fetch under the hood) with `SseParser` for
+/// parsing, matching the native implementation.
 pub(crate) struct WasmHttp {
     /// The JS function to call for HTTP requests.
-    /// Signature: (callId, method, url, headersJson, body) =>
-    ///   Promise<{ status: number, headersJson: string, url: string, bodyPromise: Promise<string> }>
-    /// The body is only awaited when `response.text()` is called.
     fetch_fn: crate::send_wrapper::SendWrapper<Function>,
     /// Registry for HTTP response bodies for this instance.
     registry: Arc<WasmRegistry>,
@@ -115,10 +114,8 @@ impl WasmHttp {
                     OpErrorKind::Other("Response 'bodyPromise' is not a Promise".into())
                 })?;
 
-            let headers_parsed: indexmap::IndexMap<String, String> =
-                serde_json::from_str(&headers_str)
-                    .map_err(|e| OpErrorKind::Other(format!("Failed to parse headersJson: {e}")))?;
-            let headers = headers_parsed;
+            let headers: indexmap::IndexMap<String, String> = serde_json::from_str(&headers_str)
+                .map_err(|e| OpErrorKind::Other(format!("Failed to parse headersJson: {e}")))?;
 
             let key = registry.store_body_promise(body_promise);
             let body: Arc<dyn std::any::Any + Send + Sync> =
@@ -227,20 +224,106 @@ impl io::IoClassHttpSseStream for WasmHttp {
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
-        _sse_stream: io::owned::http::SseStream,
+        sse_stream: io::owned::http::SseStream,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<Option<String>> {
-        SysOpOutput::err(OpErrorKind::Unsupported)
+        let handle = sse_stream
+            ._handle
+            .clone()
+            .downcast::<WasmSseStreamHandle>()
+            .ok();
+        let Some(handle) = handle else {
+            return SysOpOutput::err(OpErrorKind::Other(
+                "SSE stream handle is not a WasmSseStreamHandle".into(),
+            ));
+        };
+
+        if handle.is_done() {
+            return SysOpOutput::ok(None);
+        }
+
+        let Some((stream, parser)) = handle.take_stream() else {
+            return SysOpOutput::ok(None);
+        };
+
+        SysOpOutput::Async(Box::pin(SendFuture(async move {
+            use futures::StreamExt;
+
+            let mut stream = stream;
+            let mut parser = parser;
+
+            loop {
+                match stream.next().await {
+                    Some(Ok(bytes)) => {
+                        let events = parser.feed(&bytes);
+                        if !events.is_empty() {
+                            let json_events: Vec<serde_json::Value> = events
+                                .into_iter()
+                                .map(|e| {
+                                    serde_json::json!({
+                                        "event": e.event,
+                                        "data": e.data,
+                                        "id": e.id,
+                                    })
+                                })
+                                .collect();
+                            let json = serde_json::to_string(&json_events).map_err(|e| {
+                                OpErrorKind::Other(format!("Failed to serialize SSE events: {e}"))
+                            })?;
+                            // Return the stream + parser for future next() calls.
+                            handle.return_stream(stream, parser);
+                            return Ok(Some(json));
+                        }
+                        // No complete events yet — continue reading.
+                    }
+                    Some(Err(e)) => {
+                        // Check if the error is an abort (from close()).
+                        if handle.is_done() {
+                            return Ok(None);
+                        }
+                        handle.mark_done();
+                        return Err(OpErrorKind::Other(format!("SSE stream error: {e}")));
+                    }
+                    None => {
+                        // Stream ended. Flush any remaining partial event.
+                        let final_events = parser.feed(b"\n");
+                        handle.mark_done();
+                        if final_events.is_empty() {
+                            return Ok(None);
+                        }
+                        let json_events: Vec<serde_json::Value> = final_events
+                            .into_iter()
+                            .map(|e| {
+                                serde_json::json!({
+                                    "event": e.event,
+                                    "data": e.data,
+                                    "id": e.id,
+                                })
+                            })
+                            .collect();
+                        let json = serde_json::to_string(&json_events).map_err(|e| {
+                            OpErrorKind::Other(format!("Failed to serialize SSE events: {e}"))
+                        })?;
+                        return Ok(Some(json));
+                    }
+                }
+            }
+        })))
     }
 
     fn close(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
-        _sse_stream: io::owned::http::SseStream,
+        sse_stream: io::owned::http::SseStream,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        SysOpOutput::err(OpErrorKind::Unsupported)
+        // Mark done and drop the stream, which aborts the underlying fetch.
+        if let Some(handle) = sse_stream._handle.downcast_ref::<WasmSseStreamHandle>() {
+            handle.mark_done();
+        }
+        // sse_stream drops here, which drops the Arc<WasmSseStreamHandle>.
+        SysOpOutput::ok(())
     }
 }
 
@@ -275,9 +358,50 @@ impl IoNamespaceHttp for WasmHttp {
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
-        _request: io::owned::http::Request,
+        request: io::owned::http::Request,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::http::SseStream> {
-        SysOpOutput::err(OpErrorKind::Unsupported)
+        SysOpOutput::Async(Box::pin(SendFuture(async move {
+            let method = reqwest::Method::from_bytes(request.method.as_bytes()).map_err(|e| {
+                OpErrorKind::Other(format!("Invalid HTTP method '{}': {e}", request.method))
+            })?;
+
+            let client = reqwest::Client::new();
+            let mut builder = client.request(method, &request.url);
+
+            for (key, value) in &request.headers {
+                builder = builder.header(key.as_str(), value.as_str());
+            }
+
+            if !request.body.is_empty() {
+                builder = builder.body(request.body.clone());
+            }
+
+            let response = builder
+                .send()
+                .await
+                .map_err(|e| OpErrorKind::Other(format!("SSE connection failed: {e}")))?;
+
+            if !response.status().is_success() {
+                let status = response.status().as_u16();
+                let body = response
+                    .text()
+                    .await
+                    .unwrap_or_else(|_| "<could not read body>".to_string());
+                return Err(OpErrorKind::Other(format!(
+                    "SSE request failed with status {status}: {body}"
+                )));
+            }
+
+            let url = request.url.clone();
+            let byte_stream = Box::pin(response.bytes_stream());
+            let handle: Arc<dyn std::any::Any + Send + Sync> =
+                Arc::new(WasmSseStreamHandle::new(byte_stream));
+
+            Ok(io::owned::http::SseStream {
+                url,
+                _handle: handle,
+            })
+        })))
     }
 }
