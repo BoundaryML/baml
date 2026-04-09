@@ -66,7 +66,7 @@ impl DescribeArgs {
 
         // ── --symbols mode ──────────────────────────────────────────────────
         if self.symbols {
-            let kind_filter = crate::grep_command::parse_kind_filter(&self.kind);
+            let kind_filter = crate::grep_command::parse_kind_filter(&self.kind)?;
             let symbols = baml_lsp2_actions::list_symbols(&db, &source_files, &kind_filter);
             if symbols.is_empty() {
                 eprintln!("No symbols found.");

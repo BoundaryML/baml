@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use anyhow::{Context, Result};
 use baml_lsp2_actions::{
-    DefinitionKind, GrepMode, GrepOptions, MatchAnnotation, SymbolDescription,
+    DefinitionKind, GrepMode, GrepOptions, MatchAnnotation, SymbolDescription, TextMatch,
     describe, grep, list_symbols,
 };
 use baml_project::ProjectDatabase;
@@ -88,7 +88,7 @@ impl GrepArgs {
         }
 
         let source_files = db.get_source_files();
-        let kind_filter = parse_kind_filter(&self.kind);
+        let kind_filter = parse_kind_filter(&self.kind)?;
 
         // ── --symbols mode ──────────────────────────────────────────────────
         if self.symbols {
@@ -96,6 +96,29 @@ impl GrepArgs {
             if symbols.is_empty() {
                 eprintln!("No symbols found.");
                 return Ok(crate::ExitCode::Other);
+            }
+            if self.json {
+                let json_output: Vec<serde_json::Value> = symbols
+                    .iter()
+                    .map(|sym| {
+                        let rel = relative_path(&sym.file.path(&db), &from);
+                        serde_json::json!({
+                            "name": sym.name,
+                            "kind": sym.kind.as_str(),
+                            "file": rel.to_string_lossy(),
+                            "line": line_number_at_offset(
+                                sym.file.text(&db),
+                                sym.name_span.start().into(),
+                            ),
+                        })
+                    })
+                    .collect();
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&json_output)
+                        .context("Failed to serialize output as JSON")?
+                );
+                return Ok(crate::ExitCode::Success);
             }
             for sym in &symbols {
                 let rel = relative_path(&sym.file.path(&db), &from);
@@ -161,6 +184,34 @@ impl GrepArgs {
                 eprintln!("No symbol found: {pattern}");
                 return Ok(crate::ExitCode::Other);
             }
+            if self.json {
+                let json_output: Vec<serde_json::Value> = descriptions
+                    .iter()
+                    .map(|d| {
+                        let file_path = relative_path(&d.file.path(&db), &from);
+                        serde_json::json!({
+                            "name": d.name,
+                            "kind": d.kind.as_str(),
+                            "file": file_path.to_string_lossy(),
+                            "line": line_number_at_offset(d.file.text(&db), d.name_span.start().into()),
+                            "references": d.references.iter().map(|r| {
+                                let ref_path = relative_path(&r.file.path(&db), &from);
+                                serde_json::json!({
+                                    "file": ref_path.to_string_lossy(),
+                                    "line": r.line_number,
+                                    "text": r.line_text.trim(),
+                                })
+                            }).collect::<Vec<_>>(),
+                        })
+                    })
+                    .collect();
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&json_output)
+                        .context("Failed to serialize output as JSON")?
+                );
+                return Ok(crate::ExitCode::Success);
+            }
             for (i, desc) in descriptions.iter().enumerate() {
                 if i > 0 {
                     println!();
@@ -180,12 +231,27 @@ impl GrepArgs {
         let result = grep(&db, &source_files, &opts);
 
         if self.json {
-            let budget = self.budget;
-            let json_output: Vec<serde_json::Value> = result
-                .descriptions
-                .iter()
-                .map(|d| description_to_json(&db, d, budget, &from))
-                .collect();
+            let json_output: serde_json::Value = match result.mode {
+                GrepMode::Semantic => {
+                    let budget = self.budget;
+                    serde_json::json!({
+                        "mode": "semantic",
+                        "results": result.descriptions
+                            .iter()
+                            .map(|d| description_to_json(&db, d, budget, &from))
+                            .collect::<Vec<_>>(),
+                    })
+                }
+                GrepMode::TextSearch => {
+                    serde_json::json!({
+                        "mode": "text_search",
+                        "results": result.text_matches
+                            .iter()
+                            .map(|m| text_match_to_json(&db, m, &from))
+                            .collect::<Vec<_>>(),
+                    })
+                }
+            };
             println!(
                 "{}",
                 serde_json::to_string_pretty(&json_output)
@@ -317,26 +383,25 @@ fn render_text_matches(
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 /// Parse kind filter strings into DefinitionKind values.
-pub fn parse_kind_filter(kinds: &[String]) -> Vec<DefinitionKind> {
+pub fn parse_kind_filter(kinds: &[String]) -> Result<Vec<DefinitionKind>> {
     kinds
         .iter()
-        .filter_map(|s| match s.as_str() {
-            "class" => Some(DefinitionKind::Class),
-            "enum" => Some(DefinitionKind::Enum),
-            "function" => Some(DefinitionKind::Function),
-            "test" => Some(DefinitionKind::Test),
-            "client" => Some(DefinitionKind::Client),
-            "type_alias" => Some(DefinitionKind::TypeAlias),
-            "template_string" => Some(DefinitionKind::TemplateString),
-            "retry_policy" => Some(DefinitionKind::RetryPolicy),
-            "generator" => Some(DefinitionKind::Generator),
-            "let" => Some(DefinitionKind::Let),
-            "field" => Some(DefinitionKind::Field),
-            "variant" => Some(DefinitionKind::Variant),
-            other => {
-                eprintln!("Unknown kind: {other}");
-                None
-            }
+        .map(|s| match s.as_str() {
+            "class" => Ok(DefinitionKind::Class),
+            "enum" => Ok(DefinitionKind::Enum),
+            "function" => Ok(DefinitionKind::Function),
+            "test" => Ok(DefinitionKind::Test),
+            "client" => Ok(DefinitionKind::Client),
+            "type_alias" => Ok(DefinitionKind::TypeAlias),
+            "template_string" => Ok(DefinitionKind::TemplateString),
+            "retry_policy" => Ok(DefinitionKind::RetryPolicy),
+            "generator" => Ok(DefinitionKind::Generator),
+            "let" => Ok(DefinitionKind::Let),
+            "field" => Ok(DefinitionKind::Field),
+            "variant" => Ok(DefinitionKind::Variant),
+            other => anyhow::bail!(
+                "Unknown kind: {other}. Valid kinds: class, enum, function, test, client, type_alias, template_string, retry_policy, generator, let, field, variant"
+            ),
         })
         .collect()
 }
@@ -365,6 +430,37 @@ fn budget_body(desc: &SymbolDescription, budget: usize) -> String {
     } else {
         crate::describe_command::shape_with_elision(&desc.shape, &desc.full_body)
     }
+}
+
+/// Build a JSON value for a `TextMatch`.
+fn text_match_to_json(
+    db: &ProjectDatabase,
+    m: &TextMatch,
+    project_root: &std::path::Path,
+) -> serde_json::Value {
+    let file_path = relative_path(&m.file.path(db), project_root);
+    let annotation = match &m.annotation {
+        Some(MatchAnnotation::Definition { kind }) => {
+            serde_json::json!({ "type": "definition", "kind": kind.as_str() })
+        }
+        Some(MatchAnnotation::Reference {
+            target_name,
+            target_kind,
+        }) => {
+            serde_json::json!({
+                "type": "reference",
+                "target_name": target_name,
+                "target_kind": target_kind.as_str(),
+            })
+        }
+        None => serde_json::Value::Null,
+    };
+    serde_json::json!({
+        "file": file_path.to_string_lossy(),
+        "line": m.line_number,
+        "text": m.line_text.trim(),
+        "annotation": annotation,
+    })
 }
 
 /// Build a budget-aware JSON value for a `SymbolDescription`.
