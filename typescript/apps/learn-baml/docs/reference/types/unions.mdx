@@ -1,0 +1,104 @@
+---
+sidebar_position: 6
+sidebar_label: Unions
+title: Union Types
+description: Reference for BAML union types that can hold one of several specified types
+---
+
+# Union Types
+
+Union types can hold one of several specified types.
+
+## Syntax
+
+```baml
+Type1 | Type2
+Type1 | Type2 | Type3
+```
+
+## Examples
+
+### Basic Unions
+
+```baml
+int | string
+string | MyClass
+int | string | bool
+```
+
+### Complex Unions
+
+```baml
+(int | string) | MyClass
+string | MyClass | int[]
+int? | string[] | MyClass
+```
+
+## Usage
+
+### Function Return Types
+
+```baml
+function ClassifyIssue(description: string) -> "bug" | "enhancement" {
+    client "openai/gpt-4o"
+    prompt #"
+        Classify the issue:
+        {{ ctx.output_format }}
+
+        {{ _.role("user") }}
+        {{ description }}
+    "#
+}
+```
+
+### Function Calling
+
+Unions are useful for function calling where you want to return different types depending on which function should be called:
+
+```baml
+class SearchAction {
+    query string
+}
+
+class NavigateAction {
+    url string
+}
+
+function DetermineAction(input: string) -> SearchAction | NavigateAction {
+    client "openai/gpt-4o"
+    prompt #"
+        Determine the user's intent:
+        {{ ctx.output_format }}
+
+        {{ _.role("user") }}
+        {{ input }}
+    "#
+}
+```
+
+## Order Matters
+
+:::warning
+The order of types in a union affects parsing behavior.
+:::
+
+For example, if the LLM returns `"1"`:
+
+- `int | string` - parses as `int` (value: `1`)
+- `string | int` - parses as `string` (value: `"1"`)
+
+BAML attempts to parse in left-to-right order, using the first type that successfully parses.
+
+## Language Equivalents
+
+| BAML | Python | TypeScript | Go |
+|------|--------|------------|-----|
+| `int \| string` | `Union[int, str]` | `number \| string` | `Union2IntOrString` |
+| `int? \| string[]` | `Union[Optional[int], List[str]]` | `(number \| null) \| string[]` | `Union2IntOrStringArray` |
+| `"a" \| "b" \| 1` | `Union[Literal["a"], Literal["b"], Literal[1]]` | `"a" \| "b" \| 1` | `Union3StringOrStringOrInt` |
+
+## See Also
+
+- [Types Overview](/reference/types/overview)
+- [Literal Types](/reference/types/literals)
+- [Optional Types](/reference/types/optionals)

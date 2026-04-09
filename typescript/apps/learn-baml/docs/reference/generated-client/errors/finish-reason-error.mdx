@@ -1,0 +1,103 @@
+---
+sidebar_position: 3
+sidebar_label: BamlClientFinishReasonError
+title: BamlClientFinishReasonError
+description: Error when LLM terminates with disallowed finish reason
+---
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+# BamlClientFinishReasonError
+
+Thrown when an LLM terminates with a disallowed finish reason.
+
+## Configuration
+
+Control allowed finish reasons in your client definition:
+
+```baml
+client<llm> OpenAIWithFinishReasonError {
+  provider openai
+  options {
+    api_key env.OPENAI_API_KEY
+    model "gpt-4"
+    max_tokens 10  // Small limit to trigger early stop
+    // Throws if model returns any other finish reason
+    finish_reason_allow_list ["stop"]
+    // Or deny specific reasons
+    // finish_reason_deny_list ["length"]
+  }
+}
+```
+
+## Type Definition
+
+```typescript
+class BamlClientFinishReasonError extends Error {
+  type: 'BamlClientFinishReasonError'
+  message: string
+  prompt: string
+  raw_output: string
+  detailed_message: string
+}
+```
+
+## Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `type` | `'BamlClientFinishReasonError'` | Literal type identifier |
+| `message` | `string` | Finish reason that caused termination |
+| `prompt` | `string` | Original prompt sent to LLM |
+| `raw_output` | `string` | Partial output received before termination |
+| `detailed_message` | `string` | Complete history of failed attempts (for fallback/retry) |
+
+## Detection
+
+<Tabs>
+<TabItem value="typescript" label="TypeScript">
+
+```typescript
+import { BamlClientFinishReasonError } from '@boundaryml/baml'
+
+try {
+  const result = await b.ExtractUser(text)
+} catch (error) {
+  if (error instanceof BamlClientFinishReasonError) {
+    console.log('Finish reason error:', error.message)
+    console.log('Partial output:', error.raw_output)
+  }
+}
+```
+
+</TabItem>
+<TabItem value="python" label="Python">
+
+```python
+from baml_py import BamlClientFinishReasonError
+
+try:
+    result = await b.ExtractUser(text)
+except BamlClientFinishReasonError as e:
+    print(f"Finish reason error: {e}")
+    print(f"Partial output: {e.raw_output}")
+```
+
+</TabItem>
+</Tabs>
+
+## Common Finish Reasons
+
+| Reason | Description |
+|--------|-------------|
+| `stop` | Natural completion |
+| `length` | Hit max_tokens limit |
+| `content_filter` | Content blocked by safety filters |
+| `tool_calls` | Model wants to call a tool |
+
+## See Also
+
+- [Error Overview](./overview)
+- [BamlValidationError](./validation-error)
+- [BamlAbortError](./abort-error)

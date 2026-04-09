@@ -1,0 +1,90 @@
+---
+sidebar_position: 4
+sidebar_label: Tool Calling
+title: Tool Calling Patterns
+description: Recipes for implementing tool/function calling with BAML
+---
+
+# Tool Calling Patterns
+
+Let LLMs decide which tools to use and with what parameters.
+
+## Basic Tool Selection
+
+```baml
+enum Tool {
+  search @description("Search the web for information")
+  calculate @description("Perform mathematical calculations")
+  lookup @description("Look up data in the database")
+  none @description("No tool needed, respond directly")
+}
+
+class ToolCall {
+  tool Tool
+  query string @description("The input for the tool")
+  reasoning string
+}
+
+function SelectTool(user_message: string) -> ToolCall {
+  client GPT4
+  prompt #"
+    Given this user message, decide which tool to use:
+    {{ user_message }}
+
+    Available tools:
+    - search: Search the web
+    - calculate: Do math
+    - lookup: Query database
+    - none: Respond directly
+  "#
+}
+```
+
+## Multi-Tool Orchestration
+
+```baml
+class ToolPlan {
+  steps ToolStep[]
+  final_response_template string
+}
+
+class ToolStep {
+  tool Tool
+  input string
+  output_variable string @description("Name to store result")
+}
+
+function PlanToolUse(task: string) -> ToolPlan {
+  client GPT4
+  prompt #"
+    Plan how to accomplish this task using available tools:
+    {{ task }}
+
+    Create a step-by-step plan.
+  "#
+}
+```
+
+## Executing Tool Calls
+
+```typescript
+const plan = await b.PlanToolUse(userTask);
+
+const results = {};
+for (const step of plan.steps) {
+  switch (step.tool) {
+    case 'search':
+      results[step.output_variable] = await searchWeb(step.input);
+      break;
+    case 'calculate':
+      results[step.output_variable] = await calculate(step.input);
+      break;
+    // ... other tools
+  }
+}
+```
+
+## Related
+
+- [Classification](/cookbook/classification) - Tool selection is classification
+- [Schema-Aligned Parsing](/concepts/schema-aligned-parsing) - How tool calls are parsed

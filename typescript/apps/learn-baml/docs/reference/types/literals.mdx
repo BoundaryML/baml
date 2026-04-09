@@ -1,0 +1,87 @@
+---
+sidebar_position: 7
+sidebar_label: Literals
+title: Literal Types
+description: Reference for BAML literal types constrained to specific values
+---
+
+# Literal Types
+
+Literal types constrain primitive types to specific values.
+
+:::info
+This feature was added in v0.61.0.
+:::
+
+## Syntax
+
+```baml
+"specific_string"
+42
+true
+false
+```
+
+## Supported Literal Types
+
+| Base Type | Literal Example |
+|-----------|-----------------|
+| `string` | `"bug"`, `"feature"`, `"red"` |
+| `int` | `1`, `42`, `-5` |
+| `bool` | `true`, `false` |
+
+## Examples
+
+### String Literals
+
+```baml
+function ClassifyIssue(description: string) -> "bug" | "enhancement" {
+    client "openai/gpt-4o"
+    prompt #"
+        Classify the issue based on the description:
+        {{ ctx.output_format }}
+
+        {{ _.role("user") }}
+        {{ description }}
+    "#
+}
+```
+
+### Mixed Literals
+
+```baml
+function GetStatus() -> "active" | "inactive" | 0 | 1 {
+    client "openai/gpt-4o"
+    prompt #"
+        Return the status.
+        {{ ctx.output_format }}
+    "#
+}
+```
+
+### Literal Unions
+
+```baml
+"str" | 1 | false
+```
+
+## Usage in Maps
+
+Literal strings can be used as map keys:
+
+```baml
+map<"A" | "B" | "C", string>
+```
+
+## Language Equivalents
+
+| BAML | Python | TypeScript | Go |
+|------|--------|------------|-----|
+| `"str" \| 1 \| false` | `Union[Literal["str"], Literal[1], Literal[False]]` | `"str" \| 1 \| false` | `Union3StringOrIntOrBool` |
+| `"red" \| "green" \| "blue"` | `Literal["red", "green", "blue"]` | `"red" \| "green" \| "blue"` | `string` (with validation) |
+
+## See Also
+
+- [Types Overview](/reference/types/overview)
+- [Union Types](/reference/types/unions)
+- [Enums](/reference/types/classes-enums)

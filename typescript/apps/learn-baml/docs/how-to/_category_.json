@@ -1,0 +1,8 @@
+{
+  "label": "How-to Guides",
+  "position": 2,
+  "link": {
+    "type": "generated-index",
+    "description": "Practical guides for common tasks and configurations."
+  }
+}

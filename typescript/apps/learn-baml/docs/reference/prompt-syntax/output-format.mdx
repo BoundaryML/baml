@@ -1,0 +1,256 @@
+---
+sidebar_position: 3
+sidebar_label: Output Format
+title: ctx.output_format
+description: Reference for BAML's automatic output format generation
+---
+
+# ctx.output_format
+
+`{{ ctx.output_format }}` generates output schema instructions for the LLM based on the function's return type.
+
+## Basic Usage
+
+```baml
+class Resume {
+    name string
+    education Education[]
+}
+
+function ExtractResume(resume_text: string) -> Resume {
+    prompt #"
+        Extract this resume:
+        ---
+        {{ resume_text }}
+        ---
+
+        {{ ctx.output_format }}
+    "#
+}
+```
+
+**Rendered prompt:**
+
+```text
+Extract this resume
+---
+Aaron V.
+Bachelors CS, 2015
+UT Austin
+---
+
+Answer in JSON using this schema:
+{
+  name: string
+  education: [
+    {
+      school: string
+      graduation_year: string
+    }
+  ]
+}
+```
+
+## Parameters
+
+### prefix
+
+Custom instruction prefix before the schema.
+
+```jinja
+{{ ctx.output_format(prefix="If you use this schema correctly I'll tip $400:\n") }}
+```
+
+**Default prefixes by return type:**
+
+| Return Type | Default Prefix |
+|-------------|----------------|
+| `string` | (none) |
+| `int` | `Answer as an ` |
+| Other primitives | `Answer as a ` |
+| `enum` | `Answer with any of the categories:\n` |
+| `class` | `Answer in JSON using this schema:\n` |
+| Array | `Answer with a JSON Array using this schema:\n` |
+| Union | `Answer in JSON using any of these schemas:\n` |
+| Optional | `Answer in JSON using this schema:\n` |
+
+### always_hoist_enums
+
+Whether to print enum definitions above the schema or inline them.
+
+**Default:** `false`
+
+```jinja
+{{ ctx.output_format(always_hoist_enums=true) }}
+```
+
+**Inlined (default):**
+
+```text
+Answer in this json schema:
+{
+  categories: "ONE" | "TWO" | "THREE"
+}
+```
+
+**Hoisted:**
+
+```text
+MyCategory
+---
+ONE
+TWO
+THREE
+
+Answer in this json schema:
+{
+  categories: MyCategory
+}
+```
+
+:::warning
+BAML always hoists enums if any value has a `@description` attribute.
+:::
+
+### or_splitter
+
+Separator for union and optional types.
+
+**Default:** ` or `
+
+```jinja
+{{ ctx.output_format(or_splitter=" | ") }}
+```
+
+BAML uses `or` because some LLMs interpret `|` incorrectly.
+
+### hoist_classes
+
+Controls which classes are hoisted in the prompt.
+
+**Default:** `"auto"`
+
+**Options:**
+
+| Value | Behavior |
+|-------|----------|
+| `"auto"` | Only hoist recursive classes |
+| `false` | Same as `"auto"` |
+| `true` | Hoist all classes |
+| `["ClassName"]` | Hoist specific classes plus recursive ones |
+
+**Example with recursive class:**
+
+```baml
+class Node {
+    data int
+    next Node?
+}
+
+class Example {
+    a string
+    c NestedClass
+    d Node
+}
+```
+
+**`"auto"` output:**
+
+```text
+Node {
+  data: int,
+  next: Node or null
+}
+
+Answer in JSON using this schema:
+{
+  a: string,
+  c: {
+    m: int,
+    n: int,
+  },
+  d: Node,
+}
+```
+
+**`true` output:**
+
+```text
+Node {
+  data: int,
+  next: Node or null
+}
+
+Example {
+  a: string,
+  c: NestedClass,
+  d: Node,
+}
+
+NestedClass {
+  m: int,
+  n: int,
+}
+
+Answer in JSON using this schema: Example
+```
+
+:::info
+Requires BAML Version 0.89+
+:::
+
+### hoisted_class_prefix
+
+Prefix for hoisted class definitions.
+
+**Default:** (none)
+
+```jinja
+{{ ctx.output_format(hoisted_class_prefix="interface") }}
+```
+
+**Without prefix:**
+
+```text
+Node {
+  data: int,
+  next: Node or null
+}
+
+Answer in JSON using this schema:
+{
+  head: Node or null,
+  len: int
+}
+```
+
+**With `hoisted_class_prefix="interface"`:**
+
+```text
+interface Node {
+  data: int,
+  next: Node or null
+}
+
+Answer in JSON using this interface:
+{
+  head: Node or null,
+  len: int
+}
+```
+
+## Why Not JSON Schema?
+
+BAML uses "type definitions" format instead of JSON Schema because:
+
+1. **4x more efficient** - fewer tokens
+2. **More readable** - by humans and models
+3. **Better performance** - especially on nested objects and smaller models
+
+See the [full comparison article](https://www.boundaryml.com/blog/type-definition-prompting-baml).
+
+## See Also
+
+- [Jinja Overview](/reference/prompt-syntax/jinja-overview)
+- [Functions](/reference/functions/overview)
+- [Types](/reference/types/overview)

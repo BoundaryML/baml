@@ -1,0 +1,438 @@
+---
+sidebar_position: 4
+sidebar_label: TypeBuilder
+title: TypeBuilder
+description: Create or modify output schemas at runtime
+---
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+# TypeBuilder
+
+`TypeBuilder` creates or modifies output schemas at runtime. Useful for dynamic output structures that can't be determined at compile time, like categories from a database or user-provided schemas.
+
+## Basic Example
+
+**BAML Code**
+
+```baml
+enum Category {
+  RED
+  BLUE
+  @@dynamic  // Makes this enum modifiable at runtime
+}
+
+function Categorize(text: string) -> Category {
+  prompt #"
+    Categorize this text:
+    {{ text }}
+
+    {{ ctx.output_format }}
+  "#
+}
+```
+
+**Runtime Usage**
+
+<Tabs>
+<TabItem value="python" label="Python">
+
+```python
+from baml_client.type_builder import TypeBuilder
+from baml_client import b
+
+tb = TypeBuilder()
+tb.Category.add_value('GREEN')
+tb.Category.add_value('YELLOW')
+
+result = b.Categorize("The sun is bright", {"tb": tb})
+# result can now be RED, BLUE, GREEN, or YELLOW
+```
+
+</TabItem>
+<TabItem value="typescript" label="TypeScript">
+
+```typescript
+import { TypeBuilder } from '../baml_client/type_builder'
+import { b } from '../baml_client'
+
+const tb = new TypeBuilder()
+tb.Category.addValue('GREEN')
+tb.Category.addValue('YELLOW')
+
+const result = await b.Categorize("The sun is bright", { tb })
+// result can now be RED, BLUE, GREEN, or YELLOW
+```
+
+</TabItem>
+<TabItem value="go" label="Go">
+
+```go
+tb, _ := b.NewTypeBuilder()
+category, _ := tb.Category()
+category.AddValue("GREEN")
+category.AddValue("YELLOW")
+
+result, _ := b.Categorize(ctx, "The sun is bright", b.WithTypeBuilder(tb))
+```
+
+</TabItem>
+<TabItem value="ruby" label="Ruby">
+
+```ruby
+tb = Baml::TypeBuilder.new
+tb.Category.add_value('GREEN')
+tb.Category.add_value('YELLOW')
+
+result = Baml::Client.categorize(text: "The sun is bright", baml_options: { tb: tb })
+```
+
+</TabItem>
+</Tabs>
+
+## Dynamic Types
+
+### Modifying Existing Types
+
+Mark types with `@@dynamic` to modify at runtime:
+
+**Classes**
+
+```baml
+class User {
+  name string
+  age int
+  @@dynamic  // Allow adding more properties
+}
+```
+
+<Tabs>
+<TabItem value="python" label="Python">
+
+```python
+tb = TypeBuilder()
+tb.User.add_property('email', tb.string())
+tb.User.add_property('address', tb.string())
+```
+
+</TabItem>
+<TabItem value="typescript" label="TypeScript">
+
+```typescript
+const tb = new TypeBuilder()
+tb.User.addProperty('email', tb.string())
+tb.User.addProperty('address', tb.string())
+```
+
+</TabItem>
+</Tabs>
+
+**Enums**
+
+```baml
+enum Category {
+  VALUE1
+  VALUE2
+  @@dynamic  // Allow adding more values
+}
+```
+
+<Tabs>
+<TabItem value="python" label="Python">
+
+```python
+tb = TypeBuilder()
+tb.Category.add_value('VALUE3')
+tb.Category.add_value('VALUE4')
+```
+
+</TabItem>
+<TabItem value="typescript" label="TypeScript">
+
+```typescript
+const tb = new TypeBuilder()
+tb.Category.addValue('VALUE3')
+tb.Category.addValue('VALUE4')
+```
+
+</TabItem>
+</Tabs>
+
+### Creating New Types
+
+Create entirely new types at runtime:
+
+<Tabs>
+<TabItem value="python" label="Python">
+
+```python
+tb = TypeBuilder()
+
+# Create a new enum
+hobbies = tb.add_enum("Hobbies")
+hobbies.add_value("Soccer")
+hobbies.add_value("Reading")
+
+# Create a new class
+address = tb.add_class("Address")
+address.add_property("street", tb.string())
+address.add_property("city", tb.string())
+
+# Attach new types to existing BAML type
+tb.User.add_property("hobbies", hobbies.type().list())
+tb.User.add_property("address", address.type())
+```
+
+</TabItem>
+<TabItem value="typescript" label="TypeScript">
+
+```typescript
+const tb = new TypeBuilder()
+
+// Create a new enum
+const hobbies = tb.addEnum("Hobbies")
+hobbies.addValue("Soccer")
+hobbies.addValue("Reading")
+
+// Create a new class
+const address = tb.addClass("Address")
+address.addProperty("street", tb.string())
+address.addProperty("city", tb.string())
+
+// Attach new types to existing BAML type
+tb.User.addProperty("hobbies", hobbies.type().list())
+tb.User.addProperty("address", address.type())
+```
+
+</TabItem>
+</Tabs>
+
+## TypeBuilder Methods
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `string()` | `FieldType` | Creates a string type |
+| `int()` | `FieldType` | Creates an integer type |
+| `float()` | `FieldType` | Creates a float type |
+| `bool()` | `FieldType` | Creates a boolean type |
+| `literal_string(value)` | `FieldType` | Creates a literal string type |
+| `literal_int(value)` | `FieldType` | Creates a literal integer type |
+| `literal_bool(value)` | `FieldType` | Creates a literal boolean type |
+| `list(type)` | `FieldType` | Makes a type into a list |
+| `union(types)` | `FieldType` | Creates a union of types |
+| `map(key, value)` | `FieldType` | Creates a map type |
+| `add_class(name)` | `ClassBuilder` | Creates a new class |
+| `add_enum(name)` | `EnumBuilder` | Creates a new enum |
+
+## FieldType Methods
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `list()` | `FieldType` | Makes a type into a list |
+| `optional()` | `FieldType` | Makes a type optional |
+
+## ClassBuilder Methods
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `add_property(name, type)` | `ClassPropertyBuilder` | Adds a property to the class |
+| `description(desc)` | `ClassBuilder` | Adds a description to the class |
+| `type()` | `FieldType` | Returns the type of the class |
+
+## ClassPropertyBuilder Methods
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `description(desc)` | `ClassPropertyBuilder` | Adds a description to the property |
+| `alias(alias)` | `ClassPropertyBuilder` | Adds the alias attribute |
+
+## EnumBuilder Methods
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `add_value(value)` | `EnumValueBuilder` | Adds a value to the enum |
+| `description(desc)` | `EnumBuilder` | Adds a description |
+| `type()` | `FieldType` | Returns the type of the enum |
+
+## EnumValueBuilder Methods
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `description(desc)` | `EnumValueBuilder` | Adds a description |
+| `alias(alias)` | `EnumValueBuilder` | Adds the alias attribute |
+| `skip()` | `EnumValueBuilder` | Adds the skip attribute |
+
+## Adding Descriptions
+
+<Tabs>
+<TabItem value="python" label="Python">
+
+```python
+tb = TypeBuilder()
+
+# Add description to a property
+tb.User.add_property("email", tb.string()) \
+   .description("User's primary email address")
+
+# Add description to an enum value
+tb.Category.add_value("URGENT") \
+   .description("Needs immediate attention")
+```
+
+</TabItem>
+<TabItem value="typescript" label="TypeScript">
+
+```typescript
+const tb = new TypeBuilder()
+
+tb.User.addProperty("email", tb.string())
+   .description("User's primary email address")
+
+tb.Category.addValue("URGENT")
+   .description("Needs immediate attention")
+```
+
+</TabItem>
+</Tabs>
+
+## Using add_baml
+
+Higher-level API for creating dynamic types:
+
+<Tabs>
+<TabItem value="python" label="Python">
+
+```python
+tb = TypeBuilder()
+tb.add_baml("""
+  // Creates a new class
+  class Address {
+    street string
+    city string
+    state string
+  }
+
+  // Modifies existing @@dynamic class
+  dynamic class User {
+    address Address
+  }
+
+  // Modifies existing @@dynamic enum
+  dynamic enum Category {
+    PURPLE
+  }
+""")
+```
+
+</TabItem>
+<TabItem value="typescript" label="TypeScript">
+
+```typescript
+const tb = new TypeBuilder()
+tb.addBaml(`
+  class Address {
+    street string
+    city string
+    state string
+  }
+
+  dynamic class User {
+    address Address
+  }
+
+  dynamic enum Category {
+    PURPLE
+  }
+`)
+```
+
+</TabItem>
+</Tabs>
+
+## Common Patterns
+
+### Dynamic Categories from Database
+
+<Tabs>
+<TabItem value="python" label="Python">
+
+```python
+categories = fetch_categories_from_db()
+tb = TypeBuilder()
+for category in categories:
+    tb.Category.add_value(category)
+```
+
+</TabItem>
+<TabItem value="typescript" label="TypeScript">
+
+```typescript
+const categories = await fetchCategoriesFromDb()
+const tb = new TypeBuilder()
+categories.forEach(category => {
+    tb.Category.addValue(category)
+})
+```
+
+</TabItem>
+</Tabs>
+
+### Dynamic Form Fields
+
+<Tabs>
+<TabItem value="python" label="Python">
+
+```python
+fields = get_form_fields()
+tb = TypeBuilder()
+form = tb.add_class("Form")
+for field in fields:
+    form.add_property(field.name, tb.string())
+```
+
+</TabItem>
+<TabItem value="typescript" label="TypeScript">
+
+```typescript
+const fields = getFormFields()
+const tb = new TypeBuilder()
+const form = tb.addClass("Form")
+fields.forEach(field => {
+    form.addProperty(field.name, tb.string())
+})
+```
+
+</TabItem>
+</Tabs>
+
+### Optional Properties
+
+<Tabs>
+<TabItem value="python" label="Python">
+
+```python
+tb = TypeBuilder()
+tb.User.add_property("middle_name", tb.string().optional())
+```
+
+</TabItem>
+<TabItem value="typescript" label="TypeScript">
+
+```typescript
+const tb = new TypeBuilder()
+tb.User.addProperty("middle_name", tb.string().optional())
+```
+
+</TabItem>
+</Tabs>
+
+:::warning
+All types added through TypeBuilder must be connected to the return type of your BAML function. Standalone types that aren't referenced won't affect the output schema.
+:::
+
+## See Also
+
+- [with_options](/reference/generated-client/with-options) - Configure options globally
+- [Collector](/reference/generated-client/collector) - Track function calls
+- [Functions](/reference/functions/overview) - Function declarations

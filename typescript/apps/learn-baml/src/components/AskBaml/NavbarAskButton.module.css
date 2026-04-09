@@ -1,0 +1,67 @@
+.button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  font-family: var(--font-sans);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.button:hover {
+  background: var(--color-surface-3);
+  border-color: var(--color-accent);
+  color: var(--color-text-primary);
+}
+
+.button[data-active="true"] {
+  background: var(--color-accent-muted);
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.icon {
+  flex-shrink: 0;
+}
+
+.label {
+  font-weight: 500;
+}
+
+.shortcut {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 5px;
+  background: var(--color-surface-3);
+  border-radius: 4px;
+  font-size: 11px;
+  font-family: var(--font-sans);
+  color: var(--color-text-tertiary);
+  margin-left: 4px;
+}
+
+.button:hover .shortcut {
+  background: var(--color-surface-4);
+}
+
+.shortcutKey {
+  font-size: 12px;
+}
+
+/* Hide shortcut on mobile */
+@media (max-width: 768px) {
+  .shortcut {
+    display: none;
+  }
+
+  .label {
+    display: none;
+  }
+}

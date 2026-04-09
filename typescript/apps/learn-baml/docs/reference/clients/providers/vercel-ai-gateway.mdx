@@ -1,0 +1,44 @@
+---
+sidebar_position: 23
+sidebar_label: Vercel AI Gateway
+title: Vercel AI Gateway Provider
+description: Reference for configuring Vercel AI Gateway clients in BAML
+---
+
+# Vercel AI Gateway
+
+[Vercel AI Gateway](https://vercel.com/docs/ai-gateway/openai-compat) provides a unified gateway for multiple AI providers.
+
+## Basic Example
+
+```baml
+client<llm> VercelClient {
+    provider "openai-generic"
+    options {
+        base_url "https://ai-gateway.vercel.sh/v1"
+        api_key env.VERCEL_AI_GATEWAY_TOKEN
+        model "openai/gpt-4o-mini"
+    }
+}
+```
+
+## BAML-Specific Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `base_url` | string | - | `https://ai-gateway.vercel.sh/v1` |
+| `api_key` | string | `env.VERCEL_AI_GATEWAY_TOKEN` | Gateway token |
+| `model` | string | - | Provider/model format |
+
+### Example Models
+
+- `anthropic/claude-3-5-sonnet-latest`
+- `openai/gpt-4o-mini`
+
+See [Vercel AI Gateway documentation](https://vercel.com/docs/ai-gateway/openai-compat) for provider configuration.
+
+## See Also
+
+- [OpenAI Generic](/reference/clients/providers/openai-generic)
+- [OpenRouter](/reference/clients/providers/openrouter)
+- [Client Overview](/reference/clients/overview)

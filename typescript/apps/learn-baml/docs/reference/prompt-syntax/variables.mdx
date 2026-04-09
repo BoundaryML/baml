@@ -1,0 +1,95 @@
+---
+sidebar_position: 2
+sidebar_label: Variables
+title: Variables
+description: Reference for variable interpolation in BAML prompts
+---
+
+# Variables
+
+Variables in BAML prompts allow you to inject dynamic content.
+
+## Basic Variable Output
+
+Use double curly braces to output variable values:
+
+```jinja
+{{ variable_name }}
+{{ user.name }}
+{{ items[0] }}
+```
+
+## Function Parameters
+
+Function parameters are automatically available as variables:
+
+```baml
+function Greet(name: string, age: int) -> string {
+    client "openai/gpt-4o"
+    prompt #"
+        Hello {{ name }}, you are {{ age }} years old.
+    "#
+}
+```
+
+## Accessing Object Properties
+
+Access nested properties using dot notation:
+
+```baml
+class User {
+    name string
+    profile Profile
+}
+
+class Profile {
+    bio string
+}
+
+function DescribeUser(user: User) -> string {
+    client "openai/gpt-4o"
+    prompt #"
+        Name: {{ user.name }}
+        Bio: {{ user.profile.bio }}
+    "#
+}
+```
+
+## Array Access
+
+Access array elements by index:
+
+```jinja
+{{ items[0] }}
+{{ messages[1].content }}
+```
+
+## Setting Variables
+
+Define local variables using `{% set %}`:
+
+```jinja
+{% set greeting = "Hello" %}
+{{ greeting }}, {{ name }}!
+
+{% set total = 0 %}
+{% for item in items %}
+    {% set total = total + item.price %}
+{% endfor %}
+Total: {{ total }}
+```
+
+## Default Values
+
+Provide default values for optional or undefined variables:
+
+```jinja
+{{ user_name|default("Guest") }}
+{{ pi or 3.14159 }}
+```
+
+## See Also
+
+- [Jinja Overview](/reference/prompt-syntax/jinja-overview)
+- [Template Strings](/reference/functions/prompts)
+- [Filters](/reference/prompt-syntax/filters)

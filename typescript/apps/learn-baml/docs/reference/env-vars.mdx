@@ -1,0 +1,67 @@
+---
+sidebar_position: 10
+sidebar_label: Environment Variables
+title: Environment Variables
+description: Using environment variables in BAML
+---
+
+# Environment Variables
+
+Reference environment variables in BAML using the `env.` prefix.
+
+## Syntax
+
+```baml
+env.YOUR_VARIABLE_NAME
+```
+
+:::warning
+Environment variables with spaces in their names are not supported.
+:::
+
+## Example
+
+```baml
+client<llm> MyCustomClient {
+    provider "openai"
+    options {
+        model "gpt-4o"
+        // Set the API key using an environment variable
+        api_key env.MY_SUPER_SECRET_API_KEY
+    }
+}
+```
+
+## Error Handling
+
+Errors for unset environment variables are only thrown when the variable is accessed. If your BAML project has 15 environment variables and only 1 is used for the function you're calling, only that one will be checked.
+
+## Setting Environment Variables
+
+### Shell
+
+```bash
+export MY_SUPER_SECRET_API_KEY="sk-..."
+```
+
+### .env File
+
+```bash
+MY_SUPER_SECRET_API_KEY=sk-...
+```
+
+### Programmatically
+
+You can also pass environment variables via `with_options`:
+
+```python
+from baml_client import b
+
+my_b = b.with_options(env={"MY_SUPER_SECRET_API_KEY": "sk-..."})
+result = my_b.MyFunction("input")
+```
+
+## See Also
+
+- [Client Configuration](/reference/clients/overview) - Configure LLM clients
+- [with_options](/reference/generated-client/with-options) - Pass options at runtime

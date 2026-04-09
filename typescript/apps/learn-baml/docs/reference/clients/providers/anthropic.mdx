@@ -1,0 +1,85 @@
+---
+sidebar_position: 2
+sidebar_label: Anthropic
+title: Anthropic Provider
+description: Reference for configuring Anthropic Claude LLM clients in BAML
+---
+
+# Anthropic
+
+The `anthropic` provider supports the Anthropic `/v1/messages` endpoint.
+
+## Basic Example
+
+```baml
+client<llm> MyClient {
+    provider anthropic
+    options {
+        model "claude-sonnet-4-20250514"
+        temperature 0
+    }
+}
+```
+
+## BAML-Specific Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `api_key` | string | `env.ANTHROPIC_API_KEY` | API key for Authorization header |
+| `base_url` | string | `https://api.anthropic.com` | Base URL for API |
+| `headers` | object | - | Additional request headers |
+
+### Default Headers
+
+BAML automatically injects:
+
+```
+anthropic-version: 2023-06-01
+```
+
+### Custom Headers
+
+```baml
+client<llm> MyClient {
+    provider anthropic
+    options {
+        api_key env.MY_ANTHROPIC_KEY
+        model "claude-sonnet-4-20250514"
+        headers {
+            "X-My-Header" "my-value"
+        }
+    }
+}
+```
+
+## Available Models
+
+| Model | Use Case | Release | Context |
+|-------|----------|---------|---------|
+| `claude-opus-4-1-20250805` | Complex coding, AI agents | Aug 2025 | 200K |
+| `claude-sonnet-4-20250514` | Default choice, versatile | May 2025 | 200K-1M |
+| `claude-3-5-haiku-20241022` | Fast, cost-efficient | Oct 2024 | 200K |
+
+See [Anthropic Models](https://docs.anthropic.com/en/docs/about-claude/models) for the complete list.
+
+## Provider Parameters
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `model` | string | - | Model identifier |
+| `max_tokens` | int | 4096 | Maximum response tokens |
+| `temperature` | float | - | Sampling temperature |
+| `top_p` | float | - | Nucleus sampling |
+| `top_k` | int | - | Top-k sampling |
+
+:::note
+Anthropic's default behavior converts PDFs to base64 while keeping other media types as URLs, since the API requires PDFs to be base64-encoded.
+:::
+
+See the [Anthropic API documentation](https://docs.anthropic.com/en/api/messages) for all options.
+
+## See Also
+
+- [AWS Bedrock](/reference/clients/providers/aws-bedrock) (for Claude on AWS)
+- [Vertex AI](/reference/clients/providers/vertex) (for Claude on GCP)
+- [Client Overview](/reference/clients/overview)

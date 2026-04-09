@@ -1,0 +1,86 @@
+---
+sidebar_position: 1
+sidebar_label: Overview
+title: BAML Types Overview
+description: Complete reference for all types supported in BAML
+---
+
+# Types Overview
+
+BAML provides a rich type system for defining inputs and outputs of AI functions.
+
+## Primitive Types
+
+| Type | Description |
+|------|-------------|
+| `bool` | Boolean value (`true` or `false`) |
+| `int` | Integer number |
+| `float` | Floating point number |
+| `string` | Text data |
+| `null` | Null/empty value |
+
+## Composite Types
+
+| Type | Syntax | Description |
+|------|--------|-------------|
+| `class` | `class Name { ... }` | User-defined structured data |
+| `enum` | `enum Name { ... }` | Set of named constants |
+| `array` | `Type[]` | Collection of elements |
+| `map` | `map<KeyType, ValueType>` | Key-value pairs |
+| `optional` | `Type?` | Value that may be absent |
+| `union` | `Type1 \| Type2` | One of several types |
+| `literal` | `"value"` or `1` or `true` | Specific constrained value |
+| `type alias` | `type Name = Type` | Alternative name for a type |
+
+## Multimodal Types
+
+| Type | Description |
+|------|-------------|
+| `image` | Image data (URL or base64) |
+| `audio` | Audio data (URL or base64) |
+| `pdf` | PDF document (base64 only) |
+| `video` | Video data (URL or base64) |
+
+## Type Examples
+
+```baml
+// Primitives
+function GetCount() -> int { ... }
+function GetName() -> string { ... }
+
+// Arrays
+function GetNames() -> string[] { ... }
+
+// Optional
+function GetAge() -> int? { ... }
+
+// Union
+function Classify() -> "bug" | "feature" | "question" { ... }
+
+// Complex
+class Person {
+    name string
+    age int?
+    tags string[]
+}
+
+function ParsePerson(text: string) -> Person { ... }
+```
+
+## Unsupported Types
+
+| Type | Alternative |
+|------|-------------|
+| `any/json` | Use `string` and parse manually, or use [dynamic types](/reference/attributes/dynamic) |
+| `datetime` | Use `string` |
+| `duration` | Use `string` with ISO8601 format |
+| `set` | Use array (`Type[]`) |
+| `tuple` | Use `class` |
+
+## See Also
+
+- [Primitives](/reference/types/primitives)
+- [Arrays](/reference/types/arrays)
+- [Maps](/reference/types/maps)
+- [Classes and Enums](/reference/types/classes-enums)
+- [Multimodal Types](/reference/types/multimodal)

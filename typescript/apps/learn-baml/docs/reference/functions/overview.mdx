@@ -1,0 +1,191 @@
+---
+sidebar_position: 1
+sidebar_label: Overview
+title: Functions
+description: Reference for BAML function declarations and AI model interfaces
+---
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+# Functions
+
+Functions in BAML define type-safe contracts between your application and AI models.
+
+## Syntax
+
+```baml
+function FunctionName(param: Type) -> ReturnType {
+    client ModelSpec
+    prompt #"
+        Template content
+    "#
+}
+```
+
+## Components
+
+| Component | Description | Example |
+|-----------|-------------|---------|
+| `name` | Function identifier (must start with capital letter) | `ExtractEmail` |
+| `parameters` | Typed input parameters | `text: string`, `data: MyClass` |
+| `return_type` | Guaranteed output type | `string`, `MyClass`, `"a" \| "b"` |
+| `client` | LLM specification | `"openai/gpt-4o"`, `GPT4` |
+| `prompt` | Jinja template | Block string with `{{ }}` |
+
+## Basic Example
+
+```baml
+function ExtractEmail(text: string) -> string {
+    client "openai/gpt-4o"
+    prompt #"
+        Extract the email address from the following text:
+        {{ text }}
+
+        {{ ctx.output_format }}
+    "#
+}
+```
+
+## Client Specification
+
+### Shorthand Syntax
+
+```baml
+function MakeHaiku(topic: string) -> string {
+    client "openai/gpt-4o"
+    prompt #"
+        Write a haiku about {{ topic }}.
+    "#
+}
+```
+
+### Named Client
+
+```baml
+client<llm> MyClient {
+    provider "openai"
+    options {
+        model "gpt-4o"
+    }
+}
+
+function MakeHaiku(topic: string) -> string {
+    client MyClient
+    prompt #"
+        Write a haiku about {{ topic }}.
+    "#
+}
+```
+
+## Type System
+
+Functions support all BAML types:
+
+### Built-in Types
+
+| Type | Description |
+|------|-------------|
+| `string` | Text data |
+| `int` | Integer numbers |
+| `float` | Decimal numbers |
+| `bool` | True/false values |
+| `Type[]` | Arrays |
+| `map<K, V>` | Key-value pairs |
+| `"a" \| "b"` | Literal unions |
+
+### Custom Types
+
+```baml
+class Person {
+    name string
+    age int
+    contacts Contact[]
+}
+
+class Contact {
+    type "email" | "phone"
+    value string
+}
+
+function ParsePerson(data: string) -> Person {
+    client "openai/gpt-4o"
+    prompt #"
+        {{ ctx.output_format }}
+
+        {{ _.role('user') }}
+        {{ data }}
+    "#
+}
+```
+
+## Prompt Templates
+
+### Jinja Syntax
+
+```baml
+prompt #"
+    Input data: {{ input_data }}
+
+    {% if condition %}
+        Conditional content
+    {% endif %}
+
+    {{ ctx.output_format }}
+"#
+```
+
+### Special Variables
+
+| Variable | Description |
+|----------|-------------|
+| `ctx.output_format` | Auto-generated format instructions based on return type |
+| `ctx.client` | Selected client and model name |
+| `_.role()` | Define message role (system, user, assistant) |
+
+## Error Handling
+
+BAML functions automatically handle:
+
+- JSON parsing errors (auto-corrected)
+- Type mismatches (detected and reported)
+- Network and rate limit errors (propagated to caller)
+
+## Generated Client Usage
+
+<Tabs>
+<TabItem value="python" label="Python">
+
+```python
+from baml_client import b
+from baml_client.types import Person
+
+async def process() -> Person:
+    result = await b.ParsePerson("John Doe, 30 years old...")
+    print(result.name)  # Type-safe access
+    return result
+```
+
+</TabItem>
+<TabItem value="typescript" label="TypeScript">
+
+```typescript
+import { b } from 'baml_client';
+import { Person } from 'baml_client/types';
+
+async function process(): Promise<Person> {
+    const result = await b.ParsePerson("John Doe, 30 years old...");
+    console.log(result.name);  // Type-safe access
+    return result;
+}
+```
+
+</TabItem>
+</Tabs>
+
+## See Also
+
+- [Prompts](/reference/functions/prompts)
+- [Tests](/reference/functions/tests)
+- [Client Configuration](/reference/clients/overview)
+- [Prompt Syntax](/reference/prompt-syntax/jinja-overview)

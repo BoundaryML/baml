@@ -1,0 +1,88 @@
+---
+sidebar_position: 9
+sidebar_label: Ollama
+title: Ollama Provider
+description: Reference for configuring Ollama LLM clients in BAML
+---
+
+# Ollama
+
+[Ollama](https://ollama.com/) supports the OpenAI-compatible API, allowing you to use local models.
+
+:::tip
+Use Ollama's OpenAI-compatible `/v1` endpoint. See [Ollama's OpenAI compatibility documentation](https://ollama.com/blog/openai-compatibility).
+:::
+
+## Basic Example
+
+```baml
+client<llm> MyClient {
+    provider "openai-generic"
+    options {
+        base_url "http://localhost:11434/v1"
+        model llama3
+    }
+}
+```
+
+## BAML-Specific Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `base_url` | string | `http://localhost:11434/v1` | Ollama API endpoint |
+| `model` | string | - | Model name |
+| `headers` | object | - | Additional headers |
+
+:::note
+Include `/v1` at the end of the URL for OpenAI compatibility.
+:::
+
+### Custom Headers
+
+```baml
+client<llm> MyClient {
+    provider "openai-generic"
+    options {
+        base_url "http://localhost:11434/v1"
+        model "llama3"
+        headers {
+            "X-My-Header" "my-value"
+        }
+    }
+}
+```
+
+## Available Models
+
+| Model | Description |
+|-------|-------------|
+| `llama4` | Meta Llama 4: Latest with enhanced reasoning |
+| `llama3.3` | Meta Llama 3.3: Improved performance |
+| `llama3` | Meta Llama 3: Highly capable open LLM |
+| `qwen2` | Alibaba's large language models |
+| `phi3` | Microsoft's lightweight models (3B/14B) |
+| `mistral` | Mistral AI 7B model v0.3 |
+| `gemma` | Google DeepMind lightweight models |
+| `mixtral` | Mistral MoE models (8x7b, 8x22b) |
+
+See [Ollama Model Library](https://ollama.com/library) for the complete list.
+
+:::tip
+Use specific versions: `"mixtral:8x22b"`
+:::
+
+## PromptFiddle Integration
+
+Try BAML with Ollama at promptfiddle.com:
+
+```bash
+OLLAMA_ORIGINS='*' ollama serve
+```
+
+Learn more in the [Ollama structured output guide](https://www.boundaryml.com/blog/ollama-structured-output).
+
+## See Also
+
+- [OpenAI Generic](/reference/clients/providers/openai-generic)
+- [LM Studio](/reference/clients/providers/lmstudio)
+- [Client Overview](/reference/clients/overview)

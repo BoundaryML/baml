@@ -1,0 +1,5 @@
+{
+  "label": "Prompt Syntax",
+  "position": 3,
+  "description": "Jinja-based prompt templating"
+}

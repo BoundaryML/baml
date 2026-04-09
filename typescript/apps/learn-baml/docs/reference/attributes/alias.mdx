@@ -1,0 +1,92 @@
+---
+sidebar_position: 2
+sidebar_label: "@alias"
+title: "@alias Attribute"
+description: Reference for the BAML @alias attribute
+---
+
+# @alias
+
+The `@alias` attribute renames fields or values for LLM understanding while keeping the original name in code.
+
+## Class Field Alias
+
+### Without @alias
+
+```baml
+class MyClass {
+    property1 string
+}
+```
+
+**ctx.output_format:**
+
+```
+{
+  property1: string
+}
+```
+
+### With @alias
+
+```baml
+class MyClass {
+    property1 string @alias("name")
+}
+```
+
+**ctx.output_format:**
+
+```
+{
+  name: string
+}
+```
+
+## Enum Alias
+
+Apply `@@alias` to the enum itself:
+
+```baml
+enum MyEnum {
+    Value1
+
+    @@alias("My Name")
+}
+```
+
+**ctx.output_format:**
+
+```
+My Name
+---
+Value1
+```
+
+## Enum Value Alias
+
+```baml
+enum MyEnum {
+    Value1 @alias("Something")
+}
+```
+
+**ctx.output_format:**
+
+```
+MyEnum
+---
+Something
+```
+
+## Use Cases
+
+- Provide clearer names for prompt engineering
+- Keep internal naming conventions while using natural language for LLMs
+- Handle naming conflicts between code and prompts
+
+## See Also
+
+- [@description](/reference/attributes/description)
+- [Attributes Overview](/reference/attributes/overview)
+- [Classes and Enums](/reference/types/classes-enums)

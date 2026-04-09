@@ -1,0 +1,122 @@
+---
+sidebar_position: 6
+sidebar_label: Loops
+title: Loops
+description: Reference for loop iteration in BAML prompts
+---
+
+# Loops
+
+Iterate over collections in BAML prompts using `{% for %}` loops.
+
+## Syntax
+
+```jinja
+{% for item in items %}
+    {{ item }}
+{% endfor %}
+```
+
+## Basic Example
+
+```baml
+function MyFunc(messages: Message[]) -> string {
+    prompt #"
+        {% for message in messages %}
+            {{ message.user_name }}: {{ message.content }}
+        {% endfor %}
+    "#
+}
+```
+
+## Loop Variable
+
+The `loop` object provides information about the current iteration:
+
+| Variable | Description |
+|----------|-------------|
+| `loop.index` | Current iteration (1-indexed) |
+| `loop.index0` | Current iteration (0-indexed) |
+| `loop.revindex` | Iterations from end (1-indexed) |
+| `loop.revindex0` | Iterations from end (0-indexed) |
+| `loop.first` | True if first iteration |
+| `loop.last` | True if last iteration |
+| `loop.length` | Total number of items |
+| `loop.cycle` | Cycle through a list of values |
+| `loop.depth` | Recursion depth (starts at 1) |
+| `loop.depth0` | Recursion depth (starts at 0) |
+| `loop.previtem` | Previous item (undefined on first) |
+| `loop.nextitem` | Next item (undefined on last) |
+| `loop.changed(*val)` | True if called with different value |
+
+## Examples
+
+### Numbered List
+
+```jinja
+{% for item in items %}
+    {{ loop.index }}: {{ item }}
+{% endfor %}
+```
+
+### Conditional Formatting
+
+```jinja
+{% for item in items %}
+    {{ item }}{% if not loop.last %}, {% endif %}
+{% endfor %}
+```
+
+### First and Last
+
+```jinja
+{% for item in items %}
+    {% if loop.first %}First: {% endif %}
+    {{ item }}
+    {% if loop.last %} (End){% endif %}
+{% endfor %}
+```
+
+### Alternating Roles
+
+```jinja
+{% for m in messages %}
+    {{ _.role("user" if loop.index % 2 == 1 else "assistant") }}
+    {{ m }}
+{% endfor %}
+```
+
+### Empty Loop Fallback
+
+```jinja
+{% for item in items %}
+    {{ item }}
+{% else %}
+    No items found.
+{% endfor %}
+```
+
+## Nested Loops
+
+```jinja
+{% for category in categories %}
+    Category: {{ category.name }}
+    {% for item in category.items %}
+        - {{ item }}
+    {% endfor %}
+{% endfor %}
+```
+
+## Loop Filtering
+
+```jinja
+{% for user in users if user.is_active %}
+    {{ user.name }}
+{% endfor %}
+```
+
+## See Also
+
+- [Jinja Overview](/reference/prompt-syntax/jinja-overview)
+- [Conditionals](/reference/prompt-syntax/conditionals)
+- [Filters](/reference/prompt-syntax/filters)

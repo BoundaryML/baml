@@ -1,0 +1,85 @@
+---
+sidebar_position: 2
+sidebar_label: Data Extraction
+title: Data Extraction Patterns
+description: Recipes for extracting structured data from unstructured text
+---
+
+# Data Extraction Patterns
+
+Extract structured information from documents, emails, and other unstructured text.
+
+## Contact Information Extraction
+
+```baml
+class ContactInfo {
+  name string?
+  email string?
+  phone string?
+  company string?
+}
+
+function ExtractContact(text: string) -> ContactInfo {
+  client GPT4
+  prompt #"
+    Extract contact information from this text:
+    {{ text }}
+
+    Return any contact details found.
+  "#
+}
+```
+
+## Invoice Data Extraction
+
+```baml
+class LineItem {
+  description string
+  quantity int
+  unit_price float
+  total float
+}
+
+class Invoice {
+  invoice_number string
+  date string
+  vendor string
+  items LineItem[]
+  subtotal float
+  tax float
+  total float
+}
+
+function ExtractInvoice(document: string) -> Invoice {
+  client GPT4
+  prompt #"
+    Extract all invoice data from this document:
+    {{ document }}
+  "#
+}
+```
+
+## Handling Missing Data
+
+Use optional fields (`?`) for data that may not be present:
+
+```baml
+class Person {
+  name string           // Required
+  email string?         // Optional
+  age int?              // Optional
+  address Address?      // Optional nested object
+}
+```
+
+## Best Practices
+
+1. **Make fields optional** when data might be missing
+2. **Use descriptive names** that match how data appears in text
+3. **Add `@description`** for ambiguous fields
+
+## Related
+
+- [Classification](/cookbook/classification) - Categorize before extracting
+- [RAG Pipeline Tutorial](/tutorials/rag-pipeline) - Extraction in context
+- [Type System](/concepts/type-system) - Optional types explained

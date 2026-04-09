@@ -1,0 +1,380 @@
+---
+sidebar_position: 5
+sidebar_label: Async/Sync Client
+title: AsyncClient / SyncClient
+description: Generated sync and async client SDKs
+---
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+# AsyncClient / SyncClient
+
+BAML generates both sync and async clients with the same public API.
+
+## Basic Usage
+
+### Async Client
+
+<Tabs>
+<TabItem value="python" label="Python">
+
+```python
+from baml_client.async_client import b
+
+async def example():
+    story = await b.TellMeAStory()
+    poem = await b.WriteAPoemAbout("Roses")
+```
+
+</TabItem>
+<TabItem value="typescript" label="TypeScript">
+
+```typescript
+import { b } from '../baml_client/async_client'
+
+async function example() {
+    const story = await b.TellMeAStory()
+    const poem = await b.WriteAPoemAbout("Roses")
+}
+```
+
+</TabItem>
+<TabItem value="go" label="Go">
+
+```go
+import b "example.com/myproject/baml_client"
+
+func example() error {
+    ctx := context.Background()
+    story, err := b.TellMeAStory(ctx)
+    if err != nil {
+        return err
+    }
+    poem, err := b.WriteAPoemAbout(ctx, "Roses")
+    return err
+}
+```
+
+</TabItem>
+</Tabs>
+
+### Sync Client
+
+<Tabs>
+<TabItem value="python" label="Python">
+
+```python
+from baml_client.sync_client import b
+
+def example():
+    story = b.TellMeAStory()
+    poem = b.WriteAPoemAbout("Roses")
+```
+
+</TabItem>
+<TabItem value="typescript" label="TypeScript">
+
+```typescript
+import { b } from '../baml_client/sync_client'
+
+function example() {
+    const story = b.TellMeAStory()
+    const poem = b.WriteAPoemAbout("Roses")
+}
+```
+
+</TabItem>
+<TabItem value="ruby" label="Ruby">
+
+```ruby
+require 'baml_client/client'
+
+b = Baml.Client
+
+def example
+  story = b.TellMeAStory()
+  poem = b.WriteAPoemAbout("Roses")
+end
+```
+
+</TabItem>
+</Tabs>
+
+## Call Patterns
+
+### `.stream`
+
+Stream responses from a function:
+
+<Tabs>
+<TabItem value="python" label="Python">
+
+```python
+from baml_client.async_client import b
+
+async def example():
+    stream = b.stream.TellMeAStory()
+
+    async for partial in stream:
+        print(partial)
+
+    print(await stream.get_final_response())
+```
+
+</TabItem>
+<TabItem value="typescript" label="TypeScript">
+
+```typescript
+import { b } from '../baml_client/async_client'
+
+async function example() {
+    const stream = b.stream.TellMeAStory()
+
+    for await (const partial of stream) {
+        console.log(partial)
+    }
+
+    console.log(await stream.getFinalResponse())
+}
+```
+
+</TabItem>
+<TabItem value="go" label="Go">
+
+```go
+stream, err := b.Stream.TellMeAStory(ctx)
+if err != nil {
+    return err
+}
+
+for value := range stream {
+    if value.IsError {
+        return value.Error
+    }
+
+    if !value.IsFinal && value.Stream() != nil {
+        fmt.Println(*value.Stream())
+    }
+
+    if value.IsFinal && value.Final() != nil {
+        fmt.Println(*value.Final())
+    }
+}
+```
+
+</TabItem>
+<TabItem value="ruby" label="Ruby">
+
+```ruby
+stream = b.stream.TellMeAStory
+
+stream.each do |partial|
+  puts partial
+end
+
+puts stream.get_final_response
+```
+
+</TabItem>
+</Tabs>
+
+### `.request`
+
+:::info
+Added in version 0.79.0
+:::
+
+Get the raw HTTP request without sending it:
+
+<Tabs>
+<TabItem value="python" label="Python">
+
+```python
+from baml_client.async_client import b
+
+async def example():
+    request = await b.request.TellMeAStory()
+    print(request.url)
+    print(request.headers)
+    print(request.body.json())
+```
+
+</TabItem>
+<TabItem value="typescript" label="TypeScript">
+
+```typescript
+import { b } from '../baml_client/async_client'
+
+async function example() {
+    const request = await b.request.TellMeAStory()
+    console.log(request.url)
+    console.log(request.headers)
+    console.log(request.body.json())
+}
+```
+
+</TabItem>
+<TabItem value="ruby" label="Ruby">
+
+```ruby
+request = b.request.TellMeAStory
+puts request.url
+puts request.headers
+puts request.body.json
+```
+
+</TabItem>
+</Tabs>
+
+### `.stream_request`
+
+:::info
+Added in version 0.79.0
+:::
+
+Same as `.request` but sets streaming options to `true`:
+
+<Tabs>
+<TabItem value="python" label="Python">
+
+```python
+from baml_client.async_client import b
+
+async def example():
+    request = await b.stream_request.TellMeAStory()
+    print(request.url)
+    print(request.headers)
+    print(request.body.json())
+```
+
+</TabItem>
+<TabItem value="typescript" label="TypeScript">
+
+```typescript
+import { b } from '../baml_client/async_client'
+
+async function example() {
+    const request = await b.stream_request.TellMeAStory()
+    console.log(request.url)
+    console.log(request.headers)
+    console.log(request.body.json())
+}
+```
+
+</TabItem>
+</Tabs>
+
+### `.parse`
+
+:::info
+Added in version 0.79.0
+:::
+
+Parse LLM responses. Use with `.request` for custom HTTP handling:
+
+<Tabs>
+<TabItem value="python" label="Python">
+
+```python
+import requests
+from baml_client.sync_client import b
+
+def example():
+    request = b.request.TellMeAStory()
+    response = requests.post(
+        request.url,
+        headers=request.headers,
+        json=request.body.json()
+    )
+    parsed = b.parse.TellMeAStory(
+        response.json()["choices"][0]["message"]["content"]
+    )
+    print(parsed)
+```
+
+</TabItem>
+<TabItem value="typescript" label="TypeScript">
+
+```typescript
+import { b } from '../baml_client/async_client'
+
+async function example() {
+    const request = await b.request.TellMeAStory()
+
+    const response = await fetch(request.url, {
+        method: request.method,
+        headers: request.headers,
+        body: JSON.stringify(request.body.json())
+    })
+
+    const body = await response.json() as any
+    const parsed = await b.parse.TellMeAStory(
+        body.choices[0].message.content
+    )
+    console.log(parsed)
+}
+```
+
+</TabItem>
+</Tabs>
+
+### `.parse_stream`
+
+:::info
+Added in version 0.79.0
+:::
+
+Parse streaming responses. Use with `.stream_request`:
+
+<Tabs>
+<TabItem value="python" label="Python">
+
+```python
+from openai import AsyncOpenAI
+from baml_client.async_client import b
+
+async def example():
+    client = AsyncOpenAI()
+
+    request = await b.stream_request.TellMeAStory()
+    stream = await client.chat.completions.create(**request.body.json())
+
+    llm_response: list[str] = []
+    async for chunk in stream:
+        if len(chunk.choices) > 0 and chunk.choices[0].delta.content is not None:
+            llm_response.append(chunk.choices[0].delta.content)
+            print(b.parse_stream.TellMeAStory("".join(llm_response)))
+```
+
+</TabItem>
+<TabItem value="typescript" label="TypeScript">
+
+```typescript
+import OpenAI from 'openai'
+import { b } from '../baml_client/async_client'
+
+async function example() {
+    const client = new OpenAI()
+
+    const request = await b.stream_request.TellMeAStory()
+    const stream = await client.chat.completions.create(request.body.json())
+
+    let llmResponse: string[] = []
+    for await (const chunk of stream) {
+        if (chunk.choices.length > 0 && chunk.choices[0].delta.content) {
+            llmResponse.push(chunk.choices[0].delta.content)
+            console.log(b.parse_stream.TellMeAStory(llmResponse.join('')))
+        }
+    }
+}
+```
+
+</TabItem>
+</Tabs>
+
+## See Also
+
+- [with_options](/reference/generated-client/with-options) - Configure client options
+- [Collector](/reference/generated-client/collector) - Track function calls
+- [AbortSignal](/reference/generated-client/abort-signal) - Cancel operations

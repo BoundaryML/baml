@@ -1,0 +1,388 @@
+---
+sidebar_position: 10
+sidebar_label: Media Types
+title: Image / Audio / PDF / Video
+description: Handle multimodal inputs in BAML functions
+---
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+# Media Types
+
+BAML functions can accept image, audio, PDF, and video inputs for multimodal processing. Create media objects from URLs, base64 data, or browser-specific sources.
+
+## Overview
+
+| Type | Use Case |
+|------|----------|
+| `Image` | Image analysis, OCR, visual question answering |
+| `Audio` | Transcription, audio analysis |
+| `Pdf` | Document analysis, extraction |
+| `Video` | Video understanding (Google, Vertex, Bedrock only) |
+
+## Image
+
+<Tabs>
+<TabItem value="python" label="Python">
+
+```python
+from baml_py import Image
+from baml_client import b
+
+# From URL
+img = Image.from_url("https://example.com/image.png")
+res = await b.AnalyzeImage(img=img)
+
+# From Base64
+img = Image.from_base64("image/png", "iVB0xyz...")
+res = await b.AnalyzeImage(img=img)
+```
+
+</TabItem>
+<TabItem value="typescript" label="TypeScript">
+
+```typescript
+import { b } from '../baml_client'
+import { Image } from "@boundaryml/baml"
+
+// From URL
+let res = await b.AnalyzeImage(
+    Image.fromUrl('https://example.com/image.png')
+)
+
+// From Base64
+res = await b.AnalyzeImage(
+    Image.fromBase64('image/png', 'iVB0xyz...')
+)
+
+// Browser-specific
+const fileImage = await Image.fromFile(file)
+const blobImage = await Image.fromBlob(blob, 'image/png')
+```
+
+</TabItem>
+<TabItem value="go" label="Go">
+
+```go
+import b "example.com/myproject/baml_client"
+
+// From URL
+img, _ := b.NewImageFromUrl("https://example.com/image.png", nil)
+result, _ := b.AnalyzeImage(ctx, img)
+
+// From Base64
+img2, _ := b.NewImageFromBase64("iVB0xyz...", stringPtr("image/png"))
+result2, _ := b.AnalyzeImage(ctx, img2)
+```
+
+</TabItem>
+</Tabs>
+
+### Image API
+
+| Method | Type | Description |
+|--------|------|-------------|
+| `from_url(url, media_type?)` | Static | Create from URL |
+| `from_base64(media_type, base64)` | Static | Create from Base64 |
+| `fromFile(file)` | Static (Browser) | Create from File object |
+| `fromBlob(blob, media_type?)` | Static (Browser) | Create from Blob |
+| `is_url()` | Instance | Check if stored as URL |
+| `as_url()` | Instance | Get URL (throws if not URL) |
+| `as_base64()` | Instance | Get [base64, media_type] |
+
+## Audio
+
+<Tabs>
+<TabItem value="python" label="Python">
+
+```python
+from baml_py import Audio
+from baml_client import b
+
+# From URL
+audio = Audio.from_url("https://example.com/audio.ogg")
+res = await b.TranscribeAudio(audio=audio)
+
+# From Base64
+audio = Audio.from_base64("audio/ogg", "iVB0xyz...")
+res = await b.TranscribeAudio(audio=audio)
+```
+
+</TabItem>
+<TabItem value="typescript" label="TypeScript">
+
+```typescript
+import { b } from '../baml_client'
+import { Audio } from "@boundaryml/baml"
+
+// From URL
+let res = await b.TranscribeAudio(
+    Audio.fromUrl('https://example.com/audio.ogg')
+)
+
+// From Base64
+res = await b.TranscribeAudio(
+    Audio.fromBase64('audio/ogg', 'iVB0xyz...')
+)
+
+// Browser-specific
+const fileAudio = await Audio.fromFile(file)
+const blobAudio = await Audio.fromBlob(blob, 'audio/ogg')
+```
+
+</TabItem>
+<TabItem value="go" label="Go">
+
+```go
+// From URL
+aud, _ := b.NewAudioFromUrl("https://example.com/audio.ogg", nil)
+result, _ := b.TranscribeAudio(ctx, aud)
+
+// From Base64
+aud2, _ := b.NewAudioFromBase64("base64data...", stringPtr("audio/mp3"))
+result2, _ := b.TranscribeAudio(ctx, aud2)
+```
+
+</TabItem>
+</Tabs>
+
+### Audio API
+
+| Method | Type | Description |
+|--------|------|-------------|
+| `from_url(url, media_type?)` | Static | Create from URL |
+| `from_base64(media_type, base64)` | Static | Create from Base64 |
+| `fromFile(file)` | Static (Browser) | Create from File object |
+| `fromBlob(blob, media_type?)` | Static (Browser) | Create from Blob |
+| `is_url()` | Instance | Check if stored as URL |
+| `as_url()` | Instance | Get URL (throws if not URL) |
+| `as_base64()` | Instance | Get [base64, media_type] |
+
+## PDF
+
+:::warning
+Some models require PDFs in the `user` message, not `system`. Many websites block direct PDF fetching.
+:::
+
+<Tabs>
+<TabItem value="python" label="Python">
+
+```python
+from baml_py import Pdf
+from baml_client import b
+
+# From URL
+pdf = Pdf.from_url("https://example.com/document.pdf")
+res = await b.AnalyzePdf(pdf=pdf)
+
+# From Base64
+pdf = Pdf.from_base64("JVBERi0K...")
+res = await b.AnalyzePdf(pdf=pdf)
+```
+
+</TabItem>
+<TabItem value="typescript" label="TypeScript">
+
+```typescript
+import { b } from '../baml_client'
+import { Pdf } from "@boundaryml/baml"
+
+// From URL
+const pdfUrl = Pdf.fromUrl('https://example.com/document.pdf')
+const res1 = await b.AnalyzePdf(pdfUrl)
+
+// From Base64
+const res2 = await b.AnalyzePdf(
+    Pdf.fromBase64('JVBERi0K...')
+)
+
+// Browser-specific
+const filePdf = await Pdf.fromFile(file)
+const blobPdf = await Pdf.fromBlob(blob)
+```
+
+</TabItem>
+<TabItem value="go" label="Go">
+
+```go
+// From URL
+pdf, _ := b.NewPDFFromUrl("https://example.com/document.pdf", nil)
+result, _ := b.AnalyzePdf(ctx, pdf)
+
+// From Base64
+pdf2, _ := b.NewPDFFromBase64("JVBERi0K...", nil)
+result2, _ := b.AnalyzePdf(ctx, pdf2)
+```
+
+</TabItem>
+</Tabs>
+
+### Testing PDFs in Playground
+
+```baml
+function AnalyzePdf(myPdf: pdf) -> string {
+  client GPT4o
+  prompt #"
+    Summarize this PDF: {{myPdf}}
+  "#
+}
+
+test PdfFileTest {
+  functions [AnalyzePdf]
+  args {
+    myPdf {
+      file "../documents/report.pdf"
+    }
+  }
+}
+```
+
+### PDF API
+
+| Method | Type | Description |
+|--------|------|-------------|
+| `from_url(url)` | Static | Create from URL |
+| `from_base64(base64)` | Static | Create from Base64 |
+| `fromFile(file)` | Static (Browser) | Create from File object |
+| `fromBlob(blob)` | Static (Browser) | Create from Blob |
+| `is_url()` | Instance | Check if stored as URL |
+| `as_url()` | Instance | Get URL (throws if not URL) |
+| `as_base64()` | Instance | Get [base64, media_type] |
+
+## Video
+
+:::warning
+Direct video input is only supported by Google Gemini, Google Vertex AI, and AWS Bedrock. Other providers require frame extraction or transcripts.
+:::
+
+<Tabs>
+<TabItem value="python" label="Python">
+
+```python
+from baml_py import Video
+from baml_client import b
+
+# From URL
+video = Video.from_url("https://example.com/video.mp4")
+res = await b.AnalyzeVideo(video=video)
+
+# From Base64
+video = Video.from_base64("video/mp4", "AAAAGGZ0eXBpc29t...")
+res = await b.AnalyzeVideo(video=video)
+
+# S3 for AWS Bedrock
+bedrock_video = Video.from_url(
+    "s3://bucket/path/video.mp4", media_type="video/mp4"
+)
+res = await b.TestAwsVideoDescribe(video_input=bedrock_video)
+```
+
+</TabItem>
+<TabItem value="typescript" label="TypeScript">
+
+```typescript
+import { b } from '../baml_client'
+import { Video } from "@boundaryml/baml"
+
+// From URL
+let res = await b.AnalyzeVideo(
+    Video.fromUrl('https://example.com/video.mp4')
+)
+
+// From Base64
+res = await b.AnalyzeVideo(
+    Video.fromBase64('video/mp4', 'AAAAGGZ0eXBpc29t...')
+)
+
+// S3 for AWS Bedrock
+const bedrockVideo = Video.fromUrl(
+    's3://bucket/path/video.mp4',
+    'video/mp4'
+)
+
+// Browser-specific
+const fileVideo = await Video.fromFile(file)
+const blobVideo = await Video.fromBlob(blob, 'video/mp4')
+```
+
+</TabItem>
+</Tabs>
+
+### Video API
+
+| Method | Type | Description |
+|--------|------|-------------|
+| `from_url(url, media_type?)` | Static | Create from URL |
+| `from_base64(media_type, base64)` | Static | Create from Base64 |
+| `fromFile(file)` | Static (Browser) | Create from File object |
+| `fromBlob(blob, media_type?)` | Static (Browser) | Create from Blob |
+| `is_url()` | Instance | Check if stored as URL |
+| `as_url()` | Instance | Get URL (throws if not URL) |
+| `as_base64()` | Instance | Get [base64, media_type] |
+
+## URL Handling
+
+BAML automatically handles URL-to-base64 conversion based on provider requirements. Configure via `media_url_handler` in client options.
+
+### Default Behavior by Provider
+
+| Provider | Image | Audio | PDF | Video |
+|----------|-------|-------|-----|-------|
+| OpenAI | `send_url` | `send_base64` | `send_url` | `send_url` |
+| Anthropic | `send_url` | `send_url` | `send_base64` | `send_url` |
+| Google AI | `send_base64_unless_google_url` | `send_url` | `send_url` | `send_url` |
+| Vertex AI | `send_url_add_mime_type` | `send_url_add_mime_type` | `send_url` | `send_url` |
+| AWS Bedrock | `send_base64` | `send_base64` | `send_base64` | `send_url` |
+
+### Custom Configuration
+
+```baml
+client<llm> MyClient {
+  provider openai
+  options {
+    model "gpt-4o"
+    api_key env.OPENAI_API_KEY
+    media_url_handler {
+      image "send_base64"
+      audio "send_url"
+      pdf "send_base64"
+      video "send_url"
+    }
+  }
+}
+```
+
+### Available Modes
+
+- `send_base64` - Fetch and convert to base64
+- `send_url` - Keep URL as-is
+- `send_url_add_mime_type` - Keep URL, add MIME type info
+- `send_base64_unless_google_url` - Keep `gs://` URLs, convert others
+
+## Model Compatibility
+
+### PDF Support
+
+| Provider | Support | Notes |
+|----------|---------|-------|
+| Anthropic | Yes | URL or base64 |
+| AWS Bedrock | Yes | Base64 or S3 URI only |
+| Google Gemini | Yes | Base64 or file upload |
+| OpenAI | Yes | Base64 only (since March 2025) |
+| Vertex AI | Yes | Base64 or `gs://` URI |
+
+### Video Support
+
+| Provider | Support | Notes |
+|----------|---------|-------|
+| Anthropic | No | Use frame extraction |
+| AWS Bedrock | Yes | Base64 or S3 URI |
+| Google Gemini | Yes | Base64, file upload, or YouTube URL |
+| OpenAI | No | Use frame extraction |
+| Vertex AI | Yes | `gs://` URI, HTTP URL, YouTube, or base64 |
+
+## See Also
+
+- [Types: Multimodal](/reference/types/multimodal) - BAML multimodal type definitions
+- [Client Configuration](/reference/clients/overview) - Configure media handling

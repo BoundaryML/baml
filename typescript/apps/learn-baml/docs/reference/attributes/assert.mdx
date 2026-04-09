@@ -1,0 +1,91 @@
+---
+sidebar_position: 7
+sidebar_label: "@assert"
+title: "@assert Attribute"
+description: Reference for the BAML @assert attribute for strict validations
+---
+
+# @assert
+
+The `@assert` attribute provides strict validation. Failed assertions raise exceptions and exclude values from responses.
+
+## Field Assertion
+
+### Named Assert
+
+```baml
+class Foo {
+    bar int @assert(between_0_and_10, {{ this > 0 and this < 10 }})
+}
+```
+
+### Unnamed Assert
+
+```baml
+class Foo {
+    bar int @assert({{ this > 0 and this < 10 }})
+}
+```
+
+### Array Element Assert
+
+```baml
+class MyClass {
+    my_field (string @assert(is_valid_email, {{ this|regex_match("@") }}))[]
+}
+```
+
+## Parameter Assertion
+
+```baml
+function MyFunction(x: int @assert(between_0_and_10, {{ this > 0 and this < 10 }})) -> string {
+    client "openai/gpt-4o"
+    prompt #"Hello, world!"#
+}
+```
+
+## Block Assertion
+
+```baml
+class Foo {
+    bar int
+    baz string
+    @@assert(baz_length_limit, {{ this.baz|length < this.bar }})
+}
+```
+
+## Syntax
+
+```baml
+@assert(name, {{ jinja_expression }})
+@assert({{ jinja_expression }})  // unnamed
+```
+
+## Behavior
+
+- Failed assertions raise exceptions
+- Invalid values excluded from response
+- Multiple assertions can be stacked
+
+## The `this` Keyword
+
+- In field attributes: `this` refers to the field value
+- In block attributes: `this` refers to the entire object
+
+## Example
+
+```baml
+class Student {
+    first_name string @assert({{ this|length > 0 }})
+    last_name string @assert({{ this|length > 0 }})
+    age int @check(old_enough, {{ this > 5 }})
+    concentration string @assert({{ this|regex_match("[Math|Science]") }})
+    @@check(age_threshold, {{ this.concentration != "calculus" or this.age > 12 }})
+}
+```
+
+## See Also
+
+- [@check](/reference/attributes/check)
+- [Jinja in Attributes](/reference/attributes/jinja-in-attributes)
+- [Attributes Overview](/reference/attributes/overview)

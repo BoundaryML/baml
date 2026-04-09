@@ -1,0 +1,45 @@
+---
+sidebar_position: 18
+sidebar_label: vLLM
+title: vLLM Provider
+description: Reference for configuring vLLM LLM clients in BAML
+---
+
+# vLLM
+
+[vLLM](https://docs.vllm.ai/) is a high-performance LLM serving engine with OpenAI-compatible API.
+
+## Basic Example
+
+```baml
+client<llm> MyClient {
+    provider "openai-generic"
+    options {
+        base_url "http://localhost:8000/v1"
+        api_key "token-abc123"
+        model "NousResearch/Meta-Llama-3-8B-Instruct"
+        default_role "user"
+    }
+}
+```
+
+:::warning
+`default_role "user"` is required for vLLM compatibility.
+:::
+
+## BAML-Specific Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `base_url` | string | - | vLLM server URL |
+| `api_key` | string | - | API token |
+| `model` | string | - | Model identifier |
+| `default_role` | string | - | Must be `"user"` for vLLM |
+
+See [vLLM OpenAI-compatible server](https://docs.vllm.ai/en/latest/serving/openai_compatible_server.html) for more information.
+
+## See Also
+
+- [OpenAI Generic](/reference/clients/providers/openai-generic)
+- [Ollama](/reference/clients/providers/ollama)
+- [Client Overview](/reference/clients/overview)

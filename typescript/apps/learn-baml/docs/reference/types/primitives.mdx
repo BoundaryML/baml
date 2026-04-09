@@ -1,0 +1,136 @@
+---
+sidebar_position: 2
+sidebar_label: Primitives
+title: Primitive Types
+description: Reference for BAML primitive types - string, int, float, bool, null
+---
+
+# Primitive Types
+
+BAML supports five primitive types for basic data representation.
+
+## Overview
+
+| Type | Description | Example Values |
+|------|-------------|----------------|
+| `string` | Text data | `"hello"`, `"world"` |
+| `int` | Integer numbers | `1`, `-5`, `100` |
+| `float` | Floating point numbers | `3.14`, `-0.5`, `1.0` |
+| `bool` | Boolean values | `true`, `false` |
+| `null` | Absence of value | `null` |
+
+## String
+
+BAML supports three string formats:
+
+### Quoted Strings (Inline)
+
+Standard double-quoted strings for simple values:
+
+```baml
+"Hello World"
+"\n"  // escape sequences supported
+```
+
+### Unquoted Strings
+
+Simple strings without quotes (for configuration values):
+
+```baml
+Hello World
+```
+
+:::warning
+Unquoted strings cannot contain: `"`, `'`, `@`, `{}`, `#`, `()`, `[]`, `,`, or newlines.
+:::
+
+### Block Strings
+
+Multi-line strings with Jinja templating support:
+
+```baml
+#"
+Hello
+World
+"#
+```
+
+Block strings are automatically dedented and support Jinja syntax:
+
+```baml
+template_string Greeting(name: string) #"
+  Hello {{ name }}!
+"#
+```
+
+To include `"#` in a block string, use more `#` characters:
+
+```baml
+###"
+  #"Hello"#
+"###
+```
+
+## Int and Float
+
+Numerical types for integer and decimal values.
+
+```baml
+function DescribeCircle(radius: int | float, pi: float?) -> string {
+    client "openai/gpt-4o-mini"
+    prompt #"
+        Describe a circle with radius {{ radius }}.
+        Use pi as {{ pi or 3.14159 }}.
+    "#
+}
+
+test IntRadius {
+    functions [DescribeCircle]
+    args { radius 5 }  // cast to int
+}
+
+test FloatRadius {
+    functions [DescribeCircle]
+    args {
+        radius 5.0   // cast to float
+        pi 3.14
+    }
+}
+```
+
+:::tip
+BAML supports implicit casting from `int` to `float`. Use `0.0` instead of `0` to explicitly specify a float.
+:::
+
+## Bool
+
+Boolean type for true/false values.
+
+```baml
+function CreateStory(long: bool) -> string {
+    client "openai/gpt-4o-mini"
+    prompt #"
+        Write a story that is {{ "10 paragraphs" if long else "1 paragraph" }} long.
+    "#
+}
+
+test LongStory {
+    functions [CreateStory]
+    args { long true }
+}
+
+test ShortStory {
+    functions [CreateStory]
+    args { long false }
+}
+```
+
+## Null
+
+Represents absence of a value. Typically used with optional types (`Type?`).
+
+## See Also
+
+- [Types Overview](/reference/types/overview)
+- [Optional Types](/reference/types/optionals)
+- [Literal Types](/reference/types/literals)

@@ -1,0 +1,184 @@
+---
+sidebar_position: 5
+sidebar_label: Vertex AI
+title: Vertex AI Provider
+description: Reference for configuring Google Vertex AI LLM clients in BAML
+---
+
+# Vertex AI
+
+The `vertex-ai` provider supports Google Vertex AI services, including Gemini and Anthropic models.
+
+:::tip
+As of BAML 0.85.0, `vertex-ai` supports Anthropic models.
+:::
+
+## Quick Start (Express Mode)
+
+```baml
+client<llm> MyClient {
+    provider vertex-ai
+    options {
+        model gemini-2.5-pro
+        location us-central1
+        project_id my-project-id
+        query_params {
+            key env.VERTEX_API_KEY
+        }
+    }
+}
+```
+
+## Authentication
+
+### Vertex API Key (Express Mode)
+
+The quickest way to get started:
+
+```baml
+client<llm> VertexApiKeyClient {
+    provider vertex-ai
+    options {
+        model gemini-2.5-pro
+        location us-central1
+        project_id my-project-id
+        query_params {
+            key env.VERTEX_API_KEY
+        }
+    }
+}
+```
+
+See [Google's Express Mode guide](https://cloud.google.com/vertex-ai/generative-ai/docs/start/api-keys) for setup.
+
+### Google Application Credentials
+
+For service account authentication:
+
+```baml
+client<llm> MyClient {
+    provider vertex-ai
+    options {
+        model gemini-2.5-pro
+        location us-central1
+        project_id my-project-id
+        credentials env.MY_APPLICATION_CREDENTIALS_CONTENT
+    }
+}
+```
+
+BAML tries authentication in this order:
+1. `GOOGLE_APPLICATION_CREDENTIALS` environment variable
+2. `gcloud auth application-default login` credentials
+3. GCP metadata server (when running in GCP)
+4. `gcloud auth print-access-token` command
+
+## BAML-Specific Options
+
+| Option | Type | Required | Default | Description |
+|--------|------|----------|---------|-------------|
+| `model` | string | Yes | - | Model identifier |
+| `location` | string | Yes | - | GCP region |
+| `project_id` | string | No | From credentials | GCP project ID |
+| `base_url` | string | No | Auto-generated | Custom API URL |
+| `credentials` | string/object | No | Auto-detected | Service account credentials |
+| `headers` | object | No | - | Additional headers |
+| `query_params` | object | No | - | Query parameters |
+
+## Available Models
+
+| Model | Input | Optimized For |
+|-------|-------|---------------|
+| `gemini-2.5-pro` | Audio, images, video, text | Complex reasoning, code generation |
+| `gemini-2.5-flash` | Audio, images, video, text | Fast, versatile performance |
+| `gemini-1.0-pro` | Text | Multi-turn chat, code generation |
+
+## Configuration Examples
+
+### With Safety Settings
+
+```baml
+client<llm> MyClient {
+    provider vertex-ai
+    options {
+        model gemini-2.5-pro
+        project_id my-project-id
+        location us-central1
+        safetySettings {
+            category HARM_CATEGORY_HATE_SPEECH
+            threshold BLOCK_LOW_AND_ABOVE
+            method SEVERITY
+        }
+    }
+}
+```
+
+### With Generation Config
+
+```baml
+client<llm> MyClient {
+    provider vertex-ai
+    options {
+        model gemini-2.5-pro
+        project_id my-project-id
+        location us-central1
+        generationConfig {
+            maxOutputTokens 100
+            temperature 1
+        }
+    }
+}
+```
+
+### Anthropic Models on Vertex
+
+```baml
+client<llm> VertexClaudeSonnet {
+    provider vertex-ai
+    options {
+        model "claude-sonnet-4"
+        anthropic_version "${ANTHROPIC_VERSION}"
+        base_url "https://${LOCATION}-aiplatform.googleapis.com/v1/projects/${PROJECT_ID}/locations/${LOCATION}/publishers/anthropic/models"
+    }
+}
+```
+
+## Troubleshooting
+
+<details>
+<summary>Model not found errors</summary>
+
+Try setting `location: global`:
+
+```baml
+client<llm> MyClient {
+    provider vertex-ai
+    options {
+        model gemini-2.5-pro
+        location global
+        project_id my-project-id
+    }
+}
+```
+
+Some models are only available in specific regions or through the global endpoint.
+</details>
+
+<details>
+<summary>Authentication issues</summary>
+
+Set `BAML_INTERNAL_LOG=debug` to see detailed authentication logs.
+
+For local development:
+```bash
+gcloud auth application-default login
+```
+
+Set `GOOGLE_CLOUD_PROJECT` in the playground "API Keys" dialog.
+</details>
+
+## See Also
+
+- [Google AI](/reference/clients/providers/google-ai)
+- [AWS Bedrock](/reference/clients/providers/aws-bedrock)
+- [Client Overview](/reference/clients/overview)

@@ -1,0 +1,105 @@
+---
+sidebar_position: 1
+sidebar_label: Jinja Overview
+title: Jinja Templating
+description: Overview of Jinja templating syntax used in BAML prompts
+---
+
+# Jinja Templating
+
+BAML prompts use [Minijinja](https://docs.rs/minijinja/latest/minijinja/filters/index.html#functions) templates for dynamic content generation. Jinja is a mature templating language popular with Python developers.
+
+:::tip
+Use the BAML VSCode Playground preview to see the fully rendered prompt, including complex logic.
+:::
+
+## Basic Syntax
+
+| Syntax | Purpose |
+|--------|---------|
+| `{% ... %}` | Execute statements (loops, conditionals) |
+| `{{ ... }}` | Output expressions or variables |
+| `{# ... #}` | Comments (not rendered) |
+
+## Quick Examples
+
+### Variable Output
+
+```jinja
+{{ user.name }}
+{{ items|length }}
+```
+
+### Conditional Statements
+
+```baml
+function MyFunc(user: User) -> string {
+    prompt #"
+        {% if user.is_active %}
+            Welcome back, {{ user.name }}!
+        {% else %}
+            Please activate your account.
+        {% endif %}
+    "#
+}
+```
+
+### Loops
+
+```baml
+function MyFunc(messages: Message[]) -> string {
+    prompt #"
+        {% for message in messages %}
+            {{ message.user_name }}: {{ message.content }}
+        {% endfor %}
+    "#
+}
+```
+
+### Setting Variables
+
+```baml
+function MyFunc(items: Item[]) -> string {
+    prompt #"
+        {% set total_price = 0 %}
+        {% for item in items %}
+            {% set total_price = total_price + item.price %}
+        {% endfor %}
+        Total price: {{ total_price }}
+    "#
+}
+```
+
+### Including Templates
+
+```baml
+template_string PrintUserInfo(arg1: string, arg2: User) #"
+    {{ arg1 }}
+    The user's name is: {{ arg2.name }}
+"#
+
+function MyFunc(arg1: string, user: User) -> string {
+    prompt #"
+        Here is the user info:
+        {{ PrintUserInfo(arg1, user) }}
+    "#
+}
+```
+
+## Special BAML Variables
+
+| Variable | Description |
+|----------|-------------|
+| `ctx.output_format` | Auto-generated output schema |
+| `ctx.client` | Current client/model info |
+| `_.role()` | Set message role |
+
+## See Also
+
+- [Variables](/reference/prompt-syntax/variables)
+- [Conditionals](/reference/prompt-syntax/conditionals)
+- [Loops](/reference/prompt-syntax/loops)
+- [Filters](/reference/prompt-syntax/filters)
+- [Roles](/reference/prompt-syntax/roles)
+- [Output Format](/reference/prompt-syntax/output-format)
+- [ctx.client](/reference/prompt-syntax/ctx-client)

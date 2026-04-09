@@ -1,0 +1,64 @@
+---
+sidebar_position: 2
+sidebar_label: generate
+title: baml-cli generate
+description: Generate BAML clients from source files
+---
+
+# baml-cli generate
+
+Generate BAML clients based on your source files and generator configurations.
+
+## Usage
+
+```bash
+baml-cli generate [OPTIONS]
+```
+
+## Options
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--from <PATH>` | Path to `baml_src` directory | `./baml_src` |
+| `--no-version-check` | Skip CLI version mismatch check | `false` |
+| `--no-tests` | Strip test blocks from generated client | `false` |
+
+## Description
+
+The `generate` command:
+
+1. Finds all generators in the BAML project (usually in `generators.baml`)
+2. Ensures all generators match the CLI version
+3. Generates each `baml_client` based on configurations
+
+## Examples
+
+```bash
+# Generate with defaults
+baml-cli generate
+
+# Generate from specific directory
+baml-cli generate --from /path/to/my/baml_src
+
+# Generate without version check
+baml-cli generate --no-version-check
+
+# Generate without test blocks (smaller output)
+baml-cli generate --no-tests
+```
+
+## Output
+
+- Reports number of clients generated and locations
+- Suggests configuration if no generators found
+- Stops and reports errors if a generator fails
+
+## Notes
+
+- `--no-tests` is useful for production builds to minimize bundle size
+- Test blocks are not needed at runtime
+
+## See Also
+
+- [baml-cli init](/reference/baml-cli/init)
+- [baml-cli test](/reference/baml-cli/test)

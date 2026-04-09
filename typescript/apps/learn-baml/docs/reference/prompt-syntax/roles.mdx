@@ -1,0 +1,118 @@
+---
+sidebar_position: 4
+sidebar_label: Roles
+title: "_.role"
+description: Reference for message role assignment in BAML prompts
+---
+
+# _.role
+
+BAML prompts compile into a `messages` array that LLM providers use:
+
+```
+BAML Prompt -> [{ role: "system", content: "..." }, { role: "user", content: "..." }]
+```
+
+By default, BAML puts everything into a single message with the `system` role (or the best default for the selected provider).
+
+## Syntax
+
+```jinja
+{{ _.role("system") }}
+{{ _.role("user") }}
+{{ _.role("assistant") }}
+```
+
+## Basic Example
+
+```baml
+function MyFunction(input: string) -> string {
+    client "openai/gpt-4o"
+    prompt #"
+        {{ _.role("system") }}
+        Everything after this will be a system prompt!
+
+        {{ _.role("user") }}
+        And everything after this will be a user message.
+        {{ input }}
+    "#
+}
+```
+
+:::tip
+The playground shows the current role for each message section.
+:::
+
+:::note
+BAML may change the default role to `user` for specific APIs that only support user prompts, like when using images.
+:::
+
+## Using in Loops
+
+Inject a list of messages with different roles:
+
+```baml
+class Message {
+    role string
+    message string
+}
+
+function ChatWithAgent(input: Message[]) -> string {
+    client "openai/gpt-4o"
+    prompt #"
+        {% for m in input %}
+            {{ _.role(m.role) }}
+            {{ m.message }}
+        {% endfor %}
+    "#
+}
+```
+
+Alternate roles based on index:
+
+```baml
+function ChatMessages(messages: string[]) -> string {
+    client "openai/gpt-4o"
+    prompt #"
+        {% for m in messages %}
+            {{ _.role("user" if loop.index % 2 == 1 else "assistant") }}
+            {{ m }}
+        {% endfor %}
+    "#
+}
+```
+
+## Using in Template Strings
+
+```baml
+template_string YouAreA(name: string, job: string) #"
+    {{ _.role("system") }}
+    You are an expert {{ name }}. {{ job }}
+
+    {{ ctx.output_format }}
+    {{ _.role("user") }}
+"#
+
+function CheckJobPosting(post: string) -> bool {
+    client "openai/gpt-4o"
+    prompt #"
+        {{ YouAreA("hr admin", "Your role is to ensure every job posting is bias free.") }}
+
+        {{ post }}
+    "#
+}
+```
+
+## Available Roles
+
+| Role | Description |
+|------|-------------|
+| `system` | System instructions |
+| `user` | User input |
+| `assistant` | AI response (for context) |
+
+## See Also
+
+- [Jinja Overview](/reference/prompt-syntax/jinja-overview)
+- [Template Strings](/reference/functions/prompts)
+- [Loops](/reference/prompt-syntax/loops)

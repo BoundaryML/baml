@@ -1,0 +1,95 @@
+---
+sidebar_position: 1
+sidebar_label: Overview
+title: Generated Client
+description: Reference for the BAML generated client SDK
+---
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+# Generated Client
+
+BAML generates both synchronous and asynchronous client SDKs for calling your BAML functions from Python, TypeScript, Go, and Ruby.
+
+## Basic Usage
+
+<Tabs>
+<TabItem value="python" label="Python">
+
+```python
+from baml_client import b
+from baml_client.async_client import b as async_b
+
+# Sync client
+result = b.MyFunction("input")
+
+# Async client
+result = await async_b.MyFunction("input")
+```
+
+</TabItem>
+<TabItem value="typescript" label="TypeScript">
+
+```typescript
+import { b } from 'baml_client'
+
+// All TypeScript clients are async
+const result = await b.MyFunction("input")
+```
+
+</TabItem>
+<TabItem value="go" label="Go">
+
+```go
+import b "example.com/myproject/baml_client"
+
+ctx := context.Background()
+result, err := b.MyFunction(ctx, "input")
+```
+
+</TabItem>
+<TabItem value="ruby" label="Ruby">
+
+```ruby
+require 'baml_client/client'
+
+result = Baml.Client.MyFunction(input: "input")
+```
+
+</TabItem>
+</Tabs>
+
+## Call Patterns
+
+The generated client provides several call patterns:
+
+| Pattern | Description |
+|---------|-------------|
+| `b.Function()` | Standard function call |
+| `b.stream.Function()` | Streaming response |
+| `b.request.Function()` | Get raw HTTP request without sending |
+| `b.stream_request.Function()` | Get streaming HTTP request |
+| `b.parse.Function()` | Parse raw LLM response |
+| `b.parse_stream.Function()` | Parse streaming response |
+
+## Configuration Options
+
+Pass options to customize function calls:
+
+| Option | Description |
+|--------|-------------|
+| `client` | Override the LLM client |
+| `collector` | Track usage and logs |
+| `client_registry` | Use custom client registry |
+| `type_builder` | Dynamic type modifications |
+| `tags` | Attach metadata to calls |
+| `abort_controller` | Cancel in-flight requests |
+| `on_tick` | Real-time progress callbacks |
+
+## Related Topics
+
+- [with_options](/reference/generated-client/with-options) - Configure default options
+- [Collector](/reference/generated-client/collector) - Track function calls and usage
+- [TypeBuilder](/reference/generated-client/typebuilder) - Dynamic type modifications
+- [Async/Sync Client](/reference/generated-client/async-sync-client) - Client variations

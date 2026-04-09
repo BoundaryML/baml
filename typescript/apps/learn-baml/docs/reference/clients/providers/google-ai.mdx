@@ -1,0 +1,83 @@
+---
+sidebar_position: 4
+sidebar_label: Google AI
+title: Google AI Provider
+description: Reference for configuring Google Gemini LLM clients in BAML
+---
+
+# Google AI
+
+The `google-ai` provider supports Google's Gemini models via the Generative Language API.
+
+:::tip
+BAML automatically selects `streamGenerateContent` when using the streaming interface.
+:::
+
+## Basic Example
+
+```baml
+client<llm> MyClient {
+    provider google-ai
+    options {
+        model "gemini-2.5-flash"
+    }
+}
+```
+
+## BAML-Specific Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `api_key` | string | `env.GOOGLE_API_KEY` | API key |
+| `base_url` | string | `https://generativelanguage.googleapis.com/v1beta` | Base URL |
+| `model` | string | `gemini-2.5-flash` | Model identifier |
+| `headers` | object | - | Additional headers |
+
+## Available Models
+
+| Model | Use Case | Context | Features |
+|-------|----------|---------|----------|
+| `gemini-2.5-pro` | Complex tasks, coding, STEM | 1M | Adaptive thinking, multimodal |
+| `gemini-2.5-flash` | Production apps, balanced | 1M | Best price/performance |
+| `gemini-2.5-flash-lite` | High-volume, cost-sensitive | 1M | Lowest cost, fastest |
+
+See the [Google Model Docs](https://ai.google.dev/gemini-api/docs/models/gemini) for the latest models.
+
+## Configuration Example
+
+:::tip
+Parameters like `temperature` for Gemini models are specified in the `generationConfig` object.
+:::
+
+```baml
+client<llm> MyClient {
+    provider google-ai
+    options {
+        model "gemini-2.5-flash"
+        headers {
+            "X-My-Header" "my-value"
+        }
+        generationConfig {
+            temperature 0.5
+        }
+    }
+}
+```
+
+## Provider Parameters
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `generationConfig` | object | Generation settings (temperature, maxOutputTokens, etc.) |
+| `safetySettings` | array | Safety filter configuration |
+
+:::note
+Google AI uses `send_base64_unless_google_url` by default for images, preserving Google Cloud Storage URLs (gs://) while converting other URLs to base64.
+:::
+
+See the [Google Gemini API documentation](https://ai.google.dev/api/rest/v1beta/models/generateContent) for all options.
+
+## See Also
+
+- [Vertex AI](/reference/clients/providers/vertex) (for enterprise Google Cloud)
+- [Client Overview](/reference/clients/overview)

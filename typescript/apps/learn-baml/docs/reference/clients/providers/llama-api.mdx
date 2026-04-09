@@ -1,0 +1,44 @@
+---
+sidebar_position: 20
+sidebar_label: Llama API
+title: Llama API Provider
+description: Reference for configuring Meta Llama API clients in BAML
+---
+
+# Llama API
+
+[Llama API](https://llama.developer.meta.com/docs) is Meta's official API for Llama models.
+
+:::tip
+Use Llama's OpenAI-compatible `/compat/v1` endpoint. See [Llama's compatibility documentation](https://llama.developer.meta.com/docs/features/compatibility).
+:::
+
+## Basic Example
+
+```baml
+client<llm> LlamaAPI {
+    provider openai-generic
+    retry_policy Exponential
+    options {
+        base_url "https://llama-api.meta.com/compat/v1"
+        model "Llama-3.3-8B-Instruct"
+        api_key env.LLAMA_API_KEY
+    }
+}
+```
+
+## BAML-Specific Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `base_url` | string | - | `https://llama-api.meta.com/compat/v1` |
+| `api_key` | string | `env.LLAMA_API_KEY` | API key |
+| `model` | string | - | Model identifier |
+
+See [OpenAI Generic](/reference/clients/providers/openai-generic) for all supported options.
+
+## See Also
+
+- [OpenAI Generic](/reference/clients/providers/openai-generic)
+- [Together AI](/reference/clients/providers/together)
+- [Client Overview](/reference/clients/overview)

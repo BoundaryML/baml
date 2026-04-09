@@ -1,0 +1,57 @@
+---
+sidebar_position: 2
+sidebar_label: Switch Providers
+title: How to Switch Providers
+description: Change LLM providers without modifying your functions
+---
+
+# How to Switch Providers
+
+BAML separates function definitions from client configuration, making it easy to switch providers.
+
+## The Problem
+
+Hardcoding providers makes it difficult to:
+- Test with different models
+- Switch providers based on environment
+- A/B test model performance
+
+## Solution: Environment-Based Clients
+
+```baml
+// Define multiple clients
+client<llm> OpenAIClient {
+  provider openai
+  model gpt-4
+}
+
+client<llm> AnthropicClient {
+  provider anthropic
+  model claude-3-opus
+}
+
+// Use environment variable to select
+client<llm> DefaultClient {
+  provider env.LLM_PROVIDER  // "openai" or "anthropic"
+  model env.LLM_MODEL
+}
+```
+
+## Runtime Selection
+
+In your application code:
+
+```typescript
+import { b } from './baml_client';
+
+// Override client at runtime
+const result = await b.MyFunction(input, {
+  clientOverride: 'AnthropicClient'
+});
+```
+
+## See Also
+
+- [Add Fallbacks](/how-to/add-fallbacks) - Automatic failover between providers
+- [Getting Started](/tutorials/getting-started) - Initial BAML setup
+- [Type System](/concepts/type-system) - How BAML ensures consistent outputs across providers

@@ -1,0 +1,183 @@
+---
+sidebar_position: 8
+sidebar_label: Config
+title: Config (Logging / Environment Variables)
+description: Configure BAML logging and environment settings
+---
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+# Config
+
+Configure BAML logging and environment settings via environment variables or programmatic API.
+
+## Environment Variables
+
+| Setting | Environment Variable | Description | Default |
+|---------|---------------------|-------------|---------|
+| Logging Level | `BAML_LOG` | Log level: `INFO`, `DEBUG`, `TRACE`, `WARN`, `ERROR`, `OFF` | `INFO` |
+| JSON Mode | `BAML_LOG_JSON` | Log in JSON format: `1` or `0` | `0` |
+| Max Message Length | `BAML_LOG_MAX_MESSAGE_LENGTH` | Max prompt/response log size (`0` for no limit) | `64000` |
+| Color Mode | `BAML_LOG_COLOR_MODE` | Color output: `auto`, `always`, `never` | `auto` |
+
+## Programmatic API
+
+<Tabs>
+<TabItem value="python" label="Python">
+
+```python
+from baml_client.config import (
+    set_log_level,
+    set_log_json_mode,
+    set_log_max_message_length,
+    get_log_level,
+    reset_baml_env_vars
+)
+```
+
+### set_log_level
+
+```python
+def set_log_level(level: "INFO" | "DEBUG" | "TRACE" | "WARN" | "ERROR" | "OFF"):
+    ...
+```
+
+### set_log_json_mode
+
+Switches between JSON and human-readable format.
+
+```python
+def set_log_json_mode(enable: bool):
+    ...
+```
+
+### set_log_max_message_length
+
+Set `0` for unlimited.
+
+```python
+def set_log_max_message_length(length: int):
+    ...
+```
+
+### get_log_level
+
+```python
+def get_log_level() -> "INFO" | "DEBUG" | "TRACE" | "WARN" | "ERROR" | "OFF":
+    ...
+```
+
+### reset_baml_env_vars
+
+:::warning Deprecated
+`reset_baml_env_vars` is deprecated and safe to remove. Environment variables are now lazily loaded on each function call.
+:::
+
+```python
+def reset_baml_env_vars(env: Dict[str, str]):
+    ...
+```
+
+</TabItem>
+<TabItem value="typescript" label="TypeScript">
+
+```typescript
+import {
+    setLogLevel,
+    setLogJsonMode,
+    setLogMaxMessageLength,
+    getLogLevel,
+    resetBamlEnvVars
+} from '@/baml_client/config'
+```
+
+### setLogLevel
+
+```typescript
+setLogLevel(level: "INFO" | "DEBUG" | "TRACE" | "WARN" | "ERROR" | "OFF"): void
+```
+
+### setLogJsonMode
+
+Switches between JSON and human-readable format.
+
+```typescript
+setLogJsonMode(enable: boolean): void
+```
+
+### setLogMaxMessageLength
+
+Set `0` for unlimited.
+
+```typescript
+setLogMaxMessageLength(length: number): void
+```
+
+### getLogLevel
+
+```typescript
+getLogLevel(): "INFO" | "DEBUG" | "TRACE" | "WARN" | "ERROR" | "OFF"
+```
+
+### resetBamlEnvVars
+
+Resets environment variables to provided values.
+
+```typescript
+resetBamlEnvVars(env: Record<string, string | undefined>): void
+```
+
+</TabItem>
+<TabItem value="ruby" label="Ruby">
+
+```ruby
+# Not implemented yet
+# Please use environment variables instead
+```
+
+</TabItem>
+</Tabs>
+
+## Setting Environment Variables
+
+Environment variables can be set in your shell, `.env` file, or programmatically:
+
+```bash
+# Shell
+export BAML_LOG=DEBUG
+export BAML_LOG_JSON=1
+
+# .env file
+BAML_LOG=DEBUG
+BAML_LOG_JSON=1
+```
+
+Or pass environment variables via `with_options`:
+
+<Tabs>
+<TabItem value="python" label="Python">
+
+```python
+from baml_client import b
+
+my_b = b.with_options(env={"BAML_LOG": "DEBUG"})
+result = my_b.MyFunction("input")
+```
+
+</TabItem>
+<TabItem value="typescript" label="TypeScript">
+
+```typescript
+import { b } from "baml_client"
+
+const myB = b.withOptions({ env: { BAML_LOG: "DEBUG" } })
+const result = await myB.MyFunction("input")
+```
+
+</TabItem>
+</Tabs>
+
+## See Also
+
+- [with_options](/reference/generated-client/with-options) - Configure client options

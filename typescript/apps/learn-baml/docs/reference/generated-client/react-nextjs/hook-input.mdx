@@ -1,0 +1,89 @@
+---
+sidebar_position: 2
+sidebar_label: Hook Input
+title: Hook Input Type Reference
+description: BAML React hook input configuration
+---
+
+# Hook Input
+
+The `HookInput` type defines configuration options for BAML React hooks.
+
+## Usage
+
+```typescript
+function Component() {
+  const hook = useTestAws({
+    stream: true,
+    onStreamData: (text) => console.log("Streaming:", text),
+    onFinalData: (text) => console.log("Complete:", text),
+    onData: (text) => console.log("Any update:", text),
+    onError: (error) => console.error("Error:", error)
+  });
+
+  return <div>{hook.data}</div>;
+}
+```
+
+## Type Definition
+
+```typescript
+type HookInput<FunctionName, Options extends { stream?: boolean } = { stream?: true }> = {
+  stream?: Options['stream']
+  onStreamData?: Options['stream'] extends false
+    ? never
+    : (response?: StreamDataType<FunctionName>) => void
+  onFinalData?: (response?: FinalDataType<FunctionName>) => void
+  onData?: (response?: StreamDataType<FunctionName> | FinalDataType<FunctionName>) => void
+  onError?: (error: BamlErrors) => void
+}
+```
+
+## Type Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `FunctionName` | `generic` | BAML function name, used to infer response types |
+| `Options` | `{ stream?: boolean }` | Streaming behavior config. Defaults to `{ stream?: true }` |
+
+## Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `stream` | `boolean \| undefined` | Enable streaming mode. Default: `true` |
+| `onStreamData` | `(response?) => void` | Callback for streaming responses. Only available when `stream` is `true` |
+| `onFinalData` | `(response?) => void` | Callback for final response |
+| `onData` | `(response?) => void` | Unified callback for both streaming and final responses |
+| `onError` | `(error: BamlErrors) => void` | Callback for error handling |
+
+## Examples
+
+### Streaming Configuration
+
+```typescript
+const streamingInput: HookInput<'TestAws', { stream: true }> = {
+  stream: true,
+  onStreamData: (text) => console.log("Streaming:", text),
+  onFinalData: (text) => console.log("Final:", text),
+  onData: (text) => console.log("Any update:", text),
+  onError: (error) => console.error(error),
+};
+```
+
+### Non-Streaming Configuration
+
+```typescript
+const nonStreamingInput: HookInput<'TestAws', { stream: false }> = {
+  stream: false,
+  onFinalData: (text) => console.log("Result:", text),
+  onData: (text) => console.log("Result:", text),
+  onError: (error) => console.error(error)
+  // onStreamData is not available when stream is false
+};
+```
+
+## See Also
+
+- [Generated Hooks](./hooks) - Hooks overview
+- [Hook Output](./hook-output) - Output properties
+- [Error Types](/reference/generated-client/errors/overview)

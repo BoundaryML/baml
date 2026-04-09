@@ -1,0 +1,148 @@
+---
+sidebar_position: 1
+sidebar_label: Overview
+title: LLM Clients
+description: Reference for BAML client<llm> configuration and LLM providers
+---
+
+# LLM Clients
+
+Clients configure how LLMs are called in BAML functions.
+
+## Syntax Options
+
+### Shorthand Syntax
+
+Use `<provider>/<model>` format for quick configuration:
+
+```baml
+function MakeHaiku(topic: string) -> string {
+    client "openai/gpt-4o"
+    prompt #"
+        Write a haiku about {{ topic }}.
+    "#
+}
+```
+
+### Named Client
+
+Define reusable client configurations:
+
+```baml
+client<llm> MyClient {
+    provider "openai"
+    options {
+        model "gpt-4o"
+        // api_key defaults to env.OPENAI_API_KEY
+    }
+}
+
+function MakeHaiku(topic: string) -> string {
+    client MyClient
+    prompt #"
+        Write a haiku about {{ topic }}.
+    "#
+}
+```
+
+## Client Declaration
+
+### Syntax
+
+```baml
+client<llm> ClientName {
+    provider ProviderName
+    options {
+        // Provider-specific options
+    }
+    retry_policy PolicyName  // optional
+}
+```
+
+### Fields
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `provider` | Yes | LLM provider name |
+| `options` | Yes | Provider-specific configuration |
+| `retry_policy` | No | Name of retry policy to use |
+
+## Common Options
+
+Most providers support these options:
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `model` | `string` | Model identifier |
+| `api_key` | `string` | API key (defaults to env var) |
+| `base_url` | `string` | Custom API endpoint |
+| `temperature` | `float` | Sampling temperature |
+| `max_tokens` | `int` | Maximum response tokens |
+
+## Example Configurations
+
+### OpenAI
+
+```baml
+client<llm> GPT4 {
+    provider openai
+    options {
+        model "gpt-4o"
+        temperature 0.7
+    }
+}
+```
+
+### Anthropic
+
+```baml
+client<llm> Claude {
+    provider anthropic
+    options {
+        model "claude-sonnet-4-20250514"
+        max_tokens 4096
+    }
+}
+```
+
+### Custom Endpoint
+
+```baml
+client<llm> CustomLLM {
+    provider openai
+    options {
+        model "custom-model"
+        base_url "https://my-api.example.com/v1"
+        api_key env.CUSTOM_API_KEY
+    }
+}
+```
+
+## Runtime Client Selection
+
+Use the client registry to select clients at runtime:
+
+```python
+from baml_client import b
+from baml_client.sync_client import ClientRegistry
+
+# Create registry with custom client
+registry = ClientRegistry()
+registry.add_llm_client("MyClient", "openai", {
+    "model": "gpt-4o-mini",
+    "api_key": os.environ["OPENAI_API_KEY"]
+})
+
+# Use registry for function call
+result = b.MyFunction(input, baml_options={"client_registry": registry})
+```
+
+:::tip
+Runtime client selection is useful for A/B testing models or routing requests based on conditions.
+:::
+
+## See Also
+
+- [Providers](/reference/clients/providers/openai)
+- [Retry Policy](/reference/clients/strategies/retry)
+- [Fallback Strategy](/reference/clients/strategies/fallback)

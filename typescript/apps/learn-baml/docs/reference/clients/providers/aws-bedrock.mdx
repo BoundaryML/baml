@@ -1,0 +1,208 @@
+---
+sidebar_position: 6
+sidebar_label: AWS Bedrock
+title: AWS Bedrock Provider
+description: Reference for configuring AWS Bedrock LLM clients in BAML
+---
+
+# AWS Bedrock
+
+The `aws-bedrock` provider supports all text-output models via the [Converse API](https://docs.aws.amazon.com/bedrock/latest/userguide/conversation-inference.html).
+
+## Quick Start
+
+```baml
+client<llm> MyClient {
+    provider aws-bedrock
+    options {
+        model "anthropic.claude-3-sonnet-20240229-v1:0"
+        inference_configuration {
+            max_tokens 100
+            temperature 0.7
+        }
+    }
+}
+```
+
+## Authentication
+
+AWS Bedrock uses standard AWS authentication. BAML supports:
+
+### AWS Profile (Development)
+
+```ini
+# ~/.aws/config
+[default]
+sso_start_url = https://your-sso.awsapps.com/start
+sso_region = us-west-2
+sso_account_id = 123456789012
+sso_role_name = YourSSORole
+region = us-west-2
+```
+
+```baml
+client<llm> MyClient {
+    provider aws-bedrock
+    options {
+        profile "staging-profile"
+        model "anthropic.claude-3-sonnet-20240229-v1:0"
+    }
+}
+```
+
+### Environment Variables
+
+```bash
+export AWS_ACCESS_KEY_ID="your_key"
+export AWS_SECRET_ACCESS_KEY="your_secret"
+export AWS_REGION="us-east-1"
+```
+
+### Explicit Credentials
+
+```baml
+client<llm> MyClient {
+    provider aws-bedrock
+    options {
+        access_key_id env.AWS_ACCESS_KEY_ID
+        secret_access_key env.AWS_SECRET_ACCESS_KEY
+        region "us-east-1"
+        model "anthropic.claude-3-sonnet-20240229-v1:0"
+    }
+}
+```
+
+### AWS Services (Lambda/ECS/EC2)
+
+BAML automatically uses IAM roles in AWS environments:
+
+```baml
+client<llm> MyClient {
+    provider aws-bedrock
+    options {
+        region "us-east-1"
+        model "anthropic.claude-3-sonnet-20240229-v1:0"
+    }
+}
+```
+
+## BAML-Specific Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `region` | string | `env.AWS_REGION` | AWS region |
+| `access_key_id` | string | `env.AWS_ACCESS_KEY_ID` | Access key |
+| `secret_access_key` | string | `env.AWS_SECRET_ACCESS_KEY` | Secret key |
+| `session_token` | string | `env.AWS_SESSION_TOKEN` | Session token |
+| `profile` | string | `env.AWS_PROFILE` | AWS profile name |
+| `endpoint_url` | string | - | Custom endpoint (VPC) |
+
+## Available Models
+
+### Anthropic Claude
+- `anthropic.claude-opus-4-1-20250805-v1:0` - Most powerful
+- `anthropic.claude-sonnet-4-20250514-v1:0` - Best default, 1M context
+- `anthropic.claude-3-5-haiku-20241022-v1:0` - Fast and efficient
+
+### Meta Llama
+- `meta.llama4-maverick-17b-instruct-v1:0` - Latest Llama 4
+- `meta.llama3-3-70b-instruct-v1:0` - Enhanced Llama 3.3
+
+Run `aws bedrock list-foundation-models | jq '.modelSummaries.[].modelId'` to see all available models.
+
+:::note
+You must [request model access](https://docs.aws.amazon.com/bedrock/latest/userguide/model-access.html) before use.
+:::
+
+## Provider Parameters
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `model` | string | Model identifier (required) |
+| `inference_configuration` | object | Temperature, max_tokens, top_p |
+| `additional_model_request_fields` | object | Model-specific parameters |
+
+### Inference Configuration
+
+```baml
+client<llm> MyClient {
+    provider aws-bedrock
+    options {
+        model "anthropic.claude-3-sonnet-20240229-v1:0"
+        inference_configuration {
+            max_tokens 1000
+            temperature 1.0
+            top_p 0.8
+        }
+    }
+}
+```
+
+### Claude Thinking Models
+
+```baml
+client<llm> MyClient {
+    provider aws-bedrock
+    options {
+        model "anthropic.claude-3-sonnet-20240229-v1:0"
+        additional_model_request_fields {
+            thinking {
+                type "enabled"
+                budget_tokens 1030
+            }
+        }
+    }
+}
+```
+
+## IAM Permissions
+
+Required permissions:
+
+```json
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "bedrock:InvokeModel",
+                "bedrock:InvokeModelWithResponseStream"
+            ],
+            "Resource": "arn:aws:bedrock:*:*:model/*"
+        }
+    ]
+}
+```
+
+## Troubleshooting
+
+<details>
+<summary>AccessDeniedException</summary>
+
+- Check IAM permissions
+- Verify execution role in Lambda/ECS
+- Ensure credentials have Bedrock access
+</details>
+
+<details>
+<summary>Model not supported in Region</summary>
+
+- Check model availability in your region
+- Request model access if needed
+- Consider using a different region
+</details>
+
+<details>
+<summary>Account not authorized to use model</summary>
+
+- Request model access through AWS Console
+- Wait for approval (1-2 business days)
+- Verify model ID is correct
+</details>
+
+## See Also
+
+- [Vertex AI](/reference/clients/providers/vertex) (for GCP)
+- [Anthropic](/reference/clients/providers/anthropic) (direct API)
+- [Client Overview](/reference/clients/overview)

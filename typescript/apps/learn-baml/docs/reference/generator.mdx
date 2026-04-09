@@ -1,0 +1,182 @@
+---
+sidebar_position: 8
+sidebar_label: Generator
+title: Generator Block
+description: Configure code generation for your target language
+---
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+# Generator Block
+
+The `generator` block tells `baml-cli generate` how to generate code for your target language. You can define multiple generators to output code for different languages.
+
+:::tip
+If you created your project using `baml-cli init`, a generator has already been created for you.
+:::
+
+## Syntax
+
+```baml
+generator target {
+    output_type "<language>"
+    output_dir "<path>"
+    version "<version>"
+    // language-specific options...
+}
+```
+
+## Language Examples
+
+<Tabs>
+<TabItem value="python" label="Python">
+
+```baml
+generator target {
+    output_type "python/pydantic"
+
+    // Where the generated code will be saved (relative to baml_src/)
+    output_dir "../"
+
+    // What interface to export at top level (sync/async)
+    // Both are generated regardless
+    default_client_mode "sync"
+
+    // Version of runtime (should match installed baml-py version)
+    version "0.76.2"
+}
+```
+
+</TabItem>
+<TabItem value="python-v1" label="Python (Pydantic 1.x)">
+
+```baml
+generator target {
+    // Compatible with Pydantic 1.x
+    output_type "python/pydantic/v1"
+
+    output_dir "../"
+    default_client_mode "sync"
+    version "0.76.2"
+
+    // Optional: run formatters after generating
+    on_generate "black . && isort ."
+}
+```
+
+</TabItem>
+<TabItem value="typescript" label="TypeScript">
+
+```baml
+generator target {
+    output_type "typescript"
+
+    output_dir "../"
+    default_client_mode "async"
+
+    // Version (should match @boundaryml/baml package)
+    version "0.76.2"
+
+    // Module format: "esm" or "cjs" (default)
+    module_format "cjs"
+}
+```
+
+</TabItem>
+<TabItem value="react" label="React/Next.js">
+
+```baml
+generator target {
+    output_type "typescript/react"
+
+    output_dir "../"
+    default_client_mode "async"
+    version "0.76.2"
+    module_format "cjs"
+
+    // Optional: run formatters after generating
+    on_generate "prettier . --write"
+}
+```
+
+</TabItem>
+<TabItem value="go" label="Go">
+
+```baml
+generator target {
+    output_type "go"
+
+    output_dir "../"
+
+    // Version (should match github.com/boundaryml/baml)
+    version "0.205.0"
+
+    // Go module name for the generated client
+    client_package_name "example.com/myproject"
+
+    // Required for proper formatting
+    on_generate "gofmt -w . && goimports -w . && go mod tidy"
+}
+```
+
+</TabItem>
+<TabItem value="ruby" label="Ruby (beta)">
+
+```baml
+generator target {
+    output_type "ruby/sorbet"
+
+    output_dir "../"
+
+    // Version (should match installed baml gem)
+    version "0.76.2"
+}
+```
+
+</TabItem>
+<TabItem value="openapi" label="OpenAPI">
+
+```baml
+generator target {
+    output_type "rest/openapi"
+
+    output_dir "../"
+    version "0.76.2"
+
+    // Run after generating openapi.yaml
+    on_generate "npx @openapitools/openapi-generator-cli generate -i openapi.yaml -g OPENAPI_CLIENT_TYPE -o ."
+}
+```
+
+</TabItem>
+</Tabs>
+
+## Options
+
+| Option | Type | Required | Description |
+|--------|------|----------|-------------|
+| `output_type` | `string` | Yes | Target language/framework |
+| `output_dir` | `string` | Yes | Output path (relative to baml_src/) |
+| `version` | `string` | Yes | Runtime version to target |
+| `default_client_mode` | `"sync" \| "async"` | No | Default export mode |
+| `module_format` | `"esm" \| "cjs"` | No | TypeScript module format |
+| `client_package_name` | `string` | No | Go module name |
+| `on_generate` | `string` | No | Command to run after generation |
+
+## Output Types
+
+| Type | Description |
+|------|-------------|
+| `python/pydantic` | Python with Pydantic 2.x |
+| `python/pydantic/v1` | Python with Pydantic 1.x |
+| `typescript` | TypeScript |
+| `typescript/react` | TypeScript with React hooks |
+| `go` | Go |
+| `ruby/sorbet` | Ruby with Sorbet types (beta) |
+| `rest/openapi` | OpenAPI specification |
+
+## See Also
+
+- [baml-cli generate](/reference/baml-cli/generate) - Generate client code
+- [baml-cli init](/reference/baml-cli/init) - Initialize a new project

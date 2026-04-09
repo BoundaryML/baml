@@ -1,0 +1,48 @@
+---
+sidebar_position: 9
+sidebar_label: Comments
+title: Comments
+description: Comment syntax in BAML
+---
+
+# Comments
+
+BAML supports several comment styles for documentation and annotation.
+
+## Single Line / Trailing Comments
+
+Use `//` for single line or trailing comments.
+
+```baml
+// hello there!
+foo // this is a trailing comment
+```
+
+## Docstrings
+
+Use `///` to add docstrings to any block. Docstrings are carried through to generated types but are not forwarded to the LLM in prompts.
+
+```baml
+/// This is a docstring for a class
+class Foo {
+    /// This is a docstring for a property
+    property1 string
+}
+```
+
+## Comments in Block Strings
+
+Inside block strings (prompts), use Jinja comment syntax:
+
+```jinja
+#"
+    My string. {#
+        This is a comment that won't appear in the prompt
+    #}
+    hi!
+"#
+```
+
+## See Also
+
+- [BAML Syntax](/reference/baml-syntax) - General BAML syntax

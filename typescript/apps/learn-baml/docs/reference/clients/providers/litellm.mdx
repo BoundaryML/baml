@@ -1,0 +1,45 @@
+---
+sidebar_position: 15
+sidebar_label: LiteLLM
+title: LiteLLM Provider
+description: Reference for configuring LiteLLM proxy clients in BAML
+---
+
+# LiteLLM
+
+[LiteLLM](https://www.litellm.ai/) provides a unified API proxy for 100+ LLM providers.
+
+## Setup
+
+1. Set up [LiteLLM Proxy server](https://docs.litellm.ai/docs/proxy/docker_quick_start#21-start-proxy)
+2. Configure LiteLLM client in BAML
+3. Use in BAML functions
+
+## Basic Example
+
+```baml
+client<llm> MyClient {
+    provider "openai-generic"
+    options {
+        base_url "http://0.0.0.0:4000"
+        api_key env.LITELLM_API_KEY
+        model "gpt-4o"
+    }
+}
+```
+
+## BAML-Specific Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `base_url` | string | - | LiteLLM proxy URL |
+| `api_key` | string | `env.LITELLM_API_KEY` | API key |
+| `model` | string | - | Model identifier |
+
+See [OpenAI Generic](/reference/clients/providers/openai-generic) for all supported options.
+
+## See Also
+
+- [OpenAI Generic](/reference/clients/providers/openai-generic)
+- [OpenRouter](/reference/clients/providers/openrouter)
+- [Client Overview](/reference/clients/overview)

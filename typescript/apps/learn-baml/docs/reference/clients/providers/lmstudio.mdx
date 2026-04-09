@@ -1,0 +1,37 @@
+---
+sidebar_position: 14
+sidebar_label: LM Studio
+title: LM Studio Provider
+description: Reference for configuring LM Studio LLM clients in BAML
+---
+
+# LM Studio
+
+[LM Studio](https://lmstudio.ai/) allows you to run local LLMs with an OpenAI-compatible server.
+
+## Basic Example
+
+```baml
+client<llm> MyClient {
+    provider "openai-generic"
+    options {
+        base_url "http://localhost:1234/v1"
+        model "TheBloke/phi-2-GGUF"
+    }
+}
+```
+
+## BAML-Specific Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `base_url` | string | - | `http://localhost:1234/v1` |
+| `model` | string | - | Model identifier |
+
+See [LM Studio documentation](https://lmstudio.ai/docs/local-server#make-an-inferencing-request-using-openais-chat-completions-format) for more information.
+
+## See Also
+
+- [OpenAI Generic](/reference/clients/providers/openai-generic)
+- [Ollama](/reference/clients/providers/ollama)
+- [Client Overview](/reference/clients/overview)

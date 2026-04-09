@@ -1,0 +1,88 @@
+---
+sidebar_position: 1
+sidebar_label: Classification
+title: Classification Patterns
+description: Recipes for building classification systems with BAML
+---
+
+# Classification Patterns
+
+Classification is one of the most common LLM use cases. BAML makes it reliable with enum types.
+
+## Basic Sentiment Classification
+
+```baml
+enum Sentiment {
+  positive @description("Happy, satisfied, enthusiastic")
+  negative @description("Unhappy, frustrated, disappointed")
+  neutral @description("Neither positive nor negative")
+}
+
+function ClassifySentiment(text: string) -> Sentiment {
+  client GPT4
+  prompt #"
+    Analyze the sentiment of this text:
+    {{ text }}
+
+    Classify as positive, negative, or neutral.
+  "#
+}
+```
+
+## Multi-Label Classification
+
+When content can have multiple labels:
+
+```baml
+enum Topic {
+  technology
+  business
+  politics
+  entertainment
+  sports
+}
+
+function ClassifyTopics(article: string) -> Topic[] {
+  client GPT4
+  prompt #"
+    What topics does this article cover?
+    {{ article }}
+
+    List all applicable topics.
+  "#
+}
+```
+
+## Classification with Confidence
+
+```baml
+class ClassificationResult {
+  label Sentiment
+  confidence float @description("0.0 to 1.0")
+  reasoning string
+}
+
+function ClassifyWithConfidence(text: string) -> ClassificationResult {
+  client GPT4
+  prompt #"
+    Classify this text and explain your reasoning:
+    {{ text }}
+  "#
+}
+```
+
+## Tips
+
+1. **Use `@description`** to guide the model on edge cases
+2. **Be specific** in enum values - avoid ambiguous labels
+3. **Add reasoning** when you need to debug classifications
+
+## Related Recipes
+
+- [Data Extraction](/cookbook/data-extraction) - Extract structured data
+- [Tool Calling](/cookbook/tool-calling) - Classification for routing
+
+## Concepts
+
+- [Type System](/concepts/type-system) - How enums work
+- [Schema-Aligned Parsing](/concepts/schema-aligned-parsing) - How BAML extracts enum values

@@ -1,0 +1,91 @@
+---
+sidebar_position: 2
+sidebar_label: BamlValidationError
+title: BamlValidationError
+description: Error when BAML fails to parse or validate LLM output
+---
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+# BamlValidationError
+
+Thrown when BAML fails to parse or validate LLM output against the expected schema.
+
+## Type Definition
+
+```typescript
+class BamlValidationError extends Error {
+  type: 'BamlValidationError'
+  message: string
+  prompt: string
+  raw_output: string
+  detailed_message: string
+}
+```
+
+## Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `type` | `'BamlValidationError'` | Literal type identifier |
+| `message` | `string` | Specific validation failure description |
+| `prompt` | `string` | Original prompt sent to LLM |
+| `raw_output` | `string` | Raw LLM output that failed validation |
+| `detailed_message` | `string` | Complete history of failed attempts (for fallback/retry) |
+
+## Detection
+
+<Tabs>
+<TabItem value="typescript" label="TypeScript">
+
+```typescript
+import { BamlValidationError } from '@boundaryml/baml'
+
+try {
+  const result = await b.ExtractUser(text)
+} catch (error) {
+  if (error instanceof BamlValidationError) {
+    console.log('Validation failed:', error.message)
+    console.log('Raw output:', error.raw_output)
+    console.log('Prompt used:', error.prompt)
+  }
+}
+```
+
+</TabItem>
+<TabItem value="python" label="Python">
+
+```python
+from baml_py import BamlValidationError
+
+try:
+    result = await b.ExtractUser(text)
+except BamlValidationError as e:
+    print(f"Validation failed: {e}")
+    print(f"Raw output: {e.raw_output}")
+    print(f"Prompt used: {e.prompt}")
+```
+
+</TabItem>
+</Tabs>
+
+## Common Causes
+
+- LLM output doesn't match expected JSON structure
+- Missing required fields in output
+- Type mismatches (e.g., string instead of number)
+- Enum values not in allowed list
+- Array/object structure doesn't match schema
+
+## Debugging Tips
+
+1. Check `raw_output` to see what the LLM actually returned
+2. Review `prompt` to ensure output format instructions are clear
+3. Use `detailed_message` when debugging fallback chains
+
+## See Also
+
+- [Error Overview](./overview)
+- [BamlClientFinishReasonError](./finish-reason-error)
+- [BamlAbortError](./abort-error)

@@ -1,0 +1,39 @@
+---
+sidebar_position: 21
+sidebar_label: Tinfoil
+title: Tinfoil Provider
+description: Reference for configuring Tinfoil private AI inference clients in BAML
+---
+
+# Tinfoil
+
+[Tinfoil](https://tinfoil.sh/) provides verifiably private AI inference.
+
+## Basic Example
+
+```baml
+client<llm> TinfoilDeepSeek {
+    provider openai-generic
+    retry_policy Exponential
+    options {
+        base_url "https://deepseek-r1-70b-p.model.tinfoil.sh/v1"
+        model "deepseek-r1-70b"
+        api_key env.TINFOIL_API_KEY
+    }
+}
+```
+
+## BAML-Specific Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `base_url` | string | - | Tinfoil model endpoint |
+| `api_key` | string | `env.TINFOIL_API_KEY` | API key |
+| `model` | string | - | Model identifier |
+
+See [OpenAI Generic](/reference/clients/providers/openai-generic) for all supported options.
+
+## See Also
+
+- [OpenAI Generic](/reference/clients/providers/openai-generic)
+- [Client Overview](/reference/clients/overview)

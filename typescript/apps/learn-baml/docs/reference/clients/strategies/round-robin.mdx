@@ -1,0 +1,105 @@
+---
+sidebar_position: 3
+sidebar_label: Round Robin
+title: Round Robin Strategy
+description: Reference for BAML round-robin client configuration
+---
+
+# Round Robin
+
+The `round-robin` provider distributes requests across multiple clients in rotation.
+
+## Basic Example
+
+```baml
+client<llm> MyClient {
+    provider round-robin
+    options {
+        strategy [
+            ClientA
+            ClientB
+            ClientC
+        ]
+    }
+}
+```
+
+Calling `MyClient` multiple times: A → B → C → A → B → C → ...
+
+## Options
+
+| Option | Type | Required | Default | Description |
+|--------|------|----------|---------|-------------|
+| `strategy` | List[string] | Yes | - | Client names to rotate through |
+| `start` | int | No | random | Starting index |
+
+:::note
+In the BAML Playground, `start` defaults to `0`. In production, it defaults to a random value.
+:::
+
+## With Retry Policy
+
+When using a retry policy, round-robin rotates the strategy list after each retry:
+
+```baml
+client<llm> MyClient {
+    provider round-robin
+    retry_policy MyRetryPolicy
+    options {
+        strategy [
+            ClientA
+            ClientB
+            ClientC
+        ]
+    }
+}
+```
+
+If `ClientA` fails and triggers retry:
+1. First attempt: `ClientA`
+2. Retry 1: `ClientB`
+3. Retry 2: `ClientC`
+
+## Nesting Round Robin
+
+Nested round-robin clients compose as expected:
+
+```baml
+client<llm> MyClient {
+    provider round-robin
+    options {
+        strategy [
+            ClientA
+            ClientB
+            ClientC
+        ]
+    }
+}
+
+client<llm> MegaClient {
+    provider round-robin
+    options {
+        strategy [
+            MyClient
+            ClientD
+            ClientE
+        ]
+    }
+}
+```
+
+Calling `MegaClient` multiple times:
+1. `MyClient(ClientA)`
+2. `ClientD`
+3. `ClientE`
+4. `MyClient(ClientB)`
+5. `ClientD`
+6. `ClientE`
+7. `MyClient(ClientC)`
+8. ...
+
+## See Also
+
+- [Retry Policy](/reference/clients/strategies/retry)
+- [Fallback](/reference/clients/strategies/fallback)
+- [Client Overview](/reference/clients/overview)

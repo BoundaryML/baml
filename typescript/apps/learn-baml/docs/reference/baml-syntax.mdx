@@ -1,0 +1,79 @@
+---
+sidebar_position: 1
+sidebar_label: BAML Syntax
+title: BAML Syntax Reference
+description: Complete syntax reference for the BAML language
+---
+
+# BAML Syntax Reference
+
+This is the complete syntax reference for the BAML language.
+
+:::note Migration in Progress
+Additional reference documentation is being migrated from our [legacy docs](https://docs.boundaryml.com). Check there for topics not yet covered here.
+:::
+
+## File Structure
+
+BAML files use the `.baml` extension and contain:
+
+```baml
+// Types
+enum MyEnum { ... }
+class MyClass { ... }
+
+// Functions
+function MyFunction(...) -> ReturnType { ... }
+
+// Clients
+client<llm> MyClient { ... }
+
+// Tests
+test MyTest { ... }
+```
+
+## Functions
+
+```baml
+function FunctionName(
+  param1: Type1,
+  param2: Type2
+) -> ReturnType {
+  client ClientName
+  prompt #"
+    Your prompt template here.
+    Use {{ param1 }} for variables.
+  "#
+}
+```
+
+### Prompt Syntax
+
+Prompts use Jinja2 templating:
+
+| Syntax | Description |
+|--------|-------------|
+| `{{ var }}` | Variable interpolation |
+| `{% for x in list %}` | Loops |
+| `{% if condition %}` | Conditionals |
+| `{# comment #}` | Comments |
+
+## Types
+
+See [Type System](/concepts/type-system) for detailed explanations.
+
+### Primitives
+- `string` - Text
+- `int` - Integer
+- `float` - Decimal
+- `bool` - Boolean
+
+### Modifiers
+- `Type?` - Optional
+- `Type[]` - Array
+- `Type | null` - Nullable
+
+## See Also
+
+- [Client Configuration](/reference/client-configuration) - LLM client setup
+- [Getting Started](/tutorials/getting-started) - Practical introduction

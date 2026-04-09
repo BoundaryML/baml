@@ -1,0 +1,66 @@
+---
+sidebar_position: 8
+sidebar_label: ctx.client
+title: ctx (Metadata Access)
+description: Reference for accessing context metadata in BAML prompts
+---
+
+# ctx (Metadata Access)
+
+The `ctx` object provides access to metadata about the current prompt execution.
+
+## Viewing All Metadata
+
+Render `{{ ctx }}` to see all available metadata in the playground preview.
+
+## Available Properties
+
+| Property | Description |
+|----------|-------------|
+| `ctx.output_format` | Output schema generator |
+| `ctx.client` | Current client information |
+| `ctx.client.provider` | Provider name (e.g., "anthropic", "openai") |
+
+## Conditional Rendering by Provider
+
+Customize prompts based on the LLM provider:
+
+```baml
+template_string RenderConditionally(messages: Message[]) #"
+    {% for message in messages %}
+        {% if ctx.client.provider == "anthropic" %}
+            <Message>{{ message.user_name }}: {{ message.content }}</Message>
+        {% else %}
+            {{ message.user_name }}: {{ message.content }}
+        {% endif %}
+    {% endfor %}
+"#
+
+function MyFuncWithGPT4(messages: Message[]) -> string {
+    client "openai/gpt-4o"
+    prompt #"
+        {{ RenderConditionally(messages) }}
+    "#
+}
+
+function MyFuncWithAnthropic(messages: Message[]) -> string {
+    client "anthropic/claude-sonnet-4-20250514"
+    prompt #"
+        {{ RenderConditionally(messages) }}
+    "#
+}
+```
+
+This example uses XML tags for Anthropic (as recommended by their documentation) and plain text for other providers.
+
+## Use Cases
+
+- **Provider-specific formatting**: XML tags for Anthropic, markdown for OpenAI
+- **Model-specific instructions**: Different detail levels based on model capabilities
+- **Debugging**: Inspect metadata during development
+
+## See Also
+
+- [Output Format](/reference/prompt-syntax/output-format)
+- [Template Strings](/reference/functions/prompts)
+- [Conditionals](/reference/prompt-syntax/conditionals)

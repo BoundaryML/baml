@@ -1,0 +1,36 @@
+---
+sidebar_position: 2
+sidebar_label: Generate on Save
+title: baml.generateCodeOnSave
+description: Configure automatic code generation on save
+---
+
+# baml.generateCodeOnSave
+
+| Type | Default |
+|------|---------|
+| `"always" \| "never"` | `"always"` |
+
+## Values
+
+| Value | Description |
+|-------|-------------|
+| `always` | Generate code for `baml_client` on every save |
+| `never` | Do not generate `baml_client` on any save |
+
+:::note
+If you have a generator of type `rest/*`, `"always"` will not do any code generation. You'll need to manually run `baml-cli generate`.
+:::
+
+## Usage
+
+```json
+{
+  "baml.generateCodeOnSave": "never"
+}
+```
+
+## See Also
+
+- [CLI Path](./cli-path) - Configure custom CLI path
+- [baml-cli generate](/reference/baml-cli/generate) - Manual generation

@@ -1,0 +1,158 @@
+---
+sidebar_position: 1
+sidebar_label: Hooks
+title: Generated Hooks Reference
+description: BAML auto-generated React hooks
+---
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+# Generated Hooks
+
+BAML automatically generates a type-safe React hook for each BAML function. Each hook follows the naming pattern `use{FunctionName}` and supports both streaming and non-streaming modes.
+
+## Basic Usage
+
+```typescript
+import { useWriteMeAStory } from "@/baml_client/react/hooks";
+
+// Basic usage with streaming enabled by default
+const hook = useWriteMeAStory();
+
+// Access streaming and final data
+const { data, streamData, finalData } = hook;
+
+// Track request state
+const { isLoading, isStreaming, isPending, isSuccess, isError } = hook;
+
+// Execute the function
+await hook.mutate("A story about a brave AI");
+
+// Reset state if needed
+hook.reset();
+```
+
+**BAML Function:**
+
+```baml
+class Story {
+  title string @stream.not_null
+  content string @stream.not_null
+}
+
+function WriteMeAStory(input: string) -> Story {
+  client openai/gpt-4
+  prompt #"
+    Tell me a story.
+
+    {{ ctx.output_format() }}
+
+    {{ _.role("user") }}
+
+    Topic: {{input}}
+  "#
+}
+```
+
+## HookInput
+
+The hook accepts an optional configuration object. See [Hook Input](./hook-input) for details.
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `stream` | `boolean` | Enable streaming mode. Defaults to `true` |
+| `onStreamData` | `(response?) => void` | Callback for streaming updates |
+| `onFinalData` | `(response?) => void` | Callback when request completes |
+| `onData` | `(response?) => void` | Unified callback for both streaming and final |
+| `onError` | `(error: BamlErrors) => void` | Callback when error occurs |
+
+## HookOutput
+
+The hook returns an object with the following properties. See [Hook Output](./hook-output) for details.
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `data` | `FinalData \| StreamData \| undefined` | Current response data |
+| `finalData` | `FinalData \| undefined` | Final response (when complete) |
+| `streamData` | `StreamData \| undefined` | Latest streaming update |
+| `error` | `BamlErrors \| undefined` | Error information if failed |
+| `isLoading` | `boolean` | Request in progress |
+| `isPending` | `boolean` | Request pending (not yet streaming) |
+| `isStreaming` | `boolean` | Currently streaming |
+| `isSuccess` | `boolean` | Completed successfully |
+| `isError` | `boolean` | Request failed |
+| `status` | `HookStatus` | Current state: `'idle'` \| `'pending'` \| `'streaming'` \| `'success'` \| `'error'` |
+| `mutate` | `(...args) => Promise` | Execute the BAML function |
+| `reset` | `() => void` | Reset hook state |
+
+## Examples
+
+### With Callbacks
+
+```typescript
+function StoryComponent() {
+  const hook = useWriteMeAStory({
+    stream: true,
+    onStreamData: (text) => console.log("Streaming:", text),
+    onFinalData: (text) => console.log("Complete:", text),
+    onError: (error) => console.error("Error:", error)
+  });
+
+  return (
+    <div>
+      <button onClick={() => hook.mutate("A dragon story")} disabled={hook.isLoading}>
+        Generate Story
+      </button>
+      {hook.isStreaming && <span>Generating...</span>}
+      {hook.data && <p>{hook.data.content}</p>}
+    </div>
+  );
+}
+```
+
+### Non-Streaming Mode
+
+```typescript
+function NonStreamingComponent() {
+  const hook = useWriteMeAStory({ stream: false });
+
+  return (
+    <div>
+      <button onClick={() => hook.mutate("A sci-fi story")} disabled={hook.isLoading}>
+        Generate
+      </button>
+      {hook.isPending && <span>Loading...</span>}
+      {hook.finalData && <p>{hook.finalData.content}</p>}
+    </div>
+  );
+}
+```
+
+### Error Handling
+
+```typescript
+function WithErrorHandling() {
+  const hook = useWriteMeAStory({
+    onError: (error) => {
+      if (error instanceof BamlValidationError) {
+        console.error("Validation failed:", error.raw_output);
+      }
+    }
+  });
+
+  return (
+    <div>
+      {hook.isError && <div className="error">{hook.error?.message}</div>}
+      <button onClick={() => hook.mutate("Story topic")}>Generate</button>
+    </div>
+  );
+}
+```
+
+## See Also
+
+- [Hook Input](./hook-input) - Input configuration reference
+- [Hook Output](./hook-output) - Output properties reference
+- [Hook Data](./hook-data) - Data type reference
+- [Error Types](/reference/generated-client/errors/overview)

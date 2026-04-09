@@ -1,0 +1,130 @@
+---
+sidebar_position: 5
+sidebar_label: "@@dynamic"
+title: "@@dynamic Attribute"
+description: Reference for the BAML @@dynamic attribute for runtime type modification
+---
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+# @@dynamic
+
+The `@@dynamic` attribute allows runtime modification of fields or values.
+
+## Dynamic Classes
+
+```baml
+class MyClass {
+    property1 string
+    property2 int?
+
+    @@dynamic  // allows adding fields at runtime
+}
+```
+
+## Dynamic Enums
+
+```baml
+enum MyEnum {
+    Value1
+    Value2
+
+    @@dynamic  // allows modifying values at runtime
+}
+```
+
+## Using TypeBuilder
+
+Modify dynamic types at runtime using `TypeBuilder`.
+
+<Tabs>
+<TabItem value="python" label="Python">
+
+```python
+from baml_client.type_builder import TypeBuilder
+from baml_client import b
+
+async def run():
+    tb = TypeBuilder()
+    tb.MyClass.add_property('email', tb.string())
+    tb.MyClass.add_property('address', tb.string()).description("User's address")
+
+    res = await b.DynamicUserCreator("some user info", { "tb": tb })
+    # res can now have email and address fields
+    print(res)
+```
+
+</TabItem>
+<TabItem value="typescript" label="TypeScript">
+
+```typescript
+import TypeBuilder from '../baml_client/type_builder'
+import { b } from '../baml_client'
+
+async function run() {
+    const tb = new TypeBuilder()
+    tb.MyClass.addProperty('email', tb.string())
+    tb.MyClass.addProperty('address', tb.string()).description("User's address")
+
+    const res = await b.DynamicUserCreator("some user info", { tb: tb })
+    // res can now have email and address fields
+    console.log(res)
+}
+```
+
+</TabItem>
+<TabItem value="ruby" label="Ruby">
+
+```ruby
+require_relative 'baml_client/client'
+
+def run
+    tb = Baml::TypeBuilder.new
+    tb.MyClass.add_property('email', tb.string)
+    tb.MyClass.add_property('address', tb.string).description("User's address")
+
+    res = Baml::Client.dynamic_user_creator(
+        input: "some user info",
+        baml_options: { tb: tb }
+    )
+    # res can now have email and address fields
+    puts res
+end
+```
+
+</TabItem>
+</Tabs>
+
+## Testing Dynamic Types
+
+Use `type_builder` and `dynamic` blocks in tests:
+
+```baml
+test DynamicTest {
+    functions [ProcessDynamic]
+    type_builder {
+        class NewType {
+            field1 string
+        }
+        dynamic class ExistingDynamicType {
+            new_prop NewType
+        }
+    }
+    args {
+        input "test data"
+    }
+}
+```
+
+## Use Cases
+
+- Add fields based on runtime configuration
+- Support user-defined schemas
+- A/B test different output structures
+- Customize enums based on context
+
+## See Also
+
+- [Attributes Overview](/reference/attributes/overview)
+- [Classes and Enums](/reference/types/classes-enums)

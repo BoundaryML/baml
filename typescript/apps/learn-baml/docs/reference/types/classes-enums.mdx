@@ -1,0 +1,239 @@
+---
+sidebar_position: 10
+sidebar_label: Classes & Enums
+title: Classes and Enums
+description: Reference for BAML class and enum type definitions
+---
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+# Classes and Enums
+
+Classes and enums are user-defined composite types for structured data.
+
+## Classes
+
+Classes define complex data structures with named properties.
+
+### Syntax
+
+```baml
+class ClassName {
+    property1 Type1
+    property2 Type2
+    // ...
+}
+```
+
+:::warning
+Properties have no `:` between name and type.
+:::
+
+### Example
+
+<Tabs>
+<TabItem value="baml" label="BAML">
+
+```baml
+class Foo {
+    property1 string
+    property2 int?
+    property3 Bar[]
+    property4 MyEnum
+}
+```
+
+</TabItem>
+<TabItem value="python" label="Python Equivalent">
+
+```python
+from pydantic import BaseModel
+
+class Foo(BaseModel):
+    property1: str
+    property2: Optional[int] = None
+    property3: List[Bar]
+    property4: MyEnum
+```
+
+</TabItem>
+<TabItem value="typescript" label="TypeScript Equivalent">
+
+```typescript
+import z from "zod";
+
+const FooZod = z.object({
+    property1: z.string(),
+    property2: z.number().int().nullable().optional(),
+    property3: z.array(BarZod),
+    property4: MyEnumZod,
+});
+
+type Foo = z.infer<typeof FooZod>;
+```
+
+</TabItem>
+</Tabs>
+
+### Property Rules
+
+- Must start with a letter
+- Contain only letters, numbers, and underscores
+- Must be unique within the class
+- Classes can be recursively defined
+
+### Field Attributes
+
+| Attribute | Type | Description |
+|-----------|------|-------------|
+| `@alias` | `string` | Renames field for LLM (keeps original name in code) |
+| `@description` | `string` | Adds context to the field in the prompt |
+
+```baml
+class MyClass {
+    property1 string @alias("name") @description("The name of the object")
+    age int? @description("The age of the object")
+}
+```
+
+### Class Attributes
+
+| Attribute | Description |
+|-----------|-------------|
+| `@@dynamic` | Allows adding fields at runtime |
+
+```baml
+class MyClass {
+    property1 string
+    property2 int?
+
+    @@dynamic  // allows adding property3 float[] at runtime
+}
+```
+
+### Inheritance
+
+BAML does not support inheritance. Use composition instead:
+
+```baml
+class Address {
+    street string
+    city string
+}
+
+class Person {
+    name string
+    address Address  // composition
+}
+```
+
+## Enums
+
+Enums define a set of named constants, useful for classification tasks.
+
+### Syntax
+
+```baml
+enum EnumName {
+    Value1
+    Value2
+    Value3
+}
+```
+
+### Example
+
+<Tabs>
+<TabItem value="baml" label="BAML">
+
+```baml
+enum MyEnum {
+    Value1
+    Value2
+    Value3
+}
+```
+
+</TabItem>
+<TabItem value="python" label="Python Equivalent">
+
+```python
+from enum import StrEnum
+
+class MyEnum(StrEnum):
+    Value1 = "Value1"
+    Value2 = "Value2"
+    Value3 = "Value3"
+```
+
+</TabItem>
+<TabItem value="typescript" label="TypeScript Equivalent">
+
+```typescript
+enum MyEnum {
+    Value1 = "Value1",
+    Value2 = "Value2",
+    Value3 = "Value3",
+}
+```
+
+</TabItem>
+</Tabs>
+
+### Value Rules
+
+- May have any number of values
+- Values may not be duplicated or empty
+- Values may not contain spaces or special characters
+- Values must not start with a number
+
+### Enum Attributes
+
+| Attribute | Type | Description |
+|-----------|------|-------------|
+| `@@alias` | `string` | Name rendered in prompt |
+| `@@dynamic` | - | Allows modifying values at runtime |
+
+```baml
+enum MyEnum {
+    Value1
+    Value2
+    Value3
+
+    @@alias("My Custom Enum")
+    @@dynamic  // allows skipping Value2 at runtime
+}
+```
+
+### Value Attributes
+
+| Attribute | Type | Description |
+|-----------|------|-------------|
+| `@alias` | `string` | Renames value for LLM |
+| `@description` | `string` | Adds context to the value |
+| `@skip` | - | Excludes value from prompt and parsing |
+
+```baml
+enum MyEnum {
+    Value1 @alias("complete_summary") @description("Answer in 2 sentences")
+    Value2
+    Value3 @skip
+    Value4 @description(#"
+        This is a long description that spans multiple lines.
+        It can be useful for providing more context to the value.
+    "#)
+}
+```
+
+## Dynamic Types
+
+For adding fields/values at runtime, see [Dynamic Types](/reference/attributes/dynamic).
+
+## See Also
+
+- [Types Overview](/reference/types/overview)
+- [@alias Attribute](/reference/attributes/alias)
+- [@description Attribute](/reference/attributes/description)
+- [@skip Attribute](/reference/attributes/skip)
+- [Dynamic Types](/reference/attributes/dynamic)

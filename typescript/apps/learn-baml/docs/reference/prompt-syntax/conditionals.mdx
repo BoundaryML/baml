@@ -1,0 +1,125 @@
+---
+sidebar_position: 5
+sidebar_label: Conditionals
+title: Conditionals
+description: Reference for conditional statements in BAML prompts
+---
+
+# Conditionals
+
+Control prompt flow with conditional statements.
+
+## Syntax
+
+```jinja
+{% if condition %}
+    content
+{% elif other_condition %}
+    other content
+{% else %}
+    fallback content
+{% endif %}
+```
+
+## Basic Example
+
+```baml
+function MyFunc(user: User) -> string {
+    prompt #"
+        {% if user.is_active %}
+            Welcome back, {{ user.name }}!
+        {% else %}
+            Please activate your account.
+        {% endif %}
+    "#
+}
+```
+
+## Comparison Operators
+
+| Operator | Description |
+|----------|-------------|
+| `==` | Equal |
+| `!=` | Not equal |
+| `<` | Less than |
+| `>` | Greater than |
+| `<=` | Less than or equal |
+| `>=` | Greater than or equal |
+
+```jinja
+{% if score >= 90 %}
+    Grade: A
+{% elif score >= 80 %}
+    Grade: B
+{% elif score >= 70 %}
+    Grade: C
+{% else %}
+    Grade: F
+{% endif %}
+```
+
+## Logical Operators
+
+| Operator | Description |
+|----------|-------------|
+| `and` | Both conditions true |
+| `or` | Either condition true |
+| `not` | Negation |
+
+```jinja
+{% if user.is_active and user.has_subscription %}
+    Access granted
+{% endif %}
+
+{% if not user.is_banned %}
+    Welcome!
+{% endif %}
+```
+
+## Truthiness
+
+These values are considered false:
+
+- `false`
+- `null`
+- `0`
+- Empty string `""`
+- Empty array `[]`
+- Empty object `{}`
+
+```jinja
+{% if items %}
+    {{ items|length }} items found
+{% else %}
+    No items
+{% endif %}
+```
+
+## Inline Conditionals
+
+Use ternary-style expressions:
+
+```jinja
+{{ "Yes" if is_valid else "No" }}
+{{ user.name if user else "Guest" }}
+```
+
+## Testing with Filters
+
+Combine with filters for complex conditions:
+
+```jinja
+{% if items|length > 0 %}
+    First item: {{ items|first }}
+{% endif %}
+
+{% if text|lower == "hello" %}
+    Greeting detected
+{% endif %}
+```
+
+## See Also
+
+- [Jinja Overview](/reference/prompt-syntax/jinja-overview)
+- [Loops](/reference/prompt-syntax/loops)
+- [Filters](/reference/prompt-syntax/filters)

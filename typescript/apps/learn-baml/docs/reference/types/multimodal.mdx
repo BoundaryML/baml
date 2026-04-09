@@ -1,0 +1,373 @@
+---
+sidebar_position: 9
+sidebar_label: Multimodal
+title: Multimodal Types
+description: Reference for BAML multimodal types - image, audio, pdf, video
+---
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+# Multimodal Types
+
+BAML supports multimodal types for working with images, audio, PDFs, and video.
+
+## Overview
+
+| Type | Description | URL Support | Base64 Support |
+|------|-------------|-------------|----------------|
+| `image` | Image data | Yes | Yes |
+| `audio` | Audio data | Yes | Yes |
+| `pdf` | PDF documents | No | Yes |
+| `video` | Video data | Yes | Yes |
+
+:::warning
+You cannot use reserved type names as variable names (e.g., `image`, `audio`, `pdf`, `video`).
+:::
+
+## Image
+
+### BAML Definition
+
+```baml
+function DescribeImage(myImg: image) -> string {
+    client "openai/gpt-4o"
+    prompt #"
+        {{ _.role("user") }}
+        Describe the image in four words:
+        {{ myImg }}
+    "#
+}
+```
+
+### Host Language Usage
+
+<Tabs>
+<TabItem value="python" label="Python">
+
+```python
+from baml_py import Image
+from baml_client import b
+
+async def test_image_input():
+    # From URL
+    res = await b.DescribeImage(
+        myImg=Image.from_url("https://example.com/image.png")
+    )
+
+    # From Base64
+    image_b64 = "iVBORw0K...."
+    res = await b.DescribeImage(
+        myImg=Image.from_base64("image/png", image_b64)
+    )
+```
+
+</TabItem>
+<TabItem value="typescript" label="TypeScript">
+
+```typescript
+import { b } from '../baml_client'
+import { Image } from "@boundaryml/baml"
+
+// From URL
+let res = await b.DescribeImage(
+    Image.fromUrl('https://example.com/image.png')
+)
+
+// From Base64
+let res = await b.DescribeImage(
+    Image.fromBase64('image/png', image_b64)
+)
+```
+
+</TabItem>
+<TabItem value="ruby" label="Ruby">
+
+```ruby
+require_relative "baml_client/client"
+
+b = Baml.Client
+Image = Baml::Image
+
+# From URL
+res = b.DescribeImage(
+    myImg: Image.from_url("https://example.com/image.png")
+)
+
+# From Base64
+res = b.DescribeImage(
+    myImg: Image.from_base64("image/png", image_b64)
+)
+```
+
+</TabItem>
+<TabItem value="go" label="Go">
+
+```go
+// From URL
+img, _ := b.NewImageFromUrl("https://example.com/image.png", nil)
+res, _ := b.DescribeImage(ctx, img)
+
+// From Base64
+img2, _ := b.NewImageFromBase64(imageB64, stringPtr("image/png"))
+res2, _ := b.DescribeImage(ctx, img2)
+```
+
+</TabItem>
+</Tabs>
+
+### Test Syntax
+
+```baml
+test ImageFromURL {
+    functions [DescribeImage]
+    args {
+        myImg { url "https://example.com/image.png" }
+    }
+}
+
+test ImageFromFile {
+    functions [DescribeImage]
+    args {
+        myImg { file "./test.png" }
+    }
+}
+
+test ImageFromBase64 {
+    functions [DescribeImage]
+    args {
+        myImg {
+            media_type "image/png"
+            base64 "iVBORw0K..."
+        }
+    }
+}
+```
+
+## Audio
+
+### BAML Definition
+
+```baml
+function DescribeSound(myAudio: audio) -> string {
+    client "openai/gpt-4o"
+    prompt #"
+        {{ _.role("user") }}
+        Describe the audio in four words:
+        {{ myAudio }}
+    "#
+}
+```
+
+### Host Language Usage
+
+<Tabs>
+<TabItem value="python" label="Python">
+
+```python
+from baml_py import Audio
+from baml_client import b
+
+async def run():
+    # From URL
+    res = await b.DescribeSound(
+        myAudio=Audio.from_url("https://example.com/audio.ogg")
+    )
+
+    # From Base64
+    res = await b.DescribeSound(
+        myAudio=Audio.from_base64("audio/ogg", b64)
+    )
+```
+
+</TabItem>
+<TabItem value="typescript" label="TypeScript">
+
+```typescript
+import { Audio } from "@boundaryml/baml"
+
+// From URL
+let res = await b.DescribeSound(
+    Audio.fromUrl('https://example.com/audio.ogg')
+)
+
+// From Base64
+let res = await b.DescribeSound(
+    Audio.fromBase64('audio/ogg', audio_base64)
+)
+```
+
+</TabItem>
+</Tabs>
+
+## PDF
+
+:::note
+PDF inputs must be provided as Base64 data or file path. URL-based inputs are not supported.
+:::
+
+### BAML Definition
+
+```baml
+function AnalyzePdf(myPdf: pdf) -> string {
+    client "openai/gpt-4o"
+    prompt #"
+        {{ _.role("user") }}
+        Summarize the main points of this PDF:
+        {{ myPdf }}
+    "#
+}
+```
+
+### Host Language Usage
+
+<Tabs>
+<TabItem value="python" label="Python">
+
+```python
+from baml_py import Pdf
+from baml_client import b
+
+async def run():
+    # From Base64
+    b64 = "JVBERi0K...."
+    res = await b.AnalyzePdf(
+        myPdf=Pdf.from_base64("application/pdf", b64)
+    )
+```
+
+</TabItem>
+<TabItem value="typescript" label="TypeScript">
+
+```typescript
+import { Pdf } from "@boundaryml/baml"
+
+// From Base64
+let res = await b.AnalyzePdf(
+    Pdf.fromBase64('application/pdf', pdf_base64)
+)
+```
+
+</TabItem>
+</Tabs>
+
+### Test Syntax
+
+```baml
+test PdfFromFile {
+    functions [AnalyzePdf]
+    args {
+        myPdf { file "./document.pdf" }
+    }
+}
+
+test PdfFromBase64 {
+    functions [AnalyzePdf]
+    args {
+        myPdf {
+            base64 "JVBERi0K..."
+            media_type "application/pdf"
+        }
+    }
+}
+```
+
+## Video
+
+### BAML Definition
+
+```baml
+function DescribeVideo(myVideo: video) -> string {
+    client "openai/gpt-4o"
+    prompt #"
+        {{ _.role("user") }}
+        Describe what happens in this video:
+        {{ myVideo }}
+    "#
+}
+```
+
+:::note
+When providing a video via URL, the URL is passed directly to the model. Some models cannot download external media; convert to Base64 first in those cases.
+:::
+
+### Host Language Usage
+
+<Tabs>
+<TabItem value="python" label="Python">
+
+```python
+from baml_py import Video
+from baml_client import b
+
+async def run():
+    # From URL
+    res = await b.DescribeVideo(
+        myVideo=Video.from_url("https://example.com/video.mp4")
+    )
+
+    # From Base64
+    res = await b.DescribeVideo(
+        myVideo=Video.from_base64("video/mp4", b64)
+    )
+```
+
+</TabItem>
+<TabItem value="typescript" label="TypeScript">
+
+```typescript
+import { Video } from "@boundaryml/baml"
+
+// From URL
+let res = await b.DescribeVideo(
+    Video.fromUrl('https://example.com/video.mp4')
+)
+
+// From Base64
+let res = await b.DescribeVideo(
+    Video.fromBase64('video/mp4', video_base64)
+)
+```
+
+</TabItem>
+</Tabs>
+
+## URL Processing Configuration
+
+Control how BAML processes media URLs before sending to providers:
+
+```baml
+client<llm> MyClient {
+    provider anthropic
+    options {
+        media_url_handler {
+            image "send_base64"   // Convert URLs to base64
+            pdf "send_url"        // Keep URLs as-is
+        }
+    }
+}
+```
+
+## Security Considerations
+
+<details>
+<summary>SSRF Attack Prevention</summary>
+
+BAML's multimodal types make it easy to construct media from URLs. However, if you use untrusted user input, you may be vulnerable to [server-side request forgery (SSRF) attacks](https://portswigger.net/web-security/ssrf).
+
+Attackers may be able to:
+- Fetch files on your internal network
+- Access external networks using your application's identity
+- Drive up cloud network bandwidth costs
+
+**Recommendations:**
+- Only use URLs from trusted sources
+- Validate URLs using allowlists or denylists
+- Sanitize user input before constructing media objects
+
+</details>
+
+## See Also
+
+- [Types Overview](/reference/types/overview)
+- [Testing Functions](/reference/functions/tests)

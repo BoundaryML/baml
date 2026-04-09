@@ -1,0 +1,125 @@
+.heroBanner {
+  padding: 4rem 0 3rem;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+  background: var(--color-surface-1);
+}
+
+.heroTitle {
+  font-size: 3rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--color-text-primary);
+  margin: 0 0 0.75rem;
+}
+
+.heroSubtitle {
+  font-size: var(--text-lg);
+  color: var(--color-text-secondary);
+  margin: 0;
+  max-width: 600px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.buttons {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+
+.ctaButton {
+  background: var(--baml-purple-600) !important;
+  border: none !important;
+  color: white !important;
+  font-weight: 500;
+  padding: 0.75rem 1.5rem;
+  border-radius: 8px;
+  transition: all 0.15s ease;
+}
+
+.ctaButton:hover {
+  background: var(--baml-purple-700) !important;
+  color: white !important;
+  transform: translateY(-1px);
+}
+
+:global([data-theme='dark']) .ctaButton {
+  background: var(--baml-purple-500) !important;
+}
+
+:global([data-theme='dark']) .ctaButton:hover {
+  background: var(--baml-purple-400) !important;
+}
+
+.paths {
+  padding: 3rem 0 5rem;
+  background: var(--color-surface-1);
+}
+
+.paths h2 {
+  text-align: center;
+  margin-bottom: 2rem;
+  font-size: var(--text-2xl);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.pathGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+.pathCard {
+  display: flex;
+  flex-direction: column;
+  padding: 1.25rem 1.5rem;
+  background: var(--color-surface-1);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  text-decoration: none;
+  color: inherit;
+  transition: all 0.15s ease;
+}
+
+.pathCard:hover {
+  border-color: var(--baml-purple-400);
+  background: var(--color-surface-2);
+  text-decoration: none;
+  color: inherit;
+}
+
+.pathIcon {
+  margin-bottom: 0.75rem;
+  color: var(--color-text-secondary);
+  display: flex;
+  align-items: center;
+}
+
+.pathCard:hover .pathIcon {
+  color: var(--baml-purple-600);
+}
+
+:global([data-theme='dark']) .pathCard:hover .pathIcon {
+  color: var(--baml-purple-400);
+}
+
+.pathCard h3 {
+  margin: 0 0 0.5rem;
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.pathCard p {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}

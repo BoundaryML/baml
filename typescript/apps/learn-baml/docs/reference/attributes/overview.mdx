@@ -1,0 +1,65 @@
+---
+sidebar_position: 1
+sidebar_label: Overview
+title: Attributes Overview
+description: Overview of BAML attributes for fields, types, and blocks
+---
+
+# Attributes Overview
+
+Attributes in BAML provide additional metadata or behavior to fields and types.
+
+## Field-Level Attributes
+
+Applied to individual fields within a class or enum.
+
+| Attribute | Description |
+|-----------|-------------|
+| `@alias` | Renames field for LLM understanding |
+| `@description` | Adds context to a field |
+| `@skip` | Excludes from prompts/parsing |
+| `@assert` | Strict validation (raises exception) |
+| `@check` | Non-exception validation |
+
+```baml
+class MyClass {
+    property1 string @alias("name") @description("The name of the object")
+    age int? @check(positive, {{ this > 0 }})
+}
+```
+
+## Block-Level Attributes
+
+Applied to entire classes or enums, affecting all fields/values.
+
+| Attribute | Description |
+|-----------|-------------|
+| `@@dynamic` | Allows runtime field modification |
+| `@@assert` | Block-level strict validation |
+| `@@check` | Block-level non-exception validation |
+
+```baml
+class MyClass {
+    property1 string
+    property2 int?
+
+    @@dynamic  // allows adding fields at runtime
+}
+```
+
+## Key Differences
+
+| Aspect | Field-Level | Block-Level |
+|--------|-------------|-------------|
+| Scope | Single field | Entire class/enum |
+| Syntax | `@attribute` | `@@attribute` |
+| Use Case | Field modifications | Broad modifications |
+
+## See Also
+
+- [@alias](/reference/attributes/alias)
+- [@description](/reference/attributes/description)
+- [@skip](/reference/attributes/skip)
+- [@check](/reference/attributes/check)
+- [@assert](/reference/attributes/assert)
+- [@@dynamic](/reference/attributes/dynamic)

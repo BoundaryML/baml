@@ -1,0 +1,87 @@
+---
+sidebar_position: 3
+sidebar_label: Streaming
+title: Streaming Patterns
+description: Recipes for streaming LLM responses with BAML
+---
+
+# Streaming Patterns
+
+Stream responses for better user experience with long-running generations.
+
+## Basic Streaming
+
+```typescript
+import { b } from './baml_client';
+
+const stream = b.stream.GenerateStory(topic);
+
+for await (const chunk of stream) {
+  // chunk is a partial result
+  console.log(chunk.partial?.content);
+}
+
+const final = await stream.finalResponse();
+// final is the complete, validated result
+```
+
+## Structured Streaming
+
+BAML streams structured data as it becomes available:
+
+```baml
+class Article {
+  title string
+  summary string
+  sections Section[]
+}
+
+class Section {
+  heading string
+  content string
+}
+
+function GenerateArticle(topic: string) -> Article {
+  client GPT4
+  prompt #"Write an article about {{ topic }}"#
+}
+```
+
+```typescript
+const stream = b.stream.GenerateArticle("AI Safety");
+
+for await (const chunk of stream) {
+  // Fields populate as they're generated
+  if (chunk.partial?.title) {
+    updateTitle(chunk.partial.title);
+  }
+  if (chunk.partial?.sections) {
+    updateSections(chunk.partial.sections);
+  }
+}
+```
+
+## UI Integration
+
+```tsx
+function StreamingComponent({ topic }) {
+  const [article, setArticle] = useState(null);
+
+  useEffect(() => {
+    const stream = b.stream.GenerateArticle(topic);
+
+    (async () => {
+      for await (const chunk of stream) {
+        setArticle(chunk.partial);
+      }
+    })();
+  }, [topic]);
+
+  return <ArticleDisplay article={article} />;
+}
+```
+
+## Related
+
+- [Tool Calling](/cookbook/tool-calling) - Stream tool calls
+- [Getting Started](/tutorials/getting-started) - Basic setup

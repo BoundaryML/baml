@@ -1,0 +1,5 @@
+{
+  "label": "Strategies",
+  "position": 2,
+  "description": "Client strategies (retry, fallback, round-robin)"
+}

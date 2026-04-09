@@ -1,0 +1,48 @@
+---
+sidebar_position: 6
+sidebar_label: fmt
+title: baml-cli fmt
+description: Format BAML files
+---
+
+# baml-cli fmt
+
+Format your BAML files.
+
+:::warning Beta Feature
+This feature is still in progress and does not yet support all BAML syntax.
+:::
+
+## Usage
+
+```bash
+baml-cli fmt [file.baml] [file2.baml] [file3.baml] ...
+```
+
+## Description
+
+Formats BAML files in-place. Formatting is non-configurable.
+
+## Disabling Formatting
+
+To disable the formatter for a specific file, add:
+
+```baml
+// baml-format: ignore
+```
+
+anywhere in the file.
+
+## Examples
+
+```bash
+# Format specific files
+baml-cli fmt main.baml functions.baml
+
+# Format all BAML files
+baml-cli fmt baml_src/*.baml
+```
+
+## See Also
+
+- [baml-cli generate](/reference/baml-cli/generate)

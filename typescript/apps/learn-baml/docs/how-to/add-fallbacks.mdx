@@ -1,0 +1,60 @@
+---
+sidebar_position: 1
+sidebar_label: Add Fallbacks
+title: How to Add Fallbacks
+description: Configure fallback providers for reliability
+---
+
+# How to Add Fallbacks
+
+This guide shows how to configure fallback providers so your application remains reliable even when a primary provider is unavailable.
+
+## Why Use Fallbacks?
+
+LLM providers can experience:
+- Rate limiting
+- Temporary outages
+- Latency spikes
+
+Fallbacks let you automatically switch to a backup provider.
+
+## Configuration
+
+```baml
+client<llm> PrimaryClient {
+  provider openai
+  model gpt-4
+  options {
+    api_key env.OPENAI_API_KEY
+  }
+}
+
+client<llm> FallbackClient {
+  provider anthropic
+  model claude-3-sonnet
+  options {
+    api_key env.ANTHROPIC_API_KEY
+  }
+}
+
+client<llm> ReliableClient {
+  provider fallback
+  options {
+    clients [PrimaryClient, FallbackClient]
+  }
+}
+```
+
+## Using the Fallback Client
+
+```baml
+function MyFunction(input: string) -> Output {
+  client ReliableClient  // Will try OpenAI first, then Anthropic
+  prompt #"..."#
+}
+```
+
+## Related
+
+- [Switch Providers](/how-to/switch-providers) - Change providers without code changes
+- [Client Configuration Reference](/reference/client-configuration) - Full client options

@@ -1,0 +1,101 @@
+---
+sidebar_position: 4
+sidebar_label: serve
+title: baml-cli serve
+description: Start a BAML HTTP API server
+---
+
+# baml-cli serve
+
+Start a BAML-over-HTTP API server that exposes your functions via HTTP endpoints.
+
+## Usage
+
+```bash
+baml-cli serve [OPTIONS]
+```
+
+:::tip
+For development with hot-reload, use `baml-cli dev` instead.
+:::
+
+## Options
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--from <PATH>` | Path to `baml_src` directory | `./baml_src` |
+| `--port <PORT>` | Server port | `2024` |
+| `--no-version-check` | Skip version mismatch check | `false` |
+
+## Endpoints
+
+### Function Calls
+
+```bash
+# Call a function
+POST /call/:function_name
+
+curl -X POST \
+    "http://localhost:2024/call/MyFunctionName" \
+    -H "Content-Type: application/json" \
+    -d '{"arg1": "value1", "arg2": "value2"}'
+```
+
+```bash
+# Stream results
+POST /stream/:function_name
+
+curl -X POST \
+    "http://localhost:2024/stream/MyFunctionName" \
+    -H "Content-Type: application/json" \
+    -d '{"arg1": "value1", "arg2": "value2"}'
+```
+
+### Debugging
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /docs` | Swagger UI documentation |
+| `GET /openapi.json` | OpenAPI specification |
+| `GET /_debug/ping` | Health check |
+| `GET /_debug/status` | Server status |
+
+## Authentication
+
+Set `BAML_PASSWORD` environment variable to enable authentication.
+
+Use header: `x-baml-api-key`
+
+```bash
+curl -X POST \
+    http://localhost:2024/call/MyFunctionName \
+    -H "Content-Type: application/json" \
+    -H "x-baml-api-key: ${BAML_PASSWORD}" \
+    -d '{"arg1": "value1"}'
+```
+
+## Examples
+
+```bash
+# Start with defaults
+baml-cli serve
+
+# Custom port and source
+baml-cli serve --from /path/to/baml_src --port 3000
+
+# Test server
+curl http://localhost:2024/_debug/ping
+```
+
+## Limitations
+
+Currently not supported:
+- TypeBuilder API
+- Collector API
+- Modular API
+- Custom trace annotations
+
+## See Also
+
+- [baml-cli dev](/reference/baml-cli/dev)
+- [baml-cli test](/reference/baml-cli/test)

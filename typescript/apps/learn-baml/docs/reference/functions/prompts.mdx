@@ -1,0 +1,145 @@
+---
+sidebar_position: 2
+sidebar_label: Prompts
+title: Prompt Templates
+description: Reference for BAML prompt templates and template_string syntax
+---
+
+# Prompts and Template Strings
+
+BAML uses Jinja templating for dynamic prompt generation.
+
+## Prompt Syntax
+
+Prompts are defined using block strings with Jinja syntax:
+
+```baml
+function MyFunction(input: string) -> string {
+    client "openai/gpt-4o"
+    prompt #"
+        Process this input: {{ input }}
+
+        {{ ctx.output_format }}
+    "#
+}
+```
+
+## Template Strings
+
+Template strings are reusable prompt components that accept parameters and return strings.
+
+### Syntax
+
+```baml
+template_string TemplateName(param: Type) #"
+    Template content with {{ param }}
+"#
+```
+
+### Example
+
+```baml
+template_string PrintMessages(messages: Message[]) #"
+    {% for m in messages %}
+        {{ _.role(m.role) }}
+        {{ m.message }}
+    {% endfor %}
+"#
+
+function ClassifyConversation(messages: Message[]) -> Category[] {
+    client "openai/gpt-4o"
+    prompt #"
+        Classify this conversation:
+        {{ PrintMessages(messages) }}
+
+        Use the following categories:
+        {{ ctx.output_format }}
+    "#
+}
+```
+
+### Key Features
+
+- Can be nested inside each other
+- Can be called multiple times
+- Support all Jinja syntax
+- Allow reusing prompt logic across functions
+
+### Using in Tests
+
+Template strings can provide test data:
+
+```baml
+template_string EchoTestData(arg: int) ##"
+    The number is {{ arg }}
+"##
+
+test TemplateTest {
+    functions [Echo]
+    args {
+        input EchoTestData(43)
+    }
+    @@assert( {{ this == "The number is 43" }} )
+}
+```
+
+## Special Variables
+
+| Variable | Description |
+|----------|-------------|
+| `ctx.output_format` | Auto-generated format instructions |
+| `ctx.client` | Current client/model info |
+| `_.role(name)` | Set message role |
+
+## Jinja Features
+
+### Variables
+
+```baml
+prompt #"
+    Hello {{ name }}!
+    Count: {{ count }}
+"#
+```
+
+### Conditionals
+
+```baml
+prompt #"
+    {% if verbose %}
+        Provide detailed explanation.
+    {% else %}
+        Be concise.
+    {% endif %}
+"#
+```
+
+### Loops
+
+```baml
+prompt #"
+    {% for item in items %}
+        - {{ item }}
+    {% endfor %}
+"#
+```
+
+### Filters
+
+```baml
+prompt #"
+    {{ text | upper }}
+    {{ items | length }}
+"#
+```
+
+:::warning
+The BAML linter may show warnings for template strings due to static analysis limitations. If it renders correctly in the playground, you're good.
+:::
+
+## See Also
+
+- [Jinja Overview](/reference/prompt-syntax/jinja-overview)
+- [Variables](/reference/prompt-syntax/variables)
+- [Roles](/reference/prompt-syntax/roles)
+- [Output Format](/reference/prompt-syntax/output-format)

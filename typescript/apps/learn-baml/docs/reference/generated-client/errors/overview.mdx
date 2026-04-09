@@ -1,0 +1,107 @@
+---
+sidebar_position: 1
+sidebar_label: Overview
+title: BAML Error Types
+description: Technical reference for BAML error handling classes
+---
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+# BAML Error Types
+
+BAML provides error classes for handling different error scenarios when working with LLMs.
+
+## Error Class Hierarchy
+
+All BAML errors extend the base `Error` class and include a literal `type` field.
+
+```typescript
+// BAML-specific error classes
+class BamlValidationError extends Error {
+  type: 'BamlValidationError'
+  message: string
+  prompt: string
+  raw_output: string
+  detailed_message: string
+}
+
+class BamlClientFinishReasonError extends Error {
+  type: 'BamlClientFinishReasonError'
+  message: string
+  prompt: string
+  raw_output: string
+  detailed_message: string
+}
+
+class BamlAbortError extends Error {
+  type: 'BamlAbortError'
+  message: string
+  reason?: any
+  detailed_message: string
+}
+```
+
+## Error Types
+
+| Error | Description |
+|-------|-------------|
+| [BamlValidationError](./validation-error) | Failed to parse or validate LLM output |
+| [BamlClientFinishReasonError](./finish-reason-error) | LLM terminated with disallowed finish reason |
+| [BamlAbortError](./abort-error) | Operation cancelled via abort controller |
+
+## Fallback Error Aggregation
+
+When using [fallback clients](/reference/clients/strategies/fallback) or clients with [retry policies](/reference/clients/strategies/retry), BAML attempts multiple client calls before failing:
+
+- The error **type** corresponds to the final (last) failed attempt
+- The `message` field contains the error message from the final attempt
+- The `detailed_message` field contains the **complete history** of all failed attempts
+
+## Type Guards
+
+<Tabs>
+<TabItem value="typescript" label="TypeScript">
+
+```typescript
+import { BamlAbortError, BamlValidationError, BamlClientFinishReasonError } from '@boundaryml/baml'
+
+try {
+  const result = await b.MyFunction(input)
+} catch (error) {
+  if (error instanceof BamlAbortError) {
+    // Handle cancellation
+  } else if (error instanceof BamlValidationError) {
+    // Handle validation error
+  } else if (error instanceof BamlClientFinishReasonError) {
+    // Handle finish reason error
+  }
+}
+```
+
+</TabItem>
+<TabItem value="python" label="Python">
+
+```python
+from baml_py import BamlAbortError, BamlValidationError, BamlClientFinishReasonError
+
+try:
+    result = await b.MyFunction(input)
+except BamlAbortError as e:
+    # Handle cancellation
+except BamlValidationError as e:
+    # Handle validation error
+except BamlClientFinishReasonError as e:
+    # Handle finish reason error
+```
+
+</TabItem>
+</Tabs>
+
+## Common Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `type` | `string` | Literal type identifier for each error class |
+| `message` | `string` | Human-readable error message |
+| `detailed_message` | `string` | Complete history of all failed attempts when using fallback/retry |

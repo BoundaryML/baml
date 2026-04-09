@@ -1,0 +1,119 @@
+---
+sidebar_position: 3
+sidebar_label: test
+title: baml-cli test
+description: Run BAML function tests
+---
+
+# baml-cli test
+
+Run tests defined in your BAML files with filtering, parallel execution, and various output formats.
+
+## Usage
+
+```bash
+baml-cli test [OPTIONS]
+```
+
+## Options
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--from <PATH>` | Path to `baml_src` directory | `./baml_src` |
+| `--list` | List tests without running | `false` |
+| `-i, --include <PATTERN>` | Include specific tests | Run all |
+| `-x, --exclude <PATTERN>` | Exclude specific tests | None |
+| `--parallel <NUM>` | Parallel test count | `10` |
+| `--pass-if-no-tests` | Pass if no tests selected | `false` |
+| `--require-human-eval` | Fail if tests need human eval | `true` |
+| `--dotenv` | Load .env file | `true` |
+| `--dotenv-path <PATH>` | Custom .env file path | None |
+
+## Pattern Syntax
+
+- `*` - matches any characters
+- `FunctionName::TestName` - specific test
+- `FunctionName::` - all tests in function
+- `::TestName` - test name across functions
+
+## Examples
+
+### Basic Testing
+
+```bash
+# Run all tests
+baml-cli test
+
+# List available tests
+baml-cli test --list
+
+# Run from specific directory
+baml-cli test --from /path/to/baml_src
+```
+
+### Test Filtering
+
+```bash
+# Run tests for specific function
+baml-cli test -i "ExtractResume::"
+
+# Run specific test
+baml-cli test -i "ExtractResume::TestBasicResume"
+
+# Run tests matching pattern
+baml-cli test -i "Extract*::"
+
+# Multiple include patterns
+baml-cli test -i "Extract*::" -i "Classify*::"
+
+# Exclude specific tests
+baml-cli test -x "ExtractResume::TestComplexResume"
+
+# Combine include and exclude
+baml-cli test -i "Extract*::" -x "*::TestSlow*"
+```
+
+### Parallel Execution
+
+```bash
+# Default parallelism (10)
+baml-cli test
+
+# Sequential execution
+baml-cli test --parallel 1
+
+# High parallelism
+baml-cli test --parallel 20
+```
+
+### Environment Variables
+
+```bash
+# Use default .env loading
+baml-cli test
+
+# Disable .env loading
+baml-cli test --no-dotenv
+
+# Custom .env file
+baml-cli test --dotenv-path .env.test
+
+# Set directly
+OPENAI_API_KEY=... baml-cli test
+```
+
+## Exit Codes
+
+| Code | Meaning |
+|------|---------|
+| `0` | All tests passed |
+| `1` | Test failures occurred |
+| `2` | Tests require human evaluation |
+| `3` | Execution cancelled |
+| `4` | No tests found |
+
+## See Also
+
+- [baml-cli dev](/reference/baml-cli/dev)
+- [baml-cli serve](/reference/baml-cli/serve)
+- [Tests Reference](/reference/functions/tests)

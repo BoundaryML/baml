@@ -1,0 +1,76 @@
+---
+sidebar_position: 4
+sidebar_label: Hook Data
+title: Hook Data Type Reference
+description: BAML React hook data type
+---
+
+# Hook Data
+
+The `HookData` type represents the non-null data from a BAML React hook. Useful when you know data exists and want to avoid undefined checks.
+
+## Usage
+
+```typescript
+function Component() {
+  const hook = useTestAws({ stream: true });
+  const data = hook.data;
+
+  return (
+    <div>
+      {data} {/* No need for null checks */}
+    </div>
+  );
+}
+```
+
+## Type Definition
+
+```typescript
+type HookData<
+  FunctionName extends FunctionNames,
+  Options extends { stream?: boolean } = { stream?: true }
+> = NonNullable<HookOutput<FunctionName, Options>['data']>
+```
+
+## Type Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `FunctionName` | `FunctionNames` | BAML function name, used to infer types |
+| `Options` | `{ stream?: boolean }` | Streaming behavior config. Defaults to `{ stream?: true }` |
+
+## Details
+
+`HookData` is a utility type that removes `undefined` from the `data` property of `HookOutput`. The resulting type is either `FinalDataType` or `StreamDataType` depending on the streaming configuration.
+
+## Examples
+
+### Streaming Data
+
+```typescript
+// For streaming hooks, data can be either stream or final data
+const streamingData: HookData<'TestAws', { stream: true }> = "Streaming response...";
+```
+
+### Non-Streaming Data
+
+```typescript
+// For non-streaming hooks, data is always final data
+const nonStreamingData: HookData<'TestAws', { stream: false }> = "Final response";
+```
+
+### Type Guard Usage
+
+```typescript
+function renderData(data: HookData<'WriteStory', { stream: true }>) {
+  // data is guaranteed to be non-null here
+  return <div>{data.content}</div>;
+}
+```
+
+## See Also
+
+- [Generated Hooks](./hooks) - Hooks overview
+- [Hook Input](./hook-input) - Input configuration
+- [Hook Output](./hook-output) - Output properties

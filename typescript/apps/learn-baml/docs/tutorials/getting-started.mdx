@@ -1,0 +1,71 @@
+---
+sidebar_position: 1
+sidebar_label: Getting Started
+title: Getting Started with BAML
+description: Learn how to set up BAML and create your first AI function
+---
+
+# Getting Started with BAML
+
+Welcome to BAML! This tutorial will walk you through setting up your first project and creating a simple AI function.
+
+## Prerequisites
+
+Before you begin, make sure you have:
+- Node.js 18+ or Python 3.9+
+- An API key from OpenAI, Anthropic, or another supported provider
+
+## Installation
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+<Tabs>
+  <TabItem value="npm" label="npm" default>
+    ```bash
+    npm install @boundaryml/baml
+    ```
+  </TabItem>
+  <TabItem value="pip" label="pip">
+    ```bash
+    pip install baml-py
+    ```
+  </TabItem>
+</Tabs>
+
+## Your First BAML Function
+
+Create a file called `main.baml`:
+
+```baml
+function ClassifySentiment(text: string) -> Sentiment {
+  client GPT4
+  prompt #"
+    Classify the sentiment of this text:
+    {{ text }}
+
+    Respond with: positive, negative, or neutral
+  "#
+}
+
+enum Sentiment {
+  positive
+  negative
+  neutral
+}
+
+client<llm> GPT4 {
+  provider openai
+  model gpt-4
+}
+```
+
+## Next Steps
+
+- Learn about the [BAML type system](/concepts/type-system) to understand how structured outputs work
+- Explore the [Cookbook](/cookbook/classification) for more classification examples
+- Check the [Reference](/reference/baml-syntax) for complete syntax documentation
+
+:::tip
+Try the [Interactive Tour](/tour) for hands-on learning!
+:::

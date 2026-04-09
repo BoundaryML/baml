@@ -1,0 +1,86 @@
+---
+sidebar_position: 8
+sidebar_label: OpenRouter
+title: OpenRouter Provider
+description: Reference for configuring OpenRouter LLM clients in BAML
+---
+
+# OpenRouter
+
+The `openrouter` provider offers native integration with [OpenRouter](https://openrouter.ai), providing access to 300+ AI models through a unified API.
+
+## Basic Example
+
+```baml
+client<llm> MyClient {
+    provider openrouter
+    options {
+        model "openai/gpt-4o-mini"
+    }
+}
+```
+
+:::note
+You can also use [`openai-generic`](/reference/clients/providers/openai-generic) with OpenRouter by manually setting the `base_url`. The `openrouter` provider simplifies this with sensible defaults.
+:::
+
+## BAML-Specific Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `api_key` | string | `env.OPENROUTER_API_KEY` | API key |
+| `base_url` | string | `https://openrouter.ai/api/v1` | API base URL |
+| `model` | string | (required) | Model in `provider/model-name` format |
+
+## Available Models
+
+| Model | Description |
+|-------|-------------|
+| `openai/gpt-4o-mini` | Fast, cost-effective |
+| `anthropic/claude-3.5-sonnet` | Claude 3.5 Sonnet |
+| `anthropic/claude-3-haiku` | Fast Claude variant |
+| `google/gemini-2.0-flash-001` | Gemini 2.0 Flash |
+| `meta-llama/llama-3.1-70b-instruct` | Llama 3.1 70B |
+
+See [OpenRouter Models](https://openrouter.ai/models) for the complete list.
+
+### Model Variants
+
+OpenRouter supports routing variants (e.g., `:nitro` for high-throughput):
+
+```baml
+client<llm> NitroClient {
+    provider openrouter
+    options {
+        model "meta-llama/llama-3.1-70b-instruct:nitro"
+    }
+}
+```
+
+## App Attribution
+
+OpenRouter supports headers for app attribution:
+
+| Header | Description |
+|--------|-------------|
+| `X-Title` | App name for openrouter.ai rankings |
+| `HTTP-Referer` | Site URL for rankings |
+
+```baml
+client<llm> OpenRouterWithAttribution {
+    provider openrouter
+    options {
+        model "anthropic/claude-3-haiku"
+        headers {
+            "X-Title" "My App"
+            "HTTP-Referer" "https://myapp.com"
+        }
+    }
+}
+```
+
+## See Also
+
+- [OpenRouter API Documentation](https://openrouter.ai/docs/api/reference/overview)
+- [OpenAI Generic](/reference/clients/providers/openai-generic)
+- [Client Overview](/reference/clients/overview)

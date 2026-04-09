@@ -1,0 +1,64 @@
+---
+sidebar_position: 2
+sidebar_label: RAG Pipeline
+title: Building a RAG Pipeline
+description: Create a retrieval-augmented generation pipeline with BAML
+---
+
+# Building a RAG Pipeline with BAML
+
+This tutorial shows how to build a RAG (Retrieval-Augmented Generation) pipeline using BAML's structured output capabilities.
+
+## Overview
+
+A RAG pipeline typically involves:
+1. Retrieving relevant documents
+2. Formatting context for the LLM
+3. Generating a structured response
+
+BAML excels at step 3 - ensuring the LLM output is properly typed and validated.
+
+## Defining the Response Structure
+
+```baml
+class RAGResponse {
+  answer string @description("Direct answer to the question")
+  sources Citation[] @description("Citations from retrieved documents")
+  confidence float @description("Confidence score 0-1")
+}
+
+class Citation {
+  document_id string
+  quote string
+  relevance float
+}
+```
+
+## The RAG Function
+
+```baml
+function AnswerWithSources(
+  question: string,
+  context: Document[]
+) -> RAGResponse {
+  client GPT4
+  prompt #"
+    Answer the following question using ONLY the provided context.
+
+    Question: {{ question }}
+
+    Context:
+    {% for doc in context %}
+    [Doc {{ doc.id }}]: {{ doc.content }}
+    {% endfor %}
+
+    Provide your answer with citations.
+  "#
+}
+```
+
+## Related Resources
+
+- See [Data Extraction](/cookbook/data-extraction) for similar structured output patterns
+- Learn about [Schema-Aligned Parsing](/concepts/schema-aligned-parsing) to understand how BAML validates outputs
+- Check [How to Add Fallbacks](/how-to/add-fallbacks) for handling extraction failures

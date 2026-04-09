@@ -1,0 +1,39 @@
+---
+sidebar_position: 4
+sidebar_label: Sync Version
+title: baml.syncExtensionToGeneratorVersion
+description: Configure extension version synchronization
+---
+
+# baml.syncExtensionToGeneratorVersion
+
+| Type | Default |
+|------|---------|
+| `"auto" \| "never" \| "always"` | `"auto"` |
+
+## Values
+
+| Value | Description |
+|-------|-------------|
+| `auto` | Sync extension version when mismatch detected |
+| `never` | Never sync extension version |
+| `always` | Always attempt to sync extension version |
+
+When enabled, the extension downloads the correct version of `baml-cli` to generate client code, preventing version mismatch issues.
+
+:::note Windows
+On Windows platforms, the extension-sync feature is disabled when set to `auto`.
+:::
+
+## Usage
+
+```json
+{
+  "baml.syncExtensionToGeneratorVersion": "auto"
+}
+```
+
+## See Also
+
+- [CLI Path](./cli-path) - Use a specific CLI path
+- [Generator](/reference/generator) - Configure generator version

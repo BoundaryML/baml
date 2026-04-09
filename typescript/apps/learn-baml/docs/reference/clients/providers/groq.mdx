@@ -1,0 +1,49 @@
+---
+sidebar_position: 10
+sidebar_label: Groq
+title: Groq Provider
+description: Reference for configuring Groq LLM clients in BAML
+---
+
+# Groq
+
+[Groq](https://groq.com) provides ultra-fast inference using their custom LPU hardware.
+
+## Basic Example
+
+```baml
+client<llm> MyClient {
+    provider openai-generic
+    options {
+        base_url "https://api.groq.com/openai/v1"
+        api_key env.GROQ_API_KEY
+        model "llama-3-groq-70b-tool-use"
+    }
+}
+```
+
+## BAML-Specific Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `base_url` | string | - | `https://api.groq.com/openai/v1` |
+| `api_key` | string | `env.GROQ_API_KEY` | API key |
+| `model` | string | - | Model identifier |
+
+## Available Models
+
+| Model | Description |
+|-------|-------------|
+| `llama-3-groq-70b-tool-use` | Llama 3 70B optimized for tool use |
+| `llama-3.1-70b-versatile` | Llama 3.1 70B versatile |
+| `llama-3.1-8b-instant` | Llama 3.1 8B fast inference |
+| `mixtral-8x7b-32768` | Mixtral 8x7B |
+| `gemma-7b-it` | Gemma 7B instruction-tuned |
+
+See the [Groq documentation](https://console.groq.com/docs/openai) for the complete list.
+
+## See Also
+
+- [OpenAI Generic](/reference/clients/providers/openai-generic)
+- [Together AI](/reference/clients/providers/together)
+- [Client Overview](/reference/clients/overview)

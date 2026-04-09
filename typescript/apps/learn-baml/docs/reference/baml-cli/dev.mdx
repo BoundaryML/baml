@@ -1,0 +1,52 @@
+---
+sidebar_position: 5
+sidebar_label: dev
+title: baml-cli dev
+description: Start a BAML development server with hot-reload
+---
+
+# baml-cli dev
+
+Start a development server that watches for changes and automatically reloads.
+
+## Usage
+
+```bash
+baml-cli dev [OPTIONS]
+```
+
+## Description
+
+The `dev` command provides the same functionality as `serve`, plus:
+
+1. Watches BAML source files for changes
+2. Automatically reloads server when changes detected
+3. Runs generators automatically on changes
+
+## Options
+
+See [baml-cli serve](/reference/baml-cli/serve) for available options.
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--from <PATH>` | Path to `baml_src` directory | `./baml_src` |
+| `--port <PORT>` | Server port | `2024` |
+| `--no-version-check` | Skip version mismatch check | `false` |
+
+## Examples
+
+```bash
+# Start dev server with defaults
+baml-cli dev
+
+# Custom port
+baml-cli dev --port 3000
+
+# Custom source directory
+baml-cli dev --from /path/to/baml_src
+```
+
+## See Also
+
+- [baml-cli serve](/reference/baml-cli/serve)
+- [baml-cli generate](/reference/baml-cli/generate)

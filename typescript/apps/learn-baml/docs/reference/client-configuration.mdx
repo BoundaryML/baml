@@ -1,0 +1,82 @@
+---
+sidebar_position: 2
+sidebar_label: Client Configuration
+title: Client Configuration Reference
+description: Complete reference for configuring LLM clients in BAML
+---
+
+# Client Configuration Reference
+
+This reference covers all options for configuring LLM clients in BAML.
+
+## Basic Structure
+
+```baml
+client<llm> ClientName {
+  provider ProviderName
+  model ModelName
+  options {
+    // Provider-specific options
+  }
+}
+```
+
+## Supported Providers
+
+| Provider | Value | Models |
+|----------|-------|--------|
+| OpenAI | `openai` | gpt-4, gpt-3.5-turbo, etc. |
+| Anthropic | `anthropic` | claude-3-opus, claude-3-sonnet, etc. |
+| Google | `google-ai` | gemini-pro, etc. |
+| Azure OpenAI | `azure-openai` | Deployed model names |
+
+## Common Options
+
+```baml
+client<llm> MyClient {
+  provider openai
+  model gpt-4
+  options {
+    api_key env.OPENAI_API_KEY
+    temperature 0.7
+    max_tokens 1000
+    timeout_ms 30000
+  }
+}
+```
+
+## Environment Variables
+
+Use `env.VARIABLE_NAME` to reference environment variables:
+
+```baml
+client<llm> MyClient {
+  provider env.LLM_PROVIDER
+  model env.LLM_MODEL
+  options {
+    api_key env.LLM_API_KEY
+  }
+}
+```
+
+## Fallback Configuration
+
+```baml
+client<llm> ReliableClient {
+  provider fallback
+  options {
+    clients [PrimaryClient, BackupClient]
+    retry_policy {
+      max_retries 3
+      backoff_ms 1000
+    }
+  }
+}
+```
+
+See [How to Add Fallbacks](/how-to/add-fallbacks) for usage examples.
+
+## Related
+
+- [Switch Providers](/how-to/switch-providers) - Runtime provider selection
+- [BAML Syntax](/reference/baml-syntax) - General syntax reference

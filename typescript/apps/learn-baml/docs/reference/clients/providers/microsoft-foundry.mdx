@@ -1,0 +1,46 @@
+---
+sidebar_position: 17
+sidebar_label: Microsoft Foundry
+title: Microsoft Foundry / Azure AI Foundry
+description: Reference for configuring Microsoft Foundry LLM clients in BAML
+---
+
+# Microsoft Foundry
+
+Microsoft Foundry (Azure AI Foundry) is the simplified way to use AI models on Azure.
+
+## Basic Example
+
+Use the **Completions** API setup:
+
+```baml
+client<llm> MyClient {
+    provider "openai-generic"
+    options {
+        base_url "https://your-resource.openai.azure.com/openai/v1/"
+        api_key env.AZURE_AI_FOUNDRY_API_KEY
+        model "gpt-4o-mini"
+    }
+}
+```
+
+## BAML-Specific Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `base_url` | string | - | Azure AI Foundry endpoint |
+| `api_key` | string | `env.AZURE_AI_FOUNDRY_API_KEY` | API key |
+| `model` | string | - | Deployed model name |
+
+## Getting Credentials
+
+1. Go to [ai.azure.com](https://ai.azure.com)
+2. Navigate to the **Models** sidebar
+3. Click on your deployed model
+4. Copy the API key and endpoint URL
+
+## See Also
+
+- [Azure OpenAI](/reference/clients/providers/azure)
+- [OpenAI Generic](/reference/clients/providers/openai-generic)
+- [Client Overview](/reference/clients/overview)

@@ -1,0 +1,280 @@
+---
+sidebar_position: 2
+sidebar_label: with_options
+title: with_options
+description: Create a client with default configuration options
+---
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+# with_options
+
+:::info
+Added in version 0.79.0
+:::
+
+Creates a new client with default configuration options for logging, client registry, and type builders. These options are automatically applied to all function calls made through this client, but can be overridden on a per-call basis.
+
+## Syntax
+
+<Tabs>
+<TabItem value="python" label="Python">
+
+```python
+from baml_client import b
+from baml_py import ClientRegistry, Collector
+
+my_b = b.with_options(
+    client="openai/gpt-4o",
+    collector=collector,
+    client_registry=client_registry,
+    env={"BAML_LOG": "DEBUG"}
+)
+```
+
+</TabItem>
+<TabItem value="typescript" label="TypeScript">
+
+```typescript
+import { b } from "baml_client"
+import { Collector, ClientRegistry } from "@boundaryml/baml"
+
+const myB = b.withOptions({
+    client: "openai/gpt-4o",
+    collector,
+    clientRegistry,
+    env: { BAML_LOG: "DEBUG" }
+})
+```
+
+</TabItem>
+<TabItem value="go" label="Go">
+
+:::note
+Go doesn't have a `with_options` method. Use individual option functions like `WithClient`, `WithCollector`, `WithClientRegistry`, and `WithEnv` directly in function calls.
+:::
+
+```go
+result, err := b.ExtractResume(ctx, "...",
+    b.WithClient("openai/gpt-4o"),
+    b.WithCollector(collector),
+    b.WithEnv(env))
+```
+
+</TabItem>
+<TabItem value="ruby" label="Ruby">
+
+```ruby
+my_b = Baml.Client.with_options(
+    collector: collector,
+    client_registry: client_registry,
+    env: {"BAML_LOG" => "DEBUG"}
+)
+```
+
+</TabItem>
+</Tabs>
+
+## Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `client` | `string` | Client name to use for all calls (shorthand for `client_registry.set_primary()`) |
+| `collector` | `Collector` | Collector instance for tracking function calls and usage metrics |
+| `client_registry` | `ClientRegistry` | Registry for managing LLM clients and their configurations |
+| `type_builder` | `TypeBuilder` | Custom type builder for function inputs and outputs |
+| `env` | `Dict/Object` | Environment variables to set for the client |
+
+:::note
+All options can be overridden on a per-call basis using the `baml_options` parameter.
+:::
+
+## Examples
+
+### Basic Configuration
+
+<Tabs>
+<TabItem value="python" label="Python">
+
+```python
+from baml_client import b
+from baml_py import ClientRegistry, Collector
+
+collector = Collector(name="my-collector")
+client_registry = ClientRegistry()
+client_registry.set_primary("openai/gpt-4o")
+
+my_b = b.with_options(collector=collector, client_registry=client_registry)
+
+# All calls use the configured options
+res = my_b.ExtractResume("...")
+invoice = my_b.ExtractInvoice("...")
+
+# Access logs from the collector
+print(collector.logs)
+print(collector.last.usage)
+```
+
+</TabItem>
+<TabItem value="typescript" label="TypeScript">
+
+```typescript
+import { b } from "baml_client"
+import { Collector, ClientRegistry } from "@boundaryml/baml"
+
+const collector = new Collector("my-collector")
+const clientRegistry = new ClientRegistry()
+clientRegistry.setPrimary("openai/gpt-4o")
+
+const myB = b.withOptions({ collector, clientRegistry })
+
+// All calls use the configured options
+const res = await myB.ExtractResume("...")
+const invoice = await myB.ExtractInvoice("...")
+
+console.log(collector.logs)
+console.log(collector.last?.usage)
+```
+
+</TabItem>
+</Tabs>
+
+### Per-call Tags
+
+Add tags to a specific BAML function call for correlation, A/B testing, or user tracking:
+
+<Tabs>
+<TabItem value="python" label="Python">
+
+```python
+from baml_client import b
+from baml_py import Collector
+
+collector = Collector(name="tags-collector")
+res = b.TestFunction(
+    "hello",
+    baml_options={
+        "collector": collector,
+        "tags": {"call_id": "first", "version": "v1"},
+    },
+)
+
+print(collector.last.tags)
+```
+
+</TabItem>
+<TabItem value="typescript" label="TypeScript">
+
+```typescript
+import { b } from "baml_client"
+import { Collector } from "@boundaryml/baml"
+
+const collector = new Collector("tags-collector")
+await b.TestFunction("hello", {
+    collector,
+    tags: { callId: "first", version: "v1" }
+})
+console.log(collector.last!.tags)
+```
+
+</TabItem>
+</Tabs>
+
+### Parallel Execution
+
+<Tabs>
+<TabItem value="python" label="Python">
+
+```python
+from baml_client.async_client import b
+from baml_py import Collector
+import asyncio
+
+async def run():
+    collector = Collector(name="my-collector")
+    my_b = b.with_options(collector=collector)
+
+    # Run multiple functions in parallel
+    res, invoice = await asyncio.gather(
+        my_b.ExtractResume("..."),
+        my_b.ExtractInvoice("...")
+    )
+
+    # Iterate logs to see usage for each call
+    for log in collector.logs:
+        print(log.usage)
+```
+
+</TabItem>
+<TabItem value="typescript" label="TypeScript">
+
+```typescript
+import { b } from "baml_client"
+import { Collector } from "@boundaryml/baml"
+
+const collector = new Collector("my-collector")
+const myB = b.withOptions({ collector })
+
+const [res, invoice] = await Promise.all([
+    myB.ExtractResume("..."),
+    myB.ExtractInvoice("...")
+])
+
+for (const log of collector.logs) {
+    console.log(log.usage)
+}
+```
+
+</TabItem>
+</Tabs>
+
+### Streaming Mode
+
+<Tabs>
+<TabItem value="python" label="Python">
+
+```python
+from baml_client.async_client import b
+from baml_py import Collector
+
+async def run():
+    collector = Collector(name="my-collector")
+    my_b = b.with_options(collector=collector)
+
+    stream = my_b.stream.ExtractResume("...")
+    async for chunk in stream:
+        print(chunk)
+
+    result = await stream.get_final_result()
+    print(collector.last.usage)
+```
+
+</TabItem>
+<TabItem value="typescript" label="TypeScript">
+
+```typescript
+import { b } from "baml_client"
+import { Collector } from "@boundaryml/baml"
+
+const collector = new Collector("my-collector")
+const myB = b.withOptions({ collector })
+
+const stream = myB.stream.ExtractResume("...")
+for await (const chunk of stream) {
+    console.log(chunk)
+}
+
+const result = await stream.getFinalResult()
+console.log(collector.last?.usage)
+```
+
+</TabItem>
+</Tabs>
+
+## See Also
+
+- [Collector](/reference/generated-client/collector) - Track function calls and usage metrics
+- [TypeBuilder](/reference/generated-client/typebuilder) - Build custom types for your functions
+- [client Option](/reference/generated-client/client-option) - Simple client override
+- [AbortSignal](/reference/generated-client/abort-signal) - Cancel in-flight operations

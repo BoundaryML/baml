@@ -1,0 +1,123 @@
+---
+sidebar_position: 3
+sidebar_label: Hook Output
+title: Hook Output Type Reference
+description: BAML React hook return type
+---
+
+# Hook Output
+
+The `HookOutput` type defines the return type for BAML React hooks.
+
+## Usage
+
+```typescript
+function Component() {
+  const hook = useTestAws({ stream: true });
+
+  return (
+    <div>
+      {hook.error && <div>Error: {hook.error.message}</div>}
+      <button onClick={() => hook.mutate("test")} disabled={hook.isLoading}>
+        Submit
+      </button>
+    </div>
+  );
+}
+```
+
+## Type Definition
+
+```typescript
+type HookOutput<FunctionName, Options extends { stream?: boolean } = { stream?: true }> = {
+  data?: Options['stream'] extends false
+    ? FinalDataType<FunctionName>
+    : FinalDataType<FunctionName> | StreamDataType<FunctionName>
+  finalData?: FinalDataType<FunctionName>
+  streamData?: Options['stream'] extends false ? never : StreamDataType<FunctionName>
+  error?: BamlErrors
+  isError: boolean
+  isLoading: boolean
+  isPending: boolean
+  isSuccess: boolean
+  isStreaming: Options['stream'] extends false ? never : boolean
+  status: HookStatus<Options>
+  mutate: (...args: Parameters<ServerAction>) => Options['stream'] extends false
+    ? Promise<FinalDataType<FunctionName>>
+    : Promise<ReadableStream<Uint8Array>>
+  reset: () => void
+}
+
+type HookStatus<Options extends { stream?: boolean }> = Options['stream'] extends false
+  ? 'idle' | 'pending' | 'success' | 'error'
+  : 'idle' | 'pending' | 'streaming' | 'success' | 'error'
+```
+
+## Type Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `FunctionName` | `generic` | BAML function name, used to infer types |
+| `Options` | `{ stream?: boolean }` | Streaming behavior config. Defaults to `{ stream?: true }` |
+
+## Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `data` | `FinalData \| StreamData \| undefined` | Current response data |
+| `finalData` | `FinalData \| undefined` | Final response when complete |
+| `streamData` | `StreamData \| undefined` | Latest streaming response (streaming only) |
+| `error` | `BamlErrors \| undefined` | Error if request failed |
+| `isError` | `boolean` | Request resulted in error |
+| `isLoading` | `boolean` | Request in progress (pending or streaming) |
+| `isPending` | `boolean` | Request pending (not yet streaming) |
+| `isSuccess` | `boolean` | Request completed successfully |
+| `isStreaming` | `boolean` | Currently streaming (streaming only) |
+| `status` | `HookStatus` | Current request state |
+| `mutate` | `(...args) => Promise` | Execute the BAML function |
+| `reset` | `() => void` | Reset hook to initial state |
+
+## Examples
+
+### Streaming Result
+
+```typescript
+const streamingResult: HookOutput<'TestAws', { stream: true }> = {
+  data: "Any response",
+  finalData: "Final response",
+  streamData: "Streaming response...",
+  error: undefined,
+  isError: false,
+  isLoading: true,
+  isSuccess: false,
+  isStreaming: true,
+  isPending: false,
+  status: 'streaming',
+  mutate: async () => new ReadableStream(),
+  reset: () => {}
+};
+```
+
+### Non-Streaming Result
+
+```typescript
+const nonStreamingResult: HookOutput<'TestAws', { stream: false }> = {
+  data: "Final response",
+  finalData: "Final response",
+  // streamData and isStreaming not available
+  error: undefined,
+  isError: false,
+  isLoading: false,
+  isSuccess: true,
+  isPending: false,
+  status: 'success',
+  mutate: async () => "Final response",
+  reset: () => {}
+};
+```
+
+## See Also
+
+- [Generated Hooks](./hooks) - Hooks overview
+- [Hook Input](./hook-input) - Input configuration
+- [Hook Data](./hook-data) - Data type reference

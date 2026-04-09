@@ -1,0 +1,297 @@
+---
+sidebar_position: 3
+sidebar_label: Tests
+title: Test Blocks
+description: Reference for BAML test declarations and testing syntax
+---
+
+# Tests
+
+Tests are first-class citizens in BAML, designed for straightforward AI function testing.
+
+## Syntax
+
+```baml
+test TestName {
+    functions [FunctionName]
+    args {
+        paramName "value"
+    }
+}
+```
+
+## Components
+
+| Component | Required | Description |
+|-----------|----------|-------------|
+| `functions` | Yes | List of functions to test |
+| `args` | Yes | Input parameters |
+| `type_builder` | No | Dynamic type definitions |
+| `@@check` | No | Conditional validation |
+| `@@assert` | No | Result assertion |
+
+## Basic Example
+
+```baml
+test SimpleTest {
+    functions [ClassifyMessage]
+    args {
+        input "Can't access my account"
+    }
+}
+```
+
+## Input Types
+
+### Basic Types
+
+```baml
+test StringTest {
+    functions [ProcessText]
+    args {
+        text "Hello world"
+    }
+}
+```
+
+### Complex Objects
+
+```baml
+test ComplexTest {
+    functions [ProcessMessage]
+    args {
+        message {
+            user "john_doe"
+            content "Hello world"
+            metadata {
+                timestamp 1234567890
+                priority "high"
+            }
+        }
+    }
+}
+```
+
+### Arrays
+
+```baml
+test ArrayTest {
+    functions [BatchProcess]
+    args {
+        messages [
+            {
+                user "user1"
+                content "Message 1"
+            }
+            {
+                user "user2"
+                content "Message 2"
+            }
+        ]
+    }
+}
+```
+
+### Multi-line Strings
+
+```baml
+test LongTextTest {
+    functions [AnalyzeText]
+    args {
+        content #"
+            This is a multi-line
+            text input that preserves
+            formatting and whitespace
+        "#
+    }
+}
+```
+
+## Media Inputs
+
+### Images
+
+```baml
+// From file
+test ImageFileTest {
+    functions [AnalyzeImage]
+    args {
+        param { file "../images/test.png" }
+    }
+}
+
+// From URL
+test ImageUrlTest {
+    functions [AnalyzeImage]
+    args {
+        param { url "https://example.com/image.jpg" }
+    }
+}
+
+// From Base64
+test ImageBase64Test {
+    functions [AnalyzeImage]
+    args {
+        param {
+            base64 "iVBORw0K..."
+            media_type "image/png"
+        }
+    }
+}
+```
+
+### Audio
+
+```baml
+test AudioFileTest {
+    functions [TranscribeAudio]
+    args {
+        audio { file "../audio/sample.mp3" }
+    }
+}
+
+test AudioUrlTest {
+    functions [TranscribeAudio]
+    args {
+        audio { url "https://example.com/audio.mp3" }
+    }
+}
+```
+
+### PDFs
+
+:::note
+PDFs cannot be supplied via URL. Use file path or Base64.
+:::
+
+```baml
+test PdfFileTest {
+    functions [AnalyzePdf]
+    args {
+        pdf { file "../documents/report.pdf" }
+    }
+}
+
+test PdfBase64Test {
+    functions [AnalyzePdf]
+    args {
+        pdf {
+            base64 "JVBERi0K..."
+            media_type "application/pdf"
+        }
+    }
+}
+```
+
+### Videos
+
+```baml
+test VideoFileTest {
+    functions [AnalyzeVideo]
+    args {
+        video { file "../videos/sample.mp4" }
+    }
+}
+
+test VideoUrlTest {
+    functions [AnalyzeVideo]
+    args {
+        video { url "https://example.com/video.mp4" }
+    }
+}
+```
+
+## Assertions and Checks
+
+### @@assert
+
+Assertions fail the test if the condition is false:
+
+```baml
+test AssertTest {
+    functions [GetLength]
+    args { text "hello" }
+    @@assert( {{ this < 255 }} )
+}
+```
+
+### @@check
+
+Checks record results without failing:
+
+```baml
+test CheckTest {
+    functions [GetLength]
+    args { text "hello" }
+    @@check( check_length, {{ this > 0 }} )
+}
+```
+
+## Testing Multiple Functions
+
+Test multiple functions with the same parameters:
+
+```baml
+test EndToEndFlow {
+    functions [
+        ExtractInfo
+        ProcessInfo
+        ValidateResult
+    ]
+    args {
+        input "test data"
+    }
+}
+```
+
+## Dynamic Types
+
+Use `type_builder` for dynamic type testing:
+
+```baml
+test DynamicTest {
+    functions [ProcessDynamic]
+    type_builder {
+        class NewType {
+            field1 string
+        }
+        dynamic class ExistingDynamicType {
+            new_prop NewType
+        }
+    }
+    args {
+        input "test data"
+    }
+}
+```
+
+## Template Strings in Tests
+
+Share test data using template strings:
+
+```baml
+template_string EchoTestData(arg: int) ##"
+    The number is {{ arg }}
+"##
+
+test TemplateTest {
+    functions [Echo]
+    args {
+        input EchoTestData(43)
+    }
+    @@assert( {{ this == "The number is 43" }} )
+}
+```
+
+## VSCode Integration
+
+- Tests run directly from the BAML playground
+- Real-time syntax validation
+- Test result visualization
+
+## See Also
+
+- [Functions Overview](/reference/functions/overview)
+- [Multimodal Types](/reference/types/multimodal)
+- [@check Attribute](/reference/attributes/check)
+- [@assert Attribute](/reference/attributes/assert)

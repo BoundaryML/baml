@@ -1,0 +1,15 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "bunVersion": "1.x",
+  "buildCommand": "pnpm build",
+  "outputDirectory": "build",
+  "functions": {
+    "api/chat.ts": {
+      "maxDuration": 60,
+      "includeFiles": "static/embeddings.json"
+    },
+    "api/tour/repl.ts": {
+      "maxDuration": 60
+    }
+  }
+}

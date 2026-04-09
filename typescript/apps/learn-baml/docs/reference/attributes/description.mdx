@@ -1,0 +1,115 @@
+---
+sidebar_position: 3
+sidebar_label: "@description"
+title: "@description Attribute"
+description: Reference for the BAML @description attribute
+---
+
+# @description
+
+The `@description` attribute provides additional context to fields or values in prompts.
+
+## Class Field Description
+
+### Without @description
+
+```baml
+class MyClass {
+    property1 string
+}
+```
+
+**ctx.output_format:**
+
+```
+{
+  property1: string
+}
+```
+
+### With @description
+
+```baml
+class MyClass {
+    property1 string @description("The name of the object")
+}
+```
+
+**ctx.output_format:**
+
+```
+{
+  // The name of the object
+  property1: string
+}
+```
+
+## Enum Value Description
+
+### Without @description
+
+```baml
+enum MyEnum {
+    Value1
+    Value2
+}
+```
+
+**ctx.output_format:**
+
+```
+MyEnum
+---
+Value1
+Value2
+```
+
+### With @description
+
+```baml
+enum MyEnum {
+    Value1 @description("The first value")
+    Value2 @description("The second value")
+}
+```
+
+**ctx.output_format:**
+
+```
+MyEnum
+---
+Value1: The first value
+Value2: The second value
+```
+
+## Enum Description (Block-Level)
+
+```baml
+enum MyEnum {
+    Value1
+    Value2
+
+    @@description("This enum represents status codes")
+}
+```
+
+**ctx.output_format:**
+
+```
+MyEnum: This enum represents status codes
+---
+Value1
+Value2
+```
+
+## Use Cases
+
+- Add context to help LLM understand field purpose
+- Document expected values or formats
+- Provide examples or constraints
+
+## See Also
+
+- [@alias](/reference/attributes/alias)
+- [Attributes Overview](/reference/attributes/overview)
+- [Classes and Enums](/reference/types/classes-enums)

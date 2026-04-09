@@ -1,0 +1,91 @@
+---
+sidebar_position: 5
+sidebar_label: Optionals
+title: Optional Types
+description: Reference for BAML optional types that represent values that may be absent
+---
+
+# Optional Types
+
+Optional types represent values that might or might not be present.
+
+## Syntax
+
+```baml
+Type?
+```
+
+## Examples
+
+### Basic Optional
+
+```baml
+int?           // optional integer
+string?        // optional string
+MyClass?       // optional class instance
+```
+
+### Complex Optionals
+
+```baml
+(MyClass | int)?     // optional union
+(int | string)?      // optional union of primitives
+```
+
+## Usage
+
+### In Class Properties
+
+```baml
+class Person {
+    name string
+    age int?              // age is optional
+    email string?         // email is optional
+}
+```
+
+### In Function Parameters
+
+```baml
+function DescribeCircle(radius: int, pi: float?) -> string {
+    client "openai/gpt-4o-mini"
+    prompt #"
+        Describe a circle with radius {{ radius }}.
+        Use pi as {{ pi or 3.14159 }}.
+    "#
+}
+```
+
+### In Return Types
+
+```baml
+function FindUser(id: string) -> User? {
+    client "openai/gpt-4o-mini"
+    prompt #"
+        Find user with ID {{ id }}.
+        Return null if not found.
+        {{ ctx.output_format }}
+    "#
+}
+```
+
+## Language Equivalents
+
+| BAML | Python | TypeScript | Go |
+|------|--------|------------|-----|
+| `int?` | `Optional[int]` | `number \| null` | `*int` |
+| `string?` | `Optional[str]` | `string \| null` | `*string` |
+| `MyClass?` | `Optional[MyClass]` | `MyClass \| null` | `*MyClass` |
+
+## Key Points
+
+- Optional types default to `None`/`null` when not provided
+- Use `?` suffix to make any type optional
+- Arrays cannot be optional (`Type[]?` is invalid)
+- For optional arrays, use an empty array `[]` as the default
+
+## See Also
+
+- [Types Overview](/reference/types/overview)
+- [Union Types](/reference/types/unions)
+- [Primitives](/reference/types/primitives)

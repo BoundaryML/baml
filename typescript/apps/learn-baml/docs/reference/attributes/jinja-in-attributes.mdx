@@ -1,0 +1,118 @@
+---
+sidebar_position: 8
+sidebar_label: Jinja in Attributes
+title: Jinja in Attributes
+description: Reference for Jinja syntax in BAML @check and @assert attributes
+---
+
+# Jinja in Attributes
+
+`@check` and `@assert` use Jinja syntax to specify invariants (properties that should always hold true).
+
+## The `this` Keyword
+
+- **Field attributes**: `this` refers to the field value
+- **Block attributes**: `this` refers to the entire object
+
+```baml
+class Student {
+    first_name string @assert({{ this|length > 0 }})  // this = first_name
+    age int @check(old_enough, {{ this > 5 }})        // this = age
+    @@check(age_threshold, {{ this.age > 12 }})       // this = Student object
+}
+```
+
+## Available Filters
+
+| Filter | Description |
+|--------|-------------|
+| `abs` | Absolute value |
+| `capitalize` | First letter uppercase |
+| `escape` | HTML escape |
+| `first` | First item of list |
+| `last` | Last item of list |
+| `default(x)` | Returns `x` when undefined |
+| `float` | Convert to float (or 0.0) |
+| `int` | Convert to int (or 0) |
+| `join` | Concatenate list of strings |
+| `length` | List/string length |
+| `lower` | Lowercase |
+| `upper` | Uppercase |
+| `map(filter)` | Apply filter to each item |
+| `max` | Maximum of list |
+| `min` | Minimum of list |
+| `regex_match("regex")` | True if matches regex |
+| `reject("test")` | Filter out failing items |
+| `reverse` | Reverse list/string |
+| `round` | Round to nearest int |
+| `select("test_name")` | Keep passing items |
+| `sum` | Sum of numbers |
+| `title` | Title Case |
+| `trim` | Remove whitespace |
+| `unique` | Remove duplicates |
+
+## Common Patterns
+
+### Substring Search
+
+```baml
+function GenerateStory(subject: string) -> string {
+    client "openai/gpt-4o"
+    prompt #"Write a story about {{ subject }}"#
+}
+
+test HorseStory {
+    functions [GenerateStory]
+    args {
+        subject "Equestrian team coming-of-age story"
+    }
+    @@assert({{ this|lower|regex_match("horse") }})
+}
+```
+
+### Exact Match
+
+```baml
+class Person {
+    first_name string
+    last_name string
+}
+
+test ExtractJohnDoe {
+    functions [ExtractPerson]
+    args {
+        description "John Doe is a 5'6\" man."
+    }
+    @@assert({{ this.first_name|regex_match("^John$") }})
+    @@assert({{ this.last_name == "Doe" }})
+}
+```
+
+### Sum Validation
+
+```baml
+class Receipt {
+    items Item[]
+    tax_cents int
+    total_cents int
+}
+
+class Item {
+    name string
+    price_cents int
+}
+
+test SmallReceipt {
+    functions [ExtractReceipt]
+    args {
+        text_receipt "Affogato: $8.50. Tax: $1. Total: $9.50"
+    }
+    @@assert({{ this.items|map(attribute="price_cents")|sum + this.tax_cents == this.total_cents }})
+}
+```
+
+## See Also
+
+- [@check](/reference/attributes/check)
+- [@assert](/reference/attributes/assert)
+- [Jinja Overview](/reference/prompt-syntax/jinja-overview)

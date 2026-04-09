@@ -1,0 +1,70 @@
+---
+sidebar_position: 1
+sidebar_label: init
+title: baml-cli init
+description: Initialize a BAML project
+---
+
+# baml-cli init
+
+Initialize a new BAML project with directory structure and configuration files.
+
+## Usage
+
+```bash
+baml-cli init [OPTIONS]
+```
+
+## Options
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--dest <PATH>` | Where to initialize the project | `.` (current directory) |
+| `--client-type <TYPE>` | BAML client type to generate | Auto-detected |
+| `--openapi-client-type <TYPE>` | OpenAPI client generator | None |
+
+## Description
+
+The `init` command:
+
+1. Creates `${DEST}/baml_src` directory structure
+2. Creates `generators.baml` with initial configuration
+3. Includes example files to get started
+
+## Client Types
+
+| Type | Description |
+|------|-------------|
+| `python/pydantic` | Python with Pydantic |
+| `typescript` | TypeScript |
+| `go` | Native Go (recommended) |
+| `ruby/sorbet` | Ruby with Sorbet |
+| `rest/openapi` | REST with OpenAPI |
+
+## Examples
+
+```bash
+# Initialize in current directory
+baml init
+
+# Initialize in specific directory
+baml init --dest /path/to/my/project
+
+# Initialize for Python
+baml init --client-type python/pydantic
+
+# Initialize for Go
+baml init --client-type go
+
+# Initialize with OpenAPI + Go client
+baml init --client-type rest/openapi --openapi-client-type go
+```
+
+## Notes
+
+- Fails if `baml_src` directory already exists
+- OpenAPI generator detection: checks for `openapi-generator`, `openapi-generator-cli`, or uses `npx @openapitools/openapi-generator-cli`
+
+## See Also
+
+- [baml-cli generate](/reference/baml-cli/generate)

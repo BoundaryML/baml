@@ -1,0 +1,226 @@
+---
+sidebar_position: 4
+sidebar_label: Timeouts
+title: Timeout Configuration
+description: Reference for BAML client timeout configuration
+---
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+# Timeouts
+
+Configure timeouts on BAML clients to prevent requests from hanging indefinitely.
+
+## Timeout Options
+
+All values are specified in **milliseconds** as positive integers.
+
+### connect_timeout_ms
+
+Maximum time to establish a network connection.
+
+```baml
+client<llm> MyClient {
+    provider openai
+    options {
+        model "gpt-4o"
+        http {
+            connect_timeout_ms 5000  // 5 seconds
+        }
+    }
+}
+```
+
+### time_to_first_token_timeout_ms
+
+Maximum time to receive the first token after sending the request.
+
+```baml
+client<llm> MyClient {
+    provider openai
+    options {
+        model "gpt-4o"
+        http {
+            time_to_first_token_timeout_ms 10000  // 10 seconds
+        }
+    }
+}
+```
+
+### idle_timeout_ms
+
+Maximum time between receiving consecutive data chunks.
+
+```baml
+client<llm> MyClient {
+    provider openai
+    options {
+        model "gpt-4o"
+        http {
+            idle_timeout_ms 15000  // 15 seconds
+        }
+    }
+}
+```
+
+### request_timeout_ms
+
+Maximum total time for the entire request-response cycle.
+
+```baml
+client<llm> MyClient {
+    provider openai
+    options {
+        model "gpt-4o"
+        http {
+            request_timeout_ms 60000  // 60 seconds
+        }
+    }
+}
+```
+
+## Timeout Composition
+
+When composite clients reference subclients with timeouts, the **minimum (most restrictive) timeout wins**.
+
+```baml
+client<llm> FastClient {
+    provider openai
+    options {
+        model "gpt-4o-mini"
+        http {
+            connect_timeout_ms 3000
+            request_timeout_ms 20000
+        }
+    }
+}
+
+client<llm> SlowClient {
+    provider openai
+    options {
+        model "gpt-4o"
+        http {
+            request_timeout_ms 60000
+        }
+    }
+}
+
+client<llm> MyFallback {
+    provider fallback
+    options {
+        strategy [FastClient, SlowClient]
+        http {
+            connect_timeout_ms 5000
+            idle_timeout_ms 15000
+        }
+    }
+}
+```
+
+**Effective timeouts for FastClient:**
+- `connect_timeout_ms`: min(5000, 3000) = **3000ms**
+- `request_timeout_ms`: **20000ms**
+- `idle_timeout_ms`: **15000ms**
+
+**Effective timeouts for SlowClient:**
+- `connect_timeout_ms`: **5000ms**
+- `request_timeout_ms`: **60000ms**
+- `idle_timeout_ms`: **15000ms**
+
+## Runtime Overrides
+
+<Tabs>
+<TabItem value="typescript" label="TypeScript">
+
+```typescript
+import { b } from './baml_client'
+
+const result = await b.MyFunction(input, {
+    clientRegistry: b.ClientRegistry.override({
+        "MyClient": {
+            options: {
+                http: {
+                    request_timeout_ms: 10000,
+                    idle_timeout_ms: 5000
+                }
+            }
+        }
+    })
+})
+```
+
+</TabItem>
+<TabItem value="python" label="Python">
+
+```python
+from baml_client import b
+
+result = await b.MyFunction(
+    input,
+    baml_options={
+        "client_registry": b.ClientRegistry.override({
+            "MyClient": {
+                "options": {
+                    "http": {
+                        "request_timeout_ms": 10000,
+                        "idle_timeout_ms": 5000
+                    }
+                }
+            }
+        })
+    }
+)
+```
+
+</TabItem>
+</Tabs>
+
+## Error Handling
+
+Timeout errors are `BamlTimeoutError`, a subclass of `BamlClientError`:
+
+<Tabs>
+<TabItem value="python" label="Python">
+
+```python
+from baml_py.errors import BamlTimeoutError
+
+try:
+    result = await b.MyFunction(input)
+except BamlTimeoutError as e:
+    print(f"Timeout: {e.timeout_type}")
+    print(f"Configured: {e.configured_value_ms}ms")
+    print(f"Elapsed: {e.elapsed_ms}ms")
+```
+
+</TabItem>
+<TabItem value="typescript" label="TypeScript">
+
+```typescript
+import { BamlTimeoutError } from '@boundaryml/baml'
+
+try {
+    const result = await b.MyFunction(input)
+} catch (e) {
+    if (e instanceof BamlTimeoutError) {
+        console.log(`Timeout: ${e.timeout_type}`)
+        console.log(`Configured: ${e.configured_value_ms}ms`)
+        console.log(`Elapsed: ${e.elapsed_ms}ms`)
+    }
+}
+```
+
+</TabItem>
+</Tabs>
+
+## Validation Rules
+
+1. All timeout values must be positive integers
+2. `request_timeout_ms` must be ≥ `time_to_first_token_timeout_ms` (if both specified)
+
+## See Also
+
+- [Retry Policy](/reference/clients/strategies/retry)
+- [Fallback Strategy](/reference/clients/strategies/fallback)
+- [Client Overview](/reference/clients/overview)

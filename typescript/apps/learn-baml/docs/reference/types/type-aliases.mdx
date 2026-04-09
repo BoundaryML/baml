@@ -1,0 +1,100 @@
+---
+sidebar_position: 8
+sidebar_label: Type Aliases
+title: Type Aliases
+description: Reference for BAML type aliases - alternative names for existing types
+---
+
+# Type Aliases
+
+Type aliases provide alternative names for existing types, simplifying complex type definitions.
+
+:::info
+This feature was added in v0.71.0.
+:::
+
+## Syntax
+
+```baml
+type AliasName = ExistingType
+```
+
+## Examples
+
+### Basic Alias
+
+```baml
+type Graph = map<string, string[]>
+```
+
+### Alias Composition
+
+Type aliases can reference other aliases:
+
+```baml
+type Graph = map<string, string[]>
+type DataStructure = string[] | Graph
+```
+
+### Recursive Types
+
+Recursive type aliases are supported through map or list containers:
+
+```baml
+type JsonValue = int | string | bool | float | JsonObject | JsonArray
+type JsonObject = map<string, JsonValue>
+type JsonArray = JsonValue[]
+```
+
+### Self-Referential Aliases
+
+Aliases can reference themselves through containers:
+
+```baml
+type JsonValue = int | float | bool | string | null | JsonValue[] | map<string, JsonValue>
+```
+
+## Invalid Patterns
+
+Direct circular references without containers are invalid:
+
+```baml
+// Invalid - no value can satisfy this type
+type A = B
+type B = A
+```
+
+## Use Cases
+
+### Simplifying Complex Types
+
+```baml
+// Without alias
+function ProcessData(data: map<string, (int | string | bool)[]>) -> string { ... }
+
+// With alias
+type MixedArray = (int | string | bool)[]
+type DataMap = map<string, MixedArray>
+function ProcessData(data: DataMap) -> string { ... }
+```
+
+### JSON-like Structures
+
+```baml
+type Json = int | float | bool | string | null | Json[] | map<string, Json>
+
+function ParseJson(input: string) -> Json {
+    client "openai/gpt-4o"
+    prompt #"
+        Parse the following as JSON:
+        {{ input }}
+        {{ ctx.output_format }}
+    "#
+}
+```
+
+## See Also
+
+- [Types Overview](/reference/types/overview)
+- [Maps](/reference/types/maps)
+- [Union Types](/reference/types/unions)

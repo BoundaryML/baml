@@ -1,0 +1,112 @@
+---
+sidebar_position: 3
+sidebar_label: Arrays
+title: Array Types
+description: Reference for BAML array types and collection syntax
+---
+
+# Arrays
+
+Arrays store ordered collections of elements of the same type.
+
+## Syntax
+
+```baml
+Type[]
+```
+
+## Examples
+
+### Type Declaration
+
+```baml
+string[]           // array of strings
+int[]              // array of integers
+MyClass[]          // array of custom class
+(int | string)[]   // array of union type
+int[][]            // nested array (2D)
+```
+
+### In Functions
+
+```baml
+function DescriptionGame(items: string[]) -> string {
+    client "openai/gpt-4o-mini"
+    prompt #"
+        What 3 words best describe all of these: {{ items }}.
+    "#
+}
+```
+
+### In Tests
+
+Single-line format:
+
+```baml
+test FruitList {
+    functions [DescriptionGame]
+    args { items ["apple", "banana", "cherry"] }
+}
+```
+
+Multi-line format:
+
+```baml
+test CityDescription {
+    functions [DescriptionGame]
+    args {
+        items [
+            "New York",
+            "Los Angeles",
+            "Chicago"
+        ]
+    }
+}
+```
+
+### Nested Arrays
+
+Arrays can contain objects with key-value pairs:
+
+```baml
+{
+  key1 [value1, value2, value3],
+  key2 [
+    value1,
+    value2,
+    value3
+  ],
+  key3 [
+    {
+      subkey1 "valueA",
+      subkey2 "valueB"
+    },
+    {
+      subkey1 "valueC",
+      subkey2 "valueD"
+    }
+  ]
+}
+```
+
+## Key Points
+
+- Commas are optional in multi-line arrays but recommended for clarity
+- Nested arrays are supported for complex data structures
+- Arrays can contain objects with key-value pairs
+- Array types can be nested to create multi-dimensional arrays
+- An array type cannot be optional (use `Type[]?` is invalid, use `Type[]` with empty array instead)
+
+## Language Equivalents
+
+| BAML | Python | TypeScript | Go |
+|------|--------|------------|-----|
+| `string[]` | `List[str]` | `string[]` | `[]string` |
+| `int[]` | `List[int]` | `number[]` | `[]int` |
+| `(int \| float)[]` | `List[Union[int, float]]` | `number[]` | `[]Union2IntOrFloat` |
+
+## See Also
+
+- [Types Overview](/reference/types/overview)
+- [Maps](/reference/types/maps)
+- [Classes and Enums](/reference/types/classes-enums)

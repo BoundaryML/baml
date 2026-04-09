@@ -1,0 +1,114 @@
+---
+sidebar_position: 1
+sidebar_label: OpenAI
+title: OpenAI Provider
+description: Reference for configuring OpenAI LLM clients in BAML
+---
+
+# OpenAI
+
+The `openai` provider supports the OpenAI `/chat` endpoint.
+
+:::tip
+For Azure OpenAI, use [`azure-openai`](/reference/clients/providers/azure) instead.
+
+For OpenAI-compatible APIs (Groq, Ollama, Together AI, etc.), use [`openai-generic`](/reference/clients/providers/openai-generic).
+:::
+
+## Basic Example
+
+```baml
+client<llm> MyClient {
+    provider "openai"
+    options {
+        api_key env.MY_OPENAI_KEY
+        model "gpt-4o"
+        temperature 0.1
+    }
+}
+```
+
+## BAML-Specific Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `api_key` | string | `env.OPENAI_API_KEY` | API key for Authorization header |
+| `base_url` | string | `https://api.openai.com/v1` | Base URL for API |
+| `headers` | object | - | Additional request headers |
+
+### Custom Headers
+
+```baml
+client<llm> MyClient {
+    provider openai
+    options {
+        api_key env.MY_OPENAI_KEY
+        model "gpt-4o"
+        headers {
+            "X-My-Header" "my-value"
+        }
+    }
+}
+```
+
+## Available Models
+
+| Model | Use Case | Context | Features |
+|-------|----------|---------|----------|
+| `gpt-4o` | General purpose, multimodal | 200K | Updated knowledge, June 2024 |
+| `gpt-4o-mini` | Cost-effective tasks | 128K | Faster, lower cost |
+| `o1` | Complex reasoning | 200K | Extended thinking |
+| `o1-mini` | Lightweight reasoning | 128K | Faster reasoning |
+
+See [OpenAI Models](https://platform.openai.com/docs/models) for the complete list.
+
+## Reasoning Models
+
+:::warning
+For reasoning models (`o1`, `o1-mini`), use `max_completion_tokens` instead of `max_tokens`:
+
+```baml
+client<llm> OpenAIo1 {
+    provider openai
+    options {
+        model "o1-mini"
+        max_tokens null
+    }
+}
+```
+:::
+
+## Changing Regions
+
+Access OpenAI's API in different regions by setting `base_url`:
+
+```baml
+client<llm> EUClient {
+    provider openai
+    options {
+        model "gpt-4o"
+        base_url "https://eu.api.openai.com/v1"
+    }
+}
+```
+
+## Provider Parameters
+
+These options are passed directly to OpenAI:
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `model` | string | Model identifier |
+| `temperature` | float | Sampling temperature (0-2) |
+| `max_tokens` | int | Maximum response tokens |
+| `top_p` | float | Nucleus sampling parameter |
+| `frequency_penalty` | float | Frequency penalty (-2 to 2) |
+| `presence_penalty` | float | Presence penalty (-2 to 2) |
+
+See the [OpenAI API documentation](https://platform.openai.com/docs/api-reference/chat/create) for all options.
+
+## See Also
+
+- [Azure OpenAI](/reference/clients/providers/azure)
+- [OpenAI Generic](/reference/clients/providers/openai-generic)
+- [Client Overview](/reference/clients/overview)

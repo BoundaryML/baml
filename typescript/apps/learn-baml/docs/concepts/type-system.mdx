@@ -1,0 +1,67 @@
+---
+sidebar_position: 1
+sidebar_label: Type System
+title: The BAML Type System
+description: Understanding BAML's type system for structured LLM outputs
+---
+
+# The BAML Type System
+
+BAML's type system is the foundation for reliable AI applications. It ensures LLM outputs are always valid and usable.
+
+## Core Types
+
+### Primitives
+
+| Type | Description | Example |
+|------|-------------|---------|
+| `string` | Text | `"hello"` |
+| `int` | Integer | `42` |
+| `float` | Decimal | `3.14` |
+| `bool` | Boolean | `true` |
+
+### Complex Types
+
+```baml
+// Enums - constrained choices
+enum Status {
+  pending
+  approved
+  rejected
+}
+
+// Classes - structured objects
+class User {
+  name string
+  email string
+  age int?  // Optional field
+}
+
+// Arrays
+class Response {
+  items string[]
+  users User[]
+}
+```
+
+## Type Safety at Runtime
+
+Unlike traditional type systems that only work at compile time, BAML validates types at runtime when the LLM responds:
+
+```
+LLM Output → BAML Parser → Validated Type → Your Code
+```
+
+This is called [Schema-Aligned Parsing](/concepts/schema-aligned-parsing).
+
+## Why This Matters
+
+1. **No more JSON parsing errors** - BAML handles malformed outputs
+2. **Guaranteed structure** - Your code always receives the expected type
+3. **Provider independence** - Same types work across OpenAI, Anthropic, etc.
+
+## Learn More
+
+- [Schema-Aligned Parsing](/concepts/schema-aligned-parsing) - How BAML parses and validates outputs
+- [Classification Example](/cookbook/classification) - See types in action
+- [BAML Syntax Reference](/reference/baml-syntax) - Complete type syntax

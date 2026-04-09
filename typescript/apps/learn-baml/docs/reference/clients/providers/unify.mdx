@@ -1,0 +1,46 @@
+---
+sidebar_position: 22
+sidebar_label: Unify AI
+title: Unify AI Provider
+description: Reference for configuring Unify AI LLM clients in BAML
+---
+
+# Unify AI
+
+[Unify AI](https://www.unify.ai/) provides a unified API for multiple LLM providers with intelligent routing.
+
+## Basic Example
+
+```baml
+client<llm> UnifyClient {
+    provider "openai-generic"
+    options {
+        base_url "https://api.unify.ai/v0"
+        api_key env.MY_UNIFY_API_KEY
+        model "llama-3.1-405b-chat@together-ai"
+    }
+}
+```
+
+## BAML-Specific Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `base_url` | string | - | `https://api.unify.ai/v0` |
+| `api_key` | string | `env.MY_UNIFY_API_KEY` | API key |
+| `model` | string | - | Model with provider suffix |
+
+### Model Format
+
+Unify uses a `model@provider` format:
+- `llama-3.1-405b-chat@together-ai`
+- `gpt-4o@openai`
+- `claude-3-sonnet@anthropic`
+
+See [Unify AI documentation](https://docs.unify.ai/universal_api/making_queries#openai-python-package) for more information.
+
+## See Also
+
+- [OpenAI Generic](/reference/clients/providers/openai-generic)
+- [OpenRouter](/reference/clients/providers/openrouter)
+- [Client Overview](/reference/clients/overview)

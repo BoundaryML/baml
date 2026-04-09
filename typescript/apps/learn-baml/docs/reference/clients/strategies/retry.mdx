@@ -1,0 +1,111 @@
+---
+sidebar_position: 1
+sidebar_label: Retry Policy
+title: Retry Policy
+description: Reference for BAML retry policy configuration
+---
+
+# Retry Policy
+
+A retry policy attaches to any `client<llm>` and retries requests that fail due to network errors.
+
+## Basic Example
+
+```baml
+retry_policy MyPolicyName {
+    max_retries 3
+}
+
+client<llm> MyClient {
+    provider anthropic
+    retry_policy MyPolicyName
+    options {
+        model "claude-sonnet-4-20250514"
+        api_key env.ANTHROPIC_API_KEY
+    }
+}
+```
+
+## Fields
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `max_retries` | int | Yes | Additional retries after initial failure |
+| `strategy` | Strategy | No | Retry timing strategy (default: `constant_delay`) |
+
+## Strategies
+
+### constant_delay
+
+Waits a fixed duration between retries.
+
+```baml
+retry_policy MyPolicyName {
+    max_retries 3
+    strategy {
+        type constant_delay
+        delay_ms 200
+    }
+}
+```
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `type` | `constant_delay` | - | Strategy type |
+| `delay_ms` | int | 200 | Delay in milliseconds |
+
+### exponential_backoff
+
+Increases delay exponentially between retries.
+
+```baml
+retry_policy ExponentialPolicy {
+    max_retries 5
+    strategy {
+        type exponential_backoff
+        delay_ms 200
+        multiplier 1.5
+        max_delay_ms 10000
+    }
+}
+```
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `type` | `exponential_backoff` | - | Strategy type |
+| `delay_ms` | int | 200 | Initial delay in milliseconds |
+| `multiplier` | float | 1.5 | Multiplier applied after each retry |
+| `max_delay_ms` | int | 10000 | Maximum delay in milliseconds |
+
+## Interaction with Timeouts
+
+When using both retry policies and timeouts:
+- Each retry attempt gets the full timeout duration
+- A timeout triggers the retry mechanism
+- Total time = (attempts × timeout) + retry delays
+
+```baml
+retry_policy Exponential {
+    max_retries 3
+    strategy {
+        type exponential_backoff
+    }
+}
+
+client<llm> MyClient {
+    provider openai
+    retry_policy Exponential
+    options {
+        model "gpt-4o"
+        http {
+            request_timeout_ms 30000
+        }
+    }
+}
+```
+
+## See Also
+
+- [Fallback Strategy](/reference/clients/strategies/fallback)
+- [Timeouts](/reference/clients/strategies/timeouts)
+- [Client Overview](/reference/clients/overview)

@@ -1,0 +1,36 @@
+---
+sidebar_position: 3
+sidebar_label: Playground Proxy
+title: baml.enablePlaygroundProxy
+description: Configure the playground proxy for LLM requests
+---
+
+# baml.enablePlaygroundProxy
+
+| Type | Default |
+|------|---------|
+| `boolean \| null` | `true` |
+
+Many LLM providers don't accept requests from the browser. This setting enables a proxy that runs in the background and forwards requests to the LLM provider.
+
+:::tip
+When running VSCode from a remote machine, you likely need to set this to `false`.
+:::
+
+## Usage
+
+```json
+{
+  "baml.enablePlaygroundProxy": false
+}
+```
+
+## When to Disable
+
+- Running VSCode Remote (SSH, WSL, Containers)
+- Using a corporate proxy that handles LLM requests
+- Security policies that restrict local proxies
+
+## See Also
+
+- [CLI Path](./cli-path) - Configure custom CLI path

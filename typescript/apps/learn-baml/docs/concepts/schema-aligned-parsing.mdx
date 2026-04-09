@@ -1,0 +1,88 @@
+---
+sidebar_position: 2
+sidebar_label: Schema-Aligned Parsing
+title: Schema-Aligned Parsing
+description: How BAML transforms LLM text into validated structured data
+---
+
+# Schema-Aligned Parsing
+
+Schema-Aligned Parsing (SAP) is BAML's approach to converting free-form LLM text into structured, validated data.
+
+## The Challenge
+
+LLMs output text, but applications need structured data:
+
+```
+LLM says: "The sentiment is definitely positive! :)"
+You need: { sentiment: "positive" }
+```
+
+## How BAML Solves This
+
+BAML's parser understands your schema and extracts matching data:
+
+```baml
+enum Sentiment {
+  positive
+  negative
+  neutral
+}
+
+function Classify(text: string) -> Sentiment {
+  client GPT4
+  prompt #"Classify: {{ text }}"#
+}
+```
+
+Even if the LLM responds with extra text, BAML extracts `positive`.
+
+## Parsing Strategies
+
+### 1. Exact Match
+For enums and simple types, BAML looks for exact matches:
+
+```
+Output: "I believe this is positive"
+Parsed: Sentiment.positive
+```
+
+### 2. Structural Extraction
+For classes, BAML extracts fields flexibly:
+
+```
+Output: "Name: John, he is 25 years old"
+Parsed: { name: "John", age: 25 }
+```
+
+### 3. JSON Mode
+When enabled, BAML uses the provider's JSON mode:
+
+```baml
+function Extract(text: string) -> User {
+  client GPT4
+  prompt #"..."#
+  output_format json  // Use JSON mode
+}
+```
+
+## Error Handling
+
+When parsing fails, BAML provides detailed errors:
+
+```typescript
+try {
+  const result = await b.Classify(text);
+} catch (e) {
+  if (e instanceof BAMLParseError) {
+    console.log(e.rawOutput);  // What the LLM actually said
+    console.log(e.expected);   // What schema was expected
+  }
+}
+```
+
+## Related Topics
+
+- [Type System](/concepts/type-system) - The types SAP validates against
+- [Data Extraction](/cookbook/data-extraction) - Practical extraction examples
+- [Add Fallbacks](/how-to/add-fallbacks) - Handle parsing failures gracefully

@@ -1,0 +1,43 @@
+---
+sidebar_position: 1
+sidebar_label: CLI Path
+title: baml.cliPath
+description: Configure custom BAML CLI path
+---
+
+# baml.cliPath
+
+| Type | Default |
+|------|---------|
+| `string \| null` | `null` |
+
+If set, all generated code will use this path instead of the packaged generator shipped with the extension.
+
+:::tip Recommended
+This prevents mismatches between the VSCode Extension and the installed BAML package.
+:::
+
+## Usage
+
+Find your BAML CLI path:
+
+```bash
+# Unix/macOS
+which baml-cli
+
+# Windows
+where baml-cli
+```
+
+Configure in `settings.json`:
+
+```json
+{
+  "baml.cliPath": "/path/to/baml-cli"
+}
+```
+
+## See Also
+
+- [Generate on Save](./generate-on-save) - Configure auto-generation
+- [Sync Version](./sync-version) - Auto-sync extension version

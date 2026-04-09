@@ -1,0 +1,68 @@
+---
+sidebar_position: 6
+sidebar_label: "@check"
+title: "@check Attribute"
+description: Reference for the BAML @check attribute for non-exception validations
+---
+
+# @check
+
+The `@check` attribute adds validations without raising exceptions if they fail. Results can be inspected at runtime.
+
+## Field Check
+
+```baml
+class Foo {
+    bar int @check(less_than_zero, {{ this < 0 }})
+}
+```
+
+## Block Check
+
+```baml
+class Bar {
+    baz int
+    quux string
+    @@check(quux_limit, {{ this.quux|length < this.baz }})
+}
+```
+
+## Syntax
+
+```baml
+@check(name, {{ jinja_expression }})
+```
+
+| Component | Description |
+|-----------|-------------|
+| `name` | Identifier for the check |
+| `jinja_expression` | Expression that returns true/false |
+
+## Benefits
+
+- **Non-Intrusive**: Validation without interrupting data flow
+- **Runtime Inspection**: Check results accessible in code
+- **Multiple Checks**: Stack multiple checks on a field
+
+## Example with Multiple Checks
+
+```baml
+class Student {
+    first_name string @assert({{ this|length > 0 }})
+    last_name string @assert({{ this|length > 0 }})
+    age int @check(old_enough, {{ this > 5 }}) @check(u8, {{ this|abs < 255 }})
+    concentration string
+    @@check(age_threshold, {{ this.concentration != "calculus" or this.age > 12 }})
+}
+```
+
+## The `this` Keyword
+
+- In field attributes: `this` refers to the field value
+- In block attributes: `this` refers to the entire object
+
+## See Also
+
+- [@assert](/reference/attributes/assert)
+- [Jinja in Attributes](/reference/attributes/jinja-in-attributes)
+- [Attributes Overview](/reference/attributes/overview)

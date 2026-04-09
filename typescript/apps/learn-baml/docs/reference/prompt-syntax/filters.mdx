@@ -1,0 +1,156 @@
+---
+sidebar_position: 7
+sidebar_label: Filters
+title: Jinja Filters
+description: Reference for Jinja filters in BAML prompts
+---
+
+# Jinja Filters
+
+Filters transform values in BAML prompts using the pipe operator (`|`).
+
+## Syntax
+
+```jinja
+{{ value|filter_name }}
+{{ value|filter_name(arg1, arg2) }}
+{{ value|filter1|filter2|filter3 }}
+```
+
+## BAML Custom Filters
+
+### format
+
+Serializes values to structured text, preserving BAML aliases.
+
+**Signature:** `value|format(type="yaml" | "json" | "toon", **kwargs)`
+
+| Format | Description |
+|--------|-------------|
+| `yaml` | Human-friendly YAML with aliases |
+| `json` | Standard JSON (minified) |
+| `toon` | Compact TOON format for uniform arrays |
+
+```jinja
+{{ organization|format(type="yaml") }}
+{{ organization|format(type="json") }}
+{{ organization|format(type="toon", indent=4, delimiter="tab") }}
+```
+
+**TOON Options:**
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `indent` | 2 | Spaces per indent level |
+| `delimiter` | `"comma"` | Column separator (`"comma"`, `"tab"`, `"pipe"`) |
+| `length_marker` | (none) | Prefix for array lengths |
+
+### regex_match
+
+Tests if a string matches a regex pattern.
+
+```jinja
+{% if phone|regex_match("\\(?\\d{3}\\)?[-.\\s]?\\d{3}[-.\\s]?\\d{4}") %}
+    Valid phone number
+{% endif %}
+```
+
+### sum
+
+Sums numeric values in an array.
+
+```jinja
+Total: {{ prices|sum }}
+```
+
+## Standard Jinja Filters
+
+### String Filters
+
+| Filter | Description |
+|--------|-------------|
+| `upper` | Converts to uppercase |
+| `lower` | Converts to lowercase |
+| `title` | Converts to title case |
+| `trim` | Removes leading/trailing whitespace |
+| `replace(old, new)` | Replaces substring |
+
+```jinja
+{{ name|upper }}
+{{ name|lower }}
+{{ title|title }}
+{{ text|trim }}
+{{ text|replace("old", "new") }}
+```
+
+### Array Filters
+
+| Filter | Description |
+|--------|-------------|
+| `length` | Returns item count |
+| `first` | Returns first element |
+| `last` | Returns last element |
+| `join(sep)` | Joins with separator |
+| `sort` | Sorts array |
+| `unique` | Removes duplicates |
+| `reverse` | Reverses order |
+
+```jinja
+{{ items|length }}
+{{ items|first }}
+{{ items|last }}
+{{ tags|join(", ") }}
+{{ items|sort }}
+{{ values|unique }}
+{{ items|reverse }}
+```
+
+### Number Filters
+
+| Filter | Description |
+|--------|-------------|
+| `round(n)` | Rounds to n decimal places |
+| `abs` | Returns absolute value |
+
+```jinja
+{{ price|round(2) }}
+{{ value|abs }}
+```
+
+### Default Values
+
+```jinja
+{{ user_name|default("Guest") }}
+```
+
+## Chaining Filters
+
+```jinja
+{{ name|trim|lower|title }}
+{{ items|unique|sort|join(", ") }}
+```
+
+## TOON Format
+
+TOON (Token-Oriented Object Notation) combines YAML indentation with CSV-style tabular layout.
+
+**Best for:**
+- Uniform arrays of objects
+- Highly structured, tabular data
+
+**Consider alternatives for:**
+- Deeply nested structures (use JSON)
+- Mixed/semi-uniform data
+- Pure flat tables (use CSV)
+
+See the [TOON repository](https://github.com/toon-format/toon) for details.
+
+## More Information
+
+See the [Minijinja documentation](https://docs.rs/minijinja/latest/minijinja/filters/index.html#functions) for all standard filters.
+
+## See Also
+
+- [Jinja Overview](/reference/prompt-syntax/jinja-overview)
+- [Variables](/reference/prompt-syntax/variables)
+- [Loops](/reference/prompt-syntax/loops)

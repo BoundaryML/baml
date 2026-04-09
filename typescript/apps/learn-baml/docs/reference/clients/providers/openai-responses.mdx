@@ -1,0 +1,142 @@
+---
+sidebar_position: 16
+sidebar_label: OpenAI Responses
+title: OpenAI Responses Provider
+description: Reference for configuring OpenAI Responses API clients in BAML
+---
+
+# OpenAI Responses
+
+The `openai-responses` provider supports OpenAI's `/responses` endpoint, which uses the newer Responses API instead of Chat Completions.
+
+:::tip
+OpenAI recommends the Responses API for new users. See [OpenAI's comparison guide](https://platform.openai.com/docs/guides/responses-vs-chat-completions).
+:::
+
+:::warning
+`o1-mini` is not supported with the `openai-responses` provider.
+:::
+
+## Basic Example
+
+```baml
+client<llm> MyResponsesClient {
+    provider "openai-responses"
+    options {
+        api_key env.MY_OPENAI_KEY
+        model "gpt-4o"
+        reasoning {
+            effort "medium"
+        }
+    }
+}
+```
+
+## BAML-Specific Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `api_key` | string | `env.OPENAI_API_KEY` | API key |
+| `base_url` | string | `https://api.openai.com/v1` | Base URL |
+| `headers` | object | - | Additional headers |
+| `client_response_type` | string | `"openai-responses"` | Response format |
+
+## Provider Parameters
+
+### reasoning.effort
+
+Controls the reasoning effort level:
+
+| Value | Description |
+|-------|-------------|
+| `low` | Minimal reasoning effort |
+| `medium` | Balanced reasoning effort |
+| `high` | Maximum reasoning effort |
+
+```baml
+client<llm> HighReasoningClient {
+    provider openai-responses
+    options {
+        model "o4-mini"
+        reasoning {
+            effort "high"
+        }
+    }
+}
+```
+
+### tools
+
+Tools the model can use during reasoning:
+
+```baml
+client<llm> WebSearchClient {
+    provider openai-responses
+    options {
+        model "gpt-4o"
+        tools [
+            {
+                type "web_search_preview"
+            }
+        ]
+    }
+}
+```
+
+## Available Models
+
+| Model | Use Case | Context | Features |
+|-------|----------|---------|----------|
+| `gpt-4o` | General purpose | 128K | Multimodal, balanced |
+| `gpt-4o-mini` | Cost-efficient | 128K | Fast, affordable |
+| `o4-mini` | Fast reasoning | Standard | 92.7% AIME, cost-efficient |
+
+## Use Cases
+
+### Image Input
+
+```baml
+client<llm> VisionClient {
+    provider openai-responses
+    options {
+        model "gpt-4o"
+    }
+}
+
+function AnalyzeImage(img: image) -> string {
+    client VisionClient
+    prompt #"
+        {{ _.role("user") }}
+        What is in this image?
+        {{ img }}
+    "#
+}
+```
+
+### Advanced Reasoning
+
+```baml
+client<llm> AdvancedReasoningClient {
+    provider openai-responses
+    options {
+        model "o4-mini"
+        reasoning {
+            effort "high"
+        }
+    }
+}
+
+function SolveComplexProblem(problem: string) -> string {
+    client AdvancedReasoningClient
+    prompt #"
+        {{ _.role("user") }}
+        Solve this step by step: {{ problem }}
+    "#
+}
+```
+
+## See Also
+
+- [OpenAI](/reference/clients/providers/openai)
+- [OpenAI API Documentation](https://platform.openai.com/docs/api-reference/responses)
+- [Client Overview](/reference/clients/overview)

@@ -1,0 +1,89 @@
+---
+sidebar_position: 2
+sidebar_label: Fallback
+title: Fallback Strategy
+description: Reference for BAML fallback client configuration
+---
+
+# Fallback
+
+The `fallback` provider adds resilience by trying multiple clients in sequence.
+
+## Basic Example
+
+```baml
+client<llm> SuperDuperClient {
+    provider fallback
+    options {
+        strategy [
+            ClientA
+            ClientB
+            ClientC
+        ]
+    }
+}
+```
+
+If `ClientA` fails, it tries `ClientB`. If that fails, it tries `ClientC`.
+
+## Options
+
+| Option | Type | Required | Description |
+|--------|------|----------|-------------|
+| `strategy` | List[string] | Yes | Client names to try in order |
+
+## With Retry Policy
+
+A retry policy on the fallback client tests the fallback after the entire strategy has failed.
+
+```baml
+client<llm> SuperDuperClient {
+    provider fallback
+    retry_policy MyRetryPolicy
+    options {
+        strategy [
+            ClientA
+            ClientB
+            ClientC
+        ]
+    }
+}
+```
+
+## Nesting Fallbacks
+
+Fallbacks can be nested inside each other:
+
+```baml
+client<llm> SuperDuperClient {
+    provider fallback
+    options {
+        strategy [
+            ClientA
+            ClientB
+            ClientC
+        ]
+    }
+}
+
+client<llm> MegaClient {
+    provider fallback
+    options {
+        strategy [
+            SuperDuperClient
+            ClientD
+        ]
+    }
+}
+```
+
+Calling `MegaClient`:
+1. Tries `SuperDuperClient` (which tries A → B → C)
+2. If all fail, tries `ClientD`
+
+## See Also
+
+- [Retry Policy](/reference/clients/strategies/retry)
+- [Round Robin](/reference/clients/strategies/round-robin)
+- [Timeouts](/reference/clients/strategies/timeouts)
+- [Client Overview](/reference/clients/overview)

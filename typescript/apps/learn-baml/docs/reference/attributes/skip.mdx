@@ -1,0 +1,116 @@
+---
+sidebar_position: 4
+sidebar_label: "@skip"
+title: "@skip Attribute"
+description: Reference for the BAML @skip attribute
+---
+
+# @skip
+
+The `@skip` attribute excludes fields or values from prompts and parsed responses.
+
+:::warning
+For class fields, the type must be nullable (`?`) if `@skip` is used.
+
+**Valid:**
+```baml
+class MyClass {
+    field1 string
+    field2 string? @skip  // OK - field2 is nullable
+}
+```
+
+**Invalid:**
+```baml
+class MyClass {
+    field1 string
+    field2 string @skip  // Error: Field with @skip must be optional
+}
+```
+:::
+
+## Class Field Skip
+
+### Without @skip
+
+```baml
+class MyClass {
+    field1 string
+    field2 string?
+}
+```
+
+**ctx.output_format:**
+
+```
+{
+  field1: string,
+  field2: string or null,
+}
+```
+
+### With @skip
+
+```baml
+class MyClass {
+    field1 string
+    field2 string? @skip
+}
+```
+
+**ctx.output_format:**
+
+```
+{
+  field1: string,
+}
+```
+
+## Enum Value Skip
+
+### Without @skip
+
+```baml
+enum MyEnum {
+    Value1
+    Value2
+}
+```
+
+**ctx.output_format:**
+
+```
+MyEnum
+---
+Value1
+Value2
+```
+
+### With @skip
+
+```baml
+enum MyEnum {
+    Value1
+    Value2 @skip
+}
+```
+
+**ctx.output_format:**
+
+```
+MyEnum
+---
+Value1
+```
+
+## Use Cases
+
+- Exclude internal fields from LLM interaction
+- Hide deprecated values while maintaining code compatibility
+- Conditionally include/exclude fields at runtime with `@@dynamic`
+
+## See Also
+
+- [@@dynamic](/reference/attributes/dynamic)
+- [Attributes Overview](/reference/attributes/overview)
+- [Classes and Enums](/reference/types/classes-enums)

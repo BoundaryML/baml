@@ -1,0 +1,402 @@
+---
+sidebar_position: 3
+sidebar_label: Collector
+title: Collector
+description: Inspect internal state of BAML function calls
+---
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+# Collector
+
+:::info
+Added in version 0.79.0
+:::
+
+The `Collector` allows you to inspect the internal state of BAML function calls, including raw HTTP requests, responses, usage metrics, and timing information.
+
+## Syntax
+
+<Tabs>
+<TabItem value="python" label="Python">
+
+```python
+from baml_py import Collector
+
+collector = Collector(name="my-collector")
+result = b.MyFunction("input", baml_options={"collector": collector})
+
+print(collector.last.usage)
+print(collector.last.raw_llm_response)
+```
+
+</TabItem>
+<TabItem value="typescript" label="TypeScript">
+
+```typescript
+import { Collector } from '@boundaryml/baml'
+
+const collector = new Collector("my-collector")
+const result = await b.MyFunction("input", { collector })
+
+console.log(collector.last?.usage)
+console.log(collector.last?.rawLlmResponse)
+```
+
+</TabItem>
+<TabItem value="ruby" label="Ruby">
+
+```ruby
+collector = Baml::Collector.new(name: "my-collector")
+res = Baml.Client.MyFunction(input: '...', baml_options: { collector: collector })
+
+print(collector.last.usage)
+print(collector.last.raw_llm_response)
+```
+
+</TabItem>
+</Tabs>
+
+## Collector Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `logs` | `List[FunctionLog]` | All function calls (oldest to newest) |
+| `last` | `FunctionLog \| null` | Most recent function log |
+| `usage` | `Usage` | Cumulative total usage across all tracked requests |
+
+## Collector Methods
+
+| Method | Description |
+|--------|-------------|
+| `clear()` | Clears all logs |
+
+## FunctionLog Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `id` | `string` | Request ID |
+| `function_name` | `string` | Name of the function |
+| `log_type` | `"call" \| "stream"` | How the function was called |
+| `timing` | `Timing` | Request timing information |
+| `usage` | `Usage` | Token usage (aggregated from all calls) |
+| `calls` | `LLMCall[]` | Every call made (including retries/fallbacks) |
+| `selected_call` | `LLMCall?` | The call used for parsing the response |
+| `raw_llm_response` | `string \| null` | Raw text from the LLM |
+| `tags` | `Map[str, any]` | User-provided metadata |
+
+## Usage Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `input_tokens` | `int \| null` | Cumulative input tokens |
+| `output_tokens` | `int \| null` | Cumulative output tokens |
+| `cached_input_tokens` | `int \| null` | Cached input tokens (for providers with caching) |
+
+## Examples
+
+### Basic Logging
+
+<Tabs>
+<TabItem value="python" label="Python">
+
+```python
+from baml_client import b
+from baml_py import Collector
+
+collector = Collector(name="my-collector")
+res = b.ExtractResume("...", baml_options={"collector": collector})
+
+# Access the last request
+print(collector.last.id)
+print(collector.last.usage)
+print(collector.last.raw_llm_response)
+
+# Access raw HTTP response
+print(collector.last.calls[-1].http_response)
+```
+
+</TabItem>
+<TabItem value="typescript" label="TypeScript">
+
+```typescript
+import { b } from 'baml_client'
+import { Collector } from '@boundaryml/baml'
+
+const collector = new Collector("my-collector")
+const res = await b.ExtractResume("...", { collector })
+
+console.log(collector.last?.id)
+console.log(collector.last?.usage)
+console.log(collector.last?.rawLlmResponse)
+console.log(collector.last?.calls.at(-1)?.httpResponse)
+```
+
+</TabItem>
+</Tabs>
+
+### Tags
+
+Attach custom metadata to function calls:
+
+<Tabs>
+<TabItem value="python" label="Python">
+
+```python
+from baml_client import b
+from baml_client.tracing import trace, set_tags
+from baml_py import Collector
+
+@trace
+async def run_with_tags():
+    # Parent trace tags
+    set_tags(parent_id="p123", run="xyz")
+
+    collector = Collector(name="tags-collector")
+
+    # Per-call tags
+    await b.TestFunction(
+        "hi",
+        baml_options={"collector": collector, "tags": {"call_id": "first"}},
+    )
+
+    # Tags are merged
+    print(collector.last.tags)  # {'parent_id': 'p123', 'run': 'xyz', 'call_id': 'first'}
+```
+
+</TabItem>
+<TabItem value="typescript" label="TypeScript">
+
+```typescript
+import { b } from "baml_client"
+import { Collector } from "@boundaryml/baml"
+import { traceAsync, setTags } from "../baml_client/tracing"
+
+const parent = traceAsync("parentTS", async () => {
+    setTags({ parentId: "p123", run: "xyz" })
+    const collector = new Collector("tags-collector")
+    await b.TestFunction("hi", { collector, tags: { callId: "first" } })
+    console.log(collector.last!.tags)
+})
+
+await parent()
+```
+
+</TabItem>
+</Tabs>
+
+### Multiple Collectors
+
+<Tabs>
+<TabItem value="python" label="Python">
+
+```python
+from baml_client import b
+from baml_py import Collector
+
+collector_a = Collector(name="collector-a")
+collector_b = Collector(name="collector-b")
+
+# Use both collectors for the same call
+res = b.ExtractResume("...", baml_options={"collector": [collector_a, collector_b]})
+
+# Both have the same logs
+assert collector_a.last.usage.input_tokens == collector_b.last.usage.input_tokens
+
+# Use only collector_a for another call
+res2 = b.TestFunction("another call", baml_options={"collector": collector_a})
+
+# collector_a has 2 logs, collector_b has 1
+assert len(collector_a.logs) == 2
+assert len(collector_b.logs) == 1
+```
+
+</TabItem>
+<TabItem value="typescript" label="TypeScript">
+
+```typescript
+import { b } from 'baml_client'
+import { Collector } from '@boundaryml/baml'
+
+const collectorA = new Collector("collector-a")
+const collectorB = new Collector("collector-b")
+
+// Use both collectors
+const res = await b.ExtractResume("...", { collector: [collectorA, collectorB] })
+
+// Use only collectorA for another call
+const res2 = await b.ExtractResume("...", { collector: collectorA })
+
+console.log(collectorA.logs.length)  // 2
+console.log(collectorB.logs.length)  // 1
+```
+
+</TabItem>
+</Tabs>
+
+### Accessing SSE Responses (Streaming)
+
+<Tabs>
+<TabItem value="python" label="Python">
+
+```python
+from baml_client import b
+from baml_py import Collector
+
+async def run():
+    collector = Collector(name="stream-collector")
+
+    stream = b.stream.ExtractResume("...", baml_options={"collector": collector})
+    async for chunk in stream:
+        print(chunk)
+
+    # Access raw SSE responses
+    log = collector.last
+    if log and log.selected_call:
+        sse_responses = log.selected_call.sse_responses()
+        if sse_responses:
+            for sse in sse_responses:
+                print(f"Raw: {sse.text}")
+                parsed = sse.json()
+                if parsed:
+                    print(f"JSON: {parsed}")
+```
+
+</TabItem>
+<TabItem value="typescript" label="TypeScript">
+
+```typescript
+import { b } from 'baml_client'
+import { Collector } from '@boundaryml/baml'
+
+const collector = new Collector("stream-collector")
+
+const stream = b.stream.ExtractResume("...", { collector })
+for await (const chunk of stream) {
+    console.log(chunk)
+}
+
+const log = collector.last
+if (log?.selectedCall) {
+    const sseResponses = log.selectedCall.sseResponses()
+    if (sseResponses) {
+        for (const sse of sseResponses) {
+            console.log(`Raw: ${sse.text}`)
+            const parsed = sse.json()
+            if (parsed) {
+                console.log(`JSON: ${JSON.stringify(parsed)}`)
+            }
+        }
+    }
+}
+```
+
+</TabItem>
+</Tabs>
+
+### Cached Token Tracking
+
+For providers with prompt caching (Anthropic, OpenAI, Google, Vertex):
+
+<Tabs>
+<TabItem value="python" label="Python">
+
+```python
+from baml_client import b
+from baml_py import Collector
+
+async def run():
+    collector = Collector(name="cache-tracker")
+
+    # First call - content cached by provider
+    res = await b.TestCaching(large_content, "Question 1", baml_options={"collector": collector})
+
+    # Second call - uses cached tokens
+    res2 = await b.TestCaching(large_content, "Question 2", baml_options={"collector": collector})
+
+    first_log = collector.logs[0]
+    second_log = collector.logs[1]
+
+    print(f"First call cached tokens: {first_log.usage.cached_input_tokens}")
+    print(f"Second call cached tokens: {second_log.usage.cached_input_tokens}")
+    print(f"Total cached tokens: {collector.usage.cached_input_tokens}")
+```
+
+</TabItem>
+<TabItem value="typescript" label="TypeScript">
+
+```typescript
+import { b } from 'baml_client'
+import { Collector } from '@boundaryml/baml'
+
+const collector = new Collector("cache-tracker")
+
+const res = await b.TestCaching(largeContent, "Question 1", { collector })
+const res2 = await b.TestCaching(largeContent, "Question 2", { collector })
+
+const firstLog = collector.logs[0]
+const secondLog = collector.logs[1]
+
+console.log(`First call cached tokens: ${firstLog.usage.cachedInputTokens}`)
+console.log(`Second call cached tokens: ${secondLog.usage.cachedInputTokens}`)
+console.log(`Total cached tokens: ${collector.usage.cachedInputTokens}`)
+```
+
+</TabItem>
+</Tabs>
+
+## LLMCall Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `client_name` | `str` | Name of the client used |
+| `provider` | `str` | Provider of the client |
+| `timing` | `Timing` | Request timing |
+| `http_request` | `HttpRequest` | Raw HTTP request |
+| `http_response` | `HttpResponse \| null` | Raw HTTP response (null for streaming) |
+| `usage` | `Usage \| null` | Token usage |
+| `selected` | `bool` | Whether this call was used for parsing |
+
+## Timing Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `start_time_utc_ms` | `int` | Start time in milliseconds since epoch |
+| `duration_ms` | `int \| null` | Duration in milliseconds |
+
+## HttpRequest Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `url` | `str` | Request URL |
+| `method` | `str` | HTTP method |
+| `headers` | `object` | Request headers |
+| `body` | `HTTPBody` | Request body |
+
+## HttpResponse Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `status` | `int` | HTTP status code |
+| `headers` | `object` | Response headers |
+| `body` | `HTTPBody` | Response body |
+
+## HTTPBody Methods
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `text()` | `string` | Body as string |
+| `json()` | `object` | Body as JSON object |
+
+## SSEResponse Properties
+
+| Property/Method | Type | Description |
+|-----------------|------|-------------|
+| `text` | `string` | Raw text of the SSE data field |
+| `json()` | `object \| null` | Parse as JSON (null if invalid) |
+
+## See Also
+
+- [with_options](/reference/generated-client/with-options) - Configure logging globally
+- [TypeBuilder](/reference/generated-client/typebuilder) - Build custom types
