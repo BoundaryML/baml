@@ -269,6 +269,9 @@ fn format_postfix_base_for_diagnostic(ty: &Ty) -> String {
 }
 
 pub(crate) fn format_ty_for_diagnostic(ty: &Ty) -> String {
+    // NOTE: Keep this in sync with `impl Display for Ty`, except for the
+    // throws-specific user-facing translations (for example `__throws_*` type
+    // vars and the diagnostic-only throws rendering).
     match ty {
         Ty::Class(qn, _) | Ty::Enum(qn, _) | Ty::TypeAlias(qn, _) => qn.to_string(),
         Ty::EnumVariant(qn, variant, _) => format!("{qn}.{variant}"),

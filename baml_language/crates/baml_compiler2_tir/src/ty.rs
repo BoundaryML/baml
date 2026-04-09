@@ -454,6 +454,9 @@ impl Ty {
 
 impl fmt::Display for Ty {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // NOTE: Keep this in sync with `throws_semantics::format_ty_for_diagnostic`.
+        // That formatter intentionally layers throws-specific user-facing wording
+        // on top of the structural rendering here.
         match self {
             Ty::Class(qn, _) => write!(f, "{qn}"),
             Ty::Enum(qn, _) => write!(f, "{qn}"),

@@ -521,15 +521,7 @@ fn collect_direct_param_call_throws<'db>(
     body: &ExprBody,
     aliases: &HashMap<crate::ty::QualifiedTypeName, Ty>,
 ) -> BTreeSet<ThrowFact> {
-    let boundary = lower_callable_boundary(
-        db,
-        pkg_items,
-        ns_context,
-        generic_params,
-        sig,
-        None,
-        &mut Vec::new(),
-    );
+    let boundary = lower_callable_boundary(db, pkg_items, ns_context, generic_params, sig, None);
     let directly_invoked = directly_invoked_callback_params(body);
 
     if directly_invoked.is_empty() {

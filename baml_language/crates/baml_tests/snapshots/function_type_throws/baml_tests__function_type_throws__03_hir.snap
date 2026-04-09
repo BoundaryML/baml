@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 12292
 ---
 === HIR2 ===
 function user.test_array_map_pure() -> int[]  [expr] {
@@ -269,6 +270,9 @@ function user.test_two_pure() -> int  [expr] {
 function user.apply(f: () -> int) -> int  [expr] {
   {  } f()
 }
+function user.apply_aliased(f: () -> int) -> int  [expr] {
+  { let g = f } g()
+}
 function user.apply_and_throw(f: () -> int) -> int  [expr] {
   { let result = f(); if (result Lt 0) { throw "negative result" } } result
 }
@@ -289,6 +293,9 @@ function user.ignore_callback(f: () -> int) -> int  [expr] {
 }
 function user.ignore_callback_but_throw(f: () -> int) -> int  [expr] {
   {  } helper_with_body_throw()
+}
+function user.test_apply_aliased_throwing() -> int  [expr] {
+  {  } apply_aliased(() -> int { { throw "aliased" } })
 }
 function user.test_apply_and_throw_pure() -> int  [expr] {
   {  } apply_and_throw(() -> int { {  } 42 })

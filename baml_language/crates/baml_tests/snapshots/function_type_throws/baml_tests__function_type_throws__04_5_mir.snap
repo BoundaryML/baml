@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 12668
 ---
 === MIR2 ===
 fn user.test_array_map_pure() -> int[] {
@@ -2297,6 +2298,28 @@ fn user.apply(f: () -> int) -> int {
     }
 }
 
+fn user.apply_aliased(f: () -> int) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: () -> int // f // param
+    let _2: () -> int // g
+    let _3: () -> int
+
+    bb0: {
+        _2 = copy _1;
+        _3 = copy _2;
+        _0 = call copy _3() -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.apply_and_throw(f: () -> int) -> int {
     // Locals:
     let _0: int // _0 // return
@@ -2431,6 +2454,35 @@ fn user.ignore_callback_but_throw(f: () -> int) -> int {
 
     bb2: {
         return;
+    }
+}
+
+fn user.test_apply_aliased_throwing() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: () -> void throws string
+
+    bb0: {
+        _1 = make_closure lambda[0]();
+        _0 = call const fn user.apply_aliased(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(test_apply_aliased_throwing, 0)>() -> null {
+    // Locals:
+    let _0: null // _0 // return
+
+    bb0: {
+        throw const "aliased";
     }
 }
 

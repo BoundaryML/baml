@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 12476
 ---
 === TIR2 ===
 function user.test_array_map_pure() -> int[] throws never {
@@ -900,6 +901,23 @@ function user.test_ignore_callback_throwing() -> int throws never {
   }
 }
 lambda user.test_ignore_callback_throwing {
+}
+function user.apply_aliased(f: () -> int throws __throws_f) -> int throws __throws_f {
+  { : int
+    let g = f : () -> int throws __throws_f
+    g() : int
+  }
+}
+function user.test_apply_aliased_throwing() -> int throws never {
+  { : int
+    apply_aliased(() -> int { ... }) : int
+      () -> int { ... } : () -> never throws string
+        {
+          throw "aliased"
+        }
+  }
+}
+lambda user.test_apply_aliased_throwing {
 }
 function user.ignore_callback_but_throw(f: () -> int throws __throws_f) -> int throws __throws_f | string {
   { : int

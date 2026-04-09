@@ -22,20 +22,18 @@ pub(crate) fn collect_effective_throws<'db>(
     include_typevars: bool,
     unknown_on_unresolved_call: bool,
 ) -> BTreeSet<Ty> {
+    let context = EffectiveThrowsContext {
+        db,
+        package_id,
+        body,
+        expressions,
+        catch_residual_throws,
+        aliases,
+        include_typevars,
+        unknown_on_unresolved_call,
+    };
     body.root_expr
-        .map(|root| {
-            collect_effective_throws_from_root_expr(
-                db,
-                package_id,
-                root,
-                body,
-                expressions,
-                catch_residual_throws,
-                aliases,
-                include_typevars,
-                unknown_on_unresolved_call,
-            )
-        })
+        .map(|root| context.collect_effective_throws_from_root_expr(root))
         .unwrap_or_default()
 }
 
@@ -51,679 +49,216 @@ pub(crate) fn collect_effective_throws_from_root_expr<'db>(
     include_typevars: bool,
     unknown_on_unresolved_call: bool,
 ) -> BTreeSet<Ty> {
-    let mut out = BTreeSet::new();
-    collect_effective_throws_from_expr(
+    EffectiveThrowsContext {
         db,
         package_id,
-        root_expr,
         body,
         expressions,
         catch_residual_throws,
         aliases,
         include_typevars,
         unknown_on_unresolved_call,
-        &mut out,
-    );
-    out
+    }
+    .collect_effective_throws_from_root_expr(root_expr)
 }
 
-#[derive(Clone, Copy)]
-struct CallResolutionOptions {
-    include_typevars: bool,
-    unknown_on_unresolved_call: bool,
-}
-
-#[allow(clippy::too_many_arguments)]
-fn collect_effective_throws_from_expr<'db>(
+struct EffectiveThrowsContext<'a, 'db> {
     db: &'db dyn crate::Db,
     package_id: PackageId<'db>,
-    expr_id: ExprId,
-    body: &ExprBody,
-    expressions: &FxHashMap<ExprId, Ty>,
-    catch_residual_throws: &FxHashMap<ExprId, BTreeSet<Ty>>,
-    aliases: &HashMap<QualifiedTypeName, Ty>,
+    body: &'a ExprBody,
+    expressions: &'a FxHashMap<ExprId, Ty>,
+    catch_residual_throws: &'a FxHashMap<ExprId, BTreeSet<Ty>>,
+    aliases: &'a HashMap<QualifiedTypeName, Ty>,
     include_typevars: bool,
     unknown_on_unresolved_call: bool,
-    out: &mut BTreeSet<Ty>,
-) {
-    match &body.exprs[expr_id] {
-        Expr::Throw { value } => {
-            collect_effective_throws_from_expr(
-                db,
-                package_id,
-                *value,
-                body,
-                expressions,
-                catch_residual_throws,
-                aliases,
-                include_typevars,
-                unknown_on_unresolved_call,
-                out,
-            );
-            collect_throw_facts_from_value(*value, body, expressions, out);
-        }
-        Expr::Call { callee, args } => {
-            collect_effective_throws_from_expr(
-                db,
-                package_id,
-                *callee,
-                body,
-                expressions,
-                catch_residual_throws,
-                aliases,
-                include_typevars,
-                unknown_on_unresolved_call,
-                out,
-            );
-            for arg in args {
-                collect_effective_throws_from_expr(
-                    db,
-                    package_id,
-                    *arg,
-                    body,
-                    expressions,
-                    catch_residual_throws,
-                    aliases,
-                    include_typevars,
-                    unknown_on_unresolved_call,
-                    out,
-                );
+}
+
+impl EffectiveThrowsContext<'_, '_> {
+    fn collect_effective_throws_from_root_expr(&self, root_expr: ExprId) -> BTreeSet<Ty> {
+        let mut out = BTreeSet::new();
+        self.collect_effective_throws_from_expr(root_expr, &mut out);
+        out
+    }
+
+    fn collect_effective_throws_from_expr(&self, expr_id: ExprId, out: &mut BTreeSet<Ty>) {
+        match &self.body.exprs[expr_id] {
+            Expr::Throw { value } => {
+                self.collect_effective_throws_from_expr(*value, out);
+                collect_throw_facts_from_value(*value, self.body, self.expressions, out);
             }
-            collect_effective_throws_from_call(
-                db,
-                package_id,
-                *callee,
-                body,
-                expressions,
-                aliases,
-                CallResolutionOptions {
-                    include_typevars,
-                    unknown_on_unresolved_call,
-                },
-                out,
-            );
-        }
-        Expr::Catch { clauses, .. } => {
-            if let Some(residual) = catch_residual_throws.get(&expr_id) {
-                out.extend(residual.iter().cloned());
+            Expr::Call { callee, args } | Expr::OptionalCall { callee, args } => {
+                self.collect_effective_throws_from_expr(*callee, out);
+                for arg in args {
+                    self.collect_effective_throws_from_expr(*arg, out);
+                }
+                self.collect_effective_throws_from_call(*callee, out);
             }
-            for clause in clauses {
-                for arm_id in &clause.arms {
-                    let arm = &body.catch_arms[*arm_id];
-                    collect_effective_throws_from_expr(
-                        db,
-                        package_id,
-                        arm.body,
-                        body,
-                        expressions,
-                        catch_residual_throws,
-                        aliases,
-                        include_typevars,
-                        unknown_on_unresolved_call,
-                        out,
-                    );
+            Expr::Catch { clauses, .. } => {
+                if let Some(residual) = self.catch_residual_throws.get(&expr_id) {
+                    out.extend(residual.iter().cloned());
+                }
+                for clause in clauses {
+                    for arm_id in &clause.arms {
+                        let arm = &self.body.catch_arms[*arm_id];
+                        self.collect_effective_throws_from_expr(arm.body, out);
+                    }
                 }
             }
-        }
-        Expr::If {
-            condition,
-            then_branch,
-            else_branch,
-        } => {
-            collect_effective_throws_from_expr(
-                db,
-                package_id,
-                *condition,
-                body,
-                expressions,
-                catch_residual_throws,
-                aliases,
-                include_typevars,
-                unknown_on_unresolved_call,
-                out,
-            );
-            collect_effective_throws_from_expr(
-                db,
-                package_id,
-                *then_branch,
-                body,
-                expressions,
-                catch_residual_throws,
-                aliases,
-                include_typevars,
-                unknown_on_unresolved_call,
-                out,
-            );
-            if let Some(else_expr) = else_branch {
-                collect_effective_throws_from_expr(
-                    db,
-                    package_id,
-                    *else_expr,
-                    body,
-                    expressions,
-                    catch_residual_throws,
-                    aliases,
-                    include_typevars,
-                    unknown_on_unresolved_call,
-                    out,
-                );
-            }
-        }
-        Expr::Match {
-            scrutinee, arms, ..
-        } => {
-            collect_effective_throws_from_expr(
-                db,
-                package_id,
-                *scrutinee,
-                body,
-                expressions,
-                catch_residual_throws,
-                aliases,
-                include_typevars,
-                unknown_on_unresolved_call,
-                out,
-            );
-            for arm_id in arms {
-                let arm = &body.match_arms[*arm_id];
-                if let Some(guard) = arm.guard {
-                    collect_effective_throws_from_expr(
-                        db,
-                        package_id,
-                        guard,
-                        body,
-                        expressions,
-                        catch_residual_throws,
-                        aliases,
-                        include_typevars,
-                        unknown_on_unresolved_call,
-                        out,
-                    );
+            Expr::If {
+                condition,
+                then_branch,
+                else_branch,
+            } => {
+                self.collect_effective_throws_from_expr(*condition, out);
+                self.collect_effective_throws_from_expr(*then_branch, out);
+                if let Some(else_expr) = else_branch {
+                    self.collect_effective_throws_from_expr(*else_expr, out);
                 }
-                collect_effective_throws_from_expr(
-                    db,
-                    package_id,
-                    arm.body,
-                    body,
-                    expressions,
-                    catch_residual_throws,
-                    aliases,
-                    include_typevars,
-                    unknown_on_unresolved_call,
-                    out,
-                );
             }
-        }
-        Expr::Binary { lhs, rhs, .. } => {
-            collect_effective_throws_from_expr(
-                db,
-                package_id,
-                *lhs,
-                body,
-                expressions,
-                catch_residual_throws,
-                aliases,
-                include_typevars,
-                unknown_on_unresolved_call,
-                out,
-            );
-            collect_effective_throws_from_expr(
-                db,
-                package_id,
-                *rhs,
-                body,
-                expressions,
-                catch_residual_throws,
-                aliases,
-                include_typevars,
-                unknown_on_unresolved_call,
-                out,
-            );
-        }
-        Expr::Unary { expr, .. } => {
-            collect_effective_throws_from_expr(
-                db,
-                package_id,
-                *expr,
-                body,
-                expressions,
-                catch_residual_throws,
-                aliases,
-                include_typevars,
-                unknown_on_unresolved_call,
-                out,
-            );
-        }
-        Expr::Object {
-            fields, spreads, ..
-        } => {
-            for (_, value) in fields {
-                collect_effective_throws_from_expr(
-                    db,
-                    package_id,
-                    *value,
-                    body,
-                    expressions,
-                    catch_residual_throws,
-                    aliases,
-                    include_typevars,
-                    unknown_on_unresolved_call,
-                    out,
-                );
+            Expr::Match {
+                scrutinee, arms, ..
+            } => {
+                self.collect_effective_throws_from_expr(*scrutinee, out);
+                for arm_id in arms {
+                    let arm = &self.body.match_arms[*arm_id];
+                    if let Some(guard) = arm.guard {
+                        self.collect_effective_throws_from_expr(guard, out);
+                    }
+                    self.collect_effective_throws_from_expr(arm.body, out);
+                }
             }
-            for spread in spreads {
-                collect_effective_throws_from_expr(
-                    db,
-                    package_id,
-                    spread.expr,
-                    body,
-                    expressions,
-                    catch_residual_throws,
-                    aliases,
-                    include_typevars,
-                    unknown_on_unresolved_call,
-                    out,
-                );
+            Expr::Binary { lhs, rhs, .. } => {
+                self.collect_effective_throws_from_expr(*lhs, out);
+                self.collect_effective_throws_from_expr(*rhs, out);
             }
-        }
-        Expr::Array { elements } => {
-            for elem in elements {
-                collect_effective_throws_from_expr(
-                    db,
-                    package_id,
-                    *elem,
-                    body,
-                    expressions,
-                    catch_residual_throws,
-                    aliases,
-                    include_typevars,
-                    unknown_on_unresolved_call,
-                    out,
-                );
+            Expr::Unary { expr, .. } | Expr::OptionalChain { expr } => {
+                self.collect_effective_throws_from_expr(*expr, out);
             }
-        }
-        Expr::Map { entries } => {
-            for (key, value) in entries {
-                collect_effective_throws_from_expr(
-                    db,
-                    package_id,
-                    *key,
-                    body,
-                    expressions,
-                    catch_residual_throws,
-                    aliases,
-                    include_typevars,
-                    unknown_on_unresolved_call,
-                    out,
-                );
-                collect_effective_throws_from_expr(
-                    db,
-                    package_id,
-                    *value,
-                    body,
-                    expressions,
-                    catch_residual_throws,
-                    aliases,
-                    include_typevars,
-                    unknown_on_unresolved_call,
-                    out,
-                );
+            Expr::Object {
+                fields, spreads, ..
+            } => {
+                for (_, value) in fields {
+                    self.collect_effective_throws_from_expr(*value, out);
+                }
+                for spread in spreads {
+                    self.collect_effective_throws_from_expr(spread.expr, out);
+                }
             }
-        }
-        Expr::Block { stmts, tail_expr } => {
-            for stmt_id in stmts {
-                collect_effective_throws_from_stmt(
-                    db,
-                    package_id,
-                    *stmt_id,
-                    body,
-                    expressions,
-                    catch_residual_throws,
-                    aliases,
-                    include_typevars,
-                    unknown_on_unresolved_call,
-                    out,
-                );
+            Expr::Array { elements } => {
+                for elem in elements {
+                    self.collect_effective_throws_from_expr(*elem, out);
+                }
             }
-            if let Some(tail) = tail_expr {
-                collect_effective_throws_from_expr(
-                    db,
-                    package_id,
-                    *tail,
-                    body,
-                    expressions,
-                    catch_residual_throws,
-                    aliases,
-                    include_typevars,
-                    unknown_on_unresolved_call,
-                    out,
-                );
+            Expr::Map { entries } => {
+                for (key, value) in entries {
+                    self.collect_effective_throws_from_expr(*key, out);
+                    self.collect_effective_throws_from_expr(*value, out);
+                }
             }
-        }
-        Expr::FieldAccess { base, .. } | Expr::OptionalFieldAccess { base, .. } => {
-            collect_effective_throws_from_expr(
-                db,
-                package_id,
-                *base,
-                body,
-                expressions,
-                catch_residual_throws,
-                aliases,
-                include_typevars,
-                unknown_on_unresolved_call,
-                out,
-            );
-        }
-        Expr::Index { base, index } | Expr::OptionalIndex { base, index } => {
-            collect_effective_throws_from_expr(
-                db,
-                package_id,
-                *base,
-                body,
-                expressions,
-                catch_residual_throws,
-                aliases,
-                include_typevars,
-                unknown_on_unresolved_call,
-                out,
-            );
-            collect_effective_throws_from_expr(
-                db,
-                package_id,
-                *index,
-                body,
-                expressions,
-                catch_residual_throws,
-                aliases,
-                include_typevars,
-                unknown_on_unresolved_call,
-                out,
-            );
-        }
-        Expr::OptionalCall { callee, args } => {
-            collect_effective_throws_from_expr(
-                db,
-                package_id,
-                *callee,
-                body,
-                expressions,
-                catch_residual_throws,
-                aliases,
-                include_typevars,
-                unknown_on_unresolved_call,
-                out,
-            );
-            for arg in args {
-                collect_effective_throws_from_expr(
-                    db,
-                    package_id,
-                    *arg,
-                    body,
-                    expressions,
-                    catch_residual_throws,
-                    aliases,
-                    include_typevars,
-                    unknown_on_unresolved_call,
-                    out,
-                );
+            Expr::Block { stmts, tail_expr } => {
+                for stmt_id in stmts {
+                    self.collect_effective_throws_from_stmt(*stmt_id, out);
+                }
+                if let Some(tail) = tail_expr {
+                    self.collect_effective_throws_from_expr(*tail, out);
+                }
             }
-            collect_effective_throws_from_call(
-                db,
-                package_id,
-                *callee,
-                body,
-                expressions,
-                aliases,
-                CallResolutionOptions {
-                    include_typevars,
-                    unknown_on_unresolved_call,
-                },
-                out,
-            );
-        }
-        Expr::OptionalChain { expr } => {
-            collect_effective_throws_from_expr(
-                db,
-                package_id,
-                *expr,
-                body,
-                expressions,
-                catch_residual_throws,
-                aliases,
-                include_typevars,
-                unknown_on_unresolved_call,
-                out,
-            );
-        }
-        Expr::Lambda(_)
-        | Expr::Literal(_)
-        | Expr::ByteStringLiteral(_)
-        | Expr::Null
-        | Expr::Path(_)
-        | Expr::Missing => {}
-    }
-}
-
-#[allow(clippy::too_many_arguments)]
-fn collect_effective_throws_from_stmt<'db>(
-    db: &'db dyn crate::Db,
-    package_id: PackageId<'db>,
-    stmt_id: StmtId,
-    body: &ExprBody,
-    expressions: &FxHashMap<ExprId, Ty>,
-    catch_residual_throws: &FxHashMap<ExprId, BTreeSet<Ty>>,
-    aliases: &HashMap<QualifiedTypeName, Ty>,
-    include_typevars: bool,
-    unknown_on_unresolved_call: bool,
-    out: &mut BTreeSet<Ty>,
-) {
-    match &body.stmts[stmt_id] {
-        Stmt::Expr(expr) => collect_effective_throws_from_expr(
-            db,
-            package_id,
-            *expr,
-            body,
-            expressions,
-            catch_residual_throws,
-            aliases,
-            include_typevars,
-            unknown_on_unresolved_call,
-            out,
-        ),
-        Stmt::Let { initializer, .. } => {
-            if let Some(init) = initializer {
-                collect_effective_throws_from_expr(
-                    db,
-                    package_id,
-                    *init,
-                    body,
-                    expressions,
-                    catch_residual_throws,
-                    aliases,
-                    include_typevars,
-                    unknown_on_unresolved_call,
-                    out,
-                );
+            Expr::FieldAccess { base, .. } | Expr::OptionalFieldAccess { base, .. } => {
+                self.collect_effective_throws_from_expr(*base, out);
             }
-        }
-        Stmt::While {
-            condition,
-            body: while_body,
-            after,
-            ..
-        } => {
-            collect_effective_throws_from_expr(
-                db,
-                package_id,
-                *condition,
-                body,
-                expressions,
-                catch_residual_throws,
-                aliases,
-                include_typevars,
-                unknown_on_unresolved_call,
-                out,
-            );
-            collect_effective_throws_from_expr(
-                db,
-                package_id,
-                *while_body,
-                body,
-                expressions,
-                catch_residual_throws,
-                aliases,
-                include_typevars,
-                unknown_on_unresolved_call,
-                out,
-            );
-            if let Some(after_stmt) = after {
-                collect_effective_throws_from_stmt(
-                    db,
-                    package_id,
-                    *after_stmt,
-                    body,
-                    expressions,
-                    catch_residual_throws,
-                    aliases,
-                    include_typevars,
-                    unknown_on_unresolved_call,
-                    out,
-                );
+            Expr::Index { base, index } | Expr::OptionalIndex { base, index } => {
+                self.collect_effective_throws_from_expr(*base, out);
+                self.collect_effective_throws_from_expr(*index, out);
             }
-        }
-        Stmt::For {
-            collection,
-            body: for_body,
-            ..
-        } => {
-            collect_effective_throws_from_expr(
-                db,
-                package_id,
-                *collection,
-                body,
-                expressions,
-                catch_residual_throws,
-                aliases,
-                include_typevars,
-                unknown_on_unresolved_call,
-                out,
-            );
-            collect_effective_throws_from_expr(
-                db,
-                package_id,
-                *for_body,
-                body,
-                expressions,
-                catch_residual_throws,
-                aliases,
-                include_typevars,
-                unknown_on_unresolved_call,
-                out,
-            );
-        }
-        Stmt::Return(expr) => {
-            if let Some(expr) = expr {
-                collect_effective_throws_from_expr(
-                    db,
-                    package_id,
-                    *expr,
-                    body,
-                    expressions,
-                    catch_residual_throws,
-                    aliases,
-                    include_typevars,
-                    unknown_on_unresolved_call,
-                    out,
-                );
-            }
-        }
-        Stmt::Assign { target, value } | Stmt::AssignOp { target, value, .. } => {
-            collect_effective_throws_from_expr(
-                db,
-                package_id,
-                *target,
-                body,
-                expressions,
-                catch_residual_throws,
-                aliases,
-                include_typevars,
-                unknown_on_unresolved_call,
-                out,
-            );
-            collect_effective_throws_from_expr(
-                db,
-                package_id,
-                *value,
-                body,
-                expressions,
-                catch_residual_throws,
-                aliases,
-                include_typevars,
-                unknown_on_unresolved_call,
-                out,
-            );
-        }
-        Stmt::Throw { value } => {
-            collect_effective_throws_from_expr(
-                db,
-                package_id,
-                *value,
-                body,
-                expressions,
-                catch_residual_throws,
-                aliases,
-                include_typevars,
-                unknown_on_unresolved_call,
-                out,
-            );
-            collect_throw_facts_from_value(*value, body, expressions, out);
-        }
-        Stmt::Break | Stmt::Continue | Stmt::Missing | Stmt::HeaderComment { .. } => {}
-    }
-}
-
-#[allow(clippy::too_many_arguments)]
-fn collect_effective_throws_from_call<'db>(
-    db: &'db dyn crate::Db,
-    package_id: PackageId<'db>,
-    callee_expr_id: ExprId,
-    body: &ExprBody,
-    expressions: &FxHashMap<ExprId, Ty>,
-    aliases: &HashMap<QualifiedTypeName, Ty>,
-    options: CallResolutionOptions,
-    out: &mut BTreeSet<Ty>,
-) {
-    let type_level_facts = expressions
-        .get(&callee_expr_id)
-        .and_then(|ty| function_throws_facts(ty, aliases));
-
-    if let Some(facts) = type_level_facts.as_ref() {
-        let filtered: BTreeSet<Ty> = facts
-            .iter()
-            .filter(|fact| options.include_typevars || !matches!(fact, Ty::TypeVar(_, _)))
-            .cloned()
-            .collect();
-        if !filtered.is_empty() {
-            out.extend(filtered);
-            return;
-        }
-        if facts.iter().any(|fact| matches!(fact, Ty::TypeVar(_, _))) && !options.include_typevars {
-            return;
+            Expr::Lambda(_)
+            | Expr::Literal(_)
+            | Expr::ByteStringLiteral(_)
+            | Expr::Null
+            | Expr::Path(_)
+            | Expr::Missing => {}
         }
     }
 
-    if let Some(target) = call_target_name(callee_expr_id, body, expressions) {
-        let throws = function_throw_sets(db, package_id);
-        if let Some(transitive) = throws.transitive_for(&target) {
-            out.extend(transitive.iter().cloned());
-            return;
+    fn collect_effective_throws_from_stmt(&self, stmt_id: StmtId, out: &mut BTreeSet<Ty>) {
+        match &self.body.stmts[stmt_id] {
+            Stmt::Expr(expr) => self.collect_effective_throws_from_expr(*expr, out),
+            Stmt::Let { initializer, .. } => {
+                if let Some(init) = initializer {
+                    self.collect_effective_throws_from_expr(*init, out);
+                }
+            }
+            Stmt::While {
+                condition,
+                body: while_body,
+                after,
+                ..
+            } => {
+                self.collect_effective_throws_from_expr(*condition, out);
+                self.collect_effective_throws_from_expr(*while_body, out);
+                if let Some(after_stmt) = after {
+                    self.collect_effective_throws_from_stmt(*after_stmt, out);
+                }
+            }
+            Stmt::For {
+                collection,
+                body: for_body,
+                ..
+            } => {
+                self.collect_effective_throws_from_expr(*collection, out);
+                self.collect_effective_throws_from_expr(*for_body, out);
+            }
+            Stmt::Return(expr) => {
+                if let Some(expr) = expr {
+                    self.collect_effective_throws_from_expr(*expr, out);
+                }
+            }
+            Stmt::Assign { target, value } | Stmt::AssignOp { target, value, .. } => {
+                self.collect_effective_throws_from_expr(*target, out);
+                self.collect_effective_throws_from_expr(*value, out);
+            }
+            Stmt::Throw { value } => {
+                self.collect_effective_throws_from_expr(*value, out);
+                collect_throw_facts_from_value(*value, self.body, self.expressions, out);
+            }
+            Stmt::Break | Stmt::Continue | Stmt::Missing | Stmt::HeaderComment { .. } => {}
         }
     }
 
-    if options.unknown_on_unresolved_call && type_level_facts.is_none() {
-        out.insert(Ty::Unknown {
-            attr: TyAttr::default(),
-        });
+    fn collect_effective_throws_from_call(&self, callee_expr_id: ExprId, out: &mut BTreeSet<Ty>) {
+        let type_level_facts = self
+            .expressions
+            .get(&callee_expr_id)
+            .and_then(|ty| function_throws_facts(ty, self.aliases));
+
+        if let Some(facts) = type_level_facts.as_ref() {
+            let filtered: BTreeSet<Ty> = facts
+                .iter()
+                .filter(|fact| self.include_typevars || !matches!(fact, Ty::TypeVar(_, _)))
+                .cloned()
+                .collect();
+            if !filtered.is_empty() {
+                out.extend(filtered);
+                return;
+            }
+            if facts.iter().any(|fact| matches!(fact, Ty::TypeVar(_, _))) && !self.include_typevars
+            {
+                return;
+            }
+        }
+
+        if let Some(target) = call_target_name(callee_expr_id, self.body, self.expressions) {
+            let throws = function_throw_sets(self.db, self.package_id);
+            if let Some(transitive) = throws.transitive_for(&target) {
+                out.extend(transitive.iter().cloned());
+                return;
+            }
+        }
+
+        if self.unknown_on_unresolved_call && type_level_facts.is_none() {
+            out.insert(Ty::Unknown {
+                attr: TyAttr::default(),
+            });
+        }
     }
 }
 

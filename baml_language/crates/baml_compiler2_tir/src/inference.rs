@@ -26,7 +26,7 @@ use text_size::TextRange;
 
 use crate::{
     builder::TypeInferenceBuilder,
-    callable_boundary::lower_callable_boundary,
+    callable_boundary::{LoweredCallableBoundary, lower_callable_boundary},
     infer_context::{InferContext, TypeCheckDiagnostics},
     ty::{Ty, TyAttr},
 };
@@ -358,40 +358,37 @@ pub fn infer_scope_types<'db>(
                             })
                         });
 
-                        let boundary = lower_callable_boundary(
+                        let LoweredCallableBoundary {
+                            params,
+                            ret: return_ty,
+                            explicit_throws,
+                            direct_callback_effect_vars: _,
+                            param_diagnostics,
+                            ret_diagnostics,
+                            throws_diagnostics,
+                        } = lower_callable_boundary(
                             db,
                             pkg_items,
                             &pkg_info.namespace_path,
                             &generic_params,
                             sig.as_ref(),
                             self_param_ty.as_ref(),
-                            &mut Vec::new(),
+                        );
+                        let sig_sm = baml_compiler2_hir::signature::function_signature_source_map(
+                            db, func_loc,
                         );
 
-                        // Get declared return type
-                        let mut diags = Vec::new();
-                        if let Some(te) = sig.return_type.as_ref() {
-                            let _ = crate::lower_type_expr::lower_type_expr_in_ns(
-                                db,
-                                te,
-                                pkg_items,
-                                &pkg_info.namespace_path,
-                                &generic_params,
-                                &mut diags,
-                            );
+                        // Report named signature lowering diagnostics at the signature spans.
+                        if !ret_diagnostics.is_empty() {
+                            let span = sig_sm.return_type_span.unwrap_or(func_data.span);
+                            for diag in ret_diagnostics {
+                                builder.report_at_span(diag, span);
+                            }
                         }
-                        let return_ty = boundary.ret.clone();
-
-                        // Report unresolved type diagnostics for return type
-                        if !diags.is_empty() {
-                            let sig_sm =
-                                baml_compiler2_hir::signature::function_signature_source_map(
-                                    db, func_loc,
-                                );
-                            if let Some(ret_span) = sig_sm.return_type_span {
-                                for diag in diags.drain(..) {
-                                    builder.report_at_span(diag, ret_span);
-                                }
+                        if !throws_diagnostics.is_empty() {
+                            let span = sig_sm.throws_type_span.unwrap_or(func_data.span);
+                            for diag in throws_diagnostics {
+                                builder.report_at_span(diag, span);
                             }
                         }
 
@@ -399,40 +396,23 @@ pub fn infer_scope_types<'db>(
                         builder.set_return_type(return_ty.clone());
 
                         // Add parameter bindings as locals
-                        let sig_sm = baml_compiler2_hir::signature::function_signature_source_map(
-                            db, func_loc,
-                        );
-                        for (i, ((param_name, param_te), (_, param_ty))) in
-                            sig.params.iter().zip(boundary.params.iter()).enumerate()
+                        for (i, (((param_name, _), (_, param_ty)), param_diags)) in sig
+                            .params
+                            .iter()
+                            .zip(params.iter())
+                            .zip(param_diagnostics.into_iter())
+                            .enumerate()
                         {
-                            if !(param_name.as_str() == "self"
-                                && matches!(param_te, baml_compiler2_ast::TypeExpr::Unknown { .. }))
-                            {
-                                let mut param_diags = Vec::new();
-                                let mut param_effect_vars = Vec::new();
-                                let _ = crate::lower_type_expr::lower_type_expr_with_fn_context(
-                                    db,
-                                    param_te,
-                                    pkg_items,
-                                    &pkg_info.namespace_path,
-                                    &generic_params,
-                                    &mut param_diags,
-                                    &crate::lower_type_expr::FnTypeLoweringContext::DirectParamRoot {
-                                        param_name: param_name.clone(),
-                                    },
-                                    &mut param_effect_vars,
-                                );
-                                if !param_diags.is_empty() {
-                                    let span = sig_sm
-                                        .param_type_spans
-                                        .get(i)
-                                        .copied()
-                                        .flatten()
-                                        .or_else(|| sig_sm.param_spans.get(i).copied())
-                                        .unwrap_or_default();
-                                    for diag in param_diags {
-                                        builder.report_at_span(diag, span);
-                                    }
+                            if !param_diags.is_empty() {
+                                let span = sig_sm
+                                    .param_type_spans
+                                    .get(i)
+                                    .copied()
+                                    .flatten()
+                                    .or_else(|| sig_sm.param_spans.get(i).copied())
+                                    .unwrap_or(func_data.span);
+                                for diag in param_diags {
+                                    builder.report_at_span(diag, span);
                                 }
                             }
                             builder.add_local(param_name.clone(), param_ty.clone());
@@ -444,9 +424,9 @@ pub fn infer_scope_types<'db>(
                         }
 
                         // Validate declared `throws` against effective escaping throws.
-                        builder.check_throws_contract(
+                        builder.check_lowered_throws_contract(
                             expr_body,
-                            sig.throws.as_ref(),
+                            explicit_throws.as_ref(),
                             sig_sm.throws_type_span,
                             func_data.span,
                         );

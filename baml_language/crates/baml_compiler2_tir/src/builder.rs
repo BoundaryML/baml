@@ -1808,8 +1808,24 @@ impl<'db> TypeInferenceBuilder<'db> {
             self.context.report_at_span(diag, span);
         }
 
+        self.check_lowered_throws_contract(body, Some(&declared_ty), throws_span, fallback_span);
+    }
+
+    /// Validate an already-lowered declared `throws` type against effective escaping throws.
+    pub fn check_lowered_throws_contract(
+        &mut self,
+        body: &ExprBody,
+        declared_throws: Option<&Ty>,
+        throws_span: Option<TextRange>,
+        fallback_span: TextRange,
+    ) {
+        let Some(declared_ty) = declared_throws else {
+            return;
+        };
+
         let effective = self.collect_effective_throws(body);
-        self.report_throws_contract_diff_at_span(&declared_ty, &effective, span);
+        let span = throws_span.unwrap_or(fallback_span);
+        self.report_throws_contract_diff_at_span(declared_ty, &effective, span);
     }
 
     fn lower_lambda_throws_annotation_silently(
@@ -2577,7 +2593,6 @@ impl<'db> TypeInferenceBuilder<'db> {
         self_param_ty: Option<&Ty>,
     ) -> Ty {
         let db = self.context.db();
-        let mut diags = Vec::new();
         let boundary = lower_callable_boundary(
             db,
             pkg_items,
@@ -2585,7 +2600,6 @@ impl<'db> TypeInferenceBuilder<'db> {
             generic_params,
             sig,
             self_param_ty,
-            &mut diags,
         );
 
         let throws_ty = boundary.explicit_throws.clone().unwrap_or_else(|| {
@@ -2624,11 +2638,9 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
         });
 
-        // This helper reconstructs function types during lookup/inference rather than
-        // at the defining declaration site, so any lowering diagnostics must stay
-        // attached to the original signature instead of being re-emitted at each use.
-        drop(diags);
-
+        // This helper reconstructs function types away from the declaration
+        // site, so the boundary's lowering diagnostics stay attached to the
+        // original signature instead of being re-emitted at each lookup.
         Ty::Function {
             params: boundary.params,
             ret: Box::new(boundary.ret),

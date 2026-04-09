@@ -68,6 +68,17 @@ function test_ignore_callback_throwing() -> int {
   ignore_callback(() -> int { throw "unused" })
 }
 
+// Aliased callback invocation: the rethrow is NOT propagated because the
+// syntactic scan only recognizes direct `f()` calls.
+function apply_aliased(f: () -> int) -> int {
+  let g = f
+  g()
+}
+
+function test_apply_aliased_throwing() -> int {
+  apply_aliased(() -> int { throw "aliased" })
+}
+
 // Concrete body throws still escape even when the callback is never invoked.
 function ignore_callback_but_throw(f: () -> int) -> int {
   helper_with_body_throw()
