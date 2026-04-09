@@ -23,3 +23,4 @@ text-size = { workspace = true }
 baml_builtins2 = { workspace = true }
 baml_compiler2_ppir = { workspace = true }
 baml_workspace = { workspace = true }
+insta = { workspace = true }

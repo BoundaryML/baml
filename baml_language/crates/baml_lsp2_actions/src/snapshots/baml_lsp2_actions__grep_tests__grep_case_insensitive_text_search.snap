@@ -1,0 +1,7 @@
+---
+source: crates/baml_lsp2_actions/src/grep_tests.rs
+expression: output
+---
+types.baml:2│ class Point {  ← Definition { kind: Class }
+funcs.baml:2│ function MakePoint(x: int, y: int) -> Point {
+funcs.baml:3│ return Point { x: x, y: y };

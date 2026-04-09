@@ -58,6 +58,10 @@ pub mod utils;
 #[cfg(test)]
 mod definition_at_tests;
 #[cfg(test)]
+mod describe_tests;
+#[cfg(test)]
+mod grep_tests;
+#[cfg(test)]
 mod testing;
 #[cfg(test)]
 mod usages_at_tests;

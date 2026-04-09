@@ -331,84 +331,94 @@ fn describe_locals(db: &dyn Db, files: &[SourceFile], name: &str) -> Vec<SymbolD
                 continue;
             };
 
-            let bindings = &index.scope_bindings[func_scope_idx];
+            // Collect bindings from the function scope AND all descendant
+            // scopes (blocks, match arms, lambdas, etc.) so we don't miss
+            // let bindings nested inside control flow.
+            let func_scope = &index.scopes[func_scope_idx];
+            let scope_indices = std::iter::once(func_scope_idx).chain(
+                (func_scope.descendants.start.index()..func_scope.descendants.end.index())
+                    .map(|i| i as usize),
+            );
 
-            for (binding_name, def_site, binding_span) in &bindings.bindings {
-                if binding_name.as_str() != name {
-                    continue;
-                }
+            for scope_idx in scope_indices {
+                let bindings = &index.scope_bindings[scope_idx];
 
-                // Get the type from TIR inference.
-                let scope_id = index.scope_ids[func_scope_idx];
-                let inference =
-                    baml_compiler2_tir::inference::infer_scope_types(db, scope_id);
+                for (binding_name, def_site, binding_span) in &bindings.bindings {
+                    if binding_name.as_str() != name {
+                        continue;
+                    }
 
-                let type_str = match def_site {
-                    baml_compiler2_hir::semantic_index::DefinitionSite::Statement(stmt_id) => {
-                        // Get the PatId from the statement.
-                        let body = baml_compiler2_hir::body::function_body(db, func_loc);
-                        if let baml_compiler2_hir::body::FunctionBody::Expr(expr_body) = body.as_ref() {
-                            if let baml_compiler2_ast::Stmt::Let { pattern, .. } = &expr_body.stmts[*stmt_id] {
-                                inference
-                                    .binding_type(*pattern)
-                                    .map(crate::utils::display_ty)
-                                    .unwrap_or_else(|| "unknown".to_string())
+                    // Use the binding's own scope for type inference — this
+                    // handles lambdas that get separate inference, while
+                    // block-scoped lets fall back to the function's inference.
+                    let scope_id = index.scope_ids[scope_idx];
+                    let inference =
+                        baml_compiler2_tir::inference::infer_scope_types(db, scope_id);
+
+                    let type_str = match def_site {
+                        baml_compiler2_hir::semantic_index::DefinitionSite::Statement(stmt_id) => {
+                            let body = baml_compiler2_hir::body::function_body(db, func_loc);
+                            if let baml_compiler2_hir::body::FunctionBody::Expr(expr_body) = body.as_ref() {
+                                if let baml_compiler2_ast::Stmt::Let { pattern, .. } = &expr_body.stmts[*stmt_id] {
+                                    inference
+                                        .binding_type(*pattern)
+                                        .map(crate::utils::display_ty)
+                                        .unwrap_or_else(|| "unknown".to_string())
+                                } else {
+                                    "unknown".to_string()
+                                }
                             } else {
                                 "unknown".to_string()
                             }
-                        } else {
+                        }
+                        baml_compiler2_hir::semantic_index::DefinitionSite::PatternBinding(pat_id) => {
+                            inference
+                                .binding_type(*pat_id)
+                                .map(crate::utils::display_ty)
+                                .unwrap_or_else(|| "unknown".to_string())
+                        }
+                        baml_compiler2_hir::semantic_index::DefinitionSite::Parameter(_) => {
                             "unknown".to_string()
                         }
-                    }
-                    baml_compiler2_hir::semantic_index::DefinitionSite::PatternBinding(pat_id) => {
-                        inference
-                            .binding_type(*pat_id)
-                            .map(crate::utils::display_ty)
-                            .unwrap_or_else(|| "unknown".to_string())
-                    }
-                    baml_compiler2_hir::semantic_index::DefinitionSite::Parameter(_) => {
-                        "unknown".to_string()
-                    }
-                };
+                    };
 
-                let func_name = func.name.as_str().to_string();
+                    let func_name = func.name.as_str().to_string();
 
-                // Find usages of this binding within the function.
-                let binding_refs = usages_at(db, file, binding_span.start())
-                    .into_iter()
-                    .filter(|loc| !(loc.file == file && loc.range == *binding_span))
-                    .map(|loc| {
-                        let text = loc.file.text(db);
-                        let (line_number, line_text) = line_at_offset(text, loc.range.start());
-                        RefSite {
-                            file: loc.file,
-                            range: loc.range,
-                            line_text,
-                            line_number,
-                        }
-                    })
-                    .collect();
+                    let binding_refs = usages_at(db, file, binding_span.start())
+                        .into_iter()
+                        .filter(|loc| !(loc.file == file && loc.range == *binding_span))
+                        .map(|loc| {
+                            let text = loc.file.text(db);
+                            let (line_number, line_text) = line_at_offset(text, loc.range.start());
+                            RefSite {
+                                file: loc.file,
+                                range: loc.range,
+                                line_text,
+                                line_number,
+                            }
+                        })
+                        .collect();
 
-                // Get the full function body for context display.
-                let file_text = file.text(db);
-                let func_body = file_text
-                    .get(usize::from(func.span.start())..usize::from(func.span.end()))
-                    .unwrap_or("")
-                    .to_string();
+                    let file_text = file.text(db);
+                    let func_body = file_text
+                        .get(usize::from(func.span.start())..usize::from(func.span.end()))
+                        .unwrap_or("")
+                        .to_string();
 
-                results.push(SymbolDescription {
-                    name: name.to_string(),
-                    kind: DefinitionKind::Binding,
-                    file,
-                    name_span: *binding_span,
-                    item_range: func.span,
-                    shape: format!("let {name}: {type_str}"),
-                    full_body: func_body,
-                    docstring: None,
-                    resolved_type: Some(type_str),
-                    dependencies: vec![make_function_dep(db, file, func_local_id, &func_name)],
-                    references: binding_refs,
-                });
+                    results.push(SymbolDescription {
+                        name: name.to_string(),
+                        kind: DefinitionKind::Binding,
+                        file,
+                        name_span: *binding_span,
+                        item_range: func.span,
+                        shape: format!("let {name}: {type_str}"),
+                        full_body: func_body,
+                        docstring: None,
+                        resolved_type: Some(type_str),
+                        dependencies: vec![make_function_dep(db, file, func_local_id, &func_name)],
+                        references: binding_refs,
+                    });
+                }
             }
         }
     }

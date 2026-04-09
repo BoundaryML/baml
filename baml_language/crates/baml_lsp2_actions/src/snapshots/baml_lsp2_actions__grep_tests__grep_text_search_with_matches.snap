@@ -1,0 +1,5 @@
+---
+source: crates/baml_lsp2_actions/src/grep_tests.rs
+expression: output
+---
+funcs.baml:3│ return Point { x: x, y: y };

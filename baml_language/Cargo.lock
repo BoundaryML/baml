@@ -1308,6 +1308,7 @@ dependencies = [
  "baml_compiler_parser",
  "baml_compiler_syntax",
  "baml_workspace",
+ "insta",
  "rowan 0.16.1",
  "salsa",
  "serde",
