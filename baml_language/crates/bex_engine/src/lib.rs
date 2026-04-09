@@ -540,9 +540,9 @@ impl BexEngine {
         let class_definitions = Self::extract_class_definitions(&resolved_class_names);
         let enum_definitions = Self::extract_enum_definitions(&resolved_enum_names);
 
-        // Build RuntimeIo from the SysOps table. The adapter captures a
-        // SysOpContext for passing to SysOpFn calls; an empty context is fine
-        // here because the IO operations (http, env, fs, etc.) don't use it.
+        // Build a default RuntimeIo from the SysOps table with an empty context.
+        // This is replaced per-call in execute_sys_op with a live context that
+        // carries the correct cancellation token and spawner.
         let runtime_io =
             sys_ops::build_runtime_io(&sys_ops, &heap, &sys_types::SysOpContext::empty());
 
@@ -1670,7 +1670,12 @@ impl BexEngine {
     ) -> SysOpResult {
         let args = args.iter().map(std::convert::Into::into).collect();
         let fn_ptr = self.sys_ops.get(op);
-        let ctx = self.sys_op_ctx.to_op_context(cancel.clone(), self.clone());
+        let mut ctx = self.sys_op_ctx.to_op_context(cancel.clone(), self.clone());
+        // Rebuild RuntimeIo with the live per-call context so nested IO calls
+        // (media resolution, auth) see the correct cancellation token.
+        let mut io_ctx = ctx.clone();
+        io_ctx.runtime_io = Arc::new(sys_types::runtime_io::NoopRuntimeIo);
+        ctx.runtime_io = sys_ops::build_runtime_io(&self.sys_ops, &self.heap, &io_ctx);
         let result = fn_ptr(&self.heap, args, &ctx, call_id);
 
         match result {

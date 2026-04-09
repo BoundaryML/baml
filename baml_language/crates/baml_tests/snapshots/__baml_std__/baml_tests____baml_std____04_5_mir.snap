@@ -999,26 +999,29 @@ fn baml.llm.Client.execute_once(self: baml.llm.Client, context: baml.llm.Executi
     let _47: baml.http.Response
     let _48: future<string>
     let _49: void
-    let _50: string
-    let _51: string
-    let _52: baml.llm.Client[]
-    let _53: int // __for_idx
-    let _54: int
-    let _55: bool
-    let _56: baml.llm.Client
-    let _57: baml.llm.Client // sub
-    let _58: void // result2
-    let _59: unknown // e
-    let _60: baml.llm.Client
-    let _61: void
-    let _62: int // idx
-    let _63: int
-    let _64: int
-    let _65: baml.llm.Client[]
-    let _66: void // result3
-    let _67: baml.llm.Client
+    let _50: bool
+    let _51: future<void>
+    let _52: void
+    let _53: string
+    let _54: string
+    let _55: baml.llm.Client[]
+    let _56: int // __for_idx
+    let _57: int
+    let _58: bool
+    let _59: baml.llm.Client
+    let _60: baml.llm.Client // sub
+    let _61: void // result2
+    let _62: unknown // e
+    let _63: baml.llm.Client
+    let _64: void
+    let _65: int // idx
+    let _66: int
+    let _67: int
     let _68: baml.llm.Client[]
-    let _69: int
+    let _69: void // result3
+    let _70: baml.llm.Client
+    let _71: baml.llm.Client[]
+    let _72: int
 
     bb0: {
         _4 = copy _1.1;
@@ -1031,29 +1034,29 @@ fn baml.llm.Client.execute_once(self: baml.llm.Client, context: baml.llm.Executi
     }
 
     bb2: {
-        _63 = copy _1.4;
-        _65 = copy _1.2;
-        _64 = call const fn baml.Array.length(copy _65) -> [bb3];
+        _66 = copy _1.4;
+        _68 = copy _1.2;
+        _67 = call const fn baml.Array.length(copy _68) -> [bb3];
     }
 
     bb3: {
-        _62 = copy _63 % copy _64;
+        _65 = copy _66 % copy _67;
         _1.4 = copy _1.4 + const 1_i64;
-        _68 = copy _1.2;
-        _69 = copy _62;
-        _67 = copy _68[_69];
-        _66 = call const fn baml.llm.Client.execute(copy _67, copy _2, copy _3) -> [bb4];
+        _71 = copy _1.2;
+        _72 = copy _65;
+        _70 = copy _71[_72];
+        _69 = call const fn baml.llm.Client.execute(copy _70, copy _2, copy _3) -> [bb4];
     }
 
     bb4: {
-        _0 = copy _66;
-        goto -> bb43;
+        _0 = copy _69;
+        goto -> bb47;
     }
 
     bb5: {
-        _52 = copy _1.2;
-        _53 = const 0_i64;
-        goto -> bb39;
+        _55 = copy _1.2;
+        _56 = const 0_i64;
+        goto -> bb43;
     }
 
     bb6: {
@@ -1159,7 +1162,7 @@ fn baml.llm.Client.execute_once(self: baml.llm.Client, context: baml.llm.Executi
 
     bb27: {
         _0 = copy _35;
-        goto -> bb43;
+        goto -> bb47;
     }
 
     bb28: {
@@ -1199,45 +1202,63 @@ fn baml.llm.Client.execute_once(self: baml.llm.Client, context: baml.llm.Executi
     }
 
     bb36: {
-        _51 = copy _45;
-        _50 = const "HTTP request failed: " + copy _51;
-        _49 = DevOther { copy _50 };
-        throw copy _49;
+        _50 = copy _3 > const 0_i64;
+        branch copy _50 -> [bb38, bb37];
     }
 
     bb37: {
-        throw_if_panic copy _59 -> bb38;
+        _49 = const null;
+        goto -> bb40;
     }
 
     bb38: {
-        _53 = copy _53 + const 1_i64;
-        goto -> bb39;
+        _51 = dispatch_future const fn baml.sys.sleep(copy _3) -> bb39;
     }
 
     bb39: {
-        _54 = len(_52);
-        _55 = copy _53 < copy _54;
-        branch copy _55 -> [bb41, bb40];
+        _49 = await _51 -> [bb40];
     }
 
     bb40: {
-        _61 = DevOther { const "All orchestration steps failed" };
-        throw copy _61;
+        _54 = copy _45;
+        _53 = const "HTTP request failed: " + copy _54;
+        _52 = DevOther { copy _53 };
+        throw copy _52;
     }
 
     bb41: {
-        _56 = copy _52[_53];
-        _57 = copy _56;
-        _60 = copy _57;
-        _58 = call const fn baml.llm.Client.execute(copy _60, copy _2, copy _3) -> [bb42, unwind: bb37];
+        throw_if_panic copy _62 -> bb42;
     }
 
     bb42: {
-        _0 = copy _58;
+        _56 = copy _56 + const 1_i64;
         goto -> bb43;
     }
 
     bb43: {
+        _57 = len(_55);
+        _58 = copy _56 < copy _57;
+        branch copy _58 -> [bb45, bb44];
+    }
+
+    bb44: {
+        _64 = DevOther { const "All orchestration steps failed" };
+        throw copy _64;
+    }
+
+    bb45: {
+        _59 = copy _55[_56];
+        _60 = copy _59;
+        _63 = copy _60;
+        _61 = call const fn baml.llm.Client.execute(copy _63, copy _2, copy _3) -> [bb46, unwind: bb41];
+    }
+
+    bb46: {
+        _0 = copy _61;
+        goto -> bb47;
+    }
+
+    bb47: {
         return;
     }
 }

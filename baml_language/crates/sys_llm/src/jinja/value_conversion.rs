@@ -53,9 +53,13 @@ pub(crate) fn external_value_to_jinja(
             // Media wrapper instances (e.g. baml.media.Image) should be unwrapped
             // to their inner _data field and rendered as inline media content.
             if is_media_wrapper_class(class_name) {
-                if let Some(data) = fields.get("_data") {
-                    return external_value_to_jinja(data, media_handles);
-                }
+                let data =
+                    fields
+                        .get("_data")
+                        .ok_or_else(|| RenderPromptError::ConversionError {
+                            reason: format!("Media wrapper `{class_name}` missing _data field"),
+                        })?;
+                return external_value_to_jinja(data, media_handles);
             }
             // Convert instance fields to a map for Jinja access
             let jinja_map: IndexMap<String, JinjaValue> = fields

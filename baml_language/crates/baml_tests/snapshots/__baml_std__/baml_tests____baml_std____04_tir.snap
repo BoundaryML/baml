@@ -420,6 +420,10 @@ function baml.llm.Client.execute_once<T>(self: baml.llm.Client, context: baml.ll
                       { : ""
                         "" : ""
                       }
+              if (active_delay_ms > 0 : bool) : void
+                { : null
+                  root.sys.sleep(active_delay_ms) : null
+                }
               throw DevOther { message: "HTTP request fail..." + error_body } : unknown
             }
         }

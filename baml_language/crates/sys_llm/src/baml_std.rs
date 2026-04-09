@@ -172,25 +172,38 @@ fn apply_provider_defaults(provider: LlmProvider, options: &mut PrimitiveClientO
         };
     }
 
-    if options.default_role.is_none() {
-        options.default_role = Some(
-            match provider {
-                LlmProvider::OpenAi
-                | LlmProvider::OpenAiGeneric
-                | LlmProvider::OpenAiResponses
-                | LlmProvider::OpenRouter
-                | LlmProvider::AzureOpenAi => "system",
-                _ => "user",
-            }
-            .into(),
-        );
-    }
-
     if options.allowed_roles.is_none() {
         options.allowed_roles = Some(match provider {
             LlmProvider::Ollama => vec!["user".into(), "assistant".into()],
             _ => vec!["system".into(), "user".into(), "assistant".into()],
         });
+    }
+
+    if options.default_role.is_none() {
+        let preferred: &str = match provider {
+            LlmProvider::OpenAi
+            | LlmProvider::OpenAiGeneric
+            | LlmProvider::OpenAiResponses
+            | LlmProvider::OpenRouter
+            | LlmProvider::AzureOpenAi => "system",
+            _ => "user",
+        };
+        // Clamp to the first allowed role if the provider default is not in the set.
+        options.default_role = Some(
+            if options
+                .allowed_roles
+                .as_ref()
+                .is_some_and(|roles| roles.iter().any(|r| r == preferred))
+            {
+                preferred.into()
+            } else {
+                options
+                    .allowed_roles
+                    .as_ref()
+                    .and_then(|r| r.first().cloned())
+                    .unwrap_or_else(|| preferred.into())
+            },
+        );
     }
 
     if options.remap_roles.is_none() {
@@ -234,12 +247,29 @@ fn apply_provider_defaults(provider: LlmProvider, options: &mut PrimitiveClientO
                 video: Some("send_base64".into()),
                 pdf: Some("send_base64".into()),
             },
-            LlmProvider::VertexAi => sys_types::generated::owned::llm::MediaUrlHandler {
-                image: Some("send_url_add_mime_type".into()),
-                audio: Some("send_url_add_mime_type".into()),
-                video: Some("send_url".into()),
-                pdf: Some("send_url".into()),
-            },
+            LlmProvider::VertexAi => {
+                let is_anthropic_model = options
+                    .model
+                    .as_deref()
+                    .is_some_and(|m| m.starts_with("claude"));
+                if is_anthropic_model {
+                    // Claude on Vertex uses the Anthropic rawPredict path,
+                    // so media handling should match the Anthropic provider.
+                    sys_types::generated::owned::llm::MediaUrlHandler {
+                        image: Some("send_url".into()),
+                        audio: Some("send_url".into()),
+                        video: Some("send_url".into()),
+                        pdf: Some("send_url".into()),
+                    }
+                } else {
+                    sys_types::generated::owned::llm::MediaUrlHandler {
+                        image: Some("send_url_add_mime_type".into()),
+                        audio: Some("send_url_add_mime_type".into()),
+                        video: Some("send_url".into()),
+                        pdf: Some("send_url".into()),
+                    }
+                }
+            }
             LlmProvider::AwsBedrock => sys_types::generated::owned::llm::MediaUrlHandler {
                 image: Some("send_base64".into()),
                 audio: Some("send_base64".into()),

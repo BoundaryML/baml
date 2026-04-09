@@ -634,11 +634,11 @@ function baml.llm.Client.execute_once(self: null, context: void, active_delay_ms
     pop 1
     load_var self
     load_field .counter
-    store_var _63
+    store_var _66
     load_var self
     load_field .sub_clients
     call baml.Array.length
-    store_var _64
+    store_var _67
     load_var self
     load_var self
     load_field .counter
@@ -647,25 +647,25 @@ function baml.llm.Client.execute_once(self: null, context: void, active_delay_ms
     store_field .counter
     load_var self
     load_field .sub_clients
-    load_var _63
-    load_var _64
+    load_var _66
+    load_var _67
     bin_op %
     load_array_element
     load_var context
     load_var active_delay_ms
     call baml.llm.Client.execute
-    jump L12
+    jump L13
 
   L2:
     load_var self
     load_field .sub_clients
-    store_var _52
+    store_var _55
     load_const 0
     store_var __for_idx
 
   L3:
     load_var __for_idx
-    load_var _52
+    load_var _55
     call baml.Array.length
     cmp_op <
     pop_jump_if_false L4
@@ -678,7 +678,7 @@ function baml.llm.Client.execute_once(self: null, context: void, active_delay_ms
     throw
 
   L5:
-    load_var _52
+    load_var _55
     load_var __for_idx
     load_array_element
     load_var context
@@ -694,7 +694,7 @@ function baml.llm.Client.execute_once(self: null, context: void, active_delay_ms
     jump L3
 
   L6:
-    jump L12
+    jump L13
 
   L7:
     load_var self
@@ -731,7 +731,7 @@ function baml.llm.Client.execute_once(self: null, context: void, active_delay_ms
     load_var http_response
     call baml.http.Response.ok
     pop_jump_if_false L8
-    jump L10
+    jump L11
 
   L8:
     load_var http_response
@@ -745,6 +745,16 @@ function baml.llm.Client.execute_once(self: null, context: void, active_delay_ms
     store_var error_body
 
   L9:
+    load_var active_delay_ms
+    load_const 0
+    cmp_op >
+    pop_jump_if_false L10
+    load_var active_delay_ms
+    dispatch_future baml.sys.sleep
+    await
+    pop 1
+
+  L10:
     alloc_instance DevOther
     load_const "HTTP request failed: "
     load_var error_body
@@ -752,7 +762,7 @@ function baml.llm.Client.execute_once(self: null, context: void, active_delay_ms
     init_field .message
     throw
 
-  L10:
+  L11:
     load_var http_response
     dispatch_future baml.http.Response.text
     await
@@ -762,23 +772,23 @@ function baml.llm.Client.execute_once(self: null, context: void, active_delay_ms
     load_var return_type
     dispatch_future baml.llm.PrimitiveClient.parse
     await
-    jump L12
+    jump L13
     load_var e
     throw_if_panic
     load_var active_delay_ms
     load_const 0
     cmp_op >
-    pop_jump_if_false L11
+    pop_jump_if_false L12
     load_var active_delay_ms
     dispatch_future baml.sys.sleep
     await
     pop 1
 
-  L11:
+  L12:
     load_var e
     throw
 
-  L12:
+  L13:
     return
 }
 

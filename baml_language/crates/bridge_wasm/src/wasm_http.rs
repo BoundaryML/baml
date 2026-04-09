@@ -211,11 +211,11 @@ impl IoClassHttpResponse for WasmHttp {
             })?;
             if let Some(arr) = value.dyn_ref::<js_sys::Uint8Array>() {
                 Ok(arr.to_vec())
-            } else if let Some(s) = value.as_string() {
-                Ok(s.into_bytes())
+            } else if let Some(buf) = value.dyn_ref::<js_sys::ArrayBuffer>() {
+                Ok(js_sys::Uint8Array::new(buf).to_vec())
             } else {
                 Err(OpErrorKind::Other(
-                    "Response body did not resolve to bytes or string".into(),
+                    "Response body did not resolve to a Uint8Array or ArrayBuffer".into(),
                 ))
             }
         })))
