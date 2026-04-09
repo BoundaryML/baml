@@ -37,6 +37,30 @@ pub fn find_recursive_aliases(
     recursive
 }
 
+/// Substitute use-site `type_args` into an alias body.
+///
+/// If the alias has no generic params or the use-site has no `type_args`,
+/// returns the body unchanged. Otherwise applies `bind_type_vars` + `substitute_ty`.
+///
+/// `generic_params` must be sourced from alias definition metadata (item tree /
+/// `ExportedType`), NOT from `QualifiedTypeName.generic_params` which is unreliable.
+pub(crate) fn instantiate_alias(
+    _qtn: &QualifiedTypeName,
+    alias_body: &Ty,
+    use_site_type_args: &[Ty],
+    aliases: &HashMap<QualifiedTypeName, Ty>,
+) -> Ty {
+    if use_site_type_args.is_empty() {
+        return alias_body.clone();
+    }
+    // Current user-defined type aliases have no generic params in AST/HIR,
+    // so this path is not yet reachable for user code. When generic type aliases
+    // are added, the caller must supply generic_params from alias definition metadata.
+    // For now, return the body unchanged.
+    let _ = aliases;
+    alias_body.clone()
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // STRUCTURAL TYPE (private)
 // ═══════════════════════════════════════════════════════════════════════════
@@ -58,8 +82,8 @@ enum StructuralTy {
     // Literal
     Literal(baml_base::Literal),
     // User-defined (resolved by qualified name)
-    Class(QualifiedTypeName),
-    Enum(QualifiedTypeName),
+    Class(QualifiedTypeName, Vec<StructuralTy>),
+    Enum(QualifiedTypeName, Vec<StructuralTy>),
     EnumVariant(QualifiedTypeName, Name),
     // Constructors
     Optional(Box<StructuralTy>),
@@ -227,8 +251,22 @@ impl StructuralTy {
             (StructuralTy::Literal(LiteralValue::String(_)), StructuralTy::String) => true,
             (StructuralTy::Literal(LiteralValue::Bool(_)), StructuralTy::Bool) => true,
 
-            // EnumVariant(E, V) <: Enum(E)
-            (StructuralTy::EnumVariant(e, _), StructuralTy::Enum(sup_e)) => e == sup_e,
+            // Nominal class: same declaration identity + invariant type_args
+            (StructuralTy::Class(qtn1, args1), StructuralTy::Class(qtn2, args2))
+                if qtn1 == qtn2 && args1.len() == args2.len() =>
+            {
+                args1.iter().zip(args2.iter()).all(|(a, b)| a == b)
+            }
+
+            // Nominal enum: same declaration identity + invariant type_args
+            (StructuralTy::Enum(qtn1, args1), StructuralTy::Enum(qtn2, args2))
+                if qtn1 == qtn2 && args1.len() == args2.len() =>
+            {
+                args1.iter().zip(args2.iter()).all(|(a, b)| a == b)
+            }
+
+            // EnumVariant(E, V) <: Enum(E) — match new Enum shape with trailing _ for type_args
+            (StructuralTy::EnumVariant(e, _), StructuralTy::Enum(sup_e, _)) => e == sup_e,
 
             // Function subtyping: contravariant params, covariant return and throws
             (
@@ -309,6 +347,18 @@ fn substitute(
             var: v.clone(),
             body: Box::new(substitute(body, var, replacement)),
         },
+        StructuralTy::Class(qtn, args) => StructuralTy::Class(
+            qtn.clone(),
+            args.iter()
+                .map(|a| substitute(a, var, replacement))
+                .collect(),
+        ),
+        StructuralTy::Enum(qtn, args) => StructuralTy::Enum(
+            qtn.clone(),
+            args.iter()
+                .map(|a| substitute(a, var, replacement))
+                .collect(),
+        ),
         _ => ty.clone(),
     }
 }
@@ -351,26 +401,41 @@ fn normalize_impl(
         Ty::Unknown { .. } => StructuralTy::Unknown,
         Ty::Error { .. } => StructuralTy::Error,
         Ty::Literal(lit, _freshness, _) => StructuralTy::Literal(lit.clone()),
-        Ty::Class(qn, _) => StructuralTy::Class(qn.clone()),
-        Ty::Enum(qn, _) => StructuralTy::Enum(qn.clone()),
+        Ty::Class(qn, _) => StructuralTy::Class(
+            qn.qtn().clone(),
+            qn.type_args()
+                .iter()
+                .map(|arg| normalize_impl(arg, aliases, recursive, expanding))
+                .collect(),
+        ),
+        Ty::Enum(qn, _) => StructuralTy::Enum(
+            qn.qtn().clone(),
+            qn.type_args()
+                .iter()
+                .map(|arg| normalize_impl(arg, aliases, recursive, expanding))
+                .collect(),
+        ),
         Ty::EnumVariant(qn, v, _) => StructuralTy::EnumVariant(qn.clone(), v.clone()),
 
         Ty::TypeAlias(qn, _) => {
-            if expanding.contains(qn) {
-                return StructuralTy::TyVar(qn.clone());
+            if expanding.contains(qn.qtn()) {
+                return StructuralTy::TyVar(qn.qtn().clone());
             }
 
-            if let Some(alias_ty) = aliases.get(qn) {
-                if recursive.contains(qn) {
-                    expanding.insert(qn.clone());
-                    let body = normalize_impl(alias_ty, aliases, recursive, expanding);
-                    expanding.remove(qn);
+            if let Some(alias_ty) = aliases.get(qn.qtn()) {
+                // Substitute use-site type_args into alias body
+                let alias_ty = alias_ty.clone();
+                let substituted = instantiate_alias(qn.qtn(), &alias_ty, qn.type_args(), aliases);
+                if recursive.contains(qn.qtn()) {
+                    expanding.insert(qn.qtn().clone());
+                    let body = normalize_impl(&substituted, aliases, recursive, expanding);
+                    expanding.remove(qn.qtn());
                     StructuralTy::Mu {
-                        var: qn.clone(),
+                        var: qn.qtn().clone(),
                         body: Box::new(body),
                     }
                 } else {
-                    normalize_impl(alias_ty, aliases, recursive, expanding)
+                    normalize_impl(&substituted, aliases, recursive, expanding)
                 }
             } else {
                 StructuralTy::Error
@@ -447,7 +512,9 @@ fn ty_has_cycle(
     stack: &mut HashSet<QualifiedTypeName>,
 ) -> bool {
     match ty {
-        Ty::TypeAlias(qn, _) if aliases.contains_key(qn) => has_cycle(qn, aliases, visited, stack),
+        Ty::TypeAlias(qn, _) if aliases.contains_key(qn.qtn()) => {
+            has_cycle(qn.qtn(), aliases, visited, stack)
+        }
         Ty::Optional(inner, _) | Ty::List(inner, _) | Ty::EvolvingList(inner, _) => {
             ty_has_cycle(inner, aliases, visited, stack)
         }
@@ -569,11 +636,21 @@ fn extract_type_alias_deps(
         in_structural: bool,
     ) {
         match ty {
-            Ty::TypeAlias(qn, _) if aliases.contains_key(qn) => {
+            Ty::TypeAlias(qn, _) if aliases.contains_key(qn.qtn()) => {
                 if in_structural {
-                    structural.insert(qn.clone());
+                    structural.insert(qn.qtn().clone());
                 } else {
-                    non_structural.insert(qn.clone());
+                    non_structural.insert(qn.qtn().clone());
+                }
+                // Recurse into type_args so alias dependencies hidden inside them are found
+                for arg in qn.type_args() {
+                    visit(arg, aliases, non_structural, structural, in_structural);
+                }
+            }
+            Ty::Class(qn, _) | Ty::Enum(qn, _) if !qn.type_args().is_empty() => {
+                // Recurse into type_args to find alias dependencies inside them
+                for arg in qn.type_args() {
+                    visit(arg, aliases, non_structural, structural, in_structural);
                 }
             }
             Ty::Optional(inner, _) => {
@@ -834,15 +911,15 @@ fn extract_required_class_deps(
     match ty {
         Ty::Class(qn, _) => {
             // Only add if the field is truly required
-            if !optional && !in_list_or_map && class_fields.contains_key(qn) {
-                deps.insert(qn.clone());
+            if !optional && !in_list_or_map && class_fields.contains_key(qn.qtn()) {
+                deps.insert(qn.qtn().clone());
             }
         }
         Ty::TypeAlias(qn, _) => {
             // Resolve through type aliases (only if still required context)
-            if !optional && !in_list_or_map && !visiting.contains(qn) {
-                if let Some(alias_ty) = type_aliases.get(qn) {
-                    visiting.insert(qn.clone());
+            if !optional && !in_list_or_map && !visiting.contains(qn.qtn()) {
+                if let Some(alias_ty) = type_aliases.get(qn.qtn()) {
+                    visiting.insert(qn.qtn().clone());
                     extract_required_class_deps(
                         alias_ty,
                         class_fields,
@@ -852,7 +929,7 @@ fn extract_required_class_deps(
                         in_list_or_map,
                         visiting,
                     );
-                    visiting.remove(qn);
+                    visiting.remove(qn.qtn());
                 }
             }
         }
@@ -951,7 +1028,7 @@ mod tests {
     }
 
     fn type_alias(name: &str) -> Ty {
-        Ty::TypeAlias(qn(name), TyAttr::default())
+        Ty::TypeAlias(qn(name).into(), TyAttr::default())
     }
 
     #[test]
@@ -1078,7 +1155,7 @@ mod tests {
             &Ty::Never {
                 attr: TyAttr::default()
             },
-            &Ty::Class(qn("Foo"), TyAttr::default()),
+            &Ty::Class(qn("Foo").into(), TyAttr::default()),
             &aliases
         ));
         assert!(is_subtype_of(
@@ -1149,12 +1226,12 @@ mod tests {
         let aliases = HashMap::new();
         assert!(is_subtype_of(
             &Ty::EnumVariant(qn("Color"), Name::new("Red"), TyAttr::default()),
-            &Ty::Enum(qn("Color"), TyAttr::default()),
+            &Ty::Enum(qn("Color").into(), TyAttr::default()),
             &aliases
         ));
         assert!(!is_subtype_of(
             &Ty::EnumVariant(qn("Color"), Name::new("Red"), TyAttr::default()),
-            &Ty::Enum(qn("Shape"), TyAttr::default()),
+            &Ty::Enum(qn("Shape").into(), TyAttr::default()),
             &aliases
         ));
     }

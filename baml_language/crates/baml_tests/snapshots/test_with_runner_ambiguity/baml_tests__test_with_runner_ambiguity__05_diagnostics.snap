@@ -22,3 +22,14 @@ source: crates/baml_tests/src/generated_tests.rs
     │ 
     │ Note: Error code: E0001
 ────╯
+
+  [type] Error: type mismatch: expected testing.TestRunner?, got user.MyRunner
+    ╭─[ main.baml:23:40 ]
+    │
+ 23 │ ╭─▶ test "constructor runner" with MyRunner { threshold: 0.5 } {
+ 24 │ ├─▶   assert.is_true(true)
+    │ │                            
+    │ ╰──────────────────────────── type mismatch: expected testing.TestRunner?, got user.MyRunner
+    │     
+    │     Note: Error code: E0001
+────╯

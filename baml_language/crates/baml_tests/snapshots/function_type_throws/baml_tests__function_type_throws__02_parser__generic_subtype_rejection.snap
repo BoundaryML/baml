@@ -1,0 +1,81 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "Box"
+    GENERIC_PARAM_LIST
+      LESS "<"
+      GENERIC_PARAM "T"
+        WORD "T"
+      GREATER ">"
+    L_BRACE "{"
+    FIELD
+      WORD "value"
+      COLON ":"
+      TYPE_EXPR "T"
+        WORD "T"
+    R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "take_string_box"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "b"
+        COLON ":"
+        TYPE_EXPR
+          WORD "Box"
+          TYPE_ARGS
+            LESS "<"
+            TYPE_EXPR "string"
+              WORD "string"
+            GREATER ">"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "null"
+      WORD "null"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR "{
+  null
+}"
+        L_BRACE "{"
+        WORD "null"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "bad_box_mismatch"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "null"
+      WORD "null"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        CALL_EXPR
+          WORD "take_string_box"
+          CALL_ARGS
+            L_PAREN "("
+            OBJECT_LITERAL
+              PATH_EXPR
+                WORD "Box"
+                GENERIC_ARGS
+                  LESS "<"
+                  TYPE_EXPR "int"
+                    WORD "int"
+                  GREATER ">"
+              L_BRACE "{"
+              OBJECT_FIELD "value: 1"
+                WORD "value"
+                COLON ":"
+                INTEGER_LITERAL "1"
+              R_BRACE "}"
+            R_PAREN ")"
+        R_BRACE "}"
+
+=== ERRORS ===
+None

@@ -65,6 +65,7 @@ mod tests {
         (Path($name:expr $(, Attr($a:expr))*)) => {
             TypeExpr::Path {
                 segments: vec![baml_base::Name::new($name)],
+                type_args: vec![],
                 attrs: type_expr!(@attrs $(, Attr($a))*),
             }
         };
@@ -153,8 +154,13 @@ mod tests {
             TypeExpr::Rust { attrs } => TypeExpr::Rust {
                 attrs: strip_attrs(attrs),
             },
-            TypeExpr::Path { segments, attrs } => TypeExpr::Path {
+            TypeExpr::Path {
+                segments,
+                type_args,
+                attrs,
+            } => TypeExpr::Path {
                 segments: segments.clone(),
+                type_args: type_args.iter().map(strip_spans).collect(),
                 attrs: strip_attrs(attrs),
             },
             TypeExpr::Optional { inner, attrs } => TypeExpr::Optional {
@@ -292,6 +298,7 @@ class Response {
                     baml_base::Name::new("errors"),
                     baml_base::Name::new("Io"),
                 ],
+                type_args: vec![],
                 attrs: vec![]
             }
         );
@@ -972,6 +979,7 @@ retry_policy MyRetry {
         let (type_name, fields, _) = match root_expr {
             Expr::Object {
                 type_name,
+                type_args: _,
                 fields,
                 spreads,
             } => (type_name, fields, spreads),

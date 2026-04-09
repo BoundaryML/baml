@@ -1,6 +1,6 @@
 //! Resolved type representation — the output of type resolution.
 
-use std::fmt;
+use std::{fmt, ops::Deref};
 
 use baml_base::Name;
 pub use baml_base::attr::TyAttr;
@@ -18,8 +18,11 @@ pub struct QualifiedTypeName {
     namespace: Vec<Name>,
     /// The short/local name of the type (e.g. `"Foo"`).
     name: Name,
-    /// Unresolved generic type parameter names (e.g. `["T"]` for `Array<T>`).
-    /// Empty for non-generic types or when concrete type args are substituted.
+    /// Unresolved generic type parameter names on the definition itself
+    /// (e.g. `["T"]` for the declared class `Array<T>`).
+    ///
+    /// Concrete instantiations like `Array<int>` are represented on
+    /// `NominalTypeRef::type_args`, not here.
     pub generic_params: Vec<Name>,
 }
 
@@ -94,18 +97,106 @@ impl fmt::Display for QualifiedTypeName {
     }
 }
 
+/// A nominal type reference with optional concrete type arguments.
+///
+/// `QualifiedTypeName` identifies the declaration; `type_args` capture an
+/// instantiated use like `Handler<string>`.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct NominalTypeRef {
+    qtn: QualifiedTypeName,
+    type_args: Vec<Ty>,
+}
+
+impl NominalTypeRef {
+    pub fn new(qtn: QualifiedTypeName) -> Self {
+        Self {
+            qtn,
+            type_args: Vec::new(),
+        }
+    }
+
+    pub fn new_with_type_args(qtn: QualifiedTypeName, type_args: Vec<Ty>) -> Self {
+        Self { qtn, type_args }
+    }
+
+    pub fn qtn(&self) -> &QualifiedTypeName {
+        &self.qtn
+    }
+
+    pub fn package(&self) -> &Name {
+        self.qtn.package()
+    }
+
+    pub fn namespace(&self) -> &Vec<Name> {
+        self.qtn.namespace()
+    }
+
+    pub fn name(&self) -> &Name {
+        self.qtn.name()
+    }
+
+    pub fn type_args(&self) -> &[Ty] {
+        &self.type_args
+    }
+
+    pub fn into_qtn(self) -> QualifiedTypeName {
+        self.qtn
+    }
+
+    #[must_use]
+    pub fn with_type_args(&self, type_args: Vec<Ty>) -> Self {
+        Self {
+            qtn: self.qtn.clone(),
+            type_args,
+        }
+    }
+
+    pub fn is_panic_type(&self) -> bool {
+        self.qtn.is_panic_type()
+    }
+}
+
+impl Deref for NominalTypeRef {
+    type Target = QualifiedTypeName;
+
+    fn deref(&self) -> &Self::Target {
+        &self.qtn
+    }
+}
+
+impl From<QualifiedTypeName> for NominalTypeRef {
+    fn from(qtn: QualifiedTypeName) -> Self {
+        Self::new(qtn)
+    }
+}
+
+impl fmt::Display for NominalTypeRef {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.qtn)?;
+        if !self.type_args.is_empty() {
+            let args: Vec<_> = self
+                .type_args
+                .iter()
+                .map(std::string::ToString::to_string)
+                .collect();
+            write!(f, "<{}>", args.join(", "))?;
+        }
+        Ok(())
+    }
+}
+
 /// Resolved type — the output of type resolution (Pass 2).
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Ty {
     /// A class type — just the name, no expansion.
-    Class(QualifiedTypeName, TyAttr),
+    Class(NominalTypeRef, TyAttr),
     /// An enum type.
-    Enum(QualifiedTypeName, TyAttr),
+    Enum(NominalTypeRef, TyAttr),
     /// An enum variant — Enum(qualified) . Variant(name).
     EnumVariant(QualifiedTypeName, Name, TyAttr),
     /// A type alias — opaque name reference, NOT expanded.
     /// Expansion happens lazily at subtype-checking time.
-    TypeAlias(QualifiedTypeName, TyAttr),
+    TypeAlias(NominalTypeRef, TyAttr),
     /// Primitive types.
     Primitive(PrimitiveType, TyAttr),
     /// T[]
@@ -377,6 +468,20 @@ impl Ty {
             | Ty::Error { attr } => *attr = new_attr,
         }
         self
+    }
+
+    #[must_use]
+    pub fn with_nominal_type_args(self, type_args: Vec<Ty>) -> Ty {
+        if type_args.is_empty() {
+            return self;
+        }
+
+        match self {
+            Ty::Class(nominal, attr) => Ty::Class(nominal.with_type_args(type_args), attr),
+            Ty::Enum(nominal, attr) => Ty::Enum(nominal.with_type_args(type_args), attr),
+            Ty::TypeAlias(nominal, attr) => Ty::TypeAlias(nominal.with_type_args(type_args), attr),
+            other => other,
+        }
     }
 
     /// Widen fresh literal types to their base primitive.

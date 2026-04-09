@@ -387,9 +387,11 @@ fn throw_fact_from_expr<'db>(
             if let Some(def) = pkg_items.lookup_type(ns_context, name) {
                 match def {
                     Definition::Class(_) => {
-                        Ty::Class(qualify_def(db, def, name), TyAttr::default())
+                        Ty::Class(qualify_def(db, def, name).into(), TyAttr::default())
                     }
-                    Definition::Enum(_) => Ty::Enum(qualify_def(db, def, name), TyAttr::default()),
+                    Definition::Enum(_) => {
+                        Ty::Enum(qualify_def(db, def, name).into(), TyAttr::default())
+                    }
                     _ => Ty::Unknown {
                         attr: TyAttr::default(),
                     },
@@ -463,10 +465,10 @@ fn resolve_path_to_ty<'db>(
     };
     if let Some(def) = def {
         return match def {
-            Definition::Class(_) => Ty::Class(qualify_def(db, def, name), TyAttr::default()),
-            Definition::Enum(_) => Ty::Enum(qualify_def(db, def, name), TyAttr::default()),
+            Definition::Class(_) => Ty::Class(qualify_def(db, def, name).into(), TyAttr::default()),
+            Definition::Enum(_) => Ty::Enum(qualify_def(db, def, name).into(), TyAttr::default()),
             Definition::TypeAlias(_) => {
-                Ty::TypeAlias(qualify_def(db, def, name), TyAttr::default())
+                Ty::TypeAlias(qualify_def(db, def, name).into(), TyAttr::default())
             }
             _ => Ty::Unknown {
                 attr: TyAttr::default(),

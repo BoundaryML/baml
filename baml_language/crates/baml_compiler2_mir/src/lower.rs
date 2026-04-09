@@ -963,7 +963,8 @@ impl LoweringContext<'_> {
                                 let tir_ty = baml_compiler2_tir::ty::Ty::Class(
                                     baml_compiler2_tir::lower_type_expr::qualify_def(
                                         self.db, def, cn,
-                                    ),
+                                    )
+                                    .into(),
                                     baml_compiler2_tir::ty::TyAttr::default(),
                                 );
                                 self.resolved_aliases.convert(&tir_ty)
@@ -1456,6 +1457,7 @@ impl LoweringContext<'_> {
                 type_name,
                 fields,
                 spreads,
+                ..
             } => {
                 self.lower_object(expr_id, type_name.as_ref(), &fields, &spreads, dest);
             }

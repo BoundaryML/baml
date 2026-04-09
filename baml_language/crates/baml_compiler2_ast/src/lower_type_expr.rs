@@ -252,7 +252,13 @@ fn lower_base_type(type_expr: &CstTypeExpr) -> TypeExpr {
         }
 
         // Named type (primitive or user-defined)
-        return lower_from_type_name(&name);
+        let args = type_expr.type_arg_exprs();
+        return lower_from_type_name(
+            &name,
+            args.iter()
+                .map(|arg| lower_type_expr_inner(arg, false))
+                .collect(),
+        );
     }
 
     TypeExpr::Unknown { attrs: vec![] }
@@ -343,7 +349,21 @@ fn lower_union_member_base(parts: &baml_compiler_syntax::ast::UnionMemberParts) 
                 value: baml_base::Literal::Bool(false),
                 attrs: vec![],
             },
-            _ => lower_from_type_name(&name),
+            _ => lower_from_type_name(
+                &name,
+                parts
+                    .type_args()
+                    .into_iter()
+                    .flat_map(|type_args_node| {
+                        type_args_node
+                            .children()
+                            .filter(|n| n.kind() == baml_compiler_syntax::SyntaxKind::TYPE_EXPR)
+                            .filter_map(baml_compiler_syntax::ast::TypeExpr::cast)
+                            .map(|arg| lower_type_expr_inner(&arg, false))
+                            .collect::<Vec<_>>()
+                    })
+                    .collect(),
+            ),
         };
     }
 
@@ -351,7 +371,7 @@ fn lower_union_member_base(parts: &baml_compiler_syntax::ast::UnionMemberParts) 
 }
 
 /// Create a `TypeExpr` from a type name string (primitive or user-defined).
-fn lower_from_type_name(name: &str) -> TypeExpr {
+fn lower_from_type_name(name: &str, type_args: Vec<TypeExpr>) -> TypeExpr {
     match name {
         "int" => TypeExpr::Int { attrs: vec![] },
         "float" => TypeExpr::Float { attrs: vec![] },
@@ -384,11 +404,13 @@ fn lower_from_type_name(name: &str) -> TypeExpr {
                 let segments: Vec<Name> = name.split('.').map(Name::new).collect();
                 TypeExpr::Path {
                     segments,
+                    type_args,
                     attrs: vec![],
                 }
             } else {
                 TypeExpr::Path {
                     segments: vec![Name::new(name)],
+                    type_args,
                     attrs: vec![],
                 }
             }

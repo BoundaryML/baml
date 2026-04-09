@@ -155,6 +155,14 @@ function user.apply_with_many_args(a: int, b: string, f: (int, string) -> string
     return
 }
 
+function user.bad_box_mismatch() -> null {
+    alloc_instance Box
+    load_const 1
+    init_field .value
+    call user.take_string_box
+    return
+}
+
 function user.caller() -> string {
     load_const 1
     call user.declared_may_fail
@@ -535,6 +543,11 @@ function user.safe_caller() -> string {
     load_const "caught"
 
   L0:
+    return
+}
+
+function user.take_string_box(b: Box) -> null {
+    load_const null
     return
 }
 
@@ -1019,6 +1032,22 @@ function user.test_typed_lambda_throws_mismatch() -> int {
     return
 }
 
+function user.test_unwrap_int() -> int {
+    alloc_instance Wrapper
+    load_const 42
+    init_field .inner
+    call user.unwrap
+    return
+}
+
+function user.test_unwrap_string() -> string {
+    alloc_instance Wrapper
+    load_const "hello"
+    init_field .inner
+    call user.unwrap
+    return
+}
+
 function user.test_use_pure() -> int {
     call user.make_pure
     call_indirect
@@ -1239,6 +1268,13 @@ function user.throw_various_errors(x: int) -> string {
     load_const user.ErrorKind.NotFound
     alloc_variant user.ErrorKind
     throw
+}
+
+function user.unwrap(w: (() -> int) -> int throws string) -> void {
+    load_var w
+    load_const "inner"
+    load_map_element
+    return
 }
 
 function user.use_alias_pure(f: () -> int) -> int {

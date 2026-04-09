@@ -1263,6 +1263,7 @@ mod tests {
                 type_name: Some("MyResponse".into()),
                 fields: vec![("ok".into(), field_val)],
                 spreads: vec![],
+                type_args: vec![],
             });
             let ret = stmts.alloc(ast::Stmt::Return(Some(obj)));
             Some(exprs.alloc(ast::Expr::Block {
@@ -1324,6 +1325,7 @@ mod tests {
                 type_name: Some("Result".into()),
                 fields: vec![],
                 spreads: vec![],
+                type_args: vec![],
             });
             let ret_true = stmts.alloc(ast::Stmt::Return(Some(obj_true)));
             let then_b = exprs.alloc(ast::Expr::Block {
@@ -1336,6 +1338,7 @@ mod tests {
                 type_name: Some("Result".into()),
                 fields: vec![("err".into(), err_val)],
                 spreads: vec![],
+                type_args: vec![],
             });
             let ret_false = stmts.alloc(ast::Stmt::Return(Some(obj_false)));
             let else_b = exprs.alloc(ast::Expr::Block {
@@ -1375,6 +1378,7 @@ mod tests {
             type_name: Some("Resp".into()),
             fields: vec![("ok".into(), field_val)],
             spreads: vec![],
+            type_args: vec![],
         });
 
         let body = ast::ExprBody {

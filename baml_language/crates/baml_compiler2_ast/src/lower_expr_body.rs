@@ -1088,6 +1088,7 @@ impl LoweringContext {
                                     name,
                                     ty: crate::ast::TypeExpr::Path {
                                         segments: vec![Name::new(&text)],
+                                        type_args: vec![],
                                         attrs: vec![],
                                     },
                                 };
@@ -1990,6 +1991,7 @@ impl LoweringContext {
         let mut spreads = Vec::new();
         let mut position = 0;
         let mut type_name = None;
+        let mut type_args = Vec::new();
 
         // Look for the optional type name (first WORD or path before the brace).
         // The type name may be:
@@ -2021,6 +2023,19 @@ impl LoweringContext {
                     if let Some(name) = last_word {
                         type_name = Some(name);
                     }
+                    type_args = child_node
+                        .children()
+                        .find(|n| n.kind() == SyntaxKind::GENERIC_ARGS)
+                        .into_iter()
+                        .flat_map(|args_node| {
+                            args_node
+                                .children()
+                                .filter(|n| n.kind() == SyntaxKind::TYPE_EXPR)
+                                .filter_map(baml_compiler_syntax::ast::TypeExpr::cast)
+                                .map(|arg| crate::lower_type_expr::lower_type_expr_node(&arg))
+                                .collect::<Vec<_>>()
+                        })
+                        .collect();
                     // After handling the path node, stop scanning for more pre-brace items.
                     break 'outer;
                 }
@@ -2086,6 +2101,7 @@ impl LoweringContext {
         self.alloc_expr(
             Expr::Object {
                 type_name,
+                type_args,
                 fields,
                 spreads,
             },
@@ -2840,6 +2856,7 @@ impl LoweringContext {
             type_expr: Some(SpannedTypeExpr {
                 expr: TypeExpr::Path {
                     segments: vec![Name::new("testing"), Name::new("TestCollector")],
+                    type_args: vec![],
                     attrs: vec![],
                 },
                 span,

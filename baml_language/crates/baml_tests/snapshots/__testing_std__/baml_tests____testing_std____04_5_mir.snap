@@ -36,8 +36,8 @@ fn testing.TestRegistry.expand_set(self: testing.TestRegistry, name: string) -> 
     let _12: testing.TestSetRegistration
     let _13: int // start
     let _14: testing.TestCollector // sub_collector
-    let _15: void[]
-    let _16: void[]
+    let _15: testing.TestRegistration[]
+    let _16: testing.TestSetRegistration[]
     let _17: null
     let _18: (testing.TestCollector) -> null throws unknown
     let _19: testing.TestSetRegistration
@@ -47,7 +47,7 @@ fn testing.TestRegistry.expand_set(self: testing.TestRegistry, name: string) -> 
     let _23: int
     let _24: testing.TestRegistry // sub_registry
     let _25: testing.TestCollector
-    let _26: map<void, void>
+    let _26: map<string, testing.TestRegistry>
     let _27: int
     let _28: null
     let _29: map<string, testing.TestRegistry>

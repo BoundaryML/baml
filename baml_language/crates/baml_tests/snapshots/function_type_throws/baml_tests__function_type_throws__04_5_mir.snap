@@ -1547,6 +1547,53 @@ fn user.use_alias_pure(f: () -> int) -> int {
     }
 }
 
+fn user.test_unwrap_int() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: void
+
+    bb0: {
+        _1 = Wrapper { const 42_i64 };
+        _0 = call const fn user.unwrap(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.test_unwrap_string() -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: void
+
+    bb0: {
+        _1 = Wrapper { const "hello" };
+        _0 = call const fn user.unwrap(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.unwrap(w: (() -> int) -> int throws string) -> void {
+    // Locals:
+    let _0: void // _0 // return
+    let _1: (() -> int) -> int throws string // w // param
+    let _2: string
+
+    bb0: {
+        _2 = const "inner";
+        _0 = copy _1[_2];
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
 fn user.make_int_handler() -> Handler {
     // Locals:
     let _0: Handler // _0 // return
@@ -1639,7 +1686,7 @@ fn user.use_int_handler(h: Handler) -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: Handler // h // param
-    let _2: () -> null
+    let _2: () -> null throws int
 
     bb0: {
         _2 = copy _1.0;
@@ -1655,11 +1702,41 @@ fn user.use_string_handler(h: Handler) -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: Handler // h // param
-    let _2: () -> null
+    let _2: () -> null throws string
 
     bb0: {
         _2 = copy _1.0;
         _0 = call copy _2() -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.bad_box_mismatch() -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: Box
+
+    bb0: {
+        _1 = Box { const 1_i64 };
+        _0 = call const fn user.take_string_box(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.take_string_box(b: Box) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: Box // b // param
+
+    bb0: {
+        _0 = const null;
+        goto -> bb1;
     }
 
     bb1: {
@@ -1719,7 +1796,7 @@ fn user.run_tasks(tasks: Task[]) -> null {
     let _5: Task
     let _6: Task // task
     let _7: void
-    let _8: () -> null
+    let _8: () -> null throws string | int
     let _9: Task
 
     bb0: {

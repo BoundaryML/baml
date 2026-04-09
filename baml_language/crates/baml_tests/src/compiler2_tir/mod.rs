@@ -1023,7 +1023,8 @@ pub(crate) mod support {
                                             baml_compiler2_tir::ty::Ty::Class(
                                                 baml_compiler2_tir::lower_type_expr::qualify_def(
                                                     db, def, cn,
-                                                ),
+                                                )
+                                                .into(),
                                                 Default::default(),
                                             )
                                         })

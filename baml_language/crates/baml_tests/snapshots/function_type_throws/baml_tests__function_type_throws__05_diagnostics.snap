@@ -42,6 +42,53 @@ source: crates/baml_tests/src/generated_tests.rs
     │ Note: Error code: E0001
 ────╯
 
+  [validation] Error: Name `Wrapper` defined 2 times as: type, class
+    ╭─[ fn_type_alias_throws.baml:20:6 ]
+    │
+ 20 │ type Wrapper = (() -> int) -> int throws string
+    │      ───┬───  
+    │         ╰───── first defined as type here
+    │
+    ├─[ generic_function_inference.baml:4:7 ]
+    │
+  4 │ class Wrapper<T> {
+    │       ───┬───  
+    │          ╰───── duplicate class definition
+    │ 
+    │ Note: Error code: E0011
+────╯
+
+  [type] Error: type mismatch: expected T, got unknown
+   ╭─[ generic_function_inference.baml:8:41 ]
+   │
+ 8 │ ╭─▶ function unwrap<T>(w: Wrapper<T>) -> T {
+ 9 │ ├─▶   w.inner
+   │ │               
+   │ ╰─────────────── type mismatch: expected T, got unknown
+   │     
+   │     Note: Error code: E0001
+───╯
+
+  [type] Error: type `(() -> int) -> int throws string` has no member `inner`
+   ╭─[ generic_function_inference.baml:9:5 ]
+   │
+ 9 │   w.inner
+   │     ──┬──  
+   │       ╰──── type `(() -> int) -> int throws string` has no member `inner`
+   │ 
+   │ Note: Error code: E0001
+───╯
+
+  [type] Error: type mismatch: expected user.Box<string>, got user.Box<int>
+    ╭─[ generic_subtype_rejection.baml:14:19 ]
+    │
+ 14 │   take_string_box(Box<int> { value: 1 })
+    │                   ──────────┬──────────  
+    │                             ╰──────────── type mismatch: expected user.Box<string>, got user.Box<int>
+    │ 
+    │ Note: Error code: E0001
+────╯
+
   [type] Error: throws contract violation: `never` is missing throws from callback parameter `f`
     ╭─[ hof_throws.baml:58:57 ]
     │

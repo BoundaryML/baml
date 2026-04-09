@@ -29,15 +29,15 @@ source: crates/baml_tests/src/generated_tests.rs
    │        ──┬──  
    │          ╰──── unresolved type: name
    │ 
-   │ Note: Error code: E0001
+   │ Note: Error code: E0002
 ───╯
 
-  [type] Error: unresolved type: name
-   ╭─[ type_aliases_json.baml:4:8 ]
+  [type] Error: type mismatch: expected user.JSON, got user.NotJSON
+   ╭─[ type_aliases_json.baml:9:3 ]
    │
- 4 │   inner name
-   │        ──┬──  
-   │          ╰──── unresolved type: name
+ 9 │   NotJSON{ inner: "Whoops" }
+   │   ─────────────┬────────────  
+   │                ╰────────────── type mismatch: expected user.JSON, got user.NotJSON
    │ 
-   │ Note: Error code: E0002
+   │ Note: Error code: E0001
 ───╯

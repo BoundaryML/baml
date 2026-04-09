@@ -41,6 +41,7 @@ pub enum TypeExpr {
     /// Named type path: `User`, `baml.http.Request`
     Path {
         segments: Vec<Name>,
+        type_args: Vec<TypeExpr>,
         attrs: Vec<RawAttribute>,
     },
     /// Primitive types
@@ -446,6 +447,7 @@ pub enum Expr {
     },
     Object {
         type_name: Option<Name>,
+        type_args: Vec<TypeExpr>,
         fields: Vec<(Name, ExprId)>,
         spreads: Vec<SpreadField>,
     },

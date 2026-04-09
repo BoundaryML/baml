@@ -148,7 +148,7 @@ lambda user.make_throwing_handler {
 }
 function user.test_method_runner() -> int throws never {
   { : int
-    let runner = MethodRunner { value: 1 } : user.MethodRunner
+    let runner = MethodRunner { value: 1 } : user.MethodRunner<int>
     runner.apply((x: int) -> int { ... }) : int
       (x: int) -> int { ... } : (x: int) -> int
         {
@@ -638,29 +638,52 @@ type user.NoThrow$stream = never
 type user.AliasPure$stream = unknown
 type user.Mapper$stream = unknown
 type user.Wrapper$stream = unknown
+class user.Wrapper {
+  inner: T
+}
+function user.unwrap<T>(w: user.Wrapper<T>) -> T throws never {
+  { : unknown
+    w.inner : unknown
+  }
+  !! 201..206: type `(() -> int) -> int throws string` has no member `inner`
+  !! 196..206: type mismatch: expected T, got unknown
+}
+function user.test_unwrap_int() -> int throws never {
+  { : int
+    unwrap<T>(Wrapper { inner: 42 }) : int
+  }
+}
+function user.test_unwrap_string() -> string throws never {
+  { : string
+    unwrap<T>(Wrapper { inner: "hello" }) : string
+  }
+}
+class user.Wrapper$stream {
+  inner: null | unknown
+}
 class user.Handler {
   run: () -> null throws E
 }
-function user.use_string_handler(h: user.Handler) -> null throws never {
+function user.use_string_handler(h: user.Handler<string>) -> null throws string {
   { : null
     h.run() : null
   }
 }
-function user.use_int_handler(h: user.Handler) -> null throws never {
+function user.use_int_handler(h: user.Handler<int>) -> null throws int {
   { : null
     h.run() : null
   }
 }
-function user.make_string_handler() -> user.Handler throws never {
-  { : user.Handler
-    Handler { run: () -> null { ... } } : user.Handler
+function user.make_string_handler() -> user.Handler<string> throws never {
+  { : user.Handler<string>
+    Handler { run: () -> null { ... } } : user.Handler<string>
   }
 }
 lambda user.make_string_handler {
 }
-function user.make_int_handler() -> user.Handler throws never {
-  { : user.Handler
-    Handler { run: () -> null { ... } } : user.Handler
+function user.make_int_handler() -> user.Handler<int> throws never {
+  { : user.Handler<int>
+    Handler { run: () -> null { ... } } : user.Handler<int>
   }
 }
 lambda user.make_int_handler {
@@ -678,11 +701,28 @@ function user.test_int_handler() -> null throws never {
 class user.Handler$stream {
   run: unknown
 }
+class user.Box {
+  value: T
+}
+function user.take_string_box(b: user.Box<string>) -> null throws never {
+  { : null
+    null : null
+  }
+}
+function user.bad_box_mismatch() -> null throws never {
+  { : null
+    take_string_box(Box { value: 1 }) : null
+  }
+  !! 323..344: type mismatch: expected user.Box<string>, got user.Box<int>
+}
+class user.Box$stream {
+  value: null | unknown
+}
 class user.Task {
   name: string
   run: () -> null throws E
 }
-function user.run_tasks(tasks: user.Task[]) -> null throws never {
+function user.run_tasks(tasks: user.Task<string | int>[]) -> null throws int | string {
   { : null
     for task in tasks
       { : null
@@ -691,9 +731,9 @@ function user.run_tasks(tasks: user.Task[]) -> null throws never {
     null : null
   }
 }
-function user.make_mixed_tasks() -> user.Task[] throws never {
-  { : user.Task[]
-    [Task { name: "a", run: () -> null { ... } }, Task { name: "b", run: () -> null { ... } }] : user.Task[]
+function user.make_mixed_tasks() -> user.Task<string | int>[] throws never {
+  { : user.Task<string | int>[]
+    [Task { name: "a", run: () -> null { ... } }, Task { name: "b", run: () -> null { ... } }] : user.Task<string | int>[]
   }
 }
 lambda user.make_mixed_tasks {

@@ -655,7 +655,8 @@ fn definition_to_ty(db: &dyn Db, def: Definition<'_>) -> Option<Ty> {
                     pkg_info.package,
                     pkg_info.namespace_path,
                     class.name.clone(),
-                ),
+                )
+                .into(),
                 TyAttr::default(),
             ))
         }
@@ -668,7 +669,8 @@ fn definition_to_ty(db: &dyn Db, def: Definition<'_>) -> Option<Ty> {
                     pkg_info.package,
                     pkg_info.namespace_path,
                     enum_data.name.clone(),
-                ),
+                )
+                .into(),
                 TyAttr::default(),
             ))
         }

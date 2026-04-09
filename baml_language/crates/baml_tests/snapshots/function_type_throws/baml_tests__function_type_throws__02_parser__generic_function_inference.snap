@@ -1,0 +1,122 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "Wrapper"
+    GENERIC_PARAM_LIST
+      LESS "<"
+      GENERIC_PARAM "T"
+        WORD "T"
+      GREATER ">"
+    L_BRACE "{"
+    FIELD
+      WORD "inner"
+      COLON ":"
+      TYPE_EXPR "T"
+        WORD "T"
+    R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "unwrap"
+    GENERIC_PARAM_LIST
+      LESS "<"
+      GENERIC_PARAM "T"
+        WORD "T"
+      GREATER ">"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "w"
+        COLON ":"
+        TYPE_EXPR
+          WORD "Wrapper"
+          TYPE_ARGS
+            LESS "<"
+            TYPE_EXPR "T"
+              WORD "T"
+            GREATER ">"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "T"
+      WORD "T"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        PATH_EXPR "w.inner"
+          WORD "w"
+          DOT "."
+          WORD "inner"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "test_unwrap_int"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        CALL_EXPR
+          WORD "unwrap"
+          CALL_ARGS
+            L_PAREN "("
+            OBJECT_LITERAL
+              PATH_EXPR
+                WORD "Wrapper"
+                GENERIC_ARGS
+                  LESS "<"
+                  TYPE_EXPR "int"
+                    WORD "int"
+                  GREATER ">"
+              L_BRACE "{"
+              OBJECT_FIELD "inner: 42"
+                WORD "inner"
+                COLON ":"
+                INTEGER_LITERAL "42"
+              R_BRACE "}"
+            R_PAREN ")"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "test_unwrap_string"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        CALL_EXPR
+          WORD "unwrap"
+          CALL_ARGS
+            L_PAREN "("
+            OBJECT_LITERAL
+              PATH_EXPR
+                WORD "Wrapper"
+                GENERIC_ARGS
+                  LESS "<"
+                  TYPE_EXPR "string"
+                    WORD "string"
+                  GREATER ">"
+              L_BRACE "{"
+              OBJECT_FIELD
+                WORD "inner"
+                COLON ":"
+                STRING_LITERAL "hello"
+                  QUOTE """
+                  WORD "hello"
+                  QUOTE """
+              R_BRACE "}"
+            R_PAREN ")"
+        R_BRACE "}"
+
+=== ERRORS ===
+None

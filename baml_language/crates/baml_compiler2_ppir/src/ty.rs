@@ -47,6 +47,7 @@ pub struct PpirTypeAttrs {
 pub enum PpirTy {
     Named {
         path: Vec<Name>,
+        type_args: Vec<PpirTy>,
         attrs: PpirTypeAttrs,
     },
     Int {
@@ -139,8 +140,11 @@ impl PpirTy {
     pub fn clone_without_attrs(&self) -> Self {
         let d = PpirTypeAttrs::default();
         match self {
-            Self::Named { path, .. } => Self::Named {
+            Self::Named {
+                path, type_args, ..
+            } => Self::Named {
                 path: path.clone(),
+                type_args: type_args.clone(),
                 attrs: d,
             },
             Self::Int { .. } => Self::Int { attrs: d },
@@ -182,6 +186,7 @@ impl PpirTy {
     pub fn named(name: impl Into<Name>) -> Self {
         PpirTy::Named {
             path: vec![name.into()],
+            type_args: vec![],
             attrs: PpirTypeAttrs::default(),
         }
     }
@@ -239,8 +244,13 @@ impl PpirTy {
             TypeExpr::Bool { .. } => PpirTy::Bool { attrs },
             TypeExpr::Null { .. } => PpirTy::Null { attrs },
             TypeExpr::Never { .. } => PpirTy::Never { attrs },
-            TypeExpr::Path { segments, .. } => PpirTy::Named {
+            TypeExpr::Path {
+                segments,
+                type_args,
+                ..
+            } => PpirTy::Named {
                 path: segments.clone(),
+                type_args: type_args.iter().map(Self::convert_type_expr).collect(),
                 attrs,
             },
             TypeExpr::Optional { inner, .. } => PpirTy::Optional {
@@ -299,8 +309,11 @@ impl PpirTy {
     /// Convert a `PpirTy` back to a `TypeExpr` for synthesized AST items.
     pub fn to_type_expr(&self) -> TypeExpr {
         match self {
-            PpirTy::Named { path, .. } => TypeExpr::Path {
+            PpirTy::Named {
+                path, type_args, ..
+            } => TypeExpr::Path {
                 segments: path.clone(),
+                type_args: type_args.iter().map(PpirTy::to_type_expr).collect(),
                 attrs: vec![],
             },
             PpirTy::Int { .. } => TypeExpr::Int { attrs: vec![] },
@@ -383,6 +396,7 @@ mod tests {
     fn ppir_reads_stream_done_from_type_expr() {
         let type_expr = TypeExpr::Path {
             segments: vec![Name::new("Fizz")],
+            type_args: vec![],
             attrs: vec![make_attr("stream.done")],
         };
         let ppir_ty = PpirTy::from_type_expr(&type_expr);

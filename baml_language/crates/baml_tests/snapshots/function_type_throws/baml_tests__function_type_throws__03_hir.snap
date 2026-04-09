@@ -224,6 +224,18 @@ type user.Wrapper = (() -> int) -> int
 function user.use_alias_pure(f: user.AliasPure) -> int  [expr] {
   {  } f()
 }
+class user.Wrapper {
+  inner: user.T
+}
+function user.test_unwrap_int() -> int  [expr] {
+  {  } unwrap(user.Wrapper { inner: 42 })
+}
+function user.test_unwrap_string() -> string  [expr] {
+  {  } unwrap(user.Wrapper { inner: "hello" })
+}
+function user.unwrap(w: user.Wrapper) -> user.T  [expr] {
+  {  } w.inner
+}
 class user.Handler {
   run: () -> null
 }
@@ -244,6 +256,15 @@ function user.use_int_handler(h: user.Handler) -> null  [expr] {
 }
 function user.use_string_handler(h: user.Handler) -> null  [expr] {
   {  } h.run()
+}
+class user.Box {
+  value: user.T
+}
+function user.bad_box_mismatch() -> null  [expr] {
+  {  } take_string_box(user.Box { value: 1 })
+}
+function user.take_string_box(b: user.Box) -> null  [expr] {
+  {  } null
 }
 class user.Task {
   name: string

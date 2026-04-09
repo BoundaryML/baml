@@ -20,7 +20,7 @@ use rustc_hash::FxHashMap;
 use crate::{
     lower_type_expr::{lower_type_expr_in_ns, qualify_def},
     throw_inference::{FunctionThrowSets, function_throw_sets},
-    ty::{QualifiedTypeName, Ty, TyAttr},
+    ty::{NominalTypeRef, QualifiedTypeName, Ty, TyAttr},
 };
 
 // ── Data types ─────────────────────────────────────────────────────────────
@@ -174,9 +174,11 @@ impl ExportedType {
     /// Convert to a Ty (for type resolution results).
     pub fn to_ty(&self) -> Ty {
         match self {
-            ExportedType::Class { qtn, .. } => Ty::Class(qtn.clone(), TyAttr::default()),
-            ExportedType::Enum { qtn, .. } => Ty::Enum(qtn.clone(), TyAttr::default()),
-            ExportedType::TypeAlias { qtn, .. } => Ty::TypeAlias(qtn.clone(), TyAttr::default()),
+            ExportedType::Class { qtn, .. } => Ty::Class(qtn.clone().into(), TyAttr::default()),
+            ExportedType::Enum { qtn, .. } => Ty::Enum(qtn.clone().into(), TyAttr::default()),
+            ExportedType::TypeAlias { qtn, .. } => {
+                Ty::TypeAlias(qtn.clone().into(), TyAttr::default())
+            }
         }
     }
 }
@@ -456,7 +458,7 @@ fn build_self_type_for_class(
                 class_data.name.clone(),
                 class_data.generic_params.clone(),
             );
-            Ty::Class(qtn, TyAttr::default())
+            Ty::Class(qtn.into(), TyAttr::default())
         }
     }
 }
@@ -637,41 +639,88 @@ impl<'db> PackageResolutionContext<'db> {
     }
 
     /// Look up class fields. Dual dispatch:
-    /// - Own-package: `ItemTree` -> lower fields
-    /// - Dependency: `ExportedType::Class` { fields }
+    /// - Own-package: `ItemTree` -> lower fields + apply class-level generic substitution
+    /// - Dependency: `ExportedType::Class` { fields } + apply class-level generic substitution
     pub fn lookup_class_fields(
         &self,
         db: &'db dyn crate::Db,
-        class_name: &QualifiedTypeName,
+        class_name: &NominalTypeRef,
     ) -> Vec<(Name, Ty)> {
         let class_pkg = class_name.package();
         if class_pkg.as_str() == self.own_package_name.as_str() {
-            self.lookup_own_class_fields(db, class_name)
+            let raw_fields = self.lookup_own_class_fields(db, class_name.qtn());
+            self.apply_class_substitution(db, class_name, raw_fields)
         } else {
             for (dep_name, dep_iface) in &self.dep_interfaces {
                 if dep_name != class_pkg {
                     continue;
                 }
-                if let Some(ExportedType::Class { fields, .. }) =
-                    dep_iface.lookup_type(class_name.namespace(), class_name.name())
+                if let Some(ExportedType::Class {
+                    fields,
+                    generic_params,
+                    ..
+                }) = dep_iface.lookup_type(class_name.namespace(), class_name.name())
                 {
-                    return fields.clone();
+                    if class_name.type_args().is_empty() || generic_params.is_empty() {
+                        return fields.clone();
+                    }
+                    let bindings =
+                        crate::generics::bind_type_vars(generic_params, class_name.type_args());
+                    return fields
+                        .iter()
+                        .map(|(n, ty)| (n.clone(), crate::generics::substitute_ty(ty, &bindings)))
+                        .collect();
                 }
             }
             Vec::new()
         }
     }
 
+    /// Apply class-level generic substitution to own-package fields.
+    fn apply_class_substitution(
+        &self,
+        db: &'db dyn crate::Db,
+        class_name: &NominalTypeRef,
+        raw_fields: Vec<(Name, Ty)>,
+    ) -> Vec<(Name, Ty)> {
+        if class_name.type_args().is_empty() {
+            return raw_fields;
+        }
+        // Get generic_params from item tree
+        let Some(def) = self
+            .own_items
+            .lookup_type(class_name.namespace(), class_name.name())
+        else {
+            return raw_fields;
+        };
+        let Definition::Class(class_loc) = def else {
+            return raw_fields;
+        };
+        let item_tree = file_item_tree(db, class_loc.file(db));
+        let class_data = &item_tree[class_loc.id(db)];
+        let bindings =
+            crate::generics::bind_type_vars(&class_data.generic_params, class_name.type_args());
+        raw_fields
+            .into_iter()
+            .map(|(n, ty)| (n, crate::generics::substitute_ty(&ty, &bindings)))
+            .collect()
+    }
+
     /// Look up a class method. Dual dispatch.
+    /// Applies class-level generic substitution to the returned method type.
     pub fn lookup_class_method(
         &self,
         db: &'db dyn crate::Db,
-        class_name: &QualifiedTypeName,
+        class_name: &NominalTypeRef,
         method_name: &Name,
     ) -> Option<ResolvedMethod> {
         let class_pkg = class_name.package();
         if class_pkg.as_str() == self.own_package_name.as_str() {
-            self.lookup_own_class_method(db, class_name, method_name)
+            self.lookup_own_class_method(db, class_name.qtn(), method_name)
+                .map(|mut rm| {
+                    Self::apply_method_substitution(class_name, &mut rm);
+                    rm
+                })
         } else {
             for (dep_name, dep_iface) in &self.dep_interfaces {
                 if dep_name != class_pkg {
@@ -684,7 +733,7 @@ impl<'db> PackageResolutionContext<'db> {
                 }) = dep_iface.lookup_type(class_name.namespace(), class_name.name())
                 {
                     if let Some(method) = methods.iter().find(|m| &m.name == method_name) {
-                        return Some(ResolvedMethod {
+                        let mut resolved_method = ResolvedMethod {
                             function: ResolvedFunction {
                                 name: method.name.clone(),
                                 params: method.params.clone(),
@@ -695,11 +744,64 @@ impl<'db> PackageResolutionContext<'db> {
                             },
                             class_name: class_name.name().clone(),
                             class_generic_params: generic_params.clone(),
-                        });
+                        };
+                        // Apply class-level substitution using generic_params from ExportedType
+                        if !class_name.type_args().is_empty() && !generic_params.is_empty() {
+                            let bindings = crate::generics::bind_type_vars(
+                                generic_params,
+                                class_name.type_args(),
+                            );
+                            resolved_method.function.params = resolved_method
+                                .function
+                                .params
+                                .into_iter()
+                                .map(|(n, ty)| (n, crate::generics::substitute_ty(&ty, &bindings)))
+                                .collect();
+                            resolved_method.function.return_type = crate::generics::substitute_ty(
+                                &resolved_method.function.return_type,
+                                &bindings,
+                            );
+                            if let Some(ref throws) = resolved_method.function.throws.clone() {
+                                resolved_method.function.throws =
+                                    Some(crate::generics::substitute_ty(throws, &bindings));
+                            }
+                        }
+                        return Some(resolved_method);
                     }
                 }
             }
             None
+        }
+    }
+
+    /// Apply class-level generic substitution to a `ResolvedMethod`'s function signature.
+    /// Uses `generic_params` from the own-package item tree.
+    fn apply_method_substitution(
+        class_name: &NominalTypeRef,
+        resolved_method: &mut ResolvedMethod,
+    ) {
+        if class_name.type_args().is_empty() {
+            return;
+        }
+        // class_generic_params was set by lookup_own_class_method from item tree
+        if resolved_method.class_generic_params.is_empty() {
+            return;
+        }
+        let bindings = crate::generics::bind_type_vars(
+            &resolved_method.class_generic_params,
+            class_name.type_args(),
+        );
+        resolved_method.function.params = resolved_method
+            .function
+            .params
+            .iter()
+            .map(|(n, ty)| (n.clone(), crate::generics::substitute_ty(ty, &bindings)))
+            .collect();
+        resolved_method.function.return_type =
+            crate::generics::substitute_ty(&resolved_method.function.return_type, &bindings);
+        if let Some(ref throws) = resolved_method.function.throws.clone() {
+            resolved_method.function.throws =
+                Some(crate::generics::substitute_ty(throws, &bindings));
         }
     }
 
@@ -853,9 +955,11 @@ fn def_to_ty<'db>(db: &'db dyn crate::Db, def: Definition<'db>) -> Ty {
         }
     };
     match def {
-        Definition::Class(_) => Ty::Class(qualify_def(db, def, &name), TyAttr::default()),
-        Definition::Enum(_) => Ty::Enum(qualify_def(db, def, &name), TyAttr::default()),
-        Definition::TypeAlias(_) => Ty::TypeAlias(qualify_def(db, def, &name), TyAttr::default()),
+        Definition::Class(_) => Ty::Class(qualify_def(db, def, &name).into(), TyAttr::default()),
+        Definition::Enum(_) => Ty::Enum(qualify_def(db, def, &name).into(), TyAttr::default()),
+        Definition::TypeAlias(_) => {
+            Ty::TypeAlias(qualify_def(db, def, &name).into(), TyAttr::default())
+        }
         _ => Ty::Unknown {
             attr: TyAttr::default(),
         },

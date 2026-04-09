@@ -60,6 +60,36 @@ pub fn substitute_ty(ty: &Ty, bindings: &FxHashMap<Name, Ty>) -> Ty {
     }
     match ty {
         Ty::TypeVar(name, _) => bindings.get(name).cloned().unwrap_or_else(|| ty.clone()),
+        Ty::Class(nominal, attr) => Ty::Class(
+            nominal.with_type_args(
+                nominal
+                    .type_args()
+                    .iter()
+                    .map(|arg| substitute_ty(arg, bindings))
+                    .collect(),
+            ),
+            attr.clone(),
+        ),
+        Ty::Enum(nominal, attr) => Ty::Enum(
+            nominal.with_type_args(
+                nominal
+                    .type_args()
+                    .iter()
+                    .map(|arg| substitute_ty(arg, bindings))
+                    .collect(),
+            ),
+            attr.clone(),
+        ),
+        Ty::TypeAlias(nominal, attr) => Ty::TypeAlias(
+            nominal.with_type_args(
+                nominal
+                    .type_args()
+                    .iter()
+                    .map(|arg| substitute_ty(arg, bindings))
+                    .collect(),
+            ),
+            attr.clone(),
+        ),
         Ty::List(inner, attr) => Ty::List(Box::new(substitute_ty(inner, bindings)), attr.clone()),
         Ty::Map(k, v, attr) => Ty::Map(
             Box::new(substitute_ty(k, bindings)),
@@ -103,9 +133,11 @@ pub fn substitute_ty(ty: &Ty, bindings: &FxHashMap<Name, Ty>) -> Ty {
 /// intercept `T` references that would otherwise produce `Ty::Unknown`.
 fn substitute_type_expr(expr: &TypeExpr, bindings: &FxHashMap<Name, Ty>) -> Option<Ty> {
     match expr {
-        TypeExpr::Path { segments, .. } if segments.len() == 1 => {
-            bindings.get(&segments[0]).cloned()
-        }
+        TypeExpr::Path {
+            segments,
+            type_args,
+            ..
+        } if segments.len() == 1 && type_args.is_empty() => bindings.get(&segments[0]).cloned(),
         _ => None,
     }
 }
@@ -255,6 +287,39 @@ pub fn lower_type_expr_with_generics(
             ),
             attr: TyAttr::default(),
         },
+        TypeExpr::Path {
+            segments,
+            type_args,
+            attrs,
+        } if !type_args.is_empty() => {
+            let base = lower_type_expr_in_ns(
+                db,
+                &TypeExpr::Path {
+                    segments: segments.clone(),
+                    type_args: vec![],
+                    attrs: attrs.clone(),
+                },
+                package_items,
+                ns_context,
+                &[],
+                diagnostics,
+            );
+            base.with_nominal_type_args(
+                type_args
+                    .iter()
+                    .map(|arg| {
+                        lower_type_expr_with_generics(
+                            db,
+                            arg,
+                            package_items,
+                            ns_context,
+                            bindings,
+                            diagnostics,
+                        )
+                    })
+                    .collect(),
+            )
+        }
         // For all other type expressions (primitives, multi-segment paths, etc.),
         // lower normally and then substitute in the result.
         other => {
@@ -302,6 +367,9 @@ pub fn contains_typevar(ty: &Ty) -> bool {
             params.iter().any(|(_, t)| contains_typevar(t))
                 || contains_typevar(ret)
                 || contains_typevar(throws)
+        }
+        Ty::Class(qn, _) | Ty::Enum(qn, _) | Ty::TypeAlias(qn, _) => {
+            qn.type_args().iter().any(contains_typevar)
         }
         _ => false,
     }
@@ -351,6 +419,32 @@ pub fn infer_bindings(formal: &Ty, actual: &Ty, bindings: &mut FxHashMap<Name, T
             }
             infer_bindings(fr, ar, bindings);
             infer_bindings(fthrows, athrows, bindings);
+        }
+        // Nominal types: recurse into type_args when same declaration + arity
+        (Ty::Class(f_qn, _), Ty::Class(a_qn, _))
+            if f_qn.qtn() == a_qn.qtn() && f_qn.type_args().len() == a_qn.type_args().len() =>
+        {
+            for (f_arg, a_arg) in f_qn.type_args().iter().zip(a_qn.type_args().iter()) {
+                infer_bindings(f_arg, a_arg, bindings);
+            }
+        }
+        (Ty::Enum(f_qn, _), Ty::Enum(a_qn, _))
+            if f_qn.qtn() == a_qn.qtn() && f_qn.type_args().len() == a_qn.type_args().len() =>
+        {
+            for (f_arg, a_arg) in f_qn.type_args().iter().zip(a_qn.type_args().iter()) {
+                infer_bindings(f_arg, a_arg, bindings);
+            }
+        }
+        // TypeAlias: if both sides have the same alias identity and arity, recurse into type_args.
+        // Full alias expansion before inference is the caller's responsibility.
+        // This arm handles the structural case; callers should pre-resolve aliases
+        // via resolve_alias_chain when possible.
+        (Ty::TypeAlias(f_qn, _), Ty::TypeAlias(a_qn, _))
+            if f_qn.qtn() == a_qn.qtn() && f_qn.type_args().len() == a_qn.type_args().len() =>
+        {
+            for (f_arg, a_arg) in f_qn.type_args().iter().zip(a_qn.type_args().iter()) {
+                infer_bindings(f_arg, a_arg, bindings);
+            }
         }
         _ => {} // Concrete types: nothing to infer
     }
@@ -443,6 +537,42 @@ pub fn erase_unresolved_typevars(
                 .collect(),
             attr.clone(),
         ),
+        Ty::Class(nominal, attr) => {
+            let new_args: Vec<Ty> = nominal
+                .type_args()
+                .iter()
+                .map(|a| erase_unresolved_typevars(a, diagnostics))
+                .collect();
+            if new_args.is_empty() {
+                ty.clone()
+            } else {
+                Ty::Class(nominal.with_type_args(new_args), attr.clone())
+            }
+        }
+        Ty::Enum(nominal, attr) => {
+            let new_args: Vec<Ty> = nominal
+                .type_args()
+                .iter()
+                .map(|a| erase_unresolved_typevars(a, diagnostics))
+                .collect();
+            if new_args.is_empty() {
+                ty.clone()
+            } else {
+                Ty::Enum(nominal.with_type_args(new_args), attr.clone())
+            }
+        }
+        Ty::TypeAlias(nominal, attr) => {
+            let new_args: Vec<Ty> = nominal
+                .type_args()
+                .iter()
+                .map(|a| erase_unresolved_typevars(a, diagnostics))
+                .collect();
+            if new_args.is_empty() {
+                ty.clone()
+            } else {
+                Ty::TypeAlias(nominal.with_type_args(new_args), attr.clone())
+            }
+        }
         other => other.clone(),
     }
 }

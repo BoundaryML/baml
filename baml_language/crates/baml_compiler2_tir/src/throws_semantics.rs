@@ -17,8 +17,15 @@ pub(crate) fn resolve_alias_chain(ty: &Ty, aliases: &HashMap<QualifiedTypeName, 
     let mut resolved = ty.clone();
     for _ in 0..64 {
         match &resolved {
-            Ty::TypeAlias(qtn, _) => match aliases.get(qtn) {
-                Some(expanded) => resolved = expanded.clone(),
+            Ty::TypeAlias(qn, _) => match aliases.get(qn.qtn()) {
+                Some(expanded) => {
+                    resolved = crate::normalize::instantiate_alias(
+                        qn.qtn(),
+                        expanded,
+                        qn.type_args(),
+                        aliases,
+                    );
+                }
                 None => break,
             },
             _ => break,

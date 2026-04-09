@@ -140,13 +140,21 @@ fn requalify_for_caller(ty: PpirTy, alias_ns: &[Name], caller_ns: &[Name]) -> Pp
         return ty;
     }
     match ty {
-        PpirTy::Named { path, attrs } if path.len() == 1 && path[0].as_str() != "root" => {
+        PpirTy::Named {
+            path,
+            type_args,
+            attrs,
+        } if path.len() == 1 && path[0].as_str() != "root" => {
             let mut qualified = Vec::with_capacity(alias_ns.len() + 2);
             qualified.push(SmolStr::from("root"));
             qualified.extend(alias_ns.iter().cloned());
             qualified.extend(path);
             PpirTy::Named {
                 path: qualified,
+                type_args: type_args
+                    .into_iter()
+                    .map(|arg| requalify_for_caller(arg, alias_ns, caller_ns))
+                    .collect(),
                 attrs,
             }
         }
@@ -276,7 +284,9 @@ pub fn expand_partial(ty: &PpirTy, ctx: &ExpandCtx<'_>) -> PpirTy {
         | PpirTy::CannotBeStreamed { .. } => ty.clone_without_attrs(),
 
         // Named types — depends on classification
-        PpirTy::Named { path, .. } => {
+        PpirTy::Named {
+            path, type_args, ..
+        } => {
             // Already *$stream → unchanged
             if path.last().is_some_and(|n| n.as_str().ends_with("$stream")) {
                 return ty.clone_without_attrs();
@@ -290,6 +300,10 @@ pub fn expand_partial(ty: &PpirTy, ctx: &ExpandCtx<'_>) -> PpirTy {
                             .iter()
                             .cloned()
                             .chain(std::iter::once(SmolStr::new(format!("{bare_name}$stream"))))
+                            .collect(),
+                        type_args: type_args
+                            .iter()
+                            .map(|arg| expand_partial(arg, ctx))
                             .collect(),
                         attrs: d,
                     }
@@ -408,7 +422,9 @@ fn stream_expand_inner(ty: &PpirTy, ctx: &ExpandCtx<'_>, depth: u32) -> (PpirTy,
         ),
 
         // Named types
-        PpirTy::Named { path, .. } => {
+        PpirTy::Named {
+            path, type_args, ..
+        } => {
             // Already *$stream → treat like T$stream
             if path.last().is_some_and(|n| n.as_str().ends_with("$stream")) {
                 (
@@ -439,6 +455,10 @@ fn stream_expand_inner(ty: &PpirTy, ctx: &ExpandCtx<'_>, depth: u32) -> (PpirTy,
                         (
                             PpirTy::Named {
                                 path: stream_path,
+                                type_args: type_args
+                                    .iter()
+                                    .map(|arg| expand_partial(arg, ctx))
+                                    .collect(),
                                 attrs: d.clone(),
                             },
                             DefaultWhenPending::PrependNull,
@@ -490,6 +510,10 @@ fn stream_expand_inner(ty: &PpirTy, ctx: &ExpandCtx<'_>, depth: u32) -> (PpirTy,
                         (
                             PpirTy::Named {
                                 path: stream_path,
+                                type_args: type_args
+                                    .iter()
+                                    .map(|arg| expand_partial(arg, ctx))
+                                    .collect(),
                                 attrs: d.clone(),
                             },
                             DefaultWhenPending::PrependNull,

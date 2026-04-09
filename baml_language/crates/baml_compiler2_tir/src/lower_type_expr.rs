@@ -168,7 +168,11 @@ pub fn lower_type_expr_in_ns(
     diagnostics: &mut Vec<TirTypeError>,
 ) -> Ty {
     match type_expr {
-        TypeExpr::Path { segments, .. } => {
+        TypeExpr::Path {
+            segments,
+            type_args,
+            ..
+        } => {
             let item = segments.last().expect("non-empty path");
             let seg_ns = &segments[..segments.len() - 1];
             // When we have a namespace context, try the qualified path first.
@@ -200,13 +204,31 @@ pub fn lower_type_expr_in_ns(
 
             if let Some(def) = resolved {
                 let short = segments.last().expect("non-empty path");
+                let lowered_type_args: Vec<Ty> = type_args
+                    .iter()
+                    .map(|arg| {
+                        lower_type_expr_in_ns(
+                            db,
+                            arg,
+                            package_items,
+                            ns_context,
+                            generic_params,
+                            diagnostics,
+                        )
+                    })
+                    .collect();
                 match def {
                     Definition::Class(_) => {
-                        Ty::Class(qualify_def(db, def, short), TyAttr::default())
+                        Ty::Class(qualify_def(db, def, short).into(), TyAttr::default())
+                            .with_nominal_type_args(lowered_type_args)
                     }
-                    Definition::Enum(_) => Ty::Enum(qualify_def(db, def, short), TyAttr::default()),
+                    Definition::Enum(_) => {
+                        Ty::Enum(qualify_def(db, def, short).into(), TyAttr::default())
+                            .with_nominal_type_args(lowered_type_args)
+                    }
                     Definition::TypeAlias(_) => {
-                        Ty::TypeAlias(qualify_def(db, def, short), TyAttr::default())
+                        Ty::TypeAlias(qualify_def(db, def, short).into(), TyAttr::default())
+                            .with_nominal_type_args(lowered_type_args)
                     }
                     // Let bindings are values, not types — produce Unknown in a type position.
                     _ => Ty::Unknown {
@@ -215,7 +237,7 @@ pub fn lower_type_expr_in_ns(
                 }
             } else {
                 // Check if this is a generic type parameter (e.g. T, K, V).
-                if segments.len() == 1 {
+                if segments.len() == 1 && type_args.is_empty() {
                     if generic_params.iter().any(|p| *p == segments[0]) {
                         return Ty::TypeVar(segments[0].clone(), TyAttr::default());
                     }
