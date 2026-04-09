@@ -1,0 +1,39 @@
+---
+source: crates/baml_tests/tests/match_types.rs
+expression: output.bytecode
+---
+function classify(x: Cat | Dog | null) -> string {
+    load_var x
+    is_type Cat
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_var x
+    is_type Dog
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var x
+    is_type null
+    pop_jump_if_false L4
+    load_const "nothing"
+    jump L4
+
+  L2:
+    load_const "dog"
+    jump L4
+
+  L3:
+    load_const "cat"
+
+  L4:
+    return
+}
+
+function main() -> string {
+    load_const null
+    call user.classify
+    return
+}

@@ -1105,25 +1105,69 @@ fn user.ExhaustiveTypeAlias(r: Success | Failure) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: Success | Failure // r // param
-    let _2: int
+    let _2: bool
     let _3: Success // s
     let _4: Success
-    let _5: Failure // f
-    let _6: Failure
+    let _5: bool
+    let _6: Failure // f
+    let _7: Failure
 
     bb0: {
-        _2 = type_tag(_1);
-        switch copy _2 [type_tag:110: bb3, type_tag:107: bb2, otherwise: bb1] (exhaustive);
+        _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: ["user"], display_name: "Success" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        branch copy _2 -> [bb4, bb1];
     }
 
     bb1: {
-        unreachable;
+        _5 = is_type(copy _1, Class(TypeName { name: "Failure", module_path: ["user"], display_name: "Failure" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        branch copy _5 -> [bb3, bb2];
     }
 
     bb2: {
-        _5 = copy _1;
-        _6 = copy _5;
-        _0 = copy _6.0;
+        goto -> bb5;
+    }
+
+    bb3: {
+        _6 = copy _1;
+        _7 = copy _6;
+        _0 = copy _7.0;
+        goto -> bb5;
+    }
+
+    bb4: {
+        _3 = copy _1;
+        _4 = copy _3;
+        _0 = copy _4.0;
+        goto -> bb5;
+    }
+
+    bb5: {
+        goto -> bb6;
+    }
+
+    bb6: {
+        return;
+    }
+}
+
+fn user.ExhaustiveTypeAliasWithCatchAll(r: Success | Failure) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: Success | Failure // r // param
+    let _2: bool
+    let _3: Success // s
+    let _4: Success
+
+    bb0: {
+        _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: ["user"], display_name: "Success" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        branch copy _2 -> [bb3, bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        _0 = const "fallback";
         goto -> bb4;
     }
 
@@ -1139,40 +1183,6 @@ fn user.ExhaustiveTypeAlias(r: Success | Failure) -> string {
     }
 
     bb5: {
-        return;
-    }
-}
-
-fn user.ExhaustiveTypeAliasWithCatchAll(r: Success | Failure) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: Success | Failure // r // param
-    let _2: int
-    let _3: Success // s
-    let _4: Success
-
-    bb0: {
-        _2 = type_tag(_1);
-        switch copy _2 [type_tag:110: bb2, otherwise: bb1];
-    }
-
-    bb1: {
-        _0 = const "fallback";
-        goto -> bb3;
-    }
-
-    bb2: {
-        _3 = copy _1;
-        _4 = copy _3;
-        _0 = copy _4.0;
-        goto -> bb3;
-    }
-
-    bb3: {
-        goto -> bb4;
-    }
-
-    bb4: {
         return;
     }
 }
@@ -1437,7 +1447,7 @@ fn user.JumpTableClassTypeTag(pet: Cat | Dog | Bird | Fish) -> string {
 
     bb0: {
         _2 = type_tag(_1);
-        switch copy _2 [type_tag:111: bb5, type_tag:112: bb4, type_tag:103: bb3, type_tag:104: bb2, otherwise: bb1] (exhaustive);
+        switch copy _2 [Cat: bb5, Dog: bb4, Bird: bb3, Fish: bb2, otherwise: bb1] (exhaustive);
     }
 
     bb1: {
@@ -1525,7 +1535,7 @@ fn user.JumpTableTypeTag(value: int | string | bool | float) -> string {
 
     bb0: {
         _2 = type_tag(_1);
-        switch copy _2 [type_tag:0: bb5, type_tag:1: bb4, type_tag:2: bb3, type_tag:4: bb2, otherwise: bb1] (exhaustive);
+        switch copy _2 [int: bb5, string: bb4, bool: bb3, float: bb2, otherwise: bb1] (exhaustive);
     }
 
     bb1: {
@@ -2257,17 +2267,17 @@ fn user.NonExhaustiveClassPlusLiteralMissingLiteral(x: Success | 200) -> string 
     // Locals:
     let _0: string // _0 // return
     let _1: Success | 200 // x // param
-    let _2: int
+    let _2: bool
     let _3: Success // s
     let _4: Success
 
     bb0: {
-        _2 = type_tag(_1);
-        switch copy _2 [type_tag:110: bb2, otherwise: bb1] (exhaustive);
+        _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: ["user"], display_name: "Success" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        branch copy _2 -> [bb2, bb1];
     }
 
     bb1: {
-        unreachable;
+        goto -> bb3;
     }
 
     bb2: {
@@ -2319,40 +2329,46 @@ fn user.NonExhaustiveDoubleMaybeMissingNull(dm: (Success | Failure)??) -> string
     // Locals:
     let _0: string // _0 // return
     let _1: (Success | Failure)?? // dm // param
-    let _2: int
+    let _2: bool
     let _3: Success // s
     let _4: Success
-    let _5: Failure // f
-    let _6: Failure
+    let _5: bool
+    let _6: Failure // f
+    let _7: Failure
 
     bb0: {
-        _2 = type_tag(_1);
-        switch copy _2 [type_tag:110: bb3, type_tag:107: bb2, otherwise: bb1] (exhaustive);
+        _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: ["user"], display_name: "Success" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        branch copy _2 -> [bb4, bb1];
     }
 
     bb1: {
-        unreachable;
+        _5 = is_type(copy _1, Class(TypeName { name: "Failure", module_path: ["user"], display_name: "Failure" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        branch copy _5 -> [bb3, bb2];
     }
 
     bb2: {
-        _5 = copy _1;
-        _6 = copy _5;
-        _0 = copy _6.0;
-        goto -> bb4;
+        goto -> bb5;
     }
 
     bb3: {
-        _3 = copy _1;
-        _4 = copy _3;
-        _0 = copy _4.0;
-        goto -> bb4;
+        _6 = copy _1;
+        _7 = copy _6;
+        _0 = copy _7.0;
+        goto -> bb5;
     }
 
     bb4: {
+        _3 = copy _1;
+        _4 = copy _3;
+        _0 = copy _4.0;
         goto -> bb5;
     }
 
     bb5: {
+        goto -> bb6;
+    }
+
+    bb6: {
         return;
     }
 }
@@ -2424,40 +2440,46 @@ fn user.NonExhaustiveFullResultMissingOne(r: Success | Failure | Pending) -> str
     // Locals:
     let _0: string // _0 // return
     let _1: Success | Failure | Pending // r // param
-    let _2: int
+    let _2: bool
     let _3: Success // s
     let _4: Success
-    let _5: Failure // f
-    let _6: Failure
+    let _5: bool
+    let _6: Failure // f
+    let _7: Failure
 
     bb0: {
-        _2 = type_tag(_1);
-        switch copy _2 [type_tag:110: bb3, type_tag:107: bb2, otherwise: bb1] (exhaustive);
+        _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: ["user"], display_name: "Success" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        branch copy _2 -> [bb4, bb1];
     }
 
     bb1: {
-        unreachable;
+        _5 = is_type(copy _1, Class(TypeName { name: "Failure", module_path: ["user"], display_name: "Failure" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        branch copy _5 -> [bb3, bb2];
     }
 
     bb2: {
-        _5 = copy _1;
-        _6 = copy _5;
-        _0 = copy _6.0;
-        goto -> bb4;
+        goto -> bb5;
     }
 
     bb3: {
-        _3 = copy _1;
-        _4 = copy _3;
-        _0 = copy _4.0;
-        goto -> bb4;
+        _6 = copy _1;
+        _7 = copy _6;
+        _0 = copy _7.0;
+        goto -> bb5;
     }
 
     bb4: {
+        _3 = copy _1;
+        _4 = copy _3;
+        _0 = copy _4.0;
         goto -> bb5;
     }
 
     bb5: {
+        goto -> bb6;
+    }
+
+    bb6: {
         return;
     }
 }
@@ -2753,17 +2775,17 @@ fn user.NonExhaustiveTypeAliasMissingOne(r: Success | Failure) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: Success | Failure // r // param
-    let _2: int
+    let _2: bool
     let _3: Success // s
     let _4: Success
 
     bb0: {
-        _2 = type_tag(_1);
-        switch copy _2 [type_tag:110: bb2, otherwise: bb1] (exhaustive);
+        _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: ["user"], display_name: "Success" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        branch copy _2 -> [bb2, bb1];
     }
 
     bb1: {
-        unreachable;
+        goto -> bb3;
     }
 
     bb2: {

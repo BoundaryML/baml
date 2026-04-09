@@ -2976,6 +2976,35 @@ impl BexVm {
                 self.stack.push(Value::Bool(result));
             }
 
+            #[allow(
+                clippy::cast_sign_loss,
+                clippy::cast_lossless,
+                clippy::cast_possible_truncation
+            )]
+            Instruction::DenseTag(table_idx) => {
+                let tag = match self.stack.ensure_pop()? {
+                    Value::Int(t) => t,
+                    other => {
+                        // TypeTag always pushes Int, so this shouldn't happen.
+                        return Err(VmInternalError::TypeError {
+                            expected: Type::Int,
+                            got: self.type_of(&other),
+                        }
+                        .into());
+                    }
+                };
+                let table = &function.bytecode.match_hash_tables[table_idx];
+                let h =
+                    ((tag as u64).wrapping_mul(table.multiply) >> table.shift) & table.mask as u64;
+                let entry = &table.entries[h as usize];
+                if entry.expected_tag == tag {
+                    self.stack.push(Value::Int(i64::from(entry.dense_index)));
+                } else {
+                    // Tag not in this match — sentinel for jump_table default
+                    self.stack.push(Value::Int(-1));
+                }
+            }
+
             Instruction::ThrowIfPanic => {
                 let value = self.stack.ensure_pop()?;
                 let is_panic = match value {

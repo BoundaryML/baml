@@ -38,13 +38,13 @@ function user.CatchWithFallback(x: int) -> string {
     call user.MayFailIntOrString
     jump L4
     load_var e
-    is_type ?0
+    is_type string
     pop_jump_if_false L0
     jump L3
 
   L0:
     load_var e
-    is_type ?1
+    is_type int
     pop_jump_if_false L1
     jump L2
 
@@ -68,7 +68,7 @@ function user.CatchWithTypedArm(x: int) -> string {
     call user.MayFail
     jump L2
     load_var e
-    is_type ?0
+    is_type string
     pop_jump_if_false L0
     jump L1
 
@@ -88,13 +88,13 @@ function user.ChainedCatchClauses(x: int) -> string {
     call user.MayFailIntOrString
     jump L4
     load_var e
-    is_type ?0
+    is_type string
     pop_jump_if_false L0
     jump L3
 
   L0:
     load_var e
-    is_type ?1
+    is_type int
     pop_jump_if_false L1
     jump L2
 
@@ -168,13 +168,13 @@ function user.MultipleCatchArms(x: int) -> string {
     call user.MayFailIntOrString
     jump L4
     load_var e
-    is_type ?0
+    is_type string
     pop_jump_if_false L0
     jump L3
 
   L0:
     load_var e
-    is_type ?1
+    is_type int
     pop_jump_if_false L1
     jump L2
 
@@ -220,7 +220,7 @@ function user.SingleCatchTyped(x: int) -> string {
     call user.MayFail
     jump L2
     load_var e
-    is_type ?0
+    is_type string
     pop_jump_if_false L0
     jump L1
 

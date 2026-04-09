@@ -1,0 +1,36 @@
+---
+source: crates/baml_tests/tests/match_types.rs
+expression: output.bytecode
+---
+function classify(x: int | string | bool | null) -> string {
+    load_var x
+    type_tag
+    jump_table [L3, L2, L1, L0], default L5
+
+  L0: null
+    load_const "null"
+    jump L4
+
+  L1: bool
+    load_const "bool"
+    jump L4
+
+  L2: string
+    load_const "string"
+    jump L4
+
+  L3: int
+    load_const "int"
+
+  L4:
+    return
+
+  L5:
+    unreachable
+}
+
+function main() -> string {
+    load_const null
+    call user.classify
+    return
+}

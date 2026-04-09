@@ -3588,8 +3588,15 @@ impl LoweringContext<'_> {
             }
         }
 
-        // Need at least one int arm to justify a switch
+        // Need at least one int arm to justify a switch.
         if int_arms.is_empty() {
+            return false;
+        }
+
+        // TypeTag switches only pay off at 4+ arms (JumpTable). For fewer arms
+        // the sequential `is_type` chain is more compact because the if-else
+        // chain adds copy/pop stack management overhead per arm.
+        if matches!(switch_kind, Some(SwitchKind::TypeTag)) && int_arms.len() < 4 {
             return false;
         }
 
@@ -3685,11 +3692,28 @@ impl LoweringContext<'_> {
                 }
             }
             Some(SwitchKind::TypeTag) => {
-                // TypeTag arms: use the tag integer as the label.
-                // Future improvement: resolve tag → type name for better debug output.
+                // Reverse map: tag value → human-readable type name.
+                let reverse_class: std::collections::HashMap<i64, &str> = self
+                    .class_type_tags
+                    .iter()
+                    .map(|(tn, tag)| (*tag, tn.name.as_str()))
+                    .collect();
                 int_arms
                     .iter()
-                    .map(|(v, _)| (*v, format!("type_tag:{v}")))
+                    .map(|(v, _)| {
+                        let name = match *v {
+                            baml_type::typetag::INT => "int".to_string(),
+                            baml_type::typetag::STRING => "string".to_string(),
+                            baml_type::typetag::BOOL => "bool".to_string(),
+                            baml_type::typetag::NULL => "null".to_string(),
+                            baml_type::typetag::FLOAT => "float".to_string(),
+                            _ => reverse_class
+                                .get(v)
+                                .map(ToString::to_string)
+                                .unwrap_or_else(|| format!("type_tag:{v}")),
+                        };
+                        (*v, name)
+                    })
                     .collect()
             }
             _ => int_arms.iter().map(|(v, _)| (*v, v.to_string())).collect(),
@@ -4021,8 +4045,8 @@ impl LoweringContext<'_> {
             self.locals.insert(name, error_local);
         }
 
-        // Flatten all arms from all clauses, pre-creating body blocks.
-        let mut arms = Vec::new();
+        // Flatten all arms from all clauses (blocks created lazily below).
+        let mut arms: Vec<(baml_compiler2_ast::CatchArm, bool)> = Vec::new();
         for clause in clauses {
             for &arm_id in &clause.arms {
                 let arm = self.body.catch_arms[arm_id].clone();
@@ -4030,11 +4054,11 @@ impl LoweringContext<'_> {
                     self.body.patterns[arm.pattern],
                     AstPattern::Binding(ref name) if name.as_str() == "_"
                 );
-                arms.push((arm, self.builder.create_block(), is_wildcard));
+                arms.push((arm, is_wildcard));
             }
         }
 
-        let has_wildcard = arms.iter().any(|(_, _, is_wc)| *is_wc);
+        let has_wildcard = arms.iter().any(|(_, is_wc)| *is_wc);
         let is_catch_all_panics = clauses
             .iter()
             .any(|clause| matches!(clause.kind, CatchClauseKind::CatchAllPanics));
@@ -4067,7 +4091,22 @@ impl LoweringContext<'_> {
         let needs_throw_if_panic = has_wildcard && !is_catch_all_panics;
 
         self.builder.set_current_block(bb_handler);
-        for &(ref arm, body_block, is_wildcard) in &arms {
+
+        // Try switch optimization for catch arms (same as match).
+        if self.try_lower_catch_as_switch(error_local, &arms, dest, bb_join, needs_throw_if_panic) {
+            self.builder.set_current_block(bb_join);
+            return;
+        }
+
+        // Fallback: sequential pattern-test chain.
+        // Create body blocks now (not created earlier so the switch path
+        // doesn't leave orphaned unterminated blocks).
+        let arms_with_blocks: Vec<_> = arms
+            .iter()
+            .map(|(arm, is_wc)| (arm.clone(), self.builder.create_block(), *is_wc))
+            .collect();
+
+        for &(ref arm, body_block, is_wildcard) in &arms_with_blocks {
             if is_wildcard && needs_throw_if_panic {
                 let bb_wildcard = self.builder.create_block();
                 self.builder
@@ -4086,7 +4125,7 @@ impl LoweringContext<'_> {
         }
 
         // Lower each arm body.
-        for &(ref arm, body_block, _) in &arms {
+        for &(ref arm, body_block, _) in &arms_with_blocks {
             self.builder.set_current_block(body_block);
             self.bind_pattern(error_local, arm.pattern);
             self.lower_expr(arm.body, dest.clone());
@@ -4096,6 +4135,171 @@ impl LoweringContext<'_> {
         }
 
         self.builder.set_current_block(bb_join);
+    }
+
+    /// Try to lower catch arms as a `TypeTag` switch.
+    ///
+    /// Catch arms never have guards, so any set of typed-pattern arms without
+    /// a wildcard (or with a trailing wildcard) is switch-eligible. The
+    /// otherwise block handles `throw_if_panic` + wildcard body, or rethrows
+    /// if there's no wildcard.
+    fn try_lower_catch_as_switch(
+        &mut self,
+        scrutinee: Local,
+        arms: &[(baml_compiler2_ast::CatchArm, bool)],
+        dest: &Place,
+        join: BlockId,
+        needs_throw_if_panic: bool,
+    ) -> bool {
+        use std::collections::HashSet;
+
+        if arms.is_empty() {
+            return false;
+        }
+
+        // Classify arms: collect (type_tag_value, arm_index) for typed-pattern
+        // arms, and identify a trailing wildcard.
+        let mut int_arms: Vec<(i64, usize)> = Vec::new();
+        let mut otherwise_idx: Option<usize> = None;
+        let mut seen_values: HashSet<i64> = HashSet::new();
+
+        for (i, (arm, is_wildcard)) in arms.iter().enumerate() {
+            if *is_wildcard {
+                // Wildcard must be last arm.
+                if i != arms.len() - 1 {
+                    return false;
+                }
+                otherwise_idx = Some(i);
+                continue;
+            }
+
+            let pat = &self.body.patterns[arm.pattern];
+            match pat {
+                AstPattern::TypedBinding { .. } | AstPattern::Binding(_) => {
+                    if let Some(tir_ty) = self
+                        .pat_types
+                        .get(&(self.current_scope, arm.pattern))
+                        .cloned()
+                    {
+                        let resolved = self.resolved_aliases.convert(&tir_ty);
+                        if let Some(tag) = self.type_tag_for_ty(&resolved) {
+                            if seen_values.insert(tag) {
+                                int_arms.push((tag, i));
+                            }
+                        } else {
+                            return false;
+                        }
+                    } else {
+                        // No type info — if last arm, treat as wildcard; else bail.
+                        if i == arms.len() - 1 {
+                            otherwise_idx = Some(i);
+                        } else {
+                            return false;
+                        }
+                    }
+                }
+                // Catch arms can also be literals (e.g., "boom" => ..., 42 => ...),
+                // but those are heterogeneous values without a shared tag space.
+                // Only TypeTag patterns qualify for switch optimization.
+                _ => return false,
+            }
+        }
+
+        // Need at least 4 typed arms for switch optimization (JumpTable).
+        // For 2-3 arms, the sequential `is_type` chain is more compact because
+        // the if-else chain adds copy/pop stack management overhead that the
+        // fused `is_type` instruction avoids.
+        if int_arms.len() < 4 {
+            return false;
+        }
+
+        // Save the entry block — this is where the switch terminator goes.
+        let bb_entry = self.builder.current_block();
+
+        // Emit type_tag extraction.
+        let tag_local = self.builder.temp(Ty::Int {
+            attr: TyAttr::default(),
+        });
+        self.builder.assign(
+            Place::local(tag_local),
+            Rvalue::TypeTag(Place::local(scrutinee)),
+        );
+        let switch_operand = Operand::Copy(Place::Local(tag_local));
+
+        // Build body blocks for each arm.
+        let bb_otherwise = self.builder.create_block();
+        let mut switch_arms: Vec<(i64, BlockId)> = Vec::new();
+
+        for &(val, arm_idx) in &int_arms {
+            let bb_body = self.builder.create_block();
+            switch_arms.push((val, bb_body));
+
+            self.builder.set_current_block(bb_body);
+            let (ref arm, _) = arms[arm_idx];
+            self.bind_pattern(scrutinee, arm.pattern);
+            self.lower_expr(arm.body, dest.clone());
+            if !self.builder.is_current_terminated() {
+                self.builder.goto(join);
+            }
+        }
+
+        // Build arm_names for debug metadata.
+        let reverse_class: std::collections::HashMap<i64, &str> = self
+            .class_type_tags
+            .iter()
+            .map(|(tn, tag)| (*tag, tn.name.as_str()))
+            .collect();
+        let arm_names: Vec<(i64, String)> = int_arms
+            .iter()
+            .map(|(v, _)| {
+                let name = match *v {
+                    baml_type::typetag::INT => "int".to_string(),
+                    baml_type::typetag::STRING => "string".to_string(),
+                    baml_type::typetag::BOOL => "bool".to_string(),
+                    baml_type::typetag::NULL => "null".to_string(),
+                    baml_type::typetag::FLOAT => "float".to_string(),
+                    _ => reverse_class
+                        .get(v)
+                        .map(ToString::to_string)
+                        .unwrap_or_else(|| format!("type_tag:{v}")),
+                };
+                (*v, name)
+            })
+            .collect();
+
+        // Build the otherwise block:
+        // - If wildcard present: throw_if_panic (if needed) → wildcard body → join
+        // - If no wildcard: rethrow
+        self.builder.set_current_block(bb_otherwise);
+        if let Some(idx) = otherwise_idx {
+            if needs_throw_if_panic {
+                let bb_wildcard = self.builder.create_block();
+                self.builder
+                    .throw_if_panic(Operand::Copy(Place::Local(scrutinee)), bb_wildcard);
+                self.builder.set_current_block(bb_wildcard);
+            }
+            let (ref arm, _) = arms[idx];
+            self.bind_pattern(scrutinee, arm.pattern);
+            self.lower_expr(arm.body, dest.clone());
+            if !self.builder.is_current_terminated() {
+                self.builder.goto(join);
+            }
+        } else {
+            // No wildcard — rethrow if nothing matched.
+            self.builder.throw(Operand::Copy(Place::Local(scrutinee)));
+        }
+
+        // Emit the switch terminator in the entry block.
+        self.builder.set_current_block(bb_entry);
+        self.builder.switch(
+            switch_operand,
+            switch_arms,
+            bb_otherwise,
+            false, // catch switches are never exhaustive (always need rethrow fallback)
+            arm_names,
+        );
+
+        true
     }
 }
 

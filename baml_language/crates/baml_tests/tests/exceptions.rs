@@ -287,7 +287,7 @@ async fn typed_binding_string() {
         call user.fails
         jump L2
         load_var e
-        is_type ?0
+        is_type string
         pop_jump_if_false L0
         jump L1
 
@@ -330,7 +330,7 @@ async fn typed_binding_int() {
         call user.fails
         jump L2
         load_var e
-        is_type ?0
+        is_type int
         pop_jump_if_false L0
         jump L1
 
@@ -387,13 +387,13 @@ async fn typed_binding_dispatch_string_vs_int() {
         call user.fails
         jump L4
         load_var e
-        is_type ?1
+        is_type string
         pop_jump_if_false L0
         jump L3
 
       L0:
         load_var e
-        is_type ?0
+        is_type int
         pop_jump_if_false L1
         jump L2
 
@@ -475,7 +475,7 @@ async fn typed_binding_plus_wildcard() {
         call user.fails
         jump L2
         load_var e
-        is_type ?0
+        is_type string
         pop_jump_if_false L0
         jump L1
 
@@ -538,13 +538,13 @@ async fn named_binding_string_access_value() {
         call user.fails
         jump L4
         load_var e
-        is_type ?1
+        is_type string
         pop_jump_if_false L0
         jump L3
 
       L0:
         load_var e
-        is_type ?0
+        is_type int
         pop_jump_if_false L1
         jump L2
 
@@ -608,13 +608,13 @@ async fn named_binding_int_access_value() {
         call user.fails
         jump L4
         load_var e
-        is_type ?0
+        is_type string
         pop_jump_if_false L0
         jump L3
 
       L0:
         load_var e
-        is_type ?1
+        is_type int
         pop_jump_if_false L1
         jump L2
 
@@ -671,7 +671,7 @@ async fn catch_user_class_single_arm() {
         call user.fails
         jump L2
         load_var e
-        is_type ?0
+        is_type NetworkError
         pop_jump_if_false L0
         jump L1
 
@@ -737,13 +737,13 @@ async fn catch_two_user_classes_dispatch_first() {
         call user.fails
         jump L4
         load_var e
-        is_type ?1
+        is_type NetworkError
         pop_jump_if_false L0
         jump L3
 
       L0:
         load_var e
-        is_type ?2
+        is_type ParseError
         pop_jump_if_false L1
         jump L2
 
@@ -833,7 +833,7 @@ async fn catch_user_class_plus_wildcard() {
         call user.fails
         jump L2
         load_var e
-        is_type ?1
+        is_type NetworkError
         pop_jump_if_false L0
         jump L1
 
@@ -931,19 +931,19 @@ async fn catch_three_user_classes_plus_wildcard() {
         call user.api
         jump L6
         load_var e
-        is_type ?1
+        is_type AuthError
         pop_jump_if_false L0
         jump L5
 
       L0:
         load_var e
-        is_type ?2
+        is_type NotFound
         pop_jump_if_false L1
         jump L4
 
       L1:
         load_var e
-        is_type ?3
+        is_type RateLimit
         pop_jump_if_false L2
         jump L3
 
@@ -1005,7 +1005,7 @@ async fn named_class_binding_access_field() {
         call user.fails
         jump L2
         load_var e
-        is_type ?0
+        is_type NetworkError
         pop_jump_if_false L0
         jump L1
 
@@ -1075,13 +1075,13 @@ async fn named_class_binding_dispatch_access_fields() {
         call user.fails
         jump L4
         load_var e
-        is_type ?1
+        is_type NetworkError
         pop_jump_if_false L0
         jump L3
 
       L0:
         load_var e
-        is_type ?2
+        is_type ParseError
         pop_jump_if_false L1
         jump L2
 
@@ -1142,7 +1142,7 @@ async fn bare_class_single_arm() {
         call user.fails
         jump L2
         load_var e
-        is_type ?0
+        is_type NetworkError
         pop_jump_if_false L0
         jump L1
 
@@ -1208,13 +1208,13 @@ async fn bare_class_dispatch_first() {
         call user.fails
         jump L4
         load_var e
-        is_type ?1
+        is_type NetworkError
         pop_jump_if_false L0
         jump L3
 
       L0:
         load_var e
-        is_type ?2
+        is_type ParseError
         pop_jump_if_false L1
         jump L2
 
@@ -1304,7 +1304,7 @@ async fn bare_class_plus_wildcard() {
         call user.fails
         jump L2
         load_var e
-        is_type ?1
+        is_type NetworkError
         pop_jump_if_false L0
         jump L1
 
@@ -1424,7 +1424,7 @@ async fn catch_division_by_zero() {
         call user.divides
         jump L2
         load_var e
-        is_type ?0
+        is_type baml.panics.DivisionByZero
         pop_jump_if_false L0
         jump L1
 
@@ -1459,7 +1459,7 @@ async fn catch_index_out_of_bounds() {
         call user.oob
         jump L2
         load_var e
-        is_type ?0
+        is_type baml.panics.IndexOutOfBounds
         pop_jump_if_false L0
         jump L1
 
@@ -1512,7 +1512,7 @@ async fn catch_map_key_not_found() {
         call user.bad
         jump L2
         load_var e
-        is_type ?0
+        is_type baml.panics.MapKeyNotFound
         pop_jump_if_false L0
         jump L1
 
@@ -1557,7 +1557,7 @@ async fn catch_negative_index_as_index_out_of_bounds() {
         call user.bad
         jump L2
         load_var e
-        is_type ?0
+        is_type baml.panics.IndexOutOfBounds
         pop_jump_if_false L0
         jump L1
 
@@ -1605,7 +1605,7 @@ async fn named_panic_binding_division_by_zero_field() {
         call user.divides
         jump L2
         load_var e
-        is_type ?0
+        is_type baml.panics.DivisionByZero
         pop_jump_if_false L0
         jump L1
 
@@ -1642,7 +1642,7 @@ async fn named_panic_binding_index_out_of_bounds_fields() {
         call user.oob
         jump L2
         load_var e
-        is_type ?0
+        is_type baml.panics.IndexOutOfBounds
         pop_jump_if_false L0
         jump L1
 
@@ -1689,7 +1689,7 @@ async fn named_panic_binding_index_out_of_bounds_length() {
         call user.oob
         jump L2
         load_var e
-        is_type ?0
+        is_type baml.panics.IndexOutOfBounds
         pop_jump_if_false L0
         jump L1
 
@@ -1745,7 +1745,7 @@ async fn named_panic_binding_map_key_not_found_field() {
         call user.bad
         jump L2
         load_var e
-        is_type ?0
+        is_type baml.panics.MapKeyNotFound
         pop_jump_if_false L0
         jump L1
 
@@ -1902,7 +1902,7 @@ async fn panic_arm_plus_wildcard_panic_fires() {
         call user.risky
         jump L2
         load_var e
-        is_type ?1
+        is_type baml.panics.DivisionByZero
         pop_jump_if_false L0
         jump L1
 
@@ -1984,7 +1984,7 @@ async fn panic_arm_plus_wildcard_no_error() {
         call user.risky
         jump L2
         load_var e
-        is_type ?1
+        is_type baml.panics.DivisionByZero
         pop_jump_if_false L0
         jump L1
 
@@ -2055,13 +2055,13 @@ async fn user_class_plus_panic_plus_wildcard_class_fires() {
         call user.risky
         jump L4
         load_var e
-        is_type ?1
+        is_type AppError
         pop_jump_if_false L0
         jump L3
 
       L0:
         load_var e
-        is_type ?2
+        is_type baml.panics.DivisionByZero
         pop_jump_if_false L1
         jump L2
 
@@ -2146,13 +2146,13 @@ async fn user_class_plus_panic_plus_wildcard_panic_fires() {
         call user.risky
         jump L4
         load_var e
-        is_type ?1
+        is_type AppError
         pop_jump_if_false L0
         jump L3
 
       L0:
         load_var e
-        is_type ?2
+        is_type baml.panics.DivisionByZero
         pop_jump_if_false L1
         jump L2
 
@@ -2595,19 +2595,19 @@ async fn four_arms_division_by_zero_fires() {
         call user.risky
         jump L6
         load_var e
-        is_type ?1
+        is_type baml.panics.DivisionByZero
         pop_jump_if_false L0
         jump L5
 
       L0:
         load_var e
-        is_type ?2
+        is_type baml.panics.IndexOutOfBounds
         pop_jump_if_false L1
         jump L4
 
       L1:
         load_var e
-        is_type ?3
+        is_type AppError
         pop_jump_if_false L2
         jump L3
 
@@ -2812,19 +2812,19 @@ async fn four_arms_no_error() {
         call user.risky
         jump L6
         load_var e
-        is_type ?1
+        is_type baml.panics.DivisionByZero
         pop_jump_if_false L0
         jump L5
 
       L0:
         load_var e
-        is_type ?2
+        is_type baml.panics.IndexOutOfBounds
         pop_jump_if_false L1
         jump L4
 
       L1:
         load_var e
-        is_type ?3
+        is_type AppError
         pop_jump_if_false L2
         jump L3
 
@@ -2962,7 +2962,7 @@ async fn wrong_panic_pattern_propagates() {
         call user.divides
         jump L2
         load_var e
-        is_type ?0
+        is_type baml.panics.IndexOutOfBounds
         pop_jump_if_false L0
         jump L1
 
@@ -3041,49 +3041,49 @@ async fn panic_alias_catches_any_panic() {
         call user.divides
         jump L9
         load_var e
-        is_type ?0
+        is_type baml.panics.DivisionByZero
         pop_jump_if_false L0
         jump L8
 
       L0:
         load_var e
-        is_type ?1
+        is_type baml.panics.IndexOutOfBounds
         pop_jump_if_false L1
         jump L8
 
       L1:
         load_var e
-        is_type ?2
+        is_type baml.panics.MapKeyNotFound
         pop_jump_if_false L2
         jump L8
 
       L2:
         load_var e
-        is_type ?3
+        is_type baml.panics.StackOverflow
         pop_jump_if_false L3
         jump L8
 
       L3:
         load_var e
-        is_type ?4
+        is_type baml.panics.AssertionFailed
         pop_jump_if_false L4
         jump L8
 
       L4:
         load_var e
-        is_type ?5
+        is_type baml.panics.Unreachable
         pop_jump_if_false L5
         jump L8
 
       L5:
         load_var e
-        is_type ?6
+        is_type baml.panics.UserPanic
         pop_jump_if_false L6
         jump L8
 
       L6:
         load_var e
-        is_type ?7
+        is_type baml.panics.AllocFailure
         pop_jump_if_false L7
         jump L8
 
@@ -3125,49 +3125,49 @@ async fn panic_alias_plus_wildcard_dispatch() {
         call user.risky
         jump L9
         load_var e
-        is_type ?1
+        is_type baml.panics.DivisionByZero
         pop_jump_if_false L0
         jump L8
 
       L0:
         load_var e
-        is_type ?2
+        is_type baml.panics.IndexOutOfBounds
         pop_jump_if_false L1
         jump L8
 
       L1:
         load_var e
-        is_type ?3
+        is_type baml.panics.MapKeyNotFound
         pop_jump_if_false L2
         jump L8
 
       L2:
         load_var e
-        is_type ?4
+        is_type baml.panics.StackOverflow
         pop_jump_if_false L3
         jump L8
 
       L3:
         load_var e
-        is_type ?5
+        is_type baml.panics.AssertionFailed
         pop_jump_if_false L4
         jump L8
 
       L4:
         load_var e
-        is_type ?6
+        is_type baml.panics.Unreachable
         pop_jump_if_false L5
         jump L8
 
       L5:
         load_var e
-        is_type ?7
+        is_type baml.panics.UserPanic
         pop_jump_if_false L6
         jump L8
 
       L6:
         load_var e
-        is_type ?8
+        is_type baml.panics.AllocFailure
         pop_jump_if_false L7
         jump L8
 
@@ -3296,7 +3296,7 @@ async fn nested_inner_catches_panic_outer_catches_rethrow() {
         store_var x
         jump L2
         load_var e
-        is_type ?0
+        is_type baml.panics.DivisionByZero
         pop_jump_if_false L0
         jump L1
 
@@ -3498,7 +3498,7 @@ async fn caught_panic_has_accessible_fields() {
         call user.oob
         jump L2
         load_var e
-        is_type ?0
+        is_type baml.panics.IndexOutOfBounds
         pop_jump_if_false L0
         jump L1
 
@@ -3525,4 +3525,127 @@ async fn caught_panic_has_accessible_fields() {
     }
     ");
     assert_eq!(output.result, Ok(BexExternalValue::Int(7)));
+}
+
+// ============================================================================
+// §12 — Catch switch optimization: TypeTag dispatch for typed catch arms
+// ============================================================================
+
+/// 4+ typed catch arms (no wildcard) → type_tag + jump_table dispatch.
+/// Without wildcard, the default branch rethrows.
+#[tokio::test]
+async fn catch_four_typed_arms_jump_table() {
+    let output = baml_test!(
+        r#"
+        class ErrA { x int }
+        class ErrB { x int }
+        class ErrC { x int }
+        class ErrD { x int }
+
+        function risky(mode: int) -> int {
+            if (mode == 0) { throw ErrA { x: 1 } }
+            if (mode == 1) { throw ErrB { x: 2 } }
+            if (mode == 2) { throw ErrC { x: 3 } }
+            throw ErrD { x: 4 }
+        }
+
+        function main() -> int {
+            risky(2) catch (e) {
+                _: ErrA => 10,
+                _: ErrB => 20,
+                _: ErrC => 30,
+                _: ErrD => 40
+            }
+        }
+    "#
+    );
+
+    insta::assert_snapshot!(output.bytecode);
+    assert_eq!(output.result, Ok(BexExternalValue::Int(30)));
+}
+
+/// 4+ typed catch arms with wildcard → type_tag + jump_table + throw_if_panic.
+#[tokio::test]
+async fn catch_four_typed_arms_plus_wildcard_jump_table() {
+    let output = baml_test!(
+        r#"
+        class ErrA { x int }
+        class ErrB { x int }
+        class ErrC { x int }
+        class ErrD { x int }
+
+        function risky(mode: int) -> int {
+            if (mode == 0) { throw ErrA { x: 1 } }
+            if (mode == 1) { throw ErrB { x: 2 } }
+            if (mode == 2) { throw ErrC { x: 3 } }
+            if (mode == 3) { throw ErrD { x: 4 } }
+            throw "unknown"
+        }
+
+        function main() -> int {
+            risky(4) catch (e) {
+                _: ErrA => 10,
+                _: ErrB => 20,
+                _: ErrC => 30,
+                _: ErrD => 40,
+                _ => 99
+            }
+        }
+    "#
+    );
+
+    insta::assert_snapshot!(output.bytecode);
+    assert_eq!(output.result, Ok(BexExternalValue::Int(99)));
+}
+
+/// 2 typed catch arms → sequential is_type chain (below 4-arm switch threshold).
+#[tokio::test]
+async fn catch_two_typed_arms_sequential_chain() {
+    let output = baml_test!(
+        r#"
+        class NetworkError { url string }
+        class ParseError   { msg string }
+
+        function fails(mode: int) -> int {
+            if (mode == 0) { throw NetworkError { url: "http://x" } }
+            throw ParseError { msg: "bad" }
+        }
+
+        function main() -> int {
+            fails(1) catch (e) {
+                _: NetworkError => 1,
+                _: ParseError   => 2
+            }
+        }
+    "#
+    );
+
+    insta::assert_snapshot!(output.bytecode);
+    assert_eq!(output.result, Ok(BexExternalValue::Int(2)));
+}
+
+/// Mixed literal + typed catch arms → no switch optimization (falls back to chain).
+#[tokio::test]
+async fn catch_mixed_literal_and_typed_no_switch() {
+    let output = baml_test!(
+        r#"
+        class AppError { code int }
+
+        function fails(mode: int) -> int {
+            if (mode == 0) { throw "boom" }
+            throw AppError { code: 404 }
+        }
+
+        function main() -> int {
+            fails(0) catch (e) {
+                "boom" => 1,
+                _: AppError => 2,
+                _ => 3
+            }
+        }
+    "#
+    );
+
+    insta::assert_snapshot!(output.bytecode);
+    assert_eq!(output.result, Ok(BexExternalValue::Int(1)));
 }

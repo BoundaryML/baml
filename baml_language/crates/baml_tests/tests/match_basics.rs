@@ -419,54 +419,21 @@ async fn match_union_literal_first() {
     insta::assert_snapshot!(output.bytecode, @r#"
     function main() -> string {
         load_const 200
-        copy 0
-        load_const 400
-        cmp_op ==
-        pop_jump_if_false L0
-        pop 1
-        jump L4
+        dense_tag [200, 201, 400, 404]
+        jump_table [L2, L2, L1, L1], default L0
 
       L0:
-        copy 0
-        load_const 400
-        cmp_op <
-        pop_jump_if_false L2
-        copy 0
-        load_const 200
-        cmp_op ==
-        pop_jump_if_false L1
-        pop 1
-        jump L5
-
-      L1:
-        copy 0
-        load_const 201
-        cmp_op ==
-        pop_jump_if_false L2
-        pop 1
-        jump L5
-
-      L2:
-        copy 0
-        load_const 404
-        cmp_op ==
-        pop_jump_if_false L3
-        pop 1
-        jump L4
-
-      L3:
-        pop 1
         load_const "other"
-        jump L6
+        jump L3
 
-      L4:
+      L1: 404
         load_const "client error"
-        jump L6
+        jump L3
 
-      L5:
+      L2: 201
         load_const "success"
 
-      L6:
+      L3:
         return
     }
     "#);
@@ -495,54 +462,21 @@ async fn match_union_literal_second() {
     insta::assert_snapshot!(output.bytecode, @r#"
     function main() -> string {
         load_const 201
-        copy 0
-        load_const 400
-        cmp_op ==
-        pop_jump_if_false L0
-        pop 1
-        jump L4
+        dense_tag [200, 201, 400, 404]
+        jump_table [L2, L2, L1, L1], default L0
 
       L0:
-        copy 0
-        load_const 400
-        cmp_op <
-        pop_jump_if_false L2
-        copy 0
-        load_const 200
-        cmp_op ==
-        pop_jump_if_false L1
-        pop 1
-        jump L5
-
-      L1:
-        copy 0
-        load_const 201
-        cmp_op ==
-        pop_jump_if_false L2
-        pop 1
-        jump L5
-
-      L2:
-        copy 0
-        load_const 404
-        cmp_op ==
-        pop_jump_if_false L3
-        pop 1
-        jump L4
-
-      L3:
-        pop 1
         load_const "other"
-        jump L6
+        jump L3
 
-      L4:
+      L1: 404
         load_const "client error"
-        jump L6
+        jump L3
 
-      L5:
+      L2: 201
         load_const "success"
 
-      L6:
+      L3:
         return
     }
     "#);
@@ -572,134 +506,25 @@ async fn match_union_large() {
     insta::assert_snapshot!(output.bytecode, @r#"
     function main() -> string {
         load_const 204
-        copy 0
-        load_const 403
-        cmp_op ==
-        pop_jump_if_false L0
-        pop 1
-        jump L13
+        dense_tag [200, 201, 202, 204, 400, 401, 403, 404, 500, 501, 502, 503]
+        jump_table [L3, L3, L3, L3, L2, L2, L2, L2, L1, L1, L1, L1], default L0
 
       L0:
-        copy 0
-        load_const 403
-        cmp_op <
-        pop_jump_if_false L6
-        copy 0
-        load_const 204
-        cmp_op ==
-        pop_jump_if_false L1
-        pop 1
-        jump L14
-
-      L1:
-        copy 0
-        load_const 204
-        cmp_op <
-        pop_jump_if_false L4
-        copy 0
-        load_const 201
-        cmp_op ==
-        pop_jump_if_false L2
-        pop 1
-        jump L14
-
-      L2:
-        copy 0
-        load_const 201
-        cmp_op <
-        pop_jump_if_false L3
-        copy 0
-        load_const 200
-        cmp_op ==
-        pop_jump_if_false L3
-        pop 1
-        jump L14
-
-      L3:
-        copy 0
-        load_const 202
-        cmp_op ==
-        pop_jump_if_false L4
-        pop 1
-        jump L14
-
-      L4:
-        copy 0
-        load_const 400
-        cmp_op ==
-        pop_jump_if_false L5
-        pop 1
-        jump L13
-
-      L5:
-        copy 0
-        load_const 401
-        cmp_op ==
-        pop_jump_if_false L6
-        pop 1
-        jump L13
-
-      L6:
-        copy 0
-        load_const 501
-        cmp_op ==
-        pop_jump_if_false L7
-        pop 1
-        jump L12
-
-      L7:
-        copy 0
-        load_const 501
-        cmp_op <
-        pop_jump_if_false L9
-        copy 0
-        load_const 404
-        cmp_op ==
-        pop_jump_if_false L8
-        pop 1
-        jump L13
-
-      L8:
-        copy 0
-        load_const 500
-        cmp_op ==
-        pop_jump_if_false L9
-        pop 1
-        jump L12
-
-      L9:
-        copy 0
-        load_const 502
-        cmp_op ==
-        pop_jump_if_false L10
-        pop 1
-        jump L12
-
-      L10:
-        copy 0
-        load_const 503
-        cmp_op ==
-        pop_jump_if_false L11
-        pop 1
-        jump L12
-
-      L11:
-        pop 1
         load_const "other"
-        jump L15
+        jump L4
 
-      L12:
+      L1: 503
         load_const "server error"
-        jump L15
+        jump L4
 
-      L13:
+      L2: 404
         load_const "client error"
-        jump L15
+        jump L4
 
-      L14:
+      L3: 204
         load_const "success"
 
-      L15:
+      L4:
         return
     }
     "#);
@@ -729,134 +554,25 @@ async fn match_union_client_error() {
     insta::assert_snapshot!(output.bytecode, @r#"
     function main() -> string {
         load_const 404
-        copy 0
-        load_const 403
-        cmp_op ==
-        pop_jump_if_false L0
-        pop 1
-        jump L13
+        dense_tag [200, 201, 202, 204, 400, 401, 403, 404, 500, 501, 502, 503]
+        jump_table [L3, L3, L3, L3, L2, L2, L2, L2, L1, L1, L1, L1], default L0
 
       L0:
-        copy 0
-        load_const 403
-        cmp_op <
-        pop_jump_if_false L6
-        copy 0
-        load_const 204
-        cmp_op ==
-        pop_jump_if_false L1
-        pop 1
-        jump L14
-
-      L1:
-        copy 0
-        load_const 204
-        cmp_op <
-        pop_jump_if_false L4
-        copy 0
-        load_const 201
-        cmp_op ==
-        pop_jump_if_false L2
-        pop 1
-        jump L14
-
-      L2:
-        copy 0
-        load_const 201
-        cmp_op <
-        pop_jump_if_false L3
-        copy 0
-        load_const 200
-        cmp_op ==
-        pop_jump_if_false L3
-        pop 1
-        jump L14
-
-      L3:
-        copy 0
-        load_const 202
-        cmp_op ==
-        pop_jump_if_false L4
-        pop 1
-        jump L14
-
-      L4:
-        copy 0
-        load_const 400
-        cmp_op ==
-        pop_jump_if_false L5
-        pop 1
-        jump L13
-
-      L5:
-        copy 0
-        load_const 401
-        cmp_op ==
-        pop_jump_if_false L6
-        pop 1
-        jump L13
-
-      L6:
-        copy 0
-        load_const 501
-        cmp_op ==
-        pop_jump_if_false L7
-        pop 1
-        jump L12
-
-      L7:
-        copy 0
-        load_const 501
-        cmp_op <
-        pop_jump_if_false L9
-        copy 0
-        load_const 404
-        cmp_op ==
-        pop_jump_if_false L8
-        pop 1
-        jump L13
-
-      L8:
-        copy 0
-        load_const 500
-        cmp_op ==
-        pop_jump_if_false L9
-        pop 1
-        jump L12
-
-      L9:
-        copy 0
-        load_const 502
-        cmp_op ==
-        pop_jump_if_false L10
-        pop 1
-        jump L12
-
-      L10:
-        copy 0
-        load_const 503
-        cmp_op ==
-        pop_jump_if_false L11
-        pop 1
-        jump L12
-
-      L11:
-        pop 1
         load_const "other"
-        jump L15
+        jump L4
 
-      L12:
+      L1: 503
         load_const "server error"
-        jump L15
+        jump L4
 
-      L13:
+      L2: 404
         load_const "client error"
-        jump L15
+        jump L4
 
-      L14:
+      L3: 204
         load_const "success"
 
-      L15:
+      L4:
         return
     }
     "#);
@@ -1365,7 +1081,7 @@ async fn match_string_literal_with_typed_fallback() {
 
       L1:
         load_var s
-        is_type ?2
+        is_type string
         pop_jump_if_false L4
         load_const 0
         jump L4
@@ -2128,7 +1844,7 @@ async fn match_optional_null_pattern() {
 
       L0:
         load_var x
-        is_type ?1
+        is_type int
         pop_jump_if_false L2
         load_const "some"
         jump L2
@@ -2179,7 +1895,7 @@ async fn match_optional_value_pattern() {
 
       L0:
         load_var x
-        is_type ?1
+        is_type int
         pop_jump_if_false L2
         load_const "some"
         jump L2
@@ -2238,7 +1954,7 @@ async fn match_optional_with_literal_and_typed() {
 
       L1:
         load_var x
-        is_type ?1
+        is_type int
         pop_jump_if_false L4
         load_const "other"
         jump L4
@@ -2624,7 +2340,12 @@ async fn match_mixed_instanceof_and_literal() {
         store_field .code
         store_var x
         load_var x
+        is_type Result
+        pop_jump_if_false L0
+        load_var x
         load_field .code
+
+      L0:
         return
     }
     ");

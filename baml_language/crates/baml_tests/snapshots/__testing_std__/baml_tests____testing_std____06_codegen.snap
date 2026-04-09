@@ -611,7 +611,7 @@ function testing.TestRegistry.serialize(self: null) -> (testing.SerializedTest |
     call baml.Map.get
     store_var expanded
     load_var expanded
-    is_type ?1
+    is_type testing.TestRegistry
     pop_jump_if_false L5
     jump L6
 
@@ -700,7 +700,7 @@ function testing.run_test(body: () -> null, runner: (() -> testing.TestReport) -
 
   L0:
     load_var runner
-    is_type ?1
+    is_type (() -> testing.TestReport) -> () -> testing.TestReport
     pop_jump_if_false L2
     load_var base_run
     load_var runner
@@ -727,7 +727,7 @@ function testing.run_testset(run_children: () -> testing.TestSetReport, runner: 
 
   L0:
     load_var runner
-    is_type ?1
+    is_type (() -> testing.TestSetReport) -> () -> testing.TestSetReport
     pop_jump_if_false L2
     load_var run_children
     load_var runner

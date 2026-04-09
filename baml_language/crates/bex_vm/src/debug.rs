@@ -167,6 +167,13 @@ pub(crate) fn display_instruction(
         Instruction::JumpTable { table_idx, default } => {
             format!("(table {table_idx}, default {default:+})")
         }
+        Instruction::DenseTag(table_idx) => {
+            if let Some(table) = function.bytecode.match_hash_tables.get(*table_idx) {
+                format!("({})", table.key_names.join(", "))
+            } else {
+                format!("(hash table {table_idx})")
+            }
+        }
         Instruction::Pop(_)
         | Instruction::Copy(_)
         | Instruction::BinOp(_)
@@ -305,9 +312,10 @@ fn instruction_color(instruction: &Instruction) -> Color {
         Instruction::BinOp(_) | Instruction::CmpOp(_) | Instruction::UnaryOp(_) => {
             Color::BrightBlue
         }
-        Instruction::Jump(_) | Instruction::PopJumpIfFalse(_) | Instruction::JumpTable { .. } => {
-            Color::Yellow
-        }
+        Instruction::Jump(_)
+        | Instruction::PopJumpIfFalse(_)
+        | Instruction::JumpTable { .. }
+        | Instruction::DenseTag(_) => Color::Yellow,
         Instruction::Call(_) | Instruction::CallIndirect => Color::Magenta,
         Instruction::Return | Instruction::Pop(_) | Instruction::Copy(_) | Instruction::Throw => {
             Color::Red
@@ -751,6 +759,15 @@ fn display_instruction_textual(
         Instruction::IsType(const_idx) => {
             let name = meta_str(const_idx);
             format!("is_type {name}")
+        }
+        Instruction::DenseTag(table_idx) => {
+            let names = function
+                .bytecode
+                .match_hash_tables
+                .get(*table_idx)
+                .map(|t| t.key_names.join(", "))
+                .unwrap_or_default();
+            format!("dense_tag [{names}]")
         }
         Instruction::ThrowIfPanic => "throw_if_panic".to_string(),
 

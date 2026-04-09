@@ -383,7 +383,7 @@ function baml.llm.Client.build_plan_with_state(self: null, planner_state: void) 
     load_field .retry
     store_var _3
     load_var _3
-    is_type ?0
+    is_type baml.llm.RetryPolicy
     pop_jump_if_false L0
     jump L1
 
@@ -509,7 +509,7 @@ function baml.llm.Client.execute(self: null, context: void, inherited_delay_ms: 
     load_field .retry
     store_var _4
     load_var _4
-    is_type ?0
+    is_type baml.llm.RetryPolicy
     pop_jump_if_false L0
     jump L1
 
