@@ -14,15 +14,15 @@ class user.NestedQuotes {
   complex_nesting: string @description("It's \"really\" 'complex'")
   json_like: string @alias("{\"key\": \"value\"}")
 }
-function user.FormatMessage(name: string) -> string throws never {
+function user.FormatMessage(name: string) -> string throws unknown {
   baml.llm.call_llm_function<T>(GPT4, "FormatMessage", map { "name": name }) : string
   !! 428..553: unresolved name: GPT4
 }
-function user.FormatMessage$render_prompt(name: string) -> baml.llm.PromptAst throws never {
+function user.FormatMessage$render_prompt(name: string) -> baml.llm.PromptAst throws unknown {
   baml.llm.render_prompt(GPT4, "FormatMessage", map { "name": name }) : baml.llm.PromptAst
   !! 345..553: unresolved name: GPT4
 }
-function user.FormatMessage$build_request(name: string) -> baml.http.Request throws never {
+function user.FormatMessage$build_request(name: string) -> baml.http.Request throws unknown {
   baml.llm.build_request(GPT4, "FormatMessage", map { "name": name }) : baml.http.Request
   !! 345..553: unresolved name: GPT4
 }
@@ -51,15 +51,15 @@ class user.RawStrings {
     and #hashes#
   "###)
 }
-function user.ProcessText(input: string) -> string throws never {
+function user.ProcessText(input: string) -> string throws unknown {
   baml.llm.call_llm_function<T>(GPT4, "ProcessText", map { "input": input }) : string
   !! 411..532: unresolved name: GPT4
 }
-function user.ProcessText$render_prompt(input: string) -> baml.llm.PromptAst throws never {
+function user.ProcessText$render_prompt(input: string) -> baml.llm.PromptAst throws unknown {
   baml.llm.render_prompt(GPT4, "ProcessText", map { "input": input }) : baml.llm.PromptAst
   !! 364..532: unresolved name: GPT4
 }
-function user.ProcessText$build_request(input: string) -> baml.http.Request throws never {
+function user.ProcessText$build_request(input: string) -> baml.http.Request throws unknown {
   baml.llm.build_request(GPT4, "ProcessText", map { "input": input }) : baml.http.Request
   !! 364..532: unresolved name: GPT4
 }

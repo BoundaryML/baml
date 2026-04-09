@@ -558,13 +558,13 @@ function user.TriviaLongValueClient$new() -> ? throws never {
 function user.TriviaLongValueClientBlock$new() -> ? throws never {
   baml.llm.PrimitiveClient { name: "TriviaLongValueCl...", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "some-extremely-lo...", base_url: "https://some-real...", allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: "system", allowed_roles: ["system", "user", "assistant"], remap_roles: null, api_key: null, provider_options: null, headers: map {  }, query_params: map {  }, request_body: map {  } } } : unknown
 }
-function user.TestTarget() -> string throws never {
+function user.TestTarget() -> string throws unknown {
   baml.llm.call_llm_function<T>(BasicClient, "TestTarget", map {  }) : string
 }
-function user.TestTarget$render_prompt() -> baml.llm.PromptAst throws never {
+function user.TestTarget$render_prompt() -> baml.llm.PromptAst throws unknown {
   baml.llm.render_prompt(BasicClient, "TestTarget", map {  }) : baml.llm.PromptAst
 }
-function user.TestTarget$build_request() -> baml.http.Request throws never {
+function user.TestTarget$build_request() -> baml.http.Request throws unknown {
   baml.llm.build_request(BasicClient, "TestTarget", map {  }) : baml.http.Request
 }
 function user.TestTarget$parse(json: string) -> string throws never {
@@ -870,72 +870,72 @@ function user.DeepNestLongExpr(a: int, b: int, c: int, d: int) -> int throws nev
       }
   }
 }
-function user.LlmBasic(name: string) -> string throws never {
+function user.LlmBasic(name: string) -> string throws unknown {
   baml.llm.call_llm_function<T>(GPT4, "LlmBasic", map { "name": name }) : string
   !! 11324..11381: unresolved name: GPT4
 }
-function user.LlmBasic$render_prompt(name: string) -> baml.llm.PromptAst throws never {
+function user.LlmBasic$render_prompt(name: string) -> baml.llm.PromptAst throws unknown {
   baml.llm.render_prompt(GPT4, "LlmBasic", map { "name": name }) : baml.llm.PromptAst
   !! 11247..11381: unresolved name: GPT4
 }
-function user.LlmBasic$build_request(name: string) -> baml.http.Request throws never {
+function user.LlmBasic$build_request(name: string) -> baml.http.Request throws unknown {
   baml.llm.build_request(GPT4, "LlmBasic", map { "name": name }) : baml.http.Request
   !! 11247..11381: unresolved name: GPT4
 }
 function user.LlmBasic$parse(json: string) -> string throws never {
   baml.llm.parse<T>("LlmBasic", json) : string
 }
-function user.LlmMultiLine(text: string) -> string throws never {
+function user.LlmMultiLine(text: string) -> string throws unknown {
   baml.llm.call_llm_function<T>(GPT4, "LlmMultiLine", map { "text": text }) : string
   !! 11484..11606: unresolved name: GPT4
 }
-function user.LlmMultiLine$render_prompt(text: string) -> baml.llm.PromptAst throws never {
+function user.LlmMultiLine$render_prompt(text: string) -> baml.llm.PromptAst throws unknown {
   baml.llm.render_prompt(GPT4, "LlmMultiLine", map { "text": text }) : baml.llm.PromptAst
   !! 11381..11606: unresolved name: GPT4
 }
-function user.LlmMultiLine$build_request(text: string) -> baml.http.Request throws never {
+function user.LlmMultiLine$build_request(text: string) -> baml.http.Request throws unknown {
   baml.llm.build_request(GPT4, "LlmMultiLine", map { "text": text }) : baml.http.Request
   !! 11381..11606: unresolved name: GPT4
 }
 function user.LlmMultiLine$parse(json: string) -> string throws never {
   baml.llm.parse<T>("LlmMultiLine", json) : string
 }
-function user.LlmStringClient(text: string) -> string throws never {
+function user.LlmStringClient(text: string) -> string throws unknown {
   baml.llm.call_llm_function<T>(baml.llm.Client { name: "openai/gpt-4o", client_type: baml.llm.ClientType.Primitive, sub_clients: [], retry: null, counter: 0 }, "LlmStringClient", map { "text": text }) : string
 }
-function user.LlmStringClient$render_prompt(text: string) -> baml.llm.PromptAst throws never {
+function user.LlmStringClient$render_prompt(text: string) -> baml.llm.PromptAst throws unknown {
   baml.llm.render_prompt(baml.llm.Client { name: "openai/gpt-4o", client_type: baml.llm.ClientType.Primitive, sub_clients: [], retry: null, counter: 0 }, "LlmStringClient", map { "text": text }) : baml.llm.PromptAst
 }
-function user.LlmStringClient$build_request(text: string) -> baml.http.Request throws never {
+function user.LlmStringClient$build_request(text: string) -> baml.http.Request throws unknown {
   baml.llm.build_request(baml.llm.Client { name: "openai/gpt-4o", client_type: baml.llm.ClientType.Primitive, sub_clients: [], retry: null, counter: 0 }, "LlmStringClient", map { "text": text }) : baml.http.Request
 }
 function user.LlmStringClient$parse(json: string) -> string throws never {
   baml.llm.parse<T>("LlmStringClient", json) : string
 }
-function user.LlmReversedOrder(text: string) -> string throws never {
+function user.LlmReversedOrder(text: string) -> string throws unknown {
   baml.llm.call_llm_function<T>(GPT4, "LlmReversedOrder", map { "text": text }) : string
   !! 11884..11941: unresolved name: GPT4
 }
-function user.LlmReversedOrder$render_prompt(text: string) -> baml.llm.PromptAst throws never {
+function user.LlmReversedOrder$render_prompt(text: string) -> baml.llm.PromptAst throws unknown {
   baml.llm.render_prompt(GPT4, "LlmReversedOrder", map { "text": text }) : baml.llm.PromptAst
   !! 11771..11941: unresolved name: GPT4
 }
-function user.LlmReversedOrder$build_request(text: string) -> baml.http.Request throws never {
+function user.LlmReversedOrder$build_request(text: string) -> baml.http.Request throws unknown {
   baml.llm.build_request(GPT4, "LlmReversedOrder", map { "text": text }) : baml.http.Request
   !! 11771..11941: unresolved name: GPT4
 }
 function user.LlmReversedOrder$parse(json: string) -> string throws never {
   baml.llm.parse<T>("LlmReversedOrder", json) : string
 }
-function user.LlmWithLongSignature(first_context: string, second_context: string, third_context: string, user_query: string) -> string throws never {
+function user.LlmWithLongSignature(first_context: string, second_context: string, third_context: string, user_query: string) -> string throws unknown {
   baml.llm.call_llm_function<T>(GPT4, "LlmWithLongSignature", map { "first_context": first_context, "second_context": second_context, "third_context": third_context, "user_query": user_query }) : string
   !! 12126..12277: unresolved name: GPT4
 }
-function user.LlmWithLongSignature$render_prompt(first_context: string, second_context: string, third_context: string, user_query: string) -> baml.llm.PromptAst throws never {
+function user.LlmWithLongSignature$render_prompt(first_context: string, second_context: string, third_context: string, user_query: string) -> baml.llm.PromptAst throws unknown {
   baml.llm.render_prompt(GPT4, "LlmWithLongSignature", map { "first_context": first_context, "second_context": second_context, "third_context": third_context, "user_query": user_query }) : baml.llm.PromptAst
   !! 11941..12277: unresolved name: GPT4
 }
-function user.LlmWithLongSignature$build_request(first_context: string, second_context: string, third_context: string, user_query: string) -> baml.http.Request throws never {
+function user.LlmWithLongSignature$build_request(first_context: string, second_context: string, third_context: string, user_query: string) -> baml.http.Request throws unknown {
   baml.llm.build_request(GPT4, "LlmWithLongSignature", map { "first_context": first_context, "second_context": second_context, "third_context": third_context, "user_query": user_query }) : baml.http.Request
   !! 11941..12277: unresolved name: GPT4
 }

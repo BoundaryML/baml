@@ -2,15 +2,15 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === TIR2 ===
-function user.HelloWorld(name: string) -> string throws never {
+function user.HelloWorld(name: string) -> string throws unknown {
   baml.llm.call_llm_function<T>(GPT4, "HelloWorld", map { "name": name }) : string
   !! 43..104: unresolved name: GPT4
 }
-function user.HelloWorld$render_prompt(name: string) -> baml.llm.PromptAst throws never {
+function user.HelloWorld$render_prompt(name: string) -> baml.llm.PromptAst throws unknown {
   baml.llm.render_prompt(GPT4, "HelloWorld", map { "name": name }) : baml.llm.PromptAst
   !! 0..104: unresolved name: GPT4
 }
-function user.HelloWorld$build_request(name: string) -> baml.http.Request throws never {
+function user.HelloWorld$build_request(name: string) -> baml.http.Request throws unknown {
   baml.llm.build_request(GPT4, "HelloWorld", map { "name": name }) : baml.http.Request
   !! 0..104: unresolved name: GPT4
 }
