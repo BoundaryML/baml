@@ -1,0 +1,220 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "Handler"
+    GENERIC_PARAM_LIST
+      LESS "<"
+      GENERIC_PARAM "E"
+        WORD "E"
+      GREATER ">"
+    L_BRACE "{"
+    FIELD
+      WORD "run"
+      COLON ":"
+      TYPE_EXPR
+        L_PAREN "("
+        R_PAREN ")"
+        ARROW "->"
+        TYPE_EXPR "null"
+          WORD "null"
+        THROWS_CLAUSE
+          KW_THROWS "throws"
+          TYPE_EXPR "E"
+            WORD "E"
+    R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "use_string_handler"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "h"
+        COLON ":"
+        TYPE_EXPR
+          WORD "Handler"
+          TYPE_ARGS
+            LESS "<"
+            TYPE_EXPR "string"
+              WORD "string"
+            GREATER ">"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "null"
+      WORD "null"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        CALL_EXPR
+          PATH_EXPR "h.run"
+            WORD "h"
+            DOT "."
+            WORD "run"
+          CALL_ARGS "()"
+            L_PAREN "("
+            R_PAREN ")"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "use_int_handler"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "h"
+        COLON ":"
+        TYPE_EXPR
+          WORD "Handler"
+          TYPE_ARGS
+            LESS "<"
+            TYPE_EXPR "int"
+              WORD "int"
+            GREATER ">"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "null"
+      WORD "null"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        CALL_EXPR
+          PATH_EXPR "h.run"
+            WORD "h"
+            DOT "."
+            WORD "run"
+          CALL_ARGS "()"
+            L_PAREN "("
+            R_PAREN ")"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "make_string_handler"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR
+      WORD "Handler"
+      TYPE_ARGS
+        LESS "<"
+        TYPE_EXPR "string"
+          WORD "string"
+        GREATER ">"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        OBJECT_LITERAL
+          WORD "Handler"
+          L_BRACE "{"
+          OBJECT_FIELD
+            WORD "run"
+            COLON ":"
+            LAMBDA_EXPR
+              PARAMETER_LIST "()"
+                L_PAREN "("
+                R_PAREN ")"
+              ARROW "->"
+              TYPE_EXPR "null"
+                WORD "null"
+              BLOCK_EXPR
+                L_BRACE "{"
+                THROW_STMT
+                  THROW_EXPR
+                    KW_THROW "throw"
+                    STRING_LITERAL "error"
+                      QUOTE """
+                      WORD "error"
+                      QUOTE """
+                R_BRACE "}"
+          R_BRACE "}"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "make_int_handler"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR
+      WORD "Handler"
+      TYPE_ARGS
+        LESS "<"
+        TYPE_EXPR "int"
+          WORD "int"
+        GREATER ">"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        OBJECT_LITERAL
+          WORD "Handler"
+          L_BRACE "{"
+          OBJECT_FIELD
+            WORD "run"
+            COLON ":"
+            LAMBDA_EXPR
+              PARAMETER_LIST "()"
+                L_PAREN "("
+                R_PAREN ")"
+              ARROW "->"
+              TYPE_EXPR "null"
+                WORD "null"
+              BLOCK_EXPR
+                L_BRACE "{"
+                THROW_STMT
+                  THROW_EXPR "throw 42"
+                    KW_THROW "throw"
+                    INTEGER_LITERAL "42"
+                R_BRACE "}"
+          R_BRACE "}"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "test_string_handler"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "null"
+      WORD "null"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        CALL_EXPR
+          WORD "use_string_handler"
+          CALL_ARGS
+            L_PAREN "("
+            CALL_EXPR
+              WORD "make_string_handler"
+              CALL_ARGS "()"
+                L_PAREN "("
+                R_PAREN ")"
+            R_PAREN ")"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "test_int_handler"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "null"
+      WORD "null"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        CALL_EXPR
+          WORD "use_int_handler"
+          CALL_ARGS
+            L_PAREN "("
+            CALL_EXPR
+              WORD "make_int_handler"
+              CALL_ARGS "()"
+                L_PAREN "("
+                R_PAREN ")"
+            R_PAREN ")"
+        R_BRACE "}"
+
+=== ERRORS ===
+None

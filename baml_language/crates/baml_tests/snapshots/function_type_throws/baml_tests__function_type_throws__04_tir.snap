@@ -638,6 +638,77 @@ type user.NoThrow$stream = never
 type user.AliasPure$stream = unknown
 type user.Mapper$stream = unknown
 type user.Wrapper$stream = unknown
+class user.Handler {
+  run: () -> null throws E
+}
+function user.use_string_handler(h: user.Handler) -> null throws never {
+  { : null
+    h.run() : null
+  }
+}
+function user.use_int_handler(h: user.Handler) -> null throws never {
+  { : null
+    h.run() : null
+  }
+}
+function user.make_string_handler() -> user.Handler throws never {
+  { : user.Handler
+    Handler { run: () -> null { ... } } : user.Handler
+  }
+}
+lambda user.make_string_handler {
+}
+function user.make_int_handler() -> user.Handler throws never {
+  { : user.Handler
+    Handler { run: () -> null { ... } } : user.Handler
+  }
+}
+lambda user.make_int_handler {
+}
+function user.test_string_handler() -> null throws never {
+  { : null
+    use_string_handler(make_string_handler()) : null
+  }
+}
+function user.test_int_handler() -> null throws never {
+  { : null
+    use_int_handler(make_int_handler()) : null
+  }
+}
+class user.Handler$stream {
+  run: unknown
+}
+class user.Task {
+  name: string
+  run: () -> null throws E
+}
+function user.run_tasks(tasks: user.Task[]) -> null throws never {
+  { : null
+    for task in tasks
+      { : null
+        task.run() : null
+      }
+    null : null
+  }
+}
+function user.make_mixed_tasks() -> user.Task[] throws never {
+  { : user.Task[]
+    [Task { name: "a", run: () -> null { ... } }, Task { name: "b", run: () -> null { ... } }] : user.Task[]
+  }
+}
+lambda user.make_mixed_tasks {
+}
+lambda user.make_mixed_tasks {
+}
+function user.test_run_mixed_tasks() -> null throws never {
+  { : null
+    run_tasks(make_mixed_tasks()) : null
+  }
+}
+class user.Task$stream {
+  name: null | string
+  run: unknown
+}
 function user.apply_guarded(f: () -> int throws __throws_f) -> int throws __throws_f | string {
   { : int
     let result = f() : int

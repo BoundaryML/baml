@@ -347,6 +347,28 @@ function user.make_good_stored_handler() -> StoredPureHandler {
     return
 }
 
+function user.make_int_handler() -> Handler {
+    alloc_instance Handler
+    make_closure .<lambda(make_int_handler, 0)>, 0
+    init_field .run
+    return
+}
+
+function user.make_mixed_tasks() -> Task[] {
+    alloc_instance Task
+    load_const "a"
+    init_field .name
+    make_closure .<lambda(make_mixed_tasks, 0)>, 0
+    init_field .run
+    alloc_instance Task
+    load_const "b"
+    init_field .name
+    make_closure .<lambda(make_mixed_tasks, 1)>, 0
+    init_field .run
+    alloc_array 2
+    return
+}
+
 function user.make_pure() -> () -> int {
     make_closure .<lambda(make_pure, 0)>, 0
     return
@@ -377,6 +399,13 @@ function user.make_stored_closure_with_throws() -> () -> int throws string {
 function user.make_stored_throwing_handler() -> StoredThrowingHandler {
     alloc_instance StoredThrowingHandler
     make_closure .<lambda(make_stored_throwing_handler, 0)>, 0
+    init_field .run
+    return
+}
+
+function user.make_string_handler() -> Handler {
+    alloc_instance Handler
+    make_closure .<lambda(make_string_handler, 0)>, 0
     init_field .run
     return
 }
@@ -446,6 +475,36 @@ function user.run_pure(f: () -> int) -> int {
     load_var f
     call_indirect
     return
+}
+
+function user.run_tasks(tasks: Task[]) -> null {
+    load_const 0
+    store_var __for_idx
+
+  L0:
+    load_var __for_idx
+    load_var tasks
+    call baml.Array.length
+    cmp_op <
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const null
+    return
+
+  L2:
+    load_var tasks
+    load_var __for_idx
+    load_array_element
+    load_field .run
+    call_indirect
+    pop 1
+    load_var __for_idx
+    load_const 1
+    bin_op +
+    store_var __for_idx
+    jump L0
 }
 
 function user.run_throwing(f: () -> int) -> int {
@@ -707,6 +766,12 @@ function user.test_ignore_callback_throwing() -> int {
     return
 }
 
+function user.test_int_handler() -> null {
+    call user.make_int_handler
+    call user.use_int_handler
+    return
+}
+
 function user.test_lambda_throws_class() -> int {
     make_closure .<lambda(test_lambda_throws_class, 0)>, 0
     call_indirect
@@ -825,6 +890,12 @@ function user.test_rethrows_enum() -> int {
     return
 }
 
+function user.test_run_mixed_tasks() -> null {
+    call user.make_mixed_tasks
+    call user.run_tasks
+    return
+}
+
 function user.test_run_pure() -> int {
     make_closure .<lambda(test_run_pure, 0)>, 0
     call user.run_pure
@@ -870,6 +941,12 @@ function user.test_stored_local_shape_mismatch() -> null {
 
 function user.test_stored_local_with_throws() -> null {
     load_const null
+    return
+}
+
+function user.test_string_handler() -> null {
+    call user.make_string_handler
+    call user.use_string_handler
     return
 }
 
@@ -1182,8 +1259,22 @@ function user.use_enum_thrower(f: () -> int throws ErrorKind) -> int {
     return
 }
 
+function user.use_int_handler(h: Handler) -> null {
+    load_var h
+    load_field .run
+    call_indirect
+    return
+}
+
 function user.use_mixed_thrower(f: () -> int throws ErrorKind | ApiError | string) -> int {
     load_var f
+    call_indirect
+    return
+}
+
+function user.use_string_handler(h: Handler) -> null {
+    load_var h
+    load_field .run
     call_indirect
     return
 }

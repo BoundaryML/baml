@@ -1547,6 +1547,233 @@ fn user.use_alias_pure(f: () -> int) -> int {
     }
 }
 
+fn user.make_int_handler() -> Handler {
+    // Locals:
+    let _0: Handler // _0 // return
+    let _1: () -> void throws int
+
+    bb0: {
+        _1 = make_closure lambda[0]();
+        _0 = Handler { copy _1 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(make_int_handler, 0)>() -> null {
+    // Locals:
+    let _0: null // _0 // return
+
+    bb0: {
+        throw const 42_i64;
+    }
+}
+
+fn user.make_string_handler() -> Handler {
+    // Locals:
+    let _0: Handler // _0 // return
+    let _1: () -> void throws string
+
+    bb0: {
+        _1 = make_closure lambda[0]();
+        _0 = Handler { copy _1 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(make_string_handler, 0)>() -> null {
+    // Locals:
+    let _0: null // _0 // return
+
+    bb0: {
+        throw const "error";
+    }
+}
+
+fn user.test_int_handler() -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: Handler
+
+    bb0: {
+        _1 = call const fn user.make_int_handler() -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn user.use_int_handler(copy _1) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.test_string_handler() -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: Handler
+
+    bb0: {
+        _1 = call const fn user.make_string_handler() -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn user.use_string_handler(copy _1) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.use_int_handler(h: Handler) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: Handler // h // param
+    let _2: () -> null
+
+    bb0: {
+        _2 = copy _1.0;
+        _0 = call copy _2() -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.use_string_handler(h: Handler) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: Handler // h // param
+    let _2: () -> null
+
+    bb0: {
+        _2 = copy _1.0;
+        _0 = call copy _2() -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.make_mixed_tasks() -> Task[] {
+    // Locals:
+    let _0: Task[] // _0 // return
+    let _1: Task
+    let _2: () -> void throws string
+    let _3: Task
+    let _4: () -> void throws int
+
+    bb0: {
+        _2 = make_closure lambda[0]();
+        _1 = Task { const "a", copy _2 };
+        _4 = make_closure lambda[1]();
+        _3 = Task { const "b", copy _4 };
+        _0 = [copy _1, copy _3];
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(make_mixed_tasks, 0)>() -> null {
+    // Locals:
+    let _0: null // _0 // return
+
+    bb0: {
+        throw const "error";
+    }
+}
+
+// lambda[1]
+fn .<lambda(make_mixed_tasks, 1)>() -> null {
+    // Locals:
+    let _0: null // _0 // return
+
+    bb0: {
+        throw const 42_i64;
+    }
+}
+
+fn user.run_tasks(tasks: Task[]) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: Task[] // tasks // param
+    let _2: int // __for_idx
+    let _3: int
+    let _4: bool
+    let _5: Task
+    let _6: Task // task
+    let _7: void
+    let _8: () -> null
+    let _9: Task
+
+    bb0: {
+        _2 = const 0_i64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        _3 = len(_1);
+        _4 = copy _2 < copy _3;
+        branch copy _4 -> [bb4, bb2];
+    }
+
+    bb2: {
+        _0 = const null;
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+
+    bb4: {
+        _5 = copy _1[_2];
+        _6 = copy _5;
+        _9 = copy _6;
+        _8 = copy _9.1;
+        _7 = call copy _8() -> [bb5];
+    }
+
+    bb5: {
+        _2 = copy _2 + const 1_i64;
+        goto -> bb1;
+    }
+}
+
+fn user.test_run_mixed_tasks() -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: Task[]
+
+    bb0: {
+        _1 = call const fn user.make_mixed_tasks() -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn user.run_tasks(copy _1) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.apply_guarded(f: () -> int) -> int {
     // Locals:
     let _0: int // _0 // return

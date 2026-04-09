@@ -1,0 +1,5 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== STRONG AST ERROR ===
+An element at heterogeneous_collection.baml:4:11 was a token when it should have been a node.

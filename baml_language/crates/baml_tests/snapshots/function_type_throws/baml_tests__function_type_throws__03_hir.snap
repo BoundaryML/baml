@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 12292
 ---
 === HIR2 ===
 function user.test_array_map_pure() -> int[]  [expr] {
@@ -224,6 +223,40 @@ type user.ThrowingCallback = () -> int
 type user.Wrapper = (() -> int) -> int
 function user.use_alias_pure(f: user.AliasPure) -> int  [expr] {
   {  } f()
+}
+class user.Handler {
+  run: () -> null
+}
+function user.make_int_handler() -> user.Handler  [expr] {
+  {  } user.Handler { run: () -> null { { throw 42 } } }
+}
+function user.make_string_handler() -> user.Handler  [expr] {
+  {  } user.Handler { run: () -> null { { throw "error" } } }
+}
+function user.test_int_handler() -> null  [expr] {
+  {  } use_int_handler(make_int_handler())
+}
+function user.test_string_handler() -> null  [expr] {
+  {  } use_string_handler(make_string_handler())
+}
+function user.use_int_handler(h: user.Handler) -> null  [expr] {
+  {  } h.run()
+}
+function user.use_string_handler(h: user.Handler) -> null  [expr] {
+  {  } h.run()
+}
+class user.Task {
+  name: string
+  run: () -> null
+}
+function user.make_mixed_tasks() -> user.Task[]  [expr] {
+  {  } [user.Task { name: "a", run: () -> null { { throw "error" } } }, user.Task { name: "b", run: () -> null { { throw 42 } } }]
+}
+function user.run_tasks(tasks: user.Task[]) -> null  [expr] {
+  { for task in tasks {  } task.run() } null
+}
+function user.test_run_mixed_tasks() -> null  [expr] {
+  {  } run_tasks(make_mixed_tasks())
 }
 function user.apply_guarded(f: () -> int) -> int  [expr] {
   { let result = f(); if (result Lt 0) { throw "negative result" } } result
