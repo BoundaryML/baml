@@ -1671,11 +1671,9 @@ impl BexEngine {
         let args = args.iter().map(std::convert::Into::into).collect();
         let fn_ptr = self.sys_ops.get(op);
         let mut ctx = self.sys_op_ctx.to_op_context(cancel.clone(), self.clone());
-        // Rebuild RuntimeIo with the live per-call context so nested IO calls
-        // (media resolution, auth) see the correct cancellation token.
-        let mut io_ctx = ctx.clone();
-        io_ctx.runtime_io = Arc::new(sys_types::runtime_io::NoopRuntimeIo);
-        ctx.runtime_io = sys_ops::build_runtime_io(&self.sys_ops, &self.heap, &io_ctx);
+        // Rebuild RuntimeIo with the live per-call context so IO calls
+        // (media resolution, auth) use the correct cancellation token.
+        ctx.runtime_io = sys_ops::build_runtime_io(&self.sys_ops, &self.heap, &ctx);
         let result = fn_ptr(&self.heap, args, &ctx, call_id);
 
         match result {
