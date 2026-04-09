@@ -153,15 +153,12 @@ async fn catch_literal_int_match() {
         call user.fails
         jump L2
         load_var e
-        copy 0
         load_const 42
         cmp_op ==
         pop_jump_if_false L0
-        pop 1
         jump L1
 
       L0:
-        pop 1
         load_var e
         throw_if_panic
         load_const 2
@@ -3356,15 +3353,12 @@ async fn throw_in_match_arm_propagates() {
     insta::assert_snapshot!(output.bytecode, @r#"
     function main() -> string {
         load_const 2
-        copy 0
         load_const 1
         cmp_op ==
         pop_jump_if_false L0
-        pop 1
         jump L1
 
       L0:
-        pop 1
         load_const "boom"
         throw
 

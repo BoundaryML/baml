@@ -57,14 +57,11 @@ function user.DeeplyNestedLiterals(x: 200 | 201 | 204) -> string {
     pop 1
 
   L1:
-    copy 0
     load_const 204
     cmp_op ==
     pop_jump_if_false L2
-    pop 1
 
   L2:
-    pop 1
     load_const "all success codes"
     return
 }
@@ -134,15 +131,12 @@ function user.DuplicateEnumVariant(s: Status) -> string {
 
 function user.DuplicateIntLiteral(x: int) -> string {
     load_var x
-    copy 0
     load_const 1
     cmp_op ==
     pop_jump_if_false L0
-    pop 1
     jump L1
 
   L0:
-    pop 1
     load_const "other"
     jump L2
 
@@ -255,15 +249,12 @@ function user.EnumVariantUnionWithCatchAll(s: Status) -> string {
     jump L2
 
   L0:
-    copy 0
     load_const Status.Pending
     cmp_op ==
     pop_jump_if_false L1
-    pop 1
     jump L2
 
   L1:
-    pop 1
     load_const "other"
     jump L3
 
@@ -284,14 +275,11 @@ function user.ExhaustiveAliasOfLiterals(code: 200 | 201) -> string {
     jump L2
 
   L0:
-    copy 0
     load_const 201
     cmp_op ==
     pop_jump_if_false L1
-    pop 1
 
   L1:
-    pop 1
     jump L3
     load_const "created"
     jump L3
@@ -435,15 +423,12 @@ function user.ExhaustiveEnumAllVariants(s: Status) -> string {
 function user.ExhaustiveEnumWithCatchAll(s: Status) -> string {
     load_var s
     discriminant
-    copy 0
     load_const Status.Active
     cmp_op ==
     pop_jump_if_false L0
-    pop 1
     jump L1
 
   L0:
-    pop 1
     load_const "other"
     jump L2
 
@@ -488,14 +473,11 @@ function user.ExhaustiveIntLiterals(code: 200 | 201 | 204) -> string {
     jump L3
 
   L1:
-    copy 0
     load_const 204
     cmp_op ==
     pop_jump_if_false L2
-    pop 1
 
   L2:
-    pop 1
     jump L5
     load_const "No Content"
     jump L5
@@ -674,14 +656,11 @@ function user.ExhaustiveOptionalSingleton(code: 200?) -> string {
 
 function user.ExhaustiveSingletonInt(code: 200) -> string {
     load_var code
-    copy 0
     load_const 200
     cmp_op ==
     pop_jump_if_false L0
-    pop 1
 
   L0:
-    pop 1
     load_const "OK"
     return
 }
@@ -772,15 +751,12 @@ function user.ExhaustiveTypeAliasWithCatchAll(r: Success | Failure) -> string {
 
 function user.ExhaustiveWithNamedCatchAll(x: int) -> int {
     load_var x
-    copy 0
     load_const 1
     cmp_op ==
     pop_jump_if_false L0
-    pop 1
     jump L1
 
   L0:
-    pop 1
     load_var x
     load_const 1
     bin_op +
@@ -803,15 +779,12 @@ function user.ExhaustiveWithUnderscore(x: int) -> int {
     jump L3
 
   L0:
-    copy 0
     load_const 2
     cmp_op ==
     pop_jump_if_false L1
-    pop 1
     jump L2
 
   L1:
-    pop 1
     load_const 0
     jump L4
 
@@ -890,14 +863,11 @@ function user.GuardedWithFallback(x: int) -> int {
 function user.HighLineNumberNonExhaustive(s: Status) -> string {
     load_var s
     discriminant
-    copy 0
     load_const Status.Active
     cmp_op ==
     pop_jump_if_false L0
-    pop 1
 
   L0:
-    pop 1
     load_const "active only"
     return
 }
@@ -920,14 +890,11 @@ function user.IntLiteralUnionPattern(code: 200 | 201 | 204) -> string {
     jump L3
 
   L1:
-    copy 0
     load_const 204
     cmp_op ==
     pop_jump_if_false L2
-    pop 1
 
   L2:
-    pop 1
     jump L4
     load_const "no content"
     jump L4
@@ -1074,15 +1041,12 @@ function user.MatchArithmeticScrutinee(a: int, b: int) -> string {
     jump L3
 
   L0:
-    copy 0
     load_const 1
     cmp_op ==
     pop_jump_if_false L1
-    pop 1
     jump L2
 
   L1:
-    pop 1
     load_const "other"
     jump L4
 
@@ -1111,15 +1075,12 @@ function user.MatchComplexScrutinee(x: int) -> string {
     jump L3
 
   L0:
-    copy 0
     load_const 3
     cmp_op ==
     pop_jump_if_false L1
-    pop 1
     jump L2
 
   L1:
-    pop 1
     load_const "other"
     jump L4
 
@@ -1350,15 +1311,12 @@ function user.NestedLiteralUnions(code: int) -> string {
 
 function user.NestedMatchSpans(x: int, y: bool) -> string {
     load_var x
-    copy 0
     load_const 0
     cmp_op ==
     pop_jump_if_false L0
-    pop 1
     jump L1
 
   L0:
-    pop 1
     load_const "other"
     jump L6
 
@@ -1452,14 +1410,11 @@ function user.NestedTypeBindings(r: Success | Failure) -> int {
 
 function user.NonExhaustiveAliasOfLiterals(code: 200 | 201) -> string {
     load_var code
-    copy 0
     load_const 200
     cmp_op ==
     pop_jump_if_false L0
-    pop 1
 
   L0:
-    pop 1
     load_const "ok"
     return
 }
@@ -1488,14 +1443,11 @@ function user.NonExhaustiveBoolMissingTrue(b: bool) -> string {
 
 function user.NonExhaustiveClassPlusLiteralMissingClass(x: Success | 200) -> string {
     load_var x
-    copy 0
     load_const 200
     cmp_op ==
     pop_jump_if_false L0
-    pop 1
 
   L0:
-    pop 1
     load_const "http ok"
     return
 }
@@ -1547,14 +1499,11 @@ function user.NonExhaustiveDoubleMaybeMissingNull(dm: (Success | Failure)??) -> 
 function user.NonExhaustiveEnumMissingMultiple(s: Status) -> string {
     load_var s
     discriminant
-    copy 0
     load_const Status.Active
     cmp_op ==
     pop_jump_if_false L0
-    pop 1
 
   L0:
-    pop 1
     load_const "active"
     return
 }
@@ -1570,14 +1519,11 @@ function user.NonExhaustiveEnumMissingOne(s: Status) -> string {
     jump L2
 
   L0:
-    copy 0
     load_const Status.Inactive
     cmp_op ==
     pop_jump_if_false L1
-    pop 1
 
   L1:
-    pop 1
     jump L3
     load_const "inactive"
     jump L3
@@ -1621,14 +1567,11 @@ function user.NonExhaustiveIntLiteral(code: 200 | 201 | 204) -> string {
     jump L2
 
   L0:
-    copy 0
     load_const 201
     cmp_op ==
     pop_jump_if_false L1
-    pop 1
 
   L1:
-    pop 1
     jump L3
     load_const "Created"
     jump L3
@@ -1681,14 +1624,11 @@ function user.NonExhaustiveNullableEnumMissingNull(s: Status?) -> string {
     jump L3
 
   L1:
-    copy 0
     load_const Status.Pending
     cmp_op ==
     pop_jump_if_false L2
-    pop 1
 
   L2:
-    pop 1
     jump L5
     load_const "pending"
     jump L5
@@ -1741,14 +1681,11 @@ function user.NonExhaustiveNullableEnumMissingVariant(s: Status?) -> string {
 
 function user.NonExhaustiveOptionalMissingNull(code: 200?) -> string {
     load_var code
-    copy 0
     load_const 200
     cmp_op ==
     pop_jump_if_false L0
-    pop 1
 
   L0:
-    pop 1
     load_const "OK"
     return
 }
@@ -2024,43 +1961,34 @@ function user.StringLiteralWithCatchAll(role: "user" | "assistant" | "system") -
 
 function user.ThreeLevelNestedMatch(x: int, y: int, z: int) -> string {
     load_var x
-    copy 0
     load_const 0
     cmp_op ==
     pop_jump_if_false L0
-    pop 1
     jump L1
 
   L0:
-    pop 1
     load_const "x nonzero"
     jump L6
 
   L1:
     load_var y
-    copy 0
     load_const 0
     cmp_op ==
     pop_jump_if_false L2
-    pop 1
     jump L3
 
   L2:
-    pop 1
     load_const "y nonzero"
     jump L6
 
   L3:
     load_var z
-    copy 0
     load_const 0
     cmp_op ==
     pop_jump_if_false L4
-    pop 1
     jump L5
 
   L4:
-    pop 1
     load_const "z nonzero"
     jump L6
 
@@ -2099,14 +2027,11 @@ function user.UnreachableMultiple(x: int) -> string {
 
 function user.WrongLiteralTypeBoolWithInt(b: bool) -> string {
     load_var b
-    copy 0
     load_const 42
     cmp_op ==
     pop_jump_if_false L0
-    pop 1
 
   L0:
-    pop 1
     load_const "wrong type"
     return
 }

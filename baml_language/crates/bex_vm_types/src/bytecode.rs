@@ -835,7 +835,7 @@ pub struct Bytecode {
     pub jump_tables: Vec<JumpTableData>,
 
     /// Perfect hash tables for sparse `TypeTag` switch dispatch.
-    /// Indexed by `MatchHash` instruction operand.
+    /// Indexed by `DenseTag` instruction operand.
     pub match_hash_tables: Vec<MatchHashTable>,
 
     /// Line table mapping bytecode PCs to source spans.

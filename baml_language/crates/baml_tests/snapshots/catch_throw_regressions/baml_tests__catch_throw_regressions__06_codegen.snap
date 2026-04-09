@@ -3,15 +3,12 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 function user.AlwaysThrowsStatus(n: int) -> Status {
     load_var n
-    copy 0
     load_const 0
     cmp_op ==
     pop_jump_if_false L0
-    pop 1
     jump L1
 
   L0:
-    pop 1
     load_const 404
     throw
 
@@ -103,15 +100,12 @@ function user.CatchRecursiveThrow(n: int) -> string {
 
 function user.RecA(n: int) -> string {
     load_var n
-    copy 0
     load_const 0
     cmp_op ==
     pop_jump_if_false L0
-    pop 1
     jump L1
 
   L0:
-    pop 1
     load_var n
     call user.RecB
     return
@@ -145,15 +139,12 @@ function user.ThrowsAllStatusVariants(n: int) -> Status {
     jump L4
 
   L1:
-    copy 0
     load_const 3
     cmp_op ==
     pop_jump_if_false L2
-    pop 1
     jump L3
 
   L2:
-    pop 1
     load_const user.Status.SomeOtherError
     alloc_variant user.Status
     throw

@@ -86,15 +86,12 @@ function user.loopMatchAccum() -> int {
     jump L6
 
   L3:
-    copy 0
     load_const 1
     cmp_op ==
     pop_jump_if_false L4
-    pop 1
     jump L5
 
   L4:
-    pop 1
     load_const 30
     store_var _6
     jump L7
@@ -130,15 +127,12 @@ function user.matchAdd(x: int) -> int {
     jump L3
 
   L0:
-    copy 0
     load_const 2
     cmp_op ==
     pop_jump_if_false L1
-    pop 1
     jump L2
 
   L1:
-    pop 1
     load_const 0
     jump L4
 

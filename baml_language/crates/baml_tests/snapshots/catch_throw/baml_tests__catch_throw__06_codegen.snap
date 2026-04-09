@@ -3,15 +3,12 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 function user.AlsoMayFail(x: int) -> string {
     load_var x
-    copy 0
     load_const 0
     cmp_op ==
     pop_jump_if_false L0
-    pop 1
     jump L1
 
   L0:
-    pop 1
     load_const "also ok"
     return
 
@@ -115,15 +112,12 @@ function user.ChainedCatchClauses(x: int) -> string {
 
 function user.MayFail(x: int) -> string {
     load_var x
-    copy 0
     load_const 0
     cmp_op ==
     pop_jump_if_false L0
-    pop 1
     jump L1
 
   L0:
-    pop 1
     load_const "ok"
     return
 
@@ -142,15 +136,12 @@ function user.MayFailIntOrString(x: int) -> string {
     jump L3
 
   L0:
-    copy 0
     load_const 1
     cmp_op ==
     pop_jump_if_false L1
-    pop 1
     jump L2
 
   L1:
-    pop 1
     load_const "ok"
     return
 

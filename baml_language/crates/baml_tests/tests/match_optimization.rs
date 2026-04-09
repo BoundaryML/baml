@@ -931,15 +931,12 @@ async fn match_if_else_chain_three_arms() {
         jump L3
 
       L0:
-        copy 0
         load_const 1
         cmp_op ==
         pop_jump_if_false L1
-        pop 1
         jump L2
 
       L1:
-        pop 1
         load_const 999
         jump L4
 

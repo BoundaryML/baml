@@ -1180,15 +1180,12 @@ async fn match_enum_variant_with_wildcard() {
         jump L3
 
       L0:
-        copy 0
         load_const Status.Inactive
         cmp_op ==
         pop_jump_if_false L1
-        pop 1
         jump L2
 
       L1:
-        pop 1
         load_const "other"
         jump L4
 
@@ -1252,15 +1249,12 @@ async fn match_enum_variant_with_wildcard_matched() {
         jump L3
 
       L0:
-        copy 0
         load_const Status.Inactive
         cmp_op ==
         pop_jump_if_false L1
-        pop 1
         jump L2
 
       L1:
-        pop 1
         load_const "other"
         jump L4
 

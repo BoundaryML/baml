@@ -1494,6 +1494,13 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             }
 
             let label = Self::switch_label(*value, name_map);
+            if is_last {
+                // Last arm: let cmp_op consume the discriminant directly
+                // instead of copy+pop. The otherwise fallthrough no longer
+                // needs to pop the discriminant either.
+                self.emit_compare_and_branch_final(*value, *target, otherwise, label);
+                return;
+            }
             self.emit_compare_and_branch(*value, *target, label);
         }
 
@@ -1754,6 +1761,26 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         self.emit_jump_unless_fallthrough(target);
         let skip_to = self.current_pc();
         self.patch_jump_to(jump_idx, skip_to);
+    }
+
+    /// Last-arm variant of `emit_compare_and_branch`: lets `cmp_op ==` consume
+    /// the discriminant directly (no copy), saving 3 instructions (copy + 2 pops).
+    fn emit_compare_and_branch_final(
+        &mut self,
+        value: i64,
+        target: BlockId,
+        otherwise: BlockId,
+        label: String,
+    ) {
+        let idx = self.add_constant(ConstValue::Int(value));
+        let inst = self.emit(Instruction::LoadConst(idx));
+        self.set_operand(inst, OperandMeta::Const(label));
+        self.emit(Instruction::CmpOp(CmpOp::Eq));
+        let jump_idx = self.emit(Instruction::PopJumpIfFalse(0));
+        self.emit_jump_unless_fallthrough(target);
+        let skip_to = self.current_pc();
+        self.patch_jump_to(jump_idx, skip_to);
+        self.emit_jump_unless_fallthrough(otherwise);
     }
 
     // ========================================================================
