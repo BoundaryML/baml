@@ -923,14 +923,13 @@ async fn match_if_else_chain_three_arms() {
     insta::assert_snapshot!(output.bytecode, @"
     function classify(x: int) -> int {
         load_var x
-        copy 0
         load_const 0
         cmp_op ==
         pop_jump_if_false L0
-        pop 1
         jump L3
 
       L0:
+        load_var x
         load_const 1
         cmp_op ==
         pop_jump_if_false L1

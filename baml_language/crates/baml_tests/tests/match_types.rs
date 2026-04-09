@@ -1024,23 +1024,20 @@ async fn match_enum_variant_first() {
     function classify(s: Status) -> string {
         load_var s
         discriminant
-        copy 0
         load_const Status.Active
         cmp_op ==
         pop_jump_if_false L0
-        pop 1
         jump L3
 
       L0:
-        copy 0
+        load_var s
+        discriminant
         load_const Status.Inactive
         cmp_op ==
         pop_jump_if_false L1
-        pop 1
         jump L2
 
       L1:
-        pop 1
         load_const "pending"
         jump L4
 
@@ -1096,23 +1093,20 @@ async fn match_enum_variant_last() {
     function classify(s: Status) -> string {
         load_var s
         discriminant
-        copy 0
         load_const Status.Active
         cmp_op ==
         pop_jump_if_false L0
-        pop 1
         jump L3
 
       L0:
-        copy 0
+        load_var s
+        discriminant
         load_const Status.Inactive
         cmp_op ==
         pop_jump_if_false L1
-        pop 1
         jump L2
 
       L1:
-        pop 1
         load_const "pending"
         jump L4
 
@@ -1172,14 +1166,14 @@ async fn match_enum_variant_with_wildcard() {
     function classify(s: Status) -> string {
         load_var s
         discriminant
-        copy 0
         load_const Status.Active
         cmp_op ==
         pop_jump_if_false L0
-        pop 1
         jump L3
 
       L0:
+        load_var s
+        discriminant
         load_const Status.Inactive
         cmp_op ==
         pop_jump_if_false L1
@@ -1241,14 +1235,14 @@ async fn match_enum_variant_with_wildcard_matched() {
     function classify(s: Status) -> string {
         load_var s
         discriminant
-        copy 0
         load_const Status.Active
         cmp_op ==
         pop_jump_if_false L0
-        pop 1
         jump L3
 
       L0:
+        load_var s
+        discriminant
         load_const Status.Inactive
         cmp_op ==
         pop_jump_if_false L1

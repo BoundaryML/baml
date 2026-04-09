@@ -123,22 +123,20 @@ function user.RecB(n: int) -> string {
 
 function user.ThrowsAllStatusVariants(n: int) -> Status {
     load_var n
-    copy 0
     load_const 1
     cmp_op ==
     pop_jump_if_false L0
-    pop 1
     jump L5
 
   L0:
-    copy 0
+    load_var n
     load_const 2
     cmp_op ==
     pop_jump_if_false L1
-    pop 1
     jump L4
 
   L1:
+    load_var n
     load_const 3
     cmp_op ==
     pop_jump_if_false L2

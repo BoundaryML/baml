@@ -43,20 +43,18 @@ function user.BoolWithCatchAll(b: bool) -> string {
 
 function user.DeeplyNestedLiterals(x: 200 | 201 | 204) -> string {
     load_var x
-    copy 0
     load_const 200
     cmp_op ==
     pop_jump_if_false L0
-    pop 1
 
   L0:
-    copy 0
+    load_var x
     load_const 201
     cmp_op ==
     pop_jump_if_false L1
-    pop 1
 
   L1:
+    load_var x
     load_const 204
     cmp_op ==
     pop_jump_if_false L2
@@ -98,23 +96,20 @@ function user.DuplicateBoolLiteral(b: bool) -> string {
 function user.DuplicateEnumVariant(s: Status) -> string {
     load_var s
     discriminant
-    copy 0
     load_const Status.Active
     cmp_op ==
     pop_jump_if_false L0
-    pop 1
     jump L3
 
   L0:
-    copy 0
+    load_var s
+    discriminant
     load_const Status.Inactive
     cmp_op ==
     pop_jump_if_false L1
-    pop 1
     jump L2
 
   L1:
-    pop 1
     load_const "pending"
     jump L4
 
@@ -211,23 +206,20 @@ function user.EnumVariantAfterTypedEnum(s: Status) -> string {
 function user.EnumVariantUnion(s: Status) -> string {
     load_var s
     discriminant
-    copy 0
     load_const Status.Active
     cmp_op ==
     pop_jump_if_false L0
-    pop 1
     jump L2
 
   L0:
-    copy 0
+    load_var s
+    discriminant
     load_const Status.Pending
     cmp_op ==
     pop_jump_if_false L1
-    pop 1
     jump L2
 
   L1:
-    pop 1
     load_const "inactive"
     jump L3
 
@@ -241,14 +233,14 @@ function user.EnumVariantUnion(s: Status) -> string {
 function user.EnumVariantUnionWithCatchAll(s: Status) -> string {
     load_var s
     discriminant
-    copy 0
     load_const Status.Active
     cmp_op ==
     pop_jump_if_false L0
-    pop 1
     jump L2
 
   L0:
+    load_var s
+    discriminant
     load_const Status.Pending
     cmp_op ==
     pop_jump_if_false L1
@@ -267,14 +259,13 @@ function user.EnumVariantUnionWithCatchAll(s: Status) -> string {
 
 function user.ExhaustiveAliasOfLiterals(code: 200 | 201) -> string {
     load_var code
-    copy 0
     load_const 200
     cmp_op ==
     pop_jump_if_false L0
-    pop 1
     jump L2
 
   L0:
+    load_var code
     load_const 201
     cmp_op ==
     pop_jump_if_false L1
@@ -389,23 +380,20 @@ function user.ExhaustiveDoubleMaybe(dm: (Success | Failure)??) -> string {
 function user.ExhaustiveEnumAllVariants(s: Status) -> string {
     load_var s
     discriminant
-    copy 0
     load_const Status.Active
     cmp_op ==
     pop_jump_if_false L0
-    pop 1
     jump L3
 
   L0:
-    copy 0
+    load_var s
+    discriminant
     load_const Status.Inactive
     cmp_op ==
     pop_jump_if_false L1
-    pop 1
     jump L2
 
   L1:
-    pop 1
     load_const "pending"
     jump L4
 
@@ -457,22 +445,20 @@ function user.ExhaustiveFalseType(f: false) -> string {
 
 function user.ExhaustiveIntLiterals(code: 200 | 201 | 204) -> string {
     load_var code
-    copy 0
     load_const 200
     cmp_op ==
     pop_jump_if_false L0
-    pop 1
     jump L4
 
   L0:
-    copy 0
+    load_var code
     load_const 201
     cmp_op ==
     pop_jump_if_false L1
-    pop 1
     jump L3
 
   L1:
+    load_var code
     load_const 204
     cmp_op ==
     pop_jump_if_false L2
@@ -771,14 +757,13 @@ function user.ExhaustiveWithNamedCatchAll(x: int) -> int {
 
 function user.ExhaustiveWithUnderscore(x: int) -> int {
     load_var x
-    copy 0
     load_const 1
     cmp_op ==
     pop_jump_if_false L0
-    pop 1
     jump L3
 
   L0:
+    load_var x
     load_const 2
     cmp_op ==
     pop_jump_if_false L1
@@ -874,22 +859,20 @@ function user.HighLineNumberNonExhaustive(s: Status) -> string {
 
 function user.IntLiteralUnionPattern(code: 200 | 201 | 204) -> string {
     load_var code
-    copy 0
     load_const 200
     cmp_op ==
     pop_jump_if_false L0
-    pop 1
     jump L3
 
   L0:
-    copy 0
+    load_var code
     load_const 201
     cmp_op ==
     pop_jump_if_false L1
-    pop 1
     jump L3
 
   L1:
+    load_var code
     load_const 204
     cmp_op ==
     pop_jump_if_false L2
@@ -1033,14 +1016,15 @@ function user.MatchArithmeticScrutinee(a: int, b: int) -> string {
     load_var a
     load_var b
     bin_op +
-    copy 0
     load_const 0
     cmp_op ==
     pop_jump_if_false L0
-    pop 1
     jump L3
 
   L0:
+    load_var a
+    load_var b
+    bin_op +
     load_const 1
     cmp_op ==
     pop_jump_if_false L1
@@ -1067,14 +1051,17 @@ function user.MatchComplexScrutinee(x: int) -> string {
     bin_op *
     load_const 1
     bin_op +
-    copy 0
     load_const 1
     cmp_op ==
     pop_jump_if_false L0
-    pop 1
     jump L3
 
   L0:
+    load_var x
+    load_const 2
+    bin_op *
+    load_const 1
+    bin_op +
     load_const 3
     cmp_op ==
     pop_jump_if_false L1
@@ -1098,23 +1085,19 @@ function user.MatchComplexScrutinee(x: int) -> string {
 function user.MatchFunctionCallScrutinee() -> string {
     call user.GetStatus
     discriminant
-    copy 0
     load_const Status.Active
     cmp_op ==
     pop_jump_if_false L0
-    pop 1
     jump L3
 
   L0:
-    copy 0
+    discriminant
     load_const Status.Inactive
     cmp_op ==
     pop_jump_if_false L1
-    pop 1
     jump L2
 
   L1:
-    pop 1
     load_const "pending"
     jump L4
 
@@ -1175,23 +1158,20 @@ function user.MixedPatterns(x: int) -> string {
 function user.MultipleUnreachableSpans(s: Status) -> string {
     load_var s
     discriminant
-    copy 0
     load_const Status.Active
     cmp_op ==
     pop_jump_if_false L0
-    pop 1
     jump L3
 
   L0:
-    copy 0
+    load_var s
+    discriminant
     load_const Status.Inactive
     cmp_op ==
     pop_jump_if_false L1
-    pop 1
     jump L2
 
   L1:
-    pop 1
     load_const "pending"
     jump L4
 
@@ -1209,23 +1189,20 @@ function user.MultipleUnreachableSpans(s: Status) -> string {
 function user.NestedEnumMatch(s1: Status, s2: Status) -> string {
     load_var s1
     discriminant
-    copy 0
     load_const Status.Active
     cmp_op ==
     pop_jump_if_false L0
-    pop 1
     jump L3
 
   L0:
-    copy 0
+    load_var s1
+    discriminant
     load_const Status.Inactive
     cmp_op ==
     pop_jump_if_false L1
-    pop 1
     jump L2
 
   L1:
-    pop 1
     load_const "first pending"
     jump L8
 
@@ -1236,23 +1213,20 @@ function user.NestedEnumMatch(s1: Status, s2: Status) -> string {
   L3:
     load_var s2
     discriminant
-    copy 0
     load_const Status.Active
     cmp_op ==
     pop_jump_if_false L4
-    pop 1
     jump L7
 
   L4:
-    copy 0
+    load_var s2
+    discriminant
     load_const Status.Inactive
     cmp_op ==
     pop_jump_if_false L5
-    pop 1
     jump L6
 
   L5:
-    pop 1
     load_const "first active, second pending"
     jump L8
 
@@ -1270,21 +1244,18 @@ function user.NestedEnumMatch(s1: Status, s2: Status) -> string {
 function user.NestedEnumVariantUnions(s: Status) -> string {
     load_var s
     discriminant
-    copy 0
     load_const Status.Active
     cmp_op ==
     pop_jump_if_false L0
-    pop 1
 
   L0:
-    copy 0
+    load_var s
+    discriminant
     load_const Status.Pending
     cmp_op ==
     pop_jump_if_false L1
-    pop 1
 
   L1:
-    pop 1
     load_const "all statuses"
     return
 }
@@ -1511,14 +1482,14 @@ function user.NonExhaustiveEnumMissingMultiple(s: Status) -> string {
 function user.NonExhaustiveEnumMissingOne(s: Status) -> string {
     load_var s
     discriminant
-    copy 0
     load_const Status.Active
     cmp_op ==
     pop_jump_if_false L0
-    pop 1
     jump L2
 
   L0:
+    load_var s
+    discriminant
     load_const Status.Inactive
     cmp_op ==
     pop_jump_if_false L1
@@ -1559,14 +1530,13 @@ function user.NonExhaustiveFullResultMissingOne(r: Success | Failure | Pending) 
 
 function user.NonExhaustiveIntLiteral(code: 200 | 201 | 204) -> string {
     load_var code
-    copy 0
     load_const 200
     cmp_op ==
     pop_jump_if_false L0
-    pop 1
     jump L2
 
   L0:
+    load_var code
     load_const 201
     cmp_op ==
     pop_jump_if_false L1
@@ -1608,22 +1578,22 @@ function user.NonExhaustiveMixedLiterals(x: 200 | "success" | true) -> string {
 function user.NonExhaustiveNullableEnumMissingNull(s: Status?) -> string {
     load_var s
     discriminant
-    copy 0
     load_const Status.Active
     cmp_op ==
     pop_jump_if_false L0
-    pop 1
     jump L4
 
   L0:
-    copy 0
+    load_var s
+    discriminant
     load_const Status.Inactive
     cmp_op ==
     pop_jump_if_false L1
-    pop 1
     jump L3
 
   L1:
+    load_var s
+    discriminant
     load_const Status.Pending
     cmp_op ==
     pop_jump_if_false L2

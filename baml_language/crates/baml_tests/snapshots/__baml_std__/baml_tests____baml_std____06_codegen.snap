@@ -235,23 +235,21 @@ function baml.llm.Client.build_attempt_with_state(self: null, planner_state: voi
     load_var self
     load_field .client_type
     discriminant
-    copy 0
     load_const ClientType.Primitive
     cmp_op ==
     pop_jump_if_false L0
-    pop 1
     jump L11
 
   L0:
-    copy 0
+    load_var self
+    load_field .client_type
+    discriminant
     load_const ClientType.Fallback
     cmp_op ==
     pop_jump_if_false L1
-    pop 1
     jump L4
 
   L1:
-    pop 1
     load_var self
     load_field .sub_clients
     call baml.Array.length
@@ -610,23 +608,21 @@ function baml.llm.Client.execute_once(self: null, context: void, active_delay_ms
     load_var self
     load_field .client_type
     discriminant
-    copy 0
     load_const ClientType.Primitive
     cmp_op ==
     pop_jump_if_false L0
-    pop 1
     jump L7
 
   L0:
-    copy 0
+    load_var self
+    load_field .client_type
+    discriminant
     load_const ClientType.Fallback
     cmp_op ==
     pop_jump_if_false L1
-    pop 1
     jump L2
 
   L1:
-    pop 1
     load_var self
     load_field .counter
     store_var _57

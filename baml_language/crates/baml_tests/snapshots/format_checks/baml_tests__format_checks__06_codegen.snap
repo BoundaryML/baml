@@ -2976,14 +2976,15 @@ function user.LoopStmts(items: int[], flag: bool) -> int {
     load_var i
     load_const 3
     bin_op %
-    copy 0
     load_const 0
     cmp_op ==
     pop_jump_if_false L109
-    pop 1
     jump L112
 
   L109:
+    load_var i
+    load_const 3
+    bin_op %
     load_const 1
     cmp_op ==
     pop_jump_if_false L110
@@ -3869,20 +3870,18 @@ function user.MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure,
 
   L6:
     load_var x
-    copy 0
     load_const 0
     cmp_op ==
     pop_jump_if_false L7
-    pop 1
 
   L7:
-    copy 0
+    load_var x
     load_const 1
     cmp_op ==
     pop_jump_if_false L8
-    pop 1
 
   L8:
+    load_var x
     load_const 42
     cmp_op ==
     pop_jump_if_false L9
@@ -3920,40 +3919,35 @@ function user.MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure,
   L14:
     load_var s
     discriminant
-    copy 0
     load_const MatchStatus.Active
     cmp_op ==
     pop_jump_if_false L15
-    pop 1
 
   L15:
-    copy 0
+    load_var s
+    discriminant
     load_const MatchStatus.Inactive
     cmp_op ==
     pop_jump_if_false L16
-    pop 1
 
   L16:
-    pop 1
     load_var x
     jump_table [L17, L17, L17, L17, L17], default L17
 
   L17: 4
     load_var x
-    copy 0
     load_const 0
     cmp_op ==
     pop_jump_if_false L18
-    pop 1
 
   L18:
-    copy 0
+    load_var x
     load_const 1
     cmp_op ==
     pop_jump_if_false L19
-    pop 1
 
   L19:
+    load_var x
     load_const 2
     cmp_op ==
     pop_jump_if_false L20
@@ -3961,21 +3955,18 @@ function user.MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure,
   L20:
     load_var s
     discriminant
-    copy 0
     load_const MatchStatus.Active
     cmp_op ==
     pop_jump_if_false L21
-    pop 1
 
   L21:
-    copy 0
+    load_var s
+    discriminant
     load_const MatchStatus.Pending
     cmp_op ==
     pop_jump_if_false L22
-    pop 1
 
   L22:
-    pop 1
     load_var r
     is_type MatchSuccess
     pop_jump_if_false L23
@@ -4085,13 +4076,12 @@ function user.MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure,
 
   L35:
     load_var r
-    copy 0
     load_const 0
     cmp_op ==
     pop_jump_if_false L36
-    pop 1
 
   L36:
+    load_var r
     load_const 1
     cmp_op ==
     pop_jump_if_false L37
@@ -4103,21 +4093,18 @@ function user.MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure,
   L38: 24
     load_var r
     discriminant
-    copy 0
     load_const MatchStatus.Active
     cmp_op ==
     pop_jump_if_false L39
-    pop 1
 
   L39:
-    copy 0
+    load_var r
+    discriminant
     load_const MatchStatus.Inactive
     cmp_op ==
     pop_jump_if_false L40
-    pop 1
 
   L40:
-    pop 1
     load_var r
     load_const 0
     cmp_op ==
@@ -4325,20 +4312,19 @@ function user.MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure,
 
   L60:
     load_var r
-    copy 0
     load_const 0
     cmp_op ==
     pop_jump_if_false L61
-    pop 1
     jump L65
 
   L61:
+    load_var r
     load_const 1
     cmp_op ==
     pop_jump_if_false L62
 
   L62:
-    jump L68
+    jump L67
     load_var r
     is_type MatchSuccess
     pop_jump_if_false L63
@@ -4347,82 +4333,72 @@ function user.MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure,
   L63:
     load_var r
     is_type MatchFailure
-    pop_jump_if_false L68
-    jump L68
+    pop_jump_if_false L67
+    jump L67
 
   L64:
     load_var b
     load_const true
     cmp_op ==
-    pop_jump_if_false L68
-    jump L68
+    pop_jump_if_false L67
+    jump L67
 
   L65:
     load_var b
     load_const true
     cmp_op ==
-    pop_jump_if_false L68
+    pop_jump_if_false L67
     load_var r
     discriminant
-    copy 0
     load_const MatchStatus.Active
     cmp_op ==
     pop_jump_if_false L66
-    pop 1
 
   L66:
-    copy 0
+    load_var r
+    discriminant
     load_const MatchStatus.Inactive
     cmp_op ==
     pop_jump_if_false L67
-    pop 1
 
   L67:
-    pop 1
-
-  L68:
     load_var r
     load_const 0
+    cmp_op ==
+    pop_jump_if_false L68
+
+  L68:
+    jump L70
+    load_var b
+    pop_jump_if_false L70
+    load_var r
+    discriminant
+    load_const MatchStatus.Active
     cmp_op ==
     pop_jump_if_false L69
 
   L69:
-    jump L72
-    load_var b
-    pop_jump_if_false L72
     load_var r
     discriminant
-    copy 0
-    load_const MatchStatus.Active
-    cmp_op ==
-    pop_jump_if_false L70
-    pop 1
-
-  L70:
-    copy 0
     load_const MatchStatus.Inactive
     cmp_op ==
-    pop_jump_if_false L71
-    pop 1
+    pop_jump_if_false L70
 
-  L71:
-    pop 1
-
-  L72:
+  L70:
     load_var r
     load_const 0
     cmp_op ==
-    pop_jump_if_false L73
-    jump L74
+    pop_jump_if_false L71
+    jump L72
 
-  L73:
+  L71:
     load_const "other"
-    jump L75
+    jump L73
 
-  L74:
+  L72:
     load_const "zero"
 
-  L75:
+  L73:
     return
 }
 
@@ -4656,14 +4632,15 @@ function user.NestedLoops(matrix: int[][]) -> int {
     load_var val
     load_const 3
     bin_op %
-    copy 0
     load_const 0
     cmp_op ==
     pop_jump_if_false L6
-    pop 1
     jump L9
 
   L6:
+    load_var val
+    load_const 3
+    bin_op %
     load_const 1
     cmp_op ==
     pop_jump_if_false L7

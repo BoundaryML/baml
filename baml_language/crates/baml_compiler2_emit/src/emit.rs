@@ -1480,31 +1480,31 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             return;
         }
 
-        self.emit_operand_pull(discriminant);
-
+        // Each arm re-loads the discriminant from the operand instead of
+        // keeping it on the stack with copy/pop. This makes each arm
+        // self-contained and avoids stack cleanup instructions.
         let num_arms = arms.len();
         for (i, (value, target)) in arms.iter().enumerate() {
             let is_last = i == num_arms - 1;
 
-            // For exhaustive switches, skip the last arm's comparison
+            // For exhaustive switches, skip the last arm's comparison.
             if exhaustive && is_last {
-                self.emit(Instruction::Pop(1)); // Pop discriminant
                 self.emit_jump_unless_fallthrough(*target);
                 return;
             }
 
             let label = Self::switch_label(*value, name_map);
-            if is_last {
-                // Last arm: let cmp_op consume the discriminant directly
-                // instead of copy+pop. The otherwise fallthrough no longer
-                // needs to pop the discriminant either.
-                self.emit_compare_and_branch_final(*value, *target, otherwise, label);
-                return;
-            }
-            self.emit_compare_and_branch(*value, *target, label);
+            self.emit_operand_pull(discriminant);
+            let idx = self.add_constant(ConstValue::Int(*value));
+            let inst = self.emit(Instruction::LoadConst(idx));
+            self.set_operand(inst, OperandMeta::Const(label));
+            self.emit(Instruction::CmpOp(CmpOp::Eq));
+            let jump_idx = self.emit(Instruction::PopJumpIfFalse(0));
+            self.emit_jump_unless_fallthrough(*target);
+            let skip_to = self.current_pc();
+            self.patch_jump_to(jump_idx, skip_to);
         }
 
-        self.emit(Instruction::Pop(1));
         self.emit_jump_unless_fallthrough(otherwise);
     }
 
@@ -1750,6 +1750,10 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
 
     /// Emit: copy TOS, compare with `value` for equality; if equal, pop
     /// discriminant and jump to `target`. On mismatch, fall through.
+    ///
+    /// Used by binary search where the discriminant stays on the stack across
+    /// the tree traversal. The if-else chain uses a different strategy
+    /// (re-loading the discriminant per arm) to avoid copy/pop overhead.
     fn emit_compare_and_branch(&mut self, value: i64, target: BlockId, label: String) {
         self.emit(Instruction::Copy(0));
         let idx = self.add_constant(ConstValue::Int(value));
@@ -1761,26 +1765,6 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         self.emit_jump_unless_fallthrough(target);
         let skip_to = self.current_pc();
         self.patch_jump_to(jump_idx, skip_to);
-    }
-
-    /// Last-arm variant of `emit_compare_and_branch`: lets `cmp_op ==` consume
-    /// the discriminant directly (no copy), saving 3 instructions (copy + 2 pops).
-    fn emit_compare_and_branch_final(
-        &mut self,
-        value: i64,
-        target: BlockId,
-        otherwise: BlockId,
-        label: String,
-    ) {
-        let idx = self.add_constant(ConstValue::Int(value));
-        let inst = self.emit(Instruction::LoadConst(idx));
-        self.set_operand(inst, OperandMeta::Const(label));
-        self.emit(Instruction::CmpOp(CmpOp::Eq));
-        let jump_idx = self.emit(Instruction::PopJumpIfFalse(0));
-        self.emit_jump_unless_fallthrough(target);
-        let skip_to = self.current_pc();
-        self.patch_jump_to(jump_idx, skip_to);
-        self.emit_jump_unless_fallthrough(otherwise);
     }
 
     // ========================================================================

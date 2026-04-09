@@ -102,14 +102,13 @@ async fn match_literal_int_first_arm() {
     insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 1
-        copy 0
         load_const 1
         cmp_op ==
         pop_jump_if_false L0
-        pop 1
         jump L3
 
       L0:
+        load_const 1
         load_const 2
         cmp_op ==
         pop_jump_if_false L1
@@ -152,14 +151,13 @@ async fn match_literal_int_second_arm() {
     insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 2
-        copy 0
         load_const 1
         cmp_op ==
         pop_jump_if_false L0
-        pop 1
         jump L3
 
       L0:
+        load_const 2
         load_const 2
         cmp_op ==
         pop_jump_if_false L1
@@ -202,14 +200,13 @@ async fn match_literal_int_fallback() {
     insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 999
-        copy 0
         load_const 1
         cmp_op ==
         pop_jump_if_false L0
-        pop 1
         jump L3
 
       L0:
+        load_const 999
         load_const 2
         cmp_op ==
         pop_jump_if_false L1
@@ -592,22 +589,20 @@ async fn match_union_with_duplicates() {
     insta::assert_snapshot!(output.bytecode, @r#"
     function main() -> string {
         load_const 1
-        copy 0
         load_const 1
         cmp_op ==
         pop_jump_if_false L0
-        pop 1
         jump L4
 
       L0:
-        copy 0
+        load_const 1
         load_const 2
         cmp_op ==
         pop_jump_if_false L1
-        pop 1
         jump L4
 
       L1:
+        load_const 1
         load_const 3
         cmp_op ==
         pop_jump_if_false L2
@@ -657,14 +652,13 @@ async fn match_as_expression_in_arithmetic() {
     insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 2
-        copy 0
         load_const 1
         cmp_op ==
         pop_jump_if_false L0
-        pop 1
         jump L3
 
       L0:
+        load_const 2
         load_const 2
         cmp_op ==
         pop_jump_if_false L1
@@ -714,14 +708,13 @@ async fn match_nested() {
     insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 1
-        copy 0
         load_const 1
         cmp_op ==
         pop_jump_if_false L0
-        pop 1
         jump L3
 
       L0:
+        load_const 1
         load_const 2
         cmp_op ==
         pop_jump_if_false L1
@@ -737,14 +730,13 @@ async fn match_nested() {
 
       L3:
         load_const 2
-        copy 0
         load_const 1
         cmp_op ==
         pop_jump_if_false L4
-        pop 1
         jump L7
 
       L4:
+        load_const 2
         load_const 2
         cmp_op ==
         pop_jump_if_false L5
@@ -1372,14 +1364,14 @@ async fn match_negative_int_with_variable() {
     function main() -> string {
         load_const 1
         unary_op -
-        copy 0
         load_const -1
         cmp_op ==
         pop_jump_if_false L0
-        pop 1
         jump L3
 
       L0:
+        load_const 1
+        unary_op -
         load_const 0
         cmp_op ==
         pop_jump_if_false L1
@@ -1961,14 +1953,15 @@ async fn match_arithmetic_scrutinee() {
         load_var a
         load_var b
         bin_op +
-        copy 0
         load_const 0
         cmp_op ==
         pop_jump_if_false L0
-        pop 1
         jump L3
 
       L0:
+        load_var a
+        load_var b
+        bin_op +
         load_const 1
         cmp_op ==
         pop_jump_if_false L1
