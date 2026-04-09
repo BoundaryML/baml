@@ -437,6 +437,24 @@ function user.map_it(x: int, f: (int) -> string) -> string {
     return
 }
 
+function user.maybe_use_string_handler(h: Handler?) -> null {
+    load_var h
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var h
+    load_field .0
+    call_indirect
+    pop 1
+
+  L1:
+    load_const null
+    return
+}
+
 function user.optional_call_caught(cb: (() -> int throws string)?) -> int? {
     load_var cb
     load_const null
@@ -479,6 +497,80 @@ function user.optional_call_rethrows(cb: (() -> int throws string)?) -> int? {
     return
 }
 
+function user.run_inline_tasks() -> null {
+    alloc_instance Task
+    load_const "a"
+    init_field .name
+    make_closure .<lambda(run_inline_tasks, 0)>, 0
+    init_field .run
+    alloc_instance Task
+    load_const "b"
+    init_field .name
+    make_closure .<lambda(run_inline_tasks, 1)>, 0
+    init_field .run
+    alloc_array 2
+    store_var _6
+    load_const 0
+    store_var __for_idx
+
+  L0:
+    load_var __for_idx
+    load_var _6
+    call baml.Array.length
+    cmp_op <
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const null
+    return
+
+  L2:
+    load_var _6
+    load_var __for_idx
+    load_array_element
+    load_field .run
+    call_indirect
+    pop 1
+    load_var __for_idx
+    load_const 1
+    bin_op +
+    store_var __for_idx
+    jump L0
+}
+
+function user.run_local_tasks() -> null {
+    call user.make_mixed_tasks
+    store_var _2
+    load_const 0
+    store_var __for_idx
+
+  L0:
+    load_var __for_idx
+    load_var _2
+    call baml.Array.length
+    cmp_op <
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const null
+    return
+
+  L2:
+    load_var _2
+    load_var __for_idx
+    load_array_element
+    load_field .run
+    call_indirect
+    pop 1
+    load_var __for_idx
+    load_const 1
+    bin_op +
+    store_var __for_idx
+    jump L0
+}
+
 function user.run_pure(f: () -> int) -> int {
     load_var f
     call_indirect
@@ -503,6 +595,38 @@ function user.run_tasks(tasks: Task[]) -> null {
 
   L2:
     load_var tasks
+    load_var __for_idx
+    load_array_element
+    load_field .run
+    call_indirect
+    pop 1
+    load_var __for_idx
+    load_const 1
+    bin_op +
+    store_var __for_idx
+    jump L0
+}
+
+function user.run_tasks_alias(tasks: Task[]) -> null {
+    load_var tasks
+    store_var _3
+    load_const 0
+    store_var __for_idx
+
+  L0:
+    load_var __for_idx
+    load_var _3
+    call baml.Array.length
+    cmp_op <
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const null
+    return
+
+  L2:
+    load_var _3
     load_var __for_idx
     load_array_element
     load_field .run
@@ -797,6 +921,11 @@ function user.test_lambda_throws_enum() -> int {
     return
 }
 
+function user.test_local_string_handler() -> null {
+    call user.use_local_string_handler
+    return
+}
+
 function user.test_many_args_pure() -> string {
     load_const 1
     load_const "hello"
@@ -879,6 +1008,12 @@ function user.test_optional_call_with_throwing_callback() -> int? {
     return
 }
 
+function user.test_optional_string_handler() -> null {
+    call user.make_string_handler
+    call user.maybe_use_string_handler
+    return
+}
+
 function user.test_pure_lambda() -> int {
     make_closure .<lambda(test_pure_lambda, 0)>, 0
     call_indirect
@@ -903,6 +1038,16 @@ function user.test_rethrows_enum() -> int {
     return
 }
 
+function user.test_run_inline_tasks() -> null {
+    call user.run_inline_tasks
+    return
+}
+
+function user.test_run_local_tasks() -> null {
+    call user.run_local_tasks
+    return
+}
+
 function user.test_run_mixed_tasks() -> null {
     call user.make_mixed_tasks
     call user.run_tasks
@@ -912,6 +1057,12 @@ function user.test_run_mixed_tasks() -> null {
 function user.test_run_pure() -> int {
     make_closure .<lambda(test_run_pure, 0)>, 0
     call user.run_pure
+    return
+}
+
+function user.test_run_tasks_alias() -> null {
+    call user.make_mixed_tasks
+    call user.run_tasks_alias
     return
 }
 
@@ -960,6 +1111,12 @@ function user.test_stored_local_with_throws() -> null {
 function user.test_string_handler() -> null {
     call user.make_string_handler
     call user.use_string_handler
+    return
+}
+
+function user.test_string_handler_alias() -> null {
+    call user.make_string_handler
+    call user.use_string_handler_alias
     return
 }
 
@@ -1099,8 +1256,7 @@ function user.throw_any_error(x: int) -> string {
     throw
 
   L4:
-    load_const user.ErrorKind.NotFound
-    alloc_variant user.ErrorKind
+    load_const null
     throw
 
   L5:
@@ -1155,8 +1311,7 @@ function user.throw_enum_or_class(x: int) -> string {
     throw
 
   L3:
-    load_const user.ErrorKind.RateLimited
-    alloc_variant user.ErrorKind
+    load_const null
     throw
 }
 
@@ -1179,13 +1334,11 @@ function user.throw_enum_variant(x: int) -> string {
     return
 
   L2:
-    load_const user.ErrorKind.Unauthorized
-    alloc_variant user.ErrorKind
+    load_const null
     throw
 
   L3:
-    load_const user.ErrorKind.NotFound
-    alloc_variant user.ErrorKind
+    load_const null
     throw
 }
 
@@ -1255,18 +1408,15 @@ function user.throw_various_errors(x: int) -> string {
     return
 
   L3:
-    load_const user.ErrorKind.ValidationFailed
-    alloc_variant user.ErrorKind
+    load_const null
     throw
 
   L4:
-    load_const user.ErrorKind.Unauthorized
-    alloc_variant user.ErrorKind
+    load_const null
     throw
 
   L5:
-    load_const user.ErrorKind.NotFound
-    alloc_variant user.ErrorKind
+    load_const null
     throw
 }
 
@@ -1302,6 +1452,13 @@ function user.use_int_handler(h: Handler) -> null {
     return
 }
 
+function user.use_local_string_handler() -> null {
+    call user.make_string_handler
+    load_field .run
+    call_indirect
+    return
+}
+
 function user.use_mixed_thrower(f: () -> int throws ErrorKind | ApiError | string) -> int {
     load_var f
     call_indirect
@@ -1309,6 +1466,13 @@ function user.use_mixed_thrower(f: () -> int throws ErrorKind | ApiError | strin
 }
 
 function user.use_string_handler(h: Handler) -> null {
+    load_var h
+    load_field .run
+    call_indirect
+    return
+}
+
+function user.use_string_handler_alias(h: Handler) -> null {
     load_var h
     load_field .run
     call_indirect

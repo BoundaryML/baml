@@ -308,7 +308,7 @@ fn call_target_name(
 ) -> Option<Name> {
     match &body.exprs[callee_expr_id] {
         Expr::Path(segments) if !segments.is_empty() => Some(path_name(segments)),
-        Expr::FieldAccess { base, field } => {
+        Expr::FieldAccess { base, field } | Expr::OptionalFieldAccess { base, field } => {
             if let Some(Ty::Class(qn, _)) = expressions.get(base) {
                 Some(class_method_key(qn, field))
             } else {
@@ -324,7 +324,7 @@ fn call_target_name(
 fn expr_to_path_segments(expr_id: ExprId, body: &ExprBody) -> Option<Vec<Name>> {
     match &body.exprs[expr_id] {
         Expr::Path(segments) if !segments.is_empty() => Some(segments.clone()),
-        Expr::FieldAccess { base, field } => {
+        Expr::FieldAccess { base, field } | Expr::OptionalFieldAccess { base, field } => {
             let mut segments = expr_to_path_segments(*base, body)?;
             segments.push(field.clone());
             Some(segments)

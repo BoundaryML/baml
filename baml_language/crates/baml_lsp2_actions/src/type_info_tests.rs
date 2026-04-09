@@ -352,10 +352,70 @@ function <[CURSOR]multi_throw(x: int) -> string throws string | int {
 "#,
         );
         let info = test.type_info().expect("should resolve");
+        match &info {
+            TypeInfo::Function { throws, .. } => {
+                assert_eq!(throws.as_deref(), Some("string | int"));
+            }
+            other => panic!("Expected TypeInfo::Function, got: {other:?}"),
+        }
         let md = info.to_hover_markdown();
         assert!(
-            md.contains("throws"),
-            "Hover should contain throws clause, got: {md}"
+            md.contains("throws string | int"),
+            "Hover should preserve the declared throws clause, got: {md}"
+        );
+    }
+
+    #[test]
+    fn hover_method_with_inferred_throws_from_member_call() {
+        let test = CursorTest::new(
+            r#"
+class Handler<E> {
+    run: () -> null throws E
+}
+
+class Runner {
+    function <[CURSOR]use_handler(self, h: Handler<string>) -> null {
+        h.run()
+    }
+}
+"#,
+        );
+        let info = test.type_info().expect("should resolve");
+        match &info {
+            TypeInfo::Function { throws, .. } => {
+                assert_eq!(throws.as_deref(), Some("string"));
+            }
+            other => panic!("Expected TypeInfo::Function, got: {other:?}"),
+        }
+        let md = info.to_hover_markdown();
+        assert!(
+            md.contains("throws string"),
+            "Method hover should show inferred throws, got: {md}"
+        );
+    }
+
+    #[test]
+    fn hover_method_with_declared_union_throws_preserves_source_clause() {
+        let test = CursorTest::new(
+            r#"
+class Runner {
+    function <[CURSOR]declared(self) -> null throws string | int {
+        null
+    }
+}
+"#,
+        );
+        let info = test.type_info().expect("should resolve");
+        match &info {
+            TypeInfo::Function { throws, .. } => {
+                assert_eq!(throws.as_deref(), Some("string | int"));
+            }
+            other => panic!("Expected TypeInfo::Function, got: {other:?}"),
+        }
+        let md = info.to_hover_markdown();
+        assert!(
+            md.contains("throws string | int"),
+            "Method hover should preserve the declared throws clause, got: {md}"
         );
     }
 }

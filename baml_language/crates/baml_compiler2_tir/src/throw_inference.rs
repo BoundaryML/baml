@@ -11,7 +11,7 @@ use baml_base::Name;
 use baml_compiler2_ast::{Expr, ExprBody, Literal, Pattern, TypeExpr};
 use baml_compiler2_hir::{
     contributions::Definition,
-    package::{PackageId, PackageItems, package_dependencies, package_items},
+    package::{PackageId, PackageItems, package_items},
 };
 
 use crate::{
@@ -61,7 +61,7 @@ impl FunctionThrowSets {
     }
 }
 
-#[salsa::tracked(returns(ref))]
+#[salsa::tracked(returns(ref), cycle_initial=function_throw_sets_initial)]
 pub fn function_throw_sets<'db>(
     db: &'db dyn crate::Db,
     package_id: PackageId<'db>,
@@ -81,16 +81,8 @@ pub fn function_throw_sets<'db>(
             }
         }
     }
-    // Load dependency interfaces for cross-package throw lookup
-    let dep_interfaces: Vec<(Name, &crate::package_interface::PackageInterface)> =
-        package_dependencies(db, package_id)
-            .iter()
-            .map(|dep_id| {
-                let name = dep_id.name(db);
-                let iface = crate::package_interface::package_interface(db, *dep_id);
-                (name, iface)
-            })
-            .collect();
+    let dep_packages = &res_ctx.dep_packages;
+    let dep_interfaces = &res_ctx.dep_interfaces;
 
     let mut graph: crate::analysis::AnalysisGraph<Name, ThrowFact> =
         crate::analysis::AnalysisGraph::new();
@@ -101,12 +93,12 @@ pub fn function_throw_sets<'db>(
     let mut direct_facts: BTreeMap<Name, BTreeSet<ThrowFact>> = BTreeMap::new();
 
     for ns in pkg_items.namespaces.values() {
-        for (short_name, def) in &ns.values {
+        for def in ns.values.values() {
             let Definition::Function(func_loc) = def else {
                 continue;
             };
 
-            let key = function_key(db, *func_loc, short_name);
+            let key = callable_throw_key(db, *func_loc);
             let sig = baml_compiler2_hir::signature::function_signature(db, *func_loc);
             let body = baml_compiler2_hir::body::function_body(db, *func_loc);
             let item_tree = baml_compiler2_hir::file_item_tree(db, func_loc.file(db));
@@ -189,11 +181,8 @@ pub fn function_throw_sets<'db>(
 
             for &method_id in &class_data.methods {
                 let method_data = &item_tree[method_id];
-                let method_name = &method_data.name;
                 let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(db, file, method_id);
-                // Key as "ClassName.method_name" (with namespace prefix if any).
-                let method_short = Name::new(format!("{class_name}.{method_name}"));
-                let key = function_key(db, func_loc, &method_short);
+                let key = callable_throw_key(db, func_loc);
 
                 let sig = baml_compiler2_hir::signature::function_signature(db, func_loc);
                 let body = baml_compiler2_hir::body::function_body(db, func_loc);
@@ -282,12 +271,12 @@ pub fn function_throw_sets<'db>(
             continue;
         }
         for to in targets {
-            if let Some(dep_throws) = lookup_dep_throw_set(&dep_interfaces, to) {
+            if let Some(dep_throws) = lookup_dep_throw_set(db, dep_packages, dep_interfaces, to) {
                 // Cross-package: merge dependency's transitive throw facts into caller's direct facts
                 direct_facts
                     .entry(from.clone())
                     .or_default()
-                    .extend(dep_throws.iter().cloned());
+                    .extend(dep_throws);
             } else {
                 // Same-package: will add edge after nodes are added
                 // (edges added below)
@@ -306,7 +295,7 @@ pub fn function_throw_sets<'db>(
             continue;
         }
         for to in targets {
-            if lookup_dep_throw_set(&dep_interfaces, to).is_none() {
+            if lookup_dep_throw_set(db, dep_packages, dep_interfaces, to).is_none() {
                 graph.add_edge(from.clone(), to.clone());
             }
         }
@@ -326,6 +315,17 @@ pub fn function_throw_sets<'db>(
     FunctionThrowSets { direct, transitive }
 }
 
+fn function_throw_sets_initial<'db>(
+    _db: &'db dyn crate::Db,
+    _id: salsa::Id,
+    _package_id: PackageId<'db>,
+) -> FunctionThrowSets {
+    FunctionThrowSets {
+        direct: BTreeMap::new(),
+        transitive: BTreeMap::new(),
+    }
+}
+
 /// Build the throw-set lookup key for a function given its namespace path and short name.
 ///
 /// For top-level functions the key is just the short name; for namespaced
@@ -343,14 +343,25 @@ pub fn throw_set_key(namespace_path: &[Name], short_name: &Name) -> Name {
     }
 }
 
-fn function_key<'db>(
+pub fn callable_throw_key<'db>(
     db: &'db dyn crate::Db,
     func: baml_compiler2_hir::loc::FunctionLoc<'db>,
-    short_name: &Name,
 ) -> Name {
     let file = func.file(db);
+    let item_tree = baml_compiler2_hir::file_item_tree(db, file);
+    let func_data = &item_tree[func.id(db)];
     let pkg = baml_compiler2_hir::file_package::file_package(db, file);
-    throw_set_key(&pkg.namespace_path, short_name)
+    let short_name = item_tree
+        .classes
+        .values()
+        .find_map(|class_data| {
+            class_data
+                .methods
+                .contains(&func.id(db))
+                .then(|| Name::new(format!("{}.{}", class_data.name, func_data.name)))
+        })
+        .unwrap_or_else(|| func_data.name.clone());
+    throw_set_key(&pkg.namespace_path, &short_name)
 }
 
 pub fn collect_direct_throws<'db>(
@@ -628,151 +639,531 @@ fn collect_member_field_call_throws<'db>(
     // with TypeVar type_args, e.g. Handler<E> not bare Handler
     class_context: Option<(&Name, &[Name])>,
 ) -> (BTreeSet<ThrowFact>, BTreeSet<Name>) {
-    let mut direct_facts = BTreeSet::new();
-    let mut extra_edges = BTreeSet::new();
+    MemberFieldCallCollector::new(
+        db,
+        res_ctx,
+        ns_context,
+        generic_params,
+        sig,
+        body,
+        aliases,
+        class_context,
+    )
+    .collect()
+}
 
-    let pkg_items = res_ctx.own_items;
-    // Build param name → Ty map from the function signature.
-    let param_types: HashMap<Name, Ty> = sig
-        .params
-        .iter()
-        .map(|(name, te)| {
-            let mut diags = Vec::new();
-            let ty =
-                lower_type_expr_in_ns(db, te, pkg_items, ns_context, generic_params, &mut diags);
-            (name.clone(), ty)
-        })
-        .collect();
+struct MemberFieldCallCollector<'a, 'db> {
+    db: &'db dyn crate::Db,
+    res_ctx: &'a crate::package_interface::PackageResolutionContext<'db>,
+    ns_context: &'a [Name],
+    generic_params: &'a [Name],
+    body: &'a ExprBody,
+    aliases: &'a HashMap<crate::ty::QualifiedTypeName, Ty>,
+    class_context: Option<(&'a Name, &'a [Name])>,
+    direct_facts: BTreeSet<ThrowFact>,
+    extra_edges: BTreeSet<Name>,
+    initial_locals: HashMap<Name, Ty>,
+}
 
-    // Extend with for-loop variable types.
-    // For `for (let elem in collection)` where `collection` is a known param of type `T[]`,
-    // map `elem` → `T`. This handles patterns like `for task in tasks` where
-    // `tasks: Task<string | int>[]`.
-    let mut local_types: HashMap<Name, Ty> = param_types.clone();
-    for (_, stmt) in body.stmts.iter() {
-        if let baml_compiler2_ast::Stmt::For {
-            binding,
-            collection,
-            ..
-        } = stmt
-        {
-            // Get the binding name
-            let binding_name = match &body.patterns[*binding] {
-                baml_compiler2_ast::Pattern::Binding(name)
-                | baml_compiler2_ast::Pattern::TypedBinding { name, .. } => name.clone(),
-                _ => continue,
-            };
-            // Get the collection's type by resolving its path to a param
-            let collection_ty = match &body.exprs[*collection] {
-                Expr::Path(segments) if segments.len() == 1 => {
-                    param_types.get(&segments[0]).cloned()
+impl<'a, 'db> MemberFieldCallCollector<'a, 'db> {
+    #[allow(clippy::too_many_arguments)]
+    fn new(
+        db: &'db dyn crate::Db,
+        res_ctx: &'a crate::package_interface::PackageResolutionContext<'db>,
+        ns_context: &'a [Name],
+        generic_params: &'a [Name],
+        sig: &'a baml_compiler2_hir::signature::FunctionSignature,
+        body: &'a ExprBody,
+        aliases: &'a HashMap<crate::ty::QualifiedTypeName, Ty>,
+        class_context: Option<(&'a Name, &'a [Name])>,
+    ) -> Self {
+        let pkg_items = res_ctx.own_items;
+        let initial_locals = sig
+            .params
+            .iter()
+            .map(|(name, te)| {
+                let mut diags = Vec::new();
+                let ty = lower_type_expr_in_ns(
+                    db,
+                    te,
+                    pkg_items,
+                    ns_context,
+                    generic_params,
+                    &mut diags,
+                );
+                (name.clone(), ty)
+            })
+            .collect();
+        Self {
+            db,
+            res_ctx,
+            ns_context,
+            generic_params,
+            body,
+            aliases,
+            class_context,
+            direct_facts: BTreeSet::new(),
+            extra_edges: BTreeSet::new(),
+            initial_locals,
+        }
+    }
+
+    fn collect(mut self) -> (BTreeSet<ThrowFact>, BTreeSet<Name>) {
+        if let Some(root_expr) = self.body.root_expr {
+            let mut env = self.initial_locals.clone();
+            self.visit_expr(root_expr, &mut env);
+        }
+        (self.direct_facts, self.extra_edges)
+    }
+
+    fn visit_expr(&mut self, expr_id: baml_compiler2_ast::ExprId, env: &mut HashMap<Name, Ty>) {
+        match &self.body.exprs[expr_id] {
+            Expr::Literal(_)
+            | Expr::ByteStringLiteral(_)
+            | Expr::Null
+            | Expr::Path(_)
+            | Expr::Lambda(_)
+            | Expr::Missing => {}
+            Expr::If {
+                condition,
+                then_branch,
+                else_branch,
+            } => {
+                self.visit_expr(*condition, env);
+                let mut then_env = env.clone();
+                self.visit_expr(*then_branch, &mut then_env);
+                if let Some(else_expr) = else_branch {
+                    let mut else_env = env.clone();
+                    self.visit_expr(*else_expr, &mut else_env);
                 }
-                _ => None,
-            };
-            if let Some(coll_ty) = collection_ty {
-                // Peel List type to get element type
-                let elem_ty = match coll_ty {
-                    Ty::List(inner, _) => Some(*inner),
-                    _ => None,
-                };
-                if let Some(elem) = elem_ty {
-                    local_types.insert(binding_name, elem);
+            }
+            Expr::Match {
+                scrutinee, arms, ..
+            } => {
+                self.visit_expr(*scrutinee, env);
+                for arm_id in arms {
+                    let arm = &self.body.match_arms[*arm_id];
+                    let mut arm_env = env.clone();
+                    if let Some(guard) = arm.guard {
+                        self.visit_expr(guard, &mut arm_env);
+                    }
+                    self.visit_expr(arm.body, &mut arm_env);
                 }
+            }
+            Expr::Catch { base, clauses } => {
+                self.visit_expr(*base, env);
+                for clause in clauses {
+                    for arm_id in &clause.arms {
+                        let arm = &self.body.catch_arms[*arm_id];
+                        let mut arm_env = env.clone();
+                        self.visit_expr(arm.body, &mut arm_env);
+                    }
+                }
+            }
+            Expr::Throw { value } => self.visit_expr(*value, env),
+            Expr::Binary { lhs, rhs, .. } => {
+                self.visit_expr(*lhs, env);
+                self.visit_expr(*rhs, env);
+            }
+            Expr::Unary { expr, .. } | Expr::OptionalChain { expr } => {
+                self.visit_expr(*expr, env);
+            }
+            Expr::Call { callee, args } | Expr::OptionalCall { callee, args } => {
+                self.collect_member_call(*callee, env);
+                self.visit_expr(*callee, env);
+                for arg in args {
+                    self.visit_expr(*arg, env);
+                }
+            }
+            Expr::Object {
+                fields, spreads, ..
+            } => {
+                for (_, value) in fields {
+                    self.visit_expr(*value, env);
+                }
+                for spread in spreads {
+                    self.visit_expr(spread.expr, env);
+                }
+            }
+            Expr::Array { elements } => {
+                for elem in elements {
+                    self.visit_expr(*elem, env);
+                }
+            }
+            Expr::Map { entries } => {
+                for (key, value) in entries {
+                    self.visit_expr(*key, env);
+                    self.visit_expr(*value, env);
+                }
+            }
+            Expr::Block { stmts, tail_expr } => {
+                let mut block_env = env.clone();
+                for stmt_id in stmts {
+                    self.visit_stmt(*stmt_id, &mut block_env);
+                }
+                if let Some(tail_expr) = tail_expr {
+                    self.visit_expr(*tail_expr, &mut block_env);
+                }
+            }
+            Expr::FieldAccess { base, .. } | Expr::OptionalFieldAccess { base, .. } => {
+                self.visit_expr(*base, env);
+            }
+            Expr::Index { base, index } | Expr::OptionalIndex { base, index } => {
+                self.visit_expr(*base, env);
+                self.visit_expr(*index, env);
             }
         }
     }
 
-    for (_, expr) in body.exprs.iter() {
-        let callee_id = match expr {
-            Expr::Call { callee, .. } | Expr::OptionalCall { callee, .. } => *callee,
-            _ => continue,
-        };
-
-        // Match FieldAccess { base, field } pattern
-        let (base_id, field) = match &body.exprs[callee_id] {
-            Expr::FieldAccess { base, field } => (*base, field),
-            _ => continue,
-        };
-
-        // Resolve base to a type: direct parameter, for-loop variable, or `self`
-        let base_ty = match &body.exprs[base_id] {
-            Expr::Path(segments) if segments.len() == 1 => {
-                let base_name = &segments[0];
-                if base_name.as_str() == "self" {
-                    // self-based member calls — resolve self type from class_context.
-                    // Build accurate self type with TypeVar type_args so that
-                    // lookup_class_fields applies correct generic substitution.
-                    class_context.and_then(|(class_name, class_generic_params)| {
-                        let def = pkg_items.lookup_type(ns_context, class_name)?;
-                        match def {
-                            Definition::Class(_) => {
-                                let qtn = qualify_def(db, def, class_name);
-                                let type_args: Vec<Ty> = class_generic_params
-                                    .iter()
-                                    .map(|name| Ty::TypeVar(name.clone(), TyAttr::default()))
-                                    .collect();
-                                let nominal =
-                                    crate::ty::NominalTypeRef::new_with_type_args(qtn, type_args);
-                                Some(Ty::Class(nominal, TyAttr::default()))
-                            }
-                            _ => None,
-                        }
-                    })
-                } else {
-                    local_types.get(base_name).cloned()
+    fn visit_stmt(&mut self, stmt_id: baml_compiler2_ast::StmtId, env: &mut HashMap<Name, Ty>) {
+        match &self.body.stmts[stmt_id] {
+            baml_compiler2_ast::Stmt::Expr(expr_id) => self.visit_expr(*expr_id, env),
+            baml_compiler2_ast::Stmt::Let {
+                pattern,
+                type_annotation,
+                initializer,
+                ..
+            } => {
+                let inferred_ty = initializer.and_then(|expr_id| {
+                    self.visit_expr(expr_id, env);
+                    self.resolve_expr_ty(expr_id, env)
+                });
+                if let Some((binding_name, binding_ty)) =
+                    self.resolve_binding_ty(*pattern, *type_annotation, inferred_ty)
+                {
+                    env.insert(binding_name, binding_ty);
                 }
             }
-            _ => None,
+            baml_compiler2_ast::Stmt::While {
+                condition,
+                body,
+                after,
+                ..
+            } => {
+                self.visit_expr(*condition, env);
+                let mut body_env = env.clone();
+                self.visit_expr(*body, &mut body_env);
+                if let Some(after_stmt) = after {
+                    self.visit_stmt(*after_stmt, env);
+                }
+            }
+            baml_compiler2_ast::Stmt::For {
+                binding,
+                collection,
+                body,
+            } => {
+                self.visit_expr(*collection, env);
+                let mut body_env = env.clone();
+                if let Some(binding_name) = self.binding_name(*binding)
+                    && let Some(elem_ty) = self.resolve_collection_element_ty(*collection, env)
+                {
+                    body_env.insert(binding_name, elem_ty);
+                }
+                self.visit_expr(*body, &mut body_env);
+            }
+            baml_compiler2_ast::Stmt::Return(expr) => {
+                if let Some(expr_id) = expr {
+                    self.visit_expr(*expr_id, env);
+                }
+            }
+            baml_compiler2_ast::Stmt::Assign { target, value }
+            | baml_compiler2_ast::Stmt::AssignOp { target, value, .. } => {
+                self.visit_expr(*target, env);
+                self.visit_expr(*value, env);
+                if let Some((binding_name, binding_ty)) =
+                    self.resolve_assignment_ty(*target, *value, env)
+                {
+                    env.insert(binding_name, binding_ty);
+                }
+            }
+            baml_compiler2_ast::Stmt::Throw { value } => self.visit_expr(*value, env),
+            baml_compiler2_ast::Stmt::Break
+            | baml_compiler2_ast::Stmt::Continue
+            | baml_compiler2_ast::Stmt::Missing
+            | baml_compiler2_ast::Stmt::HeaderComment { .. } => {}
+        }
+    }
+
+    fn collect_member_call(
+        &mut self,
+        callee_id: baml_compiler2_ast::ExprId,
+        env: &HashMap<Name, Ty>,
+    ) {
+        let (base_id, field) = match &self.body.exprs[callee_id] {
+            Expr::FieldAccess { base, field } | Expr::OptionalFieldAccess { base, field } => {
+                (*base, field)
+            }
+            _ => return,
         };
 
-        let Some(base_ty) = base_ty else {
-            continue;
+        let Some(base_ty) = self.resolve_expr_ty(base_id, env) else {
+            return;
         };
-
-        // Resolve the member on the base type
-        let resolved_base = crate::throws_semantics::resolve_alias_chain(&base_ty, aliases);
+        let resolved_base = crate::throws_semantics::resolve_alias_chain(&base_ty, self.aliases);
         let Ty::Class(class_name, _) = &resolved_base else {
-            continue;
+            return;
         };
 
-        // Look up the field via PackageResolutionContext (with generic substitution)
-        let fields = res_ctx.lookup_class_fields(db, class_name);
-        if let Some((_, field_ty)) = fields.iter().find(|(n, _)| n == field) {
-            // Function-typed field → extract throws as direct facts
-            if let Some(facts) = function_throws_facts(field_ty, aliases) {
-                direct_facts.extend(facts.into_iter().filter(|fact| {
+        let fields = self.res_ctx.lookup_class_fields(self.db, class_name);
+        if let Some((_, field_ty)) = fields.iter().find(|(name, _)| name == field) {
+            if let Some(facts) = function_throws_facts(field_ty, self.aliases) {
+                self.direct_facts.extend(facts.into_iter().filter(|fact| {
                     !matches!(fact, Ty::TypeVar(_, _) | Ty::Never { .. } | Ty::Void { .. })
                 }));
             }
-            continue;
+            return;
         }
 
-        // Check if it's a named method → validate via res_ctx and add as call-graph edge.
-        // We MUST validate the method exists before adding an edge, because
-        // AnalysisGraph::add_edge (analysis.rs:54-58) auto-creates missing target
-        // nodes with empty facts. A bogus edge would inject a phantom node and
-        // alter graph topology, potentially masking real throw propagation.
-        // We also must use the class declaration namespace for the key, NOT the caller's
-        // ns_context, so the edge matches the declaration-side key built by function_key().
-        if let Some(_resolved_method) = res_ctx.lookup_class_method(db, class_name, field) {
+        if let Some(_resolved_method) = self.res_ctx.lookup_class_method(self.db, class_name, field)
+        {
             let class_ns = class_name.namespace();
             let method_short = Name::new(format!("{}.{}", class_name.name(), field));
             let method_key = throw_set_key(class_ns, &method_short);
-            extra_edges.insert(method_key);
+            self.extra_edges.insert(method_key);
         }
     }
 
-    (direct_facts, extra_edges)
+    fn resolve_expr_ty(
+        &self,
+        expr_id: baml_compiler2_ast::ExprId,
+        env: &HashMap<Name, Ty>,
+    ) -> Option<Ty> {
+        match &self.body.exprs[expr_id] {
+            Expr::Path(segments) if segments.len() == 1 => {
+                let name = &segments[0];
+                if name.as_str() == "self" {
+                    self.self_ty()
+                } else {
+                    env.get(name).cloned()
+                }
+            }
+            Expr::Path(segments) => self.named_callable_ty(segments),
+            Expr::FieldAccess { base, field } | Expr::OptionalFieldAccess { base, field } => {
+                let base_ty = self.resolve_expr_ty(*base, env)?;
+                self.resolve_member_ty(&base_ty, field)
+            }
+            Expr::Call { callee, .. } | Expr::OptionalCall { callee, .. } => {
+                let callee_ty = self.resolve_expr_ty(*callee, env)?;
+                match callee_ty {
+                    Ty::Function { ret, .. } => Some(*ret),
+                    Ty::Optional(inner, _) => match *inner {
+                        Ty::Function { ret, .. } => Some(*ret),
+                        _ => None,
+                    },
+                    _ => None,
+                }
+            }
+            Expr::Object {
+                type_name: Some(name),
+                type_args,
+                ..
+            } => {
+                let def = self.res_ctx.own_items.lookup_type(self.ns_context, name)?;
+                match def {
+                    Definition::Class(_) => {
+                        let qtn = qualify_def(self.db, def, name);
+                        let mut diags = Vec::new();
+                        let lowered_type_args = type_args
+                            .iter()
+                            .map(|te| {
+                                lower_type_expr_in_ns(
+                                    self.db,
+                                    te,
+                                    self.res_ctx.own_items,
+                                    self.ns_context,
+                                    self.generic_params,
+                                    &mut diags,
+                                )
+                            })
+                            .collect();
+                        Some(Ty::Class(
+                            crate::ty::NominalTypeRef::new_with_type_args(qtn, lowered_type_args),
+                            TyAttr::default(),
+                        ))
+                    }
+                    Definition::Enum(_) => {
+                        let qtn = qualify_def(self.db, def, name);
+                        Some(Ty::Enum(
+                            crate::ty::NominalTypeRef::new_with_type_args(qtn, Vec::new()),
+                            TyAttr::default(),
+                        ))
+                    }
+                    _ => None,
+                }
+            }
+            Expr::Array { elements } => {
+                let element_tys: Vec<Ty> = elements
+                    .iter()
+                    .map(|expr_id| self.resolve_expr_ty(*expr_id, env))
+                    .collect::<Option<Vec<_>>>()?;
+                let element_ty = collapse_types(element_tys)?;
+                Some(Ty::List(Box::new(element_ty), TyAttr::default()))
+            }
+            Expr::OptionalChain { expr } => self.resolve_expr_ty(*expr, env),
+            _ => None,
+        }
+    }
+
+    fn resolve_member_ty(&self, base_ty: &Ty, field: &Name) -> Option<Ty> {
+        let resolved_base = crate::throws_semantics::resolve_alias_chain(base_ty, self.aliases);
+        let Ty::Class(class_name, _) = &resolved_base else {
+            return None;
+        };
+
+        let fields = self.res_ctx.lookup_class_fields(self.db, class_name);
+        if let Some((_, field_ty)) = fields.iter().find(|(name, _)| name == field) {
+            return Some(field_ty.clone());
+        }
+
+        let method = self
+            .res_ctx
+            .lookup_class_method(self.db, class_name, field)?;
+        Some(Ty::Function {
+            params: method
+                .function
+                .params
+                .into_iter()
+                .map(|(name, ty)| (Some(name), ty))
+                .collect(),
+            ret: Box::new(method.function.return_type),
+            throws: Box::new(method.function.outward_throws.unwrap_or(Ty::Never {
+                attr: TyAttr::default(),
+            })),
+            attr: TyAttr::default(),
+        })
+    }
+
+    fn named_callable_ty(&self, path: &[Name]) -> Option<Ty> {
+        let (_source, function) = self
+            .res_ctx
+            .lookup_function(self.db, path, self.ns_context)?;
+        Some(Ty::Function {
+            params: function
+                .params
+                .into_iter()
+                .map(|(name, ty)| (Some(name), ty))
+                .collect(),
+            ret: Box::new(function.return_type),
+            throws: Box::new(function.outward_throws.unwrap_or(Ty::Never {
+                attr: TyAttr::default(),
+            })),
+            attr: TyAttr::default(),
+        })
+    }
+
+    fn resolve_binding_ty(
+        &self,
+        pattern: baml_compiler2_ast::PatId,
+        type_annotation: Option<baml_compiler2_ast::TypeAnnotId>,
+        inferred_ty: Option<Ty>,
+    ) -> Option<(Name, Ty)> {
+        let binding_name = self.binding_name(pattern)?;
+        let explicit_ty = type_annotation
+            .map(|annot_id| self.lower_local_type_expr(&self.body.type_annotations[annot_id]))
+            .or_else(|| match &self.body.patterns[pattern] {
+                Pattern::TypedBinding { ty, .. } => Some(self.lower_local_type_expr(ty)),
+                _ => None,
+            });
+        Some((binding_name, explicit_ty.or(inferred_ty)?))
+    }
+
+    fn resolve_assignment_ty(
+        &self,
+        target: baml_compiler2_ast::ExprId,
+        value: baml_compiler2_ast::ExprId,
+        env: &HashMap<Name, Ty>,
+    ) -> Option<(Name, Ty)> {
+        match &self.body.exprs[target] {
+            Expr::Path(segments) if segments.len() == 1 => {
+                Some((segments[0].clone(), self.resolve_expr_ty(value, env)?))
+            }
+            _ => None,
+        }
+    }
+
+    fn resolve_collection_element_ty(
+        &self,
+        collection: baml_compiler2_ast::ExprId,
+        env: &HashMap<Name, Ty>,
+    ) -> Option<Ty> {
+        match self.resolve_expr_ty(collection, env)? {
+            Ty::List(inner, _) => Some(*inner),
+            _ => None,
+        }
+    }
+
+    fn binding_name(&self, pattern: baml_compiler2_ast::PatId) -> Option<Name> {
+        match &self.body.patterns[pattern] {
+            Pattern::Binding(name) | Pattern::TypedBinding { name, .. } => Some(name.clone()),
+            _ => None,
+        }
+    }
+
+    fn lower_local_type_expr(&self, te: &TypeExpr) -> Ty {
+        let mut diags = Vec::new();
+        lower_type_expr_in_ns(
+            self.db,
+            te,
+            self.res_ctx.own_items,
+            self.ns_context,
+            self.generic_params,
+            &mut diags,
+        )
+    }
+
+    fn self_ty(&self) -> Option<Ty> {
+        self.class_context
+            .and_then(|(class_name, class_generic_params)| {
+                let def = self
+                    .res_ctx
+                    .own_items
+                    .lookup_type(self.ns_context, class_name)?;
+                match def {
+                    Definition::Class(_) => {
+                        let qtn = qualify_def(self.db, def, class_name);
+                        let type_args: Vec<Ty> = class_generic_params
+                            .iter()
+                            .map(|name| Ty::TypeVar(name.clone(), TyAttr::default()))
+                            .collect();
+                        Some(Ty::Class(
+                            crate::ty::NominalTypeRef::new_with_type_args(qtn, type_args),
+                            TyAttr::default(),
+                        ))
+                    }
+                    _ => None,
+                }
+            })
+    }
+}
+
+fn collapse_types(types: Vec<Ty>) -> Option<Ty> {
+    let mut unique = BTreeSet::new();
+    for ty in types {
+        unique.insert(ty);
+    }
+    match unique.len() {
+        0 => None,
+        1 => unique.into_iter().next(),
+        _ => Some(Ty::Union(unique.into_iter().collect(), TyAttr::default())),
+    }
 }
 
 /// Look up a function's transitive throw set from dependency interfaces.
-fn lookup_dep_throw_set<'a>(
-    dep_interfaces: &'a [(Name, &crate::package_interface::PackageInterface)],
+fn lookup_dep_throw_set<'db>(
+    db: &'db dyn crate::Db,
+    dep_packages: &[(Name, baml_compiler2_hir::package::PackageId<'db>)],
+    dep_interfaces: &[(Name, &crate::package_interface::PackageInterface)],
     target_name: &Name,
-) -> Option<&'a BTreeSet<ThrowFact>> {
-    for (_dep_name, dep_iface) in dep_interfaces {
-        if let Some(throws) = dep_iface.throw_sets.transitive_for(target_name) {
-            return Some(throws);
+) -> Option<BTreeSet<ThrowFact>> {
+    for (dep_name, dep_iface) in dep_interfaces {
+        if !dep_iface.callable_keys.contains(target_name) {
+            continue;
+        }
+        let dep_pkg_id = dep_packages
+            .iter()
+            .find_map(|(pkg_name, dep_pkg_id)| (pkg_name == dep_name).then_some(*dep_pkg_id))?;
+        if let Some(throws) = function_throw_sets(db, dep_pkg_id).transitive_for(target_name) {
+            return Some(throws.clone());
         }
     }
     None

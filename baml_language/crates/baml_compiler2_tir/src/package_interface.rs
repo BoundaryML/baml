@@ -8,6 +8,8 @@
 //! `PackageResolutionContext` bundles a package's own `PackageItems` with its
 //! dependencies' `PackageInterface`s, providing unified lookup methods.
 
+use std::collections::BTreeSet;
+
 use baml_base::Name;
 use baml_compiler2_ast::BuiltinKind;
 use baml_compiler2_hir::{
@@ -33,8 +35,8 @@ pub struct PackageInterface {
     pub types: FxHashMap<Vec<Name>, FxHashMap<Name, ExportedType>>,
     /// All exported free functions: namespace path -> name -> `ExportedFunction`
     pub functions: FxHashMap<Vec<Name>, FxHashMap<Name, ExportedFunction>>,
-    /// Throw sets for all functions in this package (transitive, fully inferred).
-    pub throw_sets: FunctionThrowSets,
+    /// Canonical callable keys exported by this package.
+    pub callable_keys: BTreeSet<Name>,
 }
 
 /// A type exported from a package.
@@ -60,9 +62,10 @@ pub enum ExportedType {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExportedFunction {
     pub name: Name,
+    pub callable_key: Name,
     pub params: Vec<(Name, Ty)>,
     pub return_type: Ty,
-    pub throws: Option<Ty>,
+    pub declared_throws: Option<Ty>,
     pub generic_params: Vec<Name>,
     pub builtin_kind: Option<BuiltinKind>,
 }
@@ -81,7 +84,7 @@ pub struct ResolvedFunction {
     pub name: Name,
     pub params: Vec<(Name, Ty)>,
     pub return_type: Ty,
-    pub throws: Option<Ty>,
+    pub outward_throws: Option<Ty>,
     pub generic_params: Vec<Name>,
     pub builtin_kind: Option<BuiltinKind>,
 }
@@ -93,11 +96,26 @@ pub struct ResolvedMethod {
     pub class_generic_params: Vec<Name>,
 }
 
+/// Specialized resolution result for builtin class members.
+///
+/// Builtin methods can be effect-polymorphic over direct callback parameters, so
+/// they still need call-site-aware lowering even though normal dependency
+/// resolution flows through exported interfaces.
+pub enum ResolvedBuiltinMember<'db> {
+    Method {
+        ty: Ty,
+        class_loc: baml_compiler2_hir::loc::ClassLoc<'db>,
+        func_loc: baml_compiler2_hir::loc::FunctionLoc<'db>,
+    },
+    Field(Ty),
+}
+
 /// Bundles a package's own items with its dependencies' pre-resolved interfaces.
 /// All cross-package lookups go through this context's methods.
 pub struct PackageResolutionContext<'db> {
     pub own_items: &'db PackageItems<'db>,
     pub dep_interfaces: Vec<(Name, &'db PackageInterface)>,
+    pub dep_packages: Vec<(Name, PackageId<'db>)>,
     pub own_package_name: Name,
 }
 
@@ -106,6 +124,7 @@ impl PartialEq for PackageResolutionContext<'_> {
         std::ptr::eq(self.own_items, other.own_items)
             && self.own_package_name == other.own_package_name
             && self.dep_interfaces.len() == other.dep_interfaces.len()
+            && self.dep_packages == other.dep_packages
             && self
                 .dep_interfaces
                 .iter()
@@ -192,6 +211,7 @@ pub fn package_interface<'db>(db: &'db dyn crate::Db, pkg_id: PackageId<'db>) ->
     let mut types: FxHashMap<Vec<Name>, FxHashMap<Name, ExportedType>> = FxHashMap::default();
     let mut functions: FxHashMap<Vec<Name>, FxHashMap<Name, ExportedFunction>> =
         FxHashMap::default();
+    let mut callable_keys = BTreeSet::new();
 
     for (ns_path, ns_items) in &pkg_items.namespaces {
         // Export types
@@ -277,7 +297,7 @@ pub fn package_interface<'db>(db: &'db dyn crate::Db, pkg_id: PackageId<'db>) ->
                             },
                         );
 
-                        let throws = sig.throws.as_ref().map(|te| {
+                        let explicit_throws = sig.throws.as_ref().map(|te| {
                             lower_type_expr_in_ns(
                                 db,
                                 te,
@@ -295,12 +315,17 @@ pub fn package_interface<'db>(db: &'db dyn crate::Db, pkg_id: PackageId<'db>) ->
 
                         methods.push(ExportedFunction {
                             name: method_data.name.clone(),
+                            callable_key: crate::throw_inference::callable_throw_key(
+                                db, method_loc,
+                            ),
                             params,
                             return_type,
-                            throws,
+                            declared_throws: explicit_throws,
                             generic_params: method_data.generic_params.clone(),
                             builtin_kind,
                         });
+                        callable_keys
+                            .insert(crate::throw_inference::callable_throw_key(db, method_loc));
                     }
 
                     let qtn = qualify_def(db, *def, name);
@@ -386,7 +411,7 @@ pub fn package_interface<'db>(db: &'db dyn crate::Db, pkg_id: PackageId<'db>) ->
                 },
             );
 
-            let throws = sig.throws.as_ref().map(|te| {
+            let explicit_throws = sig.throws.as_ref().map(|te| {
                 lower_type_expr_in_ns(
                     db,
                     te,
@@ -406,23 +431,22 @@ pub fn package_interface<'db>(db: &'db dyn crate::Db, pkg_id: PackageId<'db>) ->
                 name.clone(),
                 ExportedFunction {
                     name: name.clone(),
+                    callable_key: crate::throw_inference::callable_throw_key(db, *func_loc),
                     params,
                     return_type,
-                    throws,
+                    declared_throws: explicit_throws,
                     generic_params: func_data.generic_params.clone(),
                     builtin_kind,
                 },
             );
+            callable_keys.insert(crate::throw_inference::callable_throw_key(db, *func_loc));
         }
     }
-
-    // Compute throw sets for this package
-    let throw_sets = function_throw_sets(db, pkg_id);
 
     PackageInterface {
         types,
         functions,
-        throw_sets: throw_sets.clone(),
+        callable_keys,
     }
 }
 
@@ -463,6 +487,17 @@ fn build_self_type_for_class(
     }
 }
 
+fn outward_throws_from_key(throw_sets: &FunctionThrowSets, key: &Name) -> Option<Ty> {
+    let facts = throw_sets.transitive_for(key)?;
+    if facts.is_empty() {
+        None
+    } else {
+        Some(crate::throws_semantics::concrete_throws_ty_from_facts(
+            facts.clone(),
+        ))
+    }
+}
+
 // ── package_resolution_context Salsa query ─────────────────────────────────
 
 #[salsa::tracked(returns(ref))]
@@ -472,6 +507,10 @@ pub fn package_resolution_context<'db>(
 ) -> PackageResolutionContext<'db> {
     let own_items = package_items(db, pkg_id);
     let deps = package_dependencies(db, pkg_id);
+    let dep_packages: Vec<(Name, PackageId<'db>)> = deps
+        .iter()
+        .map(|dep_id| (dep_id.name(db), *dep_id))
+        .collect();
     let dep_interfaces: Vec<(Name, &PackageInterface)> = deps
         .iter()
         .map(|dep_id| {
@@ -483,6 +522,7 @@ pub fn package_resolution_context<'db>(
     PackageResolutionContext {
         own_items,
         dep_interfaces,
+        dep_packages,
         own_package_name: pkg_id.name(db),
     }
 }
@@ -490,11 +530,17 @@ pub fn package_resolution_context<'db>(
 // ── PackageResolutionContext lookup methods ─────────────────────────────────
 
 impl<'db> PackageResolutionContext<'db> {
+    fn dep_package_id(&self, pkg_name: &Name) -> Option<PackageId<'db>> {
+        self.dep_packages
+            .iter()
+            .find_map(|(dep_name, dep_id)| (dep_name == pkg_name).then_some(*dep_id))
+    }
+
     /// Get `PackageItems` for an accessible package (own or declared dependency).
     ///
     /// Returns `Some` for the own package and any declared dependency,
     /// `None` for undeclared packages.
-    pub fn items_for_package(
+    fn items_for_package(
         &self,
         db: &'db dyn crate::Db,
         pkg_name: &Name,
@@ -511,6 +557,159 @@ impl<'db> PackageResolutionContext<'db> {
         } else {
             None
         }
+    }
+
+    pub fn lookup_function(
+        &self,
+        db: &'db dyn crate::Db,
+        path: &[Name],
+        ns_context: &[Name],
+    ) -> Option<(ResolvedSource, ResolvedFunction)> {
+        let item = path.last()?;
+        if !ns_context.is_empty() {
+            let ns: Vec<_> = ns_context
+                .iter()
+                .chain(path[..path.len() - 1].iter())
+                .cloned()
+                .collect();
+            if let Some(result) = self.lookup_function_in_own_then_deps(db, &ns, item) {
+                return Some(result);
+            }
+        }
+        if ns_context.is_empty() {
+            if let Some(result) =
+                self.lookup_function_in_own_then_deps(db, &path[..path.len() - 1], item)
+            {
+                return Some(result);
+            }
+        }
+        if path.len() >= 2 {
+            if path[0].as_str() == "root" {
+                if let Some(function) = self.lookup_own_function(db, &path[1..path.len() - 1], item)
+                {
+                    return Some((ResolvedSource::Item, function));
+                }
+            }
+            for (dep_name, _dep_iface) in &self.dep_interfaces {
+                if &path[0] == dep_name {
+                    if let Some(function) =
+                        self.lookup_dep_function(db, dep_name, &path[1..path.len() - 1], item)
+                    {
+                        return Some((ResolvedSource::Builtin, function));
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    fn lookup_function_in_own_then_deps(
+        &self,
+        db: &'db dyn crate::Db,
+        namespace: &[Name],
+        item: &Name,
+    ) -> Option<(ResolvedSource, ResolvedFunction)> {
+        if let Some(function) = self.lookup_own_function(db, namespace, item) {
+            return Some((ResolvedSource::Item, function));
+        }
+        for (dep_name, _dep_iface) in &self.dep_interfaces {
+            if let Some(function) = self.lookup_dep_function(db, dep_name, namespace, item) {
+                return Some((ResolvedSource::Builtin, function));
+            }
+        }
+        None
+    }
+
+    fn lookup_own_function(
+        &self,
+        db: &'db dyn crate::Db,
+        namespace: &[Name],
+        item: &Name,
+    ) -> Option<ResolvedFunction> {
+        let Definition::Function(func_loc) = self.own_items.lookup_value(namespace, item)? else {
+            return None;
+        };
+        let item_tree = file_item_tree(db, func_loc.file(db));
+        let func_data = &item_tree[func_loc.id(db)];
+        let func_ns = file_package::file_package(db, func_loc.file(db)).namespace_path;
+        let sig = baml_compiler2_hir::signature::function_signature(db, func_loc);
+        let body = baml_compiler2_hir::body::function_body(db, func_loc);
+        let mut diags = Vec::new();
+        let mut params = Vec::new();
+        for (param_name, param_te) in &sig.params {
+            let param_ty = lower_type_expr_in_ns(
+                db,
+                param_te,
+                self.own_items,
+                &func_ns,
+                &func_data.generic_params,
+                &mut diags,
+            );
+            params.push((param_name.clone(), param_ty));
+        }
+        let return_type = sig.return_type.as_ref().map_or(
+            Ty::Unknown {
+                attr: TyAttr::default(),
+            },
+            |te| {
+                lower_type_expr_in_ns(
+                    db,
+                    te,
+                    self.own_items,
+                    &func_ns,
+                    &func_data.generic_params,
+                    &mut diags,
+                )
+            },
+        );
+        let explicit_throws = sig.throws.as_ref().map(|te| {
+            lower_type_expr_in_ns(
+                db,
+                te,
+                self.own_items,
+                &func_ns,
+                &func_data.generic_params,
+                &mut diags,
+            )
+        });
+        let builtin_kind = match body.as_ref() {
+            baml_compiler2_hir::body::FunctionBody::Builtin(kind) => Some(*kind),
+            _ => None,
+        };
+        drop(diags);
+        Some(ResolvedFunction {
+            name: func_data.name.clone(),
+            params,
+            return_type,
+            outward_throws: explicit_throws,
+            generic_params: func_data.generic_params.clone(),
+            builtin_kind,
+        })
+    }
+
+    fn lookup_dep_function(
+        &self,
+        db: &'db dyn crate::Db,
+        pkg_name: &Name,
+        namespace: &[Name],
+        item: &Name,
+    ) -> Option<ResolvedFunction> {
+        let dep_iface = self
+            .dep_interfaces
+            .iter()
+            .find_map(|(dep_name, dep_iface)| (dep_name == pkg_name).then_some(*dep_iface))?;
+        let exported = dep_iface.lookup_function(namespace, item)?;
+        let dep_pkg_id = self.dep_package_id(pkg_name)?;
+        Some(ResolvedFunction {
+            name: exported.name.clone(),
+            params: exported.params.clone(),
+            return_type: exported.return_type.clone(),
+            outward_throws: exported.declared_throws.clone().or_else(|| {
+                outward_throws_from_key(function_throw_sets(db, dep_pkg_id), &exported.callable_key)
+            }),
+            generic_params: exported.generic_params.clone(),
+            builtin_kind: exported.builtin_kind,
+        })
     }
 
     /// Resolve a type by path. Own-package via `PackageItems`, then deps.
@@ -616,9 +815,12 @@ impl<'db> PackageResolutionContext<'db> {
             // dep-prefixed search (parity with resolve_type)
             for (dep_name, _dep_iface) in &self.dep_interfaces {
                 if &path[0] == dep_name {
-                    let dep_pkg_id = PackageId::new(db, dep_name.clone());
-                    let dep_items = package_items(db, dep_pkg_id);
-                    if let Some(def) = dep_items.lookup_value(&path[1..path.len() - 1], item) {
+                    if let Some(def) = self.lookup_value_definition_in_package(
+                        db,
+                        dep_name,
+                        &path[1..path.len() - 1],
+                        item,
+                    ) {
                         return Some((ResolvedSource::Builtin, def));
                     }
                 }
@@ -636,6 +838,93 @@ impl<'db> PackageResolutionContext<'db> {
             return Some((ResolvedSource::Item, def));
         }
         None
+    }
+
+    pub fn lookup_value_definition_in_package(
+        &self,
+        db: &'db dyn crate::Db,
+        pkg_name: &Name,
+        namespace: &[Name],
+        item: &Name,
+    ) -> Option<Definition<'db>> {
+        let pkg_items = self.items_for_package(db, pkg_name)?;
+        pkg_items.lookup_value(namespace, item)
+    }
+
+    pub fn lookup_type_definition_in_package(
+        &self,
+        db: &'db dyn crate::Db,
+        pkg_name: &Name,
+        namespace: &[Name],
+        item: &Name,
+    ) -> Option<Definition<'db>> {
+        let pkg_items = self.items_for_package(db, pkg_name)?;
+        pkg_items.lookup_type(namespace, item)
+    }
+
+    pub fn lookup_class_loc(
+        &self,
+        db: &'db dyn crate::Db,
+        qtn: &QualifiedTypeName,
+    ) -> Option<baml_compiler2_hir::loc::ClassLoc<'db>> {
+        match self.lookup_type_definition_in_package(
+            db,
+            qtn.package(),
+            qtn.namespace(),
+            qtn.name(),
+        )? {
+            Definition::Class(class_loc) => Some(class_loc),
+            _ => None,
+        }
+    }
+
+    pub fn lookup_enum_loc(
+        &self,
+        db: &'db dyn crate::Db,
+        qtn: &QualifiedTypeName,
+    ) -> Option<baml_compiler2_hir::loc::EnumLoc<'db>> {
+        match self.lookup_type_definition_in_package(
+            db,
+            qtn.package(),
+            qtn.namespace(),
+            qtn.name(),
+        )? {
+            Definition::Enum(enum_loc) => Some(enum_loc),
+            _ => None,
+        }
+    }
+
+    pub fn lookup_enum_variants(
+        &self,
+        db: &'db dyn crate::Db,
+        enum_name: &QualifiedTypeName,
+    ) -> Vec<Name> {
+        if enum_name.package().as_str() == self.own_package_name.as_str() {
+            let Some(Definition::Enum(enum_loc)) = self.lookup_type_definition_in_package(
+                db,
+                enum_name.package(),
+                enum_name.namespace(),
+                enum_name.name(),
+            ) else {
+                return Vec::new();
+            };
+            let item_tree = file_item_tree(db, enum_loc.file(db));
+            let enum_data = &item_tree[enum_loc.id(db)];
+            enum_data.variants.iter().map(|v| v.name.clone()).collect()
+        } else {
+            self.dep_interfaces
+                .iter()
+                .find_map(|(dep_name, dep_iface)| {
+                    if dep_name != enum_name.package() {
+                        return None;
+                    }
+                    match dep_iface.lookup_type(enum_name.namespace(), enum_name.name())? {
+                        ExportedType::Enum { variants, .. } => Some(variants.clone()),
+                        _ => None,
+                    }
+                })
+                .unwrap_or_default()
+        }
     }
 
     /// Look up class fields. Dual dispatch:
@@ -726,6 +1015,9 @@ impl<'db> PackageResolutionContext<'db> {
                 if dep_name != class_pkg {
                     continue;
                 }
+                let Some(dep_pkg_id) = self.dep_package_id(dep_name) else {
+                    continue;
+                };
                 if let Some(ExportedType::Class {
                     methods,
                     generic_params,
@@ -738,7 +1030,12 @@ impl<'db> PackageResolutionContext<'db> {
                                 name: method.name.clone(),
                                 params: method.params.clone(),
                                 return_type: method.return_type.clone(),
-                                throws: method.throws.clone(),
+                                outward_throws: method.declared_throws.clone().or_else(|| {
+                                    outward_throws_from_key(
+                                        function_throw_sets(db, dep_pkg_id),
+                                        &method.callable_key,
+                                    )
+                                }),
                                 generic_params: method.generic_params.clone(),
                                 builtin_kind: method.builtin_kind,
                             },
@@ -761,9 +1058,11 @@ impl<'db> PackageResolutionContext<'db> {
                                 &resolved_method.function.return_type,
                                 &bindings,
                             );
-                            if let Some(ref throws) = resolved_method.function.throws.clone() {
-                                resolved_method.function.throws =
-                                    Some(crate::generics::substitute_ty(throws, &bindings));
+                            if let Some(ref outward_throws) =
+                                resolved_method.function.outward_throws.clone()
+                            {
+                                resolved_method.function.outward_throws =
+                                    Some(crate::generics::substitute_ty(outward_throws, &bindings));
                             }
                         }
                         return Some(resolved_method);
@@ -772,6 +1071,232 @@ impl<'db> PackageResolutionContext<'db> {
             }
             None
         }
+    }
+
+    pub fn lookup_class_method_locs(
+        &self,
+        db: &'db dyn crate::Db,
+        class_name: &NominalTypeRef,
+        method_name: &Name,
+    ) -> Option<(
+        baml_compiler2_hir::loc::ClassLoc<'db>,
+        baml_compiler2_hir::loc::FunctionLoc<'db>,
+    )> {
+        let class_loc = self.lookup_class_loc(db, class_name.qtn())?;
+        let item_tree = file_item_tree(db, class_loc.file(db));
+        let class_data = &item_tree[class_loc.id(db)];
+        let func_loc = class_data.methods.iter().find_map(|&method_id| {
+            let method_data = &item_tree[method_id];
+            if method_data.name == *method_name {
+                Some(baml_compiler2_hir::loc::FunctionLoc::new(
+                    db,
+                    class_loc.file(db),
+                    method_id,
+                ))
+            } else {
+                None
+            }
+        })?;
+        Some((class_loc, func_loc))
+    }
+
+    /// Resolve a member on a builtin class declared in the `baml` package.
+    ///
+    /// This keeps the raw builtin stub inspection inside `PackageResolutionContext`
+    /// so callers do not need to reach into foreign `PackageItems` or `ItemTree`
+    /// directly. Method parameters still get specialized lowering so omitted
+    /// throws on direct callback params become synthetic effect variables.
+    pub fn resolve_builtin_member(
+        &self,
+        db: &'db dyn crate::Db,
+        class_path: &[Name],
+        type_args: &[Ty],
+        member_name: &Name,
+    ) -> Option<ResolvedBuiltinMember<'db>> {
+        let baml_items = self.items_for_package(db, &Name::new("baml"))?;
+        let item = class_path.last()?;
+        let def = baml_items.lookup_type(&class_path[..class_path.len() - 1], item)?;
+        let Definition::Class(class_loc) = def else {
+            return None;
+        };
+
+        let file = class_loc.file(db);
+        let stub_pkg = file_package::file_package(db, file);
+        let stub_ns: &[Name] = &stub_pkg.namespace_path;
+        let item_tree = file_item_tree(db, file);
+        let class_data = &item_tree[class_loc.id(db)];
+
+        let mut bindings = crate::generics::bind_type_vars(&class_data.generic_params, type_args);
+
+        for &method_id in &class_data.methods {
+            let method_data = &item_tree[method_id];
+            if method_data.name != *member_name {
+                continue;
+            }
+
+            for gp in &method_data.generic_params {
+                bindings
+                    .entry(gp.clone())
+                    .or_insert_with(|| Ty::TypeVar(gp.clone(), TyAttr::default()));
+            }
+
+            let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(db, file, method_id);
+            let sig = baml_compiler2_hir::signature::function_signature(db, func_loc);
+            let mut diags = Vec::new();
+
+            let builtin_class_ty = if type_args.is_empty() {
+                Ty::Class(
+                    QualifiedTypeName::new_with_generic_params(
+                        stub_pkg.package.clone(),
+                        stub_pkg.namespace_path.clone(),
+                        class_data.name.clone(),
+                        class_data.generic_params.clone(),
+                    )
+                    .into(),
+                    TyAttr::default(),
+                )
+            } else if type_args.len() == 1 {
+                match class_data.name.as_str() {
+                    "Array" => Ty::List(Box::new(type_args[0].clone()), TyAttr::default()),
+                    _ => Ty::Class(
+                        QualifiedTypeName::new(
+                            stub_pkg.package.clone(),
+                            stub_pkg.namespace_path.clone(),
+                            class_data.name.clone(),
+                        )
+                        .into(),
+                        TyAttr::default(),
+                    ),
+                }
+            } else if type_args.len() == 2 {
+                match class_data.name.as_str() {
+                    "Map" => Ty::Map(
+                        Box::new(type_args[0].clone()),
+                        Box::new(type_args[1].clone()),
+                        TyAttr::default(),
+                    ),
+                    _ => Ty::Class(
+                        QualifiedTypeName::new(
+                            stub_pkg.package.clone(),
+                            stub_pkg.namespace_path.clone(),
+                            class_data.name.clone(),
+                        )
+                        .into(),
+                        TyAttr::default(),
+                    ),
+                }
+            } else {
+                Ty::Class(
+                    QualifiedTypeName::new(
+                        stub_pkg.package.clone(),
+                        stub_pkg.namespace_path.clone(),
+                        class_data.name.clone(),
+                    )
+                    .into(),
+                    TyAttr::default(),
+                )
+            };
+
+            let method_generic_params: Vec<Name> = class_data
+                .generic_params
+                .iter()
+                .chain(method_data.generic_params.iter())
+                .cloned()
+                .collect();
+
+            let mut synthetic_effect_vars: Vec<Name> = Vec::new();
+            let params: Vec<(Option<Name>, Ty)> = sig
+                .params
+                .iter()
+                .map(|(n, te)| {
+                    let ty = if n.as_str() == "self"
+                        && matches!(te, baml_compiler2_ast::TypeExpr::Unknown { .. })
+                    {
+                        builtin_class_ty.clone()
+                    } else if matches!(te, baml_compiler2_ast::TypeExpr::Function { .. }) {
+                        let lowered = crate::lower_type_expr::lower_type_expr_with_fn_context(
+                            db,
+                            te,
+                            baml_items,
+                            stub_ns,
+                            &method_generic_params,
+                            &mut diags,
+                            &crate::lower_type_expr::FnTypeLoweringContext::DirectParamRoot {
+                                param_name: n.clone(),
+                            },
+                            &mut synthetic_effect_vars,
+                        );
+                        crate::generics::substitute_ty(&lowered, &bindings)
+                    } else {
+                        crate::generics::lower_type_expr_with_generics(
+                            db, te, baml_items, stub_ns, &bindings, &mut diags,
+                        )
+                    };
+                    (Some(n.clone()), ty)
+                })
+                .collect();
+
+            let ret = sig
+                .return_type
+                .as_ref()
+                .map(|te| {
+                    crate::generics::lower_type_expr_with_generics(
+                        db, te, baml_items, stub_ns, &bindings, &mut diags,
+                    )
+                })
+                .unwrap_or(Ty::Void {
+                    attr: TyAttr::default(),
+                });
+
+            let throws_ty = match synthetic_effect_vars.len() {
+                0 => Ty::Never {
+                    attr: TyAttr::default(),
+                },
+                1 => Ty::TypeVar(synthetic_effect_vars[0].clone(), TyAttr::default()),
+                _ => Ty::Union(
+                    synthetic_effect_vars
+                        .iter()
+                        .map(|v| Ty::TypeVar(v.clone(), TyAttr::default()))
+                        .collect(),
+                    TyAttr::default(),
+                ),
+            };
+
+            drop(diags);
+            return Some(ResolvedBuiltinMember::Method {
+                ty: Ty::Function {
+                    params,
+                    ret: Box::new(ret),
+                    throws: Box::new(throws_ty),
+                    attr: TyAttr::default(),
+                },
+                class_loc,
+                func_loc,
+            });
+        }
+
+        for field in &class_data.fields {
+            if field.name != *member_name {
+                continue;
+            }
+
+            let mut diags = Vec::new();
+            let field_ty = field
+                .type_expr
+                .as_ref()
+                .map(|te| {
+                    crate::generics::lower_type_expr_with_generics(
+                        db, &te.expr, baml_items, stub_ns, &bindings, &mut diags,
+                    )
+                })
+                .unwrap_or(Ty::Unknown {
+                    attr: TyAttr::default(),
+                });
+            drop(diags);
+            return Some(ResolvedBuiltinMember::Field(field_ty));
+        }
+
+        None
     }
 
     /// Apply class-level generic substitution to a `ResolvedMethod`'s function signature.
@@ -799,9 +1324,9 @@ impl<'db> PackageResolutionContext<'db> {
             .collect();
         resolved_method.function.return_type =
             crate::generics::substitute_ty(&resolved_method.function.return_type, &bindings);
-        if let Some(ref throws) = resolved_method.function.throws.clone() {
-            resolved_method.function.throws =
-                Some(crate::generics::substitute_ty(throws, &bindings));
+        if let Some(ref outward_throws) = resolved_method.function.outward_throws.clone() {
+            resolved_method.function.outward_throws =
+                Some(crate::generics::substitute_ty(outward_throws, &bindings));
         }
     }
 
@@ -904,7 +1429,7 @@ impl<'db> PackageResolutionContext<'db> {
                     )
                 },
             );
-            let throws = sig.throws.as_ref().map(|te| {
+            let explicit_throws = sig.throws.as_ref().map(|te| {
                 lower_type_expr_in_ns(db, te, self.own_items, &ns, &all_generic_params, &mut diags)
             });
 
@@ -918,7 +1443,7 @@ impl<'db> PackageResolutionContext<'db> {
                     name: method_data.name.clone(),
                     params,
                     return_type,
-                    throws,
+                    outward_throws: explicit_throws,
                     generic_params: method_data.generic_params.clone(),
                     builtin_kind,
                 },

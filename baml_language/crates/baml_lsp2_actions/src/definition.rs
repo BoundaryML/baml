@@ -211,6 +211,12 @@ fn resolve_member_at(
             };
             let source_map = baml_compiler2_hir::body::function_body_source_map(db, func_loc)?;
 
+            if let Some(loc) =
+                resolve_path_variant_at(db, file, offset, token_text, expr_body, &source_map)
+            {
+                return Some(loc);
+            }
+
             // Try FieldAccess path first
             if let Some(loc) = resolve_field_access_at(
                 db,
@@ -290,10 +296,69 @@ fn resolve_variant_definition(
     None
 }
 
+fn resolve_path_variant_at(
+    db: &dyn Db,
+    file: SourceFile,
+    offset: TextSize,
+    token_text: &str,
+    expr_body: &baml_compiler2_ast::ExprBody,
+    source_map: &baml_compiler2_ast::AstSourceMap,
+) -> Option<Location> {
+    use baml_compiler2_ast::Expr;
+    use baml_compiler2_tir::ty::Ty;
+
+    let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
+    let pkg_id = baml_compiler2_hir::package::PackageId::new(db, pkg_info.package.clone());
+    let res_ctx = baml_compiler2_tir::package_interface::package_resolution_context(db, pkg_id);
+
+    let mut best: Option<(baml_compiler2_ast::ExprId, text_size::TextRange)> = None;
+    for (expr_id, expr) in expr_body.exprs.iter() {
+        let Expr::Path(segments) = expr else {
+            continue;
+        };
+        if segments.len() < 2 || segments.last()?.as_str() != token_text {
+            continue;
+        }
+        let span = source_map.expr_span(expr_id);
+        if !span.contains(offset) && span.end() != offset {
+            continue;
+        }
+        match best {
+            Some((_, prev_span)) if span.len() >= prev_span.len() => {}
+            _ => best = Some((expr_id, span)),
+        }
+    }
+
+    let (expr_id, _) = best?;
+    let baml_compiler2_ast::Expr::Path(segments) = &expr_body.exprs[expr_id] else {
+        return None;
+    };
+    let variant_name = segments.last()?;
+    let prefix = &segments[..segments.len() - 1];
+    let (_source, ty) = res_ctx.resolve_type(db, prefix, &pkg_info.namespace_path)?;
+    let Ty::Enum(enum_name, _) = ty else {
+        return None;
+    };
+    let enum_loc = res_ctx.lookup_enum_loc(db, enum_name.qtn())?;
+    let target_file = enum_loc.file(db);
+    let target_item_tree = baml_compiler2_hir::file_item_tree(db, target_file);
+    let target_source_map = baml_compiler2_hir::file_item_tree_source_map(db, target_file);
+    let enum_def = &target_item_tree[enum_loc.id(db)];
+    let variant_idx = enum_def
+        .variants
+        .iter()
+        .position(|variant| variant.name == *variant_name)?;
+    let variant_spans = target_source_map.enum_variant_spans.get(&enum_loc.id(db))?;
+    Some(Location {
+        file: target_file,
+        range: variant_spans[variant_idx],
+    })
+}
+
 /// Cursor is on a `FieldAccess` expression (e.g. `p.name`, `Status.Active`, `s.Celebrate()`).
 fn resolve_field_access_at(
     db: &dyn Db,
-    _file: SourceFile,
+    file: SourceFile,
     offset: TextSize,
     token_text: &str,
     expr_body: &baml_compiler2_ast::ExprBody,
@@ -301,7 +366,7 @@ fn resolve_field_access_at(
     inference: &baml_compiler2_tir::inference::ScopeInference<'_>,
 ) -> Option<Location> {
     use baml_compiler2_ast::Expr;
-    use baml_compiler2_tir::inference::MemberResolution;
+    use baml_compiler2_tir::{inference::MemberResolution, ty::Ty};
 
     // Find the FieldAccess expr whose span contains the cursor and field name matches.
     // Pick smallest (innermost) span for nested chains like a.b.c.
@@ -322,11 +387,11 @@ fn resolve_field_access_at(
     }
 
     let (expr_id, _) = best?;
-    match inference.resolution(expr_id)? {
-        MemberResolution::Field {
+    match inference.resolution(expr_id) {
+        Some(MemberResolution::Field {
             class_loc,
             field_name,
-        } => {
+        }) => {
             let target_file = class_loc.file(db);
             let target_item_tree = baml_compiler2_hir::file_item_tree(db, target_file);
             let target_source_map = baml_compiler2_hir::file_item_tree_source_map(db, target_file);
@@ -338,10 +403,10 @@ fn resolve_field_access_at(
                 range: field_spans[field_idx],
             })
         }
-        MemberResolution::Variant {
+        Some(MemberResolution::Variant {
             enum_loc,
             variant_name,
-        } => {
+        }) => {
             let target_file = enum_loc.file(db);
             let target_item_tree = baml_compiler2_hir::file_item_tree(db, target_file);
             let target_source_map = baml_compiler2_hir::file_item_tree_source_map(db, target_file);
@@ -356,7 +421,7 @@ fn resolve_field_access_at(
                 range: variant_spans[variant_idx],
             })
         }
-        MemberResolution::Free { func_loc } => {
+        Some(MemberResolution::Free { func_loc }) => {
             let def = baml_compiler2_hir::contributions::Definition::Function(*func_loc);
             let (def_file, range) = utils::definition_span(db, def)?;
             Some(Location {
@@ -364,7 +429,7 @@ fn resolve_field_access_at(
                 range,
             })
         }
-        MemberResolution::Method { func_loc, .. } => {
+        Some(MemberResolution::Method { func_loc, .. }) => {
             // Methods are not in FileSymbolContributions — use ItemTreeSourceMap.
             let target_file = func_loc.file(db);
             let target_source_map = baml_compiler2_hir::file_item_tree_source_map(db, target_file);
@@ -374,6 +439,41 @@ fn resolve_field_access_at(
             Some(Location {
                 file: target_file,
                 range: *name_range,
+            })
+        }
+        None => {
+            let Expr::FieldAccess { base, field } = &expr_body.exprs[expr_id] else {
+                return None;
+            };
+            if field.as_str() != token_text {
+                return None;
+            }
+
+            let Expr::Path(segments) = &expr_body.exprs[*base] else {
+                return None;
+            };
+
+            let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
+            let pkg_id = baml_compiler2_hir::package::PackageId::new(db, pkg_info.package.clone());
+            let res_ctx =
+                baml_compiler2_tir::package_interface::package_resolution_context(db, pkg_id);
+            let (_source, ty) = res_ctx.resolve_type(db, segments, &pkg_info.namespace_path)?;
+            let Ty::Enum(enum_name, _) = ty else {
+                return None;
+            };
+            let enum_loc = res_ctx.lookup_enum_loc(db, enum_name.qtn())?;
+            let target_file = enum_loc.file(db);
+            let target_item_tree = baml_compiler2_hir::file_item_tree(db, target_file);
+            let target_source_map = baml_compiler2_hir::file_item_tree_source_map(db, target_file);
+            let enum_def = &target_item_tree[enum_loc.id(db)];
+            let variant_idx = enum_def
+                .variants
+                .iter()
+                .position(|variant| variant.name == *field)?;
+            let variant_spans = target_source_map.enum_variant_spans.get(&enum_loc.id(db))?;
+            Some(Location {
+                file: target_file,
+                range: variant_spans[variant_idx],
             })
         }
     }

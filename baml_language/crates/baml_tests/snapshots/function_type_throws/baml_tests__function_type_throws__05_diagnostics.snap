@@ -42,6 +42,256 @@ source: crates/baml_tests/src/generated_tests.rs
     │ Note: Error code: E0001
 ────╯
 
+  [type] Warning: extraneous throws declaration: user.ErrorKind
+    ╭─[ enum_class_throws.baml:27:53 ]
+    │
+ 27 │ function throw_enum_variant(x: int) -> string throws ErrorKind {
+    │                                                     ─────┬────  
+    │                                                          ╰────── extraneous throws declaration: user.ErrorKind
+    │ 
+    │ Note: Error code: E0001
+────╯
+
+  [type] Error: throws contract violation: `user.ErrorKind` is missing unknown
+    ╭─[ enum_class_throws.baml:27:53 ]
+    │
+ 27 │ function throw_enum_variant(x: int) -> string throws ErrorKind {
+    │                                                     ─────┬────  
+    │                                                          ╰────── throws contract violation: `user.ErrorKind` is missing unknown
+    │ 
+    │ Note: Error code: E0001
+────╯
+
+  [type] Error: unresolved name: ErrorKind.NotFound
+    ╭─[ enum_class_throws.baml:28:22 ]
+    │
+ 28 │   if (x == 0) { throw ErrorKind.NotFound }
+    │                      ─────────┬─────────  
+    │                               ╰─────────── unresolved name: ErrorKind.NotFound
+    │ 
+    │ Note: Error code: E0001
+────╯
+
+  [type] Error: unresolved name: ErrorKind.Unauthorized
+    ╭─[ enum_class_throws.baml:29:22 ]
+    │
+ 29 │   if (x == 1) { throw ErrorKind.Unauthorized }
+    │                      ───────────┬───────────  
+    │                                 ╰───────────── unresolved name: ErrorKind.Unauthorized
+    │ 
+    │ Note: Error code: E0001
+────╯
+
+  [type] Error: unresolved name: ErrorKind.ValidationFailed
+    ╭─[ enum_class_throws.baml:35:28 ]
+    │
+ 35 │   let f = () -> int { throw ErrorKind.ValidationFailed }
+    │                            ─────────────┬─────────────  
+    │                                         ╰─────────────── unresolved name: ErrorKind.ValidationFailed
+    │ 
+    │ Note: Error code: E0001
+────╯
+
+  [type] Error: unresolved name: ErrorKind.ValidationFailed
+    ╭─[ enum_class_throws.baml:36:3 ]
+    │
+ 36 │   f()
+    │   ┬  
+    │   ╰── unresolved name: ErrorKind.ValidationFailed
+    │ 
+    │ Note: Error code: E0001
+────╯
+
+  [type] Warning: extraneous throws declaration: user.ErrorKind
+    ╭─[ enum_class_throws.baml:60:55 ]
+    │
+ 60 │ function throw_various_errors(x: int) -> string throws ErrorKind {
+    │                                                       ─────┬────  
+    │                                                            ╰────── extraneous throws declaration: user.ErrorKind
+    │ 
+    │ Note: Error code: E0001
+────╯
+
+  [type] Error: throws contract violation: `user.ErrorKind` is missing unknown
+    ╭─[ enum_class_throws.baml:60:55 ]
+    │
+ 60 │ function throw_various_errors(x: int) -> string throws ErrorKind {
+    │                                                       ─────┬────  
+    │                                                            ╰────── throws contract violation: `user.ErrorKind` is missing unknown
+    │ 
+    │ Note: Error code: E0001
+────╯
+
+  [type] Error: unresolved name: ErrorKind.NotFound
+    ╭─[ enum_class_throws.baml:62:15 ]
+    │
+ 62 │     0 => throw ErrorKind.NotFound,
+    │               ─────────┬─────────  
+    │                        ╰─────────── unresolved name: ErrorKind.NotFound
+    │ 
+    │ Note: Error code: E0001
+────╯
+
+  [type] Error: unresolved name: ErrorKind.Unauthorized
+    ╭─[ enum_class_throws.baml:63:15 ]
+    │
+ 63 │     1 => throw ErrorKind.Unauthorized,
+    │               ───────────┬───────────  
+    │                          ╰───────────── unresolved name: ErrorKind.Unauthorized
+    │ 
+    │ Note: Error code: E0001
+────╯
+
+  [type] Error: unresolved name: ErrorKind.ValidationFailed
+    ╭─[ enum_class_throws.baml:64:15 ]
+    │
+ 64 │     2 => throw ErrorKind.ValidationFailed,
+    │               ─────────────┬─────────────  
+    │                            ╰─────────────── unresolved name: ErrorKind.ValidationFailed
+    │ 
+    │ Note: Error code: E0001
+────╯
+
+  [type] Warning: extraneous throws declaration: user.ErrorKind
+    ╭─[ enum_class_throws.baml:81:54 ]
+    │
+ 81 │ function throw_enum_or_class(x: int) -> string throws ErrorKind | ApiError {
+    │                                                      ──────────┬──────────  
+    │                                                                ╰──────────── extraneous throws declaration: user.ErrorKind
+    │ 
+    │ Note: Error code: E0001
+────╯
+
+  [type] Error: throws contract violation: `user.ErrorKind | user.ApiError` is missing unknown
+    ╭─[ enum_class_throws.baml:81:54 ]
+    │
+ 81 │ function throw_enum_or_class(x: int) -> string throws ErrorKind | ApiError {
+    │                                                      ──────────┬──────────  
+    │                                                                ╰──────────── throws contract violation: `user.ErrorKind | user.ApiError` is missing unknown
+    │ 
+    │ Note: Error code: E0001
+────╯
+
+  [type] Error: unresolved name: ErrorKind.RateLimited
+    ╭─[ enum_class_throws.baml:82:22 ]
+    │
+ 82 │   if (x == 0) { throw ErrorKind.RateLimited }
+    │                      ───────────┬──────────  
+    │                                 ╰──────────── unresolved name: ErrorKind.RateLimited
+    │ 
+    │ Note: Error code: E0001
+────╯
+
+  [type] Warning: extraneous throws declaration: user.ErrorKind
+    ╭─[ enum_class_throws.baml:88:50 ]
+    │
+ 88 │ function throw_any_error(x: int) -> string throws string | ErrorKind | ApiError {
+    │                                                  ───────────────┬──────────────  
+    │                                                                 ╰──────────────── extraneous throws declaration: user.ErrorKind
+    │ 
+    │ Note: Error code: E0001
+────╯
+
+  [type] Error: throws contract violation: `string | user.ErrorKind | user.ApiError` is missing unknown
+    ╭─[ enum_class_throws.baml:88:50 ]
+    │
+ 88 │ function throw_any_error(x: int) -> string throws string | ErrorKind | ApiError {
+    │                                                  ───────────────┬──────────────  
+    │                                                                 ╰──────────────── throws contract violation: `string | user.ErrorKind | user.ApiError` is missing unknown
+    │ 
+    │ Note: Error code: E0001
+────╯
+
+  [type] Error: unresolved name: ErrorKind.NotFound
+    ╭─[ enum_class_throws.baml:91:15 ]
+    │
+ 91 │     1 => throw ErrorKind.NotFound,
+    │               ─────────┬─────────  
+    │                        ╰─────────── unresolved name: ErrorKind.NotFound
+    │ 
+    │ Note: Error code: E0001
+────╯
+
+  [type] Error: unresolved name: ErrorKind.Unauthorized
+     ╭─[ enum_class_throws.baml:105:24 ]
+     │
+ 105 │   apply_may_throw_enum(() -> int { throw ErrorKind.Unauthorized })
+     │                        ─────────────────────┬────────────────────  
+     │                                             ╰────────────────────── unresolved name: ErrorKind.Unauthorized
+     │ 
+     │ Note: Error code: E0001
+─────╯
+
+  [type] Error: unresolved name: ErrorKind.Unauthorized
+     ╭─[ enum_class_throws.baml:105:41 ]
+     │
+ 105 │   apply_may_throw_enum(() -> int { throw ErrorKind.Unauthorized })
+     │                                         ───────────┬───────────  
+     │                                                    ╰───────────── unresolved name: ErrorKind.Unauthorized
+     │ 
+     │ Note: Error code: E0001
+─────╯
+
+  [type] Error: unresolved name: ErrorKind.NotFound
+     ╭─[ enum_class_throws.baml:123:22 ]
+     │
+ 123 │   apply_generic_enum(() -> int { throw ErrorKind.NotFound })
+     │                      ───────────────────┬──────────────────  
+     │                                         ╰──────────────────── unresolved name: ErrorKind.NotFound
+     │ 
+     │ Note: Error code: E0001
+─────╯
+
+  [type] Error: unresolved name: ErrorKind.NotFound
+     ╭─[ enum_class_throws.baml:123:39 ]
+     │
+ 123 │   apply_generic_enum(() -> int { throw ErrorKind.NotFound })
+     │                                       ─────────┬─────────  
+     │                                                ╰─────────── unresolved name: ErrorKind.NotFound
+     │ 
+     │ Note: Error code: E0001
+─────╯
+
+  [type] Error: unresolved name: ErrorKind.NotFound
+     ╭─[ enum_class_throws.baml:174:3 ]
+     │
+ 174 │   EnumThrowingHandler { run: () -> null { throw ErrorKind.NotFound } }
+     │   ──────────────────────────────────┬─────────────────────────────────  
+     │                                     ╰─────────────────────────────────── unresolved name: ErrorKind.NotFound
+     │ 
+     │ Note: Error code: E0001
+─────╯
+
+  [type] Error: unresolved name: ErrorKind.NotFound
+     ╭─[ enum_class_throws.baml:174:48 ]
+     │
+ 174 │   EnumThrowingHandler { run: () -> null { throw ErrorKind.NotFound } }
+     │                                                ─────────┬─────────  
+     │                                                         ╰─────────── unresolved name: ErrorKind.NotFound
+     │ 
+     │ Note: Error code: E0001
+─────╯
+
+  [type] Error: unresolved name: ErrorKind.ValidationFailed
+     ╭─[ enum_class_throws.baml:194:20 ]
+     │
+ 194 │   use_enum_thrower(() -> int { throw ErrorKind.ValidationFailed })
+     │                    ───────────────────────┬──────────────────────  
+     │                                           ╰──────────────────────── unresolved name: ErrorKind.ValidationFailed
+     │ 
+     │ Note: Error code: E0001
+─────╯
+
+  [type] Error: unresolved name: ErrorKind.ValidationFailed
+     ╭─[ enum_class_throws.baml:194:37 ]
+     │
+ 194 │   use_enum_thrower(() -> int { throw ErrorKind.ValidationFailed })
+     │                                     ─────────────┬─────────────  
+     │                                                  ╰─────────────── unresolved name: ErrorKind.ValidationFailed
+     │ 
+     │ Note: Error code: E0001
+─────╯
+
   [validation] Error: Name `Wrapper` defined 2 times as: type, class
     ╭─[ fn_type_alias_throws.baml:20:6 ]
     │
@@ -78,6 +328,16 @@ source: crates/baml_tests/src/generated_tests.rs
    │ 
    │ Note: Error code: E0001
 ───╯
+
+  [type] Error: `(() -> null throws string)?` is not a function — it cannot be called
+    ╭─[ generic_stored_callback.baml:27:1 ]
+    │
+ 27 │   h?.run()
+    │ ─────┬────  
+    │      ╰────── `(() -> null throws string)?` is not a function — it cannot be called
+    │ 
+    │ Note: Error code: E0001
+────╯
 
   [type] Error: type mismatch: expected user.Box<string>, got user.Box<int>
     ╭─[ generic_subtype_rejection.baml:14:19 ]

@@ -265,26 +265,32 @@ function user.throw_enum_variant(x: int) -> string throws user.ErrorKind {
   { : "ok"
     if (x == 0 : bool) : void
       { : never
-        throw ErrorKind.NotFound : user.ErrorKind.NotFound
+        throw ErrorKind.NotFound : unknown
       }
     if (x == 1 : bool) : void
       { : never
-        throw ErrorKind.Unauthorized : user.ErrorKind.Unauthorized
+        throw ErrorKind.Unauthorized : unknown
       }
     "ok" : "ok"
   }
+  !! 445..464: unresolved name: ErrorKind.NotFound
+  !! 488..511: unresolved name: ErrorKind.Unauthorized
+  !! 411..421: throws contract violation: `user.ErrorKind` is missing unknown
+  ?? 411..421: extraneous throws declaration: user.ErrorKind
 }
-function user.test_lambda_throws_enum() -> int throws user.ErrorKind.ValidationFailed {
+function user.test_lambda_throws_enum() -> int throws unknown {
   { : never
-    let f = : () -> never throws user.ErrorKind.ValidationFailed
-      () -> int { ... } : () -> never throws user.ErrorKind.ValidationFailed
+    let f = : () -> never throws unknown
+      () -> int { ... } : () -> never throws unknown
         {
           throw ErrorKind.ValidationFailed
         }
     f() : never
   }
+  !! 665..666: unresolved name: ErrorKind.ValidationFailed
 }
 lambda user.test_lambda_throws_enum {
+  !! 633..660: unresolved name: ErrorKind.ValidationFailed
 }
 function user.throw_class_instance(x: int) -> string throws user.ApiError {
   { : "ok"
@@ -319,6 +325,11 @@ function user.throw_various_errors(x: int) -> string throws user.ErrorKind {
       _ =>
         "ok" : "ok"
   }
+  !! 1245..1264: unresolved name: ErrorKind.NotFound
+  !! 1280..1303: unresolved name: ErrorKind.Unauthorized
+  !! 1319..1346: unresolved name: ErrorKind.ValidationFailed
+  !! 1204..1214: throws contract violation: `user.ErrorKind` is missing unknown
+  ?? 1204..1214: extraneous throws declaration: user.ErrorKind
 }
 function user.throw_mixed_classes(x: int) -> string throws user.ApiError | user.ValidationError {
   { : "ok"
@@ -337,7 +348,7 @@ function user.throw_enum_or_class(x: int) -> string throws user.ErrorKind | user
   { : "ok"
     if (x == 0 : bool) : void
       { : never
-        throw ErrorKind.RateLimited : user.ErrorKind.RateLimited
+        throw ErrorKind.RateLimited : unknown
       }
     if (x == 1 : bool) : void
       { : never
@@ -345,6 +356,9 @@ function user.throw_enum_or_class(x: int) -> string throws user.ErrorKind | user
       }
     "ok" : "ok"
   }
+  !! 1774..1796: unresolved name: ErrorKind.RateLimited
+  !! 1729..1750: throws contract violation: `user.ErrorKind | user.ApiError` is missing unknown
+  ?? 1729..1750: extraneous throws declaration: user.ErrorKind
 }
 function user.throw_any_error(x: int) -> string throws string | user.ErrorKind | user.ApiError {
   { : "ok"
@@ -358,6 +372,9 @@ function user.throw_any_error(x: int) -> string throws string | user.ErrorKind |
       _ =>
         "ok" : "ok"
   }
+  !! 2067..2086: unresolved name: ErrorKind.NotFound
+  !! 1968..1998: throws contract violation: `string | user.ErrorKind | user.ApiError` is missing unknown
+  ?? 1968..1998: extraneous throws declaration: user.ErrorKind
 }
 function user.apply_may_throw_enum(f: () -> int throws user.ErrorKind) -> int throws user.ErrorKind {
   { : int
@@ -367,13 +384,15 @@ function user.apply_may_throw_enum(f: () -> int throws user.ErrorKind) -> int th
 function user.test_apply_enum_thrower() -> int throws user.ErrorKind {
   { : int
     apply_may_throw_enum(() -> int { ... }) : int
-      () -> int { ... } : () -> never throws user.ErrorKind.Unauthorized
+      () -> int { ... } : () -> never throws unknown
         {
           throw ErrorKind.Unauthorized
         }
   }
+  !! 2395..2437: unresolved name: ErrorKind.Unauthorized
 }
 lambda user.test_apply_enum_thrower {
+  !! 2412..2435: unresolved name: ErrorKind.Unauthorized
 }
 function user.apply_may_throw_class(f: () -> int throws user.ApiError) -> int throws user.ApiError {
   { : int
@@ -396,16 +415,18 @@ function user.apply_generic_enum(f: () -> int throws __throws_f) -> int throws _
     f() : int
   }
 }
-function user.test_rethrows_enum() -> int throws user.ErrorKind.NotFound {
+function user.test_rethrows_enum() -> int throws unknown {
   { : int
     apply_generic_enum(() -> int { ... }) : int
-      () -> int { ... } : () -> never throws user.ErrorKind.NotFound
+      () -> int { ... } : () -> never throws unknown
         {
           throw ErrorKind.NotFound
         }
   }
+  !! 2871..2909: unresolved name: ErrorKind.NotFound
 }
 lambda user.test_rethrows_enum {
+  !! 2888..2907: unresolved name: ErrorKind.NotFound
 }
 function user.apply_generic_class(f: () -> int throws __throws_f) -> int throws __throws_f {
   { : int
@@ -468,8 +489,10 @@ function user.make_enum_handler() -> user.EnumThrowingHandler throws never {
   { : user.EnumThrowingHandler
     EnumThrowingHandler { run: () -> null { ... } } : user.EnumThrowingHandler
   }
+  !! 4056..4124: unresolved name: ErrorKind.NotFound
 }
 lambda user.make_enum_handler {
+  !! 4101..4120: unresolved name: ErrorKind.NotFound
 }
 function user.make_class_handler() -> user.ClassThrowingHandler throws never {
   { : user.ClassThrowingHandler
@@ -499,13 +522,15 @@ function user.use_mixed_thrower(f: user.MixedThrower) -> int throws user.ApiErro
 function user.test_type_alias_enum() -> int throws user.ErrorKind {
   { : int
     use_enum_thrower(() -> int { ... }) : int
-      () -> int { ... } : () -> never throws user.ErrorKind.ValidationFailed
+      () -> int { ... } : () -> never throws unknown
         {
           throw ErrorKind.ValidationFailed
         }
   }
+  !! 4730..4776: unresolved name: ErrorKind.ValidationFailed
 }
 lambda user.test_type_alias_enum {
+  !! 4747..4774: unresolved name: ErrorKind.ValidationFailed
 }
 function user.test_type_alias_class() -> int throws user.ApiError {
   { : int
@@ -674,6 +699,25 @@ function user.use_int_handler(h: user.Handler<int>) -> null throws int {
     h.run() : null
   }
 }
+function user.use_string_handler_alias(h: user.Handler<string>) -> null throws string {
+  { : null
+    let alias = h : user.Handler<string>
+    alias.run() : null
+  }
+}
+function user.use_local_string_handler() -> null throws string {
+  { : null
+    let h = make_string_handler() : user.Handler<string>
+    h.run() : null
+  }
+}
+function user.maybe_use_string_handler(h: user.Handler<string>?) -> null throws string {
+  { : null
+    h?.run() : unknown
+    null : null
+  }
+  !! 560..570: `(() -> null throws string)?` is not a function — it cannot be called
+}
 function user.make_string_handler() -> user.Handler<string> throws never {
   { : user.Handler<string>
     Handler { run: () -> null { ... } } : user.Handler<string>
@@ -696,6 +740,21 @@ function user.test_string_handler() -> null throws string {
 function user.test_int_handler() -> null throws int {
   { : null
     use_int_handler(make_int_handler()) : null
+  }
+}
+function user.test_string_handler_alias() -> null throws string {
+  { : null
+    use_string_handler_alias(make_string_handler()) : null
+  }
+}
+function user.test_local_string_handler() -> null throws never {
+  { : null
+    use_local_string_handler() : null
+  }
+}
+function user.test_optional_string_handler() -> null throws never {
+  { : null
+    maybe_use_string_handler(make_string_handler()) : null
   }
 }
 class user.Handler$stream {
@@ -731,6 +790,16 @@ function user.run_tasks(tasks: user.Task<string | int>[]) -> null throws int | s
     null : null
   }
 }
+function user.run_tasks_alias(tasks: user.Task<string | int>[]) -> null throws int | string {
+  { : null
+    let alias = tasks : user.Task<string | int>[]
+    for task in alias
+      { : null
+        task.run() : null
+      }
+    null : null
+  }
+}
 function user.make_mixed_tasks() -> user.Task<string | int>[] throws never {
   { : user.Task<string | int>[]
     [Task { name: "a", run: () -> null { ... } }, Task { name: "b", run: () -> null { ... } }] : user.Task<string | int>[]
@@ -740,9 +809,48 @@ lambda user.make_mixed_tasks {
 }
 lambda user.make_mixed_tasks {
 }
+function user.run_local_tasks() -> null throws int | string {
+  { : null
+    let tasks = make_mixed_tasks() : user.Task<string | int>[]
+    for task in tasks
+      { : null
+        task.run() : null
+      }
+    null : null
+  }
+}
+function user.run_inline_tasks() -> null throws never {
+  { : null
+    let tasks = [Task { name: "a", run: () -> null { ... } }, Task { name: "b", run: () -> null { ... } }] : user.Task[]
+    for task in tasks
+      { : null
+        task.run() : null
+      }
+    null : null
+  }
+}
+lambda user.run_inline_tasks {
+}
+lambda user.run_inline_tasks {
+}
 function user.test_run_mixed_tasks() -> null throws int | string {
   { : null
     run_tasks(make_mixed_tasks()) : null
+  }
+}
+function user.test_run_tasks_alias() -> null throws int | string {
+  { : null
+    run_tasks_alias(make_mixed_tasks()) : null
+  }
+}
+function user.test_run_local_tasks() -> null throws never {
+  { : null
+    run_local_tasks() : null
+  }
+}
+function user.test_run_inline_tasks() -> null throws never {
+  { : null
+    run_inline_tasks() : null
   }
 }
 class user.Task$stream {

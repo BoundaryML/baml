@@ -191,7 +191,9 @@ pub fn type_at(db: &dyn Db, file: SourceFile, offset: TextSize) -> Option<TypeIn
             definition_site: None,
             ..
         }
-        | baml_compiler2_tir::resolve::ResolvedName::Unknown => None,
+        | baml_compiler2_tir::resolve::ResolvedName::Unknown => {
+            class_method_definition_type_info(db, file, offset, name_text)
+        }
     }
 }
 
@@ -226,10 +228,11 @@ fn type_info_for_definition(db: &dyn Db, def: Definition<'_>) -> TypeInfo {
                 .collect();
             let return_type = sig.return_type.as_ref().map(utils::display_type_expr);
 
-            // Compute throws: prefer inferred/transitive throws from TIR, fall back
-            // to declared throws from the signature.
-            let throws = inferred_throws_for_function(db, func_loc, func_data)
-                .or_else(|| sig.throws.as_ref().map(utils::display_type_expr));
+            // Explicit throws clauses should display exactly as written in source.
+            // Only fall back to inferred/transitive throws when the signature
+            // omits a throws clause entirely.
+            let throws = declared_throws_for_function(db, func_loc)
+                .or_else(|| inferred_throws_for_function(db, func_loc));
 
             TypeInfo::Function {
                 name: func_name,
@@ -366,16 +369,11 @@ fn type_info_for_definition(db: &dyn Db, def: Definition<'_>) -> TypeInfo {
 fn inferred_throws_for_function(
     db: &dyn Db,
     func_loc: baml_compiler2_hir::loc::FunctionLoc<'_>,
-    func_data: &baml_compiler2_hir::item_tree::Function,
 ) -> Option<String> {
     let pkg_info = baml_compiler2_hir::file_package::file_package(db, func_loc.file(db));
     let pkg_id = baml_compiler2_hir::package::PackageId::new(db, pkg_info.package);
     let throw_sets = baml_compiler2_tir::throw_inference::function_throw_sets(db, pkg_id);
-
-    let key = baml_compiler2_tir::throw_inference::throw_set_key(
-        &pkg_info.namespace_path,
-        &func_data.name,
-    );
+    let key = baml_compiler2_tir::throw_inference::callable_throw_key(db, func_loc);
 
     let facts = throw_sets.transitive_for(&key)?;
     if facts.is_empty() {
@@ -384,6 +382,47 @@ fn inferred_throws_for_function(
 
     let parts: Vec<String> = facts.iter().map(utils::display_ty).collect();
     Some(parts.join(" | "))
+}
+
+fn declared_throws_for_function(
+    db: &dyn Db,
+    func_loc: baml_compiler2_hir::loc::FunctionLoc<'_>,
+) -> Option<String> {
+    let sig_sm = baml_compiler2_hir::signature::function_signature_source_map(db, func_loc);
+    let span = sig_sm.throws_type_span?;
+    let text = func_loc.file(db).text(db);
+    let start: usize = span.start().into();
+    let end: usize = span.end().into();
+    Some(text[start..end].trim().to_string())
+}
+
+fn class_method_definition_type_info(
+    db: &dyn Db,
+    file: SourceFile,
+    offset: TextSize,
+    token_text: &str,
+) -> Option<TypeInfo> {
+    let item_tree = baml_compiler2_hir::file_item_tree(db, file);
+    let source_map = baml_compiler2_hir::file_item_tree_source_map(db, file);
+
+    for class_data in item_tree.classes.values() {
+        for &method_id in &class_data.methods {
+            let method_data = &item_tree[method_id];
+            if method_data.name.as_str() != token_text {
+                continue;
+            }
+            let Some(name_span) = source_map.function_name_spans.get(&method_id).copied() else {
+                continue;
+            };
+            if !name_span.contains(offset) && name_span.end() != offset {
+                continue;
+            }
+            let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(db, file, method_id);
+            return Some(type_info_for_definition(db, Definition::Function(func_loc)));
+        }
+    }
+
+    None
 }
 
 // ── local_type_info ───────────────────────────────────────────────────────────

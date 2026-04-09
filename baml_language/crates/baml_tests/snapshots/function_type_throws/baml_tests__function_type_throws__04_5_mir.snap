@@ -840,7 +840,7 @@ fn .<lambda(make_class_handler, 0)>() -> null {
 fn user.make_enum_handler() -> EnumThrowingHandler {
     // Locals:
     let _0: EnumThrowingHandler // _0 // return
-    let _1: () -> void throws ErrorKind.NotFound
+    let _1: () -> void
 
     bb0: {
         _1 = make_closure lambda[0]();
@@ -859,7 +859,7 @@ fn .<lambda(make_enum_handler, 0)>() -> null {
     let _0: null // _0 // return
 
     bb0: {
-        throw const user.ErrorKind.NotFound;
+        throw const null;
     }
 }
 
@@ -893,7 +893,7 @@ fn .<lambda(test_apply_class_thrower, 0)>() -> null {
 fn user.test_apply_enum_thrower() -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: () -> void throws ErrorKind.Unauthorized
+    let _1: () -> void
 
     bb0: {
         _1 = make_closure lambda[0]();
@@ -911,7 +911,7 @@ fn .<lambda(test_apply_enum_thrower, 0)>() -> null {
     let _0: null // _0 // return
 
     bb0: {
-        throw const user.ErrorKind.Unauthorized;
+        throw const null;
     }
 }
 
@@ -947,8 +947,8 @@ fn .<lambda(test_lambda_throws_class, 0)>() -> null {
 fn user.test_lambda_throws_enum() -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: () -> void throws ErrorKind.ValidationFailed // f
-    let _2: () -> void throws ErrorKind.ValidationFailed
+    let _1: () -> void // f
+    let _2: () -> void
 
     bb0: {
         _1 = make_closure lambda[0]();
@@ -967,7 +967,7 @@ fn .<lambda(test_lambda_throws_enum, 0)>() -> null {
     let _0: null // _0 // return
 
     bb0: {
-        throw const user.ErrorKind.ValidationFailed;
+        throw const null;
     }
 }
 
@@ -1001,7 +1001,7 @@ fn .<lambda(test_rethrows_class, 0)>() -> null {
 fn user.test_rethrows_enum() -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: () -> void throws ErrorKind.NotFound
+    let _1: () -> void
 
     bb0: {
         _1 = make_closure lambda[0]();
@@ -1019,7 +1019,7 @@ fn .<lambda(test_rethrows_enum, 0)>() -> null {
     let _0: null // _0 // return
 
     bb0: {
-        throw const user.ErrorKind.NotFound;
+        throw const null;
     }
 }
 
@@ -1053,7 +1053,7 @@ fn .<lambda(test_type_alias_class, 0)>() -> null {
 fn user.test_type_alias_enum() -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: () -> void throws ErrorKind.ValidationFailed
+    let _1: () -> void
 
     bb0: {
         _1 = make_closure lambda[0]();
@@ -1071,7 +1071,7 @@ fn .<lambda(test_type_alias_enum, 0)>() -> null {
     let _0: null // _0 // return
 
     bb0: {
-        throw const user.ErrorKind.ValidationFailed;
+        throw const null;
     }
 }
 
@@ -1125,7 +1125,7 @@ fn user.throw_any_error(x: int) -> string {
     }
 
     bb4: {
-        throw const user.ErrorKind.NotFound;
+        throw const null;
     }
 
     bb5: {
@@ -1193,7 +1193,7 @@ fn user.throw_enum_or_class(x: int) -> string {
     }
 
     bb5: {
-        throw const user.ErrorKind.RateLimited;
+        throw const null;
     }
 }
 
@@ -1224,11 +1224,11 @@ fn user.throw_enum_variant(x: int) -> string {
     }
 
     bb4: {
-        throw const user.ErrorKind.Unauthorized;
+        throw const null;
     }
 
     bb5: {
-        throw const user.ErrorKind.NotFound;
+        throw const null;
     }
 }
 
@@ -1290,15 +1290,15 @@ fn user.throw_various_errors(x: int) -> string {
     }
 
     bb3: {
-        throw const user.ErrorKind.ValidationFailed;
+        throw const null;
     }
 
     bb4: {
-        throw const user.ErrorKind.Unauthorized;
+        throw const null;
     }
 
     bb5: {
-        throw const user.ErrorKind.NotFound;
+        throw const null;
     }
 }
 
@@ -1646,6 +1646,39 @@ fn .<lambda(make_string_handler, 0)>() -> null {
     }
 }
 
+fn user.maybe_use_string_handler(h: Handler?) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: Handler? // h // param
+    let _2: void
+    let _3: (() -> null throws string)?
+    let _4: bool
+
+    bb0: {
+        _4 = copy _1 == const null;
+        branch copy _4 -> [bb2, bb1];
+    }
+
+    bb1: {
+        _3 = copy _1.0;
+        _2 = call copy _3() -> [bb3];
+    }
+
+    bb2: {
+        _2 = const null;
+        goto -> bb3;
+    }
+
+    bb3: {
+        _0 = const null;
+        goto -> bb4;
+    }
+
+    bb4: {
+        return;
+    }
+}
+
 fn user.test_int_handler() -> null {
     // Locals:
     let _0: null // _0 // return
@@ -1657,6 +1690,37 @@ fn user.test_int_handler() -> null {
 
     bb1: {
         _0 = call const fn user.use_int_handler(copy _1) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.test_local_string_handler() -> null {
+    // Locals:
+    let _0: null // _0 // return
+
+    bb0: {
+        _0 = call const fn user.use_local_string_handler() -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.test_optional_string_handler() -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: Handler
+
+    bb0: {
+        _1 = call const fn user.make_string_handler() -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn user.maybe_use_string_handler(copy _1) -> [bb2];
     }
 
     bb2: {
@@ -1682,6 +1746,24 @@ fn user.test_string_handler() -> null {
     }
 }
 
+fn user.test_string_handler_alias() -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: Handler
+
+    bb0: {
+        _1 = call const fn user.make_string_handler() -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn user.use_string_handler_alias(copy _1) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.use_int_handler(h: Handler) -> null {
     // Locals:
     let _0: null // _0 // return
@@ -1698,6 +1780,28 @@ fn user.use_int_handler(h: Handler) -> null {
     }
 }
 
+fn user.use_local_string_handler() -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: Handler // h
+    let _2: () -> null throws string
+    let _3: Handler
+
+    bb0: {
+        _1 = call const fn user.make_string_handler() -> [bb1];
+    }
+
+    bb1: {
+        _3 = copy _1;
+        _2 = copy _3.0;
+        _0 = call copy _2() -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.use_string_handler(h: Handler) -> null {
     // Locals:
     let _0: null // _0 // return
@@ -1707,6 +1811,26 @@ fn user.use_string_handler(h: Handler) -> null {
     bb0: {
         _2 = copy _1.0;
         _0 = call copy _2() -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.use_string_handler_alias(h: Handler) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: Handler // h // param
+    let _2: Handler // alias
+    let _3: () -> null throws string
+    let _4: Handler
+
+    bb0: {
+        _2 = copy _1;
+        _4 = copy _2;
+        _3 = copy _4.0;
+        _0 = call copy _3() -> [bb1];
     }
 
     bb1: {
@@ -1786,6 +1910,137 @@ fn .<lambda(make_mixed_tasks, 1)>() -> null {
     }
 }
 
+fn user.run_inline_tasks() -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: Task[] // tasks
+    let _2: Task
+    let _3: () -> void throws string
+    let _4: Task
+    let _5: () -> void throws int
+    let _6: Task[]
+    let _7: int // __for_idx
+    let _8: int
+    let _9: bool
+    let _10: Task
+    let _11: Task // task
+    let _12: void
+    let _13: () -> null
+    let _14: Task
+
+    bb0: {
+        _3 = make_closure lambda[0]();
+        _2 = Task { const "a", copy _3 };
+        _5 = make_closure lambda[1]();
+        _4 = Task { const "b", copy _5 };
+        _1 = [copy _2, copy _4];
+        _6 = copy _1;
+        _7 = const 0_i64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        _8 = len(_6);
+        _9 = copy _7 < copy _8;
+        branch copy _9 -> [bb4, bb2];
+    }
+
+    bb2: {
+        _0 = const null;
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+
+    bb4: {
+        _10 = copy _6[_7];
+        _11 = copy _10;
+        _14 = copy _11;
+        _13 = copy _14.1;
+        _12 = call copy _13() -> [bb5];
+    }
+
+    bb5: {
+        _7 = copy _7 + const 1_i64;
+        goto -> bb1;
+    }
+}
+
+// lambda[0]
+fn .<lambda(run_inline_tasks, 0)>() -> null {
+    // Locals:
+    let _0: null // _0 // return
+
+    bb0: {
+        throw const "error";
+    }
+}
+
+// lambda[1]
+fn .<lambda(run_inline_tasks, 1)>() -> null {
+    // Locals:
+    let _0: null // _0 // return
+
+    bb0: {
+        throw const 42_i64;
+    }
+}
+
+fn user.run_local_tasks() -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: Task[] // tasks
+    let _2: Task[]
+    let _3: int // __for_idx
+    let _4: int
+    let _5: bool
+    let _6: Task
+    let _7: Task // task
+    let _8: void
+    let _9: () -> null throws string | int
+    let _10: Task
+
+    bb0: {
+        _1 = call const fn user.make_mixed_tasks() -> [bb1];
+    }
+
+    bb1: {
+        _2 = copy _1;
+        _3 = const 0_i64;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _4 = len(_2);
+        _5 = copy _3 < copy _4;
+        branch copy _5 -> [bb5, bb3];
+    }
+
+    bb3: {
+        _0 = const null;
+        goto -> bb4;
+    }
+
+    bb4: {
+        return;
+    }
+
+    bb5: {
+        _6 = copy _2[_3];
+        _7 = copy _6;
+        _10 = copy _7;
+        _9 = copy _10.1;
+        _8 = call copy _9() -> [bb6];
+    }
+
+    bb6: {
+        _3 = copy _3 + const 1_i64;
+        goto -> bb2;
+    }
+}
+
 fn user.run_tasks(tasks: Task[]) -> null {
     // Locals:
     let _0: null // _0 // return
@@ -1833,6 +2088,83 @@ fn user.run_tasks(tasks: Task[]) -> null {
     }
 }
 
+fn user.run_tasks_alias(tasks: Task[]) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: Task[] // tasks // param
+    let _2: Task[] // alias
+    let _3: Task[]
+    let _4: int // __for_idx
+    let _5: int
+    let _6: bool
+    let _7: Task
+    let _8: Task // task
+    let _9: void
+    let _10: () -> null throws string | int
+    let _11: Task
+
+    bb0: {
+        _2 = copy _1;
+        _3 = copy _2;
+        _4 = const 0_i64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        _5 = len(_3);
+        _6 = copy _4 < copy _5;
+        branch copy _6 -> [bb4, bb2];
+    }
+
+    bb2: {
+        _0 = const null;
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+
+    bb4: {
+        _7 = copy _3[_4];
+        _8 = copy _7;
+        _11 = copy _8;
+        _10 = copy _11.1;
+        _9 = call copy _10() -> [bb5];
+    }
+
+    bb5: {
+        _4 = copy _4 + const 1_i64;
+        goto -> bb1;
+    }
+}
+
+fn user.test_run_inline_tasks() -> null {
+    // Locals:
+    let _0: null // _0 // return
+
+    bb0: {
+        _0 = call const fn user.run_inline_tasks() -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.test_run_local_tasks() -> null {
+    // Locals:
+    let _0: null // _0 // return
+
+    bb0: {
+        _0 = call const fn user.run_local_tasks() -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
 fn user.test_run_mixed_tasks() -> null {
     // Locals:
     let _0: null // _0 // return
@@ -1844,6 +2176,24 @@ fn user.test_run_mixed_tasks() -> null {
 
     bb1: {
         _0 = call const fn user.run_tasks(copy _1) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.test_run_tasks_alias() -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: Task[]
+
+    bb0: {
+        _1 = call const fn user.make_mixed_tasks() -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn user.run_tasks_alias(copy _1) -> [bb2];
     }
 
     bb2: {

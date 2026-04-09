@@ -2871,12 +2871,16 @@ impl<'db> TypeInferenceBuilder<'db> {
         } else {
             first.clone()
         };
-        let Some(pkg_items) = self.res_ctx.items_for_package(db, &pkg_name) else {
-            return Ty::Unknown {
-                attr: TyAttr::default(),
-            };
-        };
+        let own_pkg_name = self.package_id.name(db);
+        if pkg_name != own_pkg_name {
+            return self
+                .resolve_external_package_item(&pkg_name, &segments[1..], expr_id)
+                .unwrap_or(Ty::Unknown {
+                    attr: TyAttr::default(),
+                });
+        }
 
+        let pkg_items = self.package_items;
         if pkg_items.namespaces.is_empty() {
             return Ty::Unknown {
                 attr: TyAttr::default(),
@@ -2918,10 +2922,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             let func_data_for_sig = &item_tree_for_func[func_loc.id(db)];
             let generic_params = &func_data_for_sig.generic_params;
             let pkg_info = baml_compiler2_hir::file_package::file_package(db, func_loc.file(db));
-            let function_key = crate::throw_inference::throw_set_key(
-                &pkg_info.namespace_path,
-                &func_data_for_sig.name,
-            );
+            let function_key = crate::throw_inference::callable_throw_key(db, func_loc);
             let ns_context = pkg_info.namespace_path;
             self.resolutions.insert(
                 expr_id,
@@ -2968,6 +2969,51 @@ impl<'db> TypeInferenceBuilder<'db> {
         None
     }
 
+    fn resolve_external_package_item(
+        &mut self,
+        pkg_name: &Name,
+        path: &[Name],
+        expr_id: ExprId,
+    ) -> Option<Ty> {
+        if path.is_empty() {
+            return None;
+        }
+
+        let db = self.context.db();
+        let mut full_path = Vec::with_capacity(path.len() + 1);
+        full_path.push(pkg_name.clone());
+        full_path.extend_from_slice(path);
+
+        if let Some((_source, function)) = self.res_ctx.lookup_function(db, &full_path, &[]) {
+            let item = path.last().expect("non-empty path");
+            if let Some(Definition::Function(func_loc)) = self
+                .res_ctx
+                .lookup_value_definition_in_package(db, pkg_name, &path[..path.len() - 1], item)
+            {
+                self.resolutions.insert(
+                    expr_id,
+                    crate::inference::MemberResolution::Free { func_loc },
+                );
+            }
+            return Some(Ty::Function {
+                params: function
+                    .params
+                    .into_iter()
+                    .map(|(n, ty)| (Some(n), ty))
+                    .collect(),
+                ret: Box::new(function.return_type),
+                throws: Box::new(function.outward_throws.unwrap_or(Ty::Never {
+                    attr: TyAttr::default(),
+                })),
+                attr: TyAttr::default(),
+            });
+        }
+
+        self.res_ctx
+            .resolve_type(db, &full_path, &[])
+            .map(|(_, ty)| ty)
+    }
+
     /// Resolve a single name to its type.
     ///
     /// Checks local variables first, then value namespace (functions), then
@@ -2992,8 +3038,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     let sig_pkg =
                         baml_compiler2_hir::file_package::file_package(db, func_loc.file(db));
                     let sig_ns = sig_pkg.namespace_path;
-                    let function_key =
-                        crate::throw_inference::throw_set_key(&sig_ns, &func_data.name);
+                    let function_key = crate::throw_inference::callable_throw_key(db, func_loc);
                     let func_scope = self.find_function_scope_id(
                         func_loc.file(db),
                         func_data.span,
@@ -3379,46 +3424,22 @@ impl<'db> TypeInferenceBuilder<'db> {
             .collect()
     }
 
-    /// Fetch `PackageItems` for the package that owns a class type.
-    ///
-    /// Returns `self.package_items` when the class is in the current package,
-    /// or loads the correct foreign package's items when the class lives in a
-    /// declared dependency package.
-    fn resolve_class_pkg_items(
-        &self,
-        class_pkg: &baml_base::Name,
-    ) -> Option<&'db baml_compiler2_hir::package::PackageItems<'db>> {
-        let db = self.context.db();
-        self.res_ctx.items_for_package(db, class_pkg)
-    }
-
-    /// Resolve a `QualifiedTypeName` to a `ClassLoc` via `package_items` lookup.
+    /// Resolve a `QualifiedTypeName` to a `ClassLoc` via `PackageResolutionContext`.
     fn resolve_class_loc(
         &self,
         qtn: &crate::ty::QualifiedTypeName,
     ) -> Option<baml_compiler2_hir::loc::ClassLoc<'db>> {
-        let pkg_items = self.resolve_class_pkg_items(qtn.package())?;
-        match pkg_items.lookup_type(qtn.namespace(), qtn.name())? {
-            Definition::Class(class_loc) => Some(class_loc),
-            _ => None,
-        }
+        let db = self.context.db();
+        self.res_ctx.lookup_class_loc(db, qtn)
     }
 
-    /// Resolve a `QualifiedTypeName` to an `EnumLoc` via `package_items` lookup.
+    /// Resolve a `QualifiedTypeName` to an `EnumLoc` via `PackageResolutionContext`.
     fn resolve_enum_loc(
         &self,
         qtn: &crate::ty::QualifiedTypeName,
     ) -> Option<baml_compiler2_hir::loc::EnumLoc<'db>> {
         let db = self.context.db();
-        let items = if *qtn.package() == self.package_id.name(db) {
-            self.package_items
-        } else {
-            self.res_ctx.items_for_package(db, qtn.package())?
-        };
-        match items.lookup_type(qtn.namespace(), qtn.name())? {
-            Definition::Enum(enum_loc) => Some(enum_loc),
-            _ => None,
-        }
+        self.res_ctx.lookup_enum_loc(db, qtn)
     }
 
     /// Look up a class method by name.
@@ -3442,29 +3463,16 @@ impl<'db> TypeInferenceBuilder<'db> {
         baml_compiler2_hir::loc::FunctionLoc<'db>,
     )> {
         let db = self.context.db();
-        let pkg_items_for_class = self.resolve_class_pkg_items(class_name.package())?;
-        let def = pkg_items_for_class.lookup_type(class_name.namespace(), class_name.name())?;
-        let Definition::Class(class_loc) = def else {
-            return None;
-        };
-        let file = class_loc.file(db);
-        let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
-        let class_data = &item_tree[class_loc.id(db)];
-
-        // Resolve the FunctionLoc for the method (needed for MemberResolution regardless of path).
-        let func_loc = class_data.methods.iter().find_map(|&method_id| {
-            let method_data = &item_tree[method_id];
-            if method_data.name == *method_name {
-                Some(baml_compiler2_hir::loc::FunctionLoc::new(
-                    db, file, method_id,
-                ))
-            } else {
-                None
-            }
-        })?;
-
         let own_pkg_name = self.package_id.name(db);
         if *class_name.package() == own_pkg_name {
+            let class_loc = self.res_ctx.lookup_class_loc(db, class_name.qtn())?;
+            let file = class_loc.file(db);
+            let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
+            let class_data = &item_tree[class_loc.id(db)];
+            let func_loc = self
+                .res_ctx
+                .lookup_class_method_locs(db, class_name, method_name)?
+                .1;
             // Own-package path: build function type from signature with scope/throw-set support.
             let ns_context =
                 baml_compiler2_hir::file_package::file_package(db, file).namespace_path;
@@ -3478,15 +3486,12 @@ impl<'db> TypeInferenceBuilder<'db> {
                     all_generic_params.extend(method_data.generic_params.iter().cloned());
                     let sig = baml_compiler2_hir::signature::function_signature(db, func_loc);
                     let class_ty = Ty::Class(class_name.clone(), TyAttr::default());
-                    let function_key = crate::throw_inference::throw_set_key(
-                        &ns_context,
-                        &Name::new(format!("{}.{}", class_name.name(), method_data.name)),
-                    );
+                    let function_key = crate::throw_inference::callable_throw_key(db, func_loc);
                     let method_scope =
                         self.find_function_scope_id(file, method_data.span, &method_data.name);
                     let method_body = baml_compiler2_hir::body::function_body(db, func_loc);
                     let ty = self.build_function_ty_from_signature(
-                        pkg_items_for_class,
+                        self.package_items,
                         &ns_context,
                         &all_generic_params,
                         sig.as_ref(),
@@ -3512,6 +3517,9 @@ impl<'db> TypeInferenceBuilder<'db> {
             // Dep-package path: delegate type-level resolution to PackageResolutionContext,
             // which reads from the pre-resolved PackageInterface and applies class-level
             // generic substitution.
+            let (class_loc, func_loc) =
+                self.res_ctx
+                    .lookup_class_method_locs(db, class_name, method_name)?;
             let resolved = self
                 .res_ctx
                 .lookup_class_method(db, class_name, method_name)?;
@@ -3523,7 +3531,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     .map(|(n, ty)| (Some(n), ty))
                     .collect(),
                 ret: Box::new(resolved.function.return_type),
-                throws: Box::new(resolved.function.throws.unwrap_or(Ty::Never {
+                throws: Box::new(resolved.function.outward_throws.unwrap_or(Ty::Never {
                     attr: TyAttr::default(),
                 })),
                 attr: TyAttr::default(),
@@ -3605,27 +3613,17 @@ impl<'db> TypeInferenceBuilder<'db> {
         let baml_ns_shorthands: &[&str] = &[
             "env", "sys", "http", "math", "fs", "net", "media", "llm", "errors", "unstable",
         ];
-        let (pkg_items, item_path_owned): (
-            &baml_compiler2_hir::package::PackageItems<'db>,
-            Vec<Name>,
-        ) = if let Some(items) = self.res_ctx.items_for_package(db, &resolved_pkg_name) {
-            // Found the package directly.
-            if items.namespaces.is_empty() {
-                return None;
-            }
-            let ip = segments[1..].to_vec();
-            (items, ip)
+        let is_current_package = first.as_str() == "root"
+            || first.as_str() == self.package_id.name(db).as_str()
+            || resolved_pkg_name == self.package_id.name(db);
+        let (target_pkg_name, item_path_owned): (Name, Vec<Name>) = if is_current_package {
+            (resolved_pkg_name, segments[1..].to_vec())
         } else if baml_ns_shorthands.contains(&first.as_str()) {
-            // `env.X` → treat as `baml.env.X`: look up in the `"baml"` package
-            // with the namespace prefix prepended to the item path.
-            let baml_name = Name::new("baml");
-            let baml_items = self.res_ctx.items_for_package(db, &baml_name)?;
-            // Prepend the namespace segment (`first`) to the item path.
             let mut ip = vec![first.clone()];
             ip.extend_from_slice(&segments[1..]);
-            (baml_items, ip)
+            (Name::new("baml"), ip)
         } else {
-            return None;
+            (resolved_pkg_name, segments[1..].to_vec())
         };
 
         let item_path: &[Name] = &item_path_owned;
@@ -3659,34 +3657,12 @@ impl<'db> TypeInferenceBuilder<'db> {
         // When there is a non-empty item_path, try class/enum member resolution
         // first (e.g. `baml.Array.length` → Array class, then method "length").
         if !item_path.is_empty() {
-            let item_name = item_path.last().expect("non-empty item_path");
-            if let Some(def) = pkg_items.lookup_type(&item_path[..item_path.len() - 1], item_name) {
-                match def {
-                    Definition::Class(_class_loc) => {
-                        if first.as_str() == "root"
-                            || first.as_str() == self.package_id.name(db).as_str()
-                        {
-                            let class_qtn = crate::lower_type_expr::qualify_def(db, def, item_name);
-                            let base_ty = Ty::Class(class_qtn.into(), TyAttr::default());
-                            return Some(self.resolve_member(&base_ty, member, at));
-                        }
-                        let class_path: Vec<&str> =
-                            item_path.iter().map(smol_str::SmolStr::as_str).collect();
-                        return self
-                            .resolve_builtin_member(&class_path, &[], member, at)
-                            .or_else(|| {
-                                let class_qtn =
-                                    crate::lower_type_expr::qualify_def(db, def, item_name);
-                                let base_ty = Ty::Class(class_qtn.into(), TyAttr::default());
-                                Some(self.resolve_member(&base_ty, member, at))
-                            });
-                    }
-                    Definition::Enum(_) => {
-                        let enum_qtn = crate::lower_type_expr::qualify_def(db, def, item_name);
-                        let base_ty = Ty::Enum(enum_qtn.into(), TyAttr::default());
-                        return Some(self.resolve_member(&base_ty, member, at));
-                    }
-                    _ => {}
+            let mut full_base_path = Vec::with_capacity(item_path.len() + 1);
+            full_base_path.push(target_pkg_name.clone());
+            full_base_path.extend_from_slice(item_path);
+            if let Some((_source, base_ty)) = self.res_ctx.resolve_type(db, &full_base_path, &[]) {
+                if matches!(base_ty, Ty::Class(..) | Ty::Enum(..)) {
+                    return Some(self.resolve_member(&base_ty, member, at));
                 }
             }
         }
@@ -3698,7 +3674,11 @@ impl<'db> TypeInferenceBuilder<'db> {
             .chain(std::iter::once(member))
             .cloned()
             .collect();
-        let result = self.resolve_package_item(pkg_items, &full_path, at);
+        let result = if target_pkg_name == self.package_id.name(db) {
+            self.resolve_package_item(self.package_items, &full_path, at)
+        } else {
+            self.resolve_external_package_item(&target_pkg_name, &full_path, at)
+        };
         if result.is_none() {
             // Package was found but the member doesn't exist — report a clear error
             // with the full dotted path as context (e.g. "unresolved member: testing.Quorum").
@@ -3747,16 +3727,9 @@ impl<'db> TypeInferenceBuilder<'db> {
 
     /// Resolve a method or field on a builtin class declared in the `"baml"` package.
     ///
-    /// 1. Fetches `package_items(db, "baml")`.
-    /// 2. Looks up `class_name` in the root namespace.
-    /// 3. Binds the class's `generic_params` to `type_args` (e.g. `{T → int}`).
-    /// 4. Searches the class methods for `member_name`, lowering the method's
-    ///    parameter and return types with type variable substitution applied.
-    /// 5. Falls back to checking class fields.
-    ///
-    /// Returns `None` if the class or member is not found.
-    /// Wrapper around `resolve_builtin_method` that also stores a `MemberResolution`
-    /// when the result is a method (not a field).
+    /// This delegates the actual foreign-package lookup to
+    /// `PackageResolutionContext`, then records a `MemberResolution` when the
+    /// resolved member is a method.
     fn resolve_builtin_member(
         &mut self,
         class_path: &[&str],
@@ -3791,226 +3764,24 @@ impl<'db> TypeInferenceBuilder<'db> {
         member_name: &Name,
     ) -> Option<BuiltinResolution<'db>> {
         let db = self.context.db();
-        let baml_items = self
-            .res_ctx
-            .items_for_package(db, &baml_base::Name::new("baml"))?;
-
-        // Look up the class by path (e.g. &["Array"] or &["media", "Image"]).
         let path: Vec<Name> = class_path.iter().map(baml_base::Name::new).collect();
-        let item = path.last().expect("non-empty class_path");
-        let def = baml_items.lookup_type(&path[..path.len() - 1], item)?;
-        let baml_compiler2_hir::contributions::Definition::Class(class_loc) = def else {
-            return None;
-        };
-
-        let file = class_loc.file(db);
-        let stub_pkg = baml_compiler2_hir::file_package::file_package(db, file);
-        let stub_ns: &[Name] = &stub_pkg.namespace_path;
-        let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
-        let class_data = &item_tree[class_loc.id(db)];
-
-        // Bind generic type variables: e.g. {T → int} for Array<int>.
-        let mut bindings = crate::generics::bind_type_vars(&class_data.generic_params, type_args);
-
-        // Search methods first.
-        for &method_id in &class_data.methods {
-            let method_data = &item_tree[method_id];
-            if method_data.name == *member_name {
-                // Add method-level generics as TypeVar entries so they survive
-                // lowering and can be resolved by call-site inference.
-                for gp in &method_data.generic_params {
-                    bindings
-                        .entry(gp.clone())
-                        .or_insert_with(|| Ty::TypeVar(gp.clone(), TyAttr::default()));
-                }
-                let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(db, file, method_id);
-                let sig = baml_compiler2_hir::signature::function_signature(db, func_loc);
-                let mut diags = Vec::new();
-                // Build the class type for self parameter resolution.
-                // For generics, apply type_args (e.g. Array<int>).
-                let builtin_class_ty = if type_args.is_empty() {
-                    let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
-                    Ty::Class(
-                        crate::ty::QualifiedTypeName::new_with_generic_params(
-                            pkg_info.package,
-                            pkg_info.namespace_path,
-                            class_data.name.clone(),
-                            class_data.generic_params.clone(),
-                        )
-                        .into(),
-                        TyAttr::default(),
-                    )
-                } else if type_args.len() == 1 {
-                    // Single type arg: Array<T> → List(T), special-case common containers
-                    match class_data.name.as_str() {
-                        "Array" => Ty::List(Box::new(type_args[0].clone()), TyAttr::default()),
-                        _ => {
-                            let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
-                            Ty::Class(
-                                crate::ty::QualifiedTypeName::new(
-                                    pkg_info.package,
-                                    pkg_info.namespace_path,
-                                    class_data.name.clone(),
-                                )
-                                .into(),
-                                TyAttr::default(),
-                            )
-                        }
-                    }
-                } else if type_args.len() == 2 {
-                    match class_data.name.as_str() {
-                        "Map" => Ty::Map(
-                            Box::new(type_args[0].clone()),
-                            Box::new(type_args[1].clone()),
-                            TyAttr::default(),
-                        ),
-                        _ => {
-                            let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
-                            Ty::Class(
-                                crate::ty::QualifiedTypeName::new(
-                                    pkg_info.package,
-                                    pkg_info.namespace_path,
-                                    class_data.name.clone(),
-                                )
-                                .into(),
-                                TyAttr::default(),
-                            )
-                        }
-                    }
-                } else {
-                    let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
-                    Ty::Class(
-                        crate::ty::QualifiedTypeName::new(
-                            pkg_info.package,
-                            pkg_info.namespace_path,
-                            class_data.name.clone(),
-                        )
-                        .into(),
-                        TyAttr::default(),
-                    )
-                };
-
-                // Collect generic params for this method (class + method generics).
-                let method_generic_params: Vec<Name> = class_data
-                    .generic_params
-                    .iter()
-                    .chain(method_data.generic_params.iter())
-                    .cloned()
-                    .collect();
-
-                let mut synthetic_effect_vars: Vec<Name> = Vec::new();
-                let params: Vec<(Option<Name>, Ty)> = sig
-                    .params
-                    .iter()
-                    .map(|(n, te)| {
-                        let ty = if n.as_str() == "self"
-                            && matches!(te, baml_compiler2_ast::TypeExpr::Unknown { .. })
-                        {
-                            builtin_class_ty.clone()
-                        } else if matches!(te, baml_compiler2_ast::TypeExpr::Function { .. }) {
-                            // Function-typed parameter: use DirectParamRoot to create effect var.
-                            let lowered = crate::lower_type_expr::lower_type_expr_with_fn_context(
-                                db,
-                                te,
-                                baml_items,
-                                stub_ns,
-                                &method_generic_params,
-                                &mut diags,
-                                &crate::lower_type_expr::FnTypeLoweringContext::DirectParamRoot {
-                                    param_name: n.clone(),
-                                },
-                                &mut synthetic_effect_vars,
-                            );
-                            // Apply generic bindings to substitute type args.
-                            crate::generics::substitute_ty(&lowered, &bindings)
-                        } else {
-                            crate::generics::lower_type_expr_with_generics(
-                                db,
-                                te,
-                                self.package_items,
-                                stub_ns,
-                                &bindings,
-                                &mut diags,
-                            )
-                        };
-                        (Some(n.clone()), ty)
-                    })
-                    .collect();
-                let ret = sig
-                    .return_type
-                    .as_ref()
-                    .map(|te| {
-                        crate::generics::lower_type_expr_with_generics(
-                            db,
-                            te,
-                            self.package_items,
-                            stub_ns,
-                            &bindings,
-                            &mut diags,
-                        )
-                    })
-                    .unwrap_or(Ty::Void {
-                        attr: TyAttr::default(),
-                    });
-
-                // Compute throws: if we have synthetic effect vars, use them.
-                let throws_ty = match synthetic_effect_vars.len() {
-                    0 => Ty::Never {
-                        attr: TyAttr::default(),
-                    },
-                    1 => Ty::TypeVar(synthetic_effect_vars[0].clone(), TyAttr::default()),
-                    _ => Ty::Union(
-                        synthetic_effect_vars
-                            .iter()
-                            .map(|v| Ty::TypeVar(v.clone(), TyAttr::default()))
-                            .collect(),
-                        TyAttr::default(),
-                    ),
-                };
-
-                // Discard diags — they will be reported at the definition site
-                // (the builtin .baml stub). We don't want to spam user code
-                // with unresolved-type errors from builtin signatures.
-                drop(diags);
-                return Some(BuiltinResolution::Method {
-                    ty: Ty::Function {
-                        params,
-                        ret: Box::new(ret),
-                        throws: Box::new(throws_ty),
-                        attr: TyAttr::default(),
-                    },
-                    class_loc,
-                    func_loc,
-                });
+        match self
+            .res_ctx
+            .resolve_builtin_member(db, &path, type_args, member_name)?
+        {
+            crate::package_interface::ResolvedBuiltinMember::Method {
+                ty,
+                class_loc,
+                func_loc,
+            } => Some(BuiltinResolution::Method {
+                ty,
+                class_loc,
+                func_loc,
+            }),
+            crate::package_interface::ResolvedBuiltinMember::Field(ty) => {
+                Some(BuiltinResolution::Field(ty))
             }
         }
-
-        // Fall back to fields (e.g. Request.method, Request.url).
-        for field in &class_data.fields {
-            if field.name == *member_name {
-                let mut diags = Vec::new();
-                let field_ty = field
-                    .type_expr
-                    .as_ref()
-                    .map(|te| {
-                        crate::generics::lower_type_expr_with_generics(
-                            db,
-                            &te.expr,
-                            self.package_items,
-                            stub_ns,
-                            &bindings,
-                            &mut diags,
-                        )
-                    })
-                    .unwrap_or(Ty::Unknown {
-                        attr: TyAttr::default(),
-                    });
-                drop(diags);
-                return Some(BuiltinResolution::Field(field_ty));
-            }
-        }
-
-        None
     }
 
     /// Look up enum variants from the package items (via item tree).
@@ -4019,26 +3790,7 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// not just the current file's package.
     fn lookup_enum_variants(&self, enum_name: &crate::ty::QualifiedTypeName) -> Vec<Name> {
         let db = self.context.db();
-
-        // Resolve the package that owns the enum via res_ctx.
-        let items = if *enum_name.package() == self.package_id.name(db) {
-            self.package_items
-        } else {
-            match self.res_ctx.items_for_package(db, enum_name.package()) {
-                Some(items) => items,
-                None => return Vec::new(),
-            }
-        };
-
-        if let Some(Definition::Enum(enum_loc)) =
-            items.lookup_type(enum_name.namespace(), enum_name.name())
-        {
-            let file = enum_loc.file(db);
-            let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
-            let enum_data = &item_tree[enum_loc.id(db)];
-            return enum_data.variants.iter().map(|v| v.name.clone()).collect();
-        }
-        Vec::new()
+        self.res_ctx.lookup_enum_variants(db, enum_name)
     }
 
     // ── Evolving Container Mutations ─────────────────────────────────────────

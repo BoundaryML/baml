@@ -118,20 +118,27 @@ pub fn resolve_name_at_in_scope<'db>(
             if let Some((_source, _ty)) =
                 res_ctx.resolve_type(db, name_path, &pkg_info.namespace_path)
             {
-                let pkg_items = res_ctx.own_items;
-                if let Some(def) = pkg_items.lookup_type(&pkg_info.namespace_path, name) {
+                if let Some(def) = res_ctx.lookup_type_definition_in_package(
+                    db,
+                    &pkg_info.package,
+                    &pkg_info.namespace_path,
+                    name,
+                ) {
                     return ResolvedName::Item(def);
                 }
-                // The type was found in deps — search deps.
-                // Dep builtins are in the root namespace (&[]).
                 for (dep_name, _) in &res_ctx.dep_interfaces {
-                    if let Some(dep_items) = res_ctx.items_for_package(db, dep_name) {
-                        if let Some(def) = dep_items
-                            .lookup_type(&pkg_info.namespace_path, name)
-                            .or_else(|| dep_items.lookup_type(&[], name))
-                        {
-                            return ResolvedName::Builtin(def);
-                        }
+                    if let Some(def) = res_ctx
+                        .lookup_type_definition_in_package(
+                            db,
+                            dep_name,
+                            &pkg_info.namespace_path,
+                            name,
+                        )
+                        .or_else(|| {
+                            res_ctx.lookup_type_definition_in_package(db, dep_name, &[], name)
+                        })
+                    {
+                        return ResolvedName::Builtin(def);
                     }
                 }
             }
@@ -176,20 +183,16 @@ pub fn resolve_path_at<'db>(
     let own_pkg_id = PackageId::new(db, pkg_info.package);
     let res_ctx = crate::package_interface::package_resolution_context(db, own_pkg_id);
 
-    let Some(pkg_items) = res_ctx.items_for_package(db, &pkg_name) else {
-        return ResolvedName::Unknown;
-    };
-
     let after_pkg = &segments[1..];
     // The path already includes namespace segments, so look up directly.
     let item = after_pkg
         .last()
         .expect("multi-segment path has elements after pkg prefix");
     let ns = &after_pkg[..after_pkg.len() - 1];
-    if let Some(def) = pkg_items.lookup_value(ns, item) {
+    if let Some(def) = res_ctx.lookup_value_definition_in_package(db, &pkg_name, ns, item) {
         return ResolvedName::Builtin(def);
     }
-    if let Some(def) = pkg_items.lookup_type(ns, item) {
+    if let Some(def) = res_ctx.lookup_type_definition_in_package(db, &pkg_name, ns, item) {
         return ResolvedName::Builtin(def);
     }
 
