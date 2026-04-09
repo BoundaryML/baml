@@ -6,8 +6,9 @@ use std::{str::FromStr, sync::Arc};
 use baml_base::MediaKind;
 use baml_builtins2::{MediaContent, MediaValue, PromptAstSimple};
 use base64::Engine as _;
+use sys_types::runtime_io::RuntimeIo;
 
-use crate::{BuildRequestCallbacks, build_request::BuildRequestError};
+use crate::build_request::BuildRequestError;
 
 // ============================================================================
 // Resolution strategy
@@ -72,28 +73,28 @@ fn parse_field(value: Option<&str>) -> ResolveMediaUrls {
 pub(crate) async fn resolve_media(
     prompt: &bex_vm_types::PromptAst,
     handler: &MediaUrlHandler,
-    callbacks: &BuildRequestCallbacks,
+    io: &dyn RuntimeIo,
 ) -> Result<(), BuildRequestError> {
-    resolve_prompt_node(prompt, handler, callbacks).await
+    resolve_prompt_node(prompt, handler, io).await
 }
 
 fn resolve_prompt_node<'a>(
     prompt: &'a baml_builtins2::PromptAst,
     handler: &'a MediaUrlHandler,
-    callbacks: &'a BuildRequestCallbacks,
+    io: &'a dyn RuntimeIo,
 ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), BuildRequestError>> + Send + 'a>>
 {
     Box::pin(async move {
         match prompt {
             baml_builtins2::PromptAst::Simple(content) => {
-                resolve_content_node(content, handler, callbacks).await
+                resolve_content_node(content, handler, io).await
             }
             baml_builtins2::PromptAst::Message { content, .. } => {
-                resolve_content_node(content, handler, callbacks).await
+                resolve_content_node(content, handler, io).await
             }
             baml_builtins2::PromptAst::Vec(items) => {
                 for item in items {
-                    resolve_prompt_node(item, handler, callbacks).await?;
+                    resolve_prompt_node(item, handler, io).await?;
                 }
                 Ok(())
             }
@@ -104,16 +105,16 @@ fn resolve_prompt_node<'a>(
 fn resolve_content_node<'a>(
     content: &'a PromptAstSimple,
     handler: &'a MediaUrlHandler,
-    callbacks: &'a BuildRequestCallbacks,
+    io: &'a dyn RuntimeIo,
 ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), BuildRequestError>> + Send + 'a>>
 {
     Box::pin(async move {
         match content {
             PromptAstSimple::String(_) => Ok(()),
-            PromptAstSimple::Media(media) => resolve_single_media(media, handler, callbacks).await,
+            PromptAstSimple::Media(media) => resolve_single_media(media, handler, io).await,
             PromptAstSimple::Multiple(items) => {
                 for item in items {
-                    resolve_content_node(item, handler, callbacks).await?;
+                    resolve_content_node(item, handler, io).await?;
                 }
                 Ok(())
             }
@@ -124,7 +125,7 @@ fn resolve_content_node<'a>(
 async fn resolve_single_media(
     media: &Arc<MediaValue>,
     handler: &MediaUrlHandler,
-    callbacks: &BuildRequestCallbacks,
+    io: &dyn RuntimeIo,
 ) -> Result<(), BuildRequestError> {
     let strategy = handler.strategy_for(media.kind);
 
@@ -141,8 +142,8 @@ async fn resolve_single_media(
 
     match content_info {
         ContentInfo::Base64 => Ok(()),
-        ContentInfo::Url(url) => resolve_url(media, &url, strategy, callbacks).await,
-        ContentInfo::File(path) => resolve_file(media, &path, callbacks).await,
+        ContentInfo::Url(url) => resolve_url(media, &url, strategy, io).await,
+        ContentInfo::File(path) => resolve_file(media, &path, io).await,
     }
 }
 
@@ -156,7 +157,7 @@ async fn resolve_url(
     media: &Arc<MediaValue>,
     url: &str,
     strategy: ResolveMediaUrls,
-    callbacks: &BuildRequestCallbacks,
+    io: &dyn RuntimeIo,
 ) -> Result<(), BuildRequestError> {
     // Handle data: URLs inline -- no HTTP fetch needed.
     if let Some((mime, b64)) = parse_data_url(url) {
@@ -175,23 +176,12 @@ async fn resolve_url(
         ResolveMediaUrls::SendUrl => Ok(()),
         ResolveMediaUrls::SendBase64UnlessGoogleUrl if url.starts_with("gs://") => Ok(()),
         ResolveMediaUrls::SendBase64 | ResolveMediaUrls::SendBase64UnlessGoogleUrl => {
-            let response = (callbacks.fetch_bytes)(url.to_string())
-                .await
-                .map_err(|e| {
-                    BuildRequestError::Other(format!("failed to fetch media URL {url}: {e}"))
-                })?;
+            let (resp, bytes) = fetch_url_bytes(io, url).await?;
 
-            if response.status_code < 200 || response.status_code >= 300 {
-                return Err(BuildRequestError::Other(format!(
-                    "media URL {url} returned status {}",
-                    response.status_code
-                )));
-            }
-
-            let b64 = base64::engine::general_purpose::STANDARD.encode(&response.bytes);
+            let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
 
             if media.mime_type().is_none() {
-                infer_mime_from_headers_or_bytes(media, &response.headers, &response.bytes);
+                infer_mime_from_headers_or_bytes(media, &resp.headers, &bytes);
             }
 
             media.write_content(|c| {
@@ -205,33 +195,57 @@ async fn resolve_url(
             if media.mime_type().is_some() {
                 return Ok(());
             }
-            let response = (callbacks.fetch_bytes)(url.to_string())
-                .await
-                .map_err(|e| {
-                    BuildRequestError::Other(format!("failed to fetch media URL {url}: {e}"))
-                })?;
+            let (resp, bytes) = fetch_url_bytes(io, url).await?;
 
-            if response.status_code < 200 || response.status_code >= 300 {
-                return Err(BuildRequestError::Other(format!(
-                    "media URL {url} returned status {}",
-                    response.status_code
-                )));
-            }
-
-            infer_mime_from_headers_or_bytes(media, &response.headers, &response.bytes);
+            infer_mime_from_headers_or_bytes(media, &resp.headers, &bytes);
             Ok(())
         }
     }
 }
 
+/// Build a GET request, send it via `RuntimeIo`, check the status, and return
+/// the response handle together with the body bytes.
+async fn fetch_url_bytes(
+    io: &dyn RuntimeIo,
+    url: &str,
+) -> Result<(sys_types::runtime_io::HttpResponseHandle, Vec<u8>), BuildRequestError> {
+    let req = sys_types::generated::owned::http::Request {
+        method: "GET".into(),
+        url: url.to_string(),
+        headers: indexmap::IndexMap::new(),
+        body: String::new(),
+    };
+    let resp = io
+        .http_send(req)
+        .await
+        .map_err(|e| BuildRequestError::Other(format!("failed to fetch media URL {url}: {e}")))?;
+
+    if resp.status_code < 200 || resp.status_code >= 300 {
+        return Err(BuildRequestError::Other(format!(
+            "media URL {url} returned status {}",
+            resp.status_code
+        )));
+    }
+
+    let bytes = io.http_response_bytes(&resp).await.map_err(|e| {
+        BuildRequestError::Other(format!("failed to read response bytes for {url}: {e}"))
+    })?;
+
+    Ok((resp, bytes))
+}
+
 async fn resolve_file(
     media: &Arc<MediaValue>,
     path: &str,
-    callbacks: &BuildRequestCallbacks,
+    io: &dyn RuntimeIo,
 ) -> Result<(), BuildRequestError> {
-    let bytes = (callbacks.fs_read)(path.to_string()).await.map_err(|e| {
+    let file = io.fs_open(path.to_string()).await.map_err(|e| {
+        BuildRequestError::FileNotResolved(format!("failed to open file {path}: {e}"))
+    })?;
+    let content = io.fs_file_read(&file).await.map_err(|e| {
         BuildRequestError::FileNotResolved(format!("failed to read file {path}: {e}"))
     })?;
+    let bytes = content.into_bytes();
 
     let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
 
@@ -312,7 +326,9 @@ fn infer_mime_from_headers_or_bytes(
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
+    use std::{future::Future, pin::Pin, sync::Arc};
+
+    use sys_types::runtime_io::{RuntimeIo, RuntimeIoError};
 
     use super::*;
 
@@ -346,6 +362,320 @@ mod tests {
             },
             mime.map(String::from),
         ))
+    }
+
+    // -----------------------------------------------------------------------
+    // Test mock RuntimeIo implementations
+    // -----------------------------------------------------------------------
+
+    /// Generates `RuntimeIoError::Unsupported` stubs for `RuntimeIo` methods
+    /// that are not relevant to media resolution tests.
+    macro_rules! unsupported_runtime_io_methods {
+        () => {
+            fn http_fetch(
+                &self,
+                _: String,
+            ) -> Pin<
+                Box<
+                    dyn Future<
+                            Output = Result<
+                                sys_types::runtime_io::HttpResponseHandle,
+                                RuntimeIoError,
+                            >,
+                        > + Send
+                        + '_,
+                >,
+            > {
+                Box::pin(async { Err(RuntimeIoError::Unsupported) })
+            }
+            fn http_response_text(
+                &self,
+                _: &sys_types::runtime_io::HttpResponseHandle,
+            ) -> Pin<Box<dyn Future<Output = Result<String, RuntimeIoError>> + Send + '_>> {
+                Box::pin(async { Err(RuntimeIoError::Unsupported) })
+            }
+            fn env_get(
+                &self,
+                _: String,
+            ) -> Pin<Box<dyn Future<Output = Result<Option<String>, RuntimeIoError>> + Send + '_>> {
+                Box::pin(async { Err(RuntimeIoError::Unsupported) })
+            }
+            fn sys_shell(
+                &self,
+                _: String,
+            ) -> Pin<Box<dyn Future<Output = Result<String, RuntimeIoError>> + Send + '_>> {
+                Box::pin(async { Err(RuntimeIoError::Unsupported) })
+            }
+            fn sys_sleep(
+                &self,
+                _: i64,
+            ) -> Pin<Box<dyn Future<Output = Result<(), RuntimeIoError>> + Send + '_>> {
+                Box::pin(async { Err(RuntimeIoError::Unsupported) })
+            }
+            fn fs_file_close(
+                &self,
+                _: &sys_types::runtime_io::FsFileHandle,
+            ) -> Pin<Box<dyn Future<Output = Result<(), RuntimeIoError>> + Send + '_>> {
+                Box::pin(async { Err(RuntimeIoError::Unsupported) })
+            }
+            fn net_socket_read(
+                &self,
+                _: &sys_types::runtime_io::NetSocketHandle,
+            ) -> Pin<Box<dyn Future<Output = Result<String, RuntimeIoError>> + Send + '_>> {
+                Box::pin(async { Err(RuntimeIoError::Unsupported) })
+            }
+            fn net_socket_close(
+                &self,
+                _: &sys_types::runtime_io::NetSocketHandle,
+            ) -> Pin<Box<dyn Future<Output = Result<(), RuntimeIoError>> + Send + '_>> {
+                Box::pin(async { Err(RuntimeIoError::Unsupported) })
+            }
+            fn net_connect(
+                &self,
+                _: String,
+            ) -> Pin<
+                Box<
+                    dyn Future<
+                            Output = Result<sys_types::runtime_io::NetSocketHandle, RuntimeIoError>,
+                        > + Send
+                        + '_,
+                >,
+            > {
+                Box::pin(async { Err(RuntimeIoError::Unsupported) })
+            }
+            fn llm_client_get_constructor(
+                &self,
+                _: &sys_types::runtime_io::LlmClientHandle,
+            ) -> Pin<
+                Box<
+                    dyn Future<
+                            Output = Result<bex_external_types::BexExternalValue, RuntimeIoError>,
+                        > + Send
+                        + '_,
+                >,
+            > {
+                Box::pin(async { Err(RuntimeIoError::Unsupported) })
+            }
+            fn llm_primitiveclient_render_prompt(
+                &self,
+                _: &sys_types::runtime_io::LlmPrimitiveClientHandle,
+                _template: String,
+                _args: indexmap::IndexMap<String, bex_external_types::BexExternalValue>,
+                _return_type: baml_type::Ty,
+            ) -> Pin<
+                Box<
+                    dyn Future<
+                            Output = Result<
+                                sys_types::generated::owned::llm::PromptAst,
+                                RuntimeIoError,
+                            >,
+                        > + Send
+                        + '_,
+                >,
+            > {
+                Box::pin(async { Err(RuntimeIoError::Unsupported) })
+            }
+            fn llm_primitiveclient_specialize_prompt(
+                &self,
+                _: &sys_types::runtime_io::LlmPrimitiveClientHandle,
+                _prompt: sys_types::generated::owned::llm::PromptAst,
+            ) -> Pin<
+                Box<
+                    dyn Future<
+                            Output = Result<
+                                sys_types::generated::owned::llm::PromptAst,
+                                RuntimeIoError,
+                            >,
+                        > + Send
+                        + '_,
+                >,
+            > {
+                Box::pin(async { Err(RuntimeIoError::Unsupported) })
+            }
+            fn llm_primitiveclient_build_request(
+                &self,
+                _: &sys_types::runtime_io::LlmPrimitiveClientHandle,
+                _prompt: sys_types::generated::owned::llm::PromptAst,
+            ) -> Pin<
+                Box<
+                    dyn Future<
+                            Output = Result<bex_external_types::BexExternalValue, RuntimeIoError>,
+                        > + Send
+                        + '_,
+                >,
+            > {
+                Box::pin(async { Err(RuntimeIoError::Unsupported) })
+            }
+            fn llm_primitiveclient_parse(
+                &self,
+                _: &sys_types::runtime_io::LlmPrimitiveClientHandle,
+                _http_response_body: String,
+                _type_def: baml_type::Ty,
+            ) -> Pin<
+                Box<
+                    dyn Future<
+                            Output = Result<bex_external_types::BexExternalValue, RuntimeIoError>,
+                        > + Send
+                        + '_,
+                >,
+            > {
+                Box::pin(async { Err(RuntimeIoError::Unsupported) })
+            }
+            fn llm_get_jinja_template(
+                &self,
+                _: String,
+            ) -> Pin<Box<dyn Future<Output = Result<String, RuntimeIoError>> + Send + '_>> {
+                Box::pin(async { Err(RuntimeIoError::Unsupported) })
+            }
+            fn llm_get_return_type(
+                &self,
+                _: String,
+            ) -> Pin<Box<dyn Future<Output = Result<baml_type::Ty, RuntimeIoError>> + Send + '_>> {
+                Box::pin(async { Err(RuntimeIoError::Unsupported) })
+            }
+            fn llm___sap_parse(
+                &self,
+                _: String,
+                _ty: baml_type::Ty,
+            ) -> Pin<
+                Box<
+                    dyn Future<
+                            Output = Result<bex_external_types::BexExternalValue, RuntimeIoError>,
+                        > + Send
+                        + '_,
+                >,
+            > {
+                Box::pin(async { Err(RuntimeIoError::Unsupported) })
+            }
+        };
+    }
+
+    /// Mock `RuntimeIo` for HTTP fetch tests. Returns configurable status code,
+    /// headers, and body bytes from `http_send` + `http_response_bytes`.
+    struct MockHttpIo {
+        status_code: i64,
+        headers: indexmap::IndexMap<String, String>,
+        bytes: Vec<u8>,
+    }
+
+    impl RuntimeIo for MockHttpIo {
+        fn http_send(
+            &self,
+            _request: sys_types::generated::owned::http::Request,
+        ) -> Pin<
+            Box<
+                dyn Future<
+                        Output = Result<sys_types::runtime_io::HttpResponseHandle, RuntimeIoError>,
+                    > + Send
+                    + '_,
+            >,
+        > {
+            let status = self.status_code;
+            let headers = self.headers.clone();
+            Box::pin(async move {
+                Ok(sys_types::runtime_io::HttpResponseHandle {
+                    raw: bex_external_types::BexExternalValue::Null,
+                    status_code: status,
+                    headers,
+                    url: String::new(),
+                })
+            })
+        }
+
+        fn http_response_bytes(
+            &self,
+            _: &sys_types::runtime_io::HttpResponseHandle,
+        ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, RuntimeIoError>> + Send + '_>> {
+            let bytes = self.bytes.clone();
+            Box::pin(async move { Ok(bytes) })
+        }
+
+        fn fs_open(
+            &self,
+            _: String,
+        ) -> Pin<
+            Box<
+                dyn Future<Output = Result<sys_types::runtime_io::FsFileHandle, RuntimeIoError>>
+                    + Send
+                    + '_,
+            >,
+        > {
+            Box::pin(async { Err(RuntimeIoError::Unsupported) })
+        }
+
+        fn fs_file_read(
+            &self,
+            _: &sys_types::runtime_io::FsFileHandle,
+        ) -> Pin<Box<dyn Future<Output = Result<String, RuntimeIoError>> + Send + '_>> {
+            Box::pin(async { Err(RuntimeIoError::Unsupported) })
+        }
+
+        unsupported_runtime_io_methods!();
+    }
+
+    /// Mock `RuntimeIo` for file-read tests. Returns configurable file content
+    /// from `fs_open` + `fs_file_read`.
+    struct MockFsIo {
+        /// Content returned by `fs_file_read`, as raw bytes stored in a String
+        /// (callers pass binary via `String::from_utf8_lossy` or test-safe
+        /// byte sequences).
+        content: Vec<u8>,
+    }
+
+    impl RuntimeIo for MockFsIo {
+        fn http_send(
+            &self,
+            _: sys_types::generated::owned::http::Request,
+        ) -> Pin<
+            Box<
+                dyn Future<
+                        Output = Result<sys_types::runtime_io::HttpResponseHandle, RuntimeIoError>,
+                    > + Send
+                    + '_,
+            >,
+        > {
+            Box::pin(async { Err(RuntimeIoError::Unsupported) })
+        }
+
+        fn http_response_bytes(
+            &self,
+            _: &sys_types::runtime_io::HttpResponseHandle,
+        ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, RuntimeIoError>> + Send + '_>> {
+            Box::pin(async { Err(RuntimeIoError::Unsupported) })
+        }
+
+        fn fs_open(
+            &self,
+            _path: String,
+        ) -> Pin<
+            Box<
+                dyn Future<Output = Result<sys_types::runtime_io::FsFileHandle, RuntimeIoError>>
+                    + Send
+                    + '_,
+            >,
+        > {
+            Box::pin(async {
+                Ok(sys_types::runtime_io::FsFileHandle {
+                    raw: bex_external_types::BexExternalValue::Null,
+                })
+            })
+        }
+
+        fn fs_file_read(
+            &self,
+            _: &sys_types::runtime_io::FsFileHandle,
+        ) -> Pin<Box<dyn Future<Output = Result<String, RuntimeIoError>> + Send + '_>> {
+            // The RuntimeIo trait returns String from fs_file_read, but our
+            // test content is raw bytes. We need String::into_bytes() in the
+            // production code to yield the original bytes, so we construct the
+            // String directly from the byte vector. Test data is controlled,
+            // so this is safe.
+            #[allow(unsafe_code)]
+            let s = unsafe { String::from_utf8_unchecked(self.content.clone()) };
+            Box::pin(async move { Ok(s) })
+        }
+
+        unsupported_runtime_io_methods!();
     }
 
     // -- parse_data_url -------------------------------------------------------
@@ -438,10 +768,8 @@ mod tests {
             video: ResolveMediaUrls::SendBase64,
             pdf: ResolveMediaUrls::SendBase64,
         };
-        let callbacks = crate::BuildRequestCallbacks::noop();
-        resolve_single_media(&media, &handler, &callbacks)
-            .await
-            .unwrap();
+        let io = sys_types::runtime_io::NoopRuntimeIo;
+        resolve_single_media(&media, &handler, &io).await.unwrap();
 
         assert_eq!(media.mime_type().as_deref(), Some("image/png"));
         media.read_content(|c| {
@@ -460,10 +788,8 @@ mod tests {
             video: ResolveMediaUrls::SendBase64,
             pdf: ResolveMediaUrls::SendBase64,
         };
-        let callbacks = crate::BuildRequestCallbacks::noop();
-        resolve_single_media(&media, &handler, &callbacks)
-            .await
-            .unwrap();
+        let io = sys_types::runtime_io::NoopRuntimeIo;
+        resolve_single_media(&media, &handler, &io).await.unwrap();
 
         // Should remain unchanged.
         media.read_content(|c| {
@@ -482,11 +808,9 @@ mod tests {
             video: ResolveMediaUrls::SendBase64,
             pdf: ResolveMediaUrls::SendBase64,
         };
-        // noop callbacks would error if called -- proving no fetch happens.
-        let callbacks = crate::BuildRequestCallbacks::noop();
-        resolve_single_media(&media, &handler, &callbacks)
-            .await
-            .unwrap();
+        // NoopRuntimeIo would error if called -- proving no fetch happens.
+        let io = sys_types::runtime_io::NoopRuntimeIo;
+        resolve_single_media(&media, &handler, &io).await.unwrap();
 
         // base64_data should still be None.
         media.read_content(|c| {
@@ -506,10 +830,8 @@ mod tests {
             video: ResolveMediaUrls::SendBase64,
             pdf: ResolveMediaUrls::SendBase64,
         };
-        let callbacks = crate::BuildRequestCallbacks::noop();
-        resolve_single_media(&media, &handler, &callbacks)
-            .await
-            .unwrap();
+        let io = sys_types::runtime_io::NoopRuntimeIo;
+        resolve_single_media(&media, &handler, &io).await.unwrap();
 
         media.read_content(|c| {
             assert!(c.base64_data().is_none());
@@ -528,24 +850,14 @@ mod tests {
             video: ResolveMediaUrls::SendBase64,
             pdf: ResolveMediaUrls::SendBase64,
         };
-        let callbacks = crate::BuildRequestCallbacks {
-            fetch_bytes: Arc::new(move |_url| {
-                let bytes = png_bytes.clone();
-                Box::pin(async move {
-                    Ok(crate::FetchBytesResponse {
-                        status_code: 200,
-                        headers: indexmap::indexmap! {
-                            "content-type".to_string() => "image/png".to_string(),
-                        },
-                        bytes,
-                    })
-                })
-            }),
-            ..crate::BuildRequestCallbacks::noop()
+        let io = MockHttpIo {
+            status_code: 200,
+            headers: indexmap::indexmap! {
+                "content-type".to_string() => "image/png".to_string(),
+            },
+            bytes: png_bytes,
         };
-        resolve_single_media(&media, &handler, &callbacks)
-            .await
-            .unwrap();
+        resolve_single_media(&media, &handler, &io).await.unwrap();
 
         assert_eq!(media.mime_type().as_deref(), Some("image/png"));
         media.read_content(|c| {
@@ -569,22 +881,12 @@ mod tests {
             video: ResolveMediaUrls::SendBase64,
             pdf: ResolveMediaUrls::SendBase64,
         };
-        let callbacks = crate::BuildRequestCallbacks {
-            fetch_bytes: Arc::new(move |_url| {
-                let bytes = png_bytes.clone();
-                Box::pin(async move {
-                    Ok(crate::FetchBytesResponse {
-                        status_code: 200,
-                        headers: indexmap::IndexMap::new(), // no content-type
-                        bytes,
-                    })
-                })
-            }),
-            ..crate::BuildRequestCallbacks::noop()
+        let io = MockHttpIo {
+            status_code: 200,
+            headers: indexmap::IndexMap::new(), // no content-type
+            bytes: png_bytes,
         };
-        resolve_single_media(&media, &handler, &callbacks)
-            .await
-            .unwrap();
+        resolve_single_media(&media, &handler, &io).await.unwrap();
 
         assert_eq!(media.mime_type().as_deref(), Some("image/png"));
     }
@@ -603,16 +905,8 @@ mod tests {
             video: ResolveMediaUrls::SendBase64,
             pdf: ResolveMediaUrls::SendBase64,
         };
-        let callbacks = crate::BuildRequestCallbacks {
-            fs_read: Arc::new(move |_path| {
-                let bytes = png_bytes.clone();
-                Box::pin(async move { Ok(bytes) })
-            }),
-            ..crate::BuildRequestCallbacks::noop()
-        };
-        resolve_single_media(&media, &handler, &callbacks)
-            .await
-            .unwrap();
+        let io = MockFsIo { content: png_bytes };
+        resolve_single_media(&media, &handler, &io).await.unwrap();
 
         assert_eq!(media.mime_type().as_deref(), Some("image/png"));
         media.read_content(|c| {
@@ -625,11 +919,8 @@ mod tests {
     #[tokio::test]
     async fn resolve_file_prefers_extension() {
         let media = make_file_media("/tmp/photo.jpeg", None);
-        let callbacks = crate::BuildRequestCallbacks {
-            fs_read: Arc::new(|_path| {
-                Box::pin(async { Ok(vec![0x00, 0x01, 0x02]) }) // random bytes
-            }),
-            ..crate::BuildRequestCallbacks::noop()
+        let io = MockFsIo {
+            content: vec![0x00, 0x01, 0x02], // random bytes
         };
         let handler = MediaUrlHandler {
             image: ResolveMediaUrls::SendBase64,
@@ -637,9 +928,7 @@ mod tests {
             video: ResolveMediaUrls::SendBase64,
             pdf: ResolveMediaUrls::SendBase64,
         };
-        resolve_single_media(&media, &handler, &callbacks)
-            .await
-            .unwrap();
+        resolve_single_media(&media, &handler, &io).await.unwrap();
 
         // Extension wins over infer (which would return None for random bytes).
         assert_eq!(media.mime_type().as_deref(), Some("image/jpeg"));
@@ -656,19 +945,12 @@ mod tests {
             video: ResolveMediaUrls::SendBase64,
             pdf: ResolveMediaUrls::SendBase64,
         };
-        let callbacks = crate::BuildRequestCallbacks {
-            fetch_bytes: Arc::new(|_url| {
-                Box::pin(async {
-                    Ok(crate::FetchBytesResponse {
-                        status_code: 404,
-                        headers: indexmap::IndexMap::new(),
-                        bytes: vec![],
-                    })
-                })
-            }),
-            ..crate::BuildRequestCallbacks::noop()
+        let io = MockHttpIo {
+            status_code: 404,
+            headers: indexmap::IndexMap::new(),
+            bytes: vec![],
         };
-        let err = resolve_single_media(&media, &handler, &callbacks).await;
+        let err = resolve_single_media(&media, &handler, &io).await;
         assert!(err.is_err());
         assert!(format!("{}", err.unwrap_err()).contains("404"));
     }
@@ -682,19 +964,12 @@ mod tests {
             video: ResolveMediaUrls::SendUrlAddMimeType,
             pdf: ResolveMediaUrls::SendUrlAddMimeType,
         };
-        let callbacks = crate::BuildRequestCallbacks {
-            fetch_bytes: Arc::new(|_url| {
-                Box::pin(async {
-                    Ok(crate::FetchBytesResponse {
-                        status_code: 404,
-                        headers: indexmap::IndexMap::new(),
-                        bytes: vec![],
-                    })
-                })
-            }),
-            ..crate::BuildRequestCallbacks::noop()
+        let io = MockHttpIo {
+            status_code: 404,
+            headers: indexmap::IndexMap::new(),
+            bytes: vec![],
         };
-        let err = resolve_single_media(&media, &handler, &callbacks).await;
+        let err = resolve_single_media(&media, &handler, &io).await;
         assert!(err.is_err());
         assert!(format!("{}", err.unwrap_err()).contains("404"));
     }
@@ -710,23 +985,14 @@ mod tests {
             video: ResolveMediaUrls::SendBase64,
             pdf: ResolveMediaUrls::SendBase64,
         };
-        let callbacks = crate::BuildRequestCallbacks {
-            fetch_bytes: Arc::new(|_url| {
-                Box::pin(async {
-                    Ok(crate::FetchBytesResponse {
-                        status_code: 200,
-                        headers: indexmap::indexmap! {
-                            "content-type".to_string() => "image/png".to_string(),
-                        },
-                        bytes: vec![0x89, 0x50, 0x4E, 0x47],
-                    })
-                })
-            }),
-            ..crate::BuildRequestCallbacks::noop()
+        let io = MockHttpIo {
+            status_code: 200,
+            headers: indexmap::indexmap! {
+                "content-type".to_string() => "image/png".to_string(),
+            },
+            bytes: vec![0x89, 0x50, 0x4E, 0x47],
         };
-        resolve_single_media(&media, &handler, &callbacks)
-            .await
-            .unwrap();
+        resolve_single_media(&media, &handler, &io).await.unwrap();
 
         // Original mime_type should be preserved, not overwritten by Content-Type.
         assert_eq!(media.mime_type().as_deref(), Some("image/webp"));
@@ -743,23 +1009,14 @@ mod tests {
             video: ResolveMediaUrls::SendUrlAddMimeType,
             pdf: ResolveMediaUrls::SendUrlAddMimeType,
         };
-        let callbacks = crate::BuildRequestCallbacks {
-            fetch_bytes: Arc::new(|_url| {
-                Box::pin(async {
-                    Ok(crate::FetchBytesResponse {
-                        status_code: 200,
-                        headers: indexmap::indexmap! {
-                            "Content-Type".to_string() => "image/svg+xml".to_string(),
-                        },
-                        bytes: vec![],
-                    })
-                })
-            }),
-            ..crate::BuildRequestCallbacks::noop()
+        let io = MockHttpIo {
+            status_code: 200,
+            headers: indexmap::indexmap! {
+                "Content-Type".to_string() => "image/svg+xml".to_string(),
+            },
+            bytes: vec![],
         };
-        resolve_single_media(&media, &handler, &callbacks)
-            .await
-            .unwrap();
+        resolve_single_media(&media, &handler, &io).await.unwrap();
 
         assert_eq!(media.mime_type().as_deref(), Some("image/svg+xml"));
     }

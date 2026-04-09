@@ -540,6 +540,12 @@ impl BexEngine {
         let class_definitions = Self::extract_class_definitions(&resolved_class_names);
         let enum_definitions = Self::extract_enum_definitions(&resolved_enum_names);
 
+        // Build RuntimeIo from the SysOps table. The adapter captures a
+        // SysOpContext for passing to SysOpFn calls; an empty context is fine
+        // here because the IO operations (http, env, fs, etc.) don't use it.
+        let runtime_io =
+            sys_ops::build_runtime_io(&sys_ops, &heap, &sys_types::SysOpContext::empty());
+
         let sys_op_ctx = sys_types::EngineSysOpContext {
             llm_functions: Arc::new(llm_functions),
             function_global_indices: Arc::new(bytecode.function_global_indices),
@@ -547,15 +553,7 @@ impl BexEngine {
             class_definitions: Arc::new(class_definitions),
             enum_definitions: Arc::new(enum_definitions),
             type_alias_definitions: Arc::new(bytecode.recursive_type_alias_defs),
-            io_callbacks: sys_types::SysOpIoCallbacks {
-                http_send: sys_ops.baml_http_send.clone(),
-                http_response_text: sys_ops.baml_http_response_text.clone(),
-                http_response_bytes: sys_ops.baml_http_response_bytes.clone(),
-                env_get: sys_ops.baml_env_get.clone(),
-                fs_open: sys_ops.baml_fs_open.clone(),
-                fs_file_read: sys_ops.baml_fs_file_read.clone(),
-                sys_shell: sys_ops.baml_sys_shell.clone(),
-            },
+            runtime_io,
         };
 
         Ok(Self {

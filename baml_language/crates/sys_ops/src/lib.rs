@@ -38,6 +38,37 @@ pub mod io {
 }
 
 // ============================================================================
+// RuntimeIo adapter (generated from .baml files via baml_builtins2_codegen)
+// ============================================================================
+
+#[allow(
+    dead_code,
+    unreachable_pub,
+    non_snake_case,
+    unused_imports,
+    unused_variables,
+    clippy::all,
+    clippy::used_underscore_binding,
+    clippy::used_underscore_items
+)]
+mod io_adapter {
+    use std::{future::Future, pin::Pin, sync::Arc};
+
+    #[allow(unused_imports)]
+    pub use bex_external_types::BexExternalAdt;
+    pub use bex_heap::BexValue;
+    pub use sys_types::{
+        AsBexExternalValue, BexExternalValue, BexHeap, CallId, SysOpContext, SysOpFn, SysOpResult,
+        runtime_io::*,
+    };
+
+    use super::io::SysOps;
+
+    include!(concat!(env!("OUT_DIR"), "/io_adapter.rs"));
+}
+pub use io_adapter::build_runtime_io;
+
+// ============================================================================
 // Blanket IO LLM implementation (delegates to sys_llm)
 // ============================================================================
 
@@ -125,7 +156,7 @@ impl<T> io::IoClassLlmPrimitiveClient for T {
 
     fn build_request(
         &self,
-        heap: &std::sync::Arc<BexHeap>,
+        _heap: &std::sync::Arc<BexHeap>,
         _call_id: CallId,
         client: io::owned::llm::PrimitiveClient,
         prompt: io::owned::llm::PromptAst,
@@ -136,9 +167,9 @@ impl<T> io::IoClassLlmPrimitiveClient for T {
             Err(e) => return SysOpOutput::err(OpErrorKind::Other(e.to_string())),
         };
         let prompt_ast = unwrap_prompt_ast(&prompt);
-        let callbacks = build_io_callbacks(&ctx.io_callbacks, heap, ctx);
+        let io = ctx.runtime_io.clone();
         SysOpOutput::async_op(async move {
-            sys_llm::execute_build_request_from_owned(&old_client, prompt_ast, &callbacks)
+            sys_llm::execute_build_request_from_owned(&old_client, prompt_ast, io.as_ref())
                 .await
                 .map(|req| {
                     io::owned::http::Request {
@@ -621,318 +652,14 @@ impl Default for IoSysOpsBuilder {
     }
 }
 
-use ::bex_heap::{BexExternalValue, BexHeap, BexValue};
+use ::bex_heap::{BexExternalValue, BexHeap};
 use ::std::sync::Arc;
 // Re-export io::SysOps as the primary SysOps type.
 use ::sys_types::{
     AsBexExternalValue as _, CallId, FunctionRef, LlmFunctionInfo, OpErrorKind, SysOpContext,
-    SysOpFn, SysOpIoCallbacks, SysOpOutput, SysOpResult,
+    SysOpOutput,
 };
 pub use io::SysOps;
-
-// ============================================================================
-// SysOpFn -> BuildRequestCallbacks adapter
-// ============================================================================
-
-/// Resolve a `SysOpResult` (sync or async) into the contained `BexExternalValue`.
-async fn resolve_sys_op_result(
-    result: SysOpResult,
-) -> Result<BexExternalValue, sys_llm::LlmOpError> {
-    match result {
-        SysOpResult::Ready(Ok(val)) => Ok(val),
-        SysOpResult::Ready(Err(e)) => Err(sys_llm::LlmOpError::Other(format!("{e:?}"))),
-        SysOpResult::Async(fut) => fut
-            .await
-            .map_err(|e| sys_llm::LlmOpError::Other(format!("{e:?}"))),
-    }
-}
-
-/// Build [`sys_llm::BuildRequestCallbacks`] by wrapping the `SysOpFn` pointers
-/// from [`SysOpIoCallbacks`]. Each callback marshals its args into
-/// `BexExternalValue`, calls the corresponding `SysOpFn`, and extracts the result.
-///
-/// The `AssertUnwindSafe` wrappers are needed because `SysOpFn` and `BexHeap`
-/// don't carry `UnwindSafe`/`RefUnwindSafe` bounds, but the AWS SDK callback
-/// traits require them. This is safe because we never actually catch panics
-/// across these boundaries.
-fn build_io_callbacks(
-    io: &SysOpIoCallbacks,
-    heap: &Arc<BexHeap>,
-    ctx: &SysOpContext,
-) -> sys_llm::BuildRequestCallbacks {
-    use std::panic::{RefUnwindSafe, UnwindSafe};
-
-    /// Wraps captured state so closures satisfy `UnwindSafe + RefUnwindSafe`.
-    /// SAFETY: We never catch panics across these closures; the bounds are only
-    /// required by the AWS SDK's `HttpConnector` trait.
-    #[derive(Clone)]
-    struct Env {
-        fn_ptr: SysOpFn,
-        heap: Arc<BexHeap>,
-        ctx: SysOpContext,
-    }
-    impl UnwindSafe for Env {}
-    impl RefUnwindSafe for Env {}
-
-    // -- env_read: String -> Option<String> ----------------------------------
-    let env_read: sys_llm::EnvReadFn = {
-        let env = Env {
-            fn_ptr: io.env_get.clone(),
-            heap: heap.clone(),
-            ctx: ctx.clone(),
-        };
-        Arc::new(move |key: String| {
-            let env = env.clone();
-            Box::pin(async move {
-                let arg = BexExternalValue::String(key);
-                let result = (env.fn_ptr)(
-                    &env.heap,
-                    vec![BexValue::ExternalValue(&arg)],
-                    &env.ctx,
-                    CallId::next(),
-                );
-                let val = resolve_sys_op_result(result).await?;
-                match val {
-                    BexExternalValue::Null => Ok(None),
-                    BexExternalValue::String(s) => Ok(Some(s)),
-                    other => Err(sys_llm::LlmOpError::Other(format!(
-                        "env.get returned unexpected type: {}",
-                        other.type_name()
-                    ))),
-                }
-            }) as std::pin::Pin<Box<dyn std::future::Future<Output = _> + Send>>
-        })
-    };
-
-    // -- http_send: HttpRequest -> HttpSendResponse --------------------------
-    let http_send: sys_llm::HttpSendFn = {
-        let send_env = Env {
-            fn_ptr: io.http_send.clone(),
-            heap: heap.clone(),
-            ctx: ctx.clone(),
-        };
-        let text_env = Env {
-            fn_ptr: io.http_response_text.clone(),
-            heap: heap.clone(),
-            ctx: ctx.clone(),
-        };
-        Arc::new(move |req: sys_llm::baml_std::HttpRequest| {
-            let send_env = send_env.clone();
-            let text_env = text_env.clone();
-            Box::pin(async move {
-                // Convert HttpRequest to owned::http::Request -> BexExternalValue
-                let io_req = io::owned::http::Request {
-                    method: req.method,
-                    url: req.url,
-                    headers: req.headers,
-                    body: req.body,
-                };
-                let arg = io_req.into_bex_external_value();
-
-                // Call http.send
-                let result = (send_env.fn_ptr)(
-                    &send_env.heap,
-                    vec![BexValue::ExternalValue(&arg)],
-                    &send_env.ctx,
-                    CallId::next(),
-                );
-                let response_val = resolve_sys_op_result(result).await?;
-
-                // Extract status_code and headers from the response
-                let response = io::owned::http::Response::from_external(response_val.clone())
-                    .map_err(|e| {
-                        sys_llm::LlmOpError::Other(format!("http.send response parse error: {e:?}"))
-                    })?;
-                let status_code = u16::try_from(response.status_code).map_err(|_| {
-                    sys_llm::LlmOpError::Other(format!(
-                        "http.send returned invalid status_code: {}",
-                        response.status_code
-                    ))
-                })?;
-                let headers = response.headers;
-
-                // Call http.Response.text() to get the body
-                let text_result = (text_env.fn_ptr)(
-                    &text_env.heap,
-                    vec![BexValue::ExternalValue(&response_val)],
-                    &text_env.ctx,
-                    CallId::next(),
-                );
-                let body_val = resolve_sys_op_result(text_result).await?;
-                let body = match body_val {
-                    BexExternalValue::String(s) => s,
-                    other => {
-                        return Err(sys_llm::LlmOpError::Other(format!(
-                            "http.Response.text() returned unexpected type: {}",
-                            other.type_name()
-                        )));
-                    }
-                };
-
-                Ok(sys_llm::HttpSendResponse {
-                    status_code,
-                    headers,
-                    body,
-                })
-            }) as std::pin::Pin<Box<dyn std::future::Future<Output = _> + Send>>
-        })
-    };
-
-    // -- fs_read: String -> Vec<u8> ------------------------------------------
-    let fs_read: sys_llm::FsReadFn = {
-        let open_env = Env {
-            fn_ptr: io.fs_open.clone(),
-            heap: heap.clone(),
-            ctx: ctx.clone(),
-        };
-        let read_env = Env {
-            fn_ptr: io.fs_file_read.clone(),
-            heap: heap.clone(),
-            ctx: ctx.clone(),
-        };
-        Arc::new(move |path: String| {
-            let open_env = open_env.clone();
-            let read_env = read_env.clone();
-            Box::pin(async move {
-                // fs.open(path) -> File
-                let arg = BexExternalValue::String(path);
-                let result = (open_env.fn_ptr)(
-                    &open_env.heap,
-                    vec![BexValue::ExternalValue(&arg)],
-                    &open_env.ctx,
-                    CallId::next(),
-                );
-                let file_val = resolve_sys_op_result(result).await?;
-                io::owned::fs::File::from_external(file_val.clone()).map_err(|e| {
-                    sys_llm::LlmOpError::Other(format!("fs.open returned unexpected type: {e:?}"))
-                })?;
-
-                // fs.File.read() -> String
-                let result = (read_env.fn_ptr)(
-                    &read_env.heap,
-                    vec![BexValue::ExternalValue(&file_val)],
-                    &read_env.ctx,
-                    CallId::next(),
-                );
-                let content_val = resolve_sys_op_result(result).await?;
-                match content_val {
-                    BexExternalValue::String(s) => Ok(s.into_bytes()),
-                    other => Err(sys_llm::LlmOpError::Other(format!(
-                        "fs.File.read() returned unexpected type: {}",
-                        other.type_name()
-                    ))),
-                }
-            }) as std::pin::Pin<Box<dyn std::future::Future<Output = _> + Send>>
-        })
-    };
-
-    // -- shell: String -> String ---------------------------------------------
-    let shell: sys_llm::ShellFn = {
-        let env = Env {
-            fn_ptr: io.sys_shell.clone(),
-            heap: heap.clone(),
-            ctx: ctx.clone(),
-        };
-        Arc::new(move |command: String| {
-            let env = env.clone();
-            Box::pin(async move {
-                let arg = BexExternalValue::String(command);
-                let result = (env.fn_ptr)(
-                    &env.heap,
-                    vec![BexValue::ExternalValue(&arg)],
-                    &env.ctx,
-                    CallId::next(),
-                );
-                let val = resolve_sys_op_result(result).await?;
-                match val {
-                    BexExternalValue::String(s) => Ok(s),
-                    other => Err(sys_llm::LlmOpError::Other(format!(
-                        "sys.shell returned unexpected type: {}",
-                        other.type_name()
-                    ))),
-                }
-            }) as std::pin::Pin<Box<dyn std::future::Future<Output = _> + Send>>
-        })
-    };
-
-    // -- fetch_bytes: String (URL) -> FetchBytesResponse ----------------------
-    let fetch_bytes: sys_llm::FetchBytesFn = {
-        let send_env = Env {
-            fn_ptr: io.http_send.clone(),
-            heap: heap.clone(),
-            ctx: ctx.clone(),
-        };
-        let bytes_env = Env {
-            fn_ptr: io.http_response_bytes.clone(),
-            heap: heap.clone(),
-            ctx: ctx.clone(),
-        };
-        Arc::new(move |url: String| {
-            let send_env = send_env.clone();
-            let bytes_env = bytes_env.clone();
-            Box::pin(async move {
-                let io_req = io::owned::http::Request {
-                    method: "GET".to_string(),
-                    url,
-                    headers: indexmap::IndexMap::new(),
-                    body: String::new(),
-                };
-                let arg = io_req.into_bex_external_value();
-
-                let result = (send_env.fn_ptr)(
-                    &send_env.heap,
-                    vec![BexValue::ExternalValue(&arg)],
-                    &send_env.ctx,
-                    CallId::next(),
-                );
-                let response_val = resolve_sys_op_result(result).await?;
-
-                let response = io::owned::http::Response::from_external(response_val.clone())
-                    .map_err(|e| {
-                        sys_llm::LlmOpError::Other(format!("http.send response parse error: {e:?}"))
-                    })?;
-                let status_code = u16::try_from(response.status_code).map_err(|_| {
-                    sys_llm::LlmOpError::Other(format!(
-                        "http.send returned invalid status_code: {}",
-                        response.status_code
-                    ))
-                })?;
-                let headers = response.headers;
-
-                let bytes_result = (bytes_env.fn_ptr)(
-                    &bytes_env.heap,
-                    vec![BexValue::ExternalValue(&response_val)],
-                    &bytes_env.ctx,
-                    CallId::next(),
-                );
-                let body_val = resolve_sys_op_result(bytes_result).await?;
-                let bytes = match body_val {
-                    BexExternalValue::Uint8Array(b) => b,
-                    other => {
-                        return Err(sys_llm::LlmOpError::Other(format!(
-                            "http.Response.bytes() returned unexpected type: {}",
-                            other.type_name()
-                        )));
-                    }
-                };
-
-                Ok(sys_llm::FetchBytesResponse {
-                    status_code,
-                    headers,
-                    bytes,
-                })
-            }) as std::pin::Pin<Box<dyn std::future::Future<Output = _> + Send>>
-        })
-    };
-
-    sys_llm::BuildRequestCallbacks {
-        http_send,
-        env_read,
-        fs_read,
-        shell,
-        fetch_bytes,
-    }
-}
 
 /// Builder for composing a [`SysOps`] table by overriding namespaces.
 ///
@@ -1012,292 +739,5 @@ mod tests {
         let fn_ptr = ops.get(SysOp::BamlFsOpen);
         let result = fn_ptr(&heap, vec![], &ctx, CallId::next());
         assert!(matches!(result, SysOpResult::Ready(Err(_))));
-    }
-
-    // ========================================================================
-    // build_io_callbacks tests
-    // ========================================================================
-
-    /// Helper: build a `SysOpIoCallbacks` where every field is unsupported
-    /// except the ones the caller overrides.
-    fn test_io_callbacks() -> SysOpIoCallbacks {
-        SysOpIoCallbacks::unsupported()
-    }
-
-    // -- env_read -------------------------------------------------------------
-
-    #[tokio::test]
-    async fn test_env_read_returns_string() {
-        let heap = test_heap();
-        let ctx = test_ctx();
-        let mut io = test_io_callbacks();
-        io.env_get = Arc::new(|_heap, _args, _ctx, _id| {
-            SysOpResult::Ready(Ok(BexExternalValue::String("my_value".into())))
-        });
-
-        let cbs = build_io_callbacks(&io, &heap, &ctx);
-        let result = (cbs.env_read)("MY_KEY".into()).await;
-        assert_eq!(result.unwrap(), Some("my_value".to_string()));
-    }
-
-    #[tokio::test]
-    async fn test_env_read_returns_none_for_null() {
-        let heap = test_heap();
-        let ctx = test_ctx();
-        let mut io = test_io_callbacks();
-        io.env_get =
-            Arc::new(|_heap, _args, _ctx, _id| SysOpResult::Ready(Ok(BexExternalValue::Null)));
-
-        let cbs = build_io_callbacks(&io, &heap, &ctx);
-        let result = (cbs.env_read)("MISSING".into()).await;
-        assert_eq!(result.unwrap(), None);
-    }
-
-    #[tokio::test]
-    async fn test_env_read_rejects_wrong_type() {
-        let heap = test_heap();
-        let ctx = test_ctx();
-        let mut io = test_io_callbacks();
-        io.env_get =
-            Arc::new(|_heap, _args, _ctx, _id| SysOpResult::Ready(Ok(BexExternalValue::Int(42))));
-
-        let cbs = build_io_callbacks(&io, &heap, &ctx);
-        let err = (cbs.env_read)("KEY".into()).await.unwrap_err();
-        let msg = format!("{err:?}");
-        assert!(msg.contains("unexpected type"), "got: {msg}");
-    }
-
-    #[tokio::test]
-    async fn test_env_read_propagates_upstream_error() {
-        let heap = test_heap();
-        let ctx = test_ctx();
-        let mut io = test_io_callbacks();
-        io.env_get = Arc::new(|_heap, _args, _ctx, _id| {
-            SysOpResult::Ready(Err(sys_types::OpError::new(
-                SysOp::BamlEnvGet,
-                sys_types::OpErrorKind::Unsupported,
-            )))
-        });
-
-        let cbs = build_io_callbacks(&io, &heap, &ctx);
-        assert!((cbs.env_read)("KEY".into()).await.is_err());
-    }
-
-    // -- shell ----------------------------------------------------------------
-
-    #[tokio::test]
-    async fn test_shell_returns_string() {
-        let heap = test_heap();
-        let ctx = test_ctx();
-        let mut io = test_io_callbacks();
-        io.sys_shell = Arc::new(|_heap, _args, _ctx, _id| {
-            SysOpResult::Ready(Ok(BexExternalValue::String("hello\n".into())))
-        });
-
-        let cbs = build_io_callbacks(&io, &heap, &ctx);
-        let result = (cbs.shell)("echo hello".into()).await;
-        assert_eq!(result.unwrap(), "hello\n");
-    }
-
-    #[tokio::test]
-    async fn test_shell_rejects_wrong_type() {
-        let heap = test_heap();
-        let ctx = test_ctx();
-        let mut io = test_io_callbacks();
-        io.sys_shell =
-            Arc::new(|_heap, _args, _ctx, _id| SysOpResult::Ready(Ok(BexExternalValue::Null)));
-
-        let cbs = build_io_callbacks(&io, &heap, &ctx);
-        let err = (cbs.shell)("cmd".into()).await.unwrap_err();
-        let msg = format!("{err:?}");
-        assert!(msg.contains("unexpected type"), "got: {msg}");
-    }
-
-    #[tokio::test]
-    async fn test_shell_propagates_upstream_error() {
-        let heap = test_heap();
-        let ctx = test_ctx();
-        let mut io = test_io_callbacks();
-        io.sys_shell = Arc::new(|_heap, _args, _ctx, _id| {
-            SysOpResult::Ready(Err(sys_types::OpError::new(
-                SysOp::BamlSysShell,
-                sys_types::OpErrorKind::Unsupported,
-            )))
-        });
-
-        let cbs = build_io_callbacks(&io, &heap, &ctx);
-        assert!((cbs.shell)("cmd".into()).await.is_err());
-    }
-
-    // -- fs_read --------------------------------------------------------------
-
-    #[tokio::test]
-    async fn test_fs_read_returns_bytes() {
-        let heap = test_heap();
-        let ctx = test_ctx();
-        let mut io = test_io_callbacks();
-
-        // fs.open returns a File instance that fs.File.read receives
-        io.fs_open = Arc::new(|_heap, _args, _ctx, _id| {
-            use io::AsBexExternalValue;
-            let file = io::owned::fs::File {
-                _handle: std::sync::Arc::new("file_handle".to_string()),
-            };
-            SysOpResult::Ready(Ok(file.into_bex_external_value()))
-        });
-        io.fs_file_read = Arc::new(|_heap, _args, _ctx, _id| {
-            SysOpResult::Ready(Ok(BexExternalValue::String("file contents".into())))
-        });
-
-        let cbs = build_io_callbacks(&io, &heap, &ctx);
-        let result = (cbs.fs_read)("/tmp/test.txt".into()).await;
-        assert_eq!(result.unwrap(), b"file contents");
-    }
-
-    #[tokio::test]
-    async fn test_fs_read_rejects_wrong_type() {
-        let heap = test_heap();
-        let ctx = test_ctx();
-        let mut io = test_io_callbacks();
-        io.fs_open = Arc::new(|_heap, _args, _ctx, _id| {
-            use io::AsBexExternalValue;
-            let file = io::owned::fs::File {
-                _handle: std::sync::Arc::new("handle".to_string()),
-            };
-            SysOpResult::Ready(Ok(file.into_bex_external_value()))
-        });
-        io.fs_file_read =
-            Arc::new(|_heap, _args, _ctx, _id| SysOpResult::Ready(Ok(BexExternalValue::Int(999))));
-
-        let cbs = build_io_callbacks(&io, &heap, &ctx);
-        let err = (cbs.fs_read)("path".into()).await.unwrap_err();
-        let msg = format!("{err:?}");
-        assert!(msg.contains("unexpected type"), "got: {msg}");
-    }
-
-    #[tokio::test]
-    async fn test_fs_read_propagates_open_error() {
-        let heap = test_heap();
-        let ctx = test_ctx();
-        let mut io = test_io_callbacks();
-        io.fs_open = Arc::new(|_heap, _args, _ctx, _id| {
-            SysOpResult::Ready(Err(sys_types::OpError::new(
-                SysOp::BamlFsOpen,
-                sys_types::OpErrorKind::Unsupported,
-            )))
-        });
-        // fs_file_read should never be called
-        io.fs_file_read = Arc::new(|_heap, _args, _ctx, _id| {
-            panic!("should not be called when open fails");
-        });
-
-        let cbs = build_io_callbacks(&io, &heap, &ctx);
-        assert!((cbs.fs_read)("path".into()).await.is_err());
-    }
-
-    // -- http_send ------------------------------------------------------------
-
-    /// Build a fake `http.Response` as a `BexExternalValue::Instance`.
-    fn fake_http_response_value(status: i64) -> BexExternalValue {
-        use io::AsBexExternalValue;
-        io::owned::http::Response {
-            status_code: status,
-            headers: indexmap::indexmap! {
-                "content-type".to_string() => "application/json".to_string(),
-            },
-            url: "https://example.com".to_string(),
-            _body: std::sync::Arc::new(()),
-        }
-        .into_bex_external_value()
-    }
-
-    #[tokio::test]
-    async fn test_http_send_happy_path() {
-        let heap = test_heap();
-        let ctx = test_ctx();
-        let mut io = test_io_callbacks();
-
-        io.http_send = Arc::new(|_heap, _args, _ctx, _id| {
-            SysOpResult::Ready(Ok(fake_http_response_value(200)))
-        });
-        io.http_response_text = Arc::new(|_heap, _args, _ctx, _id| {
-            SysOpResult::Ready(Ok(BexExternalValue::String(r#"{"ok":true}"#.into())))
-        });
-
-        let cbs = build_io_callbacks(&io, &heap, &ctx);
-        let resp = (cbs.http_send)(sys_llm::baml_std::HttpRequest {
-            method: "GET".into(),
-            url: "https://example.com".into(),
-            headers: indexmap::IndexMap::new(),
-            body: String::new(),
-        })
-        .await
-        .unwrap();
-
-        assert_eq!(resp.status_code, 200);
-        assert_eq!(resp.body, r#"{"ok":true}"#);
-        assert_eq!(
-            resp.headers.get("content-type").map(String::as_str),
-            Some("application/json")
-        );
-    }
-
-    #[tokio::test]
-    async fn test_http_send_rejects_wrong_body_type() {
-        let heap = test_heap();
-        let ctx = test_ctx();
-        let mut io = test_io_callbacks();
-
-        io.http_send = Arc::new(|_heap, _args, _ctx, _id| {
-            SysOpResult::Ready(Ok(fake_http_response_value(200)))
-        });
-        io.http_response_text =
-            Arc::new(|_heap, _args, _ctx, _id| SysOpResult::Ready(Ok(BexExternalValue::Int(42))));
-
-        let cbs = build_io_callbacks(&io, &heap, &ctx);
-        let result = (cbs.http_send)(sys_llm::baml_std::HttpRequest {
-            method: "GET".into(),
-            url: "https://example.com".into(),
-            headers: indexmap::IndexMap::new(),
-            body: String::new(),
-        })
-        .await;
-
-        match result {
-            Err(e) => {
-                let msg = format!("{e:?}");
-                assert!(msg.contains("unexpected type"), "got: {msg}");
-            }
-            Ok(_) => panic!("expected error for wrong body type"),
-        }
-    }
-
-    #[tokio::test]
-    async fn test_http_send_propagates_send_error() {
-        let heap = test_heap();
-        let ctx = test_ctx();
-        let mut io = test_io_callbacks();
-
-        io.http_send = Arc::new(|_heap, _args, _ctx, _id| {
-            SysOpResult::Ready(Err(sys_types::OpError::new(
-                SysOp::BamlHttpSend,
-                sys_types::OpErrorKind::Unsupported,
-            )))
-        });
-        io.http_response_text = Arc::new(|_heap, _args, _ctx, _id| {
-            panic!("should not be called when send fails");
-        });
-
-        let cbs = build_io_callbacks(&io, &heap, &ctx);
-        assert!(
-            (cbs.http_send)(sys_llm::baml_std::HttpRequest {
-                method: "GET".into(),
-                url: "https://example.com".into(),
-                headers: indexmap::IndexMap::new(),
-                body: String::new(),
-            })
-            .await
-            .is_err()
-        );
     }
 }

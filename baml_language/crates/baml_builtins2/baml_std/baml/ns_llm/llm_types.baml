@@ -225,6 +225,45 @@ class Client {
   }
 }
 
+// ---------------------------------------------------------------------------
+// RuntimeIo
+// ---------------------------------------------------------------------------
+// Every `$rust_io_function` in this file (and in the other ns_* .baml files)
+// is used by `baml_builtins2_codegen` to generate the `RuntimeIo` trait
+// (in `sys_types::runtime_io`). RuntimeIo is a flat, typed async interface
+// to all sys-ops -- no VM plumbing (BexHeap, SysOpContext, CallId) in its
+// signatures. Crates like `sys_llm` take `&dyn RuntimeIo` to call into the
+// runtime IO layer (HTTP, env, filesystem, shell) without coupling to the VM.
+//
+// The generated `RuntimeIoAdapter` (in `sys_ops`) bridges the trait to the
+// underlying `SysOpFn` pointers by marshaling typed args through
+// `BexExternalValue`.
+//
+// The trait carries `UnwindSafe + RefUnwindSafe` bounds because the AWS SDK's
+// `HttpConnector` trait requires them on provider objects that store
+// `Arc<dyn RuntimeIo>`. The adapter has a manual `impl UnwindSafe` -- this is
+// safe because it holds only `Arc` clones (no interior mutability of its own)
+// and we never catch panics across the SysOpFn boundary.
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// @providers annotations
+// ---------------------------------------------------------------------------
+// The `// @providers: <name>` comments below are NOT regular comments --
+// they are parsed at build time by `baml_compiler2_ast/build.rs`
+// (`extract_provider_configs`) to associate each provider name with its
+// options class. The compiler uses this mapping during `lower_cst` to
+// validate and type-check `client<llm>` declarations: when a user writes
+// `provider "aws-bedrock"`, the compiler knows the options block should
+// match `BedrockOptions`.
+//
+// `@providers-no-options` lists providers that accept `PrimitiveClientOptions`
+// directly and have no dedicated options class.
+//
+// To add a new provider: add its name here (and a new options class + annotation
+// if it has provider-specific options).
+// ---------------------------------------------------------------------------
+
 // @providers-no-options: openai, openai-generic, openai-responses, ollama, openrouter, google-ai, fallback, round-robin
 
 class MediaUrlHandler {

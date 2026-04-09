@@ -26,14 +26,14 @@ pub(crate) fn is_anthropic_model(model: &str) -> bool {
 pub(crate) async fn build_request(
     client: &crate::baml_std::PrimitiveClient,
     prompt: bex_vm_types::PromptAst,
-    callbacks: &crate::BuildRequestCallbacks,
+    io: &dyn ::sys_types::runtime_io::RuntimeIo,
 ) -> Result<crate::baml_std::HttpRequest, BuildRequestError> {
     let provider = LlmProvider::from_str(&client.provider)
         .map_err(|_| BuildRequestError::UnsupportedLlmProvider(client.provider.clone()))?;
 
     // Resolve media (fetch URLs, read files) before building the provider-specific request.
     let handler = crate::resolve_media::MediaUrlHandler::from_client(client);
-    crate::resolve_media::resolve_media(&prompt, &handler, callbacks).await?;
+    crate::resolve_media::resolve_media(&prompt, &handler, io).await?;
 
     let mut request = match provider {
         LlmProvider::OpenAi
@@ -43,7 +43,7 @@ pub(crate) async fn build_request(
         | LlmProvider::OpenRouter => openai::chat_completions::build_request(client, &prompt),
         LlmProvider::OpenAiResponses => openai::responses::build_request(client, &prompt),
         LlmProvider::Anthropic => anthropic::build_request(client, &prompt),
-        LlmProvider::AwsBedrock => bedrock::build_request(client, &prompt, callbacks).await,
+        LlmProvider::AwsBedrock => bedrock::build_request(client, &prompt, io).await,
         LlmProvider::GoogleAi => google::build_request(client, &prompt, provider),
         LlmProvider::VertexAi => {
             if is_anthropic_model(&client.model) {
@@ -72,11 +72,7 @@ pub(crate) async fn build_request(
         request.url = parsed.to_string();
     }
 
-    // Auth is applied after body construction. Eventually this can be promoted
-    // to a standalone step in the LLM function pipeline (llm.baml) so that
-    // auth can be resolved, cached, or refreshed independently of request
-    // building.
-    crate::auth_request::auth_request(provider, &mut request, client, callbacks).await?;
+    crate::auth_request::auth_request(provider, &mut request, client, io).await?;
 
     Ok(request)
 }
@@ -257,7 +253,7 @@ mod tests {
         let system_text = "Given the receipt below:\n\n```\ntest@email.com\n```\n\nAnswer in JSON using this schema:\n{\n  items: [\n    {\n      name: string,\n      description: string or null,\n      quantity: int,\n      price: float,\n    }\n  ],\n  total_cost: float or null,\n  venue: \"barisa\" or \"ox_burger\",\n}";
         let prompt = Arc::new(PromptAst::Vec(vec![msg("system", system_text)]));
 
-        let result = build_request(&client, prompt, &crate::BuildRequestCallbacks::noop())
+        let result = build_request(&client, prompt, &::sys_types::runtime_io::NoopRuntimeIo)
             .await
             .unwrap();
 
@@ -308,7 +304,7 @@ mod tests {
             msg("user", "Write a nice short story about Dr. Pepper"),
         ]));
 
-        let result = build_request(&client, prompt, &crate::BuildRequestCallbacks::noop())
+        let result = build_request(&client, prompt, &::sys_types::runtime_io::NoopRuntimeIo)
             .await
             .unwrap();
 
@@ -348,7 +344,7 @@ mod tests {
             },
         );
         let prompt = msg("user", "Hello world");
-        let result = build_request(&client, prompt, &crate::BuildRequestCallbacks::noop())
+        let result = build_request(&client, prompt, &::sys_types::runtime_io::NoopRuntimeIo)
             .await
             .unwrap();
         let body = parse_body(&result);
@@ -373,7 +369,7 @@ mod tests {
             },
         );
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt, &crate::BuildRequestCallbacks::noop())
+        let result = build_request(&client, prompt, &::sys_types::runtime_io::NoopRuntimeIo)
             .await
             .unwrap();
         assert_eq!(result.url, "https://custom.api.com/chat/completions");
@@ -393,7 +389,7 @@ mod tests {
             },
         );
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt, &crate::BuildRequestCallbacks::noop())
+        let result = build_request(&client, prompt, &::sys_types::runtime_io::NoopRuntimeIo)
             .await
             .unwrap();
         let body = parse_body(&result);
@@ -421,7 +417,7 @@ mod tests {
             },
         );
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt, &crate::BuildRequestCallbacks::noop())
+        let result = build_request(&client, prompt, &::sys_types::runtime_io::NoopRuntimeIo)
             .await
             .unwrap();
         let body = parse_body(&result);
@@ -462,7 +458,7 @@ mod tests {
             msg("user", "Write a nice short story about Dr. Pepper"),
         ]));
 
-        let result = build_request(&client, prompt, &crate::BuildRequestCallbacks::noop())
+        let result = build_request(&client, prompt, &::sys_types::runtime_io::NoopRuntimeIo)
             .await
             .unwrap();
 
@@ -510,7 +506,7 @@ mod tests {
             },
         );
         let prompt = msg("user", "Hello");
-        let result = build_request(&client, prompt, &crate::BuildRequestCallbacks::noop())
+        let result = build_request(&client, prompt, &::sys_types::runtime_io::NoopRuntimeIo)
             .await
             .unwrap();
         let body = parse_body(&result);
@@ -552,7 +548,7 @@ mod tests {
         );
 
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt, &crate::BuildRequestCallbacks::noop())
+        let result = build_request(&client, prompt, &::sys_types::runtime_io::NoopRuntimeIo)
             .await
             .unwrap();
 
@@ -588,7 +584,7 @@ mod tests {
             },
         );
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt, &crate::BuildRequestCallbacks::noop())
+        let result = build_request(&client, prompt, &::sys_types::runtime_io::NoopRuntimeIo)
             .await
             .unwrap();
         let body = parse_body(&result);
@@ -623,7 +619,7 @@ mod tests {
             },
         );
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt, &crate::BuildRequestCallbacks::noop())
+        let result = build_request(&client, prompt, &::sys_types::runtime_io::NoopRuntimeIo)
             .await
             .unwrap();
         assert!(
@@ -648,7 +644,7 @@ mod tests {
             },
         );
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt, &crate::BuildRequestCallbacks::noop())
+        let result = build_request(&client, prompt, &::sys_types::runtime_io::NoopRuntimeIo)
             .await
             .unwrap();
         assert!(
@@ -671,7 +667,7 @@ mod tests {
             },
         );
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt, &crate::BuildRequestCallbacks::noop())
+        let result = build_request(&client, prompt, &::sys_types::runtime_io::NoopRuntimeIo)
             .await
             .unwrap();
         assert!(
@@ -699,7 +695,7 @@ mod tests {
             },
         );
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt, &crate::BuildRequestCallbacks::noop())
+        let result = build_request(&client, prompt, &::sys_types::runtime_io::NoopRuntimeIo)
             .await
             .unwrap();
         let body = parse_body(&result);
@@ -736,7 +732,7 @@ mod tests {
             msg("user", "Write a nice short story about Dr. Pepper"),
         ]));
 
-        let result = build_request(&client, prompt, &crate::BuildRequestCallbacks::noop())
+        let result = build_request(&client, prompt, &::sys_types::runtime_io::NoopRuntimeIo)
             .await
             .unwrap();
 
@@ -780,7 +776,7 @@ mod tests {
         );
 
         let prompt = msg("user", "Hello");
-        let result = build_request(&client, prompt, &crate::BuildRequestCallbacks::noop())
+        let result = build_request(&client, prompt, &::sys_types::runtime_io::NoopRuntimeIo)
             .await
             .unwrap();
         let body = parse_body(&result);
@@ -812,7 +808,7 @@ mod tests {
             msg("user", "How are you?"),
         ]));
 
-        let result = build_request(&client, prompt, &crate::BuildRequestCallbacks::noop())
+        let result = build_request(&client, prompt, &::sys_types::runtime_io::NoopRuntimeIo)
             .await
             .unwrap();
         let body = parse_body(&result);
@@ -854,7 +850,7 @@ mod tests {
         );
 
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt, &crate::BuildRequestCallbacks::noop())
+        let result = build_request(&client, prompt, &::sys_types::runtime_io::NoopRuntimeIo)
             .await
             .unwrap();
         let body = parse_body(&result);
@@ -884,7 +880,7 @@ mod tests {
         );
 
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt, &crate::BuildRequestCallbacks::noop())
+        let result = build_request(&client, prompt, &::sys_types::runtime_io::NoopRuntimeIo)
             .await
             .unwrap();
         assert!(
@@ -920,7 +916,7 @@ mod tests {
             msg("user", "Write a nice short story about Dr. Pepper"),
         ]));
 
-        let result = build_request(&client, prompt, &crate::BuildRequestCallbacks::noop())
+        let result = build_request(&client, prompt, &::sys_types::runtime_io::NoopRuntimeIo)
             .await
             .unwrap();
 
@@ -970,7 +966,7 @@ mod tests {
         );
 
         let prompt = msg("user", "Hello");
-        let result = build_request(&client, prompt, &crate::BuildRequestCallbacks::noop())
+        let result = build_request(&client, prompt, &::sys_types::runtime_io::NoopRuntimeIo)
             .await
             .unwrap();
         let body = parse_body(&result);
@@ -1007,7 +1003,7 @@ mod tests {
             msg("model", "I'm well."),
         ]));
 
-        let result = build_request(&client, prompt, &crate::BuildRequestCallbacks::noop())
+        let result = build_request(&client, prompt, &::sys_types::runtime_io::NoopRuntimeIo)
             .await
             .unwrap();
         let body = parse_body(&result);
@@ -1060,7 +1056,7 @@ mod tests {
         );
 
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt, &crate::BuildRequestCallbacks::noop())
+        let result = build_request(&client, prompt, &::sys_types::runtime_io::NoopRuntimeIo)
             .await
             .unwrap();
         let body = parse_body(&result);
@@ -1098,7 +1094,7 @@ mod tests {
         );
 
         let prompt = msg("user", "Hello");
-        let result = build_request(&client, prompt, &crate::BuildRequestCallbacks::noop())
+        let result = build_request(&client, prompt, &::sys_types::runtime_io::NoopRuntimeIo)
             .await
             .unwrap();
 
@@ -1136,7 +1132,7 @@ mod tests {
             msg("user", "How are you?"),
         ]));
 
-        let result = build_request(&client, prompt, &crate::BuildRequestCallbacks::noop())
+        let result = build_request(&client, prompt, &::sys_types::runtime_io::NoopRuntimeIo)
             .await
             .unwrap();
         let body = parse_body(&result);
@@ -1186,9 +1182,13 @@ mod tests {
         let specialized = crate::execute_specialize_prompt_from_owned(&client, prompt).unwrap();
 
         // Then build request.
-        let result = build_request(&client, specialized, &crate::BuildRequestCallbacks::noop())
-            .await
-            .unwrap();
+        let result = build_request(
+            &client,
+            specialized,
+            &::sys_types::runtime_io::NoopRuntimeIo,
+        )
+        .await
+        .unwrap();
         let body = parse_body(&result);
 
         assert!(result.url.contains(":rawPredict"));
@@ -1224,9 +1224,13 @@ mod tests {
         ]));
 
         let specialized = crate::execute_specialize_prompt_from_owned(&client, prompt).unwrap();
-        let result = build_request(&client, specialized, &crate::BuildRequestCallbacks::noop())
-            .await
-            .unwrap();
+        let result = build_request(
+            &client,
+            specialized,
+            &::sys_types::runtime_io::NoopRuntimeIo,
+        )
+        .await
+        .unwrap();
         let body = parse_body(&result);
 
         assert!(result.url.contains(":generateContent"));
@@ -1254,7 +1258,7 @@ mod tests {
         );
 
         let prompt = msg("user", "Hello");
-        let result = build_request(&client, prompt, &crate::BuildRequestCallbacks::noop())
+        let result = build_request(&client, prompt, &::sys_types::runtime_io::NoopRuntimeIo)
             .await
             .unwrap();
 
