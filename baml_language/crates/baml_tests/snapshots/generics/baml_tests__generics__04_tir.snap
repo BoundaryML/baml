@@ -101,6 +101,7 @@ function user.Shadow.bad<T>(x: T) -> T throws never {
   { : T
     x : T
   }
+  !! 2686..2799: type parameter `T` on method shadows the same parameter on class `Shadow`. Please use a different name for the type parameter.
 }
 function user.wrong_arity_missing() -> user.Box throws never {
   { : user.Box

@@ -106,6 +106,8 @@ pub enum TirTypeError {
     ExtraneousThrowsDeclaration { extra_types: Vec<String> },
     /// A type parameter could not be inferred at a call site.
     CannotInferTypeParameter { name: Name },
+    /// A method's generic type parameter shadows a class-level type parameter.
+    TypeParamShadowed { param_name: Name, class_name: Name },
     /// Wrong number of type arguments for a generic class.
     WrongNumberOfTypeArgs {
         class_name: Name,
@@ -268,6 +270,16 @@ impl fmt::Display for TirTypeError {
                 write!(
                     f,
                     "class `{class_name}` expects {expected} type argument(s), got {got}"
+                )
+            }
+            TirTypeError::TypeParamShadowed {
+                param_name,
+                class_name,
+            } => {
+                write!(
+                    f,
+                    "type parameter `{param_name}` on method shadows the same parameter on class `{class_name}`. \
+                    Please use a different name for the type parameter."
                 )
             }
             TirTypeError::CannotInferLambdaParamType { param_name } => {

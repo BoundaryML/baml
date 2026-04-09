@@ -282,6 +282,18 @@ pub fn infer_scope_types<'db>(
                             if let Some(class_name) = &parent.name {
                                 for class_data in item_tree.classes.values() {
                                     if class_data.name == *class_name {
+                                        // Check for method-level type params that shadow class-level ones.
+                                        for mp in &func_data.generic_params {
+                                            if class_data.generic_params.iter().any(|cp| cp == mp) {
+                                                builder.report_at_span(
+                                                    crate::infer_context::TirTypeError::TypeParamShadowed {
+                                                        param_name: mp.clone(),
+                                                        class_name: class_name.clone(),
+                                                    },
+                                                    func_data.span,
+                                                );
+                                            }
+                                        }
                                         let mut merged = class_data.generic_params.clone();
                                         merged.extend(generic_params);
                                         generic_params = merged;
