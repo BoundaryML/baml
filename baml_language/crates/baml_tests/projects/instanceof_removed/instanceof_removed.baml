@@ -1,0 +1,21 @@
+// The `instanceof` operator has been removed in favor of `match`.
+// Using it should produce error E0098 with a migration hint.
+
+class Cat {
+    name string
+}
+
+class Dog {
+    breed string
+}
+
+function check_instanceof(x: Cat | Dog) -> bool {
+    x instanceof Cat
+}
+
+function check_instanceof_in_if(x: Cat | Dog) -> string {
+    if (x instanceof Dog) {
+        return "dog";
+    }
+    "cat"
+}
