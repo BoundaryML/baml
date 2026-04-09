@@ -18,6 +18,7 @@ use aws_smithy_runtime_api::{
 };
 use aws_smithy_types::body::SdkBody;
 use indexmap::IndexMap;
+#[cfg_attr(target_arch = "wasm32", allow(unused_imports))]
 use sys_types::runtime_io::{RuntimeIo, RuntimeIoError};
 
 use crate::{
@@ -325,14 +326,14 @@ async fn load_aws_sdk_config(
 pub(crate) async fn auth_bedrock(
     request: &mut HttpRequest,
     client: &PrimitiveClient,
-    io: &dyn RuntimeIo,
+    io: Arc<dyn RuntimeIo>,
 ) -> Result<(), BuildRequestError> {
     let bedrock_opts = match &client.provider_options {
         Some(ProviderOptions::Bedrock(opts)) => opts.clone(),
         _ => BedrockOptions::default(),
     };
 
-    let credentials = resolve_credentials(&bedrock_opts, io).await?;
+    let credentials = resolve_credentials(&bedrock_opts, io.clone()).await?;
     let region = resolve_region(&bedrock_opts, io).await?;
 
     let signed_headers = sign_with_credentials(
@@ -355,14 +356,13 @@ pub(crate) async fn auth_bedrock(
 /// Resolve the AWS region from explicit options or the default provider chain.
 pub(crate) async fn resolve_region(
     opts: &BedrockOptions,
-    io: &dyn RuntimeIo,
+    io: Arc<dyn RuntimeIo>,
 ) -> Result<String, BuildRequestError> {
     if let Some(region) = &opts.region {
         return Ok(region.clone());
     }
 
-    let io_arc = arc_from_ref(io);
-    let sdk_config = load_aws_sdk_config(opts, io_arc).await;
+    let sdk_config = load_aws_sdk_config(opts, io).await;
     sdk_config.region().map(ToString::to_string).ok_or_else(|| {
         BuildRequestError::AuthorizationFailed(
             "AWS region not found in default provider chain".into(),
@@ -373,7 +373,7 @@ pub(crate) async fn resolve_region(
 /// Resolve AWS credentials from explicit options or the default provider chain.
 async fn resolve_credentials(
     opts: &BedrockOptions,
-    io: &dyn RuntimeIo,
+    io: Arc<dyn RuntimeIo>,
 ) -> Result<Credentials, BuildRequestError> {
     // Prefer explicit credentials from client options.
     if let Some(creds) = credentials_from_options(opts) {
@@ -381,8 +381,7 @@ async fn resolve_credentials(
     }
 
     // Fall back to the AWS provider chain via RuntimeIo.
-    let io_arc = arc_from_ref(io);
-    let sdk_config = load_aws_sdk_config(opts, io_arc).await;
+    let sdk_config = load_aws_sdk_config(opts, io).await;
     let credentials_provider = sdk_config.credentials_provider().ok_or_else(|| {
         BuildRequestError::AuthorizationFailed(
             "AWS credentials provider not found in default provider chain".into(),
@@ -396,85 +395,6 @@ async fn resolve_credentials(
                 "failed to load credentials from default provider chain: {e}"
             ))
         })
-}
-
-/// Build an `Arc<dyn RuntimeIo>` from a borrowed reference by wrapping it
-/// in a thin forwarding struct with a `'static` lifetime.
-///
-/// SAFETY: The returned `Arc` must not outlive `io`. Callers must ensure the
-/// `Arc` (and everything that clones it) is dropped before `io` is dropped.
-/// In practice this is guaranteed because `load_aws_sdk_config` awaits inline
-/// and the `SdkConfig` (plus all captured provider objects) is dropped before
-/// the calling function returns.
-#[allow(unsafe_code)]
-fn arc_from_ref(io: &dyn RuntimeIo) -> Arc<dyn RuntimeIo> {
-    // We use a raw pointer to erase the lifetime. The RuntimeIoRef wrapper
-    // forwards all trait methods through the pointer.
-    let ptr: *const dyn RuntimeIo = io;
-    // SAFETY: see doc comment above. The Arc is consumed within the caller's
-    // async scope, so the pointer remains valid for the wrapper's lifetime.
-    // We transmute the fat pointer to strip the borrow lifetime, since
-    // *const dyn RuntimeIo is technically *const (dyn RuntimeIo + 'a) and
-    // Arc<dyn RuntimeIo> requires 'static.
-    #[allow(clippy::transmute_ptr_to_ptr)]
-    let static_ptr: *const (dyn RuntimeIo + 'static) = unsafe {
-        std::mem::transmute::<*const dyn RuntimeIo, *const (dyn RuntimeIo + 'static)>(ptr)
-    };
-    Arc::new(RuntimeIoRef(static_ptr))
-}
-
-#[allow(unsafe_code)]
-/// Thin wrapper that holds a raw pointer to a `dyn RuntimeIo` and forwards
-/// all trait methods. Used by `arc_from_ref` to bridge `&dyn RuntimeIo` into
-/// an `Arc<dyn RuntimeIo>` without requiring `Clone` on the trait.
-struct RuntimeIoRef(*const (dyn RuntimeIo + 'static));
-
-// SAFETY: RuntimeIo is Send + Sync, and we only construct RuntimeIoRef from
-// references to values that are already Send + Sync.
-#[allow(unsafe_code)]
-unsafe impl Send for RuntimeIoRef {}
-#[allow(unsafe_code)]
-unsafe impl Sync for RuntimeIoRef {}
-
-/// Forward every `RuntimeIo` method through the raw pointer.
-///
-/// SAFETY: each call dereferences `self.0` which is valid for the lifetime of
-/// the `RuntimeIoRef` (see `arc_from_ref` documentation).
-macro_rules! delegate_runtime_io_ref {
-    ($($method:ident ( $($pname:ident : $pty:ty),* ) -> $ret:ty);* $(;)?) => {
-        #[allow(unsafe_code)]
-        impl RuntimeIo for RuntimeIoRef {
-            $(
-                fn $method(&self, $($pname: $pty),*) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<$ret, RuntimeIoError>> + Send + '_>> {
-                    unsafe { &*self.0 }.$method($($pname),*)
-                }
-            )*
-        }
-    };
-}
-
-delegate_runtime_io_ref! {
-    env_get(key: String) -> Option<String>;
-    http_response_text(response: &sys_types::runtime_io::HttpResponseHandle) -> String;
-    http_response_bytes(response: &sys_types::runtime_io::HttpResponseHandle) -> Vec<u8>;
-    http_fetch(url: String) -> sys_types::runtime_io::HttpResponseHandle;
-    http_send(request: sys_types::generated::owned::http::Request) -> sys_types::runtime_io::HttpResponseHandle;
-    sys_shell(command: String) -> String;
-    sys_sleep(ms: i64) -> ();
-    fs_file_read(file: &sys_types::runtime_io::FsFileHandle) -> String;
-    fs_file_close(file: &sys_types::runtime_io::FsFileHandle) -> ();
-    fs_open(path: String) -> sys_types::runtime_io::FsFileHandle;
-    net_socket_read(socket: &sys_types::runtime_io::NetSocketHandle) -> String;
-    net_socket_close(socket: &sys_types::runtime_io::NetSocketHandle) -> ();
-    net_connect(addr: String) -> sys_types::runtime_io::NetSocketHandle;
-    llm_client_get_constructor(client: &sys_types::runtime_io::LlmClientHandle) -> bex_external_types::BexExternalValue;
-    llm_primitiveclient_render_prompt(primitiveclient: &sys_types::runtime_io::LlmPrimitiveClientHandle, template: String, args: indexmap::IndexMap<String, bex_external_types::BexExternalValue>, return_type: baml_type::Ty) -> sys_types::generated::owned::llm::PromptAst;
-    llm_primitiveclient_specialize_prompt(primitiveclient: &sys_types::runtime_io::LlmPrimitiveClientHandle, prompt: sys_types::generated::owned::llm::PromptAst) -> sys_types::generated::owned::llm::PromptAst;
-    llm_primitiveclient_build_request(primitiveclient: &sys_types::runtime_io::LlmPrimitiveClientHandle, prompt: sys_types::generated::owned::llm::PromptAst) -> bex_external_types::BexExternalValue;
-    llm_primitiveclient_parse(primitiveclient: &sys_types::runtime_io::LlmPrimitiveClientHandle, http_response_body: String, type_def: baml_type::Ty) -> bex_external_types::BexExternalValue;
-    llm_get_jinja_template(function_name: String) -> String;
-    llm_get_return_type(function_name: String) -> baml_type::Ty;
-    llm___sap_parse(json: String, ty: baml_type::Ty) -> bex_external_types::BexExternalValue;
 }
 
 /// Try to build credentials from explicit client options.
@@ -1168,9 +1088,13 @@ mod tests {
     async fn sigv4_headers_present() {
         let client = make_client(base_bedrock_opts());
         let mut req = fake_bedrock_request();
-        auth_bedrock(&mut req, &client, &sys_types::runtime_io::NoopRuntimeIo)
-            .await
-            .unwrap();
+        auth_bedrock(
+            &mut req,
+            &client,
+            Arc::new(sys_types::runtime_io::NoopRuntimeIo),
+        )
+        .await
+        .unwrap();
         assert!(req.headers.contains_key("authorization"));
         assert!(req.headers.contains_key("x-amz-date"));
     }
@@ -1179,7 +1103,12 @@ mod tests {
     async fn explicit_credentials_used_without_io() {
         let client = make_client(base_bedrock_opts());
         let mut req = fake_bedrock_request();
-        let result = auth_bedrock(&mut req, &client, &sys_types::runtime_io::NoopRuntimeIo).await;
+        let result = auth_bedrock(
+            &mut req,
+            &client,
+            Arc::new(sys_types::runtime_io::NoopRuntimeIo),
+        )
+        .await;
         assert!(result.is_ok());
     }
 
@@ -1192,7 +1121,7 @@ mod tests {
             ..Default::default()
         });
         let mut req = fake_bedrock_request();
-        let result = auth_bedrock(&mut req, &client, io.as_ref()).await;
+        let result = auth_bedrock(&mut req, &client, io.clone()).await;
         assert!(result.is_err());
         // The IO was invoked during credential resolution.
         assert!(call_count.load(Ordering::SeqCst) > 0);
@@ -1204,7 +1133,7 @@ mod tests {
         let io = mock_http_io(call_count.clone(), 200, "");
         let client = make_client(base_bedrock_opts());
         let mut req = fake_bedrock_request();
-        let result = auth_bedrock(&mut req, &client, io.as_ref()).await;
+        let result = auth_bedrock(&mut req, &client, io.clone()).await;
         assert!(result.is_ok());
         assert_eq!(call_count.load(Ordering::SeqCst), 0);
     }
@@ -1215,7 +1144,7 @@ mod tests {
             region: Some("eu-west-1".into()),
             ..Default::default()
         };
-        let region = resolve_region(&opts, &sys_types::runtime_io::NoopRuntimeIo)
+        let region = resolve_region(&opts, Arc::new(sys_types::runtime_io::NoopRuntimeIo))
             .await
             .unwrap();
         assert_eq!(region, "eu-west-1");
@@ -1230,7 +1159,7 @@ mod tests {
             },
         });
         let opts = BedrockOptions::default();
-        let region = resolve_region(&opts, io.as_ref()).await.unwrap();
+        let region = resolve_region(&opts, io.clone()).await.unwrap();
         assert_eq!(region, "ap-southeast-1");
     }
 
@@ -1238,7 +1167,7 @@ mod tests {
     async fn resolve_region_missing_with_empty_env() {
         let io = stub_io();
         let opts = BedrockOptions::default();
-        let result = resolve_region(&opts, io.as_ref()).await;
+        let result = resolve_region(&opts, io.clone()).await;
         assert!(result.is_err());
     }
 
@@ -1259,7 +1188,7 @@ mod tests {
         });
         let client = make_client(BedrockOptions::default());
         let mut req = fake_bedrock_request();
-        auth_bedrock(&mut req, &client, io.as_ref()).await.unwrap();
+        auth_bedrock(&mut req, &client, io.clone()).await.unwrap();
         assert!(req.headers.contains_key("authorization"));
         assert!(req.headers.contains_key("x-amz-date"));
     }
@@ -1288,7 +1217,7 @@ aws_secret_access_key = wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
         });
         let client = make_client(BedrockOptions::default());
         let mut req = fake_bedrock_request();
-        auth_bedrock(&mut req, &client, io.as_ref()).await.unwrap();
+        auth_bedrock(&mut req, &client, io.clone()).await.unwrap();
         assert!(req.headers.contains_key("authorization"));
         assert!(req.headers.contains_key("x-amz-date"));
     }
@@ -1318,7 +1247,7 @@ aws_secret_access_key = wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
         });
         let client = make_client(BedrockOptions::default());
         let mut req = fake_bedrock_request();
-        auth_bedrock(&mut req, &client, io.as_ref()).await.unwrap();
+        auth_bedrock(&mut req, &client, io.clone()).await.unwrap();
         assert!(http_call_count.load(Ordering::SeqCst) > 0);
         assert!(req.headers.contains_key("authorization"));
         assert!(req.headers.contains_key("x-amz-date"));

@@ -169,7 +169,7 @@ impl<T> io::IoClassLlmPrimitiveClient for T {
         let prompt_ast = unwrap_prompt_ast(&prompt);
         let io = ctx.runtime_io.clone();
         SysOpOutput::async_op(async move {
-            sys_llm::execute_build_request_from_owned(&old_client, prompt_ast, io.as_ref())
+            sys_llm::execute_build_request_from_owned(&old_client, prompt_ast, io.clone())
                 .await
                 .map(|req| {
                     io::owned::http::Request {

@@ -8,7 +8,7 @@ mod bedrock;
 pub(crate) mod google;
 mod openai;
 
-use std::str::FromStr;
+use std::{str::FromStr, sync::Arc};
 
 use bex_external_types::BexExternalValue;
 
@@ -26,14 +26,14 @@ pub(crate) fn is_anthropic_model(model: &str) -> bool {
 pub(crate) async fn build_request(
     client: &crate::baml_std::PrimitiveClient,
     prompt: bex_vm_types::PromptAst,
-    io: &dyn ::sys_types::runtime_io::RuntimeIo,
+    io: Arc<dyn ::sys_types::runtime_io::RuntimeIo>,
 ) -> Result<crate::baml_std::HttpRequest, BuildRequestError> {
     let provider = LlmProvider::from_str(&client.provider)
         .map_err(|_| BuildRequestError::UnsupportedLlmProvider(client.provider.clone()))?;
 
     // Resolve media (fetch URLs, read files) before building the provider-specific request.
     let handler = crate::resolve_media::MediaUrlHandler::from_client(client);
-    crate::resolve_media::resolve_media(&prompt, &handler, io).await?;
+    crate::resolve_media::resolve_media(&prompt, &handler, &*io).await?;
 
     let mut request = match provider {
         LlmProvider::OpenAi
@@ -43,7 +43,7 @@ pub(crate) async fn build_request(
         | LlmProvider::OpenRouter => openai::chat_completions::build_request(client, &prompt),
         LlmProvider::OpenAiResponses => openai::responses::build_request(client, &prompt),
         LlmProvider::Anthropic => anthropic::build_request(client, &prompt),
-        LlmProvider::AwsBedrock => bedrock::build_request(client, &prompt, io).await,
+        LlmProvider::AwsBedrock => bedrock::build_request(client, &prompt, io.clone()).await,
         LlmProvider::GoogleAi => google::build_request(client, &prompt, provider),
         LlmProvider::VertexAi => {
             if is_anthropic_model(&client.model) {
@@ -253,9 +253,13 @@ mod tests {
         let system_text = "Given the receipt below:\n\n```\ntest@email.com\n```\n\nAnswer in JSON using this schema:\n{\n  items: [\n    {\n      name: string,\n      description: string or null,\n      quantity: int,\n      price: float,\n    }\n  ],\n  total_cost: float or null,\n  venue: \"barisa\" or \"ox_burger\",\n}";
         let prompt = Arc::new(PromptAst::Vec(vec![msg("system", system_text)]));
 
-        let result = build_request(&client, prompt, &::sys_types::runtime_io::NoopRuntimeIo)
-            .await
-            .unwrap();
+        let result = build_request(
+            &client,
+            prompt,
+            Arc::new(::sys_types::runtime_io::NoopRuntimeIo),
+        )
+        .await
+        .unwrap();
 
         // Verify envelope
         assert_eq!(result.method, "POST");
@@ -304,9 +308,13 @@ mod tests {
             msg("user", "Write a nice short story about Dr. Pepper"),
         ]));
 
-        let result = build_request(&client, prompt, &::sys_types::runtime_io::NoopRuntimeIo)
-            .await
-            .unwrap();
+        let result = build_request(
+            &client,
+            prompt,
+            Arc::new(::sys_types::runtime_io::NoopRuntimeIo),
+        )
+        .await
+        .unwrap();
 
         assert_eq!(result.url, "https://api.openai.com/v1/chat/completions");
 
@@ -344,9 +352,13 @@ mod tests {
             },
         );
         let prompt = msg("user", "Hello world");
-        let result = build_request(&client, prompt, &::sys_types::runtime_io::NoopRuntimeIo)
-            .await
-            .unwrap();
+        let result = build_request(
+            &client,
+            prompt,
+            Arc::new(::sys_types::runtime_io::NoopRuntimeIo),
+        )
+        .await
+        .unwrap();
         let body = parse_body(&result);
         assert_eq!(
             body,
@@ -369,9 +381,13 @@ mod tests {
             },
         );
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt, &::sys_types::runtime_io::NoopRuntimeIo)
-            .await
-            .unwrap();
+        let result = build_request(
+            &client,
+            prompt,
+            Arc::new(::sys_types::runtime_io::NoopRuntimeIo),
+        )
+        .await
+        .unwrap();
         assert_eq!(result.url, "https://custom.api.com/chat/completions");
     }
 
@@ -389,9 +405,13 @@ mod tests {
             },
         );
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt, &::sys_types::runtime_io::NoopRuntimeIo)
-            .await
-            .unwrap();
+        let result = build_request(
+            &client,
+            prompt,
+            Arc::new(::sys_types::runtime_io::NoopRuntimeIo),
+        )
+        .await
+        .unwrap();
         let body = parse_body(&result);
         assert_eq!(
             body,
@@ -417,9 +437,13 @@ mod tests {
             },
         );
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt, &::sys_types::runtime_io::NoopRuntimeIo)
-            .await
-            .unwrap();
+        let result = build_request(
+            &client,
+            prompt,
+            Arc::new(::sys_types::runtime_io::NoopRuntimeIo),
+        )
+        .await
+        .unwrap();
         let body = parse_body(&result);
         assert_eq!(
             body,
@@ -458,9 +482,13 @@ mod tests {
             msg("user", "Write a nice short story about Dr. Pepper"),
         ]));
 
-        let result = build_request(&client, prompt, &::sys_types::runtime_io::NoopRuntimeIo)
-            .await
-            .unwrap();
+        let result = build_request(
+            &client,
+            prompt,
+            Arc::new(::sys_types::runtime_io::NoopRuntimeIo),
+        )
+        .await
+        .unwrap();
 
         // Verify envelope
         assert_eq!(result.method, "POST");
@@ -506,9 +534,13 @@ mod tests {
             },
         );
         let prompt = msg("user", "Hello");
-        let result = build_request(&client, prompt, &::sys_types::runtime_io::NoopRuntimeIo)
-            .await
-            .unwrap();
+        let result = build_request(
+            &client,
+            prompt,
+            Arc::new(::sys_types::runtime_io::NoopRuntimeIo),
+        )
+        .await
+        .unwrap();
         let body = parse_body(&result);
         assert_eq!(
             body,
@@ -548,9 +580,13 @@ mod tests {
         );
 
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt, &::sys_types::runtime_io::NoopRuntimeIo)
-            .await
-            .unwrap();
+        let result = build_request(
+            &client,
+            prompt,
+            Arc::new(::sys_types::runtime_io::NoopRuntimeIo),
+        )
+        .await
+        .unwrap();
 
         assert_eq!(
             result.headers.get("anthropic-beta").unwrap(),
@@ -584,9 +620,13 @@ mod tests {
             },
         );
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt, &::sys_types::runtime_io::NoopRuntimeIo)
-            .await
-            .unwrap();
+        let result = build_request(
+            &client,
+            prompt,
+            Arc::new(::sys_types::runtime_io::NoopRuntimeIo),
+        )
+        .await
+        .unwrap();
         let body = parse_body(&result);
         assert_eq!(
             body,
@@ -619,9 +659,13 @@ mod tests {
             },
         );
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt, &::sys_types::runtime_io::NoopRuntimeIo)
-            .await
-            .unwrap();
+        let result = build_request(
+            &client,
+            prompt,
+            Arc::new(::sys_types::runtime_io::NoopRuntimeIo),
+        )
+        .await
+        .unwrap();
         assert!(
             result.url.contains("foo=bar") && result.url.contains("baz=qux"),
             "URL should contain query params: {}",
@@ -644,9 +688,13 @@ mod tests {
             },
         );
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt, &::sys_types::runtime_io::NoopRuntimeIo)
-            .await
-            .unwrap();
+        let result = build_request(
+            &client,
+            prompt,
+            Arc::new(::sys_types::runtime_io::NoopRuntimeIo),
+        )
+        .await
+        .unwrap();
         assert!(
             result
                 .url
@@ -667,9 +715,13 @@ mod tests {
             },
         );
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt, &::sys_types::runtime_io::NoopRuntimeIo)
-            .await
-            .unwrap();
+        let result = build_request(
+            &client,
+            prompt,
+            Arc::new(::sys_types::runtime_io::NoopRuntimeIo),
+        )
+        .await
+        .unwrap();
         assert!(
             !result.url.contains('?'),
             "URL should not contain '?' without query params: {}",
@@ -695,9 +747,13 @@ mod tests {
             },
         );
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt, &::sys_types::runtime_io::NoopRuntimeIo)
-            .await
-            .unwrap();
+        let result = build_request(
+            &client,
+            prompt,
+            Arc::new(::sys_types::runtime_io::NoopRuntimeIo),
+        )
+        .await
+        .unwrap();
         let body = parse_body(&result);
         assert_eq!(
             body,
@@ -732,9 +788,13 @@ mod tests {
             msg("user", "Write a nice short story about Dr. Pepper"),
         ]));
 
-        let result = build_request(&client, prompt, &::sys_types::runtime_io::NoopRuntimeIo)
-            .await
-            .unwrap();
+        let result = build_request(
+            &client,
+            prompt,
+            Arc::new(::sys_types::runtime_io::NoopRuntimeIo),
+        )
+        .await
+        .unwrap();
 
         assert_eq!(result.method, "POST");
         assert_eq!(
@@ -776,9 +836,13 @@ mod tests {
         );
 
         let prompt = msg("user", "Hello");
-        let result = build_request(&client, prompt, &::sys_types::runtime_io::NoopRuntimeIo)
-            .await
-            .unwrap();
+        let result = build_request(
+            &client,
+            prompt,
+            Arc::new(::sys_types::runtime_io::NoopRuntimeIo),
+        )
+        .await
+        .unwrap();
         let body = parse_body(&result);
         assert_eq!(
             body,
@@ -808,9 +872,13 @@ mod tests {
             msg("user", "How are you?"),
         ]));
 
-        let result = build_request(&client, prompt, &::sys_types::runtime_io::NoopRuntimeIo)
-            .await
-            .unwrap();
+        let result = build_request(
+            &client,
+            prompt,
+            Arc::new(::sys_types::runtime_io::NoopRuntimeIo),
+        )
+        .await
+        .unwrap();
         let body = parse_body(&result);
         assert_eq!(
             body,
@@ -850,9 +918,13 @@ mod tests {
         );
 
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt, &::sys_types::runtime_io::NoopRuntimeIo)
-            .await
-            .unwrap();
+        let result = build_request(
+            &client,
+            prompt,
+            Arc::new(::sys_types::runtime_io::NoopRuntimeIo),
+        )
+        .await
+        .unwrap();
         let body = parse_body(&result);
         assert_eq!(
             body,
@@ -880,9 +952,13 @@ mod tests {
         );
 
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt, &::sys_types::runtime_io::NoopRuntimeIo)
-            .await
-            .unwrap();
+        let result = build_request(
+            &client,
+            prompt,
+            Arc::new(::sys_types::runtime_io::NoopRuntimeIo),
+        )
+        .await
+        .unwrap();
         assert!(
             result.url.contains("key=my-api-key"),
             "URL should contain query param: {}",
@@ -916,9 +992,13 @@ mod tests {
             msg("user", "Write a nice short story about Dr. Pepper"),
         ]));
 
-        let result = build_request(&client, prompt, &::sys_types::runtime_io::NoopRuntimeIo)
-            .await
-            .unwrap();
+        let result = build_request(
+            &client,
+            prompt,
+            Arc::new(::sys_types::runtime_io::NoopRuntimeIo),
+        )
+        .await
+        .unwrap();
 
         assert_eq!(result.method, "POST");
         assert!(
@@ -966,9 +1046,13 @@ mod tests {
         );
 
         let prompt = msg("user", "Hello");
-        let result = build_request(&client, prompt, &::sys_types::runtime_io::NoopRuntimeIo)
-            .await
-            .unwrap();
+        let result = build_request(
+            &client,
+            prompt,
+            Arc::new(::sys_types::runtime_io::NoopRuntimeIo),
+        )
+        .await
+        .unwrap();
         let body = parse_body(&result);
         assert_eq!(
             body,
@@ -1003,9 +1087,13 @@ mod tests {
             msg("model", "I'm well."),
         ]));
 
-        let result = build_request(&client, prompt, &::sys_types::runtime_io::NoopRuntimeIo)
-            .await
-            .unwrap();
+        let result = build_request(
+            &client,
+            prompt,
+            Arc::new(::sys_types::runtime_io::NoopRuntimeIo),
+        )
+        .await
+        .unwrap();
         let body = parse_body(&result);
         assert_eq!(
             body,
@@ -1056,9 +1144,13 @@ mod tests {
         );
 
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt, &::sys_types::runtime_io::NoopRuntimeIo)
-            .await
-            .unwrap();
+        let result = build_request(
+            &client,
+            prompt,
+            Arc::new(::sys_types::runtime_io::NoopRuntimeIo),
+        )
+        .await
+        .unwrap();
         let body = parse_body(&result);
         assert_eq!(
             body,
@@ -1094,9 +1186,13 @@ mod tests {
         );
 
         let prompt = msg("user", "Hello");
-        let result = build_request(&client, prompt, &::sys_types::runtime_io::NoopRuntimeIo)
-            .await
-            .unwrap();
+        let result = build_request(
+            &client,
+            prompt,
+            Arc::new(::sys_types::runtime_io::NoopRuntimeIo),
+        )
+        .await
+        .unwrap();
 
         assert!(
             result.url.contains(":rawPredict"),
@@ -1132,9 +1228,13 @@ mod tests {
             msg("user", "How are you?"),
         ]));
 
-        let result = build_request(&client, prompt, &::sys_types::runtime_io::NoopRuntimeIo)
-            .await
-            .unwrap();
+        let result = build_request(
+            &client,
+            prompt,
+            Arc::new(::sys_types::runtime_io::NoopRuntimeIo),
+        )
+        .await
+        .unwrap();
         let body = parse_body(&result);
 
         assert_eq!(
@@ -1185,7 +1285,7 @@ mod tests {
         let result = build_request(
             &client,
             specialized,
-            &::sys_types::runtime_io::NoopRuntimeIo,
+            Arc::new(::sys_types::runtime_io::NoopRuntimeIo),
         )
         .await
         .unwrap();
@@ -1227,7 +1327,7 @@ mod tests {
         let result = build_request(
             &client,
             specialized,
-            &::sys_types::runtime_io::NoopRuntimeIo,
+            Arc::new(::sys_types::runtime_io::NoopRuntimeIo),
         )
         .await
         .unwrap();
@@ -1258,9 +1358,13 @@ mod tests {
         );
 
         let prompt = msg("user", "Hello");
-        let result = build_request(&client, prompt, &::sys_types::runtime_io::NoopRuntimeIo)
-            .await
-            .unwrap();
+        let result = build_request(
+            &client,
+            prompt,
+            Arc::new(::sys_types::runtime_io::NoopRuntimeIo),
+        )
+        .await
+        .unwrap();
 
         assert!(
             result.url.contains(":generateContent"),

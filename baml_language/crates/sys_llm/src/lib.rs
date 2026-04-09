@@ -20,7 +20,7 @@ pub(crate) mod types;
 #[cfg(target_arch = "wasm32")]
 pub(crate) mod wasm;
 
-use std::str::FromStr;
+use std::{str::FromStr, sync::Arc};
 
 use ::core::ops::Deref;
 use bex_external_types::BexExternalValue;
@@ -232,7 +232,7 @@ pub fn execute_specialize_prompt_from_owned(
 pub async fn execute_build_request_from_owned(
     client: &baml_std::PrimitiveClient,
     prompt: bex_vm_types::PromptAst,
-    io: &dyn ::sys_types::runtime_io::RuntimeIo,
+    io: Arc<dyn ::sys_types::runtime_io::RuntimeIo>,
 ) -> Result<baml_std::HttpRequest, LlmOpError> {
     build_request::build_request(client, prompt, io)
         .await

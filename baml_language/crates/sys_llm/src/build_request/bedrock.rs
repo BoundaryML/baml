@@ -28,7 +28,7 @@ use super::BuildRequestError;
 pub(crate) async fn build_request(
     client: &crate::baml_std::PrimitiveClient,
     prompt: &bex_vm_types::PromptAst,
-    io: &dyn ::sys_types::runtime_io::RuntimeIo,
+    io: Arc<dyn ::sys_types::runtime_io::RuntimeIo>,
 ) -> Result<crate::baml_std::HttpRequest, BuildRequestError> {
     // Convert BAML prompt to SDK types.
     let (system_blocks, messages) = prompt_to_sdk_types(prompt, &client.default_role)?;
@@ -67,7 +67,7 @@ pub(crate) async fn build_request(
 /// We extract the path starting at `/model/` and prepend the real host.
 async fn resolve_url(
     client: &crate::baml_std::PrimitiveClient,
-    io: &dyn ::sys_types::runtime_io::RuntimeIo,
+    io: Arc<dyn ::sys_types::runtime_io::RuntimeIo>,
     sdk_uri: &str,
 ) -> Result<String, BuildRequestError> {
     // Extract the path portion from the SDK URI (everything from `/model/` onward).
@@ -682,9 +682,13 @@ mod tests {
         client: &crate::baml_std::PrimitiveClient,
         prompt: Arc<PromptAst>,
     ) -> serde_json::Value {
-        let result = build_request(client, &prompt, &::sys_types::runtime_io::NoopRuntimeIo)
-            .await
-            .unwrap();
+        let result = build_request(
+            client,
+            &prompt,
+            Arc::new(::sys_types::runtime_io::NoopRuntimeIo),
+        )
+        .await
+        .unwrap();
         serde_json::from_str(&result.body).unwrap()
     }
 
@@ -792,7 +796,7 @@ mod tests {
         let result = build_request(
             &client,
             &msg("user", "hi"),
-            &::sys_types::runtime_io::NoopRuntimeIo,
+            Arc::new(::sys_types::runtime_io::NoopRuntimeIo),
         )
         .await
         .unwrap();
@@ -812,7 +816,7 @@ mod tests {
         let result = build_request(
             &client,
             &msg("user", "hi"),
-            &::sys_types::runtime_io::NoopRuntimeIo,
+            Arc::new(::sys_types::runtime_io::NoopRuntimeIo),
         )
         .await
         .unwrap();
@@ -832,7 +836,7 @@ mod tests {
         let result = build_request(
             &client,
             &msg("user", "hi"),
-            &::sys_types::runtime_io::NoopRuntimeIo,
+            Arc::new(::sys_types::runtime_io::NoopRuntimeIo),
         )
         .await
         .unwrap();
@@ -1036,7 +1040,12 @@ mod tests {
                 base64_data: None,
             },
         );
-        let result = build_request(&client, &prompt, &::sys_types::runtime_io::NoopRuntimeIo).await;
+        let result = build_request(
+            &client,
+            &prompt,
+            Arc::new(::sys_types::runtime_io::NoopRuntimeIo),
+        )
+        .await;
         assert!(result.is_err(), "non-s3 URLs should be rejected");
     }
 
@@ -1078,7 +1087,7 @@ mod tests {
         let result = build_request(
             &client,
             &msg("user", "hi"),
-            &::sys_types::runtime_io::NoopRuntimeIo,
+            Arc::new(::sys_types::runtime_io::NoopRuntimeIo),
         )
         .await
         .unwrap();
@@ -1098,7 +1107,7 @@ mod tests {
         let result = build_request(
             &client,
             &msg("user", "hi"),
-            &::sys_types::runtime_io::NoopRuntimeIo,
+            Arc::new(::sys_types::runtime_io::NoopRuntimeIo),
         )
         .await
         .unwrap();
@@ -1132,7 +1141,7 @@ mod tests {
         let result = build_request(
             &client,
             &msg("user", "hi"),
-            &::sys_types::runtime_io::NoopRuntimeIo,
+            Arc::new(::sys_types::runtime_io::NoopRuntimeIo),
         )
         .await;
         assert!(

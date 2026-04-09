@@ -24,6 +24,9 @@
 //! pure-Rust JWT signing (`rsa` + `sha2`). ADC and `gcloud` CLI are not
 //! available; credentials must be provided explicitly or via env vars.
 
+use std::sync::Arc;
+
+#[cfg_attr(target_arch = "wasm32", allow(unused_imports))]
 use sys_types::runtime_io::{RuntimeIo, RuntimeIoError};
 
 use crate::{
@@ -45,7 +48,7 @@ use crate::{
 pub(crate) async fn auth_vertex(
     request: &mut HttpRequest,
     client: &PrimitiveClient,
-    io: &dyn RuntimeIo,
+    io: Arc<dyn RuntimeIo>,
 ) -> Result<(), BuildRequestError> {
     // If an API key is provided as a query param, skip token-based auth.
     if client.options.query_params.contains_key("key") {
@@ -58,14 +61,14 @@ pub(crate) async fn auth_vertex(
     };
 
     // Resolve credentials once.
-    let creds = resolve_credentials(vertex_opts.as_ref(), io).await?;
+    let creds = resolve_credentials(vertex_opts.as_ref(), io.clone()).await?;
 
     // Resolve project_id placeholder in the URL if needed.
     if request
         .url
         .contains(crate::build_request::google::VERTEX_PROJECT_ID_PLACEHOLDER)
     {
-        let project_id = project_id_from_credentials(&creds, io)
+        let project_id = project_id_from_credentials(&creds, &*io)
             .await
             .ok_or_else(|| {
                 BuildRequestError::Other(
@@ -147,7 +150,7 @@ enum ResolvedCredentials {
 /// 6. `gcloud` CLI
 async fn resolve_credentials(
     vertex_opts: Option<&VertexAiOptions>,
-    io: &dyn RuntimeIo,
+    io: Arc<dyn RuntimeIo>,
 ) -> Result<ResolvedCredentials, BuildRequestError> {
     // 1. credentials_content: always inline JSON.
     if let Some(json_str) = vertex_opts.and_then(|o| o.credentials_content.as_ref()) {
@@ -159,7 +162,7 @@ async fn resolve_credentials(
         if serde_json::from_str::<serde_json::Value>(creds).is_ok() {
             return Ok(ResolvedCredentials::ServiceAccountJson(creds.clone()));
         }
-        let json_str = read_credentials_file(creds, io).await?;
+        let json_str = read_credentials_file(creds, &*io).await?;
         return Ok(ResolvedCredentials::ServiceAccountJson(json_str));
     }
 
@@ -188,7 +191,7 @@ async fn resolve_credentials(
 
     // 5. ADC via google-cloud-auth (native only).
     #[cfg(not(target_arch = "wasm32"))]
-    if native::build_from_adc(io).is_ok() {
+    if native::build_from_adc(io.clone()).is_ok() {
         return Ok(ResolvedCredentials::Adc);
     }
 
@@ -214,7 +217,7 @@ async fn resolve_credentials(
 
 async fn token_from_credentials(
     creds: &ResolvedCredentials,
-    io: &dyn RuntimeIo,
+    io: Arc<dyn RuntimeIo>,
 ) -> Result<String, BuildRequestError> {
     match creds {
         ResolvedCredentials::ServiceAccountJson(json_str) => {
@@ -384,84 +387,6 @@ async fn read_credentials_file(
 }
 
 // ===========================================================================
-// arc_from_ref: bridge &dyn RuntimeIo -> Arc<dyn RuntimeIo>
-// ===========================================================================
-
-/// Build an `Arc<dyn RuntimeIo>` from a borrowed reference by wrapping it
-/// in a thin forwarding struct with a `'static` lifetime.
-///
-/// SAFETY: The returned `Arc` must not outlive `io`. Callers must ensure the
-/// `Arc` (and everything that clones it) is dropped before `io` is dropped.
-/// In practice this is guaranteed because the credential builders await inline
-/// and the credentials (plus all captured provider objects) are dropped before
-/// the calling function returns.
-#[allow(unsafe_code)]
-fn arc_from_ref(io: &dyn RuntimeIo) -> std::sync::Arc<dyn RuntimeIo> {
-    let ptr: *const dyn RuntimeIo = io;
-    // SAFETY: see doc comment above. The Arc is consumed within the caller's
-    // async scope, so the pointer remains valid for the wrapper's lifetime.
-    #[allow(clippy::transmute_ptr_to_ptr)]
-    let static_ptr: *const (dyn RuntimeIo + 'static) = unsafe {
-        std::mem::transmute::<*const dyn RuntimeIo, *const (dyn RuntimeIo + 'static)>(ptr)
-    };
-    std::sync::Arc::new(RuntimeIoRef(static_ptr))
-}
-
-#[allow(unsafe_code)]
-/// Thin wrapper that holds a raw pointer to a `dyn RuntimeIo` and forwards
-/// all trait methods. Used by `arc_from_ref` to bridge `&dyn RuntimeIo` into
-/// an `Arc<dyn RuntimeIo>` without requiring `Clone` on the trait.
-struct RuntimeIoRef(*const (dyn RuntimeIo + 'static));
-
-// SAFETY: RuntimeIo is Send + Sync, and we only construct RuntimeIoRef from
-// references to values that are already Send + Sync.
-#[allow(unsafe_code)]
-unsafe impl Send for RuntimeIoRef {}
-#[allow(unsafe_code)]
-unsafe impl Sync for RuntimeIoRef {}
-
-/// Forward every `RuntimeIo` method through the raw pointer.
-///
-/// SAFETY: each call dereferences `self.0` which is valid for the lifetime of
-/// the `RuntimeIoRef` (see `arc_from_ref` documentation).
-macro_rules! delegate_runtime_io_ref {
-    ($($method:ident ( $($pname:ident : $pty:ty),* ) -> $ret:ty);* $(;)?) => {
-        #[allow(unsafe_code)]
-        impl RuntimeIo for RuntimeIoRef {
-            $(
-                fn $method(&self, $($pname: $pty),*) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<$ret, RuntimeIoError>> + Send + '_>> {
-                    unsafe { &*self.0 }.$method($($pname),*)
-                }
-            )*
-        }
-    };
-}
-
-delegate_runtime_io_ref! {
-    env_get(key: String) -> Option<String>;
-    http_response_text(response: &sys_types::runtime_io::HttpResponseHandle) -> String;
-    http_response_bytes(response: &sys_types::runtime_io::HttpResponseHandle) -> Vec<u8>;
-    http_fetch(url: String) -> sys_types::runtime_io::HttpResponseHandle;
-    http_send(request: sys_types::generated::owned::http::Request) -> sys_types::runtime_io::HttpResponseHandle;
-    sys_shell(command: String) -> String;
-    sys_sleep(ms: i64) -> ();
-    fs_file_read(file: &sys_types::runtime_io::FsFileHandle) -> String;
-    fs_file_close(file: &sys_types::runtime_io::FsFileHandle) -> ();
-    fs_open(path: String) -> sys_types::runtime_io::FsFileHandle;
-    net_socket_read(socket: &sys_types::runtime_io::NetSocketHandle) -> String;
-    net_socket_close(socket: &sys_types::runtime_io::NetSocketHandle) -> ();
-    net_connect(addr: String) -> sys_types::runtime_io::NetSocketHandle;
-    llm_client_get_constructor(client: &sys_types::runtime_io::LlmClientHandle) -> bex_external_types::BexExternalValue;
-    llm_primitiveclient_render_prompt(primitiveclient: &sys_types::runtime_io::LlmPrimitiveClientHandle, template: String, args: indexmap::IndexMap<String, bex_external_types::BexExternalValue>, return_type: baml_type::Ty) -> sys_types::generated::owned::llm::PromptAst;
-    llm_primitiveclient_specialize_prompt(primitiveclient: &sys_types::runtime_io::LlmPrimitiveClientHandle, prompt: sys_types::generated::owned::llm::PromptAst) -> sys_types::generated::owned::llm::PromptAst;
-    llm_primitiveclient_build_request(primitiveclient: &sys_types::runtime_io::LlmPrimitiveClientHandle, prompt: sys_types::generated::owned::llm::PromptAst) -> bex_external_types::BexExternalValue;
-    llm_primitiveclient_parse(primitiveclient: &sys_types::runtime_io::LlmPrimitiveClientHandle, http_response_body: String, type_def: baml_type::Ty) -> bex_external_types::BexExternalValue;
-    llm_get_jinja_template(function_name: String) -> String;
-    llm_get_return_type(function_name: String) -> baml_type::Ty;
-    llm___sap_parse(json: String, ty: baml_type::Ty) -> bex_external_types::BexExternalValue;
-}
-
-// ===========================================================================
 // Native: google-cloud-auth
 // ===========================================================================
 
@@ -471,7 +396,7 @@ mod native {
 
     use google_cloud_auth::{credentials::Builder, io};
 
-    use super::{BuildRequestError, RuntimeIo, RuntimeIoError, arc_from_ref};
+    use super::{BuildRequestError, RuntimeIo, RuntimeIoError};
 
     // -- IO provider adapters (RuntimeIo -> google-cloud-auth traits) --
 
@@ -629,7 +554,7 @@ mod native {
 
     pub(super) fn build_from_service_account_json(
         json_str: &str,
-        io: &dyn RuntimeIo,
+        io: Arc<dyn RuntimeIo>,
     ) -> Result<google_cloud_auth::credentials::AccessTokenCredentials, BuildRequestError> {
         let json_value: serde_json::Value = serde_json::from_str(json_str).map_err(|e| {
             BuildRequestError::AuthorizationFailed(format!(
@@ -637,15 +562,13 @@ mod native {
             ))
         })?;
 
-        let io_arc = arc_from_ref(io);
-
         let builder = google_cloud_auth::credentials::service_account::Builder::new(json_value)
             .with_access_specifier(
                 google_cloud_auth::credentials::service_account::AccessSpecifier::from_scopes([
                     "https://www.googleapis.com/auth/cloud-platform",
                 ]),
             )
-            .with_http_client_provider(BexHttpClientProvider { io: io_arc });
+            .with_http_client_provider(BexHttpClientProvider { io });
 
         builder.build_access_token_credentials().map_err(|e| {
             BuildRequestError::AuthorizationFailed(format!(
@@ -655,15 +578,13 @@ mod native {
     }
 
     pub(super) fn build_from_adc(
-        io: &dyn RuntimeIo,
+        io: Arc<dyn RuntimeIo>,
     ) -> Result<google_cloud_auth::credentials::AccessTokenCredentials, BuildRequestError> {
-        let io_arc = arc_from_ref(io);
-
         let builder = Builder::default()
             .with_scopes(["https://www.googleapis.com/auth/cloud-platform"])
-            .with_http_client_provider(BexHttpClientProvider { io: io_arc.clone() })
-            .with_env_provider(BexEnvProvider { io: io_arc.clone() })
-            .with_fs_provider(BexFsProvider { io: io_arc });
+            .with_http_client_provider(BexHttpClientProvider { io: io.clone() })
+            .with_env_provider(BexEnvProvider { io: io.clone() })
+            .with_fs_provider(BexFsProvider { io });
 
         builder.build_access_token_credentials().map_err(|e| {
             BuildRequestError::AuthorizationFailed(format!(
@@ -676,7 +597,7 @@ mod native {
 #[cfg(not(target_arch = "wasm32"))]
 async fn token_from_service_account_json(
     json_str: &str,
-    io: &dyn RuntimeIo,
+    io: Arc<dyn RuntimeIo>,
 ) -> Result<String, BuildRequestError> {
     let creds = native::build_from_service_account_json(json_str, io)?;
     let token = creds.access_token().await.map_err(|e| {
@@ -688,7 +609,7 @@ async fn token_from_service_account_json(
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-async fn token_from_adc(io: &dyn RuntimeIo) -> Result<String, BuildRequestError> {
+async fn token_from_adc(io: Arc<dyn RuntimeIo>) -> Result<String, BuildRequestError> {
     let creds = native::build_from_adc(io)?;
     let token = creds.access_token().await.map_err(|e| {
         BuildRequestError::AuthorizationFailed(format!(
@@ -1305,14 +1226,14 @@ mod wasm {
 #[cfg(target_arch = "wasm32")]
 async fn token_from_service_account_json(
     json_str: &str,
-    io: &dyn RuntimeIo,
+    io: Arc<dyn RuntimeIo>,
 ) -> Result<String, BuildRequestError> {
-    wasm::service_account_token(json_str, io).await
+    wasm::service_account_token(json_str, &*io).await
 }
 
 #[cfg(target_arch = "wasm32")]
 #[allow(clippy::unused_async)] // must be async to match native signature
-async fn token_from_adc(_io: &dyn RuntimeIo) -> Result<String, BuildRequestError> {
+async fn token_from_adc(_io: Arc<dyn RuntimeIo>) -> Result<String, BuildRequestError> {
     Err(BuildRequestError::AuthorizationFailed(
         "Google Cloud ADC is not supported on WASM. \
          Provide explicit credentials via 'credentials' or 'credentials_content'."
@@ -1929,7 +1850,7 @@ mod tests {
         let io = NoCredsIo;
         let client = make_client("vertex-ai");
         let mut req = fake_request();
-        let result = auth_vertex(&mut req, &client, &io).await;
+        let result = auth_vertex(&mut req, &client, Arc::new(io)).await;
         assert!(result.is_err());
     }
 
@@ -1943,7 +1864,7 @@ mod tests {
         });
         let io = StubIo::with_token("ya29.from-service-account");
         let mut req = fake_request();
-        auth_vertex(&mut req, &client, &io).await.unwrap();
+        auth_vertex(&mut req, &client, Arc::new(io)).await.unwrap();
         assert_bearer_token(&req);
     }
 
@@ -1957,7 +1878,7 @@ mod tests {
         });
         let io = StubIo::with_token("ya29.from-service-account");
         let mut req = fake_request();
-        auth_vertex(&mut req, &client, &io).await.unwrap();
+        auth_vertex(&mut req, &client, Arc::new(io)).await.unwrap();
         assert_bearer_token(&req);
     }
 
@@ -1981,7 +1902,7 @@ mod tests {
             .to_string(),
         };
         let mut req = fake_request();
-        auth_vertex(&mut req, &client, &io).await.unwrap();
+        auth_vertex(&mut req, &client, Arc::new(io)).await.unwrap();
         assert_bearer_token(&req);
     }
 
@@ -1995,7 +1916,7 @@ mod tests {
         });
         let io = StubIo::with_token("ya29.from-service-account");
         let mut req = fake_request();
-        auth_vertex(&mut req, &client, &io).await.unwrap();
+        auth_vertex(&mut req, &client, Arc::new(io)).await.unwrap();
         assert_bearer_token(&req);
     }
 
@@ -2016,7 +1937,7 @@ mod tests {
         .unwrap();
         let io = StubIo::with_token("");
         let mut req = fake_request();
-        auth_vertex(&mut req, &client, &io).await.unwrap();
+        auth_vertex(&mut req, &client, Arc::new(io)).await.unwrap();
         assert!(!req.headers.contains_key("authorization"));
     }
 
@@ -2054,7 +1975,7 @@ mod tests {
 
         let client = make_client("vertex-ai");
         let mut req = fake_request();
-        auth_vertex(&mut req, &client, &io).await.unwrap();
+        auth_vertex(&mut req, &client, Arc::new(io)).await.unwrap();
 
         assert!(http_call_count.load(Ordering::SeqCst) > 0);
         assert_eq!(
