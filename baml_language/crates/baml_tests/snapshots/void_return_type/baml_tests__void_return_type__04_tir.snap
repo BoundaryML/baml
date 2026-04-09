@@ -14,7 +14,7 @@ function user.bad_callback_use(cb: user.Callback) -> int throws never {
     let result = cb(1) : void
     1 : 1
   }
-  !! 294..299: `if` without `else` cannot be used as a value; add an `else` branch
+  !! 294..299: cannot use return value of a void function
 }
 type user.Callback$stream = unknown
 function user.test_void_lambda() -> int throws never {
@@ -38,7 +38,7 @@ function user.test_void_lambda_assign() -> int throws never {
     let x = f() : void
     1 : 1
   }
-  !! 236..239: `if` without `else` cannot be used as a value; add an `else` branch
+  !! 236..239: cannot use return value of a void function
 }
 lambda user.test_void_lambda_assign {
 }
@@ -75,7 +75,7 @@ function user.use_void() -> int throws never {
     let x = do_nothing() : void
     1 : 1
   }
-  !! 327..339: `if` without `else` cannot be used as a value; add an `else` branch
+  !! 327..339: cannot use return value of a void function
 }
 function user.call_void() -> int throws never {
   { : 1

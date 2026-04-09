@@ -276,6 +276,7 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::UnresolvedName { .. } => DiagnosticId::UnknownVariable,
         TirTypeError::DeadCode { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::VoidUsedAsValue => DiagnosticId::TypeMismatch,
+        TirTypeError::VoidFunctionResultUsed => DiagnosticId::TypeMismatch,
         TirTypeError::NotCallable { .. } => DiagnosticId::NotCallable,
         TirTypeError::NotIterable { .. } => DiagnosticId::NotCallable,
         TirTypeError::NotIndexable { .. } => DiagnosticId::NotIndexable,

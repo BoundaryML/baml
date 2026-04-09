@@ -1202,8 +1202,15 @@ impl<'db> TypeInferenceBuilder<'db> {
                 if matches!(inferred, Ty::Void { .. })
                     && !matches!(expected, Ty::Void { .. } | Ty::Unknown { .. })
                 {
-                    self.context
-                        .report_simple(TirTypeError::VoidUsedAsValue, expr_id);
+                    let err = if matches!(
+                        body.exprs[expr_id],
+                        Expr::Call { .. } | Expr::OptionalCall { .. }
+                    ) {
+                        TirTypeError::VoidFunctionResultUsed
+                    } else {
+                        TirTypeError::VoidUsedAsValue
+                    };
+                    self.context.report_simple(err, expr_id);
                 } else if !self.is_subtype(&inferred, expected) {
                     self.context.report(
                         TirTypeError::TypeMismatch {
@@ -1252,16 +1259,30 @@ impl<'db> TypeInferenceBuilder<'db> {
                         }
                         let ty = self.check_expr(*init, body, &ann_ty);
                         if matches!(ty, Ty::Void { .. }) {
-                            self.context
-                                .report_simple(TirTypeError::VoidUsedAsValue, *init);
+                            let err = if matches!(
+                                body.exprs[*init],
+                                Expr::Call { .. } | Expr::OptionalCall { .. }
+                            ) {
+                                TirTypeError::VoidFunctionResultUsed
+                            } else {
+                                TirTypeError::VoidUsedAsValue
+                            };
+                            self.context.report_simple(err, *init);
                         }
                         ann_ty_for_decl = Some(ann_ty);
                         Some(ty)
                     } else {
                         let ty = self.infer_expr(*init, body);
                         if matches!(ty, Ty::Void { .. }) {
-                            self.context
-                                .report_simple(TirTypeError::VoidUsedAsValue, *init);
+                            let err = if matches!(
+                                body.exprs[*init],
+                                Expr::Call { .. } | Expr::OptionalCall { .. }
+                            ) {
+                                TirTypeError::VoidFunctionResultUsed
+                            } else {
+                                TirTypeError::VoidUsedAsValue
+                            };
+                            self.context.report_simple(err, *init);
                         }
                         // No annotation → no declared type (evolving containers etc.)
                         Some(ty.widen_fresh().make_evolving())

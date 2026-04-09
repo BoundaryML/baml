@@ -80,6 +80,9 @@ pub enum LoweringDiagnostic {
 
     /// A byte string literal contains an invalid escape sequence.
     InvalidByteStringEscape { message: String, span: TextRange },
+
+    /// `void` was used outside of a function return type position.
+    VoidInNonReturnPosition { context: String, span: TextRange },
 }
 
 impl LoweringDiagnostic {
@@ -182,6 +185,12 @@ impl LoweringDiagnostic {
                 format!("invalid byte string literal: {message}"),
                 *span,
                 "invalid escape",
+            ),
+            LoweringDiagnostic::VoidInNonReturnPosition { context, span } => (
+                DiagnosticId::VoidInNonReturnPosition,
+                format!("`void` can only be used as a function return type, not as {context}"),
+                *span,
+                "`void` not allowed here",
             ),
         };
 

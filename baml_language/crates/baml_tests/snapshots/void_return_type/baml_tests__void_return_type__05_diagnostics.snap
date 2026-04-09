@@ -2,22 +2,22 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] Error: `if` without `else` cannot be used as a value; add an `else` branch
+  [type] Error: cannot use return value of a void function
     ╭─[ void_function_type.baml:12:16 ]
     │
  12 │   let result = cb(1);
     │                ──┬──  
-    │                  ╰──── `if` without `else` cannot be used as a value; add an `else` branch
+    │                  ╰──── cannot use return value of a void function
     │ 
     │ Note: Error code: E0001
 ────╯
 
-  [type] Error: `if` without `else` cannot be used as a value; add an `else` branch
+  [type] Error: cannot use return value of a void function
     ╭─[ void_lambda.baml:11:11 ]
     │
  11 │   let x = f();
     │           ─┬─  
-    │            ╰─── `if` without `else` cannot be used as a value; add an `else` branch
+    │            ╰─── cannot use return value of a void function
     │ 
     │ Note: Error code: E0001
 ────╯
@@ -42,15 +42,35 @@ source: crates/baml_tests/src/generated_tests.rs
     │ Note: Error code: E0001
 ────╯
 
-  [type] Error: `if` without `else` cannot be used as a value; add an `else` branch
+  [type] Error: cannot use return value of a void function
     ╭─[ void_return_type.baml:17:13 ]
     │
  17 │   let x = do_nothing();
     │             ──────┬─────  
-    │                   ╰─────── `if` without `else` cannot be used as a value; add an `else` branch
+    │                   ╰─────── cannot use return value of a void function
     │ 
     │ Note: Error code: E0001
 ────╯
+
+  [hir] Error: `void` can only be used as a function return type, not as a parameter type
+   ╭─[ void_type_position_errors.baml:2:22 ]
+   │
+ 2 │ function bad_param(x: void) -> int {
+   │                      ──┬──  
+   │                        ╰──── `void` not allowed here
+   │ 
+   │ Note: Error code: E0110
+───╯
+
+  [hir] Error: `void` can only be used as a function return type, not as a let binding annotation
+   ╭─[ void_type_position_errors.baml:8:9 ]
+   │
+ 8 │   let x: void = 1;
+   │         ──┬──  
+   │           ╰──── `void` not allowed here
+   │ 
+   │ Note: Error code: E0110
+───╯
 
   [type] Error: type mismatch: expected void, got 1
    ╭─[ void_type_position_errors.baml:8:17 ]
@@ -61,3 +81,23 @@ source: crates/baml_tests/src/generated_tests.rs
    │ 
    │ Note: Error code: E0001
 ───╯
+
+  [hir] Error: `void` can only be used as a function return type, not as return type of `bad_optional`
+    ╭─[ void_type_position_errors.baml:13:27 ]
+    │
+ 13 │ function bad_optional() -> void? {
+    │                           ───┬──  
+    │                              ╰──── `void` not allowed here
+    │ 
+    │ Note: Error code: E0110
+────╯
+
+  [hir] Error: `void` can only be used as a function return type, not as return type of `bad_list`
+    ╭─[ void_type_position_errors.baml:18:23 ]
+    │
+ 18 │ function bad_list() -> void[] {
+    │                       ───┬───  
+    │                          ╰───── `void` not allowed here
+    │ 
+    │ Note: Error code: E0110
+────╯
