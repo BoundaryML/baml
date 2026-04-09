@@ -1,0 +1,121 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== TIR2 ===
+type user.Callback = (int) -> unknown
+  !! 56..70: unresolved type: void
+function user.run_callback(cb: user.Callback, x: int) -> int throws never {
+  { : int
+    cb(x) : unknown
+    x : int
+  }
+}
+function user.bad_callback_use(cb: user.Callback) -> int throws never {
+  { : 1
+    let result = cb(1) : unknown
+    1 : 1
+  }
+}
+type user.Callback$stream = unknown
+function user.test_void_lambda() -> int throws never {
+  { : 1
+    let f = : () -> void
+      () -> void { ... } : () -> void
+        {
+        }
+    f() : void
+    1 : 1
+  }
+  !! 92..97: unresolved type: void
+}
+lambda user.test_void_lambda {
+}
+function user.test_void_lambda_assign() -> int throws never {
+  { : 1
+    let f = : () -> void
+      () -> void { ... } : () -> void
+        {
+        }
+    let x = f() : void
+    1 : 1
+  }
+  !! 215..220: unresolved type: void
+  !! 236..239: `if` without `else` cannot be used as a value; add an `else` branch
+}
+lambda user.test_void_lambda_assign {
+}
+function user.test_void_lambda_stmt() -> int throws never {
+  { : 1
+    let f = : (x: int) -> void
+      (x: int) -> void { ... } : (x: int) -> void
+        {
+          x
+        }
+    f(42) : void
+    1 : 1
+  }
+  !! 349..354: unresolved type: void
+}
+lambda user.test_void_lambda_stmt {
+}
+function user.do_nothing() -> unknown throws never {
+  { : void
+  }
+  !! 62..67: unresolved type: void
+}
+function user.do_return() -> unknown throws never {
+  { : never
+    return
+  }
+  !! 130..135: unresolved type: void
+}
+function user.do_bad_return() -> unknown throws never {
+  { : never
+    return 42 : 42
+  }
+  !! 223..228: unresolved type: void
+}
+function user.use_void() -> int throws never {
+  { : 1
+    let x = do_nothing() : unknown
+    1 : 1
+  }
+}
+function user.call_void() -> int throws never {
+  { : 1
+    do_nothing() : unknown
+    1 : 1
+  }
+}
+function user.side_effects(x: int) -> unknown throws never {
+  { : void
+    let y = x + 1 : int
+    y : int
+  }
+  !! 535..540: unresolved type: void
+}
+function user.bad_param(x: unknown) -> int throws never {
+  { : 1
+    1 : 1
+  }
+  !! 54..59: unresolved type: void
+}
+function user.bad_let() -> int throws never {
+  { : 1
+    let x = 1 : 1
+    1 : 1
+  }
+  !! 146..151: unresolved type: void
+}
+function user.bad_optional() -> unknown? throws never {
+  { : null
+    null : null
+  }
+  !! 225..231: unresolved type: void
+}
+function user.bad_list() -> unknown[] throws never {
+  { : unknown[]
+    [] : unknown[]
+  }
+  !! 289..296: unresolved type: void
+}
