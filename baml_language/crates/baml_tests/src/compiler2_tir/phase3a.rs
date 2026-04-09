@@ -731,3 +731,52 @@ function f(u: User?) -> string? { u?.address?.street }
     );
     insta::assert_snapshot!(render_tir(&db, file));
 }
+
+// ── Void return type ───────────────────────────────────────────────────────
+
+#[test]
+fn void_function_basic() {
+    let mut db = make_db();
+    let file = db.add_file("test.baml", "function f() -> void { }");
+    insta::assert_snapshot!(render_tir(&db, file));
+}
+
+#[test]
+fn void_function_bare_return() {
+    let mut db = make_db();
+    let file = db.add_file("test.baml", "function f() -> void { return; }");
+    insta::assert_snapshot!(render_tir(&db, file));
+}
+
+#[test]
+fn void_function_return_value_error() {
+    let mut db = make_db();
+    let file = db.add_file("test.baml", "function f() -> void { return 42; }");
+    insta::assert_snapshot!(render_tir(&db, file));
+}
+
+#[test]
+fn void_function_result_used_error() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function g() -> void { }
+function f() -> int { let x = g(); 1 }
+"#,
+    );
+    insta::assert_snapshot!(render_tir(&db, file));
+}
+
+#[test]
+fn void_function_bare_call_ok() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function g() -> void { }
+function f() -> int { g(); 1 }
+"#,
+    );
+    insta::assert_snapshot!(render_tir(&db, file));
+}
