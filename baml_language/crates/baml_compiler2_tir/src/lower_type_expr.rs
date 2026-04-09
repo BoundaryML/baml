@@ -102,7 +102,7 @@ pub fn lower_type_expr_in_ns(
                 let short = segments.last().expect("non-empty path");
                 match def {
                     Definition::Class(_) => {
-                        Ty::Class(qualify_def(db, def, short), TyAttr::default())
+                        Ty::Class(qualify_def(db, def, short), vec![], TyAttr::default())
                     }
                     Definition::Enum(_) => Ty::Enum(qualify_def(db, def, short), TyAttr::default()),
                     Definition::TypeAlias(_) => {

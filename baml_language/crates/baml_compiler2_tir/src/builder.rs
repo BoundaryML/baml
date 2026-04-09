@@ -479,6 +479,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                             .map(|def| {
                                 Ty::Class(
                                     crate::lower_type_expr::qualify_def(self.context.db(), def, n),
+                                    vec![],
                                     TyAttr::default(),
                                 )
                             })
@@ -849,7 +850,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
             // Object: if expected is Class(name), check fields against declared types.
             Expr::Object { fields, .. } => {
-                if let Ty::Class(class_name, _) = expected {
+                if let Ty::Class(class_name, _, _) = expected {
                     let field_types = self.lookup_class_fields(class_name);
                     for (field_name, field_expr) in fields {
                         if let Some(declared_ty) = field_types.get(field_name) {
@@ -2248,7 +2249,7 @@ impl<'db> TypeInferenceBuilder<'db> {
 
     fn ty_panic_subset(&self, ty: &Ty) -> Option<Ty> {
         match ty {
-            Ty::Class(qtn, _) => qtn.is_panic_type().then(|| ty.clone()),
+            Ty::Class(qtn, _, _) => qtn.is_panic_type().then(|| ty.clone()),
             Ty::TypeAlias(qtn, _) => {
                 if let Some(expanded) = self.aliases.get(qtn) {
                     self.ty_panic_subset(expanded)
@@ -2523,7 +2524,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     || Self::ty_covers_fact(inner, fact)
             }
             Ty::Union(parts, _) => parts.iter().any(|part| Self::ty_covers_fact(part, fact)),
-            Ty::Class(qn, _) => matches!(fact, Ty::Class(fqn, _) if fqn == qn),
+            Ty::Class(qn, _, _) => matches!(fact, Ty::Class(fqn, _, _) if fqn == qn),
             Ty::Enum(qn, _) => match fact {
                 Ty::Enum(fqn, _) => fqn == qn,
                 Ty::EnumVariant(fqn, _, _) => fqn == qn,
@@ -2920,7 +2921,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         // the class name so the target matches throw_inference's "Class.method" keys.
         let receiver = &segments[0];
         let method = &segments[1];
-        if let Some(Ty::Class(qn, _)) = self.locals.get(receiver) {
+        if let Some(Ty::Class(qn, _, _)) = self.locals.get(receiver) {
             let ns = qn.namespace();
             let key = if ns.is_empty() {
                 format!("{}.{}", qn.name(), method)
@@ -3129,7 +3130,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             match def {
                 Definition::Class(_) => {
                     let class_qtn = crate::lower_type_expr::qualify_def(db, def, name);
-                    return Some(Ty::Class(class_qtn, TyAttr::default()));
+                    return Some(Ty::Class(class_qtn, vec![], TyAttr::default()));
                 }
                 Definition::Enum(_) => {
                     let enum_qtn = crate::lower_type_expr::qualify_def(db, def, name);
@@ -3217,6 +3218,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             match def {
                 Definition::Class(_) => Ty::Class(
                     crate::lower_type_expr::qualify_def(db, def, name),
+                    vec![],
                     TyAttr::default(),
                 ),
                 Definition::Enum(_) => Ty::Enum(
@@ -3247,7 +3249,7 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// the member doesn't exist.
     pub fn resolve_member(&mut self, base_ty: &Ty, member: &Name, at: ExprId) -> Ty {
         match base_ty {
-            Ty::Class(class_name, _) => {
+            Ty::Class(class_name, _, _) => {
                 // Check class fields
                 let class_fields = self.lookup_class_fields(class_name);
                 if let Some(field_ty) = class_fields.get(member) {
@@ -3489,7 +3491,7 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// Used by `resolve_member` for union type handling.
     fn try_resolve_member_on_ty(&self, ty: &Ty, member: &Name) -> Option<Ty> {
         match ty {
-            Ty::Class(class_name, _) => {
+            Ty::Class(class_name, _, _) => {
                 let fields = self.lookup_class_fields(class_name);
                 if let Some(field_ty) = fields.get(member) {
                     return Some(field_ty.clone());
@@ -3669,7 +3671,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(db, file, method_id);
                 let sig = baml_compiler2_ppir::function_signature(db, func_loc);
                 let mut diags = Vec::new();
-                let class_ty = Ty::Class(class_name.clone(), TyAttr::default());
+                let class_ty = Ty::Class(class_name.clone(), vec![], TyAttr::default());
                 let ty = Ty::Function {
                     params: sig
                         .params
@@ -3854,7 +3856,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                             || first.as_str() == self.package_id.name(db).as_str()
                         {
                             let class_qtn = crate::lower_type_expr::qualify_def(db, def, item_name);
-                            let base_ty = Ty::Class(class_qtn, TyAttr::default());
+                            let base_ty = Ty::Class(class_qtn, vec![], TyAttr::default());
                             return Some(self.resolve_member(&base_ty, member, at));
                         }
                         let class_path: Vec<&str> =
@@ -3864,7 +3866,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                             .or_else(|| {
                                 let class_qtn =
                                     crate::lower_type_expr::qualify_def(db, def, item_name);
-                                let base_ty = Ty::Class(class_qtn, TyAttr::default());
+                                let base_ty = Ty::Class(class_qtn, vec![], TyAttr::default());
                                 Some(self.resolve_member(&base_ty, member, at))
                             });
                     }
@@ -4024,6 +4026,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                             class_data.name.clone(),
                             class_data.generic_params.clone(),
                         ),
+                        vec![],
                         TyAttr::default(),
                     )
                 } else if type_args.len() == 1 {
@@ -4038,6 +4041,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                                     pkg_info.namespace_path,
                                     class_data.name.clone(),
                                 ),
+                                vec![],
                                 TyAttr::default(),
                             )
                         }
@@ -4057,6 +4061,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                                     pkg_info.namespace_path,
                                     class_data.name.clone(),
                                 ),
+                                vec![],
                                 TyAttr::default(),
                             )
                         }
@@ -4069,6 +4074,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                             pkg_info.namespace_path,
                             class_data.name.clone(),
                         ),
+                        vec![],
                         TyAttr::default(),
                     )
                 };

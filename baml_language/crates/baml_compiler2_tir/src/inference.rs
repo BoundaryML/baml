@@ -353,6 +353,7 @@ pub fn infer_scope_types<'db>(
                                         pkg_items.lookup_type(ns_path, cn).map(|def| {
                                             Ty::Class(
                                                 crate::lower_type_expr::qualify_def(db, def, cn),
+                                                vec![],
                                                 TyAttr::default(),
                                             )
                                         })

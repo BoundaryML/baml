@@ -125,7 +125,7 @@ pub fn convert_tir2_ty(ty: &Tir2Ty, resolved: &ResolvedAliases) -> Ty {
         Tir2Ty::Primitive(PrimitiveType::Pdf, attr) => Ty::Media(MediaKind::Pdf, attr.clone()),
 
         // Named types
-        Tir2Ty::Class(qtn, attr) => Ty::Class(qtn_to_type_name(qtn), attr.clone()),
+        Tir2Ty::Class(qtn, _, attr) => Ty::Class(qtn_to_type_name(qtn), attr.clone()),
         Tir2Ty::Enum(qtn, attr) => Ty::Enum(qtn_to_type_name(qtn), attr.clone()),
         Tir2Ty::TypeAlias(qtn, attr) => {
             if resolved.recursive.contains(qtn) {
@@ -992,6 +992,7 @@ impl LoweringContext<'_> {
                                     baml_compiler2_tir::lower_type_expr::qualify_def(
                                         self.db, def, cn,
                                     ),
+                                    vec![],
                                     baml_compiler2_tir::ty::TyAttr::default(),
                                 );
                                 self.resolved_aliases.convert(&tir_ty)

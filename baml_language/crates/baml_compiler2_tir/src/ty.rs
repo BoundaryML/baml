@@ -98,7 +98,7 @@ impl fmt::Display for QualifiedTypeName {
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Ty {
     /// A class type — just the name, no expansion.
-    Class(QualifiedTypeName, TyAttr),
+    Class(QualifiedTypeName, Vec<Ty>, TyAttr),
     /// An enum type.
     Enum(QualifiedTypeName, TyAttr),
     /// An enum variant — Enum(qualified) . Variant(name).
@@ -325,7 +325,7 @@ impl Ty {
     /// Access the `TyAttr` on this type.
     pub fn attr(&self) -> &TyAttr {
         match self {
-            Ty::Class(_, a)
+            Ty::Class(_, _, a)
             | Ty::Enum(_, a)
             | Ty::EnumVariant(_, _, a)
             | Ty::TypeAlias(_, a)
@@ -353,7 +353,7 @@ impl Ty {
     #[must_use]
     pub fn with_attr(mut self, new_attr: TyAttr) -> Ty {
         match &mut self {
-            Ty::Class(_, a)
+            Ty::Class(_, _, a)
             | Ty::Enum(_, a)
             | Ty::EnumVariant(_, _, a)
             | Ty::TypeAlias(_, a)
@@ -402,6 +402,10 @@ impl Ty {
                 attr,
             ),
             Ty::Optional(inner, attr) => Ty::Optional(Box::new((*inner).widen_fresh()), attr),
+            Ty::Class(name, type_args, attr) => {
+                let widened: Vec<Ty> = type_args.into_iter().map(Ty::widen_fresh).collect();
+                Ty::Class(name, widened, attr)
+            }
             other => other,
         }
     }
@@ -454,7 +458,35 @@ impl Ty {
 impl fmt::Display for Ty {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Ty::Class(qn, _) => write!(f, "{qn}"),
+            Ty::Class(qn, type_args, _) => {
+                let namespace = qn
+                    .namespace()
+                    .iter()
+                    .map(std::string::ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(".");
+                if !namespace.is_empty() {
+                    write!(f, "{}.{}.{}", qn.package(), namespace, qn.name())?;
+                } else {
+                    write!(f, "{}.{}", qn.package(), qn.name())?;
+                }
+                if !type_args.is_empty() {
+                    let args: Vec<_> = type_args
+                        .iter()
+                        .map(std::string::ToString::to_string)
+                        .collect();
+                    write!(f, "<{}>", args.join(", "))?;
+                } else if !qn.generic_params.is_empty() {
+                    // Fallback: show declared param names when no concrete args
+                    let params: Vec<_> = qn
+                        .generic_params
+                        .iter()
+                        .map(std::string::ToString::to_string)
+                        .collect();
+                    write!(f, "<{}>", params.join(", "))?;
+                }
+                Ok(())
+            }
             Ty::Enum(qn, _) => write!(f, "{qn}"),
             Ty::EnumVariant(qn, v, _) => write!(f, "{qn}.{v}"),
             Ty::TypeAlias(qn, _) => write!(f, "{qn}"),

@@ -309,7 +309,7 @@ pub fn collect_direct_throws<'db>(
 fn fact_display_name(fact: &Ty) -> String {
     match fact {
         Ty::Primitive(p, _) => p.to_string(),
-        Ty::Class(qn, _) | Ty::Enum(qn, _) | Ty::TypeAlias(qn, _) => qn.to_string(),
+        Ty::Class(qn, _, _) | Ty::Enum(qn, _) | Ty::TypeAlias(qn, _) => qn.to_string(),
         Ty::EnumVariant(qn, variant, _) => format!("{qn}.{variant}"),
         Ty::Unknown { .. } => "unknown".to_string(),
         _ => format!("{fact}"),
@@ -361,7 +361,7 @@ fn throw_fact_from_expr<'db>(
             if let Some(def) = pkg_items.lookup_type(ns_context, name) {
                 match def {
                     Definition::Class(_) => {
-                        Ty::Class(qualify_def(db, def, name), TyAttr::default())
+                        Ty::Class(qualify_def(db, def, name), vec![], TyAttr::default())
                     }
                     Definition::Enum(_) => Ty::Enum(qualify_def(db, def, name), TyAttr::default()),
                     _ => Ty::Unknown {
@@ -437,7 +437,9 @@ fn resolve_path_to_ty<'db>(
     };
     if let Some(def) = def {
         return match def {
-            Definition::Class(_) => Ty::Class(qualify_def(db, def, name), TyAttr::default()),
+            Definition::Class(_) => {
+                Ty::Class(qualify_def(db, def, name), vec![], TyAttr::default())
+            }
             Definition::Enum(_) => Ty::Enum(qualify_def(db, def, name), TyAttr::default()),
             Definition::TypeAlias(_) => {
                 Ty::TypeAlias(qualify_def(db, def, name), TyAttr::default())

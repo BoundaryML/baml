@@ -338,7 +338,7 @@ fn normalize_impl(
         Ty::Unknown { .. } => StructuralTy::Unknown,
         Ty::Error { .. } => StructuralTy::Error,
         Ty::Literal(lit, _freshness, _) => StructuralTy::Literal(lit.clone()),
-        Ty::Class(qn, _) => StructuralTy::Class(qn.clone()),
+        Ty::Class(qn, _, _) => StructuralTy::Class(qn.clone()),
         Ty::Enum(qn, _) => StructuralTy::Enum(qn.clone()),
         Ty::EnumVariant(qn, v, _) => StructuralTy::EnumVariant(qn.clone(), v.clone()),
 
@@ -813,7 +813,7 @@ fn extract_required_class_deps(
     visiting: &mut HashSet<QualifiedTypeName>,
 ) {
     match ty {
-        Ty::Class(qn, _) => {
+        Ty::Class(qn, _, _) => {
             // Only add if the field is truly required
             if !optional && !in_list_or_map && class_fields.contains_key(qn) {
                 deps.insert(qn.clone());
@@ -1059,7 +1059,7 @@ mod tests {
             &Ty::Never {
                 attr: TyAttr::default()
             },
-            &Ty::Class(qn("Foo"), TyAttr::default()),
+            &Ty::Class(qn("Foo"), vec![], TyAttr::default()),
             &aliases
         ));
         assert!(is_subtype_of(
