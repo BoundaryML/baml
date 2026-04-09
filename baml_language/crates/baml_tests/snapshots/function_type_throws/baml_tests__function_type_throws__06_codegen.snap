@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 13077
 ---
 function user.MethodRunner.apply(self: null, f: (void) -> int) -> int {
     load_var self
@@ -191,21 +190,24 @@ function user.catch_enum_variants(x: int) -> string {
     call user.throw_enum_variant
     jump L4
     load_var e
-    load_const user.ErrorKind.NotFound
-    alloc_variant user.ErrorKind
+    discriminant
+    copy 0
+    load_const ErrorKind.NotFound
     cmp_op ==
     pop_jump_if_false L0
+    pop 1
     jump L3
 
   L0:
-    load_var e
-    load_const user.ErrorKind.Unauthorized
-    alloc_variant user.ErrorKind
+    copy 0
+    load_const ErrorKind.Unauthorized
     cmp_op ==
     pop_jump_if_false L1
+    pop 1
     jump L2
 
   L1:
+    pop 1
     load_var e
     throw_if_panic
     load_const "other error"
@@ -319,33 +321,29 @@ function user.ignore_callback_but_throw(f: () -> int) -> int {
 
 function user.make_bad_stored_handler() -> StoredPureHandler {
     alloc_instance StoredPureHandler
-    copy 0
     make_closure .<lambda(make_bad_stored_handler, 0)>, 0
-    store_field .run
+    init_field .run
     return
 }
 
 function user.make_class_handler() -> ClassThrowingHandler {
     alloc_instance ClassThrowingHandler
-    copy 0
     make_closure .<lambda(make_class_handler, 0)>, 0
-    store_field .run
+    init_field .run
     return
 }
 
 function user.make_enum_handler() -> EnumThrowingHandler {
     alloc_instance EnumThrowingHandler
-    copy 0
     make_closure .<lambda(make_enum_handler, 0)>, 0
-    store_field .run
+    init_field .run
     return
 }
 
 function user.make_good_stored_handler() -> StoredPureHandler {
     alloc_instance StoredPureHandler
-    copy 0
     make_closure .<lambda(make_good_stored_handler, 0)>, 0
-    store_field .run
+    init_field .run
     return
 }
 
@@ -356,9 +354,8 @@ function user.make_pure() -> () -> int {
 
 function user.make_pure_handler() -> PureHandler {
     alloc_instance PureHandler
-    copy 0
     make_closure .<lambda(make_pure_handler, 0)>, 0
-    store_field .run
+    init_field .run
     return
 }
 
@@ -379,9 +376,8 @@ function user.make_stored_closure_with_throws() -> () -> int throws string {
 
 function user.make_stored_throwing_handler() -> StoredThrowingHandler {
     alloc_instance StoredThrowingHandler
-    copy 0
     make_closure .<lambda(make_stored_throwing_handler, 0)>, 0
-    store_field .run
+    init_field .run
     return
 }
 
@@ -392,9 +388,8 @@ function user.make_thrower() -> () -> int throws string {
 
 function user.make_throwing_handler() -> ThrowingHandler {
     alloc_instance ThrowingHandler
-    copy 0
     make_closure .<lambda(make_throwing_handler, 0)>, 0
-    store_field .run
+    init_field .run
     return
 }
 
@@ -748,9 +743,8 @@ function user.test_map_it_throwing() -> string {
 
 function user.test_method_runner() -> int {
     alloc_instance MethodRunner
-    copy 0
     load_const 1
-    store_field .value
+    init_field .value
     make_closure .<lambda(test_method_runner, 0)>, 0
     call user.MethodRunner.apply
     return
@@ -992,12 +986,10 @@ function user.throw_any_error(x: int) -> string {
 
   L3:
     alloc_instance ApiError
-    copy 0
     load_const 400
-    store_field .code
-    copy 0
+    init_field .code
     load_const "bad request"
-    store_field .message
+    init_field .message
     throw
 
   L4:
@@ -1023,12 +1015,10 @@ function user.throw_class_instance(x: int) -> string {
 
   L1:
     alloc_instance ApiError
-    copy 0
     load_const 500
-    store_field .code
-    copy 0
+    init_field .code
     load_const "internal error"
-    store_field .message
+    init_field .message
     throw
 }
 
@@ -1052,12 +1042,10 @@ function user.throw_enum_or_class(x: int) -> string {
 
   L2:
     alloc_instance ApiError
-    copy 0
     load_const 503
-    store_field .code
-    copy 0
+    init_field .code
     load_const "unavailable"
-    store_field .message
+    init_field .message
     throw
 
   L3:
@@ -1115,22 +1103,18 @@ function user.throw_mixed_classes(x: int) -> string {
 
   L2:
     alloc_instance ValidationError
-    copy 0
     load_const "id"
-    store_field .field
-    copy 0
+    init_field .field
     load_const "required"
-    store_field .reason
+    init_field .reason
     throw
 
   L3:
     alloc_instance ApiError
-    copy 0
     load_const 404
-    store_field .code
-    copy 0
+    init_field .code
     load_const "not found"
-    store_field .message
+    init_field .message
     throw
 }
 

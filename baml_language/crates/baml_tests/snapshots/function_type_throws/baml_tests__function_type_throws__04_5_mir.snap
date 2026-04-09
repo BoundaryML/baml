@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 12668
 ---
 === MIR2 ===
 fn user.test_array_map_pure() -> int[] {
@@ -18,10 +17,6 @@ fn user.test_array_map_pure() -> int[] {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -57,10 +52,6 @@ fn user.test_array_map_throwing() -> int[] {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -74,23 +65,19 @@ fn .<lambda(test_array_map_throwing, 0)>(x: null) -> null {
 
     bb0: {
         _2 = copy _1 == const 2_i64;
-        branch copy _2 -> [bb4, bb1];
+        branch copy _2 -> [bb3, bb1];
     }
 
     bb1: {
+        _0 = copy _1 * const 2_i64;
         goto -> bb2;
     }
 
     bb2: {
-        _0 = copy _1 * const 2_i64;
-        goto -> bb3;
-    }
-
-    bb3: {
         return;
     }
 
-    bb4: {
+    bb3: {
         throw const "found two";
     }
 }
@@ -105,10 +92,6 @@ fn user.takes_throwing(f: () -> int throws string) -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -121,23 +104,19 @@ fn user.caught_may_fail(x: int) -> string {
 
     bb0: {
         _2 = copy _1 == const 0_i64;
-        branch copy _2 -> [bb4, bb1];
+        branch copy _2 -> [bb3, bb1];
     }
 
     bb1: {
+        _0 = const "ok";
         goto -> bb2;
     }
 
     bb2: {
-        _0 = const "ok";
-        goto -> bb3;
-    }
-
-    bb3: {
         return;
     }
 
-    bb4: {
+    bb3: {
         throw const "zero";
     }
 }
@@ -148,31 +127,19 @@ fn user.test_catch_all() -> string {
     let _1: unknown // e
 
     bb0: {
-        _0 = call const fn user.caught_may_fail(const 1_i64) -> [bb1, unwind: bb2];
+        _0 = call const fn user.caught_may_fail(const 1_i64) -> [bb3, unwind: bb1];
     }
 
     bb1: {
-        goto -> bb5;
+        throw_if_panic copy _1 -> bb2;
     }
 
     bb2: {
-        throw_if_panic copy _1 -> bb3;
+        _0 = const "caught";
+        goto -> bb3;
     }
 
     bb3: {
-        goto -> bb4;
-    }
-
-    bb4: {
-        _0 = const "caught";
-        goto -> bb5;
-    }
-
-    bb5: {
-        goto -> bb6;
-    }
-
-    bb6: {
         return;
     }
 }
@@ -183,30 +150,18 @@ fn user.test_catch_rethrow() -> string {
     let _1: unknown // e
 
     bb0: {
-        _0 = call const fn user.caught_may_fail(const 1_i64) -> [bb1, unwind: bb4];
+        _0 = call const fn user.caught_may_fail(const 1_i64) -> [bb1, unwind: bb2];
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
-        goto -> bb3;
-    }
-
-    bb3: {
         return;
     }
 
-    bb4: {
-        throw_if_panic copy _1 -> bb5;
+    bb2: {
+        throw_if_panic copy _1 -> bb3;
     }
 
-    bb5: {
-        goto -> bb6;
-    }
-
-    bb6: {
+    bb3: {
         throw const 42_i64;
     }
 }
@@ -218,32 +173,24 @@ fn user.test_catch_string() -> string {
     let _2: bool
 
     bb0: {
-        _0 = call const fn user.caught_may_fail(const 1_i64) -> [bb1, unwind: bb2];
+        _0 = call const fn user.caught_may_fail(const 1_i64) -> [bb4, unwind: bb1];
     }
 
     bb1: {
-        goto -> bb5;
+        _2 = is_type(copy _1, String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _2 -> [bb3, bb2];
     }
 
     bb2: {
-        _2 = is_type(copy _1, String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
-        branch copy _2 -> [bb4, bb3];
-    }
-
-    bb3: {
         throw copy _1;
     }
 
-    bb4: {
+    bb3: {
         _0 = const "caught string";
-        goto -> bb5;
+        goto -> bb4;
     }
 
-    bb5: {
-        goto -> bb6;
-    }
-
-    bb6: {
+    bb4: {
         return;
     }
 }
@@ -257,10 +204,6 @@ fn user.test_no_catch() -> string {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -275,10 +218,6 @@ fn user.apply_inner(f: () -> int) -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -293,10 +232,6 @@ fn user.apply_outer(g: () -> int) -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -312,10 +247,6 @@ fn user.test_chained_pure() -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -346,10 +277,6 @@ fn user.test_chained_throwing() -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -377,10 +304,6 @@ fn user.MethodRunner.apply(self: MethodRunner, f: (void) -> int) -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -398,10 +321,6 @@ fn user.MethodRunner.apply_underdeclared(self: MethodRunner, f: (void) -> int) -
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -478,10 +397,6 @@ fn user.test_method_runner() -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -538,10 +453,6 @@ fn .<lambda(compose, 0)>(a: void) -> null {
     }
 
     bb2: {
-        goto -> bb3;
-    }
-
-    bb3: {
         return;
     }
 }
@@ -559,10 +470,6 @@ fn user.test_compose_both_throw() -> (int) -> string {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -602,10 +509,6 @@ fn user.test_compose_first_throws() -> (int) -> string {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -650,10 +553,6 @@ fn user.test_compose_pure() -> (int) -> string {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -703,10 +602,6 @@ fn user.test_compose_second_throws() -> (int) -> string {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -748,10 +643,6 @@ fn user.apply_generic_class(f: () -> int) -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -766,10 +657,6 @@ fn user.apply_generic_enum(f: () -> int) -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -784,10 +671,6 @@ fn user.apply_may_throw_class(f: () -> int throws ApiError) -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -802,10 +685,6 @@ fn user.apply_may_throw_enum(f: () -> int throws ErrorKind) -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -820,34 +699,26 @@ fn user.catch_class_error(x: int) -> string {
     let _5: ApiError
 
     bb0: {
-        _0 = call const fn user.throw_class_instance(copy _1) -> [bb1, unwind: bb2];
+        _0 = call const fn user.throw_class_instance(copy _1) -> [bb4, unwind: bb1];
     }
 
     bb1: {
-        goto -> bb5;
+        _3 = is_type(copy _2, Class(TypeName { name: "ApiError", module_path: ["user"], display_name: "ApiError" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        branch copy _3 -> [bb3, bb2];
     }
 
     bb2: {
-        _3 = is_type(copy _2, Class(TypeName { name: "ApiError", module_path: ["user"], display_name: "ApiError" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
-        branch copy _3 -> [bb4, bb3];
-    }
-
-    bb3: {
         throw copy _2;
     }
 
-    bb4: {
+    bb3: {
         _5 = copy _2;
         _4 = copy _5.1;
         _0 = const "api error: " + copy _4;
-        goto -> bb5;
+        goto -> bb4;
     }
 
-    bb5: {
-        goto -> bb6;
-    }
-
-    bb6: {
+    bb4: {
         return;
     }
 }
@@ -857,55 +728,37 @@ fn user.catch_enum_variants(x: int) -> string {
     let _0: string // _0 // return
     let _1: int // x // param
     let _2: unknown // e
-    let _3: bool
-    let _4: bool
+    let _3: int
 
     bb0: {
-        _0 = call const fn user.throw_enum_variant(copy _1) -> [bb1, unwind: bb2];
+        _0 = call const fn user.throw_enum_variant(copy _1) -> [bb6, unwind: bb1];
     }
 
     bb1: {
-        goto -> bb9;
+        _3 = discriminant(_2);
+        switch copy _3 [ErrorKind.NotFound: bb5, ErrorKind.Unauthorized: bb4, otherwise: bb2];
     }
 
     bb2: {
-        _3 = copy _2 == const user.ErrorKind.NotFound;
-        branch copy _3 -> [bb8, bb3];
+        throw_if_panic copy _2 -> bb3;
     }
 
     bb3: {
-        _4 = copy _2 == const user.ErrorKind.Unauthorized;
-        branch copy _4 -> [bb7, bb4];
+        _0 = const "other error";
+        goto -> bb6;
     }
 
     bb4: {
-        throw_if_panic copy _2 -> bb5;
+        _0 = const "unauthorized";
+        goto -> bb6;
     }
 
     bb5: {
+        _0 = const "not found";
         goto -> bb6;
     }
 
     bb6: {
-        _0 = const "other error";
-        goto -> bb9;
-    }
-
-    bb7: {
-        _0 = const "unauthorized";
-        goto -> bb9;
-    }
-
-    bb8: {
-        _0 = const "not found";
-        goto -> bb9;
-    }
-
-    bb9: {
-        goto -> bb10;
-    }
-
-    bb10: {
         return;
     }
 }
@@ -919,51 +772,39 @@ fn user.catch_mixed_errors(x: int) -> string {
     let _4: bool
 
     bb0: {
-        _0 = call const fn user.throw_enum_or_class(copy _1) -> [bb1, unwind: bb2];
+        _0 = call const fn user.throw_enum_or_class(copy _1) -> [bb7, unwind: bb1];
     }
 
     bb1: {
-        goto -> bb9;
+        _3 = copy _2 == const user.ErrorKind.RateLimited;
+        branch copy _3 -> [bb6, bb2];
     }
 
     bb2: {
-        _3 = copy _2 == const user.ErrorKind.RateLimited;
-        branch copy _3 -> [bb8, bb3];
+        _4 = is_type(copy _2, Class(TypeName { name: "ApiError", module_path: ["user"], display_name: "ApiError" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        branch copy _4 -> [bb5, bb3];
     }
 
     bb3: {
-        _4 = is_type(copy _2, Class(TypeName { name: "ApiError", module_path: ["user"], display_name: "ApiError" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
-        branch copy _4 -> [bb7, bb4];
+        throw_if_panic copy _2 -> bb4;
     }
 
     bb4: {
-        throw_if_panic copy _2 -> bb5;
+        _0 = const "unknown";
+        goto -> bb7;
     }
 
     bb5: {
-        goto -> bb6;
+        _0 = const "api error";
+        goto -> bb7;
     }
 
     bb6: {
-        _0 = const "unknown";
-        goto -> bb9;
+        _0 = const "rate limited";
+        goto -> bb7;
     }
 
     bb7: {
-        _0 = const "api error";
-        goto -> bb9;
-    }
-
-    bb8: {
-        _0 = const "rate limited";
-        goto -> bb9;
-    }
-
-    bb9: {
-        goto -> bb10;
-    }
-
-    bb10: {
         return;
     }
 }
@@ -1033,10 +874,6 @@ fn user.test_apply_class_thrower() -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -1064,10 +901,6 @@ fn user.test_apply_enum_thrower() -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -1095,10 +928,6 @@ fn user.test_lambda_throws_class() -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -1128,10 +957,6 @@ fn user.test_lambda_throws_enum() -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -1157,10 +982,6 @@ fn user.test_rethrows_class() -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -1188,10 +1009,6 @@ fn user.test_rethrows_enum() -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -1217,10 +1034,6 @@ fn user.test_type_alias_class() -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -1248,10 +1061,6 @@ fn user.test_type_alias_enum() -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -1277,10 +1086,6 @@ fn user.test_type_alias_mixed() -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -1302,7 +1107,7 @@ fn user.throw_any_error(x: int) -> string {
     let _2: ApiError
 
     bb0: {
-        switch copy _1 [0: bb6, 1: bb5, 2: bb4, otherwise: bb1];
+        switch copy _1 [0: bb5, 1: bb4, 2: bb3, otherwise: bb1];
     }
 
     bb1: {
@@ -1311,23 +1116,19 @@ fn user.throw_any_error(x: int) -> string {
     }
 
     bb2: {
-        goto -> bb3;
-    }
-
-    bb3: {
         return;
     }
 
-    bb4: {
+    bb3: {
         _2 = ApiError { const 400_i64, const "bad request" };
         throw copy _2;
     }
 
-    bb5: {
+    bb4: {
         throw const user.ErrorKind.NotFound;
     }
 
-    bb6: {
+    bb5: {
         throw const "simple string error";
     }
 }
@@ -1341,23 +1142,19 @@ fn user.throw_class_instance(x: int) -> string {
 
     bb0: {
         _2 = copy _1 < const 0_i64;
-        branch copy _2 -> [bb4, bb1];
+        branch copy _2 -> [bb3, bb1];
     }
 
     bb1: {
+        _0 = const "ok";
         goto -> bb2;
     }
 
     bb2: {
-        _0 = const "ok";
-        goto -> bb3;
-    }
-
-    bb3: {
         return;
     }
 
-    bb4: {
+    bb3: {
         _3 = ApiError { const 500_i64, const "internal error" };
         throw copy _3;
     }
@@ -1373,37 +1170,29 @@ fn user.throw_enum_or_class(x: int) -> string {
 
     bb0: {
         _2 = copy _1 == const 0_i64;
-        branch copy _2 -> [bb7, bb1];
+        branch copy _2 -> [bb5, bb1];
     }
 
     bb1: {
-        goto -> bb2;
+        _3 = copy _1 == const 1_i64;
+        branch copy _3 -> [bb4, bb2];
     }
 
     bb2: {
-        _3 = copy _1 == const 1_i64;
-        branch copy _3 -> [bb6, bb3];
+        _0 = const "ok";
+        goto -> bb3;
     }
 
     bb3: {
-        goto -> bb4;
-    }
-
-    bb4: {
-        _0 = const "ok";
-        goto -> bb5;
-    }
-
-    bb5: {
         return;
     }
 
-    bb6: {
+    bb4: {
         _4 = ApiError { const 503_i64, const "unavailable" };
         throw copy _4;
     }
 
-    bb7: {
+    bb5: {
         throw const user.ErrorKind.RateLimited;
     }
 }
@@ -1417,36 +1206,28 @@ fn user.throw_enum_variant(x: int) -> string {
 
     bb0: {
         _2 = copy _1 == const 0_i64;
-        branch copy _2 -> [bb7, bb1];
+        branch copy _2 -> [bb5, bb1];
     }
 
     bb1: {
-        goto -> bb2;
+        _3 = copy _1 == const 1_i64;
+        branch copy _3 -> [bb4, bb2];
     }
 
     bb2: {
-        _3 = copy _1 == const 1_i64;
-        branch copy _3 -> [bb6, bb3];
+        _0 = const "ok";
+        goto -> bb3;
     }
 
     bb3: {
-        goto -> bb4;
-    }
-
-    bb4: {
-        _0 = const "ok";
-        goto -> bb5;
-    }
-
-    bb5: {
         return;
     }
 
-    bb6: {
+    bb4: {
         throw const user.ErrorKind.Unauthorized;
     }
 
-    bb7: {
+    bb5: {
         throw const user.ErrorKind.NotFound;
     }
 }
@@ -1462,37 +1243,29 @@ fn user.throw_mixed_classes(x: int) -> string {
 
     bb0: {
         _2 = copy _1 == const 0_i64;
-        branch copy _2 -> [bb7, bb1];
+        branch copy _2 -> [bb5, bb1];
     }
 
     bb1: {
-        goto -> bb2;
+        _4 = copy _1 == const 1_i64;
+        branch copy _4 -> [bb4, bb2];
     }
 
     bb2: {
-        _4 = copy _1 == const 1_i64;
-        branch copy _4 -> [bb6, bb3];
+        _0 = const "ok";
+        goto -> bb3;
     }
 
     bb3: {
-        goto -> bb4;
-    }
-
-    bb4: {
-        _0 = const "ok";
-        goto -> bb5;
-    }
-
-    bb5: {
         return;
     }
 
-    bb6: {
+    bb4: {
         _5 = ValidationError { const "id", const "required" };
         throw copy _5;
     }
 
-    bb7: {
+    bb5: {
         _3 = ApiError { const 404_i64, const "not found" };
         throw copy _3;
     }
@@ -1504,7 +1277,7 @@ fn user.throw_various_errors(x: int) -> string {
     let _1: int // x // param
 
     bb0: {
-        switch copy _1 [0: bb6, 1: bb5, 2: bb4, otherwise: bb1];
+        switch copy _1 [0: bb5, 1: bb4, 2: bb3, otherwise: bb1];
     }
 
     bb1: {
@@ -1513,22 +1286,18 @@ fn user.throw_various_errors(x: int) -> string {
     }
 
     bb2: {
-        goto -> bb3;
-    }
-
-    bb3: {
         return;
     }
 
-    bb4: {
+    bb3: {
         throw const user.ErrorKind.ValidationFailed;
     }
 
-    bb5: {
+    bb4: {
         throw const user.ErrorKind.Unauthorized;
     }
 
-    bb6: {
+    bb5: {
         throw const user.ErrorKind.NotFound;
     }
 }
@@ -1543,10 +1312,6 @@ fn user.use_class_thrower(f: () -> int throws ApiError) -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -1561,10 +1326,6 @@ fn user.use_enum_thrower(f: () -> int throws ErrorKind) -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -1579,10 +1340,6 @@ fn user.use_mixed_thrower(f: () -> int throws ErrorKind | ApiError | string) -> 
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -1597,10 +1354,6 @@ fn user.apply_explicit(f: () -> int throws string) -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -1615,10 +1368,6 @@ fn user.apply_pure_only(f: () -> int) -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -1634,10 +1383,6 @@ fn user.test_explicit_param_pure() -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -1668,10 +1413,6 @@ fn user.test_explicit_param_throwing() -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -1697,10 +1438,6 @@ fn user.test_pure_only_pure() -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -1744,10 +1481,6 @@ fn user.caller() -> string {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -1760,23 +1493,19 @@ fn user.declared_may_fail(x: int) -> string {
 
     bb0: {
         _2 = copy _1 == const 0_i64;
-        branch copy _2 -> [bb4, bb1];
+        branch copy _2 -> [bb3, bb1];
     }
 
     bb1: {
+        _0 = const "ok";
         goto -> bb2;
     }
 
     bb2: {
-        _0 = const "ok";
-        goto -> bb3;
-    }
-
-    bb3: {
         return;
     }
 
-    bb4: {
+    bb3: {
         throw const "zero";
     }
 }
@@ -1787,31 +1516,19 @@ fn user.safe_caller() -> string {
     let _1: unknown // e
 
     bb0: {
-        _0 = call const fn user.declared_may_fail(const 1_i64) -> [bb1, unwind: bb2];
+        _0 = call const fn user.declared_may_fail(const 1_i64) -> [bb3, unwind: bb1];
     }
 
     bb1: {
-        goto -> bb5;
+        throw_if_panic copy _1 -> bb2;
     }
 
     bb2: {
-        throw_if_panic copy _1 -> bb3;
+        _0 = const "caught";
+        goto -> bb3;
     }
 
     bb3: {
-        goto -> bb4;
-    }
-
-    bb4: {
-        _0 = const "caught";
-        goto -> bb5;
-    }
-
-    bb5: {
-        goto -> bb6;
-    }
-
-    bb6: {
         return;
     }
 }
@@ -1826,10 +1543,6 @@ fn user.use_alias_pure(f: () -> int) -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -1849,23 +1562,19 @@ fn user.apply_guarded(f: () -> int) -> int {
     bb1: {
         _4 = copy _2;
         _3 = copy _4 < const 0_i64;
-        branch copy _3 -> [bb5, bb2];
+        branch copy _3 -> [bb4, bb2];
     }
 
     bb2: {
+        _0 = copy _2;
         goto -> bb3;
     }
 
     bb3: {
-        _0 = copy _2;
-        goto -> bb4;
-    }
-
-    bb4: {
         return;
     }
 
-    bb5: {
+    bb4: {
         throw const "negative result";
     }
 }
@@ -1881,10 +1590,6 @@ fn user.test_guarded_pure() -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -1915,10 +1620,6 @@ fn user.test_guarded_throwing() -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -1944,10 +1645,6 @@ fn user.map_it(x: int, f: (int) -> string) -> string {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -1962,10 +1659,6 @@ fn user.run_pure(f: () -> int) -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -1980,10 +1673,6 @@ fn user.run_throwing(f: () -> int) -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -2025,10 +1714,6 @@ fn user.test_map_it_pure() -> string {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -2060,10 +1745,6 @@ fn user.test_map_it_throwing() -> string {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -2090,10 +1771,6 @@ fn user.test_run_pure() -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -2124,10 +1801,6 @@ fn user.test_run_throwing() -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -2155,10 +1828,6 @@ fn user.test_two_both_throw() -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -2196,10 +1865,6 @@ fn user.test_two_one_throws() -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -2242,10 +1907,6 @@ fn user.test_two_pure() -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -2290,10 +1951,6 @@ fn user.apply(f: () -> int) -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -2312,10 +1969,6 @@ fn user.apply_aliased(f: () -> int) -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -2335,23 +1988,19 @@ fn user.apply_and_throw(f: () -> int) -> int {
     bb1: {
         _4 = copy _2;
         _3 = copy _4 < const 0_i64;
-        branch copy _3 -> [bb5, bb2];
+        branch copy _3 -> [bb4, bb2];
     }
 
     bb2: {
+        _0 = copy _2;
         goto -> bb3;
     }
 
     bb3: {
-        _0 = copy _2;
-        goto -> bb4;
-    }
-
-    bb4: {
         return;
     }
 
-    bb5: {
+    bb4: {
         throw const "negative result";
     }
 }
@@ -2366,10 +2015,6 @@ fn user.apply_throwing(f: () -> int throws string) -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -2384,10 +2029,6 @@ fn user.apply_underdeclared(f: () -> int) -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -2407,10 +2048,6 @@ fn user.apply_with_helper(f: () -> int) -> int {
     }
 
     bb2: {
-        goto -> bb3;
-    }
-
-    bb3: {
         return;
     }
 }
@@ -2449,10 +2086,6 @@ fn user.ignore_callback_but_throw(f: () -> int) -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -2468,10 +2101,6 @@ fn user.test_apply_aliased_throwing() -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -2497,10 +2126,6 @@ fn user.test_apply_and_throw_pure() -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -2531,10 +2156,6 @@ fn user.test_apply_explicit_throws() -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -2560,10 +2181,6 @@ fn user.test_apply_pure() -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -2594,10 +2211,6 @@ fn user.test_apply_throwing() -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -2623,10 +2236,6 @@ fn user.test_apply_with_helper_pure() -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -2657,10 +2266,6 @@ fn user.test_apply_with_helper_throwing() -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -2686,10 +2291,6 @@ fn user.test_ignore_callback_but_throw() -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -2715,10 +2316,6 @@ fn user.test_ignore_callback_throwing() -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -2746,10 +2343,6 @@ fn user.test_explicit_throws_match() -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -2777,10 +2370,6 @@ fn user.test_explicit_throws_never_pure() -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -2813,10 +2402,6 @@ fn user.test_explicit_throws_wider_than_body() -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -2850,10 +2435,6 @@ fn user.test_conditional_throw(x: int) -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -2867,23 +2448,19 @@ fn .<lambda(test_conditional_throw, 0)>(n: int) -> null {
 
     bb0: {
         _2 = copy _1 < const 0_i64;
-        branch copy _2 -> [bb4, bb1];
+        branch copy _2 -> [bb3, bb1];
     }
 
     bb1: {
+        _0 = copy _1;
         goto -> bb2;
     }
 
     bb2: {
-        _0 = copy _1;
-        goto -> bb3;
-    }
-
-    bb3: {
         return;
     }
 
-    bb4: {
+    bb3: {
         throw const "negative";
     }
 }
@@ -2902,10 +2479,6 @@ fn user.test_multi_throw_types(x: int) -> string {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -2917,7 +2490,7 @@ fn .<lambda(test_multi_throw_types, 0)>(n: int) -> null {
     let _1: int // n // param
 
     bb0: {
-        switch copy _1 [0: bb5, 1: bb4, otherwise: bb1];
+        switch copy _1 [0: bb4, 1: bb3, otherwise: bb1];
     }
 
     bb1: {
@@ -2926,18 +2499,14 @@ fn .<lambda(test_multi_throw_types, 0)>(n: int) -> null {
     }
 
     bb2: {
-        goto -> bb3;
-    }
-
-    bb3: {
         return;
     }
 
-    bb4: {
+    bb3: {
         throw const 1_i64;
     }
 
-    bb5: {
+    bb4: {
         throw const "string error";
     }
 }
@@ -2955,10 +2524,6 @@ fn user.test_pure_lambda() -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -2991,10 +2556,6 @@ fn user.test_throwing_int() -> string {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -3022,10 +2583,6 @@ fn user.test_throwing_lambda() -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -3053,10 +2610,6 @@ fn user.test_throws_never_but_throws() -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -3084,10 +2637,6 @@ fn user.test_typed_lambda_annotation_underdeclares_body() -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -3115,10 +2664,6 @@ fn user.test_typed_lambda_throws_mismatch() -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -3144,10 +2689,6 @@ fn user.apply_with_arg(x: int, f: (int) -> int) -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -3164,10 +2705,6 @@ fn user.apply_with_many_args(a: int, b: string, f: (int, string) -> string) -> s
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -3183,10 +2720,6 @@ fn user.test_many_args_pure() -> string {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -3219,10 +2752,6 @@ fn user.test_mixed_pure() -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -3254,10 +2783,6 @@ fn user.test_mixed_throwing() -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -3271,23 +2796,19 @@ fn .<lambda(test_mixed_throwing, 0)>(n: int) -> null {
 
     bb0: {
         _2 = copy _1 < const 0_i64;
-        branch copy _2 -> [bb4, bb1];
+        branch copy _2 -> [bb3, bb1];
     }
 
     bb1: {
+        _0 = copy _1 * const 2_i64;
         goto -> bb2;
     }
 
     bb2: {
-        _0 = copy _1 * const 2_i64;
-        goto -> bb3;
-    }
-
-    bb3: {
         return;
     }
 
-    bb4: {
+    bb3: {
         throw const "negative";
     }
 }
@@ -3305,10 +2826,6 @@ fn user.test_nested_both_throw() -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -3355,10 +2872,6 @@ fn user.test_nested_inner_throws() -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -3377,10 +2890,6 @@ fn .<lambda(test_nested_inner_throws, 0)>() -> null {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -3408,10 +2917,6 @@ fn user.test_nested_outer_throws() -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -3450,44 +2955,28 @@ fn user.optional_call_caught(cb: (() -> int throws string)?) -> int? {
 
     bb0: {
         _3 = copy _1 == const null;
-        branch copy _3 -> [bb3, bb1];
+        branch copy _3 -> [bb2, bb1];
     }
 
     bb1: {
-        _0 = call copy _1() -> [bb2, unwind: bb5];
+        _0 = call copy _1() -> [bb5, unwind: bb3];
     }
 
     bb2: {
-        goto -> bb4;
+        _0 = const null;
+        goto -> bb5;
     }
 
     bb3: {
-        _0 = const null;
-        goto -> bb4;
+        throw_if_panic copy _2 -> bb4;
     }
 
     bb4: {
-        goto -> bb8;
+        _0 = const null;
+        goto -> bb5;
     }
 
     bb5: {
-        throw_if_panic copy _2 -> bb6;
-    }
-
-    bb6: {
-        goto -> bb7;
-    }
-
-    bb7: {
-        _0 = const null;
-        goto -> bb8;
-    }
-
-    bb8: {
-        goto -> bb9;
-    }
-
-    bb9: {
         return;
     }
 }
@@ -3500,27 +2989,19 @@ fn user.optional_call_rethrows(cb: (() -> int throws string)?) -> int? {
 
     bb0: {
         _2 = copy _1 == const null;
-        branch copy _2 -> [bb3, bb1];
+        branch copy _2 -> [bb2, bb1];
     }
 
     bb1: {
-        _0 = call copy _1() -> [bb2];
+        _0 = call copy _1() -> [bb3];
     }
 
     bb2: {
-        goto -> bb4;
+        _0 = const null;
+        goto -> bb3;
     }
 
     bb3: {
-        _0 = const null;
-        goto -> bb4;
-    }
-
-    bb4: {
-        goto -> bb5;
-    }
-
-    bb5: {
         return;
     }
 }
@@ -3536,10 +3017,6 @@ fn user.test_optional_call_with_throwing_callback() -> int? {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -3623,10 +3100,6 @@ fn user.test_use_pure() -> int {
     }
 
     bb2: {
-        goto -> bb3;
-    }
-
-    bb3: {
         return;
     }
 }
@@ -3647,10 +3120,6 @@ fn user.test_use_thrower() -> int {
     }
 
     bb2: {
-        goto -> bb3;
-    }
-
-    bb3: {
         return;
     }
 }
@@ -3829,10 +3298,6 @@ fn user.test_store_direct_callback_param(f: () -> int) -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
