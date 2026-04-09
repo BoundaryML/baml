@@ -198,6 +198,9 @@ class Client {
           let error_body = http_response.text() catch (e) {
             _ => { "" }
           };
+          if (active_delay_ms > 0) {
+            root.sys.sleep(active_delay_ms)
+          }
           throw root.errors.DevOther { message: "HTTP request failed: " + error_body };
         }
       }
