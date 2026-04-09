@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 37519
 ---
 === MIR2 ===
 fn user.bad_callback_use(cb: (int) -> void) -> int {
@@ -257,8 +258,10 @@ fn user.use_void() -> int {
 fn user.bad_let() -> int {
     // Locals:
     let _0: int // _0 // return
+    let _1: "string" // z
 
     bb0: {
+        _1 = const "string";
         _0 = const 1_i64;
         goto -> bb1;
     }

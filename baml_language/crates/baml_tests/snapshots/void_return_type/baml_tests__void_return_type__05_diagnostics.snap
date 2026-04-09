@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 37593
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] Error: cannot use return value of a void function
@@ -21,16 +22,6 @@ source: crates/baml_tests/src/generated_tests.rs
     │ 
     │ Note: Error code: E0001
 ────╯
-
-  [parse] Error: Expected expression, found ';'
-   ╭─[ void_return_type.baml:8:1 ]
-   │
- 8 │ }
-   │ ┬  
-   │ ╰── Expected expression, found ';'
-   │ 
-   │ Note: Error code: E0010
-───╯
 
   [type] Error: type mismatch: expected void, got 42
     ╭─[ void_return_type.baml:12:12 ]
@@ -72,30 +63,40 @@ source: crates/baml_tests/src/generated_tests.rs
    │ Note: Error code: E0110
 ───╯
 
-  [type] Error: type mismatch: expected void, got 1
-   ╭─[ void_type_position_errors.baml:8:17 ]
-   │
- 8 │   let x: void = 1;
-   │                 ┬  
-   │                 ╰── type mismatch: expected void, got 1
-   │ 
-   │ Note: Error code: E0001
-───╯
-
-  [hir] Error: `void` can only be used as a function return type, not as return type of `bad_optional`
-    ╭─[ void_type_position_errors.baml:13:27 ]
+  [hir] Error: `void` can only be used as a function return type, not as a let binding annotation
+    ╭─[ void_type_position_errors.baml:10:9 ]
     │
- 13 │ function bad_optional() -> void? {
+ 10 │   let y: void = {
+    │         ──┬──  
+    │           ╰──── `void` not allowed here
+    │ 
+    │ Note: Error code: E0110
+────╯
+
+  [type] Error: type mismatch: expected int, got "string"
+    ╭─[ void_type_position_errors.baml:12:18 ]
+    │
+ 12 │     let z: int = "string";
+    │                  ────┬───  
+    │                      ╰───── type mismatch: expected int, got "string"
+    │ 
+    │ Note: Error code: E0001
+────╯
+
+  [hir] Error: `void` can only be used as a function return type, not as an optional type (`void?`)
+    ╭─[ void_type_position_errors.baml:19:27 ]
+    │
+ 19 │ function bad_optional() -> void? {
     │                           ───┬──  
     │                              ╰──── `void` not allowed here
     │ 
     │ Note: Error code: E0110
 ────╯
 
-  [hir] Error: `void` can only be used as a function return type, not as return type of `bad_list`
-    ╭─[ void_type_position_errors.baml:18:23 ]
+  [hir] Error: `void` can only be used as a function return type, not as a list type (`void[]`)
+    ╭─[ void_type_position_errors.baml:24:23 ]
     │
- 18 │ function bad_list() -> void[] {
+ 24 │ function bad_list() -> void[] {
     │                       ───┬───  
     │                          ╰───── `void` not allowed here
     │ 

@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 37673
 ---
 function user.bad_callback_use(cb: (int) -> void) -> int {
     load_const 1
@@ -11,6 +12,8 @@ function user.bad_callback_use(cb: (int) -> void) -> int {
 }
 
 function user.bad_let() -> int {
+    load_const "string"
+    store_var z
     load_const 1
     return
 }

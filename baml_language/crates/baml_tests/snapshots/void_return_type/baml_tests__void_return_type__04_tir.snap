@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 37463
 ---
 === TIR2 ===
 type user.Callback = (int) -> void
@@ -97,9 +98,14 @@ function user.bad_param(x: void) -> int throws never {
 function user.bad_let() -> int throws never {
   { : 1
     let x = 1 : 1
+    let y = : "string"
+      { : "string"
+        let z = "string" : "string"
+        z : "string"
+      }
     1 : 1
   }
-  !! 154..155: type mismatch: expected void, got 1
+  !! 230..238: type mismatch: expected int, got "string"
 }
 function user.bad_optional() -> void? throws never {
   { : null

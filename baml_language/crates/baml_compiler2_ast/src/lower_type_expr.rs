@@ -418,18 +418,30 @@ pub(crate) fn check_void_type(
         }
         TypeExpr::Optional { inner, .. } => {
             // Once inside a wrapper, void is never allowed (even in return position).
-            check_void_type(inner, context, span, false, diags);
+            check_void_type(
+                inner,
+                "an optional type (`void?`)".to_string(),
+                span,
+                false,
+                diags,
+            );
         }
         TypeExpr::List { inner, .. } => {
-            check_void_type(inner, context, span, false, diags);
+            check_void_type(
+                inner,
+                "a list type (`void[]`)".to_string(),
+                span,
+                false,
+                diags,
+            );
         }
         TypeExpr::Map { key, value, .. } => {
-            check_void_type(key, context.clone(), span, false, diags);
-            check_void_type(value, context, span, false, diags);
+            check_void_type(key, "a map key type".to_string(), span, false, diags);
+            check_void_type(value, "a map value type".to_string(), span, false, diags);
         }
         TypeExpr::Union { variants, .. } => {
             for v in variants {
-                check_void_type(v, context.clone(), span, false, diags);
+                check_void_type(v, "a union member".to_string(), span, false, diags);
             }
         }
         TypeExpr::Function { params, ret: _, .. } => {

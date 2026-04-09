@@ -1257,18 +1257,27 @@ impl<'db> TypeInferenceBuilder<'db> {
                         for diag in diags {
                             self.context.report_at_type_annot(diag, *ann_idx);
                         }
-                        let ty = self.check_expr(*init, body, &ann_ty);
-                        if matches!(ty, Ty::Void { .. }) {
-                            let err = if matches!(
-                                body.exprs[*init],
-                                Expr::Call { .. } | Expr::OptionalCall { .. }
-                            ) {
-                                TirTypeError::VoidFunctionResultUsed
-                            } else {
-                                TirTypeError::VoidUsedAsValue
-                            };
-                            self.context.report_simple(err, *init);
-                        }
+                        // If the annotation is void, the AST layer already
+                        // reported VoidInNonReturnPosition — just infer the
+                        // init type without checking against void to avoid a
+                        // duplicate TypeMismatch diagnostic.
+                        let ty = if matches!(ann_ty, Ty::Void { .. }) {
+                            self.infer_expr(*init, body)
+                        } else {
+                            let ty = self.check_expr(*init, body, &ann_ty);
+                            if matches!(ty, Ty::Void { .. }) {
+                                let err = if matches!(
+                                    body.exprs[*init],
+                                    Expr::Call { .. } | Expr::OptionalCall { .. }
+                                ) {
+                                    TirTypeError::VoidFunctionResultUsed
+                                } else {
+                                    TirTypeError::VoidUsedAsValue
+                                };
+                                self.context.report_simple(err, *init);
+                            }
+                            ty
+                        };
                         ann_ty_for_decl = Some(ann_ty);
                         Some(ty)
                     } else {

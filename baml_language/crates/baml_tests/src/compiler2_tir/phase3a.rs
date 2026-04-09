@@ -738,21 +738,39 @@ function f(u: User?) -> string? { u?.address?.street }
 fn void_function_basic() {
     let mut db = make_db();
     let file = db.add_file("test.baml", "function f() -> void { }");
-    insta::assert_snapshot!(render_tir(&db, file));
+    insta::assert_snapshot!(render_tir(&db, file), @r"
+    function user.f() -> void throws never {
+      { : void
+      }
+    }
+    ");
 }
 
 #[test]
 fn void_function_bare_return() {
     let mut db = make_db();
     let file = db.add_file("test.baml", "function f() -> void { return; }");
-    insta::assert_snapshot!(render_tir(&db, file));
+    insta::assert_snapshot!(render_tir(&db, file), @r"
+    function user.f() -> void throws never {
+      { : never
+        return
+      }
+    }
+    ");
 }
 
 #[test]
 fn void_function_return_value_error() {
     let mut db = make_db();
     let file = db.add_file("test.baml", "function f() -> void { return 42; }");
-    insta::assert_snapshot!(render_tir(&db, file));
+    insta::assert_snapshot!(render_tir(&db, file), @r"
+    function user.f() -> void throws never {
+      { : never
+        return 42 : 42
+      }
+      !! 30..32: type mismatch: expected void, got 42
+    }
+    ");
 }
 
 #[test]
@@ -765,7 +783,19 @@ function g() -> void { }
 function f() -> int { let x = g(); 1 }
 "#,
     );
-    insta::assert_snapshot!(render_tir(&db, file));
+    insta::assert_snapshot!(render_tir(&db, file), @r"
+    function user.g() -> void throws never {
+      { : void
+      }
+    }
+    function user.f() -> int throws never {
+      { : 1
+        let x = g() : void
+        1 : 1
+      }
+      !! 56..59: cannot use return value of a void function
+    }
+    ");
 }
 
 #[test]
@@ -778,5 +808,16 @@ function g() -> void { }
 function f() -> int { g(); 1 }
 "#,
     );
-    insta::assert_snapshot!(render_tir(&db, file));
+    insta::assert_snapshot!(render_tir(&db, file), @r"
+    function user.g() -> void throws never {
+      { : void
+      }
+    }
+    function user.f() -> int throws never {
+      { : 1
+        g() : void
+        1 : 1
+      }
+    }
+    ");
 }

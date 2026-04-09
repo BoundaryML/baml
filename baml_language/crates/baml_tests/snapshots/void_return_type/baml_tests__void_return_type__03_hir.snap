@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 37415
 ---
 === HIR2 ===
 type user.Callback = (int) -> void
@@ -37,7 +38,7 @@ function user.use_void() -> int  [expr] {
   { let x = do_nothing() } 1
 }
 function user.bad_let() -> int  [expr] {
-  { let x: void = 1 } 1
+  { let x: void = 1; let y: void = { let z: int = "string" } z } 1
 }
 function user.bad_list() -> void[]  [expr] {
   {  } []

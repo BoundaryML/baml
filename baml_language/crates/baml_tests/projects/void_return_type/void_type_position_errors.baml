@@ -6,6 +6,12 @@ function bad_param(x: void) -> int {
 // ERROR: void as let annotation
 function bad_let() -> int {
   let x: void = 1;
+
+  let y: void = {
+    // this should still be an error
+    let z: int = "string";
+    z
+  };
   1
 }
 
