@@ -67,7 +67,20 @@ pub fn function_throw_sets<'db>(
     package_id: PackageId<'db>,
 ) -> FunctionThrowSets {
     let pkg_items = package_items(db, package_id);
-    let aliases = collect_type_aliases(db, pkg_items);
+    let res_ctx = crate::package_interface::package_resolution_context(db, package_id);
+    let mut aliases = collect_type_aliases(db, pkg_items);
+    // Merge dependency type aliases for cross-package field type resolution
+    for (_dep_name, dep_iface) in &res_ctx.dep_interfaces {
+        for types_in_ns in dep_iface.types.values() {
+            for exported in types_in_ns.values() {
+                if let crate::package_interface::ExportedType::TypeAlias { qtn, resolved } =
+                    exported
+                {
+                    aliases.insert(qtn.clone(), resolved.clone());
+                }
+            }
+        }
+    }
     // Load dependency interfaces for cross-package throw lookup
     let dep_interfaces: Vec<(Name, &crate::package_interface::PackageInterface)> =
         package_dependencies(db, package_id)
@@ -128,6 +141,17 @@ pub fn function_throw_sets<'db>(
                     expr_body,
                     &aliases,
                 ));
+                let (member_facts, _) = collect_member_field_call_throws(
+                    db,
+                    res_ctx,
+                    &func_ns,
+                    &func_data.generic_params,
+                    sig.as_ref(),
+                    expr_body,
+                    &aliases,
+                    None,
+                );
+                direct.extend(member_facts);
                 direct
             } else {
                 BTreeSet::new()
@@ -137,7 +161,20 @@ pub fn function_throw_sets<'db>(
             has_declared_contract.insert(key.clone(), declared_throws.is_some());
 
             if let baml_compiler2_hir::body::FunctionBody::Expr(expr_body) = body.as_ref() {
-                call_edges.insert(key, collect_call_targets(expr_body));
+                // Build combined target set: syntactic call targets + member call edges
+                let mut targets = collect_call_targets(expr_body);
+                let (_, member_edges) = collect_member_field_call_throws(
+                    db,
+                    res_ctx,
+                    &func_ns,
+                    &func_data.generic_params,
+                    sig.as_ref(),
+                    expr_body,
+                    &aliases,
+                    None,
+                );
+                targets.extend(member_edges);
+                call_edges.insert(key, targets);
             }
         }
 
@@ -194,6 +231,17 @@ pub fn function_throw_sets<'db>(
                         expr_body,
                         &aliases,
                     ));
+                    let (member_facts, _) = collect_member_field_call_throws(
+                        db,
+                        res_ctx,
+                        &method_ns,
+                        &method_generic_params,
+                        sig.as_ref(),
+                        expr_body,
+                        &aliases,
+                        Some((class_name, class_data.generic_params.as_slice())),
+                    );
+                    direct.extend(member_facts);
                     direct
                 } else {
                     BTreeSet::new()
@@ -203,10 +251,21 @@ pub fn function_throw_sets<'db>(
                 has_declared_contract.insert(key.clone(), declared_throws.is_some());
 
                 if let baml_compiler2_hir::body::FunctionBody::Expr(expr_body) = body.as_ref() {
-                    // Rewrite "self.X" call targets to "ClassName.X" so edges
-                    // connect to the correct graph nodes.
                     let raw_targets = collect_call_targets(expr_body);
-                    let rewritten: BTreeSet<Name> = raw_targets
+                    let (_, member_edges) = collect_member_field_call_throws(
+                        db,
+                        res_ctx,
+                        &method_ns,
+                        &method_generic_params,
+                        sig.as_ref(),
+                        expr_body,
+                        &aliases,
+                        Some((class_name, class_data.generic_params.as_slice())),
+                    );
+                    // Merge syntactic targets + member edges, then rewrite self references
+                    let mut combined = raw_targets;
+                    combined.extend(member_edges);
+                    let rewritten: BTreeSet<Name> = combined
                         .into_iter()
                         .map(|t| rewrite_self_target(&t, class_name))
                         .collect();
@@ -544,6 +603,166 @@ fn collect_direct_param_call_throws<'db>(
     }
 
     out
+}
+
+/// Extract direct throw facts from member field calls on typed parameters/self.
+///
+/// Handles two sub-cases:
+/// 1. Function-typed field calls (e.g., `h.run()` where `run` is a `Class::fields` entry):
+///    resolve the base type from the function signature, look up the field via
+///    `PackageResolutionContext::lookup_class_fields` (with generic substitution applied),
+///    and extract throws as direct facts if the field is `Ty::Function`.
+/// 2. Named method calls (e.g., `h.do_thing()` where `do_thing` is a `Class::methods` entry):
+///    rewrite the call target to namespace-qualified `"ns.ClassName.method"` form and add
+///    as a call-graph edge.
+#[allow(clippy::too_many_arguments)]
+fn collect_member_field_call_throws<'db>(
+    db: &'db dyn crate::Db,
+    res_ctx: &crate::package_interface::PackageResolutionContext<'db>,
+    ns_context: &[Name],
+    generic_params: &[Name],
+    sig: &baml_compiler2_hir::signature::FunctionSignature,
+    body: &ExprBody,
+    aliases: &HashMap<crate::ty::QualifiedTypeName, Ty>,
+    // (class_name, class_generic_params) — needed to build accurate self type
+    // with TypeVar type_args, e.g. Handler<E> not bare Handler
+    class_context: Option<(&Name, &[Name])>,
+) -> (BTreeSet<ThrowFact>, BTreeSet<Name>) {
+    let mut direct_facts = BTreeSet::new();
+    let mut extra_edges = BTreeSet::new();
+
+    let pkg_items = res_ctx.own_items;
+    // Build param name → Ty map from the function signature.
+    let param_types: HashMap<Name, Ty> = sig
+        .params
+        .iter()
+        .map(|(name, te)| {
+            let mut diags = Vec::new();
+            let ty =
+                lower_type_expr_in_ns(db, te, pkg_items, ns_context, generic_params, &mut diags);
+            (name.clone(), ty)
+        })
+        .collect();
+
+    // Extend with for-loop variable types.
+    // For `for (let elem in collection)` where `collection` is a known param of type `T[]`,
+    // map `elem` → `T`. This handles patterns like `for task in tasks` where
+    // `tasks: Task<string | int>[]`.
+    let mut local_types: HashMap<Name, Ty> = param_types.clone();
+    for (_, stmt) in body.stmts.iter() {
+        if let baml_compiler2_ast::Stmt::For {
+            binding,
+            collection,
+            ..
+        } = stmt
+        {
+            // Get the binding name
+            let binding_name = match &body.patterns[*binding] {
+                baml_compiler2_ast::Pattern::Binding(name)
+                | baml_compiler2_ast::Pattern::TypedBinding { name, .. } => name.clone(),
+                _ => continue,
+            };
+            // Get the collection's type by resolving its path to a param
+            let collection_ty = match &body.exprs[*collection] {
+                Expr::Path(segments) if segments.len() == 1 => {
+                    param_types.get(&segments[0]).cloned()
+                }
+                _ => None,
+            };
+            if let Some(coll_ty) = collection_ty {
+                // Peel List type to get element type
+                let elem_ty = match coll_ty {
+                    Ty::List(inner, _) => Some(*inner),
+                    _ => None,
+                };
+                if let Some(elem) = elem_ty {
+                    local_types.insert(binding_name, elem);
+                }
+            }
+        }
+    }
+
+    for (_, expr) in body.exprs.iter() {
+        let callee_id = match expr {
+            Expr::Call { callee, .. } | Expr::OptionalCall { callee, .. } => *callee,
+            _ => continue,
+        };
+
+        // Match FieldAccess { base, field } pattern
+        let (base_id, field) = match &body.exprs[callee_id] {
+            Expr::FieldAccess { base, field } => (*base, field),
+            _ => continue,
+        };
+
+        // Resolve base to a type: direct parameter, for-loop variable, or `self`
+        let base_ty = match &body.exprs[base_id] {
+            Expr::Path(segments) if segments.len() == 1 => {
+                let base_name = &segments[0];
+                if base_name.as_str() == "self" {
+                    // self-based member calls — resolve self type from class_context.
+                    // Build accurate self type with TypeVar type_args so that
+                    // lookup_class_fields applies correct generic substitution.
+                    class_context.and_then(|(class_name, class_generic_params)| {
+                        let def = pkg_items.lookup_type(ns_context, class_name)?;
+                        match def {
+                            Definition::Class(_) => {
+                                let qtn = qualify_def(db, def, class_name);
+                                let type_args: Vec<Ty> = class_generic_params
+                                    .iter()
+                                    .map(|name| Ty::TypeVar(name.clone(), TyAttr::default()))
+                                    .collect();
+                                let nominal =
+                                    crate::ty::NominalTypeRef::new_with_type_args(qtn, type_args);
+                                Some(Ty::Class(nominal, TyAttr::default()))
+                            }
+                            _ => None,
+                        }
+                    })
+                } else {
+                    local_types.get(base_name).cloned()
+                }
+            }
+            _ => None,
+        };
+
+        let Some(base_ty) = base_ty else {
+            continue;
+        };
+
+        // Resolve the member on the base type
+        let resolved_base = crate::throws_semantics::resolve_alias_chain(&base_ty, aliases);
+        let Ty::Class(class_name, _) = &resolved_base else {
+            continue;
+        };
+
+        // Look up the field via PackageResolutionContext (with generic substitution)
+        let fields = res_ctx.lookup_class_fields(db, class_name);
+        if let Some((_, field_ty)) = fields.iter().find(|(n, _)| n == field) {
+            // Function-typed field → extract throws as direct facts
+            if let Some(facts) = function_throws_facts(field_ty, aliases) {
+                direct_facts.extend(facts.into_iter().filter(|fact| {
+                    !matches!(fact, Ty::TypeVar(_, _) | Ty::Never { .. } | Ty::Void { .. })
+                }));
+            }
+            continue;
+        }
+
+        // Check if it's a named method → validate via res_ctx and add as call-graph edge.
+        // We MUST validate the method exists before adding an edge, because
+        // AnalysisGraph::add_edge (analysis.rs:54-58) auto-creates missing target
+        // nodes with empty facts. A bogus edge would inject a phantom node and
+        // alter graph topology, potentially masking real throw propagation.
+        // We also must use the class declaration namespace for the key, NOT the caller's
+        // ns_context, so the edge matches the declaration-side key built by function_key().
+        if let Some(_resolved_method) = res_ctx.lookup_class_method(db, class_name, field) {
+            let class_ns = class_name.namespace();
+            let method_short = Name::new(format!("{}.{}", class_name.name(), field));
+            let method_key = throw_set_key(class_ns, &method_short);
+            extra_edges.insert(method_key);
+        }
+    }
+
+    (direct_facts, extra_edges)
 }
 
 /// Look up a function's transitive throw set from dependency interfaces.

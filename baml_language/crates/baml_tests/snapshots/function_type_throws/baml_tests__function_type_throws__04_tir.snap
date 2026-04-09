@@ -688,12 +688,12 @@ function user.make_int_handler() -> user.Handler<int> throws never {
 }
 lambda user.make_int_handler {
 }
-function user.test_string_handler() -> null throws never {
+function user.test_string_handler() -> null throws string {
   { : null
     use_string_handler(make_string_handler()) : null
   }
 }
-function user.test_int_handler() -> null throws never {
+function user.test_int_handler() -> null throws int {
   { : null
     use_int_handler(make_int_handler()) : null
   }
@@ -740,7 +740,7 @@ lambda user.make_mixed_tasks {
 }
 lambda user.make_mixed_tasks {
 }
-function user.test_run_mixed_tasks() -> null throws never {
+function user.test_run_mixed_tasks() -> null throws int | string {
   { : null
     run_tasks(make_mixed_tasks()) : null
   }
