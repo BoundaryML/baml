@@ -405,6 +405,23 @@ mod tests {
     }
 
     #[test]
+    fn test_media_value_mime_type_roundtrip() {
+        let media = MediaValue::new(
+            baml_base::MediaKind::Image,
+            MediaContent::Base64 {
+                base64_data: "abc".to_string(),
+            },
+            None,
+        );
+        assert_eq!(media.mime_type(), None);
+        media.set_mime_type("image/png".to_string());
+        assert_eq!(media.mime_type().as_deref(), Some("image/png"));
+        // Overwrite
+        media.set_mime_type("image/jpeg".to_string());
+        assert_eq!(media.mime_type().as_deref(), Some("image/jpeg"));
+    }
+
+    #[test]
     fn test_media_content_base64_data() {
         let base64 = MediaContent::Base64 {
             base64_data: "abc123".to_string(),

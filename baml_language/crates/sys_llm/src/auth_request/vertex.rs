@@ -50,17 +50,16 @@ pub(crate) async fn auth_vertex(
     client: &PrimitiveClient,
     io: Arc<dyn RuntimeIo>,
 ) -> Result<(), BuildRequestError> {
-    // If an API key is provided as a query param, skip token-based auth.
-    if client.options.query_params.contains_key("key") {
-        return Ok(());
-    }
-
     let vertex_opts = match &client.provider_options {
         Some(ProviderOptions::VertexAi(opts)) => Some(opts.clone()),
         _ => None,
     };
 
-    // Resolve credentials once.
+    // If an API key is provided as a query param, skip token-based auth
+    // but still resolve the project-id placeholder in the URL.
+    let api_key_auth = client.options.query_params.contains_key("key");
+
+    // Resolve credentials once (needed for both project-id and token).
     let creds = resolve_credentials(vertex_opts.as_ref(), io.clone()).await?;
 
     // Resolve project_id placeholder in the URL if needed.
@@ -82,6 +81,11 @@ pub(crate) async fn auth_vertex(
             crate::build_request::google::VERTEX_PROJECT_ID_PLACEHOLDER,
             &project_id,
         );
+    }
+
+    // API-key auth doesn't need a bearer token.
+    if api_key_auth {
+        return Ok(());
     }
 
     let token = token_from_credentials(&creds, io).await?;

@@ -2018,6 +2018,22 @@ fn emit_result_conversion_simple(
                 )),
             }
         },
+        BamlType::Float => quote! {
+            match __val {
+                BexExternalValue::Float(v) => Ok(v),
+                other => Err(RuntimeIoError::Other(
+                    format!("expected float, got {}", other.type_name()),
+                )),
+            }
+        },
+        BamlType::Bool => quote! {
+            match __val {
+                BexExternalValue::Bool(v) => Ok(v),
+                other => Err(RuntimeIoError::Other(
+                    format!("expected bool, got {}", other.type_name()),
+                )),
+            }
+        },
         _ => quote! { Ok(__val) },
     }
 }

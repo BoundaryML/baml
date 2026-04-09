@@ -174,6 +174,8 @@ fn extract_provider_configs(source: &str) -> Vec<ProviderConfig> {
                         class_name,
                         fields,
                     });
+                } else {
+                    println!("cargo:warning=@providers annotation not followed by a class: {next}");
                 }
                 break;
             }

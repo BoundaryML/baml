@@ -99,13 +99,37 @@ impl io::IoClassHttpResponse for PlaygroundHttp {
         response: owned::http::Response,
         ctx: &SysOpContext,
     ) -> SysOpOutput<Vec<u8>> {
-        <sys_native::NativeSysOps as io::IoClassHttpResponse>::bytes(
+        let state = self.0.clone();
+        let key = response_body_key(&response);
+        let fetch_info = state.response_to_fetch.lock().unwrap().remove(&key);
+
+        let native_result = <sys_native::NativeSysOps as io::IoClassHttpResponse>::bytes(
             &sys_native::NativeSysOps,
             heap,
             call_id,
             response,
             ctx,
-        )
+        );
+
+        match fetch_info {
+            Some((cid, fetch_id)) => match native_result {
+                SysOpOutput::Async(fut) => SysOpOutput::async_op(async move {
+                    let bytes = fut.await?;
+                    let _ = state.broadcast_tx.send(WsOutMessage::FetchLogUpdate {
+                        call_id: cid,
+                        log_id: fetch_id,
+                        status: None,
+                        duration_ms: None,
+                        response_headers: None,
+                        response_body: Some(format!("<binary data: {} bytes>", bytes.len())),
+                        error: None,
+                    });
+                    Ok(bytes)
+                }),
+                other => other,
+            },
+            None => native_result,
+        }
     }
 }
 
