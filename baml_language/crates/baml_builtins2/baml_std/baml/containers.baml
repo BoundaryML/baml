@@ -72,11 +72,11 @@ class Map<K, V> {
     $rust_function
   }
 
-  function map_keys<U>(self, f: (K) -> U) -> U[] {
+  function map_keys<U>(self, f: (K) -> U throws never) -> U[] {
     self.keys().map(f)
   }
 
-  function map_values<U>(self, f: (V) -> U) -> U[] {
+  function map_values<U>(self, f: (V) -> U throws never) -> U[] {
     self.values().map(f)
   }
 }

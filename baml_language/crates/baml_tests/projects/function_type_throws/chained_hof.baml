@@ -2,6 +2,7 @@
 
 function apply_inner(f: () -> int) -> int { f() }
 
+// ERROR: callback parameter `g` has implicit effect polymorphism but is not directly invoked
 function apply_outer(g: () -> int) -> int {
   apply_inner(g)
 }

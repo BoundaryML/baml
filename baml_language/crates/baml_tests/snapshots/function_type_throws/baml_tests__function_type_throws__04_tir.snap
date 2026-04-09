@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 12476
 ---
 === TIR2 ===
 function user.test_array_map_pure() -> int[] throws never {
@@ -85,6 +84,7 @@ function user.apply_outer(g: () -> int throws __throws_g) -> int throws __throws
   { : int
     apply_inner(g) : int
   }
+  !! 224..234: callback parameter `g` has implicit effect polymorphism but is not directly invoked; call `g()` directly to propagate throws, or annotate with explicit `throws never` to opt out
 }
 function user.test_chained_pure() -> int throws never {
   { : int
@@ -179,6 +179,8 @@ function user.compose<A, B, C>(f: (A) -> B throws __throws_f, g: (B) -> C throws
           g(f(a))
         }
   }
+  !! 511..520: callback parameter `f` has implicit effect polymorphism but is not directly invoked; call `f()` directly to propagate throws, or annotate with explicit `throws never` to opt out
+  !! 526..535: callback parameter `g` has implicit effect polymorphism but is not directly invoked; call `g()` directly to propagate throws, or annotate with explicit `throws never` to opt out
 }
 lambda user.compose {
 }
@@ -890,6 +892,7 @@ function user.ignore_callback(f: () -> int throws __throws_f) -> int throws __th
   { : 42
     42 : 42
   }
+  !! 1700..1710: callback parameter `f` has implicit effect polymorphism but is not directly invoked; call `f()` directly to propagate throws, or annotate with explicit `throws never` to opt out
 }
 function user.test_ignore_callback_throwing() -> int throws never {
   { : int
@@ -907,6 +910,7 @@ function user.apply_aliased(f: () -> int throws __throws_f) -> int throws __thro
     let g = f : () -> int throws __throws_f
     g() : int
   }
+  !! 2077..2087: callback parameter `f` has implicit effect polymorphism but is not directly invoked; call `f()` directly to propagate throws, or annotate with explicit `throws never` to opt out
 }
 function user.test_apply_aliased_throwing() -> int throws never {
   { : int
@@ -923,6 +927,7 @@ function user.ignore_callback_but_throw(f: () -> int throws __throws_f) -> int t
   { : int
     helper_with_body_throw() : int
   }
+  !! 2426..2436: callback parameter `f` has implicit effect polymorphism but is not directly invoked; call `f()` directly to propagate throws, or annotate with explicit `throws never` to opt out
 }
 function user.test_ignore_callback_but_throw() -> int throws string {
   { : int
@@ -1385,7 +1390,8 @@ function user.test_store_direct_callback_param(f: () -> int throws __throws_f) -
     let stored = f : () -> int throws __throws_f
     stored() : int
   }
-  !! 2789..2790: function whose escaping throws are throws from callback parameter `f` cannot be stored in a position typed `throws never`; add an explicit `throws` annotation to the stored function type
+  !! 2835..2845: callback parameter `f` has implicit effect polymorphism but is not directly invoked; call `f()` directly to propagate throws, or annotate with explicit `throws never` to opt out
+  !! 2882..2883: function whose escaping throws are throws from callback parameter `f` cannot be stored in a position typed `throws never`; add an explicit `throws` annotation to the stored function type
 }
 class user.StoredPureHandler$stream {
   run: unknown

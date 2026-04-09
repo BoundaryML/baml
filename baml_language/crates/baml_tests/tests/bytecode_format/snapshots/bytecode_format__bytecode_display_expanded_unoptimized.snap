@@ -110,7 +110,7 @@ function testing.TestCollector.new(prefix: string) -> testing.TestCollector {
      9   return               
 }
 
-function testing.TestCollector.register_test(self: null, name: string, body: () -> null, runner: ((() -> testing.TestReport throws unknown) -> () -> testing.TestReport throws unknown)?) -> null {
+function testing.TestCollector.register_test(self: null, name: string, body: () -> null throws unknown, runner: ((() -> testing.TestReport throws unknown) -> () -> testing.TestReport throws unknown)?) -> null {
      0    load_var 1             (self)
      1    load_field 0           (prefix)
      2    load_const 0           ("")
@@ -209,7 +209,7 @@ function testing.TestCollector.register_test(self: null, name: string, body: () 
      95   jump -68               (to 27)
 }
 
-function testing.TestCollector.register_test_set(self: null, name: string, collector: (testing.TestCollector) -> null, runner: ((() -> testing.TestSetReport throws unknown) -> () -> testing.TestSetReport throws unknown)?) -> null {
+function testing.TestCollector.register_test_set(self: null, name: string, collector: (testing.TestCollector) -> null throws unknown, runner: ((() -> testing.TestSetReport throws unknown) -> () -> testing.TestSetReport throws unknown)?) -> null {
      0    load_var 1             (self)
      1    load_field 0           (prefix)
      2    load_const 0           ("")
@@ -609,7 +609,7 @@ function testing.TestRegistry.serialize(self: null) -> (testing.SerializedTest |
      100   jump -92                (to 8)
 }
 
-function testing.run_test(body: () -> null, runner: ((() -> testing.TestReport throws unknown) -> () -> testing.TestReport throws unknown)?) -> testing.TestReport {
+function testing.run_test(body: () -> null throws unknown, runner: ((() -> testing.TestReport throws unknown) -> () -> testing.TestReport throws unknown)?) -> testing.TestReport {
      0    load_var 1              
      1    make_cell               
      2    store_var 1             

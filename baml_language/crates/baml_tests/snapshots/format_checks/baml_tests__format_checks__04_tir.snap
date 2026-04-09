@@ -674,6 +674,7 @@ function user.DeepParamTypes(nested: map<string, map<string, map<string, int[]>>
   { : "done"
     "done" : "done"
   }
+  !! 2487..2543: callback parameter `callback` has implicit effect polymorphism but is not directly invoked; call `callback()` directly to propagate throws, or annotate with explicit `throws never` to opt out
 }
 function user.ConstrainedParams(name: string, score: int) -> string throws never {
   { : "done"
@@ -871,30 +872,30 @@ function user.DeepNestLongExpr(a: int, b: int, c: int, d: int) -> int throws nev
 }
 function user.LlmBasic(name: string) -> string throws never {
   baml.llm.call_llm_function<T>(GPT4, "LlmBasic", map { "name": name }) : string
-  !! 11311..11368: unresolved name: GPT4
+  !! 11324..11381: unresolved name: GPT4
 }
 function user.LlmBasic$render_prompt(name: string) -> baml.llm.PromptAst throws never {
   baml.llm.render_prompt(GPT4, "LlmBasic", map { "name": name }) : baml.llm.PromptAst
-  !! 11234..11368: unresolved name: GPT4
+  !! 11247..11381: unresolved name: GPT4
 }
 function user.LlmBasic$build_request(name: string) -> baml.http.Request throws never {
   baml.llm.build_request(GPT4, "LlmBasic", map { "name": name }) : baml.http.Request
-  !! 11234..11368: unresolved name: GPT4
+  !! 11247..11381: unresolved name: GPT4
 }
 function user.LlmBasic$parse(json: string) -> string throws never {
   baml.llm.parse<T>("LlmBasic", json) : string
 }
 function user.LlmMultiLine(text: string) -> string throws never {
   baml.llm.call_llm_function<T>(GPT4, "LlmMultiLine", map { "text": text }) : string
-  !! 11471..11593: unresolved name: GPT4
+  !! 11484..11606: unresolved name: GPT4
 }
 function user.LlmMultiLine$render_prompt(text: string) -> baml.llm.PromptAst throws never {
   baml.llm.render_prompt(GPT4, "LlmMultiLine", map { "text": text }) : baml.llm.PromptAst
-  !! 11368..11593: unresolved name: GPT4
+  !! 11381..11606: unresolved name: GPT4
 }
 function user.LlmMultiLine$build_request(text: string) -> baml.http.Request throws never {
   baml.llm.build_request(GPT4, "LlmMultiLine", map { "text": text }) : baml.http.Request
-  !! 11368..11593: unresolved name: GPT4
+  !! 11381..11606: unresolved name: GPT4
 }
 function user.LlmMultiLine$parse(json: string) -> string throws never {
   baml.llm.parse<T>("LlmMultiLine", json) : string
@@ -913,30 +914,30 @@ function user.LlmStringClient$parse(json: string) -> string throws never {
 }
 function user.LlmReversedOrder(text: string) -> string throws never {
   baml.llm.call_llm_function<T>(GPT4, "LlmReversedOrder", map { "text": text }) : string
-  !! 11871..11928: unresolved name: GPT4
+  !! 11884..11941: unresolved name: GPT4
 }
 function user.LlmReversedOrder$render_prompt(text: string) -> baml.llm.PromptAst throws never {
   baml.llm.render_prompt(GPT4, "LlmReversedOrder", map { "text": text }) : baml.llm.PromptAst
-  !! 11758..11928: unresolved name: GPT4
+  !! 11771..11941: unresolved name: GPT4
 }
 function user.LlmReversedOrder$build_request(text: string) -> baml.http.Request throws never {
   baml.llm.build_request(GPT4, "LlmReversedOrder", map { "text": text }) : baml.http.Request
-  !! 11758..11928: unresolved name: GPT4
+  !! 11771..11941: unresolved name: GPT4
 }
 function user.LlmReversedOrder$parse(json: string) -> string throws never {
   baml.llm.parse<T>("LlmReversedOrder", json) : string
 }
 function user.LlmWithLongSignature(first_context: string, second_context: string, third_context: string, user_query: string) -> string throws never {
   baml.llm.call_llm_function<T>(GPT4, "LlmWithLongSignature", map { "first_context": first_context, "second_context": second_context, "third_context": third_context, "user_query": user_query }) : string
-  !! 12113..12264: unresolved name: GPT4
+  !! 12126..12277: unresolved name: GPT4
 }
 function user.LlmWithLongSignature$render_prompt(first_context: string, second_context: string, third_context: string, user_query: string) -> baml.llm.PromptAst throws never {
   baml.llm.render_prompt(GPT4, "LlmWithLongSignature", map { "first_context": first_context, "second_context": second_context, "third_context": third_context, "user_query": user_query }) : baml.llm.PromptAst
-  !! 11928..12264: unresolved name: GPT4
+  !! 11941..12277: unresolved name: GPT4
 }
 function user.LlmWithLongSignature$build_request(first_context: string, second_context: string, third_context: string, user_query: string) -> baml.http.Request throws never {
   baml.llm.build_request(GPT4, "LlmWithLongSignature", map { "first_context": first_context, "second_context": second_context, "third_context": third_context, "user_query": user_query }) : baml.http.Request
-  !! 11928..12264: unresolved name: GPT4
+  !! 11941..12277: unresolved name: GPT4
 }
 function user.LlmWithLongSignature$parse(json: string) -> string throws never {
   baml.llm.parse<T>("LlmWithLongSignature", json) : string

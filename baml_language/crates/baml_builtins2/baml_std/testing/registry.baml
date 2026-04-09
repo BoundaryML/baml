@@ -23,7 +23,7 @@ class TestCollector {
     TestCollector { prefix: prefix, tests: [], testsets: [] }
   }
 
-  function register_test(self, name: string, body: () -> null, runner: TestRunner?) -> null {
+  function register_test(self, name: string, body: () -> null throws unknown, runner: TestRunner?) -> null {
     let full_name = if (self.prefix == "") { name } else { self.prefix + "/" + name }
     let count = 0
     let hash_prefix = full_name + "#"
@@ -35,7 +35,7 @@ class TestCollector {
     null
   }
 
-  function register_test_set(self, name: string, collector: (TestCollector) -> null, runner: TestSetRunner?) -> null {
+  function register_test_set(self, name: string, collector: (TestCollector) -> null throws unknown, runner: TestSetRunner?) -> null {
     let full_name = if (self.prefix == "") { name } else { self.prefix + "/" + name }
     let count = 0
     let hash_prefix = full_name + "#"
@@ -171,7 +171,7 @@ class TestRegistry {
 }
 
 // Run a single test with error handling and optional runner middleware.
-function run_test(body: () -> null, runner: TestRunner?) -> TestReport {
+function run_test(body: () -> null throws unknown, runner: TestRunner?) -> TestReport {
   let base_run = () -> TestReport {
     let start = baml.sys.now_ms()
     let result = {

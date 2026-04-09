@@ -74,7 +74,7 @@ function DeepFnReturn() -> (x: int) -> (y: int) -> (z: int) -> (w: int) -> map<s
 }
 
 // ===== Deeply nested param types =====
-function DeepParamTypes(nested: map<string, map<string, map<string, int[]>>>, callback: (x: int) -> (y: int) -> (z: int) -> string) -> string {
+function DeepParamTypes(nested: map<string, map<string, map<string, int[]>>>, callback: (x: int) -> (y: int) -> (z: int) -> string throws never) -> string {
     "done"
 }
 

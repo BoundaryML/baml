@@ -273,12 +273,12 @@ fn testing.TestCollector.new(prefix: string) -> testing.TestCollector {
     }
 }
 
-fn testing.TestCollector.register_test(self: testing.TestCollector, name: string, body: () -> null, runner: ((() -> testing.TestReport throws unknown) -> () -> testing.TestReport throws unknown)?) -> null {
+fn testing.TestCollector.register_test(self: testing.TestCollector, name: string, body: () -> null throws unknown, runner: ((() -> testing.TestReport throws unknown) -> () -> testing.TestReport throws unknown)?) -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: testing.TestCollector // self // param
     let _2: string // name // param
-    let _3: () -> null // body // param
+    let _3: () -> null throws unknown // body // param
     let _4: ((() -> testing.TestReport throws unknown) -> () -> testing.TestReport throws unknown)? // runner // param
     let _5: string // full_name
     let _6: bool
@@ -421,12 +421,12 @@ fn testing.TestCollector.register_test(self: testing.TestCollector, name: string
     }
 }
 
-fn testing.TestCollector.register_test_set(self: testing.TestCollector, name: string, collector: (testing.TestCollector) -> null, runner: ((() -> testing.TestSetReport throws unknown) -> () -> testing.TestSetReport throws unknown)?) -> null {
+fn testing.TestCollector.register_test_set(self: testing.TestCollector, name: string, collector: (testing.TestCollector) -> null throws unknown, runner: ((() -> testing.TestSetReport throws unknown) -> () -> testing.TestSetReport throws unknown)?) -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: testing.TestCollector // self // param
     let _2: string // name // param
-    let _3: (testing.TestCollector) -> null // collector // param
+    let _3: (testing.TestCollector) -> null throws unknown // collector // param
     let _4: ((() -> testing.TestSetReport throws unknown) -> () -> testing.TestSetReport throws unknown)? // runner // param
     let _5: string // full_name
     let _6: bool
@@ -569,10 +569,10 @@ fn testing.TestCollector.register_test_set(self: testing.TestCollector, name: st
     }
 }
 
-fn testing.run_test(body: () -> null, runner: ((() -> testing.TestReport throws unknown) -> () -> testing.TestReport throws unknown)?) -> testing.TestReport {
+fn testing.run_test(body: () -> null throws unknown, runner: ((() -> testing.TestReport throws unknown) -> () -> testing.TestReport throws unknown)?) -> testing.TestReport {
     // Locals:
     let _0: testing.TestReport // _0 // return
-    let _1: () -> null // body // param [captured]
+    let _1: () -> null throws unknown // body // param [captured]
     let _2: ((() -> testing.TestReport throws unknown) -> () -> testing.TestReport throws unknown)? // runner // param
     let _3: () -> testing.TestReport // base_run
     let _4: bool

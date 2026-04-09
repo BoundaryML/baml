@@ -60,6 +60,7 @@ function apply_underdeclared(f: () -> int) -> int throws never {
 }
 
 // Unused callback params should not widen the wrapper outward throws.
+// ERROR: callback parameter `f` has implicit effect polymorphism but is not directly invoked
 function ignore_callback(f: () -> int) -> int {
   42
 }
@@ -70,6 +71,7 @@ function test_ignore_callback_throwing() -> int {
 
 // Aliased callback invocation: the rethrow is NOT propagated because the
 // syntactic scan only recognizes direct `f()` calls.
+// ERROR: callback parameter `f` has implicit effect polymorphism but is not directly invoked
 function apply_aliased(f: () -> int) -> int {
   let g = f
   g()
@@ -80,6 +82,7 @@ function test_apply_aliased_throwing() -> int {
 }
 
 // Concrete body throws still escape even when the callback is never invoked.
+// ERROR: callback parameter `f` has implicit effect polymorphism but is not directly invoked
 function ignore_callback_but_throw(f: () -> int) -> int {
   helper_with_body_throw()
 }

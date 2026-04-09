@@ -1,6 +1,10 @@
 // === Compose HOF: nested higher-order functions with generics ===
 
-// Compose two functions, propagating throws from both
+// Compose two functions, propagating throws from both.
+// The callbacks f and g are captured by the returned lambda rather than being
+// directly invoked in the compose body, so they fire the unused effect var diagnostic.
+// ERROR: callback parameter `f` has implicit effect polymorphism but is not directly invoked
+// ERROR: callback parameter `g` has implicit effect polymorphism but is not directly invoked
 function compose<A, B, C>(
   f: (A) -> B,
   g: (B) -> C

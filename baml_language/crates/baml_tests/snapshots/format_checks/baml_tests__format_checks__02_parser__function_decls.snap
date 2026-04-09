@@ -634,6 +634,10 @@ SOURCE_FILE
               ARROW "->"
               TYPE_EXPR "string"
                 WORD "string"
+              THROWS_CLAUSE
+                KW_THROWS "throws"
+                TYPE_EXPR "never"
+                  WORD "never"
       R_PAREN ")"
     ARROW "->"
     TYPE_EXPR "string"

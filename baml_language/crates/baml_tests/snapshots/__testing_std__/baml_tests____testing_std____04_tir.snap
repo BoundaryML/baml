@@ -26,7 +26,7 @@ function testing.TestCollector.new(prefix: string) -> testing.TestCollector thro
     TestCollector { prefix: prefix, tests: [], testsets: [] } : testing.TestCollector
   }
 }
-function testing.TestCollector.register_test(self: testing.TestCollector, name: string, body: () -> null throws __throws_body, runner: testing.TestRunner?) -> null throws __throws_body {
+function testing.TestCollector.register_test(self: testing.TestCollector, name: string, body: () -> null throws unknown, runner: testing.TestRunner?) -> null throws never {
   { : null
     let full_name = : string
       if (self.prefix == "" : bool) : string
@@ -63,7 +63,7 @@ function testing.TestCollector.register_test(self: testing.TestCollector, name: 
     null : null
   }
 }
-function testing.TestCollector.register_test_set(self: testing.TestCollector, name: string, collector: (testing.TestCollector) -> null throws __throws_collector, runner: testing.TestSetRunner?) -> null throws __throws_collector {
+function testing.TestCollector.register_test_set(self: testing.TestCollector, name: string, collector: (testing.TestCollector) -> null throws unknown, runner: testing.TestSetRunner?) -> null throws never {
   { : null
     let full_name = : string
       if (self.prefix == "" : bool) : string
@@ -160,7 +160,7 @@ function testing.TestRegistry.serialize(self: testing.TestRegistry) -> testing.S
     return items : testing.SerializedTestDef[]
   }
 }
-function testing.TestRegistry.run_test(self: testing.TestRegistry, name: string) -> testing.TestReport throws string | unknown | unknown {
+function testing.TestRegistry.run_test(self: testing.TestRegistry, name: string) -> testing.TestReport throws string | unknown {
   { : never
     for t in self.collector.tests
       { : void
@@ -206,7 +206,7 @@ function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: strin
     throw "TestSet not found..." + name : string
   }
 }
-function testing.run_test(body: () -> null throws __throws_body, runner: testing.TestRunner?) -> testing.TestReport throws __throws_body | unknown {
+function testing.run_test(body: () -> null throws unknown, runner: testing.TestRunner?) -> testing.TestReport throws unknown {
   { : testing.TestReport
     let base_run = : () -> testing.TestReport
       () -> TestReport { ... } : () -> testing.TestReport

@@ -150,6 +150,13 @@ pub enum TirTypeError {
         /// The inferred throws type of the actual function being stored.
         actual_throws: Ty,
     },
+    /// A callback parameter has implicit effect polymorphism (synthetic
+    /// `__throws_<param>` var) but is never directly invoked in the function
+    /// body.  The effect var is silently dropped, breaking the A+B contract.
+    UnusedCallbackEffectVar {
+        /// The name of the callback parameter.
+        param_name: Name,
+    },
 }
 
 impl fmt::Display for TirTypeError {
@@ -340,6 +347,14 @@ impl fmt::Display for TirTypeError {
                     f,
                     "function whose escaping throws are {actual_throws} cannot be stored in a position typed `throws never`; \
                      add an explicit `throws` annotation to the stored function type"
+                )
+            }
+            TirTypeError::UnusedCallbackEffectVar { param_name } => {
+                write!(
+                    f,
+                    "callback parameter `{param_name}` has implicit effect polymorphism but is not directly invoked; \
+                     call `{param_name}()` directly to propagate throws, \
+                     or annotate with explicit `throws never` to opt out"
                 )
             }
         }

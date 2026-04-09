@@ -26,7 +26,9 @@ use text_size::TextRange;
 
 use crate::{
     builder::TypeInferenceBuilder,
-    callable_boundary::{LoweredCallableBoundary, lower_callable_boundary},
+    callable_boundary::{
+        LoweredCallableBoundary, directly_invoked_callback_params, lower_callable_boundary,
+    },
     infer_context::{InferContext, TypeCheckDiagnostics},
     ty::{Ty, TyAttr},
 };
@@ -362,7 +364,7 @@ pub fn infer_scope_types<'db>(
                             params,
                             ret: return_ty,
                             explicit_throws,
-                            direct_callback_effect_vars: _,
+                            direct_callback_effect_vars,
                             param_diagnostics,
                             ret_diagnostics,
                             throws_diagnostics,
@@ -416,6 +418,37 @@ pub fn infer_scope_types<'db>(
                                 }
                             }
                             builder.add_local(param_name.clone(), param_ty.clone());
+                        }
+
+                        // Check for callback params that generate effect vars
+                        // but are never directly invoked — this is a soundness hole.
+                        if !direct_callback_effect_vars.is_empty() {
+                            let invoked = directly_invoked_callback_params(expr_body);
+                            for effect_var in &direct_callback_effect_vars {
+                                if !invoked.contains(&effect_var.param_name) {
+                                    // Find the param index to get the right span.
+                                    let param_idx = sig
+                                        .params
+                                        .iter()
+                                        .position(|(name, _)| name == &effect_var.param_name);
+                                    let span = param_idx
+                                        .and_then(|i| {
+                                            sig_sm
+                                                .param_type_spans
+                                                .get(i)
+                                                .copied()
+                                                .flatten()
+                                                .or_else(|| sig_sm.param_spans.get(i).copied())
+                                        })
+                                        .unwrap_or(func_data.span);
+                                    builder.report_at_span(
+                                        crate::infer_context::TirTypeError::UnusedCallbackEffectVar {
+                                            param_name: effect_var.param_name.clone(),
+                                        },
+                                        span,
+                                    );
+                                }
+                            }
                         }
 
                         // Check root expression against declared return type

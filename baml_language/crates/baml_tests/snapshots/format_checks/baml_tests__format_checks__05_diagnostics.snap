@@ -308,6 +308,16 @@ source: crates/baml_tests/src/generated_tests.rs
     │ Note: Error code: E0001
 ────╯
 
+  [type] Error: callback parameter `callback` has implicit effect polymorphism but is not directly invoked; call `callback()` directly to propagate throws, or annotate with explicit `throws never` to opt out
+    ╭─[ function_decls.baml:77:88 ]
+    │
+ 77 │ function DeepParamTypes(nested: map<string, map<string, map<string, int[]>>>, callback: (x: int) -> (y: int) -> (z: int) -> string throws never) -> string {
+    │                                                                                        ────────────────────────────┬───────────────────────────  
+    │                                                                                                                    ╰───────────────────────────── callback parameter `callback` has implicit effect polymorphism but is not directly invoked; call `callback()` directly to propagate throws, or annotate with explicit `throws never` to opt out
+    │ 
+    │ Note: Error code: E0001
+────╯
+
   [type] Error: unresolved name: GPT4
      ╭─[ function_decls.baml:457:2 ]
      │

@@ -301,6 +301,8 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::NullableMemberAccess { .. } => DiagnosticId::TypeMismatch,
         // Stored function throws mismatch
         TirTypeError::StoredFunctionRequiresExplicitThrows { .. } => DiagnosticId::TypeMismatch,
+        // Unused callback effect var (implicit effect polymorphism not exercised)
+        TirTypeError::UnusedCallbackEffectVar { .. } => DiagnosticId::TypeMismatch,
     }
 }
 
