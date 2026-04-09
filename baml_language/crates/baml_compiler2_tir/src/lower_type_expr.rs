@@ -145,6 +145,9 @@ pub fn lower_type_expr_in_ns(
         TypeExpr::Never { .. } => Ty::Never {
             attr: TyAttr::default(),
         },
+        TypeExpr::Void { .. } => Ty::Void {
+            attr: TyAttr::default(),
+        },
         TypeExpr::Uint8Array { .. } => Ty::Primitive(PrimitiveType::Uint8Array, TyAttr::default()),
         TypeExpr::Media { kind, .. } => Ty::Primitive(
             match kind {

@@ -352,6 +352,7 @@ fn lower_from_type_name(name: &str) -> TypeExpr {
         "bool" => TypeExpr::Bool { attrs: vec![] },
         "null" => TypeExpr::Null { attrs: vec![] },
         "never" => TypeExpr::Never { attrs: vec![] },
+        "void" => TypeExpr::Void { attrs: vec![] },
         "unknown" => TypeExpr::BuiltinUnknown { attrs: vec![] },
         "type" => TypeExpr::Type { attrs: vec![] },
         "$rust_type" => TypeExpr::Rust { attrs: vec![] },

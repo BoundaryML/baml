@@ -2,32 +2,12 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] Error: unresolved type: void
-   ╭─[ void_function_type.baml:2:16 ]
-   │
- 2 │ type Callback = (int) -> void
-   │                ───────┬──────  
-   │                       ╰──────── unresolved type: void
-   │ 
-   │ Note: Error code: E0002
-───╯
-
-  [type] Error: unresolved type: void
-   ╭─[ void_lambda.baml:3:16 ]
-   │
- 3 │   let f = () -> void { };
-   │                ──┬──  
-   │                  ╰──── unresolved type: void
-   │ 
-   │ Note: Error code: E0001
-───╯
-
-  [type] Error: unresolved type: void
-    ╭─[ void_lambda.baml:10:16 ]
+  [type] Error: `if` without `else` cannot be used as a value; add an `else` branch
+    ╭─[ void_function_type.baml:12:16 ]
     │
- 10 │   let f = () -> void { };
+ 12 │   let result = cb(1);
     │                ──┬──  
-    │                  ╰──── unresolved type: void
+    │                  ╰──── `if` without `else` cannot be used as a value; add an `else` branch
     │ 
     │ Note: Error code: E0001
 ────╯
@@ -42,36 +22,6 @@ source: crates/baml_tests/src/generated_tests.rs
     │ Note: Error code: E0001
 ────╯
 
-  [type] Error: unresolved type: void
-    ╭─[ void_lambda.baml:17:22 ]
-    │
- 17 │   let f = (x: int) -> void { x; };
-    │                      ──┬──  
-    │                        ╰──── unresolved type: void
-    │ 
-    │ Note: Error code: E0001
-────╯
-
-  [type] Error: unresolved type: void
-   ╭─[ void_return_type.baml:2:27 ]
-   │
- 2 │ function do_nothing() -> void {
-   │                           ──┬──  
-   │                             ╰──── unresolved type: void
-   │ 
-   │ Note: Error code: E0001
-───╯
-
-  [type] Error: unresolved type: void
-   ╭─[ void_return_type.baml:6:26 ]
-   │
- 6 │ function do_return() -> void {
-   │                          ──┬──  
-   │                            ╰──── unresolved type: void
-   │ 
-   │ Note: Error code: E0001
-───╯
-
   [parse] Error: Expected expression, found ';'
    ╭─[ void_return_type.baml:8:1 ]
    │
@@ -82,63 +32,32 @@ source: crates/baml_tests/src/generated_tests.rs
    │ Note: Error code: E0010
 ───╯
 
-  [type] Error: unresolved type: void
-    ╭─[ void_return_type.baml:11:30 ]
+  [type] Error: type mismatch: expected void, got 42
+    ╭─[ void_return_type.baml:12:12 ]
     │
- 11 │ function do_bad_return() -> void {
-    │                              ──┬──  
-    │                                ╰──── unresolved type: void
+ 12 │   return 42;
+    │            ─┬  
+    │             ╰── type mismatch: expected void, got 42
     │ 
     │ Note: Error code: E0001
 ────╯
 
-  [type] Error: unresolved type: void
-    ╭─[ void_return_type.baml:28:37 ]
+  [type] Error: `if` without `else` cannot be used as a value; add an `else` branch
+    ╭─[ void_return_type.baml:17:13 ]
     │
- 28 │ ╭─▶ function side_effects(x: int) -> void {
- 29 │ ├─▶   let y = x + 1;
-    │ │                      
-    │ ╰────────────────────── unresolved type: void
-    │     
-    │     Note: Error code: E0001
+ 17 │   let x = do_nothing();
+    │             ──────┬─────  
+    │                   ╰─────── `if` without `else` cannot be used as a value; add an `else` branch
+    │ 
+    │ Note: Error code: E0001
 ────╯
 
-  [type] Error: unresolved type: void
-   ╭─[ void_type_position_errors.baml:2:22 ]
-   │
- 2 │ function bad_param(x: void) -> int {
-   │                      ──┬──  
-   │                        ╰──── unresolved type: void
-   │ 
-   │ Note: Error code: E0001
-───╯
-
-  [type] Error: unresolved type: void
-   ╭─[ void_type_position_errors.baml:8:9 ]
+  [type] Error: type mismatch: expected void, got 1
+   ╭─[ void_type_position_errors.baml:8:17 ]
    │
  8 │   let x: void = 1;
-   │         ──┬──  
-   │           ╰──── unresolved type: void
+   │                 ┬  
+   │                 ╰── type mismatch: expected void, got 1
    │ 
    │ Note: Error code: E0001
 ───╯
-
-  [type] Error: unresolved type: void
-    ╭─[ void_type_position_errors.baml:13:27 ]
-    │
- 13 │ function bad_optional() -> void? {
-    │                           ───┬──  
-    │                              ╰──── unresolved type: void
-    │ 
-    │ Note: Error code: E0001
-────╯
-
-  [type] Error: unresolved type: void
-    ╭─[ void_type_position_errors.baml:18:23 ]
-    │
- 18 │ function bad_list() -> void[] {
-    │                       ───┬───  
-    │                          ╰───── unresolved type: void
-    │ 
-    │ Note: Error code: E0001
-────╯
