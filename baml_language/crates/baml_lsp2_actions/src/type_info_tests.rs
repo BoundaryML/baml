@@ -253,4 +253,109 @@ function <[CURSOR]many_handlers(hs: Handler<int>[]) -> null {
             "Param type should render as Handler<int>[], got: {md}"
         );
     }
+
+    // ── Throws display in hover ─────────────────────────────────────────────
+
+    #[test]
+    fn hover_function_no_throws_omits_throws_clause() {
+        let test = CursorTest::new(
+            r#"
+function <[CURSOR]safe_fn(x: int) -> string {
+    "hello"
+}
+"#,
+        );
+        let info = test.type_info().expect("should resolve");
+        match &info {
+            TypeInfo::Function { throws, .. } => {
+                assert_eq!(
+                    throws, &None,
+                    "Non-throwing function should have throws: None"
+                );
+            }
+            other => panic!("Expected TypeInfo::Function, got: {other:?}"),
+        }
+        let md = info.to_hover_markdown();
+        assert!(
+            !md.contains("throws"),
+            "Non-throwing function hover should not contain 'throws', got: {md}"
+        );
+    }
+
+    #[test]
+    fn hover_function_with_declared_throws() {
+        let test = CursorTest::new(
+            r#"
+function <[CURSOR]risky_fn(x: int) -> string throws string {
+    "hello"
+}
+"#,
+        );
+        let info = test.type_info().expect("should resolve");
+        match &info {
+            TypeInfo::Function { throws, .. } => {
+                assert!(
+                    throws.is_some(),
+                    "Function with declared throws should have throws: Some(...)"
+                );
+                assert_eq!(throws.as_deref(), Some("string"));
+            }
+            other => panic!("Expected TypeInfo::Function, got: {other:?}"),
+        }
+        let md = info.to_hover_markdown();
+        assert!(
+            md.contains("throws string"),
+            "Hover should contain 'throws string', got: {md}"
+        );
+    }
+
+    #[test]
+    fn hover_function_with_inferred_throws_from_member_call() {
+        // use_handler calls h.run() which throws string — the inferred throws
+        // should propagate and appear in the hover.
+        let test = CursorTest::new(
+            r#"
+class Handler<E> {
+    run: () -> null throws E
+}
+
+function <[CURSOR]use_handler(h: Handler<string>) -> null {
+    h.run()
+}
+"#,
+        );
+        let info = test.type_info().expect("should resolve");
+        match &info {
+            TypeInfo::Function { throws, .. } => {
+                assert!(
+                    throws.is_some(),
+                    "Function with inferred throws should have throws: Some(...)"
+                );
+                assert_eq!(throws.as_deref(), Some("string"));
+            }
+            other => panic!("Expected TypeInfo::Function, got: {other:?}"),
+        }
+        let md = info.to_hover_markdown();
+        assert!(
+            md.contains("throws string"),
+            "Hover should show inferred 'throws string', got: {md}"
+        );
+    }
+
+    #[test]
+    fn hover_function_with_declared_union_throws() {
+        let test = CursorTest::new(
+            r#"
+function <[CURSOR]multi_throw(x: int) -> string throws string | int {
+    "hello"
+}
+"#,
+        );
+        let info = test.type_info().expect("should resolve");
+        let md = info.to_hover_markdown();
+        assert!(
+            md.contains("throws"),
+            "Hover should contain throws clause, got: {md}"
+        );
+    }
 }

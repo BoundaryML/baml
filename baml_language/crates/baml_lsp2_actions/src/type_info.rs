@@ -52,11 +52,14 @@ use crate::{Db, utils};
 /// different output contexts (markdown, plain text, etc.).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TypeInfo {
-    /// A function definition: name, parameters (name + type string), return type.
+    /// A function definition: name, parameters (name + type string), return type, throws.
     Function {
         name: String,
         params: Vec<(String, String)>,
         return_type: Option<String>,
+        /// `None` = throws never (omitted from display).
+        /// `Some("string")` = declared or inferred throws.
+        throws: Option<String>,
     },
     /// A class definition: name, fields (name + type string).
     Class {
@@ -85,6 +88,7 @@ impl TypeInfo {
                 name,
                 params,
                 return_type,
+                throws,
             } => {
                 let param_strs: Vec<String> =
                     params.iter().map(|(n, t)| format!("{n}: {t}")).collect();
@@ -92,11 +96,16 @@ impl TypeInfo {
                     .as_deref()
                     .map(|r| format!(" -> {r}"))
                     .unwrap_or_default();
+                let throws_str = throws
+                    .as_deref()
+                    .map(|t| format!(" throws {t}"))
+                    .unwrap_or_default();
                 format!(
-                    "```baml\nfunction {}({}){}\n```",
+                    "```baml\nfunction {}({}){}{}\n```",
                     name,
                     param_strs.join(", "),
-                    ret
+                    ret,
+                    throws_str,
                 )
             }
             TypeInfo::Class { name, fields } => {
@@ -216,10 +225,17 @@ fn type_info_for_definition(db: &dyn Db, def: Definition<'_>) -> TypeInfo {
                 })
                 .collect();
             let return_type = sig.return_type.as_ref().map(utils::display_type_expr);
+
+            // Compute throws: prefer inferred/transitive throws from TIR, fall back
+            // to declared throws from the signature.
+            let throws = inferred_throws_for_function(db, func_loc, func_data)
+                .or_else(|| sig.throws.as_ref().map(utils::display_type_expr));
+
             TypeInfo::Function {
                 name: func_name,
                 params,
                 return_type,
+                throws,
             }
         }
 
@@ -340,6 +356,34 @@ fn type_info_for_definition(db: &dyn Db, def: Definition<'_>) -> TypeInfo {
             }
         }
     }
+}
+
+// ── inferred throws ──────────────────────────────────────────────────────────
+
+/// Get the inferred (transitive) throws for a function, rendered as a display string.
+///
+/// Returns `None` when the function throws `never` (empty throw set).
+fn inferred_throws_for_function(
+    db: &dyn Db,
+    func_loc: baml_compiler2_hir::loc::FunctionLoc<'_>,
+    func_data: &baml_compiler2_hir::item_tree::Function,
+) -> Option<String> {
+    let pkg_info = baml_compiler2_hir::file_package::file_package(db, func_loc.file(db));
+    let pkg_id = baml_compiler2_hir::package::PackageId::new(db, pkg_info.package);
+    let throw_sets = baml_compiler2_tir::throw_inference::function_throw_sets(db, pkg_id);
+
+    let key = baml_compiler2_tir::throw_inference::throw_set_key(
+        &pkg_info.namespace_path,
+        &func_data.name,
+    );
+
+    let facts = throw_sets.transitive_for(&key)?;
+    if facts.is_empty() {
+        return None;
+    }
+
+    let parts: Vec<String> = facts.iter().map(utils::display_ty).collect();
+    Some(parts.join(" | "))
 }
 
 // ── local_type_info ───────────────────────────────────────────────────────────
