@@ -58,15 +58,20 @@ pub(crate) async fn auth_vertex(
     // If an API key is provided as a query param, skip token-based auth
     // but still resolve the project-id placeholder in the URL.
     let api_key_auth = client.options.query_params.contains_key("key");
+    let needs_project_id = request
+        .url
+        .contains(crate::build_request::google::VERTEX_PROJECT_ID_PLACEHOLDER);
+
+    // With API-key auth and no project-id placeholder, no credentials needed.
+    if api_key_auth && !needs_project_id {
+        return Ok(());
+    }
 
     // Resolve credentials once (needed for both project-id and token).
     let creds = resolve_credentials(vertex_opts.as_ref(), io.clone()).await?;
 
     // Resolve project_id placeholder in the URL if needed.
-    if request
-        .url
-        .contains(crate::build_request::google::VERTEX_PROJECT_ID_PLACEHOLDER)
-    {
+    if needs_project_id {
         let project_id = project_id_from_credentials(&creds, &*io)
             .await
             .ok_or_else(|| {

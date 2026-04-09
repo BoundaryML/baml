@@ -113,14 +113,15 @@ fn extract_class_fields(source: &str, class_name: &str) -> Vec<String> {
     let mut brace_depth = 1;
 
     for line in body.lines() {
-        let trimmed = line.trim();
-        brace_depth += trimmed.chars().filter(|&c| c == '{').count();
-        brace_depth -= trimmed.chars().filter(|&c| c == '}').count();
+        // Strip inline comments before counting braces.
+        let code = line.split_once("//").map_or(line, |(code, _)| code).trim();
+        brace_depth += code.chars().filter(|&c| c == '{').count();
+        brace_depth -= code.chars().filter(|&c| c == '}').count();
         if brace_depth == 0 {
             break;
         }
-        // Skip empty lines, comments, and nested blocks (functions, etc.)
-        if trimmed.is_empty() || trimmed.starts_with("//") || trimmed.starts_with("function ") {
+        // Skip empty lines and nested blocks (functions, etc.)
+        if code.is_empty() || code.starts_with("function ") {
             continue;
         }
         // Skip lines that are inside nested blocks (brace_depth > 1)
@@ -128,7 +129,7 @@ fn extract_class_fields(source: &str, class_name: &str) -> Vec<String> {
             continue;
         }
         // Field line: first word is the field name
-        if let Some(name) = trimmed.split_whitespace().next() {
+        if let Some(name) = code.split_whitespace().next() {
             // Skip keywords
             if name == "class" || name == "}" || name == "{" {
                 continue;
