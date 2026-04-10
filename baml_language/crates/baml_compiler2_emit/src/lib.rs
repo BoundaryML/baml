@@ -410,9 +410,11 @@ pub fn generate_project_bytecode_with_opt(
             let mut compiled_fn = match &mir.kind {
                 MirFunctionKind::Bytecode(body) => {
                     // Compile lambda children first, collecting their ObjectPool indices.
+                    let source_file = file.path(db).display().to_string();
                     let lambda_info = compile_lambdas_flat(
                         &mir.lambdas,
                         &line_starts,
+                        &source_file,
                         &globals,
                         &classes,
                         &class_object_indices,
@@ -438,7 +440,7 @@ pub fn generate_project_bytecode_with_opt(
                     let mut f =
                         compile_mir_function(body, mir.arity, mir.span, &line_starts, ctx, opt);
                     f.name.clone_from(&fq_name);
-                    f.source_file = file.path(db).display().to_string();
+                    f.source_file.clone_from(&source_file);
                     f
                 }
                 MirFunctionKind::Builtin(BuiltinKind::Io) => {
@@ -1066,6 +1068,7 @@ fn topological_sort_lets<'db>(
 fn compile_lambdas_flat(
     lambdas: &[baml_compiler2_mir::MirFunction],
     line_starts: &[u32],
+    source_file: &str,
     globals: &HashMap<String, usize>,
     classes: &HashMap<String, HashMap<String, usize>>,
     class_object_indices: &HashMap<String, usize>,
@@ -1083,6 +1086,7 @@ fn compile_lambdas_flat(
                 let nested_info = compile_lambdas_flat(
                     &lambda.lambdas,
                     line_starts,
+                    source_file,
                     globals,
                     classes,
                     class_object_indices,
@@ -1108,6 +1112,7 @@ fn compile_lambdas_flat(
                 let mut f =
                     compile_mir_function(body, lambda.arity, lambda.span, line_starts, ctx, opt);
                 f.name.clone_from(&lambda_name);
+                f.source_file = source_file.to_string();
                 let idx = objects.len();
                 objects.push(Object::Function(Box::new(f)));
                 idx
@@ -1160,9 +1165,11 @@ fn compile_init_function<'db>(
             Some((mir_body, lambdas)) => {
                 let line_starts = build_line_starts(file.text(db));
                 // Compile lambda children first and collect their object indices.
+                let source_file = file.path(db).display().to_string();
                 let lambda_info = compile_lambdas_flat(
                     &lambdas,
                     &line_starts,
+                    &source_file,
                     globals,
                     classes,
                     class_object_indices,
@@ -1187,7 +1194,7 @@ fn compile_init_function<'db>(
                 };
                 let mut helper = compile_mir_function(&mir_body, 0, None, &line_starts, ctx, opt);
                 helper.name = format!("$init_let_{i}");
-                helper.source_file = file.path(db).display().to_string();
+                helper.source_file.clone_from(&source_file);
                 helper.arity = 0;
                 helper
             }

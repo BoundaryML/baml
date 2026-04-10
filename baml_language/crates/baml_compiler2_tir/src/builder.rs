@@ -1734,8 +1734,13 @@ impl<'db> TypeInferenceBuilder<'db> {
                     });
                 self.bindings.insert(st_binding, st_ty.clone());
                 // Also insert into locals so name resolution finds it.
-                if let baml_compiler2_ast::Pattern::Binding(name) = &body.patterns[st_binding] {
-                    self.locals.insert(name.clone(), st_ty);
+                let st_name = match &body.patterns[st_binding] {
+                    baml_compiler2_ast::Pattern::Binding(name) => Some(name.clone()),
+                    baml_compiler2_ast::Pattern::TypedBinding { name, .. } => Some(name.clone()),
+                    _ => None,
+                };
+                if let Some(name) = st_name {
+                    self.locals.insert(name, st_ty);
                 }
             }
 

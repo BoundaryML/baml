@@ -138,7 +138,7 @@ pub enum VmError {
     #[error("uncaught throw: {value:?}")]
     ThrownUnhandled {
         value: Value,
-        trace: Vec<ErrorLocation>,
+        trace: Vec<StackFrame>,
     },
     /// Fatal VM errors
     #[error("{0}")]
@@ -159,7 +159,7 @@ pub enum VmRustFnError {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct ErrorLocation {
+pub struct StackFrame {
     pub function_name: String,
     /// Filesystem path of the source file containing this function.
     /// Empty string for builtins and synthesized functions.

@@ -30,7 +30,7 @@ use bex_vm_types::{
 use indexmap::IndexMap;
 
 use crate::{
-    errors::{ErrorLocation, VmBamlError, VmError, VmInternalError, VmPanic, VmRustFnError},
+    errors::{StackFrame, VmBamlError, VmError, VmInternalError, VmPanic, VmRustFnError},
     indexable::{EvalStack, EvalStackTrait},
     package_baml::{BamlPackageBaml, NativeFunction},
     types::ObjectTrait,
@@ -1045,8 +1045,7 @@ impl BexVm {
     /// Allocates one `baml.errors.StackFrame` per frame, an array to hold them,
     /// and the outer `StackTrace` wrapper. Only called when a catch handler binds
     /// a `stack_trace` parameter.
-    #[allow(dead_code)] // Used in Phase 5 when catch (e, st) is wired up.
-    pub(crate) fn alloc_stack_trace(&mut self, trace: &[ErrorLocation]) -> Value {
+    pub(crate) fn alloc_stack_trace(&mut self, trace: &[StackFrame]) -> Value {
         // Build StackFrame instances (fields: file, line, function_name)
         let frames: Vec<Value> = trace
             .iter()
@@ -1122,14 +1121,14 @@ impl BexVm {
         // Capture the stack trace before unwinding destroys frame information.
         // We build it inline rather than calling stack_trace() to avoid
         // constructing a StackTrace wrapper we don't need.
-        let trace: Vec<ErrorLocation> = self
+        let trace: Vec<StackFrame> = self
             .frames
             .iter()
             .filter_map(|frame| {
                 let func = self.get_object(frame.function).as_callable().ok()?;
                 let last_pc = frame.instruction_ptr.saturating_sub(1);
                 let error_line = func.bytecode.source_line_for_pc(last_pc);
-                Some(ErrorLocation {
+                Some(StackFrame {
                     function_name: func.name.clone(),
                     file_path: func.source_file.clone(),
                     function_span: func.span,

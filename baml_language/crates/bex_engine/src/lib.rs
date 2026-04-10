@@ -249,7 +249,7 @@ pub enum EngineError {
     #[error("{}", format_unhandled_throw(value, trace))]
     UnhandledThrow {
         value: Box<BexExternalValue>,
-        trace: Vec<bex_vm::ErrorLocation>,
+        trace: Vec<bex_vm::StackFrame>,
     },
 
     #[error("Cannot convert object of type {type_name}")]
@@ -275,7 +275,7 @@ pub enum EngineError {
     InitFailed(String),
 }
 
-fn format_unhandled_throw(value: &BexExternalValue, trace: &[bex_vm::ErrorLocation]) -> String {
+fn format_unhandled_throw(value: &BexExternalValue, trace: &[bex_vm::StackFrame]) -> String {
     use std::fmt::Write;
     let mut out = bex_vm::format_traceback(trace.iter().map(|loc| {
         (
