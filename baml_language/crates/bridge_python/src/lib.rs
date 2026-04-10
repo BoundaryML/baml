@@ -28,7 +28,7 @@ fn flush_events() {
 }
 
 #[pymodule]
-fn baml_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
+fn baml(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<abort_controller::AbortController>()?;
     m.add_class::<handle::BamlHandle>()?;
     m.add_class::<runtime::BamlRuntime>()?;

@@ -1,6 +1,6 @@
 # BAML Python error types.
 #
-# These re-export the native exceptions defined in the Rust baml_py module.
+# These re-export the native exceptions defined in the Rust baml module.
 
 from .baml import (
     BamlError,

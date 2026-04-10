@@ -1,5 +1,26 @@
 pub use baml_codegen_types::Object;
 use baml_codegen_types::{Name, Namespace, Ty};
+use smol_str::SmolStr;
+
+/// Result of parsing a `"foo.FuncName"` style function name.
+pub struct ParsedFnName {
+    pub bare_name: String,
+    pub namespace: Namespace,
+}
+
+/// Parse a string function name that may include a leading path (e.g. `"foo.ClassifySentiment"`).
+/// The last segment is the bare function name; leading segments form the namespace path.
+/// The namespace is always `Types { path: [...] }`.
+pub fn parse_fn_name(s: &str) -> ParsedFnName {
+    let segs: Vec<&str> = s.split('.').collect();
+    let (bare_name, path_segs) = segs.split_last().unwrap();
+    ParsedFnName {
+        bare_name: bare_name.to_string(),
+        namespace: Namespace::Types {
+            path: path_segs.iter().map(|s| SmolStr::new(s)).collect(),
+        },
+    }
+}
 
 /// Parse a type string into a `Ty`.
 ///
@@ -46,12 +67,33 @@ fn parse_ty(s: &str) -> Ty {
         return parse_ty(inner);
     }
 
-    // Handle stream_state<T>
+    // Handle stream_state<T> — kept for backward compat with existing fixtures,
+    // but produces Ty::Class since the Checked/StreamState variants are gone.
     if let Some(inner) = s
         .strip_prefix("stream_state<")
         .and_then(|s| s.strip_suffix('>'))
     {
-        return Ty::StreamState(Box::new(parse_ty(inner.trim())));
+        // Wrap as Optional to approximate partial-streaming semantics in tests.
+        return Ty::Optional(Box::new(parse_ty(inner.trim())));
+    }
+
+    // Handle callable<[P1, P2, ...], Ret>
+    if let Some(inner) = s
+        .strip_prefix("callable<")
+        .and_then(|s| s.strip_suffix('>'))
+    {
+        // inner = "[P1, P2, ...], Ret"
+        if let Some(bracket_end) = inner.find(']') {
+            let params_str = &inner[1..bracket_end]; // strip leading '['
+            let ret_str = inner[bracket_end + 1..].trim_start_matches(',').trim();
+            let params = if params_str.trim().is_empty() {
+                vec![]
+            } else {
+                params_str.split(',').map(|p| parse_ty(p.trim())).collect()
+            };
+            let ret = Box::new(parse_ty(ret_str));
+            return Ty::Callable { params, ret };
+        }
     }
 
     // Handle map<K, V>
@@ -87,12 +129,18 @@ fn parse_ty(s: &str) -> Ty {
         return Ty::Literal(baml_base::Literal::Float(s.to_string()));
     }
 
-    // - String literals: 'hello', 'draft'
+    // - String literals: 'hello', 'draft'  or  string("Hello")
     if let Some(string_val) = s.strip_prefix('\'').and_then(|s| s.strip_suffix('\'')) {
         return Ty::Literal(baml_base::Literal::String(string_val.to_string()));
     }
+    if let Some(inner) = s
+        .strip_prefix("string(\"")
+        .and_then(|s| s.strip_suffix("\")"))
+    {
+        return Ty::Literal(baml_base::Literal::String(inner.to_string()));
+    }
 
-    // Handle primitives
+    // Handle primitives and unknown
     match s {
         "int" => Ty::Int,
         "float" => Ty::Float,
@@ -100,6 +148,7 @@ fn parse_ty(s: &str) -> Ty {
         "bool" => Ty::Bool,
         "null" => Ty::Null,
         "void" | "unit" => Ty::Unit,
+        "unknown" => Ty::BuiltinUnknown,
         "image" => Ty::Media(baml_base::MediaKind::Image),
         "audio" => Ty::Media(baml_base::MediaKind::Audio),
         "video" => Ty::Media(baml_base::MediaKind::Video),
@@ -193,24 +242,37 @@ fn split_at_depth(s: &str, delimiter: char) -> Option<(&str, &str)> {
 
 /// Parse a name string into a `Name`.
 ///
-/// Handles explicit namespaces like `"types.User"` or `"stream_types.PartialUser"`.
-/// Defaults to `Namespace::Types`.
+/// Handles explicit namespaces:
+/// - `"types.User"` → `Name { name: "User", namespace: Types { path: [] } }`
+/// - `"types.foo.Sentiment"` → `Name { name: "Sentiment", namespace: Types { path: ["foo"] } }`
+/// - `"stream_types.foo.Partial"` → `Name { name: "Partial", namespace: StreamTypes { path: ["foo"] } }`
+/// - `"stream_types.PartialUser"` → `Name { name: "PartialUser", namespace: StreamTypes { path: [] } }`
+/// - `"User"` → `Name { name: "User", namespace: Types { path: [] } }` (default)
 pub fn name(s: &str) -> Name {
     if let Some(rest) = s.strip_prefix("types.") {
+        // rest = "foo.bar.Baz" — last segment is name, leading are path
+        let segs: Vec<&str> = rest.split('.').collect();
+        let (bare_name, path_segs) = segs.split_last().unwrap();
         Name {
-            name: rest.into(),
-            namespace: Namespace::Types,
+            name: (*bare_name).into(),
+            namespace: Namespace::Types {
+                path: path_segs.iter().map(|s| SmolStr::new(s)).collect(),
+            },
         }
     } else if let Some(rest) = s.strip_prefix("stream_types.") {
+        let segs: Vec<&str> = rest.split('.').collect();
+        let (bare_name, path_segs) = segs.split_last().unwrap();
         Name {
-            name: rest.into(),
-            namespace: Namespace::StreamTypes,
+            name: (*bare_name).into(),
+            namespace: Namespace::StreamTypes {
+                path: path_segs.iter().map(|s| SmolStr::new(s)).collect(),
+            },
         }
     } else {
-        // Default to Types namespace
+        // Default to Types namespace with no path
         Name {
             name: s.into(),
-            namespace: Namespace::Types,
+            namespace: Namespace::Types { path: Vec::new() },
         }
     }
 }
@@ -321,6 +383,23 @@ macro_rules! function {
             return_type: $crate::ty($ret_ty),
             stream_return_type: None,
             watchers: vec![],
+            companions: vec![],
+        }
+    };
+    // Non-streaming function with no args
+    (
+        fn $name:ident()
+            $(@ $doc:literal)?
+            -> $ret_ty:literal
+    ) => {
+        $crate::Function {
+            name: stringify!($name).into(),
+            docstring: $crate::function!(@opt $($doc)?),
+            arguments: vec![],
+            return_type: $crate::ty($ret_ty),
+            stream_return_type: None,
+            watchers: vec![],
+            companions: vec![],
         }
     };
     // Streaming function
@@ -344,6 +423,7 @@ macro_rules! function {
             return_type: $crate::ty($ret_ty),
             stream_return_type: Some($crate::ty($stream_ty)),
             watchers: vec![],
+            companions: vec![],
         }
     };
     (@opt $doc:literal) => { Some($doc.into()) };
@@ -430,19 +510,26 @@ macro_rules! r#enum {
 #[macro_export]
 macro_rules! type_alias {
     // String literal name
-    ($name:literal = $ty:literal) => {
+    ($name:literal = $ty:literal) => {{
+        // Detect recursive type alias by checking if the name appears in the type string.
+        let is_recursive = $ty.contains($name);
         $crate::TypeAlias {
             name: $crate::name($name),
             resolves_to: $crate::ty($ty),
+            recursive: is_recursive,
         }
-    };
+    }};
     // Identifier name (for use in other macros)
-    ($name:ident = $ty:literal) => {
+    ($name:ident = $ty:literal) => {{
+        // Detect recursive type alias by checking if the name appears in the type string.
+        let name_str = stringify!($name);
+        let is_recursive = $ty.contains(name_str);
         $crate::TypeAlias {
-            name: $crate::name(stringify!($name)),
+            name: $crate::name(name_str),
             resolves_to: $crate::ty($ty),
+            recursive: is_recursive,
         }
-    };
+    }};
 }
 
 /// Macro to construct an `ObjectPool` for testing.
@@ -539,7 +626,7 @@ macro_rules! object_pool_insert {
         // Insert for sync client (Types namespace)
         let sync_key = $crate::Name {
             name: stringify!($name).into(),
-            namespace: $crate::Namespace::Types,
+            namespace: $crate::Namespace::Types { path: vec![] },
         };
         $pool.insert(sync_key, $crate::Object::Function(
             $crate::function!(fn $name($($args)*) $(@ $doc)? -> $ret streams $stream)
@@ -547,11 +634,71 @@ macro_rules! object_pool_insert {
         // Insert for async/streaming client (StreamTypes namespace)
         let stream_key = $crate::Name {
             name: stringify!($name).into(),
-            namespace: $crate::Namespace::StreamTypes,
+            namespace: $crate::Namespace::StreamTypes { path: vec![] },
         };
         $pool.insert(stream_key, $crate::Object::Function(
             $crate::function!(fn $name($($args)*) $(@ $doc)? -> $ret streams $stream)
         ));
+        $($crate::object_pool_insert!($pool; $($rest)*);)?
+    };
+
+    // Non-streaming function item with string literal name (for namespaced functions like "foo.ClassifySentiment")
+    ($pool:ident; fn $name:literal($($args:tt)*) $(@ $doc:literal)? -> $ret:literal $(, $($rest:tt)*)?) => {
+        {
+            let fn_name = $crate::builders::parse_fn_name($name);
+            let obj = $crate::Function {
+                name: fn_name.bare_name.into(),
+                docstring: None,
+                arguments: $crate::object_pool_insert!(@args $($args)*),
+                return_type: $crate::ty($ret),
+                stream_return_type: None,
+                watchers: vec![],
+                companions: vec![],
+            };
+            let key = $crate::Name {
+                name: obj.name.clone(),
+                namespace: fn_name.namespace,
+            };
+            $pool.insert(key, $crate::Object::Function(obj));
+        }
+        $($crate::object_pool_insert!($pool; $($rest)*);)?
+    };
+
+    // Non-streaming function with companions (identifier name)
+    ($pool:ident; fn $name:ident($($args:tt)*) -> $ret:literal companions = { $($companions:tt)* } $(, $($rest:tt)*)?) => {
+        {
+            let companions = $crate::object_pool_insert!(@companions $($companions)*);
+            let mut obj = $crate::function!(fn $name($($args)*) -> $ret);
+            obj.companions = companions;
+            let key = $crate::Name {
+                name: obj.name.clone(),
+                namespace: $crate::Namespace::Types { path: vec![] },
+            };
+            $pool.insert(key, $crate::Object::Function(obj));
+        }
+        $($crate::object_pool_insert!($pool; $($rest)*);)?
+    };
+
+    // Non-streaming function with companions (string literal name, namespaced)
+    ($pool:ident; fn $name:literal($($args:tt)*) -> $ret:literal companions = { $($companions:tt)* } $(, $($rest:tt)*)?) => {
+        {
+            let fn_name = $crate::builders::parse_fn_name($name);
+            let companions = $crate::object_pool_insert!(@companions $($companions)*);
+            let obj = $crate::Function {
+                name: fn_name.bare_name.into(),
+                docstring: None,
+                arguments: $crate::object_pool_insert!(@args $($args)*),
+                return_type: $crate::ty($ret),
+                stream_return_type: None,
+                watchers: vec![],
+                companions,
+            };
+            let key = $crate::Name {
+                name: obj.name.clone(),
+                namespace: fn_name.namespace,
+            };
+            $pool.insert(key, $crate::Object::Function(obj));
+        }
         $($crate::object_pool_insert!($pool; $($rest)*);)?
     };
 
@@ -560,10 +707,64 @@ macro_rules! object_pool_insert {
         let obj = $crate::function!(fn $name($($args)*) $(@ $doc)? -> $ret);
         let key = $crate::Name {
             name: obj.name.clone(),
-            namespace: $crate::Namespace::Types,
+            namespace: $crate::Namespace::Types { path: vec![] },
         };
         $pool.insert(key, $crate::Object::Function(obj));
         $($crate::object_pool_insert!($pool; $($rest)*);)?
+    };
+
+    // No-arg function item (e.g. fn get_one() -> "MyClass")
+    ($pool:ident; fn $name:ident() -> $ret:literal $(, $($rest:tt)*)?) => {
+        let obj = $crate::function!(fn $name() -> $ret);
+        let key = $crate::Name {
+            name: obj.name.clone(),
+            namespace: $crate::Namespace::Types { path: vec![] },
+        };
+        $pool.insert(key, $crate::Object::Function(obj));
+        $($crate::object_pool_insert!($pool; $($rest)*);)?
+    };
+
+    // Helper: build arguments list from token stream
+    (@args) => { vec![] };
+    (@args $($arg_name:ident: $arg_ty:literal),* $(,)?) => {
+        vec![
+            $(
+                $crate::FunctionArgument {
+                    name: stringify!($arg_name).into(),
+                    docstring: None,
+                    ty: $crate::ty($arg_ty),
+                },
+            )*
+        ]
+    };
+
+    // Helper: build companions list
+    (@companions) => { vec![] };
+    (@companions $(fn $cname:ident($($carg_name:ident: $carg_ty:literal),* $(,)?) -> $cret:literal),* $(,)?) => {
+        vec![
+            $(
+                (
+                    stringify!($cname).to_string(),
+                    $crate::Function {
+                        name: stringify!($cname).into(),
+                        docstring: None,
+                        arguments: vec![
+                            $(
+                                $crate::FunctionArgument {
+                                    name: stringify!($carg_name).into(),
+                                    docstring: None,
+                                    ty: $crate::ty($carg_ty),
+                                },
+                            )*
+                        ],
+                        return_type: $crate::ty($cret),
+                        stream_return_type: None,
+                        watchers: vec![],
+                        companions: vec![],
+                    }
+                ),
+            )*
+        ]
     };
 }
 
@@ -787,14 +988,14 @@ mod tests {
             ty("User"),
             Ty::Class(Name {
                 name: "User".into(),
-                namespace: Namespace::Types,
+                namespace: Namespace::Types { path: vec![] },
             })
         );
         assert_eq!(
             ty("stream_types.PartialUser"),
             Ty::Class(Name {
                 name: "PartialUser".into(),
-                namespace: Namespace::StreamTypes,
+                namespace: Namespace::StreamTypes { path: vec![] },
             })
         );
     }
@@ -805,7 +1006,7 @@ mod tests {
             ty("enum.Status"),
             Ty::Enum(Name {
                 name: "Status".into(),
-                namespace: Namespace::Types,
+                namespace: Namespace::Types { path: vec![] },
             })
         );
     }
@@ -825,7 +1026,7 @@ mod tests {
                 key: Box::new(Ty::String),
                 value: Box::new(Ty::List(Box::new(Ty::Class(Name {
                     name: "User".into(),
-                    namespace: Namespace::Types,
+                    namespace: Namespace::Types { path: vec![] },
                 })))),
             }
         );
@@ -876,21 +1077,59 @@ mod tests {
             name("User"),
             Name {
                 name: "User".into(),
-                namespace: Namespace::Types,
+                namespace: Namespace::Types { path: vec![] },
             }
         );
         assert_eq!(
             name("types.User"),
             Name {
                 name: "User".into(),
-                namespace: Namespace::Types,
+                namespace: Namespace::Types { path: vec![] },
             }
         );
         assert_eq!(
             name("stream_types.Partial"),
             Name {
                 name: "Partial".into(),
-                namespace: Namespace::StreamTypes,
+                namespace: Namespace::StreamTypes { path: vec![] },
+            }
+        );
+    }
+
+    #[test]
+    fn test_name_with_path() {
+        assert_eq!(
+            name("types.foo.Sentiment"),
+            Name {
+                name: "Sentiment".into(),
+                namespace: Namespace::Types {
+                    path: vec![SmolStr::new("foo")]
+                },
+            }
+        );
+        assert_eq!(
+            name("types.other.foo.Address"),
+            Name {
+                name: "Address".into(),
+                namespace: Namespace::Types {
+                    path: vec![SmolStr::new("other"), SmolStr::new("foo")]
+                },
+            }
+        );
+    }
+
+    #[test]
+    fn test_ty_unknown() {
+        assert_eq!(ty("unknown"), Ty::BuiltinUnknown);
+    }
+
+    #[test]
+    fn test_ty_callable() {
+        assert_eq!(
+            ty("callable<[int], string>"),
+            Ty::Callable {
+                params: vec![Ty::Int],
+                ret: Box::new(Ty::String),
             }
         );
     }
@@ -972,7 +1211,7 @@ mod tests {
             ta2.resolves_to,
             Ty::List(Box::new(Ty::Class(Name {
                 name: "User".into(),
-                namespace: Namespace::Types,
+                namespace: Namespace::Types { path: vec![] },
             })))
         );
     }
