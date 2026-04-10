@@ -323,7 +323,7 @@ export function BepImportDialog({ bepId, bepNumber }: BepImportDialogProps) {
           Import
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-lg max-h-[85vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Upload className="h-5 w-5" />
@@ -335,12 +335,12 @@ export function BepImportDialog({ bepId, bepNumber }: BepImportDialogProps) {
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <div className="space-y-4 overflow-y-auto flex-1 min-h-0">
           {/* Success message */}
           {success && (
-            <Alert className="border-green-500 bg-green-50">
-              <CheckCircle2 className="h-4 w-4 text-green-600" />
-              <AlertDescription className="text-green-800">
+            <Alert className="border-green-600 bg-green-500/10 dark:border-green-500 dark:bg-green-500/20">
+              <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
+              <AlertDescription className="text-green-800 dark:text-green-300">
                 Successfully{" "}
                 {success.versionAction === "created" ? "created version" : "updated current version"}{" "}
                 {success.versionNumber}
@@ -448,7 +448,7 @@ export function BepImportDialog({ bepId, bepNumber }: BepImportDialogProps) {
                     ) : (
                       <Badge
                         variant="outline"
-                        className="text-green-600 border-green-600"
+                        className="text-green-600 border-green-600 dark:text-green-400 dark:border-green-400"
                       >
                         <CheckCircle2 className="h-3 w-3 mr-1" />
                         Ready
@@ -472,12 +472,12 @@ export function BepImportDialog({ bepId, bepNumber }: BepImportDialogProps) {
                         </Badge>
                       )}
                       {file.isNew ? (
-                        <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100">
+                        <Badge className="bg-blue-500/20 text-blue-700 hover:bg-blue-500/20 dark:bg-blue-500/30 dark:text-blue-300">
                           <Plus className="h-3 w-3 mr-1" />
                           New
                         </Badge>
                       ) : file.slug ? (
-                        <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-100">
+                        <Badge className="bg-amber-500/20 text-amber-700 hover:bg-amber-500/20 dark:bg-amber-500/30 dark:text-amber-300">
                           <RefreshCw className="h-3 w-3 mr-1" />
                           Update
                         </Badge>
@@ -488,7 +488,7 @@ export function BepImportDialog({ bepId, bepNumber }: BepImportDialogProps) {
                     ) : (
                       <Badge
                         variant="outline"
-                        className="text-green-600 border-green-600"
+                        className="text-green-600 border-green-600 dark:text-green-400 dark:border-green-400"
                       >
                         <CheckCircle2 className="h-3 w-3 mr-1" />
                         Ready
@@ -501,22 +501,22 @@ export function BepImportDialog({ bepId, bepNumber }: BepImportDialogProps) {
                 {pagesToDelete.map((page) => (
                   <div
                     key={page._id}
-                    className="p-3 flex items-center justify-between bg-red-50"
+                    className="p-3 flex items-center justify-between bg-destructive/10"
                   >
                     <div className="flex items-center gap-2">
-                      <FileText className="h-4 w-4 text-red-400" />
-                      <span className="font-medium text-red-700">pages/{page.slug}.md</span>
-                      <Badge variant="outline" className="font-mono text-xs text-red-600 border-red-300">
+                      <FileText className="h-4 w-4 text-destructive/70" />
+                      <span className="font-medium text-destructive">pages/{page.slug}.md</span>
+                      <Badge variant="outline" className="font-mono text-xs text-destructive border-destructive/50">
                         {page.slug}
                       </Badge>
-                      <Badge className="bg-red-100 text-red-800 hover:bg-red-100">
+                      <Badge variant="destructive">
                         <Trash2 className="h-3 w-3 mr-1" />
                         Remove
                       </Badge>
                     </div>
                     <Badge
                       variant="outline"
-                      className="text-red-600 border-red-600"
+                      className="text-destructive border-destructive"
                     >
                       Not in bundle
                     </Badge>
@@ -532,7 +532,7 @@ export function BepImportDialog({ bepId, bepNumber }: BepImportDialogProps) {
                 </p>
               )}
               {pagesToDelete.length > 0 && (
-                <p className="text-xs text-red-600">
+                <p className="text-xs text-destructive">
                   {pagesToDelete.length} existing page{pagesToDelete.length > 1 ? "s" : ""} will
                   be removed (not in import bundle)
                 </p>
