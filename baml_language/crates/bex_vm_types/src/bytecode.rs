@@ -231,6 +231,12 @@ pub enum Instruction {
     /// it, ensuring the condition doesn't leak on the evaluation stack.
     PopJumpIfFalse(isize),
 
+    /// Peek at the top of the stack and jump if the value is false.
+    /// Unlike `PopJumpIfFalse`, this does NOT pop the value — it stays on
+    /// the stack regardless of the branch taken. Used for short-circuit
+    /// `&&` / `||` where the tested value is also the expression result.
+    JumpIfFalse(isize),
+
     /// Performs an arithmetic binary operation.
     ///
     /// Format: `BIN_OP op` where `op` is the binary operation to perform.
@@ -670,6 +676,7 @@ impl std::fmt::Display for Instruction {
             Instruction::Copy(i) => write!(f, "COPY {i}"),
             Instruction::Jump(o) => write!(f, "JUMP {o:+}"),
             Instruction::PopJumpIfFalse(o) => write!(f, "POP_JUMP_IF_FALSE {o:+}"),
+            Instruction::JumpIfFalse(o) => write!(f, "JUMP_IF_FALSE {o:+}"),
             Instruction::BinOp(op) => write!(f, "BIN_OP {op}"),
             Instruction::CmpOp(op) => write!(f, "CMP_OP {op}"),
             Instruction::UnaryOp(op) => write!(f, "UNARY_OP {op}"),

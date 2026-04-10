@@ -489,12 +489,13 @@ fn user.NullCoalescing(user: User?, fallback: string, count: int) -> string {
     let _114: Profile?
     let _115: bool
     let _116: bool
-    let _117: string?
-    let _118: Profile?
-    let _119: bool
+    let _117: bool // d10
+    let _118: string?
+    let _119: Profile?
     let _120: bool
-    let _121: Profile?
-    let _122: bool
+    let _121: bool
+    let _122: Profile?
+    let _123: bool
 
     bb0: {
         _7 = copy _1 == const null;
@@ -964,42 +965,47 @@ fn user.NullCoalescing(user: User?, fallback: string, count: int) -> string {
     }
 
     bb85: {
-        _119 = copy _1 == const null;
-        branch copy _119 -> [bb89, bb86];
+        _120 = copy _1 == const null;
+        branch copy _120 -> [bb89, bb86];
     }
 
     bb86: {
-        _118 = copy _1.1;
-        _120 = copy _118 == const null;
-        branch copy _120 -> [bb89, bb87];
+        _119 = copy _1.1;
+        _121 = copy _119 == const null;
+        branch copy _121 -> [bb89, bb87];
     }
 
     bb87: {
-        _122 = copy _1 == const null;
-        branch copy _122 -> [bb89, bb88];
+        _123 = copy _1 == const null;
+        branch copy _123 -> [bb89, bb88];
     }
 
     bb88: {
-        _121 = copy _1.1;
-        _117 = copy _121.0;
+        _122 = copy _1.1;
+        _118 = copy _122.0;
         goto -> bb90;
     }
 
     bb89: {
-        _117 = const null;
+        _118 = const null;
         goto -> bb90;
     }
 
     bb90: {
-        branch copy _117 -> [bb91, bb91];
+        _117 = short_circuit(||) copy _118 -> [eval: bb91, join: bb92];
     }
 
     bb91: {
-        _0 = copy _4;
+        _117 = const "Anonymous";
         goto -> bb92;
     }
 
     bb92: {
+        _0 = copy _4;
+        goto -> bb93;
+    }
+
+    bb93: {
         return;
     }
 }

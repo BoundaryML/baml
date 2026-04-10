@@ -1792,17 +1792,15 @@ impl LoweringContext<'_> {
         is_and: bool,
     ) {
         let lhs_op = self.lower_to_operand(lhs);
-        self.builder
-            .assign(dest.clone(), Rvalue::Use(lhs_op.clone()));
 
         let bb_rhs = self.builder.create_block();
         let bb_join = self.builder.create_block();
 
-        if is_and {
-            self.builder.branch(lhs_op, bb_rhs, bb_join);
-        } else {
-            self.builder.branch(lhs_op, bb_join, bb_rhs);
-        }
+        // ShortCircuit terminator: JumpIfFalse (peek) keeps lhs on TOS
+        // when short-circuiting. The rhs block evaluates and leaves its
+        // result on TOS. At join, dest is on TOS (PhiLike).
+        self.builder
+            .short_circuit(lhs_op, is_and, dest.clone(), bb_rhs, bb_join);
 
         self.builder.set_current_block(bb_rhs);
         self.lower_expr(rhs, dest);

@@ -784,14 +784,11 @@ async fn if_else_logical_and() {
     insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const true
-        store_var _1
+        jump_if_false L0
+        pop 1
         load_const true
-        pop_jump_if_false L0
-        load_const true
-        store_var _1
 
       L0:
-        load_var _1
         pop_jump_if_false L1
         jump L2
 
@@ -823,17 +820,14 @@ async fn if_else_logical_or() {
     insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const false
-        store_var _1
-        load_const false
-        pop_jump_if_false L0
+        jump_if_false L0
         jump L1
 
       L0:
+        pop 1
         load_const true
-        store_var _1
 
       L1:
-        load_var _1
         pop_jump_if_false L2
         jump L3
 

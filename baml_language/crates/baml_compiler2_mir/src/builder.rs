@@ -259,6 +259,24 @@ impl MirBuilder {
         });
     }
 
+    /// Emit a short-circuit `&&` / `||` terminator.
+    pub(crate) fn short_circuit(
+        &mut self,
+        operand: Operand,
+        is_and: bool,
+        destination: Place,
+        eval_rhs: BlockId,
+        join: BlockId,
+    ) {
+        self.set_terminator(Terminator::ShortCircuit {
+            operand,
+            is_and,
+            destination,
+            eval_rhs,
+            join,
+        });
+    }
+
     /// Emit a multi-way switch.
     ///
     /// If `exhaustive` is true, the switch covers all possible discriminant values,

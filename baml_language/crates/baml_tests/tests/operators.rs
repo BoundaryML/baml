@@ -556,14 +556,11 @@ async fn logical_and() {
     insta::assert_snapshot!(output.bytecode, @"
     function main() -> bool {
         load_const true
-        store_var _0
-        load_const true
-        pop_jump_if_false L0
+        jump_if_false L0
+        pop 1
         load_const false
-        store_var _0
 
       L0:
-        load_var _0
         return
     }
     ");
@@ -584,17 +581,14 @@ async fn logical_or() {
     insta::assert_snapshot!(output.bytecode, @"
     function main() -> bool {
         load_const true
-        store_var _0
-        load_const true
-        pop_jump_if_false L0
+        jump_if_false L0
         jump L1
 
       L0:
+        pop 1
         load_const false
-        store_var _0
 
       L1:
-        load_var _0
         return
     }
     ");
@@ -619,8 +613,8 @@ async fn short_circuit_and() {
     insta::assert_snapshot!(output.bytecode, @"
     function main() -> bool {
         load_const true
-        load_const true
-        pop_jump_if_false L0
+        jump_if_false L0
+        pop 1
         call user.ret_bool
 
       L0:
@@ -653,11 +647,11 @@ async fn short_circuit_or() {
     insta::assert_snapshot!(output.bytecode, @"
     function main() -> bool {
         load_const true
-        load_const true
-        pop_jump_if_false L0
+        jump_if_false L0
         jump L1
 
       L0:
+        pop 1
         call user.ret_bool
 
       L1:

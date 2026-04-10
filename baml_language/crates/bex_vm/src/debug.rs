@@ -147,7 +147,9 @@ pub(crate) fn display_instruction(
                 .map(|m| format!("({})", m.as_str()))
                 .unwrap_or_default()
         }
-        Instruction::Jump(offset) | Instruction::PopJumpIfFalse(offset) => {
+        Instruction::Jump(offset)
+        | Instruction::PopJumpIfFalse(offset)
+        | Instruction::JumpIfFalse(offset) => {
             format!("(to {})", instruction_ptr.wrapping_add_signed(*offset))
         }
         Instruction::AllocInstance(index) | Instruction::AllocVariant(index) => {
@@ -317,6 +319,7 @@ fn instruction_color(instruction: &Instruction) -> Color {
         }
         Instruction::Jump(_)
         | Instruction::PopJumpIfFalse(_)
+        | Instruction::JumpIfFalse(_)
         | Instruction::JumpTable { .. }
         | Instruction::DenseTag(_) => Color::Yellow,
         Instruction::Call(_) | Instruction::CallIndirect => Color::Magenta,
@@ -542,7 +545,9 @@ fn display_bytecode_textual(function: &Function) -> String {
 
     for (ip, instruction) in instructions.iter().enumerate() {
         match instruction {
-            Instruction::Jump(offset) | Instruction::PopJumpIfFalse(offset) => {
+            Instruction::Jump(offset)
+            | Instruction::PopJumpIfFalse(offset)
+            | Instruction::JumpIfFalse(offset) => {
                 let target = ip.wrapping_add_signed(*offset);
                 jump_targets.insert(target);
             }
@@ -668,6 +673,14 @@ fn display_instruction_textual(
                 .cloned()
                 .unwrap_or_else(|| format!("?{target}"));
             format!("pop_jump_if_false {label}")
+        }
+        Instruction::JumpIfFalse(offset) => {
+            let target = ip.wrapping_add_signed(*offset);
+            let label = label_map
+                .get(&target)
+                .cloned()
+                .unwrap_or_else(|| format!("?{target}"));
+            format!("jump_if_false {label}")
         }
         Instruction::JumpTable { table_idx, default } => {
             let default_target = ip.wrapping_add_signed(*default);
@@ -963,7 +976,9 @@ fn display_expanded_metadata(ip: usize, instruction: &Instruction, function: &Fu
             .unwrap_or_default(),
 
         // Jumps: show absolute target address.
-        Instruction::Jump(offset) | Instruction::PopJumpIfFalse(offset) => {
+        Instruction::Jump(offset)
+        | Instruction::PopJumpIfFalse(offset)
+        | Instruction::JumpIfFalse(offset) => {
             let target = ip.wrapping_add_signed(*offset);
             format!("(to {target})")
         }

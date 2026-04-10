@@ -234,13 +234,11 @@ function testing.TestCollector.register_test(self: null, name: string, body: () 
     load_field .name
     load_var full_name
     cmp_op ==
-    store_var _20
-    load_var _20
-    load_var _20
-    pop_jump_if_false L9
+    jump_if_false L9
     jump L10
 
   L9:
+    pop 1
     load_var t
     load_field .name
     load_var hash_prefix
@@ -355,13 +353,11 @@ function testing.TestCollector.register_test_set(self: null, name: string, colle
     load_field .name
     load_var full_name
     cmp_op ==
-    store_var _20
-    load_var _20
-    load_var _20
-    pop_jump_if_false L9
+    jump_if_false L9
     jump L10
 
   L9:
+    pop 1
     load_var ts
     load_field .name
     load_var hash_prefix

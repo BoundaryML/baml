@@ -1901,6 +1901,28 @@ impl BexVm {
                 }
             }
 
+            Instruction::JumpIfFalse(offset) => {
+                let top = self.stack.ensure_stack_top()?;
+                let condition = self.stack[top];
+
+                match condition {
+                    Value::Bool(value) => {
+                        if !value {
+                            self.frames[*frame_idx].instruction_ptr = instruction_ptr
+                                .checked_add_signed(offset)
+                                .ok_or(VmInternalError::InvalidJump)?;
+                        }
+                    }
+                    other => {
+                        return Err(VmInternalError::TypeError {
+                            expected: Type::Bool,
+                            got: self.type_of(&other),
+                        }
+                        .into());
+                    }
+                }
+            }
+
             Instruction::Throw => {
                 let value = self.stack.ensure_pop()?;
                 self.try_unwind_exception(frame_idx, function, value)?;

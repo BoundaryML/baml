@@ -197,19 +197,14 @@ function baml.http.Response.ok(self: null) -> bool {
     load_field .status_code
     load_const 200
     cmp_op >=
-    store_var _2
-    load_var _2
-    store_var _0
-    load_var _2
-    pop_jump_if_false L0
+    jump_if_false L0
+    pop 1
     load_var self
     load_field .status_code
     load_const 300
     cmp_op <
-    store_var _0
 
   L0:
-    load_var _0
     return
 }
 

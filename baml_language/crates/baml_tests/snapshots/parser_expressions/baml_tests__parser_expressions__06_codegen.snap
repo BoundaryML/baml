@@ -36,20 +36,16 @@ function user.IndexAccess(users: IndexUser[]) -> string {
 
 function user.TestPrecedence() -> bool {
     load_const true
-    store_var d
-    load_const true
-    pop_jump_if_false L0
+    jump_if_false L0
     jump L1
 
   L0:
+    pop 1
     load_const false
-    store_var d
+    jump_if_false L1
+    pop 1
     load_const false
-    pop_jump_if_false L1
-    load_const false
-    store_var d
 
   L1:
-    load_var d
     return
 }

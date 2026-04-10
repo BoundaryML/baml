@@ -156,6 +156,10 @@ fn rewrite_block_ids_in_terminator(term: &mut Terminator, map: &[Option<BlockId>
         }
         Terminator::Throw { .. } => {}
         Terminator::ThrowIfPanic { otherwise, .. } => remap(otherwise),
+        Terminator::ShortCircuit { eval_rhs, join, .. } => {
+            remap(eval_rhs);
+            remap(join);
+        }
     }
 }
 
@@ -224,6 +228,10 @@ fn rewrite_block_ids_in_terminator_with_map(
         }
         Terminator::Throw { .. } => {}
         Terminator::ThrowIfPanic { otherwise, .. } => remap(otherwise),
+        Terminator::ShortCircuit { eval_rhs, join, .. } => {
+            remap(eval_rhs);
+            remap(join);
+        }
     }
 }
 
@@ -414,6 +422,14 @@ fn collect_place_index_locals(body: &MirFunctionBody) -> HashSet<Local> {
                     scan_operand(value, &mut set);
                 }
                 Terminator::Await { destination, .. } => scan_place(destination, &mut set),
+                Terminator::ShortCircuit {
+                    operand,
+                    destination,
+                    ..
+                } => {
+                    scan_operand(operand, &mut set);
+                    scan_place(destination, &mut set);
+                }
                 Terminator::Goto { .. } | Terminator::Return | Terminator::Unreachable => {}
             }
         }
@@ -445,6 +461,7 @@ fn count_local_defs(body: &MirFunctionBody) -> Vec<usize> {
             Some(Terminator::Call { destination, .. }) => Some(destination),
             Some(Terminator::DispatchFuture { future, .. }) => Some(future),
             Some(Terminator::Await { destination, .. }) => Some(destination),
+            Some(Terminator::ShortCircuit { destination, .. }) => Some(destination),
             _ => None,
         } {
             defs[dest.base_local().0] += 1;
@@ -621,6 +638,14 @@ fn count_in_terminator(term: &Terminator, uses: &mut [usize]) {
         }
         Terminator::Throw { value } | Terminator::ThrowIfPanic { value, .. } => {
             count_in_operand(value, uses);
+        }
+        Terminator::ShortCircuit {
+            operand,
+            destination,
+            ..
+        } => {
+            count_in_operand(operand, uses);
+            count_dest_place(destination, uses);
         }
         Terminator::Goto { .. } | Terminator::Return | Terminator::Unreachable => {}
     }
@@ -851,6 +876,9 @@ fn apply_subst_to_terminator(term: &mut Terminator, subst: &HashMap<Local, Opera
         Terminator::Throw { value } | Terminator::ThrowIfPanic { value, .. } => {
             apply_subst_to_operand(value, subst);
         }
+        Terminator::ShortCircuit { operand, .. } => {
+            apply_subst_to_operand(operand, subst);
+        }
         Terminator::Goto { .. }
         | Terminator::Return
         | Terminator::Unreachable
@@ -875,6 +903,7 @@ fn eliminate_dead_locals(body: &mut MirFunctionBody, arity: usize) {
                 Terminator::Call { destination, .. } => Some(destination.base_local()),
                 Terminator::Await { destination, .. } => Some(destination.base_local()),
                 Terminator::DispatchFuture { future, .. } => Some(future.base_local()),
+                Terminator::ShortCircuit { destination, .. } => Some(destination.base_local()),
                 _ => None,
             };
             if let Some(l) = dest_local {
@@ -1065,6 +1094,14 @@ fn rewrite_locals_in_terminator(term: &mut Terminator, map: &[Option<Local>]) {
         Terminator::Throw { value } | Terminator::ThrowIfPanic { value, .. } => {
             remap_operand(value, map);
         }
+        Terminator::ShortCircuit {
+            operand,
+            destination,
+            ..
+        } => {
+            remap_operand(operand, map);
+            remap_place(destination, map);
+        }
         Terminator::Goto { .. } | Terminator::Return | Terminator::Unreachable => {}
     }
 }
@@ -1250,6 +1287,14 @@ fn verify_mir(body: &MirFunctionBody, name: &crate::ItemRef) {
                 }
                 Terminator::Throw { value } | Terminator::ThrowIfPanic { value, .. } => {
                     check_operand(value, &blk);
+                }
+                Terminator::ShortCircuit {
+                    operand,
+                    destination,
+                    ..
+                } => {
+                    check_operand(operand, &blk);
+                    check_place(destination, &blk);
                 }
                 Terminator::Goto { .. } | Terminator::Return | Terminator::Unreachable => {}
             }

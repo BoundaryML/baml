@@ -1322,6 +1322,40 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 self.emit(Instruction::ThrowIfPanic);
                 self.emit_jump_unless_fallthrough(*otherwise);
             }
+
+            Terminator::ShortCircuit {
+                operand,
+                is_and,
+                destination: _,
+                eval_rhs,
+                join,
+            } => {
+                // Legacy-style short-circuit using JumpIfFalse (peek, no pop).
+                // The destination local is PhiLike — value stays on TOS, no store/load.
+                self.emit_operand_pull(operand);
+
+                if *is_and {
+                    // &&: false → short-circuit (value stays on TOS), jump to join.
+                    //     true → pop, evaluate rhs.
+                    let sc_jump = self.emit(Instruction::JumpIfFalse(0));
+                    let resolved_join = self.resolve_pending_target(*join);
+                    self.pending_jumps.push((sc_jump, resolved_join));
+                    self.emit(Instruction::Pop(1));
+                    self.emit_jump_unless_fallthrough(*eval_rhs);
+                } else {
+                    // ||: false → pop, evaluate rhs.
+                    //     true → value stays on TOS, jump to join.
+                    let false_jump = self.emit(Instruction::JumpIfFalse(0));
+                    let resolved_join = self.resolve_pending_target(*join);
+                    let true_jump = self.emit(Instruction::Jump(0));
+                    self.pending_jumps.push((true_jump, resolved_join));
+                    // False landing: patch JumpIfFalse to here, pop, fall to eval_rhs.
+                    let false_pc = self.bytecode.instructions.len();
+                    self.patch_jump_to(false_jump, false_pc);
+                    self.emit(Instruction::Pop(1));
+                    self.emit_jump_unless_fallthrough(*eval_rhs);
+                }
+            }
         }
     }
 
@@ -1363,6 +1397,9 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             }
             Instruction::PopJumpIfFalse(_) => {
                 self.bytecode.instructions[instruction_idx] = Instruction::PopJumpIfFalse(offset);
+            }
+            Instruction::JumpIfFalse(_) => {
+                self.bytecode.instructions[instruction_idx] = Instruction::JumpIfFalse(offset);
             }
             _ => panic!("expected jump instruction at index {instruction_idx}"),
         }

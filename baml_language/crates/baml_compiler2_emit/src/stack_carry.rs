@@ -544,6 +544,22 @@ fn simulate_terminator_stack(
             // or continues (consuming it). Either way the stack is clean after.
             sim.pop_n(1)
         }
+        Terminator::ShortCircuit { operand, .. } => {
+            // ShortCircuit pushes the operand, then conditionally pops or keeps.
+            // For stack-carry simulation we conservatively reject.
+            let mut sink = StackCarryPullSink {
+                sim,
+                carried_local,
+                classifications,
+                def_use,
+            };
+            if pull_semantics::walk_operand_pull(&mut sink, operand).is_err() {
+                return false;
+            }
+            // The stack effect is complex (conditional pop/keep + store),
+            // so reject stack-carry for blocks ending in ShortCircuit.
+            false
+        }
     }
 }
 

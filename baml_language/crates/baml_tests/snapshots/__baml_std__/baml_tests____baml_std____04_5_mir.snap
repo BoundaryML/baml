@@ -134,8 +134,7 @@ fn baml.http.Response.ok(self: baml.http.Response) -> bool {
     bb0: {
         _3 = copy _1.0;
         _2 = copy _3 >= const 200_i64;
-        _0 = copy _2;
-        branch copy _2 -> [bb1, bb2];
+        _0 = short_circuit(&&) copy _2 -> [eval: bb1, join: bb2];
     }
 
     bb1: {

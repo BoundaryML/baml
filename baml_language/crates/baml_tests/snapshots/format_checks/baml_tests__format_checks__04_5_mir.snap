@@ -11,30 +11,30 @@ fn user.BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool) -> in
     let _4: int // d // param
     let _5: string // s // param
     let _6: bool // flag // param
-    let _7: int // mut_a
-    let _8: int
-    let _9: int
+    let _7: bool
+    let _8: bool
+    let _9: int // mut_a
     let _10: int
     let _11: int
     let _12: int
     let _13: int
     let _14: int
     let _15: int
-    let _16: bool
-    let _17: bool
+    let _16: int
+    let _17: int
     let _18: bool
     let _19: bool
     let _20: bool
     let _21: bool
     let _22: bool
     let _23: bool
-    let _24: int
-    let _25: int
-    let _26: int
-    let _27: int
-    let _28: int
-    let _29: int
-    let _30: int
+    let _24: bool
+    let _25: bool
+    let _26: bool
+    let _27: bool
+    let _28: bool
+    let _29: bool
+    let _30: bool
     let _31: int
     let _32: int
     let _33: int
@@ -92,24 +92,24 @@ fn user.BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool) -> in
     let _85: int
     let _86: int
     let _87: int
-    let _88: bool
-    let _89: bool
-    let _90: bool
-    let _91: bool
-    let _92: bool
-    let _93: bool
-    let _94: bool
+    let _88: int
+    let _89: int
+    let _90: int
+    let _91: int
+    let _92: int
+    let _93: int
+    let _94: int
     let _95: bool
     let _96: bool
     let _97: bool
-    let _98: int
-    let _99: int
-    let _100: int
-    let _101: int
-    let _102: int
-    let _103: int
-    let _104: int
-    let _105: int
+    let _98: bool
+    let _99: bool
+    let _100: bool
+    let _101: bool
+    let _102: bool
+    let _103: bool
+    let _104: bool
+    let _105: bool
     let _106: int
     let _107: int
     let _108: int
@@ -140,23 +140,23 @@ fn user.BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool) -> in
     let _133: int
     let _134: int
     let _135: int
-    let _136: bool
-    let _137: bool
-    let _138: bool
-    let _139: bool
+    let _136: int
+    let _137: int
+    let _138: int
+    let _139: int
     let _140: int
     let _141: int
     let _142: int
     let _143: int
-    let _144: int
-    let _145: int
-    let _146: int
-    let _147: int
-    let _148: int
+    let _144: bool
+    let _145: bool
+    let _146: bool
+    let _147: bool
+    let _148: bool
     let _149: int
     let _150: int
     let _151: int
-    let _152: bool
+    let _152: int
     let _153: int
     let _154: int
     let _155: int
@@ -165,7 +165,7 @@ fn user.BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool) -> in
     let _158: int
     let _159: int
     let _160: int
-    let _161: int
+    let _161: bool
     let _162: int
     let _163: int
     let _164: int
@@ -198,56 +198,66 @@ fn user.BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool) -> in
     let _191: int
     let _192: int
     let _193: int
-    let _194: bool
-    let _195: bool
-    let _196: bool
-    let _197: bool
-    let _198: bool
-    let _199: bool
+    let _194: int
+    let _195: int
+    let _196: int
+    let _197: int
+    let _198: int
+    let _199: int
     let _200: int
-    let _201: bool
+    let _201: int
+    let _202: int
+    let _203: bool
+    let _204: bool
+    let _205: bool
+    let _206: bool
+    let _207: bool
+    let _208: bool
+    let _209: bool
+    let _210: int
+    let _211: bool
+    let _212: bool
 
     bb0: {
-        branch copy _6 -> [bb1, bb1];
+        _7 = short_circuit(&&) copy _6 -> [eval: bb1, join: bb2];
     }
 
     bb1: {
-        branch copy _6 -> [bb2, bb2];
+        _7 = const true;
+        goto -> bb2;
     }
 
     bb2: {
-        _7 = copy _1;
-        _7 = copy _7 + copy _2;
-        _7 = copy _7 - copy _2;
-        _7 = copy _7 * copy _2;
-        _7 = copy _7 / copy _2;
-        _7 = copy _7 % copy _2;
-        _7 = copy _7 & copy _2;
-        _7 = copy _7 | copy _2;
-        _7 = copy _7 ^ copy _2;
-        _7 = copy _7 << copy _2;
-        _7 = copy _7 >> copy _2;
-        _8 = copy _1 + copy _2;
-        _10 = copy _1 + copy _2;
-        _9 = copy _10 + copy _3;
-        _12 = copy _1 - copy _2;
-        _11 = copy _12 + copy _3;
-        _13 = copy _1 * copy _2;
-        _15 = copy _1 * copy _2;
-        _14 = copy _15 / copy _3;
-        _16 = copy _1 > const 0_i64;
-        branch copy _16 -> [bb3, bb3];
+        _8 = short_circuit(||) copy _6 -> [eval: bb3, join: bb4];
     }
 
     bb3: {
-        _17 = copy _1 > const 0_i64;
-        branch copy _17 -> [bb4, bb4];
+        _8 = const false;
+        goto -> bb4;
     }
 
     bb4: {
+        _9 = copy _1;
+        _9 = copy _9 + copy _2;
+        _9 = copy _9 - copy _2;
+        _9 = copy _9 * copy _2;
+        _9 = copy _9 / copy _2;
+        _9 = copy _9 % copy _2;
+        _9 = copy _9 & copy _2;
+        _9 = copy _9 | copy _2;
+        _9 = copy _9 ^ copy _2;
+        _9 = copy _9 << copy _2;
+        _9 = copy _9 >> copy _2;
+        _10 = copy _1 + copy _2;
+        _12 = copy _1 + copy _2;
+        _11 = copy _12 + copy _3;
+        _14 = copy _1 - copy _2;
+        _13 = copy _14 + copy _3;
+        _15 = copy _1 * copy _2;
+        _17 = copy _1 * copy _2;
+        _16 = copy _17 / copy _3;
         _19 = copy _1 > const 0_i64;
-        _18 = copy _19;
-        branch copy _19 -> [bb5, bb6];
+        _18 = short_circuit(&&) copy _19 -> [eval: bb5, join: bb6];
     }
 
     bb5: {
@@ -256,397 +266,433 @@ fn user.BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool) -> in
     }
 
     bb6: {
-        branch copy _18 -> [bb7, bb7];
+        _21 = copy _1 > const 0_i64;
+        _20 = short_circuit(||) copy _21 -> [eval: bb7, join: bb8];
     }
 
     bb7: {
-        _21 = copy _1 > const 0_i64;
-        _20 = copy _21;
-        branch copy _21 -> [bb9, bb8];
+        _20 = copy _2 > const 0_i64;
+        goto -> bb8;
     }
 
     bb8: {
-        _20 = copy _2 > const 0_i64;
-        goto -> bb9;
+        _24 = copy _1 > const 0_i64;
+        _23 = short_circuit(&&) copy _24 -> [eval: bb9, join: bb10];
     }
 
     bb9: {
-        branch copy _20 -> [bb10, bb10];
+        _23 = copy _2 > const 0_i64;
+        goto -> bb10;
     }
 
     bb10: {
-        _23 = copy _1 > const 0_i64;
-        _22 = copy _23;
-        branch copy _23 -> [bb11, bb12];
+        _22 = short_circuit(&&) copy _23 -> [eval: bb11, join: bb12];
     }
 
     bb11: {
-        _22 = copy _2 > const 0_i64;
+        _22 = copy _3 > const 0_i64;
         goto -> bb12;
     }
 
     bb12: {
-        branch copy _22 -> [bb13, bb13];
+        _27 = copy _1 > const 0_i64;
+        _26 = short_circuit(||) copy _27 -> [eval: bb13, join: bb14];
     }
 
     bb13: {
-        _24 = copy _2 * copy _3;
-        _25 = copy _1 + copy _2;
-        _26 = copy _1 * copy _2;
-        _27 = copy _3 * copy _4;
-        _29 = copy _2 * copy _3;
-        _28 = copy _1 + copy _29;
-        _30 = copy _1 + copy _2;
-        _31 = copy _3 + copy _4;
-        _33 = copy _1 + copy _2;
-        _32 = copy _33 * copy _3;
-        _35 = copy _3 + copy _4;
-        _34 = copy _2 * copy _35;
-        _39 = copy _1 + copy _2;
-        _38 = copy _39 * copy _3;
-        _37 = copy _38 + copy _4;
-        _42 = copy _1 - copy _2;
-        _41 = copy _42 + copy _3;
-        _40 = copy _41 - copy _4;
-        _36 = copy _37 * copy _40;
-        _44 = copy _1 * copy _2;
-        _45 = copy _3 * copy _4;
-        _43 = copy _44 + copy _45;
-        _48 = copy _1 + copy _2;
-        _49 = copy _3 + copy _4;
-        _47 = copy _48 * copy _49;
-        _51 = copy _1 - copy _2;
-        _52 = copy _3 - copy _4;
-        _50 = copy _51 * copy _52;
-        _46 = copy _47 + copy _50;
-        _56 = copy _1 * copy _3;
-        _55 = copy _56 * copy _4;
-        _58 = copy _2 * copy _3;
-        _57 = copy _58 * copy _4;
-        _54 = copy _55 + copy _57;
-        _60 = copy _1 * copy _4;
-        _62 = copy _2 * copy _3;
-        _61 = copy _62 * copy _4;
-        _59 = copy _60 + copy _61;
-        _53 = copy _54 - copy _59;
-        _63 = copy _1 + copy _2;
-        _87 = copy _1 + copy _2;
-        _86 = copy _87 + copy _3;
-        _85 = copy _86 + copy _4;
-        _84 = copy _85 + copy _1;
-        _83 = copy _84 + copy _2;
-        _82 = copy _83 + copy _3;
-        _81 = copy _82 + copy _4;
-        _80 = copy _81 + copy _1;
-        _79 = copy _80 + copy _2;
-        _78 = copy _79 + copy _3;
-        _77 = copy _78 + copy _4;
-        _76 = copy _77 + copy _1;
-        _75 = copy _76 + copy _2;
-        _74 = copy _75 + copy _3;
-        _73 = copy _74 + copy _4;
-        _72 = copy _73 + copy _1;
-        _71 = copy _72 + copy _2;
-        _70 = copy _71 + copy _3;
-        _69 = copy _70 + copy _4;
-        _68 = copy _69 + copy _1;
-        _67 = copy _68 + copy _2;
-        _66 = copy _67 + copy _3;
-        _65 = copy _66 + copy _4;
-        _64 = copy _65 + copy _1;
-        _97 = copy _1 > const 0_i64;
-        _96 = copy _97;
-        branch copy _97 -> [bb14, bb15];
+        _26 = copy _2 > const 0_i64;
+        goto -> bb14;
     }
 
     bb14: {
-        _96 = copy _2 > const 0_i64;
-        goto -> bb15;
+        _25 = short_circuit(||) copy _26 -> [eval: bb15, join: bb16];
     }
 
     bb15: {
-        _95 = copy _96;
-        branch copy _96 -> [bb16, bb17];
+        _25 = copy _3 > const 0_i64;
+        goto -> bb16;
     }
 
     bb16: {
-        _95 = copy _3 > const 0_i64;
-        goto -> bb17;
+        _30 = copy _1 > const 0_i64;
+        _29 = short_circuit(&&) copy _30 -> [eval: bb17, join: bb18];
     }
 
     bb17: {
-        _94 = copy _95;
-        branch copy _95 -> [bb18, bb19];
+        _29 = copy _2 > const 0_i64;
+        goto -> bb18;
     }
 
     bb18: {
-        _94 = copy _4 > const 0_i64;
-        goto -> bb19;
+        _28 = short_circuit(||) copy _29 -> [eval: bb19, join: bb20];
     }
 
     bb19: {
-        _93 = copy _94;
-        branch copy _94 -> [bb20, bb21];
+        _28 = copy _3 > const 0_i64;
+        goto -> bb20;
     }
 
     bb20: {
-        _93 = copy _1 != copy _2;
-        goto -> bb21;
+        _31 = copy _2 * copy _3;
+        _32 = copy _1 + copy _2;
+        _33 = copy _1 * copy _2;
+        _34 = copy _3 * copy _4;
+        _36 = copy _2 * copy _3;
+        _35 = copy _1 + copy _36;
+        _37 = copy _1 + copy _2;
+        _38 = copy _3 + copy _4;
+        _40 = copy _1 + copy _2;
+        _39 = copy _40 * copy _3;
+        _42 = copy _3 + copy _4;
+        _41 = copy _2 * copy _42;
+        _46 = copy _1 + copy _2;
+        _45 = copy _46 * copy _3;
+        _44 = copy _45 + copy _4;
+        _49 = copy _1 - copy _2;
+        _48 = copy _49 + copy _3;
+        _47 = copy _48 - copy _4;
+        _43 = copy _44 * copy _47;
+        _51 = copy _1 * copy _2;
+        _52 = copy _3 * copy _4;
+        _50 = copy _51 + copy _52;
+        _55 = copy _1 + copy _2;
+        _56 = copy _3 + copy _4;
+        _54 = copy _55 * copy _56;
+        _58 = copy _1 - copy _2;
+        _59 = copy _3 - copy _4;
+        _57 = copy _58 * copy _59;
+        _53 = copy _54 + copy _57;
+        _63 = copy _1 * copy _3;
+        _62 = copy _63 * copy _4;
+        _65 = copy _2 * copy _3;
+        _64 = copy _65 * copy _4;
+        _61 = copy _62 + copy _64;
+        _67 = copy _1 * copy _4;
+        _69 = copy _2 * copy _3;
+        _68 = copy _69 * copy _4;
+        _66 = copy _67 + copy _68;
+        _60 = copy _61 - copy _66;
+        _70 = copy _1 + copy _2;
+        _94 = copy _1 + copy _2;
+        _93 = copy _94 + copy _3;
+        _92 = copy _93 + copy _4;
+        _91 = copy _92 + copy _1;
+        _90 = copy _91 + copy _2;
+        _89 = copy _90 + copy _3;
+        _88 = copy _89 + copy _4;
+        _87 = copy _88 + copy _1;
+        _86 = copy _87 + copy _2;
+        _85 = copy _86 + copy _3;
+        _84 = copy _85 + copy _4;
+        _83 = copy _84 + copy _1;
+        _82 = copy _83 + copy _2;
+        _81 = copy _82 + copy _3;
+        _80 = copy _81 + copy _4;
+        _79 = copy _80 + copy _1;
+        _78 = copy _79 + copy _2;
+        _77 = copy _78 + copy _3;
+        _76 = copy _77 + copy _4;
+        _75 = copy _76 + copy _1;
+        _74 = copy _75 + copy _2;
+        _73 = copy _74 + copy _3;
+        _72 = copy _73 + copy _4;
+        _71 = copy _72 + copy _1;
+        _105 = copy _1 > const 0_i64;
+        _104 = short_circuit(&&) copy _105 -> [eval: bb21, join: bb22];
     }
 
     bb21: {
-        _92 = copy _93;
-        branch copy _93 -> [bb22, bb23];
+        _104 = copy _2 > const 0_i64;
+        goto -> bb22;
     }
 
     bb22: {
-        _92 = copy _2 != copy _3;
-        goto -> bb23;
+        _103 = short_circuit(&&) copy _104 -> [eval: bb23, join: bb24];
     }
 
     bb23: {
-        _91 = copy _92;
-        branch copy _92 -> [bb24, bb25];
+        _103 = copy _3 > const 0_i64;
+        goto -> bb24;
     }
 
     bb24: {
-        _91 = copy _3 != copy _4;
-        goto -> bb25;
+        _102 = short_circuit(&&) copy _103 -> [eval: bb25, join: bb26];
     }
 
     bb25: {
-        _90 = copy _91;
-        branch copy _91 -> [bb26, bb27];
+        _102 = copy _4 > const 0_i64;
+        goto -> bb26;
     }
 
     bb26: {
-        _90 = copy _1 < const 8002_i64;
-        goto -> bb27;
+        _101 = short_circuit(&&) copy _102 -> [eval: bb27, join: bb28];
     }
 
     bb27: {
-        _89 = copy _90;
-        branch copy _90 -> [bb28, bb29];
+        _101 = copy _1 != copy _2;
+        goto -> bb28;
     }
 
     bb28: {
-        _89 = copy _2 < const 1000_i64;
-        goto -> bb29;
+        _100 = short_circuit(&&) copy _101 -> [eval: bb29, join: bb30];
     }
 
     bb29: {
-        _88 = copy _89;
-        branch copy _89 -> [bb30, bb31];
+        _100 = copy _2 != copy _3;
+        goto -> bb30;
     }
 
     bb30: {
-        _88 = copy _3 < const 1000_i64;
-        goto -> bb31;
+        _99 = short_circuit(&&) copy _100 -> [eval: bb31, join: bb32];
     }
 
     bb31: {
-        branch copy _88 -> [bb32, bb32];
+        _99 = copy _3 != copy _4;
+        goto -> bb32;
     }
 
     bb32: {
-        _116 = copy _1 * copy _2;
-        _117 = copy _3 * copy _4;
-        _115 = copy _116 + copy _117;
-        _118 = copy _1 * copy _2;
-        _114 = copy _115 - copy _118;
-        _119 = copy _3 * copy _4;
-        _113 = copy _114 + copy _119;
-        _120 = copy _1 * copy _2;
-        _112 = copy _113 - copy _120;
-        _121 = copy _3 * copy _4;
-        _111 = copy _112 + copy _121;
-        _122 = copy _1 * copy _2;
-        _110 = copy _111 - copy _122;
-        _123 = copy _3 * copy _4;
-        _109 = copy _110 + copy _123;
-        _124 = copy _1 * copy _2;
-        _108 = copy _109 - copy _124;
-        _125 = copy _3 * copy _4;
-        _107 = copy _108 + copy _125;
-        _126 = copy _1 * copy _2;
-        _106 = copy _107 - copy _126;
-        _127 = copy _3 * copy _4;
-        _105 = copy _106 + copy _127;
-        _128 = copy _1 * copy _2;
-        _104 = copy _105 - copy _128;
-        _129 = copy _3 * copy _4;
-        _103 = copy _104 + copy _129;
-        _130 = copy _1 * copy _2;
-        _102 = copy _103 - copy _130;
-        _131 = copy _3 * copy _4;
-        _101 = copy _102 + copy _131;
-        _132 = copy _1 * copy _2;
-        _100 = copy _101 - copy _132;
-        _133 = copy _3 * copy _4;
-        _99 = copy _100 + copy _133;
-        _134 = copy _1 * copy _2;
-        _98 = copy _99 - copy _134;
-        _135 = copy _3 * copy _4;
-        _142 = copy _1 + copy _2;
-        _141 = copy _142 + copy _3;
-        _140 = copy _141 + copy _4;
-        _139 = copy _140 > const 0_i64;
-        _138 = copy _139;
-        branch copy _139 -> [bb33, bb34];
+        _98 = short_circuit(&&) copy _99 -> [eval: bb33, join: bb34];
     }
 
     bb33: {
-        _145 = copy _1 * copy _2;
-        _144 = copy _145 * copy _3;
-        _143 = copy _144 * copy _4;
-        _138 = copy _143 < const 10000_i64;
+        _98 = copy _1 < const 8002_i64;
         goto -> bb34;
     }
 
     bb34: {
-        _137 = copy _138;
-        branch copy _138 -> [bb35, bb36];
+        _97 = short_circuit(&&) copy _98 -> [eval: bb35, join: bb36];
     }
 
     bb35: {
-        _148 = copy _1 - copy _2;
-        _147 = copy _148 - copy _3;
-        _146 = copy _147 - copy _4;
-        _137 = copy _146 != const 0_i64;
+        _97 = copy _2 < const 1000_i64;
         goto -> bb36;
     }
 
     bb36: {
-        _136 = copy _137;
-        branch copy _137 -> [bb37, bb38];
+        _96 = short_circuit(&&) copy _97 -> [eval: bb37, join: bb38];
     }
 
     bb37: {
-        _150 = copy _1 + copy _2;
-        _151 = copy _3 + copy _4;
-        _149 = copy _150 * copy _151;
-        _136 = copy _149 >= const 100_i64;
+        _96 = copy _3 < const 1000_i64;
         goto -> bb38;
     }
 
     bb38: {
-        branch copy _136 -> [bb40, bb39];
+        _95 = short_circuit(&&) copy _96 -> [eval: bb39, join: bb40];
     }
 
     bb39: {
-        _153 = copy _1 * const 1_i64;
-        _152 = copy _153 < const 2_i64;
-        branch copy _152 -> [bb40, bb40];
+        _95 = copy _4 < const 1005_i64;
+        goto -> bb40;
     }
 
     bb40: {
-        _164 = copy _1 * copy _2;
-        _165 = copy _3 * copy _4;
-        _163 = copy _164 + copy _165;
-        _166 = copy _1 * copy _2;
-        _162 = copy _163 + copy _166;
-        _167 = copy _3 * copy _4;
-        _161 = copy _162 + copy _167;
-        _168 = copy _1 * copy _2;
-        _160 = copy _161 + copy _168;
-        _169 = copy _3 * copy _4;
-        _159 = copy _160 + copy _169;
-        _170 = copy _1 * copy _2;
-        _158 = copy _159 + copy _170;
-        _171 = copy _3 * copy _4;
-        _157 = copy _158 + copy _171;
-        _172 = copy _1 * copy _2;
-        _156 = copy _157 + copy _172;
-        _173 = copy _3 * copy _4;
-        _155 = copy _156 + copy _173;
-        _154 = copy _155 + copy _1;
-        _7 = copy _7 + copy _154;
-        _183 = copy _1 + copy _2;
-        _182 = copy _183 + copy _3;
-        _181 = copy _182 + copy _4;
-        _180 = copy _181 + copy _1;
-        _179 = copy _180 + copy _2;
-        _178 = copy _179 + copy _3;
-        _177 = copy _178 + copy _4;
-        _176 = copy _177 + copy _1;
-        _175 = copy _176 + copy _2;
-        _174 = copy _175 + copy _3;
-        _193 = copy _1 + copy _2;
-        _192 = copy _193 + copy _3;
-        _191 = copy _192 + copy _4;
-        _190 = copy _191 + copy _1;
-        _189 = copy _190 + copy _2;
-        _188 = copy _189 + copy _3;
-        _187 = copy _188 + copy _4;
-        _186 = copy _187 + copy _1;
-        _185 = copy _186 + copy _2;
-        _184 = copy _185 + copy _3;
-        _199 = copy _1 > const 0_i64;
-        _198 = copy _199;
-        branch copy _199 -> [bb41, bb42];
+        _124 = copy _1 * copy _2;
+        _125 = copy _3 * copy _4;
+        _123 = copy _124 + copy _125;
+        _126 = copy _1 * copy _2;
+        _122 = copy _123 - copy _126;
+        _127 = copy _3 * copy _4;
+        _121 = copy _122 + copy _127;
+        _128 = copy _1 * copy _2;
+        _120 = copy _121 - copy _128;
+        _129 = copy _3 * copy _4;
+        _119 = copy _120 + copy _129;
+        _130 = copy _1 * copy _2;
+        _118 = copy _119 - copy _130;
+        _131 = copy _3 * copy _4;
+        _117 = copy _118 + copy _131;
+        _132 = copy _1 * copy _2;
+        _116 = copy _117 - copy _132;
+        _133 = copy _3 * copy _4;
+        _115 = copy _116 + copy _133;
+        _134 = copy _1 * copy _2;
+        _114 = copy _115 - copy _134;
+        _135 = copy _3 * copy _4;
+        _113 = copy _114 + copy _135;
+        _136 = copy _1 * copy _2;
+        _112 = copy _113 - copy _136;
+        _137 = copy _3 * copy _4;
+        _111 = copy _112 + copy _137;
+        _138 = copy _1 * copy _2;
+        _110 = copy _111 - copy _138;
+        _139 = copy _3 * copy _4;
+        _109 = copy _110 + copy _139;
+        _140 = copy _1 * copy _2;
+        _108 = copy _109 - copy _140;
+        _141 = copy _3 * copy _4;
+        _107 = copy _108 + copy _141;
+        _142 = copy _1 * copy _2;
+        _106 = copy _107 - copy _142;
+        _143 = copy _3 * copy _4;
+        _151 = copy _1 + copy _2;
+        _150 = copy _151 + copy _3;
+        _149 = copy _150 + copy _4;
+        _148 = copy _149 > const 0_i64;
+        _147 = short_circuit(&&) copy _148 -> [eval: bb41, join: bb42];
     }
 
     bb41: {
-        _198 = copy _2 > const 0_i64;
+        _154 = copy _1 * copy _2;
+        _153 = copy _154 * copy _3;
+        _152 = copy _153 * copy _4;
+        _147 = copy _152 < const 10000_i64;
         goto -> bb42;
     }
 
     bb42: {
-        _197 = copy _198;
-        branch copy _198 -> [bb43, bb44];
+        _146 = short_circuit(&&) copy _147 -> [eval: bb43, join: bb44];
     }
 
     bb43: {
-        _197 = copy _3 > const 0_i64;
+        _157 = copy _1 - copy _2;
+        _156 = copy _157 - copy _3;
+        _155 = copy _156 - copy _4;
+        _146 = copy _155 != const 0_i64;
         goto -> bb44;
     }
 
     bb44: {
-        _196 = copy _197;
-        branch copy _197 -> [bb45, bb46];
+        _145 = short_circuit(&&) copy _146 -> [eval: bb45, join: bb46];
     }
 
     bb45: {
-        _196 = copy _4 > const 0_i64;
+        _159 = copy _1 + copy _2;
+        _160 = copy _3 + copy _4;
+        _158 = copy _159 * copy _160;
+        _145 = copy _158 >= const 100_i64;
         goto -> bb46;
     }
 
     bb46: {
-        _195 = copy _196;
-        branch copy _196 -> [bb47, bb48];
+        _144 = short_circuit(||) copy _145 -> [eval: bb47, join: bb49];
     }
 
     bb47: {
-        _195 = copy _1 != copy _2;
-        goto -> bb48;
+        _162 = copy _1 * const 1_i64;
+        _161 = copy _162 < const 2_i64;
+        _144 = short_circuit(&&) copy _161 -> [eval: bb48, join: bb49];
     }
 
     bb48: {
-        _194 = copy _195;
-        branch copy _195 -> [bb49, bb50];
+        _144 = const false;
+        goto -> bb49;
     }
 
     bb49: {
-        _194 = copy _2 != copy _3;
-        goto -> bb50;
+        _173 = copy _1 * copy _2;
+        _174 = copy _3 * copy _4;
+        _172 = copy _173 + copy _174;
+        _175 = copy _1 * copy _2;
+        _171 = copy _172 + copy _175;
+        _176 = copy _3 * copy _4;
+        _170 = copy _171 + copy _176;
+        _177 = copy _1 * copy _2;
+        _169 = copy _170 + copy _177;
+        _178 = copy _3 * copy _4;
+        _168 = copy _169 + copy _178;
+        _179 = copy _1 * copy _2;
+        _167 = copy _168 + copy _179;
+        _180 = copy _3 * copy _4;
+        _166 = copy _167 + copy _180;
+        _181 = copy _1 * copy _2;
+        _165 = copy _166 + copy _181;
+        _182 = copy _3 * copy _4;
+        _164 = copy _165 + copy _182;
+        _163 = copy _164 + copy _1;
+        _9 = copy _9 + copy _163;
+        _192 = copy _1 + copy _2;
+        _191 = copy _192 + copy _3;
+        _190 = copy _191 + copy _4;
+        _189 = copy _190 + copy _1;
+        _188 = copy _189 + copy _2;
+        _187 = copy _188 + copy _3;
+        _186 = copy _187 + copy _4;
+        _185 = copy _186 + copy _1;
+        _184 = copy _185 + copy _2;
+        _183 = copy _184 + copy _3;
+        _202 = copy _1 + copy _2;
+        _201 = copy _202 + copy _3;
+        _200 = copy _201 + copy _4;
+        _199 = copy _200 + copy _1;
+        _198 = copy _199 + copy _2;
+        _197 = copy _198 + copy _3;
+        _196 = copy _197 + copy _4;
+        _195 = copy _196 + copy _1;
+        _194 = copy _195 + copy _2;
+        _193 = copy _194 + copy _3;
+        _209 = copy _1 > const 0_i64;
+        _208 = short_circuit(&&) copy _209 -> [eval: bb50, join: bb51];
     }
 
     bb50: {
-        branch copy _194 -> [bb51, bb51];
+        _208 = copy _2 > const 0_i64;
+        goto -> bb51;
     }
 
     bb51: {
-        _200 = copy _1 * copy _2;
-        _201 = copy _1 == const 2_i64;
-        branch copy _201 -> [bb52, bb52];
+        _207 = short_circuit(&&) copy _208 -> [eval: bb52, join: bb53];
     }
 
     bb52: {
-        _0 = copy _1 + copy _2;
+        _207 = copy _3 > const 0_i64;
         goto -> bb53;
     }
 
     bb53: {
+        _206 = short_circuit(&&) copy _207 -> [eval: bb54, join: bb55];
+    }
+
+    bb54: {
+        _206 = copy _4 > const 0_i64;
+        goto -> bb55;
+    }
+
+    bb55: {
+        _205 = short_circuit(&&) copy _206 -> [eval: bb56, join: bb57];
+    }
+
+    bb56: {
+        _205 = copy _1 != copy _2;
+        goto -> bb57;
+    }
+
+    bb57: {
+        _204 = short_circuit(&&) copy _205 -> [eval: bb58, join: bb59];
+    }
+
+    bb58: {
+        _204 = copy _2 != copy _3;
+        goto -> bb59;
+    }
+
+    bb59: {
+        _203 = short_circuit(&&) copy _204 -> [eval: bb60, join: bb61];
+    }
+
+    bb60: {
+        _203 = copy _3 != copy _4;
+        goto -> bb61;
+    }
+
+    bb61: {
+        _210 = copy _1 * copy _2;
+        _212 = copy _1 == const 2_i64;
+        _211 = short_circuit(&&) copy _212 -> [eval: bb62, join: bb63];
+    }
+
+    bb62: {
+        _211 = copy _2 != const 3_i64;
+        goto -> bb63;
+    }
+
+    bb63: {
+        _0 = copy _1 + copy _2;
+        goto -> bb64;
+    }
+
+    bb64: {
         return;
     }
 }
@@ -2942,11 +2988,11 @@ fn user.AssertStmts(x: int, y: int) -> int {
     let _8: bool
     let _9: bool
     let _10: bool
-    let _11: int
+    let _11: bool
     let _12: int
     let _13: int
     let _14: int
-    let _15: bool
+    let _15: int
     let _16: bool
     let _17: bool
     let _18: bool
@@ -2957,8 +3003,8 @@ fn user.AssertStmts(x: int, y: int) -> int {
     let _23: bool
     let _24: bool
     let _25: bool
-    let _26: int
-    let _27: int
+    let _26: bool
+    let _27: bool
     let _28: int
     let _29: int
     let _30: int
@@ -2968,397 +3014,374 @@ fn user.AssertStmts(x: int, y: int) -> int {
     let _34: int
     let _35: int
     let _36: int
-    let _37: bool
-    let _38: bool
+    let _37: int
+    let _38: int
     let _39: bool
     let _40: bool
     let _41: bool
     let _42: bool
     let _43: bool
     let _44: bool
-    let _45: int
-    let _46: int
-    let _47: int
+    let _45: bool
+    let _46: bool
+    let _47: bool
     let _48: int
-    let _49: bool
-    let _50: bool
-    let _51: bool
+    let _49: int
+    let _50: int
+    let _51: int
     let _52: bool
     let _53: bool
     let _54: bool
     let _55: bool
     let _56: bool
-    let _57: int
-    let _58: int
-    let _59: int
-    let _60: int
+    let _57: bool
+    let _58: bool
+    let _59: bool
+    let _60: bool
+    let _61: int
+    let _62: int
+    let _63: int
+    let _64: int
 
     bb0: {
-        _10 = copy _1 > const 0_i64;
-        _9 = copy _10;
-        branch copy _10 -> [bb1, bb2];
+        _11 = copy _1 > const 0_i64;
+        _10 = short_circuit(&&) copy _11 -> [eval: bb1, join: bb2];
     }
 
     bb1: {
-        _9 = copy _1 < const 100_i64;
+        _10 = copy _1 < const 100_i64;
         goto -> bb2;
     }
 
     bb2: {
-        _8 = copy _9;
-        branch copy _9 -> [bb3, bb4];
+        _9 = short_circuit(&&) copy _10 -> [eval: bb3, join: bb4];
     }
 
     bb3: {
-        _8 = copy _2 > const 0_i64;
+        _9 = copy _2 > const 0_i64;
         goto -> bb4;
     }
 
     bb4: {
-        _7 = copy _8;
-        branch copy _8 -> [bb5, bb6];
+        _8 = short_circuit(&&) copy _9 -> [eval: bb5, join: bb6];
     }
 
     bb5: {
-        _7 = copy _2 < const 100_i64;
+        _8 = copy _2 < const 100_i64;
         goto -> bb6;
     }
 
     bb6: {
-        _6 = copy _7;
-        branch copy _7 -> [bb7, bb8];
+        _7 = short_circuit(&&) copy _8 -> [eval: bb7, join: bb8];
     }
 
     bb7: {
-        _6 = copy _1 != copy _2;
+        _7 = copy _1 != copy _2;
         goto -> bb8;
     }
 
     bb8: {
-        _5 = copy _6;
-        branch copy _6 -> [bb9, bb10];
+        _6 = short_circuit(&&) copy _7 -> [eval: bb9, join: bb10];
     }
 
     bb9: {
-        _11 = copy _1 + copy _2;
-        _5 = copy _11 < const 150_i64;
+        _12 = copy _1 + copy _2;
+        _6 = copy _12 < const 150_i64;
         goto -> bb10;
     }
 
     bb10: {
-        _4 = copy _5;
-        branch copy _5 -> [bb11, bb12];
+        _5 = short_circuit(&&) copy _6 -> [eval: bb11, join: bb12];
     }
 
     bb11: {
-        _12 = copy _1 * copy _2;
-        _4 = copy _12 > const 10_i64;
+        _13 = copy _1 * copy _2;
+        _5 = copy _13 > const 10_i64;
         goto -> bb12;
     }
 
     bb12: {
-        _3 = copy _4;
-        branch copy _4 -> [bb13, bb14];
+        _4 = short_circuit(&&) copy _5 -> [eval: bb13, join: bb14];
     }
 
     bb13: {
-        _13 = copy _1 - copy _2;
-        _3 = copy _13 != const 42_i64;
+        _14 = copy _1 - copy _2;
+        _4 = copy _14 != const 42_i64;
         goto -> bb14;
     }
 
     bb14: {
-        branch copy _3 -> [bb15, bb16];
+        _3 = short_circuit(&&) copy _4 -> [eval: bb15, join: bb16];
     }
 
     bb15: {
-        _14 = copy _1 % const 7_i64;
+        _15 = copy _1 % const 7_i64;
+        _3 = copy _15 == const 0_i64;
         goto -> bb16;
     }
 
     bb16: {
-        _25 = copy _1 > const 0_i64;
-        _24 = copy _25;
-        branch copy _25 -> [bb17, bb18];
+        _27 = copy _1 > const 0_i64;
+        _26 = short_circuit(&&) copy _27 -> [eval: bb17, join: bb18];
     }
 
     bb17: {
-        _24 = copy _1 < const 100_i64;
+        _26 = copy _1 < const 100_i64;
         goto -> bb18;
     }
 
     bb18: {
-        _23 = copy _24;
-        branch copy _24 -> [bb19, bb20];
+        _25 = short_circuit(&&) copy _26 -> [eval: bb19, join: bb20];
     }
 
     bb19: {
-        _23 = copy _2 > const 0_i64;
+        _25 = copy _2 > const 0_i64;
         goto -> bb20;
     }
 
     bb20: {
-        _22 = copy _23;
-        branch copy _23 -> [bb21, bb22];
+        _24 = short_circuit(&&) copy _25 -> [eval: bb21, join: bb22];
     }
 
     bb21: {
-        _22 = copy _2 < const 100_i64;
+        _24 = copy _2 < const 100_i64;
         goto -> bb22;
     }
 
     bb22: {
-        _21 = copy _22;
-        branch copy _22 -> [bb23, bb24];
+        _23 = short_circuit(&&) copy _24 -> [eval: bb23, join: bb24];
     }
 
     bb23: {
-        _21 = copy _1 != copy _2;
+        _23 = copy _1 != copy _2;
         goto -> bb24;
     }
 
     bb24: {
-        _20 = copy _21;
-        branch copy _21 -> [bb25, bb26];
+        _22 = short_circuit(&&) copy _23 -> [eval: bb25, join: bb26];
     }
 
     bb25: {
-        _26 = copy _1 + copy _2;
-        _20 = copy _26 < const 150_i64;
+        _28 = copy _1 + copy _2;
+        _22 = copy _28 < const 150_i64;
         goto -> bb26;
     }
 
     bb26: {
-        _19 = copy _20;
-        branch copy _20 -> [bb27, bb28];
+        _21 = short_circuit(&&) copy _22 -> [eval: bb27, join: bb28];
     }
 
     bb27: {
-        _27 = copy _1 * copy _2;
-        _19 = copy _27 > const 10_i64;
+        _29 = copy _1 * copy _2;
+        _21 = copy _29 > const 10_i64;
         goto -> bb28;
     }
 
     bb28: {
-        _18 = copy _19;
-        branch copy _19 -> [bb29, bb30];
+        _20 = short_circuit(&&) copy _21 -> [eval: bb29, join: bb30];
     }
 
     bb29: {
-        _28 = copy _1 - copy _2;
-        _18 = copy _28 != const 42_i64;
+        _30 = copy _1 - copy _2;
+        _20 = copy _30 != const 42_i64;
         goto -> bb30;
     }
 
     bb30: {
-        _17 = copy _18;
-        branch copy _18 -> [bb31, bb32];
+        _19 = short_circuit(&&) copy _20 -> [eval: bb31, join: bb32];
     }
 
     bb31: {
-        _29 = copy _1 % const 7_i64;
-        _17 = copy _29 == const 0_i64;
+        _31 = copy _1 % const 7_i64;
+        _19 = copy _31 == const 0_i64;
         goto -> bb32;
     }
 
     bb32: {
-        _16 = copy _17;
-        branch copy _17 -> [bb33, bb34];
+        _18 = short_circuit(&&) copy _19 -> [eval: bb33, join: bb34];
     }
 
     bb33: {
-        _30 = copy _2 % const 3_i64;
-        _16 = copy _30 == const 0_i64;
+        _32 = copy _2 % const 3_i64;
+        _18 = copy _32 == const 0_i64;
         goto -> bb34;
     }
 
     bb34: {
-        _15 = copy _16;
-        branch copy _16 -> [bb35, bb36];
+        _17 = short_circuit(&&) copy _18 -> [eval: bb35, join: bb36];
     }
 
     bb35: {
-        _32 = copy _1 + copy _2;
-        _33 = copy _1 * copy _2;
-        _31 = copy _32 + copy _33;
-        _15 = copy _31 > const 100_i64;
+        _34 = copy _1 + copy _2;
+        _35 = copy _1 * copy _2;
+        _33 = copy _34 + copy _35;
+        _17 = copy _33 > const 100_i64;
         goto -> bb36;
     }
 
     bb36: {
-        branch copy _15 -> [bb37, bb38];
+        _16 = short_circuit(&&) copy _17 -> [eval: bb37, join: bb38];
     }
 
     bb37: {
-        _35 = copy _1 * copy _1;
-        _36 = copy _2 * copy _2;
-        _34 = copy _35 + copy _36;
+        _37 = copy _1 * copy _1;
+        _38 = copy _2 * copy _2;
+        _36 = copy _37 + copy _38;
+        _16 = copy _36 < const 10000_i64;
         goto -> bb38;
     }
 
     bb38: {
-        _44 = copy _1 > const 0_i64;
-        _43 = copy _44;
-        branch copy _44 -> [bb39, bb40];
+        _47 = copy _1 > const 0_i64;
+        _46 = short_circuit(&&) copy _47 -> [eval: bb39, join: bb40];
     }
 
     bb39: {
-        _43 = copy _1 < const 100_i64;
+        _46 = copy _1 < const 100_i64;
         goto -> bb40;
     }
 
     bb40: {
-        _42 = copy _43;
-        branch copy _43 -> [bb41, bb42];
+        _45 = short_circuit(&&) copy _46 -> [eval: bb41, join: bb42];
     }
 
     bb41: {
-        _42 = copy _2 > const 0_i64;
+        _45 = copy _2 > const 0_i64;
         goto -> bb42;
     }
 
     bb42: {
-        _41 = copy _42;
-        branch copy _42 -> [bb43, bb44];
+        _44 = short_circuit(&&) copy _45 -> [eval: bb43, join: bb44];
     }
 
     bb43: {
-        _41 = copy _2 < const 100_i64;
+        _44 = copy _2 < const 100_i64;
         goto -> bb44;
     }
 
     bb44: {
-        _40 = copy _41;
-        branch copy _41 -> [bb45, bb46];
+        _43 = short_circuit(&&) copy _44 -> [eval: bb45, join: bb46];
     }
 
     bb45: {
-        _40 = copy _1 != copy _2;
+        _43 = copy _1 != copy _2;
         goto -> bb46;
     }
 
     bb46: {
-        _39 = copy _40;
-        branch copy _40 -> [bb47, bb48];
+        _42 = short_circuit(&&) copy _43 -> [eval: bb47, join: bb48];
     }
 
     bb47: {
-        _45 = copy _1 + copy _2;
-        _39 = copy _45 < const 150_i64;
+        _48 = copy _1 + copy _2;
+        _42 = copy _48 < const 150_i64;
         goto -> bb48;
     }
 
     bb48: {
-        _38 = copy _39;
-        branch copy _39 -> [bb49, bb50];
+        _41 = short_circuit(&&) copy _42 -> [eval: bb49, join: bb50];
     }
 
     bb49: {
-        _46 = copy _1 * copy _2;
-        _38 = copy _46 > const 10_i64;
+        _49 = copy _1 * copy _2;
+        _41 = copy _49 > const 10_i64;
         goto -> bb50;
     }
 
     bb50: {
-        _37 = copy _38;
-        branch copy _38 -> [bb51, bb52];
+        _40 = short_circuit(&&) copy _41 -> [eval: bb51, join: bb52];
     }
 
     bb51: {
-        _47 = copy _1 - copy _2;
-        _37 = copy _47 != const 42_i64;
+        _50 = copy _1 - copy _2;
+        _40 = copy _50 != const 42_i64;
         goto -> bb52;
     }
 
     bb52: {
-        branch copy _37 -> [bb53, bb54];
+        _39 = short_circuit(&&) copy _40 -> [eval: bb53, join: bb54];
     }
 
     bb53: {
-        _48 = copy _1 % const 7_i64;
+        _51 = copy _1 % const 7_i64;
+        _39 = copy _51 == const 0_i64;
         goto -> bb54;
     }
 
     bb54: {
-        _56 = copy _1 > const 0_i64;
-        _55 = copy _56;
-        branch copy _56 -> [bb55, bb56];
+        _60 = copy _1 > const 0_i64;
+        _59 = short_circuit(&&) copy _60 -> [eval: bb55, join: bb56];
     }
 
     bb55: {
-        _55 = copy _1 < const 100_i64;
+        _59 = copy _1 < const 100_i64;
         goto -> bb56;
     }
 
     bb56: {
-        _54 = copy _55;
-        branch copy _55 -> [bb57, bb58];
+        _58 = short_circuit(&&) copy _59 -> [eval: bb57, join: bb58];
     }
 
     bb57: {
-        _54 = copy _2 > const 0_i64;
+        _58 = copy _2 > const 0_i64;
         goto -> bb58;
     }
 
     bb58: {
-        _53 = copy _54;
-        branch copy _54 -> [bb59, bb60];
+        _57 = short_circuit(&&) copy _58 -> [eval: bb59, join: bb60];
     }
 
     bb59: {
-        _53 = copy _2 < const 100_i64;
+        _57 = copy _2 < const 100_i64;
         goto -> bb60;
     }
 
     bb60: {
-        _52 = copy _53;
-        branch copy _53 -> [bb61, bb62];
+        _56 = short_circuit(&&) copy _57 -> [eval: bb61, join: bb62];
     }
 
     bb61: {
-        _52 = copy _1 != copy _2;
+        _56 = copy _1 != copy _2;
         goto -> bb62;
     }
 
     bb62: {
-        _51 = copy _52;
-        branch copy _52 -> [bb63, bb64];
+        _55 = short_circuit(&&) copy _56 -> [eval: bb63, join: bb64];
     }
 
     bb63: {
-        _57 = copy _1 + copy _2;
-        _51 = copy _57 < const 150_i64;
+        _61 = copy _1 + copy _2;
+        _55 = copy _61 < const 150_i64;
         goto -> bb64;
     }
 
     bb64: {
-        _50 = copy _51;
-        branch copy _51 -> [bb65, bb66];
+        _54 = short_circuit(&&) copy _55 -> [eval: bb65, join: bb66];
     }
 
     bb65: {
-        _58 = copy _1 * copy _2;
-        _50 = copy _58 > const 10_i64;
+        _62 = copy _1 * copy _2;
+        _54 = copy _62 > const 10_i64;
         goto -> bb66;
     }
 
     bb66: {
-        _49 = copy _50;
-        branch copy _50 -> [bb67, bb68];
+        _53 = short_circuit(&&) copy _54 -> [eval: bb67, join: bb68];
     }
 
     bb67: {
-        _59 = copy _1 - copy _2;
-        _49 = copy _59 != const 42_i64;
+        _63 = copy _1 - copy _2;
+        _53 = copy _63 != const 42_i64;
         goto -> bb68;
     }
 
     bb68: {
-        branch copy _49 -> [bb69, bb70];
+        _52 = short_circuit(&&) copy _53 -> [eval: bb69, join: bb70];
     }
 
     bb69: {
-        _60 = copy _1 % const 7_i64;
+        _64 = copy _1 % const 7_i64;
+        _52 = copy _64 == const 0_i64;
         goto -> bb70;
     }
 
@@ -3909,8 +3932,7 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     bb2: {
         _8 = copy _3;
         _7 = copy _8 < const 100_i64;
-        _6 = copy _7;
-        branch copy _7 -> [bb3, bb4];
+        _6 = short_circuit(&&) copy _7 -> [eval: bb3, join: bb4];
     }
 
     bb3: {
@@ -3975,8 +3997,7 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     bb14: {
         _28 = copy _25;
         _27 = copy _28 < const 100_i64;
-        _26 = copy _27;
-        branch copy _27 -> [bb15, bb16];
+        _26 = short_circuit(&&) copy _27 -> [eval: bb15, join: bb16];
     }
 
     bb15: {
@@ -4070,8 +4091,7 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     bb31: {
         _85 = copy _3;
         _84 = copy _85 < const 100_i64;
-        _83 = copy _84;
-        branch copy _84 -> [bb32, bb33];
+        _83 = short_circuit(&&) copy _84 -> [eval: bb32, join: bb33];
     }
 
     bb32: {
@@ -4081,8 +4101,7 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     }
 
     bb33: {
-        _82 = copy _83;
-        branch copy _83 -> [bb34, bb35];
+        _82 = short_circuit(&&) copy _83 -> [eval: bb34, join: bb35];
     }
 
     bb34: {
@@ -4091,8 +4110,7 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     }
 
     bb35: {
-        _81 = copy _82;
-        branch copy _82 -> [bb36, bb37];
+        _81 = short_circuit(&&) copy _82 -> [eval: bb36, join: bb37];
     }
 
     bb36: {
@@ -4103,8 +4121,7 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     }
 
     bb37: {
-        _80 = copy _81;
-        branch copy _81 -> [bb38, bb39];
+        _80 = short_circuit(&&) copy _81 -> [eval: bb38, join: bb39];
     }
 
     bb38: {
@@ -4116,8 +4133,7 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     }
 
     bb39: {
-        _79 = copy _80;
-        branch copy _80 -> [bb40, bb41];
+        _79 = short_circuit(&&) copy _80 -> [eval: bb40, join: bb41];
     }
 
     bb40: {
@@ -4129,8 +4145,7 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     }
 
     bb41: {
-        _78 = copy _79;
-        branch copy _79 -> [bb42, bb43];
+        _78 = short_circuit(&&) copy _79 -> [eval: bb42, join: bb43];
     }
 
     bb42: {
@@ -4148,8 +4163,7 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     bb44: {
         _108 = copy _3;
         _107 = copy _108 < const 100_i64;
-        _106 = copy _107;
-        branch copy _107 -> [bb45, bb46];
+        _106 = short_circuit(&&) copy _107 -> [eval: bb45, join: bb46];
     }
 
     bb45: {
@@ -4159,8 +4173,7 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     }
 
     bb46: {
-        _105 = copy _106;
-        branch copy _106 -> [bb47, bb48];
+        _105 = short_circuit(&&) copy _106 -> [eval: bb47, join: bb48];
     }
 
     bb47: {
@@ -4169,8 +4182,7 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     }
 
     bb48: {
-        _104 = copy _105;
-        branch copy _105 -> [bb49, bb50];
+        _104 = short_circuit(&&) copy _105 -> [eval: bb49, join: bb50];
     }
 
     bb49: {
@@ -4181,8 +4193,7 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     }
 
     bb50: {
-        _103 = copy _104;
-        branch copy _104 -> [bb51, bb52];
+        _103 = short_circuit(&&) copy _104 -> [eval: bb51, join: bb52];
     }
 
     bb51: {
@@ -4194,8 +4205,7 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     }
 
     bb52: {
-        _102 = copy _103;
-        branch copy _103 -> [bb53, bb54];
+        _102 = short_circuit(&&) copy _103 -> [eval: bb53, join: bb54];
     }
 
     bb53: {
@@ -4207,8 +4217,7 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     }
 
     bb54: {
-        _101 = copy _102;
-        branch copy _102 -> [bb55, bb56];
+        _101 = short_circuit(&&) copy _102 -> [eval: bb55, join: bb56];
     }
 
     bb55: {
@@ -4220,8 +4229,7 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     }
 
     bb56: {
-        _100 = copy _101;
-        branch copy _101 -> [bb57, bb58];
+        _100 = short_circuit(&&) copy _101 -> [eval: bb57, join: bb58];
     }
 
     bb57: {
@@ -4232,8 +4240,7 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     }
 
     bb58: {
-        _99 = copy _100;
-        branch copy _100 -> [bb59, bb60];
+        _99 = short_circuit(&&) copy _100 -> [eval: bb59, join: bb60];
     }
 
     bb59: {
@@ -4244,8 +4251,7 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     }
 
     bb60: {
-        _98 = copy _99;
-        branch copy _99 -> [bb61, bb62];
+        _98 = short_circuit(&&) copy _99 -> [eval: bb61, join: bb62];
     }
 
     bb61: {
@@ -4272,8 +4278,7 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     bb64: {
         _135 = copy _132;
         _134 = copy _135 < const 1000_i64;
-        _133 = copy _134;
-        branch copy _134 -> [bb65, bb66];
+        _133 = short_circuit(&&) copy _134 -> [eval: bb65, join: bb66];
     }
 
     bb65: {
@@ -4299,8 +4304,7 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     bb68: {
         _147 = copy _137;
         _146 = copy _147 < const 1000000_i64;
-        _145 = copy _146;
-        branch copy _146 -> [bb69, bb70];
+        _145 = short_circuit(&&) copy _146 -> [eval: bb69, join: bb70];
     }
 
     bb69: {
@@ -4309,8 +4313,7 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     }
 
     bb70: {
-        _144 = copy _145;
-        branch copy _145 -> [bb71, bb72];
+        _144 = short_circuit(&&) copy _145 -> [eval: bb71, join: bb72];
     }
 
     bb71: {
@@ -4350,8 +4353,7 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     bb77: {
         _170 = copy _3;
         _169 = copy _170 < const 100_i64;
-        _168 = copy _169;
-        branch copy _169 -> [bb78, bb79];
+        _168 = short_circuit(&&) copy _169 -> [eval: bb78, join: bb79];
     }
 
     bb78: {
@@ -4361,8 +4363,7 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     }
 
     bb79: {
-        _167 = copy _168;
-        branch copy _168 -> [bb80, bb81];
+        _167 = short_circuit(&&) copy _168 -> [eval: bb80, join: bb81];
     }
 
     bb80: {
@@ -4371,8 +4372,7 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     }
 
     bb81: {
-        _166 = copy _167;
-        branch copy _167 -> [bb82, bb83];
+        _166 = short_circuit(&&) copy _167 -> [eval: bb82, join: bb83];
     }
 
     bb82: {
@@ -4383,8 +4383,7 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     }
 
     bb83: {
-        _165 = copy _166;
-        branch copy _166 -> [bb84, bb85];
+        _165 = short_circuit(&&) copy _166 -> [eval: bb84, join: bb85];
     }
 
     bb84: {
@@ -4396,8 +4395,7 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     }
 
     bb85: {
-        _164 = copy _165;
-        branch copy _165 -> [bb86, bb87];
+        _164 = short_circuit(&&) copy _165 -> [eval: bb86, join: bb87];
     }
 
     bb86: {
@@ -4409,8 +4407,7 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     }
 
     bb87: {
-        _163 = copy _164;
-        branch copy _164 -> [bb88, bb89];
+        _163 = short_circuit(&&) copy _164 -> [eval: bb88, join: bb89];
     }
 
     bb88: {
@@ -4428,8 +4425,7 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     bb90: {
         _190 = copy _3;
         _189 = copy _190 < const 100_i64;
-        _188 = copy _189;
-        branch copy _189 -> [bb91, bb92];
+        _188 = short_circuit(&&) copy _189 -> [eval: bb91, join: bb92];
     }
 
     bb91: {
@@ -4439,8 +4435,7 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     }
 
     bb92: {
-        _187 = copy _188;
-        branch copy _188 -> [bb93, bb94];
+        _187 = short_circuit(&&) copy _188 -> [eval: bb93, join: bb94];
     }
 
     bb93: {
@@ -4449,8 +4444,7 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     }
 
     bb94: {
-        _186 = copy _187;
-        branch copy _187 -> [bb95, bb96];
+        _186 = short_circuit(&&) copy _187 -> [eval: bb95, join: bb96];
     }
 
     bb95: {
@@ -4461,8 +4455,7 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     }
 
     bb96: {
-        _185 = copy _186;
-        branch copy _186 -> [bb97, bb98];
+        _185 = short_circuit(&&) copy _186 -> [eval: bb97, join: bb98];
     }
 
     bb97: {
@@ -4474,8 +4467,7 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     }
 
     bb98: {
-        _184 = copy _185;
-        branch copy _185 -> [bb99, bb100];
+        _184 = short_circuit(&&) copy _185 -> [eval: bb99, join: bb100];
     }
 
     bb99: {
@@ -4487,8 +4479,7 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     }
 
     bb100: {
-        _183 = copy _184;
-        branch copy _184 -> [bb101, bb102];
+        _183 = short_circuit(&&) copy _184 -> [eval: bb101, join: bb102];
     }
 
     bb101: {
@@ -4517,8 +4508,7 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     bb104: {
         _213 = copy _203;
         _212 = copy _213 < const 1000000_i64;
-        _211 = copy _212;
-        branch copy _212 -> [bb105, bb106];
+        _211 = short_circuit(&&) copy _212 -> [eval: bb105, join: bb106];
     }
 
     bb105: {
@@ -4527,8 +4517,7 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     }
 
     bb106: {
-        _210 = copy _211;
-        branch copy _211 -> [bb107, bb108];
+        _210 = short_circuit(&&) copy _211 -> [eval: bb107, join: bb108];
     }
 
     bb107: {
@@ -4555,8 +4544,7 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     bb110: {
         _229 = copy _219;
         _228 = copy _229 < const 1000000_i64;
-        _227 = copy _228;
-        branch copy _228 -> [bb111, bb112];
+        _227 = short_circuit(&&) copy _228 -> [eval: bb111, join: bb112];
     }
 
     bb111: {
@@ -4565,8 +4553,7 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     }
 
     bb112: {
-        _226 = copy _227;
-        branch copy _227 -> [bb113, bb114];
+        _226 = short_circuit(&&) copy _227 -> [eval: bb113, join: bb114];
     }
 
     bb113: {
@@ -4882,8 +4869,7 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
         _373 = copy _367;
         _371 = copy _372 * copy _373;
         _370 = copy _371 > const 500_i64;
-        _369 = copy _370;
-        branch copy _370 -> [bb147, bb148];
+        _369 = short_circuit(&&) copy _370 -> [eval: bb147, join: bb148];
     }
 
     bb147: {
@@ -4961,8 +4947,7 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     bb157: {
         _347 = copy _335;
         _346 = copy _347 < const 1000000_i64;
-        _345 = copy _346;
-        branch copy _346 -> [bb158, bb159];
+        _345 = short_circuit(&&) copy _346 -> [eval: bb158, join: bb159];
     }
 
     bb158: {
@@ -4971,8 +4956,7 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     }
 
     bb159: {
-        _344 = copy _345;
-        branch copy _345 -> [bb160, bb161];
+        _344 = short_circuit(&&) copy _345 -> [eval: bb160, join: bb161];
     }
 
     bb160: {
@@ -4982,8 +4966,7 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     }
 
     bb161: {
-        _343 = copy _344;
-        branch copy _344 -> [bb162, bb163];
+        _343 = short_circuit(&&) copy _344 -> [eval: bb162, join: bb163];
     }
 
     bb162: {
@@ -4993,8 +4976,7 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     }
 
     bb163: {
-        _342 = copy _343;
-        branch copy _343 -> [bb164, bb165];
+        _342 = short_circuit(&&) copy _343 -> [eval: bb164, join: bb165];
     }
 
     bb164: {
@@ -5830,8 +5812,7 @@ fn user.MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bo
         _38 = copy _28;
         _45 = copy _38;
         _44 = copy _45 > const 0_i64;
-        _43 = copy _44;
-        branch copy _44 -> [bb35, bb36];
+        _43 = short_circuit(&&) copy _44 -> [eval: bb35, join: bb36];
     }
 
     bb35: {
@@ -5841,8 +5822,7 @@ fn user.MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bo
     }
 
     bb36: {
-        _42 = copy _43;
-        branch copy _43 -> [bb37, bb38];
+        _42 = short_circuit(&&) copy _43 -> [eval: bb37, join: bb38];
     }
 
     bb37: {
@@ -5852,8 +5832,7 @@ fn user.MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bo
     }
 
     bb38: {
-        _41 = copy _42;
-        branch copy _42 -> [bb39, bb40];
+        _41 = short_circuit(&&) copy _42 -> [eval: bb39, join: bb40];
     }
 
     bb39: {
@@ -5863,8 +5842,7 @@ fn user.MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bo
     }
 
     bb40: {
-        _40 = copy _41;
-        branch copy _41 -> [bb41, bb42];
+        _40 = short_circuit(&&) copy _41 -> [eval: bb41, join: bb42];
     }
 
     bb41: {
@@ -5874,8 +5852,7 @@ fn user.MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bo
     }
 
     bb42: {
-        _39 = copy _40;
-        branch copy _40 -> [bb43, bb44];
+        _39 = short_circuit(&&) copy _40 -> [eval: bb43, join: bb44];
     }
 
     bb43: {
@@ -5932,8 +5909,7 @@ fn user.MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bo
         _54 = copy _28;
         _60 = copy _54;
         _59 = copy _60 > const 0_i64;
-        _58 = copy _59;
-        branch copy _59 -> [bb55, bb56];
+        _58 = short_circuit(&&) copy _59 -> [eval: bb55, join: bb56];
     }
 
     bb55: {
@@ -5943,8 +5919,7 @@ fn user.MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bo
     }
 
     bb56: {
-        _57 = copy _58;
-        branch copy _58 -> [bb57, bb58];
+        _57 = short_circuit(&&) copy _58 -> [eval: bb57, join: bb58];
     }
 
     bb57: {
@@ -5954,8 +5929,7 @@ fn user.MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bo
     }
 
     bb58: {
-        _56 = copy _57;
-        branch copy _57 -> [bb59, bb60];
+        _56 = short_circuit(&&) copy _57 -> [eval: bb59, join: bb60];
     }
 
     bb59: {
@@ -5965,8 +5939,7 @@ fn user.MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bo
     }
 
     bb60: {
-        _55 = copy _56;
-        branch copy _56 -> [bb61, bb62];
+        _55 = short_circuit(&&) copy _56 -> [eval: bb61, join: bb62];
     }
 
     bb61: {
@@ -5988,8 +5961,7 @@ fn user.MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bo
         _66 = copy _28;
         _72 = copy _66;
         _71 = copy _72 > const 0_i64;
-        _70 = copy _71;
-        branch copy _71 -> [bb65, bb66];
+        _70 = short_circuit(&&) copy _71 -> [eval: bb65, join: bb66];
     }
 
     bb65: {
@@ -5999,8 +5971,7 @@ fn user.MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bo
     }
 
     bb66: {
-        _69 = copy _70;
-        branch copy _70 -> [bb67, bb68];
+        _69 = short_circuit(&&) copy _70 -> [eval: bb67, join: bb68];
     }
 
     bb67: {
@@ -6010,8 +5981,7 @@ fn user.MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bo
     }
 
     bb68: {
-        _68 = copy _69;
-        branch copy _69 -> [bb69, bb70];
+        _68 = short_circuit(&&) copy _69 -> [eval: bb69, join: bb70];
     }
 
     bb69: {
@@ -6021,8 +5991,7 @@ fn user.MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bo
     }
 
     bb70: {
-        _67 = copy _68;
-        branch copy _68 -> [bb71, bb72];
+        _67 = short_circuit(&&) copy _68 -> [eval: bb71, join: bb72];
     }
 
     bb71: {
