@@ -1,0 +1,174 @@
+---
+title: How to write a Zed extension for a made up language
+description: 'Exploring the fascinating world of Wasm, Zed extensions and LSP'
+slug: how-to-write-a-zed-extension-for-a-made-up-language
+date: 'Jun 20, 2025'
+tags: ['engineering']
+author:
+  name: Egor Lukiyanov
+  imageUrl: /egor.jpg
+  linkedin: https://www.linkedin.com/in/egor-l/
+---
+
+I was first introduced to Zed when I was struggling along with the last
+of its kind intel generation macbook, which after 4 years of school and
+a degree was on its last legs. VS Code, although lightweight, was no match
+for the already struggling integrated graphics on my core i7 processor.
+The typing felt delayed and opening files was becoming a chore. Frusturated,
+I went for the nuclear option. Unmodified Vim, hosted on a remote machine. 
+However, as I navigated with my remapped capslock to ctrl and hundredth press
+of Ctrl+D and U, I felt that the land of UI beckoned me back. If only for the pleasure of
+once again using the long since forgotten scroll wheel of my mouse.
+Zed then, with its shiny "built with rust" coat, sleek IBM monoplex font,
+and recently added remote server support, was for me, the perfect choice.
+It held in it the promise land of vim and the luxuries of VS Code. 
+
+Firmly entrenched in the confines of my rust editor, I set about about with my day to day.
+That day to day eventually lead me to an internship at Baml, where I was tasked with an
+interesting project: Adding support to the brand new language in the editor of my choice.
+
+<Image
+   src="/blog/2025-06-20-how-to-write-a-zed-extension-for-a-made-up-language/diagram.jpg"
+   alt="Diagram on Language Server Stack for Baml"
+   width={800}
+   height={200}
+ />
+Diagram for the Baml Zed extension.
+
+## How a Zed extension works
+
+Before getting into weeds of LSP protocol and embedded language runtimes I will start with a brief overview of how Zed extensions are structured, and ultimately how they work. If you want more info Zed has a great blog on it: [Life of a Zed extension](https://zed.dev/blog/zed-decoded-extensions) 
+
+<Tip>
+LSP means **Language Server Protocol**. It's a standardized JSON‑RPC format (originally developed by Microsoft) that lets editors communicate with external "language servers." Those servers provide the editor with smart features like auto‑completion, go‑to‑definition, hover tooltips, diagnostics, and refactoring—so you only implement those once, and any editor that speaks LSP can use them
+</Tip>
+
+Zed extensions are small, sandboxed WebAssembly modules—no native code or crashing
+the main editor. You write your logic in Rust against `zed_extension_api`, compile
+to `wasm32-wasip1`, and bundle it (with `extension.toml` and any Tree-sitter grammars)
+into a `.tar.gz`. At runtime, Zed downloads the archive, unpacks it, and spins up the
+Wasm module using Wasmtime. Since the module runs in a sandbox, any failures stay
+contained, and Zed can reload it without restarting.
+
+Writing an extension means implementing the `zed::Extension` trait in Rust—methods like `language_server_command` tell Zed when to start an LSP process. Thanks to WIT/Iface and `wit_bindgen`, you can work with rich Rust types while the generated glue handles string and struct conversion between Wasm and the host.
+This makes the whole workflow—from coding to running—feel just like any Rust project,
+but with the safety and portability of Wasm.
+
+When figuring out how the write the extension the best resource I found was looking at
+the implementation of other language extensions such as [Docker](https://github.com/zed-extensions/dockerfile)
+or any other language. The [Zed API](https://docs.rs/zed_extension_api/latest/zed_extension_api/)
+is also minimal so it makes writing the actual extension
+fairly straightforward. However, the trickiest part is most likely writing the 
+custom tree-sitter query files `.scm`. I am still in the progress of
+finishing those for the Baml extension. 
+
+### An Overview:
+
+1. The `zed_extension_api` allows the extension to download a Language Server and a tree sitter grammar.
+2. Once both are downloaded the Zed editor throws them inside of two wasm files: `baml.wasm` for the tree-sitter grammar and `extension.wasm` for the actual extension. 
+	- Notably, the LSP is downloaded and executed as an executable outside of the wasm.
+  Otherwise it would not be able to communicate with the Zed LSP.
+  *This poses some tricky questions that I will cover later in this blog.*
+3. Finally the Wasm extensions are loaded and ran using the Wasm runtime called Wasmtime. 
+
+## Writing the extension
+
+### The problem
+
+Baml is a language designed for prompting LLMs and building reliable AI workflows. What this boils down to is a language which breaks apart the often complex API calls and presents it to the developer in a simple, unified debuggable format. The key here being **debuggability**. In order to be able to debug a prompting language you need a way of both running the language and seeing its result. 
+
+The solution? **Embed the entire language runtime** inside a frontend UI. What you get is fully integrated "playground" which allows you to write and test code *[anywhere](https://www.promptfiddle.com/)*. The question becomes then: **Can you put this inside of a Language Server?**
+
+<Tip>
+The VS Code extension for Baml already supports an embedded web-panel of the playground from inside the editor. However, this is supported through VS Code specific extension API which allows for serving web files alongside the LSP. Zed and other editors like neovim do not have support for a native web-panel, hence the LSP based embedding. 
+</Tip>
+
+The answer, surprisingly, is a resounding yes!
+
+As described earlier, the main component of an extension is its singular Rust file, 
+which contains all of the logic needed to install and launch the language server 
+and grammar. This is where the real magic happens: by embedding the entire 
+Baml runtime directly into that LSP process, you can run live code, capture output, 
+render errors, and feed back execution results—all from within the editor. When 
+the language server is launched, Zed spawns the embedded frontend with its wasm
+wrapped language runtime on a localhost server. That means you can get real-time
+feedback—completions, diagnostics, even live run results all from inside the editor.
+
+Looking at the diagram above, we can see that the wasm extension interfaces with
+the exposed zed interface to download and launch both the grammar parsing
+(via tree-sitter) and the language server. Afterwards in its initialization stage,
+the language server creates a localhost server to serve the playground frontend
+which has been embedded, via the `include_dir!` macro in the server file. The server
+also sets up a websocket which communicates with the event handler for the baml-playground.
+In other words, the language server functions as an adapter between the zed editor and 
+the baml-playground. Routing all of the LSP requests to the playground and back. 
+
+Should it even be possible to do this much in a Language Server? This becomes a 
+tricky problem
+when you consider this bypasses the safety of using Zeds Wasm to run the extension.
+While the extension code downloading the language server is safe. The language
+server itself is far from it.
+This has most likely not been a problem due to
+all of the language servers being open source including of course [Baml](https://github.com/BoundaryML/baml/tree/canary/engine/language_server).
+The rust analyzer [for example](https://rust-analyzer.github.io/book/security.html)
+can and will execute proc macros automatically, meaning that simply looking at the
+wrong code is enough to compromise your computer. Which is one of the reasons why
+VS Code now prompts for you to trust a directory. In general, this whole topic ends up expanding
+into a question of open source integrity and that is way beyond the scope of this blog.
+
+### Wasm all the way down
+
+Zed runs Wasm. The Baml runtime runs Wasm. Its Wasm embedded in typescript embedded in 
+rust and then wrapped in Wasm. Confusing? You bet.
+Zed uses a tightly controlled Wasmtime runtime to safely execute extension logic.
+Meanwhile, the Baml LSP uses whatever wasm runtime your browser runs: V8, SpiderMonkey,
+etc.
+In short, two runtimes: one Wasm inside Zed, one Wasm in the browser. Two sandboxes,
+two use-cases, and one shared goal—keeping things debuggable, flexible, and portable.
+
+<Tip>
+Technically, the LSP could have spun up the runtime natively—it's all written in Rust after all.
+But the simpler (and faster) path was to reuse the exact same Wasm module that powers
+the web playground, and wire up the LSP around it.
+</Tip>
+
+## Medium rare problems
+
+A thorny problem that has been put off for future work is the maintaining of 
+per-project versioning in Zed. In Baml, due the rapid development of the language, 
+the syntax is constantly changing. Versioning per baml project becomes
+vital in ensuring that all versions of the syntax can work correctly.
+
+While the release version can be specified inside the Zed extension. 
+It cannot pull in any context from inside the editor, excluding possibly 
+workspace settings. This leads to a tricky problem where its easy to download 
+the most recent version of Baml but difficult to automatically download the 
+same version of Baml as in th Baml project. One solution would be to have a 
+seperate global installation process for the runtime. This approach is used
+by alot of languages with some examples being 
+[rustup](https://github.com/rust-lang/rustup/blob/5e59246c45756b860ffa2c0e471e9989f0d56ff8/rustup-init.sh#L4)
+and python. However,
+this not only leads to its own twisted treasure trove of problems (as anyone
+that has suffered through getting legacy versions of python working for an obscure
+and poorly documented computer vision research project can attest), but also
+sacrifices the all important one click solution.
+
+Another solution then, could be to exploit the flexibility of the language server. 
+If the language server can modify files, why not have it replace itself with the correct version?
+Or if thats not possible, have a minimal LSP that exists only to download the correct 
+version.
+
+Additionally, Zed does not support the full LSP. It would be really nice if code lens 
+support existed to allow for the integration of a open playground button above functions. 
+Instead the current solution follows the steps of the [live server extension](https://github.com/frederik-uni/zed-live-server) 
+for zed, which uses a code action to send an event to the language server.
+
+Zed extensions offer a powerful and modern way to bring new languages
+like Baml into the editor experience—with safety, speed, and surprising
+flexibility thanks to Wasm and LSP. While challenges like versioning 
+remain, this experiment shows just how far you can push the model.
+Building for a made-up language might be niche, but the tools
+and ideas here apply broadly.
+
+Baml zed extension: https://github.com/BoundaryML/baml/pull/2044
+

@@ -1,0 +1,163 @@
+---
+title: Bringing Structured Outputs and Schema-Aligned Parsing to Golang, Java, PHP, Ruby, Rust, and More
+description: BAML now integrates with OpenAPI, allowing you to call BAML functions from any language.
+slug: announcing-openapi-support
+date: Sep 9, 2024
+tags: ['announcements']
+author:
+  name: Sam Lijin
+  imageUrl: /profile-sam.png
+  linkedin: https://www.linkedin.com/in/sxlijin/
+---
+
+With today's release of BAML 0.55.0, we're excited to announce that BAML now
+supports Golang, Java, PHP, Ruby, Rust, and any language which you might want to
+use. [Check it out here!][quickstart]
+
+[quickstart]: https://docs.boundaryml.com/docs/get-started/quickstart/openapi
+
+## What is BAML?
+
+BAML is an open-source programming language that combines a great developer
+experience - live preview, IDE integration, first-class tests - with [new
+techniques][schema-aligned parsing] to make it easy to get structured output
+out of LLMs.
+
+[schema-aligned parsing]: /blog/schema-aligned-parsing
+[docs]: https://docs.boundaryml.com
+
+## How do you support all languages?
+
+For any BAML function you define, you can now
+
+1. expose that function over an HTTP/RESTful interface, and
+2. call it using an OpenAPI-generated client in the language of your choice.
+
+<img src="/blog/openapi-diagram.drawio.svg" className="mx-auto my-0"/>
+
+And, of course, it's all 100% local, so you retain control over your prompts and
+data models.
+
+## Show me an example!
+
+Developers define two key primitives in BAML: prompts and output schemas. For
+example, to define an `ExtractReceipt` function that asks GPT4o to extract a
+receipt from an image:
+
+```baml
+class Receipt {
+  date string @description("ISO8601 formatted date")
+  total int @description("The total amount of the receipt")
+  items Item[] @description("The items on the receipt")
+}
+
+function ExtractReceipt(receipt: image) -> Receipt {
+    client "openai/gpt-4o"
+    prompt ...
+}
+```
+
+You can now start a BAML server to expose this function over HTTP:
+
+```bash
+npx @boundaryml/baml dev --preview --from baml_src/
+```
+
+which you can `curl` to get a parsed `Receipt`:
+
+```bash
+$ curl -X POST localhost:2024/call/ExtractReceipt \
+    -H 'content-type: application/json' \
+    -d '{"receipt": {"url": "https://i.redd.it/adzt4bz4llfc1.jpeg"}}'
+{
+  "establishment_name": "Brasa Rotisserie",
+  "date": "2024-01-27T20:50:00",
+  "total": 24,
+  "currency": "USD",
+  "items": [
+    {
+      "name": "Roasted Pork & Over Easy Egg Bowl",
+      "price": 15.25,
+      "quantity": 1
+    },
+    {
+      "name": "Indeed Mex Honey Lite",
+      "price": 6.5,
+      "quantity": 1
+    }
+  ]
+}
+```
+
+If you've followed the [quickstart guide][quickstart], the development server will
+also automatically generate an OpenAPI client for you in the language of your choosing.
+
+We've added example projects that demonstrate this for Golang, Java, PHP, Ruby,
+and Rust in our [`baml-examples`
+repo](https://github.com/BoundaryML/baml-examples), but to save you a click,
+we've also included snippets here:
+
+#### Golang
+
+```go
+imageUrl := "https://i.redd.it/adzt4bz4llfc1.jpeg"
+req := baml.ExtractReceiptRequest{
+  Receipt: baml.BamlImage{
+    BamlImageUrl: &baml.BamlImageUrl{
+      Url: imageUrl,
+    },
+  },
+}
+resp, _, err := b.ExtractReceipt(context.Background()).ExtractReceiptRequest(req).Execute()
+if err != nil {
+  log.Printf("Error when calling ExtractReceipt: %v\n", err)
+} else {
+  log.Printf("ExtractReceipt Response: %v\n", resp)
+}
+```
+
+#### Java
+
+```java
+var image = new BamlImage(new BamlImageUrl().url("https://i.redd.it/adzt4bz4llfc1.jpeg"));
+var req = new ExtractReceiptRequest().receipt(image);
+var resp = b.extractReceipt(req);
+System.out.println(resp);
+```
+
+#### PHP
+
+```php
+$image = new BamlImage();
+$image->setUrl("https://i.redd.it/adzt4bz4llfc1.jpeg");
+$req = new ExtractReceiptRequest();
+$req->setReceipt($image);
+$resp = $apiInstance->extractReceipt($req);
+echo "<pre> ExtractReceipt: " . print_r($resp, true) . "</pre>";
+```
+
+#### Ruby
+
+```ruby
+image = BamlClient::BamlImageUrl.new(url: 'https://i.redd.it/adzt4bz4llfc1.jpeg')
+req = BamlClient::ExtractReceiptRequest.new(receipt: image)
+resp = b.extract_receipt(req)
+puts resp
+```
+
+#### Rust
+
+```rust
+let image = BamlImage::BamlImageUrl(BamlImageUrl {
+    url: "https://i.redd.it/adzt4bz4llfc1.jpeg".to_string(),
+    media_type: None,
+});
+let req = ExtractReceiptRequest { receipt: image };
+let resp = b::extract_receipt(&config, req).await?;
+dbg!(resp);
+```
+
+You can see the full list of client languages that OpenAPI supports
+[here](https://github.com/OpenAPITools/openapi-generator?tab=readme-ov-file#overview).
+
+If this seems useful to you, visit the [quickstart] to try it out today!

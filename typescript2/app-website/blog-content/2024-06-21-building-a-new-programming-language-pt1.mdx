@@ -1,0 +1,233 @@
+---
+title: Building a New Programming Language in 2024, pt. 1
+description: An overview of the work that goes into building a new programming language.
+slug: building-a-new-programming-language
+date: Jun 21, 2024
+tags: ['engineering']
+author:
+  name: Sam Lijin
+  imageUrl: /profile-sam.png
+  linkedin: https://www.linkedin.com/in/sxlijin/
+---
+
+Here at BoundaryML, we've spent the past year building [BAML], a new programming
+language, with the goal of making it easy for developers to work with LLMs. We
+wanted to talk a bit about the engineering involved in this process (we'll discuss
+how we ideate on syntax in a future post).
+
+[BAML]: https://docs.boundaryml.com
+
+## Why make a language?
+
+For argument's sake, let's assume we've agreed that building a new language is a good idea.
+
+## Requirements
+
+At a minimum, users need to be able to:
+
+    - install it,
+    - write some code, and
+    - run it.
+
+In addition, users also expect all of the following:
+
+    - a way to try it out without installing it
+    - easy-to-understand, actionable error messages
+    - a community: a place to ask questions and provide feedback
+    - IDE integration
+        - syntax highlighting
+        - inline diagnostics
+        - jump-to-definition
+        - autocomplete
+
+BAML also isn't a general-purpose programming language, which
+means that we have one more critical requirement:
+
+    - interop with the languages our users write their software in (e.g. Python,
+        TypeScript, Ruby)
+
+This is by no means an exhaustive list (e.g. a standard library, toolchain
+manager, package manager, and package registry), but it's what we've started
+with.
+
+### Open-source and free
+
+We also believe that making a language open-source, and committing to keeping
+keeping our toolchain open-source and freely available, is a core requirement
+for success.
+
+That's why all the BAML source code is available on [GitHub][baml-github] and
+licensed using Apache 2.0.
+
+[baml-github]: https://github.com/BoundaryML/baml
+
+## What we've built
+
+Requirements are nice and all, but that doesn't say a lot about the actual
+engineering work involved in satisfying these tasks.
+
+### Choosing Rust 🦀
+
+Building BAML in Python or Typescript was a no-go for us. Since we need BAML to
+be able to interface with any language, we need to provide a bare-bones [foreign
+function interface (FFI)][ffi] for each language we support, so we had to use
+something more low-level.
+
+[ffi]: https://en.wikipedia.org/wiki/Foreign_function_interface
+
+We wrote our first compiler in C++, but we've since migrated to Rust (even
+though we didn't know any Rust when we started). Here's a few reasons why:
+
+    - Running a team with maintainable C++ code is hard
+    - It's hype 🚀
+    - You can design your code such that if it compiles, it's probably correct
+    - We didn't have to start from scratch, and were able to use the [Prisma]
+        implementation as a great reference for directory structure and organization
+    - We first thought that it wouldn't take more than 4 days to port our C++
+        code to Rust. It ended up taking 6 weeks 🤡
+
+[Prisma]: https://github.com/prisma/prisma-engines
+
+Other benefits we later discovered:
+
+    - There's a package for everything in Rust
+    - The UX in VSCode is great for writing _and_ testing Rust (this actually inspired the way we thought about testing in BAML)
+    - Learning Rust is much easier with the help of tools like Github Copilot
+
+### BAML itself: a compiler, runtime, and CLI
+
+To implement our compiler:
+
+    - we use a [Pest grammar] to lex the source code (inspired by [Prisma][pest-prisma]),
+    - we do a [first compiler pass to build an abstract syntax tree
+        (AST)][baml-ast], where we
+        - resolve symbols and types,
+        - collect diagnostics for malformed syntax trees (e.g. a partially-defined function), and
+        - once we've verified the syntax tree is well-formed, we [build an
+            intermediate representation (IR)][baml-ir][^ir],
+    - we then do a second compiler pass using the IR to
+        - apply static analysis to our template expansion on [jinja](https://jinja.palletsprojects.com/en/3.1.x/) (we use [minijinja] for
+            our templates, and built our own type checking using its exposed AST), and
+        - (optionally) [generate types and bindings] in our target languages (Python,
+            TypeScript, Ruby) for the types and functions that our users have
+            defined in BAML.
+
+Once users generate bindings for their BAML functions, they can call those bindings,
+which then calls into the BAML runtime:
+
+    - we use [pyo3] to expose our runtime in Python;
+    - we use [napi-rs] to expose our runtime in Node.js; (highly recommend napi-rs over [neon](https://github.com/neon-bindings/neon))
+    - we use [magnus] and [rb-sys] to expose our runtime in Ruby; and
+    - we use [wasm-bindgen] to expose our runtime in WASM, for use in the VSCode extension and browser.
+
+We use these same techniques to expose `baml-cli` in each target environment - the per-language
+customization is just how we retrieve `argv` (c.f. the [Python
+implementation][python-cli-impl]) - which allows us to guarantee the same
+behavior in each environment.
+
+[Pest grammar]: https://github.com/BoundaryML/baml/blob/21b1209ea1e90861e9fceffe790b914c95ada319/engine/baml-lib/schema-ast/src/parser/datamodel.pest
+[pest-prisma]: https://github.com/prisma/prisma-engines/blob/34ace0eb2704183d2c05b60b52fba5c43c13f303/psl/schema-ast/src/parser/datamodel.pest
+[baml-ast]: https://github.com/BoundaryML/baml/tree/21b1209ea1e90861e9fceffe790b914c95ada319/engine/baml-lib/schema-ast
+[baml-ir]: https://github.com/BoundaryML/baml/tree/21b1209ea1e90861e9fceffe790b914c95ada319/engine/baml-lib/baml-core/src/ir
+[generate types and bindings]: https://github.com/BoundaryML/baml/tree/21b1209ea1e90861e9fceffe790b914c95ada319/engine/language-client-codegen
+
+[minijinja]: https://docs.rs/minijinja
+[pyo3]: https://pyo3.rs/
+[napi-rs]: https://napi.rs/
+[magnus]: https://docs.rs/magnus
+[rb-sys]: https://github.com/oxidize-rb/rb-sys
+[wasm-bindgen]: https://rustwasm.github.io/wasm-bindgen/
+[python-cli-impl]: https://github.com/BoundaryML/baml/blob/21b1209ea1e90861e9fceffe790b914c95ada319/engine/language_client_python/src/lib.rs#L15-L24
+
+[^ir]: The distinction between an AST, IR, or any other flavor (e.g. Rust MIR, LLVM LLIR) is
+    somewhat arbitrary and tends to just reflect the abstractions used by a given compiler;
+    our distinction, right now, is that we guarantee our IR is well-formed but we make no such
+    guarantee for our AST.
+
+
+### An installer
+
+Since BAML isn't a general-purpose programming language, and is meant to be used via
+interop with user's preferred languages - e.g. Python, TypeScript, Ruby - we can rely on
+the package registries of those languages to distribute our compiler, runtime, and CLI.
+
+(If this wasn't the case, we'd need to ship at least a portable installer script, like
+[Docker does][docker-install-script], or our own `apt` and `brew` sources.)
+
+[docker-install-script]: https://github.com/docker/docker-install
+
+### A way to try it out without installing it
+
+This is [promptfiddle.com](https://promptfiddle.com), which is implemented using:
+
+    - [CodeMirror](https://codemirror.net/), to provide IDE-like features (we considered Monaco, but wanted to
+        keep as much of the logic in-browser as possible, and were inspired by
+        [repl.it's bet][repl-it-codemirror])
+    - a [Lezer grammar for BAML], to back the syntax highlighting
+    - our own in-memory file tree, to provide an IDE-like experience
+    - a WASM build of our compiler and runtime, to provide real-time inline diagnostics
+
+[Lezer grammar for BAML]: https://github.com/BoundaryML/baml/blob/73cf36d0d5930e52b4914bbba0299835060a2a03/typescript/codemirror-lang-baml/src/syntax.grammar
+[repl-it-codemirror]: https://blog.replit.com/codemirror
+
+### IDE integration
+
+We provide IDE integration using a [VSCode extension][baml-vscode]:
+
+    - a [TextMate grammar] powers syntax highlighting (if you're keeping count, yes, that's
+        three different BAML grammars)
+    - the extension is [implemented in TypeScript][baml-vscode-impl], and uses
+        `vscode-languageclient` to communicate with the language server
+    - the language server (also [implemented in TypeScript][baml-lsp-impl][^ide-lsp-napi])
+        provides diagnostics, jump-to-definition, and autocomplete[^ide-autocomplete], and is
+        implemented using `vscode-languageserver` and the WASM bindings to the
+        BAML compiler; and
+    - a React app in a [VSCode webview] powers the in-VSCode playground, which
+        allows users to run individual BAML functions interactively.
+
+[baml-vscode]: https://marketplace.visualstudio.com/items?itemName=Boundary.baml-extension
+[baml-vscode-impl]: https://github.com/BoundaryML/baml/tree/21b1209ea1e90861e9fceffe790b914c95ada319/typescript/vscode-ext/packages
+[baml-lsp-impl]: https://github.com/BoundaryML/baml/tree/21b1209ea1e90861e9fceffe790b914c95ada319/typescript/vscode-ext/packages/language-server
+[TextMate grammar]: https://code.visualstudio.com/api/language-extensions/syntax-highlight-guide
+[VSCode Webview]: https://code.visualstudio.com/api/extension-guides/webview
+
+[^ide-autocomplete]: We've only actually implemented autocomplete suggestions for one specific
+case so far; doing it more generally is on our to-do list.
+[^ide-lsp-napi]: We considered using the NAPI-RS bindings to the BAML compiler - we know
+it's possible to [ship VSCode extensions with native
+dependencies][native-bindings-vscode], but we were concerned about how much work
+we'd have to put into making our NAPI-RS bindings build for
+[Electron][native-bindings-electron].
+
+[native-bindings-vscode]: https://code.visualstudio.com/api/working-with-extensions/publishing-extension#platformspecific-extensions
+[native-bindings-electron]: https://www.electronjs.org/docs/latest/tutorial/using-native-node-modules
+
+### Documentation
+
+Our documentation is currently hosted on Mintlify, and is written using MDX (Markdown-React).
+
+The current way we've broken down [docs.boundaryml.com](https://docs.boundaryml.com) is to have sections for:
+
+    - quickstart,
+    - language tutorials,
+    - usage tutorials (i.e. how to actually call BAML functions from your Python/TypeScript/Ruby code), and
+    - reference documentation.
+
+We'll likely have to migrate soon, though, because Mintlify doesn't support custom
+syntax highlighting and has no plans to do so.
+
+### Community
+
+We provide a [Discord server](https://docs.boundaryml.com/discord) where users
+can ask questions and provide feedback in real-time, which is the primary way we
+engage with our community. (We would offer a community Slack, except Slack has
+no community pricing.)
+
+Lately, we've also had users engage with us via GitHub Issues and Discussions
+(we've set up Slack notification bridges for these), as well as on Hacker News
+and Reddit - we recognize that we need to meet our users where they are.
+
+
+## More to come!
+
+We'll dive more into the details of all this in the next posts.

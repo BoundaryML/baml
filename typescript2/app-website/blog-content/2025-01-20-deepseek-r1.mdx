@@ -1,0 +1,161 @@
+---
+title: Structured outputs with Deepseek R1
+description: How to do tool-calling or function-calling with Deepseek R1
+slug: deepseek-r1-function-calling
+date: Jan 20, 2025
+tags: ['tutorials']
+author:
+  name: Vaibhav Gupta
+  imageUrl: /profile-vbv.jpeg
+  linkedin: https://www.linkedin.com/in/vaigup
+---
+
+Deepseek has recently released [Deepseek R1](https://www.deepseek.com/), a reasoning model that can match the performance of OpenAI's o1 model at some tasks, at 1/50th of the cost (as of January 2025).
+
+Our prompting framework, [BAML](https://boundaryml.com), lets you do function-calling / tool-use with DeepseekR1 even when it is not officially supported.
+
+Let's look at an interactive example!
+
+### Classication with Deepseek R1 and BAML
+First we write some BAML code to classify messages. Here we write a function that takes a message and returns a category, that will be executed by an LLM. BAML will parse the result for you into the right enum type.
+
+<BamlBlock name="1" bamlCode={`
+
+client MyDeepseekR1 {
+    provider openai-generic
+    options {
+      model "deepseek/deepseek-r1"
+      base_url "https://openrouter.ai/api/v1"
+    }
+}
+
+enum Category {
+    TECHNICAL_ISSUE
+    BILLING_QUESTION
+    FEATURE_REQUEST
+    OTHER
+}
+
+class Response {
+    category Category
+    priority string @description("high, medium, or low")
+    message string @description(#"
+      a helpful response to the customer's inquiry
+      use triple quote strings for multiline
+     "#)
+    internal_notes string @description("notes for the support team")
+}
+
+function ClassifySupport(message: string) -> Response {
+    client MyDeepseekR1
+    prompt #"
+      Classify the customer support inquiry and provide appropriate response details.
+
+      {{ ctx.output_format(prefix="Using this:") }}
+      {{ _.role("user") }}
+      {{ message }}
+    "#
+}
+
+test TestName {
+    functions [ClassifySupport]
+    args {
+      message "The app keeps crashing when I try to upload files"
+    }
+    @@assert(category, {{ this.category == "TECHNICAL_ISSUE" }})
+}
+`}
+
+
+
+ />
+
+ You can run this in python like this:
+
+```python
+from baml_client import b
+response = b.ClassifySupport(message="The app keeps crashing when I try to upload files")
+print(f"Category: {response.category}")
+print(f"Priority: {response.priority}")
+```
+
+### Tool calling with Deepseek R1 and BAML
+BAML lets you write tools like normal Unions of types. Here's another example where we have two tools, one that searches products, and one that schedules appointments.
+
+<BamlBlock name="2" bamlCode={`
+client MyDeepseekR1 {
+    provider openai-generic
+    options {
+      model "deepseek/deepseek-r1"
+      base_url "https://openrouter.ai/api/v1"
+    }
+}
+
+class ProductSearch {
+    query string @description("search query for the product")
+    maxPrice float @description("maximum price filter")
+    category string @description("product category filter")
+}
+
+class ScheduleAppointment {
+    customerName string
+    serviceType string @description("type of service requested")
+    preferredDate string @description("As an ISO8601 timestamp")
+    duration int @description("duration in minutes")
+}
+
+function ChooseOneTool(user_message: string) -> ProductSearch | ScheduleAppointment {
+    client MyDeepseekR1
+    prompt #"
+      Choose the right schema that contains all the information in this message:
+      ---
+      {{ user_message }}
+      ---
+
+      {# special macro to print the output schema. #}
+      {{ ctx.output_format }}
+
+      JSON:
+    "#
+}
+
+test TestOneFunc {
+    functions [ChooseOneTool]
+    args {
+      user_message #"
+        Find me running shoes under $100 in the sports category
+      "#
+    }
+}
+
+test TestOneFunc2 {
+    functions [ChooseOneTool]
+    args {
+      user_message #"
+        I need to schedule a haircut appointment for John Smith next Tuesday at 2pm for 30 minutes
+      "#
+    }
+}
+`}
+
+ />
+ You can call this in python like this (we also support other languages!):
+
+```python
+from baml_client import b
+from baml_client.types import ProductSearch, ScheduleAppointment
+response = b.ChooseOneTool(user_message="Find me running shoes under $100 in the sports category")
+print(response)
+
+if isinstance(response, ProductSearch):
+    print(f"Product Search called:")
+    print(f"Query: {response.query}")
+    print(f"Max Price: ${response.maxPrice}")
+    print(f"Category: {response.category}")
+elif isinstance(response, ScheduleAppointment):
+    print(f"Schedule Appointment called:")
+    print(f"Customer: {response.customerName}")
+    print(f"Service: {response.serviceType}")
+    print(f"Date: {response.preferredDate}")
+    print(f"Duration: {response.duration} minutes")
+```

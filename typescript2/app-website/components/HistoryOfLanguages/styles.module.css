@@ -1,0 +1,267 @@
+.section {
+  width: 100%;
+  background: #fafaf6;
+  color: #1a1a1a;
+  border-top: 1px solid #d4d4d4;
+  border-bottom: 1px solid #d4d4d4;
+}
+
+.intro {
+  max-width: 76rem;
+  margin: 0 auto;
+  padding: 4rem 1.25rem 1.5rem;
+}
+
+.title {
+  font-size: clamp(2rem, 4vw, 3.6rem);
+  line-height: 1.1;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.subtitle {
+  margin-top: 0.75rem;
+  font-size: 0.95rem;
+  color: #474747;
+}
+
+/* ── Timeline track ── */
+
+.track {
+  position: relative;
+  max-width: 76rem;
+  margin: 0 auto;
+  padding: 0.5rem 1.25rem 3rem 3rem;
+}
+
+/* Vertical timeline line */
+.track::before {
+  content: '';
+  position: absolute;
+  left: 1.25rem;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: linear-gradient(
+    to bottom,
+    transparent 0%,
+    #d4d4d4 4%,
+    #d4d4d4 94%,
+    transparent 100%
+  );
+}
+
+/* ── Panel slot ── */
+
+.panelSlot {
+  position: relative;
+  padding: 2.5rem 0 1rem;
+}
+
+/* Timeline dot for each panel */
+.panelSlot::before {
+  content: '';
+  position: absolute;
+  left: -1.875rem; /* centers on the track::before line at left: 1.25rem */
+  top: 3rem;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #c8c8c0;
+  border: 2px solid #fafaf6;
+  transition: background 400ms ease;
+}
+
+.panelSlot[data-active='true']::before {
+  background: #7c3aed;
+}
+
+/* ── Panel card ── */
+
+.panel {
+  opacity: 0;
+  transform: translateY(16px);
+  transition: opacity 500ms ease, transform 500ms ease;
+}
+
+.panel[data-active='true'] {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.panelInner {
+  width: 100%;
+  padding: 0;
+}
+
+.transitionText {
+  font-style: italic;
+  color: #4d4d4d;
+  font-size: 0.98rem;
+}
+
+.heading {
+  display: flex;
+  gap: 0.9rem;
+  align-items: baseline;
+  margin-top: 0.75rem;
+}
+
+.language {
+  font-size: clamp(2rem, 6vw, 4.8rem);
+  line-height: 1;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+.languageBaml {
+  composes: language;
+  color: #7c3aed;
+}
+
+.year {
+  font-size: clamp(1rem, 2vw, 1.4rem);
+  font-weight: 600;
+  color: #525252;
+}
+
+.asciiContainer {
+  margin-top: 1.25rem;
+  border: 1px solid #d3d3d3;
+  border-radius: 0.5rem;
+  padding: 1rem;
+  background: #f6f6f1;
+  font-family: 'JetBrains Mono', 'Fira Code', 'IBM Plex Mono', ui-monospace,
+    SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New',
+    monospace;
+  color: #1a1a1a;
+}
+
+.tagline {
+  margin-top: 1rem;
+  font-size: 1rem;
+  color: #393939;
+}
+
+.morphRoot {
+  position: relative;
+}
+
+.morphAscii {
+  margin: 0;
+  white-space: pre;
+}
+
+.morphGlyph {
+  display: inline-block;
+  opacity: 1;
+  transform: translate3d(0, 0, 0);
+}
+
+.morphGlyphDissolve {
+  display: inline-block;
+  opacity: 0;
+  transform: translate3d(var(--driftX), var(--driftY), 0) rotate(8deg);
+  transition: transform 1200ms ease-in-out, opacity 1200ms ease-in-out;
+  transition-delay: var(--delay);
+}
+
+.codeLayer {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transform: translateY(16px) scale(0.985);
+  pointer-events: none;
+}
+
+.codeLayerVisible {
+  composes: codeLayer;
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  transition: opacity 700ms ease, transform 700ms ease;
+}
+
+.morphCode {
+  margin: 0;
+  background: #f8f7f3;
+  border: 1px solid #d8d8d8;
+  border-radius: 8px;
+  padding: 0.9rem;
+  overflow-x: auto;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.codeLine {
+  white-space: pre;
+}
+
+.tokenPlain {
+  color: #222;
+}
+
+.tokenKeyword {
+  color: #7c3aed;
+  font-weight: 600;
+}
+
+.tokenType {
+  color: #116f7a;
+}
+
+.tokenString {
+  color: #955812;
+}
+
+/* ── Particle canvas ── */
+
+.canvasWrap {
+  position: relative;
+  width: 100%;
+  cursor: crosshair;
+}
+
+.bamlOverlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transform: translateY(12px) scale(0.985);
+  pointer-events: none;
+  transition: opacity 700ms ease, transform 700ms ease;
+}
+
+.bamlOverlayVisible {
+  composes: bamlOverlay;
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  pointer-events: auto;
+}
+
+@media (max-width: 768px) {
+  .intro {
+    padding-top: 2.8rem;
+  }
+
+  .track {
+    padding-left: 2.25rem;
+  }
+
+  .track::before {
+    left: 1rem;
+  }
+
+  .panelSlot::before {
+    left: -1.375rem;
+  }
+
+  .asciiContainer {
+    padding: 0.75rem;
+  }
+
+  .tagline {
+    font-size: 0.92rem;
+  }
+}

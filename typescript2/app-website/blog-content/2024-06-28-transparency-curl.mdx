@@ -1,0 +1,38 @@
+---
+title: Transparency as a Tenet
+description: Exposing the inner workings of BAML
+slug: transparency-as-a-tenet
+date: Jun 28, 2024
+tags: ['engineering']
+author:
+  name: Anish Palakurthi
+  imageUrl: /profile-anish.png
+  linkedin: https://www.linkedin.com/in/anish-palakurthi/
+---
+
+BOOM! A new feature for BAML: the Raw cURL Panel. This addition allows users to view the raw request that BAML dynamically generates for you based on the provider you're using and your use cases, providing full transparency through BAML's abstractions.
+
+<Video src="/videos/raw-curl.mp4" title="" width={1000} />
+
+
+Our request builder seamlessly renders the changes in your prompt and the client you're using! The requests are execution-ready — no further modifications are needed. You can run them with your preferred providers in just one click.
+
+Transparency is a core principle at BoundaryML, particularly in an industry where complex abstraction layers often obscure the underlying processes. BAML achieves this transparency because **WE DEVELOPED OUR OWN PROGRAMMING LANGUAGE.** Unlike imported libraries, which lack the flexibility to support such transparency, BAML allows us to effortlessly showcase our core values.
+
+No other LLM querying library offers this capability.
+
+<br/>
+This feature even came in handy for our own debugging! Notice in our cURL that we were sending an empty text object before each image (patched that!)
+
+<img src="/bad_curl.png" alt="Bad cURL" />
+<img src="/good_curl.png" alt="Good cURL"/>
+
+Now you can see all that goes into BAML's magic! We're excited to see how you use this feature to understand and optimize your own models.
+
+
+### [Try it yourself here!](https://www.promptfiddle.com/See-the-cURL--iqwcX) or [visit our repo here!](https://github.com/BoundaryML/baml)
+
+
+---
+
+

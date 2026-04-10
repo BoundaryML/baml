@@ -1,0 +1,129 @@
+---
+title: Beating OpenAI's structured outputs on cost, accuracy and speed — An interactive deep-dive
+description: We leveraged a novel technique, schema-aligned parsing, to achieve SOTA on BFCL with every LLM.
+slug: sota-function-calling
+date: Aug 13, 2024
+tags: ['research']
+author:
+  name: Vaibhav Gupta
+  imageUrl: /profile-vbv.jpeg
+  linkedin: https://www.linkedin.com/in/vaigup
+---
+
+Click to [play with the data](#bfcl-results)
+
+Using [BAML](https://www.github.com/boundaryml/baml), we achieved state-of-the-art results for every model in the **[Berkeley function-calling benchmark (BFCL)](https://gorilla.cs.berkeley.edu/leaderboard.html)** — nearly solving it<sup>1</sup>.
+
+### Key Findings
+
+1. **BAML is more accurate and cheaper** for function calling than any native function calling API. It's easily 2-4x faster than OpenAI's FC-strict API.
+
+2. **BAML's technique is model-agnostic** and works with any model without modification (even open-source ones).
+
+3. **gpt-3.5-turbo**, **gpt-4o-mini**, and **claude-haiku** with BAML work almost as well as gpt4o with structured output (less than 2%)
+
+4. Using FC-strict over naive function calling improves every older OpenAI models, **but `gpt-4o-2024-08-06` gets worse**
+
+### Background
+
+Until now, the only way to get better results from LLMs was to:
+
+1. Prompt engineer the heck out of it with longer and more complex prompts
+2. Train a better model
+
+### What BAML does differently
+
+1. Replaces JSON schemas with typescript-like definitions. e.g. `string[]` is easier to understand than `{"type": "array", "items": {"type": "string"}}`.
+2. Uses a novel parsing technique (Schema-Aligned Parsing) inplace of JSON.parse. SAP allows for fewer tokens in the output with no errors due to JSON parsing. For example, this can be parsed even though there are no quotes around the keys. [PARALLEL-5](/blog/sota-function-calling?q=5&cmp=accuracy&test=parallel_function&model=gpt-4o-2024-08-06&r=1#bfcl-results)
+```
+[
+  {
+    streaming_service: "Netflix",
+    show_list: ["Friends"],
+    sort_by_rating: true
+  },
+  {
+    streaming_service: "Hulu",
+    show_list: ["The Office", "Stranger Things"],
+    sort_by_rating: true
+  }
+]
+```
+
+We used our prompting DSL (BAML) to achieve this[2], without using JSON-mode or any kind of constrained generation. We also compared against [OpenAI's structured outputs](https://openai.com/index/introducing-structured-outputs-in-the-api/) that uses the 'tools' API, which we call "FC-strict".
+
+We are excited to share these results, as using prompting over other approaches lowers the barrier to get reliable structured data from any model, open-source or not.
+
+### Noteable examples
+
+1. FC-Strict leans towards fewers tools than expected from the user query
+    * [PARALLEL-71](/blog/sota-function-calling?q=71&cmp=accuracy&test=parallel_function&model=gpt-4o-2024-08-06&r=3#bfcl-results)
+    * [PARALLEL-114](/blog/sota-function-calling?q=114&cmp=accuracy&test=parallel_function&model=gpt-4o-2024-08-06&r=3#bfcl-results)
+    * [PARALLEL-153](/blog/sota-function-calling?q=153&cmp=accuracy&test=parallel_function&model=gpt-4o-2024-08-06&r=3#bfcl-results)
+
+2. FC-Strict will sometimes not choose a tool and output in pure text instead
+    * [MULTIPLE-50](/blog/sota-function-calling?q=50&cmp=accuracy&test=parallel_function&model=gpt-4o-2024-08-06&r=3#bfcl-results)
+    * [MULTIPLE-10](/blog/sota-function-calling?q=10&cmp=accuracy&test=multiple_function&model=gpt-4o-2024-08-06&r=3#bfcl-results)
+    * [SIMPLE-172](/blog/sota-function-calling?q=172&cmp=accuracy&test=simple&model=gpt-4o-2024-08-06&r=3#bfcl-results)
+
+3. The benchmark has quite a few ambiguous prompts and schemas (not exhaustive)
+    * Prompt doesn't specify interest rate format (0-100 vs 0.00-1.00) [SIMPLE-145](/blog/sota-function-calling?q=145&cmp=accuracy&test=simple&model=gpt-4o-2024-08-06&r=3#bfcl-results)
+    * Schema doesn't allow LLM to indicate size of each grocery item: [PARALLEL-54](/blog/sota-function-calling?q=54&cmp=accuracy&test=parallel_function&model=gpt-4o-2024-08-06&r=3#bfcl-results)
+    * Asserts compare int vs float, when they should allow implicit conversions [PARALLEL-26](/blog/sota-function-calling?q=26&cmp=accuracy&test=parallel_function&model=gpt-4o-2024-08-06&r=3#bfcl-results) [PARALLEL-9](/blog/sota-function-calling?q=9&cmp=accuracy&test=parallel_function&model=gpt-4o-2024-08-06&r=3#bfcl-results)
+
+4. The Berkley Function Calling Prompting techinque fails on the newest model because the model's results are no longer parseable (prompting the model with `NO ADDITONAL TEXT` no longer works)
+    - [SIMPLE-0](/blog/sota-function-calling?q=10&cmp=accuracy&test=simple&model=gpt-4o-2024-08-06&r=4#bfcl-results)
+
+### Thoughts on the future
+
+Instead of efforts towards training models for structured data or contraining tokens at generation time, we believe there is un-tapped value in applying engineering efforts to areas like <b>robustly handling the output of models</b>.
+
+Models are really, really good an semantic understanding.
+
+Models are really bad at things that have to be perfect like perfect JSON, perfect SQL, compiling code, etc.
+
+Research has shown that models perform worse when they are constrained
+
+<div className="border-l-4 border-gray-300 pl-4 py-2 my-4">
+  <p className="italic text-gray-600">"Comparing results without and with schema constraint, adding schema not only increase the sensitivity to prompt but also degrade in average performance."</p>
+  <p className="mt-2 text-sm text-gray-500">- [Let Me Speak Freely](https://arxiv.org/abs/2408.02442)<br />Zhi Rui Tam, et. all, Aug 2024</p>
+</div>
+
+
+
+#### Further reading
+
+- [Why JSON Schema is bad for prompts](/blog/type-definition-prompting-baml#why-type-def-prompting)
+- [What is SAP - Schema-Aligned-Parsing?](/blog/schema-aligned-parsing#sap)
+- [What is Function Calling and how does it work?](/blog/schema-aligned-parsing#function-calling)
+
+
+#### Footnotes
+
+1. No model/technique can ever reach 100% with the current data since some prompts are confusing even to humans, or the results are not checked correctly. We did not change/fix the existing assertions (yet) to compare our score more closely against other previous runs of this benchmark. [See the code on github](https://github.com/BoundaryML/berkeley-gorilla/tree/vbv/baml-test)
+2. BAML uses a prompting technique here, but will soon support the tool APIs.
+
+
+<div style={{textDecorationLine: "none"}} id="bfcl-results">
+## BFCL Results
+    <style jsx="true">{`
+      .table-container {
+        display: flex;
+        flex-direction: column;
+        overflow-x: scroll;
+        align-items: flex-start;
+        width: 100vw;
+        margin-left: min(0px, calc(50% - 50vw));
+        padding: 0 3em;
+      }
+      table {
+        table-layout: fixed;
+        max-width: 80em;
+        margin-left: max(0px, calc(50vw - 40em));
+      }
+    `}</style>
+<BFCLDataComponent />
+</div>
+
+<br/>
+<br/>

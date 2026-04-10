@@ -1,0 +1,106 @@
+---
+title: BAML Launch Week Day 1
+description: VS Code LLM Playground 2.0
+slug: launch-week-day-1
+og:
+  title: Launch Week 2025
+  description: "Day 1: VS Code LLM Playground 2.0"
+date: Jan 27, 2025
+tags: ['launch week']
+author:
+  name: Aaron Villalpando
+  imageUrl: /aaronv.jpg
+  linkedin: https://www.linkedin.com/in/aaron-villalpando-99284576/
+---
+
+<DevSpotlight
+  users={[
+    {
+      name: "Ken Miller",
+      company: "Product Hunt",
+      role: "Sr. Staff SWE",
+      companyDescription: "Product Hunt is a place for product-loving enthusiasts to share and geek out about the latest tech creations.",
+      bamlTestimonial: "We needed a tool to auto-suggest product categories to ease the mods' workload. However, trial-and-error prompting introduced issues like invalid JSON and hallucinations. Since adopting BAML, these problems are eliminated, allowing me to code with confidence.",
+      imageUrl: "/launchweekAssets/ken.jpeg",
+      companyUrl: "https://www.producthunt.com/",
+      logoUrl: "/launchweekAssets/productHuntLogo.png",
+      logoWidth: 120,
+      logoHeight: 40
+    },
+    {
+      name: "Gabe Villasana",
+      company: "GovEagle",
+      role: "CTO & Cofounder",
+      companyDescription: "GovEagle helps BD teams in government contracts win more awards by streamlining proposal development from weeks to hours.",
+      bamlTestimonial: "BAML has been critical in keeping GovEagle resilient to LLM non-determinism. By abstracting away complexity, it replaced hundreds of Eng hours spent on deserialization, retries, and prompt engineering with the best Dev Exp among LLM frameworks.",
+      imageUrl: "/launchweekAssets/gabe.jpeg",
+      companyUrl: "https://www.goveagle.com/",
+      logoUrl: "/launchweekAssets/govEagleLogo.png",
+      logoWidth: 120,
+      logoHeight: 40
+    }
+  ]}
+/>
+
+## VS Code LLM Playground 2.0
+
+One of the core philosophies behind BAML has always been to provide an unmatched developer experience for building AI applications.
+Unlike a lot of backend code, AI applications are highly dynamic — in some ways they are much more similar to frontend development.
+
+Frontend Development:
+1. You change your React Component.
+2. You press save.
+3. Your frontend hot-reloads to show the new UI.
+4. If you don't like it, go back to Step 1.
+
+AI Development:
+1. Construct a prompt.
+2. See the prompt.
+3. Construct test cases.
+4. Write evals.
+5. Run the test cases.
+6. If you're not happy, go back to Step 1.
+
+
+Let's take a look at what's now possible right in VSCode. Or check them out online at [promptfiddle.com](http://promptfiddle.com).
+
+**You can see the prompt as you type it out:**
+<Video src="/launchweekAssets/day1-prompt.mp4" />
+
+**Multimodality works even better with BAML.** See how easy it is to preview and run a test that uses images! Works with audio inputs as well.
+
+<Video src="/launchweekAssets/day1-multimodal.mp4" />
+
+For maximum transparency, **you can see the HTTP request BAML is making** on your behalf. There's no guess work.
+
+<Video src="/launchweekAssets/day1-raw-curl.mp4" />
+
+You can also **view test history**, and see changes between test runs highlighted in the results:
+
+<Video src="/launchweekAssets/day1-history.mp4" />
+
+**Evals are 100 times easier** when you can **see what failed** and **what needs human review**:
+
+<Video src="/launchweekAssets/day1-test-panel.mp4" />
+
+The best of the playground is that it works with *your types* and with any LLM. **No need to copy paste JSON blobs around.**
+
+This is only possible because BAML is the only programming language which has an `llm` as a primitive. And since BAML **plugs natively into every existing language** (python, typescript, ruby, java, php, etc), you can use it with any code base and take advantage of a completely new developer experience today.
+
+## Try BAML Today
+
+If you want to try BAML online (without any installs), visit [promptfiddle.com](http://promptfiddle.com) (Yes, we made a full online editor just so you could try BAML!)
+
+If you're ready to experience BAML fully and start using LLMs faster and more reliably than ever before, go on over to our docs to get started today - [BAML Guide](https://docs.boundaryml.com/guide/introduction/what-is-baml)
+
+Come back for tomorrow's post to see how migrating to BAML will take less than 3 minutes…
+
+(And if you can't wait that long, join our [Discord](https://discord.gg/yzaTpQ3tdT) community if you have any questions or just want to learn more about BAML!)
+
+<div className="mt-2 pr-4 pl-4 border rounded-lg bg-gray-50">
+  P.S. If you're curious why we created a new programming language for LLMs, check [this post](/blog/ai-agents-need-new-syntax) out!
+</div>
+
+<div className="text-center mt-8">
+  <a href="/launchweek" style={{textDecoration: 'none'}} className="inline-block px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors duration-200">Back to Launch Week!</a>
+</div>

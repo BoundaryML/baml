@@ -1,0 +1,98 @@
+---
+title: "Full stack BAML with React/Next.js"
+description: Auto generated React hooks for your BAML functions
+slug: react-next-js-integration
+date: 'Feb 11, 2025'
+tags: ['tutorials']
+author:
+  name: Chris Watts
+  imageUrl: /seawatts.png
+  linkedin: https://www.linkedin.com/in/seawatts
+isPublished: true
+---
+
+BAML provides first-class support for React and Next.js applications through automatically generated type-safe hooks and server actions. Let's look at how easy it is to use BAML React hooks to handle the streaming automatically, giving your users real-time generation experience with zero extra code.
+
+![Streaming](/blog/2025-02-11-react-next-js-integration/stream.webm)
+
+Every generated hook in your React code will have a code lens that shows the underlying prompt! This gives you full transparency from your frontend components all the way to the AI prompt, making debugging a breeze.
+
+![Code Lens](/blog/2025-02-11-react-next-js-integration/02-open.png)
+
+## Example Usage
+
+Here's a simple example of using BAML with React/Next.js. Once you define your BAML function, BAML will automatically generate a type-safe React hook for you.
+
+
+```baml filename="story.baml"
+// baml_src/story.baml
+class Story {
+  title string @stream.not_null
+  content string @stream.not_null
+}
+
+function TellStory(input: string) -> Story {
+  client "openai/gpt-4"
+  prompt #"
+    Tell me a story.
+
+    {{ ctx.output_format() }}
+
+    {{ _.role("user") }}
+
+    Topic: {{input}}
+  "#
+}
+
+
+```
+
+Generate react hooks from the BAML function.
+
+```bash
+$ npx baml-cli generate
+```
+
+Use the generated hook in your React component.
+
+```tsx filename="StoryComponent.tsx"
+// src/app/StoryComponent.tsx
+'use client';
+
+import { useTellStory } from '@/baml_client/react/client';
+
+export function StoryComponent() {
+  // Auto generated hook from BAML function
+  const tellStory = useTellStory();
+
+  return (
+    <div>
+      <button
+        onClick={() => tellStory.mutate("a cat in the hat")}
+        disabled={tellStory.isLoading}
+      >
+        Generate Story
+      </button>
+
+      {tellStory.data && <div>{tellStory.data.title}</div>}
+      {tellStory.data && <div>{tellStory.data.content}</div>}
+    </div>
+  );
+}
+```
+
+## Reference Documentation
+
+For complete API documentation of the React/Next.js integration, see:
+
+### Core Concepts
+- [Generated Hooks](https://docs.boundaryml.com/ref/baml_client/react-next-js/use-function-name-hook) - Auto-generated hooks for each BAML function
+
+### Hook Configuration
+- [HookInput](https://docs.boundaryml.com/ref/baml_client/react-next-js/hook-input) - Configuration options for hooks
+- [HookOutput](https://docs.boundaryml.com/ref/baml_client/react-next-js/hook-output) - Return value types and states
+- [Error Types](https://docs.boundaryml.com/ref/baml_client/errors/overview) - Error handling and types
+
+## Next Steps
+
+- Check out the [BAML Examples](https://github.com/BoundaryML/baml-examples/tree/main/nextjs-starter) for more use cases

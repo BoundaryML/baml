@@ -10,6 +10,7 @@
     "dev:cargo": "cargo watch -C ../baml_language  --ignore '**/target/**' --skip-local-deps --watch-when-idle -w crates -x 'build -p baml_cli'",
     "dev:vscode": "turbo run dev --filter=app-vscode-ext --filter=app-vscode-webview --filter=@b/pkg-playground '//#dev:cargo'",
     "dev:promptfiddle": "turbo run dev --filter app-promptfiddle --filter @b/pkg-playground '//#dev:wasm'",
+    "dev:website": "turbo run dev --filter app-website",
     "build": "turbo run build",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",

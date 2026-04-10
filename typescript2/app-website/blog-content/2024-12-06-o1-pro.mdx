@@ -1,0 +1,144 @@
+---
+title: Structured outputs with Open AI O1
+description: How to use Open AI O1 to do function calling or tool calls
+slug: openai-o1
+date: Dec 6, 2024
+tags: ['tutorials']
+author:
+  name: Vaibhav Gupta
+  imageUrl: /profile-vbv.jpeg
+  linkedin: https://www.linkedin.com/in/vaigup
+---
+
+OpenAI recently announced [O1](https://openai.com/o1), a new update to their model that is the best.
+
+[BAML](https://boundaryml.com) is our prompting framework that lets you do function calling and tool calling with any LLM, even when it's not officially supported.
+
+## How to use Open AI O1 with BAML
+
+
+Let's look at an interactive example!
+
+### Classifying messages with O1
+First we write some BAML code to classify messages. Here we write a function that takes a message and returns a category, that will be executed by an LLM. BAML will parse the result for you into the right enum type.
+
+<BamlBlock name="1" bamlCode={`
+
+enum Category {
+  CANCEL_SUBSCRIPTION
+  CHANGE_SUBSCRIPTION
+  OTHER
+}
+
+class Response {
+  category Category
+  greeting string
+  message string @description(#"
+  a good email reply to the user's message
+  use triple quote strings for multiline
+  "#)
+  signature string
+}
+
+function ClassifyMessage(message: string) -> Response {
+  client "openai/o1-mini"
+  prompt #"
+    Classify the message given by the user.
+
+    {{ ctx.output_format(prefix="Using this:\n") }}
+    {{ _.role("user") }}
+    {{ message }}
+  "#
+}
+
+test TestName {
+  functions [ClassifyMessage]
+  args {
+    message "I want to cancel my subscription"
+  }
+  @@assert(category, {{ this.category == "CANCEL_SUBSCRIPTION" }})
+}
+`}
+
+
+
+ />
+
+ You can run this in python like this:
+
+```python
+from baml_client import b
+response = b.ClassifyMessage(message="I want to cancel my subscription")
+print(response.category)
+```
+
+### Tool calling with O1 Example
+BAML lets you write tools like normal Unions of types. Here's another example where we have two tools, one that gets the weather, and one that sends an email.
+
+<BamlBlock name="2" bamlCode={`
+class WeatherAPI {
+  city string @description("the user's city")
+  timeOfDay string @description("As an ISO8601 timestamp")
+}
+
+class SendEmail {
+  emailTo string
+  emailSubject string
+  emailBody string
+}
+
+function ChooseOneTool(user_message: string) -> WeatherAPI | SendEmail {
+  client "openai/o1-mini"
+  prompt #"
+    Choose the right schema that contains all the information in this message:
+    ---
+    {{ user_message }}
+    ---
+
+    {# special macro to print the output schema. #}
+    {{ ctx.output_format }}
+
+    JSON:
+  "#
+}
+
+test TestOneFunc {
+  functions [ChooseOneTool]
+  args {
+    user_message #"
+      what's the weather in san francisco tomorrow april 23rd 2024 at 3pm?
+    "#
+  }
+}
+
+test TestOneFunc2 {
+  functions [ChooseOneTool]
+  args {
+    user_message #"
+      Send an email to John Doe with the subject 'Hello' and the body 'How are you doing?'
+    "#
+  }
+}
+
+
+`
+}
+
+ />
+ You can call this in python like this (we also support other languages!):
+
+```python
+from baml_client import b
+from baml_client.types import WeatherAPI, SendEmail
+response = b.ChooseOneTool(user_message="what's the weather in san francisco tomorrow april 23rd 2024 at 3pm?")
+print(response)
+
+if isinstance(response, WeatherAPI):
+    print(f"Weather API called:")
+    print(f"City: {response.city}")
+    print(f"Time of Day: {response.timeOfDay}")
+elif isinstance(response, SendEmail):
+    print(f"SendEmail called:")
+    print(f"To: {response.emailTo}")
+    print(f"Subject: {response.emailSubject}")
+```

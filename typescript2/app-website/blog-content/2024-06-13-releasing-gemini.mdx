@@ -1,0 +1,74 @@
+---
+title: Announcing Gemini Support!
+description: Applying structure to Gemini output with BAML
+slug: gemini-release
+date: Jun 13, 2024
+tags: ['announcements']
+author:
+  name: Anish Palakurthi
+  imageUrl: /profile-anish.png
+  linkedin: https://www.linkedin.com/in/anish-palakurthi/
+---
+
+<div style={{ display: 'flex', alignItems: 'center' }}>
+  <p >We're thrilled to release BAML support for Gemini, Google AI's Large Language Model catalog!</p>
+</div>
+<div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '0', margin: '0', width: '100%' }}>
+  <img src="/gemini.png" style={{ height: '50px', padding: '0', margin: '0' }} />
+</div>
+
+
+
+
+<Video src="/videos/gemini-final.mp4" title="" width={1000} />
+
+
+
+The latest Gemini 1.5 Flash and Pro models offer an impressive context window of up to 1 million tokens, provide advanced safety and generation configurations, and support a broader range of multimodal inputs, such as video and audio, outpacing the current capabilities of Anthropic and OpenAI’s public models.
+
+Integrating with Gemini lets BAML users access the latest advancements in large language models, and most importantly, with structure and safety.
+
+
+### How to add Gemini to your BAML Project:
+
+1. Generate a [Google Generative AI API key](https://ai.google.dev/gemini-api/docs/get-started/tutorial?lang=rest).
+2. Add your API key to BAML’s VSCode playground or save it as the `GOOGLE_API_KEY` environment variable.
+3. Instantiate a BAML client for Gemini:
+
+    ```baml
+    client<llm> MyGeminiClient {
+      provider google-ai
+      options{
+        model "gemini-1.5-pro-001"
+      }
+    }
+    ```
+
+4. Craft your function using the Gemini client:
+
+    ```baml
+    function GetOrderInfo(email: Email) -> OrderInfo {
+      client MyGeminiClient
+      prompt #"
+        Given the email below:
+
+        """
+        from: {{email.from_address}}
+        Email Subject: {{email.subject}}
+        Email Body: {{email.body}}
+        """
+
+        Convert the email data to JSON format:
+        {{ ctx.output_format }}
+
+        Prior to JSON output, describe your reasoning in a step-by-step manner. Here's an example:
+        'If we think step by step we can see that ...
+         hence the output JSON is:
+        {
+          ... the json schema ...
+        }'
+      "#
+    }
+    ```
+
+5. And finally, effortlessly refine your prompt and data types in our playground and instantly incorporate them into your Python, TypeScript, and Ruby scripts!

@@ -1,0 +1,240 @@
+---
+title: "Using UUIDs in prompts is bad"
+description: Guidance on dealing with entity IDs in LLM functions
+slug: uuid-swap
+date: October 3, 2025
+tags: ['research']
+author:
+  name: Greg Hale
+  imageUrl: /greg.jpg
+  linkedin: https://www.linkedin.com/in/imalsogreg/
+---
+
+This article will show you a trick we use for dealing with UUIDs.
+
+## UUIDs: Great for applications, expensive for LLMs
+
+Your LLM data transformation tasks might involve UUIDs. For example you may have a list
+of messages with IDs, and you want to filter the list down to the IDs of messages that
+have a positive sentiment.
+
+<Image
+  src="/blog/2025-10-03-uuid-swap/example1.png"
+  alt="Example UUID production task"
+  width={600}
+  height={800}
+  style={{ alignSelf: 'center' }}
+  />
+
+Cases like this require the model to read and produce UUIDs. This is a problem because
+UUIDs have a lot of entropy and cost a lot of tokens! The
+more tokens in a prompt, the harder it is for the model to respond correctly.
+
+Just how many tokens? Let's check the [OpenAI Tokenizer](https://platform.openai.com/tokenizer).
+
+<Image
+  src="/blog/2025-10-03-uuid-swap/tokens.png"
+  alt="OpenAI Tokenizer output for a UUID - showing 24 tokens"
+  width={600}
+  height={800}
+  style={{ alignSelf: 'center' }}
+  />
+
+Each UUID costs a whopping 24 tokens, far more than the typical 1.25*words token count
+that you see for written language.
+
+The tokenizer can also show us that a 3-digit number is encoded by a single
+token. What that means is that if you have fewer than 1000 unique UUIDs in your prompt,
+a single token is sufficient to identify each one.
+
+## Remapping UUIDs to ints
+
+When working with structured data, the remapping trick is simple:
+
+ 1. Collect all the UUIDs from your input data.
+ 2. Find the unique ones and assign them int ids.
+ 3. Replace all the UUIDs in your prompt with their corresponding ints
+ 4. Make your LLM request
+ 5. Map all the ints in the response back to their corresponding UUIDs
+
+## A concrete example
+
+Let's look at a real example where we aggregate items by their class IDs. We'll compare three approaches:
+1. Using UUIDs directly
+2. Using integers from the start
+3. Remapping UUIDs to integers before the LLM call
+
+> **Note:** You might wonder why we'd use an LLM for a simple aggregation task - after all, this is trivial to do programmatically. We're using aggregation as a benchmark because it's easy to scale (vary the number of items and IDs) and verify correctness automatically. The technique applies equally well to more realistic tasks like sentiment analysis on messages, categorizing support tickets, or any other structured data transformation where you need the LLM to accurately read and reproduce entity identifiers.
+
+Here's a BAML function that takes items with UUID identifiers and aggregates them by class:
+
+```rust
+class ItemUuid {
+  class_id string @description("UUID")
+  name string
+}
+
+class AggregationUuid {
+  class_id string @description("Item identifier (UUID)")
+  count int
+  names string[]
+}
+
+function AggregateItemsUuid(items: ItemUuid[]) -> AggregationUuid[] {
+  client CustomHaiku
+  prompt #"
+    Aggregate the items by their class_id.
+    The output should list each class_id seen in the inputs
+    exactly once, collecting all the names of items with that
+    class_id and counting them.
+
+    {{ ctx.output_format }}
+
+    {{ items }}
+  "#
+}
+```
+
+And here's the same function but using integer IDs:
+
+```rust
+class ItemInt {
+  class_id string
+  name string
+}
+
+class AggregationInt {
+  class_id int
+  count int
+  names string[]
+}
+
+function AggregateItemsInt(items: ItemInt[]) -> AggregationInt[] {
+  client CustomHaiku
+  prompt #"
+    Aggregate the items by their class_id.
+    The output should list each class_id seen in the inputs
+    exactly once, collecting all the names of items with that
+    class_id and counting them.
+
+    {{ ctx.output_format }}
+
+    {{ items }}
+  "#
+}
+```
+
+## The results
+
+We ran an experiment with **200 items** across **100 distinct class IDs** using Claude Haiku. We ran each approach twice to check consistency. Here are the total error counts (sum of misspelled IDs, dropped IDs, and incorrect counts):
+
+| Approach | Run 1 | Run 2 | Average |
+|----------|-------|-------|---------|
+| Direct UUIDs | 29 errors | 68 errors | 48.5 errors |
+| Integer IDs | 7 errors | 5 errors | 6 errors |
+| UUID→Int Remapping | 5 errors | 6 errors | 5.5 errors |
+
+The UUID approach is dramatically worse - Haiku makes 29-68 errors depending on the run. The model struggles to accurately read and reproduce the high-entropy UUID strings, leading to typos, truncations, and dropped identifiers.
+
+By contrast, both the direct integer approach and the UUID remapping approach consistently produce only 5-7 errors total. The remapping technique gives you the best of both worlds: you can use UUIDs in your application code while getting integer-level accuracy from the LLM.
+
+## Implementing UUID remapping
+
+Here's how to implement the remapping in Python:
+
+```python
+from baml_client import b
+from baml_client.types import ItemInt, ItemUuid, AggregationInt, AggregationUuid
+
+def aggregate_items_with_remapping(items: list[ItemUuid]) -> list[AggregationUuid]:
+    # Step 1: Collect all UUIDs from input data
+    unique_uuids = list({item.class_id for item in items})
+
+    # Step 2: Assign them int IDs
+    uuid_to_int = {uuid: str(i) for i, uuid in enumerate(unique_uuids)}
+    int_to_uuid = {str(i): uuid for i, uuid in enumerate(unique_uuids)}
+
+    # Step 3: Replace UUIDs in prompt with corresponding ints
+    items_int = [
+        ItemInt(class_id=uuid_to_int[item.class_id], name=item.name)
+        for item in items
+    ]
+
+    # Step 4: Make LLM request
+    result_int: list[AggregationInt] = b.AggregateItemsInt(items_int)
+
+    # Step 5: Map ints in response back to corresponding UUIDs
+    result_uuid = [
+        AggregationUuid(
+            class_id=int_to_uuid[str(agg.class_id)],
+            count=agg.count,
+            names=agg.names
+        )
+        for agg in result_int
+    ]
+
+    return result_uuid
+```
+
+## When to use this technique
+
+This UUID remapping technique is valuable when:
+
+- You have **fewer than 1000 unique IDs** (to stay in single-token territory)
+- Your LLM task requires **reading and reproducing IDs accurately**
+- You're seeing **ID-related errors** in your outputs
+- Your IDs are **high-entropy strings** like UUIDs or hash values
+
+You should benchmark your specific use case with and without UUID remapping. The benefit depends heavily on your exact task, the number of UUIDs in your prompt, and your model. For example, when we reduced our test to 100 items across 50 classes, all three approaches performed similarly (2-4 errors each), showing that UUID remapping provides diminishing returns for simpler tasks with fewer unique identifiers.
+
+For cases where accuracy is critical, benchmarking is even more
+important. For instance, our experiment shows that Claude Haiku
+does not reach perfect aggregation accuracy, even using int
+identifiers. When we change the model to Opus 4, we get 100%
+accuracy with ints but 80% accuracy with UUIDs.
+
+For tasks where the LLM only needs to read IDs (not produce them), or where you have more than 1000 unique IDs, you may need different optimization strategies, such as breaking your data down into smaller batches.
+
+## Future: Automatic remapping in BAML
+
+While the manual remapping approach works well, we're exploring ways to automate this pattern directly in BAML. Imagine a built-in `RemappingId` type that you could use anywhere in your schemas:
+
+```rust
+class ItemUuid {
+  class_id RemappingId @description("UUID")
+  name string
+}
+
+class AggregationUuid {
+  class_id RemappingId @description("Item identifier (UUID)")
+  count int
+  names string[]
+}
+
+function AggregateItemsUuid(items: ItemUuid[]) -> AggregationUuid[] {
+  client CustomHaiku
+  prompt #"
+    Aggregate the items by their class IDs...
+
+    {{ ctx.output_format }}
+    {{ items }}
+  "#
+}
+```
+
+The BAML runtime would automatically:
+1. Collect all `RemappingId` values from the input data
+2. Build a UUID→int mapping for unique identifiers
+3. Replace all `RemappingId` fields with their integer equivalents in the prompt
+4. Parse the LLM response using integer IDs
+5. Map the integers back to their original UUID values in the output
+
+You would get to work with UUIDs directly, but get the token efficiency and accuracy of integer IDs.
+
+If this kind of automatic optimization would be useful for your use case, we'd love to hear from you! Reach out to us on [Discord](https://discord.gg/BTNBeXGuaS) or open a discussion on [GitHub](https://github.com/BoundaryML/baml).
+
+## Conclusion
+
+UUIDs are great for application code, but they're expensive and error-prone in LLM prompts. By remapping UUIDs to single-token integers before your LLM call, you can reduce both token costs and error rates significantly - in our experiments, from ~50% error rates down to < 5% for a 200-item aggregation task.
+
+This is a simple transformation that can have a big impact on the reliability of your structured LLM outputs.

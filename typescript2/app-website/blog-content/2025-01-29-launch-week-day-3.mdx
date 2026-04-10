@@ -1,0 +1,281 @@
+---
+title: BAML Launch Week Day 3
+description: Type System
+slug: launch-week-day-3
+og:
+  title: Launch Week 2025
+  description: "Day 3: Powerful Type System"
+date: Jan 29, 2025
+tags: ['launch week']
+author:
+  name: Antonio Sarosi
+  imageUrl: /antonio.jpeg
+  linkedin: https://www.linkedin.com/in/antoniosarosi/
+---
+
+<DevSpotlight
+  users={[
+    {
+      name: "Gus Trigos",
+      company: "Mentum",
+      role: "CEO & Cofounder",
+      companyDescription: "Mentum streamlines supply chain sourcing with AI, turning unstructured data into actionable insights for faster decisions and cost savings. We automate workflows like RFQs, PO tracking, and invoice reconciliation.",
+      bamlTestimonial: "BAML enabled a reliable Agentic pipeline for Mentum. Transitioning from LangChain to BAML reduced our prompt complexity by 50%, making our code cleaner and more efficient. We built a high-confidence image-to-text document classification in just one day.",
+      imageUrl: "/launchweekAssets/gus.jpeg",
+      companyUrl: "https://getmentum.com/",
+      logoUrl: "/launchweekAssets/mentumLogo.png",
+      logoWidth: 120,
+      logoHeight: 40
+    },
+    {
+      name: "Dex Horthy",
+      company: "HumanLayer",
+      role: "Founder",
+      companyDescription: "HumanLayer is an API for AI Applications to request human help, feedback, and approvals. Customers use HumanLayer to build agents that perform risky workflows, like terraform applies and database migrations.",
+      bamlTestimonial: "BAML helps us quickly classify/categorize/structure unstructured input from Slack, emails, and etc. Strategically, we're also focused on defining reference architectures for next-gen AI agents, where we think BAML plays a key role.",
+      imageUrl: "/launchweekAssets/dexter.jpeg",
+      companyUrl: "https://www.humanlayer.dev/",
+      logoUrl: "/launchweekAssets/humanLayerLogo.png",
+      logoWidth: 120,
+      logoHeight: 40
+    }
+  ]}
+/>
+
+## Beyond Strings: Type System for LLMs with BAML
+
+Imagine if you could guarantee the shape of every response you get from a language model. No more parsing messy strings, no more unpredictable outputs. With BAML, that's no longer a dream; it's our new reality.
+
+Many of you are already familiar with the power of structured prompting — the idea that specifying the format of LLM output significantly improves downstream reliability and user experiences. If you're new to this, think of it as designing a conversation where you precisely define what you expect to get back.
+
+**Let's see this in action.** Look at the recipe for one of my favorite dishes — saag paneer.
+
+<Video src="/launchweekAssets/day3-recipie-structured-vs-chat.mp4" />
+
+In the example on the left, we're using a general-purpose LLM, and ask it to return any string in natural language. It gives back a recipe that we can use but nothing about it is guaranteed. On the right, same model, but using BAML's type system — will **always** return the data in a shape that our frontend can consume.
+
+The difference is clear: One is freeform, and the other is highly predictable.
+
+As your prompting pipelines become more sophisticated, so does the need for reliability and structure. Our latest release of BAML allows you to build **rock-solid LLM interactions** by leveraging a purpose-built type system.
+
+We've moved beyond asking language models in plain English. By leveraging types we gain a few specifications:
+
+- **Unambiguous Communication:** Types are much less vague than natural language.
+- **Efficiency:** Types offer a more compact token representation.
+- **Clarity:** Types are far easier to read and understand, making your code more maintainable.
+- **Debugging:** With types, it's easier to spot inconsistencies and debug.
+- **Consistency:** Type compilers will catch a lot of unexpected bugs before they reach production.
+
+While type systems may require more upfront design and are less flexible than free-form text, their maintainability, reliability, and clarity far outweigh these limitations. We believe this is a worthwhile trade-off.
+
+### Introducing BAML's Powerful Type System
+
+BAML's type system now supports a comprehensive set of features, designed specifically for language models:
+
+- [**Primitives**](https://docs.boundaryml.com/ref/baml/types#primitive-types): string, float, int, bool, literal, null
+- [**Composite**](https://docs.boundaryml.com/ref/baml/types#compositestructured-types): map&lt;k, v&gt;, list&lt;v&gt;
+- **User-defined**: classes, enums
+- **Recursive types**
+- [**Type aliases**](https://docs.boundaryml.com/ref/baml/types#type-aliases)
+
+```java
+// You can literally define any type in BAML (including arbitrary JSON).
+type JSON = string | int | float | null | JSON[] | map<string, JSON>;
+```
+
+- @alias to rename fields for the LLM without affecting your data storage. For example, use `establishment_name` for the LLM but consume it as `name` in a database or UI Components.
+
+```baml
+class Invoice {
+   name string @alias("establishment_name")
+}
+```
+
+- @assert to add runtime metadata validations, ensuring data integrity.
+
+```baml
+class Resume {
+  // if the LLM gives an empty this,
+  // this is not a valid name or Resume
+  name string @assert(not_empty, {{ this|length > 0 }})
+  education string[]
+}
+```
+
+or
+
+```baml
+type NonEmptyString = string @assert(not_empty, {{ this|length > 0 }})
+
+class Resume {
+  name NonEmptyString
+  education string[]
+}
+```
+
+- @check to plumb metadata validations, letting you know if a response isn't valid:
+
+```baml
+class Contact {
+   name string
+   email string @assert(valid_email, {{ this|regex_matches(".+@.+\..+") }}) @check(not_gmail, {{ !this|regex_matches(".+@gmail.com") }})
+}
+```
+
+```typescript
+// BAML transforms the above into this in Typescript and returns the computed @check
+// values in the response
+interface Contact {
+  name: string
+  email: {
+    value: string
+    checks: {
+      not_gmail: boolean
+    }
+  }
+}
+```
+
+or even cleaner
+
+```baml
+type ValidEmail = string @assert(valid_email, {{ this|regex_matches(".+@.+\..+") }})
+type NotGmail = ValidEmail @check(not_gmail, {{ !this|regex_matches(".+@gmail.com") }})
+
+class Contact {
+  name string
+  // alias to work_email for the llm
+  email NotGmail @alias("work_email")
+}
+```
+
+- [**Dynamic Types**](https://docs.boundaryml.com/guide/baml-advanced/dynamic-runtime-types): Create types at runtime based on user input or external data, for example, a list of colors loaded from a database.
+
+```baml
+// BAML code
+class ColorCategory {
+ @@dynamic
+}
+
+function GetMoodColor(text: string) -> ColorCategory {
+  client "openai/gpt-4o"
+  prompt #"..."#
+}
+```
+
+```python
+# Python code
+
+valid_categories = ["red", "blue", ...]
+tb = TypeBuilder()
+for value in valid_categories:
+  tb.ColorCategory.add_value(value).alias(value.upper())
+# Call the baml function
+result = b.GetMoodColor("I'm feeling sad", { "tb": tb})
+
+# this will always be true!
+assert result in valid_categories
+```
+
+### Real-World Example
+
+Let's look at a real use case from one of our users: **Invoice Processing**.
+
+**Instead of this:**
+
+```
+You are an expert accountant, extract all the line items from this invoice.
+
+EXTRACT EVERY ITEM. DO NOT SKIP.
+Track the quantity and unit price and total for each item.
+Extract any fees applied.
+
+Here is the user's invoice.
+{{ invoice_content }}
+```
+
+**You can do this:**
+
+```baml
+class Invoice {
+ items Item[]
+ subtotal float
+ fees map<string, float>
+ tax float
+ total float
+}
+
+class Item {
+ description string
+ quantity float
+ unit_price float
+ total float
+}
+
+prompt:
+Parse an Invoice.
+
+{{ invoice_content }}
+```
+
+Notice how **concise** and **easy to understand** the later approach is using type systems!
+
+Explore this example in depth over at: [**https://mercoa.com/blog/building-invoice-ocr-in-three-days-with-type-safe-llm-calls**](https://www.google.com/url?sa=E&q=https%3A%2F%2Fmercoa.com%2Fblog%2Fbuilding-invoice-ocr-in-three-days-with-type-safe-llm-calls)
+
+
+<BamlBlock name="1" bamlCode={`
+class Invoice {
+ items Item[]
+ subtotal float
+ fees map<string, float>
+ tax float
+ total float
+}
+
+class Item {
+ description string
+ quantity float
+ unit_price float
+ total float
+}
+
+function ParseInvoice(invoice_content: image) -> Invoice {
+  client "openai/gpt-4o-mini"
+  prompt #"
+    Parse an Invoice.
+    {{ ctx.output_format }}
+
+    {{ _.role("user") }}
+    {{ invoice_content }}
+  "#
+}
+
+test TestName {
+  functions [ParseInvoice]
+  args {
+    invoice_content {
+      url "https://cdn.prod.website-files.com/609d5d3c4d120e9c52e52b07/609d5d3c4d120e370de52b70_invoice-lp-light-border.png"
+    }
+  }
+}
+`}
+ />
+
+## Try BAML Today
+
+If you want to try BAML online (without any installs), visit [promptfiddle.com](http://promptfiddle.com) (Yes, we made a full online editor just so you could try BAML!)
+
+If you're ready to experience BAML fully and start using LLMs faster and more reliably than ever before, go on over to our docs to get started today - [BAML Guide](https://docs.boundaryml.com/guide/introduction/what-is-baml)
+
+But that's not all! We're not slowing down! Tomorrow, prepare for an even bigger update to our type system. It will redefine the way you think about Agentic UX, and you don't want to miss it.
+
+(You might even get a sneak peek of people already talking about it in our [Discord](https://discord.gg/yzaTpQ3tdT) community!)
+
+
+<div className="mt-2 pr-4 pl-4 border rounded-lg bg-gray-50">
+  P.S. If you're curious why we created a new programming language for LLMs, check [this post](/blog/ai-agents-need-new-syntax) out!
+</div>
+
+<div className="text-center mt-8">
+  <a href="/launchweek" style={{textDecoration: 'none'}} className="inline-block px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors duration-200">Back to Launch Week!</a>
+</div>

@@ -1,0 +1,140 @@
+---
+title: Structured outputs with Gemini 2.0
+description: How to do tool-calling or function-calling with Gemini 2.0
+slug: gemini-2-function-calling
+date: Feb 5, 2025
+tags: ['tutorials']
+author:
+  name: Aaron Villalpando
+  imageUrl: /aaronv.jpg
+  linkedin: https://www.linkedin.com/in/aaron-villalpando-99284576/
+---
+
+Here is how we can get structured output from Gemini 2.0 reliably without having to write tedious JSON schemas.
+
+For this, we are going to use [BAML](https://boundaryml.com), which is a simple prompting configuration file to write prompts with types, that you can then import in your code. It helps keep your code clean, organized, and best of all -- comes with a [VSCode playground](https://marketplace.visualstudio.com/items?itemName=Boundary.baml-extension) to run your prompts immediately.
+
+<BamlBlock name="1" bamlCode={`
+class Employee {
+    name string
+    title string
+    subordinates Employee[]
+}
+
+function ExtractHierarchy(message: string) -> Employee {
+    client "google-ai/gemini-2.0-flash-001"
+    prompt #"
+      Extract the information.
+
+      {{ ctx.output_format }}
+      {{ _.role("user") }}
+      {{ message }}
+    "#
+}
+
+test TestName {
+    functions [ExtractHierarchy]
+    args {
+      message #"
+        Alice is the Chief Technology Officer of the organization, overseeing the tech team that includes Bob, the Director of Marketing. Charlie, who works under Alice, manages product management. Dana, another team member, is responsible for customer support and reports to Bob. Ethan leads the sales team in the West region and collaborates closely with Charlie. Fiona, who is part of the user experience design team, works alongside Dana. Greg, a data analyst, provides insights to all departments, ensuring everyone is aligned.
+      "#
+    }
+}
+`}
+/>
+
+
+Then when you want to run it in python you can save the BAML file, and the VSCode extension will generate a `baml_client` with your types and your function:
+
+```python
+from baml_client import b
+response = b.ExtractHierarchy(message="""
+George is the CEO of the company.
+Kelly is the VP of Sales. Asif is the global head of product development.
+Mohammed manages the shopping cart experience.
+Tim manages sales in South.
+Stefan is responsible for sales in the f100 company.
+Carol is in charge of user experience""")
+
+print(response) # fully type-safe and validated!
+```
+
+
+### Tool calling with Gemini 2.0 and BAML
+Here is another example of using function calling with Gemini 2.0 -- where Gemini can decide to book an appointment or search for an item.
+
+<BamlBlock name="2" bamlCode={`
+class ItemSearch {
+    query string @description("search query for the item")
+    maxCost float @description("maximum cost filter")
+    type string @description("item category filter")
+}
+
+class BookAppointment {
+    clientName string
+    serviceRequested string @description("type of service requested")
+    datePreferred string @description("As an ISO8601 timestamp")
+    timeDuration int @description("duration in minutes")
+}
+
+function ChooseOneTool(user_message: string) -> ItemSearch | BookAppointment {
+    client "google-ai/gemini-2.0-flash-001"
+    prompt #"
+     Choose the right schema that contains all the information in this message:
+      ---
+      {{ user_message }}
+      ---
+
+      {# special macro to print the output schema. #}
+      {{ ctx.output_format }}
+
+      JSON:
+    "#
+}
+
+test TestOneFunc {
+    functions [ChooseOneTool]
+    args {
+      user_message #"
+        Find me a pair of running shoes for less than $100 in the sports category
+      "#
+    }
+}
+
+test TestOneFunc2 {
+    functions [ChooseOneTool]
+    args {
+      user_message #"
+        I would like to book a haircut appointment for Maria Gonzalez on Tuesday at 2 PM for a duration of 30 minutes.
+      "#
+    }
+}
+`}
+
+ />
+ You can call this in python like this (we also support other languages!):
+
+```python
+from baml_client import b
+from baml_client.types import ProductSearch, ScheduleAppointment
+response = b.ChooseOneTool(user_message="Find me running shoes under $100 in the sports category")
+print(response)
+
+if isinstance(response, ItemSearch):
+    print(f"Item Search called:")
+    print(f"Query: {response.query}")
+    print(f"Max Price: ${response.maxPrice}")
+    print(f"Category: {response.category}")
+elif isinstance(response, BookAppointment):
+    print(f"Book Appointment called:")
+    print(f"Customer: {response.clientName}")
+    print(f"Service: {response.serviceRequested}")
+    print(f"Date: {response.datePreferred}")
+    print(f"Duration: {response.timeDuration} minutes")
+```
+
+That's it!
+
+BAML works with many languages (Ruby, TS, Python, etc), so feel free to check those out!
+
+Check out the [docs](https://docs.boundaryml.com) for more!

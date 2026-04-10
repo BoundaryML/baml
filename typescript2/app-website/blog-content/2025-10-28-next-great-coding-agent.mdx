@@ -1,0 +1,360 @@
+---
+title: "You could invent the next coding agent!"
+description: How BAML makes tools calls easy to integrate into apps
+slug: invent-next-coding-agent
+date: October 28, 2025
+tags: ['Tutorials']
+author:
+  name: Greg Hale
+  imageUrl: /greg.jpg
+  linkedin: https://www.linkedin.com/in/imalsogreg/
+---
+
+Do you use [Claude Code](https://github.com/anthropics/claude-code)?
+[Codex](https://github.com/openai/codex)? Do you feel like there are
+parts that you could have made yourself, even if some parts of
+the apps remain mysterious? Or, have you thought that your agent could
+work so much better if only it had this _one extra feature, tool, or
+piece of context_?
+
+If you have dreamed about hacking on coding assistants even a little,
+trust me, stop what you're doing, initialize a new repo and get
+started! It's much easier than you think. **And more than ever, the
+limiting factor behind the next great coding agent isn't some advanced
+build system or leetcode-hard algorithm. It's simple creativity.**
+
+There is now an easy recipe for writing coding assistants. With BAML
+and some vibe coding you can spin up your own either from scratch or
+as a Zed plugin in just a few hours. Then you have an infinite
+playground for teaching the coding assistant new tricks.
+
+## The recipe
+
+  1. Describe your tool calls and engineer your context in BAML.
+  2. Build a TUI with [ink](https://github.com/vadimdemedes/ink)
+      or [ratatui](https://ratatui.rs/), **OR** Create an ACP plugin for Zed.
+  3. Connect the tool calls to the filesystem.
+  4. Play!
+
+Vaibhav and Dex recently made a video discussing this process in detail.
+It's a great watch!
+
+<iframe
+  width="560"
+  height="315"
+  src="https://www.youtube.com/embed/grGSFfyejA0"
+  title="YouTube video player"
+  frameBorder="0"
+  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+  allowFullScreen
+></iframe>
+
+Dex himself is no stranger to coding assistants, having released
+his production-grade [CodeLayer](https://www.humanlayer.dev) project. The full source
+code from the video and extensive notes are available on the [AI That Works](https://github.com/ai-that-works/ai-that-works/tree/main/2025-10-21-agentic-rag-context-engineering) GitHub Repo.
+
+# How to write the next great coding assistant
+
+Let's walk through the recipe. As a motivating example, let's build our
+assistant around a great idea that
+[Theo shared](https://youtu.be/LJJnu0zfI6w?si=n6jhEntt9hEeZvJ0&t=907) in a
+recent video. Cursor should have two model dropdowns, so you can choose an
+expensive model for high-level planning tasks, and a different, cheaper model
+for simpler tasks, like implementating little independent features.
+
+## Describe your tool calls in BAML
+
+The tools available to your agent are the core of the whole system, so
+that's the place to start building your agent. And in my biased opinion,
+[BAML](https://boundaryml.com) is the best way to define tool calls and
+the prompts that generate them. We have comprehensive docs on [Tool calling
+in BAML](https://docs.boundaryml.com/examples/prompt-engineering/tools-function-calling).
+
+<Note>
+Why use BAML, instead of the Anthropic SDK? I don't want to take too much
+space pitching BAML here, but briefly:
+ 1. LLM Provider Independence: we can trivially switch from Anthropic models
+    to OpenAI, Gemini or a local model.
+ 2. Types First: BAML's focus on modeling tools with types and annotating
+    those types with specific LLM instructions.
+ 3. Transparent prompts: You have complete control over your prompts, rather
+    than encoding tools into some vendor-specifc format or using JSONSchema.
+ 4. Reliability: Our parser has the resilience to deal with the many ways
+    in which models produce malformed JSON.
+</Note>
+
+The exact tools you provide to the coding agent will depend on the special
+features of your agent, but you will almost always need tools for reading
+and writing files:
+
+```baml
+class ReadFileTool {
+  type "read_file_tool"
+  reasoning string
+  file_path string
+}
+
+class WriteFileTool {
+  type "write_file_tool"
+  reasoning string
+  file_path string
+  content string
+}
+
+class SendUserMeassage {
+  type "send_user_message"
+  content string
+}
+
+type Tool = ReadFileTool | WriteFileTool | SendUserMessage
+```
+
+This example, comes from my
+[Zed ACP Plugin](https://github.com/imalsogreg/baml-acp), which implements
+Theo's dual-difficulty subagent idea.
+
+Next, write a BAML function along these lines to allow an LLM to generate tool
+calls that satisfy the user's request:
+
+```baml
+// Execute tasks with tool calls using Sonnet
+function ChooseToolsForTask(
+  user_prompt: string,
+  conversation_history: string
+) -> Tool[] {
+  client ClaudeSonnet
+  prompt #"
+    You are an expert coding assistant with access to tools.
+
+    This describes your output format. i.e. the encoding of tools.
+    {{ ctx.output_format }}
+
+    Conversation history:
+    {{ conversation_history }}
+
+    Current task: {{ user_prompt }}
+
+    Break complex tasks into steps, e.g.:
+    1. Understand the codebase
+    2. Plan changes
+    3. Implement
+    4. Test
+
+    {{ ctx.output_format }}
+  "#
+}
+```
+
+Now let's add some BAML types and an LLM function to implement Theo's idea.
+We need to classify the user's query as either high level planning, or simple
+implemntation.
+
+<Note>
+    Technically, the suggestion was to dispatch individual tasks from a list
+    to differently-priced subagents. That's doable, but for this post it's easier
+    to show how to choose a model just based on the user query.
+</Note>
+
+```baml
+enum TaskComplexity {
+  COMPLEX
+  SIMPLE
+}
+
+class TaskClassification {
+  complexity TaskComplexity
+  reasoning string
+}
+
+
+function ClassifyTask(
+  user_prompt: string,
+) -> TaskClassification {
+  client ClaudeHaiku
+  prompt #"
+    Classify this query as either a complex planning task, or a simple
+    implementation task:
+    {{ user_prompt }}
+
+    Respond in this format:
+    {{ ctx.output_format }}
+  "#
+}
+```
+
+With these BAML types and functions, we've modeled all our LLM interactions.
+
+## Choose your platform
+
+Do you want to build a standalone TUI like Claude Code or Codex? Or do you want
+an assistant that integrates with an IDE?
+
+If you're making a TUI, just build your baml_src, crack open your existing
+coding assistant, and start vibe-coding the TUI. You can even point your assistant
+at the [codex GitHub repo](https://github.com/openai/codex) as a reference. Even
+if your app is written in TypeScript and uses ink, modern LLMs will have no trouble
+translating the concepts from codex, which uses Rust and ratatui.
+
+## Connect the tool calls with the file system
+
+Vibe coding will likely do this for you, but it's worth briefly mentioning here.
+Your coding assistant is an agent that not only chooses tool calls, but also
+executes them.
+
+When you call your `ExecuteTaskWithTools` BAML function, you will get back a list of
+tool calls - the tool calls that the LLM chose to implement the user's query.
+Depending on the tool (and on your platform - TUI vs. IDE), you will have
+to do some kind of file modification. Either directly editing the tool's specified
+file on disk, or (in the Zed case) signaling via the ACP SDK to change some file.
+
+Here is a simplified version of the context orchestrator and tool executor from
+[baml-acp](https://github.com/imalsogreg/baml-acp).
+
+```typescript
+async function runAgenticLoop(
+  userPrompt: string,
+  selectedModel: "sonnet" | "haiku",
+  priorHistory: string[] // Context from previous user queries
+) -> Promise<{ message: string, history: string[] }> {
+    // History accumulates all context across iterations
+    const conversationHistory = [
+      ...priorHistory,
+      `User: ${userPrompt}`
+    ];
+
+    // Loop up to 10 times
+    for (let iteration = 0; iteration < 10; iteration++) {
+
+      // 1. Call LLM with prompt + accumulated history
+      const agentResponse = selectedModel === "haiku"
+        ? await b.ExecuteTaskWithToolsHaiku(
+            userPrompt,
+            conversationHistory  // Full history as context
+          )
+        : await b.ExecuteTaskWithTools(
+            userPrompt,
+            conversationHistory
+          );
+
+      // 2. Add agent's thinking to history
+      if (agentResponse.thinking) {
+        conversationHistory.push(`Agent: ${agentResponse.thinking}`);
+      }
+
+      // 3. Execute each tool the agent requested
+      for (const toolCall of agentResponse.tool_calls) {
+        let result: string;
+
+        // Execute the tool (inlined for clarity)
+        if (toolCall.type === "read_file") {
+          const fileContent = await readFile(toolCall.path);
+          result = `✓ Read file: ${fileContent.substring(0, 100)}...`;
+        }
+        else if (toolCall.type === "write_file") {
+          await writeFile(toolCall.path, toolCall.content);
+          result = `✓ Wrote file: ${toolCall.path}`;
+        }
+        else if (toolCall.type === "run_command") {
+          const output = await execCommand(toolCall.command);
+          result = `✓ Command output: ${output}`;
+        }
+        else if (toolCall.type === "complete") {
+          result = "✓ Task marked complete";
+        }
+
+        // 4. Add tool result to history for next iteration
+        conversationHistory.push(
+          `Tool: ${toolCall.type}\n` +
+          `Reasoning: ${toolCall.reasoning}\n` +
+          `Result: ${result}`
+        );
+      }
+
+      // 5. Check if agent says it's done
+      if (agentResponse.is_complete) {
+        return { 
+          agentResponse.final_message,
+          history: conversationHistory
+        };
+      }
+
+      // Loop continues: next iteration calls LLM with updated history
+    }
+
+    return {
+      message: "Max iterations reached",
+      history: conversationHistory
+    }
+
+  }
+```
+
+This function takes a `selectedModel` as input, which is supplied by the
+main ACP loop, which chooses a difficulty level based on the user's query.
+
+```python
+    async handleTask(
+      complexModel: string,
+      simplemodel: string
+    ) -> Promise<AgenticLoopResult> { 
+      // Classify the task complexity (with full context)
+      const classification: TaskClassification =
+        await b.ClassifyTask(fullPrompt);
+
+      // Determine which model to use
+      const selectedModel =
+        classification.complexity === "COMPLEX" ? complexModel : simpleModel;
+      const modelName = selectedModel === "sonnet" ? "Sonnet 4.5" : "Haiku 3.5";
+      const taskType =
+        classification.complexity === "COMPLEX" ? "complex" : "simple";
+
+      // Send status message to user
+      await this.connection.sessionUpdate({
+        sessionId: this.sessionId,
+        update: {
+          sessionUpdate: "agent_thought_chunk",
+          content: {
+            type: "text",
+            text: `📊 Task classified as ${taskType.toUpperCase()}\n💭 ${classification.reasoning}\n🤖 Using ${modelName} for this ${taskType} task`,
+          },
+        },
+      });
+
+      // Run the agentic loop with selected model
+      const finalMessage = await this.runAgenticLoop(userPrompt, selectedModel);
+      ...
+    }
+```
+
+With this logic in place, we've connected our Agent to Zed through the ACP
+and implemented Theo's nice idea for a split-model coding assistant.
+
+<Image
+  src="/blog/2025-10-28-next-great-coding-agent/acp_screenshot.png"
+  alt="Screenshot of baml-acp in action"
+  width={600}
+  height={800}
+  style={{ alignSelf: 'center' }}
+  />
+
+Notice the selectors for models at the bottom-right, and the dynamic selection
+by task complexity in under "Thinking".
+
+
+## Play!
+
+The [baml-acp](https://github.com/imalsogreg/baml-acp) isn't meant to be a serious,
+production grade thing. It is more meant to demonstrate the point that you can,
+and should, whip up quick experiments to try out new ideas.
+
+See how easy it is to define new tools and execute them? Do you see how you could do
+some context engineering to inject different structured data into the prompt?
+
+There are _so many_ ways to extend coding agents. Maybe you want to encourage the
+model to make not a Todo _list_, but a Todo _tree_. Maybe that tree should be stored
+specially in your context, rather than living implicitly in the conversation history.
+Maybe you heard about [beads](https://github.com/steveyegge/beads), the AI-friendly,
+local task manager, and you want to build a tight integration between beads and
+a coding agent.
+
+Whatever your creative idea is, try it out! The world is your oyster.

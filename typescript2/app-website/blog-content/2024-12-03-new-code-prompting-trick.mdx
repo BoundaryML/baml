@@ -1,0 +1,58 @@
+---
+title: A new trick for generating code in JSON
+description: BAML now supports parsing triple-backtick code blocks in LLM outputs
+slug: a-new-llm-codegen-trick
+date: Dec 3, 2024
+tags: ['announcements']
+author:
+  name: Sam Lijin
+  imageUrl: /profile-sam.png
+  linkedin: https://www.linkedin.com/in/sxlijin/
+---
+
+Some of you may remember Aider's [benchmark results][aider-codegen-benchmark]
+from a few months ago, where they showed that LLMs are better at codegen when
+doing it in plaintext rather than JSON.
+
+[aider-codegen-benchmark]: https://aider.chat/2024/08/14/code-in-json.html
+
+While we were working on some new features, we had an idea: what if BAML allowed
+users to embed Markdown code blocks in their JSON outputs? Would that solve the
+quality drop issue?
+
+So we built it! As of BAML 0.68.0, if an LLM returns this:
+
+```
+{
+  ts: ```typescript
+const { execSync } = require('child_process');
+
+function getMainBranch(): string {
+    ...
+}```,
+
+  ruby: ```ruby
+def get_main_branch
+    ...
+end```
+}
+```
+
+the BAML runtime will parse this as:
+
+
+```json
+{
+  "ts": "const { execSync } = require('child_process'); [...]",
+  "ruby": "def get_main_branch [...]"
+}
+```
+
+Imagine what you could do with this! You wouldn't have to write your own
+markdown parsers, or manual heuristics to search for XML tags to delimit
+code blocks. You could also nest code blocks deep within a JSON structure,
+and do something like the above, where you ask the LLM to generate code
+in multiple languages in the same prompt, and have your output just work.
+
+We haven't had a chance to run this through any benchmarks yet, but we'd love to
+hear from anyone who tries it out!
