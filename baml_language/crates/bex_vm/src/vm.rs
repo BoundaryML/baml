@@ -1077,6 +1077,29 @@ impl BexVm {
         Value::Object(instance_ptr)
     }
 
+    /// Construct a `baml.errors.StackTrace` instance from captured error locations.
+    ///
+    /// Allocates one `baml.errors.StackFrame` per frame, an array to hold them,
+    /// and the outer `StackTrace` wrapper. Only called when a catch handler binds
+    /// a `stack_trace` parameter.
+    #[allow(dead_code)] // Used in Phase 5 when catch (e, st) is wired up.
+    pub(crate) fn alloc_stack_trace(&mut self, trace: &[ErrorLocation]) -> Value {
+        // Build StackFrame instances (fields: file, line, function_name)
+        let frames: Vec<Value> = trace
+            .iter()
+            .map(|loc| {
+                let file = self.alloc_string(loc.file_path.clone());
+                #[allow(clippy::cast_possible_wrap)]
+                let line = Value::Int(loc.error_line as i64);
+                let function_name = self.alloc_string(loc.function_name.clone());
+                self.alloc_error_value(ErrorClass::StackFrame, vec![file, line, function_name])
+            })
+            .collect();
+
+        let frames_array = Value::Object(self.tlab.alloc(Object::Array(frames)));
+        self.alloc_error_value(ErrorClass::StackTrace, vec![frames_array])
+    }
+
     pub(crate) fn panic_to_exception_value(&mut self, panic: VmPanic) -> Value {
         let (class, fields) = match panic {
             VmPanic::DivisionByZero { left, .. } => (PanicClass::DivisionByZero, vec![left]),

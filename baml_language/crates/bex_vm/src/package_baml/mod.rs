@@ -20,6 +20,7 @@ mod map;
 mod math;
 mod media;
 mod root;
+mod stack_trace;
 mod string;
 mod sys;
 mod uint8array;
