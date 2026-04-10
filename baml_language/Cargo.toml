@@ -114,6 +114,7 @@ futures = { version = "0.3.30", features = [ "executor" ] }
 futures-timer = { version = "3.0.3", features = [ "wasm-bindgen" ] }
 graphviz-rust = { version = "0.9" }
 indexmap = { version = "2.1.0", features = [ "serde" ] }
+infer = "0.16.0"
 insta = { version = "1.34", features = [ "yaml", "redactions" ] }
 la-arena = { version = "0.3" }
 libc = "0.2.169"
@@ -185,6 +186,9 @@ strum = { version = "0.26", features = [ "derive" ] }
 pyo3 = { version = "0.23.3", default-features = false }
 pyo3-async-runtimes = { version = "0.23" }
 pyo3-build-config = "0.23"
+napi = { version = "3.8.4", default-features = false }
+napi-derive = "3.5.3"
+napi-build = "2.3.1"
 wee_alloc = "0.4"
 wiremock = "0.6"
 vfs = "0.12"

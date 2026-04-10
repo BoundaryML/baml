@@ -2,7 +2,7 @@
 
 function TestFileClose() -> string {
     let f = baml.fs.open("example.txt");
-    let content = f.read();
+    let content = f.read_string();
     f.close<[CURSOR]();
     content
 }

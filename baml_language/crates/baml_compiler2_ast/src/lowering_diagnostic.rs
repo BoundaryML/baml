@@ -83,6 +83,9 @@ pub enum LoweringDiagnostic {
 
     /// The `instanceof` operator was used; it has been removed. Use `match` instead.
     InstanceofRemoved { span: TextRange },
+
+    /// `void` was used outside of a function return type position.
+    VoidInNonReturnPosition { context: String, span: TextRange },
 }
 
 impl LoweringDiagnostic {
@@ -191,6 +194,12 @@ impl LoweringDiagnostic {
                 "`instanceof` is no longer supported. Use a `match` expression for type checking instead.".to_string(),
                 *span,
                 "use `match` instead",
+            ),
+            LoweringDiagnostic::VoidInNonReturnPosition { context, span } => (
+                DiagnosticId::VoidInNonReturnPosition,
+                format!("`void` can only be used as a function return type, not as {context}"),
+                *span,
+                "`void` not allowed here",
             ),
         };
 

@@ -2821,8 +2821,8 @@ impl<'a> Parser<'a> {
         self.with_node(SyntaxKind::RETURN_STMT, |p| {
             p.expect(TokenKind::Return);
 
-            // Optional return value
-            if !p.at(TokenKind::RBrace) && !p.at_end() {
+            // Optional return value — bare `return;` is valid (e.g. in void functions).
+            if !p.at(TokenKind::Semicolon) && !p.at(TokenKind::RBrace) && !p.at_end() {
                 p.parse_expr();
             }
 

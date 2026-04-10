@@ -540,6 +540,12 @@ impl BexEngine {
         let class_definitions = Self::extract_class_definitions(&resolved_class_names);
         let enum_definitions = Self::extract_enum_definitions(&resolved_enum_names);
 
+        // Build a default RuntimeIo from the SysOps table with an empty context.
+        // This is replaced per-call in execute_sys_op with a live context that
+        // carries the correct cancellation token and spawner.
+        let runtime_io =
+            sys_ops::build_runtime_io(&sys_ops, &heap, &sys_types::SysOpContext::empty());
+
         let sys_op_ctx = sys_types::EngineSysOpContext {
             llm_functions: Arc::new(llm_functions),
             function_global_indices: Arc::new(bytecode.function_global_indices),
@@ -547,14 +553,7 @@ impl BexEngine {
             class_definitions: Arc::new(class_definitions),
             enum_definitions: Arc::new(enum_definitions),
             type_alias_definitions: Arc::new(bytecode.recursive_type_alias_defs),
-            io_callbacks: sys_types::SysOpIoCallbacks {
-                http_send: sys_ops.baml_http_send.clone(),
-                http_response_text: sys_ops.baml_http_response_text.clone(),
-                env_get: sys_ops.baml_env_get.clone(),
-                fs_open: sys_ops.baml_fs_open.clone(),
-                fs_file_read: sys_ops.baml_fs_file_read.clone(),
-                sys_shell: sys_ops.baml_sys_shell.clone(),
-            },
+            runtime_io,
         };
 
         Ok(Self {
@@ -1671,7 +1670,10 @@ impl BexEngine {
     ) -> SysOpResult {
         let args = args.iter().map(std::convert::Into::into).collect();
         let fn_ptr = self.sys_ops.get(op);
-        let ctx = self.sys_op_ctx.to_op_context(cancel.clone(), self.clone());
+        let mut ctx = self.sys_op_ctx.to_op_context(cancel.clone(), self.clone());
+        // Rebuild RuntimeIo with the live per-call context so IO calls
+        // (media resolution, auth) use the correct cancellation token.
+        ctx.runtime_io = sys_ops::build_runtime_io(&self.sys_ops, &self.heap, &ctx);
         let result = fn_ptr(&self.heap, args, &ctx, call_id);
 
         match result {

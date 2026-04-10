@@ -174,6 +174,52 @@ impl IoClassHttpResponse for WasmHttp {
             })
         })))
     }
+
+    fn bytes(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        response: io::owned::http::Response,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Vec<u8>> {
+        let registry = Arc::clone(&self.registry);
+        let body = response
+            ._body
+            .downcast_ref::<WasmResponseBody>()
+            .map(|b| b.key);
+        let Some(key) = body else {
+            return SysOpOutput::err(OpErrorKind::Other(
+                "Response body handle is not a WasmResponseBody".into(),
+            ));
+        };
+
+        SysOpOutput::Async(Box::pin(SendFuture(async move {
+            let promise = registry.take_body_promise(key).ok_or_else(|| {
+                OpErrorKind::Other(
+                    "Response body has already been consumed or handle is invalid".into(),
+                )
+            })?;
+            let value = JsFuture::from(promise).await.map_err(|e| {
+                let msg = e
+                    .as_string()
+                    .or_else(|| {
+                        e.dyn_ref::<js_sys::Error>()
+                            .map(|err| String::from(err.message()))
+                    })
+                    .unwrap_or_else(|| format!("{e:?}"));
+                OpErrorKind::Other(format!("Failed to read response body: {msg}"))
+            })?;
+            if let Some(arr) = value.dyn_ref::<js_sys::Uint8Array>() {
+                Ok(arr.to_vec())
+            } else if let Some(buf) = value.dyn_ref::<js_sys::ArrayBuffer>() {
+                Ok(js_sys::Uint8Array::new(buf).to_vec())
+            } else {
+                Err(OpErrorKind::Other(
+                    "Response body did not resolve to a Uint8Array or ArrayBuffer".into(),
+                ))
+            }
+        })))
+    }
 }
 
 impl IoNamespaceHttp for WasmHttp {
