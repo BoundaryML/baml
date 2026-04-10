@@ -1,0 +1,104 @@
+{
+  "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+  "assist": {
+    "actions": {
+      "source": {
+        "organizeImports": "on",
+        "useSortedAttributes": "on",
+        "useSortedKeys": "on",
+        "useSortedProperties": "on"
+      }
+    }
+  },
+  "files": {
+    "ignoreUnknown": false,
+    "includes": [
+      "**",
+      "!dist/**",
+      "!**/dist/**",
+      "!node_modules/**",
+      "!**/node_modules/**",
+      "!**/.next/**",
+      "!**/.react-email/**",
+      "!**/baml_client/**",
+      "!**/.turbo/**",
+      "!**/*.min.*",
+      "!bun.lock",
+      "!**/.vscode-test/**",
+      "!**/build/**",
+      "!**/.git/**",
+      "!**/coverage/**",
+      "!**/.nyc_output/**"
+    ]
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space"
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "single",
+      "semicolons": "always",
+      "trailingCommas": "all"
+    },
+    "globals": ["React"]
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "a11y": {
+        "noStaticElementInteractions": "off"
+      },
+      "correctness": {
+        "noInvalidUseBeforeDeclaration": "off",
+        "noUnusedImports": "error",
+        "noUnusedVariables": {
+          "fix": "none",
+          "level": "warn"
+        },
+        "useExhaustiveDependencies": "warn",
+        "useHookAtTopLevel": "error"
+      },
+      "nursery": {
+        "noNestedComponentDefinitions": "off",
+        "useIndexOf": "error",
+        "useUniqueElementIds": "off"
+      },
+      "recommended": true,
+      "style": {
+        "noCommonJs": "error",
+        "noInferrableTypes": "error",
+        "noNegationElse": "off",
+        "noNestedTernary": "off",
+        "noParameterAssign": "error",
+        "noUnusedTemplateLiteral": "error",
+        "noUselessElse": "error",
+        "useAsConstAssertion": "error",
+        "useAtIndex": "error",
+        "useCollapsedIf": "error",
+        "useDefaultParameterLast": "error",
+        "useEnumInitializers": "error",
+        "useFilenamingConvention": {
+          "level": "error",
+          "options": {
+            "filenameCases": ["kebab-case"],
+            "requireAscii": true
+          }
+        },
+        "useNodejsImportProtocol": "error",
+        "useNumberNamespace": "error",
+        "useSelfClosingElements": "error",
+        "useSingleVarDeclarator": "error"
+      },
+      "suspicious": {
+        "noExplicitAny": "error"
+      }
+    }
+  },
+  "vcs": {
+    "clientKind": "git",
+    "defaultBranch": "main",
+    "enabled": true,
+    "useIgnoreFile": true
+  }
+}
