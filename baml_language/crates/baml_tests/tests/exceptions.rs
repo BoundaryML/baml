@@ -4415,8 +4415,14 @@ function main() -> string {
 "#
     );
 
-    let result = output.result.unwrap();
-    insta::assert_snapshot!(format!("{result:?}"), @r#"String("Traceback (most recent call last):\n  File \"test.baml\", line 7, in user.main\n  File \"test.baml\", line 3, in user.inner")"#);
+    let BexExternalValue::String(st) = output.result.unwrap() else {
+        panic!("expected String variant");
+    };
+    insta::assert_snapshot!(st, @r#"
+    Traceback (most recent call last):
+      File "test.baml", line 7, in user.main
+      File "test.baml", line 3, in user.inner
+    "#);
 }
 
 #[tokio::test]
@@ -4458,7 +4464,17 @@ function main() -> int | string {
     );
 
     let result = output.result.unwrap();
-    let s = format!("{result:?}");
-    assert!(s.contains("Traceback"), "expected traceback, got: {s}");
-    assert!(s.contains("divider"), "expected divider frame, got: {s}");
+    let st = match result {
+        BexExternalValue::String(s) => s,
+        BexExternalValue::Union { value, .. } => match *value {
+            BexExternalValue::String(s) => s,
+            other => panic!("expected String inside Union, got: {other:?}"),
+        },
+        other => panic!("expected String or Union, got: {other:?}"),
+    };
+    insta::assert_snapshot!(st, @r#"
+    Traceback (most recent call last):
+      File "test.baml", line 7, in user.main
+      File "test.baml", line 3, in user.divider
+    "#);
 }
