@@ -1,5 +1,7 @@
 //! Snapshot tests for `grep()` and `list_symbols()`.
 
+use std::fmt::Write;
+
 use crate::{grep::GrepMode, testing::ProjectTest};
 
 fn make_project() -> ProjectTest {
@@ -116,7 +118,7 @@ fn list_symbols_snapshot() {
             .and_then(|n| n.to_str())
             .unwrap_or("unknown")
             .to_string();
-        output.push_str(&format!("{:<20} {:<12} {}\n", sym.name, sym.kind, filename));
+        writeln!(output, "{:<20} {:<12} {}", sym.name, sym.kind, filename).unwrap();
     }
     insta::assert_snapshot!(output);
 }

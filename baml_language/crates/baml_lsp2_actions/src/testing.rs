@@ -4,6 +4,7 @@
 //! the cursor position (immediately to the LEFT of the marker).
 
 use std::{
+    fmt::Write as _,
     path::PathBuf,
     sync::atomic::{AtomicU32, Ordering},
 };
@@ -340,22 +341,22 @@ impl ProjectTest {
         let offset: usize = desc.name_span.start().into();
         let (line, _col) = offset_to_line_col(text, offset);
 
-        out.push_str(&format!("── {} ── {}:{}\n", desc.kind, filename, line));
+        writeln!(out, "── {} ── {}:{}", desc.kind, filename, line).unwrap();
         if let Some(ref doc) = desc.docstring {
             for line in doc.lines() {
-                out.push_str(&format!("/// {line}\n"));
+                writeln!(out, "/// {line}").unwrap();
             }
         }
-        out.push_str(&format!("shape: {}\n", desc.shape));
+        writeln!(out, "shape: {}", desc.shape).unwrap();
         if !desc.dependencies.is_empty() {
             out.push_str("deps:");
             for dep in &desc.dependencies {
-                out.push_str(&format!(" {}", dep.name));
+                write!(out, " {}", dep.name).unwrap();
             }
             out.push('\n');
         }
         if !desc.references.is_empty() {
-            out.push_str(&format!("refs: {}\n", desc.references.len()));
+            writeln!(out, "refs: {}", desc.references.len()).unwrap();
             for r in &desc.references {
                 let rfile = r
                     .file
@@ -364,12 +365,7 @@ impl ProjectTest {
                     .and_then(|n| n.to_str())
                     .unwrap_or("unknown")
                     .to_string();
-                out.push_str(&format!(
-                    "  {}:{}  {}\n",
-                    rfile,
-                    r.line_number,
-                    r.line_text.trim()
-                ));
+                writeln!(out, "  {}:{}  {}", rfile, r.line_number, r.line_text.trim()).unwrap();
             }
         }
         out
