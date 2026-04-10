@@ -9,7 +9,7 @@ function $init_test() -> null {
     return
 }
 
-function user.$init_test_19(registry: testing.TestCollector) -> null {
+function user.$init_test_20(registry: testing.TestCollector) -> null {
     load_const 5
     load_const 3
     load_const null
@@ -17,7 +17,7 @@ function user.$init_test_19(registry: testing.TestCollector) -> null {
     store_var _4
     load_var registry
     load_const "with quorum"
-    make_closure .<lambda($init_test_19, 0)>, 0
+    make_closure .<lambda($init_test_20, 0)>, 0
     load_var _4
     call testing.TestCollector.register_test
     pop 1

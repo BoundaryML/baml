@@ -1148,6 +1148,7 @@ fn compile_init_function<'db>(
 ) -> Result<Function, LoweringError> {
     // Build the $init bytecode: a sequence of Call + StoreGlobal pairs.
     let mut init_instructions: Vec<Instruction> = Vec::new();
+    let mut init_meta: Vec<bex_vm_types::bytecode::InstructionMeta> = Vec::new();
     let mut init_constants: Vec<bex_vm_types::ConstValue> = Vec::new();
 
     for (i, (fq_name, let_loc, file)) in sorted_bindings.iter().enumerate() {
@@ -1241,20 +1242,35 @@ fn compile_init_function<'db>(
         init_instructions.push(Instruction::Call(bex_vm_types::GlobalIndex::from_raw(
             helper_global_slot,
         )));
+        init_meta.push(bex_vm_types::bytecode::InstructionMeta {
+            operand: Some(bex_vm_types::bytecode::OperandMeta::Callable(format!(
+                "$init_let_{i}"
+            ))),
+        });
         init_instructions.push(Instruction::StoreGlobal(
             bex_vm_types::GlobalIndex::from_raw(let_slot),
         ));
+        init_meta.push(bex_vm_types::bytecode::InstructionMeta {
+            operand: Some(bex_vm_types::bytecode::OperandMeta::Global(fq_name.clone())),
+        });
     }
 
     // Final: push Null and Return (Return pops the top of the eval stack).
     let null_const_idx = init_constants.len();
     init_constants.push(bex_vm_types::ConstValue::Null);
     init_instructions.push(Instruction::LoadConst(null_const_idx));
+    init_meta.push(bex_vm_types::bytecode::InstructionMeta {
+        operand: Some(bex_vm_types::bytecode::OperandMeta::Const(
+            "null".to_string(),
+        )),
+    });
     init_instructions.push(Instruction::Return);
+    init_meta.push(bex_vm_types::bytecode::InstructionMeta::default());
 
     let bytecode = Bytecode {
         instructions: init_instructions,
         constants: init_constants,
+        meta: init_meta,
         ..Bytecode::default()
     };
 

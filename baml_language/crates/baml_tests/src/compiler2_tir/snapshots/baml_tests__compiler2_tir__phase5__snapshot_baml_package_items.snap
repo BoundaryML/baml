@@ -21,6 +21,8 @@ namespace baml.errors:
   class LlmClient { methods: [] }
   class NotImplemented { methods: [] }
   class RenderPrompt { methods: [] }
+  class StackFrame { methods: [] }
+  class StackTrace { methods: [to_string] }
   class Timeout { methods: [] }
   class Unsupported { methods: [] }
 namespace baml.fs:

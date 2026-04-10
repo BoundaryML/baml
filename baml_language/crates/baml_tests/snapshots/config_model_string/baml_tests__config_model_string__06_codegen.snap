@@ -2,9 +2,9 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 function $init() -> null {
-    call ?
-    store_global ?135
-    load_const ?
+    call $init_let_0
+    store_global user.MyAwsClient
+    load_const null
     return
 }
 
