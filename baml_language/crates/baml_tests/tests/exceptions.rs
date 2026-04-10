@@ -3453,7 +3453,84 @@ async fn catch_four_typed_arms_jump_table() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode);
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function main() -> int {
+        load_const 2
+        call user.risky
+        jump L5
+        load_var e
+        type_tag
+        jump_table [L1, L2, L4, _, L3], default L0
+
+      L0:
+        load_var e
+        throw
+
+      L1: ErrD
+        load_const 40
+        jump L5
+
+      L2: ErrC
+        load_const 30
+        jump L5
+
+      L3: ErrB
+        load_const 20
+        jump L5
+
+      L4: ErrA
+        load_const 10
+
+      L5:
+        return
+    }
+
+    function risky(mode: int) -> int {
+        load_var mode
+        load_const 0
+        cmp_op ==
+        pop_jump_if_false L0
+        jump L5
+
+      L0:
+        load_var mode
+        load_const 1
+        cmp_op ==
+        pop_jump_if_false L1
+        jump L4
+
+      L1:
+        load_var mode
+        load_const 2
+        cmp_op ==
+        pop_jump_if_false L2
+        jump L3
+
+      L2:
+        alloc_instance ErrD
+        load_const 4
+        init_field .x
+        throw
+
+      L3:
+        alloc_instance ErrC
+        load_const 3
+        init_field .x
+        throw
+
+      L4:
+        alloc_instance ErrB
+        load_const 2
+        init_field .x
+        throw
+
+      L5:
+        alloc_instance ErrA
+        load_const 1
+        init_field .x
+        throw
+    }
+    "#);
     assert_eq!(output.result, Ok(BexExternalValue::Int(30)));
 }
 
@@ -3487,7 +3564,97 @@ async fn catch_four_typed_arms_plus_wildcard_jump_table() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode);
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function main() -> int {
+        load_const 4
+        call user.risky
+        jump L5
+        load_var e
+        type_tag
+        jump_table [L1, L2, L4, _, L3], default L0
+
+      L0:
+        load_var e
+        throw_if_panic
+        load_const 99
+        jump L5
+
+      L1: ErrD
+        load_const 40
+        jump L5
+
+      L2: ErrC
+        load_const 30
+        jump L5
+
+      L3: ErrB
+        load_const 20
+        jump L5
+
+      L4: ErrA
+        load_const 10
+
+      L5:
+        return
+    }
+
+    function risky(mode: int) -> int {
+        load_var mode
+        load_const 0
+        cmp_op ==
+        pop_jump_if_false L0
+        jump L7
+
+      L0:
+        load_var mode
+        load_const 1
+        cmp_op ==
+        pop_jump_if_false L1
+        jump L6
+
+      L1:
+        load_var mode
+        load_const 2
+        cmp_op ==
+        pop_jump_if_false L2
+        jump L5
+
+      L2:
+        load_var mode
+        load_const 3
+        cmp_op ==
+        pop_jump_if_false L3
+        jump L4
+
+      L3:
+        load_const "unknown"
+        throw
+
+      L4:
+        alloc_instance ErrD
+        load_const 4
+        init_field .x
+        throw
+
+      L5:
+        alloc_instance ErrC
+        load_const 3
+        init_field .x
+        throw
+
+      L6:
+        alloc_instance ErrB
+        load_const 2
+        init_field .x
+        throw
+
+      L7:
+        alloc_instance ErrA
+        load_const 1
+        init_field .x
+        throw
+    }
+    "#);
     assert_eq!(output.result, Ok(BexExternalValue::Int(99)));
 }
 
@@ -3513,7 +3680,57 @@ async fn catch_two_typed_arms_sequential_chain() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode);
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function fails(mode: int) -> int {
+        load_var mode
+        load_const 0
+        cmp_op ==
+        pop_jump_if_false L0
+        jump L1
+
+      L0:
+        alloc_instance ParseError
+        load_const "bad"
+        init_field .msg
+        throw
+
+      L1:
+        alloc_instance NetworkError
+        load_const "http://x"
+        init_field .url
+        throw
+    }
+
+    function main() -> int {
+        load_const 1
+        call user.fails
+        jump L4
+        load_var e
+        is_type NetworkError
+        pop_jump_if_false L0
+        jump L3
+
+      L0:
+        load_var e
+        is_type ParseError
+        pop_jump_if_false L1
+        jump L2
+
+      L1:
+        load_var e
+        throw
+
+      L2:
+        load_const 2
+        jump L4
+
+      L3:
+        load_const 1
+
+      L4:
+        return
+    }
+    "#);
     assert_eq!(output.result, Ok(BexExternalValue::Int(2)));
 }
 
@@ -3539,7 +3756,58 @@ async fn catch_mixed_literal_and_typed_no_switch() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode);
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function fails(mode: int) -> int {
+        load_var mode
+        load_const 0
+        cmp_op ==
+        pop_jump_if_false L0
+        jump L1
+
+      L0:
+        alloc_instance AppError
+        load_const 404
+        init_field .code
+        throw
+
+      L1:
+        load_const "boom"
+        throw
+    }
+
+    function main() -> int {
+        load_const 0
+        call user.fails
+        jump L4
+        load_var e
+        load_const "boom"
+        cmp_op ==
+        pop_jump_if_false L0
+        jump L3
+
+      L0:
+        load_var e
+        is_type AppError
+        pop_jump_if_false L1
+        jump L2
+
+      L1:
+        load_var e
+        throw_if_panic
+        load_const 3
+        jump L4
+
+      L2:
+        load_const 2
+        jump L4
+
+      L3:
+        load_const 1
+
+      L4:
+        return
+    }
+    "#);
     assert_eq!(output.result, Ok(BexExternalValue::Int(1)));
 }
 
@@ -3568,7 +3836,44 @@ async fn catch_four_primitive_type_arms() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode);
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function fails() -> int {
+        load_const "oops"
+        throw
+    }
+
+    function main() -> int {
+        call user.fails
+        jump L5
+        load_var e
+        type_tag
+        jump_table [L3, L4, L2, L1], default L0
+
+      L0:
+        load_var e
+        throw_if_panic
+        load_const 0
+        jump L5
+
+      L1: null
+        load_const 4
+        jump L5
+
+      L2: bool
+        load_const 3
+        jump L5
+
+      L3: int
+        load_const 2
+        jump L5
+
+      L4: string
+        load_const 1
+
+      L5:
+        return
+    }
+    "#);
     assert_eq!(output.result, Ok(BexExternalValue::Int(1)));
 }
 
@@ -3593,7 +3898,44 @@ async fn catch_four_primitive_wildcard_on_float() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode);
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function fails() -> int {
+        load_const 3.14
+        throw
+    }
+
+    function main() -> int {
+        call user.fails
+        jump L5
+        load_var e
+        type_tag
+        jump_table [L3, L4, L2, L1], default L0
+
+      L0:
+        load_var e
+        throw_if_panic
+        load_const 0
+        jump L5
+
+      L1: null
+        load_const 4
+        jump L5
+
+      L2: bool
+        load_const 3
+        jump L5
+
+      L3: int
+        load_const 2
+        jump L5
+
+      L4: string
+        load_const 1
+
+      L5:
+        return
+    }
+    "#);
     assert_eq!(output.result, Ok(BexExternalValue::Int(0)));
 }
 
@@ -3617,7 +3959,53 @@ async fn catch_three_type_arms_bool_throw() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode);
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function fails() -> int {
+        load_const true
+        throw
+    }
+
+    function main() -> int {
+        call user.fails
+        jump L6
+        load_var e
+        is_type string
+        pop_jump_if_false L0
+        jump L5
+
+      L0:
+        load_var e
+        is_type int
+        pop_jump_if_false L1
+        jump L4
+
+      L1:
+        load_var e
+        is_type bool
+        pop_jump_if_false L2
+        jump L3
+
+      L2:
+        load_var e
+        throw_if_panic
+        load_const 0
+        jump L6
+
+      L3:
+        load_const 3
+        jump L6
+
+      L4:
+        load_const 2
+        jump L6
+
+      L5:
+        load_const 1
+
+      L6:
+        return
+    }
+    "#);
     assert_eq!(output.result, Ok(BexExternalValue::Int(3)));
 }
 
@@ -3651,7 +4039,97 @@ async fn catch_four_user_classes_instanceof_chain() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode);
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function api(mode: int) -> int {
+        load_var mode
+        load_const 0
+        cmp_op ==
+        pop_jump_if_false L0
+        jump L7
+
+      L0:
+        load_var mode
+        load_const 1
+        cmp_op ==
+        pop_jump_if_false L1
+        jump L6
+
+      L1:
+        load_var mode
+        load_const 2
+        cmp_op ==
+        pop_jump_if_false L2
+        jump L5
+
+      L2:
+        load_var mode
+        load_const 3
+        cmp_op ==
+        pop_jump_if_false L3
+        jump L4
+
+      L3:
+        load_const "unknown"
+        throw
+
+      L4:
+        alloc_instance Timeout
+        load_const 5000
+        init_field .ms
+        throw
+
+      L5:
+        alloc_instance RateLimit
+        load_const 30
+        init_field .retryAfter
+        throw
+
+      L6:
+        alloc_instance NotFound
+        load_const "/users"
+        init_field .path
+        throw
+
+      L7:
+        alloc_instance AuthError
+        load_const "expired"
+        init_field .reason
+        throw
+    }
+
+    function main() -> int {
+        load_const 2
+        call user.api
+        jump L5
+        load_var e
+        type_tag
+        jump_table [L3, L2, _, _, L4, L1], default L0
+
+      L0:
+        load_var e
+        throw_if_panic
+        load_const 0
+        jump L5
+
+      L1: Timeout
+        load_const 4
+        jump L5
+
+      L2: RateLimit
+        load_const 3
+        jump L5
+
+      L3: NotFound
+        load_const 2
+        jump L5
+
+      L4: AuthError
+        load_const 1
+
+      L5:
+        return
+    }
+    "#);
     assert_eq!(output.result, Ok(BexExternalValue::Int(3)));
 }
 
@@ -3679,7 +4157,101 @@ async fn catch_four_literal_arms() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode);
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function fails(x: int) -> int {
+        load_var x
+        load_const 0
+        cmp_op ==
+        pop_jump_if_false L0
+        jump L5
+
+      L0:
+        load_var x
+        load_const 1
+        cmp_op ==
+        pop_jump_if_false L1
+        jump L4
+
+      L1:
+        load_var x
+        load_const 2
+        cmp_op ==
+        pop_jump_if_false L2
+        jump L3
+
+      L2:
+        load_const "other"
+        throw
+
+      L3:
+        load_const "crash"
+        throw
+
+      L4:
+        load_const "bang"
+        throw
+
+      L5:
+        load_const "boom"
+        throw
+    }
+
+    function main() -> int {
+        load_const 1
+        call user.fails
+        jump L8
+        load_var e
+        load_const "boom"
+        cmp_op ==
+        pop_jump_if_false L0
+        jump L7
+
+      L0:
+        load_var e
+        load_const "bang"
+        cmp_op ==
+        pop_jump_if_false L1
+        jump L6
+
+      L1:
+        load_var e
+        load_const "crash"
+        cmp_op ==
+        pop_jump_if_false L2
+        jump L5
+
+      L2:
+        load_var e
+        load_const "other"
+        cmp_op ==
+        pop_jump_if_false L3
+        jump L4
+
+      L3:
+        load_var e
+        throw_if_panic
+        load_const 0
+        jump L8
+
+      L4:
+        load_const 40
+        jump L8
+
+      L5:
+        load_const 30
+        jump L8
+
+      L6:
+        load_const 20
+        jump L8
+
+      L7:
+        load_const 10
+
+      L8:
+        return
+    }
+    "#);
     assert_eq!(output.result, Ok(BexExternalValue::Int(20)));
 }
 
@@ -3710,7 +4282,49 @@ async fn catch_mixed_named_and_anonymous_bindings() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode);
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function fails() -> string {
+        alloc_instance NetworkError
+        load_const "http://example.com"
+        init_field .url
+        throw
+    }
+
+    function main() -> string {
+        call user.fails
+        jump L5
+        load_var e
+        type_tag
+        jump_table [L2, _, L1, L4, _, _, L3], default L0
+
+      L0:
+        load_var e
+        throw_if_panic
+        load_const "unknown"
+        jump L5
+
+      L1: RateLimit
+        load_const "rate limited"
+        jump L5
+
+      L2: NotFound
+        load_var e
+        load_field .path
+        jump L5
+
+      L3: AuthError
+        load_var e
+        load_field .reason
+        jump L5
+
+      L4: NetworkError
+        load_var e
+        load_field .url
+
+      L5:
+        return
+    }
+    "#);
     assert_eq!(
         output.result,
         Ok(BexExternalValue::String("http://example.com".into()))
