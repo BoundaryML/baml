@@ -40,6 +40,22 @@ pub mod io {
 // ============================================================================
 // RuntimeIo adapter (generated from .baml files via baml_builtins2_codegen)
 // ============================================================================
+// Every `$rust_io_function` in the ns_* .baml files is used by
+// `baml_builtins2_codegen` to generate the `RuntimeIo` trait (in
+// `sys_types::runtime_io`). RuntimeIo is a flat, typed async interface to all
+// sys-ops -- no VM plumbing (BexHeap, SysOpContext, CallId) in its signatures.
+// Crates like `sys_llm` take `&dyn RuntimeIo` to call into the runtime IO
+// layer (HTTP, env, filesystem, shell) without coupling to the VM.
+//
+// The generated `RuntimeIoAdapter` below bridges the trait to the underlying
+// `SysOpFn` pointers by marshaling typed args through `BexExternalValue`.
+//
+// The trait carries `UnwindSafe + RefUnwindSafe` bounds because the AWS SDK's
+// `HttpConnector` trait requires them on provider objects that store
+// `Arc<dyn RuntimeIo>`. The adapter has a manual `impl UnwindSafe` -- this is
+// safe because it holds only `Arc` clones (no interior mutability of its own)
+// and we never catch panics across the SysOpFn boundary.
+// ============================================================================
 
 #[allow(
     dead_code,

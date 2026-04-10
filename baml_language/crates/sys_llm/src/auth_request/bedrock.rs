@@ -516,186 +516,6 @@ mod tests {
         }
     }
 
-    // -----------------------------------------------------------------------
-    // Test mock RuntimeIo implementations
-    // -----------------------------------------------------------------------
-
-    /// Generates `RuntimeIoError::Unsupported` stubs for `RuntimeIo` methods
-    /// that are not relevant to Bedrock tests.
-    macro_rules! unsupported_runtime_io_methods {
-        () => {
-            fn http_response_bytes(
-                &self,
-                _: &sys_types::runtime_io::HttpResponseHandle,
-            ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, RuntimeIoError>> + Send + '_>> {
-                Box::pin(async { Err(RuntimeIoError::Unsupported) })
-            }
-            fn http_fetch(
-                &self,
-                _: String,
-            ) -> Pin<
-                Box<
-                    dyn Future<
-                            Output = Result<
-                                sys_types::runtime_io::HttpResponseHandle,
-                                RuntimeIoError,
-                            >,
-                        > + Send
-                        + '_,
-                >,
-            > {
-                Box::pin(async { Err(RuntimeIoError::Unsupported) })
-            }
-            fn sys_shell(
-                &self,
-                _: String,
-            ) -> Pin<Box<dyn Future<Output = Result<String, RuntimeIoError>> + Send + '_>> {
-                Box::pin(async { Err(RuntimeIoError::Unsupported) })
-            }
-            fn sys_sleep(
-                &self,
-                _: i64,
-            ) -> Pin<Box<dyn Future<Output = Result<(), RuntimeIoError>> + Send + '_>> {
-                Box::pin(async { Err(RuntimeIoError::Unsupported) })
-            }
-            fn fs_file_close(
-                &self,
-                _: &sys_types::runtime_io::FsFileHandle,
-            ) -> Pin<Box<dyn Future<Output = Result<(), RuntimeIoError>> + Send + '_>> {
-                Box::pin(async { Err(RuntimeIoError::Unsupported) })
-            }
-            fn net_socket_read(
-                &self,
-                _: &sys_types::runtime_io::NetSocketHandle,
-            ) -> Pin<Box<dyn Future<Output = Result<String, RuntimeIoError>> + Send + '_>> {
-                Box::pin(async { Err(RuntimeIoError::Unsupported) })
-            }
-            fn net_socket_close(
-                &self,
-                _: &sys_types::runtime_io::NetSocketHandle,
-            ) -> Pin<Box<dyn Future<Output = Result<(), RuntimeIoError>> + Send + '_>> {
-                Box::pin(async { Err(RuntimeIoError::Unsupported) })
-            }
-            fn net_connect(
-                &self,
-                _: String,
-            ) -> Pin<
-                Box<
-                    dyn Future<
-                            Output = Result<sys_types::runtime_io::NetSocketHandle, RuntimeIoError>,
-                        > + Send
-                        + '_,
-                >,
-            > {
-                Box::pin(async { Err(RuntimeIoError::Unsupported) })
-            }
-            fn llm_client_get_constructor(
-                &self,
-                _: &sys_types::runtime_io::LlmClientHandle,
-            ) -> Pin<
-                Box<
-                    dyn Future<
-                            Output = Result<bex_external_types::BexExternalValue, RuntimeIoError>,
-                        > + Send
-                        + '_,
-                >,
-            > {
-                Box::pin(async { Err(RuntimeIoError::Unsupported) })
-            }
-            fn llm_primitiveclient_render_prompt(
-                &self,
-                _: &sys_types::runtime_io::LlmPrimitiveClientHandle,
-                _template: String,
-                _args: indexmap::IndexMap<String, bex_external_types::BexExternalValue>,
-                _return_type: baml_type::Ty,
-            ) -> Pin<
-                Box<
-                    dyn Future<
-                            Output = Result<
-                                sys_types::generated::owned::llm::PromptAst,
-                                RuntimeIoError,
-                            >,
-                        > + Send
-                        + '_,
-                >,
-            > {
-                Box::pin(async { Err(RuntimeIoError::Unsupported) })
-            }
-            fn llm_primitiveclient_specialize_prompt(
-                &self,
-                _: &sys_types::runtime_io::LlmPrimitiveClientHandle,
-                _prompt: sys_types::generated::owned::llm::PromptAst,
-            ) -> Pin<
-                Box<
-                    dyn Future<
-                            Output = Result<
-                                sys_types::generated::owned::llm::PromptAst,
-                                RuntimeIoError,
-                            >,
-                        > + Send
-                        + '_,
-                >,
-            > {
-                Box::pin(async { Err(RuntimeIoError::Unsupported) })
-            }
-            fn llm_primitiveclient_build_request(
-                &self,
-                _: &sys_types::runtime_io::LlmPrimitiveClientHandle,
-                _prompt: sys_types::generated::owned::llm::PromptAst,
-            ) -> Pin<
-                Box<
-                    dyn Future<
-                            Output = Result<bex_external_types::BexExternalValue, RuntimeIoError>,
-                        > + Send
-                        + '_,
-                >,
-            > {
-                Box::pin(async { Err(RuntimeIoError::Unsupported) })
-            }
-            fn llm_primitiveclient_parse(
-                &self,
-                _: &sys_types::runtime_io::LlmPrimitiveClientHandle,
-                _http_response_body: String,
-                _type_def: baml_type::Ty,
-            ) -> Pin<
-                Box<
-                    dyn Future<
-                            Output = Result<bex_external_types::BexExternalValue, RuntimeIoError>,
-                        > + Send
-                        + '_,
-                >,
-            > {
-                Box::pin(async { Err(RuntimeIoError::Unsupported) })
-            }
-            fn llm_get_jinja_template(
-                &self,
-                _: String,
-            ) -> Pin<Box<dyn Future<Output = Result<String, RuntimeIoError>> + Send + '_>> {
-                Box::pin(async { Err(RuntimeIoError::Unsupported) })
-            }
-            fn llm_get_return_type(
-                &self,
-                _: String,
-            ) -> Pin<Box<dyn Future<Output = Result<baml_type::Ty, RuntimeIoError>> + Send + '_>> {
-                Box::pin(async { Err(RuntimeIoError::Unsupported) })
-            }
-            fn llm___sap_parse(
-                &self,
-                _: String,
-                _ty: baml_type::Ty,
-            ) -> Pin<
-                Box<
-                    dyn Future<
-                            Output = Result<bex_external_types::BexExternalValue, RuntimeIoError>,
-                        > + Send
-                        + '_,
-                >,
-            > {
-                Box::pin(async { Err(RuntimeIoError::Unsupported) })
-            }
-        };
-    }
-
     /// A stub `RuntimeIo` that returns sensible defaults for Bedrock-relevant
     /// operations and `Unsupported` for everything else.
     struct StubIo;
@@ -756,8 +576,6 @@ mod tests {
         ) -> Pin<Box<dyn Future<Output = Result<String, RuntimeIoError>> + Send + '_>> {
             Box::pin(async { Err(RuntimeIoError::Other("not found".into())) })
         }
-
-        unsupported_runtime_io_methods!();
     }
 
     fn stub_io() -> Arc<dyn RuntimeIo> {
@@ -830,8 +648,6 @@ mod tests {
         ) -> Pin<Box<dyn Future<Output = Result<String, RuntimeIoError>> + Send + '_>> {
             Box::pin(async { Err(RuntimeIoError::Other("not found".into())) })
         }
-
-        unsupported_runtime_io_methods!();
     }
 
     fn mock_http_io(
@@ -910,8 +726,6 @@ mod tests {
         ) -> Pin<Box<dyn Future<Output = Result<String, RuntimeIoError>> + Send + '_>> {
             Box::pin(async { Err(RuntimeIoError::Other("not found".into())) })
         }
-
-        unsupported_runtime_io_methods!();
     }
 
     /// A mock `RuntimeIo` with custom env + fs behavior that stores file
@@ -998,8 +812,6 @@ mod tests {
                 async move { content.ok_or_else(|| RuntimeIoError::Other("not found".into())) },
             )
         }
-
-        unsupported_runtime_io_methods!();
     }
 
     /// A mock `RuntimeIo` with custom env + http behavior.
@@ -1076,8 +888,6 @@ mod tests {
         ) -> Pin<Box<dyn Future<Output = Result<String, RuntimeIoError>> + Send + '_>> {
             Box::pin(async { Err(RuntimeIoError::Other("not found".into())) })
         }
-
-        unsupported_runtime_io_methods!();
     }
 
     // -----------------------------------------------------------------------

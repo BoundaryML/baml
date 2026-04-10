@@ -1694,7 +1694,10 @@ fn emit_runtime_io_trait(
 
         methods.push(quote! {
             fn #method_ident(&self, #(#params),*)
-                -> Pin<Box<dyn Future<Output = Result<#ret_ty, RuntimeIoError>> + Send + '_>>;
+                -> Pin<Box<dyn Future<Output = Result<#ret_ty, RuntimeIoError>> + Send + '_>>
+            {
+                Box::pin(std::future::ready(Err(RuntimeIoError::Unsupported)))
+            }
         });
     }
 
@@ -1706,47 +1709,14 @@ fn emit_runtime_io_trait(
 }
 
 fn emit_noop_runtime_io(
-    io_builtins: &[NativeBuiltin],
-    tree: &BTreeMap<String, IoNamespaceNode>,
-    class_ns_map: &BTreeMap<String, String>,
-    paths: &CodegenPaths,
+    _io_builtins: &[NativeBuiltin],
+    _tree: &BTreeMap<String, IoNamespaceNode>,
+    _class_ns_map: &BTreeMap<String, String>,
+    _paths: &CodegenPaths,
 ) -> TokenStream {
-    let mut methods = Vec::new();
-
-    for builtin in io_builtins {
-        let method_name = runtime_io_method_name(builtin);
-        let method_ident = format_ident!("{}", method_name);
-        let ret_ty = runtime_io_return_type(builtin, tree, class_ns_map, paths);
-
-        let mut params: Vec<TokenStream> = Vec::new();
-
-        if let Some(ref receiver) = builtin.receiver {
-            let ns = io_namespace_name(builtin);
-            let handle = handle_type_name(ns, &receiver.class_name);
-            params.push(quote! { _: &#handle });
-        }
-
-        for p in &builtin.params {
-            let p_ident = format_ident!("_{}", p.name);
-            let p_ty = clean_rust_type(&p.ty, class_ns_map, paths);
-            params.push(quote! { #p_ident: #p_ty });
-        }
-
-        methods.push(quote! {
-            fn #method_ident(&self, #(#params),*)
-                -> Pin<Box<dyn Future<Output = Result<#ret_ty, RuntimeIoError>> + Send + '_>>
-            {
-                Box::pin(std::future::ready(Err(RuntimeIoError::Unsupported)))
-            }
-        });
-    }
-
     quote! {
         pub struct NoopRuntimeIo;
-
-        impl RuntimeIo for NoopRuntimeIo {
-            #(#methods)*
-        }
+        impl RuntimeIo for NoopRuntimeIo {}
     }
 }
 
