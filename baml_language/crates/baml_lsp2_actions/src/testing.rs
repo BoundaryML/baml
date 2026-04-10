@@ -4,6 +4,7 @@
 //! the cursor position (immediately to the LEFT of the marker).
 
 use std::{
+    fmt::Write as _,
     path::PathBuf,
     sync::atomic::{AtomicU32, Ordering},
 };
@@ -15,6 +16,8 @@ use text_size::TextSize;
 
 use crate::{
     definition::{Location, definition_at},
+    describe::SymbolDescription,
+    grep::{GrepOptions, GrepResult, TextMatch},
     usages::usages_at,
 };
 
@@ -277,6 +280,157 @@ fn offset_to_line_col(content: &str, offset: usize) -> (usize, usize) {
     let last_newline = before.rfind('\n').map(|p| p + 1).unwrap_or(0);
     let column = clamped - last_newline + 1;
     (line, column)
+}
+
+// ── Project-level test infrastructure (no cursor needed) ────────────────────
+
+/// A test project with multiple BAML files, suitable for testing `describe()`
+/// and `grep()` which operate on a set of source files.
+pub(crate) struct ProjectTest {
+    pub(crate) db: TestDb,
+    pub(crate) files: Vec<SourceFile>,
+}
+
+impl ProjectTest {
+    /// Create a builder for multi-file project tests.
+    pub(crate) fn builder() -> ProjectTestBuilder {
+        ProjectTestBuilder::default()
+    }
+
+    /// Run `describe()` on a symbol name and return the results.
+    pub(crate) fn describe(&self, name: &str) -> Vec<SymbolDescription> {
+        crate::describe::describe(&self.db, &self.files, name)
+    }
+
+    /// Run `grep()` and return the result.
+    pub(crate) fn grep(&self, pattern: &str) -> GrepResult {
+        let opts = GrepOptions {
+            pattern,
+            ignore_case: false,
+            kind_filter: &[],
+        };
+        crate::grep::grep(&self.db, &self.files, &opts)
+    }
+
+    /// Run `grep()` with case-insensitive matching.
+    pub(crate) fn grep_case_insensitive(&self, pattern: &str) -> GrepResult {
+        let opts = GrepOptions {
+            pattern,
+            ignore_case: true,
+            kind_filter: &[],
+        };
+        crate::grep::grep(&self.db, &self.files, &opts)
+    }
+
+    /// Run `list_symbols()` and return the result.
+    pub(crate) fn list_symbols(&self) -> Vec<crate::search::SymbolInfo> {
+        crate::grep::list_symbols(&self.db, &self.files, &[])
+    }
+
+    /// Format a `SymbolDescription` for snapshot comparison.
+    pub(crate) fn format_description(&self, desc: &SymbolDescription) -> String {
+        let mut out = String::new();
+        let filename = desc
+            .file
+            .path(&self.db)
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("unknown")
+            .to_string();
+        let text = desc.file.text(&self.db);
+        let offset: usize = desc.name_span.start().into();
+        let (line, _col) = offset_to_line_col(text, offset);
+
+        writeln!(out, "── {} ── {}:{}", desc.kind, filename, line).unwrap();
+        if let Some(ref doc) = desc.docstring {
+            for line in doc.lines() {
+                writeln!(out, "/// {line}").unwrap();
+            }
+        }
+        writeln!(out, "shape: {}", desc.shape).unwrap();
+        if !desc.dependencies.is_empty() {
+            out.push_str("deps:");
+            for dep in &desc.dependencies {
+                write!(out, " {}", dep.name).unwrap();
+            }
+            out.push('\n');
+        }
+        if !desc.references.is_empty() {
+            writeln!(out, "refs: {}", desc.references.len()).unwrap();
+            for r in &desc.references {
+                let rfile = r
+                    .file
+                    .path(&self.db)
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("unknown")
+                    .to_string();
+                writeln!(out, "  {}:{}  {}", rfile, r.line_number, r.line_text.trim()).unwrap();
+            }
+        }
+        out
+    }
+
+    /// Format a `TextMatch` for snapshot comparison.
+    pub(crate) fn format_text_match(&self, m: &TextMatch) -> String {
+        let filename = m
+            .file
+            .path(&self.db)
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("unknown")
+            .to_string();
+        let annotation = match &m.annotation {
+            Some(ann) => format!("  ← {ann:?}"),
+            None => String::new(),
+        };
+        format!(
+            "{}:{}│ {}{}",
+            filename,
+            m.line_number,
+            m.line_text.trim(),
+            annotation
+        )
+    }
+}
+
+/// Builder for project tests supporting multiple files (no cursor).
+#[derive(Default)]
+pub(crate) struct ProjectTestBuilder {
+    sources: Vec<(String, String)>,
+}
+
+impl ProjectTestBuilder {
+    /// Add a source file to the test project.
+    pub(crate) fn source(&mut self, filename: &str, content: &str) -> &mut Self {
+        self.sources
+            .push((filename.to_string(), content.to_string()));
+        self
+    }
+
+    /// Build the project test.
+    pub(crate) fn build(self) -> ProjectTest {
+        let mut db = TestDb::default();
+        db.init();
+
+        let mut user_files: Vec<SourceFile> = Vec::new();
+        for (filename, content) in &self.sources {
+            let path = PathBuf::from("/test").join(filename);
+            let file = db.add_file(path, content);
+            user_files.push(file);
+        }
+
+        // Update the project's file list.
+        db.project
+            .unwrap()
+            .set_files(&mut db)
+            .to(user_files.clone());
+
+        ProjectTest {
+            db,
+            files: user_files,
+        }
+    }
 }
 
 #[cfg(test)]
