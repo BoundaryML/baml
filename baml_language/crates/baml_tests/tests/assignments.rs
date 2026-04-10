@@ -752,7 +752,7 @@ async fn array_element_method_field_assignment() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function Container.get_data(self: null) -> Data {
         load_var self
         load_field .data
@@ -766,26 +766,20 @@ async fn array_element_method_field_assignment() {
 
     function main() -> int {
         alloc_instance Container
-        copy 0
         alloc_instance Data
-        copy 0
         load_const 10
-        store_field .value
-        store_field .data
+        init_field .value
+        init_field .data
         alloc_instance Container
-        copy 0
         alloc_instance Data
-        copy 0
         load_const 20
-        store_field .value
-        store_field .data
+        init_field .value
+        init_field .data
         alloc_instance Container
-        copy 0
         alloc_instance Data
-        copy 0
         load_const 30
-        store_field .value
-        store_field .data
+        init_field .value
+        init_field .data
         alloc_array 3
         store_var containers
         load_var containers
@@ -844,7 +838,7 @@ async fn method_call_then_array_access_assignment() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function Container.get_nested(self: null) -> Item[] {
         load_var self
         load_field .data
@@ -863,21 +857,17 @@ async fn method_call_then_array_access_assignment() {
         bin_op +
         store_field .value
         alloc_instance Container
-        copy 0
         alloc_instance Item
-        copy 0
         load_const 10
-        store_field .value
+        init_field .value
         alloc_instance Item
-        copy 0
         load_const 20
-        store_field .value
+        init_field .value
         alloc_instance Item
-        copy 0
         load_const 30
-        store_field .value
+        init_field .value
         alloc_array 3
-        store_field .data
+        init_field .data
         load_field .data
         load_const 1
         load_array_element
@@ -918,7 +908,7 @@ async fn method_call_field_assignment() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function Factory.get_counter(self: null) -> Counter {
         load_var self
         load_field .counter
@@ -933,12 +923,10 @@ async fn method_call_field_assignment() {
         bin_op +
         store_field .value
         alloc_instance Factory
-        copy 0
         alloc_instance Counter
-        copy 0
         load_const 10
-        store_field .value
-        store_field .counter
+        init_field .value
+        init_field .counter
         call user.Factory.get_counter
         load_field .value
         return
