@@ -924,15 +924,12 @@ function user.NullCoalescing(user: User?, fallback: string, count: int) -> strin
     load_var user
     load_field .1
     load_field .0
-    store_var _118
     jump L84
 
   L83:
     load_const null
-    store_var _118
 
   L84:
-    load_var _118
     jump_if_false L85
     jump L86
 

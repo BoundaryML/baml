@@ -174,37 +174,29 @@ function user.AssertStmts(x: int, y: int) -> int {
     load_var x
     load_const 100
     cmp_op <
-    store_var _10
 
   L0:
-    load_var _10
     jump_if_false L1
     pop 1
     load_var y
     load_const 0
     cmp_op >
-    store_var _9
 
   L1:
-    load_var _9
     jump_if_false L2
     pop 1
     load_var y
     load_const 100
     cmp_op <
-    store_var _8
 
   L2:
-    load_var _8
     jump_if_false L3
     pop 1
     load_var x
     load_var y
     cmp_op !=
-    store_var _7
 
   L3:
-    load_var _7
     jump_if_false L4
     pop 1
     load_var x
@@ -212,10 +204,8 @@ function user.AssertStmts(x: int, y: int) -> int {
     bin_op +
     load_const 150
     cmp_op <
-    store_var _6
 
   L4:
-    load_var _6
     jump_if_false L5
     pop 1
     load_var x
@@ -223,10 +213,8 @@ function user.AssertStmts(x: int, y: int) -> int {
     bin_op *
     load_const 10
     cmp_op >
-    store_var _5
 
   L5:
-    load_var _5
     jump_if_false L6
     pop 1
     load_var x
@@ -234,10 +222,8 @@ function user.AssertStmts(x: int, y: int) -> int {
     bin_op -
     load_const 42
     cmp_op !=
-    store_var _4
 
   L6:
-    load_var _4
     jump_if_false L7
     pop 1
 
@@ -250,37 +236,29 @@ function user.AssertStmts(x: int, y: int) -> int {
     load_var x
     load_const 100
     cmp_op <
-    store_var _26
 
   L8:
-    load_var _26
     jump_if_false L9
     pop 1
     load_var y
     load_const 0
     cmp_op >
-    store_var _25
 
   L9:
-    load_var _25
     jump_if_false L10
     pop 1
     load_var y
     load_const 100
     cmp_op <
-    store_var _24
 
   L10:
-    load_var _24
     jump_if_false L11
     pop 1
     load_var x
     load_var y
     cmp_op !=
-    store_var _23
 
   L11:
-    load_var _23
     jump_if_false L12
     pop 1
     load_var x
@@ -288,10 +266,8 @@ function user.AssertStmts(x: int, y: int) -> int {
     bin_op +
     load_const 150
     cmp_op <
-    store_var _22
 
   L12:
-    load_var _22
     jump_if_false L13
     pop 1
     load_var x
@@ -299,10 +275,8 @@ function user.AssertStmts(x: int, y: int) -> int {
     bin_op *
     load_const 10
     cmp_op >
-    store_var _21
 
   L13:
-    load_var _21
     jump_if_false L14
     pop 1
     load_var x
@@ -310,10 +284,8 @@ function user.AssertStmts(x: int, y: int) -> int {
     bin_op -
     load_const 42
     cmp_op !=
-    store_var _20
 
   L14:
-    load_var _20
     jump_if_false L15
     pop 1
     load_var x
@@ -321,10 +293,8 @@ function user.AssertStmts(x: int, y: int) -> int {
     bin_op %
     load_const 0
     cmp_op ==
-    store_var _19
 
   L15:
-    load_var _19
     jump_if_false L16
     pop 1
     load_var y
@@ -332,10 +302,8 @@ function user.AssertStmts(x: int, y: int) -> int {
     bin_op %
     load_const 0
     cmp_op ==
-    store_var _18
 
   L16:
-    load_var _18
     jump_if_false L17
     pop 1
     load_var x
@@ -347,10 +315,8 @@ function user.AssertStmts(x: int, y: int) -> int {
     bin_op +
     load_const 100
     cmp_op >
-    store_var _17
 
   L17:
-    load_var _17
     jump_if_false L18
     pop 1
 
@@ -363,37 +329,29 @@ function user.AssertStmts(x: int, y: int) -> int {
     load_var x
     load_const 100
     cmp_op <
-    store_var _46
 
   L19:
-    load_var _46
     jump_if_false L20
     pop 1
     load_var y
     load_const 0
     cmp_op >
-    store_var _45
 
   L20:
-    load_var _45
     jump_if_false L21
     pop 1
     load_var y
     load_const 100
     cmp_op <
-    store_var _44
 
   L21:
-    load_var _44
     jump_if_false L22
     pop 1
     load_var x
     load_var y
     cmp_op !=
-    store_var _43
 
   L22:
-    load_var _43
     jump_if_false L23
     pop 1
     load_var x
@@ -401,10 +359,8 @@ function user.AssertStmts(x: int, y: int) -> int {
     bin_op +
     load_const 150
     cmp_op <
-    store_var _42
 
   L23:
-    load_var _42
     jump_if_false L24
     pop 1
     load_var x
@@ -412,10 +368,8 @@ function user.AssertStmts(x: int, y: int) -> int {
     bin_op *
     load_const 10
     cmp_op >
-    store_var _41
 
   L24:
-    load_var _41
     jump_if_false L25
     pop 1
     load_var x
@@ -423,10 +377,8 @@ function user.AssertStmts(x: int, y: int) -> int {
     bin_op -
     load_const 42
     cmp_op !=
-    store_var _40
 
   L25:
-    load_var _40
     jump_if_false L26
     pop 1
 
@@ -439,37 +391,29 @@ function user.AssertStmts(x: int, y: int) -> int {
     load_var x
     load_const 100
     cmp_op <
-    store_var _59
 
   L27:
-    load_var _59
     jump_if_false L28
     pop 1
     load_var y
     load_const 0
     cmp_op >
-    store_var _58
 
   L28:
-    load_var _58
     jump_if_false L29
     pop 1
     load_var y
     load_const 100
     cmp_op <
-    store_var _57
 
   L29:
-    load_var _57
     jump_if_false L30
     pop 1
     load_var x
     load_var y
     cmp_op !=
-    store_var _56
 
   L30:
-    load_var _56
     jump_if_false L31
     pop 1
     load_var x
@@ -477,10 +421,8 @@ function user.AssertStmts(x: int, y: int) -> int {
     bin_op +
     load_const 150
     cmp_op <
-    store_var _55
 
   L31:
-    load_var _55
     jump_if_false L32
     pop 1
     load_var x
@@ -488,10 +430,8 @@ function user.AssertStmts(x: int, y: int) -> int {
     bin_op *
     load_const 10
     cmp_op >
-    store_var _54
 
   L32:
-    load_var _54
     jump_if_false L33
     pop 1
     load_var x
@@ -499,10 +439,8 @@ function user.AssertStmts(x: int, y: int) -> int {
     bin_op -
     load_const 42
     cmp_op !=
-    store_var _53
 
   L33:
-    load_var _53
     jump_if_false L34
     pop 1
 
@@ -634,10 +572,8 @@ function user.BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool)
     load_var b
     load_const 0
     cmp_op >
-    store_var _23
 
   L6:
-    load_var _23
     jump_if_false L7
     pop 1
 
@@ -653,10 +589,8 @@ function user.BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool)
     load_var b
     load_const 0
     cmp_op >
-    store_var _26
 
   L9:
-    load_var _26
     jump_if_false L10
     jump L11
 
@@ -672,10 +606,8 @@ function user.BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool)
     load_var b
     load_const 0
     cmp_op >
-    store_var _29
 
   L12:
-    load_var _29
     jump_if_false L13
     jump L14
 
@@ -691,82 +623,64 @@ function user.BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool)
     load_var b
     load_const 0
     cmp_op >
-    store_var _104
 
   L15:
-    load_var _104
     jump_if_false L16
     pop 1
     load_var c
     load_const 0
     cmp_op >
-    store_var _103
 
   L16:
-    load_var _103
     jump_if_false L17
     pop 1
     load_var d
     load_const 0
     cmp_op >
-    store_var _102
 
   L17:
-    load_var _102
     jump_if_false L18
     pop 1
     load_var a
     load_var b
     cmp_op !=
-    store_var _101
 
   L18:
-    load_var _101
     jump_if_false L19
     pop 1
     load_var b
     load_var c
     cmp_op !=
-    store_var _100
 
   L19:
-    load_var _100
     jump_if_false L20
     pop 1
     load_var c
     load_var d
     cmp_op !=
-    store_var _99
 
   L20:
-    load_var _99
     jump_if_false L21
     pop 1
     load_var a
     load_const 8002
     cmp_op <
-    store_var _98
 
   L21:
-    load_var _98
     jump_if_false L22
     pop 1
     load_var b
     load_const 1000
     cmp_op <
-    store_var _97
 
   L22:
-    load_var _97
     jump_if_false L23
     pop 1
     load_var c
     load_const 1000
     cmp_op <
-    store_var _96
 
   L23:
-    load_var _96
     jump_if_false L24
     pop 1
 
@@ -791,10 +705,8 @@ function user.BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool)
     bin_op *
     load_const 10000
     cmp_op <
-    store_var _147
 
   L25:
-    load_var _147
     jump_if_false L26
     pop 1
     load_var a
@@ -806,10 +718,8 @@ function user.BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool)
     bin_op -
     load_const 0
     cmp_op !=
-    store_var _146
 
   L26:
-    load_var _146
     jump_if_false L27
     pop 1
     load_var a
@@ -821,10 +731,8 @@ function user.BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool)
     bin_op *
     load_const 100
     cmp_op >=
-    store_var _145
 
   L27:
-    load_var _145
     jump_if_false L28
     jump L29
 
@@ -891,46 +799,36 @@ function user.BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool)
     load_var b
     load_const 0
     cmp_op >
-    store_var _208
 
   L30:
-    load_var _208
     jump_if_false L31
     pop 1
     load_var c
     load_const 0
     cmp_op >
-    store_var _207
 
   L31:
-    load_var _207
     jump_if_false L32
     pop 1
     load_var d
     load_const 0
     cmp_op >
-    store_var _206
 
   L32:
-    load_var _206
     jump_if_false L33
     pop 1
     load_var a
     load_var b
     cmp_op !=
-    store_var _205
 
   L33:
-    load_var _205
     jump_if_false L34
     pop 1
     load_var b
     load_var c
     cmp_op !=
-    store_var _204
 
   L34:
-    load_var _204
     jump_if_false L35
     pop 1
 
@@ -2160,26 +2058,20 @@ function user.LoopStmts(items: int[], flag: bool) -> int {
     load_var result
     load_const 0
     cmp_op >
-    store_var _83
 
   L28:
-    load_var _83
     jump_if_false L29
     pop 1
     load_var flag
-    store_var _82
 
   L29:
-    load_var _82
     jump_if_false L30
     pop 1
     load_var a
     load_var result
     cmp_op !=
-    store_var _81
 
   L30:
-    load_var _81
     jump_if_false L31
     pop 1
     load_var a
@@ -2187,10 +2079,8 @@ function user.LoopStmts(items: int[], flag: bool) -> int {
     bin_op +
     load_const 10000
     cmp_op <
-    store_var _80
 
   L31:
-    load_var _80
     jump_if_false L32
     pop 1
     load_var a
@@ -2198,10 +2088,8 @@ function user.LoopStmts(items: int[], flag: bool) -> int {
     bin_op *
     load_const 500
     cmp_op >
-    store_var _79
 
   L32:
-    load_var _79
     jump_if_false L33
     pop 1
     load_var a
@@ -2223,26 +2111,20 @@ function user.LoopStmts(items: int[], flag: bool) -> int {
     load_var result
     load_const 0
     cmp_op >
-    store_var _106
 
   L35:
-    load_var _106
     jump_if_false L36
     pop 1
     load_var flag
-    store_var _105
 
   L36:
-    load_var _105
     jump_if_false L37
     pop 1
     load_var a
     load_var result
     cmp_op !=
-    store_var _104
 
   L37:
-    load_var _104
     jump_if_false L38
     pop 1
     load_var a
@@ -2250,10 +2132,8 @@ function user.LoopStmts(items: int[], flag: bool) -> int {
     bin_op +
     load_const 10000
     cmp_op <
-    store_var _103
 
   L38:
-    load_var _103
     jump_if_false L39
     pop 1
     load_var a
@@ -2261,10 +2141,8 @@ function user.LoopStmts(items: int[], flag: bool) -> int {
     bin_op *
     load_const 500
     cmp_op >
-    store_var _102
 
   L39:
-    load_var _102
     jump_if_false L40
     pop 1
     load_var a
@@ -2272,10 +2150,8 @@ function user.LoopStmts(items: int[], flag: bool) -> int {
     bin_op -
     load_const 42
     cmp_op !=
-    store_var _101
 
   L40:
-    load_var _101
     jump_if_false L41
     pop 1
     load_var a
@@ -2283,10 +2159,8 @@ function user.LoopStmts(items: int[], flag: bool) -> int {
     bin_op %
     load_const 0
     cmp_op ==
-    store_var _100
 
   L41:
-    load_var _100
     jump_if_false L42
     pop 1
     load_var result
@@ -2294,10 +2168,8 @@ function user.LoopStmts(items: int[], flag: bool) -> int {
     bin_op %
     load_const 0
     cmp_op ==
-    store_var _99
 
   L42:
-    load_var _99
     jump_if_false L43
     pop 1
     load_var a
@@ -2347,10 +2219,8 @@ function user.LoopStmts(items: int[], flag: bool) -> int {
     jump_if_false L49
     pop 1
     load_var flag
-    store_var _145
 
   L49:
-    load_var _145
     jump_if_false L50
     pop 1
     load_var a
@@ -2408,26 +2278,20 @@ function user.LoopStmts(items: int[], flag: bool) -> int {
     load_var result
     load_const 0
     cmp_op >
-    store_var _168
 
   L56:
-    load_var _168
     jump_if_false L57
     pop 1
     load_var flag
-    store_var _167
 
   L57:
-    load_var _167
     jump_if_false L58
     pop 1
     load_var a
     load_var result
     cmp_op !=
-    store_var _166
 
   L58:
-    load_var _166
     jump_if_false L59
     pop 1
     load_var a
@@ -2435,10 +2299,8 @@ function user.LoopStmts(items: int[], flag: bool) -> int {
     bin_op +
     load_const 10000
     cmp_op <
-    store_var _165
 
   L59:
-    load_var _165
     jump_if_false L60
     pop 1
     load_var a
@@ -2446,10 +2308,8 @@ function user.LoopStmts(items: int[], flag: bool) -> int {
     bin_op *
     load_const 500
     cmp_op >
-    store_var _164
 
   L60:
-    load_var _164
     jump_if_false L61
     pop 1
     load_var a
@@ -2471,26 +2331,20 @@ function user.LoopStmts(items: int[], flag: bool) -> int {
     load_var result
     load_const 0
     cmp_op >
-    store_var _188
 
   L63:
-    load_var _188
     jump_if_false L64
     pop 1
     load_var flag
-    store_var _187
 
   L64:
-    load_var _187
     jump_if_false L65
     pop 1
     load_var a
     load_var result
     cmp_op !=
-    store_var _186
 
   L65:
-    load_var _186
     jump_if_false L66
     pop 1
     load_var a
@@ -2498,10 +2352,8 @@ function user.LoopStmts(items: int[], flag: bool) -> int {
     bin_op +
     load_const 10000
     cmp_op <
-    store_var _185
 
   L66:
-    load_var _185
     jump_if_false L67
     pop 1
     load_var a
@@ -2509,10 +2361,8 @@ function user.LoopStmts(items: int[], flag: bool) -> int {
     bin_op *
     load_const 500
     cmp_op >
-    store_var _184
 
   L67:
-    load_var _184
     jump_if_false L68
     pop 1
     load_var a
@@ -2542,10 +2392,8 @@ function user.LoopStmts(items: int[], flag: bool) -> int {
     jump_if_false L71
     pop 1
     load_var flag
-    store_var _211
 
   L71:
-    load_var _211
     jump_if_false L72
     pop 1
     load_var a
@@ -2573,10 +2421,8 @@ function user.LoopStmts(items: int[], flag: bool) -> int {
     jump_if_false L75
     pop 1
     load_var flag
-    store_var _227
 
   L75:
-    load_var _227
     jump_if_false L76
     pop 1
     load_var a
@@ -2922,28 +2768,22 @@ function user.LoopStmts(items: int[], flag: bool) -> int {
     jump_if_false L116
     pop 1
     load_var flag
-    store_var _345
 
   L116:
-    load_var _345
     jump_if_false L117
     pop 1
     load_var i
     load_const 0
     cmp_op >
-    store_var _344
 
   L117:
-    load_var _344
     jump_if_false L118
     pop 1
     load_var result
     load_const 0
     cmp_op >
-    store_var _343
 
   L118:
-    load_var _343
     jump_if_false L119
     pop 1
     load_var j
@@ -3893,37 +3733,29 @@ function user.MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure,
     load_var n
     load_const 100
     cmp_op <
-    store_var _43
 
   L30:
-    load_var _43
     jump_if_false L31
     pop 1
     load_var n
     load_const 42
     cmp_op !=
-    store_var _42
 
   L31:
-    load_var _42
     jump_if_false L32
     pop 1
     load_var n
     load_const 13
     cmp_op !=
-    store_var _41
 
   L32:
-    load_var _41
     jump_if_false L33
     pop 1
     load_var n
     load_const 7
     cmp_op !=
-    store_var _40
 
   L33:
-    load_var _40
     jump_if_false L34
     pop 1
     load_var n
@@ -3998,28 +3830,22 @@ function user.MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure,
     load_var n
     load_const 100
     cmp_op <
-    store_var _58
 
   L45:
-    load_var _58
     jump_if_false L46
     pop 1
     load_var n
     load_const 42
     cmp_op !=
-    store_var _57
 
   L46:
-    load_var _57
     jump_if_false L47
     pop 1
     load_var n
     load_const 13
     cmp_op !=
-    store_var _56
 
   L47:
-    load_var _56
     jump_if_false L48
     pop 1
     load_var n
@@ -4043,28 +3869,22 @@ function user.MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure,
     load_var n
     load_const 100
     cmp_op <
-    store_var _70
 
   L50:
-    load_var _70
     jump_if_false L51
     pop 1
     load_var n
     load_const 42
     cmp_op !=
-    store_var _69
 
   L51:
-    load_var _69
     jump_if_false L52
     pop 1
     load_var n
     load_const 13
     cmp_op !=
-    store_var _68
 
   L52:
-    load_var _68
     jump_if_false L53
     pop 1
     load_var n
