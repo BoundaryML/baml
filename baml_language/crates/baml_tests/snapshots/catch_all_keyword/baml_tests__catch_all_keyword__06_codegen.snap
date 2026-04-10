@@ -6,17 +6,13 @@ function user.CatchAllTyped(x: int) -> string {
     call user.MayFailIntOrString
     jump L4
     load_var e
-    type_tag
-    load_const 1
-    cmp_op ==
+    is_type string
     pop_jump_if_false L0
     jump L3
 
   L0:
     load_var e
-    type_tag
-    load_const 0
-    cmp_op ==
+    is_type int
     pop_jump_if_false L1
     jump L2
 
@@ -52,9 +48,7 @@ function user.CatchThenCatchAll(x: int) -> string {
     call user.MayFailIntOrString
     jump L2
     load_var e
-    type_tag
-    load_const 1
-    cmp_op ==
+    is_type string
     pop_jump_if_false L0
     jump L1
 
@@ -73,23 +67,19 @@ function user.CatchThenCatchAll(x: int) -> string {
 
 function user.MayFailIntOrString(x: int) -> string {
     load_var x
-    copy 0
     load_const 0
     cmp_op ==
     pop_jump_if_false L0
-    pop 1
     jump L3
 
   L0:
-    copy 0
+    load_var x
     load_const 1
     cmp_op ==
     pop_jump_if_false L1
-    pop 1
     jump L2
 
   L1:
-    pop 1
     load_const "ok"
     return
 
@@ -107,9 +97,7 @@ function user.PartialCatch(x: int) -> string {
     call user.MayFailIntOrString
     jump L2
     load_var e
-    type_tag
-    load_const 1
-    cmp_op ==
+    is_type string
     pop_jump_if_false L0
     jump L1
 

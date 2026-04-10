@@ -552,62 +552,29 @@ async fn match_binary_search_first_arm() {
     insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 0
-        copy 0
-        load_const 60
-        cmp_op ==
-        pop_jump_if_false L0
-        pop 1
-        jump L5
+        dense_tag [0, 30, 60, 99]
+        jump_table [L4, L3, L2, L1], default L0
 
       L0:
-        copy 0
-        load_const 60
-        cmp_op <
-        pop_jump_if_false L2
-        copy 0
-        load_const 0
-        cmp_op ==
-        pop_jump_if_false L1
-        pop 1
-        jump L7
-
-      L1:
-        copy 0
-        load_const 30
-        cmp_op ==
-        pop_jump_if_false L2
-        pop 1
-        jump L6
-
-      L2:
-        copy 0
-        load_const 99
-        cmp_op ==
-        pop_jump_if_false L3
-        pop 1
-        jump L4
-
-      L3:
-        pop 1
         load_const 999
-        jump L8
+        jump L5
 
-      L4:
+      L1: 99
         load_const 199
-        jump L8
+        jump L5
 
-      L5:
+      L2: 60
         load_const 160
-        jump L8
+        jump L5
 
-      L6:
+      L3: 30
         load_const 130
-        jump L8
+        jump L5
 
-      L7:
+      L4: 0
         load_const 100
 
-      L8:
+      L5:
         return
     }
     ");
@@ -635,62 +602,29 @@ async fn match_binary_search_middle_arm() {
     insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 60
-        copy 0
-        load_const 60
-        cmp_op ==
-        pop_jump_if_false L0
-        pop 1
-        jump L5
+        dense_tag [0, 30, 60, 99]
+        jump_table [L4, L3, L2, L1], default L0
 
       L0:
-        copy 0
-        load_const 60
-        cmp_op <
-        pop_jump_if_false L2
-        copy 0
-        load_const 0
-        cmp_op ==
-        pop_jump_if_false L1
-        pop 1
-        jump L7
-
-      L1:
-        copy 0
-        load_const 30
-        cmp_op ==
-        pop_jump_if_false L2
-        pop 1
-        jump L6
-
-      L2:
-        copy 0
-        load_const 99
-        cmp_op ==
-        pop_jump_if_false L3
-        pop 1
-        jump L4
-
-      L3:
-        pop 1
         load_const 999
-        jump L8
+        jump L5
 
-      L4:
+      L1: 99
         load_const 199
-        jump L8
+        jump L5
 
-      L5:
+      L2: 60
         load_const 160
-        jump L8
+        jump L5
 
-      L6:
+      L3: 30
         load_const 130
-        jump L8
+        jump L5
 
-      L7:
+      L4: 0
         load_const 100
 
-      L8:
+      L5:
         return
     }
     ");
@@ -718,62 +652,29 @@ async fn match_binary_search_last_arm() {
     insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 99
-        copy 0
-        load_const 60
-        cmp_op ==
-        pop_jump_if_false L0
-        pop 1
-        jump L5
+        dense_tag [0, 30, 60, 99]
+        jump_table [L4, L3, L2, L1], default L0
 
       L0:
-        copy 0
-        load_const 60
-        cmp_op <
-        pop_jump_if_false L2
-        copy 0
-        load_const 0
-        cmp_op ==
-        pop_jump_if_false L1
-        pop 1
-        jump L7
-
-      L1:
-        copy 0
-        load_const 30
-        cmp_op ==
-        pop_jump_if_false L2
-        pop 1
-        jump L6
-
-      L2:
-        copy 0
-        load_const 99
-        cmp_op ==
-        pop_jump_if_false L3
-        pop 1
-        jump L4
-
-      L3:
-        pop 1
         load_const 999
-        jump L8
+        jump L5
 
-      L4:
+      L1: 99
         load_const 199
-        jump L8
+        jump L5
 
-      L5:
+      L2: 60
         load_const 160
-        jump L8
+        jump L5
 
-      L6:
+      L3: 30
         load_const 130
-        jump L8
+        jump L5
 
-      L7:
+      L4: 0
         load_const 100
 
-      L8:
+      L5:
         return
     }
     ");
@@ -801,62 +702,29 @@ async fn match_binary_search_fallback() {
     insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 50
-        copy 0
-        load_const 60
-        cmp_op ==
-        pop_jump_if_false L0
-        pop 1
-        jump L5
+        dense_tag [0, 30, 60, 99]
+        jump_table [L4, L3, L2, L1], default L0
 
       L0:
-        copy 0
-        load_const 60
-        cmp_op <
-        pop_jump_if_false L2
-        copy 0
-        load_const 0
-        cmp_op ==
-        pop_jump_if_false L1
-        pop 1
-        jump L7
-
-      L1:
-        copy 0
-        load_const 30
-        cmp_op ==
-        pop_jump_if_false L2
-        pop 1
-        jump L6
-
-      L2:
-        copy 0
-        load_const 99
-        cmp_op ==
-        pop_jump_if_false L3
-        pop 1
-        jump L4
-
-      L3:
-        pop 1
         load_const 999
-        jump L8
+        jump L5
 
-      L4:
+      L1: 99
         load_const 199
-        jump L8
+        jump L5
 
-      L5:
+      L2: 60
         load_const 160
-        jump L8
+        jump L5
 
-      L6:
+      L3: 30
         load_const 130
-        jump L8
+        jump L5
 
-      L7:
+      L4: 0
         load_const 100
 
-      L8:
+      L5:
         return
     }
     ");
@@ -886,90 +754,37 @@ async fn match_binary_search_very_sparse() {
     insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 500
-        copy 0
-        load_const 300
-        cmp_op ==
-        pop_jump_if_false L0
-        pop 1
-        jump L8
+        dense_tag [0, 100, 200, 300, 400, 500]
+        jump_table [L6, L5, L4, L3, L2, L1], default L0
 
       L0:
-        copy 0
-        load_const 300
-        cmp_op <
-        pop_jump_if_false L3
-        copy 0
-        load_const 100
-        cmp_op ==
-        pop_jump_if_false L1
-        pop 1
-        jump L10
-
-      L1:
-        copy 0
-        load_const 100
-        cmp_op <
-        pop_jump_if_false L2
-        copy 0
-        load_const 0
-        cmp_op ==
-        pop_jump_if_false L2
-        pop 1
-        jump L11
-
-      L2:
-        copy 0
-        load_const 200
-        cmp_op ==
-        pop_jump_if_false L3
-        pop 1
-        jump L9
-
-      L3:
-        copy 0
-        load_const 400
-        cmp_op ==
-        pop_jump_if_false L4
-        pop 1
+        load_const 9999
         jump L7
 
-      L4:
-        copy 0
-        load_const 500
-        cmp_op ==
-        pop_jump_if_false L5
-        pop 1
-        jump L6
-
-      L5:
-        pop 1
-        load_const 9999
-        jump L12
-
-      L6:
+      L1: 500
         load_const 1500
-        jump L12
+        jump L7
 
-      L7:
+      L2: 400
         load_const 1400
-        jump L12
+        jump L7
 
-      L8:
+      L3: 300
         load_const 1300
-        jump L12
+        jump L7
 
-      L9:
+      L4: 200
         load_const 1200
-        jump L12
+        jump L7
 
-      L10:
+      L5: 100
         load_const 1100
-        jump L12
+        jump L7
 
-      L11:
+      L6: 0
         load_const 1000
 
-      L12:
+      L7:
         return
     }
     ");
@@ -998,74 +813,33 @@ async fn match_binary_search_large_values() {
     insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 750
-        copy 0
-        load_const 750
-        cmp_op ==
-        pop_jump_if_false L0
-        pop 1
-        jump L7
+        dense_tag [250, 500, 750, 1000, 1250]
+        jump_table [L5, L4, L3, L2, L1], default L0
 
       L0:
-        copy 0
-        load_const 750
-        cmp_op <
-        pop_jump_if_false L2
-        copy 0
-        load_const 250
-        cmp_op ==
-        pop_jump_if_false L1
-        pop 1
-        jump L9
-
-      L1:
-        copy 0
-        load_const 500
-        cmp_op ==
-        pop_jump_if_false L2
-        pop 1
-        jump L8
-
-      L2:
-        copy 0
-        load_const 1000
-        cmp_op ==
-        pop_jump_if_false L3
-        pop 1
+        load_const 9999
         jump L6
 
-      L3:
-        copy 0
-        load_const 1250
-        cmp_op ==
-        pop_jump_if_false L4
-        pop 1
-        jump L5
-
-      L4:
-        pop 1
-        load_const 9999
-        jump L10
-
-      L5:
+      L1: 1250
         load_const 2250
-        jump L10
+        jump L6
+
+      L2: 1000
+        load_const 2000
+        jump L6
+
+      L3: 750
+        load_const 1750
+        jump L6
+
+      L4: 500
+        load_const 1500
+        jump L6
+
+      L5: 250
+        load_const 1250
 
       L6:
-        load_const 2000
-        jump L10
-
-      L7:
-        load_const 1750
-        jump L10
-
-      L8:
-        load_const 1500
-        jump L10
-
-      L9:
-        load_const 1250
-
-      L10:
         return
     }
     ");
@@ -1095,62 +869,29 @@ async fn match_binary_search_sparse_four_arms_param() {
     insta::assert_snapshot!(output.bytecode, @"
     function classify(x: int) -> int {
         load_var x
-        copy 0
-        load_const 60
-        cmp_op ==
-        pop_jump_if_false L0
-        pop 1
-        jump L5
+        dense_tag [0, 30, 60, 99]
+        jump_table [L4, L3, L2, L1], default L0
 
       L0:
-        copy 0
-        load_const 60
-        cmp_op <
-        pop_jump_if_false L2
-        copy 0
-        load_const 0
-        cmp_op ==
-        pop_jump_if_false L1
-        pop 1
-        jump L7
-
-      L1:
-        copy 0
-        load_const 30
-        cmp_op ==
-        pop_jump_if_false L2
-        pop 1
-        jump L6
-
-      L2:
-        copy 0
-        load_const 99
-        cmp_op ==
-        pop_jump_if_false L3
-        pop 1
-        jump L4
-
-      L3:
-        pop 1
         load_const 999
-        jump L8
+        jump L5
 
-      L4:
+      L1: 99
         load_const 199
-        jump L8
+        jump L5
 
-      L5:
+      L2: 60
         load_const 160
-        jump L8
+        jump L5
 
-      L6:
+      L3: 30
         load_const 130
-        jump L8
+        jump L5
 
-      L7:
+      L4: 0
         load_const 100
 
-      L8:
+      L5:
         return
     }
     ");
@@ -1182,23 +923,19 @@ async fn match_if_else_chain_three_arms() {
     insta::assert_snapshot!(output.bytecode, @"
     function classify(x: int) -> int {
         load_var x
-        copy 0
         load_const 0
         cmp_op ==
         pop_jump_if_false L0
-        pop 1
         jump L3
 
       L0:
-        copy 0
+        load_var x
         load_const 1
         cmp_op ==
         pop_jump_if_false L1
-        pop 1
         jump L2
 
       L1:
-        pop 1
         load_const 999
         jump L4
 
@@ -1292,62 +1029,29 @@ async fn match_density_below_50_percent() {
     insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 6
-        copy 0
-        load_const 6
-        cmp_op ==
-        pop_jump_if_false L0
-        pop 1
-        jump L5
+        dense_tag [0, 3, 6, 9]
+        jump_table [L4, L3, L2, L1], default L0
 
       L0:
-        copy 0
-        load_const 6
-        cmp_op <
-        pop_jump_if_false L2
-        copy 0
-        load_const 0
-        cmp_op ==
-        pop_jump_if_false L1
-        pop 1
-        jump L7
-
-      L1:
-        copy 0
-        load_const 3
-        cmp_op ==
-        pop_jump_if_false L2
-        pop 1
-        jump L6
-
-      L2:
-        copy 0
-        load_const 9
-        cmp_op ==
-        pop_jump_if_false L3
-        pop 1
-        jump L4
-
-      L3:
-        pop 1
         load_const 999
-        jump L8
+        jump L5
 
-      L4:
+      L1: 9
         load_const 109
-        jump L8
+        jump L5
 
-      L5:
+      L2: 6
         load_const 106
-        jump L8
+        jump L5
 
-      L6:
+      L3: 3
         load_const 103
-        jump L8
+        jump L5
 
-      L7:
+      L4: 0
         load_const 100
 
-      L8:
+      L5:
         return
     }
     ");
@@ -1485,62 +1189,29 @@ async fn match_large_range_sparse() {
     insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 1000
-        copy 0
-        load_const 1000
-        cmp_op ==
-        pop_jump_if_false L0
-        pop 1
-        jump L5
+        dense_tag [0, 500, 1000, 1500]
+        jump_table [L4, L3, L2, L1], default L0
 
       L0:
-        copy 0
-        load_const 1000
-        cmp_op <
-        pop_jump_if_false L2
-        copy 0
-        load_const 0
-        cmp_op ==
-        pop_jump_if_false L1
-        pop 1
-        jump L7
-
-      L1:
-        copy 0
-        load_const 500
-        cmp_op ==
-        pop_jump_if_false L2
-        pop 1
-        jump L6
-
-      L2:
-        copy 0
-        load_const 1500
-        cmp_op ==
-        pop_jump_if_false L3
-        pop 1
-        jump L4
-
-      L3:
-        pop 1
         load_const 9999
-        jump L8
+        jump L5
 
-      L4:
+      L1: 1500
         load_const 4
-        jump L8
+        jump L5
 
-      L5:
+      L2: 1000
         load_const 3
-        jump L8
+        jump L5
 
-      L6:
+      L3: 500
         load_const 2
-        jump L8
+        jump L5
 
-      L7:
+      L4: 0
         load_const 1
 
-      L8:
+      L5:
         return
     }
     ");
@@ -1884,62 +1555,29 @@ async fn match_binary_search_negative_sparse() {
     insta::assert_snapshot!(output.bytecode, @r#"
     function classify(x: int) -> string {
         load_var x
-        copy 0
-        load_const -10
-        cmp_op ==
-        pop_jump_if_false L0
-        pop 1
-        jump L5
+        dense_tag [-100, -50, -10, -1]
+        jump_table [L4, L3, L2, L1], default L0
 
       L0:
-        copy 0
-        load_const -10
-        cmp_op <
-        pop_jump_if_false L2
-        copy 0
-        load_const -100
-        cmp_op ==
-        pop_jump_if_false L1
-        pop 1
-        jump L7
-
-      L1:
-        copy 0
-        load_const -50
-        cmp_op ==
-        pop_jump_if_false L2
-        pop 1
-        jump L6
-
-      L2:
-        copy 0
-        load_const -1
-        cmp_op ==
-        pop_jump_if_false L3
-        pop 1
-        jump L4
-
-      L3:
-        pop 1
         load_const "other"
-        jump L8
+        jump L5
 
-      L4:
+      L1: -1
         load_const "d"
-        jump L8
+        jump L5
 
-      L5:
+      L2: -10
         load_const "c"
-        jump L8
+        jump L5
 
-      L6:
+      L3: -50
         load_const "b"
-        jump L8
+        jump L5
 
-      L7:
+      L4: -100
         load_const "a"
 
-      L8:
+      L5:
         return
     }
 
@@ -1976,62 +1614,29 @@ async fn match_binary_search_spanning_zero_sparse() {
     insta::assert_snapshot!(output.bytecode, @r#"
     function classify(x: int) -> string {
         load_var x
-        copy 0
-        load_const 1
-        cmp_op ==
-        pop_jump_if_false L0
-        pop 1
-        jump L5
+        dense_tag [-100, -1, 1, 100]
+        jump_table [L4, L3, L2, L1], default L0
 
       L0:
-        copy 0
-        load_const 1
-        cmp_op <
-        pop_jump_if_false L2
-        copy 0
-        load_const -100
-        cmp_op ==
-        pop_jump_if_false L1
-        pop 1
-        jump L7
-
-      L1:
-        copy 0
-        load_const -1
-        cmp_op ==
-        pop_jump_if_false L2
-        pop 1
-        jump L6
-
-      L2:
-        copy 0
-        load_const 100
-        cmp_op ==
-        pop_jump_if_false L3
-        pop 1
-        jump L4
-
-      L3:
-        pop 1
         load_const "other"
-        jump L8
+        jump L5
 
-      L4:
+      L1: 100
         load_const "hundred"
-        jump L8
+        jump L5
 
-      L5:
+      L2: 1
         load_const "one"
-        jump L8
+        jump L5
 
-      L6:
+      L3: -1
         load_const "neg one"
-        jump L8
+        jump L5
 
-      L7:
+      L4: -100
         load_const "neg hundred"
 
-      L8:
+      L5:
         return
     }
 
@@ -2180,62 +1785,29 @@ async fn match_range_exceeds_limit_uses_binary_search() {
     insta::assert_snapshot!(output.bytecode, @"
     function classify(x: int) -> int {
         load_var x
-        copy 0
-        load_const 200
-        cmp_op ==
-        pop_jump_if_false L0
-        pop 1
-        jump L5
+        dense_tag [0, 100, 200, 300]
+        jump_table [L4, L3, L2, L1], default L0
 
       L0:
-        copy 0
-        load_const 200
-        cmp_op <
-        pop_jump_if_false L2
-        copy 0
         load_const 0
-        cmp_op ==
-        pop_jump_if_false L1
-        pop 1
-        jump L7
+        jump L5
 
-      L1:
-        copy 0
-        load_const 100
-        cmp_op ==
-        pop_jump_if_false L2
-        pop 1
-        jump L6
-
-      L2:
-        copy 0
-        load_const 300
-        cmp_op ==
-        pop_jump_if_false L3
-        pop 1
-        jump L4
-
-      L3:
-        pop 1
-        load_const 0
-        jump L8
-
-      L4:
+      L1: 300
         load_const 4
-        jump L8
+        jump L5
 
-      L5:
+      L2: 200
         load_const 3
-        jump L8
+        jump L5
 
-      L6:
+      L3: 100
         load_const 2
-        jump L8
+        jump L5
 
-      L7:
+      L4: 0
         load_const 1
 
-      L8:
+      L5:
         return
     }
     ");
@@ -2357,118 +1929,45 @@ async fn match_binary_search_eight_arms() {
     insta::assert_snapshot!(output.bytecode, @"
     function classify(x: int) -> int {
         load_var x
-        copy 0
-        load_const 40
-        cmp_op ==
-        pop_jump_if_false L0
-        pop 1
-        jump L11
+        dense_tag [0, 10, 20, 30, 40, 50, 60, 70]
+        jump_table [L8, L7, L6, L5, L4, L3, L2, L1], default L0
 
       L0:
-        copy 0
-        load_const 40
-        cmp_op <
-        pop_jump_if_false L4
-        copy 0
-        load_const 20
-        cmp_op ==
-        pop_jump_if_false L1
-        pop 1
-        jump L13
-
-      L1:
-        copy 0
-        load_const 20
-        cmp_op <
-        pop_jump_if_false L3
-        copy 0
-        load_const 0
-        cmp_op ==
-        pop_jump_if_false L2
-        pop 1
-        jump L15
-
-      L2:
-        copy 0
-        load_const 10
-        cmp_op ==
-        pop_jump_if_false L3
-        pop 1
-        jump L14
-
-      L3:
-        copy 0
-        load_const 30
-        cmp_op ==
-        pop_jump_if_false L4
-        pop 1
-        jump L12
-
-      L4:
-        copy 0
-        load_const 60
-        cmp_op ==
-        pop_jump_if_false L5
-        pop 1
+        load_const 99
         jump L9
 
-      L5:
-        copy 0
-        load_const 60
-        cmp_op <
-        pop_jump_if_false L6
-        copy 0
-        load_const 50
-        cmp_op ==
-        pop_jump_if_false L6
-        pop 1
-        jump L10
-
-      L6:
-        copy 0
-        load_const 70
-        cmp_op ==
-        pop_jump_if_false L7
-        pop 1
-        jump L8
-
-      L7:
-        pop 1
-        load_const 99
-        jump L16
-
-      L8:
+      L1: 70
         load_const 7
-        jump L16
+        jump L9
 
-      L9:
+      L2: 60
         load_const 6
-        jump L16
+        jump L9
 
-      L10:
+      L3: 50
         load_const 5
-        jump L16
+        jump L9
 
-      L11:
+      L4: 40
         load_const 4
-        jump L16
+        jump L9
 
-      L12:
+      L5: 30
         load_const 3
-        jump L16
+        jump L9
 
-      L13:
+      L6: 20
         load_const 2
-        jump L16
+        jump L9
 
-      L14:
+      L7: 10
         load_const 1
-        jump L16
+        jump L9
 
-      L15:
+      L8: 0
         load_const 0
 
-      L16:
+      L9:
         return
     }
     ");

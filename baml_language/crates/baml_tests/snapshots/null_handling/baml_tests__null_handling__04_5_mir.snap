@@ -991,15 +991,11 @@ fn user.NullCoalescing(user: User?, fallback: string, count: int) -> string {
     }
 
     bb90: {
-        branch copy _117 -> [bb91, bb91];
+        _0 = copy _4;
+        goto -> bb91;
     }
 
     bb91: {
-        _0 = copy _4;
-        goto -> bb92;
-    }
-
-    bb92: {
         return;
     }
 }

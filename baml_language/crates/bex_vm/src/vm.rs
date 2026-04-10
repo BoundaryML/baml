@@ -1901,6 +1901,28 @@ impl BexVm {
                 }
             }
 
+            Instruction::JumpIfFalse(offset) => {
+                let top = self.stack.ensure_stack_top()?;
+                let condition = self.stack[top];
+
+                match condition {
+                    Value::Bool(value) => {
+                        if !value {
+                            self.frames[*frame_idx].instruction_ptr = instruction_ptr
+                                .checked_add_signed(offset)
+                                .ok_or(VmInternalError::InvalidJump)?;
+                        }
+                    }
+                    other => {
+                        return Err(VmInternalError::TypeError {
+                            expected: Type::Bool,
+                            got: self.type_of(&other),
+                        }
+                        .into());
+                    }
+                }
+            }
+
             Instruction::Throw => {
                 let value = self.stack.ensure_pop()?;
                 self.try_unwind_exception(frame_idx, function, value)?;
@@ -2071,15 +2093,6 @@ impl BexVm {
                         CmpOp::LtEq => left <= right,
                         CmpOp::Gt => left > right,
                         CmpOp::GtEq => left >= right,
-
-                        CmpOp::InstanceOf => {
-                            return Err(VmInternalError::CannotApplyCmpOp {
-                                left: Type::Int,
-                                right: Type::Int,
-                                op,
-                            }
-                            .into());
-                        }
                     }),
 
                     #[allow(clippy::float_cmp)]
@@ -2091,15 +2104,6 @@ impl BexVm {
                         CmpOp::LtEq => left <= right,
                         CmpOp::Gt => left > right,
                         CmpOp::GtEq => left >= right,
-
-                        CmpOp::InstanceOf => {
-                            return Err(VmInternalError::CannotApplyCmpOp {
-                                left: Type::Float,
-                                right: Type::Float,
-                                op,
-                            }
-                            .into());
-                        }
                     }),
 
                     // Mixed int/float comparisons: promote int to float.
@@ -2113,15 +2117,6 @@ impl BexVm {
                             CmpOp::LtEq => left <= right,
                             CmpOp::Gt => left > right,
                             CmpOp::GtEq => left >= right,
-
-                            CmpOp::InstanceOf => {
-                                return Err(VmInternalError::CannotApplyCmpOp {
-                                    left: Type::Int,
-                                    right: Type::Float,
-                                    op,
-                                }
-                                .into());
-                            }
                         })
                     }
 
@@ -2135,15 +2130,6 @@ impl BexVm {
                             CmpOp::LtEq => left <= right,
                             CmpOp::Gt => left > right,
                             CmpOp::GtEq => left >= right,
-
-                            CmpOp::InstanceOf => {
-                                return Err(VmInternalError::CannotApplyCmpOp {
-                                    left: Type::Float,
-                                    right: Type::Int,
-                                    op,
-                                }
-                                .into());
-                            }
                         })
                     }
 
@@ -2161,14 +2147,6 @@ impl BexVm {
                             CmpOp::LtEq => left <= right,
                             CmpOp::Gt => left > right,
                             CmpOp::GtEq => left >= right,
-                            CmpOp::InstanceOf => {
-                                return Err(VmInternalError::CannotApplyCmpOp {
-                                    left: Type::Object(ObjectType::String),
-                                    right: Type::Object(ObjectType::String),
-                                    op,
-                                }
-                                .into());
-                            }
                         })
                     }
 
@@ -2227,21 +2205,6 @@ impl BexVm {
                     _ => Value::Bool(match op {
                         CmpOp::Eq => left == right,
                         CmpOp::NotEq => left != right,
-
-                        CmpOp::InstanceOf => {
-                            // null/non-object is never an instance of anything.
-                            match left {
-                                Value::Object(left_ptr) => match self.get_object(left_ptr) {
-                                    Object::Instance(instance) => {
-                                        let right_ptr =
-                                            self.as_object_ptr(&right, ObjectType::Class)?;
-                                        instance.class == right_ptr
-                                    }
-                                    _ => false,
-                                },
-                                _ => false,
-                            }
-                        }
 
                         _ => {
                             return Err(VmInternalError::CannotApplyCmpOp {
@@ -3056,6 +3019,58 @@ impl BexVm {
                 let value = self.stack.ensure_pop()?;
                 let tag = value_type_tag(&value);
                 self.stack.push(Value::Int(tag));
+            }
+
+            Instruction::IsType(const_idx) => {
+                let value = self.stack.ensure_pop()?;
+                let expected = &function.bytecode.resolved_constants[const_idx];
+                let result = match expected {
+                    Value::Object(class_ptr) => {
+                        // Class identity check: is value an instance of this class?
+                        match value {
+                            Value::Object(val_ptr) => match self.get_object(val_ptr) {
+                                Object::Instance(instance) => instance.class == *class_ptr,
+                                _ => false,
+                            },
+                            _ => false,
+                        }
+                    }
+                    Value::Int(tag) => {
+                        // Type tag check: does value's type tag match?
+                        value_type_tag(&value) == *tag
+                    }
+                    _ => false,
+                };
+                self.stack.push(Value::Bool(result));
+            }
+
+            #[allow(
+                clippy::cast_sign_loss,
+                clippy::cast_lossless,
+                clippy::cast_possible_truncation
+            )]
+            Instruction::DenseTag(table_idx) => {
+                let tag = match self.stack.ensure_pop()? {
+                    Value::Int(t) => t,
+                    other => {
+                        // TypeTag always pushes Int, so this shouldn't happen.
+                        return Err(VmInternalError::TypeError {
+                            expected: Type::Int,
+                            got: self.type_of(&other),
+                        }
+                        .into());
+                    }
+                };
+                let table = &function.bytecode.match_hash_tables[table_idx];
+                let h =
+                    ((tag as u64).wrapping_mul(table.multiply) >> table.shift) & table.mask as u64;
+                let entry = &table.entries[h as usize];
+                if entry.expected_tag == tag {
+                    self.stack.push(Value::Int(i64::from(entry.dense_index)));
+                } else {
+                    // Tag not in this match — sentinel for jump_table default
+                    self.stack.push(Value::Int(-1));
+                }
             }
 
             Instruction::ThrowIfPanic => {

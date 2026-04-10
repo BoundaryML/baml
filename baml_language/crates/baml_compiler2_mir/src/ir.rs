@@ -375,6 +375,24 @@ pub enum Terminator {
     /// Used before wildcard catch arms to prevent them from swallowing
     /// panics the programmer didn't explicitly name.
     ThrowIfPanic { value: Operand, otherwise: BlockId },
+
+    /// Short-circuit `&&` / `||`.
+    ///
+    /// Evaluates `operand` and peeks at the result (without popping):
+    /// - `&&` (`is_and = true`): if false, jump to `join` (value stays on stack);
+    ///   if true, pop and fall through to `eval_rhs`.
+    /// - `||` (`is_and = false`): if true, jump to `join` (value stays on stack);
+    ///   if false, pop and fall through to `eval_rhs`.
+    ///
+    /// The `eval_rhs` block must assign to `destination` and then goto `join`.
+    /// At `join`, `destination` is on TOS from whichever path executed.
+    ShortCircuit {
+        operand: Operand,
+        is_and: bool,
+        destination: Place,
+        eval_rhs: BlockId,
+        join: BlockId,
+    },
 }
 
 impl Terminator {
@@ -413,6 +431,7 @@ impl Terminator {
             }
             Terminator::Throw { .. } => vec![],
             Terminator::ThrowIfPanic { otherwise, .. } => vec![*otherwise],
+            Terminator::ShortCircuit { eval_rhs, join, .. } => vec![*eval_rhs, *join],
         }
     }
 }
@@ -546,7 +565,7 @@ pub enum Rvalue {
 
     /// Extract runtime type tag from any value: `type_tag(_1)`
     ///
-    /// Used for jump table dispatch on union types (instanceof patterns).
+    /// Used for jump table dispatch on union types (type patterns in match).
     /// Type tags are global constants:
     /// - Primitives: `int=0`, `string=1`, `bool=2`, `null=3`, `float=4`
     /// - Classes: assigned unique IDs starting at 100

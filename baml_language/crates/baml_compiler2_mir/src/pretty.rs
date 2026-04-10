@@ -294,6 +294,18 @@ fn write_terminator(f: &mut impl Write, term: &Terminator) -> fmt::Result {
             write_operand(f, value)?;
             write!(f, " -> {otherwise};")
         }
+        Terminator::ShortCircuit {
+            operand,
+            is_and,
+            destination,
+            eval_rhs,
+            join,
+        } => {
+            let op = if *is_and { "&&" } else { "||" };
+            write!(f, "{destination} = short_circuit({op}) ")?;
+            write_operand(f, operand)?;
+            write!(f, " -> [eval: {eval_rhs}, join: {join}];")
+        }
     }
 }
 

@@ -448,7 +448,6 @@ fn binop_sym(op: &baml_compiler2_ast::BinaryOp) -> &'static str {
         BinaryOp::BitXor => "^",
         BinaryOp::Shl => "<<",
         BinaryOp::Shr => ">>",
-        BinaryOp::Instanceof => "instanceof",
         BinaryOp::NullCoalesce => "??",
     }
 }

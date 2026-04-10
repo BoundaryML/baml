@@ -3,15 +3,12 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 function user.AlwaysThrowsStatus(n: int) -> Status {
     load_var n
-    copy 0
     load_const 0
     cmp_op ==
     pop_jump_if_false L0
-    pop 1
     jump L1
 
   L0:
-    pop 1
     load_const 404
     throw
 
@@ -56,17 +53,13 @@ function user.CatchAlwaysThrows(n: int) -> string {
     call user.WrapperAlwaysThrows
     jump L4
     load_var e
-    type_tag
-    load_const 1
-    cmp_op ==
+    is_type string
     pop_jump_if_false L0
     jump L3
 
   L0:
     load_var e
-    type_tag
-    load_const 0
-    cmp_op ==
+    is_type int
     pop_jump_if_false L1
     jump L2
 
@@ -90,9 +83,7 @@ function user.CatchRecursiveThrow(n: int) -> string {
     call user.RecB
     jump L2
     load_var e
-    type_tag
-    load_const 1
-    cmp_op ==
+    is_type string
     pop_jump_if_false L0
     jump L1
 
@@ -109,15 +100,12 @@ function user.CatchRecursiveThrow(n: int) -> string {
 
 function user.RecA(n: int) -> string {
     load_var n
-    copy 0
     load_const 0
     cmp_op ==
     pop_jump_if_false L0
-    pop 1
     jump L1
 
   L0:
-    pop 1
     load_var n
     call user.RecB
     return
@@ -135,31 +123,26 @@ function user.RecB(n: int) -> string {
 
 function user.ThrowsAllStatusVariants(n: int) -> Status {
     load_var n
-    copy 0
     load_const 1
     cmp_op ==
     pop_jump_if_false L0
-    pop 1
     jump L5
 
   L0:
-    copy 0
+    load_var n
     load_const 2
     cmp_op ==
     pop_jump_if_false L1
-    pop 1
     jump L4
 
   L1:
-    copy 0
+    load_var n
     load_const 3
     cmp_op ==
     pop_jump_if_false L2
-    pop 1
     jump L3
 
   L2:
-    pop 1
     load_const user.Status.SomeOtherError
     alloc_variant user.Status
     throw

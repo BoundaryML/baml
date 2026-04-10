@@ -20,7 +20,7 @@ use bex_vm_types::{
     Instruction, Object, ObjectIndex, ObjectPool, UnaryOp as VmUnaryOp,
     bytecode::{
         BlockNotification, BlockNotificationType, DebugLocalScope, InstructionMeta, JumpTableData,
-        LineTableEntry, OperandMeta,
+        LineTableEntry, MatchHashEntry, MatchHashTable, OperandMeta,
     },
 };
 
@@ -35,6 +35,9 @@ enum SwitchStrategy {
     JumpTable { min: i64, max: i64 },
     /// Use binary search tree (O(log n) comparisons) for sparse integers.
     BinarySearch,
+    /// Use perfect hash + dense jump table (O(1) dispatch) for sparse ≥4-arm switches.
+    /// Replaces `BinarySearch` when a compile-time perfect hash is found.
+    PerfectHash(PerfectHashResult),
     /// Use linear if-else chain (O(n) comparisons).
     IfElseChain,
 }
@@ -86,14 +89,121 @@ fn analyze_switch(arms: &[(i64, BlockId)]) -> SwitchStrategy {
     {
         SwitchStrategy::JumpTable { min, max }
     }
-    // Use binary search for sparse but large switch
+    // Use binary search for sparse but large switch, with perfect hash
+    // preferred when a compile-time hash is found (O(1) vs O(log K)).
+    //
+    // Perfect hashing is always attempted here. It's only reached when
+    // density is too low for JumpTable, so it won't interfere with dense
+    // enum discriminant switches. See `find_perfect_hash` for algorithm
+    // details and references.
     else if arms.len() >= BINARY_SEARCH_MIN_ARMS {
-        SwitchStrategy::BinarySearch
+        let keys: Vec<(i64, usize)> = arms.iter().enumerate().map(|(i, (v, _))| (*v, i)).collect();
+        if let Some(result) = find_perfect_hash(&keys) {
+            SwitchStrategy::PerfectHash(result)
+        } else {
+            SwitchStrategy::BinarySearch
+        }
     }
     // Default to if-else chain for small switches
     else {
         SwitchStrategy::IfElseChain
     }
+}
+
+/// Result of a successful perfect hash search.
+#[derive(Debug)]
+struct PerfectHashResult {
+    multiply: u64,
+    shift: u8,
+    mask: u8,
+    /// Verification + dispatch entries indexed by hash slot.
+    entries: Vec<MatchHashEntry>,
+}
+
+/// Find a minimal perfect hash for a small set of integer keys.
+///
+/// Searches for constants `(M, S, mask)` such that
+///   `h(x) = ((x as u64).wrapping_mul(M) >> S) & mask`
+/// maps all keys to distinct slots in `[0, table_size)`.
+///
+/// The search tries increasing table sizes (`next_power_of_two(K)`, then 2x)
+/// and brute-forces M values with all 64 shift values. For K ≤ 20 this
+/// completes in microseconds.
+///
+/// Returns `None` if no perfect hash is found (practically impossible for
+/// K ≤ 20, but handled for safety).
+///
+/// # Algorithm
+///
+/// This implements the multiply-shift hash family described in:
+/// - Neumann & Göbbert, "Improving Switch Statement Performance with Hashing
+///   Optimized at Compile Time"
+/// - Dietz 1992, "Coding Multiway Branches Using Customized Hash Functions"
+///
+/// The approach has been proposed for production compilers: LLVM issue #96971,
+/// Roslyn #66604, Go #34381.
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_lossless
+)]
+fn find_perfect_hash(keys: &[(i64, usize)]) -> Option<PerfectHashResult> {
+    let k = keys.len();
+    // Cap at 128: `MatchHashEntry::dense_index` is a `u8` (max 255), and
+    // the birthday paradox makes collision-free hashing increasingly unlikely
+    // past ~128 keys in a 256-slot table. Beyond this threshold the brute-force
+    // search would waste ~20-40ms of compile time before giving up. Falls back
+    // to binary search (O(log K)) which is fine at this scale.
+    if k == 0 || k > 128 {
+        return None;
+    }
+
+    // Try table sizes: tight (next power of 2), then 2x for easier search.
+    for table_size in [k.next_power_of_two(), (k.next_power_of_two() * 2).min(256)] {
+        let mask = (table_size - 1) as u8;
+        let mut slots = vec![false; table_size];
+
+        for m in 1u64..10_000 {
+            for s in 0u8..64 {
+                // Test if (m, s) produces distinct hashes for all keys.
+                slots.fill(false);
+                let mut ok = true;
+                for &(key, _) in keys {
+                    let h = ((key as u64).wrapping_mul(m) >> s) & mask as u64;
+                    let h = h as usize;
+                    if h >= table_size || slots[h] {
+                        ok = false;
+                        break;
+                    }
+                    slots[h] = true;
+                }
+                if ok {
+                    // Build the verification + dispatch table.
+                    let mut entries = vec![
+                        MatchHashEntry {
+                            expected_tag: i64::MIN, // sentinel for empty slots
+                            dense_index: 0,
+                        };
+                        table_size
+                    ];
+                    for (dense_idx, &(key, _arm_idx)) in keys.iter().enumerate() {
+                        let h = ((key as u64).wrapping_mul(m) >> s) & mask as u64;
+                        entries[h as usize] = MatchHashEntry {
+                            expected_tag: key,
+                            dense_index: dense_idx as u8,
+                        };
+                    }
+                    return Some(PerfectHashResult {
+                        multiply: m,
+                        shift: s,
+                        mask,
+                        entries,
+                    });
+                }
+            }
+        }
+    }
+    None
 }
 
 use crate::{
@@ -1081,6 +1191,15 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                             &name_map,
                         );
                     }
+                    SwitchStrategy::PerfectHash(hash_result) => {
+                        self.emit_switch_perfect_hash(
+                            discriminant,
+                            arms,
+                            *otherwise,
+                            hash_result,
+                            &name_map,
+                        );
+                    }
                     SwitchStrategy::BinarySearch => {
                         self.emit_switch_binary_search(
                             discriminant,
@@ -1203,6 +1322,40 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 self.emit(Instruction::ThrowIfPanic);
                 self.emit_jump_unless_fallthrough(*otherwise);
             }
+
+            Terminator::ShortCircuit {
+                operand,
+                is_and,
+                destination: _,
+                eval_rhs,
+                join,
+            } => {
+                // Legacy-style short-circuit using JumpIfFalse (peek, no pop).
+                // The destination local is PhiLike — value stays on TOS, no store/load.
+                self.emit_operand_pull(operand);
+
+                if *is_and {
+                    // &&: false → short-circuit (value stays on TOS), jump to join.
+                    //     true → pop, evaluate rhs.
+                    let sc_jump = self.emit(Instruction::JumpIfFalse(0));
+                    let resolved_join = self.resolve_pending_target(*join);
+                    self.pending_jumps.push((sc_jump, resolved_join));
+                    self.emit(Instruction::Pop(1));
+                    self.emit_jump_unless_fallthrough(*eval_rhs);
+                } else {
+                    // ||: false → pop, evaluate rhs.
+                    //     true → value stays on TOS, jump to join.
+                    let false_jump = self.emit(Instruction::JumpIfFalse(0));
+                    let resolved_join = self.resolve_pending_target(*join);
+                    let true_jump = self.emit(Instruction::Jump(0));
+                    self.pending_jumps.push((true_jump, resolved_join));
+                    // False landing: patch JumpIfFalse to here, pop, fall to eval_rhs.
+                    let false_pc = self.bytecode.instructions.len();
+                    self.patch_jump_to(false_jump, false_pc);
+                    self.emit(Instruction::Pop(1));
+                    self.emit_jump_unless_fallthrough(*eval_rhs);
+                }
+            }
         }
     }
 
@@ -1244,6 +1397,9 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             }
             Instruction::PopJumpIfFalse(_) => {
                 self.bytecode.instructions[instruction_idx] = Instruction::PopJumpIfFalse(offset);
+            }
+            Instruction::JumpIfFalse(_) => {
+                self.bytecode.instructions[instruction_idx] = Instruction::JumpIfFalse(offset);
             }
             _ => panic!("expected jump instruction at index {instruction_idx}"),
         }
@@ -1355,24 +1511,37 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         exhaustive: bool,
         name_map: &std::collections::HashMap<i64, &str>,
     ) {
-        self.emit_operand_pull(discriminant);
+        // Single exhaustive arm: no comparison needed, skip the discriminant entirely.
+        if exhaustive && arms.len() == 1 {
+            self.emit_jump_unless_fallthrough(arms[0].1);
+            return;
+        }
 
+        // Each arm re-loads the discriminant from the operand instead of
+        // keeping it on the stack with copy/pop. This makes each arm
+        // self-contained and avoids stack cleanup instructions.
         let num_arms = arms.len();
         for (i, (value, target)) in arms.iter().enumerate() {
             let is_last = i == num_arms - 1;
 
-            // For exhaustive switches, skip the last arm's comparison
+            // For exhaustive switches, skip the last arm's comparison.
             if exhaustive && is_last {
-                self.emit(Instruction::Pop(1)); // Pop discriminant
                 self.emit_jump_unless_fallthrough(*target);
                 return;
             }
 
             let label = Self::switch_label(*value, name_map);
-            self.emit_compare_and_branch(*value, *target, label);
+            self.emit_operand_pull(discriminant);
+            let idx = self.add_constant(ConstValue::Int(*value));
+            let inst = self.emit(Instruction::LoadConst(idx));
+            self.set_operand(inst, OperandMeta::Const(label));
+            self.emit(Instruction::CmpOp(CmpOp::Eq));
+            let jump_idx = self.emit(Instruction::PopJumpIfFalse(0));
+            self.emit_jump_unless_fallthrough(*target);
+            let skip_to = self.current_pc();
+            self.patch_jump_to(jump_idx, skip_to);
         }
 
-        self.emit(Instruction::Pop(1));
         self.emit_jump_unless_fallthrough(otherwise);
     }
 
@@ -1508,6 +1677,101 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         }
     }
 
+    /// Emit switch using perfect hash + dense jump table (O(1) dispatch).
+    ///
+    /// The `MatchHash` instruction remaps the sparse type tag to a dense
+    /// `[0, K-1]` index via a compile-time minimal perfect hash. A subsequent
+    /// `JumpTable` dispatches on the dense index. `MatchHash` pushes `-1` for
+    /// unknown tags, which falls to the jump table's default arm.
+    ///
+    /// This replaces O(log K) `BinarySearch` (which emits ~4K instructions for
+    /// K=8) with just 3 instructions: `type_tag` + `match_hash` + `jump_table`.
+    ///
+    /// The perfect hash uses the multiply-shift family:
+    ///   `h(tag) = ((tag as u64).wrapping_mul(M) >> S) & mask`
+    ///
+    /// References:
+    /// - Neumann & Göbbert, "Improving Switch Statement Performance with
+    ///   Hashing Optimized at Compile Time"
+    /// - Dietz 1992, "Coding Multiway Branches Using Customized Hash Functions"
+    /// - Proposed for LLVM (#96971), Roslyn (#66604), Go (#34381)
+    #[allow(clippy::cast_possible_wrap)]
+    fn emit_switch_perfect_hash(
+        &mut self,
+        discriminant: &Operand,
+        arms: &[(i64, BlockId)],
+        otherwise: BlockId,
+        hash_result: PerfectHashResult,
+        name_map: &std::collections::HashMap<i64, &str>,
+    ) {
+        // 1. Push discriminant (type tag) onto stack — consumed by DenseTag.
+        self.emit_operand_pull(discriminant);
+
+        // 2. Store the MatchHashTable in bytecode and emit DenseTag instruction.
+        let key_names: Vec<String> = arms
+            .iter()
+            .map(|(v, _)| {
+                name_map
+                    .get(v)
+                    .map(ToString::to_string)
+                    .unwrap_or_else(|| v.to_string())
+            })
+            .collect();
+        let table = MatchHashTable {
+            multiply: hash_result.multiply,
+            shift: hash_result.shift,
+            mask: hash_result.mask,
+            entries: hash_result.entries,
+            key_names,
+        };
+        let hash_table_idx = self.bytecode.match_hash_tables.len();
+        self.bytecode.match_hash_tables.push(table);
+        self.emit(Instruction::DenseTag(hash_table_idx));
+
+        // 3. Emit a dense JumpTable over [0, K-1].
+        //    The DenseTag output is dense by construction, so this is always
+        //    a compact table with no holes. We emit the JumpTable directly
+        //    (not via emit_switch_jump_table) because the dense index is
+        //    already on the stack from DenseTag — we must not re-push the
+        //    original discriminant.
+        let k = arms.len();
+        let dense_min = 0i64;
+        let dense_max = (k - 1) as i64;
+
+        let jt_table_idx = self.pending_jump_tables.len();
+        let mut jt = JumpTableData::new(dense_min, dense_max);
+
+        // Set symbolic names from the original arm names.
+        for (dense_idx, (orig_value, _)) in arms.iter().enumerate() {
+            if let Some(&name) = name_map.get(orig_value) {
+                jt.set_name(dense_idx as i64, name.to_string());
+            }
+        }
+
+        // Build dense arm mapping: dense_index → original BlockId.
+        let resolved_arms: Vec<(i64, PendingJumpTarget)> = arms
+            .iter()
+            .enumerate()
+            .map(|(dense_idx, (_, target))| {
+                (dense_idx as i64, self.resolve_pending_target(*target))
+            })
+            .collect();
+        let resolved_otherwise = self.resolve_pending_target(otherwise);
+
+        let jump_table_pc = self.emit(Instruction::JumpTable {
+            table_idx: jt_table_idx,
+            default: 0, // Will be patched later.
+        });
+
+        self.pending_jump_tables.push(PendingJumpTable {
+            table_idx: jt_table_idx,
+            jump_table_pc,
+            arms: resolved_arms,
+            otherwise: resolved_otherwise,
+            table: jt,
+        });
+    }
+
     // ========================================================================
     // Switch helpers
     // ========================================================================
@@ -1523,6 +1787,10 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
 
     /// Emit: copy TOS, compare with `value` for equality; if equal, pop
     /// discriminant and jump to `target`. On mismatch, fall through.
+    ///
+    /// Used by binary search where the discriminant stays on the stack across
+    /// the tree traversal. The if-else chain uses a different strategy
+    /// (re-loading the discriminant per arm) to avoid copy/pop overhead.
     fn emit_compare_and_branch(&mut self, value: i64, target: BlockId, label: String) {
         self.emit(Instruction::Copy(0));
         let idx = self.add_constant(ConstValue::Int(value));
@@ -1841,15 +2109,12 @@ impl PullSink for StackifyCodegen<'_, '_> {
     }
 
     fn is_type(&mut self, ty: &Ty) -> Result<(), Self::Error> {
-        // Emit instanceof check for nominal class checks.
         if let Ty::Class(tn, _) | Ty::TypeAlias(tn, _) = ty {
             let class_name_str = tn.display_name.as_str();
             if let Some(&class_obj_idx) = self.class_object_indices.get(class_name_str) {
-                let class_const =
-                    self.add_constant(ConstValue::Object(ObjectIndex::from_raw(class_obj_idx)));
-                let inst = self.emit(Instruction::LoadConst(class_const));
+                let c = self.add_constant(ConstValue::Object(ObjectIndex::from_raw(class_obj_idx)));
+                let inst = self.emit(Instruction::IsType(c));
                 self.set_operand(inst, OperandMeta::Const(class_name_str.to_string()));
-                self.emit(Instruction::CmpOp(CmpOp::InstanceOf));
             } else {
                 self.emit(Instruction::Pop(1));
                 let idx = self.add_constant(ConstValue::Bool(false));
@@ -1859,7 +2124,6 @@ impl PullSink for StackifyCodegen<'_, '_> {
             return Ok(());
         }
 
-        // Primitive and builtin runtime kinds use type tags.
         let type_tag = match ty {
             Ty::Int { .. } => Some(baml_type::typetag::INT),
             Ty::String { .. } => Some(baml_type::typetag::STRING),
@@ -1881,11 +2145,9 @@ impl PullSink for StackifyCodegen<'_, '_> {
         };
 
         if let Some(tag) = type_tag {
-            self.emit(Instruction::TypeTag);
-            let idx = self.add_constant(ConstValue::Int(tag));
-            let inst = self.emit(Instruction::LoadConst(idx));
-            self.set_operand(inst, OperandMeta::Const(tag.to_string()));
-            self.emit(Instruction::CmpOp(CmpOp::Eq));
+            let c = self.add_constant(ConstValue::Int(tag));
+            let inst = self.emit(Instruction::IsType(c));
+            self.set_operand(inst, OperandMeta::Const(ty.to_string()));
         } else {
             self.emit(Instruction::Pop(1));
             let idx = self.add_constant(ConstValue::Bool(false));

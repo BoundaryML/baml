@@ -91,6 +91,24 @@ function test_diverging_if_with_plain_else(x: int?) -> int {
 
 //----
 //- diagnostics
+// Error: `instanceof` is no longer supported. Use a `match` expression for type checking instead.
+//     ╭─[ expr_early_return_narrowing.baml:31:11 ]
+//     │
+//  31 │     if (x instanceof NarrowBar) {
+//     │           ─────┬────  
+//     │                ╰────── use `match` instead
+//     │ 
+//     │ Note: Error code: E0098
+// ────╯
+// Error: `instanceof` is no longer supported. Use a `match` expression for type checking instead.
+//     ╭─[ expr_early_return_narrowing.baml:62:11 ]
+//     │
+//  62 │     if (x instanceof NarrowBar) {
+//     │           ─────┬────  
+//     │                ╰────── use `match` instead
+//     │ 
+//     │ Note: Error code: E0098
+// ────╯
 // Error: type `user.NarrowBar` has no member `field`
 //     ╭─[ expr_early_return_narrowing.baml:35:14 ]
 //     │

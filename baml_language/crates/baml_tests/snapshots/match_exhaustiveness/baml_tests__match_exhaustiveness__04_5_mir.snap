@@ -7,29 +7,23 @@ fn user.BoolLiteralAfterTypedBool(b: bool) -> string {
     let _0: string // _0 // return
     let _1: bool // b // param
     let _2: bool
-    let _3: bool
 
     bb0: {
         _2 = is_type(copy _1, Bool { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
-        branch copy _2 -> [bb3, bb1];
+        branch copy _2 -> [bb2, bb1];
     }
 
     bb1: {
-        _3 = copy _1 == const true;
-        branch copy _3 -> [bb2, bb4];
+        _0 = const "unreachable";
+        goto -> bb3;
     }
 
     bb2: {
-        _0 = const "unreachable";
-        goto -> bb4;
+        _0 = const "any bool";
+        goto -> bb3;
     }
 
     bb3: {
-        _0 = const "any bool";
-        goto -> bb4;
-    }
-
-    bb4: {
         return;
     }
 }
@@ -38,25 +32,13 @@ fn user.BoolUnionPattern(b: bool) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: bool // b // param
-    let _2: bool
-    let _3: bool
 
     bb0: {
-        _2 = copy _1 == const true;
-        branch copy _2 -> [bb2, bb1];
+        _0 = const "covered";
+        goto -> bb1;
     }
 
     bb1: {
-        _3 = copy _1 == const false;
-        branch copy _3 -> [bb2, bb3];
-    }
-
-    bb2: {
-        _0 = const "covered";
-        goto -> bb3;
-    }
-
-    bb3: {
         return;
     }
 }
@@ -112,39 +94,33 @@ fn user.DuplicateBoolLiteral(b: bool) -> string {
     let _1: bool // b // param
     let _2: bool
     let _3: bool
-    let _4: bool
 
     bb0: {
         _2 = copy _1 == const true;
-        branch copy _2 -> [bb5, bb1];
+        branch copy _2 -> [bb4, bb1];
     }
 
     bb1: {
         _3 = copy _1 == const true;
-        branch copy _3 -> [bb4, bb2];
+        branch copy _3 -> [bb3, bb2];
     }
 
     bb2: {
-        _4 = copy _1 == const false;
-        branch copy _4 -> [bb3, bb6];
+        _0 = const "false";
+        goto -> bb5;
     }
 
     bb3: {
-        _0 = const "false";
-        goto -> bb6;
+        _0 = const "second true";
+        goto -> bb5;
     }
 
     bb4: {
-        _0 = const "second true";
-        goto -> bb6;
+        _0 = const "first true";
+        goto -> bb5;
     }
 
     bb5: {
-        _0 = const "first true";
-        goto -> bb6;
-    }
-
-    bb6: {
         return;
     }
 }
@@ -267,29 +243,23 @@ fn user.EnumVariantAfterTypedEnum(s: Status) -> string {
     let _0: string // _0 // return
     let _1: Status // s // param
     let _2: bool
-    let _3: bool
 
     bb0: {
         _2 = is_type(copy _1, Enum(TypeName { name: "Status", module_path: ["user"], display_name: "Status" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
-        branch copy _2 -> [bb3, bb1];
+        branch copy _2 -> [bb2, bb1];
     }
 
     bb1: {
-        _3 = copy _1 == const user.Status.Active;
-        branch copy _3 -> [bb2, bb4];
+        _0 = const "unreachable";
+        goto -> bb3;
     }
 
     bb2: {
-        _0 = const "unreachable";
-        goto -> bb4;
+        _0 = const "any status";
+        goto -> bb3;
     }
 
     bb3: {
-        _0 = const "any status";
-        goto -> bb4;
-    }
-
-    bb4: {
         return;
     }
 }
@@ -379,29 +349,23 @@ fn user.ExhaustiveBool(b: bool) -> string {
     let _0: string // _0 // return
     let _1: bool // b // param
     let _2: bool
-    let _3: bool
 
     bb0: {
         _2 = copy _1 == const true;
-        branch copy _2 -> [bb3, bb1];
+        branch copy _2 -> [bb2, bb1];
     }
 
     bb1: {
-        _3 = copy _1 == const false;
-        branch copy _3 -> [bb2, bb4];
+        _0 = const "no";
+        goto -> bb3;
     }
 
     bb2: {
-        _0 = const "no";
-        goto -> bb4;
+        _0 = const "yes";
+        goto -> bb3;
     }
 
     bb3: {
-        _0 = const "yes";
-        goto -> bb4;
-    }
-
-    bb4: {
         return;
     }
 }
@@ -590,19 +554,13 @@ fn user.ExhaustiveEnumWithTypedPattern(s: Status) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: Status // s // param
-    let _2: bool
 
     bb0: {
-        _2 = is_type(copy _1, Enum(TypeName { name: "Status", module_path: ["user"], display_name: "Status" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
-        branch copy _2 -> [bb1, bb2];
+        _0 = const "any status";
+        goto -> bb1;
     }
 
     bb1: {
-        _0 = const "any status";
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -791,29 +749,23 @@ fn user.ExhaustiveNullableEnumWithTypedPattern(s: Status?) -> string {
     let _0: string // _0 // return
     let _1: Status? // s // param
     let _2: bool
-    let _3: bool
 
     bb0: {
         _2 = is_type(copy _1, Enum(TypeName { name: "Status", module_path: ["user"], display_name: "Status" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
-        branch copy _2 -> [bb3, bb1];
+        branch copy _2 -> [bb2, bb1];
     }
 
     bb1: {
-        _3 = copy _1 == const null;
-        branch copy _3 -> [bb2, bb4];
+        _0 = const "no status";
+        goto -> bb3;
     }
 
     bb2: {
-        _0 = const "no status";
-        goto -> bb4;
+        _0 = const "some status";
+        goto -> bb3;
     }
 
     bb3: {
-        _0 = const "some status";
-        goto -> bb4;
-    }
-
-    bb4: {
         return;
     }
 }
@@ -1249,52 +1201,38 @@ fn user.JumpTableClassTypeTag(pet: Cat | Dog | Bird | Fish) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: Cat | Dog | Bird | Fish // pet // param
-    let _2: bool
-    let _3: bool
-    let _4: bool
-    let _5: bool
+    let _2: int
 
     bb0: {
-        _2 = is_type(copy _1, Class(TypeName { name: "Cat", module_path: ["user"], display_name: "Cat" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
-        branch copy _2 -> [bb7, bb1];
+        _2 = type_tag(_1);
+        switch copy _2 [Cat: bb5, Dog: bb4, Bird: bb3, Fish: bb2, otherwise: bb1] (exhaustive);
     }
 
     bb1: {
-        _3 = is_type(copy _1, Class(TypeName { name: "Dog", module_path: ["user"], display_name: "Dog" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
-        branch copy _3 -> [bb6, bb2];
+        unreachable;
     }
 
     bb2: {
-        _4 = is_type(copy _1, Class(TypeName { name: "Bird", module_path: ["user"], display_name: "Bird" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
-        branch copy _4 -> [bb5, bb3];
+        _0 = const "fish";
+        goto -> bb6;
     }
 
     bb3: {
-        _5 = is_type(copy _1, Class(TypeName { name: "Fish", module_path: ["user"], display_name: "Fish" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
-        branch copy _5 -> [bb4, bb8];
+        _0 = const "bird";
+        goto -> bb6;
     }
 
     bb4: {
-        _0 = const "fish";
-        goto -> bb8;
+        _0 = const "dog";
+        goto -> bb6;
     }
 
     bb5: {
-        _0 = const "bird";
-        goto -> bb8;
+        _0 = const "cat";
+        goto -> bb6;
     }
 
     bb6: {
-        _0 = const "dog";
-        goto -> bb8;
-    }
-
-    bb7: {
-        _0 = const "cat";
-        goto -> bb8;
-    }
-
-    bb8: {
         return;
     }
 }
@@ -1343,52 +1281,38 @@ fn user.JumpTableTypeTag(value: int | string | bool | float) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: int | string | bool | float // value // param
-    let _2: bool
-    let _3: bool
-    let _4: bool
-    let _5: bool
+    let _2: int
 
     bb0: {
-        _2 = is_type(copy _1, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
-        branch copy _2 -> [bb7, bb1];
+        _2 = type_tag(_1);
+        switch copy _2 [int: bb5, string: bb4, bool: bb3, float: bb2, otherwise: bb1] (exhaustive);
     }
 
     bb1: {
-        _3 = is_type(copy _1, String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
-        branch copy _3 -> [bb6, bb2];
+        unreachable;
     }
 
     bb2: {
-        _4 = is_type(copy _1, Bool { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
-        branch copy _4 -> [bb5, bb3];
+        _0 = const "float";
+        goto -> bb6;
     }
 
     bb3: {
-        _5 = is_type(copy _1, Float { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
-        branch copy _5 -> [bb4, bb8];
+        _0 = const "bool";
+        goto -> bb6;
     }
 
     bb4: {
-        _0 = const "float";
-        goto -> bb8;
+        _0 = const "string";
+        goto -> bb6;
     }
 
     bb5: {
-        _0 = const "bool";
-        goto -> bb8;
+        _0 = const "int";
+        goto -> bb6;
     }
 
     bb6: {
-        _0 = const "string";
-        goto -> bb8;
-    }
-
-    bb7: {
-        _0 = const "int";
-        goto -> bb8;
-    }
-
-    bb8: {
         return;
     }
 }
@@ -1768,7 +1692,6 @@ fn user.NestedMatchSpans(x: int, y: bool) -> string {
     let _2: bool // y // param
     let _3: bool
     let _4: bool
-    let _5: bool
 
     bb0: {
         switch copy _1 [0: bb2, otherwise: bb1];
@@ -1776,40 +1699,35 @@ fn user.NestedMatchSpans(x: int, y: bool) -> string {
 
     bb1: {
         _0 = const "other";
-        goto -> bb8;
+        goto -> bb7;
     }
 
     bb2: {
         _3 = copy _2 == const true;
-        branch copy _3 -> [bb7, bb3];
+        branch copy _3 -> [bb6, bb3];
     }
 
     bb3: {
         _4 = copy _2 == const false;
-        branch copy _4 -> [bb6, bb4];
+        branch copy _4 -> [bb5, bb4];
     }
 
     bb4: {
-        _5 = copy _2 == const true;
-        branch copy _5 -> [bb5, bb8];
+        _0 = const "unreachable nested";
+        goto -> bb7;
     }
 
     bb5: {
-        _0 = const "unreachable nested";
-        goto -> bb8;
+        _0 = const "zero false";
+        goto -> bb7;
     }
 
     bb6: {
-        _0 = const "zero false";
-        goto -> bb8;
+        _0 = const "zero true";
+        goto -> bb7;
     }
 
     bb7: {
-        _0 = const "zero true";
-        goto -> bb8;
-    }
-
-    bb8: {
         return;
     }
 }
@@ -2515,29 +2433,23 @@ fn user.ParenthesizedSingleLiteral(b: bool) -> string {
     let _0: string // _0 // return
     let _1: bool // b // param
     let _2: bool
-    let _3: bool
 
     bb0: {
         _2 = copy _1 == const true;
-        branch copy _2 -> [bb3, bb1];
+        branch copy _2 -> [bb2, bb1];
     }
 
     bb1: {
-        _3 = copy _1 == const false;
-        branch copy _3 -> [bb2, bb4];
+        _0 = const "no";
+        goto -> bb3;
     }
 
     bb2: {
-        _0 = const "no";
-        goto -> bb4;
+        _0 = const "yes";
+        goto -> bb3;
     }
 
     bb3: {
-        _0 = const "yes";
-        goto -> bb4;
-    }
-
-    bb4: {
         return;
     }
 }

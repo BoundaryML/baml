@@ -234,13 +234,11 @@ function testing.TestCollector.register_test(self: null, name: string, body: () 
     load_field .name
     load_var full_name
     cmp_op ==
-    store_var _20
-    load_var _20
-    load_var _20
-    pop_jump_if_false L9
+    jump_if_false L9
     jump L10
 
   L9:
+    pop 1
     load_var t
     load_field .name
     load_var hash_prefix
@@ -355,13 +353,11 @@ function testing.TestCollector.register_test_set(self: null, name: string, colle
     load_field .name
     load_var full_name
     cmp_op ==
-    store_var _20
-    load_var _20
-    load_var _20
-    pop_jump_if_false L9
+    jump_if_false L9
     jump L10
 
   L9:
+    pop 1
     load_var ts
     load_field .name
     load_var hash_prefix
@@ -669,8 +665,7 @@ function testing.TestRegistry.serialize(self: null) -> (testing.SerializedTest |
     call baml.Map.get
     store_var expanded
     load_var expanded
-    load_const testing.TestRegistry
-    cmp_op instanceof
+    is_type testing.TestRegistry
     pop_jump_if_false L5
     jump L6
 
@@ -752,9 +747,7 @@ function testing.run_test(body: () -> null, runner: (() -> testing.TestReport) -
 
   L0:
     load_var runner
-    type_tag
-    load_const 8
-    cmp_op ==
+    is_type (() -> testing.TestReport) -> () -> testing.TestReport
     pop_jump_if_false L2
     load_var base_run
     load_var runner
@@ -781,9 +774,7 @@ function testing.run_testset(run_children: () -> testing.TestSetReport, runner: 
 
   L0:
     load_var runner
-    type_tag
-    load_const 8
-    cmp_op ==
+    is_type (() -> testing.TestSetReport) -> () -> testing.TestSetReport
     pop_jump_if_false L2
     load_var run_children
     load_var runner
@@ -829,97 +820,44 @@ function user.User.promote(self: null, bonus: int) -> Report {
 
 function user.http_status(code: int) -> string {
     load_var code
-    copy 0
-    load_const 400
-    cmp_op ==
-    pop_jump_if_false L0
-    pop 1
-    jump L8
+    dense_tag [200, 201, 204, 400, 404, 500]
+    jump_table [L6, L5, L4, L3, L2, L1], default L0
 
   L0:
-    copy 0
-    load_const 400
-    cmp_op <
-    pop_jump_if_false L3
-    copy 0
-    load_const 201
-    cmp_op ==
-    pop_jump_if_false L1
-    pop 1
-    jump L10
-
-  L1:
-    copy 0
-    load_const 201
-    cmp_op <
-    pop_jump_if_false L2
-    copy 0
-    load_const 200
-    cmp_op ==
-    pop_jump_if_false L2
-    pop 1
-    jump L11
-
-  L2:
-    copy 0
-    load_const 204
-    cmp_op ==
-    pop_jump_if_false L3
-    pop 1
-    jump L9
-
-  L3:
-    copy 0
-    load_const 404
-    cmp_op ==
-    pop_jump_if_false L4
-    pop 1
-    jump L7
-
-  L4:
-    copy 0
-    load_const 500
-    cmp_op ==
-    pop_jump_if_false L5
-    pop 1
-    jump L6
-
-  L5:
-    pop 1
     load_const "Unknown"
     store_var label
-    jump L12
+    jump L7
 
-  L6:
+  L1: 500
     load_const "Internal Server Error"
     store_var label
-    jump L12
+    jump L7
 
-  L7:
+  L2: 404
     load_const "Not Found"
     store_var label
-    jump L12
+    jump L7
 
-  L8:
+  L3: 400
     load_const "Bad Request"
     store_var label
-    jump L12
+    jump L7
 
-  L9:
+  L4: 204
     load_const "No Content"
     store_var label
-    jump L12
+    jump L7
 
-  L10:
+  L5: 201
     load_const "Created"
     store_var label
-    jump L12
+    jump L7
 
-  L11:
+  L6: 200
     load_const "OK"
     store_var label
 
-  L12:
+  L7:
     load_const "HTTP "
     load_var label
     bin_op +
@@ -928,15 +866,13 @@ function user.http_status(code: int) -> string {
 
 function user.score(input: User | ErrorInfo, threshold: int) -> Report {
     load_var input
-    load_const User
-    cmp_op instanceof
+    is_type User
     pop_jump_if_false L0
     jump L1
 
   L0:
     load_var input
-    load_const ErrorInfo
-    cmp_op instanceof
+    is_type ErrorInfo
     pop_jump_if_false L2
     load_var input
     load_field .message
@@ -950,15 +886,13 @@ function user.score(input: User | ErrorInfo, threshold: int) -> Report {
 
   L2:
     load_var input
-    load_const User
-    cmp_op instanceof
+    is_type User
     pop_jump_if_false L3
     jump L4
 
   L3:
     load_var input
-    load_const ErrorInfo
-    cmp_op instanceof
+    is_type ErrorInfo
     pop_jump_if_false L5
     load_var input
     load_field .code
@@ -973,15 +907,13 @@ function user.score(input: User | ErrorInfo, threshold: int) -> Report {
 
   L5:
     load_var input
-    load_const User
-    cmp_op instanceof
+    is_type User
     pop_jump_if_false L6
     jump L7
 
   L6:
     load_var input
-    load_const ErrorInfo
-    cmp_op instanceof
+    is_type ErrorInfo
     pop_jump_if_false L12
     load_var threshold
     store_var role_mult
@@ -1042,18 +974,12 @@ function user.score(input: User | ErrorInfo, threshold: int) -> Report {
     load_var total
     load_var threshold
     cmp_op >
-    store_var _37
-    load_var _37
     load_const true
     cmp_op ==
     pop_jump_if_false L16
     jump L17
 
   L16:
-    load_var _37
-    load_const false
-    cmp_op ==
-    pop_jump_if_false L18
     load_const " [LOW]"
     store_var suffix
     jump L18

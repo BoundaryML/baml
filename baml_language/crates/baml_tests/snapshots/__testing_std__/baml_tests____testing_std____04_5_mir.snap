@@ -395,8 +395,7 @@ fn testing.TestCollector.register_test(self: testing.TestCollector, name: string
         _21 = copy _22.0;
         _23 = copy _5;
         _20 = copy _21 == copy _23;
-        _19 = copy _20;
-        branch copy _20 -> [bb14, bb13];
+        _19 = short_circuit(||) copy _20 -> [eval: bb13, join: bb14];
     }
 
     bb13: {
@@ -543,8 +542,7 @@ fn testing.TestCollector.register_test_set(self: testing.TestCollector, name: st
         _21 = copy _22.0;
         _23 = copy _5;
         _20 = copy _21 == copy _23;
-        _19 = copy _20;
-        branch copy _20 -> [bb14, bb13];
+        _19 = short_circuit(||) copy _20 -> [eval: bb13, join: bb14];
     }
 
     bb13: {

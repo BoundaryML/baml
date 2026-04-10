@@ -123,23 +123,19 @@ function user.LlmFunction$render_prompt(input: string) -> baml.llm.PromptAst {
 
 function user.MatchExpression(x: int) -> string {
     load_var x
-    copy 0
     load_const 1
     cmp_op ==
     pop_jump_if_false L0
-    pop 1
     jump L3
 
   L0:
-    copy 0
+    load_var x
     load_const 2
     cmp_op ==
     pop_jump_if_false L1
-    pop 1
     jump L2
 
   L1:
-    pop 1
     notify_block Default
     load_const "other"
     jump L4

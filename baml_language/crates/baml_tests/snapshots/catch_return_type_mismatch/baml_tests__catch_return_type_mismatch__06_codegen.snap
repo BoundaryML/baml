@@ -11,15 +11,12 @@ function user.caller() -> bool {
     jump L2
     load_var e
     discriminant
-    copy 0
     load_const Errors.AuthenticationError
     cmp_op ==
     pop_jump_if_false L0
-    pop 1
     jump L1
 
   L0:
-    pop 1
     load_var e
     throw
 

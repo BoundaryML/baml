@@ -146,25 +146,25 @@ function testing.TestCollector.register_test(self: null, name: string, body: () 
      36   pop_jump_if_false +2   (to 38)
      37   jump +4                (to 41)
      38   load_var 5             (full_name)
-     39   store_var 12           (final_name)
+     39   store_var 11           (final_name)
      40   jump +14               (to 54)
      41   load_var 5             (full_name)
      42   load_const 4           ("#")
      43   bin_op +               
-     44   store_var 13           (_30)
+     44   store_var 12           (_30)
      45   load_var 6             (count)
      46   load_const 5           (1)
      47   bin_op +               
      48   call 100               (baml.unstable.string)
-     49   store_var 14           (_32)
-     50   load_var 13            (_30)
-     51   load_var 14            (_32)
+     49   store_var 13           (_32)
+     50   load_var 12            (_30)
+     51   load_var 13            (_32)
      52   bin_op +               
-     53   store_var 12           (final_name)
+     53   store_var 11           (final_name)
      54   load_var 1             (self)
      55   load_field 1           (tests)
      56   alloc_instance 95      (TestRegistration)
-     57   load_var 12            (final_name)
+     57   load_var 11            (final_name)
      58   init_field 0           (name)
      59   load_var 3             (body)
      60   init_field 1           (body)
@@ -182,25 +182,23 @@ function testing.TestCollector.register_test(self: null, name: string, body: () 
      72   load_field 0           (name)
      73   load_var 5             (full_name)
      74   cmp_op ==              
-     75   store_var 11           (_20)
-     76   load_var 11            (_20)
-     77   load_var 11            (_20)
-     78   pop_jump_if_false +2   (to 80)
-     79   jump +5                (to 84)
-     80   load_var 10            (t)
-     81   load_field 0           (name)
-     82   load_var 7             (hash_prefix)
-     83   call 36                (baml.String.startsWith)
-     84   pop_jump_if_false +5   (to 89)
-     85   load_var 6             (count)
-     86   load_const 5           (1)
-     87   bin_op +               
-     88   store_var 6            (count)
-     89   load_var 9             (__for_idx)
-     90   load_const 5           (1)
-     91   bin_op +               
-     92   store_var 9            (__for_idx)
-     93   jump -66               (to 27)
+     75   jump_if_false +2       (to 77)
+     76   jump +6                (to 82)
+     77   pop 1                  
+     78   load_var 10            (t)
+     79   load_field 0           (name)
+     80   load_var 7             (hash_prefix)
+     81   call 36                (baml.String.startsWith)
+     82   pop_jump_if_false +5   (to 87)
+     83   load_var 6             (count)
+     84   load_const 5           (1)
+     85   bin_op +               
+     86   store_var 6            (count)
+     87   load_var 9             (__for_idx)
+     88   load_const 5           (1)
+     89   bin_op +               
+     90   store_var 9            (__for_idx)
+     91   jump -64               (to 27)
 }
 
 function testing.TestCollector.register_test_set(self: null, name: string, collector: (testing.TestCollector) -> null, runner: (() -> testing.TestSetReport) -> () -> testing.TestSetReport?) -> null {
@@ -243,25 +241,25 @@ function testing.TestCollector.register_test_set(self: null, name: string, colle
      36   pop_jump_if_false +2   (to 38)
      37   jump +4                (to 41)
      38   load_var 5             (full_name)
-     39   store_var 12           (final_name)
+     39   store_var 11           (final_name)
      40   jump +14               (to 54)
      41   load_var 5             (full_name)
      42   load_const 4           ("#")
      43   bin_op +               
-     44   store_var 13           (_30)
+     44   store_var 12           (_30)
      45   load_var 6             (count)
      46   load_const 5           (1)
      47   bin_op +               
      48   call 100               (baml.unstable.string)
-     49   store_var 14           (_32)
-     50   load_var 13            (_30)
-     51   load_var 14            (_32)
+     49   store_var 13           (_32)
+     50   load_var 12            (_30)
+     51   load_var 13            (_32)
      52   bin_op +               
-     53   store_var 12           (final_name)
+     53   store_var 11           (final_name)
      54   load_var 1             (self)
      55   load_field 2           (testsets)
      56   alloc_instance 97      (TestSetRegistration)
-     57   load_var 12            (final_name)
+     57   load_var 11            (final_name)
      58   init_field 0           (name)
      59   load_var 3             (collector)
      60   init_field 1           (collector)
@@ -279,25 +277,23 @@ function testing.TestCollector.register_test_set(self: null, name: string, colle
      72   load_field 0           (name)
      73   load_var 5             (full_name)
      74   cmp_op ==              
-     75   store_var 11           (_20)
-     76   load_var 11            (_20)
-     77   load_var 11            (_20)
-     78   pop_jump_if_false +2   (to 80)
-     79   jump +5                (to 84)
-     80   load_var 10            (ts)
-     81   load_field 0           (name)
-     82   load_var 7             (hash_prefix)
-     83   call 36                (baml.String.startsWith)
-     84   pop_jump_if_false +5   (to 89)
-     85   load_var 6             (count)
-     86   load_const 5           (1)
-     87   bin_op +               
-     88   store_var 6            (count)
-     89   load_var 9             (__for_idx)
-     90   load_const 5           (1)
-     91   bin_op +               
-     92   store_var 9            (__for_idx)
-     93   jump -66               (to 27)
+     75   jump_if_false +2       (to 77)
+     76   jump +6                (to 82)
+     77   pop 1                  
+     78   load_var 10            (ts)
+     79   load_field 0           (name)
+     80   load_var 7             (hash_prefix)
+     81   call 36                (baml.String.startsWith)
+     82   pop_jump_if_false +5   (to 87)
+     83   load_var 6             (count)
+     84   load_const 5           (1)
+     85   bin_op +               
+     86   store_var 6            (count)
+     87   load_var 9             (__for_idx)
+     88   load_const 5           (1)
+     89   bin_op +               
+     90   store_var 9            (__for_idx)
+     91   jump -64               (to 27)
 }
 
 function testing.TestRegistry.expand_set(self: null, name: string) -> (testing.SerializedTest | testing.SerializedTestSet)[] {
@@ -507,7 +503,7 @@ function testing.TestRegistry.serialize(self: null) -> (testing.SerializedTest |
      10   call 17                 (baml.Array.length)
      11   cmp_op <                
      12   pop_jump_if_false +2    (to 14)
-     13   jump +68                (to 81)
+     13   jump +67                (to 80)
      14   load_var 1              (self)
      15   load_field 0            (collector)
      16   load_field 2            (testsets)
@@ -533,64 +529,63 @@ function testing.TestRegistry.serialize(self: null) -> (testing.SerializedTest |
      36   call 16                 (baml.Map.get)
      37   store_var 8             (expanded)
      38   load_var 8              (expanded)
-     39   load_const 1            (testing.TestRegistry)
-     40   cmp_op instanceof       
-     41   pop_jump_if_false +2    (to 43)
-     42   jump +15                (to 57)
-     43   load_var 8              (expanded)
-     44   load_const 2            (null)
-     45   cmp_op ==               
-     46   pop_jump_if_false +30   (to 76)
-     47   load_var 2              (items)
-     48   alloc_instance 96       (SerializedTest)
-     49   load_const 3            ("lazyTestSet")
-     50   init_field 0            (type)
-     51   load_var 7              (ts)
-     52   load_field 0            (name)
-     53   init_field 1            (name)
-     54   call 10                 (baml.Array.push)
-     55   pop 1                   
-     56   jump +20                (to 76)
-     57   load_var 8              (expanded)
-     58   store_var 9             (sub)
-     59   load_var 7              (ts)
-     60   load_field 0            (name)
-     61   store_var 10            (_31)
-     62   load_var 9              (sub)
-     63   call 130                (testing.TestRegistry.serialize)
-     64   store_var 11            (_33)
-     65   load_var 2              (items)
-     66   alloc_instance 94       (SerializedTestSet)
-     67   load_var 10             (_31)
-     68   init_field 0            (name)
-     69   load_var 11             (_33)
-     70   init_field 1            (items)
-     71   load_var 9              (sub)
-     72   load_field 2            (loading_time_ms)
-     73   init_field 2            (loadingTimeMs)
-     74   call 10                 (baml.Array.push)
-     75   pop 1                   
-     76   load_var 6              (__for_idx_1)
-     77   load_const 4            (1)
-     78   bin_op +                
-     79   store_var 6             (__for_idx_1)
-     80   jump -60                (to 20)
-     81   load_var 2              (items)
-     82   alloc_instance 96       (SerializedTest)
-     83   load_const 5            ("test")
-     84   init_field 0            (type)
-     85   load_var 3              (_3)
-     86   load_var 4              (__for_idx)
-     87   load_array_element      
-     88   load_field 0            (name)
-     89   init_field 1            (name)
-     90   call 10                 (baml.Array.push)
-     91   pop 1                   
-     92   load_var 4              (__for_idx)
-     93   load_const 4            (1)
-     94   bin_op +                
-     95   store_var 4             (__for_idx)
-     96   jump -88                (to 8)
+     39   is_type 1               
+     40   pop_jump_if_false +2    (to 42)
+     41   jump +15                (to 56)
+     42   load_var 8              (expanded)
+     43   load_const 2            (null)
+     44   cmp_op ==               
+     45   pop_jump_if_false +30   (to 75)
+     46   load_var 2              (items)
+     47   alloc_instance 96       (SerializedTest)
+     48   load_const 3            ("lazyTestSet")
+     49   init_field 0            (type)
+     50   load_var 7              (ts)
+     51   load_field 0            (name)
+     52   init_field 1            (name)
+     53   call 10                 (baml.Array.push)
+     54   pop 1                   
+     55   jump +20                (to 75)
+     56   load_var 8              (expanded)
+     57   store_var 9             (sub)
+     58   load_var 7              (ts)
+     59   load_field 0            (name)
+     60   store_var 10            (_31)
+     61   load_var 9              (sub)
+     62   call 130                (testing.TestRegistry.serialize)
+     63   store_var 11            (_33)
+     64   load_var 2              (items)
+     65   alloc_instance 94       (SerializedTestSet)
+     66   load_var 10             (_31)
+     67   init_field 0            (name)
+     68   load_var 11             (_33)
+     69   init_field 1            (items)
+     70   load_var 9              (sub)
+     71   load_field 2            (loading_time_ms)
+     72   init_field 2            (loadingTimeMs)
+     73   call 10                 (baml.Array.push)
+     74   pop 1                   
+     75   load_var 6              (__for_idx_1)
+     76   load_const 4            (1)
+     77   bin_op +                
+     78   store_var 6             (__for_idx_1)
+     79   jump -59                (to 20)
+     80   load_var 2              (items)
+     81   alloc_instance 96       (SerializedTest)
+     82   load_const 5            ("test")
+     83   init_field 0            (type)
+     84   load_var 3              (_3)
+     85   load_var 4              (__for_idx)
+     86   load_array_element      
+     87   load_field 0            (name)
+     88   init_field 1            (name)
+     89   call 10                 (baml.Array.push)
+     90   pop 1                   
+     91   load_var 4              (__for_idx)
+     92   load_const 4            (1)
+     93   bin_op +                
+     94   store_var 4             (__for_idx)
+     95   jump -87                (to 8)
 }
 
 function testing.run_test(body: () -> null, runner: (() -> testing.TestReport) -> () -> testing.TestReport?) -> testing.TestReport {
@@ -604,22 +599,20 @@ function testing.run_test(body: () -> null, runner: (() -> testing.TestReport) -
      7    load_const 0           (null)
      8    cmp_op ==              
      9    pop_jump_if_false +2   (to 11)
-     10   jump +11               (to 21)
+     10   jump +9                (to 19)
      11   load_var 2             (runner)
-     12   type_tag               
-     13   load_const 1           (8)
-     14   cmp_op ==              
-     15   pop_jump_if_false +8   (to 23)
-     16   load_var 3             (base_run)
-     17   load_var 2             (runner)
-     18   call_indirect          
-     19   store_var 4            (effective_run)
-     20   jump +3                (to 23)
-     21   load_var 3             (base_run)
-     22   store_var 4            (effective_run)
-     23   load_var 4             (effective_run)
-     24   call_indirect          
-     25   return                 
+     12   is_type 1              
+     13   pop_jump_if_false +8   (to 21)
+     14   load_var 3             (base_run)
+     15   load_var 2             (runner)
+     16   call_indirect          
+     17   store_var 4            (effective_run)
+     18   jump +3                (to 21)
+     19   load_var 3             (base_run)
+     20   store_var 4            (effective_run)
+     21   load_var 4             (effective_run)
+     22   call_indirect          
+     23   return                 
 }
 
 function testing.run_testset(run_children: () -> testing.TestSetReport, runner: (() -> testing.TestSetReport) -> () -> testing.TestSetReport?) -> testing.TestSetReport {
@@ -627,22 +620,20 @@ function testing.run_testset(run_children: () -> testing.TestSetReport, runner: 
      1    load_const 0           (null)
      2    cmp_op ==              
      3    pop_jump_if_false +2   (to 5)
-     4    jump +11               (to 15)
+     4    jump +9                (to 13)
      5    load_var 2             (runner)
-     6    type_tag               
-     7    load_const 1           (8)
-     8    cmp_op ==              
-     9    pop_jump_if_false +8   (to 17)
-     10   load_var 1             (run_children)
-     11   load_var 2             (runner)
-     12   call_indirect          
-     13   store_var 3            (effective_run)
-     14   jump +3                (to 17)
-     15   load_var 1             (run_children)
-     16   store_var 3            (effective_run)
-     17   load_var 3             (effective_run)
-     18   call_indirect          
-     19   return                 
+     6    is_type 1              
+     7    pop_jump_if_false +8   (to 15)
+     8    load_var 1             (run_children)
+     9    load_var 2             (runner)
+     10   call_indirect          
+     11   store_var 3            (effective_run)
+     12   jump +3                (to 15)
+     13   load_var 1             (run_children)
+     14   store_var 3            (effective_run)
+     15   load_var 3             (effective_run)
+     16   call_indirect          
+     17   return                 
 }
 
 function user.User.promote(self: null, bonus: int) -> Report {
@@ -672,201 +663,146 @@ function user.User.promote(self: null, bonus: int) -> Report {
 }
 
 function user.http_status(code: int) -> string {
-     0    load_var 1              (code)
-     1    copy 0                  
-     2    load_const 0            (400)
-     3    cmp_op ==               
-     4    pop_jump_if_false +3    (to 7)
-     5    pop 1                   
-     6    jump +49                (to 55)
-     7    copy 0                  
-     8    load_const 0            (400)
-     9    cmp_op <                
-     10   pop_jump_if_false +23   (to 33)
-     11   copy 0                  
-     12   load_const 1            (201)
-     13   cmp_op ==               
-     14   pop_jump_if_false +3    (to 17)
-     15   pop 1                   
-     16   jump +45                (to 61)
-     17   copy 0                  
-     18   load_const 1            (201)
-     19   cmp_op <                
-     20   pop_jump_if_false +7    (to 27)
-     21   copy 0                  
-     22   load_const 2            (200)
-     23   cmp_op ==               
-     24   pop_jump_if_false +3    (to 27)
-     25   pop 1                   
-     26   jump +38                (to 64)
-     27   copy 0                  
-     28   load_const 3            (204)
-     29   cmp_op ==               
-     30   pop_jump_if_false +3    (to 33)
-     31   pop 1                   
-     32   jump +26                (to 58)
-     33   copy 0                  
-     34   load_const 4            (404)
-     35   cmp_op ==               
-     36   pop_jump_if_false +3    (to 39)
-     37   pop 1                   
-     38   jump +14                (to 52)
-     39   copy 0                  
-     40   load_const 5            (500)
-     41   cmp_op ==               
-     42   pop_jump_if_false +3    (to 45)
-     43   pop 1                   
-     44   jump +5                 (to 49)
-     45   pop 1                   
-     46   load_const 6            ("Unknown")
-     47   store_var 2             (label)
-     48   jump +18                (to 66)
-     49   load_const 7            ("Internal Server Error")
-     50   store_var 2             (label)
-     51   jump +15                (to 66)
-     52   load_const 8            ("Not Found")
-     53   store_var 2             (label)
-     54   jump +12                (to 66)
-     55   load_const 9            ("Bad Request")
-     56   store_var 2             (label)
-     57   jump +9                 (to 66)
-     58   load_const 10           ("No Content")
-     59   store_var 2             (label)
-     60   jump +6                 (to 66)
-     61   load_const 11           ("Created")
-     62   store_var 2             (label)
-     63   jump +3                 (to 66)
-     64   load_const 12           ("OK")
-     65   store_var 2             (label)
-     66   load_const 13           ("HTTP ")
-     67   load_var 2              (label)
-     68   bin_op +                
-     69   return                  
+     0    load_var 1         (code)
+     1    dense_tag 0        
+     2    jump_table 0, +1   ([to 21, to 18, to 15, to 12, to 9, to 6], default to 3)
+     3    load_const 0       ("Unknown")
+     4    store_var 2        (label)
+     5    jump +18           (to 23)
+     6    load_const 1       ("Internal Server Error")
+     7    store_var 2        (label)
+     8    jump +15           (to 23)
+     9    load_const 2       ("Not Found")
+     10   store_var 2        (label)
+     11   jump +12           (to 23)
+     12   load_const 3       ("Bad Request")
+     13   store_var 2        (label)
+     14   jump +9            (to 23)
+     15   load_const 4       ("No Content")
+     16   store_var 2        (label)
+     17   jump +6            (to 23)
+     18   load_const 5       ("Created")
+     19   store_var 2        (label)
+     20   jump +3            (to 23)
+     21   load_const 6       ("OK")
+     22   store_var 2        (label)
+     23   load_const 7       ("HTTP ")
+     24   load_var 2         (label)
+     25   bin_op +           
+     26   return             
 }
 
 function user.score(input: User | ErrorInfo, threshold: int) -> Report {
      0     load_var 1              (input)
-     1     load_const 0            (User)
-     2     cmp_op instanceof       
-     3     pop_jump_if_false +2    (to 5)
-     4     jump +9                 (to 13)
-     5     load_var 1              (input)
-     6     load_const 1            (ErrorInfo)
-     7     cmp_op instanceof       
-     8     pop_jump_if_false +8    (to 16)
-     9     load_var 1              (input)
-     10    load_field 1            (message)
-     11    store_var 3             (name)
-     12    jump +4                 (to 16)
-     13    load_var 1              (input)
-     14    load_field 0            (name)
-     15    store_var 3             (name)
-     16    load_var 1              (input)
-     17    load_const 0            (User)
-     18    cmp_op instanceof       
-     19    pop_jump_if_false +2    (to 21)
-     20    jump +10                (to 30)
+     1     is_type 0               
+     2     pop_jump_if_false +2    (to 4)
+     3     jump +8                 (to 11)
+     4     load_var 1              (input)
+     5     is_type 1               
+     6     pop_jump_if_false +8    (to 14)
+     7     load_var 1              (input)
+     8     load_field 1            (message)
+     9     store_var 3             (name)
+     10    jump +4                 (to 14)
+     11    load_var 1              (input)
+     12    load_field 0            (name)
+     13    store_var 3             (name)
+     14    load_var 1              (input)
+     15    is_type 0               
+     16    pop_jump_if_false +2    (to 18)
+     17    jump +9                 (to 26)
+     18    load_var 1              (input)
+     19    is_type 1               
+     20    pop_jump_if_false +9    (to 29)
      21    load_var 1              (input)
-     22    load_const 1            (ErrorInfo)
-     23    cmp_op instanceof       
-     24    pop_jump_if_false +9    (to 33)
-     25    load_var 1              (input)
-     26    load_field 0            (code)
-     27    unary_op -              
+     22    load_field 0            (code)
+     23    unary_op -              
+     24    store_var 4             (age)
+     25    jump +4                 (to 29)
+     26    load_var 1              (input)
+     27    load_field 1            (age)
      28    store_var 4             (age)
-     29    jump +4                 (to 33)
-     30    load_var 1              (input)
-     31    load_field 1            (age)
-     32    store_var 4             (age)
+     29    load_var 1              (input)
+     30    is_type 0               
+     31    pop_jump_if_false +2    (to 33)
+     32    jump +7                 (to 39)
      33    load_var 1              (input)
-     34    load_const 0            (User)
-     35    cmp_op instanceof       
-     36    pop_jump_if_false +2    (to 38)
-     37    jump +8                 (to 45)
-     38    load_var 1              (input)
-     39    load_const 1            (ErrorInfo)
-     40    cmp_op instanceof       
-     41    pop_jump_if_false +19   (to 60)
-     42    load_var 2              (threshold)
-     43    store_var 5             (role_mult)
-     44    jump +16                (to 60)
-     45    load_var 1              (input)
-     46    load_field 2            (role)
-     47    discriminant            
-     48    jump_table 0, +75       ([to 58, to 55, to 52, to 49], default to 123)
+     34    is_type 1               
+     35    pop_jump_if_false +19   (to 54)
+     36    load_var 2              (threshold)
+     37    store_var 5             (role_mult)
+     38    jump +16                (to 54)
+     39    load_var 1              (input)
+     40    load_field 2            (role)
+     41    discriminant            
+     42    jump_table 0, +69       ([to 52, to 49, to 46, to 43], default to 111)
+     43    load_var 2              (threshold)
+     44    store_var 5             (role_mult)
+     45    jump +9                 (to 54)
+     46    load_var 2              (threshold)
+     47    store_var 5             (role_mult)
+     48    jump +6                 (to 54)
      49    load_var 2              (threshold)
      50    store_var 5             (role_mult)
-     51    jump +9                 (to 60)
+     51    jump +3                 (to 54)
      52    load_var 2              (threshold)
      53    store_var 5             (role_mult)
-     54    jump +6                 (to 60)
-     55    load_var 2              (threshold)
-     56    store_var 5             (role_mult)
-     57    jump +3                 (to 60)
-     58    load_var 2              (threshold)
-     59    store_var 5             (role_mult)
-     60    load_var 4              (age)
-     61    load_const 2            (2)
-     62    bin_op *                
-     63    load_var 5              (role_mult)
-     64    bin_op +                
-     65    store_var 6             (base)
-     66    load_var 6              (base)
-     67    load_var 5              (role_mult)
-     68    cmp_op >                
-     69    pop_jump_if_false +2    (to 71)
-     70    jump +4                 (to 74)
-     71    load_var 6              (base)
-     72    store_var 7             (capped)
-     73    jump +3                 (to 76)
-     74    load_var 5              (role_mult)
-     75    store_var 7             (capped)
-     76    load_var 7              (capped)
-     77    load_var 5              (role_mult)
-     78    bin_op +                
-     79    store_var 8             (total)
-     80    load_var 8              (total)
-     81    load_var 2              (threshold)
-     82    cmp_op >                
-     83    store_var 10            (_37)
-     84    load_var 10             (_37)
-     85    load_const 3            (true)
-     86    cmp_op ==               
-     87    pop_jump_if_false +2    (to 89)
-     88    jump +8                 (to 96)
-     89    load_var 10             (_37)
-     90    load_const 4            (false)
-     91    cmp_op ==               
-     92    pop_jump_if_false +6    (to 98)
-     93    load_const 5            (" [LOW]")
-     94    store_var 9             (suffix)
-     95    jump +3                 (to 98)
-     96    load_const 6            (" [HIGH]")
-     97    store_var 9             (suffix)
-     98    load_var 6              (base)
-     99    load_var 7              (capped)
-     100   load_var 8              (total)
-     101   alloc_array 3           
-     102   store_var 11            (scores)
-     103   load_var 11             (scores)
-     104   load_const 7            (0)
-     105   load_var 8              (total)
-     106   store_array_element     
-     107   alloc_instance 5        (Report)
-     108   load_var 11             (scores)
-     109   load_const 7            (0)
-     110   load_array_element      
-     111   init_field 0            (score)
-     112   load_var 3              (name)
-     113   load_var 9              (suffix)
-     114   bin_op +                
-     115   init_field 1            (label)
-     116   load_var 6              (base)
-     117   load_var 5              (role_mult)
-     118   load_const 8            ("base")
-     119   load_const 9            ("role")
-     120   alloc_map 2             
-     121   init_field 2            (breakdown)
-     122   return                  
-     123   unreachable             
+     54    load_var 4              (age)
+     55    load_const 2            (2)
+     56    bin_op *                
+     57    load_var 5              (role_mult)
+     58    bin_op +                
+     59    store_var 6             (base)
+     60    load_var 6              (base)
+     61    load_var 5              (role_mult)
+     62    cmp_op >                
+     63    pop_jump_if_false +2    (to 65)
+     64    jump +4                 (to 68)
+     65    load_var 6              (base)
+     66    store_var 7             (capped)
+     67    jump +3                 (to 70)
+     68    load_var 5              (role_mult)
+     69    store_var 7             (capped)
+     70    load_var 7              (capped)
+     71    load_var 5              (role_mult)
+     72    bin_op +                
+     73    store_var 8             (total)
+     74    load_var 8              (total)
+     75    load_var 2              (threshold)
+     76    cmp_op >                
+     77    load_const 3            (true)
+     78    cmp_op ==               
+     79    pop_jump_if_false +2    (to 81)
+     80    jump +4                 (to 84)
+     81    load_const 4            (" [LOW]")
+     82    store_var 9             (suffix)
+     83    jump +3                 (to 86)
+     84    load_const 5            (" [HIGH]")
+     85    store_var 9             (suffix)
+     86    load_var 6              (base)
+     87    load_var 7              (capped)
+     88    load_var 8              (total)
+     89    alloc_array 3           
+     90    store_var 10            (scores)
+     91    load_var 10             (scores)
+     92    load_const 6            (0)
+     93    load_var 8              (total)
+     94    store_array_element     
+     95    alloc_instance 5        (Report)
+     96    load_var 10             (scores)
+     97    load_const 6            (0)
+     98    load_array_element      
+     99    init_field 0            (score)
+     100   load_var 3              (name)
+     101   load_var 9              (suffix)
+     102   bin_op +                
+     103   init_field 1            (label)
+     104   load_var 6              (base)
+     105   load_var 5              (role_mult)
+     106   load_const 7            ("base")
+     107   load_const 8            ("role")
+     108   alloc_map 2             
+     109   init_field 2            (breakdown)
+     110   return                  
+     111   unreachable             
 }
