@@ -1,6 +1,23 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 13683
 ---
+function user.EdgeService.call_self_alias(self: null) -> null {
+    load_var self
+    load_field .primary
+    load_field .run
+    call_indirect
+    return
+}
+
+function user.EdgeService.call_self_field(self: null) -> null {
+    load_var self
+    load_field .primary
+    load_field .run
+    call_indirect
+    return
+}
+
 function user.MethodRunner.apply(self: null, f: (void) -> int) -> int {
     load_var self
     load_field .value
@@ -160,6 +177,35 @@ function user.bad_box_mismatch() -> null {
     load_const 1
     init_field .value
     call user.take_string_box
+    return
+}
+
+function user.call_field_chained_receiver(holder: EdgeHolder) -> null {
+    load_var holder
+    load_field .item
+    load_field .run
+    call_indirect
+    return
+}
+
+function user.call_nested_alias_receiver(h: EdgeHandler) -> null {
+    load_var h
+    load_field .run
+    call_indirect
+    return
+}
+
+function user.call_returned_receiver() -> null {
+    call user.make_edge_handler
+    load_field .run
+    call_indirect
+    return
+}
+
+function user.call_typed_local_receiver() -> null {
+    call user.make_edge_handler
+    load_field .run
+    call_indirect
     return
 }
 
@@ -341,6 +387,13 @@ function user.make_class_handler() -> ClassThrowingHandler {
     return
 }
 
+function user.make_edge_handler() -> EdgeHandler {
+    alloc_instance EdgeHandler
+    make_closure .<lambda(make_edge_handler, 0)>, 0
+    init_field .run
+    return
+}
+
 function user.make_enum_handler() -> EnumThrowingHandler {
     alloc_instance EnumThrowingHandler
     make_closure .<lambda(make_enum_handler, 0)>, 0
@@ -453,6 +506,42 @@ function user.maybe_use_string_handler(h: Handler?) -> null {
   L1:
     load_const null
     return
+}
+
+function user.optional_apply(cb: (() -> int)?) -> int? {
+    load_var cb
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var cb
+    call_indirect
+    jump L2
+
+  L1:
+    load_const null
+
+  L2:
+    return
+}
+
+function user.optional_apply_with_body(cb: (() -> int)?) -> int? {
+    load_var cb
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var cb
+    call_indirect
+    return
+
+  L1:
+    load_const "missing callback"
+    throw
 }
 
 function user.optional_call_caught(cb: (() -> int throws string)?) -> int? {

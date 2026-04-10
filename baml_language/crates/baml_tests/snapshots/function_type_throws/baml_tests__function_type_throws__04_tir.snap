@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 12944
 ---
 === TIR2 ===
 function user.test_array_map_pure() -> int[] throws never {
@@ -747,7 +748,7 @@ function user.test_string_handler_alias() -> null throws string {
     use_string_handler_alias(make_string_handler()) : null
   }
 }
-function user.test_local_string_handler() -> null throws never {
+function user.test_local_string_handler() -> null throws string {
   { : null
     use_local_string_handler() : null
   }
@@ -843,7 +844,7 @@ function user.test_run_tasks_alias() -> null throws int | string {
     run_tasks_alias(make_mixed_tasks()) : null
   }
 }
-function user.test_run_local_tasks() -> null throws never {
+function user.test_run_local_tasks() -> null throws int | string {
   { : null
     run_local_tasks() : null
   }
@@ -1300,6 +1301,67 @@ lambda user.test_typed_lambda_annotation_underdeclares_body {
   !! 654..661: throws contract violation: `string` is missing int
   ?? 654..661: extraneous throws declaration: string
 }
+class user.EdgeHandler {
+  run: () -> null throws E
+}
+class user.EdgeHolder {
+  item: T
+}
+type user.EdgeStringHandler = user.EdgeHandler<string>
+class user.EdgeService {
+  primary: user.EdgeHandler<string>
+}
+function user.EdgeService.call_self_field(self: user.EdgeService) -> null throws string {
+  { : null
+    self.primary.run() : null
+  }
+}
+function user.EdgeService.call_self_alias(self: user.EdgeService) -> null throws string {
+  { : null
+    let me = self : user.EdgeService
+    me.primary.run() : null
+  }
+}
+function user.make_edge_handler() -> user.EdgeHandler<string> throws never {
+  { : user.EdgeHandler<string>
+    EdgeHandler { run: () -> null { ... } } : user.EdgeHandler<string>
+  }
+}
+lambda user.make_edge_handler {
+}
+function user.call_returned_receiver() -> null throws string {
+  { : null
+    make_edge_handler().run() : null
+  }
+}
+function user.call_typed_local_receiver() -> null throws string {
+  { : null
+    let h = make_edge_handler() : user.EdgeHandler<string>
+    h.run() : null
+  }
+}
+function user.call_nested_alias_receiver(h: user.EdgeHandler<string>) -> null throws string {
+  { : null
+    let a = h : user.EdgeHandler<string>
+    let b = a : user.EdgeHandler<string>
+    b.run() : null
+  }
+}
+function user.call_field_chained_receiver(holder: user.EdgeHolder<user.EdgeStringHandler>) -> null throws string {
+  { : null
+    holder.item.run() : null
+  }
+}
+class user.EdgeHandler$stream {
+  run: unknown
+}
+class user.EdgeHolder$stream {
+  item: null | unknown
+}
+type user.EdgeStringHandler$stream = user.EdgeHandler$stream<string>
+class user.EdgeService$stream {
+  primary: null | user.EdgeHandler$stream<string>
+}
 function user.apply_with_arg(x: int, f: (int) -> int throws __throws_f) -> int throws __throws_f {
   { : int
     f(x) : int
@@ -1430,6 +1492,20 @@ function user.test_optional_call_with_throwing_callback() -> int? throws string 
   }
 }
 lambda user.test_optional_call_with_throwing_callback {
+}
+function user.optional_apply(cb: (() -> int)?) -> int? throws never {
+  { : int?
+    cb?.() : int?
+  }
+}
+function user.optional_apply_with_body(cb: (() -> int)?) -> int? throws string {
+  { : int
+    if (cb == null : bool) : void
+      { : never
+        throw "missing callback" : "missing callback"
+      }
+    cb() : int
+  }
 }
 function user.make_pure() -> () -> int throws never {
   { : never

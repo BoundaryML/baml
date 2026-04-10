@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 13184
 ---
 === MIR2 ===
 fn user.test_array_map_pure() -> int[] {
@@ -3332,6 +3333,154 @@ fn .<lambda(test_typed_lambda_throws_mismatch, 0)>() -> null {
     }
 }
 
+fn user.call_field_chained_receiver(holder: EdgeHolder) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: EdgeHolder // holder // param
+    let _2: () -> null throws string
+    let _3: EdgeHandler
+
+    bb0: {
+        _3 = copy _1.0;
+        _2 = copy _3.0;
+        _0 = call copy _2() -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.call_nested_alias_receiver(h: EdgeHandler) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: EdgeHandler // h // param
+    let _2: EdgeHandler // a
+    let _3: EdgeHandler // b
+    let _4: () -> null throws string
+    let _5: EdgeHandler
+
+    bb0: {
+        _2 = copy _1;
+        _3 = copy _2;
+        _5 = copy _3;
+        _4 = copy _5.0;
+        _0 = call copy _4() -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.call_returned_receiver() -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: () -> null throws string
+    let _2: EdgeHandler
+
+    bb0: {
+        _2 = call const fn user.make_edge_handler() -> [bb1];
+    }
+
+    bb1: {
+        _1 = copy _2.0;
+        _0 = call copy _1() -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.EdgeService.call_self_alias(self: EdgeService) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: EdgeService // self // param
+    let _2: EdgeService // me
+    let _3: () -> null throws string
+    let _4: EdgeHandler
+    let _5: EdgeService
+
+    bb0: {
+        _2 = copy _1;
+        _5 = copy _2;
+        _4 = copy _5.0;
+        _3 = copy _4.0;
+        _0 = call copy _3() -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.EdgeService.call_self_field(self: EdgeService) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: EdgeService // self // param
+    let _2: () -> null throws string
+    let _3: EdgeHandler
+
+    bb0: {
+        _3 = copy _1.0;
+        _2 = copy _3.0;
+        _0 = call copy _2() -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.call_typed_local_receiver() -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: EdgeHandler // h
+    let _2: () -> null throws string
+    let _3: EdgeHandler
+
+    bb0: {
+        _1 = call const fn user.make_edge_handler() -> [bb1];
+    }
+
+    bb1: {
+        _3 = copy _1;
+        _2 = copy _3.0;
+        _0 = call copy _2() -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.make_edge_handler() -> EdgeHandler {
+    // Locals:
+    let _0: EdgeHandler // _0 // return
+    let _1: () -> void throws string
+
+    bb0: {
+        _1 = make_closure lambda[0]();
+        _0 = EdgeHandler { copy _1 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(make_edge_handler, 0)>() -> null {
+    // Locals:
+    let _0: null // _0 // return
+
+    bb0: {
+        throw const "edge boom";
+    }
+}
+
 fn user.apply_with_arg(x: int, f: (int) -> int) -> int {
     // Locals:
     let _0: int // _0 // return
@@ -3682,6 +3831,55 @@ fn .<lambda(test_optional_call_with_throwing_callback, 0)>() -> null {
 
     bb0: {
         throw const "boom";
+    }
+}
+
+fn user.optional_apply(cb: (() -> int)?) -> int? {
+    // Locals:
+    let _0: int? // _0 // return
+    let _1: (() -> int)? // cb // param
+    let _2: bool
+
+    bb0: {
+        _2 = copy _1 == const null;
+        branch copy _2 -> [bb2, bb1];
+    }
+
+    bb1: {
+        _0 = call copy _1() -> [bb3];
+    }
+
+    bb2: {
+        _0 = const null;
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+fn user.optional_apply_with_body(cb: (() -> int)?) -> int? {
+    // Locals:
+    let _0: int? // _0 // return
+    let _1: (() -> int)? // cb // param
+    let _2: bool
+
+    bb0: {
+        _2 = copy _1 == const null;
+        branch copy _2 -> [bb3, bb1];
+    }
+
+    bb1: {
+        _0 = call copy _1() -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+
+    bb3: {
+        throw const "missing callback";
     }
 }
 

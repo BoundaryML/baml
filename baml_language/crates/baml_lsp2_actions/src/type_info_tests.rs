@@ -418,4 +418,95 @@ class Runner {
             "Method hover should preserve the declared throws clause, got: {md}"
         );
     }
+
+    #[test]
+    fn hover_function_with_inferred_throws_from_returned_receiver_call() {
+        let test = CursorTest::new(
+            r#"
+class Handler<E> {
+    run: () -> null throws E
+}
+
+function make_handler() -> Handler<string> {
+    Handler { run: () -> null { throw "boom" } }
+}
+
+function <[CURSOR]use_returned_receiver() -> null {
+    make_handler().run()
+}
+"#,
+        );
+        let info = test.type_info().expect("should resolve");
+        match &info {
+            TypeInfo::Function { throws, .. } => {
+                assert_eq!(throws.as_deref(), Some("string"));
+            }
+            other => panic!("Expected TypeInfo::Function, got: {other:?}"),
+        }
+        let md = info.to_hover_markdown();
+        assert!(
+            md.contains("throws string"),
+            "Hover should show inferred throws from returned receiver call, got: {md}"
+        );
+    }
+
+    #[test]
+    fn hover_method_with_inferred_throws_from_self_field_call() {
+        let test = CursorTest::new(
+            r#"
+class Handler<E> {
+    run: () -> null throws E
+}
+
+class Runner {
+    primary: Handler<string>
+
+    function <[CURSOR]use_self(self) -> null {
+        self.primary.run()
+    }
+}
+"#,
+        );
+        let info = test.type_info().expect("should resolve");
+        match &info {
+            TypeInfo::Function { throws, .. } => {
+                assert_eq!(throws.as_deref(), Some("string"));
+            }
+            other => panic!("Expected TypeInfo::Function, got: {other:?}"),
+        }
+        let md = info.to_hover_markdown();
+        assert!(
+            md.contains("throws string"),
+            "Method hover should show inferred throws from self field call, got: {md}"
+        );
+    }
+
+    #[test]
+    fn hover_function_with_qualified_declared_throws_preserves_source_clause() {
+        let test = CursorTest::new(
+            r#"
+namespace root.errors {
+    class Io {
+        message: string
+    }
+}
+
+function <[CURSOR]qualified() -> null throws root.errors.Io | string {
+    null
+}
+"#,
+        );
+        let info = test.type_info().expect("should resolve");
+        match &info {
+            TypeInfo::Function { throws, .. } => {
+                assert_eq!(throws.as_deref(), Some("root.errors.Io | string"));
+            }
+            other => panic!("Expected TypeInfo::Function, got: {other:?}"),
+        }
+        let md = info.to_hover_markdown();
+        assert!(
+            md.contains("throws root.errors.Io | string"),
+            "Hover should preserve the qualified declared throws clause, got: {md}"
+        );
+    }
 }

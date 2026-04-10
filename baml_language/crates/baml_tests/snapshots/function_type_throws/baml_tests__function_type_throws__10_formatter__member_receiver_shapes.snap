@@ -1,0 +1,6 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 14811
+---
+=== STRONG AST ERROR ===
+An element at member_receiver_shapes.baml:3:18 was a token when it should have been a node.

@@ -1,0 +1,308 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 12246
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "EdgeHandler"
+    GENERIC_PARAM_LIST
+      LESS "<"
+      GENERIC_PARAM "E"
+        WORD "E"
+      GREATER ">"
+    L_BRACE "{"
+    FIELD
+      WORD "run"
+      COLON ":"
+      TYPE_EXPR
+        L_PAREN "("
+        R_PAREN ")"
+        ARROW "->"
+        TYPE_EXPR "null"
+          WORD "null"
+        THROWS_CLAUSE
+          KW_THROWS "throws"
+          TYPE_EXPR "E"
+            WORD "E"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "EdgeHolder"
+    GENERIC_PARAM_LIST
+      LESS "<"
+      GENERIC_PARAM "T"
+        WORD "T"
+      GREATER ">"
+    L_BRACE "{"
+    FIELD
+      WORD "item"
+      COLON ":"
+      TYPE_EXPR "T"
+        WORD "T"
+    R_BRACE "}"
+  TYPE_ALIAS_DEF
+    WORD "type"
+    WORD "EdgeStringHandler"
+    EQUALS "="
+    TYPE_EXPR
+      WORD "EdgeHandler"
+      TYPE_ARGS
+        LESS "<"
+        TYPE_EXPR "string"
+          WORD "string"
+        GREATER ">"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "EdgeService"
+    L_BRACE "{"
+    FIELD
+      WORD "primary"
+      COLON ":"
+      TYPE_EXPR
+        WORD "EdgeHandler"
+        TYPE_ARGS
+          LESS "<"
+          TYPE_EXPR "string"
+            WORD "string"
+          GREATER ">"
+    FUNCTION_DEF
+      KW_FUNCTION "function"
+      WORD "call_self_field"
+      PARAMETER_LIST
+        L_PAREN "("
+        PARAMETER "self"
+          WORD "self"
+        R_PAREN ")"
+      ARROW "->"
+      TYPE_EXPR "null"
+        WORD "null"
+      EXPR_FUNCTION_BODY
+        BLOCK_EXPR
+          L_BRACE "{"
+          CALL_EXPR
+            PATH_EXPR "self.primary.run"
+              WORD "self"
+              DOT "."
+              WORD "primary"
+              DOT "."
+              WORD "run"
+            CALL_ARGS "()"
+              L_PAREN "("
+              R_PAREN ")"
+          R_BRACE "}"
+    FUNCTION_DEF
+      KW_FUNCTION "function"
+      WORD "call_self_alias"
+      PARAMETER_LIST
+        L_PAREN "("
+        PARAMETER "self"
+          WORD "self"
+        R_PAREN ")"
+      ARROW "->"
+      TYPE_EXPR "null"
+        WORD "null"
+      EXPR_FUNCTION_BODY
+        BLOCK_EXPR
+          L_BRACE "{"
+          LET_STMT "let me = self"
+            KW_LET "let"
+            WORD "me"
+            EQUALS "="
+            WORD "self"
+          CALL_EXPR
+            PATH_EXPR "me.primary.run"
+              WORD "me"
+              DOT "."
+              WORD "primary"
+              DOT "."
+              WORD "run"
+            CALL_ARGS "()"
+              L_PAREN "("
+              R_PAREN ")"
+          R_BRACE "}"
+    R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "make_edge_handler"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR
+      WORD "EdgeHandler"
+      TYPE_ARGS
+        LESS "<"
+        TYPE_EXPR "string"
+          WORD "string"
+        GREATER ">"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        OBJECT_LITERAL
+          WORD "EdgeHandler"
+          L_BRACE "{"
+          OBJECT_FIELD
+            WORD "run"
+            COLON ":"
+            LAMBDA_EXPR
+              PARAMETER_LIST "()"
+                L_PAREN "("
+                R_PAREN ")"
+              ARROW "->"
+              TYPE_EXPR "null"
+                WORD "null"
+              BLOCK_EXPR
+                L_BRACE "{"
+                THROW_STMT
+                  THROW_EXPR
+                    KW_THROW "throw"
+                    STRING_LITERAL "edge boom"
+                      QUOTE """
+                      WORD "edge"
+                      WORD "boom"
+                      QUOTE """
+                R_BRACE "}"
+          R_BRACE "}"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "call_returned_receiver"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "null"
+      WORD "null"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        CALL_EXPR
+          FIELD_ACCESS_EXPR
+            CALL_EXPR
+              WORD "make_edge_handler"
+              CALL_ARGS "()"
+                L_PAREN "("
+                R_PAREN ")"
+            DOT "."
+            WORD "run"
+          CALL_ARGS "()"
+            L_PAREN "("
+            R_PAREN ")"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "call_typed_local_receiver"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "null"
+      WORD "null"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        LET_STMT
+          KW_LET "let"
+          WORD "h"
+          COLON ":"
+          TYPE_EXPR
+            WORD "EdgeHandler"
+            TYPE_ARGS
+              LESS "<"
+              TYPE_EXPR "string"
+                WORD "string"
+              GREATER ">"
+          EQUALS "="
+          CALL_EXPR
+            WORD "make_edge_handler"
+            CALL_ARGS "()"
+              L_PAREN "("
+              R_PAREN ")"
+        CALL_EXPR
+          PATH_EXPR "h.run"
+            WORD "h"
+            DOT "."
+            WORD "run"
+          CALL_ARGS "()"
+            L_PAREN "("
+            R_PAREN ")"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "call_nested_alias_receiver"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "h"
+        COLON ":"
+        TYPE_EXPR
+          WORD "EdgeHandler"
+          TYPE_ARGS
+            LESS "<"
+            TYPE_EXPR "string"
+              WORD "string"
+            GREATER ">"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "null"
+      WORD "null"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        LET_STMT "let a = h"
+          KW_LET "let"
+          WORD "a"
+          EQUALS "="
+          WORD "h"
+        LET_STMT "let b = a"
+          KW_LET "let"
+          WORD "b"
+          EQUALS "="
+          WORD "a"
+        CALL_EXPR
+          PATH_EXPR "b.run"
+            WORD "b"
+            DOT "."
+            WORD "run"
+          CALL_ARGS "()"
+            L_PAREN "("
+            R_PAREN ")"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "call_field_chained_receiver"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "holder"
+        COLON ":"
+        TYPE_EXPR
+          WORD "EdgeHolder"
+          TYPE_ARGS
+            LESS "<"
+            TYPE_EXPR "EdgeStringHandler"
+              WORD "EdgeStringHandler"
+            GREATER ">"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "null"
+      WORD "null"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        CALL_EXPR
+          PATH_EXPR "holder.item.run"
+            WORD "holder"
+            DOT "."
+            WORD "item"
+            DOT "."
+            WORD "run"
+          CALL_ARGS "()"
+            L_PAREN "("
+            R_PAREN ")"
+        R_BRACE "}"
+
+=== ERRORS ===
+None

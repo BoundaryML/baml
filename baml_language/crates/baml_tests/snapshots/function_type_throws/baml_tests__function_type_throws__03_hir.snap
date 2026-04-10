@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 12712
 ---
 === HIR2 ===
 function user.test_array_map_pure() -> int[]  [expr] {
@@ -444,6 +445,37 @@ function user.test_typed_lambda_annotation_underdeclares_body() -> int  [expr] {
 function user.test_typed_lambda_throws_mismatch() -> int  [expr] {
   { let f: () -> int = () -> int { { throw 42 } } } f()
 }
+class user.EdgeHandler {
+  run: () -> null
+}
+class user.EdgeHolder {
+  item: user.T
+}
+class user.EdgeService {
+  primary: user.EdgeHandler
+}
+type user.EdgeStringHandler = user.EdgeHandler
+function user.call_field_chained_receiver(holder: user.EdgeHolder) -> null  [expr] {
+  {  } holder.item.run()
+}
+function user.call_nested_alias_receiver(h: user.EdgeHandler) -> null  [expr] {
+  { let a = h; let b = a } b.run()
+}
+function user.call_returned_receiver() -> null  [expr] {
+  {  } make_edge_handler().run()
+}
+function user.call_self_alias(self: ?) -> null  [expr] {
+  { let me = self } me.primary.run()
+}
+function user.call_self_field(self: ?) -> null  [expr] {
+  {  } self.primary.run()
+}
+function user.call_typed_local_receiver() -> null  [expr] {
+  { let h: user.EdgeHandler = make_edge_handler() } h.run()
+}
+function user.make_edge_handler() -> user.EdgeHandler  [expr] {
+  {  } user.EdgeHandler { run: () -> null { { throw "edge boom" } } }
+}
 function user.apply_with_arg(x: int, f: (int) -> int) -> int  [expr] {
   {  } f(x)
 }
@@ -476,6 +508,12 @@ function user.optional_call_rethrows(cb: () -> int?) -> int?  [expr] {
 }
 function user.test_optional_call_with_throwing_callback() -> int?  [expr] {
   {  } optional_call_rethrows(() -> int { { throw "boom" } })
+}
+function user.optional_apply(cb: () -> int?) -> int?  [expr] {
+  {  } cb?.()
+}
+function user.optional_apply_with_body(cb: () -> int?) -> int?  [expr] {
+  { if (cb Eq null) { throw "missing callback" } } cb()
 }
 function user.make_pure() -> () -> int  [expr] {
   { return () -> int { {  } 42 } }

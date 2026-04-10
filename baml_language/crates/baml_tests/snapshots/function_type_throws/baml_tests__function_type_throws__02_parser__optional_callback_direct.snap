@@ -1,0 +1,96 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 12402
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "optional_apply"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "cb"
+        COLON ":"
+        TYPE_EXPR
+          L_PAREN "("
+          FUNCTION_TYPE_PARAM
+            TYPE_EXPR
+              L_PAREN "("
+              R_PAREN ")"
+              ARROW "->"
+              TYPE_EXPR "int"
+                WORD "int"
+          R_PAREN ")"
+          QUESTION "?"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int?"
+      WORD "int"
+      QUESTION "?"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        OPTIONAL_CALL_EXPR
+          WORD "cb"
+          QUESTION_DOT "?."
+          CALL_ARGS "()"
+            L_PAREN "("
+            R_PAREN ")"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "optional_apply_with_body"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "cb"
+        COLON ":"
+        TYPE_EXPR
+          L_PAREN "("
+          FUNCTION_TYPE_PARAM
+            TYPE_EXPR
+              L_PAREN "("
+              R_PAREN ")"
+              ARROW "->"
+              TYPE_EXPR "int"
+                WORD "int"
+          R_PAREN ")"
+          QUESTION "?"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int?"
+      WORD "int"
+      QUESTION "?"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        IF_EXPR
+          KW_IF "if"
+          PAREN_EXPR
+            L_PAREN "("
+            BINARY_EXPR "cb == null"
+              WORD "cb"
+              EQUALS_EQUALS "=="
+              WORD "null"
+            R_PAREN ")"
+          BLOCK_EXPR
+            L_BRACE "{"
+            THROW_STMT
+              THROW_EXPR
+                KW_THROW "throw"
+                STRING_LITERAL "missing callback"
+                  QUOTE """
+                  WORD "missing"
+                  WORD "callback"
+                  QUOTE """
+            R_BRACE "}"
+        CALL_EXPR
+          WORD "cb"
+          CALL_ARGS "()"
+            L_PAREN "("
+            R_PAREN ")"
+        R_BRACE "}"
+
+=== ERRORS ===
+None
