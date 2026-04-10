@@ -18,7 +18,7 @@ pub mod types;
 pub mod vm;
 pub mod watch;
 
-pub use errors::{ErrorLocation, StackTrace, VmPanic};
+pub use errors::{ErrorLocation, VmPanic, format_traceback};
 pub use indexable::EvalStack;
 pub use package_baml::NativeFunction;
 pub use vm::{BexVm, BytecodeProgram, SpanNotification, VmExecState, convert_program};

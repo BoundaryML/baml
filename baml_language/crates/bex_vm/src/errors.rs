@@ -168,24 +168,24 @@ pub struct ErrorLocation {
     pub error_line: usize,
 }
 
-#[derive(Debug, Clone)]
-pub struct StackTrace {
-    pub error: VmError,
-    pub trace: Vec<ErrorLocation>,
-}
-
-impl std::fmt::Display for StackTrace {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "Traceback (most recent call last):")?;
-        for location in &self.trace {
-            writeln!(
-                f,
-                "  File \"{}\", line {}, in {}",
-                location.file_path, location.error_line, location.function_name
-            )?;
+/// Format a traceback header from an iterator of `(file, line, function_name)` tuples.
+///
+/// Produces the Python-style format:
+/// ```text
+/// Traceback (most recent call last):
+///   File "test.baml", line 3, in user.inner
+///   File "test.baml", line 7, in user.main
+/// ```
+///
+/// Returns an empty string when `frames` is empty.
+pub fn format_traceback<'a>(frames: impl Iterator<Item = (&'a str, usize, &'a str)>) -> String {
+    use std::fmt::Write;
+    let mut out = String::new();
+    for (file, line, function_name) in frames {
+        if out.is_empty() {
+            writeln!(out, "Traceback (most recent call last):").unwrap();
         }
-        write!(f, "{}", self.error)
+        writeln!(out, "  File \"{file}\", line {line}, in {function_name}").unwrap();
     }
+    out
 }
-
-impl std::error::Error for StackTrace {}

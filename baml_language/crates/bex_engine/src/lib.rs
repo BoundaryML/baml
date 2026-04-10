@@ -277,18 +277,13 @@ pub enum EngineError {
 
 fn format_unhandled_throw(value: &BexExternalValue, trace: &[bex_vm::ErrorLocation]) -> String {
     use std::fmt::Write;
-    let mut out = String::new();
-    if !trace.is_empty() {
-        writeln!(out, "Traceback (most recent call last):").unwrap();
-        for location in trace {
-            writeln!(
-                out,
-                "  File \"{}\", line {}, in {}",
-                location.file_path, location.error_line, location.function_name
-            )
-            .unwrap();
-        }
-    }
+    let mut out = bex_vm::format_traceback(trace.iter().map(|loc| {
+        (
+            loc.file_path.as_str(),
+            loc.error_line,
+            loc.function_name.as_str(),
+        )
+    }));
     write!(out, "uncaught throw: {value:?}").unwrap();
     out
 }

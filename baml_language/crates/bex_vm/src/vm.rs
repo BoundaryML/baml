@@ -30,7 +30,6 @@ use bex_vm_types::{
 use indexmap::IndexMap;
 
 use crate::{
-    StackTrace,
     errors::{ErrorLocation, VmBamlError, VmError, VmInternalError, VmPanic, VmRustFnError},
     indexable::{EvalStack, EvalStackTrait},
     package_baml::{BamlPackageBaml, NativeFunction},
@@ -910,42 +909,6 @@ impl BexVm {
     /// Allocate a type descriptor object on the heap.
     pub fn alloc_type(&mut self, ty: baml_type::Ty) -> Value {
         Value::Object(self.tlab.alloc(Object::Type(ty)))
-    }
-
-    /// Builds a stack trace for the given error.
-    ///
-    /// The error is assumed to have happened wherever the instruction pointer
-    /// was left at.
-    ///
-    /// TODO: Not a clean API for the caller, VM should ideally return some kind
-    /// of error struct that contains the error and trace and this would not
-    /// be needed. That requires some refactoring though.
-    pub fn stack_trace(&self, error: VmError) -> StackTrace {
-        let trace = self
-            .frames
-            .iter()
-            .map(|frame| {
-                let function = self.get_object(frame.function).as_callable()?;
-
-                // VM increments instruction pointer as soon as it reads the
-                // instruction. So in reality the error ocurred on the previous
-                // instruction. The saturating sub is just in case the code has
-                // a bug somewhere.
-                let last_executed_instruction = frame.instruction_ptr.saturating_sub(1);
-
-                Ok(ErrorLocation {
-                    function_name: function.name.clone(),
-                    file_path: function.source_file.clone(),
-                    function_span: function.span,
-                    error_line: function
-                        .bytecode
-                        .source_line_for_pc(last_executed_instruction),
-                })
-            })
-            .collect::<Result<Vec<_>, VmError>>()
-            .unwrap_or_default();
-
-        StackTrace { error, trace }
     }
 
     /// Stops the execution of the current bytecode in favor of the given
