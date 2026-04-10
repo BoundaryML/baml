@@ -295,7 +295,7 @@ async fn project_id_from_credentials(
                     }
                     // File path? Read and extract.
                     if let Ok(handle) = io.fs_open(val).await {
-                        if let Ok(contents) = io.fs_file_read(&handle).await {
+                        if let Ok(contents) = io.fs_file_read_string(&handle).await {
                             if let Some(pid) = extract_project_id_from_json(&contents) {
                                 return Some(pid);
                             }
@@ -368,7 +368,7 @@ async fn project_id_from_adc_config(io: &dyn RuntimeIo) -> Option<String> {
     let adc_path = format!("{config_dir}/application_default_credentials.json");
 
     let handle = io.fs_open(adc_path).await.ok()?;
-    let contents = io.fs_file_read(&handle).await.ok()?;
+    let contents = io.fs_file_read_string(&handle).await.ok()?;
     let parsed: serde_json::Value = serde_json::from_str(&contents).ok()?;
 
     parsed
@@ -388,7 +388,7 @@ async fn read_credentials_file(
             "Google Cloud: failed to open credentials file '{path}': {e}"
         ))
     })?;
-    io.fs_file_read(&handle).await.map_err(|e| {
+    io.fs_file_read_string(&handle).await.map_err(|e| {
         BuildRequestError::AuthorizationFailed(format!(
             "Google Cloud: failed to read credentials file '{path}': {e}"
         ))
@@ -454,7 +454,7 @@ mod native {
                     let file_handle = io.fs_open(path).await.map_err(|_| {
                         std::io::Error::new(std::io::ErrorKind::NotFound, "file not found")
                     })?;
-                    io.fs_file_read(&file_handle).await.map_err(|_| {
+                    io.fs_file_read_string(&file_handle).await.map_err(|_| {
                         std::io::Error::new(std::io::ErrorKind::NotFound, "file not found")
                     })
                 })
@@ -1208,7 +1208,7 @@ mod tests {
             Box::pin(async { Err(RuntimeIoError::Other("not found".into())) })
         }
 
-        fn fs_file_read(
+        fn fs_file_read_string(
             &self,
             _: &sys_types::runtime_io::FsFileHandle,
         ) -> Pin<Box<dyn Future<Output = Result<String, RuntimeIoError>> + Send + '_>> {
@@ -1291,7 +1291,7 @@ mod tests {
             })
         }
 
-        fn fs_file_read(
+        fn fs_file_read_string(
             &self,
             _: &sys_types::runtime_io::FsFileHandle,
         ) -> Pin<Box<dyn Future<Output = Result<String, RuntimeIoError>> + Send + '_>> {
@@ -1378,7 +1378,7 @@ mod tests {
             })
         }
 
-        fn fs_file_read(
+        fn fs_file_read_string(
             &self,
             handle: &sys_types::runtime_io::FsFileHandle,
         ) -> Pin<Box<dyn Future<Output = Result<String, RuntimeIoError>> + Send + '_>> {
@@ -1532,7 +1532,7 @@ mod tests {
             Box::pin(async { Err(RuntimeIoError::Other("not found".into())) })
         }
 
-        fn fs_file_read(
+        fn fs_file_read_string(
             &self,
             _: &sys_types::runtime_io::FsFileHandle,
         ) -> Pin<Box<dyn Future<Output = Result<String, RuntimeIoError>> + Send + '_>> {

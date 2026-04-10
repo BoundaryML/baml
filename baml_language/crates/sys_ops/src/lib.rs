@@ -342,13 +342,22 @@ fn convert_io_primitive_client(
 struct DefaultIoOps;
 
 impl io::IoClassFsFile for DefaultIoOps {
-    fn read(
+    fn read_string(
         &self,
         _h: &Arc<BexHeap>,
         _c: CallId,
         _f: io::owned::fs::File,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<String> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+    fn read_bytes(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _f: io::owned::fs::File,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Vec<u8>> {
         SysOpOutput::err(OpErrorKind::Unsupported)
     }
     fn close(
@@ -546,10 +555,16 @@ impl IoSysOpsBuilder {
                 t.__glue_baml_fs_open(heap, args, ctx, call_id)
             })
         };
-        self.inner.baml_fs_file_read = {
+        self.inner.baml_fs_file_read_string = {
             let t = instance.clone();
             Arc::new(move |heap, args, ctx, call_id| {
-                t.__glue_baml_fs_file_read(heap, args, ctx, call_id)
+                t.__glue_baml_fs_file_read_string(heap, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_fs_file_read_bytes = {
+            let t = instance.clone();
+            Arc::new(move |heap, args, ctx, call_id| {
+                t.__glue_baml_fs_file_read_bytes(heap, args, ctx, call_id)
             })
         };
         self.inner.baml_fs_file_close = {

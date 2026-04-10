@@ -40,7 +40,7 @@ impl io::IoNamespaceEnv for NativeSysOps {
 type FsFileHandle = tokio::sync::Mutex<tokio::fs::File>;
 
 impl io::IoClassFsFile for NativeSysOps {
-    fn read(
+    fn read_string(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
@@ -57,6 +57,29 @@ impl io::IoClassFsFile for NativeSysOps {
             let mut f = handle.lock().await;
             let mut contents = String::new();
             f.read_to_string(&mut contents)
+                .await
+                .map_err(|e| OpErrorKind::Other(format!("Failed to read file: {e}")))?;
+            Ok(contents)
+        })
+    }
+
+    fn read_bytes(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        file: owned::fs::File,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Vec<u8>> {
+        use tokio::io::AsyncReadExt;
+
+        SysOpOutput::async_op(async move {
+            let handle: Arc<FsFileHandle> = file
+                ._handle
+                .downcast::<FsFileHandle>()
+                .map_err(|_| OpErrorKind::Other("Invalid file handle type".into()))?;
+            let mut f = handle.lock().await;
+            let mut contents = Vec::new();
+            f.read_to_end(&mut contents)
                 .await
                 .map_err(|e| OpErrorKind::Other(format!("Failed to read file: {e}")))?;
             Ok(contents)

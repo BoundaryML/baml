@@ -262,10 +262,9 @@ async fn resolve_file(
     let file = io.fs_open(path.to_string()).await.map_err(|e| {
         BuildRequestError::FileNotResolved(format!("failed to open file {path}: {e}"))
     })?;
-    let content = io.fs_file_read(&file).await.map_err(|e| {
+    let bytes = io.fs_file_read_bytes(&file).await.map_err(|e| {
         BuildRequestError::FileNotResolved(format!("failed to read file {path}: {e}"))
     })?;
-    let bytes = content.into_bytes();
 
     let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
 
@@ -442,11 +441,8 @@ mod tests {
     }
 
     /// Mock `RuntimeIo` for file-read tests. Returns configurable file content
-    /// from `fs_open` + `fs_file_read`.
+    /// from `fs_open` + `fs_file_read_bytes`.
     struct MockFsIo {
-        /// Content returned by `fs_file_read`, as raw bytes stored in a String
-        /// (callers pass binary via `String::from_utf8_lossy` or test-safe
-        /// byte sequences).
         content: Vec<u8>,
     }
 
@@ -468,18 +464,12 @@ mod tests {
             })
         }
 
-        fn fs_file_read(
+        fn fs_file_read_bytes(
             &self,
             _: &sys_types::runtime_io::FsFileHandle,
-        ) -> Pin<Box<dyn Future<Output = Result<String, RuntimeIoError>> + Send + '_>> {
-            // The RuntimeIo trait returns String from fs_file_read, but our
-            // test content is raw bytes. We need String::into_bytes() in the
-            // production code to yield the original bytes, so we construct the
-            // String directly from the byte vector. Test data is controlled,
-            // so this is safe.
-            #[allow(unsafe_code)]
-            let s = unsafe { String::from_utf8_unchecked(self.content.clone()) };
-            Box::pin(async move { Ok(s) })
+        ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, RuntimeIoError>> + Send + '_>> {
+            let bytes = self.content.clone();
+            Box::pin(async move { Ok(bytes) })
         }
     }
 

@@ -109,7 +109,7 @@ mod native_providers {
                 let file_handle = io.fs_open(path_str).await.map_err(|_| {
                     std::io::Error::new(std::io::ErrorKind::NotFound, "file not found")
                 })?;
-                let contents = io.fs_file_read(&file_handle).await.map_err(|_| {
+                let contents = io.fs_file_read_string(&file_handle).await.map_err(|_| {
                     std::io::Error::new(std::io::ErrorKind::NotFound, "file not found")
                 })?;
                 Ok(contents.into_bytes())
@@ -570,7 +570,7 @@ mod tests {
             Box::pin(async { Err(RuntimeIoError::Other("not found".into())) })
         }
 
-        fn fs_file_read(
+        fn fs_file_read_string(
             &self,
             _: &sys_types::runtime_io::FsFileHandle,
         ) -> Pin<Box<dyn Future<Output = Result<String, RuntimeIoError>> + Send + '_>> {
@@ -642,7 +642,7 @@ mod tests {
             Box::pin(async { Err(RuntimeIoError::Other("not found".into())) })
         }
 
-        fn fs_file_read(
+        fn fs_file_read_string(
             &self,
             _: &sys_types::runtime_io::FsFileHandle,
         ) -> Pin<Box<dyn Future<Output = Result<String, RuntimeIoError>> + Send + '_>> {
@@ -720,7 +720,7 @@ mod tests {
             Box::pin(async { Err(RuntimeIoError::Other("not found".into())) })
         }
 
-        fn fs_file_read(
+        fn fs_file_read_string(
             &self,
             _: &sys_types::runtime_io::FsFileHandle,
         ) -> Pin<Box<dyn Future<Output = Result<String, RuntimeIoError>> + Send + '_>> {
@@ -802,7 +802,7 @@ mod tests {
             }
         }
 
-        fn fs_file_read(
+        fn fs_file_read_string(
             &self,
             _: &sys_types::runtime_io::FsFileHandle,
         ) -> Pin<Box<dyn Future<Output = Result<String, RuntimeIoError>> + Send + '_>> {
@@ -882,7 +882,7 @@ mod tests {
             Box::pin(async { Err(RuntimeIoError::Other("not found".into())) })
         }
 
-        fn fs_file_read(
+        fn fs_file_read_string(
             &self,
             _: &sys_types::runtime_io::FsFileHandle,
         ) -> Pin<Box<dyn Future<Output = Result<String, RuntimeIoError>> + Send + '_>> {
