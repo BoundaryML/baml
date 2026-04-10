@@ -82,7 +82,7 @@ function user.ReadAndClose() -> string {
     await
     store_var f
     load_var f
-    dispatch_future baml.fs.File.read
+    dispatch_future baml.fs.File.read_string
     await
     store_var content
     load_var f
@@ -97,7 +97,42 @@ function user.ReadFile() -> string {
     load_const "example.txt"
     dispatch_future baml.fs.open
     await
-    dispatch_future baml.fs.File.read
+    dispatch_future baml.fs.File.read_string
+    await
+    return
+}
+
+function user.ReadFileBytes() -> uint8array {
+    load_const "binary.dat"
+    dispatch_future baml.fs.open
+    await
+    dispatch_future baml.fs.File.read_bytes
+    await
+    return
+}
+
+function user.ReadFileBytesAndClose() -> uint8array {
+    load_const "binary.dat"
+    dispatch_future baml.fs.open
+    await
+    store_var f
+    load_var f
+    dispatch_future baml.fs.File.read_bytes
+    await
+    store_var data
+    load_var f
+    dispatch_future baml.fs.File.close
+    await
+    pop 1
+    load_var data
+    return
+}
+
+function user.ReadFileBytesInline() -> uint8array {
+    load_const "image.png"
+    dispatch_future baml.fs.open
+    await
+    dispatch_future baml.fs.File.read_bytes
     await
     return
 }
@@ -106,7 +141,7 @@ function user.ReadFileInline() -> string {
     load_const "data.json"
     dispatch_future baml.fs.open
     await
-    dispatch_future baml.fs.File.read
+    dispatch_future baml.fs.File.read_string
     await
     return
 }
@@ -121,11 +156,11 @@ function user.ReadMultipleFiles() -> string {
     await
     store_var f2
     load_var f1
-    dispatch_future baml.fs.File.read
+    dispatch_future baml.fs.File.read_string
     await
     store_var content1
     load_var f2
-    dispatch_future baml.fs.File.read
+    dispatch_future baml.fs.File.read_string
     await
     store_var content2
     load_var content1

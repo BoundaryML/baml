@@ -119,7 +119,9 @@ fn baml.fs.File.close = builtin(io)
 
 fn baml.fs.open = builtin(io)
 
-fn baml.fs.File.read = builtin(io)
+fn baml.fs.File.read_bytes = builtin(io)
+
+fn baml.fs.File.read_string = builtin(io)
 
 fn baml.http.Response.bytes = builtin(io)
 

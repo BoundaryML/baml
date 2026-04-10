@@ -82,7 +82,8 @@ class baml.fs.File {
 }
 function baml.fs.close(self: ?) -> null  [builtin]
 function baml.fs.open(path: string) -> baml.fs.File  [builtin]
-function baml.fs.read(self: ?) -> string  [builtin]
+function baml.fs.read_bytes(self: ?) -> uint8array  [builtin]
+function baml.fs.read_string(self: ?) -> string  [builtin]
 
 --- <builtin>/baml/ns_http/http.baml ---
 class baml.http.Request {

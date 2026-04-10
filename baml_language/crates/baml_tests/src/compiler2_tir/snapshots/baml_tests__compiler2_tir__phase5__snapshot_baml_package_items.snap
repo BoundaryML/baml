@@ -24,7 +24,7 @@ namespace baml.errors:
   class Timeout { methods: [] }
   class Unsupported { methods: [] }
 namespace baml.fs:
-  class File { methods: [read, close] }
+  class File { methods: [read_string, read_bytes, close] }
   function open
 namespace baml.http:
   class Request { methods: [] }

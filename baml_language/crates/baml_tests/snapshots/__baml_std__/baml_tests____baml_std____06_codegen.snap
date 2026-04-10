@@ -186,7 +186,10 @@ function baml.env.get_or_panic(key: string) -> string {
 function baml.fs.File.close(self: null) -> null {
 }
 
-function baml.fs.File.read(self: null) -> string {
+function baml.fs.File.read_bytes(self: null) -> uint8array {
+}
+
+function baml.fs.File.read_string(self: null) -> string {
 }
 
 function baml.fs.open(path: string) -> void {
