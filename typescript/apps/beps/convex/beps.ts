@@ -684,11 +684,24 @@ export const importVersion = mutation({
       order: number;
     }> = [];
 
+    // Create a set of imported page slugs for efficient lookup
+    const importedSlugs = new Set(args.pages.map((p) => p.slug));
+
+    // Delete existing pages that are not in the import bundle
+    // This ensures the new version fully replaces the old content
+    const pagesDeleted: string[] = [];
+    for (const existingPage of existingPages) {
+      if (!importedSlugs.has(existingPage.slug)) {
+        await ctx.db.delete(existingPage._id);
+        pagesDeleted.push(existingPage.slug);
+      }
+    }
+
     for (const importedPage of args.pages) {
       const existingPage = existingPagesBySlug.get(importedPage.slug);
 
       if (existingPage) {
-        // Update existing page
+        // Update existing page, preserving its order
         await ctx.db.patch(existingPage._id, {
           title: importedPage.title,
           content: importedPage.content,
@@ -701,7 +714,7 @@ export const importVersion = mutation({
           order: existingPage.order,
         });
       } else {
-        // Create new page
+        // Create new page with incremental order
         maxOrder += 1;
         await ctx.db.insert("bepPages", {
           bepId: args.bepId,
@@ -717,18 +730,6 @@ export const importVersion = mutation({
           title: importedPage.title,
           content: importedPage.content,
           order: maxOrder,
-        });
-      }
-    }
-
-    // Include existing pages that weren't in the import
-    for (const existingPage of existingPages) {
-      if (!args.pages.some((p) => p.slug === existingPage.slug)) {
-        processedPages.push({
-          slug: existingPage.slug,
-          title: existingPage.title,
-          content: existingPage.content,
-          order: existingPage.order,
         });
       }
     }
@@ -777,6 +778,7 @@ export const importVersion = mutation({
         versionAction: "created" as const,
         pagesCreated,
         pagesUpdated,
+        pagesDeleted: pagesDeleted.length,
       };
     }
 
@@ -800,6 +802,7 @@ export const importVersion = mutation({
       versionAction: "updated" as const,
       pagesCreated,
       pagesUpdated,
+      pagesDeleted: pagesDeleted.length,
     };
   },
 });
