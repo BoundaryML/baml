@@ -273,7 +273,7 @@ fn gemini_media_part(media: &Arc<MediaValue>) -> Result<Part, super::BuildReques
             return Ok(Part {
                 text: None,
                 inline_data: Some(InlineData {
-                    mime_type: mime.to_string(),
+                    mime_type: mime.clone(),
                     data: b64.to_string(),
                 }),
                 file_data: None,
@@ -285,7 +285,7 @@ fn gemini_media_part(media: &Arc<MediaValue>) -> Result<Part, super::BuildReques
                 text: None,
                 inline_data: None,
                 file_data: Some(FileData {
-                    mime_type: mime.to_string(),
+                    mime_type: mime.clone(),
                     file_uri: url.clone(),
                 }),
             }),

@@ -50,6 +50,9 @@ requires-dist = [
     { name = "python-dotenv" },
 ]
 
+[package.metadata.requires-dev]
+dev = []
+
 [[package]]
 name = "baml-py"
 version = "0.0.0"

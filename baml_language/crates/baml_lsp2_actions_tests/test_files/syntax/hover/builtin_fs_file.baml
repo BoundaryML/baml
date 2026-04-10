@@ -2,7 +2,7 @@
 
 function TestFileRead() -> string {
     let f<[CURSOR] = baml.fs.open("example.txt");
-    f.read()
+    f.read_string()
 }
 
 //----

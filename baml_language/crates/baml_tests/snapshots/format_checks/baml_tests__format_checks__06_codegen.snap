@@ -3,10 +3,6 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 function $init() -> null {
     call ?
-    store_global ?225
-    call ?
-    store_global ?226
-    call ?
     store_global ?227
     call ?
     store_global ?228
@@ -70,6 +66,10 @@ function $init() -> null {
     store_global ?257
     call ?
     store_global ?258
+    call ?
+    store_global ?259
+    call ?
+    store_global ?260
     load_const ?
     return
 }
@@ -83,7 +83,7 @@ function user.ArrayConfigClient$new() -> null {
     alloc_instance baml.llm.PrimitiveClientOptions
     load_const "gpt-4"
     init_field .model
-    load_const "https://api.openai.com/v1"
+    load_const null
     init_field .base_url
     load_const null
     init_field .allowed_role_metadata
@@ -93,12 +93,9 @@ function user.ArrayConfigClient$new() -> null {
     init_field .finish_reason_deny_list
     load_const null
     init_field .supports_streaming
-    load_const "system"
+    load_const null
     init_field .default_role
-    load_const "system"
-    load_const "user"
-    load_const "assistant"
-    alloc_array 3
+    load_const null
     init_field .allowed_roles
     load_const null
     init_field .remap_roles
@@ -106,6 +103,8 @@ function user.ArrayConfigClient$new() -> null {
     init_field .api_key
     load_const null
     init_field .provider_options
+    load_const null
+    init_field .media_url_handler
     alloc_map 0
     init_field .headers
     alloc_map 0
@@ -130,7 +129,7 @@ function user.ArrayOfObjectsClient$new() -> null {
     alloc_instance baml.llm.PrimitiveClientOptions
     load_const "gpt-4"
     init_field .model
-    load_const "https://api.openai.com/v1"
+    load_const null
     init_field .base_url
     load_const null
     init_field .allowed_role_metadata
@@ -140,12 +139,9 @@ function user.ArrayOfObjectsClient$new() -> null {
     init_field .finish_reason_deny_list
     load_const null
     init_field .supports_streaming
-    load_const "system"
+    load_const null
     init_field .default_role
-    load_const "system"
-    load_const "user"
-    load_const "assistant"
-    alloc_array 3
+    load_const null
     init_field .allowed_roles
     load_const null
     init_field .remap_roles
@@ -153,6 +149,8 @@ function user.ArrayOfObjectsClient$new() -> null {
     init_field .api_key
     load_const null
     init_field .provider_options
+    load_const null
+    init_field .media_url_handler
     alloc_map 0
     init_field .headers
     alloc_map 0
@@ -555,7 +553,7 @@ function user.BasicClient$new() -> null {
     alloc_instance baml.llm.PrimitiveClientOptions
     load_const "gpt-4"
     init_field .model
-    load_const "https://api.openai.com/v1"
+    load_const null
     init_field .base_url
     load_const null
     init_field .allowed_role_metadata
@@ -565,12 +563,9 @@ function user.BasicClient$new() -> null {
     init_field .finish_reason_deny_list
     load_const null
     init_field .supports_streaming
-    load_const "system"
+    load_const null
     init_field .default_role
-    load_const "system"
-    load_const "user"
-    load_const "assistant"
-    alloc_array 3
+    load_const null
     init_field .allowed_roles
     load_const null
     init_field .remap_roles
@@ -578,6 +573,8 @@ function user.BasicClient$new() -> null {
     init_field .api_key
     load_const null
     init_field .provider_options
+    load_const null
+    init_field .media_url_handler
     alloc_map 0
     init_field .headers
     alloc_map 0
@@ -1000,7 +997,7 @@ function user.C$new() -> null {
     alloc_instance baml.llm.PrimitiveClientOptions
     load_const "gpt-4"
     init_field .model
-    load_const "https://api.openai.com/v1"
+    load_const null
     init_field .base_url
     load_const null
     init_field .allowed_role_metadata
@@ -1010,12 +1007,9 @@ function user.C$new() -> null {
     init_field .finish_reason_deny_list
     load_const null
     init_field .supports_streaming
-    load_const "system"
+    load_const null
     init_field .default_role
-    load_const "system"
-    load_const "user"
-    load_const "assistant"
-    alloc_array 3
+    load_const null
     init_field .allowed_roles
     load_const null
     init_field .remap_roles
@@ -1023,6 +1017,8 @@ function user.C$new() -> null {
     init_field .api_key
     load_const null
     init_field .provider_options
+    load_const null
+    init_field .media_url_handler
     alloc_map 0
     init_field .headers
     alloc_map 0
@@ -1162,7 +1158,7 @@ function user.CommaClient$new() -> null {
     alloc_instance baml.llm.PrimitiveClientOptions
     load_const "gpt-4"
     init_field .model
-    load_const "https://api.openai.com/v1"
+    load_const null
     init_field .base_url
     load_const null
     init_field .allowed_role_metadata
@@ -1172,12 +1168,9 @@ function user.CommaClient$new() -> null {
     init_field .finish_reason_deny_list
     load_const null
     init_field .supports_streaming
-    load_const "system"
+    load_const null
     init_field .default_role
-    load_const "system"
-    load_const "user"
-    load_const "assistant"
-    alloc_array 3
+    load_const null
     init_field .allowed_roles
     load_const null
     init_field .remap_roles
@@ -1185,6 +1178,8 @@ function user.CommaClient$new() -> null {
     init_field .api_key
     load_const null
     init_field .provider_options
+    load_const null
+    init_field .media_url_handler
     alloc_map 0
     init_field .headers
     alloc_map 0
@@ -1378,7 +1373,7 @@ function user.DeeplyNestedClient$new() -> null {
     alloc_instance baml.llm.PrimitiveClientOptions
     load_const "gpt-4"
     init_field .model
-    load_const "https://api.openai.com/v1"
+    load_const null
     init_field .base_url
     load_const null
     init_field .allowed_role_metadata
@@ -1388,12 +1383,9 @@ function user.DeeplyNestedClient$new() -> null {
     init_field .finish_reason_deny_list
     load_const null
     init_field .supports_streaming
-    load_const "system"
+    load_const null
     init_field .default_role
-    load_const "system"
-    load_const "user"
-    load_const "assistant"
-    alloc_array 3
+    load_const null
     init_field .allowed_roles
     load_const null
     init_field .remap_roles
@@ -1401,6 +1393,8 @@ function user.DeeplyNestedClient$new() -> null {
     init_field .api_key
     load_const null
     init_field .provider_options
+    load_const null
+    init_field .media_url_handler
     load_const true
     load_const 30000
     load_const "platform"
@@ -1426,7 +1420,7 @@ function user.DeeplyNestedClient$new() -> null {
 function user.EnvClient$new() -> null {
     load_const "OPENAI_API_KEY"
     call baml.env.get_or_panic
-    store_var _3
+    store_var _2
     alloc_instance baml.llm.PrimitiveClient
     load_const "EnvClient"
     init_field .name
@@ -1435,7 +1429,7 @@ function user.EnvClient$new() -> null {
     alloc_instance baml.llm.PrimitiveClientOptions
     load_const "gpt-4"
     init_field .model
-    load_const "https://api.openai.com/v1"
+    load_const null
     init_field .base_url
     load_const null
     init_field .allowed_role_metadata
@@ -1445,19 +1439,18 @@ function user.EnvClient$new() -> null {
     init_field .finish_reason_deny_list
     load_const null
     init_field .supports_streaming
-    load_const "system"
+    load_const null
     init_field .default_role
-    load_const "system"
-    load_const "user"
-    load_const "assistant"
-    alloc_array 3
+    load_const null
     init_field .allowed_roles
     load_const null
     init_field .remap_roles
-    load_var _3
+    load_var _2
     init_field .api_key
     load_const null
     init_field .provider_options
+    load_const null
+    init_field .media_url_handler
     alloc_map 0
     init_field .headers
     alloc_map 0
@@ -1491,7 +1484,7 @@ function user.ExtraWhitespaceClient$new() -> null {
     alloc_instance baml.llm.PrimitiveClientOptions
     load_const "gpt-4"
     init_field .model
-    load_const "https://api.openai.com/v1"
+    load_const null
     init_field .base_url
     load_const null
     init_field .allowed_role_metadata
@@ -1501,12 +1494,9 @@ function user.ExtraWhitespaceClient$new() -> null {
     init_field .finish_reason_deny_list
     load_const null
     init_field .supports_streaming
-    load_const "system"
+    load_const null
     init_field .default_role
-    load_const "system"
-    load_const "user"
-    load_const "assistant"
-    alloc_array 3
+    load_const null
     init_field .allowed_roles
     load_const null
     init_field .remap_roles
@@ -1514,6 +1504,8 @@ function user.ExtraWhitespaceClient$new() -> null {
     init_field .api_key
     load_const null
     init_field .provider_options
+    load_const null
+    init_field .media_url_handler
     alloc_map 0
     init_field .headers
     alloc_map 0
@@ -1545,7 +1537,7 @@ function user.FullClient$new() -> null {
     alloc_instance baml.llm.PrimitiveClientOptions
     load_const "gpt-4"
     init_field .model
-    load_const "https://api.openai.com/v1"
+    load_const null
     init_field .base_url
     load_const null
     init_field .allowed_role_metadata
@@ -1555,12 +1547,9 @@ function user.FullClient$new() -> null {
     init_field .finish_reason_deny_list
     load_const null
     init_field .supports_streaming
-    load_const "system"
+    load_const null
     init_field .default_role
-    load_const "system"
-    load_const "user"
-    load_const "assistant"
-    alloc_array 3
+    load_const null
     init_field .allowed_roles
     load_const null
     init_field .remap_roles
@@ -1568,6 +1557,8 @@ function user.FullClient$new() -> null {
     init_field .api_key
     load_const null
     init_field .provider_options
+    load_const null
+    init_field .media_url_handler
     alloc_map 0
     init_field .headers
     alloc_map 0
@@ -1829,7 +1820,7 @@ function user.LongArrayClient$new() -> null {
     alloc_instance baml.llm.PrimitiveClientOptions
     load_const "gpt-4"
     init_field .model
-    load_const "https://api.openai.com/v1"
+    load_const null
     init_field .base_url
     load_const null
     init_field .allowed_role_metadata
@@ -1839,12 +1830,9 @@ function user.LongArrayClient$new() -> null {
     init_field .finish_reason_deny_list
     load_const null
     init_field .supports_streaming
-    load_const "system"
+    load_const null
     init_field .default_role
-    load_const "system"
-    load_const "user"
-    load_const "assistant"
-    alloc_array 3
+    load_const null
     init_field .allowed_roles
     load_const null
     init_field .remap_roles
@@ -1852,6 +1840,8 @@ function user.LongArrayClient$new() -> null {
     init_field .api_key
     load_const null
     init_field .provider_options
+    load_const null
+    init_field .media_url_handler
     alloc_map 0
     init_field .headers
     alloc_map 0
@@ -1878,7 +1868,7 @@ function user.LongArrayOfObjectsClient$new() -> null {
     alloc_instance baml.llm.PrimitiveClientOptions
     load_const "gpt-4"
     init_field .model
-    load_const "https://api.openai.com/v1"
+    load_const null
     init_field .base_url
     load_const null
     init_field .allowed_role_metadata
@@ -1888,12 +1878,9 @@ function user.LongArrayOfObjectsClient$new() -> null {
     init_field .finish_reason_deny_list
     load_const null
     init_field .supports_streaming
-    load_const "system"
+    load_const null
     init_field .default_role
-    load_const "system"
-    load_const "user"
-    load_const "assistant"
-    alloc_array 3
+    load_const null
     init_field .allowed_roles
     load_const null
     init_field .remap_roles
@@ -1901,6 +1888,8 @@ function user.LongArrayOfObjectsClient$new() -> null {
     init_field .api_key
     load_const null
     init_field .provider_options
+    load_const null
+    init_field .media_url_handler
     alloc_map 0
     init_field .headers
     alloc_map 0
@@ -1946,12 +1935,9 @@ function user.LongNestedValuesClient$new() -> null {
     init_field .finish_reason_deny_list
     load_const null
     init_field .supports_streaming
-    load_const "system"
+    load_const null
     init_field .default_role
-    load_const "system"
-    load_const "user"
-    load_const "assistant"
-    alloc_array 3
+    load_const null
     init_field .allowed_roles
     load_const null
     init_field .remap_roles
@@ -1959,6 +1945,8 @@ function user.LongNestedValuesClient$new() -> null {
     init_field .api_key
     load_const null
     init_field .provider_options
+    load_const null
+    init_field .media_url_handler
     alloc_map 0
     init_field .headers
     alloc_map 0
@@ -1988,12 +1976,9 @@ function user.LongOptionClient$new() -> null {
     init_field .finish_reason_deny_list
     load_const null
     init_field .supports_streaming
-    load_const "system"
+    load_const null
     init_field .default_role
-    load_const "system"
-    load_const "user"
-    load_const "assistant"
-    alloc_array 3
+    load_const null
     init_field .allowed_roles
     load_const null
     init_field .remap_roles
@@ -2001,6 +1986,8 @@ function user.LongOptionClient$new() -> null {
     init_field .api_key
     load_const null
     init_field .provider_options
+    load_const null
+    init_field .media_url_handler
     alloc_map 0
     init_field .headers
     alloc_map 0
@@ -3765,7 +3752,7 @@ function user.ManyNestedExprs(items: int[]) -> int {
 function user.ManyOptionsClient$new() -> null {
     load_const "OPENAI_API_KEY"
     call baml.env.get_or_panic
-    store_var _3
+    store_var _2
     alloc_instance baml.llm.PrimitiveClient
     load_const "ManyOptionsClient"
     init_field .name
@@ -3784,19 +3771,18 @@ function user.ManyOptionsClient$new() -> null {
     init_field .finish_reason_deny_list
     load_const null
     init_field .supports_streaming
-    load_const "system"
+    load_const null
     init_field .default_role
-    load_const "system"
-    load_const "user"
-    load_const "assistant"
-    alloc_array 3
+    load_const null
     init_field .allowed_roles
     load_const null
     init_field .remap_roles
-    load_var _3
+    load_var _2
     init_field .api_key
     load_const null
     init_field .provider_options
+    load_const null
+    init_field .media_url_handler
     alloc_map 0
     init_field .headers
     alloc_map 0
@@ -4554,7 +4540,7 @@ function user.MixedValuesClient$new() -> null {
     alloc_instance baml.llm.PrimitiveClientOptions
     load_const "gpt-4"
     init_field .model
-    load_const "https://api.openai.com/v1"
+    load_const null
     init_field .base_url
     load_const null
     init_field .allowed_role_metadata
@@ -4564,12 +4550,9 @@ function user.MixedValuesClient$new() -> null {
     init_field .finish_reason_deny_list
     load_const null
     init_field .supports_streaming
-    load_const "system"
+    load_const null
     init_field .default_role
-    load_const "system"
-    load_const "user"
-    load_const "assistant"
-    alloc_array 3
+    load_const null
     init_field .allowed_roles
     load_const null
     init_field .remap_roles
@@ -4577,6 +4560,8 @@ function user.MixedValuesClient$new() -> null {
     init_field .api_key
     load_const null
     init_field .provider_options
+    load_const null
+    init_field .media_url_handler
     alloc_map 0
     init_field .headers
     alloc_map 0
@@ -4673,7 +4658,7 @@ function user.NestedConfigClient$new() -> null {
     alloc_instance baml.llm.PrimitiveClientOptions
     load_const "gpt-4"
     init_field .model
-    load_const "https://api.openai.com/v1"
+    load_const null
     init_field .base_url
     load_const null
     init_field .allowed_role_metadata
@@ -4683,12 +4668,9 @@ function user.NestedConfigClient$new() -> null {
     init_field .finish_reason_deny_list
     load_const null
     init_field .supports_streaming
-    load_const "system"
+    load_const null
     init_field .default_role
-    load_const "system"
-    load_const "user"
-    load_const "assistant"
-    alloc_array 3
+    load_const null
     init_field .allowed_roles
     load_const null
     init_field .remap_roles
@@ -4696,6 +4678,8 @@ function user.NestedConfigClient$new() -> null {
     init_field .api_key
     load_const null
     init_field .provider_options
+    load_const null
+    init_field .media_url_handler
     alloc_map 0
     init_field .headers
     alloc_map 0
@@ -4895,7 +4879,7 @@ function user.RawStringConfigClient$new() -> null {
     alloc_instance baml.llm.PrimitiveClientOptions
     load_const "gpt-4"
     init_field .model
-    load_const "https://api.openai.com/v1"
+    load_const null
     init_field .base_url
     load_const null
     init_field .allowed_role_metadata
@@ -4905,12 +4889,9 @@ function user.RawStringConfigClient$new() -> null {
     init_field .finish_reason_deny_list
     load_const null
     init_field .supports_streaming
-    load_const "system"
+    load_const null
     init_field .default_role
-    load_const "system"
-    load_const "user"
-    load_const "assistant"
-    alloc_array 3
+    load_const null
     init_field .allowed_roles
     load_const null
     init_field .remap_roles
@@ -4918,6 +4899,8 @@ function user.RawStringConfigClient$new() -> null {
     init_field .api_key
     load_const null
     init_field .provider_options
+    load_const null
+    init_field .media_url_handler
     alloc_map 0
     init_field .headers
     alloc_map 0
@@ -4939,7 +4922,7 @@ function user.SameLineClient$new() -> null {
     alloc_instance baml.llm.PrimitiveClientOptions
     load_const "gpt-4"
     init_field .model
-    load_const "https://api.openai.com/v1"
+    load_const null
     init_field .base_url
     load_const null
     init_field .allowed_role_metadata
@@ -4949,12 +4932,9 @@ function user.SameLineClient$new() -> null {
     init_field .finish_reason_deny_list
     load_const null
     init_field .supports_streaming
-    load_const "system"
+    load_const null
     init_field .default_role
-    load_const "system"
-    load_const "user"
-    load_const "assistant"
-    alloc_array 3
+    load_const null
     init_field .allowed_roles
     load_const null
     init_field .remap_roles
@@ -4962,6 +4942,8 @@ function user.SameLineClient$new() -> null {
     init_field .api_key
     load_const null
     init_field .provider_options
+    load_const null
+    init_field .media_url_handler
     alloc_map 0
     init_field .headers
     alloc_map 0
@@ -5001,12 +4983,9 @@ function user.StringProviderClient$new() -> null {
     init_field .finish_reason_deny_list
     load_const null
     init_field .supports_streaming
-    load_const "system"
+    load_const null
     init_field .default_role
-    load_const "system"
-    load_const "user"
-    load_const "assistant"
-    alloc_array 3
+    load_const null
     init_field .allowed_roles
     load_const null
     init_field .remap_roles
@@ -5014,6 +4993,8 @@ function user.StringProviderClient$new() -> null {
     init_field .api_key
     load_const null
     init_field .provider_options
+    load_const null
+    init_field .media_url_handler
     alloc_map 0
     init_field .headers
     alloc_map 0
@@ -5064,7 +5045,7 @@ function user.ThisIsAnExtremelyLongClientNameThatDefinitelyExceedsTheDefaultLine
     alloc_instance baml.llm.PrimitiveClientOptions
     load_const "gpt-4"
     init_field .model
-    load_const "https://api.openai.com/v1"
+    load_const null
     init_field .base_url
     load_const null
     init_field .allowed_role_metadata
@@ -5074,12 +5055,9 @@ function user.ThisIsAnExtremelyLongClientNameThatDefinitelyExceedsTheDefaultLine
     init_field .finish_reason_deny_list
     load_const null
     init_field .supports_streaming
-    load_const "system"
+    load_const null
     init_field .default_role
-    load_const "system"
-    load_const "user"
-    load_const "assistant"
-    alloc_array 3
+    load_const null
     init_field .allowed_roles
     load_const null
     init_field .remap_roles
@@ -5087,6 +5065,8 @@ function user.ThisIsAnExtremelyLongClientNameThatDefinitelyExceedsTheDefaultLine
     init_field .api_key
     load_const null
     init_field .provider_options
+    load_const null
+    init_field .media_url_handler
     alloc_map 0
     init_field .headers
     alloc_map 0
@@ -5111,7 +5091,7 @@ function user.TriviaClient$new() -> null {
     alloc_instance baml.llm.PrimitiveClientOptions
     load_const "gpt-4"
     init_field .model
-    load_const "https://api.openai.com/v1"
+    load_const null
     init_field .base_url
     load_const null
     init_field .allowed_role_metadata
@@ -5121,12 +5101,9 @@ function user.TriviaClient$new() -> null {
     init_field .finish_reason_deny_list
     load_const null
     init_field .supports_streaming
-    load_const "system"
+    load_const null
     init_field .default_role
-    load_const "system"
-    load_const "user"
-    load_const "assistant"
-    alloc_array 3
+    load_const null
     init_field .allowed_roles
     load_const null
     init_field .remap_roles
@@ -5134,6 +5111,8 @@ function user.TriviaClient$new() -> null {
     init_field .api_key
     load_const null
     init_field .provider_options
+    load_const null
+    init_field .media_url_handler
     alloc_map 0
     init_field .headers
     alloc_map 0
@@ -5153,7 +5132,7 @@ function user.TriviaClientBlock$new() -> null {
     alloc_instance baml.llm.PrimitiveClientOptions
     load_const "gpt-4"
     init_field .model
-    load_const "https://api.openai.com/v1"
+    load_const null
     init_field .base_url
     load_const null
     init_field .allowed_role_metadata
@@ -5163,12 +5142,9 @@ function user.TriviaClientBlock$new() -> null {
     init_field .finish_reason_deny_list
     load_const null
     init_field .supports_streaming
-    load_const "system"
+    load_const null
     init_field .default_role
-    load_const "system"
-    load_const "user"
-    load_const "assistant"
-    alloc_array 3
+    load_const null
     init_field .allowed_roles
     load_const null
     init_field .remap_roles
@@ -5176,6 +5152,8 @@ function user.TriviaClientBlock$new() -> null {
     init_field .api_key
     load_const null
     init_field .provider_options
+    load_const null
+    init_field .media_url_handler
     alloc_map 0
     init_field .headers
     alloc_map 0
@@ -5195,7 +5173,7 @@ function user.TriviaDeeplyNestedClient$new() -> null {
     alloc_instance baml.llm.PrimitiveClientOptions
     load_const "gpt-4"
     init_field .model
-    load_const "https://api.openai.com/v1"
+    load_const null
     init_field .base_url
     load_const null
     init_field .allowed_role_metadata
@@ -5205,12 +5183,9 @@ function user.TriviaDeeplyNestedClient$new() -> null {
     init_field .finish_reason_deny_list
     load_const null
     init_field .supports_streaming
-    load_const "system"
+    load_const null
     init_field .default_role
-    load_const "system"
-    load_const "user"
-    load_const "assistant"
-    alloc_array 3
+    load_const null
     init_field .allowed_roles
     load_const null
     init_field .remap_roles
@@ -5218,6 +5193,8 @@ function user.TriviaDeeplyNestedClient$new() -> null {
     init_field .api_key
     load_const null
     init_field .provider_options
+    load_const null
+    init_field .media_url_handler
     alloc_map 0
     init_field .headers
     alloc_map 0
@@ -5237,7 +5214,7 @@ function user.TriviaDeeplyNestedClientBlock$new() -> null {
     alloc_instance baml.llm.PrimitiveClientOptions
     load_const "gpt-4"
     init_field .model
-    load_const "https://api.openai.com/v1"
+    load_const null
     init_field .base_url
     load_const null
     init_field .allowed_role_metadata
@@ -5247,12 +5224,9 @@ function user.TriviaDeeplyNestedClientBlock$new() -> null {
     init_field .finish_reason_deny_list
     load_const null
     init_field .supports_streaming
-    load_const "system"
+    load_const null
     init_field .default_role
-    load_const "system"
-    load_const "user"
-    load_const "assistant"
-    alloc_array 3
+    load_const null
     init_field .allowed_roles
     load_const null
     init_field .remap_roles
@@ -5260,6 +5234,8 @@ function user.TriviaDeeplyNestedClientBlock$new() -> null {
     init_field .api_key
     load_const null
     init_field .provider_options
+    load_const null
+    init_field .media_url_handler
     alloc_map 0
     init_field .headers
     alloc_map 0
@@ -5313,12 +5289,9 @@ function user.TriviaLongValueClient$new() -> null {
     init_field .finish_reason_deny_list
     load_const null
     init_field .supports_streaming
-    load_const "system"
+    load_const null
     init_field .default_role
-    load_const "system"
-    load_const "user"
-    load_const "assistant"
-    alloc_array 3
+    load_const null
     init_field .allowed_roles
     load_const null
     init_field .remap_roles
@@ -5326,6 +5299,8 @@ function user.TriviaLongValueClient$new() -> null {
     init_field .api_key
     load_const null
     init_field .provider_options
+    load_const null
+    init_field .media_url_handler
     alloc_map 0
     init_field .headers
     alloc_map 0
@@ -5355,12 +5330,9 @@ function user.TriviaLongValueClientBlock$new() -> null {
     init_field .finish_reason_deny_list
     load_const null
     init_field .supports_streaming
-    load_const "system"
+    load_const null
     init_field .default_role
-    load_const "system"
-    load_const "user"
-    load_const "assistant"
-    alloc_array 3
+    load_const null
     init_field .allowed_roles
     load_const null
     init_field .remap_roles
@@ -5368,6 +5340,8 @@ function user.TriviaLongValueClientBlock$new() -> null {
     init_field .api_key
     load_const null
     init_field .provider_options
+    load_const null
+    init_field .media_url_handler
     alloc_map 0
     init_field .headers
     alloc_map 0
@@ -5407,7 +5381,7 @@ function user.TypedValuesClient$new() -> null {
     alloc_instance baml.llm.PrimitiveClientOptions
     load_const "gpt-4"
     init_field .model
-    load_const "https://api.openai.com/v1"
+    load_const null
     init_field .base_url
     load_const null
     init_field .allowed_role_metadata
@@ -5417,12 +5391,9 @@ function user.TypedValuesClient$new() -> null {
     init_field .finish_reason_deny_list
     load_const null
     init_field .supports_streaming
-    load_const "system"
+    load_const null
     init_field .default_role
-    load_const "system"
-    load_const "user"
-    load_const "assistant"
-    alloc_array 3
+    load_const null
     init_field .allowed_roles
     load_const null
     init_field .remap_roles
@@ -5430,6 +5401,8 @@ function user.TypedValuesClient$new() -> null {
     init_field .api_key
     load_const null
     init_field .provider_options
+    load_const null
+    init_field .media_url_handler
     alloc_map 0
     init_field .headers
     alloc_map 0

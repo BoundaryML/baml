@@ -1497,3 +1497,538 @@ fn emit_sys_ops_struct(io_builtins: &[NativeBuiltin]) -> TokenStream {
         }
     }
 }
+
+// ============================================================================
+// RuntimeIo trait generation (for sys_types)
+// ============================================================================
+
+/// Derive the `RuntimeIo` trait method name from a builtin path.
+///
+/// - Free functions: `{ns}_{method}` (e.g. `"baml.http.send"` -> `"http_send"`)
+/// - Class methods: `{ns}_{class}_{method}` lowercase (e.g. `"baml.http.Response.text"` -> `"http_response_text"`)
+fn runtime_io_method_name(builtin: &NativeBuiltin) -> String {
+    let after_baml = builtin.path.strip_prefix("baml.").unwrap_or(&builtin.path);
+    after_baml.replace('.', "_").to_lowercase()
+}
+
+/// Derive the handle type name for a class (e.g. `"Response"` in namespace `"http"` -> `"HttpResponseHandle"`).
+fn handle_type_name(ns: &str, class: &str) -> syn::Ident {
+    format_ident!("{}{}Handle", capitalize_first(ns), class)
+}
+
+/// Generate the `RuntimeIo` trait, handle types, `RuntimeIoError`, and `NoopRuntimeIo`.
+///
+/// This is included in `sys_types` so that both `sys_llm` and `sys_ops` can use it.
+pub fn generate_runtime_io(
+    io_builtins: &[NativeBuiltin],
+    class_defs: &[NativeClassDef],
+    structs_path: &str,
+) -> String {
+    let tree = build_io_namespace_tree(io_builtins);
+    let io_class_defs = filter_io_class_defs(io_builtins, class_defs);
+    let class_ns_map = build_class_ns_map(&io_class_defs);
+    let class_defs_by_ns = group_class_defs_by_ns(&io_class_defs);
+
+    let paths = CodegenPaths::external(structs_path);
+
+    let error_type = emit_runtime_io_error();
+    let handles = emit_runtime_io_handles(
+        &tree,
+        &io_class_defs,
+        &class_ns_map,
+        &class_defs_by_ns,
+        &paths,
+    );
+    let trait_def = emit_runtime_io_trait(io_builtins, &tree, &class_ns_map, &paths);
+    let noop = emit_noop_runtime_io(io_builtins, &tree, &class_ns_map, &paths);
+
+    let tokens = quote! {
+        use std::pin::Pin;
+        use std::future::Future;
+        use std::sync::Arc;
+        use std::panic::{UnwindSafe, RefUnwindSafe};
+
+        #error_type
+        #handles
+        #trait_def
+        #noop
+    };
+
+    crate::format_tokens(&tokens)
+}
+
+fn emit_runtime_io_error() -> TokenStream {
+    quote! {
+        #[derive(Debug, Clone)]
+        pub enum RuntimeIoError {
+            Unsupported,
+            Other(String),
+        }
+
+        impl std::fmt::Display for RuntimeIoError {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                match self {
+                    RuntimeIoError::Unsupported => write!(f, "unsupported operation"),
+                    RuntimeIoError::Other(msg) => write!(f, "{msg}"),
+                }
+            }
+        }
+
+        impl std::error::Error for RuntimeIoError {}
+    }
+}
+
+/// Emit handle structs for classes that have `$rust_io_function` methods.
+fn emit_runtime_io_handles(
+    tree: &BTreeMap<String, IoNamespaceNode>,
+    _io_class_defs: &[&NativeClassDef],
+    class_ns_map: &BTreeMap<String, String>,
+    class_defs_by_ns: &BTreeMap<String, Vec<&NativeClassDef>>,
+    paths: &CodegenPaths,
+) -> TokenStream {
+    let mut handles = Vec::new();
+
+    for (ns, node) in tree {
+        for class_name in node.classes.keys() {
+            let handle_ident = handle_type_name(ns, class_name);
+
+            // Find the class def to get non-opaque fields.
+            let class_def = class_defs_by_ns
+                .get(ns.as_str())
+                .and_then(|defs| defs.iter().find(|cd| cd.name == *class_name));
+
+            // Build public fields for non-$rust_type fields.
+            let mut pub_fields = Vec::new();
+            let mut from_raw_fields = Vec::new();
+            if let Some(cd) = class_def {
+                for field in &cd.fields {
+                    if field.field_type == BamlType::RustType {
+                        continue;
+                    }
+                    let field_ident = format_ident!("{}", field.name);
+                    let field_ty = owned_rust_type(&field.field_type, class_ns_map, paths);
+                    pub_fields.push(quote! { pub #field_ident: #field_ty });
+
+                    let val_expr = quote! { __owned.#field_ident };
+                    from_raw_fields.push(quote! { #field_ident: #val_expr });
+                }
+            }
+
+            let owned = &paths.owned;
+            let ns_ident = format_ident!("{}", ns);
+            let class_ident = format_ident!("{}", class_name);
+            let owned_ty = quote! { #owned::#ns_ident::#class_ident };
+
+            handles.push(quote! {
+                pub struct #handle_ident {
+                    pub raw: BexExternalValue,
+                    #(#pub_fields,)*
+                }
+
+                impl #handle_ident {
+                    pub fn from_raw(raw: BexExternalValue) -> Result<Self, RuntimeIoError> {
+                        let __owned = #owned_ty::from_external(raw.clone())
+                            .map_err(|e| RuntimeIoError::Other(format!("{e:?}")))?;
+                        Ok(Self {
+                            raw,
+                            #(#from_raw_fields,)*
+                        })
+                    }
+                }
+            });
+        }
+    }
+
+    quote! { #(#handles)* }
+}
+
+/// For a given builtin's return type, produce the `RuntimeIo` trait return type.
+/// If the return type is a class that has a handle type, return the handle type instead.
+fn runtime_io_return_type(
+    builtin: &NativeBuiltin,
+    tree: &BTreeMap<String, IoNamespaceNode>,
+    class_ns_map: &BTreeMap<String, String>,
+    paths: &CodegenPaths,
+) -> TokenStream {
+    if let BamlType::Named(name) = &builtin.return_type {
+        if let Some(ns) = class_ns_map.get(name.as_str()) {
+            if let Some(node) = tree.get(ns) {
+                if node.classes.contains_key(name.as_str()) {
+                    let handle = handle_type_name(ns, name);
+                    return quote! { #handle };
+                }
+            }
+        }
+    }
+    clean_rust_type(&builtin.return_type, class_ns_map, paths)
+}
+
+fn emit_runtime_io_trait(
+    io_builtins: &[NativeBuiltin],
+    tree: &BTreeMap<String, IoNamespaceNode>,
+    class_ns_map: &BTreeMap<String, String>,
+    paths: &CodegenPaths,
+) -> TokenStream {
+    let mut methods = Vec::new();
+
+    for builtin in io_builtins {
+        let method_name = runtime_io_method_name(builtin);
+        let method_ident = format_ident!("{}", method_name);
+        let ret_ty = runtime_io_return_type(builtin, tree, class_ns_map, paths);
+
+        let mut params: Vec<TokenStream> = Vec::new();
+
+        // For class methods, the first param is a handle reference.
+        if let Some(ref receiver) = builtin.receiver {
+            let ns = io_namespace_name(builtin);
+            let handle = handle_type_name(ns, &receiver.class_name);
+            let param_ident = format_ident!("{}", receiver.class_name.to_lowercase());
+            params.push(quote! { #param_ident: &#handle });
+        }
+
+        for p in &builtin.params {
+            let p_ident = format_ident!("{}", p.name);
+            let p_ty = clean_rust_type(&p.ty, class_ns_map, paths);
+            params.push(quote! { #p_ident: #p_ty });
+        }
+
+        methods.push(quote! {
+            fn #method_ident(&self, #(#params),*)
+                -> Pin<Box<dyn Future<Output = Result<#ret_ty, RuntimeIoError>> + Send + '_>>
+            {
+                Box::pin(std::future::ready(Err(RuntimeIoError::Unsupported)))
+            }
+        });
+    }
+
+    quote! {
+        pub trait RuntimeIo: Send + Sync + UnwindSafe + RefUnwindSafe {
+            #(#methods)*
+        }
+    }
+}
+
+fn emit_noop_runtime_io(
+    _io_builtins: &[NativeBuiltin],
+    _tree: &BTreeMap<String, IoNamespaceNode>,
+    _class_ns_map: &BTreeMap<String, String>,
+    _paths: &CodegenPaths,
+) -> TokenStream {
+    quote! {
+        pub struct NoopRuntimeIo;
+        impl RuntimeIo for NoopRuntimeIo {}
+    }
+}
+
+// ============================================================================
+// RuntimeIoAdapter generation (for sys_ops)
+// ============================================================================
+
+/// Generate the `RuntimeIoAdapter` struct, `RuntimeIo` impl, and `build_runtime_io()`.
+///
+/// This is included in `sys_ops` and bridges the `SysOpFn` pointers to the `RuntimeIo` trait.
+pub fn generate_io_adapter(
+    io_builtins: &[NativeBuiltin],
+    class_defs: &[NativeClassDef],
+    structs_path: &str,
+) -> String {
+    let tree = build_io_namespace_tree(io_builtins);
+    let io_class_defs = filter_io_class_defs(io_builtins, class_defs);
+    let class_ns_map = build_class_ns_map(&io_class_defs);
+
+    let paths = CodegenPaths::external(structs_path);
+
+    let adapter_struct = emit_adapter_struct(io_builtins);
+    let adapter_impl = emit_adapter_impl(io_builtins, &tree, &class_ns_map, &paths);
+    let build_fn = emit_build_runtime_io(io_builtins);
+    let resolve_fn = emit_resolve_helper();
+
+    let tokens = quote! {
+        #resolve_fn
+        #adapter_struct
+        #adapter_impl
+        #build_fn
+    };
+
+    crate::format_tokens(&tokens)
+}
+
+fn emit_resolve_helper() -> TokenStream {
+    quote! {
+        async fn __resolve_sys_op_result(
+            result: SysOpResult,
+        ) -> Result<BexExternalValue, RuntimeIoError> {
+            match result {
+                SysOpResult::Ready(Ok(val)) => Ok(val),
+                SysOpResult::Ready(Err(e)) => Err(RuntimeIoError::Other(format!("{e:?}"))),
+                SysOpResult::Async(fut) => {
+                    fut.await.map_err(|e| RuntimeIoError::Other(format!("{e:?}")))
+                }
+            }
+        }
+    }
+}
+
+fn emit_adapter_struct(io_builtins: &[NativeBuiltin]) -> TokenStream {
+    let fields: Vec<TokenStream> = io_builtins
+        .iter()
+        .map(|b| {
+            let field_ident = format_ident!("{}", runtime_io_method_name(b));
+            quote! { #field_ident: SysOpFn }
+        })
+        .collect();
+
+    quote! {
+        pub struct RuntimeIoAdapter {
+            heap: Arc<BexHeap>,
+            ctx: SysOpContext,
+            #(#fields,)*
+        }
+
+        /// SAFETY: We never catch panics across the `SysOpFn` boundaries.
+        /// The bounds are required by the `RuntimeIo` trait (for AWS SDK compatibility).
+        impl std::panic::UnwindSafe for RuntimeIoAdapter {}
+        impl std::panic::RefUnwindSafe for RuntimeIoAdapter {}
+    }
+}
+
+fn emit_adapter_impl(
+    io_builtins: &[NativeBuiltin],
+    tree: &BTreeMap<String, IoNamespaceNode>,
+    class_ns_map: &BTreeMap<String, String>,
+    paths: &CodegenPaths,
+) -> TokenStream {
+    let mut methods = Vec::new();
+
+    for builtin in io_builtins {
+        let method_name = runtime_io_method_name(builtin);
+        let method_ident = format_ident!("{}", method_name);
+        let ret_ty = runtime_io_return_type(builtin, tree, class_ns_map, paths);
+
+        let mut params: Vec<TokenStream> = Vec::new();
+
+        // Build the marshaling: convert typed args to BexExternalValue, then to BexValue refs.
+        let mut ext_bindings = Vec::new();
+        let mut arg_exprs = Vec::new();
+
+        if let Some(ref receiver) = builtin.receiver {
+            let ns = io_namespace_name(builtin);
+            let handle = handle_type_name(ns, &receiver.class_name);
+            let param_ident = format_ident!("{}", receiver.class_name.to_lowercase());
+            params.push(quote! { #param_ident: &#handle });
+            ext_bindings.push(quote! { let __recv_raw = #param_ident.raw.clone(); });
+            arg_exprs.push(quote! { BexValue::ExternalValue(&__recv_raw) });
+        }
+
+        for (i, p) in builtin.params.iter().enumerate() {
+            let p_ident = format_ident!("{}", p.name);
+            let p_ty = clean_rust_type(&p.ty, class_ns_map, paths);
+            params.push(quote! { #p_ident: #p_ty });
+
+            let ext_ident = format_ident!("__ext_{}", i);
+            let ext_expr = owned_to_external_expr(&quote! { #p_ident }, &p.ty, class_ns_map);
+            ext_bindings.push(quote! { let #ext_ident: BexExternalValue = #ext_expr; });
+            arg_exprs.push(quote! { BexValue::ExternalValue(&#ext_ident) });
+        }
+
+        let result_conversion = emit_result_conversion(builtin, tree, class_ns_map, paths);
+
+        let body = quote! {
+            let fn_ptr = self.#method_ident.clone();
+            let heap = self.heap.clone();
+            let ctx = self.ctx.clone();
+            #(#ext_bindings)*
+            Box::pin(async move {
+                let result = fn_ptr(&heap, vec![#(#arg_exprs),*], &ctx, CallId::next());
+                let __val = __resolve_sys_op_result(result).await?;
+                #result_conversion
+            })
+        };
+
+        methods.push(quote! {
+            fn #method_ident(&self, #(#params),*)
+                -> Pin<Box<dyn Future<Output = Result<#ret_ty, RuntimeIoError>> + Send + '_>>
+            {
+                #body
+            }
+        });
+    }
+
+    quote! {
+        impl RuntimeIo for RuntimeIoAdapter {
+            #(#methods)*
+        }
+    }
+}
+
+/// Generate the expression that converts `__val: BexExternalValue` to the method's return type.
+fn emit_result_conversion(
+    builtin: &NativeBuiltin,
+    tree: &BTreeMap<String, IoNamespaceNode>,
+    class_ns_map: &BTreeMap<String, String>,
+    paths: &CodegenPaths,
+) -> TokenStream {
+    // Check if return type maps to a handle.
+    if let BamlType::Named(name) = &builtin.return_type {
+        if let Some(ns) = class_ns_map.get(name.as_str()) {
+            if let Some(node) = tree.get(ns) {
+                if node.classes.contains_key(name.as_str()) {
+                    let handle = handle_type_name(ns, name);
+                    return quote! { #handle::from_raw(__val) };
+                }
+            }
+        }
+    }
+
+    match &builtin.return_type {
+        BamlType::String => quote! {
+            match __val {
+                BexExternalValue::String(s) => Ok(s),
+                other => Err(RuntimeIoError::Other(
+                    format!("expected string, got {}", other.type_name()),
+                )),
+            }
+        },
+        BamlType::Int => quote! {
+            match __val {
+                BexExternalValue::Int(v) => Ok(v),
+                other => Err(RuntimeIoError::Other(
+                    format!("expected int, got {}", other.type_name()),
+                )),
+            }
+        },
+        BamlType::Float => quote! {
+            match __val {
+                BexExternalValue::Float(v) => Ok(v),
+                other => Err(RuntimeIoError::Other(
+                    format!("expected float, got {}", other.type_name()),
+                )),
+            }
+        },
+        BamlType::Bool => quote! {
+            match __val {
+                BexExternalValue::Bool(v) => Ok(v),
+                other => Err(RuntimeIoError::Other(
+                    format!("expected bool, got {}", other.type_name()),
+                )),
+            }
+        },
+        BamlType::Null => quote! { Ok(()) },
+        BamlType::Optional(inner) => {
+            // Create a temporary builtin with the inner type to recurse.
+            let inner_conv = emit_result_conversion_simple(inner, class_ns_map, paths);
+            quote! {
+                match __val {
+                    BexExternalValue::Null => Ok(None),
+                    other => {
+                        let __val = other;
+                        Ok(Some({ #inner_conv }?))
+                    }
+                }
+            }
+        }
+        BamlType::Uint8Array => quote! {
+            match __val {
+                BexExternalValue::Uint8Array(v) => Ok(v),
+                other => Err(RuntimeIoError::Other(
+                    format!("expected uint8array, got {}", other.type_name()),
+                )),
+            }
+        },
+        BamlType::Named(name) => match name.as_str() {
+            "type" => quote! {
+                match __val {
+                    BexExternalValue::Adt(
+                        bex_external_types::BexExternalAdt::Type(ty),
+                    ) => Ok(ty),
+                    other => Err(RuntimeIoError::Other(
+                        format!("expected type, got {}", other.type_name()),
+                    )),
+                }
+            },
+            _ => {
+                if class_ns_map.contains_key(name.as_str()) {
+                    let ns = &class_ns_map[name.as_str()];
+                    let owned = &paths.owned;
+                    let ns_ident = format_ident!("{}", ns);
+                    let name_ident = format_ident!("{}", name);
+                    quote! {
+                        #owned::#ns_ident::#name_ident::from_external(__val)
+                            .map_err(|e| RuntimeIoError::Other(format!("{e:?}")))
+                    }
+                } else {
+                    quote! { Ok(__val) }
+                }
+            }
+        },
+        _ => quote! { Ok(__val) },
+    }
+}
+
+/// Simplified result conversion for inner types (used in Optional).
+fn emit_result_conversion_simple(
+    ty: &BamlType,
+    _class_ns_map: &BTreeMap<String, String>,
+    _paths: &CodegenPaths,
+) -> TokenStream {
+    match ty {
+        BamlType::String => quote! {
+            match __val {
+                BexExternalValue::String(s) => Ok(s),
+                other => Err(RuntimeIoError::Other(
+                    format!("expected string, got {}", other.type_name()),
+                )),
+            }
+        },
+        BamlType::Int => quote! {
+            match __val {
+                BexExternalValue::Int(v) => Ok(v),
+                other => Err(RuntimeIoError::Other(
+                    format!("expected int, got {}", other.type_name()),
+                )),
+            }
+        },
+        BamlType::Float => quote! {
+            match __val {
+                BexExternalValue::Float(v) => Ok(v),
+                other => Err(RuntimeIoError::Other(
+                    format!("expected float, got {}", other.type_name()),
+                )),
+            }
+        },
+        BamlType::Bool => quote! {
+            match __val {
+                BexExternalValue::Bool(v) => Ok(v),
+                other => Err(RuntimeIoError::Other(
+                    format!("expected bool, got {}", other.type_name()),
+                )),
+            }
+        },
+        _ => quote! { Ok(__val) },
+    }
+}
+
+fn emit_build_runtime_io(io_builtins: &[NativeBuiltin]) -> TokenStream {
+    let field_inits: Vec<TokenStream> = io_builtins
+        .iter()
+        .map(|b| {
+            let field_ident = format_ident!("{}", runtime_io_method_name(b));
+            let sys_ops_field = format_ident!("{}", b.fn_name);
+            quote! { #field_ident: sys_ops.#sys_ops_field.clone() }
+        })
+        .collect();
+
+    quote! {
+        pub fn build_runtime_io(
+            sys_ops: &SysOps,
+            heap: &Arc<BexHeap>,
+            ctx: &SysOpContext,
+        ) -> Arc<dyn RuntimeIo> {
+            Arc::new(RuntimeIoAdapter {
+                heap: heap.clone(),
+                ctx: ctx.clone(),
+                #(#field_inits,)*
+            })
+        }
+    }
+}

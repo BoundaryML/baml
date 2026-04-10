@@ -3,13 +3,13 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 function $init() -> null {
     call ?
-    store_global ?136
-    call ?
-    store_global ?137
-    call ?
     store_global ?138
     call ?
     store_global ?139
+    call ?
+    store_global ?140
+    call ?
+    store_global ?141
     load_const ?
     return
 }
@@ -23,7 +23,7 @@ function user.Gpt4oClient$new() -> null {
     alloc_instance baml.llm.PrimitiveClientOptions
     load_const "gpt-4o"
     init_field .model
-    load_const "https://api.openai.com/v1"
+    load_const null
     init_field .base_url
     load_const null
     init_field .allowed_role_metadata
@@ -33,12 +33,9 @@ function user.Gpt4oClient$new() -> null {
     init_field .finish_reason_deny_list
     load_const null
     init_field .supports_streaming
-    load_const "system"
+    load_const null
     init_field .default_role
-    load_const "system"
-    load_const "user"
-    load_const "assistant"
-    alloc_array 3
+    load_const null
     init_field .allowed_roles
     load_const null
     init_field .remap_roles
@@ -46,6 +43,8 @@ function user.Gpt4oClient$new() -> null {
     init_field .api_key
     load_const null
     init_field .provider_options
+    load_const null
+    init_field .media_url_handler
     alloc_map 0
     init_field .headers
     alloc_map 0
@@ -65,7 +64,7 @@ function user.O1Client$new() -> null {
     alloc_instance baml.llm.PrimitiveClientOptions
     load_const "o1"
     init_field .model
-    load_const "https://api.openai.com/v1"
+    load_const null
     init_field .base_url
     load_const null
     init_field .allowed_role_metadata
@@ -75,12 +74,9 @@ function user.O1Client$new() -> null {
     init_field .finish_reason_deny_list
     load_const null
     init_field .supports_streaming
-    load_const "system"
+    load_const null
     init_field .default_role
-    load_const "system"
-    load_const "user"
-    load_const "assistant"
-    alloc_array 3
+    load_const null
     init_field .allowed_roles
     load_const null
     init_field .remap_roles
@@ -88,6 +84,8 @@ function user.O1Client$new() -> null {
     init_field .api_key
     load_const null
     init_field .provider_options
+    load_const null
+    init_field .media_url_handler
     alloc_map 0
     init_field .headers
     alloc_map 0
@@ -107,7 +105,7 @@ function user.O1MiniClient$new() -> null {
     alloc_instance baml.llm.PrimitiveClientOptions
     load_const "o1-mini"
     init_field .model
-    load_const "https://api.openai.com/v1"
+    load_const null
     init_field .base_url
     load_const null
     init_field .allowed_role_metadata
@@ -117,12 +115,9 @@ function user.O1MiniClient$new() -> null {
     init_field .finish_reason_deny_list
     load_const null
     init_field .supports_streaming
-    load_const "system"
+    load_const null
     init_field .default_role
-    load_const "system"
-    load_const "user"
-    load_const "assistant"
-    alloc_array 3
+    load_const null
     init_field .allowed_roles
     load_const null
     init_field .remap_roles
@@ -130,6 +125,8 @@ function user.O1MiniClient$new() -> null {
     init_field .api_key
     load_const null
     init_field .provider_options
+    load_const null
+    init_field .media_url_handler
     alloc_map 0
     init_field .headers
     alloc_map 0
@@ -149,7 +146,7 @@ function user.O1WithExplicitRoles$new() -> null {
     alloc_instance baml.llm.PrimitiveClientOptions
     load_const "o1"
     init_field .model
-    load_const "https://api.openai.com/v1"
+    load_const null
     init_field .base_url
     load_const null
     init_field .allowed_role_metadata
@@ -159,7 +156,7 @@ function user.O1WithExplicitRoles$new() -> null {
     init_field .finish_reason_deny_list
     load_const null
     init_field .supports_streaming
-    load_const "system"
+    load_const null
     init_field .default_role
     load_const "system"
     load_const "user"
@@ -172,6 +169,8 @@ function user.O1WithExplicitRoles$new() -> null {
     init_field .api_key
     load_const null
     init_field .provider_options
+    load_const null
+    init_field .media_url_handler
     alloc_map 0
     init_field .headers
     alloc_map 0
