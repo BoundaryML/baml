@@ -217,49 +217,40 @@ function user.AssertStmts(x: int, y: int) -> int {
   L5:
     jump_if_false L6
     pop 1
-    load_var x
-    load_var y
-    bin_op -
-    load_const 42
-    cmp_op !=
 
   L6:
-    jump_if_false L7
-    pop 1
-
-  L7:
     load_var x
     load_const 0
     cmp_op >
-    jump_if_false L8
+    jump_if_false L7
     pop 1
     load_var x
     load_const 100
     cmp_op <
+
+  L7:
+    jump_if_false L8
+    pop 1
+    load_var y
+    load_const 0
+    cmp_op >
 
   L8:
     jump_if_false L9
     pop 1
     load_var y
-    load_const 0
-    cmp_op >
-
-  L9:
-    jump_if_false L10
-    pop 1
-    load_var y
     load_const 100
     cmp_op <
 
-  L10:
-    jump_if_false L11
+  L9:
+    jump_if_false L10
     pop 1
     load_var x
     load_var y
     cmp_op !=
 
-  L11:
-    jump_if_false L12
+  L10:
+    jump_if_false L11
     pop 1
     load_var x
     load_var y
@@ -267,8 +258,8 @@ function user.AssertStmts(x: int, y: int) -> int {
     load_const 150
     cmp_op <
 
-  L12:
-    jump_if_false L13
+  L11:
+    jump_if_false L12
     pop 1
     load_var x
     load_var y
@@ -276,8 +267,8 @@ function user.AssertStmts(x: int, y: int) -> int {
     load_const 10
     cmp_op >
 
-  L13:
-    jump_if_false L14
+  L12:
+    jump_if_false L13
     pop 1
     load_var x
     load_var y
@@ -285,8 +276,8 @@ function user.AssertStmts(x: int, y: int) -> int {
     load_const 42
     cmp_op !=
 
-  L14:
-    jump_if_false L15
+  L13:
+    jump_if_false L14
     pop 1
     load_var x
     load_const 7
@@ -294,8 +285,8 @@ function user.AssertStmts(x: int, y: int) -> int {
     load_const 0
     cmp_op ==
 
-  L15:
-    jump_if_false L16
+  L14:
+    jump_if_false L15
     pop 1
     load_var y
     load_const 3
@@ -303,45 +294,48 @@ function user.AssertStmts(x: int, y: int) -> int {
     load_const 0
     cmp_op ==
 
+  L15:
+    jump_if_false L16
+    pop 1
+
   L16:
+    load_var x
+    load_const 0
+    cmp_op >
     jump_if_false L17
     pop 1
     load_var x
-    load_var y
-    bin_op +
-    load_var x
-    load_var y
-    bin_op *
-    bin_op +
     load_const 100
-    cmp_op >
+    cmp_op <
 
   L17:
     jump_if_false L18
     pop 1
-
-  L18:
-    load_var x
+    load_var y
     load_const 0
     cmp_op >
+
+  L18:
     jump_if_false L19
     pop 1
-    load_var x
+    load_var y
     load_const 100
     cmp_op <
 
   L19:
     jump_if_false L20
     pop 1
+    load_var x
     load_var y
-    load_const 0
-    cmp_op >
+    cmp_op !=
 
   L20:
     jump_if_false L21
     pop 1
+    load_var x
     load_var y
-    load_const 100
+    bin_op +
+    load_const 150
     cmp_op <
 
   L21:
@@ -349,72 +343,47 @@ function user.AssertStmts(x: int, y: int) -> int {
     pop 1
     load_var x
     load_var y
-    cmp_op !=
+    bin_op *
+    load_const 10
+    cmp_op >
 
   L22:
     jump_if_false L23
     pop 1
-    load_var x
-    load_var y
-    bin_op +
-    load_const 150
-    cmp_op <
 
   L23:
+    load_var x
+    load_const 0
+    cmp_op >
     jump_if_false L24
     pop 1
     load_var x
-    load_var y
-    bin_op *
-    load_const 10
-    cmp_op >
+    load_const 100
+    cmp_op <
 
   L24:
     jump_if_false L25
     pop 1
-    load_var x
     load_var y
-    bin_op -
-    load_const 42
-    cmp_op !=
+    load_const 0
+    cmp_op >
 
   L25:
     jump_if_false L26
     pop 1
+    load_var y
+    load_const 100
+    cmp_op <
 
   L26:
-    load_var x
-    load_const 0
-    cmp_op >
     jump_if_false L27
-    pop 1
-    load_var x
-    load_const 100
-    cmp_op <
-
-  L27:
-    jump_if_false L28
-    pop 1
-    load_var y
-    load_const 0
-    cmp_op >
-
-  L28:
-    jump_if_false L29
-    pop 1
-    load_var y
-    load_const 100
-    cmp_op <
-
-  L29:
-    jump_if_false L30
     pop 1
     load_var x
     load_var y
     cmp_op !=
 
-  L30:
-    jump_if_false L31
+  L27:
+    jump_if_false L28
     pop 1
     load_var x
     load_var y
@@ -422,8 +391,8 @@ function user.AssertStmts(x: int, y: int) -> int {
     load_const 150
     cmp_op <
 
-  L31:
-    jump_if_false L32
+  L28:
+    jump_if_false L29
     pop 1
     load_var x
     load_var y
@@ -431,20 +400,11 @@ function user.AssertStmts(x: int, y: int) -> int {
     load_const 10
     cmp_op >
 
-  L32:
-    jump_if_false L33
-    pop 1
-    load_var x
-    load_var y
-    bin_op -
-    load_const 42
-    cmp_op !=
-
-  L33:
-    jump_if_false L34
+  L29:
+    jump_if_false L30
     pop 1
 
-  L34:
+  L30:
     load_var x
     return
 }
@@ -492,19 +452,6 @@ function user.BasicClient$new() -> null {
 }
 
 function user.BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool) -> int {
-    load_var flag
-    jump_if_false L0
-    pop 1
-
-  L0:
-    load_var flag
-    jump_if_false L1
-    jump L2
-
-  L1:
-    pop 1
-
-  L2:
     load_var a
     store_var mut_a
     load_var mut_a
@@ -550,6 +497,23 @@ function user.BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool)
     load_var a
     load_const 0
     cmp_op >
+    jump_if_false L0
+    pop 1
+
+  L0:
+    load_var a
+    load_const 0
+    cmp_op >
+    jump_if_false L1
+    jump L2
+
+  L1:
+    pop 1
+
+  L2:
+    load_var a
+    load_const 0
+    cmp_op >
     jump_if_false L3
     pop 1
 
@@ -558,133 +522,65 @@ function user.BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool)
     load_const 0
     cmp_op >
     jump_if_false L4
-    jump L5
-
-  L4:
-    pop 1
-
-  L5:
-    load_var a
-    load_const 0
-    cmp_op >
-    jump_if_false L6
     pop 1
     load_var b
+    load_const 0
+    cmp_op >
+
+  L4:
+    jump_if_false L5
+    pop 1
+    load_var c
+    load_const 0
+    cmp_op >
+
+  L5:
+    jump_if_false L6
+    pop 1
+    load_var d
     load_const 0
     cmp_op >
 
   L6:
     jump_if_false L7
     pop 1
+    load_var a
+    load_var b
+    cmp_op !=
 
   L7:
-    load_var a
-    load_const 0
-    cmp_op >
     jump_if_false L8
-    jump L9
-
-  L8:
     pop 1
     load_var b
-    load_const 0
-    cmp_op >
+    load_var c
+    cmp_op !=
+
+  L8:
+    jump_if_false L9
+    pop 1
+    load_var c
+    load_var d
+    cmp_op !=
 
   L9:
     jump_if_false L10
-    jump L11
-
-  L10:
-    pop 1
-
-  L11:
-    load_var a
-    load_const 0
-    cmp_op >
-    jump_if_false L12
-    pop 1
-    load_var b
-    load_const 0
-    cmp_op >
-
-  L12:
-    jump_if_false L13
-    jump L14
-
-  L13:
-    pop 1
-
-  L14:
-    load_var a
-    load_const 0
-    cmp_op >
-    jump_if_false L15
-    pop 1
-    load_var b
-    load_const 0
-    cmp_op >
-
-  L15:
-    jump_if_false L16
-    pop 1
-    load_var c
-    load_const 0
-    cmp_op >
-
-  L16:
-    jump_if_false L17
-    pop 1
-    load_var d
-    load_const 0
-    cmp_op >
-
-  L17:
-    jump_if_false L18
-    pop 1
-    load_var a
-    load_var b
-    cmp_op !=
-
-  L18:
-    jump_if_false L19
-    pop 1
-    load_var b
-    load_var c
-    cmp_op !=
-
-  L19:
-    jump_if_false L20
-    pop 1
-    load_var c
-    load_var d
-    cmp_op !=
-
-  L20:
-    jump_if_false L21
     pop 1
     load_var a
     load_const 8002
     cmp_op <
 
-  L21:
-    jump_if_false L22
+  L10:
+    jump_if_false L11
     pop 1
     load_var b
     load_const 1000
     cmp_op <
 
-  L22:
-    jump_if_false L23
-    pop 1
-    load_var c
-    load_const 1000
-    cmp_op <
-
-  L23:
-    jump_if_false L24
+  L11:
+    jump_if_false L12
     pop 1
 
-  L24:
+  L12:
     load_var a
     load_var b
     bin_op +
@@ -694,7 +590,7 @@ function user.BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool)
     bin_op +
     load_const 0
     cmp_op >
-    jump_if_false L25
+    jump_if_false L13
     pop 1
     load_var a
     load_var b
@@ -706,8 +602,8 @@ function user.BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool)
     load_const 10000
     cmp_op <
 
-  L25:
-    jump_if_false L26
+  L13:
+    jump_if_false L14
     pop 1
     load_var a
     load_var b
@@ -719,34 +615,11 @@ function user.BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool)
     load_const 0
     cmp_op !=
 
-  L26:
-    jump_if_false L27
-    pop 1
-    load_var a
-    load_var b
-    bin_op +
-    load_var c
-    load_var d
-    bin_op +
-    bin_op *
-    load_const 100
-    cmp_op >=
-
-  L27:
-    jump_if_false L28
-    jump L29
-
-  L28:
-    pop 1
-    load_var a
-    load_const 1
-    bin_op *
-    load_const 2
-    cmp_op <
-    jump_if_false L29
+  L14:
+    jump_if_false L15
     pop 1
 
-  L29:
+  L15:
     load_var mut_a
     load_var a
     load_var b
@@ -794,52 +667,38 @@ function user.BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool)
     load_var a
     load_const 0
     cmp_op >
-    jump_if_false L30
+    jump_if_false L16
     pop 1
     load_var b
     load_const 0
     cmp_op >
 
-  L30:
-    jump_if_false L31
+  L16:
+    jump_if_false L17
     pop 1
     load_var c
     load_const 0
     cmp_op >
 
-  L31:
-    jump_if_false L32
+  L17:
+    jump_if_false L18
     pop 1
     load_var d
     load_const 0
     cmp_op >
 
-  L32:
-    jump_if_false L33
+  L18:
+    jump_if_false L19
     pop 1
     load_var a
     load_var b
     cmp_op !=
 
-  L33:
-    jump_if_false L34
-    pop 1
-    load_var b
-    load_var c
-    cmp_op !=
-
-  L34:
-    jump_if_false L35
+  L19:
+    jump_if_false L20
     pop 1
 
-  L35:
-    load_var a
-    load_const 2
-    cmp_op ==
-    jump_if_false L36
-    pop 1
-
-  L36:
+  L20:
     load_var a
     load_var b
     bin_op +

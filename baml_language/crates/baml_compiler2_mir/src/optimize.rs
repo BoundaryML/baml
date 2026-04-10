@@ -903,7 +903,8 @@ fn eliminate_dead_locals(body: &mut MirFunctionBody, arity: usize) {
                 Terminator::Call { destination, .. } => Some(destination.base_local()),
                 Terminator::Await { destination, .. } => Some(destination.base_local()),
                 Terminator::DispatchFuture { future, .. } => Some(future.base_local()),
-                Terminator::ShortCircuit { destination, .. } => Some(destination.base_local()),
+                // ShortCircuit is side-effect-free (pure control flow), so its
+                // destination can be dead-eliminated like any other local.
                 _ => None,
             };
             if let Some(l) = dest_local {
@@ -949,6 +950,22 @@ fn eliminate_dead_locals(body: &mut MirFunctionBody, arity: usize) {
                 true
             }
         });
+    }
+
+    // Replace ShortCircuit terminators whose destination is dead with Goto
+    // to the join block. The now-unreachable eval_rhs block will be cleaned
+    // up by eliminate_dead_blocks.
+    for block in &mut body.blocks {
+        if let Some(Terminator::ShortCircuit {
+            destination: Place::Local(l),
+            join,
+            ..
+        }) = &block.terminator
+        {
+            if old_to_new[l.0].is_none() {
+                block.terminator = Some(Terminator::Goto { target: *join });
+            }
+        }
     }
 
     // Rewrite all Local references

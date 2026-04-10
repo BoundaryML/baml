@@ -903,7 +903,7 @@ function user.NullCoalescing(user: User?, fallback: string, count: int) -> strin
     load_const null
     cmp_op ==
     pop_jump_if_false L80
-    jump L83
+    jump L82
 
   L80:
     load_var user
@@ -911,34 +911,15 @@ function user.NullCoalescing(user: User?, fallback: string, count: int) -> strin
     load_const null
     cmp_op ==
     pop_jump_if_false L81
-    jump L83
+    jump L82
 
   L81:
     load_var user
     load_const null
     cmp_op ==
     pop_jump_if_false L82
-    jump L83
 
   L82:
-    load_var user
-    load_field .1
-    load_field .0
-    jump L84
-
-  L83:
-    load_const null
-
-  L84:
-    jump_if_false L85
-    jump L86
-
-  L85:
-    pop 1
-    load_const "Anonymous"
-    store_var d10
-
-  L86:
     load_var d1
     return
 }

@@ -2059,7 +2059,40 @@ async fn match_null_in_type_tag_jump_table() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode);
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function classify(x: int | string | bool | null) -> string {
+        load_var x
+        type_tag
+        jump_table [L3, L2, L1, L0], default L5
+
+      L0: null
+        load_const "null"
+        jump L4
+
+      L1: bool
+        load_const "bool"
+        jump L4
+
+      L2: string
+        load_const "string"
+        jump L4
+
+      L3: int
+        load_const "int"
+
+      L4:
+        return
+
+      L5:
+        unreachable
+    }
+
+    function main() -> string {
+        load_const null
+        call user.classify
+        return
+    }
+    "#);
     assert_eq!(
         output.result,
         Ok(BexExternalValue::String("null".to_string()))
@@ -2087,7 +2120,43 @@ async fn match_null_with_class_types_type_tag() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode);
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function classify(x: Cat | Dog | null) -> string {
+        load_var x
+        is_type Cat
+        pop_jump_if_false L0
+        jump L3
+
+      L0:
+        load_var x
+        is_type Dog
+        pop_jump_if_false L1
+        jump L2
+
+      L1:
+        load_var x
+        is_type null
+        pop_jump_if_false L4
+        load_const "nothing"
+        jump L4
+
+      L2:
+        load_const "dog"
+        jump L4
+
+      L3:
+        load_const "cat"
+
+      L4:
+        return
+    }
+
+    function main() -> string {
+        load_const null
+        call user.classify
+        return
+    }
+    "#);
     assert_eq!(
         output.result,
         Ok(BexExternalValue::String("nothing".to_string()))
