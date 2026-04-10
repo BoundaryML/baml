@@ -18,6 +18,7 @@ workspace = true
 
 [dependencies]
 baml_base = { workspace = true }
+smol_str = { workspace = true }
 
 [dev-dependencies]
 anyhow = { workspace = true }

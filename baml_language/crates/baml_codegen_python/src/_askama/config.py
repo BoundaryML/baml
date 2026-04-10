@@ -6,10 +6,18 @@ import typing_extensions
 import typing
 import functools
 
-from baml_py.logging import (
-    get_log_level as baml_get_log_level,
-    set_log_level as baml_set_log_level,
-)
+try:
+    from baml.logging import (
+        get_log_level as baml_get_log_level,
+        set_log_level as baml_set_log_level,
+    )
+except ImportError:
+    def baml_get_log_level():  # type: ignore[misc]
+        return os.environ.get("BAML_LOG", "INFO")
+
+    def baml_set_log_level(level: str) -> None:  # type: ignore[misc]
+        pass
+
 from .globals import reset_baml_env_vars
 
 rT = typing_extensions.TypeVar("rT")  # return type

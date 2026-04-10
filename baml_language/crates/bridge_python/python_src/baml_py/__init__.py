@@ -2,7 +2,7 @@
 
 import atexit
 
-from .baml_py import (
+from .baml import (
     AbortController,
     BamlRuntime,
     Collector as _RustCollector,

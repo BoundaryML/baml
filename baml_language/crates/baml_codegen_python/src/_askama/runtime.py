@@ -3,7 +3,13 @@ from __future__ import annotations
 import typing
 import typing_extensions
 
-import baml_py
+try:
+    import baml
+except ImportError:
+    import types as _types
+    baml = _types.ModuleType("baml")  # type: ignore[assignment]
+    for _n in ("Image", "Audio", "Video", "Pdf", "Collector", "AbortController", "Options"):
+        setattr(baml, _n, type(_n, (), {}))
 
 from .globals import (
     DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME as __runtime__,
@@ -12,9 +18,9 @@ from .globals import (
 
 class BamlCallOptions(typing.TypedDict, total=False):
     collector: typing_extensions.NotRequired[
-        typing.Union[baml_py.Collector, typing.List[baml_py.Collector]]
+        typing.Union[baml.Collector, typing.List[baml.Collector]]
     ]
-    abort_controller: typing_extensions.NotRequired[baml_py.AbortController]
+    abort_controller: typing_extensions.NotRequired[baml.AbortController]
 
 
 class DoNotUseDirectlyCallManager:
@@ -32,7 +38,7 @@ class DoNotUseDirectlyCallManager:
 
     def _resolve_collectors(
         self,
-    ) -> typing.Optional[typing.List[baml_py.Collector]]:
+    ) -> typing.Optional[typing.List[baml.Collector]]:
         c = self.__baml_options.get("collector")
         if c is None:
             return None
@@ -41,7 +47,7 @@ class DoNotUseDirectlyCallManager:
     def call_function_sync(
         self, *, function_name: str, args: typing.Dict[str, typing.Any]
     ) -> typing.Any:
-        return baml_py.call_function_sync(
+        return baml.call_function_sync(
             __runtime__,
             function_name,
             args,
@@ -52,7 +58,7 @@ class DoNotUseDirectlyCallManager:
     async def call_function_async(
         self, *, function_name: str, args: typing.Dict[str, typing.Any]
     ) -> typing.Any:
-        return await baml_py.call_function(
+        return await baml.call_function(
             __runtime__,
             function_name,
             args,

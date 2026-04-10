@@ -36,6 +36,39 @@ baml_codegen_types::render_fn! {
     pub fn print_async_impl(function_: &crate::objects::Function, ns: crate::ty::Namespace) -> String;
 }
 
+baml_codegen_types::render_fn! {
+    /// ```askama
+    /// def {{function_.name}}{{ function_.render_args(*ns) }} -> {{ function_.return_type.render(*ns) }}:
+    ///     {{ function_.assembed_docstring.as_docstring()|indent(4) }}
+    ///     __result__ = _get_runtime().merge_options(baml_options or {}).call_function_sync(
+    ///         function_name="{{ function_.wire_name }}",
+    ///         args={{ function_.render_args_dict() }},
+    ///     )
+    ///     return {{ function_.render_coerce_result(*ns) }}
+    /// ```
+    pub fn print_sync_module_fn(function_: &crate::objects::Function, ns: crate::ty::Namespace) -> String;
+}
+
+baml_codegen_types::render_fn! {
+    /// ```askama
+    /// async def {{function_.name}}{{ function_.render_args(*ns) }} -> {{ function_.return_type.render(*ns) }}:
+    ///     {{ function_.assembed_docstring.as_docstring()|indent(4) }}
+    ///     __result__ = await _get_runtime().merge_options(baml_options or {}).call_function_async(
+    ///         function_name="{{ function_.wire_name }}",
+    ///         args={{ function_.render_args_dict() }},
+    ///     )
+    ///     return {{ function_.render_coerce_result(*ns) }}
+    /// ```
+    pub fn print_async_module_fn(function_: &crate::objects::Function, ns: crate::ty::Namespace) -> String;
+}
+
+baml_codegen_types::render_fn! {
+    /// ```askama
+    /// def {{function_.name}}{{ function_.render_args(*ns) }} -> {{ function_.return_type.render(*ns) }}: ...
+    /// ```
+    pub fn print_module_fn_pyi(function_: &crate::objects::Function, ns: crate::ty::Namespace) -> String;
+}
+
 impl crate::objects::Function {
     fn render_args(&self, ns: crate::ty::Namespace) -> String {
         let args = self
@@ -48,6 +81,21 @@ impl crate::objects::Function {
             return format!("(\n    {},\n)", args.join(",\n    "));
         }
         format!("({})", args.join(", "))
+    }
+
+    /// Same as `render_args` but callable from plain Rust code (not just askama templates).
+    pub(super) fn render_args_str(&self, ns: crate::ty::Namespace) -> String {
+        self.render_args(ns)
+    }
+
+    /// Callable from plain Rust code.
+    pub(super) fn render_coerce_result_str(&self, ns: crate::ty::Namespace) -> String {
+        self.render_coerce_result(ns)
+    }
+
+    /// Callable from plain Rust code.
+    pub(super) fn render_args_dict_str(&self) -> String {
+        self.render_args_dict()
     }
 
     /// Render method parameters (without `self`, without `baml_options`).

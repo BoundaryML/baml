@@ -2,7 +2,11 @@ use crate::{objects::TypeAlias, ty::Namespace};
 
 baml_codegen_types::render_fn! {
     /// ```askama
-    /// {{ type_alias.name.render(*namespace) }} = {{ type_alias.resolves_to.render(*namespace) }}
+    /// {% if type_alias.is_recursive() -%}
+    /// {{ type_alias.render_name(*namespace) }} = typing_extensions.TypeAliasType("{{ type_alias.render_name(*namespace) }}", {{ type_alias.render_rhs(*namespace) }})
+    /// {% else -%}
+    /// {{ type_alias.render_name(*namespace) }} = {{ type_alias.render_rhs(*namespace) }}
+    /// {% endif %}
     /// ```
     pub fn print(type_alias: &TypeAlias, namespace: Namespace) -> String;
 }
@@ -147,5 +151,36 @@ mod tests {
         type ComplexType = "map<string, Item?[]>"
         =>
         "ComplexType = typing.Dict[str, typing.List[typing.Optional[Item]]]"
+    }
+
+    #[test]
+    fn type_alias_recursive_self_ref() {
+        // RecursiveAlias = int | RecursiveAlias[]
+        // Recursive type aliases use TypeAliasType for Pydantic v2 compatibility.
+        // The self-reference inside the body should be quoted to avoid NameError.
+        // Note: the test builder parses "int | RecursiveAlias[]" as List(Union(int, RecursiveAlias))
+        // due to suffix-first parsing, so the generated form is List[Union[int, "RecursiveAlias"]].
+        use baml_codegen_tests::ty;
+        use baml_codegen_types::{Namespace, TypeAlias as CgTypeAlias};
+
+        let type_alias = TypeAlias::from_codegen_types(&CgTypeAlias {
+            name: baml_codegen_types::Name {
+                name: "RecursiveAlias".into(),
+                namespace: Namespace::Types { path: vec![] },
+            },
+            resolves_to: ty("int | RecursiveAlias[]"),
+            recursive: true,
+        });
+        let rendered = print(&type_alias, crate::ty::Namespace::Types);
+        // The self-reference "RecursiveAlias" inside the body should be quoted
+        assert!(
+            rendered.contains("\"RecursiveAlias\""),
+            "Expected quoted self-ref in: {rendered}"
+        );
+        // Recursive aliases use TypeAliasType for Pydantic v2 compatibility
+        assert_eq!(
+            rendered.trim(),
+            r#"RecursiveAlias = typing_extensions.TypeAliasType("RecursiveAlias", typing.List[typing.Union[int, "RecursiveAlias"]])"#
+        );
     }
 }

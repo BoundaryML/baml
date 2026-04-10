@@ -17,7 +17,7 @@ import tempfile
 
 import pytest
 
-from baml_py import BamlRuntime, FunctionResult, HostSpanManager, flush_events, get_version, call_function, call_function_sync
+from baml import BamlRuntime, FunctionResult, HostSpanManager, flush_events, get_version, call_function, call_function_sync
 
 
 # ============================================================================
@@ -271,7 +271,7 @@ class TestTracing:
 
     def test_trace_decorator_sync(self):
         """@trace decorator records function start/end events."""
-        from baml_py import BamlCtxManager
+        from baml import BamlCtxManager
 
         rt = make_runtime(EXPR_FUNCS_BAML)
         ctx = BamlCtxManager(rt)
@@ -299,7 +299,7 @@ class TestTracing:
     @pytest.mark.asyncio
     async def test_trace_decorator_async(self):
         """@trace decorator works with async functions."""
-        from baml_py import BamlCtxManager
+        from baml import BamlCtxManager
 
         rt = make_runtime(EXPR_FUNCS_BAML)
         ctx = BamlCtxManager(rt)
@@ -325,7 +325,7 @@ class TestTracing:
 
     def test_nested_trace_callstack(self):
         """Nested @trace calls build a proper call stack."""
-        from baml_py import BamlCtxManager
+        from baml import BamlCtxManager
 
         rt = make_runtime(EXPR_FUNCS_BAML)
         ctx = BamlCtxManager(rt)
@@ -353,7 +353,7 @@ class TestTracing:
 
     def test_flush_trace_events(self):
         """Flushing writes trace events to the JSONL file."""
-        from baml_py import BamlCtxManager
+        from baml import BamlCtxManager
 
         rt = make_runtime(EXPR_FUNCS_BAML)
         ctx = BamlCtxManager(rt)
@@ -373,7 +373,7 @@ class TestTracing:
 
     def test_tag_propagation(self):
         """Tags set on the current span are emitted as SetTags events."""
-        from baml_py import BamlCtxManager
+        from baml import BamlCtxManager
 
         rt = make_runtime(EXPR_FUNCS_BAML)
         ctx = BamlCtxManager(rt)

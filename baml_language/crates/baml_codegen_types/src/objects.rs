@@ -22,6 +22,9 @@ pub struct Function {
 
     // TODO: add other APIs here that impact code-gen
     pub watchers: Vec<(baml_base::Name, super::Ty)>,
+
+    /// Companion functions attached to this function (e.g. `build_request`, `parse`).
+    pub companions: Vec<(String, Function)>,
 }
 
 pub struct FunctionArgument {
@@ -57,6 +60,8 @@ pub struct EnumVariant {
 pub struct TypeAlias {
     pub name: super::Name,
     pub resolves_to: super::Ty,
+    /// Whether this type alias is recursive (i.e., references itself).
+    pub recursive: bool,
 }
 
 impl Object {
@@ -89,6 +94,9 @@ impl Function {
         if let Some(stream_type) = &self.stream_return_type {
             stream_type.validate()?;
         }
+        for (_, companion) in &self.companions {
+            companion.validate()?;
+        }
 
         Ok(())
     }
@@ -102,6 +110,11 @@ impl Function {
                 self.stream_return_type
                     .iter()
                     .flat_map(|ty| ty.walk_all_unions().into_iter()),
+            )
+            .chain(
+                self.companions
+                    .iter()
+                    .flat_map(|(_, c)| c.walk_all_unions().into_iter()),
             )
             .collect()
     }
@@ -142,27 +155,31 @@ impl super::Ty {
         }
 
         match self {
-            Ty::Int |
-            Ty::Float  |
-            Ty::String |
-            Ty::Bool |
-            Ty::Null |
-            Ty::Unit |
-            Ty::Uint8Array |
-            Ty::Media(_) |
-            Ty::Class(_) |
-            Ty::Enum(_) |
-            // Unions are guranteed to not have unions thanks to .validate()
-            Ty::Union(_) |
-            Ty::Literal(_) => {},
-            Ty::Optional(ty) |
-            Ty::List(ty) |
-            Ty::Checked(ty, _) |
-            Ty::StreamState(ty) |
-            Ty::Map { key: _, value: ty } => {
+            Ty::Int
+            | Ty::Float
+            | Ty::String
+            | Ty::Bool
+            | Ty::Null
+            | Ty::Unit
+            | Ty::Uint8Array
+            | Ty::Media(_)
+            | Ty::Class(_)
+            | Ty::Enum(_)
+            | Ty::TypeAlias(_)
+            | Ty::BuiltinUnknown
+            // Unions are guaranteed to not have unions thanks to .validate()
+            | Ty::Union(_)
+            | Ty::Literal(_) => {}
+            Ty::Optional(ty) | Ty::List(ty) | Ty::Map { key: _, value: ty } => {
                 unions.extend(ty.walk_all_unions());
-            },
-            Ty::BamlOptions => {},
+            }
+            Ty::Callable { params, ret } => {
+                for p in params {
+                    unions.extend(p.walk_all_unions());
+                }
+                unions.extend(ret.walk_all_unions());
+            }
+            Ty::BamlOptions => {}
         }
 
         unions

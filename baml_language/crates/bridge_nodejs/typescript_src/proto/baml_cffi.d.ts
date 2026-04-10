@@ -1,10 +1,3 @@
-/**
- * THIS FILE IS AUTO-GENERATED — DO NOT EDIT BY HAND.
- *
- * Source: baml_language/crates/bridge_nodejs/typescript_src/
- * Proto:  baml_language/crates/bridge_ctypes/types/baml/cffi/v1/*.proto
- * Build:  cd baml_language/crates/bridge_nodejs && pnpm build:debug
- */
 import * as $protobuf from "protobufjs";
 import Long = require("long");
 /** Namespace baml. */
@@ -1048,12 +1041,6 @@ export namespace baml {
                 /** BamlOutboundValue unionVariantValue */
                 unionVariantValue?: (baml.cffi.v1.IBamlValueUnionVariant|null);
 
-                /** BamlOutboundValue checkedValue */
-                checkedValue?: (baml.cffi.v1.IBamlValueChecked|null);
-
-                /** BamlOutboundValue streamingStateValue */
-                streamingStateValue?: (baml.cffi.v1.IBamlValueStreamingState|null);
-
                 /** BamlOutboundValue handleValue */
                 handleValue?: (baml.cffi.v1.IBamlHandle|null);
 
@@ -1109,12 +1096,6 @@ export namespace baml {
                 /** BamlOutboundValue unionVariantValue. */
                 public unionVariantValue?: (baml.cffi.v1.IBamlValueUnionVariant|null);
 
-                /** BamlOutboundValue checkedValue. */
-                public checkedValue?: (baml.cffi.v1.IBamlValueChecked|null);
-
-                /** BamlOutboundValue streamingStateValue. */
-                public streamingStateValue?: (baml.cffi.v1.IBamlValueStreamingState|null);
-
                 /** BamlOutboundValue handleValue. */
                 public handleValue?: (baml.cffi.v1.IBamlHandle|null);
 
@@ -1128,7 +1109,7 @@ export namespace baml {
                 public uint8arrayValue?: (Uint8Array|null);
 
                 /** BamlOutboundValue value. */
-                public value?: ("nullValue"|"stringValue"|"intValue"|"floatValue"|"boolValue"|"classValue"|"enumValue"|"literalValue"|"listValue"|"mapValue"|"unionVariantValue"|"checkedValue"|"streamingStateValue"|"handleValue"|"mediaValue"|"promptAstValue"|"uint8arrayValue");
+                public value?: ("nullValue"|"stringValue"|"intValue"|"floatValue"|"boolValue"|"classValue"|"enumValue"|"literalValue"|"listValue"|"mapValue"|"unionVariantValue"|"handleValue"|"mediaValue"|"promptAstValue"|"uint8arrayValue");
 
                 /**
                  * Creates a new BamlOutboundValue instance using the specified properties.
@@ -2059,115 +2040,6 @@ export namespace baml {
 
                 /**
                  * Gets the default type url for BamlValueUnionVariant
-                 * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-                 * @returns The default type url
-                 */
-                public static getTypeUrl(typeUrlPrefix?: string): string;
-            }
-
-            /** Properties of a BamlValueChecked. */
-            interface IBamlValueChecked {
-
-                /** BamlValueChecked name */
-                name?: (baml.cffi.v1.IBamlTypeName|null);
-
-                /** BamlValueChecked value */
-                value?: (baml.cffi.v1.IBamlOutboundValue|null);
-
-                /** BamlValueChecked checks */
-                checks?: (baml.cffi.v1.IBamlCheckValue[]|null);
-            }
-
-            /** Represents a BamlValueChecked. */
-            class BamlValueChecked implements IBamlValueChecked {
-
-                /**
-                 * Constructs a new BamlValueChecked.
-                 * @param [properties] Properties to set
-                 */
-                constructor(properties?: baml.cffi.v1.IBamlValueChecked);
-
-                /** BamlValueChecked name. */
-                public name?: (baml.cffi.v1.IBamlTypeName|null);
-
-                /** BamlValueChecked value. */
-                public value?: (baml.cffi.v1.IBamlOutboundValue|null);
-
-                /** BamlValueChecked checks. */
-                public checks: baml.cffi.v1.IBamlCheckValue[];
-
-                /**
-                 * Creates a new BamlValueChecked instance using the specified properties.
-                 * @param [properties] Properties to set
-                 * @returns BamlValueChecked instance
-                 */
-                public static create(properties?: baml.cffi.v1.IBamlValueChecked): baml.cffi.v1.BamlValueChecked;
-
-                /**
-                 * Encodes the specified BamlValueChecked message. Does not implicitly {@link baml.cffi.v1.BamlValueChecked.verify|verify} messages.
-                 * @param message BamlValueChecked message or plain object to encode
-                 * @param [writer] Writer to encode to
-                 * @returns Writer
-                 */
-                public static encode(message: baml.cffi.v1.IBamlValueChecked, writer?: $protobuf.Writer): $protobuf.Writer;
-
-                /**
-                 * Encodes the specified BamlValueChecked message, length delimited. Does not implicitly {@link baml.cffi.v1.BamlValueChecked.verify|verify} messages.
-                 * @param message BamlValueChecked message or plain object to encode
-                 * @param [writer] Writer to encode to
-                 * @returns Writer
-                 */
-                public static encodeDelimited(message: baml.cffi.v1.IBamlValueChecked, writer?: $protobuf.Writer): $protobuf.Writer;
-
-                /**
-                 * Decodes a BamlValueChecked message from the specified reader or buffer.
-                 * @param reader Reader or buffer to decode from
-                 * @param [length] Message length if known beforehand
-                 * @returns BamlValueChecked
-                 * @throws {Error} If the payload is not a reader or valid buffer
-                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
-                 */
-                public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): baml.cffi.v1.BamlValueChecked;
-
-                /**
-                 * Decodes a BamlValueChecked message from the specified reader or buffer, length delimited.
-                 * @param reader Reader or buffer to decode from
-                 * @returns BamlValueChecked
-                 * @throws {Error} If the payload is not a reader or valid buffer
-                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
-                 */
-                public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): baml.cffi.v1.BamlValueChecked;
-
-                /**
-                 * Verifies a BamlValueChecked message.
-                 * @param message Plain object to verify
-                 * @returns `null` if valid, otherwise the reason why it is not
-                 */
-                public static verify(message: { [k: string]: any }): (string|null);
-
-                /**
-                 * Creates a BamlValueChecked message from a plain object. Also converts values to their respective internal types.
-                 * @param object Plain object
-                 * @returns BamlValueChecked
-                 */
-                public static fromObject(object: { [k: string]: any }): baml.cffi.v1.BamlValueChecked;
-
-                /**
-                 * Creates a plain object from a BamlValueChecked message. Also converts values to other types if specified.
-                 * @param message BamlValueChecked
-                 * @param [options] Conversion options
-                 * @returns Plain object
-                 */
-                public static toObject(message: baml.cffi.v1.BamlValueChecked, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-                /**
-                 * Converts this BamlValueChecked to JSON.
-                 * @returns JSON object
-                 */
-                public toJSON(): { [k: string]: any };
-
-                /**
-                 * Gets the default type url for BamlValueChecked
                  * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
                  * @returns The default type url
                  */
@@ -5362,122 +5234,6 @@ export namespace baml {
 
                 /**
                  * Gets the default type url for BamlCheckValue
-                 * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-                 * @returns The default type url
-                 */
-                public static getTypeUrl(typeUrlPrefix?: string): string;
-            }
-
-            /** BamlStreamState enum. */
-            enum BamlStreamState {
-                PENDING = 0,
-                STARTED = 1,
-                DONE = 2
-            }
-
-            /** Properties of a BamlValueStreamingState. */
-            interface IBamlValueStreamingState {
-
-                /** BamlValueStreamingState value */
-                value?: (baml.cffi.v1.IBamlOutboundValue|null);
-
-                /** BamlValueStreamingState state */
-                state?: (baml.cffi.v1.BamlStreamState|null);
-
-                /** BamlValueStreamingState name */
-                name?: (baml.cffi.v1.IBamlTypeName|null);
-            }
-
-            /** Represents a BamlValueStreamingState. */
-            class BamlValueStreamingState implements IBamlValueStreamingState {
-
-                /**
-                 * Constructs a new BamlValueStreamingState.
-                 * @param [properties] Properties to set
-                 */
-                constructor(properties?: baml.cffi.v1.IBamlValueStreamingState);
-
-                /** BamlValueStreamingState value. */
-                public value?: (baml.cffi.v1.IBamlOutboundValue|null);
-
-                /** BamlValueStreamingState state. */
-                public state: baml.cffi.v1.BamlStreamState;
-
-                /** BamlValueStreamingState name. */
-                public name?: (baml.cffi.v1.IBamlTypeName|null);
-
-                /**
-                 * Creates a new BamlValueStreamingState instance using the specified properties.
-                 * @param [properties] Properties to set
-                 * @returns BamlValueStreamingState instance
-                 */
-                public static create(properties?: baml.cffi.v1.IBamlValueStreamingState): baml.cffi.v1.BamlValueStreamingState;
-
-                /**
-                 * Encodes the specified BamlValueStreamingState message. Does not implicitly {@link baml.cffi.v1.BamlValueStreamingState.verify|verify} messages.
-                 * @param message BamlValueStreamingState message or plain object to encode
-                 * @param [writer] Writer to encode to
-                 * @returns Writer
-                 */
-                public static encode(message: baml.cffi.v1.IBamlValueStreamingState, writer?: $protobuf.Writer): $protobuf.Writer;
-
-                /**
-                 * Encodes the specified BamlValueStreamingState message, length delimited. Does not implicitly {@link baml.cffi.v1.BamlValueStreamingState.verify|verify} messages.
-                 * @param message BamlValueStreamingState message or plain object to encode
-                 * @param [writer] Writer to encode to
-                 * @returns Writer
-                 */
-                public static encodeDelimited(message: baml.cffi.v1.IBamlValueStreamingState, writer?: $protobuf.Writer): $protobuf.Writer;
-
-                /**
-                 * Decodes a BamlValueStreamingState message from the specified reader or buffer.
-                 * @param reader Reader or buffer to decode from
-                 * @param [length] Message length if known beforehand
-                 * @returns BamlValueStreamingState
-                 * @throws {Error} If the payload is not a reader or valid buffer
-                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
-                 */
-                public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): baml.cffi.v1.BamlValueStreamingState;
-
-                /**
-                 * Decodes a BamlValueStreamingState message from the specified reader or buffer, length delimited.
-                 * @param reader Reader or buffer to decode from
-                 * @returns BamlValueStreamingState
-                 * @throws {Error} If the payload is not a reader or valid buffer
-                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
-                 */
-                public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): baml.cffi.v1.BamlValueStreamingState;
-
-                /**
-                 * Verifies a BamlValueStreamingState message.
-                 * @param message Plain object to verify
-                 * @returns `null` if valid, otherwise the reason why it is not
-                 */
-                public static verify(message: { [k: string]: any }): (string|null);
-
-                /**
-                 * Creates a BamlValueStreamingState message from a plain object. Also converts values to their respective internal types.
-                 * @param object Plain object
-                 * @returns BamlValueStreamingState
-                 */
-                public static fromObject(object: { [k: string]: any }): baml.cffi.v1.BamlValueStreamingState;
-
-                /**
-                 * Creates a plain object from a BamlValueStreamingState message. Also converts values to other types if specified.
-                 * @param message BamlValueStreamingState
-                 * @param [options] Conversion options
-                 * @returns Plain object
-                 */
-                public static toObject(message: baml.cffi.v1.BamlValueStreamingState, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-                /**
-                 * Converts this BamlValueStreamingState to JSON.
-                 * @returns JSON object
-                 */
-                public toJSON(): { [k: string]: any };
-
-                /**
-                 * Gets the default type url for BamlValueStreamingState
                  * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
                  * @returns The default type url
                  */

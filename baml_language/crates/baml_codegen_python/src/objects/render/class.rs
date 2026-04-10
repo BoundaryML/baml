@@ -2,20 +2,20 @@ use crate::{objects::Class, ty::Namespace};
 
 baml_codegen_types::render_fn! {
     /// ```askama
-    /// class {{class_.name.render(*namespace)}}(BaseModel):
+    /// class {{class_.name.render(*namespace)}}(pydantic.BaseModel):
     ///     {%- if let Some(docstring) = class_.docstring %}
     ///     {{ docstring.as_docstring()|indent(4) }}
-    ///     {% endif -%}
-    ///
-    ///     {% for property in class_.properties %}
+    ///     {%- endif %}
+    ///     model_config = pydantic.ConfigDict(arbitrary_types_allowed=True)
+    /// {% for property in class_.properties %}
     ///     {% if let Some(docstring) = property.docstring -%}
     ///     {{ docstring.as_comment() }}
     ///     {% endif -%}
     ///     {{ property.name }}: {{ property.ty.render(*namespace) }}
-    ///     {%- endfor %}
+    /// {%- endfor %}
     ///     {%- if class_.properties.is_empty() && class_.docstring.is_none() %}
     ///     pass
-    ///     {% endif %}
+    ///     {%- endif %}
     /// ```
     pub fn print(class_: &Class, namespace: Namespace) -> String;
 }
@@ -63,8 +63,9 @@ mod tests {
         }
         =>
         r#"
-            class Person(BaseModel):
+            class Person(pydantic.BaseModel):
                 """A person model"""
+                model_config = pydantic.ConfigDict(arbitrary_types_allowed=True)
 
                 # The person's name
                 name: str
@@ -81,7 +82,9 @@ mod tests {
         }
         =>
         r#"
-            class User(BaseModel):
+            class User(pydantic.BaseModel):
+                model_config = pydantic.ConfigDict(arbitrary_types_allowed=True)
+
                 email: str
                 active: bool
             "#
@@ -95,9 +98,10 @@ mod tests {
         }
         =>
         r#"
-            class Config(BaseModel):
+            class Config(pydantic.BaseModel):
                 """Configuration settings"""
-                
+                model_config = pydantic.ConfigDict(arbitrary_types_allowed=True)
+
                 timeout: int
                 retries: int
             "#
@@ -112,7 +116,9 @@ mod tests {
         }
         =>
         r#"
-            class Request(BaseModel):
+            class Request(pydantic.BaseModel):
+                model_config = pydantic.ConfigDict(arbitrary_types_allowed=True)
+
                 # The URL to request
                 url: str
                 method: str
@@ -129,12 +135,13 @@ mod tests {
         }
         =>
         r#"
-            class Animal(BaseModel):
+            class Animal(pydantic.BaseModel):
                 """
                 An animal model.
                 Used for classification.
                 """
-                
+                model_config = pydantic.ConfigDict(arbitrary_types_allowed=True)
+
                 # The species name
                 species: str
                 weight: float
@@ -147,7 +154,9 @@ mod tests {
         }
         =>
         r#"
-            class Empty(BaseModel):
+            class Empty(pydantic.BaseModel):
+                model_config = pydantic.ConfigDict(arbitrary_types_allowed=True)
+
                 pass
             "#
     }
@@ -158,8 +167,9 @@ mod tests {
         }
         =>
         r#"
-            class EmptyWithDoc(BaseModel):
+            class EmptyWithDoc(pydantic.BaseModel):
                 """Empty class"""
+                model_config = pydantic.ConfigDict(arbitrary_types_allowed=True)
             "#
     }
 
@@ -171,7 +181,9 @@ mod tests {
         }
         =>
         r#"
-            class Profile(BaseModel):
+            class Profile(pydantic.BaseModel):
+                model_config = pydantic.ConfigDict(arbitrary_types_allowed=True)
+
                 name: str
                 bio: typing.Optional[str]
             "#
@@ -185,7 +197,9 @@ mod tests {
         }
         =>
         r#"
-            class Team(BaseModel):
+            class Team(pydantic.BaseModel):
+                model_config = pydantic.ConfigDict(arbitrary_types_allowed=True)
+
                 name: str
                 members: typing.List[str]
             "#
@@ -199,7 +213,9 @@ mod tests {
         }
         =>
         r#"
-            class Order(BaseModel):
+            class Order(pydantic.BaseModel):
+                model_config = pydantic.ConfigDict(arbitrary_types_allowed=True)
+
                 id: int
                 item: Product
             "#
@@ -213,7 +229,9 @@ mod tests {
         }
         =>
         r#"
-            class Response(BaseModel):
+            class Response(pydantic.BaseModel):
+                model_config = pydantic.ConfigDict(arbitrary_types_allowed=True)
+
                 data: typing.List[str]
                 errors: typing.Optional[str]
             "#

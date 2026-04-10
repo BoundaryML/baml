@@ -222,4 +222,50 @@ define_fixtures! {
             },
         }
     },
+
+    /// BEP-030: Packages and namespaces — types spread across multiple namespace paths.
+    packages_and_namespaces => {
+        object_pool! {
+            class Resume { name: "string" },
+            class "types.foo.Sentiment" { label: "string" },
+            class "types.other.foo.Address" { street: "string" },
+            class "types.baml.http.Request" { url: "string" },
+        }
+    },
+
+    /// BEP-030: Functions with attached companion methods.
+    companion_functions => {
+        object_pool! {
+            class Resume { name: "string" },
+            class "types.foo.Sentiment" { label: "string" },
+            fn ExtractResume(resume: "string") -> "Resume"
+                companions = {
+                    fn build_request(resume: "string") -> "string",
+                    fn render_prompt(resume: "string") -> "string",
+                    fn parse(json: "string") -> "Resume",
+                },
+            fn "foo.ClassifySentiment"(input: "string") -> "types.foo.Sentiment"
+                companions = {
+                    fn build_request(input: "string") -> "string",
+                },
+        }
+    },
+
+    /// BEP-030: Every BEP-030 Ty variant round-trips through codegen.
+    full_type_coverage => {
+        object_pool! {
+            class MyClass { id: "int" },
+            class CoverAll {
+                unknown_field: "unknown",
+                callable_field: "callable<[int], string>",
+                alias_field: "RecursiveAlias",
+                image_field: "image",
+                literal_field: "string(\"Hello\")",
+                optional_nested: "MyClass?[]",
+                union_field: "int | string",
+                self_ref: "CoverAll?",
+            },
+            type "RecursiveAlias" = "int | RecursiveAlias[]",
+        }
+    },
 }
