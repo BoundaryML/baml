@@ -1217,6 +1217,14 @@ impl BexVm {
                     Self::local_slot_stack_index(locals_offset, entry.error_slot);
                 self.stack[error_stack_slot] = exception_value;
 
+                // Store stack trace in stack_trace_slot if the catch clause binds it.
+                if entry.has_stack_trace_slot() {
+                    let st_value = self.alloc_stack_trace(&trace);
+                    let st_stack_slot =
+                        Self::local_slot_stack_index(locals_offset, entry.stack_trace_slot);
+                    self.stack[st_stack_slot] = st_value;
+                }
+
                 // Jump to the handler.
                 self.frames[depth].instruction_ptr = entry.handler_pc;
 

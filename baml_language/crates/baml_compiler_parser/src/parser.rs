@@ -3116,6 +3116,13 @@ impl<'a> Parser<'a> {
                 return;
             }
             p.parse_catch_pattern();
+            // Optional second binding: catch (e, stack_trace)
+            if p.at(TokenKind::Comma) {
+                p.bump(); // consume ','
+                p.with_node(SyntaxKind::CATCH_STACK_TRACE_BINDING, |p| {
+                    p.expect(TokenKind::Word);
+                });
+            }
             p.expect(TokenKind::RParen);
 
             if !p.at(TokenKind::LBrace) {

@@ -4394,3 +4394,71 @@ function main() -> int {
     uncaught throw: Instance { class_name: "baml.panics.DivisionByZero", fields: {"dividend": Int(42)} }
     "#);
 }
+
+// ============================================================================
+// §N+1 — catch (e, stack_trace) binding
+// ============================================================================
+
+#[tokio::test]
+async fn catch_with_stack_trace_binding() {
+    let output = baml_test!(
+        r#"
+function inner() -> string {
+  throw "boom"
+}
+
+function main() -> string {
+  inner() catch (e, st) {
+    _ => { st.to_string() }
+  }
+}
+"#
+    );
+
+    let result = output.result.unwrap();
+    insta::assert_snapshot!(format!("{result:?}"), @r#"String("Traceback (most recent call last):\n  File \"test.baml\", line 7, in user.main\n  File \"test.baml\", line 3, in user.inner")"#);
+}
+
+#[tokio::test]
+async fn catch_without_stack_trace_still_works() {
+    let output = baml_test!(
+        r#"
+function inner() -> string {
+  throw "oops"
+}
+
+function main() -> string {
+  inner() catch (e) {
+    string => { e }
+  }
+}
+"#
+    );
+
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("oops".to_string()))
+    );
+}
+
+#[tokio::test]
+async fn catch_stack_trace_on_panic() {
+    let output = baml_test!(
+        r#"
+function divider() -> int {
+  42 / 0
+}
+
+function main() -> int | string {
+  divider() catch (e, st) {
+    DivisionByZero => { st.to_string() }
+  }
+}
+"#
+    );
+
+    let result = output.result.unwrap();
+    let s = format!("{result:?}");
+    assert!(s.contains("Traceback"), "expected traceback, got: {s}");
+    assert!(s.contains("divider"), "expected divider frame, got: {s}");
+}

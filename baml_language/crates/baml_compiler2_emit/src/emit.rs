@@ -1480,11 +1480,17 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                  body entry {body_entry:?} (pc {start_pc}) — RPO ordering bug"
             );
 
+            let stack_trace_slot = region
+                .stack_trace_local
+                .and_then(|local| self.local_slots.get(&local).copied())
+                .unwrap_or(ExceptionTableEntry::NO_STACK_TRACE);
+
             self.bytecode.exception_table.push(ExceptionTableEntry {
                 start_pc,
                 end_pc: handler_pc,
                 handler_pc,
                 error_slot,
+                stack_trace_slot,
             });
         }
 

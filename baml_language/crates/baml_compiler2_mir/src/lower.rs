@@ -4224,6 +4224,28 @@ impl LoweringContext<'_> {
             self.locals.insert(name, error_local);
         }
 
+        // Declare stack trace local if the catch clause has a second binding.
+        let stack_trace_local = clauses.first().and_then(|c| {
+            c.stack_trace_binding.map(|st_pat| {
+                let st_name = match &self.body.patterns[st_pat] {
+                    AstPattern::Binding(name) if name.as_str() != "_" => Some(name.clone()),
+                    _ => None,
+                };
+                let local = self.builder.declare_local(
+                    st_name.clone(),
+                    Ty::BuiltinUnknown {
+                        attr: TyAttr::default(),
+                    },
+                    None,
+                    false,
+                );
+                if let Some(name) = st_name {
+                    self.locals.insert(name, local);
+                }
+                local
+            })
+        });
+
         // Flatten all arms from all clauses (blocks created lazily below).
         let mut arms: Vec<(baml_compiler2_ast::CatchArm, bool)> = Vec::new();
         for clause in clauses {
@@ -4248,6 +4270,7 @@ impl LoweringContext<'_> {
             body_entry,
             handler: bb_handler,
             error_local,
+            stack_trace_local,
         });
 
         let prev_catch = self.catch_context.take();

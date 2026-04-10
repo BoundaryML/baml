@@ -587,6 +587,8 @@ pub enum CatchClauseKind {
 pub struct CatchClause {
     pub kind: CatchClauseKind,
     pub binding: PatId,
+    /// Optional second binding for the stack trace: `catch (e, st) { ... }`
+    pub stack_trace_binding: Option<PatId>,
     pub arms: Vec<CatchArmId>,
 }
 
