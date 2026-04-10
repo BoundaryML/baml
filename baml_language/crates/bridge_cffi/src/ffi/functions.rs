@@ -4,85 +4,119 @@ use std::{ffi::CStr, panic::AssertUnwindSafe};
 
 use bridge_ctypes::{DecodeFromBuffer, HANDLE_TABLE, kwargs_to_bex_values};
 use futures::future::FutureExt;
-use prost::Message;
 
 use crate::{
-    Buffer,
-    baml::cffi::{CallAck, CallFunctionArgs, call_ack::Response as CResponse},
     engine::{get_runtime, get_tokio_runtime},
     error::BridgeError,
     ffi::callbacks::{send_error_to_callback, send_result_to_callback},
 };
 
-/// Encode a success response (task spawned successfully).
-fn encode_success_response() -> Buffer {
-    let msg = CallAck { response: None };
-    Buffer::from(msg.encode_to_vec())
+/// Format a BridgeError into the prefixed string protocol that Go's
+/// ParseBamlError expects.
+fn bridge_error_to_string(err: &BridgeError) -> String {
+    match err {
+        BridgeError::Ctypes(e) => format!("BamlError: BamlInvalidArgumentError: {e}"),
+        BridgeError::NotInitialized => {
+            "BamlError: BamlInvalidArgumentError: Engine not initialized".to_string()
+        }
+        BridgeError::NullFunctionName => {
+            "BamlError: BamlInvalidArgumentError: Function name is null".to_string()
+        }
+        BridgeError::InvalidFunctionName(e) => {
+            format!("BamlError: BamlInvalidArgumentError: Invalid function name: {e}")
+        }
+        BridgeError::FunctionNotFound { name } => {
+            format!("BamlError: BamlInvalidArgumentError: Function not found: {name}")
+        }
+        BridgeError::MissingArgument {
+            function,
+            parameter,
+        } => {
+            format!(
+                "BamlError: BamlInvalidArgumentError: Missing argument '{parameter}' for function '{function}'"
+            )
+        }
+        BridgeError::NotImplemented(msg) => {
+            format!("BamlError: BamlInvalidArgumentError: Not implemented: {msg}")
+        }
+        BridgeError::DuplicateCallId(id) => {
+            format!("BamlError: BamlInvalidArgumentError: Duplicate call ID: {id}")
+        }
+        BridgeError::ProjectNotInitialized => {
+            "BamlError: BamlClientError: Project not initialized".to_string()
+        }
+        BridgeError::LockPoisoned => "BamlError: BamlClientError: Lock poisoned".to_string(),
+        BridgeError::Internal(msg) => format!("BamlError: BamlClientError: {msg}"),
+        BridgeError::Runtime(re) => runtime_error_to_string(re),
+    }
 }
 
-/// Encode an error response (failed to spawn task).
-fn encode_error_response(error: &BridgeError) -> Buffer {
-    let msg = CallAck {
-        response: Some(CResponse::Error(error.to_string())),
-    };
-    Buffer::from(msg.encode_to_vec())
+fn runtime_error_to_string(err: &bex_project::RuntimeError) -> String {
+    use bex_project::RuntimeError;
+    match err {
+        RuntimeError::InvalidArgument { .. } => {
+            format!("BamlError: BamlInvalidArgumentError: {err}")
+        }
+        RuntimeError::Engine(engine_err) => {
+            use bex_project::EngineError;
+            match engine_err {
+                EngineError::FunctionNotFound { .. } => {
+                    format!("BamlError: BamlInvalidArgumentError: {engine_err}")
+                }
+                EngineError::Cancelled => {
+                    format!("BamlError: BamlCancelledError: {engine_err}")
+                }
+                _ => format!("BamlError: BamlClientError: {engine_err}"),
+            }
+        }
+        _ => format!("BamlError: BamlClientError: {err}"),
+    }
 }
 
 /// Call a BAML function asynchronously.
 ///
 /// Returns immediately after spawning the async task.
-/// Result is delivered via the registered callback.
-///
-/// Note: `_runtime` is unused since we use a global engine.
+/// Result/error is delivered via the registered callback.
 #[unsafe(no_mangle)]
-pub extern "C" fn call_function_from_c(
-    _runtime: *const libc::c_void,
+pub extern "C" fn call_function(
     function_name: *const libc::c_char,
-    encoded_args: *const libc::c_char,
+    encoded_args: *const u8,
     length: usize,
     id: u32,
-) -> Buffer {
-    match call_function_inner(function_name, encoded_args, length, id) {
-        Ok(()) => encode_success_response(),
-        Err(e) => encode_error_response(&e),
+) {
+    if let Err(e) = call_function_inner(function_name, encoded_args, length, id) {
+        send_error_to_callback(id, &bridge_error_to_string(&e));
     }
 }
 
 fn call_function_inner(
     function_name: *const libc::c_char,
-    encoded_args: *const libc::c_char,
+    encoded_args: *const u8,
     length: usize,
     id: u32,
 ) -> Result<(), BridgeError> {
-    // Get runtime (must be initialized)
+    use bridge_ctypes::baml::cffi::CallFunctionArgs;
+
     let runtime = get_runtime()?;
 
-    // Check for null function name pointer
     if function_name.is_null() {
         return Err(BridgeError::NullFunctionName);
     }
+    let func_name = unsafe { CStr::from_ptr(function_name) }
+        .to_str()
+        .map_err(BridgeError::from)?
+        .to_owned();
 
-    // Parse function name
-    // SAFETY: We've verified function_name is not null above
-    let func_name = unsafe {
-        CStr::from_ptr(function_name)
-            .to_str()
-            .map_err(BridgeError::from)?
-            .to_owned()
+    let args = if encoded_args.is_null() || length == 0 {
+        CallFunctionArgs::default()
+    } else {
+        unsafe { CallFunctionArgs::from_c_buffer(encoded_args, length) }?
     };
-
-    // Decode protobuf arguments
-    let args = unsafe { CallFunctionArgs::from_c_buffer(encoded_args as *const u8, length) }?;
-
-    // Convert kwargs to BexValue
     let kwargs = kwargs_to_bex_values(args.kwargs, &HANDLE_TABLE)?;
 
-    // Silently ignore collectors and type_builder (not supported)
     let call_ctx = bex_project::FunctionCallContextBuilder::new(sys_types::CallId(id.into()));
 
-    // Spawn async task with panic catching
     get_tokio_runtime()?.spawn(async move {
-        // Wrap the async block with catch_unwind to handle panics
         let result = AssertUnwindSafe(async {
             runtime
                 .call_function(&func_name, kwargs.into(), call_ctx.build())
@@ -93,19 +127,19 @@ fn call_function_inner(
 
         match result {
             Ok(Ok(value)) => {
-                send_result_to_callback(id, true, &value);
+                send_result_to_callback(id, &value);
             }
             Ok(Err(e)) => {
-                send_error_to_callback(id, &format!("{e}"));
+                let bridge_err = BridgeError::Runtime(e);
+                send_error_to_callback(id, &bridge_error_to_string(&bridge_err));
             }
             Err(panic_info) => {
-                // Extract panic message
                 let msg = if let Some(s) = panic_info.downcast_ref::<&str>() {
                     s.to_string()
                 } else if let Some(s) = panic_info.downcast_ref::<String>() {
                     s.clone()
                 } else {
-                    "Unknown panic in async task".to_string()
+                    "Unknown panic".to_string()
                 };
                 send_error_to_callback(id, &format!("Panic: {msg}"));
             }
@@ -115,48 +149,17 @@ fn call_function_inner(
     Ok(())
 }
 
-/// Parse LLM response (call_function_parse).
-#[unsafe(no_mangle)]
-pub extern "C" fn call_function_parse_from_c(
-    _runtime: *const libc::c_void,
-    _function_name: *const libc::c_char,
-    _encoded_args: *const libc::c_char,
-    _length: usize,
-    id: u32,
-) -> Buffer {
-    // TODO: Implement when bex_engine supports parsing
-    send_error_to_callback(id, "call_function_parse not implemented in bridge_cffi");
-    encode_success_response()
-}
-
-/// Stream a function call (placeholder).
-#[unsafe(no_mangle)]
-pub extern "C" fn call_function_stream_from_c(
-    _runtime: *const libc::c_void,
-    _function_name: *const libc::c_char,
-    _encoded_args: *const libc::c_char,
-    _length: usize,
-    id: u32,
-) -> Buffer {
-    // TODO: Implement when bex_engine supports streaming
-    send_error_to_callback(id, "Streaming not implemented in bridge_cffi");
-    encode_success_response()
-}
-
 /// Cancel an in-flight function call.
 ///
-/// Fires the `CancellationToken` for the given call ID, which causes:
-/// 1. The engine's Await handler to exit immediately with `EngineError::Cancelled`
-/// 2. All in-flight async tasks (HTTP requests, sleeps) to be aborted
-///
-/// If the call has already completed or the ID is unknown, this returns an error.
+/// Returns 0 on success, 1 if the call ID is unknown or already completed.
 #[unsafe(no_mangle)]
-pub extern "C" fn cancel_function_call(id: u32) -> Buffer {
-    match get_runtime() {
-        Ok(runtime) => match runtime.cancel_function_call(sys_types::CallId(id.into())) {
-            Ok(()) => encode_success_response(),
-            Err(e) => encode_error_response(&BridgeError::Runtime(e)),
-        },
-        Err(e) => encode_error_response(&e),
+pub extern "C" fn cancel_function_call(id: u32) -> i32 {
+    let runtime = match get_runtime() {
+        Ok(rt) => rt,
+        Err(_) => return 1,
+    };
+    match runtime.cancel_function_call(sys_types::CallId(id.into())) {
+        Ok(()) => 0,
+        Err(_) => 1,
     }
 }

@@ -12,3 +12,9 @@ pub extern "C" fn free_buffer(buf: Buffer) {
         }
     }
 }
+
+/// Flush the event sink.
+#[unsafe(no_mangle)]
+pub extern "C" fn flush_events() {
+    crate::flush_event_sink();
+}
