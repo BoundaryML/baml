@@ -28,6 +28,7 @@ import {
   Plus,
   RefreshCw,
   Folder,
+  Trash2,
 } from "lucide-react";
 import {
   parseImportedReadme,
@@ -65,6 +66,7 @@ export function BepImportDialog({ bepId, bepNumber }: BepImportDialogProps) {
     versionAction: "created" | "updated";
     pagesCreated: number;
     pagesUpdated: number;
+    pagesDeleted: number;
   } | null>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
 
@@ -259,6 +261,7 @@ export function BepImportDialog({ bepId, bepNumber }: BepImportDialogProps) {
         versionAction: result.versionAction,
         pagesCreated: result.pagesCreated,
         pagesUpdated: result.pagesUpdated,
+        pagesDeleted: result.pagesDeleted,
       });
 
       // Clear parsed files
@@ -288,6 +291,14 @@ export function BepImportDialog({ bepId, bepNumber }: BepImportDialogProps) {
   const validPageCount = pageFiles.filter((p) => !p.error).length;
   const errorCount = parsedFiles.filter((f) => f.error).length;
   const latestVersionNumber = bepData?.versions?.[0]?.version ?? 0;
+
+  // Calculate which existing pages will be deleted (not in the import)
+  const importedSlugs = new Set(
+    pageFiles.filter((p) => !p.error && p.slug).map((p) => p.slug)
+  );
+  const pagesToDelete = (bepData?.pages ?? []).filter(
+    (p) => !importedSlugs.has(p.slug)
+  );
   const targetVersionNumber =
     versionMode === "new" || latestVersionNumber === 0
       ? latestVersionNumber + 1
@@ -337,6 +348,8 @@ export function BepImportDialog({ bepId, bepNumber }: BepImportDialogProps) {
                   ` (${success.pagesCreated} new page${success.pagesCreated > 1 ? "s" : ""})`}
                 {success.pagesUpdated > 0 &&
                   ` (${success.pagesUpdated} page${success.pagesUpdated > 1 ? "s" : ""} updated)`}
+                {success.pagesDeleted > 0 &&
+                  ` (${success.pagesDeleted} page${success.pagesDeleted > 1 ? "s" : ""} removed)`}
               </AlertDescription>
             </Alert>
           )}
@@ -483,6 +496,32 @@ export function BepImportDialog({ bepId, bepNumber }: BepImportDialogProps) {
                     )}
                   </div>
                 ))}
+
+                {/* Pages that will be deleted */}
+                {pagesToDelete.map((page) => (
+                  <div
+                    key={page._id}
+                    className="p-3 flex items-center justify-between bg-red-50"
+                  >
+                    <div className="flex items-center gap-2">
+                      <FileText className="h-4 w-4 text-red-400" />
+                      <span className="font-medium text-red-700">pages/{page.slug}.md</span>
+                      <Badge variant="outline" className="font-mono text-xs text-red-600 border-red-300">
+                        {page.slug}
+                      </Badge>
+                      <Badge className="bg-red-100 text-red-800 hover:bg-red-100">
+                        <Trash2 className="h-3 w-3 mr-1" />
+                        Remove
+                      </Badge>
+                    </div>
+                    <Badge
+                      variant="outline"
+                      className="text-red-600 border-red-600"
+                    >
+                      Not in bundle
+                    </Badge>
+                  </div>
+                ))}
               </div>
 
               {/* Summary */}
@@ -490,6 +529,12 @@ export function BepImportDialog({ bepId, bepNumber }: BepImportDialogProps) {
                 <p className="text-xs text-destructive">
                   {errorCount} file{errorCount > 1 ? "s" : ""} with errors will
                   be skipped
+                </p>
+              )}
+              {pagesToDelete.length > 0 && (
+                <p className="text-xs text-red-600">
+                  {pagesToDelete.length} existing page{pagesToDelete.length > 1 ? "s" : ""} will
+                  be removed (not in import bundle)
                 </p>
               )}
             </div>
