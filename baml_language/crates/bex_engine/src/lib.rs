@@ -242,9 +242,10 @@ pub enum EngineError {
     #[error("Future channel closed unexpectedly")]
     FutureChannelClosed,
 
-    #[error("VM error: {0}")]
-    VmError(bex_vm::errors::VmError),
+    #[error("VM internal error: {0}")]
+    VmInternalError(bex_vm::errors::VmInternalError),
 
+    /// Either a BAML panic or a BAML error value.
     #[error("{}", format_unhandled_throw(value, trace))]
     UnhandledThrow {
         value: Box<BexExternalValue>,
@@ -436,7 +437,8 @@ impl BexEngine {
         let package_init_order = bytecode_program.package_init_order.clone();
 
         // Convert the pure bytecode to a VM-ready program with native functions attached
-        let bytecode = bex_vm::convert_program(bytecode_program).map_err(EngineError::VmError)?;
+        let bytecode =
+            bex_vm::convert_program(bytecode_program).map_err(EngineError::VmInternalError)?;
 
         // Extract test cases before consuming other bytecode fields.
         let test_cases = bytecode.test_cases;
@@ -559,6 +561,12 @@ impl BexEngine {
         let class_definitions = Self::extract_class_definitions(&resolved_class_names);
         let enum_definitions = Self::extract_enum_definitions(&resolved_enum_names);
 
+        // Build a default RuntimeIo from the SysOps table with an empty context.
+        // This is replaced per-call in execute_sys_op with a live context that
+        // carries the correct cancellation token and spawner.
+        let runtime_io =
+            sys_ops::build_runtime_io(&sys_ops, &heap, &sys_types::SysOpContext::empty());
+
         let sys_op_ctx = sys_types::EngineSysOpContext {
             llm_functions: Arc::new(llm_functions),
             function_global_indices: Arc::new(bytecode.function_global_indices),
@@ -566,14 +574,7 @@ impl BexEngine {
             class_definitions: Arc::new(class_definitions),
             enum_definitions: Arc::new(enum_definitions),
             type_alias_definitions: Arc::new(bytecode.recursive_type_alias_defs),
-            io_callbacks: sys_types::SysOpIoCallbacks {
-                http_send: sys_ops.baml_http_send.clone(),
-                http_response_text: sys_ops.baml_http_response_text.clone(),
-                env_get: sys_ops.baml_env_get.clone(),
-                fs_open: sys_ops.baml_fs_open.clone(),
-                fs_file_read: sys_ops.baml_fs_file_read.clone(),
-                sys_shell: sys_ops.baml_sys_shell.clone(),
-            },
+            runtime_io,
         };
 
         Ok(Self {
@@ -1335,7 +1336,7 @@ impl BexEngine {
 
             let exec_result = match vm.exec() {
                 Ok(state) => state,
-                Err(bex_vm::errors::VmError::UnhandledThrow { value, trace }) => {
+                Err(bex_vm::errors::VmError::ThrownUnhandled { value, trace }) => {
                     let external = if let Some(ref ty) = throws_type {
                         self.heap.with_gc_protection(|protected| {
                             self.convert_vm_value_to_external_with_type(
@@ -1352,7 +1353,18 @@ impl BexEngine {
                         trace,
                     });
                 }
-                Err(other) => return Err(EngineError::VmError(other)),
+                Err(bex_vm::errors::VmError::Thrown(value)) => {
+                    // Internal throw that escaped without unwinding — treat as
+                    // unhandled with no trace.
+                    let external = self.vm_value_to_owned(&value);
+                    return Err(EngineError::UnhandledThrow {
+                        value: Box::new(external),
+                        trace: Vec::new(),
+                    });
+                }
+                Err(bex_vm::errors::VmError::InternalError(err)) => {
+                    return Err(EngineError::VmInternalError(err));
+                }
             };
             match exec_result {
                 VmExecState::Complete(value) => {
@@ -1421,7 +1433,9 @@ impl BexEngine {
                 }
 
                 VmExecState::ScheduleFuture(id) => {
-                    let pending = vm.pending_future(id).map_err(EngineError::VmError)?;
+                    let pending = vm
+                        .pending_future(id)
+                        .map_err(EngineError::VmInternalError)?;
 
                     // Convert arguments to BexExternalValue
                     let args: Vec<BexExternalValue> = pending
@@ -1453,7 +1467,7 @@ impl BexEngine {
                             });
 
                             vm.set_future_ready(id, value)
-                                .map_err(EngineError::VmError)?;
+                                .map_err(EngineError::VmInternalError)?;
                         }
                         SysOpResult::Async(fut) => {
                             // Guard the "spawn side effect" boundary.
@@ -1543,7 +1557,8 @@ impl BexEngine {
                             )
                         });
                         vm.fulfil_future(future.id, value)
-                            .map_err(EngineError::VmError)?;
+                            .map_err(EngineError::VmInternalError)?;
+
                         if future.id == future_id {
                             continue 'vm_exec;
                         }
@@ -1572,7 +1587,9 @@ impl BexEngine {
                                         &protected.epoch_guard(),
                                     )
                                 });
-                                vm.fulfil_future(future.id, value).map_err(EngineError::VmError)?;
+                                vm.fulfil_future(future.id, value)
+                                                        .map_err(EngineError::VmInternalError)?;
+
                                 if future.id == future_id {
                                     break;
                                 }
@@ -1684,7 +1701,10 @@ impl BexEngine {
     ) -> SysOpResult {
         let args = args.iter().map(std::convert::Into::into).collect();
         let fn_ptr = self.sys_ops.get(op);
-        let ctx = self.sys_op_ctx.to_op_context(cancel.clone(), self.clone());
+        let mut ctx = self.sys_op_ctx.to_op_context(cancel.clone(), self.clone());
+        // Rebuild RuntimeIo with the live per-call context so IO calls
+        // (media resolution, auth) use the correct cancellation token.
+        ctx.runtime_io = sys_ops::build_runtime_io(&self.sys_ops, &self.heap, &ctx);
         let result = fn_ptr(&self.heap, args, &ctx, call_id);
 
         match result {

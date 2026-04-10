@@ -14,10 +14,6 @@ fn user.FetchDatax(user_id: string) -> Hi {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -34,10 +30,6 @@ fn user.FetchDatax$build_request(user_id: string) -> baml.http.Request {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -52,10 +44,6 @@ fn user.FetchDatax$parse(json: string) -> Hi {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -72,10 +60,6 @@ fn user.FetchDatax$render_prompt(user_id: string) -> baml.llm.PromptAst {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -84,19 +68,15 @@ fn user.VertexGCP$new() -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: void
-    let _2: string[]
-    let _3: map<string, string>
-    let _4: map<void, void>
-    let _5: map<void, void>
-    let _6: map<string, string>
+    let _2: map<void, void>
+    let _3: map<void, void>
+    let _4: map<string, string>
 
     bb0: {
-        _2 = [const "system", const "user", const "assistant"];
-        _3 = { const "assistant": const "model" };
-        _4 = {  };
-        _5 = {  };
-        _6 = { const "flash": const "" };
-        _1 = baml.llm.PrimitiveClientOptions { const "gemini-2", const null, const null, const null, const null, const null, const "user", copy _2, copy _3, const null, const null, copy _4, copy _5, copy _6 };
+        _2 = {  };
+        _3 = {  };
+        _4 = { const "flash": const "" };
+        _1 = baml.llm.PrimitiveClientOptions { const "gemini-2", const null, const null, const null, const null, const null, const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
         _0 = baml.llm.PrimitiveClient { const "VertexGCP", const "vertex-ai", copy _1 };
         goto -> bb1;
     }

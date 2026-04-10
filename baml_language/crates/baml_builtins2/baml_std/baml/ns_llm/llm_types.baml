@@ -195,7 +195,13 @@ class Client {
           };
           result
         } else {
-          throw root.errors.DevOther { message: "HTTP request failed" };
+          let error_body = http_response.text() catch (e) {
+            _ => { "" }
+          };
+          if (active_delay_ms > 0) {
+            root.sys.sleep(active_delay_ms)
+          }
+          throw root.errors.DevOther { message: "HTTP request failed: " + error_body };
         }
       }
 
@@ -224,6 +230,32 @@ class Client {
     }
   }
 }
+// ---------------------------------------------------------------------------
+// @providers annotations
+// ---------------------------------------------------------------------------
+// The `// @providers: <name>` comments below are NOT regular comments --
+// they are parsed at build time by `baml_compiler2_ast/build.rs`
+// (`extract_provider_configs`) to associate each provider name with its
+// options class. The compiler uses this mapping during `lower_cst` to
+// validate and type-check `client<llm>` declarations: when a user writes
+// `provider "aws-bedrock"`, the compiler knows the options block should
+// match `BedrockOptions`.
+//
+// `@providers-no-options` lists providers that accept `PrimitiveClientOptions`
+// directly and have no dedicated options class.
+//
+// To add a new provider: add its name here (and a new options class + annotation
+// if it has provider-specific options).
+// ---------------------------------------------------------------------------
+
+// @providers-no-options: openai, openai-generic, openai-responses, ollama, openrouter, google-ai, fallback, round-robin
+
+class MediaUrlHandler {
+  image string | null
+  audio string | null
+  video string | null
+  pdf string | null
+}
 
 class PrimitiveClientOptions {
   model string | null
@@ -237,6 +269,7 @@ class PrimitiveClientOptions {
   remap_roles map<string, string> | null
   api_key string | null
   provider_options AnthropicOptions | AzureOpenAiOptions | BedrockOptions | VertexAiOptions | null
+  media_url_handler MediaUrlHandler | null
 
   // request stuff here
   headers map<string, string>
@@ -244,6 +277,7 @@ class PrimitiveClientOptions {
   request_body map<string, unknown>
 }
 
+// @providers: azure-openai
 class AzureOpenAiOptions {
   resource_name string | null
   deployment_id string | null
@@ -251,10 +285,12 @@ class AzureOpenAiOptions {
   max_tokens int | null
 }
 
+// @providers: anthropic
 class AnthropicOptions {
   max_tokens int | null
 }
 
+// @providers: vertex-ai
 class VertexAiOptions {
   credentials string | null
   credentials_content string | null
@@ -262,6 +298,7 @@ class VertexAiOptions {
   project_id string | null
 }
 
+// @providers: aws-bedrock
 class BedrockOptions {
   region string | null
   endpoint_url string | null

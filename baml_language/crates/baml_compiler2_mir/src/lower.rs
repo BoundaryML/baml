@@ -14,16 +14,28 @@ use crate::{
     optimize,
 };
 
-/// Classifies what kind of switch a match expression lowers to.
+/// Classifies what kind of switch a match/catch expression lowers to.
 ///
 /// `Integer` and `EnumDiscriminant` are currently implemented.
-/// `TypeTag` (union-type dispatch via runtime type tags) is not yet ported
-/// from MIR 1 — it will use `class_type_tags` when implemented.
+/// `TypeTag` dispatches class-type and primitive-type match arms via runtime
+/// type tags, using `Rvalue::TypeTag` for the switch operand.
 enum SwitchKind {
     Integer,
     EnumDiscriminant(Name),
-    #[allow(dead_code)]
     TypeTag,
+}
+
+/// What happens in the otherwise block of a switch.
+#[derive(Clone, Copy)]
+enum SwitchOtherwise {
+    /// Match expression: goto join (non-exhaustive) or unreachable (exhaustive).
+    Match { is_exhaustive: bool },
+    /// Catch expression: rethrow unmatched errors.
+    /// If `needs_throw_if_panic` is true, insert a `throw_if_panic` guard before wildcard body.
+    Catch {
+        error_local: Local,
+        needs_throw_if_panic: bool,
+    },
 }
 
 struct LoopContext {
@@ -211,7 +223,9 @@ pub fn convert_tir2_ty(ty: &Tir2Ty, resolved: &ResolvedAliases) -> Ty {
 
 // ─── def_to_item_ref helper ──────────────────────────────────────────────────
 
-use baml_compiler2_hir::{contributions::Definition, file_package::file_package};
+use baml_compiler2_hir::{
+    compiler2_all_files, contributions::Definition, file_package::file_package,
+};
 // Use the PPIR item tree (which includes synthetic *$stream items) rather than
 // the bare HIR item tree. TIR resolves methods using PPIR `LocalItemId`s, so
 // MIR must use the same tree to avoid index mismatches.
@@ -366,9 +380,8 @@ struct LoweringContext<'db> {
     // enum's package at each match site.
     class_fields: IndexMap<TypeName, IndexMap<String, usize>>,
     enum_variants: IndexMap<Name, IndexMap<String, usize>>,
-    // Pre-computed type tags for class types — will be used by SwitchKind::TypeTag
-    // when union-type switch optimization is ported from MIR 1.
-    #[allow(dead_code)]
+    /// Pre-computed type tags for class types, used by `SwitchKind::TypeTag`
+    /// for union-type switch optimization (ported from MIR 1).
     class_type_tags: IndexMap<TypeName, i64>,
 
     // Pre-computed type alias data for inline expansion in convert_tir2_ty
@@ -403,18 +416,22 @@ struct LoweringContext<'db> {
     /// When an `OptionalFieldAccess`/`OptionalIndex`/`OptionalCall` encounters null,
     /// it jumps to the top of this stack instead of creating its own null block.
     chain_null_exits: Vec<BlockId>,
+
+    /// Optimization level controlling MIR-level transforms.
+    /// At `OptLevel::Two`, constant folding and advanced transforms are applied.
+    opt: crate::OptLevel,
 }
 
 impl<'db> LoweringContext<'db> {
-    /// Populate `class_fields`, `class_type_tags`, and `enum_variants` from a single
-    /// package's items.
+    /// Populate `class_fields` and `enum_variants` from a single package's items.
+    ///
+    /// Note: `class_type_tags` is built separately via `build_class_type_tags` to ensure
+    /// the same file-iteration order as the emitter (`generate_project_bytecode`).
     fn populate_from_package(
         db: &'db dyn crate::Db,
         pkg_items: &baml_compiler2_hir::package::PackageItems<'db>,
         pkg_name: &Name,
         class_fields: &mut IndexMap<TypeName, IndexMap<String, usize>>,
-        class_type_tags: &mut IndexMap<TypeName, i64>,
-        class_type_tag_counter: &mut i64,
         enum_variants: &mut IndexMap<Name, IndexMap<String, usize>>,
     ) {
         for (ns_names, ns) in &pkg_items.namespaces {
@@ -439,9 +456,6 @@ impl<'db> LoweringContext<'db> {
                         for (idx, field) in class_data.fields.iter().enumerate() {
                             fields.insert(field.name.to_string(), idx);
                         }
-                        let type_tag = baml_type::typetag::CLASS_BASE + *class_type_tag_counter;
-                        *class_type_tag_counter += 1;
-                        class_type_tags.insert(tn.clone(), type_tag);
                         class_fields.insert(tn, fields);
                     }
                     Definition::Enum(enum_loc) => {
@@ -461,11 +475,46 @@ impl<'db> LoweringContext<'db> {
         }
     }
 
+    /// Build `class_type_tags` by iterating `compiler2_all_files` in the same order as the
+    /// emitter (`generate_project_bytecode` in `baml_compiler2_emit`). This guarantees that
+    /// the integer type tags stored in Switch arms exactly match the `class.type_tag` values
+    /// assigned to runtime Class objects.
+    fn build_class_type_tags(db: &'db dyn crate::Db) -> IndexMap<TypeName, i64> {
+        let all_files = compiler2_all_files(db);
+        let mut class_type_tags: IndexMap<TypeName, i64> = IndexMap::new();
+        let mut class_type_tag_counter = 0i64;
+
+        for file in &all_files {
+            let item_tree = file_item_tree(db, *file);
+            let pkg_info = file_package(db, *file);
+
+            // Build module_path: [package] ++ namespace_path
+            let mut module_path: Vec<Name> = vec![pkg_info.package.clone()];
+            module_path.extend(pkg_info.namespace_path.iter().cloned());
+
+            for class_data in item_tree.classes.values() {
+                let tn = TypeName {
+                    name: class_data.name.clone(),
+                    module_path: module_path.clone(),
+                    display_name: class_data.name.clone(),
+                };
+                let type_tag = baml_type::typetag::CLASS_BASE + class_type_tag_counter;
+                class_type_tag_counter += 1;
+                // Use entry to avoid overwriting if the same class appears via multiple paths
+                // (e.g., both FQ and short names). First encounter wins — consistent with emit.rs.
+                class_type_tags.entry(tn).or_insert(type_tag);
+            }
+        }
+
+        class_type_tags
+    }
+
     fn new(
         db: &'db dyn crate::Db,
         func_loc: FunctionLoc<'db>,
         expr_body: AstExprBody,
         source_map: Option<AstSourceMap>,
+        opt: crate::OptLevel,
     ) -> Self {
         let file = func_loc.file(db);
 
@@ -556,13 +605,11 @@ impl<'db> LoweringContext<'db> {
             );
         }
 
-        // --- Build class_fields / enum_variants / class_type_tags from PackageItems ---
+        // --- Build class_fields / enum_variants from PackageItems ---
         let pkg_info = file_package(db, file);
         let pkg_id = PackageId::new(db, pkg_info.package.clone());
 
         let mut class_fields: IndexMap<TypeName, IndexMap<String, usize>> = IndexMap::new();
-        let mut class_type_tags: IndexMap<TypeName, i64> = IndexMap::new();
-        let mut class_type_tag_counter = 0i64;
         let mut enum_variants: IndexMap<Name, IndexMap<String, usize>> = IndexMap::new();
 
         // Include classes from dependency packages first (e.g., "baml" builtins).
@@ -575,8 +622,6 @@ impl<'db> LoweringContext<'db> {
                 dep_items,
                 &dep_name,
                 &mut class_fields,
-                &mut class_type_tags,
-                &mut class_type_tag_counter,
                 &mut enum_variants,
             );
         }
@@ -588,10 +633,12 @@ impl<'db> LoweringContext<'db> {
             pkg_items,
             &pkg_info.package,
             &mut class_fields,
-            &mut class_type_tags,
-            &mut class_type_tag_counter,
             &mut enum_variants,
         );
+
+        // Build class_type_tags using the same file-iteration order as the emitter,
+        // so that switch arms get the same integer tags as runtime class.type_tag fields.
+        let class_type_tags = Self::build_class_type_tags(db);
 
         let resolved_aliases = ResolvedAliases::for_package(db, pkg_id);
 
@@ -648,6 +695,7 @@ impl<'db> LoweringContext<'db> {
             watched_locals_stack: Vec::new(),
             synthetic_name_counts: HashMap::new(),
             chain_null_exits: Vec::new(),
+            opt,
         }
     }
 
@@ -660,6 +708,7 @@ impl<'db> LoweringContext<'db> {
         let_loc: LetLoc<'db>,
         expr_body: AstExprBody,
         source_map: Option<AstSourceMap>,
+        opt: crate::OptLevel,
     ) -> Self {
         let file = let_loc.file(db);
 
@@ -730,13 +779,11 @@ impl<'db> LoweringContext<'db> {
             );
         }
 
-        // --- Build class_fields / enum_variants / class_type_tags from PackageItems ---
+        // --- Build class_fields / enum_variants from PackageItems ---
         let pkg_info = file_package(db, file);
         let pkg_id = PackageId::new(db, pkg_info.package.clone());
 
         let mut class_fields: IndexMap<TypeName, IndexMap<String, usize>> = IndexMap::new();
-        let mut class_type_tags: IndexMap<TypeName, i64> = IndexMap::new();
-        let mut class_type_tag_counter = 0i64;
         let mut enum_variants: IndexMap<Name, IndexMap<String, usize>> = IndexMap::new();
 
         // Include classes from dependency packages first.
@@ -748,8 +795,6 @@ impl<'db> LoweringContext<'db> {
                 dep_items,
                 &dep_name,
                 &mut class_fields,
-                &mut class_type_tags,
-                &mut class_type_tag_counter,
                 &mut enum_variants,
             );
         }
@@ -761,10 +806,12 @@ impl<'db> LoweringContext<'db> {
             pkg_items,
             &pkg_info.package,
             &mut class_fields,
-            &mut class_type_tags,
-            &mut class_type_tag_counter,
             &mut enum_variants,
         );
+
+        // Build class_type_tags using the same file-iteration order as the emitter,
+        // so that switch arms get the same integer tags as runtime class.type_tag fields.
+        let class_type_tags = Self::build_class_type_tags(db);
 
         let resolved_aliases = ResolvedAliases::for_package(db, pkg_id);
 
@@ -795,6 +842,7 @@ impl<'db> LoweringContext<'db> {
             capture_indices: None,
             transitive_captures_needed: Vec::new(),
             chain_null_exits: Vec::new(),
+            opt,
         }
     }
 
@@ -1709,8 +1757,6 @@ impl LoweringContext<'_> {
             AstBinaryOp::Shr => Some(BinOp::Shr),
             // Short-circuit operators handled separately
             AstBinaryOp::And | AstBinaryOp::Or => None,
-            // Instanceof is not a simple binary op at MIR level
-            AstBinaryOp::Instanceof => None,
             // Null coalescing desugars to control flow, not a binary op
             AstBinaryOp::NullCoalesce => None,
         }
@@ -1731,24 +1777,20 @@ impl LoweringContext<'_> {
             AstBinaryOp::Or => {
                 return self.lower_short_circuit(expr_id, lhs, rhs, dest, false);
             }
-            AstBinaryOp::Instanceof => {
-                // Lower as IsType check
-                let lhs_op = self.lower_to_operand(lhs);
-                // Get the type from the expression type map (the rhs is a type name)
-                let check_ty = self.expr_ty(expr_id);
-                self.builder.assign(
-                    dest,
-                    Rvalue::IsType {
-                        operand: lhs_op,
-                        ty: check_ty,
-                    },
-                );
-                return;
-            }
             AstBinaryOp::NullCoalesce => {
                 return self.lower_null_coalesce(expr_id, lhs, rhs, dest);
             }
             _ => {}
+        }
+
+        // Check if TIR already folded this expression to a literal constant
+        if self.opt >= crate::OptLevel::Two {
+            if let Ty::Literal(ref lit, _) = self.expr_ty(expr_id) {
+                let constant = Self::lower_literal(lit);
+                self.builder
+                    .assign(dest, Rvalue::Use(Operand::Constant(constant)));
+                return;
+            }
         }
 
         let left = self.lower_to_operand(lhs);
@@ -1777,17 +1819,15 @@ impl LoweringContext<'_> {
         is_and: bool,
     ) {
         let lhs_op = self.lower_to_operand(lhs);
-        self.builder
-            .assign(dest.clone(), Rvalue::Use(lhs_op.clone()));
 
         let bb_rhs = self.builder.create_block();
         let bb_join = self.builder.create_block();
 
-        if is_and {
-            self.builder.branch(lhs_op, bb_rhs, bb_join);
-        } else {
-            self.builder.branch(lhs_op, bb_join, bb_rhs);
-        }
+        // ShortCircuit terminator: JumpIfFalse (peek) keeps lhs on TOS
+        // when short-circuiting. The rhs block evaluates and leaves its
+        // result on TOS. At join, dest is on TOS (PhiLike).
+        self.builder
+            .short_circuit(lhs_op, is_and, dest.clone(), bb_rhs, bb_join);
 
         self.builder.set_current_block(bb_rhs);
         self.lower_expr(rhs, dest);
@@ -2085,7 +2125,16 @@ impl LoweringContext<'_> {
         }
     }
 
-    fn lower_unary(&mut self, _expr_id: AstExprId, op: AstUnaryOp, expr: AstExprId, dest: Place) {
+    fn lower_unary(&mut self, expr_id: AstExprId, op: AstUnaryOp, expr: AstExprId, dest: Place) {
+        // Check if TIR already folded this expression to a literal constant
+        if self.opt >= crate::OptLevel::Two {
+            if let Ty::Literal(ref lit, _) = self.expr_ty(expr_id) {
+                let constant = Self::lower_literal(lit);
+                self.builder
+                    .assign(dest, Rvalue::Use(Operand::Constant(constant)));
+                return;
+            }
+        }
         let operand = self.lower_to_operand(expr);
         let mir_op = match op {
             AstUnaryOp::Not => crate::UnaryOp::Not,
@@ -3371,33 +3420,45 @@ impl LoweringContext<'_> {
             .map(|&id| self.body.match_arms[id].clone())
             .collect();
 
-        // Try switch optimization: if all non-wildcard arms are integer literals
-        // with no guards, emit a single Switch terminator.
-        if self.try_lower_match_as_switch(
+        // Try switch optimization: if all non-wildcard arms have compatible patterns
+        // (int literal, enum variant, or type tag) with no guards, emit a Switch.
+        let switch_arms: Vec<(AstPatId, AstExprId, Option<AstExprId>)> = arms
+            .iter()
+            .map(|arm| (arm.pattern, arm.body, arm.guard))
+            .collect();
+        if self.try_lower_as_switch(
             scrutinee_local,
-            &arms,
+            &switch_arms,
             dest.clone(),
             bb_join,
-            is_exhaustive,
+            SwitchOtherwise::Match { is_exhaustive },
+            None,
         ) {
             self.builder.set_current_block(bb_join);
             return;
         }
 
-        self.lower_match_chain(scrutinee_local, &arms, dest, bb_join);
+        self.lower_match_chain(scrutinee_local, &arms, dest, bb_join, is_exhaustive);
 
         self.builder.set_current_block(bb_join);
     }
 
-    /// Attempt to lower a match as a Switch terminator.
-    /// Returns true if successful, false if the match isn't switch-eligible.
-    fn try_lower_match_as_switch(
+    /// Attempt to lower a match or catch as a Switch terminator.
+    /// Returns true if successful, false if the arms aren't switch-eligible.
+    ///
+    /// Unified entry point for both match and catch switch dispatch.
+    /// - `arms`: `(pattern, body_expr, optional_guard)` tuples
+    /// - `otherwise`: controls what happens for unmatched values
+    /// - `pre_created_blocks`: if `Some`, use these pre-created body blocks instead
+    ///   of creating new ones (used by catch, which pre-creates blocks)
+    fn try_lower_as_switch(
         &mut self,
         scrutinee: Local,
-        arms: &[baml_compiler2_ast::MatchArm],
+        arms: &[(AstPatId, AstExprId, Option<AstExprId>)],
         dest: Place,
         join: BlockId,
-        is_exhaustive: bool,
+        otherwise: SwitchOtherwise,
+        pre_created_blocks: Option<&[Option<BlockId>]>,
     ) -> bool {
         use std::collections::HashSet;
 
@@ -3407,6 +3468,13 @@ impl LoweringContext<'_> {
             return false;
         }
 
+        let is_exhaustive = matches!(
+            &otherwise,
+            SwitchOtherwise::Match {
+                is_exhaustive: true
+            }
+        );
+
         // Classify arms: collect (i64_value, arm_index) for int literal or enum variant
         // patterns, and check for a trailing wildcard/binding.
         let mut switch_kind: Option<SwitchKind> = None;
@@ -3415,12 +3483,12 @@ impl LoweringContext<'_> {
         // Deduplicate discriminant values so union patterns don't produce duplicate switch arms.
         let mut seen_values: HashSet<i64> = HashSet::new();
 
-        for (i, arm) in arms.iter().enumerate() {
+        for (i, &(pattern, _body, guard)) in arms.iter().enumerate() {
             // Guards disqualify switch optimization
-            if arm.guard.is_some() {
+            if guard.is_some() {
                 return false;
             }
-            let pat = &self.body.patterns[arm.pattern];
+            let pat = &self.body.patterns[pattern];
             match pat {
                 AstPattern::Literal(Literal::Int(val)) => {
                     // Integer arm: verify kind consistency
@@ -3457,7 +3525,7 @@ impl LoweringContext<'_> {
                 }
                 AstPattern::Union(sub_pats) => {
                     // Union pattern: each sub-pattern maps to the same arm body.
-                    // All sub-patterns must be the same kind (int or enum variant).
+                    // All sub-patterns must be the same kind (int, enum variant, or type tag).
                     for sub_pat_id in sub_pats {
                         let sub_pat = &self.body.patterns[*sub_pat_id];
                         match sub_pat {
@@ -3494,34 +3562,114 @@ impl LoweringContext<'_> {
                                     int_arms.push((disc, i));
                                 }
                             }
+                            AstPattern::Binding(_) | AstPattern::TypedBinding { .. } => {
+                                // Type-pattern sub-arm: look up type tag via TIR.
+                                match &switch_kind {
+                                    None => switch_kind = Some(SwitchKind::TypeTag),
+                                    Some(SwitchKind::TypeTag) => {}
+                                    Some(_) => return false,
+                                }
+                                match self.classify_pattern_type_tag(*sub_pat_id) {
+                                    Some(tags) => {
+                                        for tag in tags {
+                                            if seen_values.insert(tag) {
+                                                int_arms.push((tag, i));
+                                            }
+                                        }
+                                    }
+                                    None => return false,
+                                }
+                            }
                             _ => return false,
                         }
                     }
                 }
+                AstPattern::TypedBinding { .. } => {
+                    // Type-annotated binding → classify as TypeTag
+                    match &switch_kind {
+                        None => switch_kind = Some(SwitchKind::TypeTag),
+                        Some(SwitchKind::TypeTag) => {}
+                        Some(_) => return false, // Mixed TypeTag + Integer/Enum
+                    }
+                    match self.classify_pattern_type_tag(pattern) {
+                        Some(tags) => {
+                            for tag in tags {
+                                if seen_values.insert(tag) {
+                                    int_arms.push((tag, i));
+                                }
+                            }
+                        }
+                        None => return false,
+                    }
+                }
+                AstPattern::Binding(name) if name.as_str() != "_" => {
+                    // Bare name resolved to a type by TIR (e.g. `DivisionByZero =>`)
+                    if self.pat_types.contains_key(&(self.current_scope, pattern)) {
+                        match &switch_kind {
+                            None => switch_kind = Some(SwitchKind::TypeTag),
+                            Some(SwitchKind::TypeTag) => {}
+                            Some(_) => return false,
+                        }
+                        match self.classify_pattern_type_tag(pattern) {
+                            Some(tags) => {
+                                for tag in tags {
+                                    if seen_values.insert(tag) {
+                                        int_arms.push((tag, i));
+                                    }
+                                }
+                            }
+                            None => return false,
+                        }
+                    } else {
+                        // Regular binding without type info — wildcard-like
+                        if i != arms.len() - 1 {
+                            return false;
+                        }
+                        otherwise_idx = Some(i);
+                    }
+                }
                 AstPattern::Binding(_) => {
-                    // Wildcard/binding must be last arm
+                    // Wildcard `_` — must be last arm
                     if i != arms.len() - 1 {
                         return false;
                     }
                     otherwise_idx = Some(i);
                 }
-                _ => return false, // Non-int-literal, non-wildcard pattern
+                AstPattern::Null | AstPattern::Literal(_) => return false,
             }
         }
 
-        // Need at least one int arm to justify a switch
+        // Need at least one int arm to justify a switch.
         if int_arms.is_empty() {
             return false;
         }
 
-        // Exhaustiveness is determined by TIR's type checker, not re-derived here.
-        // `(exhaustive)` means: no wildcard arm AND TIR confirmed all cases covered.
-        let is_switch_exhaustive = otherwise_idx.is_none() && is_exhaustive;
+        // TypeTag switches only pay off at 4+ arms (JumpTable). For fewer arms
+        // the sequential `is_type` chain is more compact because the if-else
+        // chain adds copy/pop stack management overhead per arm.
+        if matches!(switch_kind, Some(SwitchKind::TypeTag)) && int_arms.len() < 4 {
+            return false;
+        }
+
+        // Exhaustiveness: for **match** TypeTag switches without a wildcard arm,
+        // all typed arms together cover the union — the otherwise block is dead.
+        // TIR's `required_match_cases` returns None for class types, so class
+        // unions are never marked exhaustive by TIR even when all arms are
+        // covered. For match + TypeTag, if there's no wildcard, treat as
+        // exhaustive so the last arm skips its comparison and the otherwise
+        // block becomes Unreachable.
+        //
+        // For **catch** expressions, we never mark the switch as exhaustive
+        // even when all declared thrown types are covered, because panics can
+        // always occur at runtime and must be rethrown via the otherwise block.
+        let is_match = matches!(&otherwise, SwitchOtherwise::Match { .. });
+        let is_switch_exhaustive = otherwise_idx.is_none()
+            && (is_exhaustive || (is_match && matches!(switch_kind, Some(SwitchKind::TypeTag))));
 
         // Save the entry block — this is where the switch terminator goes
         let bb_entry = self.builder.current_block();
 
-        // For enum switches, emit the discriminant extraction before building arm blocks.
+        // Emit discriminant/type-tag extraction before building arm blocks.
         // We must do this before create_block() calls so the assignment goes into bb_entry.
         let switch_operand = match &switch_kind {
             Some(SwitchKind::EnumDiscriminant(_)) => {
@@ -3533,6 +3681,16 @@ impl LoweringContext<'_> {
                     Rvalue::Discriminant(Place::local(scrutinee)),
                 );
                 Operand::Copy(Place::Local(disc))
+            }
+            Some(SwitchKind::TypeTag) => {
+                let tag_local = self.builder.temp(Ty::Int {
+                    attr: TyAttr::default(),
+                });
+                self.builder.assign(
+                    Place::local(tag_local),
+                    Rvalue::TypeTag(Place::local(scrutinee)),
+                );
+                Operand::Copy(Place::Local(tag_local))
             }
             _ => Operand::Copy(Place::Local(scrutinee)),
         };
@@ -3549,13 +3707,19 @@ impl LoweringContext<'_> {
                 // Union sub-pattern: reuse the same body block
                 switch_arms.push((val, existing_bb));
             } else {
-                let bb_body = self.builder.create_block();
+                // Use pre-created block if available, otherwise create a new one
+                let bb_body = if let Some(blocks) = pre_created_blocks {
+                    blocks[arm_idx].expect("pre-created block missing for arm")
+                } else {
+                    self.builder.create_block()
+                };
                 switch_arms.push((val, bb_body));
                 arm_blocks.insert(arm_idx, bb_body);
 
                 self.builder.set_current_block(bb_body);
-                self.bind_pattern(scrutinee, arms[arm_idx].pattern);
-                self.lower_expr(arms[arm_idx].body, dest.clone());
+                let (pattern, body, _) = arms[arm_idx];
+                self.bind_pattern(scrutinee, pattern);
+                self.lower_expr(body, dest.clone());
                 if !self.builder.is_current_terminated() {
                     self.builder.goto(join);
                 }
@@ -3563,7 +3727,6 @@ impl LoweringContext<'_> {
         }
 
         // Build arm_names: symbolic labels for the switch arms (debug metadata).
-        // For enum switches: "EnumName.VariantName"; for int switches: the integer value.
         let arm_names: Vec<(i64, String)> = match &switch_kind {
             Some(SwitchKind::EnumDiscriminant(enum_name)) => {
                 if let Some(variants) = self.enum_variants.get(enum_name) {
@@ -3589,38 +3752,102 @@ impl LoweringContext<'_> {
                     vec![]
                 }
             }
+            Some(SwitchKind::TypeTag) => {
+                // Reverse map: tag value → human-readable type name.
+                let reverse_class: std::collections::HashMap<i64, &str> = self
+                    .class_type_tags
+                    .iter()
+                    .map(|(tn, tag)| (*tag, tn.name.as_str()))
+                    .collect();
+                int_arms
+                    .iter()
+                    .map(|(v, _)| {
+                        let name = reverse_class
+                            .get(v)
+                            .map(ToString::to_string)
+                            .unwrap_or_else(|| format_type_tag_name(*v));
+                        (*v, name)
+                    })
+                    .collect()
+            }
             _ => int_arms.iter().map(|(v, _)| (*v, v.to_string())).collect(),
         };
 
-        // Lower the otherwise arm:
-        // - Wildcard present → lower the wildcard body, then goto join
-        // - No wildcard + exhaustive → unreachable (all cases covered by switch arms)
-        // - No wildcard + non-exhaustive → goto join (runtime fallthrough)
+        // Lower the otherwise block
         self.builder.set_current_block(bb_otherwise);
         if let Some(idx) = otherwise_idx {
-            self.bind_pattern(scrutinee, arms[idx].pattern);
-            self.lower_expr(arms[idx].body, dest);
+            // Wildcard arm present
+            if let SwitchOtherwise::Catch {
+                error_local,
+                needs_throw_if_panic: true,
+            } = &otherwise
+            {
+                let bb_wildcard_body = self.builder.create_block();
+                self.builder
+                    .throw_if_panic(Operand::Copy(Place::Local(*error_local)), bb_wildcard_body);
+                self.builder.set_current_block(bb_wildcard_body);
+            }
+            let (pattern, body, _) = arms[idx];
+            self.bind_pattern(scrutinee, pattern);
+            self.lower_expr(body, dest);
             if !self.builder.is_current_terminated() {
                 self.builder.goto(join);
             }
-        } else if is_switch_exhaustive {
-            // No wildcard arm AND exhaustive: this block is provably unreachable.
-            // Marking it Unreachable satisfies the verifier invariant (check 5) and
-            // matches V1's lower_match_as_switch behavior (crates/baml_compiler_mir).
-            self.builder.unreachable();
         } else {
-            // No wildcard, non-exhaustive: fall through to join.
-            self.builder.goto(join);
+            // No wildcard — decide what the otherwise block does.
+            // Use `is_switch_exhaustive` (which may be inferred for TypeTag)
+            // rather than the caller's original `is_exhaustive`, so the
+            // otherwise block stays consistent with the switch terminator flag.
+            if is_switch_exhaustive {
+                match &otherwise {
+                    SwitchOtherwise::Match { .. } => {
+                        self.builder.unreachable();
+                    }
+                    SwitchOtherwise::Catch { error_local, .. } => {
+                        // Even if exhaustive, catch otherwise should rethrow
+                        // (the error might not match any arm at runtime).
+                        self.builder
+                            .throw(Operand::Copy(Place::Local(*error_local)));
+                    }
+                }
+            } else {
+                match &otherwise {
+                    SwitchOtherwise::Catch { error_local, .. } => {
+                        self.builder
+                            .throw(Operand::Copy(Place::Local(*error_local)));
+                    }
+                    SwitchOtherwise::Match { .. } => {
+                        self.builder.goto(join);
+                    }
+                }
+            }
+        }
+
+        // For catch with pre-created blocks: redirect wildcard arm's pre-created block
+        // to bb_otherwise, since the wildcard body was lowered there.
+        if let Some(blocks) = pre_created_blocks {
+            for (i, block_opt) in blocks.iter().enumerate() {
+                if let Some(block) = block_opt {
+                    if otherwise_idx == Some(i) {
+                        // Wildcard arm's pre-created block → redirect to otherwise
+                        self.builder.set_current_block(*block);
+                        self.builder.goto(bb_otherwise);
+                    } else if !arm_blocks.contains_key(&i) {
+                        // Unreachable pre-created block (e.g. duplicate tag) → terminate it
+                        self.builder.set_current_block(*block);
+                        self.builder.goto(bb_otherwise);
+                    }
+                }
+            }
         }
 
         // Emit the switch terminator in the entry block
         self.builder.set_current_block(bb_entry);
-        let exhaustive = is_switch_exhaustive;
         self.builder.switch(
             switch_operand,
             switch_arms,
             bb_otherwise,
-            exhaustive,
+            is_switch_exhaustive,
             arm_names,
         );
 
@@ -3633,6 +3860,7 @@ impl LoweringContext<'_> {
         arms: &[baml_compiler2_ast::MatchArm],
         dest: Place,
         join: BlockId,
+        exhaustive: bool,
     ) {
         if arms.is_empty() {
             // No more arms to test. Either a preceding wildcard/binding arm
@@ -3645,6 +3873,16 @@ impl LoweringContext<'_> {
 
         let arm = &arms[0];
         let rest = &arms[1..];
+
+        // Exhaustive last arm: skip the pattern test — it must match.
+        if exhaustive && rest.is_empty() && arm.guard.is_none() {
+            self.bind_pattern(scrutinee, arm.pattern);
+            self.lower_expr(arm.body, dest);
+            if !self.builder.is_current_terminated() {
+                self.builder.goto(join);
+            }
+            return;
+        }
 
         let bb_body = self.builder.create_block();
         let bb_next = self.builder.create_block();
@@ -3665,7 +3903,7 @@ impl LoweringContext<'_> {
         }
 
         self.builder.set_current_block(bb_next);
-        self.lower_match_chain(scrutinee, rest, dest, join);
+        self.lower_match_chain(scrutinee, rest, dest, join, exhaustive);
     }
 
     /// Emit an `IsType` check that handles union types by expanding them
@@ -3704,6 +3942,21 @@ impl LoweringContext<'_> {
             self.builder.assign(Place::local(test_local), test);
             self.builder
                 .branch(Operand::Copy(Place::Local(test_local)), success, failure);
+        }
+    }
+
+    /// Look up the integer type tag for a type. Returns `Some(tag)` for
+    /// primitives (INT=0, STRING=1, etc.) and classes (`CLASS_BASE` + index),
+    /// or `None` for types that don't have a tag (unions, generics, etc.).
+    fn type_tag_for_ty(&self, ty: &Ty) -> Option<i64> {
+        match ty {
+            Ty::Int { .. } => Some(baml_type::typetag::INT),
+            Ty::String { .. } => Some(baml_type::typetag::STRING),
+            Ty::Bool { .. } => Some(baml_type::typetag::BOOL),
+            Ty::Null { .. } => Some(baml_type::typetag::NULL),
+            Ty::Float { .. } => Some(baml_type::typetag::FLOAT),
+            Ty::Class(tn, _) => self.class_type_tags.get(tn).copied(),
+            _ => None,
         }
     }
 
@@ -3857,6 +4110,85 @@ impl LoweringContext<'_> {
     }
 }
 
+// ─── Type tag classification (shared by match/catch switch dispatch) ──────────
+
+impl LoweringContext<'_> {
+    /// Classify a pattern into type tag value(s) for switch dispatch.
+    /// Classify a pattern as type-tag-eligible and return its tag(s).
+    ///
+    /// Shared by match and catch lowering.
+    ///
+    /// Returns `Some(tags)` for `TypedBinding` and Binding-with-TIR-type patterns
+    /// that resolve to primitive or class types. Returns `None` for literals,
+    /// wildcards, enum variants, and types without tag mappings.
+    fn classify_pattern_type_tag(&self, pat_id: AstPatId) -> Option<Vec<i64>> {
+        let pat = &self.body.patterns[pat_id];
+        match pat {
+            AstPattern::Binding(name) if name.as_str() == "_" => {
+                // Pure wildcard — handled separately, not a type test
+                None
+            }
+            AstPattern::Binding(_) => {
+                // Named binding resolved by TIR to a type
+                let tir_ty = self.pat_types.get(&(self.current_scope, pat_id))?;
+                let resolved = self.resolved_aliases.convert(tir_ty);
+                self.ty_to_type_tags(&resolved)
+            }
+            AstPattern::TypedBinding { .. } => {
+                // Type-annotated binding — always resolved by TIR
+                let tir_ty = self.pat_types.get(&(self.current_scope, pat_id))?;
+                let resolved = self.resolved_aliases.convert(tir_ty);
+                self.ty_to_type_tags(&resolved)
+            }
+            // Literal, Null, EnumVariant, Union — not type-tag eligible
+            _ => None,
+        }
+    }
+
+    /// Convert a `Ty` to the list of type tag integers it corresponds to.
+    /// Returns `None` if the type has no simple tag representation.
+    ///
+    /// Supports primitives (globally-stable tags) and class types (looked up
+    /// from `class_type_tags`). Union types are flattened — all members must
+    /// be tag-eligible.
+    fn ty_to_type_tags(&self, ty: &Ty) -> Option<Vec<i64>> {
+        match ty {
+            Ty::Union(members, _) => {
+                let mut tags = Vec::new();
+                for m in members {
+                    let member_tags = self.ty_to_type_tags(m)?;
+                    tags.extend(member_tags);
+                }
+                Some(tags)
+            }
+            _ => self.type_tag_for_ty(ty).map(|tag| vec![tag]),
+        }
+    }
+}
+
+/// Format a type tag integer as a human-readable name for switch arm debug metadata.
+fn format_type_tag_name(tag: i64) -> String {
+    match tag {
+        baml_type::typetag::INT => "int".to_string(),
+        baml_type::typetag::STRING => "string".to_string(),
+        baml_type::typetag::BOOL => "bool".to_string(),
+        baml_type::typetag::NULL => "null".to_string(),
+        baml_type::typetag::FLOAT => "float".to_string(),
+        baml_type::typetag::LIST => "list".to_string(),
+        baml_type::typetag::MAP => "map".to_string(),
+        baml_type::typetag::ENUM => "enum".to_string(),
+        baml_type::typetag::FUNCTION => "function".to_string(),
+        baml_type::typetag::FUTURE => "future".to_string(),
+        baml_type::typetag::TYPE => "type".to_string(),
+        baml_type::typetag::COLLECTOR => "collector".to_string(),
+        baml_type::typetag::UINT8ARRAY => "uint8array".to_string(),
+        tag if tag >= baml_type::typetag::CLASS_BASE => {
+            format!("class#{}", tag - baml_type::typetag::CLASS_BASE)
+        }
+        _ => format!("tag#{tag}"),
+    }
+}
+
 // ─── Catch lowering ───────────────────────────────────────────────────────────
 
 impl LoweringContext<'_> {
@@ -3892,8 +4224,8 @@ impl LoweringContext<'_> {
             self.locals.insert(name, error_local);
         }
 
-        // Flatten all arms from all clauses, pre-creating body blocks.
-        let mut arms = Vec::new();
+        // Flatten all arms from all clauses (blocks created lazily below).
+        let mut arms: Vec<(baml_compiler2_ast::CatchArm, bool)> = Vec::new();
         for clause in clauses {
             for &arm_id in &clause.arms {
                 let arm = self.body.catch_arms[arm_id].clone();
@@ -3901,11 +4233,11 @@ impl LoweringContext<'_> {
                     self.body.patterns[arm.pattern],
                     AstPattern::Binding(ref name) if name.as_str() == "_"
                 );
-                arms.push((arm, self.builder.create_block(), is_wildcard));
+                arms.push((arm, is_wildcard));
             }
         }
 
-        let has_wildcard = arms.iter().any(|(_, _, is_wc)| *is_wc);
+        let has_wildcard = arms.iter().any(|(_, is_wc)| *is_wc);
         let is_catch_all_panics = clauses
             .iter()
             .any(|clause| matches!(clause.kind, CatchClauseKind::CatchAllPanics));
@@ -3937,8 +4269,38 @@ impl LoweringContext<'_> {
         // explicitly name. Skipped for catch_all_panics (user wants everything).
         let needs_throw_if_panic = has_wildcard && !is_catch_all_panics;
 
+        // Attempt switch-style dispatch on type tags.
+        // If all non-wildcard arms have pure type-test patterns, emit a single
+        // Switch on Rvalue::TypeTag instead of a sequential is_type chain.
+        let switch_arms: Vec<(AstPatId, AstExprId, Option<AstExprId>)> = arms
+            .iter()
+            .map(|(arm, _)| (arm.pattern, arm.body, None))
+            .collect();
         self.builder.set_current_block(bb_handler);
-        for &(ref arm, body_block, is_wildcard) in &arms {
+        if self.try_lower_as_switch(
+            error_local,
+            &switch_arms,
+            dest.clone(),
+            bb_join,
+            SwitchOtherwise::Catch {
+                error_local,
+                needs_throw_if_panic,
+            },
+            None,
+        ) {
+            self.builder.set_current_block(bb_join);
+            return;
+        }
+
+        // Fallback: sequential pattern-test chain.
+        // Create body blocks now (not created earlier so the switch path
+        // doesn't leave orphaned unterminated blocks).
+        let arms_with_blocks: Vec<_> = arms
+            .iter()
+            .map(|(arm, is_wc)| (arm.clone(), self.builder.create_block(), *is_wc))
+            .collect();
+
+        for &(ref arm, body_block, is_wildcard) in &arms_with_blocks {
             if is_wildcard && needs_throw_if_panic {
                 let bb_wildcard = self.builder.create_block();
                 self.builder
@@ -3957,7 +4319,7 @@ impl LoweringContext<'_> {
         }
 
         // Lower each arm body.
-        for &(ref arm, body_block, _) in &arms {
+        for &(ref arm, body_block, _) in &arms_with_blocks {
             self.builder.set_current_block(body_block);
             self.bind_pattern(error_local, arm.pattern);
             self.lower_expr(arm.body, dest.clone());
@@ -3980,13 +4342,15 @@ impl LoweringContext<'_> {
 pub fn lower_let_body<'db>(
     db: &'db dyn crate::Db,
     let_loc: LetLoc<'db>,
+    opt: crate::OptLevel,
 ) -> Option<(MirFunctionBody, Vec<MirFunction>)> {
     let body = let_body(db, let_loc);
     let source_map = let_body_source_map(db, let_loc);
 
     match body.as_ref() {
         LetBody::Expr(expr_body) => {
-            let mut ctx = LoweringContext::new_for_let(db, let_loc, expr_body.clone(), source_map);
+            let mut ctx =
+                LoweringContext::new_for_let(db, let_loc, expr_body.clone(), source_map, opt);
             let mir_body = ctx.lower_let_body_inner();
             let lambdas = std::mem::take(&mut ctx.pending_lambdas);
             Some((mir_body, lambdas))
@@ -3995,7 +4359,11 @@ pub fn lower_let_body<'db>(
     }
 }
 
-pub fn lower_function<'db>(db: &'db dyn crate::Db, func_loc: FunctionLoc<'db>) -> MirFunction {
+pub fn lower_function<'db>(
+    db: &'db dyn crate::Db,
+    func_loc: FunctionLoc<'db>,
+    opt: crate::OptLevel,
+) -> MirFunction {
     let body = function_body(db, func_loc);
     let source_map = function_body_source_map(db, func_loc);
     let item_ref = def_to_item_ref(
@@ -4007,7 +4375,7 @@ pub fn lower_function<'db>(db: &'db dyn crate::Db, func_loc: FunctionLoc<'db>) -
 
     match body.as_ref() {
         FunctionBody::Expr(expr_body) => {
-            let mut ctx = LoweringContext::new(db, func_loc, expr_body.clone(), source_map);
+            let mut ctx = LoweringContext::new(db, func_loc, expr_body.clone(), source_map, opt);
             let mut mir = ctx.lower_function_body();
             mir.item_ref = item_ref;
             mir

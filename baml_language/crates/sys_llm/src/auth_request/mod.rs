@@ -12,6 +12,8 @@
 pub(crate) mod bedrock;
 pub(crate) mod vertex;
 
+use std::sync::Arc;
+
 use crate::{
     LlmProvider,
     baml_std::{HttpRequest, PrimitiveClient},
@@ -23,7 +25,7 @@ pub(crate) async fn auth_request(
     provider: LlmProvider,
     request: &mut HttpRequest,
     client: &PrimitiveClient,
-    callbacks: &crate::BuildRequestCallbacks,
+    io: Arc<dyn ::sys_types::runtime_io::RuntimeIo>,
 ) -> Result<(), BuildRequestError> {
     match provider {
         LlmProvider::Anthropic => auth_anthropic(request, client),
@@ -34,13 +36,12 @@ pub(crate) async fn auth_request(
         | LlmProvider::OpenRouter
         | LlmProvider::OpenAiResponses => auth_openai(request, client, provider),
         LlmProvider::AwsBedrock => {
-            return bedrock::auth_bedrock(request, client, callbacks).await;
+            return bedrock::auth_bedrock(request, client, io).await;
         }
         LlmProvider::VertexAi => {
-            return vertex::auth_vertex(request, client, callbacks).await;
+            return vertex::auth_vertex(request, client, io).await;
         }
         LlmProvider::GoogleAi => auth_google_ai(request, client),
-        // Providers that don't need auth or aren't supported yet.
         LlmProvider::BamlFallback | LlmProvider::BamlRoundRobin => {}
     }
     Ok(())
@@ -133,7 +134,7 @@ mod tests {
             LlmProvider::Anthropic,
             &mut req,
             &client,
-            &crate::BuildRequestCallbacks::noop(),
+            Arc::new(::sys_types::runtime_io::NoopRuntimeIo),
         )
         .await
         .unwrap();
@@ -148,7 +149,7 @@ mod tests {
             LlmProvider::Anthropic,
             &mut req,
             &client,
-            &crate::BuildRequestCallbacks::noop(),
+            Arc::new(::sys_types::runtime_io::NoopRuntimeIo),
         )
         .await
         .unwrap();
@@ -173,7 +174,7 @@ mod tests {
             LlmProvider::OpenAi,
             &mut req,
             &client,
-            &crate::BuildRequestCallbacks::noop(),
+            Arc::new(::sys_types::runtime_io::NoopRuntimeIo),
         )
         .await
         .unwrap();
@@ -191,7 +192,7 @@ mod tests {
             LlmProvider::OpenAi,
             &mut req,
             &client,
-            &crate::BuildRequestCallbacks::noop(),
+            Arc::new(::sys_types::runtime_io::NoopRuntimeIo),
         )
         .await
         .unwrap();
@@ -219,7 +220,7 @@ mod tests {
             LlmProvider::AzureOpenAi,
             &mut req,
             &client,
-            &crate::BuildRequestCallbacks::noop(),
+            Arc::new(::sys_types::runtime_io::NoopRuntimeIo),
         )
         .await
         .unwrap();
@@ -242,7 +243,7 @@ mod tests {
             LlmProvider::OpenAiGeneric,
             &mut req,
             &client,
-            &crate::BuildRequestCallbacks::noop(),
+            Arc::new(::sys_types::runtime_io::NoopRuntimeIo),
         )
         .await
         .unwrap();
@@ -263,7 +264,7 @@ mod tests {
             LlmProvider::OpenRouter,
             &mut req,
             &client,
-            &crate::BuildRequestCallbacks::noop(),
+            Arc::new(::sys_types::runtime_io::NoopRuntimeIo),
         )
         .await
         .unwrap();
@@ -284,7 +285,7 @@ mod tests {
             LlmProvider::Ollama,
             &mut req,
             &client,
-            &crate::BuildRequestCallbacks::noop(),
+            Arc::new(::sys_types::runtime_io::NoopRuntimeIo),
         )
         .await
         .unwrap();
@@ -313,7 +314,7 @@ mod tests {
             LlmProvider::GoogleAi,
             &mut req,
             &client,
-            &crate::BuildRequestCallbacks::noop(),
+            Arc::new(::sys_types::runtime_io::NoopRuntimeIo),
         )
         .await
         .unwrap();
@@ -334,7 +335,7 @@ mod tests {
             LlmProvider::GoogleAi,
             &mut req,
             &client,
-            &crate::BuildRequestCallbacks::noop(),
+            Arc::new(::sys_types::runtime_io::NoopRuntimeIo),
         )
         .await
         .unwrap();
@@ -358,7 +359,7 @@ mod tests {
             LlmProvider::GoogleAi,
             &mut req,
             &client,
-            &crate::BuildRequestCallbacks::noop(),
+            Arc::new(::sys_types::runtime_io::NoopRuntimeIo),
         )
         .await
         .unwrap();
@@ -388,7 +389,7 @@ mod tests {
             LlmProvider::OpenAi,
             &mut req,
             &client,
-            &crate::BuildRequestCallbacks::noop(),
+            Arc::new(::sys_types::runtime_io::NoopRuntimeIo),
         )
         .await
         .unwrap();

@@ -28,6 +28,7 @@ import {
   Plus,
   RefreshCw,
   Folder,
+  Trash2,
 } from "lucide-react";
 import {
   parseImportedReadme,
@@ -65,6 +66,7 @@ export function BepImportDialog({ bepId, bepNumber }: BepImportDialogProps) {
     versionAction: "created" | "updated";
     pagesCreated: number;
     pagesUpdated: number;
+    pagesDeleted: number;
   } | null>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
 
@@ -259,6 +261,7 @@ export function BepImportDialog({ bepId, bepNumber }: BepImportDialogProps) {
         versionAction: result.versionAction,
         pagesCreated: result.pagesCreated,
         pagesUpdated: result.pagesUpdated,
+        pagesDeleted: result.pagesDeleted,
       });
 
       // Clear parsed files
@@ -288,6 +291,14 @@ export function BepImportDialog({ bepId, bepNumber }: BepImportDialogProps) {
   const validPageCount = pageFiles.filter((p) => !p.error).length;
   const errorCount = parsedFiles.filter((f) => f.error).length;
   const latestVersionNumber = bepData?.versions?.[0]?.version ?? 0;
+
+  // Calculate which existing pages will be deleted (not in the import)
+  const importedSlugs = new Set(
+    pageFiles.filter((p) => !p.error && p.slug).map((p) => p.slug)
+  );
+  const pagesToDelete = (bepData?.pages ?? []).filter(
+    (p) => !importedSlugs.has(p.slug)
+  );
   const targetVersionNumber =
     versionMode === "new" || latestVersionNumber === 0
       ? latestVersionNumber + 1
@@ -312,7 +323,7 @@ export function BepImportDialog({ bepId, bepNumber }: BepImportDialogProps) {
           Import
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-lg max-h-[85vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Upload className="h-5 w-5" />
@@ -324,12 +335,12 @@ export function BepImportDialog({ bepId, bepNumber }: BepImportDialogProps) {
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <div className="space-y-4 overflow-y-auto flex-1 min-h-0">
           {/* Success message */}
           {success && (
-            <Alert className="border-green-500 bg-green-50">
-              <CheckCircle2 className="h-4 w-4 text-green-600" />
-              <AlertDescription className="text-green-800">
+            <Alert className="border-green-600 bg-green-500/10 dark:border-green-500 dark:bg-green-500/20">
+              <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
+              <AlertDescription className="text-green-800 dark:text-green-300">
                 Successfully{" "}
                 {success.versionAction === "created" ? "created version" : "updated current version"}{" "}
                 {success.versionNumber}
@@ -337,6 +348,8 @@ export function BepImportDialog({ bepId, bepNumber }: BepImportDialogProps) {
                   ` (${success.pagesCreated} new page${success.pagesCreated > 1 ? "s" : ""})`}
                 {success.pagesUpdated > 0 &&
                   ` (${success.pagesUpdated} page${success.pagesUpdated > 1 ? "s" : ""} updated)`}
+                {success.pagesDeleted > 0 &&
+                  ` (${success.pagesDeleted} page${success.pagesDeleted > 1 ? "s" : ""} removed)`}
               </AlertDescription>
             </Alert>
           )}
@@ -435,7 +448,7 @@ export function BepImportDialog({ bepId, bepNumber }: BepImportDialogProps) {
                     ) : (
                       <Badge
                         variant="outline"
-                        className="text-green-600 border-green-600"
+                        className="text-green-600 border-green-600 dark:text-green-400 dark:border-green-400"
                       >
                         <CheckCircle2 className="h-3 w-3 mr-1" />
                         Ready
@@ -459,12 +472,12 @@ export function BepImportDialog({ bepId, bepNumber }: BepImportDialogProps) {
                         </Badge>
                       )}
                       {file.isNew ? (
-                        <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100">
+                        <Badge className="bg-blue-500/20 text-blue-700 hover:bg-blue-500/20 dark:bg-blue-500/30 dark:text-blue-300">
                           <Plus className="h-3 w-3 mr-1" />
                           New
                         </Badge>
                       ) : file.slug ? (
-                        <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-100">
+                        <Badge className="bg-amber-500/20 text-amber-700 hover:bg-amber-500/20 dark:bg-amber-500/30 dark:text-amber-300">
                           <RefreshCw className="h-3 w-3 mr-1" />
                           Update
                         </Badge>
@@ -475,12 +488,38 @@ export function BepImportDialog({ bepId, bepNumber }: BepImportDialogProps) {
                     ) : (
                       <Badge
                         variant="outline"
-                        className="text-green-600 border-green-600"
+                        className="text-green-600 border-green-600 dark:text-green-400 dark:border-green-400"
                       >
                         <CheckCircle2 className="h-3 w-3 mr-1" />
                         Ready
                       </Badge>
                     )}
+                  </div>
+                ))}
+
+                {/* Pages that will be deleted */}
+                {pagesToDelete.map((page) => (
+                  <div
+                    key={page._id}
+                    className="p-3 flex items-center justify-between bg-destructive/10"
+                  >
+                    <div className="flex items-center gap-2">
+                      <FileText className="h-4 w-4 text-destructive/70" />
+                      <span className="font-medium text-destructive">pages/{page.slug}.md</span>
+                      <Badge variant="outline" className="font-mono text-xs text-destructive border-destructive/50">
+                        {page.slug}
+                      </Badge>
+                      <Badge variant="destructive">
+                        <Trash2 className="h-3 w-3 mr-1" />
+                        Remove
+                      </Badge>
+                    </div>
+                    <Badge
+                      variant="outline"
+                      className="text-destructive border-destructive"
+                    >
+                      Not in bundle
+                    </Badge>
                   </div>
                 ))}
               </div>
@@ -490,6 +529,12 @@ export function BepImportDialog({ bepId, bepNumber }: BepImportDialogProps) {
                 <p className="text-xs text-destructive">
                   {errorCount} file{errorCount > 1 ? "s" : ""} with errors will
                   be skipped
+                </p>
+              )}
+              {pagesToDelete.length > 0 && (
+                <p className="text-xs text-destructive">
+                  {pagesToDelete.length} existing page{pagesToDelete.length > 1 ? "s" : ""} will
+                  be removed (not in import bundle)
                 </p>
               )}
             </div>

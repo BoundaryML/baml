@@ -27,7 +27,7 @@ async fn for_loop_sum() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 1
         load_const 2
@@ -97,7 +97,7 @@ async fn for_loop_with_break() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function for_with_break(xs: int[]) -> int {
         load_const 0
         store_var result
@@ -173,7 +173,7 @@ async fn for_loop_with_continue() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function for_with_continue(xs: int[]) -> int {
         load_const 0
         store_var result
@@ -252,7 +252,7 @@ async fn for_loop_nested() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 1
         load_const 2
@@ -345,7 +345,7 @@ async fn c_for_sum_to_ten() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 0
         store_var s
@@ -500,4 +500,51 @@ async fn c_for_endless_break() {
     "#);
 
     assert_eq!(output.result, Ok(BexExternalValue::Int(0)));
+}
+
+// ============================================================================
+// For-in loops over let-bound variables
+// ============================================================================
+
+/// Regression test: iterating over an array stored in a `let` variable
+/// should work the same as iterating over an inline array literal.
+#[tokio::test]
+async fn for_loop_over_let_variable() {
+    let output = baml_test!(
+        r#"
+        function main() -> int {
+            let xs = [1, 2, 3];
+            let sum = 0;
+
+            for (let x in xs) {
+                sum += x;
+            }
+
+            sum
+        }
+    "#
+    );
+
+    assert_eq!(output.result, Ok(BexExternalValue::Int(6)));
+}
+
+/// Same as above but without parenthesized syntax.
+#[tokio::test]
+async fn for_loop_over_let_variable_no_parens() {
+    let output = baml_test!(
+        r#"
+        function main() -> int {
+            let xs = [10, 20, 30];
+            let sum = 0;
+
+            for x in xs {
+                sum += x;
+            }
+
+            sum
+        }
+    "#
+    );
+
+    assert_eq!(output.result, Ok(BexExternalValue::Int(60)));
 }

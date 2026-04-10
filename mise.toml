@@ -8,6 +8,8 @@ ruby = "3.2.2"
 node = "22"         # For pnpm
 java = "temurin-23"
 
+uv = "0.11.3"
+
 # Rust tools
 "cargo:bacon" = "latest"
 "cargo:cross" = "latest"
@@ -23,7 +25,6 @@ java = "temurin-23"
 "go:golang.org/x/tools/cmd/goimports" = "0.36.0"
 
 # Python tools
-"pipx:uv" = "latest"
 "pipx:ruff" = "latest"
 "pipx:maturin" = "latest"
 

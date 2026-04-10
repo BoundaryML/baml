@@ -36,25 +36,27 @@ fn .<lambda($init_test_19, 0)>(testset: testing.TestCollector) -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: testing.TestCollector // testset // param
-    let _2: string[]
-    let _3: int // __for_idx
-    let _4: int
-    let _5: bool
-    let _6: string
-    let _7: string // case [captured]
-    let _8: null
-    let _9: () -> null
+    let _2: string[] // cases
+    let _3: string[]
+    let _4: int // __for_idx
+    let _5: int
+    let _6: bool
+    let _7: string
+    let _8: string // case [captured]
+    let _9: null
+    let _10: () -> null
 
     bb0: {
-        _2 = const null;
-        _3 = const 0_i64;
+        _2 = [const "hello", const "world", const "foo"];
+        _3 = copy _2;
+        _4 = const 0_i64;
         goto -> bb1;
     }
 
     bb1: {
-        _4 = len(_2);
-        _5 = copy _3 < copy _4;
-        branch copy _5 -> [bb4, bb2];
+        _5 = len(_3);
+        _6 = copy _4 < copy _5;
+        branch copy _6 -> [bb4, bb2];
     }
 
     bb2: {
@@ -67,18 +69,14 @@ fn .<lambda($init_test_19, 0)>(testset: testing.TestCollector) -> null {
     }
 
     bb4: {
-        _6 = copy _2[_3];
-        _7 = copy _6;
-        _9 = make_closure lambda[0](copy _7);
-        _8 = call const fn testing.TestCollector.register_test(copy _1, const "check case", copy _9, const null) -> [bb5];
+        _7 = copy _3[_4];
+        _8 = copy _7;
+        _10 = make_closure lambda[0](copy _8);
+        _9 = call const fn testing.TestCollector.register_test(copy _1, const "check case", copy _10, const null) -> [bb5];
     }
 
     bb5: {
-        goto -> bb6;
-    }
-
-    bb6: {
-        _3 = copy _3 + const 1_i64;
+        _4 = copy _4 + const 1_i64;
         goto -> bb1;
     }
 }
@@ -95,10 +93,6 @@ fn .<lambda(<lambda($init_test_19, 0)>, 1)>() -> null {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -108,39 +102,35 @@ fn .<lambda($init_test_19, 2)>(testset: testing.TestCollector) -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: testing.TestCollector // testset // param
-    let _2: null
-    let _3: () -> null
-    let _4: null
-    let _5: () -> null
+    let _2: bool // run_slow
+    let _3: null
+    let _4: () -> null
+    let _5: bool
+    let _6: null
+    let _7: () -> null
 
     bb0: {
-        _3 = make_closure lambda[0]();
-        _2 = call const fn testing.TestCollector.register_test(copy _1, const "always runs", copy _3, const null) -> [bb1];
+        _2 = const false;
+        _4 = make_closure lambda[0]();
+        _3 = call const fn testing.TestCollector.register_test(copy _1, const "always runs", copy _4, const null) -> [bb1];
     }
 
     bb1: {
-        branch const null -> [bb3, bb2];
+        _5 = copy _2;
+        branch copy _5 -> [bb2, bb3];
     }
 
     bb2: {
-        goto -> bb5;
+        _7 = make_closure lambda[1]();
+        _6 = call const fn testing.TestCollector.register_test(copy _1, const "only when slow", copy _7, const null) -> [bb3];
     }
 
     bb3: {
-        _5 = make_closure lambda[1]();
-        _4 = call const fn testing.TestCollector.register_test(copy _1, const "only when slow", copy _5, const null) -> [bb4];
+        _0 = const null;
+        goto -> bb4;
     }
 
     bb4: {
-        goto -> bb5;
-    }
-
-    bb5: {
-        _0 = const null;
-        goto -> bb6;
-    }
-
-    bb6: {
         return;
     }
 }
@@ -155,10 +145,6 @@ fn .<lambda(<lambda($init_test_19, 2)>, 3)>() -> null {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -173,10 +159,6 @@ fn .<lambda(<lambda($init_test_19, 2)>, 4)>() -> null {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }

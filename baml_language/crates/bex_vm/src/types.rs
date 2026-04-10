@@ -3,16 +3,16 @@ use bex_vm_types::{
     types::{Function, FunctionType, ObjectType},
 };
 
-use crate::errors::VmError;
+use crate::errors::VmInternalError;
 
 pub trait ObjectTrait {
-    fn as_function(&self) -> Result<&Function, VmError>;
+    fn as_function(&self) -> Result<&Function, VmInternalError>;
     /// Like `as_function`, but also handles `Object::Closure` by returning the
     /// inner `Function`. This fixes the silent-empty-trace bug in `stack_trace()`
     /// where closure frames were causing an early `Err` that got swallowed.
-    fn as_callable(&self) -> Result<&Function, VmError>;
-    fn as_string(&self) -> Result<&String, VmError>;
-    fn as_string_mut(&mut self) -> Result<&mut String, VmError>;
+    fn as_callable(&self) -> Result<&Function, VmInternalError>;
+    fn as_string(&self) -> Result<&String, VmInternalError>;
+    fn as_string_mut(&mut self) -> Result<&mut String, VmInternalError>;
 }
 
 #[allow(unsafe_code)]
@@ -22,10 +22,10 @@ impl ObjectTrait for Object {
     /// Used to deal with some borrow checker issues in the [`crate::vm::BexVm::exec`]
     /// function.
     #[inline]
-    fn as_function(&self) -> Result<&Function, VmError> {
+    fn as_function(&self) -> Result<&Function, VmInternalError> {
         match self {
             Object::Function(function) => Ok(function),
-            _ => Err(VmError::TypeError {
+            _ => Err(VmInternalError::TypeError {
                 expected: FunctionType::Any.into(),
                 got: ObjectType::of(self).into(),
             }),
@@ -37,7 +37,7 @@ impl ObjectTrait for Object {
     ///
     /// This mirrors the dual-dispatch pattern in `load_function()` in `vm.rs`.
     #[inline]
-    fn as_callable(&self) -> Result<&Function, VmError> {
+    fn as_callable(&self) -> Result<&Function, VmInternalError> {
         match self {
             Object::Function(f) => Ok(f),
             Object::Closure(closure) => {
@@ -47,16 +47,16 @@ impl ObjectTrait for Object {
                 let func_obj: &Object = unsafe { closure.function.get() };
                 func_obj.as_function()
             }
-            _ => Err(VmError::TypeError {
+            _ => Err(VmInternalError::TypeError {
                 expected: FunctionType::Any.into(),
                 got: ObjectType::of(self).into(),
             }),
         }
     }
 
-    fn as_string(&self) -> Result<&String, VmError> {
+    fn as_string(&self) -> Result<&String, VmInternalError> {
         let Self::String(str) = self else {
-            return Err(VmError::TypeError {
+            return Err(VmInternalError::TypeError {
                 expected: ObjectType::String.into(),
                 got: ObjectType::of(self).into(),
             });
@@ -65,9 +65,9 @@ impl ObjectTrait for Object {
         Ok(str)
     }
 
-    fn as_string_mut(&mut self) -> Result<&mut String, VmError> {
+    fn as_string_mut(&mut self) -> Result<&mut String, VmInternalError> {
         let Self::String(str) = self else {
-            return Err(VmError::TypeError {
+            return Err(VmInternalError::TypeError {
                 expected: ObjectType::String.into(),
                 got: ObjectType::of(self).into(),
             });

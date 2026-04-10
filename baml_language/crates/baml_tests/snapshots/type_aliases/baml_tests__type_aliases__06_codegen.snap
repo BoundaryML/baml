@@ -13,9 +13,8 @@ function user.Baz() -> Json {
 
 function user.EchoJSON(i: JSON) -> JSON {
     alloc_instance NotJSON
-    copy 0
     load_const "Whoops"
-    store_field .inner
+    init_field .inner
     return
 }
 

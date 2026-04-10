@@ -15,10 +15,6 @@ fn user.test_annotated() -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -54,10 +50,6 @@ fn user.test_capture() -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -93,10 +85,6 @@ fn user.test_generic_lambda() -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -130,10 +118,6 @@ fn user.test_inferred_return() -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -169,10 +153,6 @@ fn user.test_map_inferred() -> int[] {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -206,10 +186,6 @@ fn user.test_multi_param() -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -244,10 +220,6 @@ fn user.test_nested() -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -267,10 +239,6 @@ fn .<lambda(test_nested, 0)>(x: int) -> null {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -306,10 +274,6 @@ fn user.test_throws() -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -323,23 +287,19 @@ fn .<lambda(test_throws, 0)>(x: int) -> null {
 
     bb0: {
         _2 = copy _1 < const 0_i64;
-        branch copy _2 -> [bb4, bb1];
+        branch copy _2 -> [bb3, bb1];
     }
 
     bb1: {
+        _0 = copy _1;
         goto -> bb2;
     }
 
     bb2: {
-        _0 = copy _1;
-        goto -> bb3;
-    }
-
-    bb3: {
         return;
     }
 
-    bb4: {
+    bb3: {
         throw const "negative";
     }
 }
@@ -357,10 +317,6 @@ fn user.test_zero_param() -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }

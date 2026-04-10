@@ -10,8 +10,8 @@ function user.caller() -> bool {
     call user.callee
     jump L2
     load_var e
-    load_const user.Errors.AuthenticationError
-    alloc_variant user.Errors
+    discriminant
+    load_const Errors.AuthenticationError
     cmp_op ==
     pop_jump_if_false L0
     jump L1

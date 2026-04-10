@@ -12,12 +12,12 @@ fn user.ElseIfChain(x: int) -> string {
 
     bb0: {
         _2 = copy _1 == const 1_i64;
-        branch copy _2 -> [bb8, bb1];
+        branch copy _2 -> [bb6, bb1];
     }
 
     bb1: {
         _3 = copy _1 == const 2_i64;
-        branch copy _3 -> [bb6, bb2];
+        branch copy _3 -> [bb5, bb2];
     }
 
     bb2: {
@@ -28,40 +28,28 @@ fn user.ElseIfChain(x: int) -> string {
     bb3: {
         notify_block(Default case, level=1);
         _0 = const "other";
-        goto -> bb5;
+        goto -> bb7;
     }
 
     bb4: {
         notify_block(Case three, level=1);
         _0 = const "three";
-        goto -> bb5;
-    }
-
-    bb5: {
         goto -> bb7;
     }
 
-    bb6: {
+    bb5: {
         notify_block(Case two, level=1);
         _0 = const "two";
         goto -> bb7;
     }
 
-    bb7: {
-        goto -> bb9;
-    }
-
-    bb8: {
+    bb6: {
         notify_block(Case one, level=1);
         _0 = const "one";
-        goto -> bb9;
+        goto -> bb7;
     }
 
-    bb9: {
-        goto -> bb10;
-    }
-
-    bb10: {
+    bb7: {
         return;
     }
 }
@@ -94,10 +82,6 @@ fn user.Headers() -> string {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -125,10 +109,6 @@ fn user.IfElseWithHeaders(flag: bool) -> string {
     }
 
     bb3: {
-        goto -> bb4;
-    }
-
-    bb4: {
         return;
     }
 }
@@ -145,10 +125,6 @@ fn user.LlmFunction(input: string) -> string {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -165,10 +141,6 @@ fn user.LlmFunction$build_request(input: string) -> baml.http.Request {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -183,10 +155,6 @@ fn user.LlmFunction$parse(json: string) -> string {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -203,10 +171,6 @@ fn user.LlmFunction$render_prompt(input: string) -> baml.llm.PromptAst {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -239,10 +203,6 @@ fn user.MatchExpression(x: int) -> string {
     }
 
     bb4: {
-        goto -> bb5;
-    }
-
-    bb5: {
         return;
     }
 }
@@ -263,7 +223,7 @@ fn user.NestedControlFlow(x: int) -> string {
     bb1: {
         notify_block(Non-positive, level=1);
         _0 = const "zero or negative";
-        goto -> bb6;
+        goto -> bb5;
     }
 
     bb2: {
@@ -285,14 +245,6 @@ fn user.NestedControlFlow(x: int) -> string {
     }
 
     bb5: {
-        goto -> bb6;
-    }
-
-    bb6: {
-        goto -> bb7;
-    }
-
-    bb7: {
         return;
     }
 }
@@ -315,17 +267,15 @@ fn user.TestClient$new() -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: void
-    let _2: string[]
+    let _2: map<void, void>
     let _3: map<void, void>
     let _4: map<void, void>
-    let _5: map<void, void>
 
     bb0: {
-        _2 = [const "system", const "user", const "assistant"];
+        _2 = {  };
         _3 = {  };
         _4 = {  };
-        _5 = {  };
-        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const "https://api.openai.com/v1", const null, const null, const null, const null, const "system", copy _2, const null, const null, const null, copy _3, copy _4, copy _5 };
+        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const null, const null, const null, const null, const null, const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
         _0 = baml.llm.PrimitiveClient { const "TestClient", const "openai", copy _1 };
         goto -> bb1;
     }

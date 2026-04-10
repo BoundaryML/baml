@@ -14,20 +14,10 @@
 
 use std::collections::{HashMap, HashSet};
 
+pub use baml_compiler2_mir::OptLevel;
 use baml_compiler2_mir::{
     BlockId, Constant, Local, MirFunctionBody, Operand, Place, Rvalue, StatementKind, Terminator,
 };
-
-/// Optimization level for bytecode generation.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum OptLevel {
-    /// No inlining of user-named locals. Compiler temps are still optimized.
-    /// Produces bytecode that closely mirrors the source structure.
-    Zero,
-    /// Full optimization: inline single-use locals, copy propagation, stack carry.
-    #[default]
-    One,
-}
 
 use crate::stack_carry;
 
@@ -859,6 +849,24 @@ fn collect_uses_in_terminator(
         Terminator::Throw { value } | Terminator::ThrowIfPanic { value, .. } => {
             collect_uses_in_operand(value, block, StatementRef::Terminator, def_use);
         }
+        Terminator::ShortCircuit {
+            operand,
+            destination,
+            ..
+        } => {
+            collect_uses_in_operand(operand, block, StatementRef::Terminator, def_use);
+            // Record the def for the destination
+            if let Place::Local(local) = destination {
+                if let Some(du) = def_use.get_mut(local) {
+                    du.def = Some(DefLocation {
+                        block,
+                        statement_ref: StatementRef::Terminator,
+                        rvalue: Rvalue::Use(Operand::Constant(Constant::Null)),
+                    });
+                    du.all_defs.push((block, StatementRef::Terminator));
+                }
+            }
+        }
     }
 }
 
@@ -938,6 +946,12 @@ fn classify_locals(
             }
         } else if is_phi_like(local, du, body, predecessors, def_use) {
             // Stack-carry candidate validated in a later stack simulation pass.
+            stack_carry_candidates.insert(local, stack_carry::StackCarryKind::PhiLike);
+            LocalClassification::Real
+        } else if is_short_circuit_phi(local, du, body) {
+            // ShortCircuit destination: the JumpIfFalse keeps lhs on TOS on the
+            // short-circuit path, and the rhs block leaves its result on TOS.
+            // Treated like PhiLike — value stays on the stack, no store/load.
             stack_carry_candidates.insert(local, stack_carry::StackCarryKind::PhiLike);
             LocalClassification::Real
         } else if is_return_phi(local, body, def_use, redirect_targets) {
@@ -1047,6 +1061,25 @@ fn is_phi_like(
     }
 
     true
+}
+
+/// Check if a local is the destination of a `ShortCircuit` terminator and has
+/// exactly one use in the join block. The `JumpIfFalse` peek instruction keeps
+/// the LHS on TOS for the short-circuit path, while the rhs block leaves its
+/// result on TOS. At the join, the value is on TOS from whichever path ran.
+fn is_short_circuit_phi(local: Local, du: &LocalDefUse, body: &MirFunctionBody) -> bool {
+    if du.uses.len() != 1 {
+        return false;
+    }
+
+    // One of the defs must be a ShortCircuit terminator targeting this local.
+    du.all_defs.iter().any(|&(block_id, ref stmt_ref)| {
+        *stmt_ref == StatementRef::Terminator
+            && matches!(
+                &body.block(block_id).terminator,
+                Some(Terminator::ShortCircuit { destination: Place::Local(l), .. }) if *l == local
+            )
+    })
 }
 
 /// Check if a MIR statement is stack-neutral (doesn't push or pop from the eval stack).

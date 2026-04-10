@@ -1,0 +1,33 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== MIR2 ===
+fn user.check_instanceof(x: Cat | Dog) -> bool {
+    // Locals:
+    let _0: bool // _0 // return
+    let _1: Cat | Dog // x // param
+    let _2: null
+
+    bb0: {
+        _2 = call const fn baml.sys.panic(const "parse error") -> [bb1];
+    }
+
+    bb1: {
+        unreachable;
+    }
+}
+
+fn user.check_instanceof_in_if(x: Cat | Dog) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: Cat | Dog // x // param
+    let _2: null
+
+    bb0: {
+        _2 = call const fn baml.sys.panic(const "parse error") -> [bb1];
+    }
+
+    bb1: {
+        unreachable;
+    }
+}

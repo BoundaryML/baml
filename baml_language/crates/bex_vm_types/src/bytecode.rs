@@ -71,6 +71,55 @@ impl JumpTableData {
     }
 }
 
+// ============================================================================
+// Perfect Hash Table Data Structure
+// ============================================================================
+
+/// Compile-time minimal perfect hash table for O(1) type dispatch.
+///
+/// Used by `Instruction::DenseTag` to remap a sparse type tag to a dense
+/// `[0, K-1]` index for jump table dispatch. The hash function is:
+///
+///   `h(tag) = ((tag as u64).wrapping_mul(multiply) >> shift) & mask`
+///
+/// Each entry stores the expected tag for verification — if the runtime tag
+/// doesn't match, the value is not in the match and dispatch falls to default.
+///
+/// The hash constants are found by brute-force search at compile time.
+/// For K ≤ 20 arms, the search completes in microseconds.
+///
+/// References:
+/// - Neumann & Göbbert, "Improving Switch Statement Performance with Hashing
+///   Optimized at Compile Time"
+/// - Dietz 1992, "Coding Multiway Branches Using Customized Hash Functions"
+/// - Proposed for LLVM (issue #96971), Roslyn (#66604), Go (#34381)
+#[derive(Clone, Debug, PartialEq)]
+pub struct MatchHashTable {
+    /// Multiplicative hash constant, found at compile time.
+    pub multiply: u64,
+    /// Right-shift amount applied after multiplication.
+    pub shift: u8,
+    /// Bitmask applied after shift. Always `table_size - 1` (power of 2).
+    pub mask: u8,
+    /// Verification + dispatch entries. `entries[h(tag)]` contains:
+    /// - `expected_tag`: the type tag that should hash to this slot
+    /// - `dense_index`: the dense arm index `[0, K-1]` for jump table dispatch
+    ///   Unused slots have `expected_tag = i64::MIN` (sentinel).
+    pub entries: Vec<MatchHashEntry>,
+    /// Human-readable names for keys in arm order (display only).
+    /// `key_names[i]` is the name for the i-th arm (e.g. "int", "`MyClass`").
+    pub key_names: Vec<String>,
+}
+
+/// Single entry in a [`MatchHashTable`].
+#[derive(Clone, Debug, PartialEq)]
+pub struct MatchHashEntry {
+    /// The type tag expected at this slot (for verification).
+    pub expected_tag: i64,
+    /// Dense arm index `[0, K-1]` — fed into the subsequent jump table.
+    pub dense_index: u8,
+}
+
 /// Individual bytecode instruction.
 ///
 /// For faster iteration we'll start with an in-memory data structure that
@@ -148,6 +197,12 @@ pub enum Instruction {
     /// object's fields array.
     StoreField(usize),
 
+    /// Initialize a field during construction: pops the value, stores it in the field,
+    /// and keeps the instance on the stack (unlike `StoreField` which pops both).
+    ///
+    /// Format: `INIT_FIELD i` where `i` is the index of the field.
+    InitField(usize),
+
     /// Pop N values from the top of `Vm::stack` (the evaluation stack).
     ///
     /// Format: `POP n` where `n` is the number of values to pop.
@@ -175,6 +230,12 @@ pub enum Instruction {
     /// This instruction pops the condition value from the stack after checking
     /// it, ensuring the condition doesn't leak on the evaluation stack.
     PopJumpIfFalse(isize),
+
+    /// Peek at the top of the stack and jump if the value is false.
+    /// Unlike `PopJumpIfFalse`, this does NOT pop the value — it stays on
+    /// the stack regardless of the branch taken. Used for short-circuit
+    /// `&&` / `||` where the tested value is also the expression result.
+    JumpIfFalse(isize),
 
     /// Performs an arithmetic binary operation.
     ///
@@ -348,11 +409,33 @@ pub enum Instruction {
     ///
     /// Stack: `[any_value]` -> `[type_tag: Int]`
     ///
-    /// Used for jump table dispatch on union types (instanceof patterns).
+    /// Used for jump table dispatch on union types (type patterns in match).
     /// Type tags are global constants:
     /// - Primitives: `int=0`, `string=1`, `bool=2`, `null=3`, `float=4`
     /// - Classes: assigned unique IDs starting at 100
     TypeTag,
+
+    /// Check if the value on top of the stack matches the type identified by
+    /// the constant at index `i`. The constant is either:
+    /// - `Value::Object(class_ptr)` — class identity check (`inst.class == class_ptr`)
+    /// - `Value::Int(tag)` — type tag check (`value_type_tag(value) == tag`)
+    ///
+    /// Pops the value, pushes `Bool` result.
+    IsType(usize),
+
+    /// Remap a sparse type tag to a dense index via perfect hash lookup.
+    ///
+    /// Pops the type tag (from a preceding `TypeTag` instruction), computes
+    /// `h(tag) = ((tag as u64).wrapping_mul(M) >> S) & mask`, verifies the
+    /// entry's expected tag, and pushes the dense arm index. On verification
+    /// failure (tag not in the match), pushes `-1` as a sentinel — the
+    /// subsequent `JumpTable`'s default arm handles this.
+    ///
+    /// Design rationale: perfect hashing replaces O(log K) `BinarySearch` with
+    /// O(1) dispatch for sparse ≥4-arm `TypeTag` switches. Memory per match
+    /// site scales with K (arms) not N (total classes). See [`MatchHashTable`]
+    /// for algorithm references.
+    DenseTag(usize),
 
     /// If the top-of-stack value is a panic instance (`baml.panics.*`), throw it.
     /// Otherwise pop the value and continue to the next instruction.
@@ -531,7 +614,6 @@ pub enum CmpOp {
     LtEq,
     Gt,
     GtEq,
-    InstanceOf,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -566,7 +648,6 @@ impl std::fmt::Display for CmpOp {
             CmpOp::LtEq => "<=",
             CmpOp::Gt => ">",
             CmpOp::GtEq => ">=",
-            CmpOp::InstanceOf => "instanceof",
         })
     }
 }
@@ -590,10 +671,12 @@ impl std::fmt::Display for Instruction {
             Instruction::StoreGlobal(i) => write!(f, "STORE_GLOBAL {i}"),
             Instruction::LoadField(i) => write!(f, "LOAD_FIELD {i}"),
             Instruction::StoreField(i) => write!(f, "STORE_FIELD {i}"),
+            Instruction::InitField(i) => write!(f, "INIT_FIELD {i}"),
             Instruction::Pop(n) => write!(f, "POP {n}"),
             Instruction::Copy(i) => write!(f, "COPY {i}"),
             Instruction::Jump(o) => write!(f, "JUMP {o:+}"),
             Instruction::PopJumpIfFalse(o) => write!(f, "POP_JUMP_IF_FALSE {o:+}"),
+            Instruction::JumpIfFalse(o) => write!(f, "JUMP_IF_FALSE {o:+}"),
             Instruction::BinOp(op) => write!(f, "BIN_OP {op}"),
             Instruction::CmpOp(op) => write!(f, "CMP_OP {op}"),
             Instruction::UnaryOp(op) => write!(f, "UNARY_OP {op}"),
@@ -625,6 +708,8 @@ impl std::fmt::Display for Instruction {
             }
             Instruction::Discriminant => f.write_str("DISCRIMINANT"),
             Instruction::TypeTag => f.write_str("TYPE_TAG"),
+            Instruction::IsType(i) => write!(f, "IS_TYPE {i}"),
+            Instruction::DenseTag(i) => write!(f, "DENSE_TAG {i}"),
             Instruction::ThrowIfPanic => f.write_str("THROW_IF_PANIC"),
             Instruction::Unreachable => f.write_str("UNREACHABLE"),
             Instruction::MakeClosure(obj_idx, count) => {
@@ -756,6 +841,10 @@ pub struct Bytecode {
     /// Jump tables for switch dispatch (indexed by `JumpTable` instruction).
     pub jump_tables: Vec<JumpTableData>,
 
+    /// Perfect hash tables for sparse `TypeTag` switch dispatch.
+    /// Indexed by `DenseTag` instruction operand.
+    pub match_hash_tables: Vec<MatchHashTable>,
+
     /// Line table mapping bytecode PCs to source spans.
     ///
     /// Entries are run-length encoded by PC ranges.
@@ -786,6 +875,7 @@ impl Bytecode {
             constants: Vec::new(),
             resolved_constants: Vec::new(),
             jump_tables: Vec::new(),
+            match_hash_tables: Vec::new(),
             line_table: Vec::new(),
             meta: Vec::new(),
             exception_table: Vec::new(),

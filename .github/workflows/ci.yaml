@@ -50,6 +50,8 @@ jobs:
       webview: ${{ steps.check_webview.outputs.changed }}
       # Flag for unsafe code changes (bex_heap) - triggers Miri tests
       unsafe: ${{ steps.check_unsafe.outputs.changed }}
+      # Flag for bridge_nodejs changes - triggers generated file sync check
+      bridge_nodejs: ${{ steps.check_bridge_nodejs.outputs.changed }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -217,6 +219,20 @@ jobs:
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Check if bridge_nodejs changed
+        id: check_bridge_nodejs
+        env:
+          MERGE_BASE: ${{ steps.merge_base.outputs.sha }}
+        run: |
+          if git diff --quiet "${MERGE_BASE}...HEAD" -- \
+            ':baml_language/crates/bridge_nodejs/**' \
+            ':baml_language/crates/bridge_ctypes/types/**' \
+          ; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
   # Lint checks
   prek:
     name: "Pre-commit Checks"
@@ -351,6 +367,62 @@ jobs:
         run: cargo miri test -p bex_heap --lib
         working-directory: baml_language
 
+  bridge-nodejs-sync:
+    name: "bridge_nodejs generated files sync"
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    needs: determine_changes
+    if: needs.determine_changes.outputs.bridge_nodejs == 'true'
+    timeout-minutes: 15
+    steps:
+      - name: "Checkout"
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: "Install Rust toolchain"
+        run: rustup toolchain install
+        working-directory: baml_language
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "baml_language -> target"
+          shared-key: "linux-cargo"
+
+      - name: "Install pnpm"
+        uses: pnpm/action-setup@v4
+
+      - name: "Setup Node.js"
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "pnpm"
+          cache-dependency-path: baml_language/crates/bridge_nodejs/pnpm-lock.yaml
+
+      - name: "Install dependencies"
+        run: pnpm install --frozen-lockfile
+        working-directory: baml_language/crates/bridge_nodejs
+
+      - name: "Build bridge_nodejs"
+        run: pnpm build:debug
+        working-directory: baml_language/crates/bridge_nodejs
+
+      - name: "Check generated files are in sync"
+        run: |
+          # Check for both modified tracked files and untracked files
+          STATUS=$(git status --porcelain -- baml_language/crates/bridge_nodejs)
+          if [ -n "$STATUS" ]; then
+            echo "::error::bridge_nodejs has uncommitted changes after running 'pnpm build:debug'"
+            echo ""
+            echo "The following files are out of sync:"
+            echo "$STATUS"
+            echo ""
+            echo "Please run 'pnpm build:debug' in baml_language/crates/bridge_nodejs and commit the changes."
+            echo ""
+            git diff -- baml_language/crates/bridge_nodejs
+            exit 1
+          fi
+          echo "All generated files are in sync."
+
   benchmarks-instrumented:
     name: "benchmarks instrumented (baml)"
     runs-on: blacksmith-4vcpu-ubuntu-2404
@@ -421,6 +493,7 @@ jobs:
       - docs
       - webview-tests
       - miri-tests
+      - bridge-nodejs-sync
       - benchmarks-instrumented
     # Only run if something failed or was cancelled (otherwise skip → success)
     if: ${{ failure() || cancelled() }}
@@ -440,6 +513,7 @@ jobs:
           echo "| docs | ${{ needs.docs.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| webview-tests | ${{ needs.webview-tests.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| miri-tests | ${{ needs.miri-tests.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| bridge-nodejs-sync | ${{ needs.bridge-nodejs-sync.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| benchmarks-instrumented | ${{ needs.benchmarks-instrumented.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "::error::One or more CI jobs failed!"

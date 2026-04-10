@@ -25,7 +25,8 @@ fn is_fallible(path: &str) -> bool {
     path.starts_with("baml.unstable.")
         || matches!(
             path,
-            "baml.Uint8Array.zeroes"
+            "baml.sys.panic"
+                | "baml.Uint8Array.zeroes"
                 | "baml.Uint8Array.from_array"
                 | "baml.Uint8Array.from_hex"
                 | "baml.Uint8Array.from_base64"
@@ -928,14 +929,14 @@ fn clean_return_type(b: &NativeBuiltin) -> String {
             let ns = constructor_media_namespace(b);
             let inner = format!("copy::{ns}::{class_name}");
             if is_fallible(&b.path) {
-                return format!("Result<{inner}, VmError>");
+                return format!("Result<{inner}, VmRustFnError>");
             }
             return inner;
         }
     }
     let inner = baml_type_to_output(&b.return_type);
     if is_fallible(&b.path) {
-        format!("Result<{inner}, VmError>")
+        format!("Result<{inner}, VmRustFnError>")
     } else {
         inner
     }
@@ -1067,13 +1068,13 @@ fn extraction_expr(val: &str, ty: &BamlType, is_mut: bool) -> String {
             }
         }
         BamlType::Int => format!(
-            "match {val} {{ Value::Int(i) => *i, other => return Err(VmError::TypeError {{ expected: Type::Int, got: vm.type_of(other) }}) }}"
+            "match {val} {{ Value::Int(i) => *i, other => return Err(VmInternalError::TypeError {{ expected: Type::Int, got: vm.type_of(other) }}.into()) }}"
         ),
         BamlType::Float => format!(
-            "match {val} {{ Value::Float(f) => *f, other => return Err(VmError::TypeError {{ expected: Type::Float, got: vm.type_of(other) }}) }}"
+            "match {val} {{ Value::Float(f) => *f, other => return Err(VmInternalError::TypeError {{ expected: Type::Float, got: vm.type_of(other) }}.into()) }}"
         ),
         BamlType::Bool => format!(
-            "match {val} {{ Value::Bool(b) => *b, other => return Err(VmError::TypeError {{ expected: Type::Bool, got: vm.type_of(other) }}) }}"
+            "match {val} {{ Value::Bool(b) => *b, other => return Err(VmInternalError::TypeError {{ expected: Type::Bool, got: vm.type_of(other) }}.into()) }}"
         ),
         BamlType::List(_) => {
             if is_mut {

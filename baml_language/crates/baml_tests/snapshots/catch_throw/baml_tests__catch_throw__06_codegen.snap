@@ -3,15 +3,12 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 function user.AlsoMayFail(x: int) -> string {
     load_var x
-    copy 0
     load_const 0
     cmp_op ==
     pop_jump_if_false L0
-    pop 1
     jump L1
 
   L0:
-    pop 1
     load_const "also ok"
     return
 
@@ -38,17 +35,13 @@ function user.CatchWithFallback(x: int) -> string {
     call user.MayFailIntOrString
     jump L4
     load_var e
-    type_tag
-    load_const 1
-    cmp_op ==
+    is_type string
     pop_jump_if_false L0
     jump L3
 
   L0:
     load_var e
-    type_tag
-    load_const 0
-    cmp_op ==
+    is_type int
     pop_jump_if_false L1
     jump L2
 
@@ -72,9 +65,7 @@ function user.CatchWithTypedArm(x: int) -> string {
     call user.MayFail
     jump L2
     load_var e
-    type_tag
-    load_const 1
-    cmp_op ==
+    is_type string
     pop_jump_if_false L0
     jump L1
 
@@ -94,17 +85,13 @@ function user.ChainedCatchClauses(x: int) -> string {
     call user.MayFailIntOrString
     jump L4
     load_var e
-    type_tag
-    load_const 1
-    cmp_op ==
+    is_type string
     pop_jump_if_false L0
     jump L3
 
   L0:
     load_var e
-    type_tag
-    load_const 0
-    cmp_op ==
+    is_type int
     pop_jump_if_false L1
     jump L2
 
@@ -125,15 +112,12 @@ function user.ChainedCatchClauses(x: int) -> string {
 
 function user.MayFail(x: int) -> string {
     load_var x
-    copy 0
     load_const 0
     cmp_op ==
     pop_jump_if_false L0
-    pop 1
     jump L1
 
   L0:
-    pop 1
     load_const "ok"
     return
 
@@ -144,23 +128,19 @@ function user.MayFail(x: int) -> string {
 
 function user.MayFailIntOrString(x: int) -> string {
     load_var x
-    copy 0
     load_const 0
     cmp_op ==
     pop_jump_if_false L0
-    pop 1
     jump L3
 
   L0:
-    copy 0
+    load_var x
     load_const 1
     cmp_op ==
     pop_jump_if_false L1
-    pop 1
     jump L2
 
   L1:
-    pop 1
     load_const "ok"
     return
 
@@ -178,17 +158,13 @@ function user.MultipleCatchArms(x: int) -> string {
     call user.MayFailIntOrString
     jump L4
     load_var e
-    type_tag
-    load_const 1
-    cmp_op ==
+    is_type string
     pop_jump_if_false L0
     jump L3
 
   L0:
     load_var e
-    type_tag
-    load_const 0
-    cmp_op ==
+    is_type int
     pop_jump_if_false L1
     jump L2
 
@@ -234,9 +210,7 @@ function user.SingleCatchTyped(x: int) -> string {
     call user.MayFail
     jump L2
     load_var e
-    type_tag
-    load_const 1
-    cmp_op ==
+    is_type string
     pop_jump_if_false L0
     jump L1
 

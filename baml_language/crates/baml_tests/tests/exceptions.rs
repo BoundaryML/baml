@@ -10,7 +10,7 @@
 //!   - Panics vs user throws
 //!   - Nested, rethrow, sequential
 
-use baml_tests::baml_test;
+use baml_tests::{baml_test, baml_test_optimized};
 use bex_engine::BexExternalValue;
 
 /// Assert that execution failed with an uncaught panic of the given class.
@@ -287,9 +287,7 @@ async fn typed_binding_string() {
         call user.fails
         jump L2
         load_var e
-        type_tag
-        load_const 1
-        cmp_op ==
+        is_type string
         pop_jump_if_false L0
         jump L1
 
@@ -332,9 +330,7 @@ async fn typed_binding_int() {
         call user.fails
         jump L2
         load_var e
-        type_tag
-        load_const 0
-        cmp_op ==
+        is_type int
         pop_jump_if_false L0
         jump L1
 
@@ -391,17 +387,13 @@ async fn typed_binding_dispatch_string_vs_int() {
         call user.fails
         jump L4
         load_var e
-        type_tag
-        load_const 1
-        cmp_op ==
+        is_type string
         pop_jump_if_false L0
         jump L3
 
       L0:
         load_var e
-        type_tag
-        load_const 0
-        cmp_op ==
+        is_type int
         pop_jump_if_false L1
         jump L2
 
@@ -483,9 +475,7 @@ async fn typed_binding_plus_wildcard() {
         call user.fails
         jump L2
         load_var e
-        type_tag
-        load_const 1
-        cmp_op ==
+        is_type string
         pop_jump_if_false L0
         jump L1
 
@@ -548,17 +538,13 @@ async fn named_binding_string_access_value() {
         call user.fails
         jump L4
         load_var e
-        type_tag
-        load_const 1
-        cmp_op ==
+        is_type string
         pop_jump_if_false L0
         jump L3
 
       L0:
         load_var e
-        type_tag
-        load_const 0
-        cmp_op ==
+        is_type int
         pop_jump_if_false L1
         jump L2
 
@@ -622,17 +608,13 @@ async fn named_binding_int_access_value() {
         call user.fails
         jump L4
         load_var e
-        type_tag
-        load_const 1
-        cmp_op ==
+        is_type string
         pop_jump_if_false L0
         jump L3
 
       L0:
         load_var e
-        type_tag
-        load_const 0
-        cmp_op ==
+        is_type int
         pop_jump_if_false L1
         jump L2
 
@@ -679,9 +661,8 @@ async fn catch_user_class_single_arm() {
     insta::assert_snapshot!(output.bytecode, @r#"
     function fails() -> int {
         alloc_instance NetworkError
-        copy 0
         load_const "http://example.com"
-        store_field .url
+        init_field .url
         throw
     }
 
@@ -689,8 +670,7 @@ async fn catch_user_class_single_arm() {
         call user.fails
         jump L2
         load_var e
-        load_const NetworkError
-        cmp_op instanceof
+        is_type NetworkError
         pop_jump_if_false L0
         jump L1
 
@@ -738,16 +718,14 @@ async fn catch_two_user_classes_dispatch_first() {
 
       L0:
         alloc_instance ParseError
-        copy 0
         load_const "bad json"
-        store_field .message
+        init_field .message
         throw
 
       L1:
         alloc_instance NetworkError
-        copy 0
         load_const "http://x"
-        store_field .url
+        init_field .url
         throw
     }
 
@@ -756,15 +734,13 @@ async fn catch_two_user_classes_dispatch_first() {
         call user.fails
         jump L4
         load_var e
-        load_const NetworkError
-        cmp_op instanceof
+        is_type NetworkError
         pop_jump_if_false L0
         jump L3
 
       L0:
         load_var e
-        load_const ParseError
-        cmp_op instanceof
+        is_type ParseError
         pop_jump_if_false L1
         jump L2
 
@@ -843,9 +819,8 @@ async fn catch_user_class_plus_wildcard() {
 
       L1:
         alloc_instance NetworkError
-        copy 0
         load_const "http://x"
-        store_field .url
+        init_field .url
         throw
     }
 
@@ -854,8 +829,7 @@ async fn catch_user_class_plus_wildcard() {
         call user.fails
         jump L2
         load_var e
-        load_const NetworkError
-        cmp_op instanceof
+        is_type NetworkError
         pop_jump_if_false L0
         jump L1
 
@@ -928,23 +902,20 @@ async fn catch_three_user_classes_plus_wildcard() {
 
       L3:
         alloc_instance RateLimit
-        copy 0
         load_const 30
-        store_field .retryAfter
+        init_field .retryAfter
         throw
 
       L4:
         alloc_instance NotFound
-        copy 0
         load_const "/users"
-        store_field .path
+        init_field .path
         throw
 
       L5:
         alloc_instance AuthError
-        copy 0
         load_const "expired"
-        store_field .reason
+        init_field .reason
         throw
     }
 
@@ -953,22 +924,19 @@ async fn catch_three_user_classes_plus_wildcard() {
         call user.api
         jump L6
         load_var e
-        load_const AuthError
-        cmp_op instanceof
+        is_type AuthError
         pop_jump_if_false L0
         jump L5
 
       L0:
         load_var e
-        load_const NotFound
-        cmp_op instanceof
+        is_type NotFound
         pop_jump_if_false L1
         jump L4
 
       L1:
         load_var e
-        load_const RateLimit
-        cmp_op instanceof
+        is_type RateLimit
         pop_jump_if_false L2
         jump L3
 
@@ -1020,9 +988,8 @@ async fn named_class_binding_access_field() {
     insta::assert_snapshot!(output.bytecode, @r#"
     function fails() -> string {
         alloc_instance NetworkError
-        copy 0
         load_const "http://example.com"
-        store_field .url
+        init_field .url
         throw
     }
 
@@ -1030,8 +997,7 @@ async fn named_class_binding_access_field() {
         call user.fails
         jump L2
         load_var e
-        load_const NetworkError
-        cmp_op instanceof
+        is_type NetworkError
         pop_jump_if_false L0
         jump L1
 
@@ -1083,16 +1049,14 @@ async fn named_class_binding_dispatch_access_fields() {
 
       L0:
         alloc_instance ParseError
-        copy 0
         load_const "bad json"
-        store_field .message
+        init_field .message
         throw
 
       L1:
         alloc_instance NetworkError
-        copy 0
         load_const "http://x"
-        store_field .url
+        init_field .url
         throw
     }
 
@@ -1101,15 +1065,13 @@ async fn named_class_binding_dispatch_access_fields() {
         call user.fails
         jump L4
         load_var e
-        load_const NetworkError
-        cmp_op instanceof
+        is_type NetworkError
         pop_jump_if_false L0
         jump L3
 
       L0:
         load_var e
-        load_const ParseError
-        cmp_op instanceof
+        is_type ParseError
         pop_jump_if_false L1
         jump L2
 
@@ -1160,9 +1122,8 @@ async fn bare_class_single_arm() {
     insta::assert_snapshot!(output.bytecode, @r#"
     function fails() -> int {
         alloc_instance NetworkError
-        copy 0
         load_const "http://example.com"
-        store_field .url
+        init_field .url
         throw
     }
 
@@ -1170,8 +1131,7 @@ async fn bare_class_single_arm() {
         call user.fails
         jump L2
         load_var e
-        load_const NetworkError
-        cmp_op instanceof
+        is_type NetworkError
         pop_jump_if_false L0
         jump L1
 
@@ -1219,16 +1179,14 @@ async fn bare_class_dispatch_first() {
 
       L0:
         alloc_instance ParseError
-        copy 0
         load_const "bad"
-        store_field .message
+        init_field .message
         throw
 
       L1:
         alloc_instance NetworkError
-        copy 0
         load_const "http://x"
-        store_field .url
+        init_field .url
         throw
     }
 
@@ -1237,15 +1195,13 @@ async fn bare_class_dispatch_first() {
         call user.fails
         jump L4
         load_var e
-        load_const NetworkError
-        cmp_op instanceof
+        is_type NetworkError
         pop_jump_if_false L0
         jump L3
 
       L0:
         load_var e
-        load_const ParseError
-        cmp_op instanceof
+        is_type ParseError
         pop_jump_if_false L1
         jump L2
 
@@ -1324,9 +1280,8 @@ async fn bare_class_plus_wildcard() {
 
       L1:
         alloc_instance NetworkError
-        copy 0
         load_const "http://x"
-        store_field .url
+        init_field .url
         throw
     }
 
@@ -1335,8 +1290,7 @@ async fn bare_class_plus_wildcard() {
         call user.fails
         jump L2
         load_var e
-        load_const NetworkError
-        cmp_op instanceof
+        is_type NetworkError
         pop_jump_if_false L0
         jump L1
 
@@ -1455,8 +1409,7 @@ async fn catch_division_by_zero() {
         call user.divides
         jump L2
         load_var e
-        load_const baml.panics.DivisionByZero
-        cmp_op instanceof
+        is_type baml.panics.DivisionByZero
         pop_jump_if_false L0
         jump L1
 
@@ -1491,8 +1444,7 @@ async fn catch_index_out_of_bounds() {
         call user.oob
         jump L2
         load_var e
-        load_const baml.panics.IndexOutOfBounds
-        cmp_op instanceof
+        is_type baml.panics.IndexOutOfBounds
         pop_jump_if_false L0
         jump L1
 
@@ -1545,8 +1497,7 @@ async fn catch_map_key_not_found() {
         call user.bad
         jump L2
         load_var e
-        load_const baml.panics.MapKeyNotFound
-        cmp_op instanceof
+        is_type baml.panics.MapKeyNotFound
         pop_jump_if_false L0
         jump L1
 
@@ -1591,8 +1542,7 @@ async fn catch_negative_index_as_index_out_of_bounds() {
         call user.bad
         jump L2
         load_var e
-        load_const baml.panics.IndexOutOfBounds
-        cmp_op instanceof
+        is_type baml.panics.IndexOutOfBounds
         pop_jump_if_false L0
         jump L1
 
@@ -1640,8 +1590,7 @@ async fn named_panic_binding_division_by_zero_field() {
         call user.divides
         jump L2
         load_var e
-        load_const baml.panics.DivisionByZero
-        cmp_op instanceof
+        is_type baml.panics.DivisionByZero
         pop_jump_if_false L0
         jump L1
 
@@ -1678,8 +1627,7 @@ async fn named_panic_binding_index_out_of_bounds_fields() {
         call user.oob
         jump L2
         load_var e
-        load_const baml.panics.IndexOutOfBounds
-        cmp_op instanceof
+        is_type baml.panics.IndexOutOfBounds
         pop_jump_if_false L0
         jump L1
 
@@ -1726,8 +1674,7 @@ async fn named_panic_binding_index_out_of_bounds_length() {
         call user.oob
         jump L2
         load_var e
-        load_const baml.panics.IndexOutOfBounds
-        cmp_op instanceof
+        is_type baml.panics.IndexOutOfBounds
         pop_jump_if_false L0
         jump L1
 
@@ -1783,8 +1730,7 @@ async fn named_panic_binding_map_key_not_found_field() {
         call user.bad
         jump L2
         load_var e
-        load_const baml.panics.MapKeyNotFound
-        cmp_op instanceof
+        is_type baml.panics.MapKeyNotFound
         pop_jump_if_false L0
         jump L1
 
@@ -1941,8 +1887,7 @@ async fn panic_arm_plus_wildcard_panic_fires() {
         call user.risky
         jump L2
         load_var e
-        load_const baml.panics.DivisionByZero
-        cmp_op instanceof
+        is_type baml.panics.DivisionByZero
         pop_jump_if_false L0
         jump L1
 
@@ -2024,8 +1969,7 @@ async fn panic_arm_plus_wildcard_no_error() {
         call user.risky
         jump L2
         load_var e
-        load_const baml.panics.DivisionByZero
-        cmp_op instanceof
+        is_type baml.panics.DivisionByZero
         pop_jump_if_false L0
         jump L1
 
@@ -2096,15 +2040,13 @@ async fn user_class_plus_panic_plus_wildcard_class_fires() {
         call user.risky
         jump L4
         load_var e
-        load_const AppError
-        cmp_op instanceof
+        is_type AppError
         pop_jump_if_false L0
         jump L3
 
       L0:
         load_var e
-        load_const baml.panics.DivisionByZero
-        cmp_op instanceof
+        is_type baml.panics.DivisionByZero
         pop_jump_if_false L1
         jump L2
 
@@ -2144,9 +2086,8 @@ async fn user_class_plus_panic_plus_wildcard_class_fires() {
 
       L2:
         alloc_instance AppError
-        copy 0
         load_const 500
-        store_field .code
+        init_field .code
         throw
     }
     "#);
@@ -2189,15 +2130,13 @@ async fn user_class_plus_panic_plus_wildcard_panic_fires() {
         call user.risky
         jump L4
         load_var e
-        load_const AppError
-        cmp_op instanceof
+        is_type AppError
         pop_jump_if_false L0
         jump L3
 
       L0:
         load_var e
-        load_const baml.panics.DivisionByZero
-        cmp_op instanceof
+        is_type baml.panics.DivisionByZero
         pop_jump_if_false L1
         jump L2
 
@@ -2242,9 +2181,8 @@ async fn user_class_plus_panic_plus_wildcard_panic_fires() {
 
       L3:
         alloc_instance AppError
-        copy 0
         load_const 500
-        store_field .code
+        init_field .code
         throw
     }
     "#);
@@ -2492,12 +2430,14 @@ async fn mixed_union_no_wildcard_unmatched_rethrows() {
     "#
     );
     let Err(bex_engine::EngineError::UnhandledThrow { value, .. }) = &output.result else {
-        panic!("expected UnhandledThrow, got: {:?}", output.result);
+        panic!(
+            "unmatched throw should rethrow past mixed union arm, got: {:?}",
+            output.result
+        );
     };
     assert_eq!(
         value.as_ref(),
-        &BexExternalValue::String("not matched".to_string()),
-        "unmatched throw should rethrow past mixed union arm"
+        &BexExternalValue::String("not matched".to_string())
     );
 }
 
@@ -2641,22 +2581,19 @@ async fn four_arms_division_by_zero_fires() {
         call user.risky
         jump L6
         load_var e
-        load_const baml.panics.DivisionByZero
-        cmp_op instanceof
+        is_type baml.panics.DivisionByZero
         pop_jump_if_false L0
         jump L5
 
       L0:
         load_var e
-        load_const baml.panics.IndexOutOfBounds
-        cmp_op instanceof
+        is_type baml.panics.IndexOutOfBounds
         pop_jump_if_false L1
         jump L4
 
       L1:
         load_var e
-        load_const AppError
-        cmp_op instanceof
+        is_type AppError
         pop_jump_if_false L2
         jump L3
 
@@ -2708,9 +2645,8 @@ async fn four_arms_division_by_zero_fires() {
 
       L3:
         alloc_instance AppError
-        copy 0
         load_const 404
-        store_field .code
+        init_field .code
         throw
 
       L4:
@@ -2861,22 +2797,19 @@ async fn four_arms_no_error() {
         call user.risky
         jump L6
         load_var e
-        load_const baml.panics.DivisionByZero
-        cmp_op instanceof
+        is_type baml.panics.DivisionByZero
         pop_jump_if_false L0
         jump L5
 
       L0:
         load_var e
-        load_const baml.panics.IndexOutOfBounds
-        cmp_op instanceof
+        is_type baml.panics.IndexOutOfBounds
         pop_jump_if_false L1
         jump L4
 
       L1:
         load_var e
-        load_const AppError
-        cmp_op instanceof
+        is_type AppError
         pop_jump_if_false L2
         jump L3
 
@@ -2939,9 +2872,8 @@ async fn four_arms_no_error() {
 
       L5:
         alloc_instance AppError
-        copy 0
         load_const 404
-        store_field .code
+        init_field .code
         throw
 
       L6:
@@ -3014,8 +2946,7 @@ async fn wrong_panic_pattern_propagates() {
         call user.divides
         jump L2
         load_var e
-        load_const baml.panics.IndexOutOfBounds
-        cmp_op instanceof
+        is_type baml.panics.IndexOutOfBounds
         pop_jump_if_false L0
         jump L1
 
@@ -3092,57 +3023,20 @@ async fn panic_alias_catches_any_panic() {
 
     function main() -> int {
         call user.divides
-        jump L7
+        jump L2
         load_var e
-        load_const baml.panics.DivisionByZero
-        cmp_op instanceof
-        pop_jump_if_false L0
-        jump L6
+        type_tag
+        jump_table [L1, L1, L1, _, _, L1, _, _, _, L1, L1, _, L1, L1], default L0
 
       L0:
         load_var e
-        load_const baml.panics.IndexOutOfBounds
-        cmp_op instanceof
-        pop_jump_if_false L1
-        jump L6
-
-      L1:
-        load_var e
-        load_const baml.panics.MapKeyNotFound
-        cmp_op instanceof
-        pop_jump_if_false L2
-        jump L6
-
-      L2:
-        load_var e
-        load_const baml.panics.StackOverflow
-        cmp_op instanceof
-        pop_jump_if_false L3
-        jump L6
-
-      L3:
-        load_var e
-        load_const baml.panics.AssertionFailed
-        cmp_op instanceof
-        pop_jump_if_false L4
-        jump L6
-
-      L4:
-        load_var e
-        load_const baml.panics.Unreachable
-        cmp_op instanceof
-        pop_jump_if_false L5
-        jump L6
-
-      L5:
-        load_var e
         throw
 
-      L6:
+      L1: Unreachable
         load_const 1
         unary_op -
 
-      L7:
+      L2:
         return
     }
     ");
@@ -3170,58 +3064,21 @@ async fn panic_alias_plus_wildcard_dispatch() {
     function main() -> int {
         load_const 0
         call user.risky
-        jump L7
+        jump L2
         load_var e
-        load_const baml.panics.DivisionByZero
-        cmp_op instanceof
-        pop_jump_if_false L0
-        jump L6
+        type_tag
+        jump_table [L1, L1, L1, _, _, L1, _, _, _, L1, L1, _, L1, L1], default L0
 
       L0:
         load_var e
-        load_const baml.panics.IndexOutOfBounds
-        cmp_op instanceof
-        pop_jump_if_false L1
-        jump L6
-
-      L1:
-        load_var e
-        load_const baml.panics.MapKeyNotFound
-        cmp_op instanceof
-        pop_jump_if_false L2
-        jump L6
-
-      L2:
-        load_var e
-        load_const baml.panics.StackOverflow
-        cmp_op instanceof
-        pop_jump_if_false L3
-        jump L6
-
-      L3:
-        load_var e
-        load_const baml.panics.AssertionFailed
-        cmp_op instanceof
-        pop_jump_if_false L4
-        jump L6
-
-      L4:
-        load_var e
-        load_const baml.panics.Unreachable
-        cmp_op instanceof
-        pop_jump_if_false L5
-        jump L6
-
-      L5:
-        load_var e
         throw_if_panic
         load_const 2
-        jump L7
+        jump L2
 
-      L6:
+      L1: Unreachable
         load_const 1
 
-      L7:
+      L2:
         return
     }
 
@@ -3337,8 +3194,7 @@ async fn nested_inner_catches_panic_outer_catches_rethrow() {
         store_var x
         jump L2
         load_var e
-        load_const baml.panics.DivisionByZero
-        cmp_op instanceof
+        is_type baml.panics.DivisionByZero
         pop_jump_if_false L0
         jump L1
 
@@ -3499,15 +3355,12 @@ async fn throw_in_match_arm_propagates() {
     insta::assert_snapshot!(output.bytecode, @r#"
     function main() -> string {
         load_const 2
-        copy 0
         load_const 1
         cmp_op ==
         pop_jump_if_false L0
-        pop 1
         jump L1
 
       L0:
-        pop 1
         load_const "boom"
         throw
 
@@ -3541,8 +3394,7 @@ async fn caught_panic_has_accessible_fields() {
         call user.oob
         jump L2
         load_var e
-        load_const baml.panics.IndexOutOfBounds
-        cmp_op instanceof
+        is_type baml.panics.IndexOutOfBounds
         pop_jump_if_false L0
         jump L1
 
@@ -3569,6 +3421,917 @@ async fn caught_panic_has_accessible_fields() {
     }
     ");
     assert_eq!(output.result, Ok(BexExternalValue::Int(7)));
+}
+
+// ============================================================================
+// §12 — Catch switch optimization: TypeTag dispatch for typed catch arms
+// ============================================================================
+
+/// 4+ typed catch arms (no wildcard) → type_tag + jump_table dispatch.
+/// Without wildcard, the default branch rethrows.
+#[tokio::test]
+async fn catch_four_typed_arms_jump_table() {
+    let output = baml_test!(
+        r#"
+        class ErrA { x int }
+        class ErrB { x int }
+        class ErrC { x int }
+        class ErrD { x int }
+
+        function risky(mode: int) -> int {
+            if (mode == 0) { throw ErrA { x: 1 } }
+            if (mode == 1) { throw ErrB { x: 2 } }
+            if (mode == 2) { throw ErrC { x: 3 } }
+            throw ErrD { x: 4 }
+        }
+
+        function main() -> int {
+            risky(2) catch (e) {
+                _: ErrA => 10,
+                _: ErrB => 20,
+                _: ErrC => 30,
+                _: ErrD => 40
+            }
+        }
+    "#
+    );
+
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function main() -> int {
+        load_const 2
+        call user.risky
+        jump L5
+        load_var e
+        type_tag
+        jump_table [L1, L2, L4, _, L3], default L0
+
+      L0:
+        load_var e
+        throw
+
+      L1: ErrD
+        load_const 40
+        jump L5
+
+      L2: ErrC
+        load_const 30
+        jump L5
+
+      L3: ErrB
+        load_const 20
+        jump L5
+
+      L4: ErrA
+        load_const 10
+
+      L5:
+        return
+    }
+
+    function risky(mode: int) -> int {
+        load_var mode
+        load_const 0
+        cmp_op ==
+        pop_jump_if_false L0
+        jump L5
+
+      L0:
+        load_var mode
+        load_const 1
+        cmp_op ==
+        pop_jump_if_false L1
+        jump L4
+
+      L1:
+        load_var mode
+        load_const 2
+        cmp_op ==
+        pop_jump_if_false L2
+        jump L3
+
+      L2:
+        alloc_instance ErrD
+        load_const 4
+        init_field .x
+        throw
+
+      L3:
+        alloc_instance ErrC
+        load_const 3
+        init_field .x
+        throw
+
+      L4:
+        alloc_instance ErrB
+        load_const 2
+        init_field .x
+        throw
+
+      L5:
+        alloc_instance ErrA
+        load_const 1
+        init_field .x
+        throw
+    }
+    "#);
+    assert_eq!(output.result, Ok(BexExternalValue::Int(30)));
+}
+
+/// 4+ typed catch arms with wildcard → type_tag + jump_table + throw_if_panic.
+#[tokio::test]
+async fn catch_four_typed_arms_plus_wildcard_jump_table() {
+    let output = baml_test!(
+        r#"
+        class ErrA { x int }
+        class ErrB { x int }
+        class ErrC { x int }
+        class ErrD { x int }
+
+        function risky(mode: int) -> int {
+            if (mode == 0) { throw ErrA { x: 1 } }
+            if (mode == 1) { throw ErrB { x: 2 } }
+            if (mode == 2) { throw ErrC { x: 3 } }
+            if (mode == 3) { throw ErrD { x: 4 } }
+            throw "unknown"
+        }
+
+        function main() -> int {
+            risky(4) catch (e) {
+                _: ErrA => 10,
+                _: ErrB => 20,
+                _: ErrC => 30,
+                _: ErrD => 40,
+                _ => 99
+            }
+        }
+    "#
+    );
+
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function main() -> int {
+        load_const 4
+        call user.risky
+        jump L5
+        load_var e
+        type_tag
+        jump_table [L1, L2, L4, _, L3], default L0
+
+      L0:
+        load_var e
+        throw_if_panic
+        load_const 99
+        jump L5
+
+      L1: ErrD
+        load_const 40
+        jump L5
+
+      L2: ErrC
+        load_const 30
+        jump L5
+
+      L3: ErrB
+        load_const 20
+        jump L5
+
+      L4: ErrA
+        load_const 10
+
+      L5:
+        return
+    }
+
+    function risky(mode: int) -> int {
+        load_var mode
+        load_const 0
+        cmp_op ==
+        pop_jump_if_false L0
+        jump L7
+
+      L0:
+        load_var mode
+        load_const 1
+        cmp_op ==
+        pop_jump_if_false L1
+        jump L6
+
+      L1:
+        load_var mode
+        load_const 2
+        cmp_op ==
+        pop_jump_if_false L2
+        jump L5
+
+      L2:
+        load_var mode
+        load_const 3
+        cmp_op ==
+        pop_jump_if_false L3
+        jump L4
+
+      L3:
+        load_const "unknown"
+        throw
+
+      L4:
+        alloc_instance ErrD
+        load_const 4
+        init_field .x
+        throw
+
+      L5:
+        alloc_instance ErrC
+        load_const 3
+        init_field .x
+        throw
+
+      L6:
+        alloc_instance ErrB
+        load_const 2
+        init_field .x
+        throw
+
+      L7:
+        alloc_instance ErrA
+        load_const 1
+        init_field .x
+        throw
+    }
+    "#);
+    assert_eq!(output.result, Ok(BexExternalValue::Int(99)));
+}
+
+/// 2 typed catch arms → sequential is_type chain (below 4-arm switch threshold).
+#[tokio::test]
+async fn catch_two_typed_arms_sequential_chain() {
+    let output = baml_test!(
+        r#"
+        class NetworkError { url string }
+        class ParseError   { msg string }
+
+        function fails(mode: int) -> int {
+            if (mode == 0) { throw NetworkError { url: "http://x" } }
+            throw ParseError { msg: "bad" }
+        }
+
+        function main() -> int {
+            fails(1) catch (e) {
+                _: NetworkError => 1,
+                _: ParseError   => 2
+            }
+        }
+    "#
+    );
+
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function fails(mode: int) -> int {
+        load_var mode
+        load_const 0
+        cmp_op ==
+        pop_jump_if_false L0
+        jump L1
+
+      L0:
+        alloc_instance ParseError
+        load_const "bad"
+        init_field .msg
+        throw
+
+      L1:
+        alloc_instance NetworkError
+        load_const "http://x"
+        init_field .url
+        throw
+    }
+
+    function main() -> int {
+        load_const 1
+        call user.fails
+        jump L4
+        load_var e
+        is_type NetworkError
+        pop_jump_if_false L0
+        jump L3
+
+      L0:
+        load_var e
+        is_type ParseError
+        pop_jump_if_false L1
+        jump L2
+
+      L1:
+        load_var e
+        throw
+
+      L2:
+        load_const 2
+        jump L4
+
+      L3:
+        load_const 1
+
+      L4:
+        return
+    }
+    "#);
+    assert_eq!(output.result, Ok(BexExternalValue::Int(2)));
+}
+
+/// Mixed literal + typed catch arms → no switch optimization (falls back to chain).
+#[tokio::test]
+async fn catch_mixed_literal_and_typed_no_switch() {
+    let output = baml_test!(
+        r#"
+        class AppError { code int }
+
+        function fails(mode: int) -> int {
+            if (mode == 0) { throw "boom" }
+            throw AppError { code: 404 }
+        }
+
+        function main() -> int {
+            fails(0) catch (e) {
+                "boom" => 1,
+                _: AppError => 2,
+                _ => 3
+            }
+        }
+    "#
+    );
+
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function fails(mode: int) -> int {
+        load_var mode
+        load_const 0
+        cmp_op ==
+        pop_jump_if_false L0
+        jump L1
+
+      L0:
+        alloc_instance AppError
+        load_const 404
+        init_field .code
+        throw
+
+      L1:
+        load_const "boom"
+        throw
+    }
+
+    function main() -> int {
+        load_const 0
+        call user.fails
+        jump L4
+        load_var e
+        load_const "boom"
+        cmp_op ==
+        pop_jump_if_false L0
+        jump L3
+
+      L0:
+        load_var e
+        is_type AppError
+        pop_jump_if_false L1
+        jump L2
+
+      L1:
+        load_var e
+        throw_if_panic
+        load_const 3
+        jump L4
+
+      L2:
+        load_const 2
+        jump L4
+
+      L3:
+        load_const 1
+
+      L4:
+        return
+    }
+    "#);
+    assert_eq!(output.result, Ok(BexExternalValue::Int(1)));
+}
+
+// ============================================================================
+// §13 — Optimized catch dispatch (from canary: primitive TypeTag + instanceof tests)
+// ============================================================================
+
+#[tokio::test]
+async fn catch_four_primitive_type_arms() {
+    // 4 primitive type arms: string, int, bool, null + wildcard.
+    let output = baml_test_optimized!(
+        r#"
+        function fails() -> int {
+            throw "oops"
+        }
+
+        function main() -> int {
+            fails() catch (e) {
+                _: string => 1,
+                _: int => 2,
+                _: bool => 3,
+                _: null => 4,
+                _ => 0
+            }
+        }
+    "#
+    );
+
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function fails() -> int {
+        load_const "oops"
+        throw
+    }
+
+    function main() -> int {
+        call user.fails
+        jump L5
+        load_var e
+        type_tag
+        jump_table [L3, L4, L2, L1], default L0
+
+      L0:
+        load_var e
+        throw_if_panic
+        load_const 0
+        jump L5
+
+      L1: null
+        load_const 4
+        jump L5
+
+      L2: bool
+        load_const 3
+        jump L5
+
+      L3: int
+        load_const 2
+        jump L5
+
+      L4: string
+        load_const 1
+
+      L5:
+        return
+    }
+    "#);
+    assert_eq!(output.result, Ok(BexExternalValue::Int(1)));
+}
+
+#[tokio::test]
+async fn catch_four_primitive_wildcard_on_float() {
+    // Throw a float — no arm matches, falls through to wildcard.
+    let output = baml_test_optimized!(
+        r#"
+        function fails() -> int {
+            throw 3.14
+        }
+
+        function main() -> int {
+            fails() catch (e) {
+                _: string => 1,
+                _: int => 2,
+                _: bool => 3,
+                _: null => 4,
+                _ => 0
+            }
+        }
+    "#
+    );
+
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function fails() -> int {
+        load_const 3.14
+        throw
+    }
+
+    function main() -> int {
+        call user.fails
+        jump L5
+        load_var e
+        type_tag
+        jump_table [L3, L4, L2, L1], default L0
+
+      L0:
+        load_var e
+        throw_if_panic
+        load_const 0
+        jump L5
+
+      L1: null
+        load_const 4
+        jump L5
+
+      L2: bool
+        load_const 3
+        jump L5
+
+      L3: int
+        load_const 2
+        jump L5
+
+      L4: string
+        load_const 1
+
+      L5:
+        return
+    }
+    "#);
+    assert_eq!(output.result, Ok(BexExternalValue::Int(0)));
+}
+
+#[tokio::test]
+async fn catch_three_type_arms_bool_throw() {
+    // 3 type arms + wildcard, throw bool.
+    let output = baml_test_optimized!(
+        r#"
+        function fails() -> int {
+            throw true
+        }
+
+        function main() -> int {
+            fails() catch (e) {
+                _: string => 1,
+                _: int => 2,
+                _: bool => 3,
+                _ => 0
+            }
+        }
+    "#
+    );
+
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function fails() -> int {
+        load_const true
+        throw
+    }
+
+    function main() -> int {
+        call user.fails
+        jump L6
+        load_var e
+        is_type string
+        pop_jump_if_false L0
+        jump L5
+
+      L0:
+        load_var e
+        is_type int
+        pop_jump_if_false L1
+        jump L4
+
+      L1:
+        load_var e
+        is_type bool
+        pop_jump_if_false L2
+        jump L3
+
+      L2:
+        load_var e
+        throw_if_panic
+        load_const 0
+        jump L6
+
+      L3:
+        load_const 3
+        jump L6
+
+      L4:
+        load_const 2
+        jump L6
+
+      L5:
+        load_const 1
+
+      L6:
+        return
+    }
+    "#);
+    assert_eq!(output.result, Ok(BexExternalValue::Int(3)));
+}
+
+#[tokio::test]
+async fn catch_four_user_classes_instanceof_chain() {
+    // User class arms — with this branch, 4+ class arms use TypeTag dispatch.
+    let output = baml_test_optimized!(
+        r#"
+        class AuthError { reason: string }
+        class NotFound { path: string }
+        class RateLimit { retryAfter: int }
+        class Timeout { ms: int }
+
+        function api(mode: int) -> int {
+            if (mode == 0) { throw AuthError { reason: "expired" } }
+            if (mode == 1) { throw NotFound { path: "/users" } }
+            if (mode == 2) { throw RateLimit { retryAfter: 30 } }
+            if (mode == 3) { throw Timeout { ms: 5000 } }
+            throw "unknown"
+        }
+
+        function main() -> int {
+            api(2) catch (e) {
+                _: AuthError => 1,
+                _: NotFound => 2,
+                _: RateLimit => 3,
+                _: Timeout => 4,
+                _ => 0
+            }
+        }
+    "#
+    );
+
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function api(mode: int) -> int {
+        load_var mode
+        load_const 0
+        cmp_op ==
+        pop_jump_if_false L0
+        jump L7
+
+      L0:
+        load_var mode
+        load_const 1
+        cmp_op ==
+        pop_jump_if_false L1
+        jump L6
+
+      L1:
+        load_var mode
+        load_const 2
+        cmp_op ==
+        pop_jump_if_false L2
+        jump L5
+
+      L2:
+        load_var mode
+        load_const 3
+        cmp_op ==
+        pop_jump_if_false L3
+        jump L4
+
+      L3:
+        load_const "unknown"
+        throw
+
+      L4:
+        alloc_instance Timeout
+        load_const 5000
+        init_field .ms
+        throw
+
+      L5:
+        alloc_instance RateLimit
+        load_const 30
+        init_field .retryAfter
+        throw
+
+      L6:
+        alloc_instance NotFound
+        load_const "/users"
+        init_field .path
+        throw
+
+      L7:
+        alloc_instance AuthError
+        load_const "expired"
+        init_field .reason
+        throw
+    }
+
+    function main() -> int {
+        load_const 2
+        call user.api
+        jump L5
+        load_var e
+        type_tag
+        jump_table [L3, L2, _, _, L4, L1], default L0
+
+      L0:
+        load_var e
+        throw_if_panic
+        load_const 0
+        jump L5
+
+      L1: Timeout
+        load_const 4
+        jump L5
+
+      L2: RateLimit
+        load_const 3
+        jump L5
+
+      L3: NotFound
+        load_const 2
+        jump L5
+
+      L4: AuthError
+        load_const 1
+
+      L5:
+        return
+    }
+    "#);
+    assert_eq!(output.result, Ok(BexExternalValue::Int(3)));
+}
+
+#[tokio::test]
+async fn catch_four_literal_arms() {
+    // Literal patterns use sequential dispatch even with 4+ arms.
+    let output = baml_test_optimized!(
+        r#"
+        function fails(x: int) -> int {
+            if (x == 0) { throw "boom" }
+            if (x == 1) { throw "bang" }
+            if (x == 2) { throw "crash" }
+            throw "other"
+        }
+
+        function main() -> int {
+            fails(1) catch (e) {
+                "boom" => 10,
+                "bang" => 20,
+                "crash" => 30,
+                "other" => 40,
+                _ => 0
+            }
+        }
+    "#
+    );
+
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function fails(x: int) -> int {
+        load_var x
+        load_const 0
+        cmp_op ==
+        pop_jump_if_false L0
+        jump L5
+
+      L0:
+        load_var x
+        load_const 1
+        cmp_op ==
+        pop_jump_if_false L1
+        jump L4
+
+      L1:
+        load_var x
+        load_const 2
+        cmp_op ==
+        pop_jump_if_false L2
+        jump L3
+
+      L2:
+        load_const "other"
+        throw
+
+      L3:
+        load_const "crash"
+        throw
+
+      L4:
+        load_const "bang"
+        throw
+
+      L5:
+        load_const "boom"
+        throw
+    }
+
+    function main() -> int {
+        load_const 1
+        call user.fails
+        jump L8
+        load_var e
+        load_const "boom"
+        cmp_op ==
+        pop_jump_if_false L0
+        jump L7
+
+      L0:
+        load_var e
+        load_const "bang"
+        cmp_op ==
+        pop_jump_if_false L1
+        jump L6
+
+      L1:
+        load_var e
+        load_const "crash"
+        cmp_op ==
+        pop_jump_if_false L2
+        jump L5
+
+      L2:
+        load_var e
+        load_const "other"
+        cmp_op ==
+        pop_jump_if_false L3
+        jump L4
+
+      L3:
+        load_var e
+        throw_if_panic
+        load_const 0
+        jump L8
+
+      L4:
+        load_const 40
+        jump L8
+
+      L5:
+        load_const 30
+        jump L8
+
+      L6:
+        load_const 20
+        jump L8
+
+      L7:
+        load_const 10
+
+      L8:
+        return
+    }
+    "#);
+    assert_eq!(output.result, Ok(BexExternalValue::Int(20)));
+}
+
+#[tokio::test]
+async fn catch_mixed_named_and_anonymous_bindings() {
+    // Mixed named (err: ClassName) and anonymous (_: ClassName) bindings
+    // in the same catch block with field access.
+    let output = baml_test_optimized!(
+        r#"
+        class NetworkError { url: string }
+        class AuthError { reason: string }
+        class NotFound { path: string }
+        class RateLimit { retryAfter: int }
+
+        function fails() -> string {
+            throw NetworkError { url: "http://example.com" }
+        }
+
+        function main() -> string {
+            fails() catch (e) {
+                err: NetworkError => err.url,
+                err: AuthError => err.reason,
+                err: NotFound => err.path,
+                _: RateLimit => "rate limited",
+                _ => "unknown"
+            }
+        }
+    "#
+    );
+
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function fails() -> string {
+        alloc_instance NetworkError
+        load_const "http://example.com"
+        init_field .url
+        throw
+    }
+
+    function main() -> string {
+        call user.fails
+        jump L5
+        load_var e
+        type_tag
+        jump_table [L2, _, L1, L4, _, _, L3], default L0
+
+      L0:
+        load_var e
+        throw_if_panic
+        load_const "unknown"
+        jump L5
+
+      L1: RateLimit
+        load_const "rate limited"
+        jump L5
+
+      L2: NotFound
+        load_var e
+        load_field .path
+        jump L5
+
+      L3: AuthError
+        load_var e
+        load_field .reason
+        jump L5
+
+      L4: NetworkError
+        load_var e
+        load_field .url
+
+      L5:
+        return
+    }
+    "#);
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("http://example.com".into()))
+    );
 }
 
 // ============================================================================

@@ -20,8 +20,10 @@ pub(crate) fn optimize_function(func: &mut MirFunction) {
         return; // nothing to clean up on builtins
     };
     eliminate_dead_blocks(body);
+    merge_passthrough_blocks(body);
     propagate_copies(body, func.arity);
     eliminate_dead_locals(body, func.arity);
+    merge_passthrough_blocks(body); // catch blocks emptied by copy-prop / dead-local elim
     reorder_blocks_rpo(body);
 
     #[cfg(debug_assertions)]
@@ -34,8 +36,10 @@ pub(crate) fn optimize_function(func: &mut MirFunction) {
 /// the enclosing `MirFunction` wrapper (arity = 0).
 pub(crate) fn optimize_function_body(body: &mut MirFunctionBody) {
     eliminate_dead_blocks(body);
+    merge_passthrough_blocks(body);
     propagate_copies(body, 0);
     eliminate_dead_locals(body, 0);
+    merge_passthrough_blocks(body); // catch blocks emptied by copy-prop / dead-local elim
     reorder_blocks_rpo(body);
 
     #[cfg(debug_assertions)]
@@ -152,6 +156,10 @@ fn rewrite_block_ids_in_terminator(term: &mut Terminator, map: &[Option<BlockId>
         }
         Terminator::Throw { .. } => {}
         Terminator::ThrowIfPanic { otherwise, .. } => remap(otherwise),
+        Terminator::ShortCircuit { eval_rhs, join, .. } => {
+            remap(eval_rhs);
+            remap(join);
+        }
     }
 }
 
@@ -168,6 +176,125 @@ fn rewrite_catch_region_blocks(regions: &mut Vec<CatchRegion>, map: &[Option<Blo
         region.handler = new_handler;
         true
     });
+}
+
+// ============================================================================
+// Phase 1b: Passthrough block merging
+// ============================================================================
+
+/// Rewrite all `BlockId` references in a terminator using a `HashMap` redirect map.
+fn rewrite_block_ids_in_terminator_with_map(
+    term: &mut Terminator,
+    map: &HashMap<BlockId, BlockId>,
+) {
+    let remap = |id: &mut BlockId| {
+        if let Some(&new_id) = map.get(id) {
+            *id = new_id;
+        }
+    };
+
+    match term {
+        Terminator::Goto { target } => remap(target),
+        Terminator::Branch {
+            then_block,
+            else_block,
+            ..
+        } => {
+            remap(then_block);
+            remap(else_block);
+        }
+        Terminator::Switch {
+            arms, otherwise, ..
+        } => {
+            for (_, target) in arms {
+                remap(target);
+            }
+            remap(otherwise);
+        }
+        Terminator::Return => {}
+        Terminator::Call { target, unwind, .. } => {
+            remap(target);
+            if let Some(u) = unwind {
+                remap(u);
+            }
+        }
+        Terminator::Unreachable => {}
+        Terminator::DispatchFuture { resume, .. } => remap(resume),
+        Terminator::Await { target, unwind, .. } => {
+            remap(target);
+            if let Some(u) = unwind {
+                remap(u);
+            }
+        }
+        Terminator::Throw { .. } => {}
+        Terminator::ThrowIfPanic { otherwise, .. } => remap(otherwise),
+        Terminator::ShortCircuit { eval_rhs, join, .. } => {
+            remap(eval_rhs);
+            remap(join);
+        }
+    }
+}
+
+/// Merge passthrough blocks: blocks with no statements and a single Goto terminator
+/// are eliminated by redirecting all references to them to their target.
+fn merge_passthrough_blocks(body: &mut MirFunctionBody) {
+    // Step 1: identify passthrough blocks (empty statements + Goto terminator)
+    let mut redirect: HashMap<BlockId, BlockId> = HashMap::new();
+    for block in &body.blocks {
+        if !block.statements.is_empty() {
+            continue;
+        }
+        if let Some(Terminator::Goto { target }) = &block.terminator {
+            // Don't redirect the entry block — it must remain as-is
+            if block.id != body.entry {
+                redirect.insert(block.id, *target);
+            }
+        }
+    }
+
+    if redirect.is_empty() {
+        return;
+    }
+
+    // Step 2: resolve chains (A→B→C becomes A→C)
+    let mut resolved: HashMap<BlockId, BlockId> = HashMap::new();
+    for &src in redirect.keys() {
+        let mut target = redirect[&src];
+        let mut visited = HashSet::new();
+        visited.insert(src);
+        while let Some(&next) = redirect.get(&target) {
+            if !visited.insert(target) {
+                break; // cycle detected, stop
+            }
+            target = next;
+        }
+        resolved.insert(src, target);
+    }
+
+    // Step 3: rewrite all terminators
+    for block in &mut body.blocks {
+        if let Some(term) = &mut block.terminator {
+            rewrite_block_ids_in_terminator_with_map(term, &resolved);
+        }
+    }
+
+    // Step 4: rewrite catch regions
+    for region in &mut body.catch_regions {
+        if let Some(&new_body) = resolved.get(&region.body_entry) {
+            region.body_entry = new_body;
+        }
+        if let Some(&new_handler) = resolved.get(&region.handler) {
+            region.handler = new_handler;
+        }
+    }
+
+    // Step 5: entry block redirect (shouldn't happen since we excluded it, but be safe)
+    if let Some(&new_entry) = resolved.get(&body.entry) {
+        body.entry = new_entry;
+    }
+
+    // Step 6: re-run dead block elimination to compact
+    eliminate_dead_blocks(body);
 }
 
 // ============================================================================
@@ -295,6 +422,14 @@ fn collect_place_index_locals(body: &MirFunctionBody) -> HashSet<Local> {
                     scan_operand(value, &mut set);
                 }
                 Terminator::Await { destination, .. } => scan_place(destination, &mut set),
+                Terminator::ShortCircuit {
+                    operand,
+                    destination,
+                    ..
+                } => {
+                    scan_operand(operand, &mut set);
+                    scan_place(destination, &mut set);
+                }
                 Terminator::Goto { .. } | Terminator::Return | Terminator::Unreachable => {}
             }
         }
@@ -326,6 +461,7 @@ fn count_local_defs(body: &MirFunctionBody) -> Vec<usize> {
             Some(Terminator::Call { destination, .. }) => Some(destination),
             Some(Terminator::DispatchFuture { future, .. }) => Some(future),
             Some(Terminator::Await { destination, .. }) => Some(destination),
+            Some(Terminator::ShortCircuit { destination, .. }) => Some(destination),
             _ => None,
         } {
             defs[dest.base_local().0] += 1;
@@ -502,6 +638,14 @@ fn count_in_terminator(term: &Terminator, uses: &mut [usize]) {
         }
         Terminator::Throw { value } | Terminator::ThrowIfPanic { value, .. } => {
             count_in_operand(value, uses);
+        }
+        Terminator::ShortCircuit {
+            operand,
+            destination,
+            ..
+        } => {
+            count_in_operand(operand, uses);
+            count_dest_place(destination, uses);
         }
         Terminator::Goto { .. } | Terminator::Return | Terminator::Unreachable => {}
     }
@@ -732,6 +876,9 @@ fn apply_subst_to_terminator(term: &mut Terminator, subst: &HashMap<Local, Opera
         Terminator::Throw { value } | Terminator::ThrowIfPanic { value, .. } => {
             apply_subst_to_operand(value, subst);
         }
+        Terminator::ShortCircuit { operand, .. } => {
+            apply_subst_to_operand(operand, subst);
+        }
         Terminator::Goto { .. }
         | Terminator::Return
         | Terminator::Unreachable
@@ -756,6 +903,8 @@ fn eliminate_dead_locals(body: &mut MirFunctionBody, arity: usize) {
                 Terminator::Call { destination, .. } => Some(destination.base_local()),
                 Terminator::Await { destination, .. } => Some(destination.base_local()),
                 Terminator::DispatchFuture { future, .. } => Some(future.base_local()),
+                // ShortCircuit is side-effect-free (pure control flow), so its
+                // destination can be dead-eliminated like any other local.
                 _ => None,
             };
             if let Some(l) = dest_local {
@@ -801,6 +950,22 @@ fn eliminate_dead_locals(body: &mut MirFunctionBody, arity: usize) {
                 true
             }
         });
+    }
+
+    // Replace ShortCircuit terminators whose destination is dead with Goto
+    // to the join block. The now-unreachable eval_rhs block will be cleaned
+    // up by eliminate_dead_blocks.
+    for block in &mut body.blocks {
+        if let Some(Terminator::ShortCircuit {
+            destination: Place::Local(l),
+            join,
+            ..
+        }) = &block.terminator
+        {
+            if old_to_new[l.0].is_none() {
+                block.terminator = Some(Terminator::Goto { target: *join });
+            }
+        }
     }
 
     // Rewrite all Local references
@@ -945,6 +1110,14 @@ fn rewrite_locals_in_terminator(term: &mut Terminator, map: &[Option<Local>]) {
         }
         Terminator::Throw { value } | Terminator::ThrowIfPanic { value, .. } => {
             remap_operand(value, map);
+        }
+        Terminator::ShortCircuit {
+            operand,
+            destination,
+            ..
+        } => {
+            remap_operand(operand, map);
+            remap_place(destination, map);
         }
         Terminator::Goto { .. } | Terminator::Return | Terminator::Unreachable => {}
     }
@@ -1131,6 +1304,14 @@ fn verify_mir(body: &MirFunctionBody, name: &crate::ItemRef) {
                 }
                 Terminator::Throw { value } | Terminator::ThrowIfPanic { value, .. } => {
                     check_operand(value, &blk);
+                }
+                Terminator::ShortCircuit {
+                    operand,
+                    destination,
+                    ..
+                } => {
+                    check_operand(operand, &blk);
+                    check_place(destination, &blk);
                 }
                 Terminator::Goto { .. } | Terminator::Return | Terminator::Unreachable => {}
             }

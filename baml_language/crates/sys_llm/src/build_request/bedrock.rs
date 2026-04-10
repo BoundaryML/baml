@@ -28,7 +28,7 @@ use super::BuildRequestError;
 pub(crate) async fn build_request(
     client: &crate::baml_std::PrimitiveClient,
     prompt: &bex_vm_types::PromptAst,
-    callbacks: &crate::BuildRequestCallbacks,
+    io: Arc<dyn ::sys_types::runtime_io::RuntimeIo>,
 ) -> Result<crate::baml_std::HttpRequest, BuildRequestError> {
     // Convert BAML prompt to SDK types.
     let (system_blocks, messages) = prompt_to_sdk_types(prompt, &client.default_role)?;
@@ -45,7 +45,7 @@ pub(crate) async fn build_request(
     )
     .await?;
 
-    let url = resolve_url(client, callbacks, &dry_run.sdk_uri).await?;
+    let url = resolve_url(client, io, &dry_run.sdk_uri).await?;
 
     let mut headers = indexmap::IndexMap::new();
     headers.insert("content-type".to_string(), "application/json".to_string());
@@ -67,7 +67,7 @@ pub(crate) async fn build_request(
 /// We extract the path starting at `/model/` and prepend the real host.
 async fn resolve_url(
     client: &crate::baml_std::PrimitiveClient,
-    callbacks: &crate::BuildRequestCallbacks,
+    io: Arc<dyn ::sys_types::runtime_io::RuntimeIo>,
     sdk_uri: &str,
 ) -> Result<String, BuildRequestError> {
     // Extract the path portion from the SDK URI (everything from `/model/` onward).
@@ -86,7 +86,7 @@ async fn resolve_url(
         return Ok(format!("{endpoint}{path}"));
     }
 
-    let region = crate::auth_request::bedrock::resolve_region(&bedrock_opts, callbacks).await?;
+    let region = crate::auth_request::bedrock::resolve_region(&bedrock_opts, io).await?;
     Ok(format!(
         "https://bedrock-runtime.{region}.amazonaws.com{path}",
     ))
@@ -411,7 +411,7 @@ fn media_to_content_block(
 
     match media.kind {
         MediaKind::Image => {
-            let format = parse_image_format(mime)?;
+            let format = parse_image_format(&mime)?;
             let img_source = match source {
                 ResolvedMedia::S3Uri(uri) => ImageSource::S3Location(s3_location(uri)),
                 ResolvedMedia::Bytes(bytes) => {
@@ -428,7 +428,7 @@ fn media_to_content_block(
             Ok(vec![ContentBlock::Image(block)])
         }
         MediaKind::Video => {
-            let format = parse_video_format(mime)?;
+            let format = parse_video_format(&mime)?;
             let vid_source = match source {
                 ResolvedMedia::S3Uri(uri) => VideoSource::S3Location(s3_location(uri)),
                 ResolvedMedia::Bytes(bytes) => {
@@ -464,7 +464,7 @@ fn media_to_content_block(
             Ok(vec![ContentBlock::Document(block)])
         }
         MediaKind::Audio => {
-            let format = parse_audio_format(mime)?;
+            let format = parse_audio_format(&mime)?;
             let aud_source = match source {
                 ResolvedMedia::S3Uri(_) => {
                     return Err(BuildRequestError::UnsupportedMedia(
@@ -682,9 +682,13 @@ mod tests {
         client: &crate::baml_std::PrimitiveClient,
         prompt: Arc<PromptAst>,
     ) -> serde_json::Value {
-        let result = build_request(client, &prompt, &crate::BuildRequestCallbacks::noop())
-            .await
-            .unwrap();
+        let result = build_request(
+            client,
+            &prompt,
+            Arc::new(::sys_types::runtime_io::NoopRuntimeIo),
+        )
+        .await
+        .unwrap();
         serde_json::from_str(&result.body).unwrap()
     }
 
@@ -792,7 +796,7 @@ mod tests {
         let result = build_request(
             &client,
             &msg("user", "hi"),
-            &crate::BuildRequestCallbacks::noop(),
+            Arc::new(::sys_types::runtime_io::NoopRuntimeIo),
         )
         .await
         .unwrap();
@@ -812,7 +816,7 @@ mod tests {
         let result = build_request(
             &client,
             &msg("user", "hi"),
-            &crate::BuildRequestCallbacks::noop(),
+            Arc::new(::sys_types::runtime_io::NoopRuntimeIo),
         )
         .await
         .unwrap();
@@ -832,7 +836,7 @@ mod tests {
         let result = build_request(
             &client,
             &msg("user", "hi"),
-            &crate::BuildRequestCallbacks::noop(),
+            Arc::new(::sys_types::runtime_io::NoopRuntimeIo),
         )
         .await
         .unwrap();
@@ -1036,7 +1040,12 @@ mod tests {
                 base64_data: None,
             },
         );
-        let result = build_request(&client, &prompt, &crate::BuildRequestCallbacks::noop()).await;
+        let result = build_request(
+            &client,
+            &prompt,
+            Arc::new(::sys_types::runtime_io::NoopRuntimeIo),
+        )
+        .await;
         assert!(result.is_err(), "non-s3 URLs should be rejected");
     }
 
@@ -1078,7 +1087,7 @@ mod tests {
         let result = build_request(
             &client,
             &msg("user", "hi"),
-            &crate::BuildRequestCallbacks::noop(),
+            Arc::new(::sys_types::runtime_io::NoopRuntimeIo),
         )
         .await
         .unwrap();
@@ -1098,7 +1107,7 @@ mod tests {
         let result = build_request(
             &client,
             &msg("user", "hi"),
-            &crate::BuildRequestCallbacks::noop(),
+            Arc::new(::sys_types::runtime_io::NoopRuntimeIo),
         )
         .await
         .unwrap();
@@ -1132,7 +1141,7 @@ mod tests {
         let result = build_request(
             &client,
             &msg("user", "hi"),
-            &crate::BuildRequestCallbacks::noop(),
+            Arc::new(::sys_types::runtime_io::NoopRuntimeIo),
         )
         .await;
         assert!(

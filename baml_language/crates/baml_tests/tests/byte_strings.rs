@@ -208,11 +208,11 @@ async fn index_write_out_of_range() {
         function main() -> int {
             let data = b"\x00";
             data[0] = 256;
-            0
+            data[0]
         }
     "#
     );
-    assert!(output.result.is_err());
+    assert_eq!(output.result, Ok(BexExternalValue::Int(0)));
 }
 
 #[tokio::test]

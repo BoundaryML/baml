@@ -37,6 +37,7 @@ fn hir2_type_expr_to_string(ty: &baml_compiler2_ast::TypeExpr) -> String {
         TypeExpr::Bool { .. } => "bool".into(),
         TypeExpr::Null { .. } => "null".into(),
         TypeExpr::Never { .. } => "never".into(),
+        TypeExpr::Void { .. } => "void".into(),
         TypeExpr::Uint8Array { .. } => "uint8array".into(),
         TypeExpr::Media { kind, .. } => format!("{:?}", kind).to_lowercase(),
         TypeExpr::Optional { inner, .. } => format!("{}?", hir2_type_expr_to_string(inner)),
@@ -447,7 +448,6 @@ fn binop_sym(op: &baml_compiler2_ast::BinaryOp) -> &'static str {
         BinaryOp::BitXor => "^",
         BinaryOp::Shl => "<<",
         BinaryOp::Shr => ">>",
-        BinaryOp::Instanceof => "instanceof",
         BinaryOp::NullCoalesce => "??",
     }
 }

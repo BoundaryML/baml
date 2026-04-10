@@ -29,17 +29,8 @@ class baml.Map$stream {
 
 --- <builtin>/baml/ns_env/env.baml ---
 function baml.env.get_or_panic(key: string) -> string throws never {
-  { : "" | string
-    let val = get(key) : string?
-    if (val == null : bool) : "" | string
-      { : ""
-        root.sys.panic("env var not found: " + key) : null
-        "" : ""
-      }
-    else
-      { : string
-        val : string
-      }
+  { : string
+    get(key) ?? root.sys.panic("env var not found: " + key) : string
   }
 }
 
@@ -422,7 +413,18 @@ function baml.llm.Client.execute_once<T>(self: baml.llm.Client, context: baml.ll
             }
           else
             { : never
-              throw DevOther { message: "HTTP request failed" } : unknown
+              let error_body = : string | "" -> string
+                catch (http_response.text() : string) : string | ""
+                  catch (e)
+                    _ =>
+                      { : ""
+                        "" : ""
+                      }
+              if (active_delay_ms > 0 : bool) : void
+                { : null
+                  root.sys.sleep(active_delay_ms) : null
+                }
+              throw DevOther { message: "HTTP request fail..." + error_body } : unknown
             }
         }
       ClientType.Fallback =>
@@ -449,6 +451,12 @@ function baml.llm.Client.execute_once<T>(self: baml.llm.Client, context: baml.ll
         }
   }
 }
+class baml.llm.MediaUrlHandler {
+  image: string | null
+  audio: string | null
+  video: string | null
+  pdf: string | null
+}
 class baml.llm.PrimitiveClientOptions {
   model: string | null
   base_url: string | null
@@ -461,6 +469,7 @@ class baml.llm.PrimitiveClientOptions {
   remap_roles: map<string, string> | null
   api_key: string | null
   provider_options: baml.llm.AnthropicOptions | baml.llm.AzureOpenAiOptions | baml.llm.BedrockOptions | baml.llm.VertexAiOptions | null
+  media_url_handler: baml.llm.MediaUrlHandler | null
   headers: map<string, string>
   query_params: map<string, string>
   request_body: map<string, unknown>
@@ -513,6 +522,12 @@ class baml.llm.Client$stream {
   retry: null | baml.llm.RetryPolicy$stream
   counter: null | int
 }
+class baml.llm.MediaUrlHandler$stream {
+  image: string | null
+  audio: string | null
+  video: string | null
+  pdf: string | null
+}
 class baml.llm.PrimitiveClientOptions$stream {
   model: string | null
   base_url: string | null
@@ -525,6 +540,7 @@ class baml.llm.PrimitiveClientOptions$stream {
   remap_roles: map<string, string> | null
   api_key: string | null
   provider_options: baml.llm.AnthropicOptions$stream | baml.llm.AzureOpenAiOptions$stream | baml.llm.BedrockOptions$stream | baml.llm.VertexAiOptions$stream | null
+  media_url_handler: baml.llm.MediaUrlHandler$stream | null
   headers: map<string, string>
   query_params: map<string, string>
   request_body: map<string, unknown>
@@ -618,7 +634,13 @@ class baml.panics.AssertionFailed {
 class baml.panics.Unreachable {
   message: string
 }
-type baml.panics.Panic = baml.panics.DivisionByZero | baml.panics.IndexOutOfBounds | baml.panics.MapKeyNotFound | baml.panics.StackOverflow | baml.panics.AssertionFailed | baml.panics.Unreachable
+class baml.panics.UserPanic {
+  message: string
+}
+class baml.panics.AllocFailure {
+  message: string
+}
+type baml.panics.Panic = baml.panics.DivisionByZero | baml.panics.IndexOutOfBounds | baml.panics.MapKeyNotFound | baml.panics.StackOverflow | baml.panics.AssertionFailed | baml.panics.Unreachable | baml.panics.UserPanic | baml.panics.AllocFailure
 class baml.panics.DivisionByZero$stream {
   dividend: null | int
 }
@@ -638,7 +660,13 @@ class baml.panics.AssertionFailed$stream {
 class baml.panics.Unreachable$stream {
   message: null | string
 }
-type baml.panics.Panic$stream = baml.panics.DivisionByZero$stream | baml.panics.IndexOutOfBounds$stream | baml.panics.MapKeyNotFound$stream | baml.panics.StackOverflow$stream | baml.panics.AssertionFailed$stream | baml.panics.Unreachable$stream
+class baml.panics.UserPanic$stream {
+  message: null | string
+}
+class baml.panics.AllocFailure$stream {
+  message: null | string
+}
+type baml.panics.Panic$stream = baml.panics.DivisionByZero$stream | baml.panics.IndexOutOfBounds$stream | baml.panics.MapKeyNotFound$stream | baml.panics.StackOverflow$stream | baml.panics.AssertionFailed$stream | baml.panics.Unreachable$stream | baml.panics.UserPanic$stream | baml.panics.AllocFailure$stream
 
 --- <builtin>/baml/ns_sys/sys.baml ---
 

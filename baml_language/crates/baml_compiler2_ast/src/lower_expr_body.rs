@@ -610,7 +610,11 @@ impl LoweringContext {
                         SyntaxKind::CARET => op = Some(BinaryOp::BitXor),
                         SyntaxKind::LESS_LESS => op = Some(BinaryOp::Shl),
                         SyntaxKind::GREATER_GREATER => op = Some(BinaryOp::Shr),
-                        SyntaxKind::KW_INSTANCEOF => op = Some(BinaryOp::Instanceof),
+                        SyntaxKind::KW_INSTANCEOF => {
+                            self.diags
+                                .push(LoweringDiagnostic::InstanceofRemoved { span });
+                            return self.alloc_expr(Expr::Missing, node.text_range());
+                        }
                         SyntaxKind::QUESTION_QUESTION => op = Some(BinaryOp::NullCoalesce),
                         SyntaxKind::QUESTION if op.is_none() => {
                             // Two consecutive QUESTION tokens = null coalescing (??)
@@ -2378,6 +2382,13 @@ impl LoweringContext {
                             {
                                 let span = child.text_range();
                                 let ty = crate::lower_type_expr::lower_type_expr_node(&type_expr);
+                                crate::lower_type_expr::check_void_type(
+                                    &ty,
+                                    "a let binding annotation".to_string(),
+                                    span,
+                                    false,
+                                    &mut self.diags,
+                                );
                                 type_annotation = Some(self.alloc_type_annot(ty, span));
                                 seen_colon = false;
                             }

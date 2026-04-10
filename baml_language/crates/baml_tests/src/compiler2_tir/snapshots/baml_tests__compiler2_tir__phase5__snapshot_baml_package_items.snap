@@ -24,11 +24,11 @@ namespace baml.errors:
   class Timeout { methods: [] }
   class Unsupported { methods: [] }
 namespace baml.fs:
-  class File { methods: [read, close] }
+  class File { methods: [read_string, read_bytes, close] }
   function open
 namespace baml.http:
   class Request { methods: [] }
-  class Response { methods: [text, ok] }
+  class Response { methods: [text, bytes, ok] }
   function fetch
   function send
 namespace baml.llm:
@@ -39,6 +39,7 @@ namespace baml.llm:
   enum ClientType
   class ExecutionContext { methods: [] }
   class ExecutionResult { methods: [] }
+  class MediaUrlHandler { methods: [] }
   class OrchestrationStep { methods: [] }
   class PlannerState { methods: [rr_local_offset, rr_pick_index] }
   class PrimitiveClient { methods: [render_prompt, specialize_prompt, build_request, parse] }
@@ -64,6 +65,7 @@ namespace baml.net:
   class Socket { methods: [read, close] }
   function connect
 namespace baml.panics:
+  class AllocFailure { methods: [] }
   class AssertionFailed { methods: [] }
   class DivisionByZero { methods: [] }
   class IndexOutOfBounds { methods: [] }
@@ -71,6 +73,7 @@ namespace baml.panics:
   type Panic
   class StackOverflow { methods: [] }
   class Unreachable { methods: [] }
+  class UserPanic { methods: [] }
 namespace baml.sys:
   function now_ms
   function panic

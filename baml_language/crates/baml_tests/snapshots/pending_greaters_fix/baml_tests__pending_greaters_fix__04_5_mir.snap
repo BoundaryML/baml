@@ -14,10 +14,6 @@ fn user.BadParam(x: map<string, int>) -> string {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -34,10 +30,6 @@ fn user.BadParam$build_request(x: map<string, int>) -> baml.http.Request {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -52,10 +44,6 @@ fn user.BadParam$parse(json: string) -> string {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -72,10 +60,6 @@ fn user.BadParam$render_prompt(x: map<string, int>) -> baml.llm.PromptAst {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -91,10 +75,6 @@ fn user.BadReturnType() -> map<string, int> {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -110,10 +90,6 @@ fn user.BadReturnType$build_request() -> baml.http.Request {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -128,10 +104,6 @@ fn user.BadReturnType$parse(json: string) -> map<string, int> {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -147,10 +119,6 @@ fn user.BadReturnType$render_prompt() -> baml.llm.PromptAst {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }

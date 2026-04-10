@@ -6,8 +6,8 @@ function sleep(ms: int) -> null throws root.errors.Io {
   $rust_io_function
 }
 
-function panic(message: string) -> null {
-  $rust_io_function
+function panic(message: string) -> never {
+  $rust_function
 }
 
 function now_ms() -> int {

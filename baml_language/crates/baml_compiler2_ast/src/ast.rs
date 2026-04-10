@@ -62,6 +62,10 @@ pub enum TypeExpr {
     Never {
         attrs: Vec<RawAttribute>,
     },
+    /// The `void` type — valid only as a function return type.
+    Void {
+        attrs: Vec<RawAttribute>,
+    },
     /// `Uint8Array` (binary data) type
     Uint8Array {
         attrs: Vec<RawAttribute>,
@@ -136,6 +140,7 @@ impl TypeExpr {
             | Self::Bool { attrs }
             | Self::Null { attrs }
             | Self::Never { attrs }
+            | Self::Void { attrs }
             | Self::Uint8Array { attrs }
             | Self::Media { attrs, .. }
             | Self::Optional { attrs, .. }
@@ -162,6 +167,7 @@ impl TypeExpr {
             | Self::Bool { attrs }
             | Self::Null { attrs }
             | Self::Never { attrs }
+            | Self::Void { attrs }
             | Self::Uint8Array { attrs }
             | Self::Media { attrs, .. }
             | Self::Optional { attrs, .. }
@@ -634,7 +640,6 @@ pub enum BinaryOp {
     BitXor,
     Shl,
     Shr,
-    Instanceof,
     /// Null coalescing: `a ?? b` — returns `a` if non-null, else `b`.
     NullCoalesce,
 }
@@ -660,7 +665,6 @@ impl std::fmt::Display for BinaryOp {
             BinaryOp::BitXor => "^",
             BinaryOp::Shl => "<<",
             BinaryOp::Shr => ">>",
-            BinaryOp::Instanceof => "instanceof",
             BinaryOp::NullCoalesce => "??",
         };
         write!(f, "{s}")

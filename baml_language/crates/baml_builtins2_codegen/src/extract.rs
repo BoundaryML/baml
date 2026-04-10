@@ -483,6 +483,7 @@ fn type_expr_to_baml_type(ty: &TypeExpr, generics: &[String]) -> BamlType {
         TypeExpr::Bool { .. } => BamlType::Bool,
         TypeExpr::Null { .. } => BamlType::Null,
         TypeExpr::Never { .. } => BamlType::Null,
+        TypeExpr::Void { .. } => BamlType::Null,
 
         TypeExpr::Media { kind, .. } => {
             // Map MediaKind to the class name string.
@@ -918,13 +919,6 @@ mod tests {
             .find(|b| b.path == "baml.http.fetch")
             .unwrap();
         assert_eq!(http_fetch.throws, vec!["Io", "Timeout"]);
-
-        // baml.sys.panic has no throws clause
-        let sys_panic = io_builtins
-            .iter()
-            .find(|b| b.path == "baml.sys.panic")
-            .unwrap();
-        assert!(sys_panic.throws.is_empty());
 
         let render_prompt = io_builtins
             .iter()

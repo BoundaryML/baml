@@ -40,7 +40,7 @@ function baml.deep_equals(a: baml.T, b: baml.T) -> bool  [builtin]
 --- <builtin>/baml/ns_env/env.baml ---
 function baml.env.get(key: string) -> string?  [builtin]
 function baml.env.get_or_panic(key: string) -> string  [expr] {
-  { let val = get(key) } if (val Eq null) { root.sys.panic("env var not found: " Add key) } "" else {  } val
+  {  } get(key) NullCoalesce root.sys.panic("env var not found: " Add key)
 }
 
 --- <builtin>/baml/ns_errors/errors.baml ---
@@ -82,7 +82,8 @@ class baml.fs.File {
 }
 function baml.fs.close(self: ?) -> null  [builtin]
 function baml.fs.open(path: string) -> baml.fs.File  [builtin]
-function baml.fs.read(self: ?) -> string  [builtin]
+function baml.fs.read_bytes(self: ?) -> uint8array  [builtin]
+function baml.fs.read_string(self: ?) -> string  [builtin]
 
 --- <builtin>/baml/ns_http/http.baml ---
 class baml.http.Request {
@@ -97,6 +98,7 @@ class baml.http.Response {
   url: string
   _body: $rust_type
 }
+function baml.http.bytes(self: ?) -> uint8array  [builtin]
 function baml.http.fetch(url: string) -> baml.http.Response  [builtin]
 function baml.http.ok(self: ?) -> bool  [expr] {
   {  } self.status_code Ge 200 And self.status_code Lt 300
@@ -169,6 +171,12 @@ class baml.llm.Client {
   retry: baml.llm.RetryPolicy?
   counter: int
 }
+class baml.llm.MediaUrlHandler {
+  image: string | null
+  audio: string | null
+  video: string | null
+  pdf: string | null
+}
 class baml.llm.PrimitiveClient {
   name: string
   provider: string
@@ -186,6 +194,7 @@ class baml.llm.PrimitiveClientOptions {
   remap_roles: map<string, string> | null
   api_key: string | null
   provider_options: baml.llm.AnthropicOptions | baml.llm.AzureOpenAiOptions | baml.llm.BedrockOptions | baml.llm.VertexAiOptions | null
+  media_url_handler: baml.llm.MediaUrlHandler | null
   headers: map<string, string>
   query_params: map<string, string>
   request_body: map<string, unknown>
@@ -224,7 +233,7 @@ function baml.llm.execute(self: ?, context: baml.llm.ExecutionContext, inherited
   {  } match (self.retry) { r: baml.llm.RetryPolicy => { let current_delay = r.initial_delay_ms Add 0.0; { let attempt = 0; while attempt Le r.max_retries { let attempt_delay = inherited_delay_ms; if (attempt Gt 0) { attempt_delay = root.math.trunc(current_delay); let next = current_delay Mul r.multiplier } if (next Gt r.max_delay_ms Add 0.0) { current_delay = r.max_delay_ms Add 0.0 } else { current_delay = next }; if (attempt Eq r.max_retries) { attempt_delay = inherited_delay_ms }; let result2: baml.llm.T = self.execute_once(context, attempt_delay) catch (e) { _ => { continue } }; return result2 } }; throw DevOther { message: "All orchestration..." } }, null => { let result: baml.llm.T = self.execute_once(context, inherited_delay_ms); return result } }
 }
 function baml.llm.execute_once(self: ?, context: baml.llm.ExecutionContext, active_delay_ms: int) -> baml.llm.T  [expr] {
-  {  } match (self.client_type) { baml.llm.ClientType.Primitive => { let resolve_fn = self.get_constructor(); let primitive = resolve_fn(); let return_type = get_return_type(context.function_name); let prompt = primitive.render_prompt(context.jinja_string, context.args, return_type); let specialized = primitive.specialize_prompt(prompt); let http_request = primitive.build_request(specialized); let http_response = root.http.send(http_request) } if (http_response.ok()) { let body = http_response.text(); let result: baml.llm.T = primitive.parse(body, return_type) catch (e) { _ => { if (active_delay_ms Gt 0) {  } root.sys.sleep(active_delay_ms); throw e } } } result else { throw DevOther { message: "HTTP request failed" } }, baml.llm.ClientType.Fallback => { for sub in self.sub_clients { let result2: baml.llm.T = sub.execute(context, active_delay_ms) catch (e) { _ => { continue } }; return result2 }; throw DevOther { message: "All orchestration..." } }, baml.llm.ClientType.RoundRobin => { let idx = self.counter Mod self.sub_clients.length(); self.counter Add= 1; let result3: baml.llm.T = self.sub_clients[idx].execute(context, active_delay_ms); return result3 } }
+  {  } match (self.client_type) { baml.llm.ClientType.Primitive => { let resolve_fn = self.get_constructor(); let primitive = resolve_fn(); let return_type = get_return_type(context.function_name); let prompt = primitive.render_prompt(context.jinja_string, context.args, return_type); let specialized = primitive.specialize_prompt(prompt); let http_request = primitive.build_request(specialized); let http_response = root.http.send(http_request) } if (http_response.ok()) { let body = http_response.text(); let result: baml.llm.T = primitive.parse(body, return_type) catch (e) { _ => { if (active_delay_ms Gt 0) {  } root.sys.sleep(active_delay_ms); throw e } } } result else { let error_body = http_response.text() catch (e) { _ => {  } "" }; if (active_delay_ms Gt 0) {  } root.sys.sleep(active_delay_ms); throw DevOther { message: "HTTP request fail..." Add error_body } }, baml.llm.ClientType.Fallback => { for sub in self.sub_clients { let result2: baml.llm.T = sub.execute(context, active_delay_ms) catch (e) { _ => { continue } }; return result2 }; throw DevOther { message: "All orchestration..." } }, baml.llm.ClientType.RoundRobin => { let idx = self.counter Mod self.sub_clients.length(); self.counter Add= 1; let result3: baml.llm.T = self.sub_clients[idx].execute(context, active_delay_ms); return result3 } }
 }
 function baml.llm.get_constructor(self: ?) -> () -> baml.llm.PrimitiveClient  [builtin]
 function baml.llm.get_jinja_template(function_name: string) -> string  [builtin]
@@ -290,6 +299,9 @@ function baml.net.connect(addr: string) -> baml.net.Socket  [builtin]
 function baml.net.read(self: ?) -> string  [builtin]
 
 --- <builtin>/baml/ns_panics/panics.baml ---
+class baml.panics.AllocFailure {
+  message: string
+}
 class baml.panics.AssertionFailed {
   message: string
 }
@@ -309,11 +321,14 @@ class baml.panics.StackOverflow {
 class baml.panics.Unreachable {
   message: string
 }
-type baml.panics.Panic = baml.panics.DivisionByZero | baml.panics.IndexOutOfBounds | baml.panics.MapKeyNotFound | baml.panics.StackOverflow | baml.panics.AssertionFailed | baml.panics.Unreachable
+class baml.panics.UserPanic {
+  message: string
+}
+type baml.panics.Panic = baml.panics.DivisionByZero | baml.panics.IndexOutOfBounds | baml.panics.MapKeyNotFound | baml.panics.StackOverflow | baml.panics.AssertionFailed | baml.panics.Unreachable | baml.panics.UserPanic | baml.panics.AllocFailure
 
 --- <builtin>/baml/ns_sys/sys.baml ---
 function baml.sys.now_ms() -> int  [builtin]
-function baml.sys.panic(message: string) -> null  [builtin]
+function baml.sys.panic(message: string) -> never  [builtin]
 function baml.sys.shell(command: string) -> string  [builtin]
 function baml.sys.sleep(ms: int) -> null  [builtin]
 

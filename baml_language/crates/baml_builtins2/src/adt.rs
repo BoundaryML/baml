@@ -5,7 +5,7 @@ use std::{collections::VecDeque, sync::Arc};
 pub struct MediaValue {
     pub random_id: usize,
     pub kind: baml_base::MediaKind,
-    pub mime_type: Option<String>,
+    mime_type: std::sync::RwLock<Option<String>>,
     // This is unsafe because technically this is writeable
     // so we need to use the unsafe_rw_lock to protect it
     // which then needs to be accessed using the unsafe_cell.get()
@@ -48,8 +48,18 @@ impl MediaValue {
             random_id: GLOBAL_MEDIA_VALUE_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
             kind,
             content: std::cell::UnsafeCell::new(content),
-            mime_type,
+            mime_type: std::sync::RwLock::new(mime_type),
         }
+    }
+
+    /// Get the MIME type, if set.
+    pub fn mime_type(&self) -> Option<String> {
+        self.mime_type.read().unwrap().clone()
+    }
+
+    /// Set the MIME type. Used by media resolution to store inferred MIME types.
+    pub fn set_mime_type(&self, mime: String) {
+        *self.mime_type.write().unwrap() = Some(mime);
     }
 
     /// Read content without taking the lock. Use only when no concurrent writes can occur.
@@ -392,6 +402,23 @@ mod tests {
         if let PromptAst::Simple(s) = &*merged {
             assert!(matches!(&**s, PromptAstSimple::String(t) if t == "abcd"));
         }
+    }
+
+    #[test]
+    fn test_media_value_mime_type_roundtrip() {
+        let media = MediaValue::new(
+            baml_base::MediaKind::Image,
+            MediaContent::Base64 {
+                base64_data: "abc".to_string(),
+            },
+            None,
+        );
+        assert_eq!(media.mime_type(), None);
+        media.set_mime_type("image/png".to_string());
+        assert_eq!(media.mime_type().as_deref(), Some("image/png"));
+        // Overwrite
+        media.set_mime_type("image/jpeg".to_string());
+        assert_eq!(media.mime_type().as_deref(), Some("image/jpeg"));
     }
 
     #[test]

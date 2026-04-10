@@ -3,11 +3,9 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 function user.CallOpenAI(cfg: AppConfig) -> llm.openai.OpenAIResponse {
     alloc_instance OpenAIResponse
-    copy 0
     load_const "response"
-    store_field .text
-    copy 0
+    init_field .text
     load_const "gpt-4"
-    store_field .model
+    init_field .model
     return
 }

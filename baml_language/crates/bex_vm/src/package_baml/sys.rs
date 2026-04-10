@@ -1,4 +1,5 @@
 use super::{BamlNamespaceSys, PackageBamlImpl};
+use crate::errors::VmRustFnError;
 
 impl BamlNamespaceSys for PackageBamlImpl {
     #[allow(clippy::cast_possible_truncation)]
@@ -7,5 +8,11 @@ impl BamlNamespaceSys for PackageBamlImpl {
             .duration_since(web_time::UNIX_EPOCH)
             .expect("system time before UNIX epoch")
             .as_millis() as i64
+    }
+
+    fn panic(message: &str) -> Result<(), VmRustFnError> {
+        Err(VmRustFnError::Panic(crate::VmPanic::UserPanic {
+            message: message.to_string(),
+        }))
     }
 }

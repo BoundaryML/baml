@@ -179,7 +179,7 @@ fn bex_media_to_proto_media(media: &bex_project::MediaValue) -> crate::baml::cff
     use crate::baml::cffi::{BamlValueMedia, baml_value_media::Value as BamlValueMediaValue};
     BamlValueMedia {
         media: media_kind_to_proto_enum(media.kind).into(),
-        mime_type: media.mime_type.clone(),
+        mime_type: media.mime_type(),
         value: Some(media.read_content(|content| match content {
             bex_project::MediaContent::Url { url, .. } => BamlValueMediaValue::Url(url.clone()),
             bex_project::MediaContent::Base64 { base64_data } => {
