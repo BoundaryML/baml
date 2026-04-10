@@ -70,8 +70,8 @@ pub fn function_throw_sets<'db>(
     let res_ctx = crate::package_interface::package_resolution_context(db, package_id);
     let mut aliases = collect_type_aliases(db, pkg_items);
     // Merge dependency type aliases for cross-package field type resolution
-    for (_dep_name, dep_iface) in &res_ctx.dep_interfaces {
-        for types_in_ns in dep_iface.types.values() {
+    for dep in &res_ctx.deps {
+        for types_in_ns in dep.interface.types.values() {
             for exported in types_in_ns.values() {
                 if let crate::package_interface::ExportedType::TypeAlias { qtn, resolved } =
                     exported
@@ -81,8 +81,7 @@ pub fn function_throw_sets<'db>(
             }
         }
     }
-    let dep_packages = &res_ctx.dep_packages;
-    let dep_interfaces = &res_ctx.dep_interfaces;
+    let deps = &res_ctx.deps;
 
     let mut graph: crate::analysis::AnalysisGraph<Name, ThrowFact> =
         crate::analysis::AnalysisGraph::new();
@@ -271,7 +270,7 @@ pub fn function_throw_sets<'db>(
             continue;
         }
         for to in targets {
-            if let Some(dep_throws) = lookup_dep_throw_set(db, dep_packages, dep_interfaces, to) {
+            if let Some(dep_throws) = lookup_dep_throw_set(db, deps, to) {
                 // Cross-package: merge dependency's transitive throw facts into caller's direct facts
                 direct_facts
                     .entry(from.clone())
@@ -295,7 +294,7 @@ pub fn function_throw_sets<'db>(
             continue;
         }
         for to in targets {
-            if lookup_dep_throw_set(db, dep_packages, dep_interfaces, to).is_none() {
+            if lookup_dep_throw_set(db, deps, to).is_none() {
                 graph.add_edge(from.clone(), to.clone());
             }
         }
@@ -652,6 +651,13 @@ fn collect_member_field_call_throws<'db>(
     .collect()
 }
 
+/// Conservative pre-inference recovery pass used only for outward-throws
+/// collection.
+///
+/// This intentionally duplicates a narrow slice of expression typing because
+/// `function_throw_sets` runs before full scope inference and must remain
+/// cycle-safe. Supported shapes should be kept explicit and conservative; full
+/// TIR inference remains the source of truth for general expression semantics.
 struct MemberFieldCallCollector<'a, 'db> {
     db: &'db dyn crate::Db,
     res_ctx: &'a crate::package_interface::PackageResolutionContext<'db>,
@@ -826,7 +832,7 @@ impl<'a, 'db> MemberFieldCallCollector<'a, 'db> {
             } => {
                 let inferred_ty = initializer.and_then(|expr_id| {
                     self.visit_expr(expr_id, env);
-                    self.resolve_expr_ty(expr_id, env)
+                    self.recover_expr_ty(expr_id, env)
                 });
                 if let Some((binding_name, binding_ty)) =
                     self.resolve_binding_ty(*pattern, *type_annotation, inferred_ty)
@@ -896,7 +902,7 @@ impl<'a, 'db> MemberFieldCallCollector<'a, 'db> {
             _ => return,
         };
 
-        let Some(base_ty) = self.resolve_expr_ty(base_id, env) else {
+        let Some(base_ty) = self.recover_expr_ty(base_id, env) else {
             return;
         };
         let resolved_base = crate::throws_semantics::resolve_alias_chain(&base_ty, self.aliases);
@@ -923,27 +929,19 @@ impl<'a, 'db> MemberFieldCallCollector<'a, 'db> {
         }
     }
 
-    fn resolve_expr_ty(
+    fn recover_expr_ty(
         &self,
         expr_id: baml_compiler2_ast::ExprId,
         env: &HashMap<Name, Ty>,
     ) -> Option<Ty> {
         match &self.body.exprs[expr_id] {
-            Expr::Path(segments) if segments.len() == 1 => {
-                let name = &segments[0];
-                if name.as_str() == "self" {
-                    self.self_ty()
-                } else {
-                    env.get(name).cloned()
-                }
-            }
-            Expr::Path(segments) => self.named_callable_ty(segments),
+            Expr::Path(segments) => self.recover_path_ty(segments, env),
             Expr::FieldAccess { base, field } | Expr::OptionalFieldAccess { base, field } => {
-                let base_ty = self.resolve_expr_ty(*base, env)?;
+                let base_ty = self.recover_expr_ty(*base, env)?;
                 self.resolve_member_ty(&base_ty, field)
             }
             Expr::Call { callee, .. } | Expr::OptionalCall { callee, .. } => {
-                let callee_ty = self.resolve_expr_ty(*callee, env)?;
+                let callee_ty = self.recover_expr_ty(*callee, env)?;
                 match callee_ty {
                     Ty::Function { ret, .. } => Some(*ret),
                     Ty::Optional(inner, _) => match *inner {
@@ -957,51 +955,74 @@ impl<'a, 'db> MemberFieldCallCollector<'a, 'db> {
                 type_name: Some(name),
                 type_args,
                 ..
-            } => {
-                let def = self.res_ctx.own_items.lookup_type(self.ns_context, name)?;
-                match def {
-                    Definition::Class(_) => {
-                        let qtn = qualify_def(self.db, def, name);
-                        let mut diags = Vec::new();
-                        let lowered_type_args = type_args
-                            .iter()
-                            .map(|te| {
-                                lower_type_expr_in_ns(
-                                    self.db,
-                                    te,
-                                    self.res_ctx.own_items,
-                                    self.ns_context,
-                                    self.generic_params,
-                                    &mut diags,
-                                )
-                            })
-                            .collect();
-                        Some(Ty::Class(
-                            crate::ty::NominalTypeRef::new_with_type_args(qtn, lowered_type_args),
-                            TyAttr::default(),
-                        ))
-                    }
-                    Definition::Enum(_) => {
-                        let qtn = qualify_def(self.db, def, name);
-                        Some(Ty::Enum(
-                            crate::ty::NominalTypeRef::new_with_type_args(qtn, Vec::new()),
-                            TyAttr::default(),
-                        ))
-                    }
-                    _ => None,
-                }
-            }
-            Expr::Array { elements } => {
-                let element_tys: Vec<Ty> = elements
-                    .iter()
-                    .map(|expr_id| self.resolve_expr_ty(*expr_id, env))
-                    .collect::<Option<Vec<_>>>()?;
-                let element_ty = collapse_types(element_tys)?;
-                Some(Ty::List(Box::new(element_ty), TyAttr::default()))
-            }
-            Expr::OptionalChain { expr } => self.resolve_expr_ty(*expr, env),
+            } => self.recover_typed_object_ty(name, type_args),
+            Expr::Array { elements } => self.recover_array_ty(elements, env),
+            Expr::OptionalChain { expr } => self.recover_expr_ty(*expr, env),
             _ => None,
         }
+    }
+
+    fn recover_path_ty(&self, segments: &[Name], env: &HashMap<Name, Ty>) -> Option<Ty> {
+        if segments.len() == 1 {
+            let name = &segments[0];
+            if name.as_str() == "self" {
+                self.self_ty()
+            } else {
+                env.get(name)
+                    .cloned()
+                    .or_else(|| self.named_callable_ty(segments))
+            }
+        } else {
+            self.named_callable_ty(segments)
+        }
+    }
+
+    fn recover_typed_object_ty(&self, name: &Name, type_args: &[TypeExpr]) -> Option<Ty> {
+        let def = self.res_ctx.own_items.lookup_type(self.ns_context, name)?;
+        match def {
+            Definition::Class(_) => {
+                let qtn = qualify_def(self.db, def, name);
+                let mut diags = Vec::new();
+                let lowered_type_args = type_args
+                    .iter()
+                    .map(|te| {
+                        lower_type_expr_in_ns(
+                            self.db,
+                            te,
+                            self.res_ctx.own_items,
+                            self.ns_context,
+                            self.generic_params,
+                            &mut diags,
+                        )
+                    })
+                    .collect();
+                Some(Ty::Class(
+                    crate::ty::NominalTypeRef::new_with_type_args(qtn, lowered_type_args),
+                    TyAttr::default(),
+                ))
+            }
+            Definition::Enum(_) => {
+                let qtn = qualify_def(self.db, def, name);
+                Some(Ty::Enum(
+                    crate::ty::NominalTypeRef::new_with_type_args(qtn, Vec::new()),
+                    TyAttr::default(),
+                ))
+            }
+            _ => None,
+        }
+    }
+
+    fn recover_array_ty(
+        &self,
+        elements: &[baml_compiler2_ast::ExprId],
+        env: &HashMap<Name, Ty>,
+    ) -> Option<Ty> {
+        let element_tys: Vec<Ty> = elements
+            .iter()
+            .map(|expr_id| self.recover_expr_ty(*expr_id, env))
+            .collect::<Option<Vec<_>>>()?;
+        let element_ty = collapse_types(element_tys)?;
+        Some(Ty::List(Box::new(element_ty), TyAttr::default()))
     }
 
     fn resolve_member_ty(&self, base_ty: &Ty, field: &Name) -> Option<Ty> {
@@ -1018,37 +1039,14 @@ impl<'a, 'db> MemberFieldCallCollector<'a, 'db> {
         let method = self
             .res_ctx
             .lookup_class_method(self.db, class_name, field)?;
-        Some(Ty::Function {
-            params: method
-                .function
-                .params
-                .into_iter()
-                .map(|(name, ty)| (Some(name), ty))
-                .collect(),
-            ret: Box::new(method.function.return_type),
-            throws: Box::new(method.function.outward_throws.unwrap_or(Ty::Never {
-                attr: TyAttr::default(),
-            })),
-            attr: TyAttr::default(),
-        })
+        Some(method.function.as_ty())
     }
 
     fn named_callable_ty(&self, path: &[Name]) -> Option<Ty> {
         let (_source, function) = self
             .res_ctx
             .lookup_function(self.db, path, self.ns_context)?;
-        Some(Ty::Function {
-            params: function
-                .params
-                .into_iter()
-                .map(|(name, ty)| (Some(name), ty))
-                .collect(),
-            ret: Box::new(function.return_type),
-            throws: Box::new(function.outward_throws.unwrap_or(Ty::Never {
-                attr: TyAttr::default(),
-            })),
-            attr: TyAttr::default(),
-        })
+        Some(function.as_ty())
     }
 
     fn resolve_binding_ty(
@@ -1075,7 +1073,7 @@ impl<'a, 'db> MemberFieldCallCollector<'a, 'db> {
     ) -> Option<(Name, Ty)> {
         match &self.body.exprs[target] {
             Expr::Path(segments) if segments.len() == 1 => {
-                Some((segments[0].clone(), self.resolve_expr_ty(value, env)?))
+                Some((segments[0].clone(), self.recover_expr_ty(value, env)?))
             }
             _ => None,
         }
@@ -1086,7 +1084,7 @@ impl<'a, 'db> MemberFieldCallCollector<'a, 'db> {
         collection: baml_compiler2_ast::ExprId,
         env: &HashMap<Name, Ty>,
     ) -> Option<Ty> {
-        match self.resolve_expr_ty(collection, env)? {
+        match self.recover_expr_ty(collection, env)? {
             Ty::List(inner, _) => Some(*inner),
             _ => None,
         }
@@ -1151,18 +1149,14 @@ fn collapse_types(types: Vec<Ty>) -> Option<Ty> {
 /// Look up a function's transitive throw set from dependency interfaces.
 fn lookup_dep_throw_set<'db>(
     db: &'db dyn crate::Db,
-    dep_packages: &[(Name, baml_compiler2_hir::package::PackageId<'db>)],
-    dep_interfaces: &[(Name, &crate::package_interface::PackageInterface)],
+    deps: &[crate::package_interface::ResolvedDependency<'db>],
     target_name: &Name,
 ) -> Option<BTreeSet<ThrowFact>> {
-    for (dep_name, dep_iface) in dep_interfaces {
-        if !dep_iface.callable_keys.contains(target_name) {
+    for dep in deps {
+        if !dep.interface.callable_keys.contains(target_name) {
             continue;
         }
-        let dep_pkg_id = dep_packages
-            .iter()
-            .find_map(|(pkg_name, dep_pkg_id)| (pkg_name == dep_name).then_some(*dep_pkg_id))?;
-        if let Some(throws) = function_throw_sets(db, dep_pkg_id).transitive_for(target_name) {
+        if let Some(throws) = function_throw_sets(db, dep.package_id).transitive_for(target_name) {
             return Some(throws.clone());
         }
     }

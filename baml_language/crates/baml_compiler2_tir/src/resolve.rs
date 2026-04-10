@@ -126,16 +126,16 @@ pub fn resolve_name_at_in_scope<'db>(
                 ) {
                     return ResolvedName::Item(def);
                 }
-                for (dep_name, _) in &res_ctx.dep_interfaces {
+                for dep in &res_ctx.deps {
                     if let Some(def) = res_ctx
                         .lookup_type_definition_in_package(
                             db,
-                            dep_name,
+                            &dep.name,
                             &pkg_info.namespace_path,
                             name,
                         )
                         .or_else(|| {
-                            res_ctx.lookup_type_definition_in_package(db, dep_name, &[], name)
+                            res_ctx.lookup_type_definition_in_package(db, &dep.name, &[], name)
                         })
                     {
                         return ResolvedName::Builtin(def);

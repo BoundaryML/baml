@@ -1,7 +1,7 @@
 //! Package interface types and resolution context.
 //!
 //! `PackageInterface` is a fully-resolved typed summary of everything a package
-//! exports — classes, enums, type aliases, functions, and throw sets.
+//! exports — classes, enums, type aliases, functions, and callable identities.
 //! Dependent packages consume this instead of reaching into raw `ItemTree` /
 //! `TypeExpr` data.
 //!
@@ -80,7 +80,8 @@ pub enum ResolvedSource {
 }
 
 /// Common output for resolved function signatures.
-pub struct ResolvedFunction {
+pub struct ResolvedFunction<'db> {
+    pub func_loc: baml_compiler2_hir::loc::FunctionLoc<'db>,
     pub name: Name,
     pub params: Vec<(Name, Ty)>,
     pub return_type: Ty,
@@ -90,10 +91,27 @@ pub struct ResolvedFunction {
 }
 
 /// Common output for resolved method lookups (includes class context).
-pub struct ResolvedMethod {
-    pub function: ResolvedFunction,
+pub struct ResolvedMethod<'db> {
+    pub function: ResolvedFunction<'db>,
     pub class_name: Name,
     pub class_generic_params: Vec<Name>,
+}
+
+impl ResolvedFunction<'_> {
+    pub fn as_ty(&self) -> Ty {
+        Ty::Function {
+            params: self
+                .params
+                .iter()
+                .map(|(name, ty)| (Some(name.clone()), ty.clone()))
+                .collect(),
+            ret: Box::new(self.return_type.clone()),
+            throws: Box::new(self.outward_throws.clone().unwrap_or(Ty::Never {
+                attr: TyAttr::default(),
+            })),
+            attr: TyAttr::default(),
+        }
+    }
 }
 
 /// Specialized resolution result for builtin class members.
@@ -110,12 +128,17 @@ pub enum ResolvedBuiltinMember<'db> {
     Field(Ty),
 }
 
+pub struct ResolvedDependency<'db> {
+    pub name: Name,
+    pub package_id: PackageId<'db>,
+    pub interface: &'db PackageInterface,
+}
+
 /// Bundles a package's own items with its dependencies' pre-resolved interfaces.
 /// All cross-package lookups go through this context's methods.
 pub struct PackageResolutionContext<'db> {
     pub own_items: &'db PackageItems<'db>,
-    pub dep_interfaces: Vec<(Name, &'db PackageInterface)>,
-    pub dep_packages: Vec<(Name, PackageId<'db>)>,
+    pub deps: Vec<ResolvedDependency<'db>>,
     pub own_package_name: Name,
 }
 
@@ -123,13 +146,12 @@ impl PartialEq for PackageResolutionContext<'_> {
     fn eq(&self, other: &Self) -> bool {
         std::ptr::eq(self.own_items, other.own_items)
             && self.own_package_name == other.own_package_name
-            && self.dep_interfaces.len() == other.dep_interfaces.len()
-            && self.dep_packages == other.dep_packages
-            && self
-                .dep_interfaces
-                .iter()
-                .zip(other.dep_interfaces.iter())
-                .all(|((n1, i1), (n2, i2))| n1 == n2 && std::ptr::eq(*i1, *i2))
+            && self.deps.len() == other.deps.len()
+            && self.deps.iter().zip(other.deps.iter()).all(|(d1, d2)| {
+                d1.name == d2.name
+                    && d1.package_id == d2.package_id
+                    && std::ptr::eq(d1.interface, d2.interface)
+            })
     }
 }
 
@@ -498,6 +520,150 @@ fn outward_throws_from_key(throw_sets: &FunctionThrowSets, key: &Name) -> Option
     }
 }
 
+fn builtin_runtime_class_ty(
+    package: &Name,
+    namespace_path: &[Name],
+    class_name: &Name,
+    class_generic_params: &[Name],
+    type_args: &[Ty],
+) -> Ty {
+    if type_args.is_empty() {
+        Ty::Class(
+            QualifiedTypeName::new_with_generic_params(
+                package.clone(),
+                namespace_path.to_vec(),
+                class_name.clone(),
+                class_generic_params.to_vec(),
+            )
+            .into(),
+            TyAttr::default(),
+        )
+    } else if type_args.len() == 1 && class_name.as_str() == "Array" {
+        Ty::List(Box::new(type_args[0].clone()), TyAttr::default())
+    } else if type_args.len() == 2 && class_name.as_str() == "Map" {
+        Ty::Map(
+            Box::new(type_args[0].clone()),
+            Box::new(type_args[1].clone()),
+            TyAttr::default(),
+        )
+    } else {
+        Ty::Class(
+            QualifiedTypeName::new(package.clone(), namespace_path.to_vec(), class_name.clone())
+                .into(),
+            TyAttr::default(),
+        )
+    }
+}
+
+fn synthetic_effect_throws_ty(effect_vars: &[Name]) -> Ty {
+    match effect_vars.len() {
+        0 => Ty::Never {
+            attr: TyAttr::default(),
+        },
+        1 => Ty::TypeVar(effect_vars[0].clone(), TyAttr::default()),
+        _ => Ty::Union(
+            effect_vars
+                .iter()
+                .map(|name| Ty::TypeVar(name.clone(), TyAttr::default()))
+                .collect(),
+            TyAttr::default(),
+        ),
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn lower_builtin_method_ty<'db>(
+    db: &'db dyn crate::Db,
+    baml_items: &'db PackageItems<'db>,
+    stub_ns: &[Name],
+    package: &Name,
+    namespace_path: &[Name],
+    class_name: &Name,
+    class_generic_params: &[Name],
+    method_generic_params: &[Name],
+    sig: &baml_compiler2_hir::signature::FunctionSignature,
+    type_args: &[Ty],
+    bindings: &FxHashMap<Name, Ty>,
+) -> Ty {
+    let builtin_class_ty = builtin_runtime_class_ty(
+        package,
+        namespace_path,
+        class_name,
+        class_generic_params,
+        type_args,
+    );
+    let mut diags = Vec::new();
+    let mut synthetic_effect_vars: Vec<Name> = Vec::new();
+    let params: Vec<(Option<Name>, Ty)> = sig
+        .params
+        .iter()
+        .map(|(n, te)| {
+            let ty = if n.as_str() == "self"
+                && matches!(te, baml_compiler2_ast::TypeExpr::Unknown { .. })
+            {
+                builtin_class_ty.clone()
+            } else if matches!(te, baml_compiler2_ast::TypeExpr::Function { .. }) {
+                let lowered = crate::lower_type_expr::lower_type_expr_with_fn_context(
+                    db,
+                    te,
+                    baml_items,
+                    stub_ns,
+                    method_generic_params,
+                    &mut diags,
+                    &crate::lower_type_expr::FnTypeLoweringContext::DirectParamRoot {
+                        param_name: n.clone(),
+                    },
+                    &mut synthetic_effect_vars,
+                );
+                crate::generics::substitute_ty(&lowered, bindings)
+            } else {
+                crate::generics::lower_type_expr_with_generics(
+                    db, te, baml_items, stub_ns, bindings, &mut diags,
+                )
+            };
+            (Some(n.clone()), ty)
+        })
+        .collect();
+
+    let ret = sig
+        .return_type
+        .as_ref()
+        .map(|te| {
+            crate::generics::lower_type_expr_with_generics(
+                db, te, baml_items, stub_ns, bindings, &mut diags,
+            )
+        })
+        .unwrap_or(Ty::Void {
+            attr: TyAttr::default(),
+        });
+
+    Ty::Function {
+        params,
+        ret: Box::new(ret),
+        throws: Box::new(synthetic_effect_throws_ty(&synthetic_effect_vars)),
+        attr: TyAttr::default(),
+    }
+}
+
+fn lower_builtin_field_ty<'db>(
+    db: &'db dyn crate::Db,
+    baml_items: &'db PackageItems<'db>,
+    stub_ns: &[Name],
+    type_expr: Option<&baml_compiler2_ast::SpannedTypeExpr>,
+    bindings: &FxHashMap<Name, Ty>,
+) -> Ty {
+    let mut diags = Vec::new();
+    type_expr
+        .map(|te| {
+            crate::generics::lower_type_expr_with_generics(
+                db, &te.expr, baml_items, stub_ns, bindings, &mut diags,
+            )
+        })
+        .unwrap_or(Ty::Unknown {
+            attr: TyAttr::default(),
+        })
+}
+
 // ── package_resolution_context Salsa query ─────────────────────────────────
 
 #[salsa::tracked(returns(ref))]
@@ -507,22 +673,17 @@ pub fn package_resolution_context<'db>(
 ) -> PackageResolutionContext<'db> {
     let own_items = package_items(db, pkg_id);
     let deps = package_dependencies(db, pkg_id);
-    let dep_packages: Vec<(Name, PackageId<'db>)> = deps
+    let deps: Vec<ResolvedDependency<'db>> = deps
         .iter()
-        .map(|dep_id| (dep_id.name(db), *dep_id))
-        .collect();
-    let dep_interfaces: Vec<(Name, &PackageInterface)> = deps
-        .iter()
-        .map(|dep_id| {
-            let name = dep_id.name(db);
-            let iface = package_interface(db, *dep_id);
-            (name, iface)
+        .map(|dep_id| ResolvedDependency {
+            name: dep_id.name(db),
+            package_id: *dep_id,
+            interface: package_interface(db, *dep_id),
         })
         .collect();
     PackageResolutionContext {
         own_items,
-        dep_interfaces,
-        dep_packages,
+        deps,
         own_package_name: pkg_id.name(db),
     }
 }
@@ -530,12 +691,6 @@ pub fn package_resolution_context<'db>(
 // ── PackageResolutionContext lookup methods ─────────────────────────────────
 
 impl<'db> PackageResolutionContext<'db> {
-    fn dep_package_id(&self, pkg_name: &Name) -> Option<PackageId<'db>> {
-        self.dep_packages
-            .iter()
-            .find_map(|(dep_name, dep_id)| (dep_name == pkg_name).then_some(*dep_id))
-    }
-
     /// Get `PackageItems` for an accessible package (own or declared dependency).
     ///
     /// Returns `Some` for the own package and any declared dependency,
@@ -547,13 +702,12 @@ impl<'db> PackageResolutionContext<'db> {
     ) -> Option<&'db PackageItems<'db>> {
         if pkg_name.as_str() == self.own_package_name.as_str() {
             Some(self.own_items)
-        } else if self
-            .dep_interfaces
+        } else if let Some(dep) = self
+            .deps
             .iter()
-            .any(|(n, _)| n.as_str() == pkg_name.as_str())
+            .find(|dep| dep.name.as_str() == pkg_name.as_str())
         {
-            let pkg_id = PackageId::new(db, pkg_name.clone());
-            Some(package_items(db, pkg_id))
+            Some(package_items(db, dep.package_id))
         } else {
             None
         }
@@ -564,7 +718,7 @@ impl<'db> PackageResolutionContext<'db> {
         db: &'db dyn crate::Db,
         path: &[Name],
         ns_context: &[Name],
-    ) -> Option<(ResolvedSource, ResolvedFunction)> {
+    ) -> Option<(ResolvedSource, ResolvedFunction<'db>)> {
         let item = path.last()?;
         if !ns_context.is_empty() {
             let ns: Vec<_> = ns_context
@@ -590,13 +744,12 @@ impl<'db> PackageResolutionContext<'db> {
                     return Some((ResolvedSource::Item, function));
                 }
             }
-            for (dep_name, _dep_iface) in &self.dep_interfaces {
-                if &path[0] == dep_name {
-                    if let Some(function) =
-                        self.lookup_dep_function(db, dep_name, &path[1..path.len() - 1], item)
-                    {
-                        return Some((ResolvedSource::Builtin, function));
-                    }
+            for dep in &self.deps {
+                if path[0] == dep.name
+                    && let Some(function) =
+                        Self::lookup_dep_function(db, dep, &path[1..path.len() - 1], item)
+                {
+                    return Some((ResolvedSource::Builtin, function));
                 }
             }
         }
@@ -608,12 +761,12 @@ impl<'db> PackageResolutionContext<'db> {
         db: &'db dyn crate::Db,
         namespace: &[Name],
         item: &Name,
-    ) -> Option<(ResolvedSource, ResolvedFunction)> {
+    ) -> Option<(ResolvedSource, ResolvedFunction<'db>)> {
         if let Some(function) = self.lookup_own_function(db, namespace, item) {
             return Some((ResolvedSource::Item, function));
         }
-        for (dep_name, _dep_iface) in &self.dep_interfaces {
-            if let Some(function) = self.lookup_dep_function(db, dep_name, namespace, item) {
+        for dep in &self.deps {
+            if let Some(function) = Self::lookup_dep_function(db, dep, namespace, item) {
                 return Some((ResolvedSource::Builtin, function));
             }
         }
@@ -625,7 +778,7 @@ impl<'db> PackageResolutionContext<'db> {
         db: &'db dyn crate::Db,
         namespace: &[Name],
         item: &Name,
-    ) -> Option<ResolvedFunction> {
+    ) -> Option<ResolvedFunction<'db>> {
         let Definition::Function(func_loc) = self.own_items.lookup_value(namespace, item)? else {
             return None;
         };
@@ -678,6 +831,7 @@ impl<'db> PackageResolutionContext<'db> {
         };
         drop(diags);
         Some(ResolvedFunction {
+            func_loc,
             name: func_data.name.clone(),
             params,
             return_type,
@@ -688,24 +842,27 @@ impl<'db> PackageResolutionContext<'db> {
     }
 
     fn lookup_dep_function(
-        &self,
         db: &'db dyn crate::Db,
-        pkg_name: &Name,
+        dep: &ResolvedDependency<'db>,
         namespace: &[Name],
         item: &Name,
-    ) -> Option<ResolvedFunction> {
-        let dep_iface = self
-            .dep_interfaces
-            .iter()
-            .find_map(|(dep_name, dep_iface)| (dep_name == pkg_name).then_some(*dep_iface))?;
-        let exported = dep_iface.lookup_function(namespace, item)?;
-        let dep_pkg_id = self.dep_package_id(pkg_name)?;
+    ) -> Option<ResolvedFunction<'db>> {
+        let exported = dep.interface.lookup_function(namespace, item)?;
+        let Definition::Function(func_loc) =
+            package_items(db, dep.package_id).lookup_value(namespace, item)?
+        else {
+            return None;
+        };
         Some(ResolvedFunction {
+            func_loc,
             name: exported.name.clone(),
             params: exported.params.clone(),
             return_type: exported.return_type.clone(),
             outward_throws: exported.declared_throws.clone().or_else(|| {
-                outward_throws_from_key(function_throw_sets(db, dep_pkg_id), &exported.callable_key)
+                outward_throws_from_key(
+                    function_throw_sets(db, dep.package_id),
+                    &exported.callable_key,
+                )
             }),
             generic_params: exported.generic_params.clone(),
             builtin_kind: exported.builtin_kind,
@@ -750,9 +907,11 @@ impl<'db> PackageResolutionContext<'db> {
                     return Some((ResolvedSource::Item, ty));
                 }
             }
-            for (dep_name, dep_iface) in &self.dep_interfaces {
-                if &path[0] == dep_name {
-                    if let Some(exported) = dep_iface.lookup_type(&path[1..path.len() - 1], item) {
+            for dep in &self.deps {
+                if path[0] == dep.name {
+                    if let Some(exported) =
+                        dep.interface.lookup_type(&path[1..path.len() - 1], item)
+                    {
                         return Some((ResolvedSource::Builtin, exported.to_ty()));
                     }
                 }
@@ -772,8 +931,8 @@ impl<'db> PackageResolutionContext<'db> {
             let ty = def_to_ty(db, def);
             return Some((ResolvedSource::Item, ty));
         }
-        for (_dep_name, dep_iface) in &self.dep_interfaces {
-            if let Some(exported) = dep_iface.lookup_type(namespace, item) {
+        for dep in &self.deps {
+            if let Some(exported) = dep.interface.lookup_type(namespace, item) {
                 return Some((ResolvedSource::Builtin, exported.to_ty()));
             }
         }
@@ -813,11 +972,11 @@ impl<'db> PackageResolutionContext<'db> {
                 }
             }
             // dep-prefixed search (parity with resolve_type)
-            for (dep_name, _dep_iface) in &self.dep_interfaces {
-                if &path[0] == dep_name {
+            for dep in &self.deps {
+                if path[0] == dep.name {
                     if let Some(def) = self.lookup_value_definition_in_package(
                         db,
-                        dep_name,
+                        &dep.name,
                         &path[1..path.len() - 1],
                         item,
                     ) {
@@ -912,13 +1071,16 @@ impl<'db> PackageResolutionContext<'db> {
             let enum_data = &item_tree[enum_loc.id(db)];
             enum_data.variants.iter().map(|v| v.name.clone()).collect()
         } else {
-            self.dep_interfaces
+            self.deps
                 .iter()
-                .find_map(|(dep_name, dep_iface)| {
-                    if dep_name != enum_name.package() {
+                .find_map(|dep| {
+                    if &dep.name != enum_name.package() {
                         return None;
                     }
-                    match dep_iface.lookup_type(enum_name.namespace(), enum_name.name())? {
+                    match dep
+                        .interface
+                        .lookup_type(enum_name.namespace(), enum_name.name())?
+                    {
                         ExportedType::Enum { variants, .. } => Some(variants.clone()),
                         _ => None,
                     }
@@ -940,15 +1102,17 @@ impl<'db> PackageResolutionContext<'db> {
             let raw_fields = self.lookup_own_class_fields(db, class_name.qtn());
             self.apply_class_substitution(db, class_name, raw_fields)
         } else {
-            for (dep_name, dep_iface) in &self.dep_interfaces {
-                if dep_name != class_pkg {
+            for dep in &self.deps {
+                if &dep.name != class_pkg {
                     continue;
                 }
                 if let Some(ExportedType::Class {
                     fields,
                     generic_params,
                     ..
-                }) = dep_iface.lookup_type(class_name.namespace(), class_name.name())
+                }) = dep
+                    .interface
+                    .lookup_type(class_name.namespace(), class_name.name())
                 {
                     if class_name.type_args().is_empty() || generic_params.is_empty() {
                         return fields.clone();
@@ -1002,7 +1166,7 @@ impl<'db> PackageResolutionContext<'db> {
         db: &'db dyn crate::Db,
         class_name: &NominalTypeRef,
         method_name: &Name,
-    ) -> Option<ResolvedMethod> {
+    ) -> Option<ResolvedMethod<'db>> {
         let class_pkg = class_name.package();
         if class_pkg.as_str() == self.own_package_name.as_str() {
             self.lookup_own_class_method(db, class_name.qtn(), method_name)
@@ -1011,28 +1175,33 @@ impl<'db> PackageResolutionContext<'db> {
                     rm
                 })
         } else {
-            for (dep_name, dep_iface) in &self.dep_interfaces {
-                if dep_name != class_pkg {
+            for dep in &self.deps {
+                if &dep.name != class_pkg {
                     continue;
                 }
-                let Some(dep_pkg_id) = self.dep_package_id(dep_name) else {
-                    continue;
-                };
                 if let Some(ExportedType::Class {
                     methods,
                     generic_params,
                     ..
-                }) = dep_iface.lookup_type(class_name.namespace(), class_name.name())
+                }) = dep
+                    .interface
+                    .lookup_type(class_name.namespace(), class_name.name())
                 {
                     if let Some(method) = methods.iter().find(|m| &m.name == method_name) {
+                        let Some((_, func_loc)) =
+                            self.lookup_class_method_locs(db, class_name, method_name)
+                        else {
+                            continue;
+                        };
                         let mut resolved_method = ResolvedMethod {
                             function: ResolvedFunction {
+                                func_loc,
                                 name: method.name.clone(),
                                 params: method.params.clone(),
                                 return_type: method.return_type.clone(),
                                 outward_throws: method.declared_throws.clone().or_else(|| {
                                     outward_throws_from_key(
-                                        function_throw_sets(db, dep_pkg_id),
+                                        function_throw_sets(db, dep.package_id),
                                         &method.callable_key,
                                     )
                                 }),
@@ -1142,134 +1311,26 @@ impl<'db> PackageResolutionContext<'db> {
 
             let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(db, file, method_id);
             let sig = baml_compiler2_hir::signature::function_signature(db, func_loc);
-            let mut diags = Vec::new();
-
-            let builtin_class_ty = if type_args.is_empty() {
-                Ty::Class(
-                    QualifiedTypeName::new_with_generic_params(
-                        stub_pkg.package.clone(),
-                        stub_pkg.namespace_path.clone(),
-                        class_data.name.clone(),
-                        class_data.generic_params.clone(),
-                    )
-                    .into(),
-                    TyAttr::default(),
-                )
-            } else if type_args.len() == 1 {
-                match class_data.name.as_str() {
-                    "Array" => Ty::List(Box::new(type_args[0].clone()), TyAttr::default()),
-                    _ => Ty::Class(
-                        QualifiedTypeName::new(
-                            stub_pkg.package.clone(),
-                            stub_pkg.namespace_path.clone(),
-                            class_data.name.clone(),
-                        )
-                        .into(),
-                        TyAttr::default(),
-                    ),
-                }
-            } else if type_args.len() == 2 {
-                match class_data.name.as_str() {
-                    "Map" => Ty::Map(
-                        Box::new(type_args[0].clone()),
-                        Box::new(type_args[1].clone()),
-                        TyAttr::default(),
-                    ),
-                    _ => Ty::Class(
-                        QualifiedTypeName::new(
-                            stub_pkg.package.clone(),
-                            stub_pkg.namespace_path.clone(),
-                            class_data.name.clone(),
-                        )
-                        .into(),
-                        TyAttr::default(),
-                    ),
-                }
-            } else {
-                Ty::Class(
-                    QualifiedTypeName::new(
-                        stub_pkg.package.clone(),
-                        stub_pkg.namespace_path.clone(),
-                        class_data.name.clone(),
-                    )
-                    .into(),
-                    TyAttr::default(),
-                )
-            };
-
             let method_generic_params: Vec<Name> = class_data
                 .generic_params
                 .iter()
                 .chain(method_data.generic_params.iter())
                 .cloned()
                 .collect();
-
-            let mut synthetic_effect_vars: Vec<Name> = Vec::new();
-            let params: Vec<(Option<Name>, Ty)> = sig
-                .params
-                .iter()
-                .map(|(n, te)| {
-                    let ty = if n.as_str() == "self"
-                        && matches!(te, baml_compiler2_ast::TypeExpr::Unknown { .. })
-                    {
-                        builtin_class_ty.clone()
-                    } else if matches!(te, baml_compiler2_ast::TypeExpr::Function { .. }) {
-                        let lowered = crate::lower_type_expr::lower_type_expr_with_fn_context(
-                            db,
-                            te,
-                            baml_items,
-                            stub_ns,
-                            &method_generic_params,
-                            &mut diags,
-                            &crate::lower_type_expr::FnTypeLoweringContext::DirectParamRoot {
-                                param_name: n.clone(),
-                            },
-                            &mut synthetic_effect_vars,
-                        );
-                        crate::generics::substitute_ty(&lowered, &bindings)
-                    } else {
-                        crate::generics::lower_type_expr_with_generics(
-                            db, te, baml_items, stub_ns, &bindings, &mut diags,
-                        )
-                    };
-                    (Some(n.clone()), ty)
-                })
-                .collect();
-
-            let ret = sig
-                .return_type
-                .as_ref()
-                .map(|te| {
-                    crate::generics::lower_type_expr_with_generics(
-                        db, te, baml_items, stub_ns, &bindings, &mut diags,
-                    )
-                })
-                .unwrap_or(Ty::Void {
-                    attr: TyAttr::default(),
-                });
-
-            let throws_ty = match synthetic_effect_vars.len() {
-                0 => Ty::Never {
-                    attr: TyAttr::default(),
-                },
-                1 => Ty::TypeVar(synthetic_effect_vars[0].clone(), TyAttr::default()),
-                _ => Ty::Union(
-                    synthetic_effect_vars
-                        .iter()
-                        .map(|v| Ty::TypeVar(v.clone(), TyAttr::default()))
-                        .collect(),
-                    TyAttr::default(),
-                ),
-            };
-
-            drop(diags);
             return Some(ResolvedBuiltinMember::Method {
-                ty: Ty::Function {
-                    params,
-                    ret: Box::new(ret),
-                    throws: Box::new(throws_ty),
-                    attr: TyAttr::default(),
-                },
+                ty: lower_builtin_method_ty(
+                    db,
+                    baml_items,
+                    stub_ns,
+                    &stub_pkg.package,
+                    &stub_pkg.namespace_path,
+                    &class_data.name,
+                    &class_data.generic_params,
+                    &method_generic_params,
+                    sig.as_ref(),
+                    type_args,
+                    &bindings,
+                ),
                 class_loc,
                 func_loc,
             });
@@ -1280,20 +1341,13 @@ impl<'db> PackageResolutionContext<'db> {
                 continue;
             }
 
-            let mut diags = Vec::new();
-            let field_ty = field
-                .type_expr
-                .as_ref()
-                .map(|te| {
-                    crate::generics::lower_type_expr_with_generics(
-                        db, &te.expr, baml_items, stub_ns, &bindings, &mut diags,
-                    )
-                })
-                .unwrap_or(Ty::Unknown {
-                    attr: TyAttr::default(),
-                });
-            drop(diags);
-            return Some(ResolvedBuiltinMember::Field(field_ty));
+            return Some(ResolvedBuiltinMember::Field(lower_builtin_field_ty(
+                db,
+                baml_items,
+                stub_ns,
+                field.type_expr.as_ref(),
+                &bindings,
+            )));
         }
 
         None
@@ -1303,7 +1357,7 @@ impl<'db> PackageResolutionContext<'db> {
     /// Uses `generic_params` from the own-package item tree.
     fn apply_method_substitution(
         class_name: &NominalTypeRef,
-        resolved_method: &mut ResolvedMethod,
+        resolved_method: &mut ResolvedMethod<'_>,
     ) {
         if class_name.type_args().is_empty() {
             return;
@@ -1377,7 +1431,7 @@ impl<'db> PackageResolutionContext<'db> {
         db: &'db dyn crate::Db,
         class_name: &QualifiedTypeName,
         method_name: &Name,
-    ) -> Option<ResolvedMethod> {
+    ) -> Option<ResolvedMethod<'db>> {
         let def = self
             .own_items
             .lookup_type(class_name.namespace(), class_name.name())?;
@@ -1440,6 +1494,7 @@ impl<'db> PackageResolutionContext<'db> {
 
             return Some(ResolvedMethod {
                 function: ResolvedFunction {
+                    func_loc: method_loc,
                     name: method_data.name.clone(),
                     params,
                     return_type,

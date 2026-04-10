@@ -291,8 +291,8 @@ pub fn infer_scope_types<'db>(
     let mut aliases = collect_type_aliases(db, pkg_items);
     // Also collect type aliases from dependency packages so that e.g.
     // `testing.TestRunner` can be resolved during subtype checking.
-    for (_dep_name, dep_iface) in &res_ctx.dep_interfaces {
-        for types_in_ns in dep_iface.types.values() {
+    for dep in &res_ctx.deps {
+        for types_in_ns in dep.interface.types.values() {
             for exported in types_in_ns.values() {
                 if let crate::package_interface::ExportedType::TypeAlias { qtn, resolved } =
                     exported

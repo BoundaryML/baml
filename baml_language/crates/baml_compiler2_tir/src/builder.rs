@@ -2825,7 +2825,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             );
             // Don't report "unresolved name" for dependency package names —
             // they'll be resolved by the parent FieldAccess expression.
-            let is_dep_package = self.res_ctx.dep_interfaces.iter().any(|(n, _)| n == name);
+            let is_dep_package = self.res_ctx.deps.iter().any(|dep| dep.name == *name);
             if matches!(ty, Ty::Unknown { .. })
                 && !self.locals.contains_key(name)
                 && self
@@ -2985,28 +2985,13 @@ impl<'db> TypeInferenceBuilder<'db> {
         full_path.extend_from_slice(path);
 
         if let Some((_source, function)) = self.res_ctx.lookup_function(db, &full_path, &[]) {
-            let item = path.last().expect("non-empty path");
-            if let Some(Definition::Function(func_loc)) = self
-                .res_ctx
-                .lookup_value_definition_in_package(db, pkg_name, &path[..path.len() - 1], item)
-            {
-                self.resolutions.insert(
-                    expr_id,
-                    crate::inference::MemberResolution::Free { func_loc },
-                );
-            }
-            return Some(Ty::Function {
-                params: function
-                    .params
-                    .into_iter()
-                    .map(|(n, ty)| (Some(n), ty))
-                    .collect(),
-                ret: Box::new(function.return_type),
-                throws: Box::new(function.outward_throws.unwrap_or(Ty::Never {
-                    attr: TyAttr::default(),
-                })),
-                attr: TyAttr::default(),
-            });
+            self.resolutions.insert(
+                expr_id,
+                crate::inference::MemberResolution::Free {
+                    func_loc: function.func_loc,
+                },
+            );
+            return Some(function.as_ty());
         }
 
         self.res_ctx
@@ -3523,19 +3508,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             let resolved = self
                 .res_ctx
                 .lookup_class_method(db, class_name, method_name)?;
-            let ty = Ty::Function {
-                params: resolved
-                    .function
-                    .params
-                    .into_iter()
-                    .map(|(n, ty)| (Some(n), ty))
-                    .collect(),
-                ret: Box::new(resolved.function.return_type),
-                throws: Box::new(resolved.function.outward_throws.unwrap_or(Ty::Never {
-                    attr: TyAttr::default(),
-                })),
-                attr: TyAttr::default(),
-            };
+            let ty = resolved.function.as_ty();
             Some((ty, class_loc, func_loc))
         }
     }
