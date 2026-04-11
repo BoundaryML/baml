@@ -40,12 +40,20 @@ pub mod playground_sender;
 pub mod playground_server;
 pub mod playground_ws;
 
-use std::sync::Arc;
+use std::{
+    collections::HashMap,
+    sync::{Arc, RwLock, atomic::AtomicU64},
+};
 
 use playground_env::{PlaygroundEnv, PlaygroundEnvState};
 use playground_http::{PlaygroundHttp, PlaygroundHttpState};
 use playground_ws::WsOutMessage;
+use sys_ops::replay::{RecordReplay, RecordedResponse, ReplayHttp, RequestKey};
 use tokio::net::TcpListener;
+
+/// Per-project replay store map, shared between the sys_op_factory and the WS server.
+pub type ReplayStoreMap =
+    Arc<std::sync::Mutex<HashMap<String, Arc<RwLock<RecordReplay<RequestKey, RecordedResponse>>>>>>;
 
 pub fn version() -> &'static str {
     env!("CARGO_PKG_VERSION")
@@ -58,13 +66,48 @@ pub fn version() -> &'static str {
 fn build_playground_sys_ops(
     broadcast_tx: &tokio::sync::broadcast::Sender<WsOutMessage>,
     env_state: &Arc<PlaygroundEnvState>,
+    replay_store: Arc<RwLock<RecordReplay<RequestKey, RecordedResponse>>>,
 ) -> sys_ops::SysOps {
-    let http_state = Arc::new(PlaygroundHttpState::new(broadcast_tx.clone()));
+    let fetch_id_alloc = Arc::new(AtomicU64::new(1));
+    let http_state = Arc::new(PlaygroundHttpState::new(
+        broadcast_tx.clone(),
+        fetch_id_alloc.clone(),
+    ));
+
+    let broadcast_tx_for_replay = broadcast_tx.clone();
+    let on_replay: Arc<dyn Fn(sys_ops::replay::ReplayFetchEvent) + Send + Sync> =
+        Arc::new(move |event: sys_ops::replay::ReplayFetchEvent| {
+            let _ = broadcast_tx_for_replay.send(WsOutMessage::FetchLogNew {
+                call_id: event.call_id,
+                id: event.fetch_id,
+                method: event.method,
+                url: event.url,
+                request_headers: event.request_headers,
+                request_body: event.request_body,
+                replayed: Some(true),
+            });
+            let _ = broadcast_tx_for_replay.send(WsOutMessage::FetchLogUpdate {
+                call_id: event.call_id,
+                log_id: event.fetch_id,
+                status: Some(event.status),
+                duration_ms: Some(event.duration_ms),
+                response_body: Some(event.response_body),
+                error: None,
+                response_headers: Some(event.response_headers),
+            });
+        });
+
+    let replay = ReplayHttp::new(
+        Arc::new(PlaygroundHttp(http_state)),
+        replay_store,
+        fetch_id_alloc,
+        Some(on_replay),
+    );
     sys_ops::SysOpsBuilder::new()
         .with_fs::<sys_native::NativeSysOps>()
         .with_sys::<sys_native::NativeSysOps>()
         .with_net::<sys_native::NativeSysOps>()
-        .with_http_instance(Arc::new(PlaygroundHttp(http_state)))
+        .with_http_instance(Arc::new(replay))
         .with_env_instance(Arc::new(PlaygroundEnv(env_state.clone())))
         .build()
 }
@@ -98,15 +141,24 @@ pub fn run_server(playground_via_browser: bool) -> anyhow::Result<()> {
     let env_state = Arc::new(PlaygroundEnvState::new(broadcast_tx.clone()));
 
     // Build SysOps with playground interception.
-    // The factory creates the same ops for every project.
+    // The factory creates per-project ops with replay stores.
+    let replay_stores: ReplayStoreMap = Arc::new(std::sync::Mutex::new(HashMap::new()));
+    let replay_stores_for_factory = replay_stores.clone();
+
     let broadcast_tx_for_factory = broadcast_tx.clone();
     let env_state_for_factory = env_state.clone();
     #[allow(clippy::type_complexity)]
     let sys_op_factory: Arc<dyn Fn(&vfs::VfsPath) -> Arc<sys_ops::SysOps> + Send + Sync> =
-        Arc::new(move |_path: &vfs::VfsPath| {
+        Arc::new(move |path: &vfs::VfsPath| {
+            let replay_store = Arc::new(RwLock::new(RecordReplay::new()));
+            replay_stores_for_factory
+                .lock()
+                .unwrap()
+                .insert(path.as_str().to_string(), replay_store.clone());
             Arc::new(build_playground_sys_ops(
                 &broadcast_tx_for_factory,
                 &env_state_for_factory,
+                replay_store,
             ))
         });
 
@@ -160,8 +212,10 @@ pub fn run_server(playground_via_browser: bool) -> anyhow::Result<()> {
         let bex_for_playground = bex.clone();
         let btx = broadcast_tx.clone();
         let es = env_state.clone();
+        let rs = replay_stores.clone();
         tokio_runtime.spawn(async move {
-            if let Err(e) = playground_server::run(listener, bex_for_playground, btx, es).await {
+            if let Err(e) = playground_server::run(listener, bex_for_playground, btx, es, rs).await
+            {
                 tracing::error!("Playground server exited: {e}");
             }
         });

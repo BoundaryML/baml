@@ -122,7 +122,8 @@ extern "C" {
         lsp_send_notification: WasmSendNotificationCallback;
         lsp_send_response: WasmSendResponseCallback;
         lsp_make_request: WasmMakeRequestCallback;
-        playground_send_notification: WasmPlaygroundNotificationCallback
+        playground_send_notification: WasmPlaygroundNotificationCallback;
+        replay_notify: (callId: number, fetchId: number, method: string, url: string, requestHeadersJson: string, requestBody: string, status: number, responseHeadersJson: string, responseBody: string) => void;
 }"#)]
     pub type WasmCallbacks;
 
@@ -143,6 +144,14 @@ extern "C" {
 
     #[wasm_bindgen(method, getter, structural, js_name = "playground_send_notification")]
     fn playground_send_notification(this: &WasmCallbacks) -> Function;
+
+    /// Called when a pinned response is replayed (bypasses `loggingFetch`).
+    /// Posts `fetchLogNew` with `replayed: true` to the main thread.
+    ///
+    /// Arguments: callId, fetchId, method, url, requestHeadersJson, requestBody,
+    ///            status, responseHeadersJson, responseBody, durationMs
+    #[wasm_bindgen(method, getter, structural, js_name = "replay_notify")]
+    fn replay_notify(this: &WasmCallbacks) -> Function;
 }
 
 /// A BAML runtime for WASM environments.
@@ -152,6 +161,19 @@ extern "C" {
 #[wasm_bindgen]
 pub struct BamlWasmRuntime {
     bex: Box<dyn bex_project::BexLsp>,
+    // TODO: This is a single shared store across all projects. In the LSP path,
+    // each project gets its own store via `sys_op_factory`. In practice this is
+    // fine because promptfiddle loads one project at a time, but if multi-project
+    // support is added, this should become a per-project map (requires threading
+    // project context through to the HTTP sys_op layer).
+    replay_store: std::sync::Arc<
+        std::sync::RwLock<
+            sys_ops::replay::RecordReplay<
+                sys_ops::replay::RequestKey,
+                sys_ops::replay::RecordedResponse,
+            >,
+        >,
+    >,
 }
 
 // SAFETY: wasm32-unknown-unknown is single-threaded, so unwind safety is
@@ -180,8 +202,44 @@ impl BamlWasmRuntime {
         let make_request_fn = callbacks.make_request();
         let playground_send_notification_fn = callbacks.playground_send_notification();
 
+        let replay_store =
+            std::sync::Arc::new(std::sync::RwLock::new(sys_ops::replay::RecordReplay::new()));
+        let fetch_id_alloc = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(1_000_000));
+
+        // Build the on_replay callback that notifies JS when a pinned response is replayed.
+        // Arguments are passed via a JS Array to avoid the deprecated callN methods.
+        // The JS `replay_notify` function posts `fetchLogNew` with `replayed: true` to the
+        // main thread.
+        let replay_notify_fn = send_wrapper::SendWrapper::new(callbacks.replay_notify());
+        let on_replay: std::sync::Arc<dyn Fn(sys_ops::replay::ReplayFetchEvent) + Send + Sync> =
+            std::sync::Arc::new(move |event: sys_ops::replay::ReplayFetchEvent| {
+                let request_headers_json =
+                    serde_json::to_string(&event.request_headers).unwrap_or_default();
+                let response_headers_json =
+                    serde_json::to_string(&event.response_headers).unwrap_or_default();
+                let args = js_sys::Array::new();
+                #[allow(clippy::cast_precision_loss)]
+                args.push(&wasm_bindgen::JsValue::from_f64(event.call_id as f64));
+                #[allow(clippy::cast_precision_loss)]
+                args.push(&wasm_bindgen::JsValue::from_f64(event.fetch_id as f64));
+                args.push(&event.method.into());
+                args.push(&event.url.into());
+                args.push(&request_headers_json.into());
+                args.push(&event.request_body.into());
+                #[allow(clippy::cast_precision_loss)]
+                args.push(&wasm_bindgen::JsValue::from_f64(event.status as f64));
+                args.push(&response_headers_json.into());
+                args.push(&event.response_body.into());
+                let _ = replay_notify_fn.apply(&wasm_bindgen::JsValue::NULL, &args);
+            });
+
         let sys_ops = sys_ops::SysOpsBuilder::new()
-            .with_http_instance(std::sync::Arc::new(wasm_http::WasmHttp::new(fetch_fn)))
+            .with_http_instance(std::sync::Arc::new(sys_ops::replay::ReplayHttp::new(
+                std::sync::Arc::new(wasm_http::WasmHttp::new(fetch_fn)),
+                replay_store.clone(),
+                fetch_id_alloc,
+                Some(on_replay),
+            )))
             .with_env_instance(std::sync::Arc::new(wasm_env::WasmEnv::new(env_vars_fn)))
             .with_sys_instance(std::sync::Arc::new(wasm_sys::WasmSys::new()))
             .build();
@@ -203,7 +261,10 @@ impl BamlWasmRuntime {
             None,
         );
 
-        Ok(BamlWasmRuntime { bex: Box::new(bex) })
+        Ok(BamlWasmRuntime {
+            bex: Box::new(bex),
+            replay_store,
+        })
     }
 
     /// Call a BAML function for a specific project.
@@ -395,5 +456,38 @@ impl BamlWasmRuntime {
     pub fn expand_test_set(&self, project: &str, generation: u32, testset_name: &str) {
         self.bex
             .expand_test_set(project, u64::from(generation), testset_name);
+    }
+
+    /// Pin or unpin a recorded HTTP response for replay.
+    ///
+    /// When `pinned` is `true`, subsequent requests with the same content key
+    /// (SHA-256 of method + url + sorted headers + body) will be served from
+    /// the recorded response instead of making a live network call.
+    ///
+    /// `fetch_id` is the ID from the `fetchLogNew` event. Returns `true` if the
+    /// `fetch_id` was found in the recordings, `false` otherwise.
+    #[wasm_bindgen(js_name = "toggleReplay")]
+    pub fn toggle_replay(&self, fetch_id: f64, pinned: bool) -> bool {
+        #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+        let fetch_id = fetch_id as u64;
+        self.replay_store
+            .write()
+            .unwrap()
+            .set_pinned(fetch_id, pinned)
+    }
+
+    /// Return a snapshot of all recorded requests for the Replay Manager popover.
+    ///
+    /// Returns an array of `ReplayGroupSnapshot` objects as a JS value.
+    /// Each entry has: `key` (hex string), `display` (`method`, `url`, `body`),
+    /// `recordings` (array of `{fetch_id, status, body}`), and `pinned_fetch_id`.
+    #[wasm_bindgen(js_name = "replayState")]
+    pub fn replay_state(&self) -> JsValue {
+        let store = self.replay_store.read().unwrap();
+        let snapshot = store.snapshot();
+        match serde_json::to_string(&snapshot) {
+            Ok(json) => js_sys::JSON::parse(&json).unwrap_or(JsValue::NULL),
+            Err(_) => JsValue::NULL,
+        }
     }
 }

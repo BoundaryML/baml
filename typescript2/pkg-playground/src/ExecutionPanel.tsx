@@ -11,8 +11,10 @@
 
 import type { ChangeEvent, FC, RefObject } from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useAtom } from 'jotai';
+import { envVarsAtom } from './atoms';
 import { encodeCallArgs } from '@b/pkg-proto';
-import { KeyRound, PanelLeft, Square } from 'lucide-react';
+import { KeyRound, PanelLeft, RotateCcw, Square } from 'lucide-react';
 import { Button } from './components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs';
 import { Input } from './components/ui/input';
@@ -42,6 +44,8 @@ import { ResultDisplay } from './ResultDisplay';
 import { registerBuiltinResultRenderers } from './renderers/registerBuiltins';
 import { GraphView } from './graph/GraphView';
 import { FunctionSidebar } from './FunctionSidebar';
+import { ReplayManagerDialog } from './ReplayManagerPopover';
+import type { ReplayGroup } from './worker-protocol';
 
 registerBuiltinResultRenderers();
 
@@ -126,6 +130,11 @@ const CollectionRunView: FC<CollectionRunViewProps> = ({ run, expandedLogId, set
                 className="flex items-center gap-1.5 py-0.5 pr-2.5 pl-[22px] cursor-pointer border-b border-vsc-border-subtle"
               >
                 <span className={`${statusColorCls} font-semibold text-[11px]`}>{log.status ?? '...'}</span>
+                {log.replayed && (
+                  <span className="px-1 py-0 rounded text-[9px] font-semibold" style={{ backgroundColor: '#1e1528', color: '#7c3aed', border: '1px solid #7c3aed' }}>
+                    REPLAYED
+                  </span>
+                )}
                 <span className="text-vsc-text-faint text-[10px]">{log.method}</span>
                 <span className="text-vsc-text flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-[11px]">{log.url}</span>
                 {log.durationMs != null && <span className="text-vsc-text-faint text-[10px]">{log.durationMs}ms</span>}
@@ -210,10 +219,12 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
 
   const [showApiKeysDialog, setShowApiKeysDialog] = useState(false);
   const showApiKeysDialogRef = useRef(false);
+  const [showReplayManager, setShowReplayManager] = useState(false);
+  const [replayEntries, setReplayEntries] = useState<ReplayGroup[]>([]);
 
   const [diagsExpanded, setDiagsExpanded] = useState(false);
   const [buildTime, setBuildTime] = useState<number | null>(null);
-  const [envVars, setEnvVarsState] = useState<Record<string, string>>({});
+  const [envVars, setEnvVarsState] = useAtom(envVarsAtom);
   // Keys the project is known to need — accumulated from envVarRequests, never shrunk.
   const [knownRequiredKeys, setKnownRequiredKeys] = useState<Set<string>>(new Set());
   // In-flight worker requests waiting for a value: id → variable name. Ref because it doesn't drive renders.
@@ -488,6 +499,10 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
 
         case "cursorContext":
           handleCursorContext(data.context);
+          break;
+
+        case "replayState":
+          setReplayEntries(data.entries);
           break;
 
         default:
@@ -870,6 +885,22 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
         <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Record / Replay"
+                className="relative h-7 w-7"
+                onClick={() => setShowReplayManager((prev) => !prev)}
+              >
+                <RotateCcw size={14} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Record / Replay</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
               <Button variant="ghost" size="icon" className="relative h-7 w-7" onClick={() => setShowApiKeysDialog(true)}>
                 <KeyRound size={14} />
                 {hasMissingKeys && (
@@ -1097,6 +1128,11 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
                             className="flex items-center gap-1.5 py-0.5 pr-2.5 pl-[22px] cursor-pointer border-b border-vsc-border-subtle"
                           >
                             <span className={`${statusColorCls} font-semibold text-[11px]`}>{log.status ?? '...'}</span>
+                            {log.replayed && (
+                              <span className="px-1 py-0 rounded text-[9px] font-semibold" style={{ backgroundColor: '#1e1528', color: '#7c3aed', border: '1px solid #7c3aed' }}>
+                                REPLAYED
+                              </span>
+                            )}
                             <span className="text-vsc-text-faint text-[10px]">{log.method}</span>
                             <span className="text-vsc-text flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-[11px]">{log.url}</span>
                             {log.durationMs != null && <span className="text-vsc-text-faint text-[10px]">{log.durationMs}ms</span>}
@@ -1327,6 +1363,11 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
                                 className="flex items-center gap-1.5 py-0.5 pr-2.5 pl-[22px] cursor-pointer border-b border-vsc-border-subtle"
                               >
                                 <span className={`${statusColorCls} font-semibold text-[11px]`}>{log.status ?? '...'}</span>
+                                {log.replayed && (
+                                  <span className="px-1 py-0 rounded text-[9px] font-semibold" style={{ backgroundColor: '#1e1528', color: '#7c3aed', border: '1px solid #7c3aed' }}>
+                                    REPLAYED
+                                  </span>
+                                )}
                                 <span className="text-vsc-text-faint text-[10px]">{log.method}</span>
                                 <span className="text-vsc-text flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-[11px]">{log.url}</span>
                                 {log.durationMs != null && <span className="text-vsc-text-faint text-[10px]">{log.durationMs}ms</span>}
@@ -1434,6 +1475,26 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
         onSetEnvVar={addEnvVar}
         onDeleteEnvVar={removeEnvVar}
         onImportEnvVars={handleImportEnvVars}
+      />
+      <ReplayManagerDialog
+        open={showReplayManager}
+        onOpenChange={setShowReplayManager}
+        entries={replayEntries}
+        onToggleReplay={(fetchId, pinned) => {
+          port.postMessage({
+            type: 'toggleReplay',
+            fetchId,
+            pinned,
+            project: selectedProject ?? '',
+          });
+          // Refresh state after toggle.
+          setTimeout(() => {
+            port.postMessage({ type: 'requestReplayState', project: selectedProject ?? '' });
+          }, 50);
+        }}
+        onRequestState={() => {
+          port.postMessage({ type: 'requestReplayState', project: selectedProject ?? '' });
+        }}
       />
     </>
   );

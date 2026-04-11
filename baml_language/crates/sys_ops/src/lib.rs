@@ -37,6 +37,8 @@ pub mod io {
     include!(concat!(env!("OUT_DIR"), "/io_generated.rs"));
 }
 
+pub mod replay;
+
 // ============================================================================
 // RuntimeIo adapter (generated from .baml files via baml_builtins2_codegen)
 // ============================================================================

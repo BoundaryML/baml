@@ -12,7 +12,7 @@
  */
 
 import type { RuntimePort } from '../runtime-port';
-import type { WorkerOutMessage, WorkerInMessage, PlaygroundNotification } from '../worker-protocol';
+import type { WorkerOutMessage, WorkerInMessage, PlaygroundNotification, ReplayGroup } from '../worker-protocol';
 import { decodeCallResult } from '@b/pkg-proto';
 
 /** Server → Client message shapes (must match playground_ws.rs WsOutMessage) */
@@ -22,10 +22,11 @@ type WsOutMessage =
   | { type: 'callFunctionResult'; id: number; result: string }
   | { type: 'callFunctionError'; id: number; error: string; cancelled?: boolean }
   | { type: 'envVarRequest'; id: number; variable: string }
-  | { type: 'fetchLogNew'; callId: number; id: number; method: string; url: string; requestHeaders: Record<string, string>; requestBody: string }
+  | { type: 'fetchLogNew'; callId: number; id: number; method: string; url: string; requestHeaders: Record<string, string>; requestBody: string; replayed?: boolean }
   | { type: 'fetchLogUpdate'; callId: number; logId: number; status?: number; durationMs?: number; responseBody?: string; error?: string; responseHeaders?: Record<string, string> }
   | { type: 'controlFlowGraphResult'; functionName: string; graph: unknown | null }
-  | { type: 'cursorContext'; context: unknown };
+  | { type: 'cursorContext'; context: unknown }
+  | { type: 'replayState'; entries: unknown[] };
 
 /** Client → Server message shapes (must match playground_ws.rs WsInMessage) */
 type WsInMessage =
@@ -37,7 +38,9 @@ type WsInMessage =
   | { type: 'requestState' }
   | { type: 'requestCollectTests'; project: string }
   | { type: 'requestControlFlowGraph'; project: string; functionName: string }
-  | { type: 'cursorPosition'; file: string; line: number; column: number };
+  | { type: 'cursorPosition'; file: string; line: number; column: number }
+  | { type: 'toggleReplay'; project: string; fetchId: number; pinned: boolean }
+  | { type: 'requestReplayState'; project: string };
 
 const MAX_RECONNECT_DELAY = 5000;
 
@@ -218,6 +221,15 @@ export class WebSocketRuntimePort implements RuntimePort {
           generation: msg.generation,
           testsetName: msg.testsetName,
         };
+      case 'toggleReplay':
+        return {
+          type: 'toggleReplay',
+          project: msg.project,
+          fetchId: msg.fetchId,
+          pinned: msg.pinned,
+        };
+      case 'requestReplayState':
+        return { type: 'requestReplayState', project: msg.project };
       case 'clearHandles':
         return null; // handles live in the Rust process; no TS-side cleanup needed
       case 'dispose':
@@ -281,6 +293,7 @@ export class WebSocketRuntimePort implements RuntimePort {
             error: null,
             durationMs: null,
             responseHeaders: null,
+            replayed: raw.replayed ?? undefined,
           },
         };
       case 'fetchLogUpdate':
@@ -305,6 +318,25 @@ export class WebSocketRuntimePort implements RuntimePort {
         return {
           type: 'cursorContext',
           context: raw.context as import('../worker-protocol').CursorContext,
+        };
+      case 'replayState':
+        return {
+          type: 'replayState',
+          entries: (raw.entries ?? []).map((e: any) => ({
+            key: e.key,
+            display: {
+              method: e.display.method,
+              url: e.display.url,
+              body: e.display.body,
+            },
+            recordings: (e.recordings ?? []).map((r: any) => ({
+              fetchId: r.fetch_id,
+              status: r.status,
+              body: r.body,
+              recordedAt: r.recorded_at ?? 0,
+            })),
+            pinnedFetchId: e.pinned_fetch_id ?? null,
+          })) as ReplayGroup[],
         };
       default:
         return null;

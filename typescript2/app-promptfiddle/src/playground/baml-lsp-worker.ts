@@ -384,6 +384,40 @@ self.onmessage = async (event: MessageEvent) => {
           notification = mapsToRecordsDeep(notification);
           onPlaygroundNotification(notification);
         },
+        replay_notify: (
+          callId: number,
+          fetchId: number,
+          method: string,
+          url: string,
+          requestHeadersJson: string,
+          requestBody: string,
+          status: number,
+          responseHeadersJson: string,
+          responseBody: string,
+        ) => {
+          let requestHeaders: Record<string, string> = {};
+          let responseHeaders: Record<string, string> = {};
+          try { requestHeaders = JSON.parse(requestHeadersJson); } catch {}
+          try { responseHeaders = JSON.parse(responseHeadersJson); } catch {}
+          postOut({
+            type: "fetchLogNew",
+            entry: {
+              id: fetchId,
+              callId,
+              timestamp: Date.now(),
+              method,
+              url,
+              requestHeaders,
+              requestBody,
+              status,
+              responseBody,
+              error: null,
+              durationMs: 0,
+              responseHeaders,
+              replayed: true,
+            },
+          });
+        },
       },
       vfs.wasmVfs,
     );
@@ -634,6 +668,34 @@ self.onmessage = async (event: MessageEvent) => {
 
     case "dispose":
       dispose();
+      return;
+
+    case "toggleReplay":
+      if (runtime) {
+        runtime.toggleReplay(msg.fetchId, msg.pinned);
+      }
+      return;
+
+    case "requestReplayState":
+      if (runtime) {
+        const rawEntries = runtime.replayState();
+        const entries = (Array.isArray(rawEntries) ? rawEntries : []).map((e: any) => ({
+          key: e.key,
+          display: {
+            method: e.display.method,
+            url: e.display.url,
+            body: e.display.body,
+          },
+          recordings: (e.recordings ?? []).map((r: any) => ({
+            fetchId: r.fetch_id,
+            status: r.status,
+            body: r.body,
+            recordedAt: r.recorded_at ?? 0,
+          })),
+          pinnedFetchId: e.pinned_fetch_id ?? null,
+        }));
+        self.postMessage({ type: "replayState", entries });
+      }
       return;
   }
   msg satisfies never;

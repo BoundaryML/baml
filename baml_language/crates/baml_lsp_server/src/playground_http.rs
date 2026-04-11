@@ -21,16 +21,19 @@ use crate::playground_ws::WsOutMessage;
 /// Shared state for the HTTP interceptor.
 pub struct PlaygroundHttpState {
     broadcast_tx: broadcast::Sender<WsOutMessage>,
-    next_fetch_id: AtomicU64,
+    next_fetch_id: Arc<AtomicU64>,
     /// Maps response body pointer → (call_id, fetch_id) for response_text tracking.
-    response_to_fetch: std::sync::Mutex<HashMap<usize, (u64, u64)>>,
+    pub response_to_fetch: std::sync::Mutex<HashMap<usize, (u64, u64)>>,
 }
 
 impl PlaygroundHttpState {
-    pub fn new(broadcast_tx: broadcast::Sender<WsOutMessage>) -> Self {
+    pub fn new(
+        broadcast_tx: broadcast::Sender<WsOutMessage>,
+        fetch_id_allocator: Arc<AtomicU64>,
+    ) -> Self {
         Self {
             broadcast_tx,
-            next_fetch_id: AtomicU64::new(1),
+            next_fetch_id: fetch_id_allocator,
             response_to_fetch: std::sync::Mutex::new(HashMap::new()),
         }
     }
@@ -153,6 +156,7 @@ impl io::IoNamespaceHttp for PlaygroundHttp {
             url: request.url.clone(),
             request_headers: extract_headers_as_hashmap(&request.headers),
             request_body: request.body.clone(),
+            replayed: None,
         });
 
         let native_result = <sys_native::NativeSysOps as io::IoNamespaceHttp>::send(

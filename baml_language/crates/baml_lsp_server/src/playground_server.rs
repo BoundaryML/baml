@@ -63,11 +63,14 @@ pub async fn pick_port(base_port: u16, max_attempts: u16) -> anyhow::Result<(Tcp
 // Shared state for Axum handlers
 // ---------------------------------------------------------------------------
 
+use crate::ReplayStoreMap;
+
 #[derive(Clone)]
 struct WsState {
     bex: Arc<dyn bex_project::BexLsp>,
     broadcast_tx: broadcast::Sender<WsOutMessage>,
     env_state: Arc<PlaygroundEnvState>,
+    replay_stores: ReplayStoreMap,
 }
 
 /// Start the playground server on the given listener.
@@ -76,8 +79,9 @@ pub async fn run(
     bex: Arc<dyn bex_project::BexLsp>,
     broadcast_tx: broadcast::Sender<WsOutMessage>,
     env_state: Arc<PlaygroundEnvState>,
+    replay_stores: ReplayStoreMap,
 ) -> anyhow::Result<()> {
-    let app = build_router(bex, broadcast_tx, env_state)?;
+    let app = build_router(bex, broadcast_tx, env_state, replay_stores)?;
 
     tracing::info!(
         "Playground: http://localhost:{}",
@@ -93,11 +97,13 @@ fn build_router(
     bex: Arc<dyn bex_project::BexLsp>,
     broadcast_tx: broadcast::Sender<WsOutMessage>,
     env_state: Arc<PlaygroundEnvState>,
+    replay_stores: ReplayStoreMap,
 ) -> anyhow::Result<Router> {
     let ws_state = WsState {
         bex,
         broadcast_tx,
         env_state,
+        replay_stores,
     };
 
     let api = Router::new()
@@ -417,6 +423,47 @@ async fn handle_ws_in_message(
                 && sink.send(ws_msg).await.is_err()
             {
                 tracing::warn!("Failed to send cursor context");
+            }
+        }
+
+        WsInMessage::ToggleReplay {
+            project,
+            fetch_id,
+            pinned,
+        } => {
+            let stores = state.replay_stores.lock().unwrap();
+            if let Some(store) = stores.get(&project) {
+                store.write().unwrap().set_pinned(fetch_id, pinned);
+            } else {
+                tracing::warn!("ToggleReplay: no replay store for project {project}");
+            }
+        }
+
+        WsInMessage::RequestReplayState { project } => {
+            // Collect entries while holding the lock, then drop it before await.
+            let entries: Vec<serde_json::Value> = {
+                let stores = state.replay_stores.lock().unwrap();
+                if let Some(store) = stores.get(&project) {
+                    let store = store.read().unwrap();
+                    store
+                        .snapshot()
+                        .into_iter()
+                        .map(|g| serde_json::to_value(g).unwrap())
+                        .collect()
+                } else {
+                    vec![]
+                }
+            };
+            // Send via sink (per-session), not broadcast.
+            if let Err(e) = sink
+                .send(axum::extract::ws::Message::Text(
+                    serde_json::to_string(&WsOutMessage::ReplayState { entries })
+                        .unwrap()
+                        .into(),
+                ))
+                .await
+            {
+                tracing::warn!("Failed to send ReplayState: {e}");
             }
         }
     }
