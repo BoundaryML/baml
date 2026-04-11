@@ -198,7 +198,7 @@ fn extract_from_class(
              -- these are mutually exclusive (mutable receiver already borrows vm)"
         );
         assert!(
-            !may_yield || has_mut_vm || is_mut,
+            !may_yield || has_mut_vm,
             "baml codegen error: {path} has //baml:may_yield without //baml:mut_vm \
              -- yielding methods require mutable VM access"
         );

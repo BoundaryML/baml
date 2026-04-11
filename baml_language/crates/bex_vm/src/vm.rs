@@ -1408,44 +1408,30 @@ impl BexVm {
                     NativeCallResult::Done(v) => {
                         self.stack.push(v);
                     }
-                    NativeCallResult::Error(VmRustFnError::Panic(panic)) => {
-                        return Err(VmError::Thrown(self.panic_to_exception_value(panic)));
-                    }
-                    NativeCallResult::Error(VmRustFnError::BamlError(err)) => {
-                        return Err(VmError::Thrown(self.error_to_exception_value(err)));
-                    }
-                    NativeCallResult::Error(VmRustFnError::InternalError(err)) => {
-                        return Err(VmError::InternalError(err));
+                    NativeCallResult::Error(e) => {
+                        return Err(self.native_error_to_vm_error(e));
                     }
                     NativeCallResult::YieldToCall {
                         callee,
                         args: callback_args,
                         continuation,
                     } => {
-                        // Push a Native frame so that when the callback returns
-                        // we can resume the continuation.
+                        // Push a Native continuation frame, then dispatch the
+                        // callback through ECFLO. The exec loop's continuation
+                        // handler (at the top of the loop) will invoke the
+                        // continuation when the callback completes.
                         self.frames.push(Frame::Native(NativeFrame {
                             function: callee_ptr,
                             continuation,
                         }));
 
-                        // Push the callback arguments onto the eval stack.
-                        let callback_locals_offset = StackIndex::from_raw(self.stack.len());
+                        let arg_count = callback_args.len();
+                        let cb_locals = StackIndex::from_raw(self.stack.len());
                         self.stack.extend(callback_args);
 
-                        // Push the bytecode frame for the callback.
-                        self.frames.push(Frame::Bytecode(BytecodeFrame {
-                            function: callee,
-                            instruction_ptr: 0,
-                            locals_offset: callback_locals_offset,
-                        }));
-                        self.allocate_real_locals_for_frame(callee)?;
-
-                        // Update the outer loop's frame pointer and function.
-                        *frame_idx = self.frames.len() - 1;
-
-                        // SAFETY: See `load_function` doc comment.
-                        *function = unsafe { self.load_function(*frame_idx)? };
+                        return self.execute_call_from_locals_offset(
+                            callee, cb_locals, arg_count, frame_idx, function,
+                        );
                     }
                 }
             }
@@ -1511,6 +1497,15 @@ impl BexVm {
         }
 
         Ok(None)
+    }
+
+    /// Convert a [`VmRustFnError`] into the corresponding [`VmError`].
+    fn native_error_to_vm_error(&mut self, err: VmRustFnError) -> VmError {
+        match err {
+            VmRustFnError::Panic(panic) => VmError::Thrown(self.panic_to_exception_value(panic)),
+            VmRustFnError::BamlError(err) => VmError::Thrown(self.error_to_exception_value(err)),
+            VmRustFnError::InternalError(err) => VmError::InternalError(err),
+        }
     }
 
     // Runs filters and returns remaining notifications for the watched node.
@@ -1666,40 +1661,113 @@ impl BexVm {
     ///
     /// Each "cycle" (loop iteration) executes a single instruction.
     pub fn exec(&mut self) -> Result<VmExecState, VmError> {
-        // Grab the last frame from the call stack.
-        //
-        // Note that [`BytecodeFrame`] is [`Copy`], so in case the borrow checker
-        // complains too much and you can't circumvent it then you can make a
-        // local copy of the frame, modify it as needed, and then when we're
-        // done with this frame store it back in the vector to persist changes.
-        // It's a similar trick to what we've implemented in the cycle detection
-        // algorithm. Take a look at the `strong_connect` function in the
-        // `tarjan.rs` file.
-        // Check if we have frames to execute
         if self.frames.is_empty() {
             return Ok(VmExecState::Complete(Value::Null));
         }
 
-        // Get the frame index (we'll use indexing instead of holding a mutable reference
-        // to avoid borrow checker issues). This is mutable so we can update it when
-        // pushing new frames during function calls.
         let mut frame_idx = self.frames.len() - 1;
-
-        // SAFETY: See `load_function` doc comment.
         let mut function = unsafe { self.load_function(frame_idx)? };
 
         loop {
-            // Current instruction pointer (read from frame).
-            let Frame::Bytecode(bf) = &self.frames[frame_idx] else {
-                unreachable!("exec loop frame is always Bytecode");
+            // ── CPS continuation handler ──────────────────────────────
+            //
+            // When a bytecode callback returns (Return instruction) and
+            // the frame below is Frame::Native, the Return handler just
+            // pops the bytecode frame and leaves the result on the stack.
+            // We detect the Native frame here and drive the continuation.
+            //
+            // This also handles re-entry after exec() yielded a
+            // FunctionExit span for a traced callback.
+            while matches!(self.frames.last(), Some(Frame::Native(_))) {
+                let v = self.stack.ensure_pop()?;
+                let Some(Frame::Native(nf)) = self.frames.pop() else {
+                    unreachable!("just matched Some(Frame::Native(_))");
+                };
+                let native_fn_ptr = nf.function;
+
+                match nf.continuation.call(self, v) {
+                    NativeCallResult::Done(val) => {
+                        self.stack.push(val);
+                        // Continue the while loop — there may be stacked
+                        // Native frames below (e.g. nested continuations).
+                    }
+                    NativeCallResult::Error(e) => match self.native_error_to_vm_error(e) {
+                        VmError::Thrown(exception_value) => {
+                            self.try_unwind_exception(
+                                &mut frame_idx,
+                                &mut function,
+                                exception_value,
+                            )?;
+                            break;
+                        }
+                        other => return Err(other),
+                    },
+                    NativeCallResult::YieldToCall {
+                        callee,
+                        args: callback_args,
+                        continuation,
+                    } => {
+                        // The continuation wants to call another function.
+                        // Push the new Native frame, then dispatch the
+                        // callback through ECFLO.
+                        self.frames.push(Frame::Native(NativeFrame {
+                            function: native_fn_ptr,
+                            continuation,
+                        }));
+
+                        let arg_count = callback_args.len();
+                        let cb_locals = StackIndex::from_raw(self.stack.len());
+                        self.stack.extend(callback_args);
+
+                        let ecflo_result = match self.execute_call_from_locals_offset(
+                            callee,
+                            cb_locals,
+                            arg_count,
+                            &mut frame_idx,
+                            &mut function,
+                        ) {
+                            Ok(result) => result,
+                            Err(VmError::Thrown(exception_value)) => {
+                                self.try_unwind_exception(
+                                    &mut frame_idx,
+                                    &mut function,
+                                    exception_value,
+                                )?;
+                                break;
+                            }
+                            Err(other) => return Err(other),
+                        };
+
+                        if let Some(state) = ecflo_result {
+                            return Ok(state);
+                        }
+                        // If ECFLO returned None: either a bytecode frame
+                        // was pushed (top is Bytecode, while exits) or a
+                        // native callback completed inline (top is Native,
+                        // while continues).
+                    }
+                }
+            }
+
+            if self.frames.is_empty() {
+                return self
+                    .stack
+                    .ensure_pop()
+                    .map_err(VmError::InternalError)
+                    .map(VmExecState::Complete);
+            }
+
+            // Sync frame state — may have changed due to continuation
+            // handling above or the previous step()'s Return.
+            frame_idx = self.frames.len() - 1;
+            function = unsafe { self.load_function(frame_idx)? };
+
+            // ── Instruction execution ─────────────────────────────────
+
+            let Frame::Bytecode(bf) = &mut self.frames[frame_idx] else {
+                unreachable!("exec loop frame is always Bytecode after continuation handler");
             };
             let instruction_ptr = bf.instruction_ptr;
-
-            // Move the frame's IP to the next instruction. We'll deal with
-            // jump offsets later.
-            let Frame::Bytecode(bf) = &mut self.frames[frame_idx] else {
-                unreachable!("exec loop frame is always Bytecode");
-            };
             bf.instruction_ptr += 1;
 
             #[cfg(debug_assertions)]
@@ -3036,67 +3104,6 @@ impl BexVm {
                 // Pop from the call stack.
                 self.frames.pop();
 
-                // If the frame below is a Native continuation frame, invoke
-                // the continuation with the result and handle its outcome.
-                if matches!(self.frames.last(), Some(Frame::Native(_))) {
-                    // Pop the result we just pushed; the continuation will
-                    // produce the final value (or yield again).
-                    let callback_result = self.stack.ensure_pop()?;
-
-                    // Pop the Native frame and extract the continuation.
-                    let Some(Frame::Native(nf)) = self.frames.pop() else {
-                        unreachable!("just matched Some(Frame::Native(_))");
-                    };
-
-                    match nf.continuation.call(self, callback_result) {
-                        NativeCallResult::Done(v) => {
-                            self.stack.push(v);
-                        }
-                        NativeCallResult::Error(VmRustFnError::Panic(panic)) => {
-                            return Err(VmError::Thrown(self.panic_to_exception_value(panic)));
-                        }
-                        NativeCallResult::Error(VmRustFnError::BamlError(err)) => {
-                            return Err(VmError::Thrown(self.error_to_exception_value(err)));
-                        }
-                        NativeCallResult::Error(VmRustFnError::InternalError(err)) => {
-                            return Err(VmError::InternalError(err));
-                        }
-                        NativeCallResult::YieldToCall {
-                            callee,
-                            args: callback_args,
-                            continuation,
-                        } => {
-                            // The continuation wants to call another bytecode
-                            // function. Push another Native frame + Bytecode frame
-                            // and resume the execution loop.
-                            let next_locals_offset = StackIndex::from_raw(self.stack.len());
-                            self.stack.extend(callback_args);
-
-                            // Re-use the same native function pointer from the
-                            // frame we just popped.
-                            self.frames.push(Frame::Native(NativeFrame {
-                                function: nf.function,
-                                continuation,
-                            }));
-                            self.frames.push(Frame::Bytecode(BytecodeFrame {
-                                function: callee,
-                                instruction_ptr: 0,
-                                locals_offset: next_locals_offset,
-                            }));
-                            self.allocate_real_locals_for_frame(callee)?;
-
-                            *frame_idx = self.frames.len() - 1;
-
-                            // SAFETY: See `load_function` doc comment.
-                            *function = unsafe { self.load_function(*frame_idx)? };
-
-                            // Return Ok(None) so the exec loop calls step()
-                            // again, starting execution of the new bytecode frame.
-                            return Ok(None);
-                        }
-                    }
-                }
-
                 // Return from interrupt.
                 if Some(self.frames.len()) == self.interrupt_frame {
                     self.interrupt_frame = None;
@@ -3128,11 +3135,9 @@ impl BexVm {
                     )));
                 }
 
-                // Resume previous frame execution.
-                *frame_idx = self.frames.len() - 1;
-
-                // SAFETY: See `load_function` doc comment.
-                *function = unsafe { self.load_function(*frame_idx)? };
+                // Native continuation frames (from CPS callbacks like
+                // array.map) are handled at the top of the exec loop.
+                // Just update frame_idx so the loop detects them.
             }
 
             Instruction::AllocMap(n) => {

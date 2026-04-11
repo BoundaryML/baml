@@ -229,3 +229,30 @@ async fn array_map_callback_throws() {
     );
     assert_eq!(output.result, Ok(BexExternalValue::String("caught".into())));
 }
+
+/// array.map over string[] — exercises heap-object paths in MapContinuation
+/// (gc_roots, apply_forwarding) that int[] tests don't cover.
+#[tokio::test]
+async fn array_map_string_elements() {
+    let output = baml_test!(
+        r#"
+        function main() -> string[] {
+            let items: string[] = ["a", "b", "c"]
+            items.map((s: string) -> string { s + "!" })
+        }
+    "#
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::Array {
+            element_type: Ty::String {
+                attr: baml_base::TyAttr::default()
+            },
+            items: vec![
+                BexExternalValue::String("a!".into()),
+                BexExternalValue::String("b!".into()),
+                BexExternalValue::String("c!".into()),
+            ],
+        })
+    );
+}

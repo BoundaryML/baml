@@ -144,6 +144,7 @@ impl BamlClassArray for PackageBamlImpl {
         }
 
         let first_arg = array[0];
+        let capacity = array.len();
         NativeCallResult::YieldToCall {
             callee: f_ptr,
             args: vec![first_arg],
@@ -151,7 +152,7 @@ impl BamlClassArray for PackageBamlImpl {
                 f_ptr,
                 array,
                 idx: 0,
-                results: vec![],
+                results: Vec::with_capacity(capacity),
             }),
         }
     }
