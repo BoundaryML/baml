@@ -6,13 +6,13 @@ fn user.$init_test_19(registry: testing.TestCollector) -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: testing.TestCollector // registry // param
-    let _2: null
-    let _3: () -> null
-    let _4: null
-    let _5: () -> null
+    let _2: void
+    let _3: () -> void
+    let _4: void
+    let _5: () -> void
     let _6: void
-    let _7: null
-    let _8: () -> null
+    let _7: void
+    let _8: () -> void
     let _9: MyRunner
 
     bb0: {

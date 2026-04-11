@@ -1027,7 +1027,10 @@ fn synthesize_register_call(
                 name: Name::new("<test body>"),
                 generic_params: vec![],
                 params: vec![],
-                return_type: None,
+                return_type: Some(SpannedTypeExpr {
+                    expr: crate::ast::TypeExpr::Void { attrs: vec![] },
+                    span,
+                }),
                 throws: None,
                 body: Some(FunctionBodyDef::Expr(lambda_body, lambda_source_map)),
                 declarative_meta: None,
@@ -1094,7 +1097,10 @@ fn synthesize_register_call(
                 name: Name::new("<testset collector>"),
                 generic_params: vec![],
                 params: vec![testset_param],
-                return_type: None,
+                return_type: Some(SpannedTypeExpr {
+                    expr: crate::ast::TypeExpr::Void { attrs: vec![] },
+                    span,
+                }),
                 throws: None,
                 body: Some(FunctionBodyDef::Expr(collector_exprs, collector_source_map)),
                 declarative_meta: None,

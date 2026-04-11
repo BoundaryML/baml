@@ -6,10 +6,10 @@ fn user.$init_test_19(registry: testing.TestCollector) -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: testing.TestCollector // registry // param
-    let _2: null
-    let _3: (testing.TestCollector) -> null
-    let _4: null
-    let _5: (testing.TestCollector) -> null
+    let _2: void
+    let _3: (testing.TestCollector) -> void
+    let _4: void
+    let _5: (testing.TestCollector) -> void
 
     bb0: {
         _3 = make_closure lambda[0]();
@@ -43,8 +43,8 @@ fn .<lambda($init_test_19, 0)>(testset: testing.TestCollector) -> null {
     let _6: bool
     let _7: string
     let _8: string // case [captured]
-    let _9: null
-    let _10: () -> null
+    let _9: void
+    let _10: () -> void
 
     bb0: {
         _2 = [const "hello", const "world", const "foo"];
@@ -103,11 +103,11 @@ fn .<lambda($init_test_19, 2)>(testset: testing.TestCollector) -> null {
     let _0: null // _0 // return
     let _1: testing.TestCollector // testset // param
     let _2: bool // run_slow
-    let _3: null
-    let _4: () -> null
+    let _3: void
+    let _4: () -> void
     let _5: bool
-    let _6: null
-    let _7: () -> null
+    let _6: void
+    let _7: () -> void
 
     bb0: {
         _2 = const false;

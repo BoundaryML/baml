@@ -4,10 +4,10 @@ source: crates/baml_tests/src/generated_tests.rs
 === MIR2 ===
 
 === MIR2 (package testing) ===
-fn testing.$invoke_collector(collector: (testing.TestCollector) -> null, c: testing.TestCollector) -> null {
+fn testing.$invoke_collector(collector: (testing.TestCollector) -> void, c: testing.TestCollector) -> void {
     // Locals:
-    let _0: null // _0 // return
-    let _1: (testing.TestCollector) -> null // collector // param
+    let _0: void // _0 // return
+    let _1: (testing.TestCollector) -> void // collector // param
     let _2: testing.TestCollector // c // param
 
     bb0: {
@@ -38,8 +38,8 @@ fn testing.TestRegistry.expand_set(self: testing.TestRegistry, name: string) -> 
     let _14: testing.TestCollector // sub_collector
     let _15: void[]
     let _16: void[]
-    let _17: null
-    let _18: (testing.TestCollector) -> null
+    let _17: void
+    let _18: (testing.TestCollector) -> void
     let _19: testing.TestSetRegistration
     let _20: testing.TestCollector
     let _21: int // elapsed
@@ -273,12 +273,12 @@ fn testing.TestCollector.new(prefix: string) -> testing.TestCollector {
     }
 }
 
-fn testing.TestCollector.register_test(self: testing.TestCollector, name: string, body: () -> null, runner: (() -> testing.TestReport) -> () -> testing.TestReport?) -> null {
+fn testing.TestCollector.register_test(self: testing.TestCollector, name: string, body: () -> void, runner: (() -> testing.TestReport) -> () -> testing.TestReport?) -> void {
     // Locals:
-    let _0: null // _0 // return
+    let _0: void // _0 // return
     let _1: testing.TestCollector // self // param
     let _2: string // name // param
-    let _3: () -> null // body // param
+    let _3: () -> void // body // param
     let _4: (() -> testing.TestReport) -> () -> testing.TestReport? // runner // param
     let _5: string // full_name
     let _6: bool
@@ -420,12 +420,12 @@ fn testing.TestCollector.register_test(self: testing.TestCollector, name: string
     }
 }
 
-fn testing.TestCollector.register_test_set(self: testing.TestCollector, name: string, collector: (testing.TestCollector) -> null, runner: (() -> testing.TestSetReport) -> () -> testing.TestSetReport?) -> null {
+fn testing.TestCollector.register_test_set(self: testing.TestCollector, name: string, collector: (testing.TestCollector) -> void, runner: (() -> testing.TestSetReport) -> () -> testing.TestSetReport?) -> void {
     // Locals:
-    let _0: null // _0 // return
+    let _0: void // _0 // return
     let _1: testing.TestCollector // self // param
     let _2: string // name // param
-    let _3: (testing.TestCollector) -> null // collector // param
+    let _3: (testing.TestCollector) -> void // collector // param
     let _4: (() -> testing.TestSetReport) -> () -> testing.TestSetReport? // runner // param
     let _5: string // full_name
     let _6: bool
@@ -567,10 +567,10 @@ fn testing.TestCollector.register_test_set(self: testing.TestCollector, name: st
     }
 }
 
-fn testing.run_test(body: () -> null, runner: (() -> testing.TestReport) -> () -> testing.TestReport?) -> testing.TestReport {
+fn testing.run_test(body: () -> void, runner: (() -> testing.TestReport) -> () -> testing.TestReport?) -> testing.TestReport {
     // Locals:
     let _0: testing.TestReport // _0 // return
-    let _1: () -> null // body // param [captured]
+    let _1: () -> void // body // param [captured]
     let _2: (() -> testing.TestReport) -> () -> testing.TestReport? // runner // param
     let _3: () -> testing.TestReport // base_run
     let _4: () -> testing.TestReport // effective_run
@@ -693,7 +693,7 @@ fn testing.TestRegistry.run_test(self: testing.TestRegistry, name: string) -> te
     let _10: bool
     let _11: string
     let _12: testing.TestRegistration
-    let _13: () -> null
+    let _13: () -> void
     let _14: testing.TestRegistration
     let _15: (() -> testing.TestReport) -> () -> testing.TestReport?
     let _16: testing.TestRegistration

@@ -8,12 +8,12 @@ source: crates/baml_tests/src/generated_tests.rs
 --- <builtin>/testing/registry.baml ---
 class testing.TestRegistration {
   name: string
-  body: () -> null
+  body: () -> void
   runner: testing.TestRunner?
 }
 class testing.TestSetRegistration {
   name: string
-  collector: (testing.TestCollector) -> null
+  collector: (testing.TestCollector) -> void
   runner: testing.TestSetRunner?
 }
 class testing.TestCollector {
@@ -26,8 +26,8 @@ function testing.TestCollector.new(prefix: string) -> testing.TestCollector thro
     TestCollector { prefix: prefix, tests: [], testsets: [] } : testing.TestCollector
   }
 }
-function testing.TestCollector.register_test(self: testing.TestCollector, name: string, body: () -> null, runner: testing.TestRunner?) -> null throws never {
-  { : null
+function testing.TestCollector.register_test(self: testing.TestCollector, name: string, body: () -> void, runner: testing.TestRunner?) -> void throws never {
+  { : void
     let full_name = : string
       if (self.prefix == "" : bool) : string
         { : string
@@ -60,11 +60,10 @@ function testing.TestCollector.register_test(self: testing.TestCollector, name: 
           full_name : string
         }
     let _ = self.tests.push(TestRegistration { name: final_name, body: body, runner: runner }) : int
-    null : null
   }
 }
-function testing.TestCollector.register_test_set(self: testing.TestCollector, name: string, collector: (testing.TestCollector) -> null, runner: testing.TestSetRunner?) -> null throws never {
-  { : null
+function testing.TestCollector.register_test_set(self: testing.TestCollector, name: string, collector: (testing.TestCollector) -> void, runner: testing.TestSetRunner?) -> void throws never {
+  { : void
     let full_name = : string
       if (self.prefix == "" : bool) : string
         { : string
@@ -97,7 +96,6 @@ function testing.TestCollector.register_test_set(self: testing.TestCollector, na
           full_name : string
         }
     let _ = self.testsets.push(TestSetRegistration { name: final_name, collector: collector, runner: runner }) : int
-    null : null
   }
 }
 function testing.TestCollector.find_testset(self: testing.TestCollector, name: string) -> testing.TestSetRegistration throws never {
@@ -112,9 +110,9 @@ function testing.TestCollector.find_testset(self: testing.TestCollector, name: s
     throw "TestSet not found: " + name : string
   }
 }
-function testing.$invoke_collector(collector: (testing.TestCollector) -> null, c: testing.TestCollector) -> null throws never {
-  { : null
-    collector(c) : null
+function testing.$invoke_collector(collector: (testing.TestCollector) -> void, c: testing.TestCollector) -> void throws never {
+  { : void
+    collector(c) : void
   }
 }
 class testing.SerializedTest {
@@ -188,7 +186,7 @@ function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: strin
           { : never
             let start = baml.sys.now_ms() : int
             let sub_collector = TestCollector { prefix: name, tests: [], testsets: [] } : testing.TestCollector
-            ts.collector(sub_collector) : null
+            ts.collector(sub_collector) : void
             let elapsed = baml.sys.now_ms() - start : int
             let sub_registry = TestRegistry { collector: sub_collector, expansions: map {  }, loading_time_ms: elapsed } : testing.TestRegistry
             self.expansions.set(name, sub_registry) : null
@@ -206,7 +204,7 @@ function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: strin
     throw "TestSet not found..." + name : string
   }
 }
-function testing.run_test(body: () -> null, runner: testing.TestRunner?) -> testing.TestReport throws never {
+function testing.run_test(body: () -> void, runner: testing.TestRunner?) -> testing.TestReport throws never {
   { : testing.TestReport
     let base_run = : () -> testing.TestReport
       () -> TestReport { ... } : () -> testing.TestReport

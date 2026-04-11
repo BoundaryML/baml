@@ -53,7 +53,7 @@ function assert.not_null(value: unknown?) -> null {
      9   return                 
 }
 
-function testing.$invoke_collector(collector: (testing.TestCollector) -> null, c: testing.TestCollector) -> null {
+function testing.$invoke_collector(collector: (testing.TestCollector) -> void, c: testing.TestCollector) -> void {
      0   load_var 2      (c)
      1   load_var 1      (collector)
      2   call_indirect   
@@ -110,7 +110,7 @@ function testing.TestCollector.new(prefix: string) -> testing.TestCollector {
      9   return               
 }
 
-function testing.TestCollector.register_test(self: null, name: string, body: () -> null, runner: (() -> testing.TestReport) -> () -> testing.TestReport?) -> null {
+function testing.TestCollector.register_test(self: null, name: string, body: () -> void, runner: (() -> testing.TestReport) -> () -> testing.TestReport?) -> void {
      0    load_var 1             (self)
      1    load_field 0           (prefix)
      2    load_const 0           ("")
@@ -207,7 +207,7 @@ function testing.TestCollector.register_test(self: null, name: string, body: () 
      93   jump -66               (to 27)
 }
 
-function testing.TestCollector.register_test_set(self: null, name: string, collector: (testing.TestCollector) -> null, runner: (() -> testing.TestSetReport) -> () -> testing.TestSetReport?) -> null {
+function testing.TestCollector.register_test_set(self: null, name: string, collector: (testing.TestCollector) -> void, runner: (() -> testing.TestSetReport) -> () -> testing.TestSetReport?) -> void {
      0    load_var 1             (self)
      1    load_field 0           (prefix)
      2    load_const 0           ("")
@@ -604,7 +604,7 @@ function testing.TestRegistry.serialize(self: null) -> (testing.SerializedTest |
      99   jump -91                (to 8)
 }
 
-function testing.run_test(body: () -> null, runner: (() -> testing.TestReport) -> () -> testing.TestReport?) -> testing.TestReport {
+function testing.run_test(body: () -> void, runner: (() -> testing.TestReport) -> () -> testing.TestReport?) -> testing.TestReport {
      0    load_var 1              
      1    make_cell               
      2    store_var 1             
