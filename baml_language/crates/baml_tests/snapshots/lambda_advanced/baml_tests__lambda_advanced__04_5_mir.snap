@@ -1586,6 +1586,7 @@ fn user.test_shadowing() -> string {
 
     bb5: {
         _10 = copy _6[_7];
+        fresh_cell(_11);
         _11 = copy _10;
         _12 = const 0_i64;
         goto -> bb6;

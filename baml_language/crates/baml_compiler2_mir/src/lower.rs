@@ -2981,8 +2981,46 @@ impl LoweringContext<'_> {
                         kind: IndexKind::Array,
                     })),
                 );
-                // Now bind the pattern to the element local
-                self.bind_pattern(elem_local, binding);
+                // Bind the pattern to the element local, inserting FreshCell
+                // before the assignment so each iteration's closures capture a
+                // distinct cell.
+                {
+                    let pat = self.body.patterns[binding].clone();
+                    match pat {
+                        AstPattern::Binding(name) if name.as_str() != "_" => {
+                            let ty = self
+                                .pat_types
+                                .get(&(self.current_scope, binding))
+                                .map(|ty| convert_tir2_ty(ty, &self.resolved_aliases))
+                                .unwrap_or_else(|| self.builder.local_ty(elem_local));
+                            let local =
+                                self.builder
+                                    .declare_local(Some(name.clone()), ty, None, false);
+                            self.builder.fresh_cell(local);
+                            self.builder.assign(
+                                Place::local(local),
+                                Rvalue::Use(Operand::Copy(Place::Local(elem_local))),
+                            );
+                            self.locals.insert(name, local);
+                        }
+                        AstPattern::TypedBinding { name, ty, .. } if name.as_str() != "_" => {
+                            let resolved_ty = self.resolve_type_annotation(&ty);
+                            let local = self.builder.declare_local(
+                                Some(name.clone()),
+                                resolved_ty,
+                                None,
+                                false,
+                            );
+                            self.builder.fresh_cell(local);
+                            self.builder.assign(
+                                Place::local(local),
+                                Rvalue::Use(Operand::Copy(Place::Local(elem_local))),
+                            );
+                            self.locals.insert(name, local);
+                        }
+                        _ => {}
+                    }
+                }
 
                 // Lower the body expression (result discarded)
                 let body_temp = self.builder.temp(Ty::Void {

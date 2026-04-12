@@ -266,6 +266,11 @@ pub enum StatementKind {
     /// Emitted at the end of control flow structures.
     VizExit(usize),
 
+    /// Replace a captured local's cell with a fresh one.
+    /// Emitted at the top of for-loop iteration bodies so each iteration's
+    /// closures capture a distinct cell.
+    FreshCell(Local),
+
     /// No-op (placeholder for removed statements).
     Nop,
 }

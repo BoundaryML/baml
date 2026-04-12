@@ -177,6 +177,9 @@ fn write_statement(f: &mut impl Write, stmt: &Statement) -> fmt::Result {
         StatementKind::VizExit(idx) => {
             write!(f, "viz_exit({idx});")
         }
+        StatementKind::FreshCell(local) => {
+            write!(f, "fresh_cell({local});")
+        }
         StatementKind::Nop => {
             write!(f, "nop;")
         }

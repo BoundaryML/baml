@@ -366,6 +366,7 @@ fn baml.llm.PlannerState.rr_local_offset(self: baml.llm.PlannerState, client_nam
 
     bb4: {
         _8 = copy _4[_5];
+        fresh_cell(_9);
         _9 = copy _8;
         _11 = copy _9;
         _10 = copy _11 == copy _2;
@@ -544,6 +545,7 @@ fn baml.llm.Client.build_attempt_with_state(self: baml.llm.Client, planner_state
 
     bb11: {
         _16 = copy _12[_13];
+        fresh_cell(_17);
         _17 = copy _16;
         _19 = copy _17;
         _18 = call const fn baml.llm.Client.build_plan_with_state(copy _19, copy _2) -> [bb12];
@@ -567,6 +569,7 @@ fn baml.llm.Client.build_attempt_with_state(self: baml.llm.Client, planner_state
 
     bb15: {
         _23 = copy _18[_20];
+        fresh_cell(_24);
         _24 = copy _23;
         _26 = copy _11;
         _27 = copy _24;
@@ -772,6 +775,7 @@ fn baml.llm.Client.build_plan_with_state(self: baml.llm.Client, planner_state: b
 
     bb16: {
         _35 = copy _31[_32];
+        fresh_cell(_36);
         _36 = copy _35;
         _38 = copy _6;
         _41 = copy _36;
@@ -1249,6 +1253,7 @@ fn baml.llm.Client.execute_once(self: baml.llm.Client, context: baml.llm.Executi
 
     bb45: {
         _59 = copy _55[_56];
+        fresh_cell(_60);
         _60 = copy _59;
         _63 = copy _60;
         _61 = call const fn baml.llm.Client.execute(copy _63, copy _2, copy _3) -> [bb46, unwind: bb41];

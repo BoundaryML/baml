@@ -610,6 +610,17 @@ fn collect_def_use(body: &MirFunctionBody) -> HashMap<Local, LocalDefUse> {
                         statement_ref: stmt_ref,
                     });
                 }
+                StatementKind::FreshCell(local) => {
+                    // FreshCell only has an effect when the local is captured
+                    // (it replaces the cell). For non-captured locals it's a no-op,
+                    // so don't add a use that would prevent Virtual classification.
+                    if body.local(*local).is_captured {
+                        def_use.get_mut(local).unwrap().uses.push(UseLocation {
+                            block: block.id,
+                            statement_ref: stmt_ref,
+                        });
+                    }
+                }
                 StatementKind::VizEnter(_) | StatementKind::VizExit(_) => {
                     // VizEnter/VizExit don't use any locals
                 }
@@ -1094,6 +1105,7 @@ fn is_stack_neutral_statement(kind: &StatementKind) -> bool {
         StatementKind::VizEnter(_) | StatementKind::VizExit(_) => true,
         StatementKind::NotifyBlock { .. } => true,
         StatementKind::WatchNotify(_) => true,
+        StatementKind::FreshCell(_) => true,
         StatementKind::Nop => true,
 
         // WatchOptions pushes 2 (channel, filter) then Watch pops 2 - net neutral
@@ -1511,6 +1523,7 @@ fn has_side_effect(kind: &StatementKind, rvalue_reads: &HashSet<Local>) -> bool 
         StatementKind::NotifyBlock { .. } => true, // NotifyBlock has side effects (emits notification)
         StatementKind::WatchOptions { .. } => true, // WatchOptions has side effects on watch graph
         StatementKind::WatchNotify(_) => true, // WatchNotify has side effects (emits notification)
+        StatementKind::FreshCell(_) => false,  // FreshCell only affects cell wrapper, not values
         StatementKind::VizEnter(_) | StatementKind::VizExit(_) => true, // VizEnter/VizExit emit notifications
         StatementKind::Nop => false,
     }

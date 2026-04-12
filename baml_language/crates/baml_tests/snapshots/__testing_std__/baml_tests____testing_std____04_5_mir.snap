@@ -104,6 +104,7 @@ fn testing.TestRegistry.expand_set(self: testing.TestRegistry, name: string) -> 
 
     bb6: {
         _36 = copy _31[_33];
+        fresh_cell(_37);
         _37 = copy _36;
         _39 = copy _1.1;
         _40 = copy _37;
@@ -129,6 +130,7 @@ fn testing.TestRegistry.expand_set(self: testing.TestRegistry, name: string) -> 
 
     bb10: {
         _8 = copy _3[_5];
+        fresh_cell(_9);
         _9 = copy _8;
         _12 = copy _9;
         _11 = copy _12.0;
@@ -215,6 +217,7 @@ fn testing.TestCollector.find_testset(self: testing.TestCollector, name: string)
 
     bb3: {
         _7 = copy _3[_4];
+        fresh_cell(_8);
         _8 = copy _7;
         _11 = copy _8;
         _10 = copy _11.0;
@@ -390,6 +393,7 @@ fn testing.TestCollector.register_test(self: testing.TestCollector, name: string
 
     bb12: {
         _17 = copy _13[_14];
+        fresh_cell(_18);
         _18 = copy _17;
         _22 = copy _18;
         _21 = copy _22.0;
@@ -537,6 +541,7 @@ fn testing.TestCollector.register_test_set(self: testing.TestCollector, name: st
 
     bb12: {
         _17 = copy _13[_14];
+        fresh_cell(_18);
         _18 = copy _17;
         _22 = copy _18;
         _21 = copy _22.0;
@@ -749,6 +754,7 @@ fn testing.TestRegistry.run_test(self: testing.TestRegistry, name: string) -> te
 
     bb6: {
         _22 = copy _17[_19];
+        fresh_cell(_23);
         _23 = copy _22;
         _25 = copy _1.1;
         _26 = copy _23;
@@ -774,6 +780,7 @@ fn testing.TestRegistry.run_test(self: testing.TestRegistry, name: string) -> te
 
     bb10: {
         _8 = copy _3[_5];
+        fresh_cell(_9);
         _9 = copy _8;
         _12 = copy _9;
         _11 = copy _12.0;
@@ -925,6 +932,7 @@ fn testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.Serial
 
     bb6: {
         _20 = copy _15[_17];
+        fresh_cell(_21);
         _21 = copy _20;
         _24 = copy _1.1;
         _26 = copy _21;
@@ -973,6 +981,7 @@ fn testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.Serial
 
     bb13: {
         _8 = copy _3[_5];
+        fresh_cell(_9);
         _9 = copy _8;
         _11 = copy _2;
         _14 = copy _9;

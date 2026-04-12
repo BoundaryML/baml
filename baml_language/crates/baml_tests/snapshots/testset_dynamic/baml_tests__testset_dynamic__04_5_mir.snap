@@ -70,6 +70,7 @@ fn .<lambda($init_test_19, 0)>(testset: testing.TestCollector) -> null {
 
     bb4: {
         _7 = copy _3[_4];
+        fresh_cell(_8);
         _8 = copy _7;
         _10 = make_closure lambda[0](copy _8);
         _9 = call const fn testing.TestCollector.register_test(copy _1, const "check case", copy _10, const null) -> [bb5];

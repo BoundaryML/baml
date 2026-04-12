@@ -1395,6 +1395,8 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
 
       <ApiKeysDialog
         open={showApiKeysDialog}
+        envVars={envVars}
+        requiredKeys={knownRequiredKeys}
         onOpenChange={(open) => {
           setShowApiKeysDialog(open);
           showApiKeysDialogRef.current = open;
