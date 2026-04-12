@@ -1523,7 +1523,7 @@ fn has_side_effect(kind: &StatementKind, rvalue_reads: &HashSet<Local>) -> bool 
         StatementKind::NotifyBlock { .. } => true, // NotifyBlock has side effects (emits notification)
         StatementKind::WatchOptions { .. } => true, // WatchOptions has side effects on watch graph
         StatementKind::WatchNotify(_) => true, // WatchNotify has side effects (emits notification)
-        StatementKind::FreshCell(_) => false,  // FreshCell only affects cell wrapper, not values
+        StatementKind::FreshCell(local) => rvalue_reads.contains(local),
         StatementKind::VizEnter(_) | StatementKind::VizExit(_) => true, // VizEnter/VizExit emit notifications
         StatementKind::Nop => false,
     }
