@@ -3172,6 +3172,19 @@ paths:
                 title: TestVertexClaudeResponse
                 type: string
       operationId: TestVertexClaude
+  /call/TestVertexClaudeGlobal:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestVertexClaudeGlobal'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestVertexClaudeGlobalResponse
+                type: string
+      operationId: TestVertexClaudeGlobal
   /call/TestVertexWithSystemInstructions:
     post:
       requestBody:
@@ -7080,6 +7093,22 @@ components:
         application/json:
           schema:
             title: TestVertexClaudeRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
+    TestVertexClaudeGlobal:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestVertexClaudeGlobalRequest
             type: object
             properties:
               input:

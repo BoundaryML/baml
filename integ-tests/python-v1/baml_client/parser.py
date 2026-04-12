@@ -1391,6 +1391,12 @@ class LlmResponseParser:
         __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestVertexClaude", llm_response=llm_response, mode="request")
         return typing.cast(str, __result__)
 
+    def TestVertexClaudeGlobal(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestVertexClaudeGlobal", llm_response=llm_response, mode="request")
+        return typing.cast(str, __result__)
+
     def TestVertexWithSystemInstructions(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> str:
@@ -3155,6 +3161,12 @@ class LlmStreamParser:
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> str:
         __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestVertexClaude", llm_response=llm_response, mode="stream")
+        return typing.cast(str, __result__)
+
+    def TestVertexClaudeGlobal(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestVertexClaudeGlobal", llm_response=llm_response, mode="stream")
         return typing.cast(str, __result__)
 
     def TestVertexWithSystemInstructions(
