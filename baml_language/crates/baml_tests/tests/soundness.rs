@@ -308,5 +308,11 @@ async fn multiple_defs_preserve_side_effects() {
         return
     }
     ");
-    insta::assert_snapshot!(output.result.unwrap_err().to_string(), @r#"uncaught throw: Instance { class_name: "baml.panics.UserPanic", fields: {"message": String("assertion failed: expected true")} }"#);
+    insta::assert_snapshot!(output.result.unwrap_err().to_string(), @r#"
+    Traceback (most recent call last):
+      File "test.baml", line 8, in user.main
+      File "test.baml", line 3, in user.fail
+      File "<builtin>/assert/assert.baml", line 5, in assert.is_true
+    uncaught throw: Instance { class_name: "baml.panics.UserPanic", fields: {"message": String("assertion failed: expected true")} }
+    "#);
 }

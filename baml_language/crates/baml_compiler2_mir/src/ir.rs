@@ -46,6 +46,9 @@ pub struct CatchRegion {
     pub handler: BlockId,
     /// Frame-local slot for the caught error value.
     pub error_local: Local,
+    /// Frame-local slot for the stack trace value, if the catch clause
+    /// has a second binding: `catch (e, st) { ... }`
+    pub stack_trace_local: Option<Local>,
 }
 
 /// The bytecode body of a MIR function — blocks, locals, and associated data.

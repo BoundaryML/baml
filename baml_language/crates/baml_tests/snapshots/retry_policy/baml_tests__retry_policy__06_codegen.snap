@@ -2,11 +2,11 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 function $init() -> null {
-    call ?
-    store_global ?135
-    call ?
-    store_global ?136
-    load_const ?
+    call $init_let_0
+    store_global user.MyRetry
+    call $init_let_1
+    store_global user.MyClient
+    load_const null
     return
 }
 

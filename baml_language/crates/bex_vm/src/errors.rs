@@ -131,9 +131,15 @@ pub enum VmInternalError {
 /// Any kind of virtual machine error.
 #[derive(Debug, Error, PartialEq, Clone)]
 pub enum VmError {
-    /// Catchable (panics and error values)
+    /// Catchable (panics and error values) — internal signal for exception unwinding.
     #[error("uncaught throw: {0:?}")]
     Thrown(Value),
+    /// An exception that escaped all catch handlers, with captured stack trace.
+    #[error("uncaught throw: {value:?}")]
+    ThrownUnhandled {
+        value: Value,
+        trace: Vec<StackFrame>,
+    },
     /// Fatal VM errors
     #[error("{0}")]
     InternalError(#[from] VmInternalError),
@@ -152,31 +158,34 @@ pub enum VmRustFnError {
     InternalError(#[from] VmInternalError),
 }
 
-#[derive(Debug, Clone)]
-pub struct ErrorLocation {
+#[derive(Debug, Clone, PartialEq)]
+pub struct StackFrame {
     pub function_name: String,
+    /// Filesystem path of the source file containing this function.
+    /// Empty string for builtins and synthesized functions.
+    pub file_path: String,
     pub function_span: baml_type::Span,
     pub error_line: usize,
 }
 
-#[derive(Debug, Clone)]
-pub struct StackTrace {
-    pub error: VmError,
-    pub trace: Vec<ErrorLocation>,
-}
-
-impl std::fmt::Display for StackTrace {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "Traceback (most recent call last):")?;
-        for location in &self.trace {
-            writeln!(
-                f,
-                "  File \"{}\", line {}, in {}",
-                location.function_span.file_id, location.error_line, location.function_name
-            )?;
+/// Format a traceback header from an iterator of `(file, line, function_name)` tuples.
+///
+/// Produces the Python-style format:
+/// ```text
+/// Traceback (most recent call last):
+///   File "test.baml", line 3, in user.inner
+///   File "test.baml", line 7, in user.main
+/// ```
+///
+/// Returns an empty string when `frames` is empty.
+pub fn format_traceback<'a>(frames: impl Iterator<Item = (&'a str, usize, &'a str)>) -> String {
+    use std::fmt::Write;
+    let mut out = String::new();
+    for (file, line, function_name) in frames {
+        if out.is_empty() {
+            writeln!(out, "Traceback (most recent call last):").unwrap();
         }
-        write!(f, "{}", self.error)
+        writeln!(out, "  File \"{file}\", line {line}, in {function_name}").unwrap();
     }
+    out
 }
-
-impl std::error::Error for StackTrace {}

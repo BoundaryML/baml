@@ -571,9 +571,11 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         let debug_locals = Self::build_debug_locals(mir, &self.local_slots);
 
         // 5. Build the Function
-        // Note: `name` and `span` are set by the caller after `compile_mir_function` returns.
+        // Note: `name` is set by the caller after `compile_mir_function` returns.
+        // `span` is set by `compile_mir_function` from the MIR function span.
         Function {
             name: String::new(),
+            source_file: String::new(), // caller sets this after compile_mir_function returns
             arity: self.arity,
             real_local_count: self.real_local_count,
             bytecode: self.bytecode,
@@ -1490,11 +1492,17 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                  body entry {body_entry:?} (pc {start_pc}) — RPO ordering bug"
             );
 
+            let stack_trace_slot = region
+                .stack_trace_local
+                .and_then(|local| self.local_slots.get(&local).copied())
+                .unwrap_or(ExceptionTableEntry::NO_STACK_TRACE);
+
             self.bytecode.exception_table.push(ExceptionTableEntry {
                 start_pc,
                 end_pc: handler_pc,
                 handler_pc,
                 error_slot,
+                stack_trace_slot,
             });
         }
 
@@ -2273,11 +2281,12 @@ impl StackEffectSink for StackifyCodegen<'_, '_> {
 /// Compile a MIR function body to bytecode using stackification.
 ///
 /// This is the main entry point for the optimized MIR-based code generation.
-/// The caller is responsible for filling in `Function::name` and `Function::span`
-/// after this returns.
+/// The caller is responsible for filling in `Function::name` after this returns.
+/// If `mir_span` is provided, it is used to set `Function::span`.
 pub(crate) fn compile_mir_function<'mir>(
     body: &'mir MirFunctionBody,
     arity: usize,
+    mir_span: Option<baml_base::Span>,
     line_starts: &'mir [u32],
     ctx: MirCodegenContext<'mir, '_>,
     opt: crate::analysis::OptLevel,
@@ -2289,5 +2298,9 @@ pub(crate) fn compile_mir_function<'mir>(
 
     // Compile with stackification
     let codegen = StackifyCodegen::new(body, arity, line_starts, ctx, analysis);
-    codegen.compile()
+    let mut f = codegen.compile();
+    if let Some(span) = mir_span {
+        f.span = span;
+    }
+    f
 }

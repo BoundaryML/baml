@@ -1319,6 +1319,7 @@ impl LoweringContext {
 
         let mut kind = CatchClauseKind::Catch;
         let mut binding = None;
+        let mut stack_trace_binding = None;
         let mut arms = Vec::new();
 
         for elem in node.children_with_tokens() {
@@ -1335,6 +1336,22 @@ impl LoweringContext {
                     SyntaxKind::CATCH_PATTERN => {
                         binding = Some(self.lower_catch_pattern(&child));
                     }
+                    SyntaxKind::CATCH_STACK_TRACE_BINDING => {
+                        // Extract the identifier name from the node.
+                        let name = child
+                            .children_with_tokens()
+                            .find_map(|t| match t {
+                                rowan::NodeOrToken::Token(tok)
+                                    if tok.kind() == SyntaxKind::WORD =>
+                                {
+                                    Some(Name::new(tok.text()))
+                                }
+                                _ => None,
+                            })
+                            .unwrap_or_else(|| Name::new("_"));
+                        stack_trace_binding =
+                            Some(self.alloc_pattern(Pattern::Binding(name), child.text_range()));
+                    }
                     SyntaxKind::CATCH_ARM => {
                         let arm = self.lower_catch_arm(&child);
                         arms.push(arm);
@@ -1349,6 +1366,7 @@ impl LoweringContext {
             binding: binding.unwrap_or_else(|| {
                 self.alloc_pattern(Pattern::Binding(Name::new("_")), node.text_range())
             }),
+            stack_trace_binding,
             arms,
         }
     }

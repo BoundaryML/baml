@@ -303,6 +303,21 @@ impl<'db> SemanticIndexBuilder<'db> {
                         ));
                 }
 
+                // Register optional stack trace binding in the same CatchClause scope.
+                if let Some(st_pat) = clause.stack_trace_binding {
+                    if let Some(name) = Self::pattern_binding_name(&body.patterns, st_pat) {
+                        let name_range = source_map.pattern_span(st_pat);
+                        let scope_id = self.current_scope_id();
+                        self.scope_bindings[scope_id.index() as usize]
+                            .bindings
+                            .push((
+                                name.clone(),
+                                DefinitionSite::PatternBinding(st_pat),
+                                name_range,
+                            ));
+                    }
+                }
+
                 // Push CatchArm child scopes — arm pattern visible only in arm body.
                 for &arm_id in &clause.arms {
                     let arm = &body.catch_arms[arm_id];

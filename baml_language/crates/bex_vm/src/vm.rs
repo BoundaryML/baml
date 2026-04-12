@@ -30,8 +30,7 @@ use bex_vm_types::{
 use indexmap::IndexMap;
 
 use crate::{
-    StackTrace,
-    errors::{ErrorLocation, VmBamlError, VmError, VmInternalError, VmPanic, VmRustFnError},
+    errors::{StackFrame, VmBamlError, VmError, VmInternalError, VmPanic, VmRustFnError},
     indexable::{EvalStack, EvalStackTrait},
     package_baml::{BamlPackageBaml, NativeFunction},
     types::ObjectTrait,
@@ -912,41 +911,6 @@ impl BexVm {
         Value::Object(self.tlab.alloc(Object::Type(ty)))
     }
 
-    /// Builds a stack trace for the given error.
-    ///
-    /// The error is assumed to have happened wherever the instruction pointer
-    /// was left at.
-    ///
-    /// TODO: Not a clean API for the caller, VM should ideally return some kind
-    /// of error struct that contains the error and trace and this would not
-    /// be needed. That requires some refactoring though.
-    pub fn stack_trace(&self, error: VmError) -> StackTrace {
-        let trace = self
-            .frames
-            .iter()
-            .map(|frame| {
-                let function = self.get_object(frame.function).as_function()?;
-
-                // VM increments instruction pointer as soon as it reads the
-                // instruction. So in reality the error ocurred on the previous
-                // instruction. The saturating sub is just in case the code has
-                // a bug somewhere.
-                let last_executed_instruction = frame.instruction_ptr.saturating_sub(1);
-
-                Ok(ErrorLocation {
-                    function_name: function.name.clone(),
-                    function_span: function.span,
-                    error_line: function
-                        .bytecode
-                        .source_line_for_pc(last_executed_instruction),
-                })
-            })
-            .collect::<Result<Vec<_>, VmError>>()
-            .unwrap_or_default();
-
-        StackTrace { error, trace }
-    }
-
     /// Stops the execution of the current bytecode in favor of the given
     /// function
     ///
@@ -1076,6 +1040,28 @@ impl BexVm {
         Value::Object(instance_ptr)
     }
 
+    /// Construct a `baml.errors.StackTrace` instance from captured error locations.
+    ///
+    /// Allocates one `baml.errors.StackFrame` per frame, an array to hold them,
+    /// and the outer `StackTrace` wrapper. Only called when a catch handler binds
+    /// a `stack_trace` parameter.
+    pub(crate) fn alloc_stack_trace(&mut self, trace: &[StackFrame]) -> Value {
+        // Build StackFrame instances (fields: file, line, function_name)
+        let frames: Vec<Value> = trace
+            .iter()
+            .map(|loc| {
+                let file = self.alloc_string(loc.file_path.clone());
+                #[allow(clippy::cast_possible_wrap)]
+                let line = Value::Int(loc.error_line as i64);
+                let function_name = self.alloc_string(loc.function_name.clone());
+                self.alloc_error_value(ErrorClass::StackFrame, vec![file, line, function_name])
+            })
+            .collect();
+
+        let frames_array = Value::Object(self.tlab.alloc(Object::Array(frames)));
+        self.alloc_error_value(ErrorClass::StackTrace, vec![frames_array])
+    }
+
     pub(crate) fn panic_to_exception_value(&mut self, panic: VmPanic) -> Value {
         let (class, fields) = match panic {
             VmPanic::DivisionByZero { left, .. } => (PanicClass::DivisionByZero, vec![left]),
@@ -1132,6 +1118,25 @@ impl BexVm {
         function: &mut &'static Function,
         exception_value: Value,
     ) -> Result<(), VmError> {
+        // Capture the stack trace before unwinding destroys frame information.
+        // We build it inline rather than calling stack_trace() to avoid
+        // constructing a StackTrace wrapper we don't need.
+        let trace: Vec<StackFrame> = self
+            .frames
+            .iter()
+            .filter_map(|frame| {
+                let func = self.get_object(frame.function).as_callable().ok()?;
+                let last_pc = frame.instruction_ptr.saturating_sub(1);
+                let error_line = func.bytecode.source_line_for_pc(last_pc);
+                Some(StackFrame {
+                    function_name: func.name.clone(),
+                    file_path: func.source_file.clone(),
+                    function_span: func.span,
+                    error_line,
+                })
+            })
+            .collect();
+
         // Walk the call stack from the current frame outward looking for an
         // exception table entry that covers the faulting PC.
         loop {
@@ -1174,6 +1179,14 @@ impl BexVm {
                     Self::local_slot_stack_index(locals_offset, entry.error_slot);
                 self.stack[error_stack_slot] = exception_value;
 
+                // Store stack trace in stack_trace_slot if the catch clause binds it.
+                if entry.has_stack_trace_slot() {
+                    let st_value = self.alloc_stack_trace(&trace);
+                    let st_stack_slot =
+                        Self::local_slot_stack_index(locals_offset, entry.stack_trace_slot);
+                    self.stack[st_stack_slot] = st_value;
+                }
+
                 // Jump to the handler.
                 self.frames[depth].instruction_ptr = entry.handler_pc;
 
@@ -1186,7 +1199,10 @@ impl BexVm {
             // No handler in this frame -- pop it and try the caller.
             if self.frames.len() <= 1 {
                 // No more frames to unwind through.
-                return Err(VmError::Thrown(exception_value));
+                return Err(VmError::ThrownUnhandled {
+                    value: exception_value,
+                    trace,
+                });
             }
 
             let popped = self.frames.pop().expect("frame stack is not empty");
@@ -1601,6 +1617,7 @@ impl BexVm {
                 Err(VmError::Thrown(exception_value)) => {
                     self.try_unwind_exception(&mut frame_idx, &mut function, exception_value)?;
                 }
+                Err(e @ VmError::ThrownUnhandled { .. }) => return Err(e),
             }
         }
     }
@@ -2863,7 +2880,7 @@ impl BexVm {
                 let span_exit = if self.traced_frames.last() == Some(frame_idx) {
                     let func_name = self
                         .get_object(self.frames[*frame_idx].function)
-                        .as_function()
+                        .as_callable()
                         .map(|f| f.name.clone())
                         .ok();
                     self.traced_frames.pop();

@@ -1718,6 +1718,40 @@ impl<'db> TypeInferenceBuilder<'db> {
             self.bindings
                 .insert(clause.binding, clause_binding_ty.clone());
 
+            // Type the optional stack trace binding as baml.errors.StackTrace.
+            if let Some(st_binding) = clause.stack_trace_binding {
+                let db = self.context.db();
+                let baml_name = baml_base::Name::new("baml");
+                let st_ty = self
+                    .res_ctx
+                    .items_for_package(db, &baml_name)
+                    .and_then(|items| {
+                        let errors_ns = [baml_base::Name::new("errors")];
+                        let st_name = baml_base::Name::new("StackTrace");
+                        items.lookup_type(&errors_ns, &st_name)
+                    })
+                    .map(|def| {
+                        let st_name = baml_base::Name::new("StackTrace");
+                        Ty::Class(
+                            crate::lower_type_expr::qualify_def(db, def, &st_name),
+                            TyAttr::default(),
+                        )
+                    })
+                    .unwrap_or(Ty::Unknown {
+                        attr: TyAttr::default(),
+                    });
+                self.bindings.insert(st_binding, st_ty.clone());
+                // Also insert into locals so name resolution finds it.
+                let st_name = match &body.patterns[st_binding] {
+                    baml_compiler2_ast::Pattern::Binding(name) => Some(name.clone()),
+                    baml_compiler2_ast::Pattern::TypedBinding { name, .. } => Some(name.clone()),
+                    _ => None,
+                };
+                if let Some(name) = st_name {
+                    self.locals.insert(name, st_ty);
+                }
+            }
+
             let binding_name = match &body.patterns[clause.binding] {
                 baml_compiler2_ast::Pattern::Binding(name) => Some(name.clone()),
                 baml_compiler2_ast::Pattern::TypedBinding { name, ty } => {

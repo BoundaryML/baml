@@ -267,6 +267,12 @@ pub struct Function {
     /// Function name.
     pub name: String,
 
+    /// Source file path where this function is defined.
+    ///
+    /// Set at emit time for bytecode functions. Empty string for builtins and
+    /// synthesized functions that have no source file.
+    pub source_file: String,
+
     /// Number of arguments the function accepts.
     pub arity: usize,
 

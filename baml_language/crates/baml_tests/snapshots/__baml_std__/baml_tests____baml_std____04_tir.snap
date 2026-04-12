@@ -98,6 +98,24 @@ class baml.errors.HostPanic$stream {
   message: null | string
 }
 
+--- <builtin>/baml/ns_errors/stack_trace.baml ---
+class baml.errors.StackFrame {
+  file: string
+  line: int
+  function_name: string
+}
+class baml.errors.StackTrace {
+  frames: baml.errors.StackFrame[]
+}
+class baml.errors.StackFrame$stream {
+  file: null | string
+  line: null | int
+  function_name: null | string
+}
+class baml.errors.StackTrace$stream {
+  frames: baml.errors.StackFrame$stream[]
+}
+
 --- <builtin>/baml/ns_fs/fs.baml ---
 class baml.fs.File {
   _handle: $rust_type

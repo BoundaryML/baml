@@ -19,7 +19,7 @@ fn assert_uncaught_panic(
     expected_class: &str,
 ) {
     match result {
-        Err(bex_engine::EngineError::UnhandledThrow { value }) => match value.as_ref() {
+        Err(bex_engine::EngineError::UnhandledThrow { value, .. }) => match value.as_ref() {
             BexExternalValue::Instance { class_name, .. } => {
                 assert_eq!(class_name, expected_class);
             }
@@ -1352,11 +1352,12 @@ async fn unhandled_throw_string() {
         throw
     }
     "#);
+    let Err(bex_engine::EngineError::UnhandledThrow { value, .. }) = &output.result else {
+        panic!("expected UnhandledThrow, got: {:?}", output.result);
+    };
     assert_eq!(
-        output.result,
-        Err(bex_engine::EngineError::UnhandledThrow {
-            value: Box::new(BexExternalValue::String("something went wrong".to_string())),
-        })
+        value.as_ref(),
+        &BexExternalValue::String("something went wrong".to_string())
     );
 }
 
@@ -1375,12 +1376,10 @@ async fn unhandled_throw_int() {
         throw
     }
     ");
-    assert_eq!(
-        output.result,
-        Err(bex_engine::EngineError::UnhandledThrow {
-            value: Box::new(BexExternalValue::Int(42)),
-        })
-    );
+    let Err(bex_engine::EngineError::UnhandledThrow { value, .. }) = &output.result else {
+        panic!("expected UnhandledThrow, got: {:?}", output.result);
+    };
+    assert_eq!(value.as_ref(), &BexExternalValue::Int(42));
 }
 
 // ============================================================================
@@ -2430,12 +2429,15 @@ async fn mixed_union_no_wildcard_unmatched_rethrows() {
         }
     "#
     );
+    let Err(bex_engine::EngineError::UnhandledThrow { value, .. }) = &output.result else {
+        panic!(
+            "unmatched throw should rethrow past mixed union arm, got: {:?}",
+            output.result
+        );
+    };
     assert_eq!(
-        output.result,
-        Err(bex_engine::EngineError::UnhandledThrow {
-            value: Box::new(BexExternalValue::String("not matched".to_string())),
-        }),
-        "unmatched throw should rethrow past mixed union arm"
+        value.as_ref(),
+        &BexExternalValue::String("not matched".to_string())
     );
 }
 
@@ -3367,11 +3369,12 @@ async fn throw_in_match_arm_propagates() {
         return
     }
     "#);
+    let Err(bex_engine::EngineError::UnhandledThrow { value, .. }) = &output.result else {
+        panic!("expected UnhandledThrow, got: {:?}", output.result);
+    };
     assert_eq!(
-        output.result,
-        Err(bex_engine::EngineError::UnhandledThrow {
-            value: Box::new(BexExternalValue::String("boom".to_string())),
-        })
+        value.as_ref(),
+        &BexExternalValue::String("boom".to_string())
     );
 }
 
@@ -4329,4 +4332,149 @@ async fn catch_mixed_named_and_anonymous_bindings() {
         output.result,
         Ok(BexExternalValue::String("http://example.com".into()))
     );
+}
+
+// ============================================================================
+// §N — Stack trace tests
+// ============================================================================
+
+#[tokio::test]
+async fn exception_stack_trace_through_closures() {
+    let output = baml_test!(
+        r#"
+function inner() -> int {
+  throw "from_closure"
+}
+
+function outer() -> int {
+  let f = inner
+  f()
+}
+
+function main() -> int {
+  outer()
+}
+"#
+    );
+
+    let err = output.result.unwrap_err();
+    insta::assert_snapshot!(err, @r#"
+    Traceback (most recent call last):
+      File "test.baml", line 12, in user.main
+      File "test.baml", line 8, in user.outer
+      File "test.baml", line 3, in user.inner
+    uncaught throw: String("from_closure")
+    "#);
+}
+
+#[tokio::test]
+async fn exception_stack_trace_on_panic() {
+    let output = baml_test!(
+        r#"
+function divider(x: int) -> int {
+  x / 0
+}
+
+function caller() -> int {
+  divider(42)
+}
+
+function main() -> int {
+  caller()
+}
+"#
+    );
+
+    let err = output.result.unwrap_err();
+    insta::assert_snapshot!(err, @r#"
+    Traceback (most recent call last):
+      File "test.baml", line 11, in user.main
+      File "test.baml", line 7, in user.caller
+      File "test.baml", line 3, in user.divider
+    uncaught throw: Instance { class_name: "baml.panics.DivisionByZero", fields: {"dividend": Int(42)} }
+    "#);
+}
+
+// ============================================================================
+// §N+1 — catch (e, stack_trace) binding
+// ============================================================================
+
+#[tokio::test]
+async fn catch_with_stack_trace_binding() {
+    let output = baml_test!(
+        r#"
+function inner() -> string {
+  throw "boom"
+}
+
+function main() -> string {
+  inner() catch (e, st) {
+    _ => { st.to_string() }
+  }
+}
+"#
+    );
+
+    let BexExternalValue::String(st) = output.result.unwrap() else {
+        panic!("expected String variant");
+    };
+    insta::assert_snapshot!(st, @r#"
+    Traceback (most recent call last):
+      File "test.baml", line 7, in user.main
+      File "test.baml", line 3, in user.inner
+    "#);
+}
+
+#[tokio::test]
+async fn catch_without_stack_trace_still_works() {
+    let output = baml_test!(
+        r#"
+function inner() -> string {
+  throw "oops"
+}
+
+function main() -> string {
+  inner() catch (e) {
+    string => { e }
+  }
+}
+"#
+    );
+
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("oops".to_string()))
+    );
+}
+
+#[tokio::test]
+async fn catch_stack_trace_on_panic() {
+    let output = baml_test!(
+        r#"
+function divider() -> int {
+  42 / 0
+}
+
+function main() -> int | string {
+  divider() catch (e, st) {
+    DivisionByZero => { st.to_string() }
+  }
+}
+"#
+    );
+
+    let result = output.result.unwrap();
+    let st = match result {
+        BexExternalValue::String(s) => s,
+        BexExternalValue::Union { value, .. } => match *value {
+            BexExternalValue::String(s) => s,
+            other => panic!("expected String inside Union, got: {other:?}"),
+        },
+        other => panic!("expected String or Union, got: {other:?}"),
+    };
+    insta::assert_snapshot!(st, @r#"
+    Traceback (most recent call last):
+      File "test.baml", line 7, in user.main
+      File "test.baml", line 3, in user.divider
+    "#);
 }

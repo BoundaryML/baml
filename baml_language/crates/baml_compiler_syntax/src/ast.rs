@@ -2788,6 +2788,13 @@ impl CatchClause {
         self.syntax.children().find_map(CatchPattern::cast)
     }
 
+    /// Get the optional stack trace binding node from `catch (e, st)`.
+    pub fn stack_trace_binding(&self) -> Option<SyntaxNode> {
+        self.syntax
+            .children()
+            .find(|c| c.kind() == SyntaxKind::CATCH_STACK_TRACE_BINDING)
+    }
+
     /// Iterate over typed/fallback arm entries for this clause.
     pub fn arms(&self) -> impl Iterator<Item = CatchArm> + '_ {
         self.syntax.children().filter_map(CatchArm::cast)
