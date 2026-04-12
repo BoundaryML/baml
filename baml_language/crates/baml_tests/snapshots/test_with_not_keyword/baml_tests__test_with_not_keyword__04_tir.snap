@@ -21,8 +21,8 @@ class user.HasWith {
 }
 function user.$init_test_20(registry: testing.TestCollector) -> ? throws never {
   { : null
-    registry.register_test("with as field", () -> { ... }, null) : null
-      () -> { ... } : () -> null
+    registry.register_test("with as field", () -> void { ... }, null) : void
+      () -> void { ... } : () -> void
         {
           let h = HasWith { with: 1 }
           assert.equal(h.with, 1)

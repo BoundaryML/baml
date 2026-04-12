@@ -764,7 +764,15 @@ impl<'db> TypeInferenceBuilder<'db> {
                         attr: TyAttr::default(),
                     }
                 } else if let Some(tail) = tail_expr {
-                    self.check_expr(*tail, body, expected)
+                    if matches!(expected, Ty::Void { .. }) {
+                        // Void context: infer the tail for diagnostics but discard its value.
+                        let _ = self.infer_expr(*tail, body);
+                        Ty::Void {
+                            attr: TyAttr::default(),
+                        }
+                    } else {
+                        self.check_expr(*tail, body, expected)
+                    }
                 } else if !matches!(expected, Ty::Unknown { .. } | Ty::Void { .. }) {
                     // No tail expression, no divergence — block falls through
                     // without producing a value. Report missing return.

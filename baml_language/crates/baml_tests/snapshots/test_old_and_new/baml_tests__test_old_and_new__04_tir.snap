@@ -9,8 +9,8 @@ function user.Greet(name: string) -> string throws never {
 }
 function user.$init_test_20(registry: testing.TestCollector) -> ? throws never {
   { : null
-    registry.register_test("new style", () -> { ... }, null) : null
-      () -> { ... } : () -> null
+    registry.register_test("new style", () -> void { ... }, null) : void
+      () -> void { ... } : () -> void
         {
           let result = "hello"
           assert.not_null(result)

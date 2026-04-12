@@ -4,8 +4,8 @@ source: crates/baml_tests/src/generated_tests.rs
 === TIR2 ===
 function user.$init_test_20(registry: testing.TestCollector) -> ? throws never {
   { : null
-    registry.register_test_set("all evals", (testset: testing.TestCollector) -> { ... }, null) : null
-      (testset: testing.TestCollector) -> { ... } : (testset: testing.TestCollector) -> null
+    registry.register_test_set("all evals", (testset: testing.TestCollector) -> void { ... }, null) : void
+      (testset: testing.TestCollector) -> void { ... } : (testset: testing.TestCollector) -> void
         {
           testset.register_test_set("normal cases", (testset: testing.TestCollector) -> { ... }, null)
           testset.register_test_set("hard cases", (testset: testing.TestCollector) -> { ... }, null)

@@ -383,6 +383,7 @@ fn simulate_statement_stack(
         StatementKind::Unwatch(_)
         | StatementKind::NotifyBlock { .. }
         | StatementKind::WatchNotify(_)
+        | StatementKind::FreshCell(_)
         | StatementKind::VizEnter(_)
         | StatementKind::VizExit(_)
         | StatementKind::Nop => true,

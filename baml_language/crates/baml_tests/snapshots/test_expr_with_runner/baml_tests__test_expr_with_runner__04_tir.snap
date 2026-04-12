@@ -4,8 +4,8 @@ source: crates/baml_tests/src/generated_tests.rs
 === TIR2 ===
 function user.$init_test_20(registry: testing.TestCollector) -> ? throws never {
   { : null
-    registry.register_test("with quorum", () -> { ... }, testing.Quorum(5, 3)) : null
-      () -> { ... } : () -> null
+    registry.register_test("with quorum", () -> void { ... }, testing.Quorum(5, 3)) : void
+      () -> void { ... } : () -> void
         {
           let result = "hello"
           assert.not_null(result)

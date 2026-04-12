@@ -161,15 +161,6 @@ test TestMakePoem() {
 //    │ 
 //    │ Note: Error code: E0001
 // ───╯
-// Error: type mismatch: expected null, got 4
-//    ╭─[ expr_expr_full.baml:1:1 ]
-//    │
-//  1 │ function MakePoem(length: int) -> string {
-//    │ │ 
-//    │ ╰─ type mismatch: expected null, got 4
-//    │ 
-//    │ Note: Error code: E0001
-// ───╯
 // Error: unresolved name: functions
 //     ╭─[ expr_expr_full.baml:45:3 ]
 //     │

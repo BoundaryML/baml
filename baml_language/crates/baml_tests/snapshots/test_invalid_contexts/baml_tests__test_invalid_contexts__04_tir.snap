@@ -16,13 +16,13 @@ function user.another() -> null throws never {
 }
 function user.$init_test_20(registry: testing.TestCollector) -> ? throws never {
   { : null
-    registry.register_test("top level is fine", () -> { ... }, null) : null
-      () -> { ... } : () -> null
+    registry.register_test("top level is fine", () -> void { ... }, null) : void
+      () -> void { ... } : () -> void
         {
           assert.is_true(true)
         }
-    registry.register_test_set("top level set is ...", (testset: testing.TestCollector) -> { ... }, null) : null
-      (testset: testing.TestCollector) -> { ... } : (testset: testing.TestCollector) -> null
+    registry.register_test_set("top level set is ...", (testset: testing.TestCollector) -> void { ... }, null) : void
+      (testset: testing.TestCollector) -> void { ... } : (testset: testing.TestCollector) -> void
         {
           testset.register_test("nested is fine", () -> { ... }, null)
           null

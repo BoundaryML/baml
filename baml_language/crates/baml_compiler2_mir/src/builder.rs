@@ -206,6 +206,11 @@ impl MirBuilder {
         self.push_statement(StatementKind::Drop(place), None);
     }
 
+    /// Emit a fresh-cell statement for a loop variable.
+    pub(crate) fn fresh_cell(&mut self, local: Local) {
+        self.push_statement(StatementKind::FreshCell(local), None);
+    }
+
     /// Emit a nop statement.
     pub(crate) fn nop(&mut self) {
         self.push_statement(StatementKind::Nop, None);

@@ -7,18 +7,18 @@ class user.MyRunner {
 }
 function user.$init_test_20(registry: testing.TestCollector) -> ? throws never {
   { : null
-    registry.register_test("simple runner", () -> { ... }, my_runner) : null
-      () -> { ... } : () -> null
+    registry.register_test("simple runner", () -> void { ... }, my_runner) : void
+      () -> void { ... } : () -> void
         {
           assert.is_true(true)
         }
-    registry.register_test("call runner", () -> { ... }, testing.Quorum(5, 3)) : null
-      () -> { ... } : () -> null
+    registry.register_test("call runner", () -> void { ... }, testing.Quorum(5, 3)) : void
+      () -> void { ... } : () -> void
         {
           assert.is_true(true)
         }
-    registry.register_test("constructor runner", () -> { ... }, MyRunner { threshold: 0.5 }) : null
-      () -> { ... } : () -> null
+    registry.register_test("constructor runner", () -> void { ... }, MyRunner { threshold: 0.5 }) : void
+      () -> void { ... } : () -> void
         {
           assert.is_true(true)
         }

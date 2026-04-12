@@ -4,8 +4,8 @@ source: crates/baml_tests/src/generated_tests.rs
 === TIR2 ===
 function user.$init_test_20(registry: testing.TestCollector) -> ? throws never {
   { : null
-    registry.register_test_set("dynamic tests", (testset: testing.TestCollector) -> { ... }, null) : null
-      (testset: testing.TestCollector) -> { ... } : (testset: testing.TestCollector) -> null
+    registry.register_test_set("dynamic tests", (testset: testing.TestCollector) -> void { ... }, null) : void
+      (testset: testing.TestCollector) -> void { ... } : (testset: testing.TestCollector) -> void
         {
           let cases = ["hello", "world", "foo"]
           for case in cases
@@ -14,8 +14,8 @@ function user.$init_test_20(registry: testing.TestCollector) -> ? throws never {
             }
           null
         }
-    registry.register_test_set("conditional tests", (testset: testing.TestCollector) -> { ... }, null) : null
-      (testset: testing.TestCollector) -> { ... } : (testset: testing.TestCollector) -> null
+    registry.register_test_set("conditional tests", (testset: testing.TestCollector) -> void { ... }, null) : void
+      (testset: testing.TestCollector) -> void { ... } : (testset: testing.TestCollector) -> void
         {
           {
             let run_slow = false

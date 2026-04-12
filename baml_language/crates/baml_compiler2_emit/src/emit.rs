@@ -959,6 +959,18 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             StatementKind::VizExit(node_idx) => {
                 self.emit(Instruction::VizExit(*node_idx));
             }
+            StatementKind::FreshCell(local) => {
+                if self.captured_locals.contains(local) {
+                    if let Some(&slot) = self.local_slots.get(local) {
+                        let null_idx = self.add_constant(ConstValue::Null);
+                        let inst = self.emit(Instruction::LoadConst(null_idx));
+                        self.set_operand(inst, OperandMeta::Const("null".to_string()));
+                        self.emit(Instruction::MakeCell);
+                        let inst = self.emit(Instruction::StoreVar(slot));
+                        self.set_var_operand(inst, slot);
+                    }
+                }
+            }
             StatementKind::Nop => {}
         }
     }

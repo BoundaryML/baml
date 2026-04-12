@@ -581,6 +581,9 @@ fn count_in_statement(stmt: &crate::Statement, uses: &mut [usize]) {
         crate::StatementKind::WatchNotify(l) => {
             uses[l.0] += 1;
         }
+        crate::StatementKind::FreshCell(l) => {
+            uses[l.0] += 1;
+        }
         crate::StatementKind::VizEnter(_)
         | crate::StatementKind::VizExit(_)
         | crate::StatementKind::NotifyBlock { .. }
@@ -1065,6 +1068,7 @@ fn rewrite_locals_in_statement(stmt: &mut crate::Statement, map: &[Option<Local>
             remap_operand(filter, map);
         }
         crate::StatementKind::WatchNotify(l) => remap_local(l, map),
+        crate::StatementKind::FreshCell(l) => remap_local(l, map),
         crate::StatementKind::VizEnter(_)
         | crate::StatementKind::VizExit(_)
         | crate::StatementKind::NotifyBlock { .. }
@@ -1258,6 +1262,7 @@ fn verify_mir(body: &MirFunctionBody, name: &crate::ItemRef) {
                     check_operand(filter, &blk);
                 }
                 crate::StatementKind::WatchNotify(l) => check_local(*l, &blk),
+                crate::StatementKind::FreshCell(l) => check_local(*l, &blk),
                 _ => {}
             }
         }

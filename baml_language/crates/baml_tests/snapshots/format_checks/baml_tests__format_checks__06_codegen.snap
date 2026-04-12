@@ -2103,13 +2103,13 @@ function user.LoopStmts(items: int[], flag: bool) -> int {
     load_const "mike november oscar"
     load_const "papa quebec romeo"
     alloc_array 6
-    store_var _158
+    store_var _159
     load_const 0
     store_var __for_idx_7
 
   L54:
     load_var __for_idx_7
-    load_var _158
+    load_var _159
     call baml.Array.length
     cmp_op <
     pop_jump_if_false L55
@@ -2287,13 +2287,13 @@ function user.LoopStmts(items: int[], flag: bool) -> int {
     load_const "mike november oscar"
     load_const "papa quebec romeo"
     alloc_array 6
-    store_var _235
+    store_var _237
     load_const 0
     store_var __for_idx_8
 
   L78:
     load_var __for_idx_8
-    load_var _235
+    load_var _237
     call baml.Array.length
     cmp_op <
     pop_jump_if_false L79
@@ -2307,13 +2307,13 @@ function user.LoopStmts(items: int[], flag: bool) -> int {
     load_const "mike november oscar"
     load_const "papa quebec romeo"
     alloc_array 6
-    store_var _240
+    store_var _243
     load_const 0
     store_var __for_idx_9
 
   L80:
     load_var __for_idx_9
-    load_var _240
+    load_var _243
     call baml.Array.length
     cmp_op <
     pop_jump_if_false L81
@@ -2324,13 +2324,13 @@ function user.LoopStmts(items: int[], flag: bool) -> int {
     load_const 2
     load_const 3
     alloc_array 3
-    store_var _245
+    store_var _249
     load_const 0
     store_var __for_idx_10
 
   L82:
     load_var __for_idx_10
-    load_var _245
+    load_var _249
     call baml.Array.length
     cmp_op <
     pop_jump_if_false L83
@@ -2354,13 +2354,13 @@ function user.LoopStmts(items: int[], flag: bool) -> int {
     load_const 4
     load_const 5
     alloc_array 5
-    store_var _282
+    store_var _286
     load_const 0
     store_var __for_idx_13
 
   L86:
     load_var __for_idx_13
-    load_var _282
+    load_var _286
     call baml.Array.length
     cmp_op <
     pop_jump_if_false L87
@@ -2401,13 +2401,13 @@ function user.LoopStmts(items: int[], flag: bool) -> int {
     load_const 9
     load_const 10
     alloc_array 10
-    store_var _356
+    store_var _360
     load_const 0
     store_var __for_idx_17
 
   L92:
     load_var __for_idx_17
-    load_var _356
+    load_var _360
     call baml.Array.length
     cmp_op <
     pop_jump_if_false L93
@@ -2479,7 +2479,7 @@ function user.LoopStmts(items: int[], flag: bool) -> int {
     jump L93
 
   L102:
-    load_var _356
+    load_var _360
     load_var __for_idx_17
     load_array_element
     store_var i
@@ -2494,13 +2494,13 @@ function user.LoopStmts(items: int[], flag: bool) -> int {
     load_const 90
     load_const 100
     alloc_array 10
-    store_var _362
+    store_var _366
     load_const 0
     store_var __for_idx_18
 
   L103:
     load_var __for_idx_18
-    load_var _362
+    load_var _366
     call baml.Array.length
     cmp_op <
     pop_jump_if_false L104
@@ -2514,7 +2514,7 @@ function user.LoopStmts(items: int[], flag: bool) -> int {
     jump L92
 
   L105:
-    load_var _362
+    load_var _366
     load_var __for_idx_18
     load_array_element
     store_var j
@@ -2666,13 +2666,13 @@ function user.LoopStmts(items: int[], flag: bool) -> int {
     load_const 1
     load_const 2
     alloc_array 2
-    store_var _311
+    store_var _315
     load_const 0
     store_var __for_idx_15
 
   L123:
     load_var __for_idx_15
-    load_var _311
+    load_var _315
     call baml.Array.length
     cmp_op <
     pop_jump_if_false L124
@@ -2686,7 +2686,7 @@ function user.LoopStmts(items: int[], flag: bool) -> int {
     jump L88
 
   L125:
-    load_var _311
+    load_var _315
     load_var __for_idx_15
     load_array_element
     store_var lvl2
@@ -2743,7 +2743,7 @@ function user.LoopStmts(items: int[], flag: bool) -> int {
     jump L129
 
   L132:
-    load_var _282
+    load_var _286
     load_var __for_idx_13
     load_array_element
     store_var i
@@ -2760,43 +2760,43 @@ function user.LoopStmts(items: int[], flag: bool) -> int {
     load_const 40
     load_const 50
     alloc_array 5
-    store_var _290
+    store_var _294
     load_const 0
     store_var __for_idx_14
 
   L134:
     load_var __for_idx_14
-    load_var _290
+    load_var _294
     call baml.Array.length
     cmp_op <
     pop_jump_if_false L139
     load_var i
-    load_var _290
+    load_var _294
     load_var __for_idx_14
     load_array_element
     bin_op *
-    store_var _297
-    load_var _297
+    store_var _301
+    load_var _301
     load_const 0
     cmp_op ==
     pop_jump_if_false L135
     jump L139
 
   L135:
-    load_var _297
+    load_var _301
     is_type int
     pop_jump_if_false L136
-    load_var _297
+    load_var _301
     load_const 100
     cmp_op >
     pop_jump_if_false L136
     jump L138
 
   L136:
-    load_var _297
+    load_var _301
     is_type int
     pop_jump_if_false L137
-    load_var _297
+    load_var _301
     store_var val
 
   L137:
@@ -2871,7 +2871,7 @@ function user.LoopStmts(items: int[], flag: bool) -> int {
     jump L144
 
   L147:
-    load_var _245
+    load_var _249
     load_var __for_idx_10
     load_array_element
     store_var i
@@ -2879,13 +2879,13 @@ function user.LoopStmts(items: int[], flag: bool) -> int {
     load_const 5
     load_const 6
     alloc_array 3
-    store_var _251
+    store_var _255
     load_const 0
     store_var __for_idx_11
 
   L148:
     load_var __for_idx_11
-    load_var _251
+    load_var _255
     call baml.Array.length
     cmp_op <
     pop_jump_if_false L149
@@ -2899,7 +2899,7 @@ function user.LoopStmts(items: int[], flag: bool) -> int {
     jump L82
 
   L150:
-    load_var _251
+    load_var _255
     load_var __for_idx_11
     load_array_element
     store_var j
@@ -2907,13 +2907,13 @@ function user.LoopStmts(items: int[], flag: bool) -> int {
     load_const 8
     load_const 9
     alloc_array 3
-    store_var _257
+    store_var _261
     load_const 0
     store_var __for_idx_12
 
   L151:
     load_var __for_idx_12
-    load_var _257
+    load_var _261
     call baml.Array.length
     cmp_op <
     pop_jump_if_false L152
@@ -2931,7 +2931,7 @@ function user.LoopStmts(items: int[], flag: bool) -> int {
     load_var i
     load_var j
     bin_op *
-    load_var _257
+    load_var _261
     load_var __for_idx_12
     load_array_element
     bin_op *
@@ -2944,6 +2944,10 @@ function user.LoopStmts(items: int[], flag: bool) -> int {
     jump L151
 
   L154:
+    load_var _243
+    load_var __for_idx_9
+    load_array_element
+    store_var extremely_long_item_variable_name
     load_var result
     load_const 1
     bin_op +
@@ -2955,6 +2959,10 @@ function user.LoopStmts(items: int[], flag: bool) -> int {
     jump L80
 
   L155:
+    load_var _237
+    load_var __for_idx_8
+    load_array_element
+    store_var extremely_long_item_variable_name
     load_var result
     load_const 1
     bin_op +
@@ -3006,6 +3014,10 @@ function user.LoopStmts(items: int[], flag: bool) -> int {
     jump L55
 
   L160:
+    load_var _159
+    load_var __for_idx_7
+    load_array_element
+    store_var extremely_long_item_variable_name
     load_var result
     load_const 1
     bin_op +
@@ -3017,6 +3029,10 @@ function user.LoopStmts(items: int[], flag: bool) -> int {
     jump L54
 
   L161:
+    load_var _153
+    load_var __for_idx_6
+    load_array_element
+    store_var item
     load_var result
     load_const 1
     bin_op +

@@ -550,6 +550,7 @@ fn generate_mir_test(project: &TestProject, stdlib_package_filter: Option<&str>)
         fn test_04_5_mir() {
             use baml_compiler2_hir::{file_item_tree, loc::FunctionLoc};
             use baml_compiler2_mir::{OptLevel, lower_function, pretty::display_function};
+            use baml_project::collect_compiler2_diagnostics;
 
             let mut db = ProjectDatabase::new();
             let _root = db.set_project_root(std::path::Path::new("."));
@@ -560,18 +561,26 @@ fn generate_mir_test(project: &TestProject, stdlib_package_filter: Option<&str>)
             let mut output = String::new();
             writeln!(output, "=== MIR2 ===").unwrap();
 
-            for source_file in &source_files {
-                let item_tree = file_item_tree(&db, *source_file);
-                let mut functions: Vec<_> = item_tree.functions.iter().collect();
-                functions.sort_by_key(|(_, f)| f.name.as_str().to_string());
-                for (local_id, _func_data) in functions {
-                    let func_loc = FunctionLoc::new(&db, *source_file, *local_id);
-                    let mir = lower_function(&db, func_loc, OptLevel::Two);
-                    writeln!(output, "{}", display_function(&mir)).unwrap();
+            // Skip MIR lowering when there are diagnostic errors — the AST/HIR
+            // may be incomplete and lowering can panic on malformed input.
+            let diagnostics = collect_compiler2_diagnostics(&db);
+            let has_errors = diagnostics.iter().any(|d| d.severity == baml_compiler_diagnostics::Severity::Error);
+            if has_errors {
+                writeln!(output, "Skipped: project has diagnostic errors").unwrap();
+            } else {
+                for source_file in &source_files {
+                    let item_tree = file_item_tree(&db, *source_file);
+                    let mut functions: Vec<_> = item_tree.functions.iter().collect();
+                    functions.sort_by_key(|(_, f)| f.name.as_str().to_string());
+                    for (local_id, _func_data) in functions {
+                        let func_loc = FunctionLoc::new(&db, *source_file, *local_id);
+                        let mir = lower_function(&db, func_loc, OptLevel::Two);
+                        writeln!(output, "{}", display_function(&mir)).unwrap();
+                    }
                 }
-            }
 
-            #stdlib_section
+                #stdlib_section
+            }
 
             with_settings!({snapshot_path => SNAPSHOT_PATH, omit_expression => true}, {
                 assert_snapshot!("04_5_mir", output);

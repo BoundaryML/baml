@@ -21,6 +21,7 @@ import { CodeBlock } from './components/ui/code-block';
 import { ToggleGroup } from './components/ui/toggle-group';
 import { cn } from './lib/utils';
 import { ApiKeysDialog } from './components/ApiKeysDialog';
+import { useEnvVars } from './envAtoms';
 import { CopyButton } from './components/CopyButton';
 import { ErrorDisplay } from './components/ErrorDisplay';
 import { MetadataBadges } from './components/MetadataBadges';
@@ -213,9 +214,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
 
   const [diagsExpanded, setDiagsExpanded] = useState(false);
   const [buildTime, setBuildTime] = useState<number | null>(null);
-  const [envVars, setEnvVarsState] = useState<Record<string, string>>({});
-  // Keys the project is known to need — accumulated from envVarRequests, never shrunk.
-  const [knownRequiredKeys, setKnownRequiredKeys] = useState<Set<string>>(new Set());
+  const { envVars, knownRequiredKeys, addEnvVar, removeEnvVar, importEnvVars, addRequiredKey } = useEnvVars(port);
   // In-flight worker requests waiting for a value: id → variable name. Ref because it doesn't drive renders.
   const pendingEnvRequestsRef = useRef<Map<number, string>>(new Map());
 
@@ -353,7 +352,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
               try {
                 const jsonStr = new TextDecoder().decode(new Uint8Array(n.data));
                 const tree = JSON.parse(jsonStr);
-                console.log('[testCollectionResult] decoded tree:', JSON.stringify(tree, null, 2));
+
                 setTestTree(tree);
                 setCollectionCallId(n.callId);
                 setGeneration(n.generation);
@@ -455,7 +454,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
 
         case 'envVarRequest': {
           // Always track as a known required key (proactive indicator)
-          setKnownRequiredKeys((prev) => prev.has(data.variable) ? prev : new Set([...prev, data.variable]));
+          addRequiredKey(data.variable);
           const cached = envVarsRef.current[data.variable];
           if (cached !== undefined) {
             port.postMessage({ type: 'envVarResponse', id: data.id, value: cached, variable: data.variable });
@@ -604,26 +603,6 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only sync when port changes
   }, [port]);
-
-  // ── Env var helpers ────────────────────────────────────────────────────
-
-  const addEnvVar = useCallback((key: string, value: string) => {
-    setEnvVarsState((prev) => ({ ...prev, [key]: value }));
-    envVarsRef.current[key] = value;
-    port.postMessage({ type: 'setEnvVar', key, value });
-  }, [port]);
-
-  const removeEnvVar = useCallback((key: string) => {
-    setEnvVarsState((prev) => { const { [key]: _, ...rest } = prev; return rest; });
-    delete envVarsRef.current[key];
-    port.postMessage({ type: 'deleteEnvVar', key });
-  }, [port]);
-
-  const handleImportEnvVars = useCallback((vars: Record<string, string>) => {
-    for (const [key, value] of Object.entries(vars)) {
-      addEnvVar(key, value);
-    }
-  }, [addEnvVar]);
 
   const onArgsJsonChange = useCallback((e: ChangeEvent<HTMLInputElement>) => {
     setArgsJson(e.target.value);
@@ -797,7 +776,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
     const expandLazy = (items: any[]) => {
       for (const item of items) {
         if (item && item.type === 'lazyTestSet' && !pending.has(item.name)) {
-          console.log('[auto-expand] expanding lazy testset:', item.name);
+
           pending.add(item.name);
           port.postMessage({
             type: 'expandTestSet',
@@ -1416,6 +1395,8 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
 
       <ApiKeysDialog
         open={showApiKeysDialog}
+        envVars={envVars}
+        requiredKeys={knownRequiredKeys}
         onOpenChange={(open) => {
           setShowApiKeysDialog(open);
           showApiKeysDialogRef.current = open;
@@ -1429,11 +1410,9 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
             pendingEnvRequestsRef.current.clear();
           }
         }}
-        envVars={envVars}
-        requiredKeys={knownRequiredKeys}
         onSetEnvVar={addEnvVar}
         onDeleteEnvVar={removeEnvVar}
-        onImportEnvVars={handleImportEnvVars}
+        onImportEnvVars={importEnvVars}
       />
     </>
   );
