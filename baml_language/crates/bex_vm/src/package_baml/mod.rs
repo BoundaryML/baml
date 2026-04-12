@@ -20,6 +20,7 @@ mod map;
 mod math;
 mod media;
 mod root;
+mod stack_trace;
 mod string;
 mod sys;
 mod uint8array;
@@ -96,6 +97,7 @@ pub fn attach_builtins(object: Object) -> Result<Object, VmInternalError> {
             };
             Object::Function(Box::new(bex_vm_types::Function {
                 name: function.name,
+                source_file: function.source_file,
                 arity: function.arity,
                 real_local_count: function.real_local_count,
                 bytecode: function.bytecode,

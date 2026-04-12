@@ -183,6 +183,9 @@ function baml.env.get_or_panic(key: string) -> string {
     return
 }
 
+function baml.errors.StackTrace.to_string(self: null) -> string {
+}
+
 function baml.fs.File.close(self: null) -> null {
 }
 

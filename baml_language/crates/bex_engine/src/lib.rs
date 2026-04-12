@@ -246,8 +246,11 @@ pub enum EngineError {
     VmInternalError(bex_vm::errors::VmInternalError),
 
     /// Either a BAML panic or a BAML error value.
-    #[error("uncaught throw: {value:?}")]
-    UnhandledThrow { value: Box<BexExternalValue> },
+    #[error("{}", format_unhandled_throw(value, trace))]
+    UnhandledThrow {
+        value: Box<BexExternalValue>,
+        trace: Vec<bex_vm::StackFrame>,
+    },
 
     #[error("Cannot convert object of type {type_name}")]
     CannotConvert { type_name: String },
@@ -270,6 +273,19 @@ pub enum EngineError {
 
     #[error("Package initialization failed: {0}")]
     InitFailed(String),
+}
+
+fn format_unhandled_throw(value: &BexExternalValue, trace: &[bex_vm::StackFrame]) -> String {
+    use std::fmt::Write;
+    let mut out = bex_vm::format_traceback(trace.iter().map(|loc| {
+        (
+            loc.file_path.as_str(),
+            loc.error_line,
+            loc.function_name.as_str(),
+        )
+    }));
+    write!(out, "uncaught throw: {value:?}").unwrap();
+    out
 }
 
 // ============================================================================
@@ -1315,7 +1331,7 @@ impl BexEngine {
 
             let exec_result = match vm.exec() {
                 Ok(state) => state,
-                Err(bex_vm::errors::VmError::Thrown(value)) => {
+                Err(bex_vm::errors::VmError::ThrownUnhandled { value, trace }) => {
                     let external = if let Some(ref ty) = throws_type {
                         self.heap.with_gc_protection(|protected| {
                             self.convert_vm_value_to_external_with_type(
@@ -1329,6 +1345,16 @@ impl BexEngine {
                     };
                     return Err(EngineError::UnhandledThrow {
                         value: Box::new(external),
+                        trace,
+                    });
+                }
+                Err(bex_vm::errors::VmError::Thrown(value)) => {
+                    // Internal throw that escaped without unwinding — treat as
+                    // unhandled with no trace.
+                    let external = self.vm_value_to_owned(&value);
+                    return Err(EngineError::UnhandledThrow {
+                        value: Box::new(external),
+                        trace: Vec::new(),
                     });
                 }
                 Err(bex_vm::errors::VmError::InternalError(err)) => {

@@ -76,6 +76,17 @@ class baml.errors.Unsupported {
   message: string
 }
 
+--- <builtin>/baml/ns_errors/stack_trace.baml ---
+class baml.errors.StackFrame {
+  file: string
+  line: int
+  function_name: string
+}
+class baml.errors.StackTrace {
+  frames: baml.errors.StackFrame[]
+}
+function baml.errors.to_string(self: ?) -> string  [builtin]
+
 --- <builtin>/baml/ns_fs/fs.baml ---
 class baml.fs.File {
   _handle: $rust_type

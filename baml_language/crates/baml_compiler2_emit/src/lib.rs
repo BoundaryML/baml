@@ -410,9 +410,11 @@ pub fn generate_project_bytecode_with_opt(
             let mut compiled_fn = match &mir.kind {
                 MirFunctionKind::Bytecode(body) => {
                     // Compile lambda children first, collecting their ObjectPool indices.
+                    let source_file = file.path(db).display().to_string();
                     let lambda_info = compile_lambdas_flat(
                         &mir.lambdas,
                         &line_starts,
+                        &source_file,
                         &globals,
                         &classes,
                         &class_object_indices,
@@ -435,8 +437,10 @@ pub fn generate_project_bytecode_with_opt(
                         lambda_object_indices: &lambda_obj_indices,
                         lambda_names: &lambda_names_vec,
                     };
-                    let mut f = compile_mir_function(body, mir.arity, &line_starts, ctx, opt);
+                    let mut f =
+                        compile_mir_function(body, mir.arity, mir.span, &line_starts, ctx, opt);
                     f.name.clone_from(&fq_name);
+                    f.source_file.clone_from(&source_file);
                     f
                 }
                 MirFunctionKind::Builtin(BuiltinKind::Io) => {
@@ -444,6 +448,7 @@ pub fn generate_project_bytecode_with_opt(
                         .unwrap_or_else(|| panic!("unknown sys_op path: {fq_name}"));
                     Function {
                         name: fq_name.clone(),
+                        source_file: String::new(), // builtins have no source file
                         arity: mir.arity,
                         real_local_count: 0,
                         bytecode: Bytecode::default(),
@@ -465,6 +470,7 @@ pub fn generate_project_bytecode_with_opt(
                 }
                 MirFunctionKind::Builtin(BuiltinKind::Vm) => Function {
                     name: fq_name.clone(),
+                    source_file: String::new(), // builtins have no source file
                     arity: mir.arity,
                     real_local_count: 0,
                     bytecode: Bytecode::default(),
@@ -671,6 +677,7 @@ pub fn generate_project_bytecode_with_opt(
             // $init synthesis at compile_init_function (lib.rs:1085-1103).
             let chainer_fn = Function {
                 name: "$init_test".to_string(),
+                source_file: String::new(), // synthesized, no source file
                 arity: 1,
                 real_local_count: 1, // the registry param
                 bytecode,
@@ -1061,6 +1068,7 @@ fn topological_sort_lets<'db>(
 fn compile_lambdas_flat(
     lambdas: &[baml_compiler2_mir::MirFunction],
     line_starts: &[u32],
+    source_file: &str,
     globals: &HashMap<String, usize>,
     classes: &HashMap<String, HashMap<String, usize>>,
     class_object_indices: &HashMap<String, usize>,
@@ -1078,6 +1086,7 @@ fn compile_lambdas_flat(
                 let nested_info = compile_lambdas_flat(
                     &lambda.lambdas,
                     line_starts,
+                    source_file,
                     globals,
                     classes,
                     class_object_indices,
@@ -1100,8 +1109,10 @@ fn compile_lambdas_flat(
                     lambda_object_indices: &nested_obj_indices,
                     lambda_names: &nested_names,
                 };
-                let mut f = compile_mir_function(body, lambda.arity, line_starts, ctx, opt);
+                let mut f =
+                    compile_mir_function(body, lambda.arity, lambda.span, line_starts, ctx, opt);
                 f.name.clone_from(&lambda_name);
+                f.source_file = source_file.to_string();
                 let idx = objects.len();
                 objects.push(Object::Function(Box::new(f)));
                 idx
@@ -1137,6 +1148,7 @@ fn compile_init_function<'db>(
 ) -> Result<Function, LoweringError> {
     // Build the $init bytecode: a sequence of Call + StoreGlobal pairs.
     let mut init_instructions: Vec<Instruction> = Vec::new();
+    let mut init_meta: Vec<bex_vm_types::bytecode::InstructionMeta> = Vec::new();
     let mut init_constants: Vec<bex_vm_types::ConstValue> = Vec::new();
 
     for (i, (fq_name, let_loc, file)) in sorted_bindings.iter().enumerate() {
@@ -1154,9 +1166,11 @@ fn compile_init_function<'db>(
             Some((mir_body, lambdas)) => {
                 let line_starts = build_line_starts(file.text(db));
                 // Compile lambda children first and collect their object indices.
+                let source_file = file.path(db).display().to_string();
                 let lambda_info = compile_lambdas_flat(
                     &lambdas,
                     &line_starts,
+                    &source_file,
                     globals,
                     classes,
                     class_object_indices,
@@ -1179,8 +1193,9 @@ fn compile_init_function<'db>(
                     lambda_object_indices: &lambda_let_obj_indices,
                     lambda_names: &lambda_let_names,
                 };
-                let mut helper = compile_mir_function(&mir_body, 0, &line_starts, ctx, opt);
+                let mut helper = compile_mir_function(&mir_body, 0, None, &line_starts, ctx, opt);
                 helper.name = format!("$init_let_{i}");
+                helper.source_file.clone_from(&source_file);
                 helper.arity = 0;
                 helper
             }
@@ -1193,6 +1208,7 @@ fn compile_init_function<'db>(
                 bytecode.instructions.push(Instruction::Return);
                 Function {
                     name: format!("$init_let_{i}"),
+                    source_file: String::new(), // synthesized, no source file
                     arity: 0,
                     real_local_count: 0,
                     bytecode,
@@ -1226,25 +1242,41 @@ fn compile_init_function<'db>(
         init_instructions.push(Instruction::Call(bex_vm_types::GlobalIndex::from_raw(
             helper_global_slot,
         )));
+        init_meta.push(bex_vm_types::bytecode::InstructionMeta {
+            operand: Some(bex_vm_types::bytecode::OperandMeta::Callable(format!(
+                "$init_let_{i}"
+            ))),
+        });
         init_instructions.push(Instruction::StoreGlobal(
             bex_vm_types::GlobalIndex::from_raw(let_slot),
         ));
+        init_meta.push(bex_vm_types::bytecode::InstructionMeta {
+            operand: Some(bex_vm_types::bytecode::OperandMeta::Global(fq_name.clone())),
+        });
     }
 
     // Final: push Null and Return (Return pops the top of the eval stack).
     let null_const_idx = init_constants.len();
     init_constants.push(bex_vm_types::ConstValue::Null);
     init_instructions.push(Instruction::LoadConst(null_const_idx));
+    init_meta.push(bex_vm_types::bytecode::InstructionMeta {
+        operand: Some(bex_vm_types::bytecode::OperandMeta::Const(
+            "null".to_string(),
+        )),
+    });
     init_instructions.push(Instruction::Return);
+    init_meta.push(bex_vm_types::bytecode::InstructionMeta::default());
 
     let bytecode = Bytecode {
         instructions: init_instructions,
         constants: init_constants,
+        meta: init_meta,
         ..Bytecode::default()
     };
 
     Ok(Function {
         name: "$init".to_string(),
+        source_file: String::new(), // synthesized, no source file
         arity: 0,
         real_local_count: 0,
         bytecode,

@@ -2,19 +2,19 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 function $init() -> null {
-    call ?
-    store_global ?140
-    call ?
-    store_global ?141
-    call ?
-    store_global ?142
-    call ?
-    store_global ?143
-    call ?
-    store_global ?144
-    call ?
-    store_global ?145
-    load_const ?
+    call $init_let_0
+    store_global user.ValidAzureBaseUrl
+    call $init_let_1
+    store_global user.BadAzureMissingUrl
+    call $init_let_2
+    store_global user.BadMaxTokens
+    call $init_let_3
+    store_global user.ValidOpenAI
+    call $init_let_4
+    store_global user.BadTemperature
+    call $init_let_5
+    store_global user.ValidAzure
+    load_const null
     return
 }
 

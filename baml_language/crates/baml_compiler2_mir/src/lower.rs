@@ -901,6 +901,21 @@ impl<'db> LoweringContext<'db> {
         );
         self.resolved_aliases.convert(&tir_ty)
     }
+
+    /// Build a `Span` from an expression's source range.
+    /// Returns `None` if no source map is available (e.g. synthesized bodies).
+    fn span_for_expr(&self, expr_id: AstExprId) -> Option<baml_base::Span> {
+        let sm = self.source_map.as_ref()?;
+        let range = sm.expr_span(expr_id);
+        Some(baml_base::Span::new(self.file.file_id(self.db), range))
+    }
+
+    /// Build a `Span` from a statement's source range.
+    fn span_for_stmt(&self, stmt_id: AstStmtId) -> Option<baml_base::Span> {
+        let sm = self.source_map.as_ref()?;
+        let range = sm.stmt_span(stmt_id);
+        Some(baml_base::Span::new(self.file.file_id(self.db), range))
+    }
 }
 
 // ─── 3.1: lower_function_body ────────────────────────────────────────────────
@@ -945,6 +960,11 @@ impl LoweringContext<'_> {
         let index = file_semantic_index(self.db, self.file);
         let item_tree = file_item_tree(self.db, self.file);
         let func_data = &item_tree[func_loc.id(self.db)];
+        // Set the function-level span on the builder so MirFunction::span is populated.
+        self.builder.set_span(baml_base::Span::new(
+            self.file.file_id(self.db),
+            func_data.span,
+        ));
         let func_scope_id: FileScopeId =
             index.scope_at_offset(func_data.span.start(), Some(&func_data.name));
         let func_scope = &index.scopes[func_scope_id.index() as usize];
@@ -1408,6 +1428,11 @@ impl LoweringContext<'_> {
 
 impl LoweringContext<'_> {
     fn lower_expr(&mut self, expr_id: AstExprId, dest: Place) {
+        let prev_span = self.builder.current_source_span;
+        if let Some(span) = self.span_for_expr(expr_id) {
+            self.builder.current_source_span = Some(span);
+        }
+
         // Clone expr to avoid borrow issues
         let expr = self.body.exprs[expr_id].clone();
         match expr {
@@ -1552,6 +1577,8 @@ impl LoweringContext<'_> {
                 self.emit_panic_call("parse error", expr_id);
             }
         }
+
+        self.builder.current_source_span = prev_span;
     }
 }
 
@@ -2785,6 +2812,11 @@ impl LoweringContext<'_> {
 
 impl LoweringContext<'_> {
     fn lower_stmt(&mut self, stmt_id: AstStmtId) {
+        let prev_span = self.builder.current_source_span;
+        if let Some(span) = self.span_for_stmt(stmt_id) {
+            self.builder.current_source_span = Some(span);
+        }
+
         let stmt = self.body.stmts[stmt_id].clone();
         match stmt {
             AstStmt::Expr(expr_id) => {
@@ -3127,6 +3159,8 @@ impl LoweringContext<'_> {
                     .push_statement(StatementKind::NotifyBlock { name, level }, None);
             }
         }
+
+        self.builder.current_source_span = prev_span;
     }
 
     fn convert_assign_op(op: AstAssignOp) -> BinOp {
@@ -4190,6 +4224,28 @@ impl LoweringContext<'_> {
             self.locals.insert(name, error_local);
         }
 
+        // Declare stack trace local if the catch clause has a second binding.
+        let stack_trace_local = clauses.first().and_then(|c| {
+            c.stack_trace_binding.map(|st_pat| {
+                let st_name = match &self.body.patterns[st_pat] {
+                    AstPattern::Binding(name) if name.as_str() != "_" => Some(name.clone()),
+                    _ => None,
+                };
+                let local = self.builder.declare_local(
+                    st_name.clone(),
+                    Ty::BuiltinUnknown {
+                        attr: TyAttr::default(),
+                    },
+                    None,
+                    false,
+                );
+                if let Some(name) = st_name {
+                    self.locals.insert(name, local);
+                }
+                local
+            })
+        });
+
         // Flatten all arms from all clauses (blocks created lazily below).
         let mut arms: Vec<(baml_compiler2_ast::CatchArm, bool)> = Vec::new();
         for clause in clauses {
@@ -4214,6 +4270,7 @@ impl LoweringContext<'_> {
             body_entry,
             handler: bb_handler,
             error_local,
+            stack_trace_local,
         });
 
         let prev_catch = self.catch_context.take();
