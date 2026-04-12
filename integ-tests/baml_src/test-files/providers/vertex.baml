@@ -19,8 +19,15 @@ function TestVertexClaude(input: string) -> string {
   "#
 }
 
+function TestVertexClaudeGlobal(input: string) -> string {
+  client VertexClaudeGlobal
+  prompt #"
+    Write a nice short story about {{ input }}. Keep it to 15 words or less.
+  "#
+}
+
 test TestVertex {
-  functions [TestVertex, TestVertexWithSystemInstructions, TestVertexClaude]
+  functions [TestVertex, TestVertexWithSystemInstructions, TestVertexClaude, TestVertexClaudeGlobal]
   args {
     input "a cat"
 
