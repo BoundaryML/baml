@@ -20,6 +20,7 @@ workspace = true
 baml_codegen_python = { workspace = true }
 baml_db = { workspace = true }
 baml_fmt = { workspace = true }
+baml_lsp2_actions = { workspace = true }
 baml_lsp_server = { workspace = true }
 baml_project = { workspace = true }
 baml_workspace = { workspace = true }
@@ -31,6 +32,8 @@ clap = { workspace = true, features = [ "color", "env" ] }
 clap-cargo = { workspace = true }
 ctrlc = { workspace = true }
 regex = { workspace = true }
+serde_json = { workspace = true }
+text-size = { workspace = true }
 tokio = { workspace = true }
 
 [features]

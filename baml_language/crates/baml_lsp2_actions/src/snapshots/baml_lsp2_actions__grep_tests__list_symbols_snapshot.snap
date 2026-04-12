@@ -1,0 +1,8 @@
+---
+source: crates/baml_lsp2_actions/src/grep_tests.rs
+expression: output
+---
+Point                class types.baml
+Color                enum types.baml
+MakePoint            function funcs.baml
+ReadColor            function funcs.baml

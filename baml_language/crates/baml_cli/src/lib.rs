@@ -10,8 +10,10 @@
 )]
 
 pub(crate) mod commands;
+pub(crate) mod describe_command;
 pub(crate) mod format;
 pub(crate) mod generate;
+pub(crate) mod grep_command;
 pub(crate) mod lsp;
 pub(crate) mod test_command;
 pub(crate) mod test_filter;

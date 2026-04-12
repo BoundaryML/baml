@@ -16,9 +16,11 @@ baml_compiler_parser = { workspace = true }
 baml_compiler_syntax = { workspace = true }
 rowan = { workspace = true }
 salsa = { workspace = true }
+serde = { workspace = true, features = [ "derive" ] }
 text-size = { workspace = true }
 
 [dev-dependencies]
 baml_builtins2 = { workspace = true }
 baml_compiler2_ppir = { workspace = true }
 baml_workspace = { workspace = true }
+insta = { workspace = true }
