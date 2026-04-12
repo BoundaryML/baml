@@ -398,7 +398,7 @@ async fn test_call_function_with_external_args() {
     assert_eq!(result, BexExternalValue::Int(42));
 }
 
-/// Test that `BexExternalValue` arguments are properly allocated on the heap.
+/// Test that closures created inside loops correctly capture loop variables.
 #[tokio::test]
 async fn test_closures_in_loop_vars() {
     // Create a BAML program with a function that takes arguments
@@ -428,7 +428,7 @@ async fn test_closures_in_loop_vars() {
         .expect("Failed to create engine"),
     );
 
-    // Test passing strings via BexExternalValue
+    // Test closures capturing loop variables
     let result = engine
         .call_function(
             "sum_array",
