@@ -453,9 +453,14 @@ impl FromCST for FunctionParam {
             .next_if_kind(SyntaxKind::COLON)
             .map(t::Colon::from_cst)
             .transpose()?;
-        let ty = if it.peek().map(SyntaxElement::kind) == Some(SyntaxKind::TYPE_EXPR) {
+        let ty = if colon.is_some() {
+            // Colon present - type is required
+            let ty: Type = it.expect_parse()?;
+            Some((colon, ty))
+        } else if it.peek().map(SyntaxElement::kind) == Some(SyntaxKind::TYPE_EXPR) {
+            // No colon but type present (BEP-019 optional colon)
             let elem = it.next().expect("peeked");
-            Some((colon, Type::from_cst(elem)?))
+            Some((None, Type::from_cst(elem)?))
         } else {
             // No type annotation (e.g. `self`)
             None
@@ -1210,11 +1215,9 @@ impl Printable for ClassItem {
                     Some(ClassFieldDelimiter::Comma(comma)) => {
                         printer.print_raw_token(comma);
                     }
-                    Some(ClassFieldDelimiter::Semicolon(semi)) => {
-                        // Print trivia from semicolon, but output comma
-                        let (_, trailing) = printer.trivia.get_for_range_split(semi.span());
+                    Some(ClassFieldDelimiter::Semicolon(_)) => {
+                        // Normalize to comma; parent handles trailing trivia via rightmost_token()
                         printer.print_str(",");
-                        printer.print_trivia_squished(trailing);
                     }
                     None => {
                         printer.print_str(",");
