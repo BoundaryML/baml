@@ -35,8 +35,7 @@ async fn net_connect_and_read() {
         load_const "{ADDR}"
         dispatch_future baml.net.connect
         await
-        dispatch_future baml.net.Socket.read
-        await
+        call baml.net.Socket.read
         return
     }
     "#);
@@ -62,8 +61,7 @@ async fn net_connect_failure() {
         load_const "127.0.0.1:1"
         dispatch_future baml.net.connect
         await
-        dispatch_future baml.net.Socket.read
-        await
+        call baml.net.Socket.read
         return
     }
     "#);

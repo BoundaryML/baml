@@ -123,19 +123,20 @@ function testing.TestCollector.register_test(self: null, name: string, body: () 
     load_var full_name
     load_const "#"
     bin_op +
-    store_var _27
+    store_var _28
     load_var count
     load_const 1
     bin_op +
     call baml.unstable.string
-    store_var _29
-    load_var _27
-    load_var _29
+    store_var _30
+    load_var _28
+    load_var _30
     bin_op +
     store_var final_name
 
   L7:
     load_var self
+    load_field .tests
     alloc_instance TestRegistration
     load_var final_name
     init_field .name
@@ -163,6 +164,7 @@ function testing.TestCollector.register_test(self: null, name: string, body: () 
   L9:
     pop 1
     load_var t
+    load_field .name
     load_var hash_prefix
     call baml.String.startsWith
 
@@ -240,19 +242,20 @@ function testing.TestCollector.register_test_set(self: null, name: string, colle
     load_var full_name
     load_const "#"
     bin_op +
-    store_var _27
+    store_var _28
     load_var count
     load_const 1
     bin_op +
     call baml.unstable.string
-    store_var _29
-    load_var _27
-    load_var _29
+    store_var _30
+    load_var _28
+    load_var _30
     bin_op +
     store_var final_name
 
   L7:
     load_var self
+    load_field .testsets
     alloc_instance TestSetRegistration
     load_var final_name
     init_field .name
@@ -280,6 +283,7 @@ function testing.TestCollector.register_test_set(self: null, name: string, colle
   L9:
     pop 1
     load_var ts
+    load_field .name
     load_var hash_prefix
     call baml.String.startsWith
 
@@ -316,14 +320,15 @@ function testing.TestRegistry.expand_set(self: null, name: string) -> (testing.S
 
   L1:
     load_var self
+    load_field .expansions
     call baml.Map.keys
-    store_var _27
+    store_var _28
     load_const 0
     store_var __for_idx_1
 
   L2:
     load_var __for_idx_1
-    load_var _27
+    load_var _28
     call baml.Array.length
     cmp_op <
     pop_jump_if_false L3
@@ -336,7 +341,7 @@ function testing.TestRegistry.expand_set(self: null, name: string) -> (testing.S
     throw
 
   L4:
-    load_var _27
+    load_var _28
     load_var __for_idx_1
     load_array_element
     store_var k
@@ -404,6 +409,7 @@ function testing.TestRegistry.expand_set(self: null, name: string) -> (testing.S
     call baml.sys.now_ms
     store_var _19
     load_var self
+    load_field .expansions
     load_var name
     alloc_instance TestRegistry
     load_var sub_collector
@@ -452,6 +458,7 @@ function testing.TestRegistry.run_test(self: null, name: string) -> testing.Test
 
   L1:
     load_var self
+    load_field .expansions
     call baml.Map.keys
     store_var _13
     load_const 0
@@ -576,6 +583,7 @@ function testing.TestRegistry.serialize(self: null) -> (testing.SerializedTest |
     load_array_element
     store_var ts
     load_var self
+    load_field .expansions
     load_var ts
     load_field .name
     call baml.Map.get
@@ -606,15 +614,15 @@ function testing.TestRegistry.serialize(self: null) -> (testing.SerializedTest |
     store_var sub
     load_var ts
     load_field .name
-    store_var _24
+    store_var _25
     load_var sub
     call testing.TestRegistry.serialize
-    store_var _25
+    store_var _26
     load_var items
     alloc_instance SerializedTestSet
-    load_var _24
-    init_field .name
     load_var _25
+    init_field .name
+    load_var _26
     init_field .items
     load_var sub
     load_field .loading_time_ms

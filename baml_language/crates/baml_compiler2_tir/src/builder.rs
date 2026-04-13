@@ -144,6 +144,9 @@ pub struct TypeInferenceBuilder<'db> {
     /// chain field projections even when the MIR local was declared with a
     /// coarser type (e.g. catch variables are declared as `BuiltinUnknown`).
     pub path_root_types: FxHashMap<ExprId, Ty>,
+    /// Per-segment member resolutions for multi-segment local-rooted `Path`
+    /// expressions. Populated by `infer_local_rooted_path`.
+    pub path_member_resolutions: FxHashMap<ExprId, Vec<crate::inference::MemberResolution<'db>>>,
 }
 
 impl<'db> TypeInferenceBuilder<'db> {
@@ -177,6 +180,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             generic_params: Vec::new(),
             in_optional_chain: 0,
             path_root_types: FxHashMap::default(),
+            path_member_resolutions: FxHashMap::default(),
         }
     }
 
@@ -196,6 +200,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         FxHashSet<ExprId>,
         TypeCheckDiagnostics<'db>,
         FxHashMap<ExprId, Ty>,
+        FxHashMap<ExprId, Vec<crate::inference::MemberResolution<'db>>>,
     ) {
         let diagnostics = self.context.finish();
         (
@@ -205,6 +210,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             self.exhaustive_matches,
             diagnostics,
             self.path_root_types,
+            self.path_member_resolutions,
         )
     }
 
@@ -323,12 +329,14 @@ impl<'db> TypeInferenceBuilder<'db> {
                 }
             }
             Expr::MemberAccess { base, member } => {
-                // Check for primitive-type static method access first:
-                // `image.from_url(...)` where `image` is a type name, not a value.
+                // `MemberAccess` now only comes from `FIELD_ACCESS_EXPR` (complex base
+                // expressions like `f().a`, `arr[0].x`). Package-qualified paths are
+                // always `Expr::Path` nodes (never `MemberAccess`) after Phase 1.
+                //
+                // Still handle primitive-type static method access (e.g. an expression
+                // evaluating to an image type followed by `.from_url`) via the existing
+                // try_primitive_static_access helper.
                 if let Some(ty) = self.try_primitive_static_access(expr_id, *base, member, body) {
-                    ty
-                // Check for package access: `baml.Array.length`, `env.get`, etc.
-                } else if let Some(ty) = self.try_package_access(expr_id, *base, member, body) {
                     ty
                 } else {
                     let base_ty = self.infer_expr(*base, body);
@@ -932,7 +940,16 @@ impl<'db> TypeInferenceBuilder<'db> {
 
                 let is_method_call = match &body.exprs[*callee] {
                     Expr::MemberAccess { .. } => true,
-                    Expr::Path(segs) if segs.len() >= 2 => true,
+                    Expr::Path(segs) if segs.len() >= 2 => {
+                        // A multi-segment Path callee is a method call only when the
+                        // root is a local variable (e.g. `obj.method()`).  Package-
+                        // qualified callees (e.g. `registry.register_test(...)`) are
+                        // free-function calls where the first segment is a package name.
+                        // We check directly in the TIR local scope rather than going
+                        // through the HIR path_resolution_query, because ExprIds are
+                        // per-function-body and not globally unique across functions.
+                        self.locals.contains_key(&segs[0])
+                    }
                     _ => false,
                 };
                 let callee_ty = self.infer_expr(*callee, body);
@@ -3010,35 +3027,47 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
             ty
         } else if segments.len() >= 2 {
-            // First try package path resolution (e.g. baml.llm.ClientType.Primitive).
-            // infer_multi_segment_path also handles namespace shorthands (env.get, etc.)
-            let pkg_ty = self.infer_multi_segment_path(segments, expr_id);
-            if !matches!(pkg_ty, Ty::Unknown { .. }) {
-                return pkg_ty;
-            }
-            // Try primitive static access (e.g. image.from_url) for 2-segment paths.
-            if segments.len() == 2 {
-                let name = segments[0].as_str();
-                let class_path: &[&str] = match name {
-                    "image" => &["media", "Image"],
-                    "audio" => &["media", "Audio"],
-                    "video" => &["media", "Video"],
-                    "pdf" => &["media", "Pdf"],
-                    "string" => &["String"],
-                    _ => &[],
-                };
-                if !class_path.is_empty() {
-                    if let Some(ty) =
-                        self.resolve_builtin_member(class_path, &[], &segments[1], expr_id)
-                    {
-                        return ty;
+            // Dispatch based on whether the root segment is a known local variable.
+            // We check self.locals directly rather than going through the HIR
+            // path_resolution_query, because ExprIds are per-function-body arenas
+            // and are not globally unique across functions in a file.
+            if self.locals.contains_key(&segments[0]) {
+                // Root is a local variable — chain resolve_member for segments[1..].
+                self.infer_local_rooted_path(segments, expr_id)
+            } else {
+                // Root is not a known local. Try full package/namespace resolution:
+                // 1. Package path (e.g. baml.llm.ClientType.Primitive, env.get)
+                let pkg_ty = self.infer_multi_segment_path(segments, expr_id);
+                if !matches!(pkg_ty, Ty::Unknown { .. }) {
+                    return pkg_ty;
+                }
+                // 2. Primitive static access (e.g. image.from_url)
+                if segments.len() == 2 {
+                    let name = segments[0].as_str();
+                    let class_path: &[&str] = match name {
+                        "image" => &["media", "Image"],
+                        "audio" => &["media", "Audio"],
+                        "video" => &["media", "Video"],
+                        "pdf" => &["media", "Pdf"],
+                        "string" => &["String"],
+                        _ => &[],
+                    };
+                    if !class_path.is_empty() {
+                        if let Some(ty) =
+                            self.resolve_builtin_member(class_path, &[], &segments[1], expr_id)
+                        {
+                            return ty;
+                        }
                     }
                 }
-            }
-            // Fall back to local-rooted member access: infer root, then chain resolve_member.
-            let root_ty = self.infer_single_name(&segments[0]);
-            if matches!(root_ty, Ty::Unknown { .. }) {
-                // Check namespace shorthands and dependency packages to avoid spurious errors.
+                // 3. Type-rooted access: root resolves as a type in the namespace
+                //    (e.g. `Status.Active` where Status is an enum, or enum static methods).
+                //    Use infer_local_rooted_path which chains resolve_member for segments[1..].
+                let root_ty = self.infer_single_name(&segments[0]);
+                if !matches!(root_ty, Ty::Unknown { .. }) {
+                    return self.infer_local_rooted_path(segments, expr_id);
+                }
+                // 4. Truly unresolved — report error if not a known namespace/package name.
                 let is_baml_ns_shorthand = matches!(
                     segments[0].as_str(),
                     "env"
@@ -3068,66 +3097,106 @@ impl<'db> TypeInferenceBuilder<'db> {
                         expr_id,
                     );
                 }
-                return Ty::Unknown {
+                Ty::Unknown {
                     attr: TyAttr::default(),
-                };
-            }
-            // Record the root segment's TIR type for MIR to use in field-chain lowering.
-            // MIR catch variables are declared as BuiltinUnknown, so builder.local_ty()
-            // would return a coarser type than TIR inferred.
-            self.path_root_types.insert(expr_id, root_ty.clone());
-            // Chain resolve_member for remaining segments.
-            let mut current_ty = root_ty;
-            for (i, seg) in segments[1..].iter().enumerate() {
-                let seg_idx = i + 1; // index into the path segments (0 is the root)
-                let inner = crate::narrowing::remove_null(&current_ty);
-                let is_nullable = inner != current_ty
-                    && !matches!(current_ty, Ty::Unknown { .. } | Ty::Error { .. });
-                if is_nullable {
-                    if self.in_optional_chain > 0 {
-                        // Inside an OptionalChain: resolve and re-wrap the result.
-                        let member_ty =
-                            self.resolve_member_for_path_segment(&inner, seg, expr_id, seg_idx);
-                        current_ty = Self::make_optional(member_ty);
-                    } else {
-                        // Outside any chain: null-safety violation — suggest `?.`.
-                        let base_text = segments[..seg_idx]
-                            .iter()
-                            .map(smol_str::SmolStr::as_str)
-                            .collect::<Vec<_>>()
-                            .join(".");
-                        let member_text = format!(".{}", seg.as_str());
-                        let expr_text = segments[..=seg_idx]
-                            .iter()
-                            .map(smol_str::SmolStr::as_str)
-                            .collect::<Vec<_>>()
-                            .join(".");
-                        self.context.report_simple(
-                            TirTypeError::NullableMemberAccess {
-                                base: base_text,
-                                member: member_text,
-                                expr: expr_text,
-                            },
-                            expr_id,
-                        );
-                        let member_ty =
-                            self.resolve_member_for_path_segment(&inner, seg, expr_id, seg_idx);
-                        current_ty = Self::make_optional(member_ty);
-                    }
-                } else {
-                    current_ty =
-                        self.resolve_member_for_path_segment(&inner, seg, expr_id, seg_idx);
-                }
-                if matches!(current_ty, Ty::Unknown { .. }) {
-                    break;
                 }
             }
-            current_ty
         } else {
             Ty::Unknown {
                 attr: TyAttr::default(),
             }
         }
+    }
+
+    /// Infer a local-rooted multi-segment path (e.g. `obj.a.b`).
+    ///
+    /// Resolves `segments[0]` as a local variable, then chains `resolve_member`
+    /// for each subsequent segment. Captures per-segment `MemberResolution`
+    /// values into `path_member_resolutions` for MIR field-chain lowering and
+    /// LSP navigation.
+    fn infer_local_rooted_path(&mut self, segments: &[Name], expr_id: ExprId) -> Ty {
+        let root_ty = self.infer_single_name(&segments[0]);
+        if matches!(root_ty, Ty::Unknown { .. }) {
+            return Ty::Unknown {
+                attr: TyAttr::default(),
+            };
+        }
+
+        // Record the root segment's TIR type for MIR field-chain lowering.
+        // MIR catch variables are declared as BuiltinUnknown, so builder.local_ty()
+        // would return a coarser type than TIR inferred here.
+        self.path_root_types.insert(expr_id, root_ty.clone());
+
+        // Chain resolve_member for remaining segments, capturing per-segment resolutions.
+        let mut current_ty = root_ty;
+        let mut member_resolutions: Vec<crate::inference::MemberResolution<'db>> = Vec::new();
+
+        for (i, seg) in segments[1..].iter().enumerate() {
+            let seg_idx = i + 1; // index into the path segments (0 is the root)
+            let inner = crate::narrowing::remove_null(&current_ty);
+            let is_nullable =
+                inner != current_ty && !matches!(current_ty, Ty::Unknown { .. } | Ty::Error { .. });
+            let member_ty;
+            if is_nullable {
+                if self.in_optional_chain > 0 {
+                    // Inside an OptionalChain: resolve and re-wrap the result.
+                    member_ty = self.resolve_member_for_path_segment(&inner, seg, expr_id, seg_idx);
+                    current_ty = Self::make_optional(member_ty.clone());
+                } else {
+                    // Outside any chain: null-safety violation — suggest `?.`.
+                    let base_text = segments[..seg_idx]
+                        .iter()
+                        .map(smol_str::SmolStr::as_str)
+                        .collect::<Vec<_>>()
+                        .join(".");
+                    let member_text = format!(".{}", seg.as_str());
+                    let expr_text = segments[..=seg_idx]
+                        .iter()
+                        .map(smol_str::SmolStr::as_str)
+                        .collect::<Vec<_>>()
+                        .join(".");
+                    self.context.report_simple(
+                        TirTypeError::NullableMemberAccess {
+                            base: base_text,
+                            member: member_text,
+                            expr: expr_text,
+                        },
+                        expr_id,
+                    );
+                    member_ty = self.resolve_member_for_path_segment(&inner, seg, expr_id, seg_idx);
+                    current_ty = Self::make_optional(member_ty.clone());
+                }
+            } else {
+                member_ty = self.resolve_member_for_path_segment(&inner, seg, expr_id, seg_idx);
+                current_ty = member_ty.clone();
+            }
+
+            // Capture whatever resolution `resolve_member` (called by
+            // `resolve_member_for_path_segment`) stored at `expr_id`.
+            // We immediately remove it from `resolutions` so consecutive
+            // segments don't see stale values from earlier iterations.
+            if let Some(res) = self.resolutions.remove(&expr_id) {
+                member_resolutions.push(res);
+            } else {
+                // No resolution recorded (e.g. builtin/primitive member or error) — push a placeholder.
+                // We keep the Vec parallel to segments[1..] so index lookups stay aligned.
+                // We only push when we've consumed a segment, so break-on-unknown still works.
+                if !matches!(member_ty, Ty::Unknown { .. }) {
+                    // Resolved but no MemberResolution (e.g. String.length) — skip recording
+                }
+            }
+
+            if matches!(current_ty, Ty::Unknown { .. }) {
+                break;
+            }
+        }
+
+        if !member_resolutions.is_empty() {
+            self.path_member_resolutions
+                .insert(expr_id, member_resolutions);
+        }
+
+        current_ty
     }
 
     /// Resolve a multi-segment path like `baml.llm.render_prompt` or `root.sys.panic`.
@@ -4019,181 +4088,6 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// then delegates to `resolve_builtin_member`.
     /// Try to resolve a `FieldAccess` chain as a package access path.
     ///
-    /// Walks the `FieldAccess` chain to find a root `Path([pkg_name])` where
-    /// `pkg_name` is a known package. Then resolves intermediate segments
-    /// through the package's namespace to find a type (class/enum), and
-    /// finally uses `resolve_member` on that type for the final field.
-    ///
-    /// Handles patterns like:
-    /// - `baml.Array.length` -- package=`baml`, path=`["Array"]`, member=`length`
-    /// - `baml.media.Image.from_url` -- package=`baml`, path=`["media","Image"]`, member=`from_url`
-    /// - `env.get` → package="env", path=[], member="get" (free function)
-    fn try_package_access(
-        &mut self,
-        at: ExprId,
-        base_id: ExprId,
-        member: &Name,
-        body: &ExprBody,
-    ) -> Option<Ty> {
-        // Walk the chain to collect segments before this member access.
-        let mut segments: Vec<Name> = Vec::new();
-        let mut current = base_id;
-        loop {
-            match &body.exprs[current] {
-                Expr::Path(path_segments) if !path_segments.is_empty() => {
-                    // Multi-segment Path: push all segments in reverse order so that
-                    // after reversal below they appear in root-to-leaf order.
-                    for seg in path_segments.iter().rev() {
-                        segments.push(seg.clone());
-                    }
-                    break;
-                }
-                Expr::MemberAccess { base, member } => {
-                    segments.push(member.clone());
-                    current = *base;
-                }
-                _ => return None,
-            }
-        }
-
-        // Reverse so we have root-to-leaf order: ["baml", "Array"] or ["env"]
-        segments.reverse();
-
-        if segments.is_empty() {
-            return None;
-        }
-
-        // Check if the root segment is a known package (not a local variable)
-        let first = &segments[0];
-        if self.locals.contains_key(first) {
-            return None;
-        }
-
-        let db = self.context.db();
-        let resolved_pkg_name = if first.as_str() == "root" {
-            let pkg_info = baml_compiler2_hir::file_package::file_package(db, self.scope.file(db));
-            pkg_info.package
-        } else {
-            first.clone()
-        };
-
-        // Try to resolve the package. If not found, check if the first segment
-        // is a known namespace shorthand for the `"baml"` package (e.g. `env.get`
-        // → `baml.env.get`, `sys.panic` → `baml.sys.panic`).
-        let baml_ns_shorthands: &[&str] = &[
-            "env", "sys", "http", "math", "fs", "net", "media", "llm", "errors", "unstable",
-        ];
-        let (pkg_items, item_path_owned): (
-            &baml_compiler2_hir::package::PackageItems<'db>,
-            Vec<Name>,
-        ) = if let Some(items) = self.res_ctx.items_for_package(db, &resolved_pkg_name) {
-            // Found the package directly.
-            if items.namespaces.is_empty() {
-                return None;
-            }
-            let ip = segments[1..].to_vec();
-            (items, ip)
-        } else if baml_ns_shorthands.contains(&first.as_str()) {
-            // `env.X` → treat as `baml.env.X`: look up in the `"baml"` package
-            // with the namespace prefix prepended to the item path.
-            let baml_name = Name::new("baml");
-            let baml_items = self.res_ctx.items_for_package(db, &baml_name)?;
-            // Prepend the namespace segment (`first`) to the item path.
-            let mut ip = vec![first.clone()];
-            ip.extend_from_slice(&segments[1..]);
-            (baml_items, ip)
-        } else {
-            return None;
-        };
-
-        let item_path: &[Name] = &item_path_owned;
-
-        // Record types for intermediate expressions (so MIR doesn't panic on them).
-        let mut cur = base_id;
-        loop {
-            match &body.exprs[cur] {
-                Expr::Path(_) => {
-                    self.record_expr_type(
-                        cur,
-                        Ty::Unknown {
-                            attr: TyAttr::default(),
-                        },
-                    );
-                    break;
-                }
-                Expr::MemberAccess { base, .. } => {
-                    self.record_expr_type(
-                        cur,
-                        Ty::Unknown {
-                            attr: TyAttr::default(),
-                        },
-                    );
-                    cur = *base;
-                }
-                _ => break,
-            }
-        }
-
-        // When there is a non-empty item_path, try class/enum member resolution
-        // first (e.g. `baml.Array.length` → Array class, then method "length").
-        if !item_path.is_empty() {
-            let item_name = item_path.last().expect("non-empty item_path");
-            if let Some(def) = pkg_items.lookup_type(&item_path[..item_path.len() - 1], item_name) {
-                match def {
-                    Definition::Class(_class_loc) => {
-                        if first.as_str() == "root"
-                            || first.as_str() == self.package_id.name(db).as_str()
-                        {
-                            let class_qtn = crate::lower_type_expr::qualify_def(db, def, item_name);
-                            let base_ty = Ty::Class(class_qtn, TyAttr::default());
-                            return Some(self.resolve_member(&base_ty, member, at));
-                        }
-                        let class_path: Vec<&str> =
-                            item_path.iter().map(smol_str::SmolStr::as_str).collect();
-                        return self
-                            .resolve_builtin_member(&class_path, &[], member, at)
-                            .or_else(|| {
-                                let class_qtn =
-                                    crate::lower_type_expr::qualify_def(db, def, item_name);
-                                let base_ty = Ty::Class(class_qtn, TyAttr::default());
-                                Some(self.resolve_member(&base_ty, member, at))
-                            });
-                    }
-                    Definition::Enum(_) => {
-                        let enum_qtn = crate::lower_type_expr::qualify_def(db, def, item_name);
-                        let base_ty = Ty::Enum(enum_qtn, TyAttr::default());
-                        return Some(self.resolve_member(&base_ty, member, at));
-                    }
-                    _ => {}
-                }
-            }
-        }
-
-        // Fall back to the shared value/type resolution for free functions
-        // in nested namespaces (e.g. `env.get`, `baml.llm.render_prompt`).
-        let full_path: Vec<Name> = item_path
-            .iter()
-            .chain(std::iter::once(member))
-            .cloned()
-            .collect();
-        let result = self.resolve_package_item(pkg_items, &full_path, at);
-        if result.is_none() {
-            // Package was found but the member doesn't exist — report a clear error
-            // with the full dotted path as context (e.g. "unresolved member: testing.Quorum").
-            let base_path = segments.join(".");
-            self.context.report_simple(
-                TirTypeError::UnresolvedName {
-                    name: Name::new(format!("{base_path}.{member}")),
-                },
-                at,
-            );
-            return Some(Ty::Unknown {
-                attr: TyAttr::default(),
-            });
-        }
-        result
-    }
-
     fn try_primitive_static_access(
         &mut self,
         at: ExprId,

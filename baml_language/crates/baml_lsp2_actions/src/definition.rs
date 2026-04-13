@@ -307,7 +307,8 @@ fn resolve_field_access_at(
     // Find the best matching expr — either a MemberAccess or a multi-segment Path
     // whose span contains the cursor and whose member name matches the token.
     // Pick smallest (innermost) span for nested chains.
-    let mut best: Option<(baml_compiler2_ast::ExprId, TextRange)> = None;
+    // For Path nodes, also record which segment index the cursor is on.
+    let mut best: Option<(baml_compiler2_ast::ExprId, TextRange, Option<usize>)> = None;
     for (expr_id, expr) in expr_body.exprs.iter() {
         match expr {
             Expr::MemberAccess { member, .. } => {
@@ -318,8 +319,8 @@ fn resolve_field_access_at(
                 if !span.contains(offset) && span.end() != offset {
                     continue;
                 }
-                if best.is_none_or(|(_, prev_span)| span.len() < prev_span.len()) {
-                    best = Some((expr_id, span));
+                if best.is_none_or(|(_, prev_span, _)| span.len() < prev_span.len()) {
+                    best = Some((expr_id, span, None));
                 }
             }
             Expr::Path(segments) if segments.len() >= 2 => {
@@ -340,16 +341,31 @@ fn resolve_field_access_at(
                     continue;
                 }
                 let span = source_map.expr_span(expr_id);
-                if best.is_none_or(|(_, prev_span)| span.len() < prev_span.len()) {
-                    best = Some((expr_id, span));
+                if best.is_none_or(|(_, prev_span, _)| span.len() < prev_span.len()) {
+                    best = Some((expr_id, span, segment_idx));
                 }
             }
             _ => {}
         }
     }
 
-    let (expr_id, _) = best?;
-    match inference.resolution(expr_id)? {
+    let (expr_id, _, path_seg_idx) = best?;
+
+    // For multi-segment Path nodes, look up the per-segment resolution
+    // from path_member_resolutions. For MemberAccess, use the top-level resolution.
+    let resolution = if let Some(seg_idx) = path_seg_idx {
+        // seg_idx is the index into the full segments array (0-based, with 0 being the root).
+        // path_member_resolutions[i] corresponds to segments[i+1], so the member resolution
+        // for segment seg_idx is at index seg_idx - 1 in path_member_resolutions.
+        inference
+            .path_member_resolution(expr_id)
+            .and_then(|resolutions| resolutions.get(seg_idx - 1))
+            .or_else(|| inference.resolution(expr_id))
+    } else {
+        inference.resolution(expr_id)
+    };
+
+    match resolution? {
         MemberResolution::Field {
             class_loc,
             field_name,

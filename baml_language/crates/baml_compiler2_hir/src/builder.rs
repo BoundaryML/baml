@@ -25,7 +25,9 @@ use crate::{
         TemplateStringLoc, TestLoc, TypeAliasLoc,
     },
     scope::{FileScopeId, Scope, ScopeId, ScopeKind},
-    semantic_index::{DefinitionSite, FileSemanticIndex, ScopeBindings, SemanticIndexExtra},
+    semantic_index::{
+        DefinitionSite, FileSemanticIndex, PathResolution, ScopeBindings, SemanticIndexExtra,
+    },
 };
 
 pub struct SemanticIndexBuilder<'db> {
@@ -42,6 +44,10 @@ pub struct SemanticIndexBuilder<'db> {
 
     /// Expression → scope mappings, sorted by `ExprId` at the end.
     expr_scopes: Vec<(ast::ExprId, FileScopeId)>,
+
+    /// Path root resolutions for multi-segment `Path` expressions.
+    /// Collected during `walk_expr_body`, sorted by `ExprId` at the end.
+    path_resolutions: Vec<(ast::ExprId, PathResolution)>,
 
     item_tree: ItemTree,
     item_tree_source_map: crate::item_tree::ItemTreeSourceMap,
@@ -61,6 +67,7 @@ impl<'db> SemanticIndexBuilder<'db> {
             scope_stack: Vec::new(),
             class_depth: 0,
             expr_scopes: Vec::new(),
+            path_resolutions: Vec::new(),
             item_tree: ItemTree::new(),
             item_tree_source_map: crate::item_tree::ItemTreeSourceMap::default(),
             type_contributions: Vec::new(),
@@ -118,6 +125,9 @@ impl<'db> SemanticIndexBuilder<'db> {
         // Sort expr_scopes for binary search
         self.expr_scopes.sort_by_key(|(id, _)| *id);
 
+        // Sort path_resolutions for binary search
+        self.path_resolutions.sort_by_key(|(id, _)| *id);
+
         // Pre-intern ScopeIds for each FileScopeId
         let scope_ids: Vec<ScopeId<'db>> = (0..self.scopes.len())
             .map(|i| {
@@ -147,6 +157,7 @@ impl<'db> SemanticIndexBuilder<'db> {
                 values: self.value_contributions,
             }),
             extra,
+            path_resolutions: self.path_resolutions,
         }
     }
 
@@ -439,6 +450,52 @@ impl<'db> SemanticIndexBuilder<'db> {
 
             self.pop_scope();
         }
+
+        // Pass 6 — Path resolution: classify multi-segment Path root segments.
+        // After all binding collection passes, check if the root of each
+        // multi-segment Path is a locally-declared variable or parameter.
+        let visible_names = self.collect_visible_names();
+        for (expr_id, expr) in body.exprs.iter() {
+            if let ast::Expr::Path(segments) = expr {
+                if segments.len() >= 2 {
+                    let root = &segments[0];
+                    let resolution = if visible_names.contains(root) {
+                        PathResolution::Local { name: root.clone() }
+                    } else {
+                        PathResolution::Unknown
+                    };
+                    self.path_resolutions.push((expr_id, resolution));
+                }
+            }
+        }
+    }
+
+    /// Collect all names visible in the current scope chain (params and
+    /// let-bindings), stopping at function/lambda boundaries.
+    ///
+    /// This is a conservative best-effort check: names found here are
+    /// definitely locals; names not found may be package names (resolved by TIR).
+    fn collect_visible_names(&self) -> std::collections::HashSet<Name> {
+        let mut names = std::collections::HashSet::new();
+        for &scope_id in self.scope_stack.iter().rev() {
+            let idx = scope_id.index() as usize;
+            let bindings = &self.scope_bindings[idx];
+            for (name, _) in &bindings.params {
+                names.insert(name.clone());
+            }
+            for (name, _, _) in &bindings.bindings {
+                names.insert(name.clone());
+            }
+            for (name, _) in &bindings.captures {
+                names.insert(name.clone());
+            }
+            // Stop at function/lambda boundary — don't look through function scopes.
+            let scope_kind = &self.scopes[idx].kind;
+            if matches!(scope_kind, ScopeKind::Function | ScopeKind::Lambda) {
+                break;
+            }
+        }
+        names
     }
 
     /// Extract the binding name from a pattern, if it has one.

@@ -91,6 +91,14 @@ pub struct ScopeInference<'db> {
     /// are declared as `BuiltinUnknown` by `lower_catch` before `bind_pattern`
     /// has a chance to refine them).
     path_root_types: FxHashMap<ExprId, Ty>,
+    /// Per-segment member resolutions for multi-segment local-rooted `Path` expressions.
+    ///
+    /// For `obj.a.b` (`Path(["obj", "a", "b"])`), contains resolutions for segments
+    /// [1..] i.e., "a" (index 0) and "b" (index 1). Parallel to `segments[1..]`.
+    ///
+    /// Used by MIR to emit chained `Place::Field` projections and by LSP to
+    /// navigate to field definitions from within multi-segment paths.
+    path_member_resolutions: FxHashMap<ExprId, Vec<MemberResolution<'db>>>,
     /// Diagnostics and other rare data. Heap-allocated only when non-empty.
     extra: Option<Box<ScopeInferenceExtra<'db>>>,
 }
@@ -171,6 +179,23 @@ impl<'db> ScopeInference<'db> {
     /// Iterate over all (`ExprId`, root `Ty`) pairs for multi-segment paths in this scope.
     pub fn iter_path_root_types(&self) -> impl Iterator<Item = (&ExprId, &Ty)> {
         self.path_root_types.iter()
+    }
+
+    /// Look up per-segment member resolutions for a multi-segment local-rooted
+    /// `Path` expression. Returns `None` if not recorded (e.g. package-rooted
+    /// paths or paths with only a single segment).
+    pub fn path_member_resolution(&self, expr_id: ExprId) -> Option<&[MemberResolution<'db>]> {
+        self.path_member_resolutions
+            .get(&expr_id)
+            .map(Vec::as_slice)
+    }
+
+    /// Iterate over all (`ExprId`, per-segment resolutions) for multi-segment
+    /// local-rooted paths in this scope.
+    pub fn iter_path_member_resolutions(
+        &self,
+    ) -> impl Iterator<Item = (&ExprId, &Vec<MemberResolution<'db>>)> {
+        self.path_member_resolutions.iter()
     }
 
     /// Get diagnostics for this scope (empty slice if none).
@@ -584,8 +609,15 @@ pub fn infer_scope_types<'db>(
         }
     }
 
-    let (expressions, bindings, resolutions, exhaustive_matches, diagnostics, path_root_types) =
-        builder.finish();
+    let (
+        expressions,
+        bindings,
+        resolutions,
+        exhaustive_matches,
+        diagnostics,
+        path_root_types,
+        path_member_resolutions,
+    ) = builder.finish();
 
     let extra = if diagnostics.is_empty() {
         None
@@ -599,6 +631,7 @@ pub fn infer_scope_types<'db>(
         resolutions,
         exhaustive_matches,
         path_root_types,
+        path_member_resolutions,
         extra,
     }
 }

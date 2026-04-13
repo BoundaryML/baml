@@ -404,6 +404,43 @@ fn find_field_definition_usages(
                 }
             }
 
+            // Multi-segment Path sites: scan path_member_resolutions for matching Field.
+            // For `obj.field` which is Path(["obj", "field"]), the field resolution is
+            // in path_member_resolutions[expr_id][0] (index into segments[1..]).
+            for (expr_id, member_resolutions) in inference.iter_path_member_resolutions() {
+                use baml_compiler2_tir::inference::MemberResolution;
+                // Look up the Path's segments to find which segment index matched.
+                let Some((_, path_expr)) = expr_body.exprs.iter().find(|(id, _)| id == expr_id)
+                else {
+                    continue;
+                };
+                let baml_compiler2_ast::Expr::Path(segments) = path_expr else {
+                    continue;
+                };
+                for (res_idx, resolution) in member_resolutions.iter().enumerate() {
+                    if let MemberResolution::Field {
+                        class_loc: res_class_loc,
+                        field_name,
+                    } = resolution
+                    {
+                        if *res_class_loc == class_loc && field_name.as_str() == field_name_text {
+                            // segment index in the full segments array = res_idx + 1
+                            // (since res_idx 0 corresponds to segments[1])
+                            let seg_idx = res_idx + 1;
+                            if seg_idx < segments.len() {
+                                let seg_span = source_map.path_segment_span(*expr_id, seg_idx);
+                                if !seg_span.is_empty() {
+                                    results.push(Location {
+                                        file: sf,
+                                        range: seg_span,
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             // Object constructor field sites: scan Object expressions
             for (expr_id, expr) in expr_body.exprs.iter() {
                 if let Expr::Object { fields, .. } = expr {

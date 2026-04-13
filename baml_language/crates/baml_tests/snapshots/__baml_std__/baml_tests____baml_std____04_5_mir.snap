@@ -389,21 +389,23 @@ fn baml.llm.PlannerState.rr_pick_index(self: baml.llm.PlannerState, client_name:
     let _4: int // sub_client_count // param
     let _5: int // local_offset
     let _6: int
-    let _7: int
+    let _7: (string[], string) -> int
     let _8: int
+    let _9: int
 
     bb0: {
         _5 = call const fn baml.llm.PlannerState.rr_local_offset(copy _1, copy _2) -> [bb1];
     }
 
     bb1: {
-        _6 = call const fn baml.Array.push(copy _1, copy _2) -> [bb2];
+        _7 = copy _1.0;
+        _6 = call const fn baml.Array.push(copy _7, copy _2) -> [bb2];
     }
 
     bb2: {
-        _8 = copy _5;
-        _7 = copy _3 + copy _8;
-        _0 = copy _7 % copy _4;
+        _9 = copy _5;
+        _8 = copy _3 + copy _9;
+        _0 = copy _8 % copy _4;
         goto -> bb3;
     }
 
@@ -464,13 +466,15 @@ fn baml.llm.Client.build_attempt_with_state(self: baml.llm.Client, planner_state
     let _25: baml.llm.OrchestrationStep
     let _26: bool
     let _27: int
-    let _28: int // idx
-    let _29: string
-    let _30: int
+    let _28: (baml.llm.Client[]) -> int
+    let _29: int // idx
+    let _30: string
     let _31: int
-    let _32: baml.llm.Client
-    let _33: baml.llm.Client[]
-    let _34: int
+    let _32: int
+    let _33: (baml.llm.Client[]) -> int
+    let _34: baml.llm.Client
+    let _35: baml.llm.Client[]
+    let _36: int
 
     bb0: {
         _3 = copy _1.1;
@@ -483,7 +487,8 @@ fn baml.llm.Client.build_attempt_with_state(self: baml.llm.Client, planner_state
     }
 
     bb2: {
-        _27 = call const fn baml.Array.length(copy _1) -> [bb3];
+        _28 = copy _1.2;
+        _27 = call const fn baml.Array.length(copy _28) -> [bb3];
     }
 
     bb3: {
@@ -492,20 +497,21 @@ fn baml.llm.Client.build_attempt_with_state(self: baml.llm.Client, planner_state
     }
 
     bb4: {
-        _29 = copy _1.0;
-        _30 = copy _1.4;
-        _31 = call const fn baml.Array.length(copy _1) -> [bb5];
+        _30 = copy _1.0;
+        _31 = copy _1.4;
+        _33 = copy _1.2;
+        _32 = call const fn baml.Array.length(copy _33) -> [bb5];
     }
 
     bb5: {
-        _28 = call const fn baml.llm.PlannerState.rr_pick_index(copy _2, copy _29, copy _30, copy _31) -> [bb6];
+        _29 = call const fn baml.llm.PlannerState.rr_pick_index(copy _2, copy _30, copy _31, copy _32) -> [bb6];
     }
 
     bb6: {
-        _33 = copy _1.2;
-        _34 = copy _28;
-        _32 = copy _33[_34];
-        _0 = call const fn baml.llm.Client.build_plan_with_state(copy _32, copy _2) -> [bb21];
+        _35 = copy _1.2;
+        _36 = copy _29;
+        _34 = copy _35[_36];
+        _0 = call const fn baml.llm.Client.build_plan_with_state(copy _34, copy _2) -> [bb21];
     }
 
     bb7: {
@@ -974,10 +980,11 @@ fn baml.llm.Client.execute_once(self: baml.llm.Client, context: baml.llm.Executi
     let _57: int // idx
     let _58: int
     let _59: int
-    let _60: void // result3
-    let _61: baml.llm.Client
-    let _62: baml.llm.Client[]
-    let _63: int
+    let _60: (baml.llm.Client[]) -> int
+    let _61: void // result3
+    let _62: baml.llm.Client
+    let _63: baml.llm.Client[]
+    let _64: int
 
     bb0: {
         _4 = copy _1.1;
@@ -991,20 +998,21 @@ fn baml.llm.Client.execute_once(self: baml.llm.Client, context: baml.llm.Executi
 
     bb2: {
         _58 = copy _1.4;
-        _59 = call const fn baml.Array.length(copy _1) -> [bb3];
+        _60 = copy _1.2;
+        _59 = call const fn baml.Array.length(copy _60) -> [bb3];
     }
 
     bb3: {
         _57 = copy _58 % copy _59;
         _1.4 = copy _1.4 + const 1_i64;
-        _62 = copy _1.2;
-        _63 = copy _57;
-        _61 = copy _62[_63];
-        _60 = call const fn baml.llm.Client.execute(copy _61, copy _2, copy _3) -> [bb4];
+        _63 = copy _1.2;
+        _64 = copy _57;
+        _62 = copy _63[_64];
+        _61 = call const fn baml.llm.Client.execute(copy _62, copy _2, copy _3) -> [bb4];
     }
 
     bb4: {
-        _0 = copy _60;
+        _0 = copy _61;
         goto -> bb47;
     }
 
@@ -1228,14 +1236,16 @@ fn baml.llm.Client.to_primitive_client(self: baml.llm.Client) -> baml.llm.Primit
     let _0: baml.llm.PrimitiveClient // _0 // return
     let _1: baml.llm.Client // self // param
     let _2: bool
-    let _3: void
-    let _4: string
+    let _3: (baml.String, string) -> bool
+    let _4: void
     let _5: string
-    let _6: () -> baml.llm.PrimitiveClient
-    let _7: future<() -> baml.llm.PrimitiveClient>
+    let _6: string
+    let _7: () -> baml.llm.PrimitiveClient
+    let _8: future<() -> baml.llm.PrimitiveClient>
 
     bb0: {
-        _2 = call const fn baml.String.includes(copy _1, const "/") -> [bb1];
+        _3 = copy _1.0;
+        _2 = call const fn baml.String.includes(copy _3, const "/") -> [bb1];
     }
 
     bb1: {
@@ -1243,15 +1253,15 @@ fn baml.llm.Client.to_primitive_client(self: baml.llm.Client) -> baml.llm.Primit
     }
 
     bb2: {
-        _7 = dispatch_future const fn baml.llm.Client.get_constructor(copy _1) -> bb3;
+        _8 = dispatch_future const fn baml.llm.Client.get_constructor(copy _1) -> bb3;
     }
 
     bb3: {
-        _6 = await _7 -> [bb4];
+        _7 = await _8 -> [bb4];
     }
 
     bb4: {
-        _0 = call copy _6() -> [bb5];
+        _0 = call copy _7() -> [bb5];
     }
 
     bb5: {
@@ -1259,10 +1269,10 @@ fn baml.llm.Client.to_primitive_client(self: baml.llm.Client) -> baml.llm.Primit
     }
 
     bb6: {
-        _5 = copy _1.0;
-        _4 = const "Invalid short hand name: " + copy _5;
-        _3 = InvalidArgument { copy _4 };
-        throw copy _3;
+        _6 = copy _1.0;
+        _5 = const "Invalid short hand name: " + copy _6;
+        _4 = InvalidArgument { copy _5 };
+        throw copy _4;
     }
 }
 

@@ -362,6 +362,13 @@ struct LoweringContext<'db> {
     // type even when the MIR local was declared with a coarser type (e.g.
     // catch variables declared as BuiltinUnknown).
     path_root_types: FxHashMap<(FileScopeId, AstExprId), Tir2Ty>,
+    // Per-segment member resolutions for multi-segment local-rooted Path expressions.
+    // Set by TIR's infer_local_rooted_path; indexed by (scope, Path ExprId).
+    // path_member_resolutions[(scope, expr_id)][i] is the resolution for segments[i+1].
+    path_member_resolutions: FxHashMap<
+        (FileScopeId, AstExprId),
+        Vec<baml_compiler2_tir::inference::MemberResolution<'db>>,
+    >,
 
     // The FileScopeId of the expression body currently being lowered.
     // Updated when descending into lambda bodies (Phase 3+).
@@ -552,7 +559,7 @@ impl<'db> LoweringContext<'db> {
             })
             .unwrap_or_else(|| index.scope_at_offset(func_span.start(), Some(&func_data.name)));
 
-        // --- Eagerly aggregate expr_types, pat_types, resolutions, exhaustive_matches, and path_root_types from all scopes ---
+        // --- Eagerly aggregate expr_types, pat_types, resolutions, exhaustive_matches, path_root_types, and path_member_resolutions from all scopes ---
         let mut expr_types: FxHashMap<(FileScopeId, AstExprId), Tir2Ty> = FxHashMap::default();
         let mut pat_types: FxHashMap<(FileScopeId, AstPatId), Tir2Ty> = FxHashMap::default();
         let mut resolutions: FxHashMap<
@@ -562,6 +569,10 @@ impl<'db> LoweringContext<'db> {
         let mut exhaustive_matches: rustc_hash::FxHashSet<(FileScopeId, AstExprId)> =
             rustc_hash::FxHashSet::default();
         let mut path_root_types: FxHashMap<(FileScopeId, AstExprId), Tir2Ty> = FxHashMap::default();
+        let mut path_member_resolutions: FxHashMap<
+            (FileScopeId, AstExprId),
+            Vec<baml_compiler2_tir::inference::MemberResolution<'db>>,
+        > = FxHashMap::default();
 
         let merge_scope =
             |fsi: FileScopeId,
@@ -572,7 +583,11 @@ impl<'db> LoweringContext<'db> {
                 baml_compiler2_tir::inference::MemberResolution<'db>,
             >,
              exhaustive_matches: &mut rustc_hash::FxHashSet<(FileScopeId, AstExprId)>,
-             path_root_types: &mut FxHashMap<(FileScopeId, AstExprId), Tir2Ty>| {
+             path_root_types: &mut FxHashMap<(FileScopeId, AstExprId), Tir2Ty>,
+             path_member_resolutions: &mut FxHashMap<
+                (FileScopeId, AstExprId),
+                Vec<baml_compiler2_tir::inference::MemberResolution<'db>>,
+            >| {
                 let scope_id = index.scope_ids[fsi.index() as usize];
                 let inference = infer_scope_types(db, scope_id);
                 for (&expr_id, ty) in inference.iter_expressions() {
@@ -590,6 +605,9 @@ impl<'db> LoweringContext<'db> {
                 for (&expr_id, ty) in inference.iter_path_root_types() {
                     path_root_types.insert((fsi, expr_id), ty.clone());
                 }
+                for (&expr_id, member_resolutions) in inference.iter_path_member_resolutions() {
+                    path_member_resolutions.insert((fsi, expr_id), member_resolutions.clone());
+                }
             };
 
         // Include the function scope itself
@@ -600,6 +618,7 @@ impl<'db> LoweringContext<'db> {
             &mut resolutions,
             &mut exhaustive_matches,
             &mut path_root_types,
+            &mut path_member_resolutions,
         );
 
         // Include all descendant scopes (blocks, lambdas, etc.)
@@ -614,6 +633,7 @@ impl<'db> LoweringContext<'db> {
                 &mut resolutions,
                 &mut exhaustive_matches,
                 &mut path_root_types,
+                &mut path_member_resolutions,
             );
         }
 
@@ -692,6 +712,7 @@ impl<'db> LoweringContext<'db> {
             resolutions,
             exhaustive_matches,
             path_root_types,
+            path_member_resolutions,
             current_scope: func_scope_id,
             body: expr_body,
             source_map,
@@ -734,7 +755,7 @@ impl<'db> LoweringContext<'db> {
         let index = file_semantic_index(db, file);
         let let_scope_id: FileScopeId = index.scope_at_offset(let_span.start(), Some(&let_name));
 
-        // --- Eagerly aggregate expr_types, pat_types, resolutions from let scope ---
+        // --- Eagerly aggregate expr_types, pat_types, resolutions, path_root_types, path_member_resolutions from let scope ---
         let mut expr_types: FxHashMap<(FileScopeId, AstExprId), Tir2Ty> = FxHashMap::default();
         let mut pat_types: FxHashMap<(FileScopeId, AstPatId), Tir2Ty> = FxHashMap::default();
         let mut resolutions: FxHashMap<
@@ -744,6 +765,10 @@ impl<'db> LoweringContext<'db> {
         let mut exhaustive_matches: rustc_hash::FxHashSet<(FileScopeId, AstExprId)> =
             rustc_hash::FxHashSet::default();
         let mut path_root_types: FxHashMap<(FileScopeId, AstExprId), Tir2Ty> = FxHashMap::default();
+        let mut path_member_resolutions: FxHashMap<
+            (FileScopeId, AstExprId),
+            Vec<baml_compiler2_tir::inference::MemberResolution<'db>>,
+        > = FxHashMap::default();
 
         let merge_scope =
             |fsi: FileScopeId,
@@ -754,7 +779,11 @@ impl<'db> LoweringContext<'db> {
                 baml_compiler2_tir::inference::MemberResolution<'db>,
             >,
              exhaustive_matches: &mut rustc_hash::FxHashSet<(FileScopeId, AstExprId)>,
-             path_root_types: &mut FxHashMap<(FileScopeId, AstExprId), Tir2Ty>| {
+             path_root_types: &mut FxHashMap<(FileScopeId, AstExprId), Tir2Ty>,
+             path_member_resolutions: &mut FxHashMap<
+                (FileScopeId, AstExprId),
+                Vec<baml_compiler2_tir::inference::MemberResolution<'db>>,
+            >| {
                 let scope_id = index.scope_ids[fsi.index() as usize];
                 let inference = infer_scope_types(db, scope_id);
                 for (&expr_id, ty) in inference.iter_expressions() {
@@ -772,6 +801,9 @@ impl<'db> LoweringContext<'db> {
                 for (&expr_id, ty) in inference.iter_path_root_types() {
                     path_root_types.insert((fsi, expr_id), ty.clone());
                 }
+                for (&expr_id, member_resolutions) in inference.iter_path_member_resolutions() {
+                    path_member_resolutions.insert((fsi, expr_id), member_resolutions.clone());
+                }
             };
 
         // Include the let scope itself
@@ -782,6 +814,7 @@ impl<'db> LoweringContext<'db> {
             &mut resolutions,
             &mut exhaustive_matches,
             &mut path_root_types,
+            &mut path_member_resolutions,
         );
 
         // Include all descendant scopes (blocks, closures within the initializer)
@@ -796,6 +829,7 @@ impl<'db> LoweringContext<'db> {
                 &mut resolutions,
                 &mut exhaustive_matches,
                 &mut path_root_types,
+                &mut path_member_resolutions,
             );
         }
 
@@ -847,6 +881,7 @@ impl<'db> LoweringContext<'db> {
             resolutions,
             exhaustive_matches,
             path_root_types,
+            path_member_resolutions,
             current_scope: let_scope_id,
             body: expr_body,
             source_map,
@@ -1633,8 +1668,50 @@ impl LoweringContext<'_> {
 
 impl<'db> LoweringContext<'db> {
     fn lower_path_expr(&mut self, expr_id: AstExprId, segments: &[Name], dest: Place) {
-        // Multi-segment paths (e.g. baml.llm.render_prompt) — check TIR resolution first
+        // Multi-segment paths (e.g. baml.llm.render_prompt, self.field, obj.method) — check TIR resolution first
         if segments.len() > 1 {
+            // Check path_member_resolutions first (set by infer_local_rooted_path for local-rooted paths).
+            // This takes priority over the flat resolutions map since infer_local_rooted_path
+            // moves resolutions from the flat map into path_member_resolutions.
+            if let Some(member_resolutions) = self
+                .path_member_resolutions
+                .get(&(self.current_scope, expr_id))
+                .cloned()
+            {
+                use baml_compiler2_tir::inference::MemberResolution;
+                // The last resolution corresponds to the final segment of the path.
+                // - If the last resolution is a Method/Free, this path is a callee reference;
+                //   emit a function constant. The receiver will be prepended by lower_call.
+                // - If the last resolution is a Field, this is a pure field-chain access.
+                // Note: for paths like `user.profile.items.slice`, the member_resolutions
+                // are [Field{profile}, Field{items}, Method{slice}], so we check last().
+                match member_resolutions.last() {
+                    Some(MemberResolution::Method { .. } | MemberResolution::Free { .. }) => {
+                        // Local-rooted method/free call reference — emit a function constant.
+                        // The receiver will be prepended by lower_call.
+                        let resolution = member_resolutions.into_iter().last().unwrap();
+                        if let Some(item) = resolution_to_item_ref(self.db, &resolution) {
+                            self.builder.assign(
+                                dest,
+                                Rvalue::Use(Operand::Constant(Constant::Function(item))),
+                            );
+                            return;
+                        }
+                    }
+                    Some(MemberResolution::Field { .. }) => {
+                        // Local-rooted field access — chain field projections.
+                        self.lower_multi_segment_path_as_field_chain(expr_id, segments, dest);
+                        return;
+                    }
+                    Some(MemberResolution::Variant { .. }) => {
+                        // Handled by expr_types check below.
+                    }
+                    None => {}
+                }
+            }
+
+            // Check flat resolutions (set by infer_multi_segment_path for package-rooted paths
+            // like baml.fs.open, env.get, etc.).
             if let Some(resolution) = self
                 .resolutions
                 .get(&(self.current_scope, expr_id))
@@ -2403,20 +2480,60 @@ impl LoweringContext<'_> {
                 (callee_op, arg_ops)
             }
         } else if let AstExpr::Path(segments) = &callee_expr {
-            if segments.len() >= 2
+            // Check path_member_resolutions first (local-rooted paths like `self.method()`
+            // or `obj.field.method()`). The last resolution determines if the final segment
+            // is a method call (e.g. for `user.profile.items.slice`, resolutions are
+            // [Field{profile}, Field{items}, Method{slice}] — last() is Method).
+            let is_local_method = segments.len() >= 2
+                && self
+                    .path_member_resolutions
+                    .get(&(self.current_scope, callee))
+                    .and_then(|resolutions| resolutions.last())
+                    .is_some_and(|r| {
+                        use baml_compiler2_tir::inference::MemberResolution;
+                        matches!(r, MemberResolution::Method { .. })
+                    });
+            // Also check flat resolutions (package-path method call, kept for compatibility).
+            let is_pkg_method = !is_local_method
+                && segments.len() >= 2
                 && self
                     .resolutions
                     .get(&(self.current_scope, callee))
                     .is_some_and(|r| {
                         use baml_compiler2_tir::inference::MemberResolution;
                         matches!(r, MemberResolution::Method { .. })
-                    })
-            {
-                // Multi-segment path callee with a Method resolution: the first segment
-                // is the receiver (e.g. `a` in `a.push`), the rest identifies the method.
-                // We need to lower the receiver separately and prepend it as self.
+                    });
+
+            if is_local_method {
+                // Multi-segment path callee with a local-rooted Method resolution.
+                // The last segment is the method; segments[0..n-1] form the receiver.
+                // e.g. `self.method()` → receiver=self, `user.profile.items.slice()` → receiver=user.profile.items.
+                let receiver_segments = &segments[..segments.len() - 1];
+                let callee_op = self.lower_to_operand(callee);
+                let receiver_op = if receiver_segments.len() == 1 {
+                    // Simple local variable receiver (e.g. `self`).
+                    if let Some(&recv_local) = self.locals.get(&receiver_segments[0]) {
+                        Operand::Copy(Place::Local(recv_local))
+                    } else {
+                        Operand::Constant(Constant::Null)
+                    }
+                } else {
+                    // Multi-segment receiver (e.g. `user.profile.items`): lower as field chain.
+                    let recv_ty = self.expr_ty(callee); // approximation; actual type not critical here
+                    let recv_local = self.builder.temp(recv_ty);
+                    self.lower_multi_segment_path_as_field_chain(
+                        callee,
+                        receiver_segments,
+                        Place::local(recv_local),
+                    );
+                    Operand::Copy(Place::local(recv_local))
+                };
+                let mut all_args = vec![receiver_op];
+                all_args.extend(args.iter().map(|&a| self.lower_to_operand(a)));
+                (callee_op, all_args)
+            } else if is_pkg_method {
+                // Package-path method call (via flat resolutions): same treatment.
                 let first_seg = &segments[0];
-                // Look up the receiver local by name.
                 let receiver_local = self.locals.get(first_seg).copied();
                 if let Some(receiver_local) = receiver_local {
                     let receiver_op = Operand::Copy(Place::Local(receiver_local));
@@ -2425,7 +2542,6 @@ impl LoweringContext<'_> {
                     all_args.extend(args.iter().map(|&a| self.lower_to_operand(a)));
                     (callee_op, all_args)
                 } else {
-                    // Receiver not found as a local — fall through to plain call.
                     let callee_op = self.lower_to_operand(callee);
                     let arg_ops: Vec<Operand> =
                         args.iter().map(|&a| self.lower_to_operand(a)).collect();
@@ -2529,15 +2645,32 @@ impl LoweringContext<'_> {
                     _ => None,
                 }
             } else {
-                // Multi-segment: check TIR resolution
+                // Multi-segment: check path_member_resolutions first (local-rooted paths
+                // like `file.read_string`), then fall back to flat resolutions (package paths).
+                // The last resolution in path_member_resolutions is the final-segment resolution.
                 use baml_compiler2_tir::inference::MemberResolution;
-                self.resolutions
+                let from_pmr = self
+                    .path_member_resolutions
                     .get(&(self.current_scope, callee))
+                    .and_then(|resolutions| resolutions.last())
                     .and_then(|res| match res {
                         MemberResolution::Free { func_loc } => Some(*func_loc),
                         MemberResolution::Method { func_loc, .. } => Some(*func_loc),
                         MemberResolution::Field { .. } | MemberResolution::Variant { .. } => None,
-                    })
+                    });
+                if from_pmr.is_some() {
+                    from_pmr
+                } else {
+                    self.resolutions
+                        .get(&(self.current_scope, callee))
+                        .and_then(|res| match res {
+                            MemberResolution::Free { func_loc } => Some(*func_loc),
+                            MemberResolution::Method { func_loc, .. } => Some(*func_loc),
+                            MemberResolution::Field { .. } | MemberResolution::Variant { .. } => {
+                                None
+                            }
+                        })
+                }
             };
             if let Some(fl) = func_loc {
                 let body = function_body(self.db, fl);

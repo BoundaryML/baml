@@ -781,13 +781,17 @@ function user.ChainExprs(user: ChainUser, items: ChainItem[], m: map<string, int
     load_var user
     load_field .profile
     load_field .items
+    store_var _34
+    load_var user
+    load_field .profile
+    load_field .items
     load_const "len"
     load_map_element
     call_indirect
-    store_var _35
-    load_var user
+    store_var _36
+    load_var _34
     load_const 0
-    load_var _35
+    load_var _36
     load_const 1
     bin_op -
     load_var user
@@ -805,13 +809,13 @@ function user.ChainExprs(user: ChainUser, items: ChainItem[], m: map<string, int
     pop 1
     load_var user
     load_field .scores
-    store_var _50
+    store_var _51
     load_var user
     load_field .scores
     load_const "len"
     load_map_element
     call_indirect
-    store_var _52
+    store_var _53
     load_var user
     load_field .scores
     load_const 0
@@ -819,7 +823,7 @@ function user.ChainExprs(user: ChainUser, items: ChainItem[], m: map<string, int
     load_const "len"
     load_map_element
     call_indirect
-    store_var _56
+    store_var _57
     load_const 0
     load_const null
     call_indirect
