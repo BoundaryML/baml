@@ -2412,16 +2412,15 @@ impl<'a> Parser<'a> {
                 p.error_unexpected_token("parameter name".to_string());
             }
 
-            // Type annotation - requires "name: type" syntax
+            // Type annotation - colon is optional per BEP-019
             // 'self' parameter does not have a type annotation
             if is_self {
                 // No type annotation for self
             } else if p.eat(TokenKind::Colon) {
                 p.parse_type();
             } else if p.is_at_type_start() {
-                // Heuristic for if they're trying to do a type annotation without a colon
-                p.error_unexpected_token("':'".to_string());
-                p.parse_type(); // Parse the type anyway, so errors don't cascade
+                // Colon omitted - parse the type anyway (formatter will add colon)
+                p.parse_type();
             } else {
                 p.error_unexpected_token("type annotation".to_string());
             }
@@ -5106,9 +5105,9 @@ mod tests {
     }
 
     #[test]
-    fn error_on_parameter_type_without_colon() {
-        // When the user writes `x int` instead of `x: int`, the parser should
-        // report a missing ':' error but still parse the type to avoid cascading errors.
+    fn accepts_parameter_type_without_colon() {
+        // BEP-019: colons are optional in function parameters.
+        // `x int` is valid syntax (formatter will add the colon).
         let source = r#"
 function Demo(x int) -> int {
   x
@@ -5117,19 +5116,10 @@ function Demo(x int) -> int {
 
         let (root, errors) = parse_source(source);
 
-        // Should report a missing ':' error
-        assert!(
-            errors.iter().any(|error| {
-                matches!(
-                    error,
-                    ParseError::UnexpectedToken { expected, .. }
-                        if expected == "':'"
-                )
-            }),
-            "expected an error about missing ':', got: {errors:#?}"
-        );
+        // No errors expected - colons are optional
+        assert_no_errors(&errors);
 
-        // The parameter node should still contain the type
+        // The parameter node should contain the type
         let param = root
             .descendants()
             .find(|n| n.kind() == SyntaxKind::PARAMETER)
@@ -5137,7 +5127,7 @@ function Demo(x int) -> int {
         let param_text = param.text().to_string();
         assert!(
             param_text.contains("int"),
-            "parameter should still contain the type 'int', got: {param_text:?}"
+            "parameter should contain the type 'int', got: {param_text:?}"
         );
     }
 
@@ -5253,8 +5243,9 @@ function f() -> int {
     }
 
     #[test]
-    fn error_on_parameter_parenthesized_type_without_colon() {
-        // When the user writes `x (int | string)` instead of `x: (int | string)`,
+    fn accepts_parameter_parenthesized_type_without_colon() {
+        // BEP-019: colons are optional in function parameters.
+        // `x (int | string)` is valid syntax.
         let source = r#"
 function Demo(x (int | string)) -> int {
   1
@@ -5263,16 +5254,7 @@ function Demo(x (int | string)) -> int {
 
         let (root, errors) = parse_source(source);
 
-        assert!(
-            errors.iter().any(|error| {
-                matches!(
-                    error,
-                    ParseError::UnexpectedToken { expected, .. }
-                        if expected == "':'"
-                )
-            }),
-            "expected an error about missing ':', got: {errors:#?}"
-        );
+        assert_no_errors(&errors);
 
         let param = root
             .descendants()
@@ -5281,13 +5263,14 @@ function Demo(x (int | string)) -> int {
         let param_text = param.text().to_string();
         assert!(
             param_text.contains("int"),
-            "parameter should still contain parsed type, got: {param_text:?}"
+            "parameter should contain parsed type, got: {param_text:?}"
         );
     }
 
     #[test]
-    fn error_on_parameter_string_literal_type_without_colon() {
-        // When the user writes `x "hello"` instead of `x: "hello"`,
+    fn accepts_parameter_string_literal_type_without_colon() {
+        // BEP-019: colons are optional in function parameters.
+        // `x "hello"` is valid syntax.
         let source = r#"
 function Demo(x "hello") -> int {
   1
@@ -5296,16 +5279,7 @@ function Demo(x "hello") -> int {
 
         let (root, errors) = parse_source(source);
 
-        assert!(
-            errors.iter().any(|error| {
-                matches!(
-                    error,
-                    ParseError::UnexpectedToken { expected, .. }
-                        if expected == "':'"
-                )
-            }),
-            "expected an error about missing ':', got: {errors:#?}"
-        );
+        assert_no_errors(&errors);
 
         let param = root
             .descendants()
@@ -5314,13 +5288,14 @@ function Demo(x "hello") -> int {
         let param_text = param.text().to_string();
         assert!(
             param_text.contains("hello"),
-            "parameter should still contain parsed type, got: {param_text:?}"
+            "parameter should contain parsed type, got: {param_text:?}"
         );
     }
 
     #[test]
-    fn error_on_parameter_raw_string_type_without_colon() {
-        // When the user writes `x #"hello"#` instead of `x: #"hello"#`,
+    fn accepts_parameter_raw_string_type_without_colon() {
+        // BEP-019: colons are optional in function parameters.
+        // `x #"hello"#` is valid syntax.
         let source = r##"
 function Demo(x #"hello"#) -> int {
   1
@@ -5329,16 +5304,7 @@ function Demo(x #"hello"#) -> int {
 
         let (root, errors) = parse_source(source);
 
-        assert!(
-            errors.iter().any(|error| {
-                matches!(
-                    error,
-                    ParseError::UnexpectedToken { expected, .. }
-                        if expected == "':'"
-                )
-            }),
-            "expected an error about missing ':', got: {errors:#?}"
-        );
+        assert_no_errors(&errors);
 
         let param = root
             .descendants()
@@ -5347,13 +5313,14 @@ function Demo(x #"hello"#) -> int {
         let param_text = param.text().to_string();
         assert!(
             param_text.contains("hello"),
-            "parameter should still contain parsed type, got: {param_text:?}"
+            "parameter should contain parsed type, got: {param_text:?}"
         );
     }
 
     #[test]
-    fn error_on_parameter_integer_literal_type_without_colon() {
-        // When the user writes `x 200` instead of `x: 200`,
+    fn accepts_parameter_integer_literal_type_without_colon() {
+        // BEP-019: colons are optional in function parameters.
+        // `x 200` is valid syntax.
         let source = r#"
 function Demo(x 200) -> int {
   1
@@ -5362,16 +5329,7 @@ function Demo(x 200) -> int {
 
         let (root, errors) = parse_source(source);
 
-        assert!(
-            errors.iter().any(|error| {
-                matches!(
-                    error,
-                    ParseError::UnexpectedToken { expected, .. }
-                        if expected == "':'"
-                )
-            }),
-            "expected an error about missing ':', got: {errors:#?}"
-        );
+        assert_no_errors(&errors);
 
         let param = root
             .descendants()
@@ -5380,40 +5338,7 @@ function Demo(x 200) -> int {
         let param_text = param.text().to_string();
         assert!(
             param_text.contains("200"),
-            "parameter should still contain parsed type, got: {param_text:?}"
-        );
-    }
-
-    #[test]
-    fn error_on_parameter_float_literal_type_without_colon() {
-        // When the user writes `x 3.14` instead of `x: 3.14`,
-        let source = r#"
-function Demo(x 3.14) -> int {
-  1
-}
-"#;
-
-        let (root, errors) = parse_source(source);
-
-        assert!(
-            errors.iter().any(|error| {
-                matches!(
-                    error,
-                    ParseError::UnexpectedToken { expected, .. }
-                        if expected == "':'"
-                )
-            }),
-            "expected an error about missing ':', got: {errors:#?}"
-        );
-
-        let param = root
-            .descendants()
-            .find(|n| n.kind() == SyntaxKind::PARAMETER)
-            .expect("expected PARAMETER node");
-        let param_text = param.text().to_string();
-        assert!(
-            param_text.contains("3.14"),
-            "parameter should still contain parsed type, got: {param_text:?}"
+            "parameter should contain parsed type, got: {param_text:?}"
         );
     }
 

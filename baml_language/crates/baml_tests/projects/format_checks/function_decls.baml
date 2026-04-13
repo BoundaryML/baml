@@ -509,3 +509,24 @@ function    ExtraWhitespace   (   a   :   int   ,   b   :   int   )   ->   int  
 function F() -> int {
     1
 }
+
+// ===== BEP-019: Optional colon in function parameters =====
+// Single param without colon
+function NoColonSingle(x int) -> int {
+    x
+}
+
+// Multiple params without colons
+function NoColonMultiple(a int, b string, c bool) -> int {
+    a
+}
+
+// Mixed colons and no colons
+function MixedColons(a: int, b string, c: bool) -> int {
+    a
+}
+
+// Complex types without colons
+function NoColonComplexTypes(items int[], mapping map<string, int>) -> string {
+    "done"
+}

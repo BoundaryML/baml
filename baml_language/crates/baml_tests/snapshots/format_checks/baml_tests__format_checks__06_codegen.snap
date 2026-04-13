@@ -3936,6 +3936,11 @@ function user.Minimal() -> int {
     return
 }
 
+function user.MixedColons(a: int, b: string, c: bool) -> int {
+    load_var a
+    return
+}
+
 function user.MixedValuesClient$new() -> null {
     alloc_instance baml.llm.PrimitiveClient
     load_const "MixedValuesClient"
@@ -4211,6 +4216,21 @@ function user.NestedLoops(matrix: int[][]) -> int {
     bin_op +
     store_var __for_idx_1
     jump L3
+}
+
+function user.NoColonComplexTypes(items: int[], mapping: map<string, int>) -> string {
+    load_const "done"
+    return
+}
+
+function user.NoColonMultiple(a: int, b: string, c: bool) -> int {
+    load_var a
+    return
+}
+
+function user.NoColonSingle(x: int) -> int {
+    load_var x
+    return
 }
 
 function user.OtherExprs(a: int, b: int) -> int {

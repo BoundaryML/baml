@@ -436,7 +436,8 @@ impl Printable for FunctionParamList {
 #[derive(Debug)]
 pub struct FunctionParam {
     pub name: t::Word,
-    pub ty: Option<(t::Colon, Type)>,
+    /// Type annotation with optional colon (colon is optional per BEP-019).
+    pub ty: Option<(Option<t::Colon>, Type)>,
 }
 
 impl FromCST for FunctionParam {
@@ -448,9 +449,13 @@ impl FromCST for FunctionParam {
 
         let name = it.expect_parse()?;
 
-        let ty = if let Some(colon_elem) = it.next_if_kind(SyntaxKind::COLON) {
-            let colon = t::Colon::from_cst(colon_elem)?;
-            Some((colon, it.expect_parse()?))
+        let colon = it
+            .next_if_kind(SyntaxKind::COLON)
+            .map(t::Colon::from_cst)
+            .transpose()?;
+        let ty = if it.peek().map(SyntaxElement::kind) == Some(SyntaxKind::TYPE_EXPR) {
+            let elem = it.next().expect("peeked");
+            Some((colon, Type::from_cst(elem)?))
         } else {
             // No type annotation (e.g. `self`)
             None
@@ -473,9 +478,14 @@ impl Printable for FunctionParam {
         printer.print_raw_token(&self.name);
         if let Some((colon, ty)) = &self.ty {
             let mut trivia_len = 0;
-            let (_, colon_trailing) = printer.trivia.get_for_range_split(colon.span());
-            printer.print_str(": ");
-            trivia_len += printer.print_trivia_squished(colon_trailing);
+            // Colon is optional per BEP-019; synthesize if absent
+            if let Some(colon) = colon {
+                let (_, colon_trailing) = printer.trivia.get_for_range_split(colon.span());
+                printer.print_str(": ");
+                trivia_len += printer.print_trivia_squished(colon_trailing);
+            } else {
+                printer.print_str(": ");
+            }
             let ty_leading = printer.trivia.get_leading_for_element(ty);
             trivia_len += printer.print_trivia_squished(ty_leading);
 

@@ -1030,6 +1030,26 @@ function user.F() -> int throws never {
     1 : 1
   }
 }
+function user.NoColonSingle(x: int) -> int throws never {
+  { : int
+    x : int
+  }
+}
+function user.NoColonMultiple(a: int, b: string, c: bool) -> int throws never {
+  { : int
+    a : int
+  }
+}
+function user.MixedColons(a: int, b: string, c: bool) -> int throws never {
+  { : int
+    a : int
+  }
+}
+function user.NoColonComplexTypes(items: int[], mapping: map<string, int>) -> string throws never {
+  { : "done"
+    "done" : "done"
+  }
+}
 function user.MyFunction(a: int, b: int) -> int throws never {
   { : 1
     if (a > b : bool) : void

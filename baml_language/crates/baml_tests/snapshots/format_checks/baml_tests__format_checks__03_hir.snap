@@ -442,6 +442,9 @@ function user.ManyParams(first_parameter: int, second_parameter: string, third_p
 function user.Minimal() -> int  [expr] {
   {  } 1
 }
+function user.MixedColons(a: int, b: string, c: bool) -> int  [expr] {
+  {  } a
+}
 function user.MultiParamTrivia(a: int, b: string) -> int  [expr] {
   {  } a
 }
@@ -459,6 +462,15 @@ function user.NestedGenericReturn() -> map<string, map<string, map<string, int |
 }
 function user.NestedLoops(matrix: int[][]) -> int  [expr] {
   { let total = 0; for row in matrix { for val in row { if (val Lt 0) { continue }; if (val Gt 1000) { break }; let processed = match (val Mod 3) { 0 => val Mul 2, 1 => val Add 1, _ => val }; total Add= processed } }; return total }
+}
+function user.NoColonComplexTypes(items: int[], mapping: map<string, int>) -> string  [expr] {
+  {  } "done"
+}
+function user.NoColonMultiple(a: int, b: string, c: bool) -> int  [expr] {
+  {  } a
+}
+function user.NoColonSingle(x: int) -> int  [expr] {
+  {  } x
 }
 function user.SingleParam(x: int) -> int  [expr] {
   {  } x
