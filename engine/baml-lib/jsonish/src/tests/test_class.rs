@@ -1675,3 +1675,87 @@ test_deserializer!(
     "skip_this_one": null
   }
 );
+
+// Test case courtesy of https://discord.com/channels/1119368998161752075/1486485390599913514
+test_deserializer!(
+    test_class_with_braces_in_string_value,
+    r#"
+    class ExtractedResult {
+        required_literals string[]
+        optional_literals string[]
+        explanation string
+    }
+    "#,
+    r#"I'll analyze the parser systematically, tracing each literal string used in matching/validation logic.
+
+## Analysis
+
+### Structure Detection
+
+The parser splits on `' - '` and checks `parts[1].strip() == 'aaaaaa'` to detect the optional logger field.
+
+- `' - '` — delimiter used in `split()` and rejoin; **required** as the field separator
+- `'aaaaaa'` — exact match on `parts[1]`; triggers the 6-part path but is **optional** (the 5-part path without it also succeeds)
+
+### Timestamp Extraction (`extract_timestamp`)
+
+```python
+pattern = r'^(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\s+[+-]\d{4})'
+```
+- All components are regex patterns (digit groups, whitespace, character classes) — **no literal strings** here, only patterns.
+
+### Timestamp Validation (`validate_timestamp`)
+
+```python
+r'^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(\s*(Z|[+-]\d{2}:?\d{2}))?$'
+r'^\d{10,13}$'
+```
+- `'Z'` appears as a literal alternative in the regex, but the extractor already requires `[+-]\d{4}` format, so `Z` is never actually reached from a valid extracted timestamp. Regardless, it's a regex literal alternative, not a log literal.
+- No fixed literal strings required.
+
+### `validate_logger`
+
+```python
+return value == "aaaaaa"
+```
+- `"aaaaaa"` — only checked when `has_logger` is `True`, which itself required `parts[1].strip() == 'aaaaaa'`. So `aaaaaa` is **optional** (its absence is the no-logger path).
+
+### `validate_level`
+
+```python
+return value == "WARNING"
+```
+- `"WARNING"` — this is a **required** field in both structural paths (parts[1] without logger, parts[2] with logger). Parsing raises `ValueError` if it doesn't match.
+
+### Field Assignments (repository, sensor, message)
+
+These are validated only for being non-empty strings — **no literal content required**.
+
+### Summary of Literal Roles
+
+| Literal | Role | Required? |
+|---|---|---|
+| `' - '` | Field delimiter (split + rejoin) | Yes — without it, no valid segmentation |
+| `'AAAAAA'` | Exact match for `level` field | Yes — `validate_level` raises on mismatch |
+| `'aaaaaa'` | Exact match for optional `logger` field | No — absent logger path is valid |
+
+```json
+{
+  "required_literals": [
+    " - ",
+    "AAAAAA"
+  ],
+  "optional_literals": [
+    "aaaaaa"
+  ],
+  "explanation": "The parser splits the log line on ' - ' to produce positional segments, making it a required delimiter — without it, the line cannot be segmented into the minimum 5 fields. 'WARNING' is a required literal because validate_level() performs an exact equality check (value == 'WARNING') and raises ValueError on any other value, in both the with-logger and without-logger structural paths. 'aaaaaa' is optional: its presence in parts[1] triggers the 6-part path (with logger), but its absence triggers the equally valid 5-part path (without logger); parsing succeeds either way. No JSON field names are involved (this is a text parser). No other regex literal components are required — all other patterns use only digit groups, whitespace matchers, and character classes with no fixed literal substrings that must appear in the log."
+}
+```
+"#,
+    TypeIR::class("ExtractedResult"),
+    {
+        "required_literals": [" - ", "AAAAAA"],
+        "optional_literals": ["aaaaaa"],
+        "explanation": "The parser splits the log line on ' - ' to produce positional segments, making it a required delimiter — without it, the line cannot be segmented into the minimum 5 fields. 'WARNING' is a required literal because validate_level() performs an exact equality check (value == 'WARNING') and raises ValueError on any other value, in both the with-logger and without-logger structural paths. 'aaaaaa' is optional: its presence in parts[1] triggers the 6-part path (with logger), but its absence triggers the equally valid 5-part path (without logger); parsing succeeds either way. No JSON field names are involved (this is a text parser). No other regex literal components are required — all other patterns use only digit groups, whitespace matchers, and character classes with no fixed literal substrings that must appear in the log."
+    }
+);
