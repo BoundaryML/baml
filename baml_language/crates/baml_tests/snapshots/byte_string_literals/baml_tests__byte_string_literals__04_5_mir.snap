@@ -15,10 +15,6 @@ fn user.ByteStringBasic() -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -56,10 +52,6 @@ fn user.ByteStringEmpty() -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -95,10 +87,6 @@ fn user.ByteStringHexEscapes() -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -131,10 +119,6 @@ fn user.ByteStringInCondition() -> int {
     }
 
     bb4: {
-        goto -> bb5;
-    }
-
-    bb5: {
         return;
     }
 }
@@ -152,10 +136,6 @@ fn user.ByteStringIndexAccess() -> int? {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -171,10 +151,6 @@ fn user.ByteStringLiteralAsArg() -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -195,10 +171,6 @@ fn user.ByteStringMutate() -> int? {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -213,10 +185,6 @@ fn user.ByteStringPassAndReturn(data: uint8array) -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -234,10 +202,6 @@ fn user.ByteStringStandardEscapes() -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }

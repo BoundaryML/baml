@@ -9,12 +9,10 @@ function user.RootAliasParam(cfg: Config) -> string {
 
 function user.RootConstruct(key: string) -> Config {
     alloc_instance Config
-    copy 0
     load_var key
-    store_field .key
-    copy 0
+    init_field .key
     load_const "prod"
-    store_field .env
+    init_field .env
     return
 }
 
@@ -35,11 +33,6 @@ function user.RootEnumMatch(s: Status) -> string {
     jump L2
 
   L1:
-    load_var s
-    load_const user.Status.Pending
-    alloc_variant user.Status
-    cmp_op ==
-    pop_jump_if_false L4
     load_const "pending"
     jump L4
 
@@ -73,40 +66,32 @@ function user.RootMixedConfigs(root_cfg: Config, llm_cfg: llm.Config) -> string 
 
 function user.RootThrowClass(x: int) -> string {
     load_var x
-    copy 0
     load_const 0
     cmp_op ==
     pop_jump_if_false L0
-    pop 1
     jump L1
 
   L0:
-    pop 1
     load_const "ok"
     return
 
   L1:
     alloc_instance Error
-    copy 0
     load_const 500
-    store_field .code
-    copy 0
+    init_field .code
     load_const "root error"
-    store_field .message
+    init_field .message
     throw
 }
 
 function user.RootThrowEnum(x: int) -> string {
     load_var x
-    copy 0
     load_const 0
     cmp_op ==
     pop_jump_if_false L0
-    pop 1
     jump L1
 
   L0:
-    pop 1
     load_const "ok"
     return
 
@@ -160,35 +145,30 @@ function user.auth.AuthAliasParam(t: void) -> string {
 
 function user.auth.AuthConstruct(provider: string) -> Config {
     alloc_instance Config
-    copy 0
     load_var provider
-    store_field .key
-    copy 0
+    init_field .key
     load_const "s3cret"
-    store_field .env
+    init_field .env
     return
 }
 
 function user.auth.AuthEnumMatch(r: void) -> string {
     load_var r
     discriminant
-    copy 0
     load_const Role.Admin
     cmp_op ==
     pop_jump_if_false L0
-    pop 1
     jump L3
 
   L0:
-    copy 0
+    load_var r
+    discriminant
     load_const Role.User
     cmp_op ==
     pop_jump_if_false L1
-    pop 1
     jump L2
 
   L1:
-    pop 1
     load_const "guest"
     jump L4
 
@@ -216,13 +196,11 @@ function user.auth.AuthIdentity(cfg: Config) -> Config {
 
 function user.auth.AuthMakeToken(v: string) -> void {
     alloc_instance Token
-    copy 0
     load_var v
-    store_field .value
-    copy 0
+    init_field .value
     load_const user.auth.Role.User
     alloc_variant user.auth.Role
-    store_field .role
+    init_field .role
     return
 }
 
@@ -241,10 +219,6 @@ function user.auth.AuthMatchesLlmStatus(s: llm.Status) -> string {
     jump L2
 
   L1:
-    load_var s
-    load_const undefined_enum::user.auth.root.llm.Status.Done
-    cmp_op ==
-    pop_jump_if_false L4
     load_const "done"
     jump L4
 
@@ -274,10 +248,6 @@ function user.auth.AuthMatchesRootStatus(s: Status) -> string {
     jump L2
 
   L1:
-    load_var s
-    load_const undefined_enum::user.auth.root.Status.Pending
-    cmp_op ==
-    pop_jump_if_false L4
     load_const "pending"
     jump L4
 
@@ -306,40 +276,32 @@ function user.auth.AuthMixedErrors(auth_err: Error, root_err: Error, llm_err: ll
 
 function user.auth.AuthThrowClass(x: int) -> string {
     load_var x
-    copy 0
     load_const 0
     cmp_op ==
     pop_jump_if_false L0
-    pop 1
     jump L1
 
   L0:
-    pop 1
     load_const "ok"
     return
 
   L1:
     alloc_instance Error
-    copy 0
     load_const "auth failed"
-    store_field .code
-    copy 0
+    init_field .code
     load_const true
-    store_field .message
+    init_field .message
     throw
 }
 
 function user.auth.AuthThrowEnum(x: int) -> string {
     load_var x
-    copy 0
     load_const 0
     cmp_op ==
     pop_jump_if_false L0
-    pop 1
     jump L1
 
   L0:
-    pop 1
     load_const "ok"
     return
 
@@ -351,26 +313,21 @@ function user.auth.AuthThrowEnum(x: int) -> string {
 
 function user.auth.AuthThrowsRootError(x: int) -> string {
     load_var x
-    copy 0
     load_const 0
     cmp_op ==
     pop_jump_if_false L0
-    pop 1
     jump L1
 
   L0:
-    pop 1
     load_const "ok"
     return
 
   L1:
     alloc_instance Error
-    copy 0
     load_const 403
-    store_field .code
-    copy 0
+    init_field .code
     load_const "forbidden"
-    store_field .message
+    init_field .message
     throw
 }
 
@@ -418,35 +375,30 @@ function user.llm.LlmAliasParam(cfg: Config) -> string {
 
 function user.llm.LlmConstruct(model: string) -> Config {
     alloc_instance Config
-    copy 0
     load_var model
-    store_field .key
-    copy 0
+    init_field .key
     load_const 0.7
-    store_field .env
+    init_field .env
     return
 }
 
 function user.llm.LlmEnumMatch(s: Status) -> string {
     load_var s
     discriminant
-    copy 0
     load_const Status.Ready
     cmp_op ==
     pop_jump_if_false L0
-    pop 1
     jump L3
 
   L0:
-    copy 0
+    load_var s
+    discriminant
     load_const Status.Generating
     cmp_op ==
     pop_jump_if_false L1
-    pop 1
     jump L2
 
   L1:
-    pop 1
     load_const "done"
     jump L4
 
@@ -487,10 +439,6 @@ function user.llm.LlmMatchesRootStatus(s: Status) -> string {
     jump L2
 
   L1:
-    load_var s
-    load_const undefined_enum::user.llm.root.Status.Pending
-    cmp_op ==
-    pop_jump_if_false L4
     load_const "pending"
     jump L4
 
@@ -513,51 +461,41 @@ function user.llm.LlmMixedConfigs(llm_cfg: Config, root_cfg: Config, auth_cfg: a
 
 function user.llm.LlmResponseConstruct(text: string) -> void {
     alloc_instance Response
-    copy 0
     load_var text
-    store_field .text
-    copy 0
+    init_field .text
     load_const 42
-    store_field .tokens
+    init_field .tokens
     return
 }
 
 function user.llm.LlmThrowClass(x: int) -> string {
     load_var x
-    copy 0
     load_const 0
     cmp_op ==
     pop_jump_if_false L0
-    pop 1
     jump L1
 
   L0:
-    pop 1
     load_const "ok"
     return
 
   L1:
     alloc_instance Error
-    copy 0
     load_const "llm failed"
-    store_field .code
-    copy 0
+    init_field .code
     load_const true
-    store_field .message
+    init_field .message
     throw
 }
 
 function user.llm.LlmThrowEnum(x: int) -> string {
     load_var x
-    copy 0
     load_const 0
     cmp_op ==
     pop_jump_if_false L0
-    pop 1
     jump L1
 
   L0:
-    pop 1
     load_const "ok"
     return
 
@@ -569,15 +507,12 @@ function user.llm.LlmThrowEnum(x: int) -> string {
 
 function user.llm.LlmThrowsRootEnum(x: int) -> string {
     load_var x
-    copy 0
     load_const 0
     cmp_op ==
     pop_jump_if_false L0
-    pop 1
     jump L1
 
   L0:
-    pop 1
     load_const "ok"
     return
 
@@ -589,26 +524,21 @@ function user.llm.LlmThrowsRootEnum(x: int) -> string {
 
 function user.llm.LlmThrowsRootError(x: int) -> string {
     load_var x
-    copy 0
     load_const 0
     cmp_op ==
     pop_jump_if_false L0
-    pop 1
     jump L1
 
   L0:
-    pop 1
     load_const "ok"
     return
 
   L1:
     alloc_instance Error
-    copy 0
     load_const 404
-    store_field .code
-    copy 0
+    init_field .code
     load_const "not found"
-    store_field .message
+    init_field .message
     throw
 }
 
@@ -662,35 +592,30 @@ function user.llm.LlmUsesRootStatus() -> Status {
 
 function user.llm.openai.OpenAIConstruct(key: string) -> void {
     alloc_instance Client
-    copy 0
     load_var key
-    store_field .api_key
-    copy 0
+    init_field .api_key
     load_const "org-123"
-    store_field .org_id
+    init_field .org_id
     return
 }
 
 function user.llm.openai.OpenAIEnumMatch(m: void) -> string {
     load_var m
     discriminant
-    copy 0
     load_const Model.GPT4o
     cmp_op ==
     pop_jump_if_false L0
-    pop 1
     jump L3
 
   L0:
-    copy 0
+    load_var m
+    discriminant
     load_const Model.GPT4oMini
     cmp_op ==
     pop_jump_if_false L1
-    pop 1
     jump L2
 
   L1:
-    pop 1
     load_const "o3"
     jump L4
 
@@ -731,10 +656,6 @@ function user.llm.openai.OpenAIMatchesAuthRole(r: auth.Role) -> string {
     jump L2
 
   L1:
-    load_var r
-    load_const undefined_enum::user.llm.openai.root.auth.Role.Guest
-    cmp_op ==
-    pop_jump_if_false L4
     load_const "guest"
     jump L4
 
@@ -764,10 +685,6 @@ function user.llm.openai.OpenAIMatchesLlmStatus(s: llm.Status) -> string {
     jump L2
 
   L1:
-    load_var s
-    load_const undefined_enum::user.llm.openai.root.llm.Status.Done
-    cmp_op ==
-    pop_jump_if_false L4
     load_const "done"
     jump L4
 
@@ -797,10 +714,6 @@ function user.llm.openai.OpenAIMatchesRootStatus(s: Status) -> string {
     jump L2
 
   L1:
-    load_var s
-    load_const undefined_enum::user.llm.openai.root.Status.Pending
-    cmp_op ==
-    pop_jump_if_false L4
     load_const "pending"
     jump L4
 
@@ -824,23 +737,20 @@ function user.llm.openai.OpenAIMixedErrors(openai_err: Error, root_err: Error, l
 function user.llm.openai.OpenAIMixedModels(openai_model: void, llm_model: llm.Model) -> string {
     load_var openai_model
     discriminant
-    copy 0
     load_const Model.GPT4o
     cmp_op ==
     pop_jump_if_false L0
-    pop 1
     jump L3
 
   L0:
-    copy 0
+    load_var openai_model
+    discriminant
     load_const Model.GPT4oMini
     cmp_op ==
     pop_jump_if_false L1
-    pop 1
     jump L2
 
   L1:
-    pop 1
     load_const "o3"
     jump L4
 
@@ -857,40 +767,32 @@ function user.llm.openai.OpenAIMixedModels(openai_model: void, llm_model: llm.Mo
 
 function user.llm.openai.OpenAIThrowClass(x: int) -> string {
     load_var x
-    copy 0
     load_const 0
     cmp_op ==
     pop_jump_if_false L0
-    pop 1
     jump L1
 
   L0:
-    pop 1
     load_const "ok"
     return
 
   L1:
     alloc_instance Error
-    copy 0
     load_const 429
-    store_field .code
-    copy 0
+    init_field .code
     load_const "rate limited"
-    store_field .message
+    init_field .message
     throw
 }
 
 function user.llm.openai.OpenAIThrowEnum(x: int) -> string {
     load_var x
-    copy 0
     load_const 0
     cmp_op ==
     pop_jump_if_false L0
-    pop 1
     jump L1
 
   L0:
-    pop 1
     load_const "ok"
     return
 

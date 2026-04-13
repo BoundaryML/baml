@@ -58,6 +58,7 @@ pub(crate) mod support {
             TypeExpr::Bool { .. } => "bool".into(),
             TypeExpr::Null { .. } => "null".into(),
             TypeExpr::Never { .. } => "never".into(),
+            TypeExpr::Void { .. } => "void".into(),
             TypeExpr::Uint8Array { .. } => "uint8array".into(),
             TypeExpr::Media { kind: k, .. } => format!("{:?}", k).to_lowercase(),
             TypeExpr::Optional { inner, .. } => {
@@ -656,10 +657,6 @@ pub(crate) mod support {
             Stmt::Continue => {
                 writeln!(output, "{pad}continue").ok();
             }
-            Stmt::Assert { condition } => {
-                let desc = expr_desc(*condition, body);
-                writeln!(output, "{pad}assert {desc}").ok();
-            }
             Stmt::Missing | Stmt::HeaderComment { .. } => {}
         }
     }
@@ -800,10 +797,6 @@ pub(crate) mod support {
                 let val_desc = expr_desc(*value, body);
                 let val_ty = expr_ty(inference, *value);
                 writeln!(output, "{pad}{target_desc} {op:?}= {val_desc} : {val_ty}").ok();
-            }
-            Stmt::Assert { condition } => {
-                let desc = expr_desc(*condition, body);
-                writeln!(output, "{pad}assert {desc}").ok();
             }
             Stmt::Break => {
                 writeln!(output, "{pad}break").ok();
@@ -1195,6 +1188,7 @@ pub(crate) mod support {
                 baml_compiler2_ast::TypeExpr::Bool { .. } => "bool".into(),
                 baml_compiler2_ast::TypeExpr::Null { .. } => "null".into(),
                 baml_compiler2_ast::TypeExpr::Never { .. } => "never".into(),
+                baml_compiler2_ast::TypeExpr::Void { .. } => "void".into(),
                 baml_compiler2_ast::TypeExpr::Uint8Array { .. } => "uint8array".into(),
                 baml_compiler2_ast::TypeExpr::Media { kind: k, .. } => {
                     format!("{:?}", k).to_lowercase()
@@ -1564,12 +1558,6 @@ pub(crate) mod support {
                     expr_desc_hir(*target, body, prefix, local_type_names),
                     expr_desc_hir(*value, body, prefix, local_type_names)
                 ),
-                Stmt::Assert { condition } => {
-                    format!(
-                        "assert {}",
-                        expr_desc_hir(*condition, body, prefix, local_type_names)
-                    )
-                }
                 Stmt::Break => "break".into(),
                 Stmt::Continue => "continue".into(),
                 Stmt::HeaderComment { name, level } => format!("// [{level}] {name}"),

@@ -20,9 +20,9 @@ function user.Broken.BadUnionPattern(x: int | bool) -> string throws never {
   !! 664..669: unresolved type: b
   !! 664..669: unresolved type: b
   !! 664..669: unresolved type: b
-  !! 619..675: unresolved type: bool
+  !! 664..669: unresolved type: b
+  !! 664..669: unresolved type: b
   !! 619..675: unreachable arm
-  !! 619..675: unresolved type: bool
 }
 function user.Broken.MixedLiteralAndTyped(x: int) -> string throws never {
   { : "mixed"

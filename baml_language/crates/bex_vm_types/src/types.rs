@@ -267,6 +267,12 @@ pub struct Function {
     /// Function name.
     pub name: String,
 
+    /// Source file path where this function is defined.
+    ///
+    /// Set at emit time for bytecode functions. Empty string for builtins and
+    /// synthesized functions that have no source file.
+    pub source_file: String,
+
     /// Number of arguments the function accepts.
     pub arity: usize,
 
@@ -318,6 +324,11 @@ pub struct Function {
 
     /// Parameter types in declaration order.
     pub param_types: Vec<Ty>,
+
+    /// Inferred throws type — the union of all types this function (and its callees)
+    /// may throw. `None` if the function never throws. Used by the engine to convert
+    /// uncaught throw values to `BexExternalValue`.
+    pub throws_type: Option<Ty>,
 
     /// LLM-specific metadata (prompt template, client name). `None` for non-LLM functions.
     pub body_meta: Option<FunctionMeta>,
@@ -512,6 +523,13 @@ impl std::fmt::Display for Value {
         }
     }
 }
+
+// Error class / instance enums — generated from `errors.baml` class definitions.
+// ErrorClass (tag enum), ErrorInstance (with Value fields), associated methods.
+include!(concat!(env!("OUT_DIR"), "/errors_generated.rs"));
+// Panic class / instance enums — generated from `panics.baml` class definitions.
+// PanicClass (tag enum), PanicInstance (with Value fields), associated methods.
+include!(concat!(env!("OUT_DIR"), "/panics_generated.rs"));
 
 // ============================================================================
 // Test Cases

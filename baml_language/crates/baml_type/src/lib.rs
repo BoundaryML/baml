@@ -51,6 +51,14 @@ impl TypeName {
     ///
     /// The last segment becomes `name`, everything before it becomes `module_path`,
     /// and `display_name` is the full dotted path.
+    /// Returns `true` if this type lives in the `baml.panics` namespace.
+    pub fn is_panic_type(&self) -> bool {
+        // module_path is [package, namespace...], so split into package + rest.
+        self.module_path
+            .first()
+            .is_some_and(|pkg| baml_base::is_panic_namespace(pkg.as_str(), &self.module_path[1..]))
+    }
+
     pub fn from_dotted_path(path: &str) -> Self {
         let segments: Vec<&str> = path.split('.').collect();
         let name = Name::new(*segments.last().expect("path must be non-empty"));

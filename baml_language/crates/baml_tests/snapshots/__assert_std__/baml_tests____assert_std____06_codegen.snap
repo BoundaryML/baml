@@ -1,0 +1,78 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+function assert.contains(haystack: string, needle: string) -> null {
+    load_var haystack
+    load_var needle
+    call baml.String.includes
+    unary_op !
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const null
+    jump L2
+
+  L1:
+    load_const "assertion failed: string does not contain expected substring"
+    call baml.sys.panic
+
+  L2:
+    return
+}
+
+function assert.equal(actual: unknown, expected: unknown) -> null {
+    load_var actual
+    load_var expected
+    cmp_op !=
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const null
+    jump L2
+
+  L1:
+    load_const "assertion failed: expected equal values"
+    call baml.sys.panic
+
+  L2:
+    return
+}
+
+function assert.is_true(condition: bool) -> null {
+    load_var condition
+    unary_op !
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const null
+    jump L2
+
+  L1:
+    load_const "assertion failed: expected true"
+    call baml.sys.panic
+
+  L2:
+    return
+}
+
+function assert.not_null(value: unknown?) -> null {
+    load_var value
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const null
+    jump L2
+
+  L1:
+    load_const "assertion failed: expected non-null value"
+    call baml.sys.panic
+
+  L2:
+    return
+}

@@ -24,6 +24,9 @@ pub struct NativeBuiltin {
     /// How the method uses the VM parameter, determined by `//baml:vm` or `//baml:mut_vm`
     /// directives. Mutually exclusive with `receiver.is_mut` (enforced at extraction time).
     pub vm_usage: VmUsage,
+    /// When true, the trait method returns `NativeCallResult` directly instead of
+    /// `Result<T, VmRustFnError>`. Set by `//baml:may_yield` directive.
+    pub may_yield: bool,
     /// Which pipeline this builtin belongs to.
     pub pipeline: BuiltinPipeline,
     /// Error categories from `throws` clause (IO only). E.g. `["Io", "Timeout"]`.

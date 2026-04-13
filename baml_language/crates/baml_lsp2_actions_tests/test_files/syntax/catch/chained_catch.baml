@@ -1,4 +1,4 @@
-// Multiple catch clauses chained on same expression — no diagnostics expected
+// Multiple catch clauses chained on same expression — unreachable because MayFail never throws
 function MayFail(x: int) -> string {
   "ok"
 }
@@ -24,7 +24,7 @@ function TripleChainedCatch(x: int) -> string {
 
 //----
 //- diagnostics
-// Error: unreachable arm
+// Warning: unreachable arm
 //    ╭─[ catch_chained_catch.baml:8:20 ]
 //    │
 //  8 │ ╭─▶     _: string => "string error"
@@ -34,7 +34,7 @@ function TripleChainedCatch(x: int) -> string {
 //    │     
 //    │     Note: Error code: E0001
 // ───╯
-// Error: unreachable arm
+// Warning: unreachable arm
 //     ╭─[ catch_chained_catch.baml:10:17 ]
 //     │
 //  10 │ ╭─▶     _: int => "int error"
@@ -44,7 +44,7 @@ function TripleChainedCatch(x: int) -> string {
 //     │     
 //     │     Note: Error code: E0001
 // ────╯
-// Error: unreachable arm
+// Warning: unreachable arm
 //     ╭─[ catch_chained_catch.baml:17:20 ]
 //     │
 //  17 │ ╭─▶     _: string => "first"
@@ -54,7 +54,7 @@ function TripleChainedCatch(x: int) -> string {
 //     │     
 //     │     Note: Error code: E0001
 // ────╯
-// Error: unreachable arm
+// Warning: unreachable arm
 //     ╭─[ catch_chained_catch.baml:19:17 ]
 //     │
 //  19 │ ╭─▶     _: int => "second"
@@ -64,7 +64,7 @@ function TripleChainedCatch(x: int) -> string {
 //     │     
 //     │     Note: Error code: E0001
 // ────╯
-// Error: unreachable arm
+// Warning: unreachable arm
 //     ╭─[ catch_chained_catch.baml:21:12 ]
 //     │
 //  21 │ ╭─▶     _ => "third"

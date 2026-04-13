@@ -9,7 +9,7 @@
 //! all of that moves downstream.
 
 use baml_base::Name;
-use baml_compiler_syntax::{SyntaxNode, ast};
+use baml_compiler_syntax::{SyntaxKind, SyntaxNode, ast};
 use rowan::ast::AstNode;
 
 use crate::{
@@ -24,6 +24,34 @@ use crate::{
     lower_expr_body, lower_type_expr,
 };
 
+// ── Test/Testset desugaring intermediate types ───────────────────
+
+/// Intermediate representation of a test/testset block before synthesis.
+///
+/// Collected during file lowering, then passed to `synthesize_init_test_function`
+/// which emits a per-file `$init_test_<file_id>` function containing
+/// `registry.register_test(...)` / `registry.register_test_set(...)` calls.
+enum TestRegistrationItem {
+    Test {
+        /// The name expression CST element (`STRING_LITERAL`, `BINARY_EXPR`, etc.).
+        name_element: baml_compiler_syntax::SyntaxElement,
+        /// The `BLOCK_EXPR` CST node for the test body — lowered lazily into a lambda.
+        body_node: SyntaxNode,
+        /// Optional runner expression element from `with <expr>`.
+        /// May be a node (e.g. `CALL_EXPR`) or a token (e.g. `INTEGER_LITERAL`).
+        runner_element: Option<baml_compiler_syntax::SyntaxElement>,
+    },
+    TestSet {
+        /// The name expression CST element (`STRING_LITERAL`, `BINARY_EXPR`, etc.).
+        name_element: baml_compiler_syntax::SyntaxElement,
+        /// The `BLOCK_EXPR` body node of the testset — lowered as a collector lambda body.
+        /// May contain setup statements (let bindings), for/if blocks, and nested test/testset.
+        body_node: SyntaxNode,
+        /// Optional runner expression element from `with <expr>`.
+        runner_element: Option<baml_compiler_syntax::SyntaxElement>,
+    },
+}
+
 // ── File-level lowering ─────────────────────────────────────────
 
 /// Lower a CST root node to a list of `Item`s.
@@ -34,8 +62,16 @@ use crate::{
 /// All diagnostics (structural lowering issues, client validation,
 /// field-attr-in-wrong-position) are returned as `LoweringDiagnostic` variants.
 pub fn lower_file(root: &SyntaxNode) -> (Vec<Item>, Vec<LoweringDiagnostic>) {
+    lower_file_with_file_id(root, baml_base::FileId::sentinel())
+}
+
+pub fn lower_file_with_file_id(
+    root: &SyntaxNode,
+    file_id: baml_base::FileId,
+) -> (Vec<Item>, Vec<LoweringDiagnostic>) {
     let mut diags = Vec::new();
     let mut items = Vec::new();
+    let mut test_registrations: Vec<TestRegistrationItem> = Vec::new();
 
     for child in root.children() {
         match child.kind() {
@@ -74,6 +110,16 @@ pub fn lower_file(root: &SyntaxNode) -> (Vec<Item>, Vec<LoweringDiagnostic>) {
                     items.push(Item::Test(t));
                 }
             }
+            baml_compiler_syntax::SyntaxKind::TEST_EXPR_DEF => {
+                if let Some(reg) = lower_test_expr(&child) {
+                    test_registrations.push(reg);
+                }
+            }
+            baml_compiler_syntax::SyntaxKind::TESTSET_DEF => {
+                if let Some(reg) = lower_testset(&child) {
+                    test_registrations.push(reg);
+                }
+            }
             baml_compiler_syntax::SyntaxKind::GENERATOR_DEF => {
                 if let Some(g) = lower_generator(&child, &mut diags) {
                     items.push(Item::Generator(g));
@@ -91,6 +137,13 @@ pub fn lower_file(root: &SyntaxNode) -> (Vec<Item>, Vec<LoweringDiagnostic>) {
             }
             _ => {} // skip comments, whitespace, errors
         }
+    }
+
+    // Synthesize a per-file $init_test function for all collected test/testset registrations.
+    // The file_id suffix ensures uniqueness when multiple files contain tests.
+    if !test_registrations.is_empty() {
+        let init_fn = synthesize_init_test_function(&test_registrations, file_id, &mut diags);
+        items.push(Item::Function(init_fn));
     }
 
     // Post-lowering validation: reject field attrs in invalid type positions.
@@ -140,6 +193,14 @@ fn lower_function(node: &SyntaxNode, diags: &mut Vec<LoweringDiagnostic>) -> Opt
         let expr = lower_type_expr::lower_type_expr_node(&te);
         let te_span = te.syntax().text_range();
         check_unknown_type(&expr, format!("return type of `{name}`"), te_span, diags);
+        // void is allowed as a bare return type, but not wrapped (void?, void[], etc.).
+        lower_type_expr::check_void_type(
+            &expr,
+            format!("return type of `{name}`"),
+            te_span,
+            true,
+            diags,
+        );
         SpannedTypeExpr {
             expr,
             span: te_span,
@@ -259,6 +320,13 @@ pub(crate) fn lower_param(
                 &expr,
                 format!("parameter `{param_name_str}` in `{function_name}`"),
                 te_span,
+                diags,
+            );
+            lower_type_expr::check_void_type(
+                &expr,
+                "a parameter type".to_string(),
+                te_span,
+                false,
                 diags,
             );
             SpannedTypeExpr {
@@ -558,6 +626,13 @@ fn lower_class(
                     te_span,
                     diags,
                 );
+                lower_type_expr::check_void_type(
+                    &expr,
+                    "a class field type".to_string(),
+                    te_span,
+                    false,
+                    diags,
+                );
 
                 // Hoist field attrs from the outermost TypeExpr to FieldDef.
                 // Only attrs that are direct ATTRIBUTE children of the outermost
@@ -701,6 +776,13 @@ fn lower_type_alias(
             let expr = lower_type_expr::lower_type_expr_node(&te);
             let te_span = te.syntax().text_range();
             check_unknown_type(&expr, format!("type alias `{alias_name}`"), te_span, diags);
+            lower_type_expr::check_void_type(
+                &expr,
+                "a type alias".to_string(),
+                te_span,
+                false,
+                diags,
+            );
             SpannedTypeExpr {
                 expr,
                 span: te_span,
@@ -733,6 +815,343 @@ fn lower_test(node: &SyntaxNode, diags: &mut Vec<LoweringDiagnostic>) -> Option<
         span: node.text_range(),
         name_span: name_token.text_range(),
     })
+}
+
+/// Extract the name expression element from a `TEST_EXPR_DEF` or `TESTSET_DEF` node.
+///
+/// Returns the first non-trivial child (node or token) after the keyword
+/// (`KW_TEST` or `KW_TESTSET`) and before `KW_WITH` or `BLOCK_EXPR`.
+fn extract_name_element(
+    node: &SyntaxNode,
+    keyword_kind: SyntaxKind,
+) -> Option<baml_compiler_syntax::SyntaxElement> {
+    let mut past_keyword = false;
+    for child in node.children_with_tokens() {
+        let kind = child.kind();
+        // Skip whitespace/newline trivia
+        if matches!(
+            kind,
+            SyntaxKind::WHITESPACE | SyntaxKind::NEWLINE | SyntaxKind::LINE_COMMENT
+        ) {
+            continue;
+        }
+        if kind == keyword_kind {
+            past_keyword = true;
+            continue;
+        }
+        if past_keyword && kind != SyntaxKind::KW_WITH && kind != SyntaxKind::BLOCK_EXPR {
+            return Some(child);
+        }
+        if kind == SyntaxKind::KW_WITH || kind == SyntaxKind::BLOCK_EXPR {
+            break;
+        }
+    }
+    None
+}
+
+/// Extract the runner expression element from a `TEST_EXPR_DEF` or `TESTSET_DEF` node.
+///
+/// Returns the first non-trivial child (node or token) that appears after `KW_WITH` and
+/// before `BLOCK_EXPR`. This uses `children_with_tokens()` because the runner expression
+/// may be a bare token (e.g. `INTEGER_LITERAL "42"`) rather than a wrapped node.
+pub(crate) fn extract_runner_element(
+    node: &SyntaxNode,
+) -> Option<baml_compiler_syntax::SyntaxElement> {
+    let mut found_with = false;
+    for child in node.children_with_tokens() {
+        let kind = child.kind();
+        // Skip whitespace/newline trivia
+        if matches!(
+            kind,
+            SyntaxKind::WHITESPACE | SyntaxKind::NEWLINE | SyntaxKind::LINE_COMMENT
+        ) {
+            continue;
+        }
+        if kind == SyntaxKind::KW_WITH {
+            found_with = true;
+            continue;
+        }
+        if found_with && kind != SyntaxKind::BLOCK_EXPR {
+            return Some(child);
+        }
+        if kind == SyntaxKind::BLOCK_EXPR {
+            break;
+        }
+    }
+    None
+}
+
+/// Lower a `TEST_EXPR_DEF` CST node into a `TestRegistrationItem::Test`.
+///
+/// The CST structure is:
+/// `TEST_EXPR_DEF [ KW_TEST STRING_LITERAL [KW_WITH expr] BLOCK_EXPR ]`
+fn lower_test_expr(node: &SyntaxNode) -> Option<TestRegistrationItem> {
+    // Find the name expression — first child element after KW_TEST, before KW_WITH/BLOCK_EXPR.
+    let name_element = extract_name_element(node, SyntaxKind::KW_TEST)?;
+
+    // Find the optional runner expression (first child after KW_WITH, before BLOCK_EXPR)
+    let runner_element = extract_runner_element(node);
+
+    // Find the BLOCK_EXPR child (the test body)
+    let body_node = node
+        .children()
+        .find(|c| c.kind() == SyntaxKind::BLOCK_EXPR)?;
+
+    Some(TestRegistrationItem::Test {
+        name_element,
+        body_node,
+        runner_element,
+    })
+}
+
+/// Lower a `TESTSET_DEF` CST node into a `TestRegistrationItem::TestSet`.
+///
+/// The CST structure is:
+/// `TESTSET_DEF [ KW_TESTSET STRING_LITERAL [KW_WITH expr] BLOCK_EXPR ]`
+///
+/// The `BLOCK_EXPR` body may contain setup statements (let bindings), for/if control
+/// flow, and nested `TEST_EXPR_DEF` / `TESTSET_DEF` nodes. The entire body is stored
+/// and lowered lazily into a collector lambda body.
+fn lower_testset(node: &SyntaxNode) -> Option<TestRegistrationItem> {
+    // Find the name expression — first child element after KW_TESTSET, before KW_WITH/BLOCK_EXPR.
+    let name_element = extract_name_element(node, SyntaxKind::KW_TESTSET)?;
+
+    // Find the optional runner expression (first child after KW_WITH, before BLOCK_EXPR)
+    let runner_element = extract_runner_element(node);
+
+    // Find the BLOCK_EXPR child (the full testset body)
+    let body_node = node
+        .children()
+        .find(|c| c.kind() == SyntaxKind::BLOCK_EXPR)?;
+
+    Some(TestRegistrationItem::TestSet {
+        name_element,
+        body_node,
+        runner_element,
+    })
+}
+
+/// Synthesize a `$init_test` function that registers tests and testsets
+/// into a `testing.Registry` parameter.
+///
+/// The function body calls `registry.register_test(name, lambda, null)` for each test
+/// and `registry.register_test_set(name, collector_lambda, null)` for each testset.
+///
+/// Lambda bodies are lowered from the original CST `BLOCK_EXPR` nodes.
+///
+/// The function is named `"$init_test_<file_id>"` to avoid collisions when
+/// multiple files contain tests. For the sentinel `FileId` (PPIR), uses plain
+/// `"$init_test"` since PPIR processes files individually.
+fn synthesize_init_test_function(
+    registrations: &[TestRegistrationItem],
+    file_id: baml_base::FileId,
+    diags: &mut Vec<LoweringDiagnostic>,
+) -> FunctionDef {
+    let fn_name = if file_id == baml_base::FileId::sentinel() {
+        "$init_test".to_string()
+    } else {
+        format!("$init_test_{}", file_id.as_u32())
+    };
+    let span = text_size::TextRange::default();
+
+    let mut ctx = lower_expr_body::InitTestContext::new();
+
+    // Build statements: one per registration
+    let mut stmt_ids: Vec<crate::ast::StmtId> = Vec::with_capacity(registrations.len());
+    for reg in registrations {
+        let stmt_expr = synthesize_register_call(reg, &mut ctx, diags);
+        stmt_ids.push(ctx.alloc_stmt(crate::ast::Stmt::Expr(stmt_expr), span));
+    }
+
+    // Block expression containing all registration calls, with a null tail
+    let null_expr = ctx.alloc_expr(Expr::Null, span);
+    let block_expr = ctx.alloc_expr(
+        Expr::Block {
+            stmts: stmt_ids,
+            tail_expr: Some(null_expr),
+        },
+        span,
+    );
+
+    let (body, source_map, finish_diags) = ctx.finish(Some(block_expr));
+    diags.extend(finish_diags);
+
+    // The single parameter: `registry: testing.TestCollector`
+    let registry_param = Param {
+        name: Name::new("registry"),
+        type_expr: Some(SpannedTypeExpr {
+            expr: crate::ast::TypeExpr::Path {
+                segments: vec![Name::new("testing"), Name::new("TestCollector")],
+                attrs: vec![],
+            },
+            span,
+        }),
+        span,
+        name_span: span,
+    };
+
+    FunctionDef {
+        name: Name::new(&fn_name),
+        generic_params: vec![],
+        params: vec![registry_param],
+        return_type: None,
+        throws: None,
+        body: Some(FunctionBodyDef::Expr(body, source_map)),
+        declarative_meta: None,
+        attributes: vec![],
+        span,
+        name_span: span,
+    }
+}
+
+/// Synthesize a single `registry.register_test(name, lambda, runner)` or
+/// `registry.register_test_set(name, collector_lambda, runner)` call expression.
+fn synthesize_register_call(
+    reg: &TestRegistrationItem,
+    ctx: &mut lower_expr_body::InitTestContext,
+    diags: &mut Vec<LoweringDiagnostic>,
+) -> ExprId {
+    let span = text_size::TextRange::default();
+    match reg {
+        TestRegistrationItem::Test {
+            name_element,
+            body_node,
+            runner_element,
+        } => {
+            // Lower the test block body into a fresh ExprBody (lambda body)
+            let (lambda_body, lambda_source_map, lambda_diags) =
+                lower_expr_body::lower_block_node(body_node, &[Name::new("registry")]);
+            diags.extend(lambda_diags);
+
+            let lambda_def = FunctionDef {
+                name: Name::new("<test body>"),
+                generic_params: vec![],
+                params: vec![],
+                return_type: Some(SpannedTypeExpr {
+                    expr: crate::ast::TypeExpr::Void { attrs: vec![] },
+                    span,
+                }),
+                throws: None,
+                body: Some(FunctionBodyDef::Expr(lambda_body, lambda_source_map)),
+                declarative_meta: None,
+                attributes: vec![],
+                span,
+                name_span: span,
+            };
+
+            // registry.register_test
+            let registry_ref = ctx.alloc_expr(Expr::Path(vec![Name::new("registry")]), span);
+            let method_call_target = ctx.alloc_expr(
+                Expr::FieldAccess {
+                    base: registry_ref,
+                    field: Name::new("register_test"),
+                },
+                span,
+            );
+
+            // Args: (name_expr, lambda, runner_or_null)
+            let name_arg = lower_expr_body::lower_runner_element(ctx, name_element);
+            // Use a unique synthetic span for the lambda so the HIR scope builder
+            // can distinguish this lambda's scope from other synthesized lambdas.
+            let lambda_span = ctx.next_lambda_span();
+            let lambda_arg = ctx.alloc_expr(Expr::Lambda(Box::new(lambda_def)), lambda_span);
+            let runner_arg = lower_runner_element(runner_element.as_ref(), ctx, span);
+
+            ctx.alloc_expr(
+                Expr::Call {
+                    callee: method_call_target,
+                    args: vec![name_arg, lambda_arg, runner_arg],
+                },
+                span,
+            )
+        }
+        TestRegistrationItem::TestSet {
+            name_element,
+            body_node,
+            runner_element,
+        } => {
+            // Lower the testset body into a collector lambda using the full testset lowering.
+            let (collector_exprs, collector_source_map, collector_diags) =
+                lower_expr_body::lower_testset_block_node(
+                    body_node,
+                    &Name::new("testset"),
+                    &[Name::new("registry")],
+                );
+            diags.extend(collector_diags);
+
+            // Collector lambda parameter: `testset`
+            let testset_param = Param {
+                name: Name::new("testset"),
+                type_expr: Some(SpannedTypeExpr {
+                    expr: crate::ast::TypeExpr::Path {
+                        segments: vec![Name::new("testing"), Name::new("TestCollector")],
+                        attrs: vec![],
+                    },
+                    span,
+                }),
+                span,
+                name_span: span,
+            };
+
+            let collector_def = FunctionDef {
+                name: Name::new("<testset collector>"),
+                generic_params: vec![],
+                params: vec![testset_param],
+                return_type: Some(SpannedTypeExpr {
+                    expr: crate::ast::TypeExpr::Void { attrs: vec![] },
+                    span,
+                }),
+                throws: None,
+                body: Some(FunctionBodyDef::Expr(collector_exprs, collector_source_map)),
+                declarative_meta: None,
+                attributes: vec![],
+                span,
+                name_span: span,
+            };
+
+            // registry.register_test_set
+            let registry_ref = ctx.alloc_expr(Expr::Path(vec![Name::new("registry")]), span);
+            let method_call_target = ctx.alloc_expr(
+                Expr::FieldAccess {
+                    base: registry_ref,
+                    field: Name::new("register_test_set"),
+                },
+                span,
+            );
+
+            // Args: (name_expr, collector_lambda, runner_or_null)
+            let name_arg = lower_expr_body::lower_runner_element(ctx, name_element);
+            // Use the testset body's real CST range so HIR scope lookup works
+            // correctly for name resolution inside the collector lambda body.
+            let collector_lambda_span = body_node.text_range();
+            let collector_arg =
+                ctx.alloc_expr(Expr::Lambda(Box::new(collector_def)), collector_lambda_span);
+            let runner_arg = lower_runner_element(runner_element.as_ref(), ctx, span);
+
+            ctx.alloc_expr(
+                Expr::Call {
+                    callee: method_call_target,
+                    args: vec![name_arg, collector_arg, runner_arg],
+                },
+                span,
+            )
+        }
+    }
+}
+
+/// Lower an optional runner CST element directly into the parent arena.
+///
+/// If present, the runner expression is lowered into the same `InitTestContext` arena
+/// (no IIFE wrapping needed). If absent, returns `Expr::Null`.
+fn lower_runner_element(
+    runner_element: Option<&baml_compiler_syntax::SyntaxElement>,
+    ctx: &mut lower_expr_body::InitTestContext,
+    span: text_size::TextRange,
+) -> ExprId {
+    match runner_element {
+        Some(element) => lower_expr_body::lower_runner_element(ctx, element),
+        None => ctx.alloc_expr(Expr::Null, span),
+    }
 }
 
 fn lower_generator(node: &SyntaxNode, diags: &mut Vec<LoweringDiagnostic>) -> Option<GeneratorDef> {
@@ -921,7 +1340,7 @@ fn synthesize_client_items(
 
     // Validate provider name.
     if let Some(p) = &provider {
-        if !VALID_PROVIDERS.contains(&p.as_str()) {
+        if !is_valid_provider(p.as_str()) {
             diags.push(LoweringDiagnostic::UnknownProvider {
                 client_name: client_name.clone(),
                 provider: p.clone(),
@@ -1160,41 +1579,40 @@ fn synthesize_client_new_companion(
 
     let config = provider
         .map(String::as_str)
-        .filter(|p| VALID_PROVIDERS.contains(p))
-        .map(provider_config_for);
+        .filter(|p| is_valid_provider(p))
+        .and_then(provider_config_for);
 
-    // ── 1. Seed the unified value map from provider defaults ────
+    // ── 1. Seed known fields as null/empty ─────────────────────
     //
-    // All known fields (top-level AND provider-specific) go into one map.
-    // The split into PrimitiveClientOptions vs provider sub-object only
-    // happens at assembly time.
+    // All known fields go into one map, seeded as Null (or EmptyMap for
+    // map-typed fields). No provider-specific defaults are injected --
+    // those are applied at runtime in sys_llm.
 
     let mut values: std::collections::HashMap<String, ExprId> = std::collections::HashMap::new();
-    let top_level_names: std::collections::HashSet<&str> =
-        TOP_LEVEL_FIELDS.iter().map(|(n, _)| *n).collect();
-
-    // Provider-specific field names: anything in config.fields not in TOP_LEVEL_FIELDS.
+    // Provider-specific field names (from the generated config).
     let provider_field_set: std::collections::HashSet<&str> = config
-        .as_ref()
-        .map(|c| {
-            c.fields
-                .iter()
-                .map(|(n, _)| *n)
-                .filter(|n| !top_level_names.contains(n))
-                .collect()
-        })
+        .map(|c| c.fields.iter().copied().collect())
         .unwrap_or_default();
 
-    // Seed top-level fields with their base defaults.
-    for &(name, ref default) in TOP_LEVEL_FIELDS {
-        values.insert(name.to_string(), alloc_field_default(default, &mut alloc));
+    // Seed top-level fields as null / empty map.
+    // Skip provider_options and request_body -- they're assembled separately.
+    for &name in CLIENT_OPTION_FIELDS {
+        if SEPARATELY_ASSEMBLED_FIELDS.contains(&name) {
+            continue;
+        }
+        let expr = if EMPTY_MAP_FIELDS.contains(&name) {
+            alloc(Expr::Map { entries: vec![] })
+        } else {
+            alloc(Expr::Null)
+        };
+        values.insert(name.to_string(), expr);
     }
 
-    // Apply provider field defaults on top (both top-level overrides and provider-specific).
-    if let Some(cfg) = &config {
-        for &(name, ref default) in cfg.fields {
-            values.insert(name.to_string(), alloc_field_default(default, &mut alloc));
-        }
+    // Seed provider-specific fields as null (so they're recognized as known).
+    for &name in &provider_field_set {
+        values
+            .entry(name.to_string())
+            .or_insert_with(|| alloc(Expr::Null));
     }
 
     // ── 2. Override from user config ────────────────────────────
@@ -1211,18 +1629,10 @@ fn synthesize_client_new_companion(
 
     let mut has_base_url = false;
     let mut request_body_entries: Vec<(ExprId, ExprId)> = vec![];
-    // Track which provider fields have been set to non-null values (by defaults
-    // or by user). Used by validate_client_options and assembly.
-    let mut provider_fields_set: std::collections::HashSet<String> = config
-        .as_ref()
-        .map(|c| {
-            c.fields
-                .iter()
-                .filter(|(name, default)| provider_field_set.contains(*name) && !default.is_null())
-                .map(|(name, _)| name.to_string())
-                .collect()
-        })
-        .unwrap_or_default();
+    // Track which provider fields have been set to non-null values by the user.
+    // No compile-time defaults, so this starts empty.
+    let mut provider_fields_set: std::collections::HashSet<String> =
+        std::collections::HashSet::new();
 
     if let Some(options_item) = config_block
         .items()
@@ -1277,39 +1687,36 @@ fn synthesize_client_new_companion(
 
     // Build provider options sub-object from provider-specific fields.
     let null_expr = alloc(Expr::Null);
-    let provider_options =
-        if let Some(type_name) = config.as_ref().and_then(|c| c.provider_options_type) {
-            let prov_fields: Vec<(Name, ExprId)> = config
-                .as_ref()
-                .unwrap()
-                .fields
-                .iter()
-                .filter(|(name, _)| !top_level_names.contains(name))
-                .map(|&(name, _)| {
-                    let val = values.remove(name).unwrap_or_else(|| alloc(Expr::Null));
-                    (Name::new(name), val)
-                })
-                .collect();
-            if !provider_fields_set.is_empty() {
-                alloc(Expr::Object {
-                    type_name: Some(Name::new(type_name)),
-                    fields: prov_fields,
-                    spreads: vec![],
-                })
-            } else {
-                null_expr
-            }
+    let provider_options = if let Some(type_name) = config.and_then(|c| c.options_type) {
+        let prov_fields: Vec<(Name, ExprId)> = config
+            .unwrap()
+            .fields
+            .iter()
+            .map(|&name| {
+                let val = values.remove(name).unwrap_or_else(|| alloc(Expr::Null));
+                (Name::new(name), val)
+            })
+            .collect();
+        if !provider_fields_set.is_empty() {
+            alloc(Expr::Object {
+                type_name: Some(Name::new(type_name)),
+                fields: prov_fields,
+                spreads: vec![],
+            })
         } else {
             null_expr
-        };
+        }
+    } else {
+        null_expr
+    };
 
     // Extract top-level fields in class-definition order.
-    let mut options_fields: Vec<(Name, ExprId)> = TOP_LEVEL_FIELDS
+    // Skip provider_options and request_body -- they're inserted separately below.
+    let mut options_fields: Vec<(Name, ExprId)> = CLIENT_OPTION_FIELDS
         .iter()
-        .map(|&(name, ref default)| {
-            let val = values
-                .remove(name)
-                .unwrap_or_else(|| alloc_field_default(default, &mut alloc));
+        .filter(|name| !SEPARATELY_ASSEMBLED_FIELDS.contains(name))
+        .map(|&name| {
+            let val = values.remove(name).unwrap_or_else(|| alloc(Expr::Null));
             (Name::new(name), val)
         })
         .collect();
@@ -1318,14 +1725,19 @@ fn synthesize_client_new_companion(
         entries: request_body_entries,
     });
 
-    // Insert provider_options before "headers" to match PrimitiveClientOptions
+    // Insert provider_options before "media_url_handler" to match PrimitiveClientOptions
     // class-definition order, then append request_body at the end.
-    let headers_pos = options_fields
+    let insert_pos = options_fields
         .iter()
-        .position(|(n, _)| n.as_str() == "headers")
-        .unwrap_or(options_fields.len());
+        .position(|(n, _)| n.as_str() == "media_url_handler")
+        .unwrap_or_else(|| {
+            options_fields
+                .iter()
+                .position(|(n, _)| n.as_str() == "headers")
+                .unwrap_or(options_fields.len())
+        });
     options_fields.insert(
-        headers_pos,
+        insert_pos,
         (Name::new("provider_options"), provider_options),
     );
     options_fields.push((Name::new("request_body"), request_body));
@@ -1385,239 +1797,37 @@ fn synthesize_client_new_companion(
     }
 }
 
-// ── Helpers ─────────────────────────────────────────────────────
-
-/// Default value for a field -- covers both "unset" sentinels (`Null`, `EmptyMap`)
-/// used in [`TOP_LEVEL_FIELDS`] and concrete provider defaults used in per-provider
-/// field consts like [`ANTHROPIC_FIELDS`].
-enum FieldDefault {
-    /// Null / unset.
-    Null,
-    /// Empty map literal (used as the unset default for `headers`, `query_params`).
-    EmptyMap,
-    /// Literal string.
-    Str(&'static str),
-    /// Literal integer.
-    Int(i64),
-    /// Array of strings.
-    StrArray(&'static [&'static str]),
-    /// Map of string pairs.
-    StrPairMap(&'static [(&'static str, &'static str)]),
-}
-
-impl FieldDefault {
-    fn is_null(&self) -> bool {
-        matches!(self, Self::Null)
-    }
-}
-
-/// Allocate an `Expr` tree for a [`FieldDefault`] value.
-fn alloc_field_default(default: &FieldDefault, alloc: &mut impl FnMut(Expr) -> ExprId) -> ExprId {
-    use baml_base::Literal;
-    match default {
-        FieldDefault::Null => alloc(Expr::Null),
-        FieldDefault::EmptyMap => alloc(Expr::Map { entries: vec![] }),
-        FieldDefault::Str(s) => alloc(Expr::Literal(Literal::String(s.to_string()))),
-        FieldDefault::Int(v) => alloc(Expr::Literal(Literal::Int(*v))),
-        FieldDefault::StrArray(items) => {
-            let elements: Vec<ExprId> = items
-                .iter()
-                .map(|s| alloc(Expr::Literal(Literal::String(s.to_string()))))
-                .collect();
-            alloc(Expr::Array { elements })
-        }
-        FieldDefault::StrPairMap(pairs) => {
-            let entries: Vec<(ExprId, ExprId)> = pairs
-                .iter()
-                .map(|(k, v)| {
-                    let ke = alloc(Expr::Literal(Literal::String(k.to_string())));
-                    let ve = alloc(Expr::Literal(Literal::String(v.to_string())));
-                    (ke, ve)
-                })
-                .collect();
-            alloc(Expr::Map { entries })
-        }
-    }
-}
-
-/// Top-level fields on `PrimitiveClientOptions`, in class-definition order.
-///
-/// To add a new top-level option, add it here and in the `PrimitiveClientOptions`
-/// class in `llm_types.baml`. The seed, take, and assembly stages all derive
-/// from this list automatically.
-const TOP_LEVEL_FIELDS: &[(&str, FieldDefault)] = &[
-    ("model", FieldDefault::Null),
-    ("base_url", FieldDefault::Null),
-    ("allowed_role_metadata", FieldDefault::Null),
-    ("finish_reason_allow_list", FieldDefault::Null),
-    ("finish_reason_deny_list", FieldDefault::Null),
-    ("supports_streaming", FieldDefault::Null),
-    ("default_role", FieldDefault::Null),
-    ("allowed_roles", FieldDefault::Null),
-    ("remap_roles", FieldDefault::Null),
-    ("api_key", FieldDefault::Null),
-    ("headers", FieldDefault::EmptyMap),
-    ("query_params", FieldDefault::EmptyMap),
-];
-
-// ── Per-provider field definitions ─────────────────────────────
+// ── Generated field lists & provider config ────────────────────
 //
-// Each const lists ALL fields the provider cares about -- both top-level
-// overrides (e.g. base_url, default_role) and provider-specific fields
-// (e.g. max_tokens, region). Fields not in TOP_LEVEL_FIELDS are
-// automatically treated as provider-specific and grouped into the typed
-// sub-object at assembly time.
-//
-// To add a new provider:
-//   1. Add its name to VALID_PROVIDERS.
-//   2. Add a PROVIDER_FIELDS const here.
-//   3. Add an arm to provider_config_for().
-//   4. If it needs compile-time validation, add checks to validate_client_options().
+// Extracted from llm_types.baml by build.rs. To add a new field or provider,
+// edit the BAML file (and its @providers annotations) -- the compiler picks it
+// up automatically.
 
-const SAU: &[&str] = &["system", "user", "assistant"];
-const UA: &[&str] = &["user", "assistant"];
+#[allow(dead_code)]
+mod generated_client_fields {
+    include!(concat!(env!("OUT_DIR"), "/client_fields_generated.rs"));
+}
+use generated_client_fields::{CLIENT_OPTION_FIELDS, PROVIDER_CONFIGS, ProviderFieldConfig};
 
-const ANTHROPIC_FIELDS: &[(&str, FieldDefault)] = &[
-    ("base_url", FieldDefault::Str("https://api.anthropic.com")),
-    ("default_role", FieldDefault::Str("user")),
-    ("allowed_roles", FieldDefault::StrArray(SAU)),
-    ("max_tokens", FieldDefault::Int(4096)),
-];
+/// Map fields that should be seeded as empty maps rather than null.
+const EMPTY_MAP_FIELDS: &[&str] = &["headers", "query_params"];
 
-const OPENAI_FIELDS: &[(&str, FieldDefault)] = &[
-    ("base_url", FieldDefault::Str("https://api.openai.com/v1")),
-    ("default_role", FieldDefault::Str("system")),
-    ("allowed_roles", FieldDefault::StrArray(SAU)),
-];
+/// Fields that are assembled separately (not seeded/extracted with normal top-level fields).
+const SEPARATELY_ASSEMBLED_FIELDS: &[&str] = &["provider_options", "request_body"];
 
-const OLLAMA_FIELDS: &[(&str, FieldDefault)] = &[
-    ("base_url", FieldDefault::Str("http://localhost:11434")),
-    ("default_role", FieldDefault::Str("user")),
-    ("allowed_roles", FieldDefault::StrArray(UA)),
-];
-
-const OPENROUTER_FIELDS: &[(&str, FieldDefault)] = &[
-    (
-        "base_url",
-        FieldDefault::Str("https://openrouter.ai/api/v1"),
-    ),
-    ("default_role", FieldDefault::Str("system")),
-    ("allowed_roles", FieldDefault::StrArray(SAU)),
-];
-
-const AZURE_OPENAI_FIELDS: &[(&str, FieldDefault)] = &[
-    ("default_role", FieldDefault::Str("system")),
-    ("allowed_roles", FieldDefault::StrArray(SAU)),
-    ("resource_name", FieldDefault::Null),
-    ("deployment_id", FieldDefault::Null),
-    ("api_version", FieldDefault::Null),
-    ("max_tokens", FieldDefault::Int(4096)),
-];
-
-const BEDROCK_FIELDS: &[(&str, FieldDefault)] = &[
-    ("default_role", FieldDefault::Str("user")),
-    ("allowed_roles", FieldDefault::StrArray(SAU)),
-    ("region", FieldDefault::Null),
-    ("endpoint_url", FieldDefault::Null),
-    ("access_key_id", FieldDefault::Null),
-    ("secret_access_key", FieldDefault::Null),
-    ("session_token", FieldDefault::Null),
-    ("profile", FieldDefault::Null),
-    ("stop_sequences", FieldDefault::Null),
-    ("max_tokens", FieldDefault::Null),
-    ("temperature", FieldDefault::Null),
-    ("top_p", FieldDefault::Null),
-];
-
-const GOOGLE_AI_FIELDS: &[(&str, FieldDefault)] = &[
-    (
-        "base_url",
-        FieldDefault::Str("https://generativelanguage.googleapis.com/v1beta"),
-    ),
-    ("default_role", FieldDefault::Str("user")),
-    ("allowed_roles", FieldDefault::StrArray(SAU)),
-    (
-        "remap_roles",
-        FieldDefault::StrPairMap(&[("assistant", "model")]),
-    ),
-];
-
-const VERTEX_AI_FIELDS: &[(&str, FieldDefault)] = &[
-    ("default_role", FieldDefault::Str("user")),
-    ("allowed_roles", FieldDefault::StrArray(SAU)),
-    (
-        "remap_roles",
-        FieldDefault::StrPairMap(&[("assistant", "model")]),
-    ),
-    ("credentials", FieldDefault::Null),
-    ("credentials_content", FieldDefault::Null),
-    ("location", FieldDefault::Null),
-    ("project_id", FieldDefault::Null),
-];
-
-/// Provider configuration: field definitions and optional typed sub-object.
-///
-/// Fields not present in [`TOP_LEVEL_FIELDS`] are automatically treated as
-/// provider-specific and assembled into a typed `Expr::Object`.
-struct ProviderConfig {
-    /// All fields this provider defines (top-level overrides + provider-specific).
-    fields: &'static [(&'static str, FieldDefault)],
-    /// Type name for the provider-specific options sub-object, if any.
-    provider_options_type: Option<&'static str>,
+/// Look up the provider config for a given provider name.
+fn provider_config_for(provider: &str) -> Option<&'static ProviderFieldConfig> {
+    PROVIDER_CONFIGS
+        .iter()
+        .find(|c| c.providers.contains(&provider))
 }
 
-fn provider_config_for(provider: &str) -> ProviderConfig {
-    match provider {
-        "anthropic" => ProviderConfig {
-            fields: ANTHROPIC_FIELDS,
-            provider_options_type: Some("baml.llm.AnthropicOptions"),
-        },
-        "openai" | "openai-generic" | "openai-responses" => ProviderConfig {
-            fields: OPENAI_FIELDS,
-            provider_options_type: None,
-        },
-        "ollama" => ProviderConfig {
-            fields: OLLAMA_FIELDS,
-            provider_options_type: None,
-        },
-        "openrouter" => ProviderConfig {
-            fields: OPENROUTER_FIELDS,
-            provider_options_type: None,
-        },
-        "azure-openai" => ProviderConfig {
-            fields: AZURE_OPENAI_FIELDS,
-            provider_options_type: Some("baml.llm.AzureOpenAiOptions"),
-        },
-        "aws-bedrock" => ProviderConfig {
-            fields: BEDROCK_FIELDS,
-            provider_options_type: Some("baml.llm.BedrockOptions"),
-        },
-        "google-ai" => ProviderConfig {
-            fields: GOOGLE_AI_FIELDS,
-            provider_options_type: None,
-        },
-        "vertex-ai" => ProviderConfig {
-            fields: VERTEX_AI_FIELDS,
-            provider_options_type: Some("baml.llm.VertexAiOptions"),
-        },
-        _ => unreachable!("unknown provider {provider:?}: add it to provider_config_for"),
-    }
+/// Check whether a provider name is known.
+fn is_valid_provider(provider: &str) -> bool {
+    PROVIDER_CONFIGS
+        .iter()
+        .any(|c| c.providers.contains(&provider))
 }
-
-const VALID_PROVIDERS: &[&str] = &[
-    "anthropic",
-    "azure-openai",
-    "aws-bedrock",
-    "openai",
-    "openai-generic",
-    "openai-responses",
-    "ollama",
-    "openrouter",
-    "google-ai",
-    "vertex-ai",
-    "fallback",
-    "round-robin",
-];
 
 /// Validate provider-specific option constraints at compile time.
 fn validate_client_options(

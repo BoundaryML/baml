@@ -15,6 +15,10 @@ class Response {
     $rust_io_function
   }
 
+  function bytes(self) -> uint8array throws root.errors.Io {
+    $rust_io_function
+  }
+
   function ok(self) -> bool {
     self.status_code >= 200 && self.status_code < 300
   }

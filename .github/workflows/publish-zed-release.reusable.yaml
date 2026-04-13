@@ -13,7 +13,7 @@ permissions: {}
 
 jobs:
   publish-zed-release:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - name: Checkout upstream zed extensions
         uses: actions/checkout@v5

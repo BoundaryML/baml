@@ -1,0 +1,25 @@
+// Parser ambiguity: `with <expr> { ... }` — does `{` start an object
+// literal (part of the runner expr) or the test body?
+//
+// Resolution: peek-ahead disambiguates. If `{ <word> :` follows, the brace
+// starts an object literal (constructor arg). Otherwise it starts the test body.
+
+// Case 1: Simple identifier runner — `{ body }` is the test body.
+test "simple runner" with my_runner {
+  assert.is_true(true)
+}
+
+// Case 2: Call expression runner — `{ body }` is the test body.
+test "call runner" with testing.Quorum(5, 3) {
+  assert.is_true(true)
+}
+
+// Case 3: Constructor runner — `{ threshold: 0.5 }` is parsed as an object
+// literal because peek-ahead sees `<word> :` after the `{`.
+class MyRunner {
+  threshold float
+}
+
+test "constructor runner" with MyRunner { threshold: 0.5 } {
+  assert.is_true(true)
+}

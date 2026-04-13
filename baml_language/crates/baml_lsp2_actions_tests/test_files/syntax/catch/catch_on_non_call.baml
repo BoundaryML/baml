@@ -13,7 +13,7 @@ function CatchOnVariable(x: int) -> string {
 
 //----
 //- diagnostics
-// Error: unreachable arm
+// Warning: unreachable arm
 //    ╭─[ catch_catch_on_non_call.baml:4:10 ]
 //    │
 //  4 │     _ => "caught"
@@ -22,7 +22,7 @@ function CatchOnVariable(x: int) -> string {
 //    │ 
 //    │ Note: Error code: E0001
 // ───╯
-// Error: unreachable arm
+// Warning: unreachable arm
 //     ╭─[ catch_catch_on_non_call.baml:10:10 ]
 //     │
 //  10 │     _ => "caught"

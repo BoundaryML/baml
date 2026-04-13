@@ -295,7 +295,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 if let Some((div_idx, div_stmt)) = diverged_at {
                     let remaining = stmts.len() - div_idx - 1 + usize::from(tail_expr.is_some());
                     if remaining > 0 {
-                        self.context.report_at_stmt(
+                        self.context.report_warning_at_stmt(
                             crate::infer_context::TirTypeError::DeadCode {
                                 after: div_stmt,
                                 unreachable_count: remaining,
@@ -752,7 +752,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 let ty = if let Some((div_idx, div_stmt)) = diverged_at {
                     let remaining = stmts.len() - div_idx - 1 + usize::from(tail_expr.is_some());
                     if remaining > 0 {
-                        self.context.report_at_stmt(
+                        self.context.report_warning_at_stmt(
                             crate::infer_context::TirTypeError::DeadCode {
                                 after: div_stmt,
                                 unreachable_count: remaining,
@@ -764,7 +764,15 @@ impl<'db> TypeInferenceBuilder<'db> {
                         attr: TyAttr::default(),
                     }
                 } else if let Some(tail) = tail_expr {
-                    self.check_expr(*tail, body, expected)
+                    if matches!(expected, Ty::Void { .. }) {
+                        // Void context: infer the tail for diagnostics but discard its value.
+                        let _ = self.infer_expr(*tail, body);
+                        Ty::Void {
+                            attr: TyAttr::default(),
+                        }
+                    } else {
+                        self.check_expr(*tail, body, expected)
+                    }
                 } else if !matches!(expected, Ty::Unknown { .. } | Ty::Void { .. }) {
                     // No tail expression, no divergence — block falls through
                     // without producing a value. Report missing return.
@@ -916,6 +924,23 @@ impl<'db> TypeInferenceBuilder<'db> {
 
                 let is_method_call = matches!(&body.exprs[*callee], Expr::FieldAccess { .. });
                 let callee_ty = self.infer_expr(*callee, body);
+
+                // Expand type alias chains so alias-over-function types are callable.
+                // Bare alias cycles are already caught by find_invalid_alias_cycles (Tarjan SCC)
+                // before we reach here, so the depth guard is cheap insurance.
+                let callee_ty = {
+                    let mut ty = callee_ty;
+                    for _ in 0..64 {
+                        match &ty {
+                            Ty::TypeAlias(qtn, _) => match self.aliases.get(qtn) {
+                                Some(expanded) => ty = expanded.clone(),
+                                None => break,
+                            },
+                            _ => break,
+                        }
+                    }
+                    ty
+                };
 
                 match &callee_ty {
                     Ty::Function { params, ret, .. } => {
@@ -1185,8 +1210,15 @@ impl<'db> TypeInferenceBuilder<'db> {
                 if matches!(inferred, Ty::Void { .. })
                     && !matches!(expected, Ty::Void { .. } | Ty::Unknown { .. })
                 {
-                    self.context
-                        .report_simple(TirTypeError::VoidUsedAsValue, expr_id);
+                    let err = if matches!(
+                        body.exprs[expr_id],
+                        Expr::Call { .. } | Expr::OptionalCall { .. }
+                    ) {
+                        TirTypeError::VoidFunctionResultUsed
+                    } else {
+                        TirTypeError::VoidUsedAsValue
+                    };
+                    self.context.report_simple(err, expr_id);
                 } else if !self.is_subtype(&inferred, expected) {
                     self.context.report(
                         TirTypeError::TypeMismatch {
@@ -1233,18 +1265,41 @@ impl<'db> TypeInferenceBuilder<'db> {
                         for diag in diags {
                             self.context.report_at_type_annot(diag, *ann_idx);
                         }
-                        let ty = self.check_expr(*init, body, &ann_ty);
-                        if matches!(ty, Ty::Void { .. }) {
-                            self.context
-                                .report_simple(TirTypeError::VoidUsedAsValue, *init);
-                        }
+                        // If the annotation is void, the AST layer already
+                        // reported VoidInNonReturnPosition — just infer the
+                        // init type without checking against void to avoid a
+                        // duplicate TypeMismatch diagnostic.
+                        let ty = if matches!(ann_ty, Ty::Void { .. }) {
+                            self.infer_expr(*init, body)
+                        } else {
+                            let ty = self.check_expr(*init, body, &ann_ty);
+                            if matches!(ty, Ty::Void { .. }) {
+                                let err = if matches!(
+                                    body.exprs[*init],
+                                    Expr::Call { .. } | Expr::OptionalCall { .. }
+                                ) {
+                                    TirTypeError::VoidFunctionResultUsed
+                                } else {
+                                    TirTypeError::VoidUsedAsValue
+                                };
+                                self.context.report_simple(err, *init);
+                            }
+                            ty
+                        };
                         ann_ty_for_decl = Some(ann_ty);
                         Some(ty)
                     } else {
                         let ty = self.infer_expr(*init, body);
                         if matches!(ty, Ty::Void { .. }) {
-                            self.context
-                                .report_simple(TirTypeError::VoidUsedAsValue, *init);
+                            let err = if matches!(
+                                body.exprs[*init],
+                                Expr::Call { .. } | Expr::OptionalCall { .. }
+                            ) {
+                                TirTypeError::VoidFunctionResultUsed
+                            } else {
+                                TirTypeError::VoidUsedAsValue
+                            };
+                            self.context.report_simple(err, *init);
                         }
                         // No annotation → no declared type (evolving containers etc.)
                         Some(ty.widen_fresh().make_evolving())
@@ -1410,10 +1465,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                 }
                 false
             }
-            Stmt::Assert { condition } => {
-                self.infer_expr(*condition, body);
-                false
-            }
             Stmt::Break | Stmt::Continue => true, // break/continue diverge
             Stmt::Missing | Stmt::HeaderComment { .. } => false,
         }
@@ -1546,6 +1597,8 @@ impl<'db> TypeInferenceBuilder<'db> {
             let arm = &body.match_arms[*arm_id];
             let pattern_id = arm.pattern;
 
+            self.record_pattern_test_types(pattern_id, &scrutinee_ty, body, arm.body);
+
             let arm_cases = self.pattern_match_cases(pattern_id, &scrutinee_ty, body, arm.body);
             let mut unreachable = catch_all_seen;
             if !unreachable && arm.guard.is_none() {
@@ -1574,12 +1627,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                     .insert(name.clone(), narrowed_scrutinee_ty.clone());
             }
 
-            if let Some((bind_name, bind_ty)) = self.pattern_binding_for_arm(
-                pattern_id,
-                &scrutinee_ty,
-                &narrowed_scrutinee_ty,
-                body,
-            ) {
+            if let Some((bind_name, bind_ty)) =
+                self.pattern_binding_for_arm(pattern_id, &scrutinee_ty, body, arm.body)
+            {
                 saved.push((bind_name.clone(), self.locals.get(&bind_name).cloned()));
                 self.locals.insert(bind_name, bind_ty);
             }
@@ -1665,7 +1715,42 @@ impl<'db> TypeInferenceBuilder<'db> {
                 Self::facts_to_ty(&residual)
             };
             // Record the clause binding type in the bindings map so MIR can read it.
-            self.bindings.insert(clause.binding, clause_binding_ty);
+            self.bindings
+                .insert(clause.binding, clause_binding_ty.clone());
+
+            // Type the optional stack trace binding as baml.errors.StackTrace.
+            if let Some(st_binding) = clause.stack_trace_binding {
+                let db = self.context.db();
+                let baml_name = baml_base::Name::new("baml");
+                let st_ty = self
+                    .res_ctx
+                    .items_for_package(db, &baml_name)
+                    .and_then(|items| {
+                        let errors_ns = [baml_base::Name::new("errors")];
+                        let st_name = baml_base::Name::new("StackTrace");
+                        items.lookup_type(&errors_ns, &st_name)
+                    })
+                    .map(|def| {
+                        let st_name = baml_base::Name::new("StackTrace");
+                        Ty::Class(
+                            crate::lower_type_expr::qualify_def(db, def, &st_name),
+                            TyAttr::default(),
+                        )
+                    })
+                    .unwrap_or(Ty::Unknown {
+                        attr: TyAttr::default(),
+                    });
+                self.bindings.insert(st_binding, st_ty.clone());
+                // Also insert into locals so name resolution finds it.
+                let st_name = match &body.patterns[st_binding] {
+                    baml_compiler2_ast::Pattern::Binding(name) => Some(name.clone()),
+                    baml_compiler2_ast::Pattern::TypedBinding { name, .. } => Some(name.clone()),
+                    _ => None,
+                };
+                if let Some(name) = st_name {
+                    self.locals.insert(name, st_ty);
+                }
+            }
 
             let binding_name = match &body.patterns[clause.binding] {
                 baml_compiler2_ast::Pattern::Binding(name) => Some(name.clone()),
@@ -1687,28 +1772,58 @@ impl<'db> TypeInferenceBuilder<'db> {
                 let arm = &body.catch_arms[arm_id];
                 let matches =
                     self.match_throw_types_for_pattern(arm.pattern, &residual, body, arm.body);
-                if matches.may_match.is_empty() {
+                // Panic-containing patterns are never unreachable — panics can
+                // occur in any expression at runtime regardless of the
+                // declared throw set.
+                let panic_subset_ty = self.pattern_panic_narrowed_type(arm.pattern, body, arm.body);
+                let has_panic_component = panic_subset_ty.is_some();
+                // Record resolved types for bare type sugar / typed binding
+                // patterns (including union members) so MIR can emit `IsType`
+                // checks for each subpattern.
+                self.record_pattern_test_types(arm.pattern, &clause_binding_ty, body, arm.body);
+                if matches.may_match.is_empty() && !has_panic_component {
                     self.context
                         .report_warning_simple(TirTypeError::UnreachableArm, arm.body);
                 }
 
-                let narrowed_binding_ty = Self::facts_to_ty(&matches.may_match);
+                let mut narrowed_binding_ty = Self::facts_to_ty(&matches.may_match);
+                // Panic members aren't tracked in the declared throw set, so
+                // add back the panic subset of the pattern to keep the clause
+                // binding (e.g. `e`) and arm bindings usable inside mixed arms.
+                if let Some(panic_subset_ty) = panic_subset_ty {
+                    narrowed_binding_ty = if matches!(narrowed_binding_ty, Ty::Never { .. }) {
+                        panic_subset_ty
+                    } else {
+                        Self::join_all(&[narrowed_binding_ty, panic_subset_ty])
+                    };
+                }
+                let pattern_binding_ty = self.pattern_binding_ty_for_catch(
+                    arm.pattern,
+                    &clause_binding_ty,
+                    &narrowed_binding_ty,
+                    body,
+                    arm.body,
+                );
                 let mut saved = Vec::new();
                 if let Some(name) = &binding_name {
                     saved.push((name.clone(), self.locals.get(name).cloned()));
-                    self.locals
-                        .insert(name.clone(), narrowed_binding_ty.clone());
+                    self.locals.insert(name.clone(), pattern_binding_ty.clone());
                 }
-                if let Some((arm_bind_name, arm_bind_ty)) = self.pattern_binding_for_arm(
-                    arm.pattern,
-                    &narrowed_binding_ty,
-                    &narrowed_binding_ty,
-                    body,
-                ) {
+                if let Some((arm_bind_name, arm_bind_ty)) =
+                    self.pattern_binding_for_arm(arm.pattern, &narrowed_binding_ty, body, arm.body)
+                {
                     saved.push((
                         arm_bind_name.clone(),
                         self.locals.get(&arm_bind_name).cloned(),
                     ));
+                    let arm_bind_ty =
+                        if self.pattern_has_multiple_variants(arm.pattern, body, arm.body) {
+                            Ty::Error {
+                                attr: TyAttr::default(),
+                            }
+                        } else {
+                            arm_bind_ty
+                        };
                     self.locals.insert(arm_bind_name, arm_bind_ty);
                 }
 
@@ -1928,11 +2043,11 @@ impl<'db> TypeInferenceBuilder<'db> {
     }
 
     fn pattern_binding_for_arm(
-        &self,
+        &mut self,
         pattern_id: PatId,
         scrutinee_ty: &Ty,
-        narrowed_ty: &Ty,
         body: &ExprBody,
+        at_expr: ExprId,
     ) -> Option<(Name, Ty)> {
         match &body.patterns[pattern_id] {
             baml_compiler2_ast::Pattern::Binding(name) => {
@@ -1942,11 +2057,52 @@ impl<'db> TypeInferenceBuilder<'db> {
                     Some((name.clone(), scrutinee_ty.clone()))
                 }
             }
-            baml_compiler2_ast::Pattern::TypedBinding { name, .. } => {
-                Some((name.clone(), narrowed_ty.clone()))
+            baml_compiler2_ast::Pattern::TypedBinding { name, ty } => {
+                Some((name.clone(), self.resolve_type_expr(ty, at_expr)))
             }
             _ => None,
         }
+    }
+
+    fn record_pattern_test_types(
+        &mut self,
+        pattern_id: PatId,
+        scrutinee_ty: &Ty,
+        body: &ExprBody,
+        at_expr: ExprId,
+    ) {
+        match &body.patterns[pattern_id] {
+            baml_compiler2_ast::Pattern::Binding(name)
+                if name.as_str() != "_" && self.is_bare_type_sugar_binding(name) =>
+            {
+                let ty = self.pattern_narrowed_type(pattern_id, scrutinee_ty, body, at_expr);
+                self.bindings.insert(pattern_id, ty);
+            }
+            baml_compiler2_ast::Pattern::TypedBinding { ty, .. } => {
+                let resolved = self.resolve_type_expr(ty, at_expr);
+                self.bindings.insert(pattern_id, resolved);
+            }
+            baml_compiler2_ast::Pattern::Union(parts) => {
+                for part in parts {
+                    self.record_pattern_test_types(*part, scrutinee_ty, body, at_expr);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// Resolve a `TypeExpr` to a `Ty`.  Tries `bare_type_sugar_to_ty` first
+    /// (handles `baml.panics.*` types and primitives), falls back to
+    /// `lower_pattern_type_expr` for user-defined types.
+    fn resolve_type_expr(&mut self, ty: &TypeExpr, at_expr: ExprId) -> Ty {
+        if let TypeExpr::Path { segments, .. } = ty {
+            if segments.len() == 1 {
+                if let Some(resolved) = bare_type_sugar_to_ty(&segments[0]) {
+                    return resolved;
+                }
+            }
+        }
+        self.lower_pattern_type_expr(ty, at_expr)
     }
 
     fn pattern_narrowed_type(
@@ -1958,7 +2114,9 @@ impl<'db> TypeInferenceBuilder<'db> {
     ) -> Ty {
         match &body.patterns[pattern_id] {
             baml_compiler2_ast::Pattern::Binding(name) => {
-                if self.is_bare_type_sugar_binding(name) {
+                if let Some(prim_ty) = bare_type_sugar_to_ty(name) {
+                    prim_ty
+                } else if self.is_bare_type_sugar_binding(name) {
                     self.lower_pattern_type_expr(
                         &TypeExpr::Path {
                             segments: vec![name.clone()],
@@ -1971,7 +2129,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 }
             }
             baml_compiler2_ast::Pattern::TypedBinding { ty, .. } => {
-                self.lower_pattern_type_expr(ty, at_expr)
+                self.resolve_type_expr(ty, at_expr)
             }
             baml_compiler2_ast::Pattern::Literal(lit) => Ty::Literal(
                 lit.clone(),
@@ -2035,14 +2193,142 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
+    /// Return the subset of a catch pattern that can match `baml.panics.*`
+    /// values, if any.
+    fn pattern_panic_narrowed_type(
+        &mut self,
+        pattern_id: baml_compiler2_ast::PatId,
+        body: &baml_compiler2_ast::ExprBody,
+        at_expr: ExprId,
+    ) -> Option<Ty> {
+        match &body.patterns[pattern_id] {
+            baml_compiler2_ast::Pattern::Binding(name) => {
+                if name.as_str() == "_" || !self.is_bare_type_sugar_binding(name) {
+                    return None;
+                }
+
+                let narrowed = if let Some(prim_ty) = bare_type_sugar_to_ty(name) {
+                    prim_ty
+                } else {
+                    self.lower_pattern_type_expr(
+                        &TypeExpr::Path {
+                            segments: vec![name.clone()],
+                            attrs: vec![],
+                        },
+                        at_expr,
+                    )
+                };
+                self.ty_panic_subset(&narrowed)
+            }
+            baml_compiler2_ast::Pattern::TypedBinding { ty, .. } => {
+                let narrowed = self.resolve_type_expr(ty, at_expr);
+                self.ty_panic_subset(&narrowed)
+            }
+            baml_compiler2_ast::Pattern::Union(parts) => {
+                let mut panic_members = Vec::new();
+                for part in parts {
+                    if let Some(ty) = self.pattern_panic_narrowed_type(*part, body, at_expr) {
+                        panic_members.push(ty);
+                    }
+                }
+
+                if panic_members.is_empty() {
+                    None
+                } else {
+                    Some(Self::join_all(&panic_members))
+                }
+            }
+            baml_compiler2_ast::Pattern::Literal(_)
+            | baml_compiler2_ast::Pattern::Null
+            | baml_compiler2_ast::Pattern::EnumVariant { .. } => None,
+        }
+    }
+
+    fn ty_panic_subset(&self, ty: &Ty) -> Option<Ty> {
+        match ty {
+            Ty::Class(qtn, _) => qtn.is_panic_type().then(|| ty.clone()),
+            Ty::TypeAlias(qtn, _) => {
+                if let Some(expanded) = self.aliases.get(qtn) {
+                    self.ty_panic_subset(expanded)
+                } else if qtn.is_panic_type() {
+                    Some(ty.clone())
+                } else {
+                    None
+                }
+            }
+            Ty::Union(parts, _) => {
+                let panic_members: Vec<_> = parts
+                    .iter()
+                    .filter_map(|part| self.ty_panic_subset(part))
+                    .collect();
+                if panic_members.is_empty() {
+                    None
+                } else {
+                    Some(Self::join_all(&panic_members))
+                }
+            }
+            _ => None,
+        }
+    }
+
+    fn pattern_binding_ty_for_catch(
+        &mut self,
+        pattern_id: PatId,
+        clause_binding_ty: &Ty,
+        narrowed_binding_ty: &Ty,
+        body: &ExprBody,
+        at_expr: ExprId,
+    ) -> Ty {
+        if self.pattern_has_multiple_variants(pattern_id, body, at_expr) {
+            // Multi-variant union binding — require narrowing (e.g. match)
+            // before field access. Use Error so diagnostics show the actual
+            // type rather than the stdlib `unknown`.
+            Ty::Error {
+                attr: TyAttr::default(),
+            }
+        } else if matches!(narrowed_binding_ty, Ty::Never { .. }) {
+            clause_binding_ty.clone()
+        } else {
+            narrowed_binding_ty.clone()
+        }
+    }
+
+    fn pattern_has_multiple_variants(
+        &mut self,
+        pattern_id: PatId,
+        body: &ExprBody,
+        at_expr: ExprId,
+    ) -> bool {
+        let pattern_ty = self.pattern_narrowed_type(
+            pattern_id,
+            &Ty::BuiltinUnknown {
+                attr: TyAttr::default(),
+            },
+            body,
+            at_expr,
+        );
+        self.ty_has_multiple_variants(&pattern_ty)
+    }
+
+    fn ty_has_multiple_variants(&self, ty: &Ty) -> bool {
+        match ty {
+            Ty::Union(members, _) => {
+                members.len() > 1 || members.iter().any(|ty| self.ty_has_multiple_variants(ty))
+            }
+            Ty::TypeAlias(qtn, _) => self
+                .aliases
+                .get(qtn)
+                .is_some_and(|expanded| self.ty_has_multiple_variants(expanded)),
+            _ => false,
+        }
+    }
+
     fn is_bare_type_sugar_binding(&self, name: &Name) -> bool {
-        matches!(
-            name.as_str(),
-            "int" | "float" | "string" | "bool" | "null" | "image" | "audio" | "video" | "pdf"
-        ) || self
-            .package_items
-            .lookup_type(&self.ns_context, name)
-            .is_some()
+        bare_type_sugar_to_ty(name).is_some()
+            || self
+                .package_items
+                .lookup_type(&self.ns_context, name)
+                .is_some()
     }
 
     /// Check if a pattern's `enum_name` (which may be dotted like `"root.Status"` or
@@ -2129,13 +2415,17 @@ impl<'db> TypeInferenceBuilder<'db> {
         match pattern {
             baml_compiler2_ast::Pattern::Binding(name) => {
                 if self.is_bare_type_sugar_binding(name) {
-                    let lowered = self.lower_pattern_type_expr(
-                        &TypeExpr::Path {
-                            segments: vec![name.clone()],
-                            attrs: vec![],
-                        },
-                        at_expr,
-                    );
+                    let lowered = if let Some(prim_ty) = bare_type_sugar_to_ty(name) {
+                        prim_ty
+                    } else {
+                        self.lower_pattern_type_expr(
+                            &TypeExpr::Path {
+                                segments: vec![name.clone()],
+                                attrs: vec![],
+                            },
+                            at_expr,
+                        )
+                    };
                     if Self::ty_covers_fact(&lowered, throw_fact) {
                         PatternMatchStrength::DefiniteMatch
                     } else if is_unknown {
@@ -2158,9 +2448,14 @@ impl<'db> TypeInferenceBuilder<'db> {
                 }
             }
             baml_compiler2_ast::Pattern::Literal(lit) => {
+                // A literal value pattern (e.g. "boom", 42) matches a subset of a
+                // primitive throw fact.  It can never *definitely* handle the whole
+                // type (other values of the same type would still escape), so we
+                // return MayMatch — keeping the throw fact in the residual for
+                // subsequent arms.
                 let lit_ty = Ty::Primitive(PrimitiveType::from_literal(lit), TyAttr::default());
                 if &lit_ty == throw_fact || is_unknown {
-                    PatternMatchStrength::DefiniteMatch
+                    PatternMatchStrength::MayMatch
                 } else {
                     PatternMatchStrength::NoMatch
                 }
@@ -2272,7 +2567,18 @@ impl<'db> TypeInferenceBuilder<'db> {
                     );
                     if let Some(transitive) = throws.transitive_for(&target) {
                         out.extend(transitive.iter().cloned());
+                    } else {
+                        // Target not in throw set registry (function parameter,
+                        // external function, etc.) — conservatively assume it
+                        // could throw anything.
+                        out.insert(Ty::Unknown {
+                            attr: TyAttr::default(),
+                        });
                     }
+                } else {
+                    out.insert(Ty::Unknown {
+                        attr: TyAttr::default(),
+                    });
                 }
             }
             Expr::Catch { clauses, .. } => {
@@ -2412,9 +2718,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                 self.collect_effective_throws_from_expr(*target, body, out);
                 self.collect_effective_throws_from_expr(*value, body, out);
             }
-            Stmt::Assert { condition } => {
-                self.collect_effective_throws_from_expr(*condition, body, out);
-            }
             Stmt::Throw { value } => {
                 self.collect_effective_throws_from_expr(*value, body, out);
                 self.collect_throw_facts_from_value(*value, out);
@@ -2446,7 +2749,15 @@ impl<'db> TypeInferenceBuilder<'db> {
                     );
                     if let Some(transitive) = throws.transitive_for(&target) {
                         out.extend(transitive.iter().cloned());
+                    } else {
+                        out.insert(Ty::Unknown {
+                            attr: TyAttr::default(),
+                        });
                     }
+                } else {
+                    out.insert(Ty::Unknown {
+                        attr: TyAttr::default(),
+                    });
                 }
             }
             Expr::If {
@@ -2576,7 +2887,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                 self.collect_throw_facts_from_expr(*target, body, out);
                 self.collect_throw_facts_from_expr(*value, body, out);
             }
-            Stmt::Assert { condition } => self.collect_throw_facts_from_expr(*condition, body, out),
             Stmt::Throw { value } => {
                 self.collect_throw_facts_from_expr(*value, body, out);
                 self.collect_throw_facts_from_value(*value, out);
@@ -2667,6 +2977,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                     | "errors"
                     | "unstable"
             );
+            // Don't report "unresolved name" for dependency package names —
+            // they'll be resolved by the parent FieldAccess expression.
+            let is_dep_package = self.res_ctx.dep_interfaces.iter().any(|(n, _)| n == name);
             if matches!(ty, Ty::Unknown { .. })
                 && !self.locals.contains_key(name)
                 && self
@@ -2678,6 +2991,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     .lookup_type(&self.ns_context, name)
                     .is_none()
                 && !is_baml_ns_shorthand
+                && !is_dep_package
             {
                 self.context
                     .report_simple(TirTypeError::UnresolvedName { name: name.clone() }, expr_id);
@@ -3568,7 +3882,22 @@ impl<'db> TypeInferenceBuilder<'db> {
             .chain(std::iter::once(member))
             .cloned()
             .collect();
-        self.resolve_package_item(pkg_items, &full_path, at)
+        let result = self.resolve_package_item(pkg_items, &full_path, at);
+        if result.is_none() {
+            // Package was found but the member doesn't exist — report a clear error
+            // with the full dotted path as context (e.g. "unresolved member: testing.Quorum").
+            let base_path = segments.join(".");
+            self.context.report_simple(
+                TirTypeError::UnresolvedName {
+                    name: Name::new(format!("{base_path}.{member}")),
+                },
+                at,
+            );
+            return Some(Ty::Unknown {
+                attr: TyAttr::default(),
+            });
+        }
+        result
     }
 
     fn try_primitive_static_access(
@@ -4191,8 +4520,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             | BinaryOp::Lt
             | BinaryOp::Le
             | BinaryOp::Gt
-            | BinaryOp::Ge
-            | BinaryOp::Instanceof => Ty::Primitive(PrimitiveType::Bool, TyAttr::default()),
+            | BinaryOp::Ge => Ty::Primitive(PrimitiveType::Bool, TyAttr::default()),
 
             // Logical → bool
             BinaryOp::And | BinaryOp::Or => Ty::Primitive(PrimitiveType::Bool, TyAttr::default()),
@@ -4652,6 +4980,9 @@ impl<'db> TypeInferenceBuilder<'db> {
         let saved_generic_params = self.generic_params.clone();
         let saved_expressions = std::mem::take(&mut self.expressions);
         let saved_bindings = std::mem::take(&mut self.bindings);
+        let saved_resolutions = std::mem::take(&mut self.resolutions);
+        let saved_exhaustive_matches = std::mem::take(&mut self.exhaustive_matches);
+        let saved_catch_residual_throws = std::mem::take(&mut self.catch_residual_throws);
 
         // Extend generic params with the lambda's own generic params
         let mut new_generic_params = self.generic_params.clone();
@@ -4718,11 +5049,33 @@ impl<'db> TypeInferenceBuilder<'db> {
         // Collect the lambda's expression types and restore parent state
         let lambda_expressions = std::mem::replace(&mut self.expressions, saved_expressions);
         self.bindings = saved_bindings;
+        self.resolutions = saved_resolutions;
+        self.exhaustive_matches = saved_exhaustive_matches;
+        self.catch_residual_throws = saved_catch_residual_throws;
         self.locals = saved_locals;
         self.declared_types = saved_declared;
         self.declared_return_ty = saved_return_ty;
         self.generic_params = saved_generic_params;
 
         (ret_ty, lambda_expressions)
+    }
+}
+
+/// Map a bare type sugar name to a `Ty` for primitive and media types.
+///
+/// Returns `Some(Ty)` for names like `int`, `string`, `image`, etc.
+/// Returns `None` for class/enum names that need full resolution.
+fn bare_type_sugar_to_ty(name: &Name) -> Option<Ty> {
+    match name.as_str() {
+        "int" => Some(Ty::Primitive(PrimitiveType::Int, TyAttr::default())),
+        "float" => Some(Ty::Primitive(PrimitiveType::Float, TyAttr::default())),
+        "string" => Some(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
+        "bool" => Some(Ty::Primitive(PrimitiveType::Bool, TyAttr::default())),
+        "null" => Some(Ty::Primitive(PrimitiveType::Null, TyAttr::default())),
+        "image" => Some(Ty::Primitive(PrimitiveType::Image, TyAttr::default())),
+        "audio" => Some(Ty::Primitive(PrimitiveType::Audio, TyAttr::default())),
+        "video" => Some(Ty::Primitive(PrimitiveType::Video, TyAttr::default())),
+        "pdf" => Some(Ty::Primitive(PrimitiveType::Pdf, TyAttr::default())),
+        _ => None,
     }
 }

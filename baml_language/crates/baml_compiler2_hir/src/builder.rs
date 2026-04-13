@@ -303,6 +303,21 @@ impl<'db> SemanticIndexBuilder<'db> {
                         ));
                 }
 
+                // Register optional stack trace binding in the same CatchClause scope.
+                if let Some(st_pat) = clause.stack_trace_binding {
+                    if let Some(name) = Self::pattern_binding_name(&body.patterns, st_pat) {
+                        let name_range = source_map.pattern_span(st_pat);
+                        let scope_id = self.current_scope_id();
+                        self.scope_bindings[scope_id.index() as usize]
+                            .bindings
+                            .push((
+                                name.clone(),
+                                DefinitionSite::PatternBinding(st_pat),
+                                name_range,
+                            ));
+                    }
+                }
+
                 // Push CatchArm child scopes — arm pattern visible only in arm body.
                 for &arm_id in &clause.arms {
                     let arm = &body.catch_arms[arm_id];
@@ -1100,6 +1115,7 @@ impl<'db> SemanticIndexBuilder<'db> {
             ast::TypeExpr::Bool { .. } => "bool".to_string(),
             ast::TypeExpr::Null { .. } => "null".to_string(),
             ast::TypeExpr::Never { .. } => "never".to_string(),
+            ast::TypeExpr::Void { .. } => "void".to_string(),
             ast::TypeExpr::Uint8Array { .. } => "uint8array".to_string(),
             ast::TypeExpr::Media { kind, .. } => kind.to_string(),
             ast::TypeExpr::Optional { inner, .. } => format!("{}?", Self::render_type_expr(inner)),

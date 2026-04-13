@@ -207,12 +207,10 @@ function user.iterator_style_for_loop() -> int {
 
 function user.let_statements() -> int {
     alloc_instance Point
-    copy 0
     load_const 1
-    store_field .x
-    copy 0
+    init_field .x
     load_const 2
-    store_field .y
+    init_field .y
     store_var point
     load_var point
     load_field .x

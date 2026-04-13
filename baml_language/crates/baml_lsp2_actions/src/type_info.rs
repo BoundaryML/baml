@@ -189,7 +189,7 @@ pub fn type_at(db: &dyn Db, file: SourceFile, offset: TextSize) -> Option<TypeIn
 // ── type_info_for_definition ──────────────────────────────────────────────────
 
 /// Build `TypeInfo` for a top-level item definition.
-fn type_info_for_definition(db: &dyn Db, def: Definition<'_>) -> TypeInfo {
+pub fn type_info_for_definition(db: &dyn Db, def: Definition<'_>) -> TypeInfo {
     match def {
         Definition::Function(func_loc) => {
             let sig = baml_compiler2_hir::signature::function_signature(db, func_loc);

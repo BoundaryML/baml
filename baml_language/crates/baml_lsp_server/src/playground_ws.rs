@@ -23,6 +23,21 @@ pub enum WsInMessage {
     },
     #[serde(rename = "cancelCall")]
     CancelCall { id: u64, project: String },
+    #[serde(rename = "callTestFunction")]
+    CallTestFunction {
+        id: u64,
+        project: String,
+        generation: u64,
+        #[serde(rename = "testName")]
+        test_name: String,
+    },
+    #[serde(rename = "expandTestSet")]
+    ExpandTestSet {
+        project: String,
+        generation: u64,
+        #[serde(rename = "testsetName")]
+        testset_name: String,
+    },
     #[serde(rename = "envVarResponse")]
     EnvVarResponse {
         id: u64,
@@ -31,6 +46,8 @@ pub enum WsInMessage {
     },
     #[serde(rename = "requestState")]
     RequestState,
+    #[serde(rename = "requestCollectTests")]
+    RequestCollectTests { project: String },
     #[serde(rename = "requestControlFlowGraph")]
     RequestControlFlowGraph {
         project: String,

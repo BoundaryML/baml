@@ -213,7 +213,7 @@ fn anthropic_content_parts(
 
 fn anthropic_media_part(media: &Arc<MediaValue>) -> Result<ContentPart, super::BuildRequestError> {
     let mime = super::mime_type_as_ok(media)?;
-    let source = media.read_content(|c| content_to_media_source(c, mime))?;
+    let source = media.read_content(|c| content_to_media_source(c, &mime))?;
 
     match media.kind {
         MediaKind::Image => Ok(ContentPart::Image {

@@ -232,12 +232,10 @@ async fn watch_alias() {
     insta::assert_snapshot!(output.bytecode, @r#"
     function main() -> int {
         alloc_instance Point
-        copy 0
         load_const 0
-        store_field .x
-        copy 0
+        init_field .x
         load_const 0
-        store_field .y
+        init_field .y
         store_var point
         load_const "point"
         load_const null
@@ -275,12 +273,10 @@ async fn watch_alias_nested_scope() {
     insta::assert_snapshot!(output.bytecode, @r#"
     function main() -> int {
         alloc_instance Point
-        copy 0
         load_const 0
-        store_field .x
-        copy 0
+        init_field .x
         load_const 0
-        store_field .y
+        init_field .y
         store_var point
         load_const "point"
         load_const null
@@ -324,12 +320,10 @@ async fn watch_scope_exit() {
     insta::assert_snapshot!(output.bytecode, @r#"
     function main() -> int {
         alloc_instance Point
-        copy 0
         load_const 0
-        store_field .x
-        copy 0
+        init_field .x
         load_const 0
-        store_field .y
+        init_field .y
         store_var point
         load_const "point"
         load_const null
@@ -394,12 +388,10 @@ async fn watch_function_call_modifications() {
 
     function main() -> int {
         alloc_instance Point
-        copy 0
         load_const 0
-        store_field .x
-        copy 0
+        init_field .x
         load_const 0
-        store_field .y
+        init_field .y
         store_var point
         load_const "point"
         load_const null
@@ -447,53 +439,39 @@ async fn watch_nested_object_added() {
     insta::assert_snapshot!(output.bytecode, @r#"
     function main() -> int {
         alloc_instance Vec2D
-        copy 0
         alloc_instance Point
-        copy 0
         alloc_instance Value
-        copy 0
         load_const 0
-        store_field .value
-        store_field .x
-        copy 0
+        init_field .value
+        init_field .x
         alloc_instance Value
-        copy 0
         load_const 0
-        store_field .value
-        store_field .y
-        store_field .p
-        copy 0
+        init_field .value
+        init_field .y
+        init_field .p
         alloc_instance Point
-        copy 0
         alloc_instance Value
-        copy 0
         load_const 0
-        store_field .value
-        store_field .x
-        copy 0
+        init_field .value
+        init_field .x
         alloc_instance Value
-        copy 0
         load_const 0
-        store_field .value
-        store_field .y
-        store_field .q
+        init_field .value
+        init_field .y
+        init_field .q
         store_var vec
         load_const "vec"
         load_const null
         watch vec
         alloc_instance Point
-        copy 0
         alloc_instance Value
-        copy 0
         load_const 1
-        store_field .value
-        store_field .x
-        copy 0
+        init_field .value
+        init_field .x
         alloc_instance Value
-        copy 0
         load_const 1
-        store_field .value
-        store_field .y
+        init_field .value
+        init_field .y
         store_var p
         load_var vec
         load_var p
@@ -540,36 +518,26 @@ async fn watch_nested_object_removed() {
     insta::assert_snapshot!(output.bytecode, @r#"
     function main() -> int {
         alloc_instance Vec2D
-        copy 0
         alloc_instance Point
-        copy 0
         alloc_instance Value
-        copy 0
         load_const 0
-        store_field .value
-        store_field .x
-        copy 0
+        init_field .value
+        init_field .x
         alloc_instance Value
-        copy 0
         load_const 0
-        store_field .value
-        store_field .y
-        store_field .p
-        copy 0
+        init_field .value
+        init_field .y
+        init_field .p
         alloc_instance Point
-        copy 0
         alloc_instance Value
-        copy 0
         load_const 0
-        store_field .value
-        store_field .x
-        copy 0
+        init_field .value
+        init_field .x
         alloc_instance Value
-        copy 0
         load_const 0
-        store_field .value
-        store_field .y
-        store_field .q
+        init_field .value
+        init_field .y
+        init_field .q
         store_var vec
         load_const "vec"
         load_const null
@@ -579,18 +547,14 @@ async fn watch_nested_object_removed() {
         store_var p
         load_var vec
         alloc_instance Point
-        copy 0
         alloc_instance Value
-        copy 0
         load_const 1
-        store_field .value
-        store_field .x
-        copy 0
+        init_field .value
+        init_field .x
         alloc_instance Value
-        copy 0
         load_const 1
-        store_field .value
-        store_field .y
+        init_field .value
+        init_field .y
         store_field .p
         load_var p
         load_field .x
@@ -650,39 +614,31 @@ async fn watch_cyclic_graph() {
     insta::assert_snapshot!(output.bytecode, @r#"
     function main() -> int {
         alloc_instance Vertex
-        copy 0
         load_const 1
-        store_field .edges
-        copy 0
+        init_field .edges
         alloc_array 0
-        store_field .value
+        init_field .value
         store_var v1
         alloc_instance Vertex
-        copy 0
         load_const 2
-        store_field .edges
-        copy 0
+        init_field .edges
         alloc_array 0
-        store_field .value
+        init_field .value
         store_var v2
         load_const "v2"
         load_const null
         watch v2
         alloc_instance Vertex
-        copy 0
         load_const 3
-        store_field .edges
-        copy 0
+        init_field .edges
         alloc_array 0
-        store_field .value
+        init_field .value
         store_var v3
         alloc_instance Vertex
-        copy 0
         load_const 4
-        store_field .edges
-        copy 0
+        init_field .edges
         alloc_array 0
-        store_field .value
+        init_field .value
         store_var v4
         load_const "v4"
         load_const null
@@ -738,7 +694,7 @@ async fn block_notification_basic() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         notify_block entering_computation
         load_const 1
@@ -768,7 +724,7 @@ async fn block_notification_multiple() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         notify_block first_block
         notify_block second_block
@@ -806,7 +762,7 @@ async fn viz_header_before_if() {
         entry: "header_before_if",
     };
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function header_before_if() -> int {
         notify_block MyHeader
         load_const true
@@ -848,7 +804,7 @@ async fn viz_header_before_while() {
         entry: "header_before_while",
     };
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function header_before_while() -> int {
         load_const 0
         store_var x
@@ -892,7 +848,7 @@ async fn viz_standalone_header_no_viz_events() {
         entry: "standalone_header",
     };
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function standalone_header() -> int {
         notify_block JustAHeader
         load_const 5
@@ -926,7 +882,7 @@ async fn viz_multiple_headers_only_one_before_if() {
         entry: "multiple_headers",
     };
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function multiple_headers() -> int {
         notify_block FirstHeader
         notify_block SecondHeader
@@ -967,7 +923,7 @@ async fn viz_if_without_header_no_viz() {
         entry: "if_no_header",
     };
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function if_no_header() -> int {
         load_const true
         pop_jump_if_false L0

@@ -21,7 +21,7 @@ async fn call_result_immediate_right_operand_subtraction() {
         "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function id(x: int) -> int {
         load_var x
         return
@@ -50,7 +50,7 @@ async fn phi_like_right_operand_subtraction() {
         "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 2
         load_const 1
@@ -98,12 +98,11 @@ async fn cross_block_field_mutation() {
         "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         alloc_instance Box
-        copy 0
         load_const 1
-        store_field .v
+        init_field .v
         store_var b
         load_var b
         load_field .v
@@ -140,7 +139,7 @@ async fn cross_block_let_mutation() {
         args: { "c" => BexExternalValue::Bool(true) },
     };
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main(c: bool) -> int {
         load_const 1
         store_var a
@@ -195,7 +194,7 @@ async fn cross_block_param_mutation() {
         },
     };
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main(c: bool, p: int) -> int {
         load_var p
         store_var x
@@ -225,7 +224,7 @@ async fn copy_of_mutable_param() {
         args: { "x" => BexExternalValue::Int(5) },
     };
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main(x: int) -> int {
         load_var x
         store_var y
@@ -257,7 +256,7 @@ async fn transitive_param_copy_mutation() {
         },
     };
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main(c: bool, p: int) -> int {
         load_var p
         store_var x
@@ -279,7 +278,7 @@ async fn multiple_defs_preserve_side_effects() {
     let output = baml_tests::baml_test! {
         baml: r#"
             function fail() -> int {
-                assert(false);
+                assert.is_true(false)
                 1
             }
 
@@ -291,10 +290,11 @@ async fn multiple_defs_preserve_side_effects() {
         "#,
     };
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function fail() -> int {
         load_const false
-        assert
+        call assert.is_true
+        pop 1
         load_const 1
         return
     }
@@ -308,5 +308,11 @@ async fn multiple_defs_preserve_side_effects() {
         return
     }
     ");
-    insta::assert_snapshot!(output.result.unwrap_err().to_string(), @"VM error: assertion failed");
+    insta::assert_snapshot!(output.result.unwrap_err().to_string(), @r#"
+    Traceback (most recent call last):
+      File "test.baml", line 8, in user.main
+      File "test.baml", line 3, in user.fail
+      File "<builtin>/assert/assert.baml", line 5, in assert.is_true
+    uncaught throw: Instance { class_name: "baml.panics.UserPanic", fields: {"message": String("assertion failed: expected true")} }
+    "#);
 }

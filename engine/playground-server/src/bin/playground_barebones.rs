@@ -7,9 +7,8 @@ use playground_server::{
 use tracing_subscriber::EnvFilter;
 use walkdir::WalkDir;
 
-// const PROJECT_DIR: &'static str = "/Users/sam/baml4/c2/baml_src";
-// const PROJECT_DIR: &'static str = "/Users/sam/baml/engine/playground-server/tests/codelens-bugs";
-const PROJECT_DIR: &str = "/Users/sam/baml/integ-tests/baml_src";
+// PROJECT_DIR is relative to this crate's directory (engine/playground-server)
+const PROJECT_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../integ-tests/baml_src");
 
 #[derive(Debug)]
 pub struct Playground2Server {

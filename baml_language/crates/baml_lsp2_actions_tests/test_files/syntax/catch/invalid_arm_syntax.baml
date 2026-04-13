@@ -29,7 +29,7 @@ function InvalidArmSyntax(x: int) -> string {
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: unreachable arm
+// Warning: unreachable arm
 //    ╭─[ catch_invalid_arm_syntax.baml:7:18 ]
 //    │
 //  7 │     _: string => "ok",
@@ -38,7 +38,7 @@ function InvalidArmSyntax(x: int) -> string {
 //    │ 
 //    │ Note: Error code: E0001
 // ───╯
-// Error: unreachable arm
+// Warning: unreachable arm
 //    ╭─[ catch_invalid_arm_syntax.baml:7:23 ]
 //    │
 //  7 │ ╭─▶     _: string => "ok",

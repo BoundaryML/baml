@@ -36,15 +36,6 @@ pub struct LlmCapabilities {
 #[derive(Tsify, Serialize)]
 #[tsify(into_wasm_abi)]
 #[serde(rename_all = "camelCase")]
-pub struct TestInfo {
-    pub name: String,
-    pub function_name: String,
-    pub args_json: String,
-}
-
-#[derive(Tsify, Serialize)]
-#[tsify(into_wasm_abi)]
-#[serde(rename_all = "camelCase")]
 pub struct ProjectDiagnostic {
     pub severity: String,
     pub message: String,
@@ -56,7 +47,6 @@ pub struct ProjectDiagnostic {
 pub struct ProjectUpdate {
     pub is_bex_current: bool,
     pub functions: Vec<FunctionInfo>,
-    pub tests: Vec<TestInfo>,
     pub diagnostics: Vec<ProjectDiagnostic>,
 }
 
@@ -83,6 +73,13 @@ pub enum PlaygroundNotification {
     },
     #[serde(rename_all = "camelCase")]
     CursorContext { context: serde_json::Value },
+    #[serde(rename_all = "camelCase")]
+    TestCollectionResult {
+        project: String,
+        generation: u64,
+        call_id: u64,
+        data: Vec<u8>,
+    },
 }
 
 impl From<bex_project::PlaygroundNotification> for PlaygroundNotification {
@@ -110,15 +107,6 @@ impl From<bex_project::PlaygroundNotification> for PlaygroundNotification {
                                     build_request: c.build_request,
                                     client_name: c.client_name,
                                 }),
-                            })
-                            .collect(),
-                        tests: update
-                            .tests
-                            .into_iter()
-                            .map(|t| TestInfo {
-                                name: t.name,
-                                function_name: t.function_name,
-                                args_json: t.args_json,
                             })
                             .collect(),
                         diagnostics: update
@@ -149,6 +137,17 @@ impl From<bex_project::PlaygroundNotification> for PlaygroundNotification {
             bex_project::PlaygroundNotification::CursorContext { context } => {
                 PlaygroundNotification::CursorContext { context }
             }
+            bex_project::PlaygroundNotification::TestCollectionResult {
+                project,
+                generation,
+                call_id,
+                data,
+            } => PlaygroundNotification::TestCollectionResult {
+                project,
+                generation,
+                call_id,
+                data,
+            },
         }
     }
 }

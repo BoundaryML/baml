@@ -43,6 +43,42 @@ function test_multiple_classes(x: Foo | Bar | Baz) -> string {
 
 //----
 //- diagnostics
+// Error: `instanceof` is no longer supported. Use a `match` expression for type checking instead.
+//     ╭─[ expr_instanceof_narrowing.baml:11:11 ]
+//     │
+//  11 │     if (x instanceof Foo) {
+//     │           ─────┬────  
+//     │                ╰────── use `match` instead
+//     │ 
+//     │ Note: Error code: E0098
+// ────╯
+// Error: `instanceof` is no longer supported. Use a `match` expression for type checking instead.
+//     ╭─[ expr_instanceof_narrowing.baml:22:11 ]
+//     │
+//  22 │     if (x instanceof Foo) {
+//     │           ─────┬────  
+//     │                ╰────── use `match` instead
+//     │ 
+//     │ Note: Error code: E0098
+// ────╯
+// Error: `instanceof` is no longer supported. Use a `match` expression for type checking instead.
+//     ╭─[ expr_instanceof_narrowing.baml:35:11 ]
+//     │
+//  35 │     if (x instanceof Foo) {
+//     │           ─────┬────  
+//     │                ╰────── use `match` instead
+//     │ 
+//     │ Note: Error code: E0098
+// ────╯
+// Error: `instanceof` is no longer supported. Use a `match` expression for type checking instead.
+//     ╭─[ expr_instanceof_narrowing.baml:37:18 ]
+//     │
+//  37 │     } else if (x instanceof Baz) {
+//     │                  ─────┬────  
+//     │                       ╰────── use `match` instead
+//     │ 
+//     │ Note: Error code: E0098
+// ────╯
 // Error: type `user.Bar` has no member `field`
 //     ╭─[ expr_instanceof_narrowing.baml:13:18 ]
 //     │

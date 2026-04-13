@@ -1,0 +1,9 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== SYNTAX TREE ===
+SOURCE_FILE "// Placeholder – stdlib snapshot tests use this project to capture
+// the built-in `package testing` definitions (HIR, TIR, MIR, codegen)."
+
+=== ERRORS ===
+None

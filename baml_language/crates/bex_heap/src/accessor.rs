@@ -692,7 +692,8 @@ impl<'a> BexValue<'a> {
                     }
                     Object::Type(ty) => Ok(BexExternalValue::Adt(BexExternalAdt::Type(ty.clone()))),
                     Object::Uint8Array(bytes) => Ok(BexExternalValue::Uint8Array(bytes.clone())),
-                    Object::RustData(data) => Ok(BexExternalValue::RustData(data.clone())),
+                    Object::RustData(data) => Ok(bex_external_types::try_convert_rust_data(data)
+                        .unwrap_or_else(|| BexExternalValue::RustData(data.clone()))),
                     Object::Closure(_) => Err(AccessError::CannotConvertToOwned {
                         reason: "closure".to_string(),
                     }),

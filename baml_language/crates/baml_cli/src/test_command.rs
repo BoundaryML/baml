@@ -160,6 +160,7 @@ impl TestArgs {
                 func_name,
                 ordered_args,
                 FunctionCallContextBuilder::new(CallId::next()).build(),
+                true,
             )) {
                 Ok(result) => {
                     println!("PASS {func_name}::{test_name}");

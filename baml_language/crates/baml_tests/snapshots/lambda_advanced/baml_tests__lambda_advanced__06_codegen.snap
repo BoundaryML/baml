@@ -211,8 +211,7 @@ function user.test_lambda_variable_then_pass() -> int[] {
 }
 
 function user.test_lambda_with_if() -> string {
-    load_const 5
-    unary_op -
+    load_const -5
     make_closure .<lambda(test_lambda_with_if, 0)>, 0
     call_indirect
     return
@@ -232,37 +231,6 @@ function user.test_literal_return_inference() -> int[] {
     alloc_array 3
     make_closure .<lambda(test_literal_return_inference, 0)>, 0
     call baml.Array.map
-    return
-}
-
-function user.test_map_entries() -> string[] {
-    load_const 1
-    load_const 2
-    load_const "a"
-    load_const "b"
-    alloc_map 2
-    make_closure .<lambda(test_map_entries, 0)>, 0
-    call baml.Map.map
-    return
-}
-
-function user.test_map_entries_inferred() -> string[] {
-    load_const 1
-    load_const 2
-    load_const "a"
-    load_const "b"
-    alloc_map 2
-    make_closure .<lambda(test_map_entries_inferred, 0)>, 0
-    call baml.Map.map
-    return
-}
-
-function user.test_map_keys_transform() -> string[] {
-    load_const 1
-    load_const "hello"
-    alloc_map 1
-    make_closure .<lambda(test_map_keys_transform, 0)>, 0
-    call baml.Map.map_keys
     return
 }
 
@@ -305,28 +273,6 @@ function user.test_map_type_change_inferred() -> string[] {
     return
 }
 
-function user.test_map_values_fully_inferred() -> string[] {
-    load_const 10
-    load_const 20
-    load_const "x"
-    load_const "y"
-    alloc_map 2
-    make_closure .<lambda(test_map_values_fully_inferred, 0)>, 0
-    call baml.Map.map_values
-    return
-}
-
-function user.test_map_values_transform() -> int[] {
-    load_const 10
-    load_const 20
-    load_const "x"
-    load_const "y"
-    alloc_map 2
-    make_closure .<lambda(test_map_values_transform, 0)>, 0
-    call baml.Map.map_values
-    return
-}
-
 function user.test_map_with_capture() -> int[] {
     load_var ?1
     make_cell
@@ -357,8 +303,7 @@ function user.test_nested_map() -> int[][] {
 }
 
 function user.test_optional_return() -> int? {
-    load_const 1
-    unary_op -
+    load_const -1
     make_closure .<lambda(test_optional_return, 0)>, 0
     call_indirect
     return

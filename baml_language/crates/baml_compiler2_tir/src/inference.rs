@@ -242,7 +242,20 @@ pub fn infer_scope_types<'db>(
     let res_ctx = crate::package_interface::package_resolution_context(db, pkg_id);
     let pkg_items = res_ctx.own_items;
 
-    let aliases = collect_type_aliases(db, pkg_items);
+    let mut aliases = collect_type_aliases(db, pkg_items);
+    // Also collect type aliases from dependency packages so that e.g.
+    // `testing.TestRunner` can be resolved during subtype checking.
+    for (_dep_name, dep_iface) in &res_ctx.dep_interfaces {
+        for types_in_ns in dep_iface.types.values() {
+            for exported in types_in_ns.values() {
+                if let crate::package_interface::ExportedType::TypeAlias { qtn, resolved } =
+                    exported
+                {
+                    aliases.insert(qtn.clone(), resolved.clone());
+                }
+            }
+        }
+    }
     let context = InferContext::new(db, scope_id);
     let mut builder = TypeInferenceBuilder::new(context, res_ctx, pkg_id, scope_id, aliases);
 
@@ -822,25 +835,78 @@ pub fn render_scope_diagnostics<'db>(
     let scope = &index.scopes[file_scope.index() as usize];
     let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
 
-    let source_map = item_tree
-        .functions
-        .iter()
-        .find(|(_, f)| f.span == scope.range && scope.name.as_ref() == Some(&f.name))
-        .and_then(|(local_id, _)| {
-            let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(db, file, *local_id);
-            baml_compiler2_hir::body::function_body_source_map(db, func_loc)
-        })
-        .or_else(|| {
-            // Also search let bindings — synthesized Item::Let initializers have source maps too.
+    let source_map = match &scope.kind {
+        ScopeKind::Lambda => {
+            // For lambda scopes, walk ancestors to find the parent Function/Let body,
+            // then use find_lambda_by_span to get the lambda's own source map.
+            let lambda_span = scope.range;
+            let mut found_sm = None;
+            'ancestor: for ancestor_fsi in index.ancestor_scopes(file_scope) {
+                let ancestor = &index.scopes[ancestor_fsi.index() as usize];
+                match &ancestor.kind {
+                    ScopeKind::Function => {
+                        for func_data in item_tree.functions.values() {
+                            if func_data.span == ancestor.range
+                                && ancestor.name.as_ref() == Some(&func_data.name)
+                            {
+                                if let Some(baml_compiler2_ast::FunctionBodyDef::Expr(
+                                    ref body,
+                                    ref sm,
+                                )) = func_data.body
+                                {
+                                    if let Some((_, _, lambda_sm, _)) =
+                                        find_lambda_by_span(body, sm, lambda_span)
+                                    {
+                                        found_sm = Some(lambda_sm.clone());
+                                    }
+                                }
+                                break 'ancestor;
+                            }
+                        }
+                    }
+                    ScopeKind::Let => {
+                        for let_data in item_tree.lets.values() {
+                            if let_data.span == ancestor.range
+                                && ancestor.name.as_ref() == Some(&let_data.name)
+                            {
+                                if let Some((ref body, ref sm)) = let_data.initializer {
+                                    if let Some((_, _, lambda_sm, _)) =
+                                        find_lambda_by_span(body, sm, lambda_span)
+                                    {
+                                        found_sm = Some(lambda_sm.clone());
+                                    }
+                                }
+                                break 'ancestor;
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            found_sm
+        }
+        _ => {
+            // For Function/Let scopes, find the source map directly.
             item_tree
-                .lets
+                .functions
                 .iter()
-                .find(|(_, l)| l.span == scope.range)
+                .find(|(_, f)| f.span == scope.range && scope.name.as_ref() == Some(&f.name))
                 .and_then(|(local_id, _)| {
-                    let let_loc = baml_compiler2_hir::loc::LetLoc::new(db, file, *local_id);
-                    baml_compiler2_hir::body::let_body_source_map(db, let_loc)
+                    let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(db, file, *local_id);
+                    baml_compiler2_hir::body::function_body_source_map(db, func_loc)
                 })
-        });
+                .or_else(|| {
+                    item_tree
+                        .lets
+                        .iter()
+                        .find(|(_, l)| l.span == scope.range)
+                        .and_then(|(local_id, _)| {
+                            let let_loc = baml_compiler2_hir::loc::LetLoc::new(db, file, *local_id);
+                            baml_compiler2_hir::body::let_body_source_map(db, let_loc)
+                        })
+                })
+        }
+    };
 
     diags
         .diagnostics

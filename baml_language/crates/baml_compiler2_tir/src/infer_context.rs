@@ -47,6 +47,9 @@ pub enum TirTypeError {
     /// A `void` expression (e.g. `if` without `else`) was used where a value
     /// is required — assigned to a variable, passed as an argument, or returned.
     VoidUsedAsValue,
+    /// The return value of a void-returning function was used where a value
+    /// is required — assigned to a variable, passed as an argument, etc.
+    VoidFunctionResultUsed,
     /// Expression is not callable (e.g. `42(1)` or `Foo(1)` where Foo is a class).
     NotCallable { ty: Ty },
     /// Expression is not iterable (e.g. `for let i in 42 { ... }` where 42 is an int).
@@ -169,6 +172,9 @@ impl fmt::Display for TirTypeError {
                     f,
                     "`if` without `else` cannot be used as a value; add an `else` branch"
                 )
+            }
+            TirTypeError::VoidFunctionResultUsed => {
+                write!(f, "cannot use return value of a void function")
             }
             TirTypeError::NotCallable { ty } => {
                 write!(f, "`{ty}` is not a function — it cannot be called")
@@ -543,6 +549,19 @@ impl<'db> InferContext<'db> {
             .push(TirDiagnostic {
                 error,
                 severity: DiagnosticSeverity::Error,
+                primary: DiagnosticLocation::Stmt(at),
+                related: Vec::new(),
+            });
+    }
+
+    /// Report a warning-level diagnostic at a specific statement.
+    pub fn report_warning_at_stmt(&self, error: TirTypeError, at: StmtId) {
+        self.diagnostics
+            .borrow_mut()
+            .diagnostics
+            .push(TirDiagnostic {
+                error,
+                severity: DiagnosticSeverity::Warning,
                 primary: DiagnosticLocation::Stmt(at),
                 related: Vec::new(),
             });

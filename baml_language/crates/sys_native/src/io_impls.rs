@@ -40,7 +40,7 @@ impl io::IoNamespaceEnv for NativeSysOps {
 type FsFileHandle = tokio::sync::Mutex<tokio::fs::File>;
 
 impl io::IoClassFsFile for NativeSysOps {
-    fn read(
+    fn read_string(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
@@ -57,6 +57,29 @@ impl io::IoClassFsFile for NativeSysOps {
             let mut f = handle.lock().await;
             let mut contents = String::new();
             f.read_to_string(&mut contents)
+                .await
+                .map_err(|e| OpErrorKind::Other(format!("Failed to read file: {e}")))?;
+            Ok(contents)
+        })
+    }
+
+    fn read_bytes(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        file: owned::fs::File,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Vec<u8>> {
+        use tokio::io::AsyncReadExt;
+
+        SysOpOutput::async_op(async move {
+            let handle: Arc<FsFileHandle> = file
+                ._handle
+                .downcast::<FsFileHandle>()
+                .map_err(|_| OpErrorKind::Other("Invalid file handle type".into()))?;
+            let mut f = handle.lock().await;
+            let mut contents = Vec::new();
+            f.read_to_end(&mut contents)
                 .await
                 .map_err(|e| OpErrorKind::Other(format!("Failed to read file: {e}")))?;
             Ok(contents)
@@ -143,16 +166,6 @@ impl io::IoNamespaceSys for NativeSysOps {
             tokio::time::sleep(std::time::Duration::from_millis(millis)).await;
             Ok(())
         })
-    }
-
-    fn panic(
-        &self,
-        _heap: &Arc<BexHeap>,
-        _call_id: CallId,
-        message: String,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<()> {
-        SysOpOutput::err(OpErrorKind::Other(message))
     }
 }
 
@@ -253,6 +266,41 @@ impl io::IoClassHttpResponse for NativeSysOps {
         _response: owned::http::Response,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<String> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+
+    #[cfg(feature = "bundle-http")]
+    fn bytes(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        response: owned::http::Response,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Vec<u8>> {
+        SysOpOutput::async_op(async move {
+            let body: Arc<tokio::sync::Mutex<Option<reqwest::Response>>> = response
+                ._body
+                .downcast::<tokio::sync::Mutex<Option<reqwest::Response>>>()
+                .map_err(|_| OpErrorKind::Other("Invalid response body handle".into()))?;
+            let mut guard = body.lock().await;
+            let resp = guard.take().ok_or_else(|| {
+                OpErrorKind::Other("Response body has already been consumed".into())
+            })?;
+            resp.bytes()
+                .await
+                .map(|b| b.to_vec())
+                .map_err(|e| OpErrorKind::Other(format!("Failed to read response body: {e}")))
+        })
+    }
+
+    #[cfg(not(feature = "bundle-http"))]
+    fn bytes(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _response: owned::http::Response,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Vec<u8>> {
         SysOpOutput::err(OpErrorKind::Unsupported)
     }
 }

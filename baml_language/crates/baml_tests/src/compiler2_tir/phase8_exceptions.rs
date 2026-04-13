@@ -260,3 +260,88 @@ function f() -> int {
         "expected unreachable catch arm warning, got:\n{output}"
     );
 }
+
+#[test]
+fn mixed_panic_union_catch_binding_requires_further_narrowing() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"class AppError {
+  code int
+}
+
+function fail(which: int) -> int {
+  if (which == 0) {
+    throw AppError { code: 7 }
+  }
+  1 / 0
+}
+
+function f(which: int) -> int {
+  return fail(which) catch (e) {
+    AppError | DivisionByZero => e.code
+    _ => 0
+  }
+}"#,
+    );
+
+    let output = render_tir(&db, file);
+    // Multi-variant union bindings require instanceof narrowing before field
+    // access, so `e.code` should produce a "has no member" error.
+    assert!(
+        output.contains("has no member"),
+        "mixed union catch bindings should require further narrowing before field access, got:\n{output}"
+    );
+}
+
+#[test]
+fn panic_containing_union_after_wildcard_is_not_unreachable() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"class AppError {
+  code int
+}
+
+function fail() -> int {
+  throw AppError { code: 7 }
+}
+
+function f() -> int {
+  return fail() catch (e) {
+    _ => 1
+    _: AppError | baml.panics.DivisionByZero => 2
+  }
+}"#,
+    );
+
+    let output = render_tir(&db, file);
+    assert!(
+        !output.contains("unreachable arm"),
+        "mixed panic union arm should stay reachable because panics may still occur, got:\n{output}"
+    );
+}
+
+#[test]
+fn single_panic_catch_binding_allows_field_access() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"function fail() -> int {
+  1 / 0
+}
+
+function f() -> int {
+  return fail() catch (e) {
+    DivisionByZero => e.dividend
+    _ => 0
+  }
+}"#,
+    );
+
+    let output = render_tir(&db, file);
+    assert!(
+        !output.contains("unresolved member") && !output.contains("cannot access field"),
+        "single-type catch binding should allow field access, got:\n{output}"
+    );
+}

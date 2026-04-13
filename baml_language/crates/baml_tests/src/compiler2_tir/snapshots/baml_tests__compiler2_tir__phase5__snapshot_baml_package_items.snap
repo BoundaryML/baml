@@ -4,7 +4,7 @@ expression: output
 ---
 namespace baml:
   class Array<T> { methods: [length, at, push, pop, concat, reverse, slice, join, map] }
-  class Map<K, V> { methods: [length, has, keys, values, set, get, map, map_keys, map_values] }
+  class Map<K, V> { methods: [length, has, keys, values, set, get] }
   class String { methods: [length, toLowerCase, toUpperCase, trim, includes, startsWith, endsWith, split, substring, replace, indexOf, charAt, matches, replaceAll] }
   class Uint8Array { methods: [length, at, push, pop, concat, includes, reverse, slice, zeroes, from_array, to_array, from_hex, to_hex, from_base64, to_base64, sort] }
   function deep_copy<T>
@@ -21,14 +21,16 @@ namespace baml.errors:
   class LlmClient { methods: [] }
   class NotImplemented { methods: [] }
   class RenderPrompt { methods: [] }
+  class StackFrame { methods: [] }
+  class StackTrace { methods: [to_string] }
   class Timeout { methods: [] }
   class Unsupported { methods: [] }
 namespace baml.fs:
-  class File { methods: [read, close] }
+  class File { methods: [read_string, read_bytes, close] }
   function open
 namespace baml.http:
   class Request { methods: [] }
-  class Response { methods: [text, ok] }
+  class Response { methods: [text, bytes, ok] }
   function fetch
   function send
 namespace baml.llm:
@@ -39,6 +41,7 @@ namespace baml.llm:
   enum ClientType
   class ExecutionContext { methods: [] }
   class ExecutionResult { methods: [] }
+  class MediaUrlHandler { methods: [] }
   class OrchestrationStep { methods: [] }
   class PlannerState { methods: [rr_local_offset, rr_pick_index] }
   class PrimitiveClient { methods: [render_prompt, specialize_prompt, build_request, parse] }
@@ -63,7 +66,18 @@ namespace baml.media:
 namespace baml.net:
   class Socket { methods: [read, close] }
   function connect
+namespace baml.panics:
+  class AllocFailure { methods: [] }
+  class AssertionFailed { methods: [] }
+  class DivisionByZero { methods: [] }
+  class IndexOutOfBounds { methods: [] }
+  class MapKeyNotFound { methods: [] }
+  type Panic
+  class StackOverflow { methods: [] }
+  class Unreachable { methods: [] }
+  class UserPanic { methods: [] }
 namespace baml.sys:
+  function now_ms
   function panic
   function shell
   function sleep

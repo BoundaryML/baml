@@ -151,7 +151,7 @@ fn generate_clean_params(d: &NativeFnDef) -> TokenStream2 {
 fn generate_clean_return_type(d: &NativeFnDef) -> TokenStream2 {
     let inner_type = rust_type_for_output(&d.returns.type_name, d.returns.is_generic);
     if d.returns.is_fallible {
-        quote!(Result<#inner_type, VmError>)
+        quote!(Result<#inner_type, VmRustFnError>)
     } else {
         inner_type
     }
@@ -330,7 +330,7 @@ fn extraction_rhs_expr(
         "i64" => quote! {
             match #value_expr {
                 Value::Int(i) => *i,
-                _ => return Err(InternalError::TypeError {
+                _ => return Err(VmInternalError::TypeError {
                     expected: Type::Int,
                     got: vm.type_of(#value_expr),
                 }.into()),
@@ -339,7 +339,7 @@ fn extraction_rhs_expr(
         "f64" => quote! {
             match #value_expr {
                 Value::Float(f) => *f,
-                _ => return Err(InternalError::TypeError {
+                _ => return Err(VmInternalError::TypeError {
                     expected: Type::Float,
                     got: vm.type_of(#value_expr),
                 }.into()),
@@ -348,7 +348,7 @@ fn extraction_rhs_expr(
         "bool" => quote! {
             match #value_expr {
                 Value::Bool(b) => *b,
-                _ => return Err(InternalError::TypeError {
+                _ => return Err(VmInternalError::TypeError {
                     expected: Type::Bool,
                     got: vm.type_of(#value_expr),
                 }.into()),

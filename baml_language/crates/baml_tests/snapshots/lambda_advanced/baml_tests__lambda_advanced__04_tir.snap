@@ -179,42 +179,6 @@ function user.test_map_multi_statement() -> int[] throws never {
 }
 lambda user.test_map_multi_statement {
 }
-function user.test_map_entries() -> string[] throws never {
-  { : string[]
-    let m = map { "a": 1, "b": 2 } : map<string, int>
-    m.map<U>((k: string, v: int) -> string { ... }) : string[]
-      (k: string, v: int) -> string { ... } : (k: string, v: int) -> string
-        {
-          k
-        }
-  }
-}
-lambda user.test_map_entries {
-}
-function user.test_map_values_transform() -> int[] throws never {
-  { : int[]
-    let m = map { "x": 10, "y": 20 } : map<string, int>
-    m.map_values<U>((v) -> { ... }) : int[]
-      (v) -> { ... } : (v: int) -> int
-        {
-          v * 2
-        }
-  }
-}
-lambda user.test_map_values_transform {
-}
-function user.test_map_keys_transform() -> string[] throws never {
-  { : string[]
-    let m = map { "hello": 1 } : map<string, int>
-    m.map_keys<U>((k) -> { ... }) : string[]
-      (k) -> { ... } : (k: string) -> string
-        {
-          k
-        }
-  }
-}
-lambda user.test_map_keys_transform {
-}
 function user.test_lambda_variable_then_pass() -> int[] throws never {
   { : int[]
     let items = [10, 20, 30] : int[]
@@ -297,25 +261,6 @@ function user.test_map_type_change_inferred() -> string[] throws never {
   }
 }
 lambda user.test_map_type_change_inferred {
-}
-function user.test_map_values_fully_inferred() -> string[] throws never {
-  { : (string | "big" | "small")[]
-    let m = map { "x": 10, "y": 20 } : map<string, int>
-    m.map_values<U>((v) -> { ... }) : (string | "big" | "small")[]
-      (v) -> { ... } : (v: int) -> "big" | "small"
-        {
-          if (v > 15)
-            {
-              "big"
-            }
-          else
-            {
-              "small"
-            }
-        }
-  }
-}
-lambda user.test_map_values_fully_inferred {
 }
 function user.test_literal_return_inference() -> int[] throws never {
   { : (int | 0)[]
@@ -564,16 +509,4 @@ function user.test_iife_inferred() -> int throws never {
   }
 }
 lambda user.test_iife_inferred {
-}
-function user.test_map_entries_inferred() -> string[] throws never {
-  { : string[]
-    let m = map { "a": 1, "b": 2 } : map<string, int>
-    m.map<U>((k, v) -> { ... }) : string[]
-      (k, v) -> { ... } : (k: string, v: int) -> string
-        {
-          k
-        }
-  }
-}
-lambda user.test_map_entries_inferred {
 }

@@ -1,7 +1,10 @@
 use bex_vm_types::Value;
 
 use super::{BamlClassUint8Array, PackageBamlImpl};
-use crate::errors::{RuntimeError, VmError};
+use crate::{
+    VmPanic,
+    errors::{VmBamlError, VmRustFnError},
+};
 
 impl BamlClassUint8Array for PackageBamlImpl {
     #[allow(clippy::cast_possible_wrap)]
@@ -51,42 +54,36 @@ impl BamlClassUint8Array for PackageBamlImpl {
     )]
     fn slice(uint8array: &[u8], start: i64, end: i64) -> Vec<u8> {
         let len = uint8array.len() as i64;
-        let start = start.max(0).min(len) as usize;
-        let end = end.max(0).min(len) as usize;
-        let end = end.max(start);
+        let start = start.clamp(0, len);
+        let end = end.clamp(start, len) as usize;
+        let start = start as usize;
         uint8array[start..end].to_vec()
     }
 
-    fn zeroes(size: i64) -> Result<Vec<u8>, VmError> {
-        let size = usize::try_from(size).map_err(|_| {
-            VmError::from(RuntimeError::Other(format!(
-                "uint8array.zeroes: invalid size {size}"
-            )))
+    fn zeroes(size: i64) -> Result<Vec<u8>, VmRustFnError> {
+        let size = usize::try_from(size).map_err(|_| VmBamlError::InvalidArgument {
+            message: format!("Invalid size {size} for uint8array"),
         })?;
         let mut v = Vec::new();
-        v.try_reserve(size).map_err(|_| {
-            VmError::from(RuntimeError::Other(format!(
-                "uint8array.zeroes: allocation of {size} bytes failed"
-            )))
+        v.try_reserve(size).map_err(|_| VmPanic::AllocFailure {
+            message: format!("Allocation of {size} bytes for new uint8array failed"),
         })?;
         v.resize(size, 0u8);
         Ok(v)
     }
 
     #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
-    fn from_array(array: &[Value]) -> Result<Vec<u8>, VmError> {
+    fn from_array(array: &[Value]) -> Result<Vec<u8>, VmRustFnError> {
         let mut result = Vec::with_capacity(array.len());
         for (i, val) in array.iter().enumerate() {
             let Value::Int(n) = val else {
-                return Err(RuntimeError::Other(format!(
-                    "uint8array.from_array: element at index {i} is not an integer"
-                ))
+                return Err(VmBamlError::InvalidArgument {
+                    message: format!("Element at index {i} is not an `int`"),
+                }
                 .into());
             };
-            let byte = u8::try_from(*n).map_err(|_| {
-                VmError::from(RuntimeError::Other(format!(
-                    "uint8array.from_array: value {n} at index {i} is out of range 0..=255"
-                )))
+            let byte = u8::try_from(*n).map_err(|_| VmBamlError::InvalidArgument {
+                message: format!("Value {n} at index {i} is out of range 0..=255"),
             })?;
             result.push(byte);
         }
@@ -100,34 +97,37 @@ impl BamlClassUint8Array for PackageBamlImpl {
             .collect()
     }
 
-    fn from_hex(hex: &str) -> Result<Vec<u8>, VmError> {
+    fn from_hex(hex: &str) -> Result<Vec<u8>, VmRustFnError> {
         #[inline]
-        fn parse_hex_digit(c: u8) -> Option<u8> {
+        const fn parse_hex_digit(c: u8) -> Option<u8> {
             match c {
                 b'0'..=b'9' => Some(c - b'0'),
-                b'a'..=b'f' => Some(c - b'a' + 10),
-                b'A'..=b'F' => Some(c - b'A' + 10),
+                b'a'..=b'f' | b'A'..=b'F' => Some((c & 0x1F) + 9),
                 _ => None,
             }
         }
         let (chunks, &[]) = hex.as_bytes().as_chunks::<2>() else {
-            return Err(RuntimeError::Other(
-                "uint8array.from_hex: hex string must have even length".to_string(),
-            )
+            return Err(VmBamlError::InvalidArgument {
+                message: "hex string must have even length".to_string(),
+            }
             .into());
         };
         chunks
             .iter()
             .enumerate()
             .map(|(i, &[hi, lo]): (usize, &[u8; 2])| {
-                let hi = parse_hex_digit(hi).ok_or(VmError::from(RuntimeError::Other(format!(
-                    "uint8array.from_hex: invalid hex at position {}",
-                    i * 2
-                ))))?;
-                let lo = parse_hex_digit(lo).ok_or(VmError::from(RuntimeError::Other(format!(
-                    "uint8array.from_hex: invalid hex at position {}",
-                    i * 2 + 1
-                ))))?;
+                let hi = parse_hex_digit(hi).ok_or(VmBamlError::InvalidArgument {
+                    message: format!(
+                        "uint8array.from_hex: invalid hex digit at position {}",
+                        i * 2
+                    ),
+                })?;
+                let lo = parse_hex_digit(lo).ok_or(VmBamlError::InvalidArgument {
+                    message: format!(
+                        "uint8array.from_hex: invalid hex digit at position {}",
+                        i * 2 + 1
+                    ),
+                })?;
                 Ok(hi << 4 | lo)
             })
             .collect()
@@ -144,11 +144,14 @@ impl BamlClassUint8Array for PackageBamlImpl {
         s
     }
 
-    fn from_base64(base64_str: &str) -> Result<Vec<u8>, VmError> {
+    fn from_base64(base64_str: &str) -> Result<Vec<u8>, VmRustFnError> {
         use base64::Engine;
         base64::engine::general_purpose::STANDARD
             .decode(base64_str)
-            .map_err(|e| VmError::from(RuntimeError::Other(format!("uint8array.from_base64: {e}"))))
+            .map_err(|e| VmBamlError::InvalidArgument {
+                message: format!("failed to decode base64: {e}"),
+            })
+            .map_err(VmRustFnError::BamlError)
     }
 
     fn to_base64(uint8array: &[u8]) -> String {

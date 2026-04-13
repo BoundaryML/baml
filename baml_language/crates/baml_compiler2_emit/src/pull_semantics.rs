@@ -41,8 +41,7 @@ pub(crate) trait PullSink {
     fn alloc_map(&mut self, len: usize) -> Result<(), Self::Error>;
 
     fn alloc_class_instance(&mut self, class_name: &str) -> Result<(), Self::Error>;
-    fn copy_top(&mut self, offset: usize) -> Result<(), Self::Error>;
-    fn store_field(&mut self, field_idx: usize, name: &str) -> Result<(), Self::Error>;
+    fn init_field(&mut self, field_idx: usize, name: &str) -> Result<(), Self::Error>;
 
     fn alloc_enum_variant(&mut self, enum_name: &str, variant: &str) -> Result<(), Self::Error>;
 
@@ -80,7 +79,6 @@ pub(crate) trait StackEffectSink: PullSink {
         channel_name: Option<&str>,
     ) -> Result<(), Self::Error>;
     fn watch_local(&mut self, local: Local) -> Result<(), Self::Error>;
-    fn assert_top(&mut self) -> Result<(), Self::Error>;
 }
 
 /// How a local assignment statement should be emitted/evaluated.
@@ -182,15 +180,6 @@ pub(crate) fn walk_watch_options_statement<S: StackEffectSink>(
     sink.push_watch_channel(local, channel_name)?;
     walk_operand_pull(sink, filter)?;
     sink.watch_local(local)
-}
-
-/// Shared evaluation for `Assert(operand)`.
-pub(crate) fn walk_assert_statement<S: StackEffectSink>(
-    sink: &mut S,
-    operand: &Operand,
-) -> Result<(), S::Error> {
-    walk_operand_pull(sink, operand)?;
-    sink.assert_top()
 }
 
 /// Shared pull order for direct calls: each arg only.
@@ -361,9 +350,8 @@ pub(crate) fn walk_rvalue_pull<S: PullSink>(sink: &mut S, rvalue: &Rvalue) -> Re
                 sink.alloc_class_instance(class_name)?;
                 for (field_idx, field_operand) in fields.iter().enumerate() {
                     let name = sink.class_field_name(class_name, field_idx);
-                    sink.copy_top(0)?;
                     walk_operand_pull(sink, field_operand)?;
-                    sink.store_field(field_idx, &name)?;
+                    sink.init_field(field_idx, &name)?;
                 }
                 Ok(())
             }

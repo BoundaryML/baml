@@ -19,16 +19,16 @@ function user.boolValues() -> map<string, bool> {
 }
 
 function user.floatArray() -> float[] {
-    load_const 1
-    load_const 2
-    load_const 3
+    load_const 1.0
+    load_const 2.0
+    load_const 3.0
     alloc_array 3
     return
 }
 
 function user.floatValues() -> map<string, float> {
-    load_const 1
-    load_const 2
+    load_const 1.0
+    load_const 2.0
     load_const "hello"
     load_const "test"
     alloc_map 2
@@ -62,37 +62,29 @@ function user.mixedArray() -> (int | string)[] {
 
 function user.point() -> Point {
     alloc_instance Point
-    copy 0
     load_const 1
-    store_field .x
-    copy 0
+    init_field .x
     load_const 2
-    store_field .y
+    init_field .y
     return
 }
 
 function user.pointArray() -> Point[] {
     alloc_instance Point
-    copy 0
     load_const 1
-    store_field .x
-    copy 0
+    init_field .x
     load_const 2
-    store_field .y
+    init_field .y
     alloc_instance Point
-    copy 0
     load_const 3
-    store_field .x
-    copy 0
+    init_field .x
     load_const 4
-    store_field .y
+    init_field .y
     alloc_instance Point
-    copy 0
     load_const 5
-    store_field .x
-    copy 0
+    init_field .x
     load_const 6
-    store_field .y
+    init_field .y
     alloc_array 3
     return
 }
@@ -116,23 +108,17 @@ function user.stringValues() -> map<string, string> {
 
 function user.vec2d() -> Vec2D {
     alloc_instance Vec2D
-    copy 0
     alloc_instance Point
-    copy 0
     load_const 1
-    store_field .x
-    copy 0
+    init_field .x
     load_const 2
-    store_field .y
-    store_field .p
-    copy 0
+    init_field .y
+    init_field .p
     alloc_instance Point
-    copy 0
     load_const 3
-    store_field .x
-    copy 0
+    init_field .x
     load_const 4
-    store_field .y
-    store_field .q
+    init_field .y
+    init_field .q
     return
 }

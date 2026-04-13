@@ -9,8 +9,10 @@
 use baml_base::Name;
 use baml_compiler_syntax::{FunctionTypeParam, SyntaxKind, ast::TypeExpr as CstTypeExpr};
 use rowan::ast::AstNode;
+use text_size::TextRange;
 
 use crate::{
+    LoweringDiagnostic,
     ast::{FunctionTypeParam as AstFunctionTypeParam, RawAttribute, TypeExpr},
     lower_cst::lower_attribute,
 };
@@ -352,6 +354,7 @@ fn lower_from_type_name(name: &str) -> TypeExpr {
         "bool" => TypeExpr::Bool { attrs: vec![] },
         "null" => TypeExpr::Null { attrs: vec![] },
         "never" => TypeExpr::Never { attrs: vec![] },
+        "void" => TypeExpr::Void { attrs: vec![] },
         "unknown" => TypeExpr::BuiltinUnknown { attrs: vec![] },
         "type" => TypeExpr::Type { attrs: vec![] },
         "$rust_type" => TypeExpr::Rust { attrs: vec![] },
@@ -386,5 +389,69 @@ fn lower_from_type_name(name: &str) -> TypeExpr {
                 }
             }
         }
+    }
+}
+
+/// Recursively check that `void` does not appear in a non-return-type position.
+///
+/// `void` is only valid as the *bare* return type of a function. It must not
+/// appear in parameter types, field types, union members, list/optional
+/// wrappers, or function-type parameter positions. When `void` IS used as the
+/// return type of a `TypeExpr::Function`, it is exempt.
+///
+/// Set `allow_root_void = true` when calling on a function return-type annotation
+/// to permit a bare `-> void` while still rejecting `-> void?` or `-> void[]`.
+///
+/// Emits `VoidInNonReturnPosition` for every invalid occurrence.
+pub(crate) fn check_void_type(
+    type_expr: &TypeExpr,
+    context: String,
+    span: TextRange,
+    allow_root_void: bool,
+    diags: &mut Vec<LoweringDiagnostic>,
+) {
+    match type_expr {
+        TypeExpr::Void { .. } => {
+            if !allow_root_void {
+                diags.push(LoweringDiagnostic::VoidInNonReturnPosition { context, span });
+            }
+        }
+        TypeExpr::Optional { inner, .. } => {
+            // Once inside a wrapper, void is never allowed (even in return position).
+            check_void_type(
+                inner,
+                "an optional type (`void?`)".to_string(),
+                span,
+                false,
+                diags,
+            );
+        }
+        TypeExpr::List { inner, .. } => {
+            check_void_type(
+                inner,
+                "a list type (`void[]`)".to_string(),
+                span,
+                false,
+                diags,
+            );
+        }
+        TypeExpr::Map { key, value, .. } => {
+            check_void_type(key, "a map key type".to_string(), span, false, diags);
+            check_void_type(value, "a map value type".to_string(), span, false, diags);
+        }
+        TypeExpr::Union { variants, .. } => {
+            for v in variants {
+                check_void_type(v, "a union member".to_string(), span, false, diags);
+            }
+        }
+        TypeExpr::Function { params, ret: _, .. } => {
+            // ret is exempt — void IS allowed as function-type return type.
+            // But void in param types is not allowed.
+            for p in params {
+                check_void_type(&p.ty, context.clone(), span, false, diags);
+            }
+        }
+        // All other variants (primitives, path, etc.) cannot contain void.
+        _ => {}
     }
 }

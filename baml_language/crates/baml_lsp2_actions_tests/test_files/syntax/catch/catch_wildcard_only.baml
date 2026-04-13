@@ -1,4 +1,4 @@
-// catch with only wildcard arm — no diagnostics expected
+// catch with only wildcard arm — unreachable because MayFail never throws
 function MayFail(x: int) -> string {
   "ok"
 }
@@ -18,7 +18,7 @@ function CatchNamedWildcard(x: int) -> string {
 
 //----
 //- diagnostics
-// Error: unreachable arm
+// Warning: unreachable arm
 //    ╭─[ catch_catch_wildcard_only.baml:8:12 ]
 //    │
 //  8 │ ╭─▶     _ => "caught everything"
@@ -28,7 +28,7 @@ function CatchNamedWildcard(x: int) -> string {
 //    │     
 //    │     Note: Error code: E0001
 // ───╯
-// Error: unreachable arm
+// Warning: unreachable arm
 //     ╭─[ catch_catch_wildcard_only.baml:15:15 ]
 //     │
 //  15 │ ╭─▶     other => "caught: " + other

@@ -71,6 +71,55 @@ impl JumpTableData {
     }
 }
 
+// ============================================================================
+// Perfect Hash Table Data Structure
+// ============================================================================
+
+/// Compile-time minimal perfect hash table for O(1) type dispatch.
+///
+/// Used by `Instruction::DenseTag` to remap a sparse type tag to a dense
+/// `[0, K-1]` index for jump table dispatch. The hash function is:
+///
+///   `h(tag) = ((tag as u64).wrapping_mul(multiply) >> shift) & mask`
+///
+/// Each entry stores the expected tag for verification — if the runtime tag
+/// doesn't match, the value is not in the match and dispatch falls to default.
+///
+/// The hash constants are found by brute-force search at compile time.
+/// For K ≤ 20 arms, the search completes in microseconds.
+///
+/// References:
+/// - Neumann & Göbbert, "Improving Switch Statement Performance with Hashing
+///   Optimized at Compile Time"
+/// - Dietz 1992, "Coding Multiway Branches Using Customized Hash Functions"
+/// - Proposed for LLVM (issue #96971), Roslyn (#66604), Go (#34381)
+#[derive(Clone, Debug, PartialEq)]
+pub struct MatchHashTable {
+    /// Multiplicative hash constant, found at compile time.
+    pub multiply: u64,
+    /// Right-shift amount applied after multiplication.
+    pub shift: u8,
+    /// Bitmask applied after shift. Always `table_size - 1` (power of 2).
+    pub mask: u8,
+    /// Verification + dispatch entries. `entries[h(tag)]` contains:
+    /// - `expected_tag`: the type tag that should hash to this slot
+    /// - `dense_index`: the dense arm index `[0, K-1]` for jump table dispatch
+    ///   Unused slots have `expected_tag = i64::MIN` (sentinel).
+    pub entries: Vec<MatchHashEntry>,
+    /// Human-readable names for keys in arm order (display only).
+    /// `key_names[i]` is the name for the i-th arm (e.g. "int", "`MyClass`").
+    pub key_names: Vec<String>,
+}
+
+/// Single entry in a [`MatchHashTable`].
+#[derive(Clone, Debug, PartialEq)]
+pub struct MatchHashEntry {
+    /// The type tag expected at this slot (for verification).
+    pub expected_tag: i64,
+    /// Dense arm index `[0, K-1]` — fed into the subsequent jump table.
+    pub dense_index: u8,
+}
+
 /// Individual bytecode instruction.
 ///
 /// For faster iteration we'll start with an in-memory data structure that
@@ -148,6 +197,12 @@ pub enum Instruction {
     /// object's fields array.
     StoreField(usize),
 
+    /// Initialize a field during construction: pops the value, stores it in the field,
+    /// and keeps the instance on the stack (unlike `StoreField` which pops both).
+    ///
+    /// Format: `INIT_FIELD i` where `i` is the index of the field.
+    InitField(usize),
+
     /// Pop N values from the top of `Vm::stack` (the evaluation stack).
     ///
     /// Format: `POP n` where `n` is the number of values to pop.
@@ -175,6 +230,12 @@ pub enum Instruction {
     /// This instruction pops the condition value from the stack after checking
     /// it, ensuring the condition doesn't leak on the evaluation stack.
     PopJumpIfFalse(isize),
+
+    /// Peek at the top of the stack and jump if the value is false.
+    /// Unlike `PopJumpIfFalse`, this does NOT pop the value — it stays on
+    /// the stack regardless of the branch taken. Used for short-circuit
+    /// `&&` / `||` where the tested value is also the expression result.
+    JumpIfFalse(isize),
 
     /// Performs an arithmetic binary operation.
     ///
@@ -289,24 +350,6 @@ pub enum Instruction {
     /// Arity is read from the runtime callee function object.
     CallIndirect,
 
-    /// Push an unwind handler for catch semantics.
-    ///
-    /// The handler remains active until a matching `POP_UNWIND` is executed
-    /// or an exception unwinds control flow to `handler`.
-    ///
-    /// Format: `PUSH_UNWIND handler, error_slot` where:
-    /// - `handler` is the relative jump offset to the catch handler block.
-    /// - `error_slot` is the frame-local slot that receives the exception value.
-    PushUnwind {
-        /// Relative offset from current instruction to handler entry.
-        handler: isize,
-        /// Frame-local slot index for the caught error value.
-        error_slot: usize,
-    },
-
-    /// Pop the most recently pushed unwind handler for the current frame.
-    PopUnwind,
-
     /// Throw the value on top of the stack.
     ///
     /// Stack: `[error_value]` -> `[]` (control transfers to unwind handler or caller)
@@ -317,12 +360,6 @@ pub enum Instruction {
     /// No arguments needed, result is stored in the eval stack and the VM
     /// simply has to clean up the call stack and continue execution.
     Return,
-
-    /// Pops a `Bool` value from the stack. If the value is `false`, raises
-    /// an assertion error.
-    ///
-    /// Format: `ASSERT`
-    Assert,
 
     /// Notifies about entering or exiting a block.
     ///
@@ -372,11 +409,42 @@ pub enum Instruction {
     ///
     /// Stack: `[any_value]` -> `[type_tag: Int]`
     ///
-    /// Used for jump table dispatch on union types (instanceof patterns).
+    /// Used for jump table dispatch on union types (type patterns in match).
     /// Type tags are global constants:
     /// - Primitives: `int=0`, `string=1`, `bool=2`, `null=3`, `float=4`
     /// - Classes: assigned unique IDs starting at 100
     TypeTag,
+
+    /// Check if the value on top of the stack matches the type identified by
+    /// the constant at index `i`. The constant is either:
+    /// - `Value::Object(class_ptr)` — class identity check (`inst.class == class_ptr`)
+    /// - `Value::Int(tag)` — type tag check (`value_type_tag(value) == tag`)
+    ///
+    /// Pops the value, pushes `Bool` result.
+    IsType(usize),
+
+    /// Remap a sparse type tag to a dense index via perfect hash lookup.
+    ///
+    /// Pops the type tag (from a preceding `TypeTag` instruction), computes
+    /// `h(tag) = ((tag as u64).wrapping_mul(M) >> S) & mask`, verifies the
+    /// entry's expected tag, and pushes the dense arm index. On verification
+    /// failure (tag not in the match), pushes `-1` as a sentinel — the
+    /// subsequent `JumpTable`'s default arm handles this.
+    ///
+    /// Design rationale: perfect hashing replaces O(log K) `BinarySearch` with
+    /// O(1) dispatch for sparse ≥4-arm `TypeTag` switches. Memory per match
+    /// site scales with K (arms) not N (total classes). See [`MatchHashTable`]
+    /// for algorithm references.
+    DenseTag(usize),
+
+    /// If the top-of-stack value is a panic instance (`baml.panics.*`), throw it.
+    /// Otherwise pop the value and continue to the next instruction.
+    ///
+    /// Stack: `[value]` -> `[]` (continues) or unwinds (throws)
+    ///
+    /// Used in catch handlers before wildcard arms to prevent them from
+    /// swallowing panics the programmer didn't explicitly name.
+    ThrowIfPanic,
 
     /// Halt execution with an unreachable code error.
     ///
@@ -546,7 +614,6 @@ pub enum CmpOp {
     LtEq,
     Gt,
     GtEq,
-    InstanceOf,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -581,7 +648,6 @@ impl std::fmt::Display for CmpOp {
             CmpOp::LtEq => "<=",
             CmpOp::Gt => ">",
             CmpOp::GtEq => ">=",
-            CmpOp::InstanceOf => "instanceof",
         })
     }
 }
@@ -605,10 +671,12 @@ impl std::fmt::Display for Instruction {
             Instruction::StoreGlobal(i) => write!(f, "STORE_GLOBAL {i}"),
             Instruction::LoadField(i) => write!(f, "LOAD_FIELD {i}"),
             Instruction::StoreField(i) => write!(f, "STORE_FIELD {i}"),
+            Instruction::InitField(i) => write!(f, "INIT_FIELD {i}"),
             Instruction::Pop(n) => write!(f, "POP {n}"),
             Instruction::Copy(i) => write!(f, "COPY {i}"),
             Instruction::Jump(o) => write!(f, "JUMP {o:+}"),
             Instruction::PopJumpIfFalse(o) => write!(f, "POP_JUMP_IF_FALSE {o:+}"),
+            Instruction::JumpIfFalse(o) => write!(f, "JUMP_IF_FALSE {o:+}"),
             Instruction::BinOp(op) => write!(f, "BIN_OP {op}"),
             Instruction::CmpOp(op) => write!(f, "CMP_OP {op}"),
             Instruction::UnaryOp(op) => write!(f, "UNARY_OP {op}"),
@@ -623,17 +691,9 @@ impl std::fmt::Display for Instruction {
             Instruction::Await => f.write_str("AWAIT"),
             Instruction::Call(callee) => write!(f, "CALL {callee}"),
             Instruction::CallIndirect => f.write_str("CALL_INDIRECT"),
-            Instruction::PushUnwind {
-                handler,
-                error_slot,
-            } => {
-                write!(f, "PUSH_UNWIND {handler:+}, {error_slot}")
-            }
-            Instruction::PopUnwind => f.write_str("POP_UNWIND"),
             Instruction::Throw => f.write_str("THROW"),
 
             Instruction::Return => f.write_str("RETURN"),
-            Instruction::Assert => f.write_str("ASSERT"),
             Instruction::AllocMap(n) => write!(f, "ALLOC_MAP {n}"),
             Instruction::Watch(i) => write!(f, "WATCH {i}"),
             Instruction::Unwatch(i) => write!(f, "UNWATCH {i}"),
@@ -648,6 +708,9 @@ impl std::fmt::Display for Instruction {
             }
             Instruction::Discriminant => f.write_str("DISCRIMINANT"),
             Instruction::TypeTag => f.write_str("TYPE_TAG"),
+            Instruction::IsType(i) => write!(f, "IS_TYPE {i}"),
+            Instruction::DenseTag(i) => write!(f, "DENSE_TAG {i}"),
+            Instruction::ThrowIfPanic => f.write_str("THROW_IF_PANIC"),
             Instruction::Unreachable => f.write_str("UNREACHABLE"),
             Instruction::MakeClosure(obj_idx, count) => {
                 write!(f, "MAKE_CLOSURE {} {}", obj_idx.raw(), count)
@@ -734,6 +797,42 @@ pub struct DebugLocalScope {
     pub scope_span: Span,
 }
 
+/// Exception table entry mapping a PC range to a handler.
+///
+/// Any instruction at PC in `[start_pc, end_pc)` that raises an error
+/// transfers control to `handler_pc`, with the exception value stored
+/// in the frame-local slot `error_slot`.
+///
+/// Entries are sorted by `start_pc`. For nested catch blocks the innermost
+/// (narrowest range) entry appears first.
+///
+/// All exceptions (user-thrown values and VM panics) are routed to the
+/// handler. The handler bytecode is responsible for filtering: a
+/// `ThrowIfPanic` instruction before wildcard arms rethrows panics the
+/// programmer didn't explicitly name.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ExceptionTableEntry {
+    /// First protected instruction (inclusive).
+    pub start_pc: usize,
+    /// End of protected range (exclusive).
+    pub end_pc: usize,
+    /// Instruction pointer of the handler block.
+    pub handler_pc: usize,
+    /// Frame-local slot index for the caught error value.
+    pub error_slot: usize,
+    /// Frame-local slot for the stack trace value.
+    /// `usize::MAX` means no stack trace binding (catch (e) without second param).
+    pub stack_trace_slot: usize,
+}
+
+impl ExceptionTableEntry {
+    pub const NO_STACK_TRACE: usize = usize::MAX;
+
+    pub fn has_stack_trace_slot(&self) -> bool {
+        self.stack_trace_slot != Self::NO_STACK_TRACE
+    }
+}
+
 /// Executable bytecode.
 ///
 /// Contains the instructions to run and all the associated constants.
@@ -753,6 +852,10 @@ pub struct Bytecode {
     /// Jump tables for switch dispatch (indexed by `JumpTable` instruction).
     pub jump_tables: Vec<JumpTableData>,
 
+    /// Perfect hash tables for sparse `TypeTag` switch dispatch.
+    /// Indexed by `DenseTag` instruction operand.
+    pub match_hash_tables: Vec<MatchHashTable>,
+
     /// Line table mapping bytecode PCs to source spans.
     ///
     /// Entries are run-length encoded by PC ranges.
@@ -762,6 +865,12 @@ pub struct Bytecode {
     ///
     /// Parallel to `instructions`. Populated by the compiler at emit time.
     pub meta: Vec<InstructionMeta>,
+
+    /// Exception table mapping PC ranges to catch handlers.
+    ///
+    /// Sorted by `start_pc`. The VM searches this table when an error occurs
+    /// to find a handler covering the faulting instruction.
+    pub exception_table: Vec<ExceptionTableEntry>,
 }
 
 impl Default for Bytecode {
@@ -777,8 +886,10 @@ impl Bytecode {
             constants: Vec::new(),
             resolved_constants: Vec::new(),
             jump_tables: Vec::new(),
+            match_hash_tables: Vec::new(),
             line_table: Vec::new(),
             meta: Vec::new(),
+            exception_table: Vec::new(),
         }
     }
 
@@ -794,6 +905,20 @@ impl Bytecode {
     /// Get the 1-indexed source line for a bytecode PC.
     pub fn source_line_for_pc(&self, pc: usize) -> usize {
         self.line_entry_for_pc(pc).map_or(0, |entry| entry.line)
+    }
+
+    /// Iterate all exception table entries whose PC range covers `pc`.
+    ///
+    /// Returns entries in table order (innermost / first-declared first).
+    /// The caller is responsible for picking the first entry whose filter
+    /// matches the exception value.
+    pub fn exception_handlers_for_pc(
+        &self,
+        pc: usize,
+    ) -> impl Iterator<Item = &ExceptionTableEntry> {
+        self.exception_table
+            .iter()
+            .filter(move |e| pc >= e.start_pc && pc < e.end_pc)
     }
 
     /// Resolve constants from `ConstValue` to Value using a resolver function.

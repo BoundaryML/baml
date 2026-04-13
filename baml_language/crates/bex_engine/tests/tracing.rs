@@ -86,7 +86,7 @@ async fn trace_single_function() {
         .with_host_ctx(host_ctx)
         .build();
     let value = engine
-        .call_function("main", vec![], call_ctx)
+        .call_function("main", vec![], call_ctx, true)
         .await
         .unwrap();
     let events = collect_events(&guard);
@@ -135,7 +135,7 @@ async fn trace_nested_expression_calls_no_child_spans() {
         .with_host_ctx(host_ctx)
         .build();
     let value = engine
-        .call_function("main", vec![], call_ctx)
+        .call_function("main", vec![], call_ctx, true)
         .await
         .unwrap();
     let events = collect_events(&guard);
@@ -184,7 +184,7 @@ async fn trace_deeply_nested_expression_calls_no_child_spans() {
         .with_host_ctx(host_ctx)
         .build();
     let value = engine
-        .call_function("main", vec![], call_ctx)
+        .call_function("main", vec![], call_ctx, true)
         .await
         .unwrap();
     let events = collect_events(&guard);
@@ -227,7 +227,7 @@ async fn trace_sibling_expression_calls_no_child_spans() {
         .with_host_ctx(host_ctx)
         .build();
     let value = engine
-        .call_function("main", vec![], call_ctx)
+        .call_function("main", vec![], call_ctx, true)
         .await
         .unwrap();
     let events = collect_events(&guard);
@@ -266,6 +266,7 @@ async fn trace_captures_root_args() {
             "add",
             vec![BexExternalValue::Int(3), BexExternalValue::Int(4)],
             call_ctx,
+            true,
         )
         .await
         .unwrap();
@@ -310,7 +311,7 @@ async fn trace_captures_root_result() {
         .with_host_ctx(host_ctx)
         .build();
     let value = engine
-        .call_function("double", vec![BexExternalValue::Int(5)], call_ctx)
+        .call_function("double", vec![BexExternalValue::Int(5)], call_ctx, true)
         .await
         .unwrap();
     let events = collect_events(&guard);

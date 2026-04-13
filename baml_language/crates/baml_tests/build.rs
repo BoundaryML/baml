@@ -195,16 +195,27 @@ fn generate_project_tests(project: &TestProject, manifest_dir: &str) -> TokenStr
     );
 
     let is_stdlib = project.name == "__baml_std__";
+    let is_testing_std = project.name == "__testing_std__";
+    let is_assert_std = project.name == "__assert_std__";
+    let stdlib_package_filter: Option<&str> = if is_stdlib {
+        Some("baml")
+    } else if is_testing_std {
+        Some("testing")
+    } else if is_assert_std {
+        Some("assert")
+    } else {
+        None
+    };
 
     let lexer_tests: TokenStream = project.files.iter().map(generate_lexer_test).collect();
 
     let parser_tests: TokenStream = project.files.iter().map(generate_parser_test).collect();
 
-    let hir_test = generate_hir_test(project, is_stdlib);
-    let tir_test = generate_tir_test(project, is_stdlib);
-    let mir_test = generate_mir_test(project, is_stdlib);
+    let hir_test = generate_hir_test(project, stdlib_package_filter);
+    let tir_test = generate_tir_test(project, stdlib_package_filter);
+    let mir_test = generate_mir_test(project, stdlib_package_filter);
     let diagnostics_test = generate_diagnostics_test(project);
-    let codegen_test = generate_codegen_test(project, is_stdlib);
+    let codegen_test = generate_codegen_test(project, stdlib_package_filter);
 
     let formatter_tests: TokenStream = project.files.iter().map(generate_formatter_test).collect();
 
@@ -339,7 +350,7 @@ fn generate_parser_test(baml_file: &BamlFile) -> TokenStream {
     }
 }
 
-fn generate_hir_test(project: &TestProject, is_stdlib: bool) -> TokenStream {
+fn generate_hir_test(project: &TestProject, stdlib_package_filter: Option<&str>) -> TokenStream {
     let file_loaders: TokenStream = project
         .files
         .iter()
@@ -362,19 +373,22 @@ fn generate_hir_test(project: &TestProject, is_stdlib: bool) -> TokenStream {
         })
         .collect();
 
-    let stdlib_section = if is_stdlib {
+    let stdlib_section = if let Some(pkg_name) = stdlib_package_filter {
+        let pkg_lit = syn::LitStr::new(pkg_name, proc_macro2::Span::call_site());
         quote! {
-            writeln!(output, "\n=== HIR2 (package baml) ===").unwrap();
-            use baml_base::Name;
-            use baml_compiler2_hir::{compiler2_all_files, file_package::file_package};
-            let mut baml_files: Vec<_> = compiler2_all_files(&db)
-                .into_iter()
-                .filter(|f| file_package(&db, *f).package == Name::new("baml"))
-                .collect();
-            baml_files.sort_by_key(|f| f.path(&db).to_string_lossy().to_string());
-            for sf in baml_files {
-                writeln!(output, "\n--- {} ---", sf.path(&db).display()).unwrap();
-                output.push_str(&render_hir2(&db, sf));
+            {
+                let pkg_filter = #pkg_lit;
+                writeln!(output, "\n=== HIR2 (package {}) ===", pkg_filter).unwrap();
+                use baml_compiler2_hir::{compiler2_all_files, file_package::file_package};
+                let mut baml_files: Vec<_> = compiler2_all_files(&db)
+                    .into_iter()
+                    .filter(|f| file_package(&db, *f).package.as_str() == pkg_filter)
+                    .collect();
+                baml_files.sort_by_key(|f| f.path(&db).to_string_lossy().to_string());
+                for sf in baml_files {
+                    writeln!(output, "\n--- {} ---", sf.path(&db).display()).unwrap();
+                    output.push_str(&render_hir2(&db, sf));
+                }
             }
         }
     } else {
@@ -408,7 +422,7 @@ fn generate_hir_test(project: &TestProject, is_stdlib: bool) -> TokenStream {
     }
 }
 
-fn generate_tir_test(project: &TestProject, is_stdlib: bool) -> TokenStream {
+fn generate_tir_test(project: &TestProject, stdlib_package_filter: Option<&str>) -> TokenStream {
     let file_loaders: TokenStream = project
         .files
         .iter()
@@ -431,19 +445,22 @@ fn generate_tir_test(project: &TestProject, is_stdlib: bool) -> TokenStream {
         })
         .collect();
 
-    let stdlib_section = if is_stdlib {
+    let stdlib_section = if let Some(pkg_name) = stdlib_package_filter {
+        let pkg_lit = syn::LitStr::new(pkg_name, proc_macro2::Span::call_site());
         quote! {
-            writeln!(output, "\n=== TIR2 (package baml) ===").unwrap();
-            use baml_base::Name;
-            use baml_compiler2_hir::{compiler2_all_files, file_package::file_package};
-            let mut baml_files: Vec<_> = compiler2_all_files(&db)
-                .into_iter()
-                .filter(|f| file_package(&db, *f).package == Name::new("baml"))
-                .collect();
-            baml_files.sort_by_key(|f| f.path(&db).to_string_lossy().to_string());
-            for sf in baml_files {
-                writeln!(output, "\n--- {} ---", sf.path(&db).display()).unwrap();
-                output.push_str(&render_tir(&db, sf));
+            {
+                let pkg_filter = #pkg_lit;
+                writeln!(output, "\n=== TIR2 (package {}) ===", pkg_filter).unwrap();
+                use baml_compiler2_hir::{compiler2_all_files, file_package::file_package};
+                let mut baml_files: Vec<_> = compiler2_all_files(&db)
+                    .into_iter()
+                    .filter(|f| file_package(&db, *f).package.as_str() == pkg_filter)
+                    .collect();
+                baml_files.sort_by_key(|f| f.path(&db).to_string_lossy().to_string());
+                for sf in baml_files {
+                    writeln!(output, "\n--- {} ---", sf.path(&db).display()).unwrap();
+                    output.push_str(&render_tir(&db, sf));
+                }
             }
         }
     } else {
@@ -477,7 +494,7 @@ fn generate_tir_test(project: &TestProject, is_stdlib: bool) -> TokenStream {
     }
 }
 
-fn generate_mir_test(project: &TestProject, is_stdlib: bool) -> TokenStream {
+fn generate_mir_test(project: &TestProject, stdlib_package_filter: Option<&str>) -> TokenStream {
     let file_loaders: TokenStream = project
         .files
         .iter()
@@ -500,24 +517,27 @@ fn generate_mir_test(project: &TestProject, is_stdlib: bool) -> TokenStream {
         })
         .collect();
 
-    let stdlib_section = if is_stdlib {
+    let stdlib_section = if let Some(pkg_name) = stdlib_package_filter {
+        let pkg_lit = syn::LitStr::new(pkg_name, proc_macro2::Span::call_site());
         quote! {
-            writeln!(output, "\n=== MIR2 (package baml) ===").unwrap();
-            use baml_base::Name;
-            use baml_compiler2_hir::{compiler2_all_files, file_package::file_package};
-            let mut baml_files: Vec<_> = compiler2_all_files(&db)
-                .into_iter()
-                .filter(|f| file_package(&db, *f).package == Name::new("baml"))
-                .collect();
-            baml_files.sort_by_key(|f| f.path(&db).to_string_lossy().to_string());
-            for sf in baml_files {
-                let item_tree = file_item_tree(&db, sf);
-                let mut functions: Vec<_> = item_tree.functions.iter().collect();
-                functions.sort_by_key(|(_, f)| f.name.as_str().to_string());
-                for (local_id, _func_data) in functions {
-                    let func_loc = FunctionLoc::new(&db, sf, *local_id);
-                    let mir = lower_function(&db, func_loc);
-                    writeln!(output, "{}", display_function(&mir)).unwrap();
+            {
+                let pkg_filter = #pkg_lit;
+                writeln!(output, "\n=== MIR2 (package {}) ===", pkg_filter).unwrap();
+                use baml_compiler2_hir::{compiler2_all_files, file_package::file_package};
+                let mut baml_files: Vec<_> = compiler2_all_files(&db)
+                    .into_iter()
+                    .filter(|f| file_package(&db, *f).package.as_str() == pkg_filter)
+                    .collect();
+                baml_files.sort_by_key(|f| f.path(&db).to_string_lossy().to_string());
+                for sf in baml_files {
+                    let item_tree = file_item_tree(&db, sf);
+                    let mut functions: Vec<_> = item_tree.functions.iter().collect();
+                    functions.sort_by_key(|(_, f)| f.name.as_str().to_string());
+                    for (local_id, _func_data) in functions {
+                        let func_loc = FunctionLoc::new(&db, sf, *local_id);
+                        let mir = lower_function(&db, func_loc, OptLevel::Two);
+                        writeln!(output, "{}", display_function(&mir)).unwrap();
+                    }
                 }
             }
         }
@@ -529,7 +549,8 @@ fn generate_mir_test(project: &TestProject, is_stdlib: bool) -> TokenStream {
         #[test]
         fn test_04_5_mir() {
             use baml_compiler2_hir::{file_item_tree, loc::FunctionLoc};
-            use baml_compiler2_mir::{lower_function, pretty::display_function};
+            use baml_compiler2_mir::{OptLevel, lower_function, pretty::display_function};
+            use baml_project::collect_compiler2_diagnostics;
 
             let mut db = ProjectDatabase::new();
             let _root = db.set_project_root(std::path::Path::new("."));
@@ -540,18 +561,26 @@ fn generate_mir_test(project: &TestProject, is_stdlib: bool) -> TokenStream {
             let mut output = String::new();
             writeln!(output, "=== MIR2 ===").unwrap();
 
-            for source_file in &source_files {
-                let item_tree = file_item_tree(&db, *source_file);
-                let mut functions: Vec<_> = item_tree.functions.iter().collect();
-                functions.sort_by_key(|(_, f)| f.name.as_str().to_string());
-                for (local_id, _func_data) in functions {
-                    let func_loc = FunctionLoc::new(&db, *source_file, *local_id);
-                    let mir = lower_function(&db, func_loc);
-                    writeln!(output, "{}", display_function(&mir)).unwrap();
+            // Skip MIR lowering when there are diagnostic errors — the AST/HIR
+            // may be incomplete and lowering can panic on malformed input.
+            let diagnostics = collect_compiler2_diagnostics(&db);
+            let has_errors = diagnostics.iter().any(|d| d.severity == baml_compiler_diagnostics::Severity::Error);
+            if has_errors {
+                writeln!(output, "Skipped: project has diagnostic errors").unwrap();
+            } else {
+                for source_file in &source_files {
+                    let item_tree = file_item_tree(&db, *source_file);
+                    let mut functions: Vec<_> = item_tree.functions.iter().collect();
+                    functions.sort_by_key(|(_, f)| f.name.as_str().to_string());
+                    for (local_id, _func_data) in functions {
+                        let func_loc = FunctionLoc::new(&db, *source_file, *local_id);
+                        let mir = lower_function(&db, func_loc, OptLevel::Two);
+                        writeln!(output, "{}", display_function(&mir)).unwrap();
+                    }
                 }
-            }
 
-            #stdlib_section
+                #stdlib_section
+            }
 
             with_settings!({snapshot_path => SNAPSHOT_PATH, omit_expression => true}, {
                 assert_snapshot!("04_5_mir", output);
@@ -634,7 +663,10 @@ fn generate_diagnostics_test(project: &TestProject) -> TokenStream {
     }
 }
 
-fn generate_codegen_test(project: &TestProject, is_stdlib: bool) -> TokenStream {
+fn generate_codegen_test(
+    project: &TestProject,
+    stdlib_package_filter: Option<&str>,
+) -> TokenStream {
     let file_loaders: TokenStream = project
         .files
         .iter()
@@ -653,10 +685,12 @@ fn generate_codegen_test(project: &TestProject, is_stdlib: bool) -> TokenStream 
         })
         .collect();
 
-    let filter_expr = if is_stdlib {
-        quote! { |_name: &&String| true }
+    let filter_expr = if let Some(pkg_name) = stdlib_package_filter {
+        let pkg_prefix = format!("{pkg_name}.");
+        let pkg_prefix_lit = syn::LitStr::new(&pkg_prefix, proc_macro2::Span::call_site());
+        quote! { |name: &&String| name.starts_with(#pkg_prefix_lit) }
     } else {
-        quote! { |name: &&String| !name.starts_with(BAML_STD_PREFIX) && !name.starts_with("env.") }
+        quote! { |name: &&String| !name.starts_with(BAML_STD_PREFIX) && !name.starts_with("env.") && !name.starts_with("testing.") && !name.starts_with("assert.") }
     };
 
     quote! {

@@ -19,6 +19,8 @@ pub enum TopLevelDeclaration {
     Enum(EnumDecl),
     Client(ClientDecl),
     Test(TestDecl),
+    TestExpr(TestExprDecl),
+    TestSet(TestSetDecl),
     RetryPolicy(RetryPolicyDecl),
     TemplateString(TemplateStringDecl),
     TypeAlias(TypeAliasDecl),
@@ -36,6 +38,10 @@ impl FromCST for TopLevelDeclaration {
             SyntaxKind::ENUM_DEF => TopLevelDeclaration::Enum(EnumDecl::from_cst(elem)?),
             SyntaxKind::CLIENT_DEF => TopLevelDeclaration::Client(ClientDecl::from_cst(elem)?),
             SyntaxKind::TEST_DEF => TopLevelDeclaration::Test(TestDecl::from_cst(elem)?),
+            SyntaxKind::TEST_EXPR_DEF => {
+                TopLevelDeclaration::TestExpr(TestExprDecl::from_cst(elem)?)
+            }
+            SyntaxKind::TESTSET_DEF => TopLevelDeclaration::TestSet(TestSetDecl::from_cst(elem)?),
             SyntaxKind::RETRY_POLICY_DEF => {
                 TopLevelDeclaration::RetryPolicy(RetryPolicyDecl::from_cst(elem)?)
             }
@@ -62,6 +68,8 @@ impl Printable for TopLevelDeclaration {
             TopLevelDeclaration::Enum(enum_decl) => enum_decl.print(shape, printer),
             TopLevelDeclaration::Client(client_decl) => client_decl.print(shape, printer),
             TopLevelDeclaration::Test(test_decl) => test_decl.print(shape, printer),
+            TopLevelDeclaration::TestExpr(test_expr_decl) => test_expr_decl.print(shape, printer),
+            TopLevelDeclaration::TestSet(test_set_decl) => test_set_decl.print(shape, printer),
             TopLevelDeclaration::RetryPolicy(retry_policy_decl) => {
                 retry_policy_decl.print(shape, printer)
             }
@@ -87,6 +95,8 @@ impl Printable for TopLevelDeclaration {
             TopLevelDeclaration::Enum(e) => e.leftmost_token(),
             TopLevelDeclaration::Client(c) => c.leftmost_token(),
             TopLevelDeclaration::Test(t) => t.leftmost_token(),
+            TopLevelDeclaration::TestExpr(t) => t.leftmost_token(),
+            TopLevelDeclaration::TestSet(t) => t.leftmost_token(),
             TopLevelDeclaration::RetryPolicy(r) => r.leftmost_token(),
             TopLevelDeclaration::TemplateString(t) => t.leftmost_token(),
             TopLevelDeclaration::TypeAlias(t) => t.leftmost_token(),
@@ -101,6 +111,8 @@ impl Printable for TopLevelDeclaration {
             TopLevelDeclaration::Enum(e) => e.rightmost_token(),
             TopLevelDeclaration::Client(c) => c.rightmost_token(),
             TopLevelDeclaration::Test(t) => t.rightmost_token(),
+            TopLevelDeclaration::TestExpr(t) => t.rightmost_token(),
+            TopLevelDeclaration::TestSet(t) => t.rightmost_token(),
             TopLevelDeclaration::RetryPolicy(r) => r.rightmost_token(),
             TopLevelDeclaration::TemplateString(t) => t.rightmost_token(),
             TopLevelDeclaration::TypeAlias(t) => t.rightmost_token(),
@@ -2396,6 +2408,167 @@ impl Printable for TestDecl {
     }
     fn rightmost_token(&self) -> TextRange {
         self.config_block.rightmost_token()
+    }
+}
+
+/// The `with <expr>` clause on test/testset declarations.
+#[derive(Debug)]
+pub struct WithClause {
+    pub keyword: t::With,
+    pub expr: Expression,
+}
+
+/// Corresponds to a [`SyntaxKind::TEST_EXPR_DEF`] node.
+#[derive(Debug)]
+pub struct TestExprDecl {
+    pub keyword: t::Test,
+    pub name: t::QuotedString,
+    pub with_clause: Option<WithClause>,
+    pub body: BlockExpr,
+}
+
+impl FromCST for TestExprDecl {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        let node = StrongAstError::assert_is_node(elem)?;
+        StrongAstError::assert_kind_node(&node, SyntaxKind::TEST_EXPR_DEF)?;
+
+        let mut it = SyntaxNodeIter::new(&node);
+
+        // keyword: "test"
+        let keyword = it.expect_parse()?;
+
+        // name — string literal
+        let name = it.expect_parse()?;
+
+        // optional `with` clause
+        let with_clause = if let Some(with_kw_elem) = it.next_if_kind(SyntaxKind::KW_WITH) {
+            let with_kw = t::With::from_cst(with_kw_elem)?;
+            let expr_elem = it.expect_next("a runner expression")?;
+            let expr = Expression::from_cst(expr_elem)?;
+            Some(WithClause {
+                keyword: with_kw,
+                expr,
+            })
+        } else {
+            None
+        };
+
+        // block body
+        let body: BlockExpr = it.expect_parse()?;
+
+        it.expect_end()?;
+
+        Ok(TestExprDecl {
+            keyword,
+            name,
+            with_clause,
+            body,
+        })
+    }
+}
+
+impl KnownKind for TestExprDecl {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::TEST_EXPR_DEF
+    }
+}
+
+impl Printable for TestExprDecl {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer.print_raw_token(&self.keyword);
+        printer.print_str(" ");
+        printer.print(&self.name, shape.clone());
+        if let Some(wc) = &self.with_clause {
+            printer.print_str(" ");
+            printer.print_raw_token(&wc.keyword);
+            printer.print_str(" ");
+            printer.print(&wc.expr, shape.clone());
+        }
+        printer.print_str(" ");
+        printer.print(&self.body, shape)
+    }
+    fn leftmost_token(&self) -> TextRange {
+        self.keyword.span()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.body.rightmost_token()
+    }
+}
+
+/// Corresponds to a [`SyntaxKind::TESTSET_DEF`] node.
+#[derive(Debug)]
+pub struct TestSetDecl {
+    pub keyword: t::TestSet,
+    pub name: t::QuotedString,
+    pub with_clause: Option<WithClause>,
+    pub body: BlockExpr,
+}
+
+impl FromCST for TestSetDecl {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        let node = StrongAstError::assert_is_node(elem)?;
+        StrongAstError::assert_kind_node(&node, SyntaxKind::TESTSET_DEF)?;
+
+        let mut it = SyntaxNodeIter::new(&node);
+
+        // keyword: "testset"
+        let keyword = it.expect_parse()?;
+
+        // name — string literal
+        let name = it.expect_parse()?;
+
+        // optional `with` clause
+        let with_clause = if let Some(with_kw_elem) = it.next_if_kind(SyntaxKind::KW_WITH) {
+            let with_kw = t::With::from_cst(with_kw_elem)?;
+            let expr_elem = it.expect_next("a runner expression")?;
+            let expr = Expression::from_cst(expr_elem)?;
+            Some(WithClause {
+                keyword: with_kw,
+                expr,
+            })
+        } else {
+            None
+        };
+
+        // block body
+        let body: BlockExpr = it.expect_parse()?;
+
+        it.expect_end()?;
+
+        Ok(TestSetDecl {
+            keyword,
+            name,
+            with_clause,
+            body,
+        })
+    }
+}
+
+impl KnownKind for TestSetDecl {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::TESTSET_DEF
+    }
+}
+
+impl Printable for TestSetDecl {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer.print_raw_token(&self.keyword);
+        printer.print_str(" ");
+        printer.print(&self.name, shape.clone());
+        if let Some(wc) = &self.with_clause {
+            printer.print_str(" ");
+            printer.print_raw_token(&wc.keyword);
+            printer.print_str(" ");
+            printer.print(&wc.expr, shape.clone());
+        }
+        printer.print_str(" ");
+        printer.print(&self.body, shape)
+    }
+    fn leftmost_token(&self) -> TextRange {
+        self.keyword.span()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.body.rightmost_token()
     }
 }
 

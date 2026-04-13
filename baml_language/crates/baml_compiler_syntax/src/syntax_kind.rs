@@ -15,6 +15,7 @@ pub enum SyntaxKind {
     KW_CLIENT,
     KW_GENERATOR,
     KW_TEST,
+    KW_TESTSET,
     KW_RETRY_POLICY,
     KW_TEMPLATE_STRING,
     KW_TYPE_BUILDER,
@@ -33,13 +34,13 @@ pub enum SyntaxKind {
     KW_MATCH,
     KW_CATCH,
     KW_CATCH_ALL,
-    KW_ASSERT,
     KW_THROWS,
 
     // Other keywords
     KW_WATCH,
     KW_INSTANCEOF,
     KW_DYNAMIC,
+    KW_WITH,
 
     // Literals
     WORD,            // Any word (non-keyword identifier)
@@ -142,6 +143,8 @@ pub enum SyntaxKind {
     CLIENT_DEF,
     GENERATOR_DEF,
     TEST_DEF,
+    TEST_EXPR_DEF,
+    TESTSET_DEF,
     RETRY_POLICY_DEF,
     TEMPLATE_STRING_DEF,
     TYPE_ALIAS_DEF,
@@ -249,6 +252,7 @@ pub enum SyntaxKind {
     CATCH_CLAUSE,
     CATCH_ARM,
     CATCH_PATTERN,
+    CATCH_STACK_TRACE_BINDING,
     THROW_EXPR,
     LAMBDA_EXPR,
     THROWS_CLAUSE,
@@ -260,7 +264,6 @@ pub enum SyntaxKind {
     CONTINUE_STMT,
     RETURN_STMT,
     THROW_STMT,
-    ASSERT_STMT,
 
     // Expression components
     CALL_ARGS,
@@ -382,6 +385,7 @@ impl SyntaxKind {
                 | Self::KW_CLIENT
                 | Self::KW_GENERATOR
                 | Self::KW_TEST
+                | Self::KW_TESTSET
                 | Self::KW_RETRY_POLICY
                 | Self::KW_TEMPLATE_STRING
                 | Self::KW_TYPE_BUILDER
@@ -398,7 +402,6 @@ impl SyntaxKind {
                 | Self::KW_MATCH
                 | Self::KW_CATCH
                 | Self::KW_CATCH_ALL
-                | Self::KW_ASSERT
                 | Self::KW_THROWS
                 | Self::KW_WATCH
                 | Self::KW_INSTANCEOF

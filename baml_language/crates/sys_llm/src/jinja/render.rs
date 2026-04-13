@@ -530,6 +530,341 @@ mod tests {
         assert_eq!(result, "-1,234,567".to_string().into());
     }
 
+    // ========================================================================
+    // Media tests
+    // ========================================================================
+
+    fn make_media(
+        kind: baml_base::MediaKind,
+        content: baml_builtins2::MediaContent,
+        mime: Option<&str>,
+    ) -> std::sync::Arc<baml_builtins2::MediaValue> {
+        std::sync::Arc::new(baml_builtins2::MediaValue::new(
+            kind,
+            content,
+            mime.map(String::from),
+        ))
+    }
+
+    fn make_media_external(
+        kind: baml_base::MediaKind,
+        content: baml_builtins2::MediaContent,
+        mime: Option<&str>,
+    ) -> BexExternalValue {
+        BexExternalValue::Adt(bex_external_types::BexExternalAdt::Media(make_media(
+            kind, content, mime,
+        )))
+    }
+
+    fn make_media_instance(
+        class_name: &str,
+        kind: baml_base::MediaKind,
+        content: baml_builtins2::MediaContent,
+        mime: Option<&str>,
+    ) -> BexExternalValue {
+        let media = make_media_external(kind, content, mime);
+        let mut fields = IndexMap::new();
+        fields.insert("_data".to_string(), media);
+        BexExternalValue::Instance {
+            class_name: class_name.to_string(),
+            fields,
+        }
+    }
+
+    #[test]
+    fn test_media_renders_as_prompt_ast_media() {
+        let template = "Describe this: {{ img }}";
+        let mut args = IndexMap::new();
+        args.insert(
+            "img".to_string(),
+            make_media_external(
+                baml_base::MediaKind::Image,
+                baml_builtins2::MediaContent::Url {
+                    url: "https://example.com/photo.jpg".into(),
+                    base64_data: None,
+                },
+                Some("image/jpeg"),
+            ),
+        );
+
+        let result = render_prompt(template, &args, &test_ctx()).unwrap();
+
+        // Should produce a Multiple with text + media
+        match &result {
+            PromptAst::Simple(content) => match content.as_ref() {
+                PromptAstSimple::Multiple(parts) => {
+                    assert_eq!(parts.len(), 2);
+                    match parts[0].as_ref() {
+                        PromptAstSimple::String(s) => assert_eq!(s, "Describe this:"),
+                        other => panic!("Expected String, got {other:?}"),
+                    }
+                    match parts[1].as_ref() {
+                        PromptAstSimple::Media(m) => {
+                            assert_eq!(m.kind, baml_base::MediaKind::Image);
+                        }
+                        other => panic!("Expected Media, got {other:?}"),
+                    }
+                }
+                other => panic!("Expected Multiple, got {other:?}"),
+            },
+            other => panic!("Expected Simple, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_media_in_chat_message() {
+        let template = r#"
+            {{ _.role("user") }}
+            Look at this image:
+            {{ img }}
+        "#;
+
+        let mut args = IndexMap::new();
+        args.insert(
+            "img".to_string(),
+            make_media_external(
+                baml_base::MediaKind::Image,
+                baml_builtins2::MediaContent::Base64 {
+                    base64_data: "iVBORw0KGgo=".into(),
+                },
+                Some("image/png"),
+            ),
+        );
+
+        let result = render_prompt(template, &args, &test_ctx()).unwrap();
+
+        match &result {
+            PromptAst::Message { role, content, .. } => {
+                assert_eq!(role, "user");
+                match content.as_ref() {
+                    PromptAstSimple::Multiple(parts) => {
+                        assert_eq!(parts.len(), 2);
+                        assert!(matches!(parts[0].as_ref(), PromptAstSimple::String(_)));
+                        assert!(matches!(parts[1].as_ref(), PromptAstSimple::Media(_)));
+                    }
+                    other => panic!("Expected Multiple, got {other:?}"),
+                }
+            }
+            other => panic!("Expected Message, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_media_wrapper_instance_unwrapped() {
+        let template = "{{ receipt }}";
+        let mut args = IndexMap::new();
+        args.insert(
+            "receipt".to_string(),
+            make_media_instance(
+                "baml.media.Image",
+                baml_base::MediaKind::Image,
+                baml_builtins2::MediaContent::Url {
+                    url: "https://example.com/receipt.jpg".into(),
+                    base64_data: None,
+                },
+                Some("image/jpeg"),
+            ),
+        );
+
+        let result = render_prompt(template, &args, &test_ctx()).unwrap();
+
+        // The wrapper instance should be unwrapped to produce a media node
+        match &result {
+            PromptAst::Simple(content) => match content.as_ref() {
+                PromptAstSimple::Media(m) => {
+                    assert_eq!(m.kind, baml_base::MediaKind::Image);
+                }
+                other => panic!("Expected Media, got {other:?}"),
+            },
+            other => panic!("Expected Simple, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_media_wrapper_audio() {
+        let template = "{{ audio }}";
+        let mut args = IndexMap::new();
+        args.insert(
+            "audio".to_string(),
+            make_media_instance(
+                "baml.media.Audio",
+                baml_base::MediaKind::Audio,
+                baml_builtins2::MediaContent::Base64 {
+                    base64_data: "AAAA".into(),
+                },
+                Some("audio/wav"),
+            ),
+        );
+
+        let result = render_prompt(template, &args, &test_ctx()).unwrap();
+
+        match &result {
+            PromptAst::Simple(content) => match content.as_ref() {
+                PromptAstSimple::Media(m) => {
+                    assert_eq!(m.kind, baml_base::MediaKind::Audio);
+                }
+                other => panic!("Expected Media, got {other:?}"),
+            },
+            other => panic!("Expected Simple, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_media_wrapper_pdf() {
+        let template = "{{ doc }}";
+        let mut args = IndexMap::new();
+        args.insert(
+            "doc".to_string(),
+            make_media_instance(
+                "baml.media.Pdf",
+                baml_base::MediaKind::Pdf,
+                baml_builtins2::MediaContent::Url {
+                    url: "https://example.com/doc.pdf".into(),
+                    base64_data: None,
+                },
+                Some("application/pdf"),
+            ),
+        );
+
+        let result = render_prompt(template, &args, &test_ctx()).unwrap();
+
+        match &result {
+            PromptAst::Simple(content) => match content.as_ref() {
+                PromptAstSimple::Media(m) => {
+                    assert_eq!(m.kind, baml_base::MediaKind::Pdf);
+                }
+                other => panic!("Expected Media, got {other:?}"),
+            },
+            other => panic!("Expected Simple, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_media_with_text_in_chat() {
+        let template = r#"
+            {{ _.role("user") }}
+            Extract info from this receipt:
+            {{ receipt }}
+            {{ ctx.output_format }}
+        "#;
+
+        let mut args = IndexMap::new();
+        args.insert(
+            "receipt".to_string(),
+            make_media_external(
+                baml_base::MediaKind::Image,
+                baml_builtins2::MediaContent::Url {
+                    url: "https://example.com/receipt.jpg".into(),
+                    base64_data: None,
+                },
+                Some("image/jpeg"),
+            ),
+        );
+
+        let result = render_prompt(template, &args, &test_ctx()).unwrap();
+
+        match &result {
+            PromptAst::Message { role, content, .. } => {
+                assert_eq!(role, "user");
+                match content.as_ref() {
+                    PromptAstSimple::Multiple(parts) => {
+                        // Should have: text, media (output_format for string is empty)
+                        assert!(
+                            parts.len() >= 2,
+                            "Expected at least 2 parts, got {}",
+                            parts.len()
+                        );
+                        assert!(matches!(parts[0].as_ref(), PromptAstSimple::String(_)));
+                        assert!(matches!(parts[1].as_ref(), PromptAstSimple::Media(_)));
+                    }
+                    other => panic!("Expected Multiple, got {other:?}"),
+                }
+            }
+            other => panic!("Expected Message, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_multiple_media_in_message() {
+        let template = r#"
+            {{ _.role("user") }}
+            Compare these images:
+            {{ img1 }}
+            {{ img2 }}
+        "#;
+
+        let mut args = IndexMap::new();
+        args.insert(
+            "img1".to_string(),
+            make_media_external(
+                baml_base::MediaKind::Image,
+                baml_builtins2::MediaContent::Url {
+                    url: "https://example.com/a.jpg".into(),
+                    base64_data: None,
+                },
+                Some("image/jpeg"),
+            ),
+        );
+        args.insert(
+            "img2".to_string(),
+            make_media_external(
+                baml_base::MediaKind::Image,
+                baml_builtins2::MediaContent::Url {
+                    url: "https://example.com/b.jpg".into(),
+                    base64_data: None,
+                },
+                Some("image/png"),
+            ),
+        );
+
+        let result = render_prompt(template, &args, &test_ctx()).unwrap();
+
+        match &result {
+            PromptAst::Message { content, .. } => match content.as_ref() {
+                PromptAstSimple::Multiple(parts) => {
+                    let media_count = parts
+                        .iter()
+                        .filter(|p| matches!(p.as_ref(), PromptAstSimple::Media(_)))
+                        .count();
+                    assert_eq!(media_count, 2, "Should have 2 media parts");
+                }
+                other => panic!("Expected Multiple, got {other:?}"),
+            },
+            other => panic!("Expected Message, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_non_media_instance_not_unwrapped() {
+        let template = "{{ person }}";
+        let mut fields = IndexMap::new();
+        fields.insert(
+            "name".to_string(),
+            BexExternalValue::String("Alice".to_string()),
+        );
+        let mut args = IndexMap::new();
+        args.insert(
+            "person".to_string(),
+            BexExternalValue::Instance {
+                class_name: "user.Person".to_string(),
+                fields,
+            },
+        );
+
+        let result = render_prompt(template, &args, &test_ctx()).unwrap();
+
+        // Non-media instances should render as maps, not be unwrapped
+        match &result {
+            PromptAst::Simple(content) => match content.as_ref() {
+                PromptAstSimple::String(s) => {
+                    assert!(s.contains("Alice"), "Should contain field value: {s}");
+                }
+                other => panic!("Expected String, got {other:?}"),
+            },
+            other => panic!("Expected Simple, got {other:?}"),
+        }
+    }
+
     #[test]
     fn test_enum_access() {
         let template = "Category: {{ ctx.enums.Category.SPORTS }}";

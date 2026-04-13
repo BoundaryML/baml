@@ -21,7 +21,7 @@ function UnknownBindingTypes(x: int) -> string {
 //    │ 
 //    │ Note: Error code: E0001
 // ───╯
-// Error: unreachable arm
+// Warning: unreachable arm
 //    ╭─[ catch_unknown_binding_types.baml:7:10 ]
 //    │
 //  7 │     _ => "caught any"
@@ -39,7 +39,7 @@ function UnknownBindingTypes(x: int) -> string {
 //    │ 
 //    │ Note: Error code: E0001
 // ───╯
-// Error: unreachable arm
+// Warning: unreachable arm
 //    ╭─[ catch_unknown_binding_types.baml:9:10 ]
 //    │
 //  9 │     _ => "caught unknown"

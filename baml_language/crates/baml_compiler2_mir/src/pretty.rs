@@ -177,13 +177,11 @@ fn write_statement(f: &mut impl Write, stmt: &Statement) -> fmt::Result {
         StatementKind::VizExit(idx) => {
             write!(f, "viz_exit({idx});")
         }
+        StatementKind::FreshCell(local) => {
+            write!(f, "fresh_cell({local});")
+        }
         StatementKind::Nop => {
             write!(f, "nop;")
-        }
-        StatementKind::Assert(operand) => {
-            write!(f, "assert(")?;
-            write_operand(f, operand)?;
-            write!(f, ");")
         }
     }
 }
@@ -294,6 +292,23 @@ fn write_terminator(f: &mut impl Write, term: &Terminator) -> fmt::Result {
             write_operand(f, value)?;
             write!(f, ";")
         }
+        Terminator::ThrowIfPanic { value, otherwise } => {
+            write!(f, "throw_if_panic ")?;
+            write_operand(f, value)?;
+            write!(f, " -> {otherwise};")
+        }
+        Terminator::ShortCircuit {
+            operand,
+            is_and,
+            destination,
+            eval_rhs,
+            join,
+        } => {
+            let op = if *is_and { "&&" } else { "||" };
+            write!(f, "{destination} = short_circuit({op}) ")?;
+            write_operand(f, operand)?;
+            write!(f, " -> [eval: {eval_rhs}, join: {join}];")
+        }
     }
 }
 
@@ -396,7 +411,6 @@ fn write_constant(f: &mut impl Write, constant: &Constant) -> fmt::Result {
         Constant::Null => write!(f, "const null"),
         Constant::Function(qn) => write!(f, "const fn {qn}"),
         Constant::EnumVariant { enum_ref, variant } => write!(f, "const {enum_ref}.{variant}"),
-        Constant::Ty(ty) => write!(f, "const type {ty:?}"),
     }
 }
 

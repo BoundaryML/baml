@@ -55,7 +55,7 @@ async fn fs_open_and_read() {
         r#"
             function main() -> string {{
                 let file = baml.fs.open("{root}/hello.txt");
-                file.read()
+                file.read_string()
             }}
         "#
     ));
@@ -65,7 +65,7 @@ async fn fs_open_and_read() {
         load_const "{TMPDIR}/hello.txt"
         dispatch_future baml.fs.open
         await
-        dispatch_future baml.fs.File.read
+        dispatch_future baml.fs.File.read_string
         await
         return
     }
@@ -77,6 +77,35 @@ async fn fs_open_and_read() {
 }
 
 #[tokio::test]
+async fn fs_open_and_read_bytes() {
+    let (_tmp, root) = tmp(indexmap! { "hello.txt" => "Hello from BAML!" });
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> uint8array {{
+                let file = baml.fs.open("{root}/hello.txt");
+                file.read_bytes()
+            }}
+        "#
+    ));
+
+    insta::assert_snapshot!(stabilize(&output.bytecode, &root), @r#"
+    function main() -> uint8array {
+        load_const "{TMPDIR}/hello.txt"
+        dispatch_future baml.fs.open
+        await
+        dispatch_future baml.fs.File.read_bytes
+        await
+        return
+    }
+    "#);
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::Uint8Array(b"Hello from BAML!".to_vec()))
+    );
+}
+
+#[tokio::test]
 async fn fs_open_nonexistent_file() {
     let (_tmp, root) = tmp(indexmap! {});
 
@@ -84,7 +113,7 @@ async fn fs_open_nonexistent_file() {
         r#"
             function main() -> string {{
                 let file = baml.fs.open("{root}/nonexistent.txt");
-                file.read()
+                file.read_string()
             }}
         "#
     ));
@@ -94,7 +123,7 @@ async fn fs_open_nonexistent_file() {
         load_const "{TMPDIR}/nonexistent.txt"
         dispatch_future baml.fs.open
         await
-        dispatch_future baml.fs.File.read
+        dispatch_future baml.fs.File.read_string
         await
         return
     }

@@ -88,14 +88,14 @@ pub fn compile_source(source: &str) -> Program {
 }
 
 /// Compile BAML source with a specific optimization level.
-pub fn compile_source_with_opt(source: &str, _opt: OptLevel) -> Program {
+pub fn compile_source_with_opt(source: &str, opt: OptLevel) -> Program {
     let db = setup_test_db(source);
     assert_no_diagnostic_errors(&db);
 
     let opts = baml_compiler2_emit::CompileOptions {
         emit_test_cases: false,
     };
-    baml_compiler2_emit::generate_project_bytecode(&db, &opts)
+    baml_compiler2_emit::generate_project_bytecode_with_opt(&db, &opts, opt)
         .expect("generate_project_bytecode should succeed for valid test source")
 }
 
@@ -103,11 +103,16 @@ pub fn compile_source_with_opt(source: &str, _opt: OptLevel) -> Program {
 ///
 /// Strips the `"user."` package prefix from function names so snapshots show
 /// `function main()` rather than `function user.main()`.
-fn display_user_functions(program: &Program) -> String {
+pub fn display_user_functions(program: &Program) -> String {
     let mut functions: Vec<(String, &Function)> = program
         .function_indices
         .iter()
-        .filter(|(name, _)| !name.starts_with("baml."))
+        .filter(|(name, _)| {
+            !name.starts_with("baml.")
+                && !name.starts_with("testing.")
+                && !name.starts_with("assert.")
+                && !name.starts_with("env.")
+        })
         .filter_map(|(name, idx)| match program.objects.get(*idx) {
             Some(Object::Function(f)) => {
                 // Strip leading "user." package prefix for display.
@@ -205,7 +210,7 @@ pub async fn run_test(
     let bytecode = display_user_functions(&program);
 
     // Resolve the entry name (bare "main" → "user.main" for compiler2 output).
-    let resolved_entry = resolve_entry_name(&program, entry).clone();
+    let resolved_entry = resolve_entry_name(&program, entry);
 
     // Resolve named args to positional before the engine consumes the program.
     let positional_args = resolve_args(&program, entry, args);
@@ -220,8 +225,18 @@ pub async fn run_test(
             &resolved_entry,
             positional_args,
             FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
         )
         .await;
 
     TestOutput { bytecode, result }
+}
+
+/// Like `run_test` but at `OptLevel::Two` (includes MIR constant folding).
+pub async fn run_test_mir_optimized(
+    source: &str,
+    entry: &str,
+    args: IndexMap<&str, BexExternalValue>,
+) -> TestOutput {
+    run_test(source, entry, args, OptLevel::Two).await
 }

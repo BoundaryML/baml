@@ -539,6 +539,12 @@ impl AsBexExternalValue for Vec<String> {
     }
 }
 
+impl AsBexExternalValue for Vec<u8> {
+    fn into_bex_external_value(self) -> BexExternalValue {
+        BexExternalValue::Uint8Array(self)
+    }
+}
+
 /// Trait for opaque Rust data stored in `Object::RustData` that knows how to
 /// convert itself to a [`BexExternalValue`].
 ///

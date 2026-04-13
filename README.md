@@ -111,7 +111,7 @@ final = stream.get_final_response()
 And get fully type-safe outputs for each chunk in the stream.
 
 ## Test prompts 10x faster, right in your IDE
-BAML comes with native tooling for VSCode (jetbrains + neovim coming soon). 
+BAML comes with native tooling for [VS Code](https://docs.boundaryml.com/guide/installation-editors/vs-code-extension) and [JetBrains IDEs](https://docs.boundaryml.com/guide/installation-editors/jetbrains), with support for [other editors](https://docs.boundaryml.com/guide/installation-editors/others) continuing to expand.
 
 **Visualize full prompt (including any multi-modal assets), and the API request**. BAML gives you full transparency and control of the prompt.
 

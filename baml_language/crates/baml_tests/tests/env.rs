@@ -47,7 +47,12 @@ async fn env_get_or_panic_missing_var() {
         return
     }
     "#);
-    insta::assert_snapshot!(output.result.unwrap_err().to_string(), @"failed to call baml.sys.panic: env var not found: BAML_TEST_MISSING_PANIC");
+    insta::assert_snapshot!(output.result.unwrap_err().to_string(), @r#"
+    Traceback (most recent call last):
+      File "test.baml", line 3, in user.main
+      File "<builtin>/baml/ns_env/env.baml", line 6, in baml.env.get_or_panic
+    uncaught throw: Instance { class_name: "baml.panics.UserPanic", fields: {"message": String("env var not found: BAML_TEST_MISSING_PANIC")} }
+    "#);
 }
 
 #[tokio::test]
@@ -139,5 +144,10 @@ async fn env_sugar_missing_var() {
         return
     }
     "#);
-    insta::assert_snapshot!(output.result.unwrap_err().to_string(), @"failed to call baml.sys.panic: env var not found: BAML_TEST_SUGAR_MISSING");
+    insta::assert_snapshot!(output.result.unwrap_err().to_string(), @r#"
+    Traceback (most recent call last):
+      File "test.baml", line 3, in user.main
+      File "<builtin>/baml/ns_env/env.baml", line 6, in baml.env.get_or_panic
+    uncaught throw: Instance { class_name: "baml.panics.UserPanic", fields: {"message": String("env var not found: BAML_TEST_SUGAR_MISSING")} }
+    "#);
 }

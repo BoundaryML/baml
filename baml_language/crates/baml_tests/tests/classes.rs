@@ -24,15 +24,13 @@ async fn class_constructor() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> Point {
         alloc_instance Point
-        copy 0
         load_const 1
-        store_field .x
-        copy 0
+        init_field .x
         load_const 2
-        store_field .y
+        init_field .y
         return
     }
     ");
@@ -64,15 +62,13 @@ async fn class_constructor_return_directly() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> Point {
         alloc_instance Point
-        copy 0
         load_const 1
-        store_field .x
-        copy 0
+        init_field .x
         load_const 2
-        store_field .y
+        init_field .y
         return
     }
     ");
@@ -108,15 +104,13 @@ async fn constructor_with_preceding_variables() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         alloc_instance MyClass
-        copy 0
         load_const 100
-        store_field .x
-        copy 0
+        init_field .x
         load_const 200
-        store_field .y
+        init_field .y
         store_var obj
         load_var obj
         load_field .x
@@ -158,7 +152,7 @@ async fn nested_construction_dead_store() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 42
         return
@@ -191,21 +185,17 @@ async fn nested_construction_field_access() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         alloc_instance Outer
-        copy 0
         alloc_instance Inner
-        copy 0
         load_const 10
-        store_field .x
-        copy 0
+        init_field .x
         load_const 20
-        store_field .y
-        store_field .inner
-        copy 0
+        init_field .y
+        init_field .inner
         load_const 30
-        store_field .value
+        init_field .value
         load_field .value
         return
     }
@@ -237,21 +227,17 @@ async fn nested_construction_inner_field_access() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         alloc_instance Outer
-        copy 0
         alloc_instance Inner
-        copy 0
         load_const 10
-        store_field .x
-        copy 0
+        init_field .x
         load_const 20
-        store_field .y
-        store_field .inner
-        copy 0
+        init_field .y
+        init_field .inner
         load_const 30
-        store_field .value
+        init_field .value
         load_field .inner
         load_field .y
         return
@@ -279,15 +265,13 @@ async fn nested_field_read() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         alloc_instance Outer
-        copy 0
         alloc_instance Inner
-        copy 0
         load_const 42
-        store_field .value
-        store_field .inner
+        init_field .value
+        init_field .inner
         load_field .inner
         load_field .value
         return
@@ -316,15 +300,13 @@ async fn nested_field_read_separate_construction() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         alloc_instance Outer
-        copy 0
         alloc_instance Inner
-        copy 0
         load_const 42
-        store_field .value
-        store_field .inner
+        init_field .value
+        init_field .inner
         load_field .inner
         load_field .value
         return
@@ -358,18 +340,15 @@ async fn nested_constructor_with_preceding_variables() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         alloc_instance Outer
-        copy 0
         alloc_instance Inner
-        copy 0
         load_const 100
-        store_field .val
-        store_field .inner
-        copy 0
+        init_field .val
+        init_field .inner
         load_const 50
-        store_field .x
+        init_field .x
         store_var obj
         load_var obj
         load_field .inner
@@ -414,21 +393,17 @@ async fn spread_before_named_fields() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function default_point() -> Point {
         alloc_instance Point
-        copy 0
         load_const 0
-        store_field .x
-        copy 0
+        init_field .x
         load_const 0
-        store_field .y
-        copy 0
+        init_field .y
         load_const 0
-        store_field .z
-        copy 0
+        init_field .z
         load_const 0
-        store_field .w
+        init_field .w
         return
     }
 
@@ -436,20 +411,16 @@ async fn spread_before_named_fields() {
         call user.default_point
         store_var _2
         alloc_instance Point
-        copy 0
         load_const 1
-        store_field .x
-        copy 0
+        init_field .x
         load_const 2
-        store_field .y
-        copy 0
+        init_field .y
         load_var _2
         load_field .2
-        store_field .z
-        copy 0
+        init_field .z
         load_var _2
         load_field .3
-        store_field .w
+        init_field .w
         return
     }
     ");
@@ -490,21 +461,17 @@ async fn spread_after_named_fields() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function default_point() -> Point {
         alloc_instance Point
-        copy 0
         load_const 0
-        store_field .x
-        copy 0
+        init_field .x
         load_const 0
-        store_field .y
-        copy 0
+        init_field .y
         load_const 0
-        store_field .z
-        copy 0
+        init_field .z
         load_const 0
-        store_field .w
+        init_field .w
         return
     }
 
@@ -512,22 +479,18 @@ async fn spread_after_named_fields() {
         call user.default_point
         store_var _2
         alloc_instance Point
-        copy 0
         load_var _2
         load_field .0
-        store_field .x
-        copy 0
+        init_field .x
         load_var _2
         load_field .1
-        store_field .y
-        copy 0
+        init_field .y
         load_var _2
         load_field .2
-        store_field .z
-        copy 0
+        init_field .z
         load_var _2
         load_field .3
-        store_field .w
+        init_field .w
         return
     }
     ");
@@ -572,63 +535,51 @@ async fn multiple_spreads() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> Point {
         call user.x_one
         pop 1
         call user.xy_one
         store_var _3
         alloc_instance Point
-        copy 0
         load_var _3
         load_field .0
-        store_field .x
-        copy 0
+        init_field .x
         load_var _3
         load_field .1
-        store_field .y
-        copy 0
+        init_field .y
         load_var _3
         load_field .2
-        store_field .z
-        copy 0
+        init_field .z
         load_var _3
         load_field .3
-        store_field .w
+        init_field .w
         return
     }
 
     function x_one() -> Point {
         alloc_instance Point
-        copy 0
         load_const 1
-        store_field .x
-        copy 0
+        init_field .x
         load_const 0
-        store_field .y
-        copy 0
+        init_field .y
         load_const 0
-        store_field .z
-        copy 0
+        init_field .z
         load_const 0
-        store_field .w
+        init_field .w
         return
     }
 
     function xy_one() -> Point {
         alloc_instance Point
-        copy 0
         load_const 1
-        store_field .x
-        copy 0
+        init_field .x
         load_const 1
-        store_field .y
-        copy 0
+        init_field .y
         load_const 0
-        store_field .z
-        copy 0
+        init_field .z
         load_const 0
-        store_field .w
+        init_field .w
         return
     }
     ");
@@ -670,21 +621,17 @@ async fn spread_does_not_break_locals() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function default_point() -> Point {
         alloc_instance Point
-        copy 0
         load_const 0
-        store_field .x
-        copy 0
+        init_field .x
         load_const 0
-        store_field .y
-        copy 0
+        init_field .y
         load_const 0
-        store_field .z
-        copy 0
+        init_field .z
         load_const 0
-        store_field .w
+        init_field .w
         return
     }
 
@@ -719,12 +666,11 @@ async fn field_assignment() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         alloc_instance Data
-        copy 0
         load_const 0
-        store_field .value
+        init_field .value
         store_var d
         load_var d
         load_const 42
@@ -754,12 +700,11 @@ async fn field_compound_assignment() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         alloc_instance Counter
-        copy 0
         load_const 5
-        store_field .value
+        init_field .value
         store_var c
         load_var c
         load_var c
@@ -795,15 +740,13 @@ async fn nested_field_assignment() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         alloc_instance Outer
-        copy 0
         alloc_instance Inner
-        copy 0
         load_const 0
-        store_field .value
-        store_field .inner
+        init_field .value
+        init_field .inner
         store_var o
         load_var o
         load_field .inner
@@ -838,15 +781,13 @@ async fn nested_field_compound_assignment() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         alloc_instance Outer
-        copy 0
         alloc_instance Inner
-        copy 0
         load_const 5
-        store_field .value
-        store_field .inner
+        init_field .value
+        init_field .inner
         store_var o
         load_var o
         load_field .inner
@@ -891,28 +832,25 @@ async fn method_call() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function Number.add(self: null, other: Number) -> Number {
         alloc_instance Number
-        copy 0
         load_var self
         load_field .value
         load_var other
         load_field .value
         bin_op +
-        store_field .value
+        init_field .value
         return
     }
 
     function main() -> int {
         alloc_instance Number
-        copy 0
         load_const 1
-        store_field .value
+        init_field .value
         alloc_instance Number
-        copy 0
         load_const 2
-        store_field .value
+        init_field .value
         call user.Number.add
         load_field .value
         return
@@ -944,7 +882,7 @@ async fn mutable_self_method() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function Number.add(self: null, other: Number) -> bool {
         load_var self
         load_var self
@@ -959,15 +897,13 @@ async fn mutable_self_method() {
 
     function main() -> int {
         alloc_instance Number
-        copy 0
         load_const 1
-        store_field .value
+        init_field .value
         store_var a
         load_var a
         alloc_instance Number
-        copy 0
         load_const 2
-        store_field .value
+        init_field .value
         call user.Number.add
         pop 1
         load_var a

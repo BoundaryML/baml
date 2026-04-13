@@ -24,7 +24,7 @@ function ThrowsMixed(x: int) -> string throws string | Errors {
 //    │ 
 //    │ Note: Error code: E0001
 // ───╯
-// Error: extraneous throws declaration: user.Errors
+// Warning: extraneous throws declaration: user.Errors
 //    ╭─[ throw_throws_mixed.baml:9:46 ]
 //    │
 //  9 │ function ThrowsMixed(x: int) -> string throws string | Errors {

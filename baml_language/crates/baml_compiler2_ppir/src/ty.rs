@@ -239,6 +239,7 @@ impl PpirTy {
             TypeExpr::Bool { .. } => PpirTy::Bool { attrs },
             TypeExpr::Null { .. } => PpirTy::Null { attrs },
             TypeExpr::Never { .. } => PpirTy::Never { attrs },
+            TypeExpr::Void { .. } => PpirTy::Never { attrs },
             TypeExpr::Path { segments, .. } => PpirTy::Named {
                 path: segments.clone(),
                 attrs,

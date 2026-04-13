@@ -34,30 +34,6 @@ source: crates/baml_tests/src/generated_tests.rs
     │     Note: Error code: E0001
 ────╯
 
-  [type] Error: unresolved type: bool
-    ╭─[ syntax_errors.baml:16:52 ]
-    │
- 16 │ ╭─▶ function BadUnionPattern(x: int | bool) -> string {
-    ┆ ┆   
- 19 │ ├─▶     }
-    │ │           
-    │ ╰─────────── unresolved type: bool
-    │     
-    │     Note: Error code: E0001
-────╯
-
-  [type] Error: unresolved type: bool
-    ╭─[ syntax_errors.baml:16:52 ]
-    │
- 16 │ ╭─▶ function BadUnionPattern(x: int | bool) -> string {
-    ┆ ┆   
- 19 │ ├─▶     }
-    │ │           
-    │ ╰─────────── unresolved type: bool
-    │     
-    │     Note: Error code: E0001
-────╯
-
   [parse] Error: Expected '=>' after pattern, found ':'
     ╭─[ syntax_errors.baml:18:19 ]
     │

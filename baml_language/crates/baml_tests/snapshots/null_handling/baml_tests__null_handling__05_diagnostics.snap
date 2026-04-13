@@ -136,7 +136,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │ Note: Error code: E0001
 ─────╯
 
-  [type] Error: did you mean `user?.profile?.name`? `... ?? null` is unnecessary because `user?.profile?.name` is already nullable
+  [type] Warning: did you mean `user?.profile?.name`? `... ?? null` is unnecessary because `user?.profile?.name` is already nullable
      ╭─[ null_handling.baml:238:23 ]
      │
  238 │     // --- Diagnostic: W1 — || where ?? was likely intended ---
@@ -146,7 +146,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │ Note: Error code: E0001
 ─────╯
 
-  [type] Error: did you mean `user?.profile?.name ?? "Anonymous"`? BAML uses `??` instead of `||` for null coalescing
+  [type] Warning: did you mean `user?.profile?.name ?? "Anonymous"`? BAML uses `??` instead of `||` for null coalescing
      ╭─[ null_handling.baml:243:1 ]
      │
  243 │ ╭─▶ 

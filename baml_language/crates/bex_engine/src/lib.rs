@@ -77,7 +77,8 @@ use bex_vm_types::{FunctionMeta, GlobalPool, HeapPtr, Object, SysOp, Value};
 pub use conversion::test_arg_to_external;
 // Re-export CancellationToken for callers.
 pub use function_call_context::{FunctionCallContext, FunctionCallContextBuilder};
-use sys_types::{CallId, OpError, SysOpResult};
+pub use sys_types::CallId;
+use sys_types::{OpError, SysOpResult};
 use thiserror::Error;
 use tokio::sync::{Notify, mpsc};
 pub use tokio_util::sync::CancellationToken;
@@ -241,11 +242,15 @@ pub enum EngineError {
     #[error("Future channel closed unexpectedly")]
     FutureChannelClosed,
 
-    #[error("VM error: {0}")]
-    VmError(#[from] bex_vm::errors::VmError),
+    #[error("VM internal error: {0}")]
+    VmInternalError(bex_vm::errors::VmInternalError),
 
-    #[error("Internal VM error: {0}")]
-    InternalVmError(#[from] bex_vm::InternalError),
+    /// Either a BAML panic or a BAML error value.
+    #[error("{}", format_unhandled_throw(value, trace))]
+    UnhandledThrow {
+        value: Box<BexExternalValue>,
+        trace: Vec<bex_vm::StackFrame>,
+    },
 
     #[error("Cannot convert object of type {type_name}")]
     CannotConvert { type_name: String },
@@ -268,6 +273,19 @@ pub enum EngineError {
 
     #[error("Package initialization failed: {0}")]
     InitFailed(String),
+}
+
+fn format_unhandled_throw(value: &BexExternalValue, trace: &[bex_vm::StackFrame]) -> String {
+    use std::fmt::Write;
+    let mut out = bex_vm::format_traceback(trace.iter().map(|loc| {
+        (
+            loc.file_path.as_str(),
+            loc.error_line,
+            loc.function_name.as_str(),
+        )
+    }));
+    write!(out, "uncaught throw: {value:?}").unwrap();
+    out
 }
 
 // ============================================================================
@@ -414,7 +432,8 @@ impl BexEngine {
         let package_init_order = bytecode_program.package_init_order.clone();
 
         // Convert the pure bytecode to a VM-ready program with native functions attached
-        let bytecode = bex_vm::convert_program(bytecode_program)?;
+        let bytecode =
+            bex_vm::convert_program(bytecode_program).map_err(EngineError::VmInternalError)?;
 
         // Extract test cases before consuming other bytecode fields.
         let test_cases = bytecode.test_cases;
@@ -537,6 +556,12 @@ impl BexEngine {
         let class_definitions = Self::extract_class_definitions(&resolved_class_names);
         let enum_definitions = Self::extract_enum_definitions(&resolved_enum_names);
 
+        // Build a default RuntimeIo from the SysOps table with an empty context.
+        // This is replaced per-call in execute_sys_op with a live context that
+        // carries the correct cancellation token and spawner.
+        let runtime_io =
+            sys_ops::build_runtime_io(&sys_ops, &heap, &sys_types::SysOpContext::empty());
+
         let sys_op_ctx = sys_types::EngineSysOpContext {
             llm_functions: Arc::new(llm_functions),
             function_global_indices: Arc::new(bytecode.function_global_indices),
@@ -544,14 +569,7 @@ impl BexEngine {
             class_definitions: Arc::new(class_definitions),
             enum_definitions: Arc::new(enum_definitions),
             type_alias_definitions: Arc::new(bytecode.recursive_type_alias_defs),
-            io_callbacks: sys_types::SysOpIoCallbacks {
-                http_send: sys_ops.baml_http_send.clone(),
-                http_response_text: sys_ops.baml_http_response_text.clone(),
-                env_get: sys_ops.baml_env_get.clone(),
-                fs_open: sys_ops.baml_fs_open.clone(),
-                fs_file_read: sys_ops.baml_fs_file_read.clone(),
-                sys_shell: sys_ops.baml_sys_shell.clone(),
-            },
+            runtime_io,
         };
 
         Ok(Self {
@@ -851,6 +869,7 @@ impl BexEngine {
             collectors,
             cancel,
         }: FunctionCallContext,
+        copy_objects: bool,
     ) -> Result<BexExternalValue, EngineError> {
         // Fail fast if already cancelled — guarantees pre-cancelled tokens
         // always produce Err(Cancelled) regardless of function contents.
@@ -871,6 +890,7 @@ impl BexEngine {
             .unwrap_or(Ty::Null {
                 attr: baml_type::TyAttr::default(),
             });
+        let throws_type = self.function_throws_type(function_name);
 
         // Register with current epoch
         let my_epoch = self.current_epoch.load(Ordering::Acquire);
@@ -973,11 +993,13 @@ impl BexEngine {
         let result = self
             .run_event_loop_with_epoch(
                 return_type,
+                throws_type,
                 &mut vm,
                 my_epoch,
                 call_id,
                 &mut span_state,
                 &cancel,
+                copy_objects,
             )
             .await;
 
@@ -1063,6 +1085,18 @@ impl BexEngine {
         }
     }
 
+    /// Get the inferred throws type for a function by dereferencing its heap object.
+    fn function_throws_type(&self, name: &str) -> Option<Ty> {
+        let resolved = self.resolve_function_name(name)?;
+        let (ptr, _kind) = self.resolved_function_names.get(resolved)?;
+        // SAFETY: ptr is from resolved_function_names, a compile-time object
+        let obj = unsafe { ptr.get() };
+        match obj {
+            Object::Function(func) => func.throws_type.clone(),
+            _ => None,
+        }
+    }
+
     /// Get parameter names and types for a function by dereferencing its heap object.
     pub fn function_params(&self, name: &str) -> Result<Vec<(&str, &Ty)>, EngineError> {
         let resolved = self
@@ -1105,6 +1139,77 @@ impl BexEngine {
         self.test_cases
             .iter()
             .find(|t| t.function_names.iter().any(|n| function_name == n) && t.name == test_name)
+    }
+
+    // ========================================================================
+    // Test Collection API
+    // ========================================================================
+
+    /// Collect all tests for a package by invoking `{package}.$init_test(collector)`.
+    ///
+    /// Returns a `BexExternalValue::Handle` pointing to a live `testing.TestRegistry`
+    /// heap object (GC-rooted), or `BexExternalValue::Null` if the package has no tests.
+    ///
+    /// If the package has no test blocks, `$init_test` will not exist in the program
+    /// and `Null` is returned immediately.
+    ///
+    /// # Arguments
+    ///
+    /// - `package`: The package name (e.g. `"user"`).
+    /// - `cancel`: A [`CancellationToken`] for caller-controlled cancellation.
+    pub async fn collect_tests(
+        self: &Arc<Self>,
+        package: &str,
+        call_id: CallId,
+        cancel: CancellationToken,
+    ) -> Result<BexExternalValue, EngineError> {
+        let init_test_name = if package == "user" {
+            "$init_test".to_string()
+        } else {
+            format!("{package}.$init_test")
+        };
+
+        // If no $init_test function exists, this package has no tests.
+        if self.lookup_function(&init_test_name).is_err() {
+            return Ok(BexExternalValue::Null);
+        }
+
+        let ctx = || {
+            FunctionCallContextBuilder::new(call_id)
+                .with_cancel_token(cancel.clone())
+                .build()
+        };
+
+        // Step 1: Create a live TestCollector on the heap
+        let collector = self
+            .call_function(
+                "testing.TestCollector.new",
+                vec![BexExternalValue::String(String::new())],
+                ctx(),
+                false, // return Handle, not deep copy
+            )
+            .await?;
+
+        // Step 2: Populate the collector in-place via $init_test
+        self.call_function(
+            &init_test_name,
+            vec![collector.clone()],
+            ctx(),
+            true, // return value is null, doesn't matter
+        )
+        .await?;
+
+        // Step 3: Wrap in a TestRegistry
+        let registry = self
+            .call_function(
+                "testing.TestRegistry.new",
+                vec![collector],
+                ctx(),
+                false, // return Handle to live registry
+            )
+            .await?;
+
+        Ok(registry)
     }
 
     /// Collect roots from a yielded VM.
@@ -1187,14 +1292,17 @@ impl BexEngine {
     ///
     /// The `my_epoch` parameter is used to check if GC has been requested
     /// (epoch advanced). VMs from old epochs will park at yield points.
+    #[allow(clippy::too_many_arguments)]
     async fn run_event_loop_with_epoch(
         self: &Arc<Self>,
         return_type: Ty,
+        throws_type: Option<Ty>,
         vm: &mut BexVm,
         my_epoch: u64,
         call_id: CallId,
         span_state: &mut Option<SpanState>,
         cancel: &CancellationToken,
+        copy_objects: bool,
     ) -> Result<BexExternalValue, EngineError> {
         let (pending_futures, mut processed_futures) = mpsc::unbounded_channel::<FutureResult>();
         // Abort handles for spawned async tasks.
@@ -1221,7 +1329,39 @@ impl BexEngine {
         'vm_exec: loop {
             Self::cancellation_safepoint(cancel, &abort_handles)?;
 
-            match vm.exec()? {
+            let exec_result = match vm.exec() {
+                Ok(state) => state,
+                Err(bex_vm::errors::VmError::ThrownUnhandled { value, trace }) => {
+                    let external = if let Some(ref ty) = throws_type {
+                        self.heap.with_gc_protection(|protected| {
+                            self.convert_vm_value_to_external_with_type(
+                                &value,
+                                ty,
+                                &protected.epoch_guard(),
+                            )
+                        })?
+                    } else {
+                        self.vm_value_to_owned(&value)
+                    };
+                    return Err(EngineError::UnhandledThrow {
+                        value: Box::new(external),
+                        trace,
+                    });
+                }
+                Err(bex_vm::errors::VmError::Thrown(value)) => {
+                    // Internal throw that escaped without unwinding — treat as
+                    // unhandled with no trace.
+                    let external = self.vm_value_to_owned(&value);
+                    return Err(EngineError::UnhandledThrow {
+                        value: Box::new(external),
+                        trace: Vec::new(),
+                    });
+                }
+                Err(bex_vm::errors::VmError::InternalError(err)) => {
+                    return Err(EngineError::VmInternalError(err));
+                }
+            };
+            match exec_result {
                 VmExecState::Complete(value) => {
                     // "Cancel wins" semantics: if cancellation races with a
                     // completed VM step, report `Cancelled` rather than
@@ -1265,8 +1405,20 @@ impl BexEngine {
                         return Err(EngineError::Cancelled);
                     }
 
+                    // When copy_objects: false and the result is a heap object,
+                    // create a Handle without holding with_gc_protection (which
+                    // takes a read lock on handles). create_handle takes a write
+                    // lock — the two cannot nest without deadlocking.
+                    if !copy_objects {
+                        if let Value::Object(ptr) = value {
+                            let handle = self.heap.create_handle(ptr);
+                            return Ok(BexExternalValue::Handle(handle));
+                        }
+                        // Non-object primitives fall through to normal conversion below.
+                    }
+
                     return self.heap.with_gc_protection(|protected| {
-                        // Convert to BexValue (handles for objects, BexExternalValue for primitives)
+                        // Normal deep-extraction: convert VM value to fully owned BexExternalValue.
                         self.convert_vm_value_to_external_with_type(
                             &value,
                             &return_type,
@@ -1276,7 +1428,9 @@ impl BexEngine {
                 }
 
                 VmExecState::ScheduleFuture(id) => {
-                    let pending = vm.pending_future(id)?;
+                    let pending = vm
+                        .pending_future(id)
+                        .map_err(EngineError::VmInternalError)?;
 
                     // Convert arguments to BexExternalValue
                     let args: Vec<BexExternalValue> = pending
@@ -1307,7 +1461,8 @@ impl BexEngine {
                                 )
                             });
 
-                            vm.set_future_ready(id, value)?;
+                            vm.set_future_ready(id, value)
+                                .map_err(EngineError::VmInternalError)?;
                         }
                         SysOpResult::Async(fut) => {
                             // Guard the "spawn side effect" boundary.
@@ -1396,7 +1551,9 @@ impl BexEngine {
                                 &protected.epoch_guard(),
                             )
                         });
-                        vm.fulfil_future(future.id, value)?;
+                        vm.fulfil_future(future.id, value)
+                            .map_err(EngineError::VmInternalError)?;
+
                         if future.id == future_id {
                             continue 'vm_exec;
                         }
@@ -1425,7 +1582,9 @@ impl BexEngine {
                                         &protected.epoch_guard(),
                                     )
                                 });
-                                vm.fulfil_future(future.id, value)?;
+                                vm.fulfil_future(future.id, value)
+                                                        .map_err(EngineError::VmInternalError)?;
+
                                 if future.id == future_id {
                                     break;
                                 }
@@ -1537,7 +1696,10 @@ impl BexEngine {
     ) -> SysOpResult {
         let args = args.iter().map(std::convert::Into::into).collect();
         let fn_ptr = self.sys_ops.get(op);
-        let ctx = self.sys_op_ctx.to_op_context(cancel.clone(), self.clone());
+        let mut ctx = self.sys_op_ctx.to_op_context(cancel.clone(), self.clone());
+        // Rebuild RuntimeIo with the live per-call context so IO calls
+        // (media resolution, auth) use the correct cancellation token.
+        ctx.runtime_io = sys_ops::build_runtime_io(&self.sys_ops, &self.heap, &ctx);
         let result = fn_ptr(&self.heap, args, &ctx, call_id);
 
         match result {
@@ -1578,6 +1740,7 @@ impl sys_types::VmSpawner for BexEngine {
             FunctionCallContextBuilder::new(sys_types::CallId::next())
                 .with_cancel_token(cancel)
                 .build(),
+            true,
         )
         .await
         .map_err(|e| Box::new(e) as Box<dyn Send + Sync + 'static>)

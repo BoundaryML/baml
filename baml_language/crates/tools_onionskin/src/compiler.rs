@@ -37,6 +37,7 @@ fn hir2_type_expr_to_string(ty: &baml_compiler2_ast::TypeExpr) -> String {
         TypeExpr::Bool { .. } => "bool".into(),
         TypeExpr::Null { .. } => "null".into(),
         TypeExpr::Never { .. } => "never".into(),
+        TypeExpr::Void { .. } => "void".into(),
         TypeExpr::Uint8Array { .. } => "uint8array".into(),
         TypeExpr::Media { kind, .. } => format!("{:?}", kind).to_lowercase(),
         TypeExpr::Optional { inner, .. } => format!("{}?", hir2_type_expr_to_string(inner)),
@@ -447,7 +448,6 @@ fn binop_sym(op: &baml_compiler2_ast::BinaryOp) -> &'static str {
         BinaryOp::BitXor => "^",
         BinaryOp::Shl => "<<",
         BinaryOp::Shr => ">>",
-        BinaryOp::Instanceof => "instanceof",
         BinaryOp::NullCoalesce => "??",
     }
 }
@@ -2512,12 +2512,6 @@ impl CompilerRunner {
                             writeln!(output, "{line}").ok();
                             output_annotated.push((line, status));
                         }
-                        Stmt::Assert { condition } => {
-                            let desc = expr_desc(*condition, body);
-                            let line = format!("{pad}assert {desc}");
-                            writeln!(output, "{line}").ok();
-                            output_annotated.push((line, status));
-                        }
                         Stmt::Break => {
                             let line = format!("{pad}break");
                             writeln!(output, "{line}").ok();
@@ -3195,11 +3189,6 @@ impl CompilerRunner {
                             line.extend(expr_desc_spans(*target, body, inference));
                             line.push(DetailSpan::Code(format!(" {} ", assignop_sym(op))));
                             line.extend(expr_desc_spans(*value, body, inference));
-                            lines.push(line);
-                        }
-                        Stmt::Assert { condition } => {
-                            let mut line = vec![DetailSpan::Code(format!("{pad}  assert "))];
-                            line.extend(expr_desc_spans(*condition, body, inference));
                             lines.push(line);
                         }
                         Stmt::Break => {

@@ -62,15 +62,6 @@ function user.test_lambda_with_match() -> string  [expr] {
 function user.test_literal_return_inference() -> int[]  [expr] {
   { let items: int[] = [1, 2, 3] } items.map((x) -> { {  } 0 })
 }
-function user.test_map_entries() -> string[]  [expr] {
-  { let m: map<string, int> = map { "a": 1, "b": 2 } } m.map((k: string, v: int) -> string { {  } k })
-}
-function user.test_map_entries_inferred() -> string[]  [expr] {
-  { let m: map<string, int> = map { "a": 1, "b": 2 } } m.map((k, v) -> { {  } k })
-}
-function user.test_map_keys_transform() -> string[]  [expr] {
-  { let m: map<string, int> = map { "hello": 1 } } m.map_keys((k) -> { {  } k })
-}
 function user.test_map_multi_statement() -> int[]  [expr] {
   { let items: int[] = [1, 2, 3] } items.map((x) -> { { let doubled = x Mul 2; let offset = 100 } doubled Add offset })
 }
@@ -82,12 +73,6 @@ function user.test_map_string_to_int() -> int[]  [expr] {
 }
 function user.test_map_type_change_inferred() -> string[]  [expr] {
   { let nums: int[] = [1, 2, 3] } nums.map((n) -> { {  } match (n) { 1 => "one", 2 => "two", _ => "other" } })
-}
-function user.test_map_values_fully_inferred() -> string[]  [expr] {
-  { let m: map<string, int> = map { "x": 10, "y": 20 } } m.map_values((v) -> { {  } if (v Gt 15) {  } "big" else {  } "small" })
-}
-function user.test_map_values_transform() -> int[]  [expr] {
-  { let m: map<string, int> = map { "x": 10, "y": 20 } } m.map_values((v) -> { {  } v Mul 2 })
 }
 function user.test_map_with_capture() -> int[]  [expr] {
   { let items: int[] = [1, 2, 3]; let factor = 10 } items.map((x) -> { {  } x Mul factor })

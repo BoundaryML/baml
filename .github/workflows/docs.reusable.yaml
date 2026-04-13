@@ -17,7 +17,7 @@ concurrency:
 jobs:
   publish-docs:
     name: "publish docs"
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     if: ${{ inputs.docs_changed == 'true' || inputs.is_canary }}
     permissions: write-all
     environment:
@@ -92,7 +92,7 @@ jobs:
 
   deploy-backend:
     name: "deploy backend"
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     if: ${{ inputs.docs_changed == 'true' || inputs.is_canary }}
     permissions: write-all
     environment:
@@ -203,7 +203,7 @@ jobs:
 
   update-pinecone:
     name: "update pinecone"
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     if: ${{ inputs.docs_changed == 'true' || inputs.is_canary }}
     environment:
       name: ${{ inputs.is_canary && 'boundary-tools-prod' || 'boundary-tools-dev' }}

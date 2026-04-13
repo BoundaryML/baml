@@ -49,6 +49,8 @@ pub enum TokenKind {
     Generator,
     #[token("test")]
     Test,
+    #[token("testset")]
+    TestSet,
     #[token("retry_policy")]
     RetryPolicy,
     #[token("template_string")]
@@ -83,8 +85,6 @@ pub enum TokenKind {
     Catch,
     #[token("catch_all")]
     CatchAll,
-    #[token("assert")]
-    Assert,
     #[token("throws")]
     Throws,
 
@@ -270,6 +270,7 @@ impl std::fmt::Display for TokenKind {
             TokenKind::Client => "client",
             TokenKind::Generator => "generator",
             TokenKind::Test => "test",
+            TokenKind::TestSet => "testset",
             TokenKind::RetryPolicy => "retry_policy",
             TokenKind::TemplateString => "template_string",
             TokenKind::TypeBuilder => "type_builder",
@@ -286,7 +287,6 @@ impl std::fmt::Display for TokenKind {
             TokenKind::Match => "match",
             TokenKind::Catch => "catch",
             TokenKind::CatchAll => "catch_all",
-            TokenKind::Assert => "assert",
             TokenKind::Throws => "throws",
             TokenKind::Watch => "watch",
             TokenKind::Instanceof => "instanceof",

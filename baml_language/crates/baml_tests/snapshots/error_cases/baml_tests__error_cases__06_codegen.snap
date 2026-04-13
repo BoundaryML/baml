@@ -3,22 +3,33 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 function user.Broken.BadUnionPattern(x: int | bool) -> string {
     load_var x
-    pop 1
-    load_const false
+    is_type int
     pop_jump_if_false L0
-    jump L1
+    jump L3
 
   L0:
+    load_var x
+    pop 1
+    load_const false
+    pop_jump_if_false L1
+    jump L3
+
+  L1:
+    load_var x
+    is_type bool
+    pop_jump_if_false L2
+
+  L2:
     load_const "bad"
     return
 
-  L1:
+  L3:
     load_const "parse error"
     call baml.sys.panic
     pop 1
-    jump L2
+    jump L4
 
-  L2:
+  L4:
     unreachable
 }
 
@@ -36,9 +47,7 @@ function user.Broken.MixedLiteralAndTyped(x: int) -> string {
 
   L0:
     load_var x
-    type_tag
-    load_const 0
-    cmp_op ==
+    is_type int
     pop_jump_if_false L1
 
   L1:

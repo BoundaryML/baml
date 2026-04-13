@@ -26,14 +26,13 @@
 //! let mir = builder.build();
 //! ```
 
-use std::collections::HashMap;
-
 use baml_base::{Name, Span};
 use baml_type::Ty;
 
 use crate::{
-    BasicBlock, BlockId, Constant, ItemRef, Local, LocalDecl, MirFunction, MirFunctionBody,
-    MirFunctionKind, Operand, Place, Rvalue, Statement, StatementKind, Terminator, VizNode,
+    BasicBlock, BlockId, CatchRegion, Constant, ItemRef, Local, LocalDecl, MirFunction,
+    MirFunctionBody, MirFunctionKind, Operand, Place, Rvalue, Statement, StatementKind, Terminator,
+    VizNode,
 };
 
 /// Builder for constructing MIR functions.
@@ -47,10 +46,11 @@ pub(crate) struct MirBuilder {
     viz_nodes: Vec<VizNode>,
     /// Current source span for tagging statements/terminators.
     pub(crate) current_source_span: Option<Span>,
-    /// Maps unwind handler block -> error local, populated during catch lowering.
-    pub(crate) unwind_error_locals: HashMap<BlockId, Local>,
+    /// Catch regions recorded during lowering for exception table construction.
+    pub(crate) catch_regions: Vec<CatchRegion>,
 }
 
+// Some builder utilities are not yet used but will be needed as MIR 2 matures.
 #[allow(dead_code)]
 impl MirBuilder {
     /// Create a new MIR builder for a function.
@@ -64,7 +64,7 @@ impl MirBuilder {
             span: None,
             viz_nodes: Vec::new(),
             current_source_span: None,
-            unwind_error_locals: HashMap::new(),
+            catch_regions: Vec::new(),
         }
     }
 
@@ -206,6 +206,11 @@ impl MirBuilder {
         self.push_statement(StatementKind::Drop(place), None);
     }
 
+    /// Emit a fresh-cell statement for a loop variable.
+    pub(crate) fn fresh_cell(&mut self, local: Local) {
+        self.push_statement(StatementKind::FreshCell(local), None);
+    }
+
     /// Emit a nop statement.
     pub(crate) fn nop(&mut self) {
         self.push_statement(StatementKind::Nop, None);
@@ -233,11 +238,6 @@ impl MirBuilder {
         }
     }
 
-    /// Emit an assert statement.
-    pub(crate) fn assert(&mut self, condition: Operand) {
-        self.push_statement(StatementKind::Assert(condition), None);
-    }
-
     // ========================================================================
     // Terminator Emission
     // ========================================================================
@@ -261,6 +261,24 @@ impl MirBuilder {
             condition,
             then_block,
             else_block,
+        });
+    }
+
+    /// Emit a short-circuit `&&` / `||` terminator.
+    pub(crate) fn short_circuit(
+        &mut self,
+        operand: Operand,
+        is_and: bool,
+        destination: Place,
+        eval_rhs: BlockId,
+        join: BlockId,
+    ) {
+        self.set_terminator(Terminator::ShortCircuit {
+            operand,
+            is_and,
+            destination,
+            eval_rhs,
+            join,
         });
     }
 
@@ -320,6 +338,12 @@ impl MirBuilder {
     /// Emit a throw terminator (unwind with error value).
     pub(crate) fn throw(&mut self, value: Operand) {
         self.set_terminator(Terminator::Throw { value });
+    }
+
+    /// Emit a throw-if-panic terminator: if the value is a panic instance,
+    /// throw it; otherwise continue to `otherwise`.
+    pub(crate) fn throw_if_panic(&mut self, value: Operand, otherwise: BlockId) {
+        self.set_terminator(Terminator::ThrowIfPanic { value, otherwise });
     }
 
     /// Emit a dispatch future (for LLM calls).
@@ -426,7 +450,7 @@ impl MirBuilder {
                 blocks: self.blocks,
                 entry: BlockId(0),
                 locals: self.locals,
-                unwind_error_locals: self.unwind_error_locals,
+                catch_regions: self.catch_regions.clone(),
                 viz_nodes: self.viz_nodes,
             }),
             lambdas: vec![],
@@ -446,7 +470,7 @@ impl MirBuilder {
             blocks: self.blocks,
             entry: BlockId(0),
             locals: self.locals,
-            unwind_error_locals: self.unwind_error_locals,
+            catch_regions: self.catch_regions,
             viz_nodes: self.viz_nodes,
         }
     }
@@ -468,7 +492,7 @@ impl MirBuilder {
                 blocks: self.blocks,
                 entry: BlockId(0),
                 locals: self.locals,
-                unwind_error_locals: self.unwind_error_locals,
+                catch_regions: self.catch_regions.clone(),
                 viz_nodes: self.viz_nodes,
             }),
             lambdas: vec![],
@@ -484,15 +508,5 @@ impl MirBuilder {
         let idx = self.viz_nodes.len();
         self.viz_nodes.push(node);
         idx
-    }
-
-    /// Emit a `VizEnter` statement for the given node index.
-    pub(crate) fn viz_enter(&mut self, node_idx: usize) {
-        self.push_statement(StatementKind::VizEnter(node_idx), None);
-    }
-
-    /// Emit a `VizExit` statement for the given node index.
-    pub(crate) fn viz_exit(&mut self, node_idx: usize) {
-        self.push_statement(StatementKind::VizExit(node_idx), None);
     }
 }

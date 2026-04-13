@@ -2,12 +2,12 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] Error: unresolved name: baml
+  [type] Error: unresolved name: baml.HttpMethod.Get
     ╭─[ fetch_as.baml:10:16 ]
     │
  10 │         method: baml.HttpMethod.Get,
     │                ──────────┬─────────  
-    │                          ╰─────────── unresolved name: baml
+    │                          ╰─────────── unresolved name: baml.HttpMethod.Get
     │ 
     │ Note: Error code: E0001
 ────╯

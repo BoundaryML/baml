@@ -236,6 +236,7 @@ pub fn display_type_expr(te: &TypeExpr) -> String {
         }
         TypeExpr::BuiltinUnknown { .. } => "unknown".to_string(),
         TypeExpr::Never { .. } => "never".to_string(),
+        TypeExpr::Void { .. } => "void".to_string(),
         TypeExpr::Type { .. } => "type".to_string(),
         TypeExpr::Rust { .. } => "$rust_type".to_string(),
         TypeExpr::Error { .. } | TypeExpr::Unknown { .. } => "unknown".to_string(),
