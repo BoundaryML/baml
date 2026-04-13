@@ -354,10 +354,10 @@ pub fn execute_sap_parse_partial(
     let jsonish = ::bex_sap::jsonish::parse(json, jsonish_options, false)
         .map_err(LlmOpError::JsonishError)?;
 
-    // === SAP parsing ===
+    // === SAP parsing (use the streaming type for partial results) ===
     let parse_ctx = ::bex_sap::deserializer::coercer::ParsingContext::new(sap.db());
     let target = sap
-        .ty_resolved()
+        .stream_ty_resolved()
         .map_err(|err| parse_ctx.error_type_resolution(err))
         .map_err(LlmOpError::SapError)?;
     let parsed = ::bex_sap::sap_model::TyResolvedRef::coerce(&parse_ctx, target, &jsonish)
