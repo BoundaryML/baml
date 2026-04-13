@@ -185,6 +185,7 @@ fn extract_from_class(
             has_self && has_method_directive(cst_root, class_name, method_name, "//baml:mut_self");
         let has_vm = has_method_directive(cst_root, class_name, method_name, "//baml:vm");
         let has_mut_vm = has_method_directive(cst_root, class_name, method_name, "//baml:mut_vm");
+        let may_yield = has_method_directive(cst_root, class_name, method_name, "//baml:may_yield");
 
         assert!(
             !(has_vm && has_mut_vm),
@@ -195,6 +196,11 @@ fn extract_from_class(
             !(is_mut && (has_vm || has_mut_vm)),
             "baml codegen error: {path} has //baml:mut_self with //baml:vm or //baml:mut_vm \
              -- these are mutually exclusive (mutable receiver already borrows vm)"
+        );
+        assert!(
+            !may_yield || has_mut_vm || is_mut,
+            "baml codegen error: {path} has //baml:may_yield without //baml:mut_vm \
+             -- yielding methods require mutable VM access"
         );
 
         let vm_usage = if has_mut_vm {
@@ -249,6 +255,7 @@ fn extract_from_class(
             generics: all_generics,
             receiver,
             vm_usage,
+            may_yield,
             pipeline,
             throws,
             source_file: source_file.to_string(),
@@ -339,11 +346,17 @@ fn extract_from_free_function(
     let fn_name = path_to_fn_name(&path);
     let has_vm = has_free_fn_directive(cst_root, func_def.name.as_str(), "//baml:vm");
     let has_mut_vm = has_free_fn_directive(cst_root, func_def.name.as_str(), "//baml:mut_vm");
+    let may_yield = has_free_fn_directive(cst_root, func_def.name.as_str(), "//baml:may_yield");
 
     assert!(
         !(has_vm && has_mut_vm),
         "baml codegen error: {path} has both //baml:vm and //baml:mut_vm \
          -- these are mutually exclusive"
+    );
+    assert!(
+        !may_yield || has_mut_vm,
+        "baml codegen error: {path} has //baml:may_yield without //baml:mut_vm \
+         -- yielding functions require mutable VM access"
     );
 
     let vm_usage = if has_mut_vm {
@@ -387,6 +400,7 @@ fn extract_from_free_function(
         generics,
         receiver: None,
         vm_usage,
+        may_yield,
         pipeline,
         throws,
         source_file: source_file.to_string(),
@@ -797,6 +811,7 @@ mod tests {
             generics: vec![],
             receiver: None,
             vm_usage: VmUsage::None,
+            may_yield: false,
             pipeline: BuiltinPipeline::Io,
             throws: vec![],
             source_file: String::new(),

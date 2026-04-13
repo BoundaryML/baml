@@ -1,6 +1,6 @@
 use bex_vm_types::types::Value;
 
-use super::{BamlClassArray, PackageBamlImpl};
+use super::{BamlClassArray, NativeCallResult, PackageBamlImpl};
 use crate::BexVm;
 
 impl BamlClassArray for PackageBamlImpl {
@@ -55,7 +55,8 @@ impl BamlClassArray for PackageBamlImpl {
             .join(separator)
     }
 
-    fn map(_array: &[Value], _f: &Value) -> Vec<Value> {
-        todo!("map not yet implemented");
+    fn map(vm: &mut BexVm, array: &[Value], f: &Value) -> NativeCallResult {
+        let _ = (vm, array, f);
+        todo!("map not yet implemented")
     }
 }

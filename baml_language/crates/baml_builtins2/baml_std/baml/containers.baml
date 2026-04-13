@@ -34,6 +34,8 @@ class Array<T> {
     $rust_function
   }
 
+  //baml:mut_vm
+  //baml:may_yield
   function map<U>(self, f: (T) -> U) -> U[] {
     $rust_function
   }
@@ -68,6 +70,8 @@ class Map<K, V> {
     $rust_function
   }
 
+  //baml:mut_vm
+  //baml:may_yield
   function map<U>(self, f: (K, V) -> U) -> U[] {
     $rust_function
   }

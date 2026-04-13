@@ -1,7 +1,7 @@
 use bex_vm_types::types::Value;
 use indexmap::IndexMap;
 
-use super::{BamlClassMap, PackageBamlImpl};
+use super::{BamlClassMap, NativeCallResult, PackageBamlImpl};
 use crate::BexVm;
 
 impl BamlClassMap for PackageBamlImpl {
@@ -26,13 +26,19 @@ impl BamlClassMap for PackageBamlImpl {
         map.values().copied().collect()
     }
 
-    fn __glue_set(vm: &mut BexVm, args: &[Value]) -> super::NativeFunctionResult {
-        let key = &args[1];
-        let value = &args[2];
-        let key_as_string = vm.as_string(key)?.clone();
-        let map = vm.as_map_mut(&args[0])?;
-        map.insert(key_as_string, *value);
-        Ok(Value::Null)
+    fn __glue_set(vm: &mut BexVm, args: &[Value]) -> super::NativeCallResult {
+        let __result: super::NativeFunctionResult = (|| {
+            let key = &args[1];
+            let value = &args[2];
+            let key_as_string = vm.as_string(key)?.clone();
+            let map = vm.as_map_mut(&args[0])?;
+            map.insert(key_as_string, *value);
+            Ok(Value::Null)
+        })();
+        match __result {
+            Ok(v) => super::NativeCallResult::Done(v),
+            Err(e) => super::NativeCallResult::Error(e),
+        }
     }
 
     fn set(_map: &mut IndexMap<String, Value>, _key: &Value, _value: &Value) {
@@ -47,7 +53,8 @@ impl BamlClassMap for PackageBamlImpl {
         }
     }
 
-    fn map(_map: &IndexMap<String, Value>, _f: &Value) -> Vec<Value> {
-        todo!("map not yet implemented");
+    fn map(vm: &mut BexVm, map: &IndexMap<String, Value>, f: &Value) -> NativeCallResult {
+        let _ = (vm, map, f);
+        todo!("map not yet implemented")
     }
 }

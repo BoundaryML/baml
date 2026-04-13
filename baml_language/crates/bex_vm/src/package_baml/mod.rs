@@ -26,7 +26,12 @@ mod sys;
 mod uint8array;
 mod unstable;
 
-use bex_vm_types::types::{Instance, Object, Type, Value};
+use std::collections::HashMap;
+
+use bex_vm_types::{
+    HeapPtr,
+    types::{Instance, Object, Type, Value},
+};
 use indexmap::IndexMap;
 
 use crate::{
@@ -38,7 +43,50 @@ use crate::{
 pub type NativeFunctionResult = Result<Value, VmRustFnError>;
 
 /// Native function type alias.
-pub type NativeFunction = fn(&mut BexVm, &[Value]) -> NativeFunctionResult;
+pub type NativeFunction = fn(&mut BexVm, &[Value]) -> NativeCallResult;
+
+/// Result returned by native functions. Non-yielding functions return `Done` or
+/// `Error`; yielding functions (like `array.map`) may return `YieldToCall` to
+/// invoke a bytecode callback via the CPS trampoline.
+pub enum NativeCallResult {
+    /// Native function completed successfully.
+    Done(Value),
+    /// Native function failed.
+    Error(VmRustFnError),
+    /// Yield control to call a bytecode function, then invoke the continuation
+    /// with its return value.
+    YieldToCall {
+        callee: HeapPtr,
+        args: Vec<Value>,
+        continuation: Box<dyn Continuation>,
+    },
+}
+
+impl From<VmRustFnError> for NativeCallResult {
+    fn from(err: VmRustFnError) -> Self {
+        NativeCallResult::Error(err)
+    }
+}
+
+impl From<VmInternalError> for NativeCallResult {
+    fn from(err: VmInternalError) -> Self {
+        NativeCallResult::Error(VmRustFnError::InternalError(err))
+    }
+}
+
+/// A continuation that resumes a native function after a bytecode callback returns.
+/// Must expose GC roots so the compacting collector can find and forward `HeapPtr`
+/// values captured by the continuation.
+pub trait Continuation: Send {
+    /// Invoke the continuation with the callback's return value.
+    fn call(self: Box<Self>, vm: &mut BexVm, value: Value) -> NativeCallResult;
+
+    /// Return all `HeapPtr` values held by this continuation (for GC root scanning).
+    fn gc_roots(&self) -> Vec<HeapPtr>;
+
+    /// Update all `HeapPtr` values after GC moves objects (forwarding).
+    fn apply_forwarding(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>);
+}
 
 // Generate the BamlClass*/BamlNamespace*/BamlPackageBaml trait hierarchy.
 #[allow(
@@ -47,7 +95,8 @@ pub type NativeFunction = fn(&mut BexVm, &[Value]) -> NativeFunctionResult;
     clippy::pub_underscore_fields,
     clippy::used_underscore_binding,
     clippy::elidable_lifetime_names,
-    clippy::needless_lifetimes
+    clippy::needless_lifetimes,
+    clippy::redundant_closure_call
 )]
 mod generated {
     use super::*;

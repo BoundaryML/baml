@@ -32,7 +32,7 @@ use indexmap::IndexMap;
 use crate::{
     errors::{StackFrame, VmBamlError, VmError, VmInternalError, VmPanic, VmRustFnError},
     indexable::{EvalStack, EvalStackTrait},
-    package_baml::{BamlPackageBaml, NativeFunction},
+    package_baml::{BamlPackageBaml, NativeCallResult, NativeFunction},
     types::ObjectTrait,
     watch::{self, NodeId, RootState, Watch, WatchFilter},
 };
@@ -40,25 +40,42 @@ use crate::{
 /// Max call stack size.
 pub const MAX_FRAMES: usize = 256;
 
-/// Call frame.
-///
-/// This is what gets pushed onto the call stack every time we call a function.
-///
-/// As with [`Value`], this struct should not own allocated objects (like
-/// functions) but instead use references to index into [`BexVm::heap`]. Should
-/// be [`Copy`].
+/// Bytecode call frame — pushed when entering a bytecode function.
+/// Deliberately Copy so the exec-loop can snapshot/restore cheaply.
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct Frame {
-    /// Pointer to the running function object.
+pub(crate) struct BytecodeFrame {
+    /// Pointer to the running function (or closure) object.
     pub(crate) function: HeapPtr,
-
-    /// Instruction pointer (IP) or program counter (PC).
-    ///
-    /// Points to the next instruction that the VM will execute.
+    /// Instruction pointer (IP). Points to the next instruction.
     pub(crate) instruction_ptr: usize,
-
     /// Local variables offset in the eval stack.
     pub(crate) locals_offset: StackIndex,
+}
+
+/// Native continuation frame — pushed when a native function yields via
+/// `NativeCallResult::YieldToCall`. Sits below the callback's bytecode
+/// frame on the call stack and is popped when the callback returns.
+pub(crate) struct NativeFrame {
+    /// Pointer to the native function object (for GC roots + stack traces).
+    pub(crate) function: HeapPtr,
+    /// The continuation to invoke with the callback's return value.
+    pub(crate) continuation: Box<dyn crate::package_baml::Continuation>,
+}
+
+/// Call frame — either a bytecode frame or a native continuation frame.
+pub(crate) enum Frame {
+    Bytecode(BytecodeFrame),
+    Native(NativeFrame),
+}
+
+impl Frame {
+    /// Get the function pointer (valid for both variants).
+    pub(crate) fn function(&self) -> HeapPtr {
+        match self {
+            Frame::Bytecode(f) => f.function,
+            Frame::Native(f) => f.function,
+        }
+    }
 }
 
 /// The beast.
@@ -498,20 +515,39 @@ impl BexVm {
         unsafe { ptr.get_mut() }
     }
 
-    /// Collect all `HeapPtr`s stored in call frames (frame function pointers).
+    /// Collect all `HeapPtr`s stored in call frames.
+    /// - For bytecode frames, the function pointer
+    /// - For native frames, the continuation pointer as well as all native-held GC roots
     ///
     /// Used by `bex_engine` to include frame roots in GC root sets.
     pub fn collect_frame_roots(&self) -> Vec<HeapPtr> {
-        self.frames.iter().map(|f| f.function).collect()
+        let mut roots = Vec::new();
+        for frame in &self.frames {
+            roots.push(frame.function());
+            if let Frame::Native(nf) = frame {
+                roots.extend(nf.continuation.gc_roots());
+            }
+        }
+        roots
     }
 
-    /// Update frame function pointers according to a GC forwarding map.
+    /// Update heap pointers held by frames according to a GC forwarding map.
     ///
     /// Must be called after a GC cycle to keep frame pointers valid.
     pub fn apply_frame_forwarding(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
         for frame in &mut self.frames {
-            if let Some(&new_ptr) = forwarding.get(&frame.function) {
-                frame.function = new_ptr;
+            match frame {
+                Frame::Bytecode(bf) => {
+                    if let Some(&new_ptr) = forwarding.get(&bf.function) {
+                        bf.function = new_ptr;
+                    }
+                }
+                Frame::Native(nf) => {
+                    if let Some(&new_ptr) = forwarding.get(&nf.function) {
+                        nf.function = new_ptr;
+                    }
+                    nf.continuation.apply_forwarding(forwarding);
+                }
             }
         }
     }
@@ -695,11 +731,11 @@ impl BexVm {
 
         self.stack.extend(args.iter().copied());
 
-        self.frames.push(Frame {
+        self.frames.push(Frame::Bytecode(BytecodeFrame {
             function,
             instruction_ptr: 0,
             locals_offset: StackIndex::from_raw(0),
-        });
+        }));
 
         // Entry functions need the same frame-local pre-allocation as normal
         // bytecode calls now that INIT_LOCALS is gone from bytecode.
@@ -935,11 +971,11 @@ impl BexVm {
         self.stack.extend(args.iter().copied());
 
         // Push the new frame.
-        self.frames.push(Frame {
+        self.frames.push(Frame::Bytecode(BytecodeFrame {
             function: function_ptr,
             instruction_ptr: 0,
             locals_offset: StackIndex::from_raw(locals_offset),
-        });
+        }));
         self.allocate_real_locals_for_frame(function_ptr)?;
 
         // Execute the interrupt code and return the result.
@@ -1125,15 +1161,25 @@ impl BexVm {
             .frames
             .iter()
             .filter_map(|frame| {
-                let func = self.get_object(frame.function).as_callable().ok()?;
-                let last_pc = frame.instruction_ptr.saturating_sub(1);
-                let error_line = func.bytecode.source_line_for_pc(last_pc);
-                Some(StackFrame {
-                    function_name: func.name.clone(),
-                    file_path: func.source_file.clone(),
-                    function_span: func.span,
-                    error_line,
-                })
+                let func = self.get_object(frame.function()).as_callable().ok()?;
+                match frame {
+                    Frame::Bytecode(frame) => {
+                        let last_pc = frame.instruction_ptr.saturating_sub(1);
+                        let error_line = func.bytecode.source_line_for_pc(last_pc);
+                        Some(StackFrame {
+                            function_name: func.name.clone(),
+                            file_path: func.source_file.clone(),
+                            function_span: func.span,
+                            error_line,
+                        })
+                    }
+                    Frame::Native(_) => Some(StackFrame {
+                        function_name: func.name.clone(),
+                        file_path: func.source_file.clone(),
+                        function_span: func.span,
+                        error_line: 0,
+                    }),
+                }
             })
             .collect();
 
@@ -1146,6 +1192,34 @@ impl BexVm {
             );
             let depth = self.frames.len() - 1;
             let frame = &self.frames[depth];
+
+            // Native continuation frames have no exception handlers and own
+            // no eval stack region — just pop and continue unwinding.
+            if matches!(frame, Frame::Native(_)) {
+                if self.frames.len() <= 1 {
+                    return Err(VmError::Thrown(exception_value));
+                }
+                self.frames.pop();
+                // Clean up tracing / interrupt bookkeeping
+                while self
+                    .traced_frames
+                    .last()
+                    .is_some_and(|d| *d >= self.frames.len())
+                {
+                    self.traced_frames.pop();
+                }
+                if let Some(interrupt_depth) = self.interrupt_frame
+                    && interrupt_depth >= self.frames.len()
+                {
+                    self.interrupt_frame = None;
+                }
+                continue; // try next outer frame
+            }
+
+            // From here, frame is guaranteed Bytecode.
+            let Frame::Bytecode(frame) = frame else {
+                unreachable!("non-Native frames already handled above");
+            };
 
             // The frame's instruction_ptr already points to the NEXT instruction
             // (it was incremented before the instruction executed), so the
@@ -1188,7 +1262,10 @@ impl BexVm {
                 }
 
                 // Jump to the handler.
-                self.frames[depth].instruction_ptr = entry.handler_pc;
+                let Frame::Bytecode(bf) = &mut self.frames[depth] else {
+                    unreachable!("frame at depth is Bytecode");
+                };
+                bf.instruction_ptr = entry.handler_pc;
 
                 // Update caller's frame_idx / function references.
                 *frame_idx = depth;
@@ -1206,7 +1283,12 @@ impl BexVm {
             }
 
             let popped = self.frames.pop().expect("frame stack is not empty");
-            self.stack.drain(popped.locals_offset..);
+            match popped {
+                Frame::Bytecode(bf) => {
+                    self.stack.drain(bf.locals_offset..);
+                }
+                Frame::Native(_) => {} // native frames own no stack region
+            }
 
             // Clean up tracing / interrupt bookkeeping for popped frames.
             while self
@@ -1317,27 +1399,55 @@ impl BexVm {
                 // The explicit type parameters document exactly what we're doing.
                 let func = unsafe { std::mem::transmute::<*const (), NativeFunction>(func_ptr) };
 
-                // NOTE: (perf) could use drain(..) instead, or even maintain the arguments
-                // reference in the stack, using `swap` to insert the result.
-                let args = self.stack[locals_offset..].to_owned();
+                // Native functions should manage their own gc roots (or never yield).
+                // They have no data on the stack.
+                let args: Vec<Value> = self.stack.drain(locals_offset..).collect();
 
-                // Run Rust native function, converting VmRustFnError → VmError.
-                let result = match func(self, &args) {
-                    Ok(v) => v,
-                    Err(VmRustFnError::Panic(panic)) => {
+                // Run Rust native function, converting NativeCallResult → VmError.
+                match func(self, &args) {
+                    NativeCallResult::Done(v) => {
+                        self.stack.push(v);
+                    }
+                    NativeCallResult::Error(VmRustFnError::Panic(panic)) => {
                         return Err(VmError::Thrown(self.panic_to_exception_value(panic)));
                     }
-                    Err(VmRustFnError::BamlError(err)) => {
+                    NativeCallResult::Error(VmRustFnError::BamlError(err)) => {
                         return Err(VmError::Thrown(self.error_to_exception_value(err)));
                     }
-                    Err(VmRustFnError::InternalError(err)) => {
+                    NativeCallResult::Error(VmRustFnError::InternalError(err)) => {
                         return Err(VmError::InternalError(err));
                     }
-                };
+                    NativeCallResult::YieldToCall {
+                        callee,
+                        args: callback_args,
+                        continuation,
+                    } => {
+                        // Push a Native frame so that when the callback returns
+                        // we can resume the continuation.
+                        self.frames.push(Frame::Native(NativeFrame {
+                            function: callee_ptr,
+                            continuation,
+                        }));
 
-                // Drop function call and place result on top.
-                self.stack.drain(locals_offset..);
-                self.stack.push(result);
+                        // Push the callback arguments onto the eval stack.
+                        let callback_locals_offset = StackIndex::from_raw(self.stack.len());
+                        self.stack.extend(callback_args);
+
+                        // Push the bytecode frame for the callback.
+                        self.frames.push(Frame::Bytecode(BytecodeFrame {
+                            function: callee,
+                            instruction_ptr: 0,
+                            locals_offset: callback_locals_offset,
+                        }));
+                        self.allocate_real_locals_for_frame(callee)?;
+
+                        // Update the outer loop's frame pointer and function.
+                        *frame_idx = self.frames.len() - 1;
+
+                        // SAFETY: See `load_function` doc comment.
+                        *function = unsafe { self.load_function(*frame_idx)? };
+                    }
+                }
             }
 
             FunctionKind::Bytecode => {
@@ -1351,11 +1461,11 @@ impl BexVm {
                 };
 
                 // Push the new frame.
-                self.frames.push(Frame {
+                self.frames.push(Frame::Bytecode(BytecodeFrame {
                     function: callee_ptr,
                     instruction_ptr: 0,
                     locals_offset,
-                });
+                }));
                 self.allocate_real_locals_for_frame(callee_ptr)?;
 
                 // Update frame_idx to point to the new frame.
@@ -1534,7 +1644,7 @@ impl BexVm {
     ///      still no clone).
     #[inline]
     unsafe fn load_function(&self, frame_idx: usize) -> Result<&'static Function, VmInternalError> {
-        let ptr = self.frames[frame_idx].function;
+        let ptr = self.frames[frame_idx].function();
         // SAFETY: See doc comment above.
         let obj: &'static Object = unsafe { ptr.get() };
         match obj {
@@ -1558,7 +1668,7 @@ impl BexVm {
     pub fn exec(&mut self) -> Result<VmExecState, VmError> {
         // Grab the last frame from the call stack.
         //
-        // Note that [`Frame`] is [`Copy`], so in case the borrow checker
+        // Note that [`BytecodeFrame`] is [`Copy`], so in case the borrow checker
         // complains too much and you can't circumvent it then you can make a
         // local copy of the frame, modify it as needed, and then when we're
         // done with this frame store it back in the vector to persist changes.
@@ -1580,11 +1690,17 @@ impl BexVm {
 
         loop {
             // Current instruction pointer (read from frame).
-            let instruction_ptr = self.frames[frame_idx].instruction_ptr;
+            let Frame::Bytecode(bf) = &self.frames[frame_idx] else {
+                unreachable!("exec loop frame is always Bytecode");
+            };
+            let instruction_ptr = bf.instruction_ptr;
 
             // Move the frame's IP to the next instruction. We'll deal with
             // jump offsets later.
-            self.frames[frame_idx].instruction_ptr += 1;
+            let Frame::Bytecode(bf) = &mut self.frames[frame_idx] else {
+                unreachable!("exec loop frame is always Bytecode");
+            };
+            bf.instruction_ptr += 1;
 
             #[cfg(debug_assertions)]
             #[allow(clippy::print_stderr)] // intentional debug output
@@ -1689,16 +1805,20 @@ impl BexVm {
             }
 
             Instruction::LoadVar(index) => {
-                let slot =
-                    Self::local_slot_stack_index(self.frames[*frame_idx].locals_offset, index);
+                let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
+                    unreachable!("exec loop frame is always Bytecode");
+                };
+                let slot = Self::local_slot_stack_index(bf.locals_offset, index);
                 let value = self.stack[slot];
                 self.stack.push(value);
             }
 
             Instruction::StoreVar(index) => {
+                let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
+                    unreachable!("exec loop frame is always Bytecode");
+                };
                 // Absolute index of the local variable.
-                let local_var_index =
-                    Self::local_slot_stack_index(self.frames[*frame_idx].locals_offset, index);
+                let local_var_index = Self::local_slot_stack_index(bf.locals_offset, index);
 
                 // New value.
                 let value = self.stack.ensure_pop()?;
@@ -1887,7 +2007,10 @@ impl BexVm {
                 // becomes a bottleneck on hot loops, it can be replaced with
                 // wrapping_add_signed — the array bounds check on the next
                 // iteration will catch invalid pointers anyway.
-                self.frames[*frame_idx].instruction_ptr = instruction_ptr
+                let Frame::Bytecode(bf) = &mut self.frames[*frame_idx] else {
+                    unreachable!("exec loop frame is always Bytecode");
+                };
+                bf.instruction_ptr = instruction_ptr
                     .checked_add_signed(offset)
                     .ok_or(VmInternalError::InvalidJump)?;
             }
@@ -1900,7 +2023,10 @@ impl BexVm {
                     // Reassign only if the condition is false.
                     Value::Bool(value) => {
                         if !value {
-                            self.frames[*frame_idx].instruction_ptr = instruction_ptr
+                            let Frame::Bytecode(bf) = &mut self.frames[*frame_idx] else {
+                                unreachable!("exec loop frame is always Bytecode");
+                            };
+                            bf.instruction_ptr = instruction_ptr
                                 .checked_add_signed(offset)
                                 .ok_or(VmInternalError::InvalidJump)?;
                         }
@@ -1922,10 +2048,14 @@ impl BexVm {
                 let top = self.stack.ensure_stack_top()?;
                 let condition = self.stack[top];
 
+                let Frame::Bytecode(bf) = &mut self.frames[*frame_idx] else {
+                    unreachable!("exec loop frame is always Bytecode");
+                };
+
                 match condition {
                     Value::Bool(value) => {
                         if !value {
-                            self.frames[*frame_idx].instruction_ptr = instruction_ptr
+                            bf.instruction_ptr = instruction_ptr
                                 .checked_add_signed(offset)
                                 .ok_or(VmInternalError::InvalidJump)?;
                         }
@@ -2753,8 +2883,10 @@ impl BexVm {
                 let channel_value = self.stack.ensure_pop()?;
                 let channel = self.as_string(&channel_value)?.to_owned();
 
-                let local_var_index =
-                    Self::local_slot_stack_index(self.frames[*frame_idx].locals_offset, index);
+                let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
+                    unreachable!("exec loop frame is always Bytecode");
+                };
+                let local_var_index = Self::local_slot_stack_index(bf.locals_offset, index);
                 let value = self.stack[local_var_index];
 
                 // The variable index should be the same as where the value is stored
@@ -2791,8 +2923,10 @@ impl BexVm {
             }
 
             Instruction::Unwatch(index) => {
-                let local_var_index =
-                    Self::local_slot_stack_index(self.frames[*frame_idx].locals_offset, index);
+                let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
+                    unreachable!("exec loop frame is always Bytecode");
+                };
+                let local_var_index = Self::local_slot_stack_index(bf.locals_offset, index);
 
                 // Remove from watched_vars tracking
                 if self.watched_vars.remove(&local_var_index).is_some() {
@@ -2813,8 +2947,10 @@ impl BexVm {
             }
 
             Instruction::Notify(index) => {
-                let local_var_index =
-                    Self::local_slot_stack_index(self.frames[*frame_idx].locals_offset, index);
+                let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
+                    unreachable!("exec loop frame is always Bytecode");
+                };
+                let local_var_index = Self::local_slot_stack_index(bf.locals_offset, index);
                 let var_node = NodeId::LocalVar(local_var_index);
 
                 let notifications = self.watch.copy_roots_reaching(var_node);
@@ -2879,7 +3015,7 @@ impl BexVm {
                 // Capture function name before popping the frame.
                 let span_exit = if self.traced_frames.last() == Some(frame_idx) {
                     let func_name = self
-                        .get_object(self.frames[*frame_idx].function)
+                        .get_object(self.frames[*frame_idx].function())
                         .as_callable()
                         .map(|f| f.name.clone())
                         .ok();
@@ -2891,11 +3027,75 @@ impl BexVm {
 
                 // Restore the eval stack to the state before the function
                 // was called and leave the result on top.
-                self.stack.drain(self.frames[*frame_idx].locals_offset..);
+                let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
+                    unreachable!("exec loop frame is always Bytecode");
+                };
+                self.stack.drain(bf.locals_offset..);
                 self.stack.push(result);
 
                 // Pop from the call stack.
                 self.frames.pop();
+
+                // If the frame below is a Native continuation frame, invoke
+                // the continuation with the result and handle its outcome.
+                if matches!(self.frames.last(), Some(Frame::Native(_))) {
+                    // Pop the result we just pushed; the continuation will
+                    // produce the final value (or yield again).
+                    let callback_result = self.stack.ensure_pop()?;
+
+                    // Pop the Native frame and extract the continuation.
+                    let Some(Frame::Native(nf)) = self.frames.pop() else {
+                        unreachable!("just matched Some(Frame::Native(_))");
+                    };
+
+                    match nf.continuation.call(self, callback_result) {
+                        NativeCallResult::Done(v) => {
+                            self.stack.push(v);
+                        }
+                        NativeCallResult::Error(VmRustFnError::Panic(panic)) => {
+                            return Err(VmError::Thrown(self.panic_to_exception_value(panic)));
+                        }
+                        NativeCallResult::Error(VmRustFnError::BamlError(err)) => {
+                            return Err(VmError::Thrown(self.error_to_exception_value(err)));
+                        }
+                        NativeCallResult::Error(VmRustFnError::InternalError(err)) => {
+                            return Err(VmError::InternalError(err));
+                        }
+                        NativeCallResult::YieldToCall {
+                            callee,
+                            args: callback_args,
+                            continuation,
+                        } => {
+                            // The continuation wants to call another bytecode
+                            // function. Push another Native frame + Bytecode frame
+                            // and resume the execution loop.
+                            let next_locals_offset = StackIndex::from_raw(self.stack.len());
+                            self.stack.extend(callback_args);
+
+                            // Re-use the same native function pointer from the
+                            // frame we just popped.
+                            self.frames.push(Frame::Native(NativeFrame {
+                                function: nf.function,
+                                continuation,
+                            }));
+                            self.frames.push(Frame::Bytecode(BytecodeFrame {
+                                function: callee,
+                                instruction_ptr: 0,
+                                locals_offset: next_locals_offset,
+                            }));
+                            self.allocate_real_locals_for_frame(callee)?;
+
+                            *frame_idx = self.frames.len() - 1;
+
+                            // SAFETY: See `load_function` doc comment.
+                            *function = unsafe { self.load_function(*frame_idx)? };
+
+                            // Return Ok(None) so the exec loop calls step()
+                            // again, starting execution of the new bytecode frame.
+                            return Ok(None);
+                        }
+                    }
+                }
 
                 // Return from interrupt.
                 if Some(self.frames.len()) == self.interrupt_frame {
@@ -2997,7 +3197,10 @@ impl BexVm {
                 let offset = table.lookup(value).unwrap_or(default);
 
                 // Jump
-                self.frames[*frame_idx].instruction_ptr = instruction_ptr
+                let Frame::Bytecode(bf) = &mut self.frames[*frame_idx] else {
+                    unreachable!("exec loop frame is always Bytecode");
+                };
+                bf.instruction_ptr = instruction_ptr
                     .checked_add_signed(offset)
                     .ok_or(VmInternalError::InvalidJump)?;
             }
@@ -3138,8 +3341,10 @@ impl BexVm {
             }
 
             Instruction::LoadDeref(slot) => {
-                let locals_offset = self.frames[*frame_idx].locals_offset;
-                let cell_value = self.stack[Self::local_slot_stack_index(locals_offset, slot)];
+                let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
+                    unreachable!("exec loop frame is always Bytecode");
+                };
+                let cell_value = self.stack[Self::local_slot_stack_index(bf.locals_offset, slot)];
                 let Value::Object(cell_ptr) = cell_value else {
                     return Err(VmInternalError::TypeError {
                         expected: ObjectType::Cell.into(),
@@ -3161,8 +3366,10 @@ impl BexVm {
 
             Instruction::StoreDeref(slot) => {
                 let value = self.stack.ensure_pop()?;
-                let locals_offset = self.frames[*frame_idx].locals_offset;
-                let cell_value = self.stack[Self::local_slot_stack_index(locals_offset, slot)];
+                let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
+                    unreachable!("exec loop frame is always Bytecode");
+                };
+                let cell_value = self.stack[Self::local_slot_stack_index(bf.locals_offset, slot)];
                 let Value::Object(cell_ptr) = cell_value else {
                     return Err(VmInternalError::TypeError {
                         expected: ObjectType::Cell.into(),
@@ -3183,7 +3390,10 @@ impl BexVm {
             }
 
             Instruction::LoadCapture(idx) => {
-                let closure_ptr = self.frames[*frame_idx].function;
+                let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
+                    unreachable!("exec loop frame is always Bytecode");
+                };
+                let closure_ptr = bf.function;
                 // SAFETY: closure_ptr is the frame's function, valid for
                 // the duration of this frame.
                 let obj = unsafe { closure_ptr.get() };
@@ -3216,7 +3426,10 @@ impl BexVm {
 
             Instruction::StoreCapture(idx) => {
                 let value = self.stack.ensure_pop()?;
-                let closure_ptr = self.frames[*frame_idx].function;
+                let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
+                    unreachable!("exec loop frame is always Bytecode");
+                };
+                let closure_ptr = bf.function;
                 // SAFETY: closure_ptr is the frame's function, valid for
                 // the duration of this frame.
                 let obj = unsafe { closure_ptr.get() };
@@ -3251,7 +3464,10 @@ impl BexVm {
                 // Push the raw cell pointer from captures[idx] without
                 // reading through the cell.  Used by nested closures to
                 // forward a shared cell to an inner closure.
-                let closure_ptr = self.frames[*frame_idx].function;
+                let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
+                    unreachable!("exec loop frame is always Bytecode");
+                };
+                let closure_ptr = bf.function;
                 // SAFETY: closure_ptr is the frame's function, valid for
                 // the duration of this frame.
                 let obj = unsafe { closure_ptr.get() };
