@@ -283,8 +283,13 @@ impl RequestBuilder for VertexClient {
                         va.project_id().await?.to_string()
                     }
                 };
+                let publisher = if self.properties.anthropic_version.is_some() {
+                    "anthropic"
+                } else {
+                    "google"
+                };
                 format!(
-                    "https://{domain}/v1/projects/{project_id}/locations/{location}/publishers/google/models",
+                    "https://{domain}/v1/projects/{project_id}/locations/{location}/publishers/{publisher}/models",
                 )
             }
         };

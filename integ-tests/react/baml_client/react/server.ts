@@ -4170,6 +4170,24 @@ export const TestVertexClaude = async (
 };
 
 /**
+ * Executes the "TestVertexClaudeGlobal" BAML action.
+ *
+ * This server action calls the underlying BAML function "TestVertexClaudeGlobal"
+ * with the specified parameters.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const TestVertexClaudeGlobal = async (
+  input: string,
+): Promise<string> => {
+  return b.TestVertexClaudeGlobal(
+    input,
+  );
+};
+
+/**
  * Executes the "TestVertexWithSystemInstructions" BAML action.
  *
  * This server action calls the underlying BAML function "TestVertexWithSystemInstructions"

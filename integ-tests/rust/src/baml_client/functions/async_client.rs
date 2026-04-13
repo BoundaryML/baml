@@ -585,6 +585,8 @@ baml_function_async!(TestVertex(input: impl AsRef<str> + BamlEncode, ) -> (Strin
 
 baml_function_async!(TestVertexClaude(input: impl AsRef<str> + BamlEncode, ) -> (String, String));
 
+baml_function_async!(TestVertexClaudeGlobal(input: impl AsRef<str> + BamlEncode, ) -> (String, String));
+
 baml_function_async!(TestVertexWithSystemInstructions() -> (String, String));
 
 baml_function_async!(TestZeroTimeout(input: impl AsRef<str> + BamlEncode, ) -> (String, String));
@@ -1178,6 +1180,8 @@ pub struct BamlAsyncClient {
     pub TestVertex: TestVertex,
 
     pub TestVertexClaude: TestVertexClaude,
+
+    pub TestVertexClaudeGlobal: TestVertexClaudeGlobal,
 
     pub TestVertexWithSystemInstructions: TestVertexWithSystemInstructions,
 
@@ -1774,6 +1778,8 @@ impl BamlAsyncClient {
             TestVertex: TestVertex::new(),
 
             TestVertexClaude: TestVertexClaude::new(),
+
+            TestVertexClaudeGlobal: TestVertexClaudeGlobal::new(),
 
             TestVertexWithSystemInstructions: TestVertexWithSystemInstructions::new(),
 
@@ -2826,6 +2832,10 @@ impl BamlAsyncClient {
             },
 
             TestVertexClaude: TestVertexClaude {
+                options: options.clone(),
+            },
+
+            TestVertexClaudeGlobal: TestVertexClaudeGlobal {
                 options: options.clone(),
             },
 

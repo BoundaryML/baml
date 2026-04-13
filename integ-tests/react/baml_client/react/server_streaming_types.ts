@@ -307,6 +307,7 @@ export type StreamingServerTypes = {
   TestUniverseQuestion: UniverseQuestion,
   TestVertex: string,
   TestVertexClaude: string,
+  TestVertexClaudeGlobal: string,
   TestVertexWithSystemInstructions: string,
   TestZeroTimeout: string,
   UnionTest_Function: UnionTest_ReturnType,
