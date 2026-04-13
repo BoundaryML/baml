@@ -3260,8 +3260,7 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// `path` contains all segments after the package name. The last segment
     /// is the item name; preceding segments are the namespace path.
     ///
-    /// Used by both `infer_multi_segment_path` (for `Expr::Path`) and
-    /// `try_package_access` (for `Expr::FieldAccess` chains).
+    /// Used by `infer_multi_segment_path` (for `Expr::Path`).
     fn resolve_package_item(
         &mut self,
         pkg_items: &baml_compiler2_hir::package::PackageItems<'db>,

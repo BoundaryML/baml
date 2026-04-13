@@ -160,7 +160,9 @@ pub fn completions_at(db: &dyn Db, file: SourceFile, offset: TextSize) -> Vec<Co
 
     match context {
         CompletionContext::TypePosition => completions_for_type_position(db, file, offset),
-        CompletionContext::MemberAccess => completions_for_field_access(db, file, &token, offset),
+        // Field-access completions are temporarily disabled while TIR-based
+        // resolution is rebuilt for multi-segment Path nodes (follow-up task).
+        CompletionContext::MemberAccess => Vec::new(),
         CompletionContext::ValuePosition => completions_for_value_position(db, file, offset),
         CompletionContext::TopLevel => completions_for_top_level(),
         CompletionContext::Unknown => Vec::new(),
@@ -411,11 +413,15 @@ fn completions_for_type_position(
 }
 
 // ── Field-access completions ──────────────────────────────────────────────────
+// NOTE: These functions are temporarily unused while field-access completions
+// are stubbed out (see Phase 3, step 3.5). They will be re-enabled once
+// TIR-based completions are rebuilt for multi-segment Path nodes.
 
 /// Completions after a `.` — fields, methods, or enum variants.
 ///
 /// Extracts the base identifier (the `WORD` token before the `.`), resolves
 /// it, then returns the appropriate members.
+#[allow(dead_code)]
 fn completions_for_field_access(
     db: &dyn Db,
     file: SourceFile,
@@ -457,6 +463,7 @@ fn completions_for_field_access(
 }
 
 /// Returns completions for the members of `ty`.
+#[allow(dead_code)]
 fn completions_for_ty_members(db: &dyn Db, ty: &Ty) -> Vec<Completion> {
     match ty {
         Ty::Class(qn, _) => {
@@ -540,6 +547,7 @@ fn completions_for_ty_members(db: &dyn Db, ty: &Ty) -> Vec<Completion> {
 }
 
 /// Built-in methods for list types.
+#[allow(dead_code)]
 fn builtin_list_completions() -> Vec<Completion> {
     vec![
         Completion::new("length", CompletionKind::Method).with_detail("int"),
@@ -554,6 +562,7 @@ fn builtin_list_completions() -> Vec<Completion> {
 }
 
 /// Built-in methods for map types.
+#[allow(dead_code)]
 fn builtin_map_completions() -> Vec<Completion> {
     vec![
         Completion::new("keys", CompletionKind::Method).with_detail("K[]"),
@@ -563,6 +572,7 @@ fn builtin_map_completions() -> Vec<Completion> {
 }
 
 /// Built-in methods for string types.
+#[allow(dead_code)]
 fn builtin_string_completions() -> Vec<Completion> {
     vec![
         Completion::new("length", CompletionKind::Method).with_detail("int"),
@@ -583,6 +593,7 @@ fn builtin_string_completions() -> Vec<Completion> {
 /// Given a token at position `bar` in `foo.bar`, returns `"foo"`.
 /// Handles both `PATH_EXPR` (where siblings are in the parent) and
 /// `FIELD_ACCESS_EXPR` (where the base is a child node).
+#[allow(dead_code)]
 fn find_base_for_field_access(token: &baml_compiler_syntax::SyntaxToken) -> Option<String> {
     let parent = token.parent()?;
 
@@ -644,6 +655,7 @@ fn find_base_for_field_access(token: &baml_compiler_syntax::SyntaxToken) -> Opti
 ///
 /// Used by field-access completions to determine what fields/variants are
 /// available on an item reference (e.g., `MyEnum.` → enum variants).
+#[allow(dead_code)]
 fn definition_to_ty(db: &dyn Db, def: Definition<'_>) -> Option<Ty> {
     match def {
         Definition::Class(class_loc) => {
@@ -677,6 +689,7 @@ fn definition_to_ty(db: &dyn Db, def: Definition<'_>) -> Option<Ty> {
 }
 
 /// Look up the type of a local variable (let binding or parameter) at a scope position.
+#[allow(dead_code)]
 fn local_variable_ty(
     db: &dyn Db,
     file: SourceFile,

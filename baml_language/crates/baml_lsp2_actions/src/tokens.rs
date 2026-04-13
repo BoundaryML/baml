@@ -648,17 +648,38 @@ fn build_resolution_map(
     for (expr_id, expr) in expr_body.exprs.iter() {
         match expr {
             Expr::Path(names) if !names.is_empty() => {
-                // Single-segment path after AST lowering; multi-segment paths
-                // were desugared to MemberAccess chains. The expr_span is the
-                // identifier's own range.
-                let span = source_map.expr_span(expr_id);
-                if span.is_empty() {
-                    continue;
-                }
-                // Only classify if we have a type for this expression.
-                if let Some(ty) = inference.expression_type(expr_id) {
-                    if let Some(token_type) = ty_to_token_type(ty) {
-                        map.insert(span, token_type);
+                if names.len() == 1 {
+                    // Single-segment path: the expr_span is exactly the identifier range.
+                    let span = source_map.expr_span(expr_id);
+                    if span.is_empty() {
+                        continue;
+                    }
+                    // Only classify if we have a type for this expression.
+                    if let Some(ty) = inference.expression_type(expr_id) {
+                        if let Some(token_type) = ty_to_token_type(ty) {
+                            map.insert(span, token_type);
+                        }
+                    }
+                } else {
+                    // Multi-segment path (e.g. `Status.Active`, `obj.field`, `env.get`).
+                    // The expr_span covers the whole `a.b.c` expression.
+                    // Segments after the root (segments[1..]) are member accesses — mark as Property.
+                    if let Some(seg_spans) = source_map.path_segment_spans.get(&expr_id) {
+                        for span in seg_spans.iter().skip(1) {
+                            if !span.is_empty() {
+                                map.insert(*span, SemanticTokenType::Property);
+                            }
+                        }
+                    }
+                    // Also classify the whole expression for type-based highlighting (e.g. enum variant).
+                    let span = source_map.expr_span(expr_id);
+                    if !span.is_empty() {
+                        if let Some(ty) = inference.expression_type(expr_id) {
+                            if let Some(token_type) = ty_to_token_type(ty) {
+                                // Only insert the whole-expression span if not overridden per-segment.
+                                map.entry(span).or_insert(token_type);
+                            }
+                        }
                     }
                 }
             }
