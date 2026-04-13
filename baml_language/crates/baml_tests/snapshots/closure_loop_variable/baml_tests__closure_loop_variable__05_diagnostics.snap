@@ -2,4 +2,24 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-No errors found.
+  [type] Error: type mismatch: expected never, got () -> void
+   ╭─[ demo.baml:5:20 ]
+   │
+ 5 │ ╭─▶         total.push(() -> {
+   ┆ ┆   
+ 7 │ ├─▶         })
+   │ │                
+   │ ╰──────────────── type mismatch: expected never, got () -> void
+   │     
+   │     Note: Error code: E0001
+───╯
+
+  [type] Error: `never` is not a function — it cannot be called
+    ╭─[ demo.baml:10:9 ]
+    │
+ 10 │         cb();
+    │         ──┬─  
+    │           ╰─── `never` is not a function — it cannot be called
+    │ 
+    │ Note: Error code: E0001
+────╯

@@ -139,20 +139,20 @@ function testing.TestRegistry.serialize(self: testing.TestRegistry) -> testing.S
   { : never
     let items = [] : testing.SerializedTestDef[]
     for t in self.collector.tests
-      { : null
-        items.push(SerializedTest { type: "test", name: t.name }) : null
+      { : int
+        items.push(SerializedTest { type: "test", name: t.name }) : int
       }
     for ts in self.collector.testsets
-      { : null
+      { : int
         let expanded = self.expansions.get(ts.name) : testing.TestRegistry?
-        match (expanded : testing.TestRegistry?) : null
+        match (expanded : testing.TestRegistry?) : int
           sub: TestRegistry =>
-            { : null
-              items.push(SerializedTestSet { name: ts.name, items: sub.serialize(), loadingTimeMs: sub.loading_time_ms }) : null
+            { : int
+              items.push(SerializedTestSet { name: ts.name, items: sub.serialize(), loadingTimeMs: sub.loading_time_ms }) : int
             }
           null =>
-            { : null
-              items.push(SerializedTest { type: "lazyTestSet", name: ts.name }) : null
+            { : int
+              items.push(SerializedTest { type: "lazyTestSet", name: ts.name }) : int
             }
       }
     return items : testing.SerializedTestDef[]

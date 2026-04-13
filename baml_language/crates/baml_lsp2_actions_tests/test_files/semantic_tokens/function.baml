@@ -20,4 +20,3 @@ function classify(input: Input) -> string {
 // function.baml:5:19 (parameter) len=5 "input"
 // function.baml:5:26 (class) len=5 "Input"
 // function.baml:5:36 (type) len=6 "string"
-// function.baml:6:11 (property) len=4 "text"

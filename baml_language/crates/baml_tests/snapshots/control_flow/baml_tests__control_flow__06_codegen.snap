@@ -56,11 +56,7 @@ function user.Headers() -> string {
     notify_block Setup
     notify_block Configuration
     notify_block Processing
-    load_const 1
-    load_const 2
-    bin_op +
-    load_const "to_string"
-    load_map_element
+    load_const null
     call_indirect
     return
 }

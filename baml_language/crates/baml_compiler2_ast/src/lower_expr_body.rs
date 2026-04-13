@@ -1667,25 +1667,15 @@ impl LoweringContext {
             }
         }
 
-        // Desugar multi-segment paths into MemberAccess chains:
-        //   Color.Red  → MemberAccess { base: Path(["Color"]), member: "Red" }
-        //   a.b.c      → MemberAccess { base: MemberAccess { base: Path(["a"]), member: "b" }, member: "c" }
-        // After this, Path is always single-segment (a bare identifier).
-        let mut base = self.alloc_expr(Expr::Path(vec![segments[0].0.clone()]), node.text_range());
-        for (seg, seg_range) in &segments[1..] {
-            let id = self.alloc_expr(
-                Expr::MemberAccess {
-                    base,
-                    member: seg.clone(),
-                },
-                node.text_range(),
-            );
-            self.source_map
-                .member_access_member_spans
-                .insert(id, *seg_range);
-            base = id;
+        // Multi-segment paths stay as Path(["a", "b", "c"]).
+        // Record per-segment spans for diagnostics and LSP.
+        let names: Vec<Name> = segments.iter().map(|(n, _)| n.clone()).collect();
+        let id = self.alloc_expr(Expr::Path(names), node.text_range());
+        if segments.len() > 1 {
+            let spans: Vec<TextRange> = segments.iter().map(|(_, r)| *r).collect();
+            self.source_map.path_segment_spans.insert(id, spans);
         }
-        base
+        id
     }
 
     fn lower_field_access_expr(&mut self, node: &SyntaxNode) -> ExprId {

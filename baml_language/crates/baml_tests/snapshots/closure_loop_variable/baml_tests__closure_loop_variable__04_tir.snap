@@ -7,8 +7,8 @@ function user.sum_array(arr: int[]) -> int throws never {
     let sum = 0 : 0 -> int
     let total = [] : never[] -> _[]
     for i in arr
-      { : null
-        total.push(() -> { ... }) : null
+      { : int
+        total.push(() -> { ... }) : int
           () -> { ... } : () -> void
             {
               sum Add= i
@@ -16,10 +16,12 @@ function user.sum_array(arr: int[]) -> int throws never {
       }
     for cb in total
       { : void
-        cb() : void
+        cb() : unknown
       }
     sum : int
   }
+  !! 121..156: type mismatch: expected never, got () -> void
+  !! 200..204: `never` is not a function — it cannot be called
 }
 lambda user.sum_array {
 }

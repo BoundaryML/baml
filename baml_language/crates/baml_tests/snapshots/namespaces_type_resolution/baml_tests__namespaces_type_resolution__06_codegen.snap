@@ -126,8 +126,7 @@ function user.RootUsesLlmError(e: llm.Error) -> string {
 }
 
 function user.RootUsesLlmStatus() -> llm.Status {
-    load_const user.llm.Status.Ready
-    alloc_variant user.llm.Status
+    load_const null
     return
 }
 
@@ -344,8 +343,7 @@ function user.auth.AuthUsesLlmResponse(r: llm.Response) -> string {
 }
 
 function user.auth.AuthUsesLlmStatus() -> llm.Status {
-    load_const user.llm.Status.Ready
-    alloc_variant user.llm.Status
+    load_const null
     return
 }
 
@@ -362,8 +360,7 @@ function user.auth.AuthUsesRootConfig(cfg: Config) -> string {
 }
 
 function user.auth.AuthUsesRootStatus() -> Status {
-    load_const user.Status.Pending
-    alloc_variant user.Status
+    load_const null
     return
 }
 
@@ -517,8 +514,7 @@ function user.llm.LlmThrowsRootEnum(x: int) -> string {
     return
 
   L1:
-    load_const user.Status.Failed
-    alloc_variant user.Status
+    load_const null
     throw
 }
 
@@ -555,8 +551,7 @@ function user.llm.LlmUsesAuthError(e: auth.Error) -> string {
 }
 
 function user.llm.LlmUsesAuthRole() -> auth.Role {
-    load_const user.auth.Role.Admin
-    alloc_variant user.auth.Role
+    load_const null
     return
 }
 
@@ -585,8 +580,7 @@ function user.llm.LlmUsesRootError(e: Error) -> string {
 }
 
 function user.llm.LlmUsesRootStatus() -> Status {
-    load_const user.Status.Ok
-    alloc_variant user.Status
+    load_const null
     return
 }
 
@@ -809,8 +803,7 @@ function user.llm.openai.OpenAIUsesAuthConfig(cfg: auth.Config) -> string {
 }
 
 function user.llm.openai.OpenAIUsesAuthRole() -> auth.Role {
-    load_const user.auth.Role.User
-    alloc_variant user.auth.Role
+    load_const null
     return
 }
 
@@ -827,8 +820,7 @@ function user.llm.openai.OpenAIUsesLlmResponse(r: llm.Response) -> string {
 }
 
 function user.llm.openai.OpenAIUsesLlmStatus() -> llm.Status {
-    load_const user.llm.Status.Generating
-    alloc_variant user.llm.Status
+    load_const null
     return
 }
 
@@ -839,7 +831,6 @@ function user.llm.openai.OpenAIUsesRootConfig(cfg: Config) -> string {
 }
 
 function user.llm.openai.OpenAIUsesRootStatus() -> Status {
-    load_const user.Status.Ok
-    alloc_variant user.Status
+    load_const null
     return
 }

@@ -750,9 +750,7 @@ function user.ChainExprs(user: ChainUser, items: ChainItem[], m: map<string, int
     load_map_element
     call_indirect
     pop 1
-    load_var items
-    load_const "len"
-    load_map_element
+    load_const null
     call_indirect
     pop 1
     load_const 0
@@ -764,17 +762,10 @@ function user.ChainExprs(user: ChainUser, items: ChainItem[], m: map<string, int
     call_indirect
     pop 1
     load_const 0
-    load_var items
-    load_const "get"
-    load_map_element
+    load_const null
     call_indirect
     pop 1
     load_const 0
-    load_var items
-    load_const "get"
-    load_map_element
-    call_indirect
-    pop 1
     load_const null
     call_indirect
     pop 1
@@ -784,20 +775,19 @@ function user.ChainExprs(user: ChainUser, items: ChainItem[], m: map<string, int
     load_const null
     call_indirect
     pop 1
-    load_var user
-    load_field .profile
-    load_field .items
-    store_var _55
+    load_const null
+    call_indirect
+    pop 1
     load_var user
     load_field .profile
     load_field .items
     load_const "len"
     load_map_element
     call_indirect
-    store_var _58
-    load_var _55
+    store_var _35
+    load_var user
     load_const 0
-    load_var _58
+    load_var _35
     load_const 1
     bin_op -
     load_var user
@@ -815,13 +805,13 @@ function user.ChainExprs(user: ChainUser, items: ChainItem[], m: map<string, int
     pop 1
     load_var user
     load_field .scores
-    store_var _78
+    store_var _50
     load_var user
     load_field .scores
     load_const "len"
     load_map_element
     call_indirect
-    store_var _80
+    store_var _52
     load_var user
     load_field .scores
     load_const 0
@@ -829,11 +819,9 @@ function user.ChainExprs(user: ChainUser, items: ChainItem[], m: map<string, int
     load_const "len"
     load_map_element
     call_indirect
-    store_var _85
+    store_var _56
     load_const 0
-    load_var items
-    load_const "get"
-    load_map_element
+    load_const null
     call_indirect
     pop 1
     load_var user
@@ -1404,8 +1392,7 @@ function user.LlmStringClient(text: string) -> string {
     alloc_instance baml.llm.Client
     load_const "openai/gpt-4o"
     init_field .name
-    load_const baml.llm.ClientType.Primitive
-    alloc_variant baml.llm.ClientType
+    load_const null
     init_field .client_type
     alloc_array 0
     init_field .sub_clients
@@ -1425,8 +1412,7 @@ function user.LlmStringClient$build_request(text: string) -> baml.http.Request {
     alloc_instance baml.llm.Client
     load_const "openai/gpt-4o"
     init_field .name
-    load_const baml.llm.ClientType.Primitive
-    alloc_variant baml.llm.ClientType
+    load_const null
     init_field .client_type
     alloc_array 0
     init_field .sub_clients
@@ -1453,8 +1439,7 @@ function user.LlmStringClient$render_prompt(text: string) -> baml.llm.PromptAst 
     alloc_instance baml.llm.Client
     load_const "openai/gpt-4o"
     init_field .name
-    load_const baml.llm.ClientType.Primitive
-    alloc_variant baml.llm.ClientType
+    load_const null
     init_field .client_type
     alloc_array 0
     init_field .sub_clients

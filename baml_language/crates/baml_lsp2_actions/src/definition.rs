@@ -290,7 +290,8 @@ fn resolve_variant_definition(
     None
 }
 
-/// Cursor is on a `MemberAccess` expression (e.g. `p.name`, `Status.Active`, `s.Celebrate()`).
+/// Cursor is on a `MemberAccess` expression or a multi-segment `Path`
+/// (e.g. `p.name`, `Status.Active`, `s.Celebrate()`).
 fn resolve_field_access_at(
     db: &dyn Db,
     _file: SourceFile,
@@ -303,21 +304,47 @@ fn resolve_field_access_at(
     use baml_compiler2_ast::Expr;
     use baml_compiler2_tir::inference::MemberResolution;
 
-    // Find the MemberAccess expr whose span contains the cursor and member name matches.
-    // Pick smallest (innermost) span for nested chains like a.b.c.
+    // Find the best matching expr — either a MemberAccess or a multi-segment Path
+    // whose span contains the cursor and whose member name matches the token.
+    // Pick smallest (innermost) span for nested chains.
     let mut best: Option<(baml_compiler2_ast::ExprId, TextRange)> = None;
     for (expr_id, expr) in expr_body.exprs.iter() {
-        if let Expr::MemberAccess { member, .. } = expr {
-            if member.as_str() != token_text {
-                continue;
+        match expr {
+            Expr::MemberAccess { member, .. } => {
+                if member.as_str() != token_text {
+                    continue;
+                }
+                let span = source_map.expr_span(expr_id);
+                if !span.contains(offset) && span.end() != offset {
+                    continue;
+                }
+                if best.is_none_or(|(_, prev_span)| span.len() < prev_span.len()) {
+                    best = Some((expr_id, span));
+                }
             }
-            let span = source_map.expr_span(expr_id);
-            if !span.contains(offset) && span.end() != offset {
-                continue;
+            Expr::Path(segments) if segments.len() >= 2 => {
+                // Check if the cursor is on a non-first segment of this path.
+                // Only segments[1..] can be member accesses — segments[0] is the root.
+                let segment_idx = segments[1..]
+                    .iter()
+                    .enumerate()
+                    .find(|(i, seg)| {
+                        if seg.as_str() != token_text {
+                            return false;
+                        }
+                        let seg_span = source_map.path_segment_span(expr_id, *i + 1);
+                        seg_span.contains(offset) || seg_span.end() == offset
+                    })
+                    .map(|(i, _)| i + 1);
+                if segment_idx.is_none() {
+                    continue;
+                }
+                let span = source_map.expr_span(expr_id);
+                if best.is_none_or(|(_, prev_span)| span.len() < prev_span.len()) {
+                    best = Some((expr_id, span));
+                }
             }
-            if best.is_none_or(|(_, prev_span)| span.len() < prev_span.len()) {
-                best = Some((expr_id, span));
-            }
+            _ => {}
         }
     }
 

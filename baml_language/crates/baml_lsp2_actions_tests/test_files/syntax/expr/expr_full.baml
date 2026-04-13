@@ -144,20 +144,20 @@ test TestMakePoem() {
 //    │ Note: Error code: E0001
 // ───╯
 // Error: unresolved name: args
-//     ╭─[ expr_expr_full.baml:44:6 ]
-//     │
-//  44 │ test TestPipeline() {
-//     │      ───────┬──────  
-//     │             ╰──────── unresolved name: args
-//     │ 
-//     │ Note: Error code: E0001
-// ────╯
-// Error: unresolved name: length
 //    ╭─[ expr_expr_full.baml:1:3 ]
 //    │
 //  1 │ function MakePoem(length: int) -> string {
 //    │   ┬  
-//    │   ╰── unresolved name: length
+//    │   ╰── unresolved name: args
+//    │ 
+//    │ Note: Error code: E0001
+// ───╯
+// Error: unresolved name: length
+//    ╭─[ expr_expr_full.baml:1:1 ]
+//    │
+//  1 │ function MakePoem(length: int) -> string {
+//    │ │ 
+//    │ ╰─ unresolved name: length
 //    │ 
 //    │ Note: Error code: E0001
 // ───╯

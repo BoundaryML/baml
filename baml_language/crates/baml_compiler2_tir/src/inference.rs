@@ -85,6 +85,12 @@ pub struct ScopeInference<'db> {
     resolutions: FxHashMap<ExprId, MemberResolution<'db>>,
     /// Match expressions that the exhaustiveness checker determined cover all cases.
     exhaustive_matches: FxHashSet<ExprId>,
+    /// TIR-inferred root segment type for each multi-segment `Path` expression.
+    /// Populated in `infer_path` so that MIR can chain field projections even
+    /// when the MIR local was declared with a coarser type (e.g. catch variables
+    /// are declared as `BuiltinUnknown` by `lower_catch` before `bind_pattern`
+    /// has a chance to refine them).
+    path_root_types: FxHashMap<ExprId, Ty>,
     /// Diagnostics and other rare data. Heap-allocated only when non-empty.
     extra: Option<Box<ScopeInferenceExtra<'db>>>,
 }
@@ -155,6 +161,16 @@ impl<'db> ScopeInference<'db> {
     /// Iterate over all exhaustive match `ExprIds` in this scope.
     pub fn iter_exhaustive_matches(&self) -> impl Iterator<Item = &ExprId> {
         self.exhaustive_matches.iter()
+    }
+
+    /// Look up the TIR-inferred root segment type for a multi-segment Path expression.
+    pub fn path_root_type(&self, expr_id: ExprId) -> Option<&Ty> {
+        self.path_root_types.get(&expr_id)
+    }
+
+    /// Iterate over all (`ExprId`, root `Ty`) pairs for multi-segment paths in this scope.
+    pub fn iter_path_root_types(&self) -> impl Iterator<Item = (&ExprId, &Ty)> {
+        self.path_root_types.iter()
     }
 
     /// Get diagnostics for this scope (empty slice if none).
@@ -568,7 +584,8 @@ pub fn infer_scope_types<'db>(
         }
     }
 
-    let (expressions, bindings, resolutions, exhaustive_matches, diagnostics) = builder.finish();
+    let (expressions, bindings, resolutions, exhaustive_matches, diagnostics, path_root_types) =
+        builder.finish();
 
     let extra = if diagnostics.is_empty() {
         None
@@ -581,6 +598,7 @@ pub fn infer_scope_types<'db>(
         bindings,
         resolutions,
         exhaustive_matches,
+        path_root_types,
         extra,
     }
 }

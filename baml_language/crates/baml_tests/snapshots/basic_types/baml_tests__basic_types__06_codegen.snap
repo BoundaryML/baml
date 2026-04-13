@@ -98,8 +98,7 @@ function user.GetUser(id: int) -> User {
     alloc_instance baml.llm.Client
     load_const "openai/gpt-4o"
     init_field .name
-    load_const baml.llm.ClientType.Primitive
-    alloc_variant baml.llm.ClientType
+    load_const null
     init_field .client_type
     alloc_array 0
     init_field .sub_clients
@@ -119,8 +118,7 @@ function user.GetUser$build_request(id: int) -> baml.http.Request {
     alloc_instance baml.llm.Client
     load_const "openai/gpt-4o"
     init_field .name
-    load_const baml.llm.ClientType.Primitive
-    alloc_variant baml.llm.ClientType
+    load_const null
     init_field .client_type
     alloc_array 0
     init_field .sub_clients
@@ -147,8 +145,7 @@ function user.GetUser$render_prompt(id: int) -> baml.llm.PromptAst {
     alloc_instance baml.llm.Client
     load_const "openai/gpt-4o"
     init_field .name
-    load_const baml.llm.ClientType.Primitive
-    alloc_variant baml.llm.ClientType
+    load_const null
     init_field .client_type
     alloc_array 0
     init_field .sub_clients

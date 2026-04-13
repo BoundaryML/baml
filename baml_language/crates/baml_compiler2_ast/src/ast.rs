@@ -315,6 +315,9 @@ pub struct AstSourceMap {
     pub catch_arm_spans: Arena<TextRange>,
     /// For `MemberAccess` expressions, the span of just the member name (after the dot).
     pub member_access_member_spans: HashMap<ExprId, TextRange>,
+    /// For multi-segment `Path` expressions, per-segment spans.
+    /// `path_segment_spans[expr_id][i]` is the `TextRange` of `segments[i]`.
+    pub path_segment_spans: HashMap<ExprId, Vec<TextRange>>,
 }
 
 impl AstSourceMap {
@@ -327,6 +330,7 @@ impl AstSourceMap {
             type_annotation_spans: Arena::new(),
             catch_arm_spans: Arena::new(),
             member_access_member_spans: HashMap::new(),
+            path_segment_spans: HashMap::new(),
         }
     }
 
@@ -359,6 +363,16 @@ impl AstSourceMap {
         self.member_access_member_spans
             .get(&id)
             .copied()
+            .unwrap_or_else(|| self.expr_span(id))
+    }
+
+    /// Look up the per-segment spans for a multi-segment `Path` expression.
+    /// `path_segment_span(id, i)` returns the `TextRange` of `segments[i]`.
+    /// Returns the full expression span as fallback if no segment span was recorded.
+    pub fn path_segment_span(&self, id: ExprId, segment_idx: usize) -> TextRange {
+        self.path_segment_spans
+            .get(&id)
+            .and_then(|spans| spans.get(segment_idx).copied())
             .unwrap_or_else(|| self.expr_span(id))
     }
 

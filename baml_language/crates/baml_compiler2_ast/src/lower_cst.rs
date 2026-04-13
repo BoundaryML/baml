@@ -420,15 +420,12 @@ pub(crate) fn synthesize_llm_builtin_call(
         Some(name) if name.contains('/') => {
             // Shorthand client (e.g. "openai/gpt-4o"): build an inline Client object.
             let name_lit = alloc(Expr::Literal(Literal::String(name.to_string())));
-            let ct_path = alloc(Expr::Path(vec![
+            let ct_variant = alloc(Expr::Path(vec![
                 Name::new("baml"),
                 Name::new("llm"),
                 Name::new("ClientType"),
+                Name::new("Primitive"),
             ]));
-            let ct_variant = alloc(Expr::MemberAccess {
-                base: ct_path,
-                member: Name::new("Primitive"),
-            });
             let sub = alloc(Expr::Array { elements: vec![] });
             let retry = alloc(Expr::Null);
             let counter = alloc(Expr::Literal(Literal::Int(0)));
@@ -476,6 +473,7 @@ pub(crate) fn synthesize_llm_builtin_call(
         type_annotation_spans: Arena::new(),
         catch_arm_spans: Arena::new(),
         member_access_member_spans: std::collections::HashMap::new(),
+        path_segment_spans: std::collections::HashMap::new(),
     };
 
     (body, source_map)
@@ -539,6 +537,7 @@ pub(crate) fn synthesize_llm_parse_call(
         type_annotation_spans: Arena::new(),
         catch_arm_spans: Arena::new(),
         member_access_member_spans: std::collections::HashMap::new(),
+        path_segment_spans: std::collections::HashMap::new(),
     };
 
     (body, source_map)
@@ -1040,12 +1039,8 @@ fn synthesize_register_call(
             };
 
             // registry.register_test
-            let registry_ref = ctx.alloc_expr(Expr::Path(vec![Name::new("registry")]), span);
             let method_call_target = ctx.alloc_expr(
-                Expr::MemberAccess {
-                    base: registry_ref,
-                    member: Name::new("register_test"),
-                },
+                Expr::Path(vec![Name::new("registry"), Name::new("register_test")]),
                 span,
             );
 
@@ -1110,12 +1105,8 @@ fn synthesize_register_call(
             };
 
             // registry.register_test_set
-            let registry_ref = ctx.alloc_expr(Expr::Path(vec![Name::new("registry")]), span);
             let method_call_target = ctx.alloc_expr(
-                Expr::MemberAccess {
-                    base: registry_ref,
-                    member: Name::new("register_test_set"),
-                },
+                Expr::Path(vec![Name::new("registry"), Name::new("register_test_set")]),
                 span,
             );
 
@@ -1285,6 +1276,7 @@ fn synthesize_retry_policy_let(
         type_annotation_spans: la_arena::Arena::new(),
         catch_arm_spans: la_arena::Arena::new(),
         member_access_member_spans: std::collections::HashMap::new(),
+        path_segment_spans: std::collections::HashMap::new(),
     };
 
     Some(Item::Let(LetDef {
@@ -1465,11 +1457,6 @@ fn synthesize_client_let(
     let name_expr = alloc(Expr::Literal(Literal::String(client_name.to_string())));
 
     // client_type: baml.llm.ClientType.Primitive (or Fallback / RoundRobin)
-    let client_type_path = alloc(Expr::Path(vec![
-        Name::new("baml"),
-        Name::new("llm"),
-        Name::new("ClientType"),
-    ]));
     let variant_name = if is_fallback {
         "Fallback"
     } else if is_round_robin {
@@ -1477,10 +1464,12 @@ fn synthesize_client_let(
     } else {
         "Primitive"
     };
-    let client_type_expr = alloc(Expr::MemberAccess {
-        base: client_type_path,
-        member: Name::new(variant_name),
-    });
+    let client_type_expr = alloc(Expr::Path(vec![
+        Name::new("baml"),
+        Name::new("llm"),
+        Name::new("ClientType"),
+        Name::new(variant_name),
+    ]));
 
     // sub_clients: [A, B, ...] for composites, [] for primitive
     let sub_clients_expr = alloc(Expr::Array {
@@ -1528,6 +1517,7 @@ fn synthesize_client_let(
         type_annotation_spans: la_arena::Arena::new(),
         catch_arm_spans: la_arena::Arena::new(),
         member_access_member_spans: std::collections::HashMap::new(),
+        path_segment_spans: std::collections::HashMap::new(),
     };
 
     Item::Let(LetDef {
@@ -1780,6 +1770,7 @@ fn synthesize_client_new_companion(
         type_annotation_spans: la_arena::Arena::new(),
         catch_arm_spans: la_arena::Arena::new(),
         member_access_member_spans: std::collections::HashMap::new(),
+        path_segment_spans: std::collections::HashMap::new(),
     };
 
     let func_name = format!("{client_name}$new");

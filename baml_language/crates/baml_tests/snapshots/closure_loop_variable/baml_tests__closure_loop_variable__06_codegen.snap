@@ -25,13 +25,13 @@ function user.sum_array(arr: int[]) -> int {
 
   L1:
     load_var total
-    store_var _12
+    store_var _11
     load_const 0
     store_var __for_idx_1
 
   L2:
     load_var __for_idx_1
-    load_var _12
+    load_var _11
     call baml.Array.length
     cmp_op <
     pop_jump_if_false L3
@@ -42,7 +42,7 @@ function user.sum_array(arr: int[]) -> int {
     return
 
   L4:
-    load_var _12
+    load_var _11
     load_var __for_idx_1
     load_array_element
     call_indirect

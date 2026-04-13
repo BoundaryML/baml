@@ -2,4 +2,97 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-No errors found.
+  [type] Error: unresolved name: root
+     ╭─[ main.baml:104:10 ]
+     │
+ 104 │ // Takes root.Config, returns root.llm.Config — must be different types
+     │          ─────────────┬────────────  
+     │                       ╰────────────── unresolved name: root
+     │ 
+     │ Note: Error code: E0001
+─────╯
+
+  [type] Error: unresolved name: root
+     ╭─[ auth.baml:104:14 ]
+     │
+ 104 │ ╭─▶         _ => "ok"
+     ┆ ┆   
+ 108 │ ├─▶ // ── Cross-namespace: sibling (root.llm.X) ───────────────────────
+     │ │                                                                         
+     │ ╰───────────────────────────────────────────────────────────────────────── unresolved name: root
+     │     
+     │     Note: Error code: E0001
+─────╯
+
+  [type] Error: unresolved name: root
+     ╭─[ auth.baml:136:17 ]
+     │
+ 136 │ // ── Mixed: auth + root + llm types ──────────────────────────────
+     │                 ─────────────┬────────────  
+     │                              ╰────────────── unresolved name: root
+     │ 
+     │ Note: Error code: E0001
+─────╯
+
+  [type] Error: unresolved name: root
+     ╭─[ models.baml:116:48 ]
+     │
+ 116 │ ╭─▶ // root.ConfigAlias must be root.ConfigAlias = root.Config
+ 117 │ ├─▶ function LlmUsesRootAlias(cfg: root.ConfigAlias) -> string {
+     │ │                                                                  
+     │ ╰────────────────────────────────────────────────────────────────── unresolved name: root
+     │     
+     │     Note: Error code: E0001
+─────╯
+
+  [type] Error: unresolved name: root
+     ╭─[ models.baml:145:10 ]
+     │
+ 145 │ function LlmUsesAuthError(e: root.auth.Error) -> string {
+     │          ─────────┬─────────  
+     │                   ╰─────────── unresolved name: root
+     │ 
+     │ Note: Error code: E0001
+─────╯
+
+  [type] Error: unresolved name: root
+     ╭─[ models.baml:163:33 ]
+     │
+ 163 │ // All three Configs in one signature — must be three different types
+     │                                 ────────────┬────────────  
+     │                                             ╰────────────── unresolved name: root
+     │ 
+     │ Note: Error code: E0001
+─────╯
+
+  [type] Error: unresolved name: root
+    ╭─[ client.baml:81:32 ]
+    │
+ 81 │ function OpenAIUsesLlmConfig(cfg: root.llm.Config) -> string {
+    │                                ─────────┬─────────  
+    │                                         ╰─────────── unresolved name: root
+    │ 
+    │ Note: Error code: E0001
+────╯
+
+  [type] Error: unresolved name: root
+     ╭─[ client.baml:107:24 ]
+     │
+ 107 │ ╭─▶ function OpenAIUsesAuthRole() -> root.auth.Role {
+ 108 │ ├─▶     root.auth.Role.User
+     │ │                             
+     │ ╰───────────────────────────── unresolved name: root
+     │     
+     │     Note: Error code: E0001
+─────╯
+
+  [type] Error: unresolved name: root
+     ╭─[ client.baml:125:12 ]
+     │
+ 125 │ ╭─▶     root_err: root.Error,
+ 126 │ ├─▶     llm_err: root.llm.Error,
+     │ │                                  
+     │ ╰────────────────────────────────── unresolved name: root
+     │     
+     │     Note: Error code: E0001
+─────╯
