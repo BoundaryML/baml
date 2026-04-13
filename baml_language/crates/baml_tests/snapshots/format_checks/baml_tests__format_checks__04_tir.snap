@@ -393,6 +393,10 @@ class user.AttrsWithDelimiters {
   age: int @alias("user_age")
   active: bool
 }
+class user.SemicolonTrivia {
+  name: string
+  age: int
+}
 class user.EmptyClass$stream {
 }
 class user.SingleField$stream {
@@ -567,6 +571,10 @@ class user.AttrsWithDelimiters$stream {
   name: null | string @description("name")
   age: null | int @alias("user_age")
   active: bool
+}
+class user.SemicolonTrivia$stream {
+  name: null | string
+  age: null | int
 }
 function user.BasicClient$new() -> ? throws never {
   baml.llm.PrimitiveClient { name: "BasicClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } } : unknown

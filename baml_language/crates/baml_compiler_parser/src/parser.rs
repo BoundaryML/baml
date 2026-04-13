@@ -2416,10 +2416,16 @@ impl<'a> Parser<'a> {
             // 'self' parameter does not have a type annotation
             if is_self {
                 // No type annotation for self
-            } else if p.eat(TokenKind::Colon) {
-                p.parse_type();
-            } else if p.is_at_type_start() {
-                // Colon omitted - parse the type anyway (formatter will add colon)
+                return;
+            }
+
+            let has_colon = p.eat(TokenKind::Colon);
+
+            // Check if there's a newline before the next token.
+            // Consistent with class field parsing: if no colon, type must be on the same line.
+            let newline_before_type = p.has_newline_ahead();
+            let has_type = p.is_at_type_start() && (!newline_before_type || has_colon);
+            if has_type {
                 p.parse_type();
             } else {
                 p.error_unexpected_token("type annotation".to_string());

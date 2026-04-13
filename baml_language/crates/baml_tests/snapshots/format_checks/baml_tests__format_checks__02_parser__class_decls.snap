@@ -1438,6 +1438,23 @@ class EmptyClass {
           DOT "."
           WORD "done"
     R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "SemicolonTrivia"
+    L_BRACE "{"
+    FIELD
+      WORD "name"
+      COLON ":"
+      TYPE_EXPR "string"
+        WORD "string"
+    SEMICOLON ";"
+    FIELD
+      WORD "age"
+      COLON ":"
+      TYPE_EXPR "int"
+        WORD "int"
+    COMMA ","
+    R_BRACE "}"
 
 === ERRORS ===
 None

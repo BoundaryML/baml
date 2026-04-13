@@ -902,15 +902,16 @@ impl FromCST for ClassDecl {
             match elem.kind() {
                 SyntaxKind::FIELD => {
                     let field = ClassField::from_cst(elem)?;
-                    let comma = it
-                        .next_if_kind(SyntaxKind::COMMA)
-                        .map(t::Comma::from_cst)
-                        .transpose()?;
-                    if comma.is_none() {
-                        // Consume and discard semicolon (normalized to comma by formatter)
-                        it.next_if_kind(SyntaxKind::SEMICOLON);
-                    }
-                    items.push(ClassItem::Field(field, comma));
+                    let delimiter = if let Some(comma_elem) = it.next_if_kind(SyntaxKind::COMMA) {
+                        Some(ClassFieldDelimiter::Comma(t::Comma::from_cst(comma_elem)?))
+                    } else if let Some(semi_elem) = it.next_if_kind(SyntaxKind::SEMICOLON) {
+                        Some(ClassFieldDelimiter::Semicolon(t::Semicolon::from_cst(
+                            semi_elem,
+                        )?))
+                    } else {
+                        None
+                    };
+                    items.push(ClassItem::Field(field, delimiter));
                 }
                 SyntaxKind::FUNCTION_DEF => {
                     items.push(ClassItem::Function(FunctionDecl::from_cst(elem)?));
@@ -1163,10 +1164,18 @@ impl Printable for ClassField {
     }
 }
 
+/// Delimiter after a class field (comma or semicolon).
+/// The formatter normalizes to comma, but we preserve the original for trivia.
+#[derive(Debug)]
+pub enum ClassFieldDelimiter {
+    Comma(t::Comma),
+    Semicolon(t::Semicolon),
+}
+
 /// Any of the valid items in a [`ClassDecl`].
 #[derive(Debug)]
 pub enum ClassItem {
-    Field(ClassField, Option<t::Comma>),
+    Field(ClassField, Option<ClassFieldDelimiter>),
     Function(FunctionDecl),
     BlockAttribute(BlockAttribute),
 }
@@ -1194,12 +1203,22 @@ impl FromCST for ClassItem {
 impl Printable for ClassItem {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         match self {
-            ClassItem::Field(field, comma) => {
+            ClassItem::Field(field, delimiter) => {
                 let info = field.print(shape, printer);
-                if let Some(comma) = &comma {
-                    printer.print_raw_token(comma);
-                } else {
-                    printer.print_str(",");
+                // Always print comma, but preserve trivia from original delimiter
+                match delimiter {
+                    Some(ClassFieldDelimiter::Comma(comma)) => {
+                        printer.print_raw_token(comma);
+                    }
+                    Some(ClassFieldDelimiter::Semicolon(semi)) => {
+                        // Print trivia from semicolon, but output comma
+                        let (_, trailing) = printer.trivia.get_for_range_split(semi.span());
+                        printer.print_str(",");
+                        printer.print_trivia_squished(trailing);
+                    }
+                    None => {
+                        printer.print_str(",");
+                    }
                 }
                 info
             }
@@ -1216,13 +1235,11 @@ impl Printable for ClassItem {
     }
     fn rightmost_token(&self) -> TextRange {
         match self {
-            ClassItem::Field(field, comma) => {
-                if let Some(comma) = comma {
-                    comma.span()
-                } else {
-                    field.rightmost_token()
-                }
-            }
+            ClassItem::Field(field, delimiter) => match delimiter {
+                Some(ClassFieldDelimiter::Comma(comma)) => comma.span(),
+                Some(ClassFieldDelimiter::Semicolon(semi)) => semi.span(),
+                None => field.rightmost_token(),
+            },
             ClassItem::Function(function) => function.rightmost_token(),
             ClassItem::BlockAttribute(attr) => attr.rightmost_token(),
         }

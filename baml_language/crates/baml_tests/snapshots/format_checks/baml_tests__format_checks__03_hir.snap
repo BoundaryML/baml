@@ -143,6 +143,10 @@ class user.Outer {
   optional: user.InnerNested?
   mapping: map<string, user.InnerNested>
 }
+class user.SemicolonTrivia {
+  name: string
+  age: int
+}
 class user.SingleAttrField {
   name: string
 }
