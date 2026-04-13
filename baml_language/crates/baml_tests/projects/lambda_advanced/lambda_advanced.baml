@@ -98,26 +98,6 @@ function test_map_multi_statement() -> int[] {
     })
 }
 
-// ── Map.map with two-param lambda ────────────────────────────────
-function test_map_entries() -> string[] {
-    let m: map<string, int> = {"a": 1, "b": 2}
-    m.map((k: string, v: int) -> string {
-        k
-    })
-}
-
-// ── Map.map_values ───────────────────────────────────────────────
-function test_map_values_transform() -> int[] {
-    let m: map<string, int> = {"x": 10, "y": 20}
-    m.map_values((v) -> { v * 2 })
-}
-
-// ── Map.map_keys ─────────────────────────────────────────────────
-function test_map_keys_transform() -> string[] {
-    let m: map<string, int> = {"hello": 1}
-    m.map_keys((k) -> { k })
-}
-
 // ── Lambda assigned then passed ──────────────────────────────────
 function test_lambda_variable_then_pass() -> int[] {
     let items: int[] = [10, 20, 30]
@@ -180,15 +160,6 @@ function test_map_type_change_inferred() -> string[] {
     })
     // n: int inferred, return: string inferred from match body
     // U binds to "one"|"two"|"other", result is string[]?
-}
-
-// ── map_values: V inferred, return type inferred ─────────────────
-function test_map_values_fully_inferred() -> string[] {
-    let m: map<string, int> = {"x": 10, "y": 20}
-    m.map_values((v) -> {
-        if (v > 15) { "big" }
-        else { "small" }
-    })
 }
 
 // ── Lambda returning literal 0 — does U bind to 0 or int? ───────
@@ -324,11 +295,4 @@ function test_shadowing_inferred() -> int[] {
 // ── IIFE with inferred types ─────────────────────────────────────
 function test_iife_inferred() -> int {
     ((x: int) -> { x * x })(7)
-}
-
-// ── Map.map two-param lambda with inferred types ─────────────────
-function test_map_entries_inferred() -> string[] {
-    let m: map<string, int> = {"a": 1, "b": 2}
-    m.map((k, v) -> { k })
-    // k: string inferred from K, v: int inferred from V
 }

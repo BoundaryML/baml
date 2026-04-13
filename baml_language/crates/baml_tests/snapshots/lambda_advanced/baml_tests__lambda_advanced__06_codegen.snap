@@ -234,37 +234,6 @@ function user.test_literal_return_inference() -> int[] {
     return
 }
 
-function user.test_map_entries() -> string[] {
-    load_const 1
-    load_const 2
-    load_const "a"
-    load_const "b"
-    alloc_map 2
-    make_closure .<lambda(test_map_entries, 0)>, 0
-    call baml.Map.map
-    return
-}
-
-function user.test_map_entries_inferred() -> string[] {
-    load_const 1
-    load_const 2
-    load_const "a"
-    load_const "b"
-    alloc_map 2
-    make_closure .<lambda(test_map_entries_inferred, 0)>, 0
-    call baml.Map.map
-    return
-}
-
-function user.test_map_keys_transform() -> string[] {
-    load_const 1
-    load_const "hello"
-    alloc_map 1
-    make_closure .<lambda(test_map_keys_transform, 0)>, 0
-    call baml.Map.map_keys
-    return
-}
-
 function user.test_map_multi_statement() -> int[] {
     load_const 1
     load_const 2
@@ -301,28 +270,6 @@ function user.test_map_type_change_inferred() -> string[] {
     alloc_array 3
     make_closure .<lambda(test_map_type_change_inferred, 0)>, 0
     call baml.Array.map
-    return
-}
-
-function user.test_map_values_fully_inferred() -> string[] {
-    load_const 10
-    load_const 20
-    load_const "x"
-    load_const "y"
-    alloc_map 2
-    make_closure .<lambda(test_map_values_fully_inferred, 0)>, 0
-    call baml.Map.map_values
-    return
-}
-
-function user.test_map_values_transform() -> int[] {
-    load_const 10
-    load_const 20
-    load_const "x"
-    load_const "y"
-    alloc_map 2
-    make_closure .<lambda(test_map_values_transform, 0)>, 0
-    call baml.Map.map_values
     return
 }
 

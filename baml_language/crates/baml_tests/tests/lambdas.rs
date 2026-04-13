@@ -197,10 +197,7 @@ async fn iife_returns_closure_counter() {
 
 /// Closure passed to .map() with a captured offset.
 /// [1, 2, 3].map(x -> x + offset) where offset = 10 returns [11, 12, 13].
-// Ignored: Array.map() is not yet implemented in the VM (panics "not yet implemented").
-// The lambda compilation itself is correct; this test is blocked on VM work.
 #[tokio::test]
-#[ignore = "Array.map() not yet implemented in VM"]
 async fn closure_in_map_with_captured_offset() {
     let output = baml_test!(
         "

@@ -1,7 +1,7 @@
 use bex_vm_types::types::Value;
 use indexmap::IndexMap;
 
-use super::{BamlClassMap, NativeCallResult, PackageBamlImpl};
+use super::{BamlClassMap, PackageBamlImpl};
 use crate::BexVm;
 
 impl BamlClassMap for PackageBamlImpl {
@@ -51,10 +51,5 @@ impl BamlClassMap for PackageBamlImpl {
         } else {
             None
         }
-    }
-
-    fn map(vm: &mut BexVm, map: &IndexMap<String, Value>, f: &Value) -> NativeCallResult {
-        let _ = (vm, map, f);
-        todo!("map not yet implemented")
     }
 }

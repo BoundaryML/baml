@@ -40,25 +40,6 @@ function baml.Map.keys(self: null) -> void[] {
 function baml.Map.length(self: null) -> int {
 }
 
-function baml.Map.map(self: null, f: (void, void) -> void) -> void[] {
-}
-
-function baml.Map.map_keys(self: null, f: (void) -> void) -> void[] {
-    load_var self
-    call baml.Map.keys
-    load_var f
-    call baml.Array.map
-    return
-}
-
-function baml.Map.map_values(self: null, f: (void) -> void) -> void[] {
-    load_var self
-    call baml.Map.values
-    load_var f
-    call baml.Array.map
-    return
-}
-
 function baml.Map.set(self: null, key: void, value: void) -> null {
 }
 

@@ -69,18 +69,4 @@ class Map<K, V> {
   function get(self, key: K) -> V? {
     $rust_function
   }
-
-  //baml:mut_vm
-  //baml:may_yield
-  function map<U>(self, f: (K, V) -> U) -> U[] {
-    $rust_function
-  }
-
-  function map_keys<U>(self, f: (K) -> U) -> U[] {
-    self.keys().map(f)
-  }
-
-  function map_values<U>(self, f: (V) -> U) -> U[] {
-    self.values().map(f)
-  }
 }
