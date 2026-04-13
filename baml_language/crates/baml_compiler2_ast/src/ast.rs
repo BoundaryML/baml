@@ -245,11 +245,11 @@ impl ExprBody {
                 .map(smol_str::SmolStr::as_str)
                 .collect::<Vec<_>>()
                 .join("."),
-            Expr::FieldAccess { base, field } => {
-                format!("{}.{field}", self.display_expr_inner(*base, depth + 1))
+            Expr::MemberAccess { base, member } => {
+                format!("{}.{member}", self.display_expr_inner(*base, depth + 1))
             }
-            Expr::OptionalFieldAccess { base, field } => {
-                format!("{}?.{field}", self.display_expr_inner(*base, depth + 1))
+            Expr::OptionalMemberAccess { base, member } => {
+                format!("{}?.{member}", self.display_expr_inner(*base, depth + 1))
             }
             Expr::Index { base, index } => {
                 format!(
@@ -313,8 +313,8 @@ pub struct AstSourceMap {
     pub match_arm_spans: Arena<TextRange>,
     pub type_annotation_spans: Arena<TextRange>,
     pub catch_arm_spans: Arena<TextRange>,
-    /// For `FieldAccess` expressions, the span of just the member name (after the dot).
-    pub field_access_member_spans: HashMap<ExprId, TextRange>,
+    /// For `MemberAccess` expressions, the span of just the member name (after the dot).
+    pub member_access_member_spans: HashMap<ExprId, TextRange>,
 }
 
 impl AstSourceMap {
@@ -326,7 +326,7 @@ impl AstSourceMap {
             match_arm_spans: Arena::new(),
             type_annotation_spans: Arena::new(),
             catch_arm_spans: Arena::new(),
-            field_access_member_spans: HashMap::new(),
+            member_access_member_spans: HashMap::new(),
         }
     }
 
@@ -353,10 +353,10 @@ impl AstSourceMap {
             .unwrap_or_default()
     }
 
-    /// Look up the member-name span for a `FieldAccess` expression.
+    /// Look up the member-name span for a `MemberAccess` expression.
     /// Returns the full expression span as fallback if no member span was recorded.
-    pub fn field_access_member_span(&self, id: ExprId) -> TextRange {
-        self.field_access_member_spans
+    pub fn member_access_member_span(&self, id: ExprId) -> TextRange {
+        self.member_access_member_spans
             .get(&id)
             .copied()
             .unwrap_or_else(|| self.expr_span(id))
@@ -465,16 +465,16 @@ pub enum Expr {
         tail_expr: Option<ExprId>,
     },
     // These nodes are constructed purely in the HIR layer AFTER
-    // name resolution as we can't know if it's a field access
+    // name resolution as we can't know if it's a member access
     // until we know how to resolve the path
-    FieldAccess {
+    MemberAccess {
         base: ExprId,
-        field: Name,
+        member: Name,
     },
-    /// Optional field access: `obj?.field` — short-circuits to null if base is null.
-    OptionalFieldAccess {
+    /// Optional member access: `obj?.member` — short-circuits to null if base is null.
+    OptionalMemberAccess {
         base: ExprId,
-        field: Name,
+        member: Name,
     },
     Index {
         base: ExprId,

@@ -1497,12 +1497,12 @@ impl LoweringContext<'_> {
                 self.lower_object(expr_id, type_name.as_ref(), &fields, &spreads, dest);
             }
 
-            AstExpr::FieldAccess { base, field } => {
-                self.lower_field_access(expr_id, base, &field, dest);
+            AstExpr::MemberAccess { base, member } => {
+                self.lower_member_access(expr_id, base, &member, dest);
             }
 
-            AstExpr::OptionalFieldAccess { base, field } => {
-                self.lower_optional_field_access(expr_id, base, &field, dest);
+            AstExpr::OptionalMemberAccess { base, member } => {
+                self.lower_optional_member_access(expr_id, base, &member, dest);
             }
 
             AstExpr::OptionalIndex { base, index } => {
@@ -1971,8 +1971,8 @@ impl LoweringContext<'_> {
         self.builder.set_current_block(bb_join);
     }
 
-    /// Lower `obj?.field` — null-check obj, then access field or produce null.
-    fn lower_optional_field_access(
+    /// Lower `obj?.member` — null-check obj, then access member or produce null.
+    fn lower_optional_member_access(
         &mut self,
         expr_id: AstExprId,
         base: AstExprId,
@@ -2000,7 +2000,7 @@ impl LoweringContext<'_> {
                 .branch(Operand::Copy(Place::Local(test_local)), bb_null, bb_access);
 
             self.builder.set_current_block(bb_access);
-            self.lower_field_access(expr_id, base, field, dest);
+            self.lower_member_access(expr_id, base, field, dest);
             // Don't create our own join — the OptionalChain handler does that
         } else {
             // Standalone (no wrapping OptionalChain) — fall back to own null/join blocks
@@ -2011,7 +2011,7 @@ impl LoweringContext<'_> {
                 .branch(Operand::Copy(Place::Local(test_local)), bb_null, bb_access);
 
             self.builder.set_current_block(bb_access);
-            self.lower_field_access(expr_id, base, field, dest.clone());
+            self.lower_member_access(expr_id, base, field, dest.clone());
             if !self.builder.is_current_terminated() {
                 self.builder.goto(bb_join);
             }
@@ -2160,22 +2160,23 @@ impl LoweringContext<'_> {
         args: &[AstExprId],
         dest: Place,
     ) {
-        // Check if callee is a field access (potential watch method call)
+        // Check if callee is a member access (potential watch method call)
         let callee_expr = self.body.exprs[callee].clone();
-        if let AstExpr::FieldAccess { base, field } = &callee_expr {
-            let field_name = field.clone();
+        if let AstExpr::MemberAccess { base, member } = &callee_expr {
+            let member_name = member.clone();
             let base_id = *base;
-            if field_name.as_str() == "options" || field_name.as_str() == "notify" {
+            if member_name.as_str() == "options" || member_name.as_str() == "notify" {
                 let args_owned = args.to_vec();
-                self.lower_watch_method(expr_id, base_id, &field_name, &args_owned, dest);
+                self.lower_watch_method(expr_id, base_id, &member_name, &args_owned, dest);
                 return;
             }
         }
 
-        // Check if callee is a method call (FieldAccess with a MemberResolution::Method/Free).
+        // Check if callee is a method call (MemberAccess with a MemberResolution::Method/Free).
         // Field and Variant resolutions are not callable — treat them like unresolved accesses.
         // If the base is a real value (not a package namespace), prepend it as self.
-        let (callee_operand, arg_operands) = if let AstExpr::FieldAccess { base, .. } = &callee_expr
+        let (callee_operand, arg_operands) = if let AstExpr::MemberAccess { base, .. } =
+            &callee_expr
         {
             if self
                 .resolutions
@@ -2325,8 +2326,8 @@ impl LoweringContext<'_> {
             }
         }
 
-        // ── NEW: FieldAccess callee (e.g. f.read, sock.recv) ──────────────────
-        if let AstExpr::FieldAccess { .. } = &self.body.exprs[callee] {
+        // ── NEW: MemberAccess callee (e.g. f.read, sock.recv) ──────────────────
+        if let AstExpr::MemberAccess { .. } = &self.body.exprs[callee] {
             use baml_compiler2_tir::inference::MemberResolution;
             if let Some(resolution) = self.resolutions.get(&(self.current_scope, callee)) {
                 let func_loc = match resolution {
@@ -2571,7 +2572,7 @@ impl LoweringContext<'_> {
         }
     }
 
-    fn lower_field_access(
+    fn lower_member_access(
         &mut self,
         expr_id: AstExprId,
         base: AstExprId,
@@ -2651,7 +2652,7 @@ impl LoweringContext<'_> {
         let base_op = self.lower_to_operand(base);
         let field_str = field.to_string();
 
-        // Unwrap Optional — when called from lower_optional_field_access,
+        // Unwrap Optional — when called from lower_optional_member_access,
         // the base type is T? but we've already null-checked, so use the inner type.
         let unwrapped_ty = match &base_ty {
             Ty::Optional(inner, _) => inner.as_ref(),
@@ -3237,14 +3238,14 @@ impl LoweringContext<'_> {
                     Place::Local(temp)
                 }
             }
-            AstExpr::FieldAccess { base, field } => {
+            AstExpr::MemberAccess { base, member } => {
                 let base_id = *base;
-                let field_name = field.clone();
+                let member_name = member.clone();
                 let base_place = self.lower_lvalue(base_id);
                 let base_ty = self.expr_ty(base_id);
                 if let Ty::Class(ref tn, _) = base_ty {
                     if let Some(fields) = self.class_fields.get(tn) {
-                        if let Some(&idx) = fields.get(field_name.as_str()) {
+                        if let Some(&idx) = fields.get(member_name.as_str()) {
                             return Place::Field {
                                 base: Box::new(base_place),
                                 field: idx,
@@ -3253,10 +3254,10 @@ impl LoweringContext<'_> {
                     }
                     self.emit_panic_call(
                         &format!(
-                            "internal compiler error: MIR failed to resolve field access \
+                            "internal compiler error: MIR failed to resolve member access \
                              .{} against class definition '{}' (module_path: {:?}). \
                              This class should be in class_fields but isn't.",
-                            field_name, tn.name, tn.module_path,
+                            member_name, tn.name, tn.module_path,
                         ),
                         base_id,
                     );
@@ -3272,7 +3273,7 @@ impl LoweringContext<'_> {
                 });
                 self.builder.assign(
                     Place::local(key_local),
-                    Rvalue::Use(Operand::Constant(Constant::String(field_name.to_string()))),
+                    Rvalue::Use(Operand::Constant(Constant::String(member_name.to_string()))),
                 );
                 Place::Index {
                     base: Box::new(base_place),
@@ -3303,9 +3304,9 @@ impl LoweringContext<'_> {
                     kind,
                 }
             }
-            AstExpr::OptionalFieldAccess { base, field } => {
+            AstExpr::OptionalMemberAccess { base, member } => {
                 let base_id = *base;
-                let field_name = field.clone();
+                let member_name = member.clone();
 
                 // Evaluate base once into a temp local
                 let base_op = self.lower_to_operand(base_id);
@@ -3327,7 +3328,7 @@ impl LoweringContext<'_> {
                 let bb_null = *self
                     .chain_null_exits
                     .last()
-                    .expect("OptionalFieldAccess in lvalue must be inside OptionalChain");
+                    .expect("OptionalMemberAccess in lvalue must be inside OptionalChain");
                 self.builder.branch(
                     Operand::Copy(Place::Local(test_local)),
                     bb_null,
@@ -3336,7 +3337,7 @@ impl LoweringContext<'_> {
 
                 self.builder.set_current_block(bb_continue);
 
-                // Project field from the same temp local — no second evaluation
+                // Project member from the same temp local — no second evaluation
                 let base_place = Place::Local(base_local);
                 // Unwrap Optional — we've already null-checked, so use the inner type.
                 let unwrapped_ty = match &base_ty {
@@ -3345,7 +3346,7 @@ impl LoweringContext<'_> {
                 };
                 if let Ty::Class(tn, _) = unwrapped_ty {
                     if let Some(fields) = self.class_fields.get(tn) {
-                        if let Some(&idx) = fields.get(field_name.as_str()) {
+                        if let Some(&idx) = fields.get(member_name.as_str()) {
                             return Place::Field {
                                 base: Box::new(base_place),
                                 field: idx,
@@ -3359,7 +3360,7 @@ impl LoweringContext<'_> {
                 });
                 self.builder.assign(
                     Place::local(key_local),
-                    Rvalue::Use(Operand::Constant(Constant::String(field_name.to_string()))),
+                    Rvalue::Use(Operand::Constant(Constant::String(member_name.to_string()))),
                 );
                 Place::Index {
                     base: Box::new(base_place),

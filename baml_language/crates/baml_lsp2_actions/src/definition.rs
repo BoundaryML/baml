@@ -211,7 +211,7 @@ fn resolve_member_at(
             };
             let source_map = baml_compiler2_hir::body::function_body_source_map(db, func_loc)?;
 
-            // Try FieldAccess path first
+            // Try MemberAccess path first
             if let Some(loc) = resolve_field_access_at(
                 db,
                 file,
@@ -290,7 +290,7 @@ fn resolve_variant_definition(
     None
 }
 
-/// Cursor is on a `FieldAccess` expression (e.g. `p.name`, `Status.Active`, `s.Celebrate()`).
+/// Cursor is on a `MemberAccess` expression (e.g. `p.name`, `Status.Active`, `s.Celebrate()`).
 fn resolve_field_access_at(
     db: &dyn Db,
     _file: SourceFile,
@@ -303,12 +303,12 @@ fn resolve_field_access_at(
     use baml_compiler2_ast::Expr;
     use baml_compiler2_tir::inference::MemberResolution;
 
-    // Find the FieldAccess expr whose span contains the cursor and field name matches.
+    // Find the MemberAccess expr whose span contains the cursor and member name matches.
     // Pick smallest (innermost) span for nested chains like a.b.c.
     let mut best: Option<(baml_compiler2_ast::ExprId, TextRange)> = None;
     for (expr_id, expr) in expr_body.exprs.iter() {
-        if let Expr::FieldAccess { field, .. } = expr {
-            if field.as_str() != token_text {
+        if let Expr::MemberAccess { member, .. } = expr {
+            if member.as_str() != token_text {
                 continue;
             }
             let span = source_map.expr_span(expr_id);

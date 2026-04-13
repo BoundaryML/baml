@@ -352,7 +352,7 @@ pub enum RelatedLocation<'db> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DiagnosticLocation {
     Expr(ExprId),
-    /// The member-name portion of a `FieldAccess` expression (after the dot).
+    /// The member-name portion of a `MemberAccess` expression (after the dot).
     ExprMember(ExprId),
     Stmt(StmtId),
     TypeAnnot(TypeAnnotId),
@@ -384,7 +384,7 @@ impl TirDiagnostic<'_> {
                 source_map.map(|sm| sm.expr_span(*id)).unwrap_or_default()
             }
             DiagnosticLocation::ExprMember(id) => source_map
-                .map(|sm| sm.field_access_member_span(*id))
+                .map(|sm| sm.member_access_member_span(*id))
                 .unwrap_or_default(),
             DiagnosticLocation::Stmt(id) => {
                 source_map.map(|sm| sm.stmt_span(*id)).unwrap_or_default()
@@ -492,7 +492,7 @@ impl<'db> InferContext<'db> {
         self.report(error, at, Vec::new());
     }
 
-    /// Report a type error at the member-name portion of a `FieldAccess` expression.
+    /// Report a type error at the member-name portion of a `MemberAccess` expression.
     pub fn report_at_member(
         &self,
         error: TirTypeError,

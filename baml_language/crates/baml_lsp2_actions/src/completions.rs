@@ -133,8 +133,8 @@ impl Completion {
 enum CompletionContext {
     /// Cursor is in a type expression (e.g., after `:` in a field or parameter).
     TypePosition,
-    /// Cursor is after a `.` — field/method/variant access on a base expression.
-    FieldAccess,
+    /// Cursor is after a `.` — member/method/variant access on a base expression.
+    MemberAccess,
     /// Cursor is in a value expression inside a function body.
     ValuePosition,
     /// Cursor is at the top level (not inside any item body).
@@ -160,7 +160,7 @@ pub fn completions_at(db: &dyn Db, file: SourceFile, offset: TextSize) -> Vec<Co
 
     match context {
         CompletionContext::TypePosition => completions_for_type_position(db, file, offset),
-        CompletionContext::FieldAccess => completions_for_field_access(db, file, &token, offset),
+        CompletionContext::MemberAccess => completions_for_field_access(db, file, &token, offset),
         CompletionContext::ValuePosition => completions_for_value_position(db, file, offset),
         CompletionContext::TopLevel => completions_for_top_level(),
         CompletionContext::Unknown => Vec::new(),
@@ -184,7 +184,7 @@ fn detect_context(
     // Check for field access: immediately after a DOT token.
     // Walk prev_sibling_or_token to find the token just before the cursor's token.
     if is_field_access_position(token) {
-        return CompletionContext::FieldAccess;
+        return CompletionContext::MemberAccess;
     }
 
     // Walk ancestors to detect the structural context.

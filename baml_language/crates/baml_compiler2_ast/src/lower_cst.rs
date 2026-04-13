@@ -425,9 +425,9 @@ pub(crate) fn synthesize_llm_builtin_call(
                 Name::new("llm"),
                 Name::new("ClientType"),
             ]));
-            let ct_variant = alloc(Expr::FieldAccess {
+            let ct_variant = alloc(Expr::MemberAccess {
                 base: ct_path,
-                field: Name::new("Primitive"),
+                member: Name::new("Primitive"),
             });
             let sub = alloc(Expr::Array { elements: vec![] });
             let retry = alloc(Expr::Null);
@@ -475,7 +475,7 @@ pub(crate) fn synthesize_llm_builtin_call(
         match_arm_spans: Arena::new(),
         type_annotation_spans: Arena::new(),
         catch_arm_spans: Arena::new(),
-        field_access_member_spans: std::collections::HashMap::new(),
+        member_access_member_spans: std::collections::HashMap::new(),
     };
 
     (body, source_map)
@@ -538,7 +538,7 @@ pub(crate) fn synthesize_llm_parse_call(
         match_arm_spans: Arena::new(),
         type_annotation_spans: Arena::new(),
         catch_arm_spans: Arena::new(),
-        field_access_member_spans: std::collections::HashMap::new(),
+        member_access_member_spans: std::collections::HashMap::new(),
     };
 
     (body, source_map)
@@ -1042,9 +1042,9 @@ fn synthesize_register_call(
             // registry.register_test
             let registry_ref = ctx.alloc_expr(Expr::Path(vec![Name::new("registry")]), span);
             let method_call_target = ctx.alloc_expr(
-                Expr::FieldAccess {
+                Expr::MemberAccess {
                     base: registry_ref,
-                    field: Name::new("register_test"),
+                    member: Name::new("register_test"),
                 },
                 span,
             );
@@ -1112,9 +1112,9 @@ fn synthesize_register_call(
             // registry.register_test_set
             let registry_ref = ctx.alloc_expr(Expr::Path(vec![Name::new("registry")]), span);
             let method_call_target = ctx.alloc_expr(
-                Expr::FieldAccess {
+                Expr::MemberAccess {
                     base: registry_ref,
-                    field: Name::new("register_test_set"),
+                    member: Name::new("register_test_set"),
                 },
                 span,
             );
@@ -1284,7 +1284,7 @@ fn synthesize_retry_policy_let(
         match_arm_spans: la_arena::Arena::new(),
         type_annotation_spans: la_arena::Arena::new(),
         catch_arm_spans: la_arena::Arena::new(),
-        field_access_member_spans: std::collections::HashMap::new(),
+        member_access_member_spans: std::collections::HashMap::new(),
     };
 
     Some(Item::Let(LetDef {
@@ -1477,9 +1477,9 @@ fn synthesize_client_let(
     } else {
         "Primitive"
     };
-    let client_type_expr = alloc(Expr::FieldAccess {
+    let client_type_expr = alloc(Expr::MemberAccess {
         base: client_type_path,
-        field: Name::new(variant_name),
+        member: Name::new(variant_name),
     });
 
     // sub_clients: [A, B, ...] for composites, [] for primitive
@@ -1527,7 +1527,7 @@ fn synthesize_client_let(
         match_arm_spans: la_arena::Arena::new(),
         type_annotation_spans: la_arena::Arena::new(),
         catch_arm_spans: la_arena::Arena::new(),
-        field_access_member_spans: std::collections::HashMap::new(),
+        member_access_member_spans: std::collections::HashMap::new(),
     };
 
     Item::Let(LetDef {
@@ -1779,7 +1779,7 @@ fn synthesize_client_new_companion(
         match_arm_spans: la_arena::Arena::new(),
         type_annotation_spans: la_arena::Arena::new(),
         catch_arm_spans: la_arena::Arena::new(),
-        field_access_member_spans: std::collections::HashMap::new(),
+        member_access_member_spans: std::collections::HashMap::new(),
     };
 
     let func_name = format!("{client_name}$new");

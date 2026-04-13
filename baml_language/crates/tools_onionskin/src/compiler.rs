@@ -583,13 +583,13 @@ fn expr_desc_spans<'db>(
                 stmts.len()
             )));
         }
-        Expr::FieldAccess { base, field } => {
+        Expr::MemberAccess { base, member } => {
             spans.extend(expr_desc_spans(*base, body, inference));
-            spans.push(DetailSpan::Code(format!(".{field}")));
+            spans.push(DetailSpan::Code(format!(".{member}")));
         }
-        Expr::OptionalFieldAccess { base, field } => {
+        Expr::OptionalMemberAccess { base, member } => {
             spans.extend(expr_desc_spans(*base, body, inference));
-            spans.push(DetailSpan::Code(format!("?.{field}")));
+            spans.push(DetailSpan::Code(format!("?.{member}")));
         }
         Expr::Index { base, index } => {
             spans.extend(expr_desc_spans(*base, body, inference));
@@ -2013,9 +2013,11 @@ impl CompilerRunner {
                     let tail = if tail_expr.is_some() { " + tail" } else { "" };
                     format!("{{ {} stmts{tail} }}", stmts.len())
                 }
-                Expr::FieldAccess { base, field } => format!("{}.{field}", expr_desc(*base, body)),
-                Expr::OptionalFieldAccess { base, field } => {
-                    format!("{}?.{field}", expr_desc(*base, body))
+                Expr::MemberAccess { base, member } => {
+                    format!("{}.{member}", expr_desc(*base, body))
+                }
+                Expr::OptionalMemberAccess { base, member } => {
+                    format!("{}?.{member}", expr_desc(*base, body))
                 }
                 Expr::Index { base, .. } => format!("{}[...]", expr_desc(*base, body)),
                 Expr::ByteStringLiteral(bytes) => format!("b\"<{} bytes>\"", bytes.len()),

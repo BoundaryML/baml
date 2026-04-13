@@ -349,7 +349,7 @@ fn throw_fact_from_expr<'db>(
         Expr::Path(segments) if !segments.is_empty() => {
             resolve_path_to_ty(db, pkg_items, ns_context, segments)
         }
-        Expr::FieldAccess { .. } => expr_to_path(expr_id, body)
+        Expr::MemberAccess { .. } => expr_to_path(expr_id, body)
             .map(|segments| resolve_path_to_ty(db, pkg_items, ns_context, &segments))
             .unwrap_or(Ty::Unknown {
                 attr: TyAttr::default(),
@@ -473,9 +473,9 @@ fn collect_catch_binding_names(body: &ExprBody) -> HashSet<&str> {
 fn expr_to_path(expr_id: baml_compiler2_ast::ExprId, body: &ExprBody) -> Option<Vec<Name>> {
     match &body.exprs[expr_id] {
         Expr::Path(segments) if !segments.is_empty() => Some(segments.clone()),
-        Expr::FieldAccess { base, field } => {
+        Expr::MemberAccess { base, member } => {
             let mut base_path = expr_to_path(*base, body)?;
-            base_path.push(field.clone());
+            base_path.push(member.clone());
             Some(base_path)
         }
         _ => None,

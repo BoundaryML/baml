@@ -314,13 +314,13 @@ impl<'db> TypeInferenceBuilder<'db> {
                         })
                 }
             }
-            Expr::FieldAccess { base, field } => {
+            Expr::MemberAccess { base, member } => {
                 // Check for primitive-type static method access first:
                 // `image.from_url(...)` where `image` is a type name, not a value.
-                if let Some(ty) = self.try_primitive_static_access(expr_id, *base, field, body) {
+                if let Some(ty) = self.try_primitive_static_access(expr_id, *base, member, body) {
                     ty
                 // Check for package access: `baml.Array.length`, `env.get`, etc.
-                } else if let Some(ty) = self.try_package_access(expr_id, *base, field, body) {
+                } else if let Some(ty) = self.try_package_access(expr_id, *base, member, body) {
                     ty
                 } else {
                     let base_ty = self.infer_expr(*base, body);
@@ -331,30 +331,30 @@ impl<'db> TypeInferenceBuilder<'db> {
                             // Inside an OptionalChain: auto-unwrap nullable base,
                             // resolve the member, and re-wrap in Optional.
                             // This allows `a?.b.c` where `a?.b` returns `T?`.
-                            let member_ty = self.resolve_member(&inner, field, expr_id);
+                            let member_ty = self.resolve_member(&inner, member, expr_id);
                             Self::make_optional(member_ty)
                         } else {
-                            // Outside any chain: accessing `.field` on a nullable type
+                            // Outside any chain: accessing `.member` on a nullable type
                             // is an error (e.g. `(a?.b).c`). Use `?.` instead.
                             let base_text = body.display_expr(*base);
                             self.context.report_simple(
                                 TirTypeError::NullableMemberAccess {
                                     base: base_text.clone(),
-                                    member: format!(".{field}"),
-                                    expr: format!("{base_text}.{field}"),
+                                    member: format!(".{member}"),
+                                    expr: format!("{base_text}.{member}"),
                                 },
                                 expr_id,
                             );
                             // Still resolve for downstream inference
-                            let member_ty = self.resolve_member(&inner, field, expr_id);
+                            let member_ty = self.resolve_member(&inner, member, expr_id);
                             Self::make_optional(member_ty)
                         }
                     } else {
-                        self.resolve_member(&base_ty, field, expr_id)
+                        self.resolve_member(&base_ty, member, expr_id)
                     }
                 }
             }
-            Expr::OptionalFieldAccess { base, field } => {
+            Expr::OptionalMemberAccess { base, member } => {
                 // Optional chaining: a?.b — if a is null, short-circuit to null.
                 // Type: if a: T?, resolve member on T, wrap result in Optional.
                 let base_ty = self.infer_expr(*base, body);
@@ -365,7 +365,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     let base_text = body.display_expr(*base);
                     self.context.report_simple(
                         TirTypeError::UnnecessaryOptionalChaining {
-                            expr: format!("{base_text}?.{field}"),
+                            expr: format!("{base_text}?.{member}"),
                             base: base_text,
                         },
                         expr_id,
@@ -375,7 +375,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     // Base is just null — result is null
                     Ty::Primitive(PrimitiveType::Null, TyAttr::default())
                 } else {
-                    let member_ty = self.resolve_member(&inner_ty, field, expr_id);
+                    let member_ty = self.resolve_member(&inner_ty, member, expr_id);
                     Self::make_optional(member_ty)
                 }
             }
@@ -584,7 +584,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // Optional chaining: func?.(args) — short-circuits to null if callee is null.
                 let is_method_call = matches!(
                     &body.exprs[*callee],
-                    Expr::FieldAccess { .. } | Expr::OptionalFieldAccess { .. }
+                    Expr::MemberAccess { .. } | Expr::OptionalMemberAccess { .. }
                 );
                 let callee_ty = self.infer_expr(*callee, body);
                 for arg in args {
@@ -922,7 +922,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     return result_ty;
                 }
 
-                let is_method_call = matches!(&body.exprs[*callee], Expr::FieldAccess { .. });
+                let is_method_call = matches!(&body.exprs[*callee], Expr::MemberAccess { .. });
                 let callee_ty = self.infer_expr(*callee, body);
 
                 // Expand type alias chains so alias-over-function types are callable.
@@ -2651,7 +2651,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     self.collect_effective_throws_from_expr(*tail, body, out);
                 }
             }
-            Expr::FieldAccess { base, .. } | Expr::OptionalFieldAccess { base, .. } => {
+            Expr::MemberAccess { base, .. } | Expr::OptionalMemberAccess { base, .. } => {
                 self.collect_effective_throws_from_expr(*base, body, out);
             }
             Expr::Index { base, index } | Expr::OptionalIndex { base, index } => {
@@ -2817,7 +2817,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     self.collect_throw_facts_from_expr(*tail, body, out);
                 }
             }
-            Expr::FieldAccess { base, .. } | Expr::OptionalFieldAccess { base, .. } => {
+            Expr::MemberAccess { base, .. } | Expr::OptionalMemberAccess { base, .. } => {
                 self.collect_throw_facts_from_expr(*base, body, out);
             }
             Expr::Index { base, index } | Expr::OptionalIndex { base, index } => {
@@ -2941,9 +2941,9 @@ impl<'db> TypeInferenceBuilder<'db> {
     fn expr_to_path_segments(expr_id: ExprId, body: &ExprBody) -> Option<Vec<Name>> {
         match &body.exprs[expr_id] {
             Expr::Path(segments) if !segments.is_empty() => Some(segments.clone()),
-            Expr::FieldAccess { base, field } => {
+            Expr::MemberAccess { base, member } => {
                 let mut base_segments = Self::expr_to_path_segments(*base, body)?;
-                base_segments.push(field.clone());
+                base_segments.push(member.clone());
                 Some(base_segments)
             }
             _ => None,
@@ -3754,8 +3754,8 @@ impl<'db> TypeInferenceBuilder<'db> {
                     segments.push(path_segments[0].clone());
                     break;
                 }
-                Expr::FieldAccess { base, field } => {
-                    segments.push(field.clone());
+                Expr::MemberAccess { base, member } => {
+                    segments.push(member.clone());
                     current = *base;
                 }
                 _ => return None,
@@ -3827,7 +3827,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     );
                     break;
                 }
-                Expr::FieldAccess { base, .. } => {
+                Expr::MemberAccess { base, .. } => {
                     self.record_expr_type(
                         cur,
                         Ty::Unknown {
@@ -4219,12 +4219,12 @@ impl<'db> TypeInferenceBuilder<'db> {
         args: &[ExprId],
         body: &ExprBody,
     ) -> Option<Ty> {
-        // After AST lowering, method calls are always FieldAccess:
-        //   x.push(val) → Call { callee: FieldAccess { base: Path(["x"]), field: "push" }, ... }
+        // After AST lowering, method calls are always MemberAccess:
+        //   x.push(val) → Call { callee: MemberAccess { base: Path(["x"]), member: "push" }, ... }
         let (base_id, local_name, method_name) = match &body.exprs[callee_id] {
-            Expr::FieldAccess { base, field } => {
+            Expr::MemberAccess { base, member } => {
                 let name = self.expr_local_name(*base, body)?;
-                (*base, name, field.clone())
+                (*base, name, member.clone())
             }
             _ => return None,
         };
@@ -4400,15 +4400,15 @@ impl<'db> TypeInferenceBuilder<'db> {
     }
 
     /// Wrap a type in `Optional` unless it is already nullable.
-    /// Check if an expression tree contains any Optional* nodes (`OptionalFieldAccess`,
+    /// Check if an expression tree contains any Optional* nodes (`OptionalMemberAccess`,
     /// `OptionalIndex`, `OptionalCall`). Used to detect safe-chain assignment targets.
     fn expr_contains_optional(expr_id: ExprId, body: &ExprBody) -> bool {
         match &body.exprs[expr_id] {
-            Expr::OptionalFieldAccess { .. }
+            Expr::OptionalMemberAccess { .. }
             | Expr::OptionalIndex { .. }
             | Expr::OptionalCall { .. } => true,
             Expr::OptionalChain { expr } => Self::expr_contains_optional(*expr, body),
-            Expr::FieldAccess { base, .. } | Expr::Index { base, .. } => {
+            Expr::MemberAccess { base, .. } | Expr::Index { base, .. } => {
                 Self::expr_contains_optional(*base, body)
             }
             _ => false,
