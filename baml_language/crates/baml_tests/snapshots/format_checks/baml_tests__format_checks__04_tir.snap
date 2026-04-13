@@ -351,6 +351,48 @@ class user.DeepLevel3 {
   data: string
   nested: map<string, map<string, int>>
 }
+class user.TrailingCommas {
+  name: string
+  age: int
+  active: bool
+}
+class user.TrailingSemicolons {
+  name: string
+  age: int
+  active: bool
+}
+class user.MixedDelimiters {
+  a: string
+  b: int
+  c: bool
+  d: float
+}
+class user.FieldsAndMethods {
+  name: string
+  age: int
+  active: bool
+}
+function user.FieldsAndMethods.greet() -> string throws never {
+  { : "hello"
+    "hello" : "hello"
+  }
+}
+class user.SingleFieldComma {
+  name: string
+}
+class user.SingleFieldSemicolon {
+  name: string
+}
+class user.NoColonDelimiters {
+  name: string
+  age: int
+  active: bool
+}
+class user.AttrsWithDelimiters {
+  name: string @description("name")
+  age: int @alias("user_age")
+  active: bool
+}
 class user.EmptyClass$stream {
 }
 class user.SingleField$stream {
@@ -488,6 +530,43 @@ class user.DeepLevel2$stream {
 class user.DeepLevel3$stream {
   data: null | string
   nested: map<string, map<string, int>>
+}
+class user.TrailingCommas$stream {
+  name: null | string
+  age: null | int
+  active: null | bool
+}
+class user.TrailingSemicolons$stream {
+  name: null | string
+  age: null | int
+  active: null | bool
+}
+class user.MixedDelimiters$stream {
+  a: null | string
+  b: null | int
+  c: null | bool
+  d: null | float
+}
+class user.FieldsAndMethods$stream {
+  name: null | string
+  age: null | int
+  active: null | bool
+}
+class user.SingleFieldComma$stream {
+  name: null | string
+}
+class user.SingleFieldSemicolon$stream {
+  name: null | string
+}
+class user.NoColonDelimiters$stream {
+  name: null | string
+  age: null | int
+  active: null | bool
+}
+class user.AttrsWithDelimiters$stream {
+  name: null | string @description("name")
+  age: null | int @alias("user_age")
+  active: bool
 }
 function user.BasicClient$new() -> ? throws never {
   baml.llm.PrimitiveClient { name: "BasicClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } } : unknown

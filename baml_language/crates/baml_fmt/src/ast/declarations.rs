@@ -890,8 +890,26 @@ impl FromCST for ClassDecl {
                 return Err(StrongAstError::missing(SyntaxKind::R_BRACE, it.parent));
             };
             match elem.kind() {
-                SyntaxKind::FIELD | SyntaxKind::FUNCTION_DEF | SyntaxKind::BLOCK_ATTRIBUTE => {
-                    items.push(ClassItem::from_cst(elem)?);
+                SyntaxKind::FIELD => {
+                    let field = ClassField::from_cst(elem)?;
+                    let comma = it
+                        .next_if_kind(SyntaxKind::COMMA)
+                        .map(t::Comma::from_cst)
+                        .transpose()?;
+                    if comma.is_none() {
+                        // Consume and discard semicolon (normalized to comma by formatter)
+                        it.next_if_kind(SyntaxKind::SEMICOLON);
+                    }
+                    items.push(ClassItem::Field(field, comma));
+                }
+                SyntaxKind::FUNCTION_DEF => {
+                    items.push(ClassItem::Function(FunctionDecl::from_cst(elem)?));
+                }
+                SyntaxKind::BLOCK_ATTRIBUTE => {
+                    items.push(ClassItem::BlockAttribute(BlockAttribute::from_cst(elem)?));
+                }
+                SyntaxKind::COMMA | SyntaxKind::SEMICOLON => {
+                    // Stray delimiter not following a field - skip silently
                 }
                 SyntaxKind::R_BRACE => {
                     break t::RBrace::from_cst(elem)?;
@@ -973,7 +991,6 @@ pub struct ClassField {
     pub colon: Option<t::Colon>,
     pub ty: Type,
     pub attributes: Vec<Attribute>,
-    // pub comma: Option<t::Comma>,
 }
 
 impl FromCST for ClassField {
@@ -1139,7 +1156,7 @@ impl Printable for ClassField {
 /// Any of the valid items in a [`ClassDecl`].
 #[derive(Debug)]
 pub enum ClassItem {
-    Field(ClassField),
+    Field(ClassField, Option<t::Comma>),
     Function(FunctionDecl),
     BlockAttribute(BlockAttribute),
 }
@@ -1147,7 +1164,7 @@ pub enum ClassItem {
 impl FromCST for ClassItem {
     fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
         let item = match elem.kind() {
-            SyntaxKind::FIELD => ClassItem::Field(ClassField::from_cst(elem)?),
+            SyntaxKind::FIELD => ClassItem::Field(ClassField::from_cst(elem)?, None),
             SyntaxKind::FUNCTION_DEF => ClassItem::Function(FunctionDecl::from_cst(elem)?),
             SyntaxKind::BLOCK_ATTRIBUTE => {
                 ClassItem::BlockAttribute(BlockAttribute::from_cst(elem)?)
@@ -1167,21 +1184,35 @@ impl FromCST for ClassItem {
 impl Printable for ClassItem {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         match self {
-            ClassItem::Field(field) => field.print(shape, printer),
+            ClassItem::Field(field, comma) => {
+                let info = field.print(shape, printer);
+                if let Some(comma) = &comma {
+                    printer.print_raw_token(comma);
+                } else {
+                    printer.print_str(",");
+                }
+                info
+            }
             ClassItem::Function(function) => function.print(shape, printer),
             ClassItem::BlockAttribute(attr) => attr.print(shape, printer),
         }
     }
     fn leftmost_token(&self) -> TextRange {
         match self {
-            ClassItem::Field(field) => field.leftmost_token(),
+            ClassItem::Field(field, _) => field.leftmost_token(),
             ClassItem::Function(function) => function.leftmost_token(),
             ClassItem::BlockAttribute(attr) => attr.leftmost_token(),
         }
     }
     fn rightmost_token(&self) -> TextRange {
         match self {
-            ClassItem::Field(field) => field.rightmost_token(),
+            ClassItem::Field(field, comma) => {
+                if let Some(comma) = comma {
+                    comma.span()
+                } else {
+                    field.rightmost_token()
+                }
+            }
             ClassItem::Function(function) => function.rightmost_token(),
             ClassItem::BlockAttribute(attr) => attr.rightmost_token(),
         }

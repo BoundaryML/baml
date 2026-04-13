@@ -1235,6 +1235,11 @@ function user.F() -> int {
     return
 }
 
+function user.FieldsAndMethods.greet() -> string {
+    load_const "hello"
+    return
+}
+
 function user.FinalExpr(a: int, b: int) -> int {
     load_var a
     load_var b

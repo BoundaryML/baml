@@ -9,7 +9,7 @@ function HelloWorld(name: string) -> string {
 }
 
 class User {
-    name: string
-    age: int
+    name: string,
+    age: int,
 } // Added comment
 // Test comment

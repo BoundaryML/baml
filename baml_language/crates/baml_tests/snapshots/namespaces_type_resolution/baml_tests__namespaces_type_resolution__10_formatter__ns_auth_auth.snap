@@ -9,13 +9,13 @@ source: crates/baml_tests/src/generated_tests.rs
 // ═══════════════════════════════════════════════════════════════════
 
 class Config {
-    provider: string
-    secret: string
+    provider: string,
+    secret: string,
 }
 
 class Error {
-    realm: string
-    expired: bool
+    realm: string,
+    expired: bool,
 }
 
 enum Role {
@@ -25,8 +25,8 @@ enum Role {
 }
 
 class Token {
-    value: string
-    role: Role
+    value: string,
+    role: Role,
 }
 
 type TokenAlias = Token;

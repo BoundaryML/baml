@@ -9,13 +9,13 @@ source: crates/baml_tests/src/generated_tests.rs
 // ═══════════════════════════════════════════════════════════════════
 
 class Config {
-    model: string
-    temperature: float
+    model: string,
+    temperature: float,
 }
 
 class Error {
-    reason: string
-    retryable: bool
+    reason: string,
+    retryable: bool,
 }
 
 enum Status {
@@ -30,8 +30,8 @@ enum Model {
 }
 
 class Response {
-    text: string
-    tokens: int
+    text: string,
+    tokens: int,
 }
 
 type ConfigAlias = Config;
@@ -187,19 +187,19 @@ function LlmMixedConfigs(
 
 // llm class with fields from root and sibling namespaces
 class LlmWithCrossNsFields {
-    own_config: Config
-    own_response: Response
-    root_config: root.Config
-    root_error: root.Error
-    auth_config: root.auth.Config
-    nested_client: root.llm.openai.Client
-    own_status: Status
-    own_alias: ConfigAlias
-    root_alias: root.ConfigAlias
+    own_config: Config,
+    own_response: Response,
+    root_config: root.Config,
+    root_error: root.Error,
+    auth_config: root.auth.Config,
+    nested_client: root.llm.openai.Client,
+    own_status: Status,
+    own_alias: ConfigAlias,
+    root_alias: root.ConfigAlias,
 }
 
 // llm class referencing root type alias (this was the alias stream bug)
 class LlmWithRootAlias {
-    root_alias: root.ConfigAlias
-    own_alias: ResponseAlias
+    root_alias: root.ConfigAlias,
+    own_alias: ResponseAlias,
 }

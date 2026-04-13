@@ -362,3 +362,61 @@ class DeepLevel3 {
     data: string
     nested map<string, map<string, int>>
 }
+
+// ===== Fields with trailing commas (Rust-style) =====
+class TrailingCommas {
+    name: string,
+    age: int,
+    active: bool,
+}
+
+// ===== Fields with trailing semicolons (TypeScript-style) =====
+class TrailingSemicolons {
+    name: string;
+    age: int;
+    active: bool;
+}
+
+// ===== Mixed delimiter styles =====
+class MixedDelimiters {
+    a: string,
+    b: int;
+    c bool
+    d: float,
+}
+
+// ===== Fields and methods mixed - fields get commas, methods don't =====
+class FieldsAndMethods {
+    name: string
+    age int
+
+    function greet() -> string {
+        "hello"
+    }
+
+    active: bool
+}
+
+// ===== Single field with trailing comma =====
+class SingleFieldComma {
+    name: string,
+}
+
+// ===== Single field with trailing semicolon =====
+class SingleFieldSemicolon {
+    name: string;
+}
+
+// ===== No-colon fields with delimiters =====
+class NoColonDelimiters {
+    name string,
+    age int;
+    active bool
+}
+
+// ===== Fields with attributes and delimiters =====
+class AttrsWithDelimiters {
+    name: string @description("name"),
+    age: int @alias("user_age");
+    active bool @stream.done
+}

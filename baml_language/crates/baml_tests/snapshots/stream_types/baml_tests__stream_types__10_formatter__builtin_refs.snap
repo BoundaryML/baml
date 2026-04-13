@@ -6,23 +6,23 @@ source: crates/baml_tests/src/generated_tests.rs
 // referencing them in user classes should produce valid $stream expansions.
 
 class ApiCall {
-    request: baml.http.Request
-    label: string
+    request: baml.http.Request,
+    label: string,
 }
 
 class WithResponse {
-    response: baml.http.Response
-    status: string
+    response: baml.http.Response,
+    status: string,
 }
 
 class MixedBuiltin {
-    requests: baml.http.Request[]
-    metadata: map<string, baml.http.Request>
-    maybe_request: baml.http.Request?
-    union_request: baml.http.Request | string
+    requests: baml.http.Request[],
+    metadata: map<string, baml.http.Request>,
+    maybe_request: baml.http.Request?,
+    union_request: baml.http.Request | string,
 }
 
 // Direct reference to the $stream variant of a builtin class.
 class WithStreamRef {
-    partial: baml.http.Request$stream
+    partial: baml.http.Request$stream,
 }

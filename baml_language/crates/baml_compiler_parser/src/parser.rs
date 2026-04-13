@@ -2233,6 +2233,9 @@ impl<'a> Parser<'a> {
                 } else if p.at(TokenKind::Word) {
                     // Field declaration
                     p.parse_field();
+                    if !p.eat(TokenKind::Comma) {
+                        p.eat(TokenKind::Semicolon);
+                    }
                 } else {
                     // Skip unexpected token
                     p.error_unexpected_token("Unexpected token in class body".to_string());
@@ -2299,7 +2302,6 @@ impl<'a> Parser<'a> {
                     p.error(format!("field '{name}' is missing a type annotation"), span);
                 }
             }
-            // TODO: once we decide which, parse optional comma or semicolon
         });
     }
 

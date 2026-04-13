@@ -49,6 +49,11 @@ class user.AttributeVariety {
   e: string
   f: string
 }
+class user.AttrsWithDelimiters {
+  name: string
+  age: int
+  active: bool
+}
 class user.ColonFields {
   name: string
   age: int
@@ -78,6 +83,11 @@ class user.ExtraWhitespace {
   name: string
   age: int
 }
+class user.FieldsAndMethods {
+  name: string
+  age: int
+  active: bool
+}
 class user.InnerNested {
   value: int
 }
@@ -104,6 +114,12 @@ class user.ManyFields {
   field9: int
   field10: int
 }
+class user.MixedDelimiters {
+  a: string
+  b: int
+  c: bool
+  d: float
+}
 class user.MultiAttrField {
   name: string
   summary: string?
@@ -112,6 +128,11 @@ class user.MultiBlockAttr {
   name: string
 }
 class user.MultiField {
+  name: string
+  age: int
+  active: bool
+}
+class user.NoColonDelimiters {
   name: string
   age: int
   active: bool
@@ -128,8 +149,24 @@ class user.SingleAttrField {
 class user.SingleField {
   name: string
 }
+class user.SingleFieldComma {
+  name: string
+}
+class user.SingleFieldSemicolon {
+  name: string
+}
 class user.ThisIsAnExtremelyLongClassNameThatDefinitelyExceedsTheOneHundredCharacterLineLimitAllByItself {
   x: int
+}
+class user.TrailingCommas {
+  name: string
+  age: int
+  active: bool
+}
+class user.TrailingSemicolons {
+  name: string
+  age: int
+  active: bool
 }
 class user.TriviaClass {
   name: string
@@ -175,6 +212,9 @@ class user.WithLongMethod {
 }
 class user.WithMethod {
   name: string
+}
+function user.greet() -> string  [expr] {
+  {  } "hello"
 }
 function user.greet() -> string  [expr] {
   {  } "hello"

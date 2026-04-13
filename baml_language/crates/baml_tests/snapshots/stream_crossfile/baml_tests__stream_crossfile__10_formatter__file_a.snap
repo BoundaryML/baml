@@ -5,9 +5,9 @@ source: crates/baml_tests/src/generated_tests.rs
 // These are referenced by Resume in file_b.baml.
 
 class Education {
-    school: string
-    degree: Degree
-    year: int
+    school: string,
+    degree: Degree,
+    year: int,
 }
 
 enum Degree {

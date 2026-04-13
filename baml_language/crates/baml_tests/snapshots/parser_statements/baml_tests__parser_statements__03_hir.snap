@@ -2,6 +2,9 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === HIR2 ===
+class user.EdgeFoo {
+  x: int
+}
 function user.add_assign() -> int  [expr] {
   { let x = 10; x Add= 5; return x }
 }
@@ -10,6 +13,27 @@ function user.assign_in_loop() -> int  [expr] {
 }
 function user.block_with_tail() -> int  [expr] {
   { let x = { let y = 1; let z = 2 } y Add z; return x }
+}
+function user.edge_call_then_index(foo: () -> int[]) -> int  [expr] {
+  { foo()[0] } 1
+}
+function user.edge_call_then_parens(foo: () -> (int) -> int) -> int  [expr] {
+  { foo()(1) } 2
+}
+function user.edge_let_call_then_index(bar: () -> int[]) -> int  [expr] {
+  { let x = bar()[0] } x
+}
+function user.edge_semicolon_forces_boundary(bar: () -> int[]) -> int  [expr] {
+  { bar(); [0] } 1
+}
+function user.edge_type_then_object() -> int  [expr] {
+  {  } user.EdgeFoo { x: 1 }.x
+}
+function user.let_mixed_semicolons() -> int  [expr] {
+  { let a = 1; let b = 2; let c = 3; let d = 4; return a Add b Add c Add d }
+}
+function user.let_no_semicolons() -> int  [expr] {
+  { let x = 1; let y = 2; return x Add y }
 }
 function user.mul_assign() -> int  [expr] {
   { let x = 3; x Mul= 4; return x }

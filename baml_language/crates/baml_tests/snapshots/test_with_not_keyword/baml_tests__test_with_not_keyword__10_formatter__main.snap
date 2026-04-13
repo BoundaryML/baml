@@ -6,7 +6,7 @@ source: crates/baml_tests/src/generated_tests.rs
 // BUG: "with" is reserved globally, so foo.with(...) breaks.
 
 class Foo {
-    x: int
+    x: int,
 }
 
 function make_foo() -> Foo {
@@ -15,16 +15,16 @@ function make_foo() -> Foo {
 
 // "with" as a variable name should work.
 function use_with_as_var() -> int {
-    let with = 42
+    let with = 42;
     with
 }
 
 // "with" as a field name should work.
 class HasWith {
-    with: int
+    with: int,
 }
 
 test "with as field" {
-    let h = HasWith { with: 1 }
+    let h = HasWith { with: 1 };
     assert.equal(h.with, 1)
 }

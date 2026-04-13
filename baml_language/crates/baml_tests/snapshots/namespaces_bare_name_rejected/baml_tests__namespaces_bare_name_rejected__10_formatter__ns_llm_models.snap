@@ -2,7 +2,7 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 class Response {
-    text: string
+    text: string,
 }
 
 // This bare reference to Config should fail — it's in root namespace,

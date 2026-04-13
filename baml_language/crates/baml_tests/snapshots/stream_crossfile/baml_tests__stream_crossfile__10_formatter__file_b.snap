@@ -7,8 +7,8 @@ source: crates/baml_tests/src/generated_tests.rs
 //           (stream_ prefix on class reference, not on enum).
 
 class Resume {
-    name: string
-    education: Education[]
-    highest_degree: Degree
-    aliases: EducationList
+    name: string,
+    education: Education[],
+    highest_degree: Degree,
+    aliases: EducationList,
 }

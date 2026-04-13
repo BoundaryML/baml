@@ -9,78 +9,78 @@ class EmptyClass {
 
 // ===== Single field =====
 class SingleField {
-    name: string
+    name: string,
 }
 
 // ===== Multiple fields =====
 class MultiField {
-    name: string
-    age: int
-    active: bool
+    name: string,
+    age: int,
+    active: bool,
 }
 
 // ===== Fields with colons =====
 class ColonFields {
-    name: string
-    age: int
+    name: string,
+    age: int,
 }
 
 // ===== Field with single attribute =====
 class SingleAttrField {
-    name: string @description("The user's name")
+    name: string @description("The user's name"),
 }
 
 // ===== Field with multiple attributes =====
 class MultiAttrField {
-    name: string @description("The user's name") @alias("user_name")
-    summary: string? @description("A summary") @alias("sum") @stream.done @stream.not_null
+    name: string @description("The user's name") @alias("user_name"),
+    summary: string? @description("A summary") @alias("sum") @stream.done @stream.not_null,
 }
 
 // ===== Field type + attr exceeding limit =====
 class LongAttrField {
     name: string @description(
         "This is an extremely long description attribute value that should push the field definition well past the default line width limit of one hundred columns",
-    )
-    data: map<string, int | string | bool> @description("complex data") @alias("payload") @stream.done
+    ),
+    data: map<string, int | string | bool> @description("complex data") @alias("payload") @stream.done,
     config: map<string, map<string, int | string | bool | null>> @description(
         "deeply nested config structure for testing wrapping",
-    )
+    ),
 }
 
 // ===== Field name + long union type exceeding limit =====
 class LongFieldTypes {
-    very_long_field_name_that_takes_up_space: int | string | bool | float | null | int[] | string[]
-    another_long_field: map<string, map<string, map<string, int | string | bool | float | null>>>
-    callback_field: (first_param: int, second_param: string, third_param: bool) -> map<string, int>
-    deeply_nested: (int | (string | (bool | (float | null))))[]?
+    very_long_field_name_that_takes_up_space: int | string | bool | float | null | int[] | string[],
+    another_long_field: map<string, map<string, map<string, int | string | bool | float | null>>>,
+    callback_field: (first_param: int, second_param: string, third_param: bool) -> map<string, int>,
+    deeply_nested: (int | (string | (bool | (float | null))))[]?,
 }
 
 // ===== Various type expressions on fields =====
 class TypeVariety {
-    simple: string
-    optional: string?
-    array: int[]
-    nested_array: int[][]
-    union_type: int | string
-    optional_union: (int | string)?
-    union_array: (int | string)[]
-    generic: map<string, int>
-    complex_generic: map<string, int | string | bool>
-    deep_generic: map<string, map<string, int[]>>
-    fn_type: (x: int, y: int) -> string
-    paren_union_array: (int | string | bool)[]
-    triple_nested: map<string, map<string, map<string, int>>>
+    simple: string,
+    optional: string?,
+    array: int[],
+    nested_array: int[][],
+    union_type: int | string,
+    optional_union: (int | string)?,
+    union_array: (int | string)[],
+    generic: map<string, int>,
+    complex_generic: map<string, int | string | bool>,
+    deep_generic: map<string, map<string, int[]>>,
+    fn_type: (x: int, y: int) -> string,
+    paren_union_array: (int | string | bool)[],
+    triple_nested: map<string, map<string, map<string, int>>>,
 }
 
 // ===== Block attribute =====
 class DynamicClass {
-    name: string
+    name: string,
     @@dynamic
 }
 
 // ===== Multiple block attributes =====
 class MultiBlockAttr {
-    name: string
+    name: string,
     @@dynamic
     @@streaming
 }
@@ -89,7 +89,7 @@ class MultiBlockAttr {
 // 1 class keyword leading
 class TriviaClass { // 6 open brace trailing
     // 7 field leading
-    name: string // 12 type trailing
+    name: string, // 12 type trailing
     // 13 close brace leading
 } // 14 close brace trailing
 
@@ -99,7 +99,7 @@ class TriviaClass { // 6 open brace trailing
 /* 1 class keyword leading */
 class TriviaClassBlock { /* 6 open brace trailing */
     /* 7 field leading */
-    name: /* 10 colon trailing *//* 11 type leading */string /* 12 type trailing */
+    name: /* 10 colon trailing *//* 11 type leading */string, /* 12 type trailing */
     /* 13 close brace leading */
 } /* 14 close brace trailing */
 
@@ -113,7 +113,7 @@ class TriviaFieldAttrs {
             // 11 arg leading
             "the name", // 12 arg trailing
             // 13 close paren leading
-        ) // 14 close paren trailing
+        ), // 14 close paren trailing
 }
 
 // ===== Trivia on field with attributes (block comments) =====
@@ -124,7 +124,7 @@ class TriviaFieldAttrsBlock {
             /* 11 arg leading */
             "the name", /* 12 arg trailing */
             /* 13 close paren leading */
-        ) /* 14 close paren trailing */
+        ), /* 14 close paren trailing */
 }
 
 // ===== Trivia on field with long wrapping type (line comments) =====
@@ -143,7 +143,7 @@ class TriviaLongFieldType {
         @description( // 28 attr open trailing
             // 29 attr arg leading
             "a long description", // 30 attr arg trailing
-        ) // 31 attr close trailing
+        ), // 31 attr close trailing
 }
 
 // ===== Trivia on field with long wrapping type (block comments) =====
@@ -162,7 +162,7 @@ class TriviaLongFieldTypeBlock {
         @description( /* 28 attr open trailing */
             /* 29 attr arg leading */
             "a long description", /* 30 attr arg trailing */
-        ) /* 31 attr close trailing */
+        ), /* 31 attr close trailing */
 }
 
 // ===== Trivia on field with multiple attributes (line comments) =====
@@ -177,7 +177,7 @@ class TriviaMultiAttr {
             // 16 arg leading
             "user_name", // 17 arg trailing
         )
-        @stream.done // 20 third attr trailing
+        @stream.done, // 20 third attr trailing
 }
 
 // ===== Trivia on field with multiple attributes (block comments) =====
@@ -186,64 +186,64 @@ class TriviaMultiAttrBlock {
     name: /* 4 colon trailing *//* 5 type leading */string /* 6 type trailing */
         @description(/* 9 first attr open trailing *//* 10 arg leading */"name"/* 11 arg trailing */)
         @alias(/* 15 second attr open trailing *//* 16 arg leading */"user_name"/* 17 arg trailing */)
-        @stream.done /* 20 third attr trailing */
+        @stream.done, /* 20 third attr trailing */
 }
 
 // ===== Short class name =====
 class A {
-    x: int
+    x: int,
 }
 
 // ===== Long class name exceeding limit =====
 class ThisIsAnExtremelyLongClassNameThatDefinitelyExceedsTheOneHundredCharacterLineLimitAllByItself {
-    x: int
+    x: int,
 }
 
 // ===== Fields with various attribute types =====
 class AttributeVariety {
-    a: string @skip
-    b: string @alias("alt_name")
-    c: string @description("desc")
-    d: string @stream.done
-    e: string @stream.not_null
-    f: string @stream.with_state
+    a: string @skip,
+    b: string @alias("alt_name"),
+    c: string @description("desc"),
+    d: string @stream.done,
+    e: string @stream.not_null,
+    f: string @stream.with_state,
 }
 
 // ===== Extraneous whitespace =====
 class ExtraWhitespace {
-    name: string @description("name") @alias("n")
-    age: int
+    name: string @description("name") @alias("n"),
+    age: int,
 }
 
 // ===== Many fields =====
 class ManyFields {
-    field1: int
-    field2: int
-    field3: int
-    field4: int
-    field5: int
-    field6: int
-    field7: int
-    field8: int
-    field9: int
-    field10: int
+    field1: int,
+    field2: int,
+    field3: int,
+    field4: int,
+    field5: int,
+    field6: int,
+    field7: int,
+    field8: int,
+    field9: int,
+    field10: int,
 }
 
 // ===== Nested class types =====
 class Outer {
-    inner: InnerNested
-    list: InnerNested[]
-    optional: InnerNested?
-    mapping: map<string, InnerNested>
+    inner: InnerNested,
+    list: InnerNested[],
+    optional: InnerNested?,
+    mapping: map<string, InnerNested>,
 }
 
 class InnerNested {
-    value: int
+    value: int,
 }
 
 // ===== Class with function member =====
 class WithMethod {
-    name: string
+    name: string,
 
     function greet() -> string {
         "hello"
@@ -252,7 +252,7 @@ class WithMethod {
 
 // ===== Class with function member that has wrapping signature =====
 class WithLongMethod {
-    name: string
+    name: string,
 
     function processData(
         first_input: map<string, int>,
@@ -265,21 +265,79 @@ class WithLongMethod {
 
 // ===== Deeply nested class structure =====
 class DeepOuter {
-    level1: DeepLevel1
+    level1: DeepLevel1,
 }
 
 class DeepLevel1 {
-    level2: DeepLevel2
-    items: DeepLevel2[]
-    mapping: map<string, DeepLevel2>
+    level2: DeepLevel2,
+    items: DeepLevel2[],
+    mapping: map<string, DeepLevel2>,
 }
 
 class DeepLevel2 {
-    level3: DeepLevel3
-    value: int | string | bool | float | null
+    level3: DeepLevel3,
+    value: int | string | bool | float | null,
 }
 
 class DeepLevel3 {
-    data: string
-    nested: map<string, map<string, int>>
+    data: string,
+    nested: map<string, map<string, int>>,
+}
+
+// ===== Fields with trailing commas (Rust-style) =====
+class TrailingCommas {
+    name: string,
+    age: int,
+    active: bool,
+}
+
+// ===== Fields with trailing semicolons (TypeScript-style) =====
+class TrailingSemicolons {
+    name: string,
+    age: int,
+    active: bool,
+}
+
+// ===== Mixed delimiter styles =====
+class MixedDelimiters {
+    a: string,
+    b: int,
+    c: bool,
+    d: float,
+}
+
+// ===== Fields and methods mixed - fields get commas, methods don't =====
+class FieldsAndMethods {
+    name: string,
+    age: int,
+
+    function greet() -> string {
+        "hello"
+    }
+
+    active: bool,
+}
+
+// ===== Single field with trailing comma =====
+class SingleFieldComma {
+    name: string,
+}
+
+// ===== Single field with trailing semicolon =====
+class SingleFieldSemicolon {
+    name: string,
+}
+
+// ===== No-colon fields with delimiters =====
+class NoColonDelimiters {
+    name: string,
+    age: int,
+    active: bool,
+}
+
+// ===== Fields with attributes and delimiters =====
+class AttrsWithDelimiters {
+    name: string @description("name"),
+    age: int @alias("user_age"),
+    active: bool @stream.done,
 }

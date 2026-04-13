@@ -5,13 +5,13 @@ source: crates/baml_tests/src/generated_tests.rs
 
 // Class with a field named `type` (common in real-world BAML)
 class RiskFactor {
-    type: string
-    severity: float
+    type: string,
+    severity: float,
 }
 
 // Class with field named `type` whose type is the meta-type `type`
 class MetaField {
-    type: type
+    type: type,
 }
 
 // Enum with a variant named `type`

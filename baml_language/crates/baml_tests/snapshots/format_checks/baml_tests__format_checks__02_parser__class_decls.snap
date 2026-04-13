@@ -1242,6 +1242,202 @@ class EmptyClass {
               GREATER ">"
           GREATER ">"
     R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "TrailingCommas"
+    L_BRACE "{"
+    FIELD
+      WORD "name"
+      COLON ":"
+      TYPE_EXPR "string"
+        WORD "string"
+    COMMA ","
+    FIELD
+      WORD "age"
+      COLON ":"
+      TYPE_EXPR "int"
+        WORD "int"
+    COMMA ","
+    FIELD
+      WORD "active"
+      COLON ":"
+      TYPE_EXPR "bool"
+        WORD "bool"
+    COMMA ","
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "TrailingSemicolons"
+    L_BRACE "{"
+    FIELD
+      WORD "name"
+      COLON ":"
+      TYPE_EXPR "string"
+        WORD "string"
+    SEMICOLON ";"
+    FIELD
+      WORD "age"
+      COLON ":"
+      TYPE_EXPR "int"
+        WORD "int"
+    SEMICOLON ";"
+    FIELD
+      WORD "active"
+      COLON ":"
+      TYPE_EXPR "bool"
+        WORD "bool"
+    SEMICOLON ";"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "MixedDelimiters"
+    L_BRACE "{"
+    FIELD
+      WORD "a"
+      COLON ":"
+      TYPE_EXPR "string"
+        WORD "string"
+    COMMA ","
+    FIELD
+      WORD "b"
+      COLON ":"
+      TYPE_EXPR "int"
+        WORD "int"
+    SEMICOLON ";"
+    FIELD
+      WORD "c"
+      TYPE_EXPR "bool"
+        WORD "bool"
+    FIELD
+      WORD "d"
+      COLON ":"
+      TYPE_EXPR "float"
+        WORD "float"
+    COMMA ","
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "FieldsAndMethods"
+    L_BRACE "{"
+    FIELD
+      WORD "name"
+      COLON ":"
+      TYPE_EXPR "string"
+        WORD "string"
+    FIELD
+      WORD "age"
+      TYPE_EXPR "int"
+        WORD "int"
+    FUNCTION_DEF
+      KW_FUNCTION "function"
+      WORD "greet"
+      PARAMETER_LIST "()"
+        L_PAREN "("
+        R_PAREN ")"
+      ARROW "->"
+      TYPE_EXPR "string"
+        WORD "string"
+      EXPR_FUNCTION_BODY
+        BLOCK_EXPR
+          L_BRACE "{"
+          STRING_LITERAL "hello"
+            QUOTE """
+            WORD "hello"
+            QUOTE """
+          R_BRACE "}"
+    FIELD
+      WORD "active"
+      COLON ":"
+      TYPE_EXPR "bool"
+        WORD "bool"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "SingleFieldComma"
+    L_BRACE "{"
+    FIELD
+      WORD "name"
+      COLON ":"
+      TYPE_EXPR "string"
+        WORD "string"
+    COMMA ","
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "SingleFieldSemicolon"
+    L_BRACE "{"
+    FIELD
+      WORD "name"
+      COLON ":"
+      TYPE_EXPR "string"
+        WORD "string"
+    SEMICOLON ";"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "NoColonDelimiters"
+    L_BRACE "{"
+    FIELD
+      WORD "name"
+      TYPE_EXPR "string"
+        WORD "string"
+    COMMA ","
+    FIELD
+      WORD "age"
+      TYPE_EXPR "int"
+        WORD "int"
+    SEMICOLON ";"
+    FIELD
+      WORD "active"
+      TYPE_EXPR "bool"
+        WORD "bool"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "AttrsWithDelimiters"
+    L_BRACE "{"
+    FIELD
+      WORD "name"
+      COLON ":"
+      TYPE_EXPR
+        WORD "string"
+        ATTRIBUTE
+          AT "@"
+          WORD "description"
+          ATTRIBUTE_ARGS
+            L_PAREN "("
+            STRING_LITERAL "name"
+              QUOTE """
+              WORD "name"
+              QUOTE """
+            R_PAREN ")"
+    COMMA ","
+    FIELD
+      WORD "age"
+      COLON ":"
+      TYPE_EXPR
+        WORD "int"
+        ATTRIBUTE
+          AT "@"
+          WORD "alias"
+          ATTRIBUTE_ARGS
+            L_PAREN "("
+            STRING_LITERAL "user_age"
+              QUOTE """
+              WORD "user_age"
+              QUOTE """
+            R_PAREN ")"
+    SEMICOLON ";"
+    FIELD
+      WORD "active"
+      TYPE_EXPR
+        WORD "bool"
+        ATTRIBUTE "@stream.done"
+          AT "@"
+          WORD "stream"
+          DOT "."
+          WORD "done"
+    R_BRACE "}"
 
 === ERRORS ===
 None
