@@ -840,6 +840,18 @@ fn emit_root_trait(out: &mut String, root: &NamespaceNode) {
 // ============================================================================
 
 fn emit_required_method(out: &mut String, method_name: &str, b: &NativeBuiltin) {
+    if b.may_yield {
+        // Yielding methods return NativeCallResult directly.
+        // may_yield implies mut_vm, so always include vm parameter.
+        let params = clean_param_list(b);
+        writeln!(
+            out,
+            "    fn {method_name}(vm: &mut BexVm, {params}) -> NativeCallResult;",
+        )
+        .unwrap();
+        return;
+    }
+
     let return_type = clean_return_type(b);
     let params = clean_param_list(b);
 
@@ -862,23 +874,45 @@ fn emit_required_method(out: &mut String, method_name: &str, b: &NativeBuiltin) 
 
 fn emit_glue_method(out: &mut String, method_name: &str, b: &NativeBuiltin) {
     let glue_name = format!("__glue_{method_name}");
-    let fallible = is_fallible(&b.path);
 
     writeln!(
         out,
-        "    fn {glue_name}(vm: &mut BexVm, args: &[Value]) -> NativeFunctionResult {{"
+        "    fn {glue_name}(vm: &mut BexVm, args: &[Value]) -> NativeCallResult {{"
     )
     .unwrap();
 
-    emit_arg_extractions(out, b);
+    if b.may_yield {
+        // Yielding method — returns NativeCallResult directly.
+        // Use a closure returning Result<NativeCallResult, VmRustFnError> so `?`
+        // operators in arg extractions work (VmInternalError -> VmRustFnError via From),
+        // then flatten the result.
+        out.push_str("        let __result: Result<NativeCallResult, VmRustFnError> = (|| {\n");
+        emit_arg_extractions_indented(out, b, "            ");
+        let call_args = call_arg_list(b);
+        writeln!(out, "            Ok(Self::{method_name}(vm, {call_args}))").unwrap();
+        out.push_str("        })();\n");
+        out.push_str("        match __result {\n");
+        out.push_str("            Ok(r) => r,\n");
+        out.push_str("            Err(e) => NativeCallResult::Error(e),\n");
+        out.push_str("        }\n");
+        out.push_str("    }\n");
+        return;
+    }
+
+    let fallible = is_fallible(&b.path);
+
+    // Use a closure returning NativeFunctionResult so `?` operators work inside.
+    out.push_str("        let __result: NativeFunctionResult = (|| {\n");
+
+    emit_arg_extractions_indented(out, b, "            ");
 
     let call_args = call_arg_list(b);
     let returns_null = matches!(b.return_type, BamlType::Null);
 
     let binding = if returns_null {
-        "        "
+        "            "
     } else {
-        "        let result = "
+        "            let result = "
     };
     let suffix = if fallible { "?;\n" } else { ";\n" };
 
@@ -891,8 +925,13 @@ fn emit_glue_method(out: &mut String, method_name: &str, b: &NativeBuiltin) {
         }
     }
 
-    emit_result_conversion(out, b);
+    emit_result_conversion_ok(out, b, "            ");
 
+    out.push_str("        })();\n");
+    out.push_str("        match __result {\n");
+    out.push_str("            Ok(v) => NativeCallResult::Done(v),\n");
+    out.push_str("            Err(e) => NativeCallResult::Error(e),\n");
+    out.push_str("        }\n");
     out.push_str("    }\n");
 }
 
@@ -978,58 +1017,51 @@ fn constructor_media_namespace(b: &NativeBuiltin) -> &str {
 // Argument extraction
 // ============================================================================
 
-fn emit_arg_extractions(out: &mut String, b: &NativeBuiltin) {
-    if let Some(recv) = &b.receiver {
-        if recv.is_mut {
-            for (i, p) in b.params.iter().enumerate() {
-                let arg_idx = i + 1;
-                emit_single_extraction(out, &p.name, arg_idx, &p.ty);
-            }
-            let recv_name = receiver_param_name(recv);
-            emit_mut_receiver_extraction(out, &recv_name, recv);
-        } else {
-            let recv_name = receiver_param_name(recv);
-            emit_immut_receiver_extraction(out, &recv_name, 0, recv);
-            for (i, p) in b.params.iter().enumerate() {
-                let arg_idx = i + 1;
-                emit_single_extraction(out, &p.name, arg_idx, &p.ty);
-            }
-        }
-    } else {
-        for (i, p) in b.params.iter().enumerate() {
-            emit_single_extraction(out, &p.name, i, &p.ty);
-        }
-    }
-}
-
-fn emit_single_extraction(out: &mut String, name: &str, idx: usize, ty: &BamlType) {
+fn emit_single_extraction_indented(
+    out: &mut String,
+    name: &str,
+    idx: usize,
+    ty: &BamlType,
+    indent: &str,
+) {
     let rhs = extraction_expr(&format!("&args[{idx}]"), ty, false);
-    writeln!(out, "        let {name} = {rhs};").unwrap();
+    writeln!(out, "{indent}let {name} = {rhs};").unwrap();
 }
 
-fn emit_immut_receiver_extraction(out: &mut String, name: &str, idx: usize, recv: &Receiver) {
+fn emit_immut_receiver_extraction_indented(
+    out: &mut String,
+    name: &str,
+    idx: usize,
+    recv: &Receiver,
+    indent: &str,
+) {
     match recv.class_name.as_str() {
         _ if is_media_class(recv.class_name.as_str()) => {
             let cls = &recv.class_name;
             writeln!(
                 out,
-                "        let __instance = vm.as_instance(&args[{idx}])?;"
+                "{indent}let __instance = vm.as_instance(&args[{idx}])?;"
             )
             .unwrap();
             writeln!(
                 out,
-                "        let {name} = view::media::{cls} {{ instance: __instance }};"
+                "{indent}let {name} = view::media::{cls} {{ instance: __instance }};"
             )
             .unwrap();
         }
         _ => {
             let rhs = receiver_immut_extraction_expr(&format!("&args[{idx}]"), recv);
-            writeln!(out, "        let {name} = {rhs};").unwrap();
+            writeln!(out, "{indent}let {name} = {rhs};").unwrap();
         }
     }
 }
 
-fn emit_mut_receiver_extraction(out: &mut String, name: &str, recv: &Receiver) {
+fn emit_mut_receiver_extraction_indented(
+    out: &mut String,
+    name: &str,
+    recv: &Receiver,
+    indent: &str,
+) {
     let expr = match recv.class_name.as_str() {
         "Array" => "vm.as_array_mut(&args[0])?".to_string(),
         "Map" => "vm.as_map_mut(&args[0])?".to_string(),
@@ -1037,7 +1069,32 @@ fn emit_mut_receiver_extraction(out: &mut String, name: &str, recv: &Receiver) {
         "Uint8Array" => "vm.as_uint8array_mut(&args[0])?".to_string(),
         _ => "vm.as_value_mut(&args[0])?".to_string(),
     };
-    writeln!(out, "        let {name} = {expr};").unwrap();
+    writeln!(out, "{indent}let {name} = {expr};").unwrap();
+}
+
+/// Like `emit_arg_extractions` but uses `indent` for each line.
+fn emit_arg_extractions_indented(out: &mut String, b: &NativeBuiltin, indent: &str) {
+    if let Some(recv) = &b.receiver {
+        if recv.is_mut {
+            for (i, p) in b.params.iter().enumerate() {
+                let arg_idx = i + 1;
+                emit_single_extraction_indented(out, &p.name, arg_idx, &p.ty, indent);
+            }
+            let recv_name = receiver_param_name(recv);
+            emit_mut_receiver_extraction_indented(out, &recv_name, recv, indent);
+        } else {
+            let recv_name = receiver_param_name(recv);
+            emit_immut_receiver_extraction_indented(out, &recv_name, 0, recv, indent);
+            for (i, p) in b.params.iter().enumerate() {
+                let arg_idx = i + 1;
+                emit_single_extraction_indented(out, &p.name, arg_idx, &p.ty, indent);
+            }
+        }
+    } else {
+        for (i, p) in b.params.iter().enumerate() {
+            emit_single_extraction_indented(out, &p.name, i, &p.ty, indent);
+        }
+    }
 }
 
 // ============================================================================
@@ -1176,14 +1233,14 @@ fn call_arg_needs_ref(ty: &BamlType) -> bool {
 // Result conversion
 // ============================================================================
 
-fn emit_result_conversion(out: &mut String, b: &NativeBuiltin) {
-    // Static constructors on media classes: result is a copy struct, call .to_value(vm)
+/// Emit `Ok(...)` return for the inner closure body with the given indentation.
+fn emit_result_conversion_ok(out: &mut String, b: &NativeBuiltin, indent: &str) {
     if b.receiver.is_none() && constructor_media_class(b).is_some() {
-        out.push_str("        Ok(result.to_value(vm))\n");
+        writeln!(out, "{indent}Ok(result.to_value(vm))").unwrap();
         return;
     }
     let conversion = result_conversion_expr("result", &b.return_type);
-    writeln!(out, "        Ok({conversion})").unwrap();
+    writeln!(out, "{indent}Ok({conversion})").unwrap();
 }
 
 fn result_conversion_expr(name: &str, ty: &BamlType) -> String {

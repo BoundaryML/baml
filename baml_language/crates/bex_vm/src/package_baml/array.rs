@@ -1,7 +1,81 @@
-use bex_vm_types::types::Value;
+use std::collections::HashMap;
 
-use super::{BamlClassArray, PackageBamlImpl};
+use bex_vm_types::{HeapPtr, types::Value};
+
+use super::{BamlClassArray, Continuation, NativeCallResult, PackageBamlImpl};
 use crate::BexVm;
+
+/// Continuation for `Array.map`. Accumulates the mapped results one element at
+/// a time, yielding to the callback for each element and completing when the
+/// last result has been collected.
+struct MapContinuation {
+    /// `HeapPtr` to the mapping function/closure (needed for GC).
+    f_ptr: HeapPtr,
+    /// The original array elements to map over.
+    array: Vec<Value>,
+    /// Index of the element whose callback result we are about to receive.
+    /// Starts at 0 (we yield for index 0 before constructing the continuation).
+    idx: usize,
+    /// Accumulated mapped results so far (does not include the current in-flight result).
+    results: Vec<Value>,
+}
+
+impl Continuation for MapContinuation {
+    fn call(mut self: Box<Self>, vm: &mut BexVm, value: Value) -> NativeCallResult {
+        // Store the result we just received.
+        self.results.push(value);
+        self.idx += 1;
+
+        if self.idx >= self.array.len() {
+            // All elements have been mapped — return the completed array.
+            return NativeCallResult::Done(vm.alloc_array(self.results));
+        }
+
+        // Yield to map the next element.
+        let next_arg = self.array[self.idx];
+        NativeCallResult::YieldToCall {
+            callee: self.f_ptr,
+            args: vec![next_arg],
+            continuation: self,
+        }
+    }
+
+    fn gc_roots(&self) -> Vec<HeapPtr> {
+        // Collect all heap pointers captured by this continuation.
+        let mut roots = vec![self.f_ptr];
+        for v in &self.array {
+            if let Value::Object(ptr) = v {
+                roots.push(*ptr);
+            }
+        }
+        for v in &self.results {
+            if let Value::Object(ptr) = v {
+                roots.push(*ptr);
+            }
+        }
+        roots
+    }
+
+    fn apply_forwarding(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
+        if let Some(&new_ptr) = forwarding.get(&self.f_ptr) {
+            self.f_ptr = new_ptr;
+        }
+        for v in &mut self.array {
+            if let Value::Object(ptr) = v {
+                if let Some(&new_ptr) = forwarding.get(ptr) {
+                    *ptr = new_ptr;
+                }
+            }
+        }
+        for v in &mut self.results {
+            if let Value::Object(ptr) = v {
+                if let Some(&new_ptr) = forwarding.get(ptr) {
+                    *ptr = new_ptr;
+                }
+            }
+        }
+    }
+}
 
 impl BamlClassArray for PackageBamlImpl {
     #[allow(clippy::cast_possible_wrap)]
@@ -55,7 +129,31 @@ impl BamlClassArray for PackageBamlImpl {
             .join(separator)
     }
 
-    fn map(_array: &[Value], _f: &Value) -> Vec<Value> {
-        todo!("map not yet implemented");
+    fn map(vm: &mut BexVm, array: &[Value], f: &Value) -> NativeCallResult {
+        let Value::Object(f_ptr) = f else {
+            return NativeCallResult::from(crate::errors::VmInternalError::TypeError {
+                expected: bex_vm_types::types::Type::Object(bex_vm_types::ObjectType::Any),
+                got: vm.type_of(f),
+            });
+        };
+        let f_ptr = *f_ptr;
+        let array = array.to_vec();
+
+        if array.is_empty() {
+            return NativeCallResult::Done(vm.alloc_array(vec![]));
+        }
+
+        let first_arg = array[0];
+        let capacity = array.len();
+        NativeCallResult::YieldToCall {
+            callee: f_ptr,
+            args: vec![first_arg],
+            continuation: Box::new(MapContinuation {
+                f_ptr,
+                array,
+                idx: 0,
+                results: Vec::with_capacity(capacity),
+            }),
+        }
     }
 }
