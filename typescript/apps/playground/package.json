@@ -20,8 +20,8 @@
     "allotment": "1.20.4",
     "jotai": "2.15.1",
     "next-themes": "0.4.6",
-    "react": "19.2.1",
-    "react-dom": "19.2.1",
+    "react": "19.2.5",
+    "react-dom": "19.2.5",
     "typescript": "5.8.3"
   },
   "devDependencies": {
