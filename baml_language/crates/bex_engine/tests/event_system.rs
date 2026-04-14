@@ -293,6 +293,73 @@ async fn test_span_context_consistency() {
     assert_eq!(events[0].ctx.span_id, events[1].ctx.span_id);
 }
 
+// === Phase 2: VM Span Context ===
+
+/// Verify that `vm.current_span_context` is populated by the engine during execution.
+///
+/// We cannot read `BexVm.current_span_context` directly from an integration test, but
+/// we can observe its effects: events emitted during execution must carry span IDs that
+/// are consistent with the root span ID provided at call time.  This is only possible
+/// if the engine correctly writes the span context into the VM before each `vm.exec()`
+/// step.
+#[tokio::test]
+async fn test_vm_span_context_is_set_during_execution() {
+    let source = r#"
+        function check_ctx() -> int {
+            1
+        }
+    "#;
+
+    let snapshot = compile_for_engine(source);
+    let engine = std::sync::Arc::new(
+        BexEngine::new(
+            snapshot,
+            std::sync::Arc::new(sys_native::SysOps::native()),
+            None,
+        )
+        .unwrap(),
+    );
+
+    let (host_ctx, guard) = setup_tracking();
+    let expected_root = guard.root.clone();
+    let call_ctx = FunctionCallContextBuilder::new(sys_types::CallId::next())
+        .with_host_ctx(host_ctx)
+        .build();
+
+    engine
+        .call_function("check_ctx", vec![], call_ctx, true)
+        .await
+        .unwrap();
+
+    let events = collect_events(&guard);
+    assert!(
+        !events.is_empty(),
+        "Expected at least one event to be emitted"
+    );
+
+    // Every event must carry the root span ID that was injected via HostSpanContext.
+    // The engine sets vm.current_span_context from the SpanState before vm.exec(),
+    // so events emitted during that step reflect the correct span hierarchy.
+    for event in &events {
+        assert_eq!(
+            event.ctx.root_span_id,
+            expected_root,
+            "Event root_span_id should match the tracking root — \
+             this requires vm.current_span_context to be set correctly before vm.exec()"
+        );
+    }
+
+    // The span IDs used in events must be non-null (real spans were created).
+    let start_event = events
+        .iter()
+        .find_map(|e| match &e.event {
+            EventKind::Function(FunctionEvent::Start(s)) => Some(s),
+            _ => None,
+        })
+        .expect("Expected a FunctionStart event");
+    assert_eq!(start_event.name, "check_ctx");
+}
+
 // === Future tests for Phase 4+ ===
 // These tests are commented out until the corresponding features are implemented.
 

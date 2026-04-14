@@ -1329,6 +1329,11 @@ impl BexEngine {
         'vm_exec: loop {
             Self::cancellation_safepoint(cancel, &abort_handles)?;
 
+            // Update the VM's span context so native functions can read it.
+            vm.current_span_context = span_state
+                .as_ref()
+                .map(|state| Self::build_span_context_from_state(state));
+
             let exec_result = match vm.exec() {
                 Ok(state) => state,
                 Err(bex_vm::errors::VmError::ThrownUnhandled { value, trace }) => {
@@ -1675,6 +1680,28 @@ impl BexEngine {
                         }
                     }
                 }
+            }
+        }
+    }
+
+    /// Build a `SpanContext` from the current `SpanState`.
+    ///
+    /// Returns the context for the innermost active span, or uses the root span
+    /// if the stack is empty (e.g. between span transitions).
+    fn build_span_context_from_state(state: &SpanState) -> bex_events::SpanContext {
+        if let Some(current_span) = state.stack.last() {
+            bex_events::SpanContext {
+                span_id: current_span.span_id.clone(),
+                parent_span_id: current_span.parent_span_id.clone(),
+                root_span_id: state.root_span_id.clone(),
+            }
+        } else {
+            // Stack is empty (e.g. root span has not been pushed yet, or has been popped).
+            // Use the root span as a fallback.
+            bex_events::SpanContext {
+                span_id: state.root_span_id.clone(),
+                parent_span_id: None,
+                root_span_id: state.root_span_id.clone(),
             }
         }
     }

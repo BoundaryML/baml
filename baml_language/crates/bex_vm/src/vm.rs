@@ -234,6 +234,11 @@ pub struct BexVm {
     /// Frame depths for traced function calls. Always sorted ascending (LIFO).
     /// Checked on `Return` to yield `FunctionExit` notifications.
     traced_frames: Vec<usize>,
+
+    /// Current span context, set by the engine before each VM execution step.
+    /// Available to `//baml:mut_vm` native functions that need to emit events
+    /// with the correct span context.
+    pub current_span_context: Option<bex_events::SpanContext>,
 }
 
 /// VM execution state.
@@ -479,6 +484,7 @@ impl BexVm {
             watched_vars: HashMap::new(),
             interrupt_frame: None,
             traced_frames: Vec::new(),
+            current_span_context: None,
         }
     }
 
