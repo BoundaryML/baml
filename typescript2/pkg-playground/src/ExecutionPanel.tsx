@@ -172,6 +172,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
   const [collectionCallId, setCollectionCallId] = useState<number | null>(null);
   const [generation, setGeneration] = useState<number>(0);
   const [testRunResults, setTestRunResults] = useState<Map<string, Record<string, unknown>>>(new Map());
+  const [failedExpands, setFailedExpands] = useState<Set<string>>(new Set());
   // Synthetic RunEntry that accumulates fetch logs from test collection/expansion operations
   const [collectionRun, setCollectionRun] = useState<RunEntry | null>(null);
   // When true, the main content area shows the collection run's fetch logs
@@ -352,6 +353,30 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
               try {
                 const jsonStr = new TextDecoder().decode(new Uint8Array(n.data));
                 const tree = JSON.parse(jsonStr);
+
+                // Detect failed expansions: testsets that were pending but are
+                // still lazyTestSet in the returned tree.
+                const pending = pendingExpandsRef.current;
+                if (pending.names.size > 0 && pending.generation === n.generation) {
+                  const stillLazy = new Set<string>();
+                  const collectLazy = (items: any[]) => {
+                    for (const item of items) {
+                      if (item?.type === 'lazyTestSet' && pending.names.has(item.name)) {
+                        stillLazy.add(item.name);
+                      } else if (item?.items && Array.isArray(item.items)) {
+                        collectLazy(item.items);
+                      }
+                    }
+                  };
+                  if (Array.isArray(tree)) collectLazy(tree);
+                  if (stillLazy.size > 0) {
+                    setFailedExpands((prev) => {
+                      const next = new Set(prev);
+                      for (const name of stillLazy) next.add(name);
+                      return next;
+                    });
+                  }
+                }
 
                 setTestTree(tree);
                 setCollectionCallId(n.callId);
@@ -768,9 +793,10 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
   // Auto-expand lazy testsets after receiving a new testTree
   useEffect(() => {
     if (!testTree || !selectedProject) return;
-    // Reset pending set when generation changes (new collection)
+    // Reset pending set and failed state when generation changes (new collection)
     if (pendingExpandsRef.current.generation !== generation) {
       pendingExpandsRef.current = { generation, names: new Set() };
+      setFailedExpands(new Set());
     }
     const pending = pendingExpandsRef.current.names;
     const expandLazy = (items: any[]) => {
@@ -1003,6 +1029,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
                 onRefreshTests={handleRefreshTests}
                 onRunTest={handleRunTest}
                 testRunResults={testRunResults}
+                failedExpands={failedExpands}
                 collectionRun={collectionRun}
                 viewingCollection={viewingCollection}
                 onSelectCollectionView={() => { setViewingCollection(true); setViewingTestRun(false); setSelectedFn(null); }}
