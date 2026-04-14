@@ -3175,15 +3175,13 @@ impl<'db> TypeInferenceBuilder<'db> {
             // `resolve_member_for_path_segment`) stored at `expr_id`.
             // We immediately remove it from `resolutions` so consecutive
             // segments don't see stale values from earlier iterations.
+            //
+            // Note: the Vec is NOT guaranteed to be parallel to segments[1..] —
+            // builtin/primitive members (e.g. String.length) don't record a
+            // MemberResolution. Consumers must use `.last()` or iterate by
+            // value, not index-based correspondence with segments.
             if let Some(res) = self.resolutions.remove(&expr_id) {
                 member_resolutions.push(res);
-            } else {
-                // No resolution recorded (e.g. builtin/primitive member or error) — push a placeholder.
-                // We keep the Vec parallel to segments[1..] so index lookups stay aligned.
-                // We only push when we've consumed a segment, so break-on-unknown still works.
-                if !matches!(member_ty, Ty::Unknown { .. }) {
-                    // Resolved but no MemberResolution (e.g. String.length) — skip recording
-                }
             }
 
             if matches!(current_ty, Ty::Unknown { .. }) {
@@ -5171,6 +5169,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         let saved_exhaustive_matches = std::mem::take(&mut self.exhaustive_matches);
         let saved_catch_residual_throws = std::mem::take(&mut self.catch_residual_throws);
         let saved_path_root_types = std::mem::take(&mut self.path_root_types);
+        let saved_path_member_resolutions = std::mem::take(&mut self.path_member_resolutions);
 
         // Extend generic params with the lambda's own generic params
         let mut new_generic_params = self.generic_params.clone();
@@ -5241,6 +5240,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         self.exhaustive_matches = saved_exhaustive_matches;
         self.catch_residual_throws = saved_catch_residual_throws;
         self.path_root_types = saved_path_root_types;
+        self.path_member_resolutions = saved_path_member_resolutions;
         self.locals = saved_locals;
         self.declared_types = saved_declared;
         self.declared_return_ty = saved_return_ty;

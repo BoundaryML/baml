@@ -511,13 +511,13 @@ impl<'db> SemanticIndexBuilder<'db> {
     }
 
     /// Collect all single-segment `Expr::Path` names from an `ExprBody`.
-    /// These represent potential variable references (as opposed to multi-segment
-    /// paths like `Foo.bar` which are field accesses or qualified names).
+    /// These represent potential variable references — both bare identifiers
+    /// (`x`) and the root segment of multi-segment paths (`obj` in `obj.field`).
     fn collect_name_references(body: &ast::ExprBody) -> Vec<Name> {
         let mut names = Vec::new();
         for (_expr_id, expr) in body.exprs.iter() {
             if let ast::Expr::Path(segments) = expr {
-                if segments.len() == 1 {
+                if !segments.is_empty() {
                     names.push(segments[0].clone());
                 }
             }
