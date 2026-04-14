@@ -624,19 +624,35 @@ impl BexMulitProject {
                             );
                             false
                         } else {
-                            // Extract Handle from BexExternalValue::Handle
+                            // Extract Handle from BexExternalValue::Handle.
+                            // Null means the project has no tests ($init_test absent).
                             let handle = match &registry {
-                                bex_engine::BexExternalValue::Handle(h) => h.clone(),
+                                bex_engine::BexExternalValue::Handle(h) => Some(h.clone()),
+                                bex_engine::BexExternalValue::Null => None,
                                 _ => {
-                                    log::error!("[collect_tests] unexpected non-Handle result");
+                                    log::error!("[collect_tests] unexpected result type");
                                     return;
                                 }
                             };
-                            state.registry = Some(handle);
+                            state.registry = handle;
                             true
                         }
                     };
                     if !should_continue {
+                        return;
+                    }
+
+                    // If the project has no tests, send an empty test tree.
+                    if matches!(registry, bex_engine::BexExternalValue::Null) {
+                        sender.send_playground_notification(
+                            crate::bex_lsp::PlaygroundNotification::TestCollectionResult {
+                                project,
+                                generation,
+                                call_id: call_id.0,
+                                data: serde_json::to_vec(&serde_json::json!([]))
+                                    .unwrap_or_default(),
+                            },
+                        );
                         return;
                     }
 

@@ -138,6 +138,21 @@ async fn collect_tests_dynamic_name_returns_handle() {
     );
 }
 
+/// Helper: serialize a registry via the registry's `serialize` method.
+async fn serialize_registry(
+    engine: &Arc<BexEngine>,
+    registry: BexExternalValue,
+) -> Result<BexExternalValue, bex_engine::EngineError> {
+    engine
+        .call_function(
+            "testing.TestRegistry.serialize",
+            vec![registry],
+            bex_engine::FunctionCallContextBuilder::new(CallId::next()).build(),
+            true,
+        )
+        .await
+}
+
 /// Helper: expand a testset by name via the registry's `expand_set` method.
 async fn expand_testset(
     engine: &Arc<BexEngine>,
@@ -361,5 +376,33 @@ async fn collect_tests_multiple_testsets_returns_handle() {
     assert!(
         matches!(registry, BexExternalValue::Handle(_)),
         "expected Handle for project with multiple testsets, got: {registry:?}"
+    );
+}
+
+/// Serializing a registry with unexpanded testsets should work (the match on
+/// nullable `expansions.get(name)` should hit the `null` arm without error).
+#[tokio::test]
+async fn serialize_registry_with_unexpanded_testsets() {
+    let source = r#"
+        test "top_test" { null }
+        testset "lazy_suite" {
+            test "inner" { null }
+        }
+    "#;
+
+    let engine = make_engine(source);
+    let registry = engine
+        .collect_tests("user", CallId::next(), CancellationToken::default())
+        .await
+        .expect("collect_tests should succeed");
+
+    // Serialize without expanding the testset first — this exercises the `null`
+    // arm of the `match (expanded)` in `TestRegistry.serialize`.
+    let serialized = serialize_registry(&engine, registry)
+        .await
+        .expect("serialize should succeed even with unexpanded testsets");
+    assert!(
+        !matches!(serialized, BexExternalValue::Null),
+        "expected non-null serialized result, got: {serialized:?}"
     );
 }

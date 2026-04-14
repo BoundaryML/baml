@@ -160,9 +160,7 @@ pub fn completions_at(db: &dyn Db, file: SourceFile, offset: TextSize) -> Vec<Co
 
     match context {
         CompletionContext::TypePosition => completions_for_type_position(db, file, offset),
-        // Field-access completions are temporarily disabled while TIR-based
-        // resolution is rebuilt for multi-segment Path nodes (follow-up task).
-        CompletionContext::MemberAccess => Vec::new(),
+        CompletionContext::MemberAccess => completions_for_field_access(db, file, &token, offset),
         CompletionContext::ValuePosition => completions_for_value_position(db, file, offset),
         CompletionContext::TopLevel => completions_for_top_level(),
         CompletionContext::Unknown => Vec::new(),
@@ -243,12 +241,23 @@ fn detect_context(
 }
 
 /// Returns `true` if `token` is a `WORD` immediately preceded by a `.` token,
+/// or if `token` IS a `.` token (cursor right after the dot with nothing typed),
 /// indicating a field access completion context.
 fn is_field_access_position(token: &baml_compiler_syntax::SyntaxToken) -> bool {
-    // Only WORD tokens can be field names.
-    if token.kind() != SyntaxKind::WORD {
-        // Also check if cursor is right after a DOT (token is whitespace/empty after dot).
-        // Walk the parent and look at siblings.
+    // If the token itself is a DOT, this is a field access position —
+    // the cursor is right after the dot with no partial segment typed yet.
+    if token.kind() == SyntaxKind::DOT {
+        if let Some(parent) = token.parent() {
+            let has_base_before = parent.children_with_tokens().any(|c| match c {
+                NodeOrToken::Token(t) => {
+                    t.kind() == SyntaxKind::WORD
+                        && t.text_range().end() <= token.text_range().start()
+                }
+                NodeOrToken::Node(n) => n.text_range().end() <= token.text_range().start(),
+            });
+            return has_base_before;
+        }
+        return false;
     }
 
     // Check previous sibling tokens in the parent node.
@@ -413,57 +422,86 @@ fn completions_for_type_position(
 }
 
 // ── Field-access completions ──────────────────────────────────────────────────
-// NOTE: These functions are temporarily unused while field-access completions
-// are stubbed out (see Phase 3, step 3.5). They will be re-enabled once
-// TIR-based completions are rebuilt for multi-segment Path nodes.
-
 /// Completions after a `.` — fields, methods, or enum variants.
 ///
-/// Extracts the base identifier (the `WORD` token before the `.`), resolves
-/// it, then returns the appropriate members.
-#[allow(dead_code)]
+/// When the token is a DOT (cursor right after `.`), finds the base WORD
+/// before the DOT in the CST and resolves it. When the token is a WORD
+/// after a DOT, uses the existing `find_base_for_field_access` logic.
 fn completions_for_field_access(
     db: &dyn Db,
     file: SourceFile,
     token: &baml_compiler_syntax::SyntaxToken,
     offset: TextSize,
 ) -> Vec<Completion> {
-    // Find the base expression: the WORD token preceding the `.`.
-    let Some(base_name) = find_base_for_field_access(token) else {
+    // Find base name from CST depending on whether token is DOT or WORD.
+    let base_name = if token.kind() == SyntaxKind::DOT {
+        find_word_before_dot(token)
+    } else {
+        find_base_for_field_access(token)
+    };
+
+    let Some(base_name) = base_name else {
         return Vec::new();
     };
 
     let base = Name::new(&base_name);
-
-    // Resolve the base name in scope.
     let resolved = baml_compiler2_tir::resolve::resolve_name_at(db, file, offset, &base);
 
-    // Resolve the base to a type.
     let ty = match resolved {
         baml_compiler2_tir::resolve::ResolvedName::Item(def)
-        | baml_compiler2_tir::resolve::ResolvedName::Builtin(def) => {
-            // Item reference — the type is the item itself.
-            definition_to_ty(db, def)
-        }
+        | baml_compiler2_tir::resolve::ResolvedName::Builtin(def) => definition_to_ty(db, def),
         baml_compiler2_tir::resolve::ResolvedName::Local {
             definition_site: Some(site),
             ..
-        } => {
-            // Local variable — look up inferred type.
-            local_variable_ty(db, file, offset, site)
-        }
+        } => local_variable_ty(db, file, offset, site),
         _ => None,
     };
 
-    let Some(ty) = ty else {
-        return Vec::new();
-    };
+    ty.map(|t| completions_for_ty_members(db, &t))
+        .unwrap_or_default()
+}
 
-    completions_for_ty_members(db, &ty)
+/// Find the WORD token immediately before a DOT token in the same parent node.
+fn find_word_before_dot(dot_token: &baml_compiler_syntax::SyntaxToken) -> Option<String> {
+    let parent = dot_token.parent()?;
+    let mut last_word: Option<String> = None;
+    for child in parent.children_with_tokens() {
+        match &child {
+            NodeOrToken::Token(t) => {
+                if t == dot_token {
+                    break;
+                }
+                if t.kind() == SyntaxKind::WORD {
+                    last_word = Some(t.text().to_string());
+                }
+            }
+            NodeOrToken::Node(n) => {
+                if n.text_range().end() <= dot_token.text_range().start() {
+                    let w = n
+                        .descendants_with_tokens()
+                        .filter_map(|d| {
+                            if let NodeOrToken::Token(t) = d {
+                                if t.kind() == SyntaxKind::WORD {
+                                    Some(t.text().to_string())
+                                } else {
+                                    None
+                                }
+                            } else {
+                                None
+                            }
+                        })
+                        .last();
+                    if w.is_some() {
+                        last_word = w;
+                    }
+                }
+            }
+        }
+    }
+    last_word
 }
 
 /// Returns completions for the members of `ty`.
-#[allow(dead_code)]
 fn completions_for_ty_members(db: &dyn Db, ty: &Ty) -> Vec<Completion> {
     match ty {
         Ty::Class(qn, _) => {
@@ -547,7 +585,6 @@ fn completions_for_ty_members(db: &dyn Db, ty: &Ty) -> Vec<Completion> {
 }
 
 /// Built-in methods for list types.
-#[allow(dead_code)]
 fn builtin_list_completions() -> Vec<Completion> {
     vec![
         Completion::new("length", CompletionKind::Method).with_detail("int"),
@@ -562,7 +599,6 @@ fn builtin_list_completions() -> Vec<Completion> {
 }
 
 /// Built-in methods for map types.
-#[allow(dead_code)]
 fn builtin_map_completions() -> Vec<Completion> {
     vec![
         Completion::new("keys", CompletionKind::Method).with_detail("K[]"),
@@ -572,7 +608,6 @@ fn builtin_map_completions() -> Vec<Completion> {
 }
 
 /// Built-in methods for string types.
-#[allow(dead_code)]
 fn builtin_string_completions() -> Vec<Completion> {
     vec![
         Completion::new("length", CompletionKind::Method).with_detail("int"),
@@ -593,7 +628,6 @@ fn builtin_string_completions() -> Vec<Completion> {
 /// Given a token at position `bar` in `foo.bar`, returns `"foo"`.
 /// Handles both `PATH_EXPR` (where siblings are in the parent) and
 /// `FIELD_ACCESS_EXPR` (where the base is a child node).
-#[allow(dead_code)]
 fn find_base_for_field_access(token: &baml_compiler_syntax::SyntaxToken) -> Option<String> {
     let parent = token.parent()?;
 
@@ -655,7 +689,6 @@ fn find_base_for_field_access(token: &baml_compiler_syntax::SyntaxToken) -> Opti
 ///
 /// Used by field-access completions to determine what fields/variants are
 /// available on an item reference (e.g., `MyEnum.` → enum variants).
-#[allow(dead_code)]
 fn definition_to_ty(db: &dyn Db, def: Definition<'_>) -> Option<Ty> {
     match def {
         Definition::Class(class_loc) => {
@@ -689,7 +722,10 @@ fn definition_to_ty(db: &dyn Db, def: Definition<'_>) -> Option<Ty> {
 }
 
 /// Look up the type of a local variable (let binding or parameter) at a scope position.
-#[allow(dead_code)]
+///
+/// For `Statement` bindings (let), searches all scopes in the file for the
+/// binding type — this handles variables inside lambdas (test bodies, closures)
+/// where the enclosing function is a synthesized `$init_test` wrapper.
 fn local_variable_ty(
     db: &dyn Db,
     file: SourceFile,
@@ -697,35 +733,28 @@ fn local_variable_ty(
     site: baml_compiler2_hir::semantic_index::DefinitionSite,
 ) -> Option<Ty> {
     let index = baml_compiler2_hir::file_semantic_index(db, file);
-    let item_tree = baml_compiler2_hir::file_item_tree(db, file);
-
-    // Find the enclosing Function scope.
-    let scope_id = index.scope_at_offset(at_offset, None);
-    let enclosing_func_scope = index
-        .ancestor_scopes(scope_id)
-        .into_iter()
-        .find(|ancestor_id| {
-            matches!(
-                index.scopes[ancestor_id.index() as usize].kind,
-                ScopeKind::Function
-            )
-        })?;
-
-    let func_scope_range = index.scopes[enclosing_func_scope.index() as usize].range;
-
-    // Match scope range to a function in the item tree.
-    let (func_local_id, _) = item_tree
-        .functions
-        .iter()
-        .find(|(_, f)| f.span == func_scope_range)?;
-
-    let func_loc = FunctionLoc::new(db, file, *func_local_id);
-    let func_scope_salsa_id = index.scope_ids[enclosing_func_scope.index() as usize];
-    let inference = baml_compiler2_tir::inference::infer_scope_types(db, func_scope_salsa_id);
 
     match site {
         baml_compiler2_hir::semantic_index::DefinitionSite::Parameter(param_idx) => {
             // Get declared type from function signature.
+            let item_tree = baml_compiler2_hir::file_item_tree(db, file);
+            let scope_id = index.scope_at_offset(at_offset, None);
+            let enclosing_func_scope =
+                index
+                    .ancestor_scopes(scope_id)
+                    .into_iter()
+                    .find(|ancestor_id| {
+                        matches!(
+                            index.scopes[ancestor_id.index() as usize].kind,
+                            ScopeKind::Function
+                        )
+                    })?;
+            let func_scope_range = index.scopes[enclosing_func_scope.index() as usize].range;
+            let (func_local_id, _) = item_tree
+                .functions
+                .iter()
+                .find(|(_, f)| f.span == func_scope_range)?;
+            let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(db, file, *func_local_id);
             let sig = baml_compiler2_hir::signature::function_signature(db, func_loc);
             sig.params.get(param_idx).map(|(_, te)| {
                 let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
@@ -735,33 +764,152 @@ fn local_variable_ty(
                 baml_compiler2_tir::lower_type_expr::lower_type_expr(db, te, pkg, &[], &mut diags)
             })
         }
-        baml_compiler2_hir::semantic_index::DefinitionSite::Statement(stmt_id) => {
-            // Find the PatId from the statement.
-            let body = baml_compiler2_hir::body::function_body(db, func_loc);
-            let baml_compiler2_hir::body::FunctionBody::Expr(expr_body) = body.as_ref() else {
-                return None;
-            };
-            let stmt = &expr_body.stmts[stmt_id];
-            let pat_id = match stmt {
-                baml_compiler2_ast::Stmt::Let { pattern, .. } => *pattern,
-                _ => return None,
-            };
-            inference.binding_type(pat_id).cloned().or_else(|| {
-                // Try other scopes (nested blocks).
-                for scope_id in &index.scope_ids {
-                    let inf = baml_compiler2_tir::inference::infer_scope_types(db, *scope_id);
-                    if let Some(ty) = inf.binding_type(pat_id) {
-                        return Some(ty.clone());
-                    }
-                }
-                None
-            })
+        baml_compiler2_hir::semantic_index::DefinitionSite::Statement(_) => {
+            // Search all scopes for the binding type. This handles variables
+            // inside lambdas (test bodies, closures) where the variable's
+            // StmtId is in a nested ExprBody, not the outer function's body.
+            find_binding_ty_for_local(db, file, at_offset, site)
         }
         baml_compiler2_hir::semantic_index::DefinitionSite::PatternBinding(_) => {
-            // Pattern bindings — type not yet available via this path.
-            None
+            find_binding_ty_for_local(db, file, at_offset, site)
         }
     }
+}
+
+/// Find the binding type for a local variable by locating the correct `ExprBody`
+/// (which may be a nested lambda body for test/testset code) and looking up the
+/// binding type from TIR inference.
+///
+/// For `Statement` bindings, we walk the scope tree to build a nesting path from
+/// the cursor's innermost Lambda scope up to the enclosing Function scope, then
+/// descend through the `ExprBody` tree using each body's source map to match
+/// lambda expression spans against scope ranges. This ensures we find the correct
+/// `ExprBody` even for deeply nested testset/test lambdas, where `func_def.span`
+/// may not match the scope range set by the HIR builder.
+fn find_binding_ty_for_local(
+    db: &dyn Db,
+    file: SourceFile,
+    at_offset: TextSize,
+    site: baml_compiler2_hir::semantic_index::DefinitionSite,
+) -> Option<Ty> {
+    let index = baml_compiler2_hir::file_semantic_index(db, file);
+    let item_tree = baml_compiler2_hir::file_item_tree(db, file);
+
+    let pat_id = match site {
+        baml_compiler2_hir::semantic_index::DefinitionSite::Statement(stmt_id) => {
+            // 1. Build the scope nesting path from cursor to enclosing Function.
+            //    lambda_ranges: innermost-first Lambda scope ranges.
+            //    func_range: the enclosing Function scope range.
+            let scope_id = index.scope_at_offset(at_offset, None);
+            let ancestors = index.ancestor_scopes(scope_id);
+
+            let mut lambda_ranges_rev: Vec<text_size::TextRange> = Vec::new();
+            let mut func_range: Option<text_size::TextRange> = None;
+            for ancestor_id in &ancestors {
+                let s = &index.scopes[ancestor_id.index() as usize];
+                match s.kind {
+                    ScopeKind::Lambda => lambda_ranges_rev.push(s.range),
+                    ScopeKind::Function => {
+                        func_range = Some(s.range);
+                        break;
+                    }
+                    _ => {}
+                }
+            }
+
+            // 2. Start from the outermost Function scope → find its body.
+            let func_range = func_range?;
+            let (func_local_id, _) = item_tree
+                .functions
+                .iter()
+                .find(|(_, f)| f.span == func_range)?;
+            let func_loc = FunctionLoc::new(db, file, *func_local_id);
+            let body = baml_compiler2_hir::body::function_body(db, func_loc);
+            let baml_compiler2_hir::body::FunctionBody::Expr(ref top_body) = *body else {
+                return None;
+            };
+
+            // 3. If cursor is directly in the Function (no lambda nesting), use it.
+            if lambda_ranges_rev.is_empty() {
+                extract_pat_from_stmt(top_body, stmt_id)
+            } else {
+                // Get the top-level source map and descend through nested lambdas.
+                let top_source_map =
+                    baml_compiler2_hir::body::function_body_source_map(db, func_loc)?;
+
+                // Reverse to get outermost→innermost order for descent.
+                lambda_ranges_rev.reverse();
+
+                let target_body =
+                    descend_into_lambdas(top_body, &top_source_map, &lambda_ranges_rev)?;
+                extract_pat_from_stmt(target_body, stmt_id)
+            }
+        }
+        baml_compiler2_hir::semantic_index::DefinitionSite::PatternBinding(pat_id) => Some(pat_id),
+        baml_compiler2_hir::semantic_index::DefinitionSite::Parameter(_) => None,
+    };
+
+    let pat_id = pat_id?;
+
+    // Search ancestor scopes (innermost first) for the binding type.
+    // We must NOT search all scopes because `PatId` is an arena index that
+    // can collide across different `ExprBody` arenas (e.g., `PatId(0)` in
+    // the test body vs `PatId(0)` in the testset body).
+    let cursor_scope = index.scope_at_offset(at_offset, None);
+    for ancestor_id in index.ancestor_scopes(cursor_scope) {
+        let scope_id = index.scope_ids[ancestor_id.index() as usize];
+        let inference = baml_compiler2_tir::inference::infer_scope_types(db, scope_id);
+        if let Some(ty) = inference.binding_type(pat_id) {
+            return Some(ty.clone());
+        }
+    }
+    None
+}
+
+/// Extract `PatId` from a `StmtId` in a specific `ExprBody`.
+fn extract_pat_from_stmt(
+    expr_body: &baml_compiler2_ast::ExprBody,
+    stmt_id: baml_compiler2_ast::StmtId,
+) -> Option<baml_compiler2_ast::PatId> {
+    let stmt = &expr_body.stmts[stmt_id];
+    if let baml_compiler2_ast::Stmt::Let { pattern, .. } = stmt {
+        Some(*pattern)
+    } else {
+        None
+    }
+}
+
+/// Descend through nested lambda bodies following the given scope ranges.
+///
+/// `lambda_ranges` is ordered outermost→innermost. At each level, finds the
+/// `Expr::Lambda` whose expression span (from the current body's source map)
+/// matches the target range, then recurses into that lambda's body. This uses
+/// the **same** source map the HIR builder used when creating scope ranges,
+/// guaranteeing a match even for deeply nested testset/test lambdas.
+fn descend_into_lambdas<'a>(
+    body: &'a baml_compiler2_ast::ExprBody,
+    source_map: &baml_compiler2_ast::AstSourceMap,
+    lambda_ranges: &[text_size::TextRange],
+) -> Option<&'a baml_compiler2_ast::ExprBody> {
+    if lambda_ranges.is_empty() {
+        return Some(body);
+    }
+    let target_range = lambda_ranges[0];
+    for (expr_id, expr) in body.exprs.iter() {
+        if let baml_compiler2_ast::Expr::Lambda(func_def) = expr {
+            let expr_span = source_map.expr_span(expr_id);
+            if expr_span == target_range {
+                if let Some(baml_compiler2_ast::FunctionBodyDef::Expr(
+                    ref nested_body,
+                    ref nested_sm,
+                )) = func_def.body
+                {
+                    return descend_into_lambdas(nested_body, nested_sm, &lambda_ranges[1..]);
+                }
+            }
+        }
+    }
+    None
 }
 
 // ── Value-position completions ────────────────────────────────────────────────
