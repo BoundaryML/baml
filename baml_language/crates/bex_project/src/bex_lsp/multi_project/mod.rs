@@ -823,6 +823,32 @@ impl BexMulitProject {
                 .await
             {
                 log::error!("[expand_test_set] expand failed for testset '{name}': {e}");
+                // Re-serialize and send the current (pre-expansion) state so the
+                // UI unblocks from the loading spinner instead of spinning forever.
+                let ctx_resend =
+                    bex_engine::FunctionCallContextBuilder::new(sys_types::CallId::next())
+                        .with_cancel_token(cancel)
+                        .build();
+                if let Ok(serialized) = engine
+                    .call_function(
+                        "testing.TestRegistry.serialize",
+                        vec![registry_value],
+                        ctx_resend,
+                        true,
+                    )
+                    .await
+                {
+                    let data =
+                        serde_json::to_vec(&bex_value_to_json(&serialized)).unwrap_or_default();
+                    sender.send_playground_notification(
+                        crate::bex_lsp::PlaygroundNotification::TestCollectionResult {
+                            project,
+                            generation,
+                            call_id: call_id.0,
+                            data,
+                        },
+                    );
+                }
                 return;
             }
             log::info!("[expand_test_set] expanded testset '{name}' successfully");
@@ -854,6 +880,15 @@ impl BexMulitProject {
                 }
                 Err(e) => {
                     log::error!("[expand_test_set] serialize after expanding '{name}' failed: {e}");
+                    // Send empty result so the UI unblocks
+                    sender.send_playground_notification(
+                        crate::bex_lsp::PlaygroundNotification::TestCollectionResult {
+                            project,
+                            generation,
+                            call_id: call_id.0,
+                            data: serde_json::to_vec(&serde_json::json!([])).unwrap_or_default(),
+                        },
+                    );
                 }
             }
         });
