@@ -2,11 +2,11 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === HIR2 ===
-function user.future_custom_events(name: string) -> null  [expr] {
-  {  } null
+function user.emit_custom_event(name: string) -> null  [expr] {
+  {  } baml.events.send("user_action", map { "action": name })
 }
-function user.future_logging(message: string) -> null  [expr] {
-  {  } null
+function user.emit_multiple_events() -> null  [expr] {
+  { baml.events.send("step", map { "step": 1 }); baml.events.send("step", map { "step": 2 }) } baml.events.send("step", map { "step": 3 })
 }
 function user.nested_inner() -> int  [expr] {
   {  } 10
@@ -14,12 +14,12 @@ function user.nested_inner() -> int  [expr] {
 function user.nested_outer() -> int  [expr] {
   {  } nested_inner() Add 1
 }
+function user.process_with_logging(input: string) -> string  [expr] {
+  { log.info("Processing started", map { "input": input }); baml.events.send("processing", map { "stage": "start" }); let result = "Processed: " Add input; baml.events.send("processing", map { "stage": "complete" }); log.info("Processing complete", map { "result": result }) } result
+}
 function user.simple_function() -> int  [expr] {
   {  } 42
 }
-function user.with_args(a: int, b: string) -> string  [expr] {
-  {  } b Add ": " Add baml.to_string(a)
-}
-function user.with_complex_return() -> map<string, int>  [expr] {
-  {  } map { "one": 1, "two": 2, "three": 3 }
+function user.test_logging() -> null  [expr] {
+  { log.debug_simple("Starting process"); log.info("Processing item", map { "id": 123 }); log.warn_simple("Resource usage high") } log.error("Operation failed", map { "code": "E001", "retries": 3 })
 }

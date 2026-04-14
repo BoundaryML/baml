@@ -17,24 +17,33 @@ function user.nested_inner() -> int throws never {
     10 : 10
   }
 }
-function user.with_args(a: int, b: string) -> string throws never {
+function user.emit_custom_event(name: string) -> null throws never {
+  { : null
+    baml.events.send("user_action", map { "action": name }) : null
+  }
+}
+function user.emit_multiple_events() -> null throws never {
+  { : null
+    baml.events.send("step", map { "step": 1 }) : null
+    baml.events.send("step", map { "step": 2 }) : null
+    baml.events.send("step", map { "step": 3 }) : null
+  }
+}
+function user.test_logging() -> null throws never {
+  { : null
+    log.debug_simple("Starting process") : null
+    log.info("Processing item", map { "id": 123 }) : null
+    log.warn_simple("Resource usage high") : null
+    log.error("Operation failed", map { "code": "E001", "retries": 3 }) : null
+  }
+}
+function user.process_with_logging(input: string) -> string throws never {
   { : string
-    b + ": " + baml.to_string(a) : string
-  }
-  !! 463..478: unresolved name: baml.to_string
-}
-function user.with_complex_return() -> map<string, int> throws never {
-  { : map<string, int>
-    map { "one": 1, "two": 2, "three": 3 } : map<string, int>
-  }
-}
-function user.future_custom_events(name: string) -> null throws never {
-  { : null
-    null : null
-  }
-}
-function user.future_logging(message: string) -> null throws never {
-  { : null
-    null : null
+    log.info("Processing started", map { "input": input }) : null
+    baml.events.send("processing", map { "stage": "start" }) : null
+    let result = "Processed: " + input : string
+    baml.events.send("processing", map { "stage": "complete" }) : null
+    log.info("Processing complete", map { "result": result }) : null
+    result : string
   }
 }

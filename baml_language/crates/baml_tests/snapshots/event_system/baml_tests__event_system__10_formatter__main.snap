@@ -2,11 +2,6 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 // Test project for event system observability
-// This project tests:
-// 1. Function start/end events
-// 2. Nested function calls and event ordering
-// 3. (Future) Custom events via baml.events.send()
-// 4. (Future) Structured logging via log.info()
 
 function simple_function() -> int {
     42
@@ -20,22 +15,35 @@ function nested_inner() -> int {
     10
 }
 
-function with_args(a: int, b: string) -> string {
-    b + ": " + baml.to_string(a)
+// Test custom event emission
+function emit_custom_event(name: string) -> null {
+    baml.events.send("user_action", { action: name })
 }
 
-function with_complex_return() -> map<string, int> {
-    { "one": 1, "two": 2, "three": 3 }
+// Test multiple events in sequence
+function emit_multiple_events() -> null {
+    baml.events.send("step", { step: 1 });
+    baml.events.send("step", { step: 2 });
+    baml.events.send("step", { step: 3 })
 }
 
-// Function that will later use baml.events.send()
-function future_custom_events(name: string) -> null {
-    // TODO: baml.events.send("user_action", { name: name })
-    null
+// Test logging at different levels
+function test_logging() -> null {
+    log.debug_simple("Starting process");
+    log.info("Processing item", { id: 123 });
+    log.warn_simple("Resource usage high");
+    log.error("Operation failed", { code: "E001", retries: 3 })
 }
 
-// Function that will later use log.info()
-function future_logging(message: string) -> null {
-    // TODO: log.info(message, { source: "event_system_test" })
-    null
+// Test combined function execution with events
+function process_with_logging(input: string) -> string {
+    log.info("Processing started", { input: input });
+    baml.events.send("processing", { stage: "start" });
+
+    let result = "Processed: " + input;
+
+    baml.events.send("processing", { stage: "complete" });
+    log.info("Processing complete", { result: result });
+
+    result
 }

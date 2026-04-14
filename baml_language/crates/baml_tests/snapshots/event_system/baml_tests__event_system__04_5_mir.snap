@@ -2,4 +2,173 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR2 ===
-Skipped: project has diagnostic errors
+fn user.emit_custom_event(name: string) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: string // name // param
+    let _2: map<string, unknown>
+
+    bb0: {
+        _2 = { const "action": copy _1 };
+        _0 = call const fn baml.events.send(const "user_action", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.emit_multiple_events() -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: null
+    let _2: map<string, unknown>
+    let _3: null
+    let _4: map<string, unknown>
+    let _5: map<string, unknown>
+
+    bb0: {
+        _2 = { const "step": const 1_i64 };
+        _1 = call const fn baml.events.send(const "step", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        _4 = { const "step": const 2_i64 };
+        _3 = call const fn baml.events.send(const "step", copy _4) -> [bb2];
+    }
+
+    bb2: {
+        _5 = { const "step": const 3_i64 };
+        _0 = call const fn baml.events.send(const "step", copy _5) -> [bb3];
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+fn user.nested_inner() -> int {
+    // Locals:
+    let _0: int // _0 // return
+
+    bb0: {
+        _0 = const 10_i64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.nested_outer() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: int
+
+    bb0: {
+        _1 = call const fn user.nested_inner() -> [bb1];
+    }
+
+    bb1: {
+        _0 = copy _1 + const 1_i64;
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.process_with_logging(input: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // input // param
+    let _2: null
+    let _3: map<string, unknown>
+    let _4: null
+    let _5: map<string, unknown>
+    let _6: string // result
+    let _7: null
+    let _8: map<string, unknown>
+    let _9: null
+    let _10: map<string, unknown>
+    let _11: string
+
+    bb0: {
+        _3 = { const "input": copy _1 };
+        _2 = call const fn baml.log.info(const "Processing started", copy _3) -> [bb1];
+    }
+
+    bb1: {
+        _5 = { const "stage": const "start" };
+        _4 = call const fn baml.events.send(const "processing", copy _5) -> [bb2];
+    }
+
+    bb2: {
+        _6 = const "Processed: " + copy _1;
+        _8 = { const "stage": const "complete" };
+        _7 = call const fn baml.events.send(const "processing", copy _8) -> [bb3];
+    }
+
+    bb3: {
+        _11 = copy _6;
+        _10 = { const "result": copy _11 };
+        _9 = call const fn baml.log.info(const "Processing complete", copy _10) -> [bb4];
+    }
+
+    bb4: {
+        _0 = copy _6;
+        goto -> bb5;
+    }
+
+    bb5: {
+        return;
+    }
+}
+
+fn user.simple_function() -> int {
+    // Locals:
+    let _0: int // _0 // return
+
+    bb0: {
+        _0 = const 42_i64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.test_logging() -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: null
+    let _2: null
+    let _3: map<string, unknown>
+    let _4: null
+    let _5: map<string, unknown>
+
+    bb0: {
+        _1 = call const fn baml.log.debug_simple(const "Starting process") -> [bb1];
+    }
+
+    bb1: {
+        _3 = { const "id": const 123_i64 };
+        _2 = call const fn baml.log.info(const "Processing item", copy _3) -> [bb2];
+    }
+
+    bb2: {
+        _4 = call const fn baml.log.warn_simple(const "Resource usage high") -> [bb3];
+    }
+
+    bb3: {
+        _5 = { const "code": const "E001", const "retries": const 3_i64 };
+        _0 = call const fn baml.log.error(const "Operation failed", copy _5) -> [bb4];
+    }
+
+    bb4: {
+        return;
+    }
+}
