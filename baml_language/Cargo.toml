@@ -3,7 +3,7 @@ members = [
   "crates/*",
   "rig_tests/crates/*",
 ]
-exclude = [  ]
+exclude = [ "crates/bridge_go" ]
 resolver = "2"
 
 [workspace.package]
