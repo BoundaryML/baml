@@ -49,8 +49,8 @@ fn summarize_events(events: &[RuntimeEvent]) -> Vec<String> {
             EventKind::Function(FunctionEvent::Start(s)) => format!("start:{}", s.name),
             EventKind::Function(FunctionEvent::End(e)) => format!("end:{}", e.name),
             EventKind::SetTags(_) => "tags".to_string(),
-            // Future: EventKind::Custom(c) => format!("custom:{}", c.name),
-            // Future: EventKind::Log(l) => format!("log:{}:{}", l.level, l.message),
+            EventKind::Custom(c) => format!("custom:{}", c.name),
+            EventKind::Log(l) => format!("log:{}:{}", l.level, l.message),
         })
         .collect()
 }

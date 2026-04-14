@@ -2,7 +2,7 @@
 
 use bex_external_types::{BexExternalAdt, BexExternalValue};
 
-use crate::{EventKind, FunctionEvent, RuntimeEvent};
+use crate::{CustomEvent, EventKind, FunctionEvent, LogEvent, RuntimeEvent};
 
 /// Serialize a `RuntimeEvent` to a single-line JSON string (JSONL format).
 pub fn event_to_jsonl(event: &RuntimeEvent) -> String {
@@ -58,6 +58,25 @@ pub fn event_to_jsonl(event: &RuntimeEvent) -> String {
                 "type": "intermediate",
                 "data": {
                     "SetTags": tags_map,
+                }
+            })
+        }
+        EventKind::Log(LogEvent { level, message, data }) => {
+            serde_json::json!({
+                "type": "log",
+                "data": {
+                    "level": level,
+                    "message": message,
+                    "data": bex_value_to_json(data),
+                }
+            })
+        }
+        EventKind::Custom(CustomEvent { name, data }) => {
+            serde_json::json!({
+                "type": "custom",
+                "data": {
+                    "name": name,
+                    "data": bex_value_to_json(data),
                 }
             })
         }
@@ -150,6 +169,62 @@ mod tests {
 
     use super::*;
     use crate::{FunctionStart, SpanContext, SpanId};
+
+    use crate::{CustomEvent, LogEvent};
+
+    #[test]
+    fn test_serialize_log_event() {
+        let span_id = SpanId::new();
+        let root_id = span_id.clone();
+        let event = RuntimeEvent {
+            ctx: SpanContext {
+                span_id: span_id.clone(),
+                parent_span_id: None,
+                root_span_id: root_id,
+            },
+            call_stack: vec![span_id],
+            timestamp: SystemTime::now(),
+            event: EventKind::Log(LogEvent {
+                level: "info".into(),
+                message: "hello world".into(),
+                data: BexExternalValue::Null,
+            }),
+        };
+
+        let jsonl = event_to_jsonl(&event);
+        let parsed: serde_json::Value = serde_json::from_str(&jsonl).unwrap();
+
+        assert_eq!(parsed["content"]["type"], "log");
+        assert_eq!(parsed["content"]["data"]["level"], "info");
+        assert_eq!(parsed["content"]["data"]["message"], "hello world");
+        assert!(parsed["content"]["data"]["data"].is_null());
+    }
+
+    #[test]
+    fn test_serialize_custom_event() {
+        let span_id = SpanId::new();
+        let root_id = span_id.clone();
+        let event = RuntimeEvent {
+            ctx: SpanContext {
+                span_id: span_id.clone(),
+                parent_span_id: None,
+                root_span_id: root_id,
+            },
+            call_stack: vec![span_id],
+            timestamp: SystemTime::now(),
+            event: EventKind::Custom(CustomEvent {
+                name: "user_clicked".into(),
+                data: BexExternalValue::String("payload".into()),
+            }),
+        };
+
+        let jsonl = event_to_jsonl(&event);
+        let parsed: serde_json::Value = serde_json::from_str(&jsonl).unwrap();
+
+        assert_eq!(parsed["content"]["type"], "custom");
+        assert_eq!(parsed["content"]["data"]["name"], "user_clicked");
+        assert_eq!(parsed["content"]["data"]["data"], "payload");
+    }
 
     #[test]
     fn test_serialize_function_start() {

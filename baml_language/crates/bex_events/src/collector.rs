@@ -239,6 +239,10 @@ impl FunctionLog {
                         tags.insert(k.clone(), v.clone());
                     }
                 }
+                EventKind::Log(_) | EventKind::Custom(_) => {
+                    // Currently just skip — these don't contribute to FunctionLog.
+                    // Future: could add a `custom_events: Vec<CustomEvent>` field.
+                }
             }
         }
 
