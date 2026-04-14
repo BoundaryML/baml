@@ -204,7 +204,8 @@ pub(crate) fn display_instruction(
         | Instruction::LoadCapture(_)
         | Instruction::StoreCapture(_)
         | Instruction::CaptureRef(_)
-        | Instruction::Return => String::new(),
+        | Instruction::Return
+        | Instruction::SendEvent => String::new(),
     };
 
     (instruction.to_string(), metadata)
@@ -345,6 +346,7 @@ fn instruction_color(instruction: &Instruction) -> Color {
             Color::Blue
         }
         Instruction::StoreDeref(_) | Instruction::StoreCapture(_) => Color::Green,
+        Instruction::SendEvent => Color::BrightGreen,
     }
 }
 
@@ -808,6 +810,7 @@ fn display_instruction_textual(
         Instruction::LoadCapture(idx) => format!("load_capture {idx}"),
         Instruction::StoreCapture(idx) => format!("store_capture {idx}"),
         Instruction::CaptureRef(idx) => format!("capture_ref {idx}"),
+        Instruction::SendEvent => "send_event".to_string(),
     }
 }
 

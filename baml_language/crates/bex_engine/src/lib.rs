@@ -1598,6 +1598,27 @@ impl BexEngine {
                     }
                 }
 
+                VmExecState::Event { event_name, data } => {
+                    // Emit a CustomEvent with the current span context.
+                    if let Some(state) = span_state.as_ref() {
+                        let ctx = Self::build_span_context_from_state(state);
+                        let mut call_stack = state.host_call_stack.clone();
+                        call_stack.extend(state.stack.iter().map(|s| s.span_id.clone()));
+
+                        let external_data = self.vm_value_to_owned(&data);
+
+                        self.emit(RuntimeEvent {
+                            ctx,
+                            call_stack,
+                            timestamp: SystemTime::now(),
+                            event: EventKind::Custom(bex_events::CustomEvent {
+                                name: event_name,
+                                data: external_data,
+                            }),
+                        });
+                    }
+                }
+
                 VmExecState::Notify(_notification) => {
                     // Ignore watch notifications for now
                 }

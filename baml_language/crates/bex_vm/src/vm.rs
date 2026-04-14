@@ -271,6 +271,17 @@ pub enum VmExecState {
 
     /// Notify about span lifecycle (from traced `Call` / `Return`).
     SpanNotify(SpanNotification),
+
+    /// The VM is yielding a custom event to be emitted.
+    ///
+    /// The engine handles this by converting both values to `BexExternalValue`
+    /// and emitting a `CustomEvent` with the current span context.
+    Event {
+        /// Name of the event (extracted from the String heap object).
+        event_name: String,
+        /// Event payload (raw VM value; engine converts to `BexExternalValue`).
+        data: Value,
+    },
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -3490,6 +3501,18 @@ impl BexVm {
                     .into());
                 };
                 self.stack.push(closure.captures[idx]);
+            }
+
+            Instruction::SendEvent => {
+                // Stack layout (top-to-bottom): [data, event_name]
+                // Pop data first (it's on top), then event_name.
+                let data = self.stack.ensure_pop()?;
+                let name_value = self.stack.ensure_pop()?;
+
+                // Extract the event name string from the heap.
+                let event_name = self.as_string(&name_value)?.clone();
+
+                return Ok(Some(VmExecState::Event { event_name, data }));
             }
         }
 

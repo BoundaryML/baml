@@ -3884,6 +3884,10 @@ impl CompilerRunner {
             Ok(VmExecState::SpanNotify(_)) => {
                 // Span notifications are ignored in the VM Runner — just continue.
             }
+            Ok(VmExecState::Event { event_name, .. }) => {
+                // Custom events are not surfaced in the VM Runner — just continue.
+                let _ = event_name;
+            }
             Err(e) => {
                 self.vm_runner_state.execution_result =
                     Some(VmExecutionResult::Error(format!("{:?}", e)));

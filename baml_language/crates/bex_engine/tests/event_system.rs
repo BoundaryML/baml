@@ -360,6 +360,115 @@ async fn test_vm_span_context_is_set_during_execution() {
     assert_eq!(start_event.name, "check_ctx");
 }
 
+// === Phase 3: SendEvent Instruction ===
+
+/// Verify that `Instruction::SendEvent` yields a `CustomEvent` through the engine.
+///
+/// Strategy: compile a trivial `function main() -> null { null }`, then patch its
+/// bytecode by injecting `LoadConst(name_idx)`, `LoadConst(data_idx)`, `SendEvent`
+/// just before the final `Return` instruction. The engine should handle the yielded
+/// `VmExecState::Event` and emit a `CustomEvent` into the event store.
+#[tokio::test]
+async fn test_send_event_bytecode_yields_custom_event() {
+    use bex_vm_types::{
+        ConstValue, Instruction, Object,
+        indexable::ObjectIndex,
+    };
+
+    // 1. Compile a trivial null-returning function.
+    let mut program = compile_for_engine(
+        r#"
+        function main() -> null { null }
+        "#,
+    );
+
+    // 2. Find the compiled "user.main" function's index in the object pool.
+    let func_obj_idx = *program
+        .function_indices
+        .get("user.main")
+        .expect("user.main should be compiled");
+
+    // 3. Record the current end of the object pool; we will append a String there.
+    let string_obj_idx = program.objects.0.len();
+    program
+        .objects
+        .0
+        .push(Object::String("phase3_event".to_string()));
+
+    // 4. Patch the function bytecode: inject SendEvent before Return.
+    let func = match &mut program.objects.0[func_obj_idx] {
+        Object::Function(f) => f,
+        other => panic!("expected Function at index {func_obj_idx}, got {other:?}"),
+    };
+
+    // Add the event-name string and a Null data value as constants.
+    let name_const_idx = func.bytecode.constants.len();
+    func.bytecode
+        .constants
+        .push(ConstValue::Object(ObjectIndex::from_raw(string_obj_idx)));
+    let data_const_idx = func.bytecode.constants.len();
+    func.bytecode.constants.push(ConstValue::Null);
+
+    // Find the Return instruction and insert SendEvent + its operands before it.
+    let return_pos = func
+        .bytecode
+        .instructions
+        .iter()
+        .rposition(|i| matches!(i, Instruction::Return))
+        .expect("function must have a Return instruction");
+
+    // Stack layout expected by SendEvent: name is pushed first, data on top.
+    func.bytecode.instructions.insert(return_pos, Instruction::SendEvent);
+    func.bytecode
+        .instructions
+        .insert(return_pos, Instruction::LoadConst(data_const_idx));
+    func.bytecode
+        .instructions
+        .insert(return_pos, Instruction::LoadConst(name_const_idx));
+
+    // meta and line_table are debug-only; leave them as-is (length mismatch is harmless).
+
+    // 5. Create the engine with the patched program.
+    let engine = std::sync::Arc::new(
+        BexEngine::new(
+            program,
+            std::sync::Arc::new(sys_native::SysOps::native()),
+            None,
+        )
+        .expect("engine creation must succeed"),
+    );
+
+    // 6. Call the function with span tracking.
+    let (host_ctx, guard) = setup_tracking();
+    let call_ctx = FunctionCallContextBuilder::new(sys_types::CallId::next())
+        .with_host_ctx(host_ctx)
+        .build();
+
+    engine
+        .call_function("main", vec![], call_ctx, true)
+        .await
+        .expect("call_function should succeed");
+
+    // 7. Verify the CustomEvent was emitted.
+    let events = collect_events(&guard);
+    let custom = events
+        .iter()
+        .find_map(|e| match &e.event {
+            EventKind::Custom(c) => Some(c),
+            _ => None,
+        })
+        .expect("Expected a CustomEvent from SendEvent instruction");
+
+    assert_eq!(custom.name, "phase3_event");
+
+    // The event's span context must be rooted at our tracking root.
+    let custom_event = events
+        .iter()
+        .find(|e| matches!(&e.event, EventKind::Custom(_)))
+        .unwrap();
+    assert_eq!(custom_event.ctx.root_span_id, guard.root);
+}
+
 // === Future tests for Phase 4+ ===
 // These tests are commented out until the corresponding features are implemented.
 
