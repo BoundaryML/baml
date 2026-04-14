@@ -1396,7 +1396,8 @@ function user.LlmStringClient(text: string) -> string {
     alloc_instance baml.llm.Client
     load_const "openai/gpt-4o"
     init_field .name
-    load_const null
+    load_const baml.llm.ClientType.Primitive
+    alloc_variant baml.llm.ClientType
     init_field .client_type
     alloc_array 0
     init_field .sub_clients
@@ -1416,7 +1417,8 @@ function user.LlmStringClient$build_request(text: string) -> baml.http.Request {
     alloc_instance baml.llm.Client
     load_const "openai/gpt-4o"
     init_field .name
-    load_const null
+    load_const baml.llm.ClientType.Primitive
+    alloc_variant baml.llm.ClientType
     init_field .client_type
     alloc_array 0
     init_field .sub_clients
@@ -1443,7 +1445,8 @@ function user.LlmStringClient$render_prompt(text: string) -> baml.llm.PromptAst 
     alloc_instance baml.llm.Client
     load_const "openai/gpt-4o"
     init_field .name
-    load_const null
+    load_const baml.llm.ClientType.Primitive
+    alloc_variant baml.llm.ClientType
     init_field .client_type
     alloc_array 0
     init_field .sub_clients

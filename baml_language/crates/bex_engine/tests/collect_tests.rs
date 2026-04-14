@@ -406,3 +406,359 @@ async fn serialize_registry_with_unexpanded_testsets() {
         "expected non-null serialized result, got: {serialized:?}"
     );
 }
+
+/// Testset with `for` loop and nested `testset <variable>` blocks.
+/// Reproduces the pattern from the user's failing code:
+/// ```
+/// testset "vibes" {
+///     let topics = ["happy", "sad"];
+///     for (let sentiments in topics) {
+///         testset sentiments { ... }
+///     }
+/// }
+/// ```
+#[tokio::test]
+async fn collect_tests_testset_for_loop_with_nested_testset_variable_name() {
+    let source = r#"
+        testset "vibes" {
+            let topics: string[] = ["happy", "sad"];
+            for (topic in topics) {
+                testset topic {
+                    test "check" {
+                        assert.not_null(topic)
+                    }
+                }
+            }
+        }
+    "#;
+
+    let engine = make_engine(source);
+    let registry = engine
+        .collect_tests("user", CallId::next(), CancellationToken::default())
+        .await
+        .expect("collect_tests should succeed");
+
+    // Expand the outer testset
+    let result = expand_testset(&engine, registry.clone(), "vibes").await;
+    match &result {
+        Ok(v) => {
+            assert!(
+                !matches!(v, BexExternalValue::Null),
+                "expected non-null result after expanding 'vibes' testset"
+            );
+        }
+        Err(e) => {
+            panic!("expand_set failed: {e}");
+        }
+    }
+}
+
+/// Testset with for loop over array, test block uses loop variable in assertion.
+/// Tests basic for-loop + test body with captured variable.
+#[tokio::test]
+async fn collect_tests_testset_for_loop_test_uses_loop_var() {
+    let source = r#"
+        testset "suite" {
+            let items: string[] = ["a", "b"];
+            for (item in items) {
+                test item {
+                    assert.not_null(item)
+                }
+            }
+        }
+    "#;
+
+    let engine = make_engine(source);
+    let registry = engine
+        .collect_tests("user", CallId::next(), CancellationToken::default())
+        .await
+        .expect("collect_tests should succeed");
+
+    let result = expand_testset(&engine, registry, "suite").await;
+    match &result {
+        Ok(v) => {
+            assert!(
+                !matches!(v, BexExternalValue::Null),
+                "expected non-null after expanding 'suite'"
+            );
+        }
+        Err(e) => {
+            panic!("expand_set for 'suite' failed: {e}");
+        }
+    }
+}
+
+/// Top-level testset "test" with a nested testset using string concat name.
+/// This mimics the user's `testset "test" { ... }` pattern.
+#[tokio::test]
+async fn collect_tests_top_level_testset_with_string_concat_name() {
+    let source = r#"
+        testset "test" {
+            let topics: string[] = ["happy", "sad"];
+            for (topic in topics) {
+                testset topic {
+                    test "basic " + topic {
+                        assert.not_null(topic)
+                    }
+                }
+            }
+        }
+    "#;
+
+    let engine = make_engine(source);
+    let registry = engine
+        .collect_tests("user", CallId::next(), CancellationToken::default())
+        .await
+        .expect("collect_tests should succeed");
+
+    let result = expand_testset(&engine, registry, "test").await;
+    match &result {
+        Ok(v) => {
+            assert!(
+                !matches!(v, BexExternalValue::Null),
+                "expected non-null after expanding 'test'"
+            );
+        }
+        Err(e) => {
+            panic!("expand_set for 'test' failed: {e}");
+        }
+    }
+}
+
+/// Testset with function call + assert.equal in test body.
+/// Reproduces the user's pattern where test body calls a function
+/// and uses `assert.equal(result.feeling, "positive")`.
+#[tokio::test]
+async fn collect_tests_testset_with_function_call_and_field_access() {
+    let source = r##"
+        class Sentiment {
+            feeling string
+            confidence float
+        }
+
+        function ClassifySentiment(text: string) -> Sentiment {
+            client GPT4o
+            prompt #"classify {{ text }}"#
+        }
+
+        client<llm> GPT4o {
+            provider openai
+            options {
+                model "gpt-4o"
+                api_key env.OPENAI_API_KEY
+            }
+        }
+
+        testset "vibes" {
+            let topics: string[] = ["happy", "sad"];
+            for (topic in topics) {
+                testset topic {
+                    test "basic" {
+                        let result = ClassifySentiment("hi");
+                        assert.equal(result.feeling, "positive");
+                    }
+                }
+            }
+        }
+    "##;
+
+    let engine = make_engine(source);
+    let registry = engine
+        .collect_tests("user", CallId::next(), CancellationToken::default())
+        .await
+        .expect("collect_tests should succeed");
+
+    let result = expand_testset(&engine, registry, "vibes").await;
+    result.expect("expand_set for vibes should succeed");
+}
+
+/// Reproduces the user's EXACT file — "vibes" is nested INSIDE "test".
+/// Includes union-return-type function (`Foo() -> string | image`) to check
+/// if Discriminant instructions cause "expected variant, got any" errors.
+#[tokio::test]
+async fn collect_tests_user_exact_file_full_lifecycle() {
+    // NOTE: "vibes" is INSIDE "test" — the closing brace of "test" comes
+    // AFTER "vibes". This is the exact structure from the user's file.
+    let source = r##"
+        client<llm> GPT4o {
+            provider openai
+            options {
+                model "gpt-4o"
+                api_key env.OPENAI_API_KEY
+            }
+        }
+
+        class Sentiment {
+            feeling string @description("The detected sentiment")
+            confidence float @description("Confidence score between 0 and 1")
+            reasoning string @description("Brief explanation")
+        }
+
+        function ClassifySentiment(text: string) -> Sentiment {
+            client GPT4o
+            prompt #"
+                {{ _.role('system') }}
+                Classify the sentiment of the following text.
+                {{ ctx.output_format }}
+                {{ _.role('assistant') }}
+                Text: {{ text }}
+            "#
+        }
+
+        testset "test" {
+            let topics = ["happy", "sad"];
+            for (let sentiments in topics) {
+                testset sentiments {
+                    let req = baml.http.fetch("http://localhost:8000/" + sentiments);
+                    let data = req.text();
+                    let tests = GenerateTests$parse(data);
+                    for (let ex in tests) {
+                        test ex {
+                            let result = ClassifySentiment("hi");
+                            assert.equal(result.feeling, "positive");
+                        }
+                    }
+                }
+            }
+
+            testset "vibes" {
+                let topics = ["happy", "sad"];
+                for (let sentiments in topics) {
+                    testset sentiments {
+                        let tests = GenerateTests(5, sentiments);
+                        for (let ex in tests) {
+                            test ex {
+                                let result = ClassifySentiment("hi");
+                                assert.equal(result.feeling, "positive");
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        function Foo() -> string | image {
+            let x = "foo";
+            let y = 2;
+            for (let i = 0; i < y; i += 1) {
+                x = "hi:  " + x
+            }
+            x
+        }
+
+        function ClassifySentiment2(text: string) -> string {
+            client GPT4o
+            prompt #"classify {{ text }}"#
+        }
+
+        function GenerateTests(count: int, topic: string) -> string[] {
+            client GPT4o
+            prompt #"generate {{ count }} tests about {{ topic }}"#
+        }
+    "##;
+
+    let engine = make_engine(source);
+
+    // Step 1: Collect tests
+    let registry = engine
+        .collect_tests("user", CallId::next(), CancellationToken::default())
+        .await
+        .expect("collect_tests should succeed");
+
+    // Step 2: Serialize before expansion
+    serialize_registry(&engine, registry.clone())
+        .await
+        .expect("serialize before expansion should succeed");
+
+    // Step 3: Expand "test" testset (runs collector lambda with for loops + nested testsets)
+    expand_testset(&engine, registry.clone(), "test")
+        .await
+        .expect("expand 'test' should succeed");
+
+    // Step 4: Serialize after expanding "test"
+    serialize_registry(&engine, registry.clone())
+        .await
+        .expect("serialize after expanding 'test' should succeed");
+
+    // Step 5: Expand "test/vibes" (second-level nested testset)
+    expand_testset(&engine, registry.clone(), "test/vibes")
+        .await
+        .expect("expand 'test/vibes' should succeed");
+
+    // Step 6: Expand third-level testsets.
+    // "test/vibes/happy" collector lambda calls GenerateTests(5, "happy") which
+    // is an LLM function. Without OPENAI_API_KEY, the expansion fails with a
+    // runtime error — but crucially NOT "expected variant, got any" (which was
+    // the bug). The expected error is about the missing env var.
+    for name in &[
+        "test/happy",
+        "test/sad",
+        "test/vibes/happy",
+        "test/vibes/sad",
+    ] {
+        let result = expand_testset(&engine, registry.clone(), name).await;
+        if let Err(e) = &result {
+            let err_str = format!("{e}");
+            // The "expected variant, got any" error was the bug we fixed.
+            // Any other error (like missing env var) is acceptable.
+            assert!(
+                !err_str.contains("expected variant, got any"),
+                "BUG: enum variant not resolved for testset '{name}': {e}"
+            );
+        }
+    }
+
+    // Step 7: Final serialize
+    serialize_registry(&engine, registry)
+        .await
+        .expect("final serialize should succeed");
+}
+
+/// Expansion of a nested testset that itself contains async operations.
+/// After expanding the outer testset, expand the inner ones to exercise
+/// the full depth of the testset tree.
+#[tokio::test]
+async fn collect_tests_expand_nested_testsets_full_depth() {
+    let source = r#"
+        testset "outer" {
+            let items: string[] = ["alpha", "beta"];
+            for (item in items) {
+                testset item {
+                    test "check" {
+                        assert.not_null(item)
+                    }
+                }
+            }
+        }
+    "#;
+
+    let engine = make_engine(source);
+    let registry = engine
+        .collect_tests("user", CallId::next(), CancellationToken::default())
+        .await
+        .expect("collect_tests should succeed");
+
+    // Expand outer
+    expand_testset(&engine, registry.clone(), "outer")
+        .await
+        .expect("expand 'outer' should succeed");
+
+    // Serialize after outer expansion
+    serialize_registry(&engine, registry.clone())
+        .await
+        .expect("serialize after outer expand should succeed");
+
+    // The inner testsets are registered with full path names ("outer/alpha", "outer/beta").
+    // Expand them to exercise full-depth async expansion.
+    expand_testset(&engine, registry.clone(), "outer/alpha")
+        .await
+        .expect("expand 'outer/alpha' should succeed");
+
+    expand_testset(&engine, registry.clone(), "outer/beta")
+        .await
+        .expect("expand 'outer/beta' should succeed");
+
+    // Final serialize
+    let final_ser = serialize_registry(&engine, registry).await;
+    final_ser.expect("final serialize should succeed");
+}

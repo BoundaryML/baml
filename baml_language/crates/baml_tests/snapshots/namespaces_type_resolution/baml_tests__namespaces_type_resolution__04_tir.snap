@@ -72,10 +72,9 @@ function user.RootUsesLlmError(e: user.llm.Error) -> string throws never {
   }
 }
 function user.RootUsesLlmStatus() -> user.llm.Status throws never {
-  { : unknown
-    root.llm.Status.Ready : unknown
+  { : user.llm.Status.Ready
+    root.llm.Status.Ready : user.llm.Status.Ready
   }
-  !! 2469..2495: unresolved name: root
 }
 function user.RootUsesAuthConfig(cfg: user.auth.Config) -> string throws never {
   { : string
@@ -206,10 +205,9 @@ function user.auth.AuthUsesRootConfig(cfg: user.Config) -> string throws never {
   }
 }
 function user.auth.AuthUsesRootStatus() -> user.Status throws never {
-  { : unknown
-    root.Status.Pending : unknown
+  { : user.Status.Pending
+    root.Status.Pending : user.Status.Pending
   }
-  !! 2345..2369: unresolved name: root
 }
 function user.auth.AuthMatchesRootStatus(s: user.Status) -> string throws never {
   { : "ok" | "failed" | "pending"
@@ -242,10 +240,9 @@ function user.auth.AuthUsesLlmResponse(r: user.llm.Response) -> string throws ne
   }
 }
 function user.auth.AuthUsesLlmStatus() -> user.llm.Status throws never {
-  { : unknown
-    root.llm.Status.Ready : unknown
+  { : user.llm.Status.Ready
+    root.llm.Status.Ready : user.llm.Status.Ready
   }
-  !! 3052..3078: unresolved name: root
 }
 function user.auth.AuthMatchesLlmStatus(s: user.llm.Status) -> string throws never {
   { : "ready" | "generating" | "done"
@@ -367,10 +364,9 @@ function user.llm.LlmUsesRootError(e: user.Error) -> string throws never {
   }
 }
 function user.llm.LlmUsesRootStatus() -> user.Status throws never {
-  { : unknown
-    root.Status.Ok : unknown
+  { : user.Status.Ok
+    root.Status.Ok : user.Status.Ok
   }
-  !! 2680..2699: unresolved name: root
 }
 function user.llm.LlmMatchesRootStatus(s: user.Status) -> string throws never {
   { : "ok" | "failed" | "pending"
@@ -405,7 +401,6 @@ function user.llm.LlmThrowsRootEnum(x: int) -> string throws never {
       _ =>
         "ok" : "ok"
   }
-  !! 3389..3408: unresolved name: root
 }
 function user.llm.LlmUsesAuthConfig(cfg: user.auth.Config) -> string throws never {
   { : string
@@ -418,10 +413,9 @@ function user.llm.LlmUsesAuthError(e: user.auth.Error) -> string throws never {
   }
 }
 function user.llm.LlmUsesAuthRole() -> user.auth.Role throws never {
-  { : unknown
-    root.auth.Role.Admin : unknown
+  { : user.auth.Role.Admin
+    root.auth.Role.Admin : user.auth.Role.Admin
   }
-  !! 3886..3911: unresolved name: root
 }
 function user.llm.LlmUsesNestedClient(c: user.llm.openai.Client) -> string throws never {
   { : string
@@ -536,10 +530,9 @@ function user.llm.openai.OpenAIUsesRootConfig(cfg: user.Config) -> string throws
   }
 }
 function user.llm.openai.OpenAIUsesRootStatus() -> user.Status throws never {
-  { : unknown
-    root.Status.Ok : unknown
+  { : user.Status.Ok
+    root.Status.Ok : user.Status.Ok
   }
-  !! 1795..1814: unresolved name: root
 }
 function user.llm.openai.OpenAIMatchesRootStatus(s: user.Status) -> string throws never {
   { : "ok" | "failed" | "pending"
@@ -563,10 +556,9 @@ function user.llm.openai.OpenAIUsesLlmResponse(r: user.llm.Response) -> string t
   }
 }
 function user.llm.openai.OpenAIUsesLlmStatus() -> user.llm.Status throws never {
-  { : unknown
-    root.llm.Status.Generating : unknown
+  { : user.llm.Status.Generating
+    root.llm.Status.Generating : user.llm.Status.Generating
   }
-  !! 2408..2439: unresolved name: root
 }
 function user.llm.openai.OpenAIMatchesLlmStatus(s: user.llm.Status) -> string throws never {
   { : "ready" | "generating" | "done"
@@ -585,10 +577,9 @@ function user.llm.openai.OpenAIUsesAuthConfig(cfg: user.auth.Config) -> string t
   }
 }
 function user.llm.openai.OpenAIUsesAuthRole() -> user.auth.Role throws never {
-  { : unknown
-    root.auth.Role.User : unknown
+  { : user.auth.Role.User
+    root.auth.Role.User : user.auth.Role.User
   }
-  !! 2896..2920: unresolved name: root
 }
 function user.llm.openai.OpenAIMatchesAuthRole(r: user.auth.Role) -> string throws never {
   { : "admin" | "user" | "guest"

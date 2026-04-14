@@ -809,21 +809,23 @@ impl BexMulitProject {
                 .build();
 
             // Expand — mutates registry.expansions in-place on the heap
+            log::info!("[expand_test_set] expanding testset: {name}");
             if let Err(e) = engine
                 .call_function(
                     "testing.TestRegistry.expand_set",
                     vec![
                         registry_value.clone(),
-                        bex_engine::BexExternalValue::String(name),
+                        bex_engine::BexExternalValue::String(name.clone()),
                     ],
                     ctx,
                     true,
                 )
                 .await
             {
-                log::error!("[expand_test_set] expand failed: {e}");
+                log::error!("[expand_test_set] expand failed for testset '{name}': {e}");
                 return;
             }
+            log::info!("[expand_test_set] expanded testset '{name}' successfully");
 
             // Re-serialize full state
             let ctx2 = bex_engine::FunctionCallContextBuilder::new(sys_types::CallId::next())
@@ -850,7 +852,9 @@ impl BexMulitProject {
                         },
                     );
                 }
-                Err(e) => log::error!("[expand_test_set] serialize after expand failed: {e}"),
+                Err(e) => {
+                    log::error!("[expand_test_set] serialize after expanding '{name}' failed: {e}");
+                }
             }
         });
     }

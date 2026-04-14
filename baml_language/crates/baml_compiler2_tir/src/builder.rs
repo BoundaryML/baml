@@ -3344,6 +3344,36 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
         }
 
+        // Try as an enum variant: for paths like ["llm", "ClientType", "Primitive"],
+        // check if a shorter prefix resolves to an enum and the remaining segment
+        // is a variant name. Walk from split_at=1 up to path.len()-1.
+        for split in 1..path.len() {
+            let ns = &path[..split - 1];
+            let type_name = &path[split - 1];
+            if let Some(Definition::Enum(enum_loc)) = pkg_items.lookup_type(ns, type_name) {
+                let variant_name = &path[split];
+                // Remaining segments after the variant are not supported here
+                if split + 1 != path.len() {
+                    continue;
+                }
+                let db = self.context.db();
+                let enum_qtn =
+                    crate::lower_type_expr::qualify_def(db, Definition::Enum(enum_loc), type_name);
+                self.resolutions.insert(
+                    expr_id,
+                    crate::inference::MemberResolution::Variant {
+                        enum_loc,
+                        variant_name: variant_name.clone(),
+                    },
+                );
+                return Some(Ty::EnumVariant(
+                    enum_qtn,
+                    variant_name.clone(),
+                    TyAttr::default(),
+                ));
+            }
+        }
+
         None
     }
 
