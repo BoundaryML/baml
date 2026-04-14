@@ -102,7 +102,7 @@
     "@types/jest": "^30.0.0",
     "@types/lodash": "4.17.17",
     "@types/node": "24.0.3",
-    "@types/react": "19.2.7",
+    "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
     "@types/vscode": "1.96.0",
     "@vitest/ui": "^4.0.7",
