@@ -59,19 +59,61 @@ pub enum AnnotationKind {
     Parameter,
 }
 
+/// A single segment of an inlay hint label.
+///
+/// When `location` is set, the editor renders the segment as a clickable link
+/// that navigates to the target definition.
+#[derive(Clone)]
+pub struct LabelPart {
+    /// The text to display for this segment.
+    pub value: String,
+    /// Optional go-to-definition target (file + byte range).
+    pub location: Option<crate::Location>,
+}
+
+impl LabelPart {
+    /// Create a plain label part with no navigation target.
+    pub fn plain(value: impl Into<String>) -> Self {
+        Self {
+            value: value.into(),
+            location: None,
+        }
+    }
+}
+
+impl std::fmt::Debug for LabelPart {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.location.is_some() {
+            write!(f, "[{}]", self.value)
+        } else {
+            write!(f, "{}", self.value)
+        }
+    }
+}
+
 /// A single inline annotation (inlay hint) to display in the editor.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct InlineAnnotation {
     /// Byte offset in the file where the hint is inserted.
     pub offset: TextSize,
-    /// The text label to display (e.g. `": int"` or `"name: "`).
-    pub label: String,
+    /// Label segments. Each segment may optionally carry a navigation target.
+    pub label: Vec<LabelPart>,
     /// Semantic kind used by the editor for styling/filtering.
     pub kind: AnnotationKind,
     /// Insert thin space to the left of the hint (between hint and preceding token).
     pub padding_left: bool,
     /// Insert thin space to the right of the hint (between hint and following token).
     pub padding_right: bool,
+    /// Whether double-click should insert this annotation into the source.
+    /// False for hints where insertion isn't valid syntax (e.g., for loop bindings).
+    pub insertable: bool,
+}
+
+impl InlineAnnotation {
+    /// Get the full label text (concatenation of all parts).
+    pub fn label_text(&self) -> String {
+        self.label.iter().map(|p| p.value.as_str()).collect()
+    }
 }
 
 // ── Public entry point ────────────────────────────────────────────────────────
@@ -91,6 +133,18 @@ pub fn annotations(db: &dyn Db, file: SourceFile) -> Vec<InlineAnnotation> {
     let mut out: Vec<InlineAnnotation> = Vec::new();
 
     for (func_local_id, func_data) in &item_tree.functions {
+        // Skip compiler-generated functions (companions have `$` in name,
+        // e.g. `MyFunc$render_prompt`, `MyFunc$parse`).
+        if func_data.name.as_str().contains('$') {
+            continue;
+        }
+
+        // Skip LLM functions (declarative syntax). These are lowered by the
+        // compiler and any inferred types are internal implementation details.
+        if func_data.declarative_meta.is_some() {
+            continue;
+        }
+
         let func_loc = FunctionLoc::new(db, file, *func_local_id);
 
         // Only expression-body functions have type information we can display.
@@ -123,25 +177,29 @@ pub fn annotations(db: &dyn Db, file: SourceFile) -> Vec<InlineAnnotation> {
         let func_scope_id = index.scope_ids[func_scope_file_id.index() as usize];
         let inference = baml_compiler2_tir::inference::infer_scope_types(db, func_scope_id);
 
-        // ── Type hints for let bindings without annotations ───────────────────
+        // ── Type hints for bindings (let statements and for loop variables) ───
 
         for (stmt_id, stmt) in expr_body.stmts.iter() {
-            let Stmt::Let {
-                pattern,
-                type_annotation,
-                ..
-            } = stmt
-            else {
-                continue;
+            // Extract the pattern to annotate and whether it's insertable.
+            // Let bindings can have type annotations inserted; for loops cannot.
+            let (pattern, insertable) = match stmt {
+                Stmt::Let {
+                    pattern,
+                    type_annotation,
+                    ..
+                } => {
+                    // Skip if the user already wrote a type annotation.
+                    if type_annotation.is_some() {
+                        continue;
+                    }
+                    (*pattern, true)
+                }
+                Stmt::For { binding, .. } => (*binding, false),
+                _ => continue,
             };
 
-            // Skip if the user already wrote a type annotation.
-            if type_annotation.is_some() {
-                continue;
-            }
-
             // Get the binding name to suppress hints for `_`.
-            let pat = &expr_body.patterns[*pattern];
+            let pat = &expr_body.patterns[pattern];
             let binding_name = match pat {
                 Pattern::Binding(name) => name.as_str(),
                 Pattern::TypedBinding { name, .. } => name.as_str(),
@@ -153,19 +211,22 @@ pub fn annotations(db: &dyn Db, file: SourceFile) -> Vec<InlineAnnotation> {
             }
 
             // Look up the inferred type.
-            let Some(ty) = inference.binding_type(*pattern) else {
+            let Some(ty) = inference.binding_type(pattern) else {
                 // Try other scopes for nested blocks.
-                let ty_str = find_binding_ty_any_scope(db, index, *pattern);
-                if let Some(ty_str) = ty_str {
+                let ty_parts = find_binding_ty_any_scope(db, index, pattern);
+                if let Some(ty_parts) = ty_parts {
                     // Emit hint: position at end of pattern span.
-                    let pat_span = source_map.pattern_span(*pattern);
+                    let pat_span = source_map.pattern_span(pattern);
                     if !pat_span.is_empty() {
+                        let mut label = vec![LabelPart::plain(": ")];
+                        label.extend(ty_parts);
                         out.push(InlineAnnotation {
                             offset: pat_span.end(),
-                            label: format!(": {ty_str}"),
+                            label,
                             kind: AnnotationKind::Type,
                             padding_left: false,
                             padding_right: true,
+                            insertable,
                         });
                     }
                 }
@@ -177,10 +238,8 @@ pub fn annotations(db: &dyn Db, file: SourceFile) -> Vec<InlineAnnotation> {
                 continue;
             }
 
-            let ty_str = utils::display_ty(ty);
-
             // Position the hint at the end of the pattern span (after the var name).
-            let pat_span = source_map.pattern_span(*pattern);
+            let pat_span = source_map.pattern_span(pattern);
             if pat_span.is_empty() {
                 // Fall back to using the statement span start if the pattern span is unknown.
                 let stmt_span = source_map.stmt_span(stmt_id);
@@ -192,12 +251,15 @@ pub fn annotations(db: &dyn Db, file: SourceFile) -> Vec<InlineAnnotation> {
                 continue;
             }
 
+            let mut label = vec![LabelPart::plain(": ")];
+            label.extend(ty_to_label_parts(db, ty));
             out.push(InlineAnnotation {
                 offset: pat_span.end(),
-                label: format!(": {ty_str}"),
+                label,
                 kind: AnnotationKind::Type,
                 padding_left: false,
                 padding_right: true,
+                insertable,
             });
         }
 
@@ -244,10 +306,11 @@ pub fn annotations(db: &dyn Db, file: SourceFile) -> Vec<InlineAnnotation> {
 
                 out.push(InlineAnnotation {
                     offset: arg_span.start(),
-                    label: format!("{name_str}: "),
+                    label: vec![LabelPart::plain(format!("{name_str}: "))],
                     kind: AnnotationKind::Parameter,
                     padding_left: false,
                     padding_right: false,
+                    insertable: false,
                 });
             }
         }
@@ -276,21 +339,138 @@ fn should_suppress_type(ty: &Ty) -> bool {
 /// Search all scopes in the file for the binding type of `pat_id`.
 ///
 /// Used as a fallback when the let binding is in a nested block scope
-/// (not directly in the enclosing function scope). Returns the display
-/// string directly to avoid allocating a `Ty`.
+/// (not directly in the enclosing function scope). Returns label parts.
 fn find_binding_ty_any_scope(
     db: &dyn Db,
     index: &baml_compiler2_hir::semantic_index::FileSemanticIndex<'_>,
     pat_id: baml_compiler2_ast::PatId,
-) -> Option<String> {
+) -> Option<Vec<LabelPart>> {
     for scope_id in &index.scope_ids {
         let inference = baml_compiler2_tir::inference::infer_scope_types(db, *scope_id);
         if let Some(ty) = inference.binding_type(pat_id) {
             if should_suppress_type(ty) {
                 return None;
             }
-            return Some(utils::display_ty(ty));
+            return Some(ty_to_label_parts(db, ty));
         }
     }
     None
+}
+
+/// Convert a `Ty` to label parts with go-to-definition support.
+///
+/// Named types (classes, enums, type aliases) become clickable links.
+/// Compound types recursively convert their inner types.
+fn ty_to_label_parts(db: &dyn Db, ty: &Ty) -> Vec<LabelPart> {
+    match ty {
+        Ty::Class(qn, _) | Ty::Enum(qn, _) | Ty::TypeAlias(qn, _) => {
+            let display = utils::display_ty(ty);
+            let location = lookup_type_definition(db, qn);
+            vec![LabelPart {
+                value: display,
+                location,
+            }]
+        }
+        Ty::EnumVariant(qn, _, _) => {
+            // Widened to enum in display_ty, so look up the enum
+            let display = utils::display_ty(ty);
+            let location = lookup_type_definition(db, qn);
+            vec![LabelPart {
+                value: display,
+                location,
+            }]
+        }
+        Ty::Primitive(p, _) => vec![LabelPart::plain(p.to_string())],
+        Ty::Optional(inner, _) => {
+            let mut parts = wrap_if_compound(db, inner);
+            parts.push(LabelPart::plain("?"));
+            parts
+        }
+        Ty::List(inner, _) | Ty::EvolvingList(inner, _) => {
+            if matches!(**inner, Ty::Never { .. }) {
+                return vec![LabelPart::plain("_[]")];
+            }
+            let mut parts = wrap_if_compound(db, inner);
+            parts.push(LabelPart::plain("[]"));
+            parts
+        }
+        Ty::Map(k, v, _) | Ty::EvolvingMap(k, v, _) => {
+            if matches!(**k, Ty::Never { .. }) && matches!(**v, Ty::Never { .. }) {
+                return vec![LabelPart::plain("map<_, _>")];
+            }
+            let mut parts = vec![LabelPart::plain("map<")];
+            parts.extend(ty_to_label_parts(db, k));
+            parts.push(LabelPart::plain(", "));
+            parts.extend(ty_to_label_parts(db, v));
+            parts.push(LabelPart::plain(">"));
+            parts
+        }
+        Ty::Union(members, _) => {
+            let mut parts = Vec::new();
+            for (i, m) in members.iter().enumerate() {
+                if i > 0 {
+                    parts.push(LabelPart::plain(" | "));
+                }
+                parts.extend(ty_to_label_parts(db, m));
+            }
+            parts
+        }
+        Ty::Function { params, ret, .. } => {
+            let mut parts = vec![LabelPart::plain("(")];
+            for (i, (name, param_ty)) in params.iter().enumerate() {
+                if i > 0 {
+                    parts.push(LabelPart::plain(", "));
+                }
+                if let Some(n) = name {
+                    parts.push(LabelPart::plain(format!("{n}: ")));
+                }
+                parts.extend(ty_to_label_parts(db, param_ty));
+            }
+            parts.push(LabelPart::plain(") -> "));
+            parts.extend(ty_to_label_parts(db, ret));
+            parts
+        }
+        Ty::Literal(lit, _, _) => vec![LabelPart::plain(lit.to_string())],
+        Ty::TypeVar(name, _) => vec![LabelPart::plain(name.to_string())],
+        Ty::Never { .. } => vec![LabelPart::plain("never")],
+        Ty::Void { .. } => vec![LabelPart::plain("void")],
+        Ty::BuiltinUnknown { .. } | Ty::Unknown { .. } => vec![LabelPart::plain("unknown")],
+        Ty::RustType { .. } => vec![LabelPart::plain("$rust_type")],
+        Ty::Type { .. } => vec![LabelPart::plain("type")],
+        Ty::Error { .. } => vec![LabelPart::plain("!error")],
+    }
+}
+
+/// Wrap type in parentheses if it's a compound type that needs grouping.
+fn wrap_if_compound(db: &dyn Db, ty: &Ty) -> Vec<LabelPart> {
+    if matches!(ty, Ty::Union(_, _) | Ty::Function { .. }) {
+        let mut parts = vec![LabelPart::plain("(")];
+        parts.extend(ty_to_label_parts(db, ty));
+        parts.push(LabelPart::plain(")"));
+        parts
+    } else {
+        ty_to_label_parts(db, ty)
+    }
+}
+
+/// Look up the definition location for a type by its qualified name.
+fn lookup_type_definition(
+    db: &dyn Db,
+    qn: &baml_compiler2_tir::ty::QualifiedTypeName,
+) -> Option<crate::Location> {
+    use baml_compiler2_hir::package::{PackageId, package_items};
+
+    let pkg_name = qn.package();
+    let namespace = qn.namespace();
+    let name = qn.name();
+
+    // Find the package
+    let package_id = PackageId::new(db, pkg_name.clone());
+    let items = package_items(db, package_id);
+
+    // Look up the type definition
+    let def = items.lookup_type(namespace, name)?;
+
+    // Get the definition's file and name span
+    crate::utils::definition_span(db, def).map(|(file, range)| crate::Location { file, range })
 }

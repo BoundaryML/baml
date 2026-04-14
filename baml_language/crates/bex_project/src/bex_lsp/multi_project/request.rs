@@ -244,18 +244,54 @@ impl BexLspRequest for BexMulitProject {
             .map(|h| {
                 let position =
                     baml_project::position::offset_to_lsp_position(text, usize::from(h.offset));
-                // For type hints, double-click inserts the type annotation.
-                // Parameter hints don't get text edits (can't insert param names in calls).
-                let text_edits = match h.kind {
-                    baml_lsp2_actions::AnnotationKind::Type => Some(vec![lsp_types::TextEdit {
+
+                // Convert label parts to LSP format with go-to-definition support.
+                let label_parts: Vec<lsp_types::InlayHintLabelPart> = h
+                    .label
+                    .iter()
+                    .map(|part| {
+                        let location = part.location.as_ref().map(|loc| {
+                            let loc_text = loc.file.text(lsp_db);
+                            lsp_types::Location {
+                                uri: lsp_types::Url::from_file_path(loc.file.path(lsp_db))
+                                    .unwrap_or_else(|()| {
+                                        lsp_types::Url::parse("file:///unknown").unwrap()
+                                    }),
+                                range: lsp_types::Range::new(
+                                    baml_project::position::offset_to_lsp_position(
+                                        loc_text,
+                                        usize::from(loc.range.start()),
+                                    ),
+                                    baml_project::position::offset_to_lsp_position(
+                                        loc_text,
+                                        usize::from(loc.range.end()),
+                                    ),
+                                ),
+                            }
+                        });
+                        lsp_types::InlayHintLabelPart {
+                            value: part.value.clone(),
+                            tooltip: None,
+                            location,
+                            command: None,
+                        }
+                    })
+                    .collect();
+
+                // Only insertable hints (e.g., let bindings) get text edits.
+                // For loops and parameter hints don't support insertion.
+                let text_edits = if h.insertable {
+                    Some(vec![lsp_types::TextEdit {
                         range: lsp_types::Range::new(position, position),
-                        new_text: h.label.clone(),
-                    }]),
-                    baml_lsp2_actions::AnnotationKind::Parameter => None,
+                        new_text: h.label_text(),
+                    }])
+                } else {
+                    None
                 };
+
                 lsp_types::InlayHint {
                     position,
-                    label: lsp_types::InlayHintLabel::String(h.label),
+                    label: lsp_types::InlayHintLabel::LabelParts(label_parts),
                     kind: Some(match h.kind {
                         baml_lsp2_actions::AnnotationKind::Type => lsp_types::InlayHintKind::TYPE,
                         baml_lsp2_actions::AnnotationKind::Parameter => {

@@ -58,3 +58,5 @@ function qux() -> () {
 //
 //- inlay_hints
 // for_loops.baml:12:15 (Type) ": int"
+// for_loops.baml:18:15 (Type) ": int"
+// for_loops.baml:24:15 (Type) ": Color[]"

@@ -2606,6 +2606,7 @@ impl LoweringContext {
         // Desugaring to index-based basic blocks happens at MIR lowering time.
 
         let mut iter_name = Name::new("_iter_var");
+        let mut iter_name_range = range; // Track the binding name's span
         let mut iter_expr_opt = None;
         let mut body_opt = None;
         let mut seen_in = false;
@@ -2620,6 +2621,7 @@ impl LoweringContext {
                     // Non-parenthesized form: `for i in xs` — bare WORD before KW_IN
                     k if is_ident_token(k) && !seen_in => {
                         iter_name = Name::new(token.text());
+                        iter_name_range = token.text_range();
                     }
                     _ => {
                         if seen_in && iter_expr_opt.is_none() {
@@ -2636,6 +2638,7 @@ impl LoweringContext {
                             if let rowan::NodeOrToken::Token(tok) = t {
                                 if is_ident_token(tok.kind()) {
                                     iter_name = Name::new(tok.text());
+                                    iter_name_range = tok.text_range();
                                     break;
                                 }
                             }
@@ -2652,7 +2655,7 @@ impl LoweringContext {
 
         let collection = iter_expr_opt.unwrap_or_else(|| self.alloc_expr(Expr::Missing, range));
         let body = body_opt.unwrap_or_else(|| self.alloc_expr(Expr::Missing, range));
-        let binding = self.alloc_pattern(Pattern::Binding(iter_name), range);
+        let binding = self.alloc_pattern(Pattern::Binding(iter_name), iter_name_range);
 
         self.alloc_stmt(
             Stmt::For {

@@ -318,7 +318,7 @@ fn format_annotations(
 
         output.push_str(&format!(
             "// {filename}:{line}:{col}{kind_str} {:?}\n",
-            hint.label
+            hint.label_text()
         ));
     }
 
