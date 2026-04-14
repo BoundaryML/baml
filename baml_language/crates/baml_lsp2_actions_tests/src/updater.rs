@@ -30,11 +30,13 @@ pub fn update_test_file(
         completion_section.as_deref(),
         result.actual_inlay_hints.as_deref(),
         result.actual_semantic_tokens.as_deref(),
+        result.actual_folding_ranges.as_deref(),
         &result.diagnostics_comments,
         &result.hovers_comments,
         &result.completions_comments,
         &result.inlay_hints_comments,
         &result.semantic_tokens_comments,
+        &result.folding_ranges_comments,
     );
 
     // Combine source and new expectations
@@ -78,11 +80,13 @@ fn generate_expectations_section(
     completions: Option<&str>,
     inlay_hints: Option<&str>,
     semantic_tokens: Option<&str>,
+    folding_ranges: Option<&str>,
     diagnostics_comments: &[String],
     hovers_comments: &[String],
     completions_comments: &[String],
     inlay_hints_comments: &[String],
     semantic_tokens_comments: &[String],
+    folding_ranges_comments: &[String],
 ) -> String {
     let mut section = String::new();
     section.push_str("\n\n//----\n");
@@ -153,6 +157,20 @@ fn generate_expectations_section(
         section.push('\n');
     }
 
+    if let Some(folding_ranges) = folding_ranges {
+        section.push_str("//\n");
+        section.push_str("//- folding_ranges\n");
+
+        // Add preserved folding ranges comments first
+        for comment in folding_ranges_comments {
+            section.push_str(comment);
+            section.push('\n');
+        }
+
+        section.push_str(folding_ranges);
+        section.push('\n');
+    }
+
     section
 }
 
@@ -169,6 +187,8 @@ mod tests {
             None,
             None,
             None,
+            None,
+            &[],
             &[],
             &[],
             &[],
@@ -192,6 +212,8 @@ mod tests {
             None,
             None,
             None,
+            None,
+            &[],
             &[],
             &[],
             &[],
@@ -215,7 +237,9 @@ mod tests {
             None,
             None,
             None,
+            None,
             &diagnostics_comments,
+            &[],
             &[],
             &[],
             &[],
@@ -243,8 +267,10 @@ mod tests {
             None,
             None,
             None,
+            None,
             &[],
             &hovers_comments,
+            &[],
             &[],
             &[],
             &[],
@@ -270,6 +296,8 @@ mod tests {
             Some(completions),
             None,
             None,
+            None,
+            &[],
             &[],
             &[],
             &[],

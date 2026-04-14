@@ -66,6 +66,11 @@ pub struct ParsedTestFile {
     pub inlay_hints_comments: Vec<String>,
     /// User comments in the semantic tokens section that should be preserved.
     pub semantic_tokens_comments: Vec<String>,
+    /// Expected folding ranges section (after `//- folding_ranges`).
+    /// None if section is omitted.
+    pub expected_folding_ranges: Option<String>,
+    /// User comments in the folding ranges section that should be preserved.
+    pub folding_ranges_comments: Vec<String>,
 }
 
 /// Expected completions for a cursor position.
@@ -122,11 +127,13 @@ pub fn parse_test_file(content: &str, default_filename: &str) -> ParsedTestFile 
         expected_completions: expectations.completions,
         expected_inlay_hints: expectations.inlay_hints,
         expected_semantic_tokens: expectations.semantic_tokens,
+        expected_folding_ranges: expectations.folding_ranges,
         diagnostics_comments: expectations.diagnostics_comments,
         hovers_comments: expectations.hovers_comments,
         completions_comments: expectations.completions_comments,
         inlay_hints_comments: expectations.inlay_hints_comments,
         semantic_tokens_comments: expectations.semantic_tokens_comments,
+        folding_ranges_comments: expectations.folding_ranges_comments,
     }
 }
 
@@ -288,11 +295,13 @@ struct ParsedExpectations {
     completions: Option<CompletionExpectation>,
     inlay_hints: Option<String>,
     semantic_tokens: Option<String>,
+    folding_ranges: Option<String>,
     diagnostics_comments: Vec<String>,
     hovers_comments: Vec<String>,
     completions_comments: Vec<String>,
     inlay_hints_comments: Vec<String>,
     semantic_tokens_comments: Vec<String>,
+    folding_ranges_comments: Vec<String>,
 }
 
 /// Parse the expectations section (after `//----`).
@@ -304,11 +313,13 @@ fn parse_expectations_section(section: &str) -> ParsedExpectations {
             completions: None,
             inlay_hints: None,
             semantic_tokens: None,
+            folding_ranges: None,
             diagnostics_comments: Vec::new(),
             hovers_comments: Vec::new(),
             completions_comments: Vec::new(),
             inlay_hints_comments: Vec::new(),
             semantic_tokens_comments: Vec::new(),
+            folding_ranges_comments: Vec::new(),
         };
     }
 
@@ -317,11 +328,13 @@ fn parse_expectations_section(section: &str) -> ParsedExpectations {
     let mut completions: Option<CompletionExpectation> = None;
     let mut inlay_hints: Option<String> = None;
     let mut semantic_tokens: Option<String> = None;
+    let mut folding_ranges: Option<String> = None;
     let mut diagnostics_comments: Vec<String> = Vec::new();
     let mut hovers_comments: Vec<String> = Vec::new();
     let mut completions_comments: Vec<String> = Vec::new();
     let mut inlay_hints_comments: Vec<String> = Vec::new();
     let mut semantic_tokens_comments: Vec<String> = Vec::new();
+    let mut folding_ranges_comments: Vec<String> = Vec::new();
 
     // Find the subsection markers
     let lines: Vec<&str> = section.lines().collect();
@@ -344,6 +357,8 @@ fn parse_expectations_section(section: &str) -> ParsedExpectations {
             Some("inlay_hints")
         } else if trimmed == "//- semantic_tokens" {
             Some("semantic_tokens")
+        } else if trimmed == "//- folding_ranges" {
+            Some("folding_ranges")
         } else {
             None
         };
@@ -360,11 +375,13 @@ fn parse_expectations_section(section: &str) -> ParsedExpectations {
                     &mut completions,
                     &mut inlay_hints,
                     &mut semantic_tokens,
+                    &mut folding_ranges,
                     &mut diagnostics_comments,
                     &mut hovers_comments,
                     &mut completions_comments,
                     &mut inlay_hints_comments,
                     &mut semantic_tokens_comments,
+                    &mut folding_ranges_comments,
                 );
             }
             current_section = Some(new_section_name);
@@ -404,11 +421,13 @@ fn parse_expectations_section(section: &str) -> ParsedExpectations {
             &mut completions,
             &mut inlay_hints,
             &mut semantic_tokens,
+            &mut folding_ranges,
             &mut diagnostics_comments,
             &mut hovers_comments,
             &mut completions_comments,
             &mut inlay_hints_comments,
             &mut semantic_tokens_comments,
+            &mut folding_ranges_comments,
         );
     }
 
@@ -418,11 +437,13 @@ fn parse_expectations_section(section: &str) -> ParsedExpectations {
         completions,
         inlay_hints: inlay_hints.map(|s| s.trim().to_string()),
         semantic_tokens: semantic_tokens.map(|s| s.trim().to_string()),
+        folding_ranges: folding_ranges.map(|s| s.trim().to_string()),
         diagnostics_comments,
         hovers_comments,
         completions_comments,
         inlay_hints_comments,
         semantic_tokens_comments,
+        folding_ranges_comments,
     }
 }
 
@@ -462,11 +483,13 @@ fn save_section_with_comments(
     completions: &mut Option<CompletionExpectation>,
     inlay_hints: &mut Option<String>,
     semantic_tokens: &mut Option<String>,
+    folding_ranges: &mut Option<String>,
     diagnostics_comments: &mut Vec<String>,
     hovers_comments: &mut Vec<String>,
     completions_comments: &mut Vec<String>,
     inlay_hints_comments: &mut Vec<String>,
     semantic_tokens_comments: &mut Vec<String>,
+    folding_ranges_comments: &mut Vec<String>,
 ) {
     let content_trimmed = content.trim().to_string();
     match section_name {
@@ -489,6 +512,10 @@ fn save_section_with_comments(
         "semantic_tokens" => {
             *semantic_tokens = Some(content_trimmed);
             *semantic_tokens_comments = comments.to_vec();
+        }
+        "folding_ranges" => {
+            *folding_ranges = Some(content_trimmed);
+            *folding_ranges_comments = comments.to_vec();
         }
         _ => {}
     }

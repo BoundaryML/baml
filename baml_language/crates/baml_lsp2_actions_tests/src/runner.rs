@@ -7,6 +7,7 @@ use baml_lsp2_actions::{
     annotations::{AnnotationKind, InlineAnnotation, annotations},
     check::check_file,
     completions::completions_at,
+    folding::{FoldingRange, folding_ranges},
     tokens::{SemanticToken, semantic_tokens},
     type_info::type_at,
 };
@@ -25,12 +26,14 @@ pub struct TestResult {
     pub completion_result: Option<CompletionTestResult>,
     pub actual_inlay_hints: Option<String>,
     pub actual_semantic_tokens: Option<String>,
+    pub actual_folding_ranges: Option<String>,
     pub diff: Option<String>,
     pub diagnostics_comments: Vec<String>,
     pub hovers_comments: Vec<String>,
     pub completions_comments: Vec<String>,
     pub inlay_hints_comments: Vec<String>,
     pub semantic_tokens_comments: Vec<String>,
+    pub folding_ranges_comments: Vec<String>,
 }
 
 /// Result of completion testing.
@@ -198,18 +201,40 @@ pub fn run_test(parsed: &ParsedTestFile) -> TestResult {
         None
     };
 
+    // 8. Handle folding ranges
+    let actual_folding_ranges = if parsed.expected_folding_ranges.is_some() {
+        let mut all_ranges: Vec<(String, FoldingRange)> = Vec::new();
+        for (filename, source_file) in &file_map {
+            let ranges = folding_ranges(&db, *source_file);
+            for range in ranges {
+                all_ranges.push((filename.clone(), range));
+            }
+        }
+
+        all_ranges.sort_by(|(fa, ra), (fb, rb)| {
+            fa.cmp(fb)
+                .then_with(|| ra.range.start().cmp(&rb.range.start()))
+        });
+
+        Some(format_folding_ranges_results(&all_ranges, &parsed.files))
+    } else {
+        None
+    };
+
     // Compare against expectations
     let diagnostics_passed = parsed.expected_diagnostics == actual_diagnostics;
     let hovers_passed = parsed.expected_hovers == actual_hovers;
     let completions_passed = completion_result.as_ref().map(|r| r.passed).unwrap_or(true);
     let inlay_hints_passed = parsed.expected_inlay_hints == actual_inlay_hints;
     let semantic_tokens_passed = parsed.expected_semantic_tokens == actual_semantic_tokens;
+    let folding_ranges_passed = parsed.expected_folding_ranges == actual_folding_ranges;
 
     let passed = diagnostics_passed
         && hovers_passed
         && completions_passed
         && inlay_hints_passed
-        && semantic_tokens_passed;
+        && semantic_tokens_passed
+        && folding_ranges_passed;
 
     let diff = if !passed {
         Some(generate_full_diff(
@@ -222,6 +247,8 @@ pub fn run_test(parsed: &ParsedTestFile) -> TestResult {
             actual_inlay_hints.as_deref(),
             parsed.expected_semantic_tokens.as_deref(),
             actual_semantic_tokens.as_deref(),
+            parsed.expected_folding_ranges.as_deref(),
+            actual_folding_ranges.as_deref(),
         ))
     } else {
         None
@@ -234,11 +261,13 @@ pub fn run_test(parsed: &ParsedTestFile) -> TestResult {
         completion_result,
         actual_inlay_hints,
         actual_semantic_tokens,
+        actual_folding_ranges,
         diff,
         diagnostics_comments: parsed.diagnostics_comments.clone(),
         hovers_comments: parsed.hovers_comments.clone(),
         completions_comments: parsed.completions_comments.clone(),
         inlay_hints_comments: parsed.inlay_hints_comments.clone(),
+        folding_ranges_comments: parsed.folding_ranges_comments.clone(),
         semantic_tokens_comments: parsed.semantic_tokens_comments.clone(),
     }
 }
@@ -352,7 +381,30 @@ fn format_semantic_tokens_results(
     output.trim_end().to_string()
 }
 
-/// Generate a full diff including all five sections.
+/// Format folding ranges for output.
+fn format_folding_ranges_results(
+    ranges: &[(String, FoldingRange)],
+    files: &IndexMap<String, VirtualFile>,
+) -> String {
+    if ranges.is_empty() {
+        return "// <no-folding-ranges>".to_string();
+    }
+
+    let mut output = String::new();
+    for (filename, range) in ranges {
+        let file_content = &files[filename].content;
+        let (start_line, start_col) = offset_to_line_col(file_content, range.range.start().into());
+        let (end_line, end_col) = offset_to_line_col(file_content, range.range.end().into());
+
+        output.push_str(&format!(
+            "// {filename}:{start_line}:{start_col}-{end_line}:{end_col}\n"
+        ));
+    }
+
+    output.trim_end().to_string()
+}
+
+/// Generate a full diff including all sections.
 #[allow(clippy::too_many_arguments)]
 fn generate_full_diff(
     expected_diag: &str,
@@ -364,6 +416,8 @@ fn generate_full_diff(
     actual_inlay_hints: Option<&str>,
     expected_semantic_tokens: Option<&str>,
     actual_semantic_tokens: Option<&str>,
+    expected_folding_ranges: Option<&str>,
+    actual_folding_ranges: Option<&str>,
 ) -> String {
     let mut diff = String::new();
 
@@ -411,6 +465,14 @@ fn generate_full_diff(
         diff.push_str(expected_semantic_tokens.unwrap_or("<none>"));
         diff.push_str("\n\nActual:\n");
         diff.push_str(actual_semantic_tokens.unwrap_or("<none>"));
+    }
+
+    if expected_folding_ranges.is_some() || actual_folding_ranges.is_some() {
+        diff.push_str("\n\n=== FOLDING RANGES ===\n");
+        diff.push_str("Expected:\n");
+        diff.push_str(expected_folding_ranges.unwrap_or("<none>"));
+        diff.push_str("\n\nActual:\n");
+        diff.push_str(actual_folding_ranges.unwrap_or("<none>"));
     }
 
     diff

@@ -77,6 +77,7 @@ pub(super) fn server_capabilities() -> ServerCapabilities {
                 resolve_provider: Some(false),
             }),
         )),
+        folding_range_provider: Some(lsp_types::FoldingRangeProviderCapability::Simple(true)),
         ..Default::default()
     }
 }
@@ -856,6 +857,62 @@ impl BexLspRequest for BexMulitProject {
             },
             new_text: formatted,
         }]))
+    }
+
+    fn on_request_text_document_folding_range(
+        &self,
+        params: lsp_request_params!("textDocument/foldingRange"),
+    ) -> Result<lsp_request_result!("textDocument/foldingRange"), LspError> {
+        let path = self.get_path_from_uri(&params.text_document.uri)?;
+        let root_path = Self::get_baml_project_root(&path)?;
+        let project_handle = self.get_or_create_project(root_path)?;
+
+        let project = project_handle.project.try_lock_db()?;
+        let lsp_db = project.db();
+        let Some(source_file) = lsp_db.get_file(std::path::Path::new(path.as_str())) else {
+            return Ok(None);
+        };
+
+        let text = source_file.text(lsp_db);
+        let line_starts = compute_line_starts(text);
+        let encoding = self.position_encoding;
+
+        let ranges = baml_lsp2_actions::folding_ranges(lsp_db, source_file);
+
+        let lsp_ranges: Vec<lsp_types::FoldingRange> = ranges
+            .into_iter()
+            .filter_map(|r| {
+                let full_range =
+                    super::diagnostics::span_to_lsp_range(r.range, text, &line_starts, encoding);
+
+                // LSP folding ranges are line-based; only fold multi-line regions.
+                if full_range.start.line >= full_range.end.line {
+                    return None;
+                }
+
+                Some(lsp_types::FoldingRange {
+                    start_line: full_range.start.line,
+                    start_character: Some(full_range.start.character),
+                    end_line: full_range.end.line,
+                    end_character: Some(full_range.end.character),
+                    kind: Some(match r.kind {
+                        baml_lsp2_actions::FoldingRangeKind::Region => {
+                            lsp_types::FoldingRangeKind::Region
+                        }
+                        baml_lsp2_actions::FoldingRangeKind::Comment => {
+                            lsp_types::FoldingRangeKind::Comment
+                        }
+                    }),
+                    collapsed_text: None,
+                })
+            })
+            .collect();
+
+        if lsp_ranges.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(lsp_ranges))
+        }
     }
 }
 
