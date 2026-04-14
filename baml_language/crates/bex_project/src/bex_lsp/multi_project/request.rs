@@ -10,7 +10,8 @@
 //!   `initialize`. Compiler APIs stay byte-based.
 
 use lsp_types::{
-    CodeLens, CodeLensOptions, CompletionOptions, HoverProviderCapability, InlayHintOptions,
+    CodeActionProviderCapability, CodeLens, CodeLensOptions, CompletionOptions,
+    HoverProviderCapability, InlayHintOptions,
     InlayHintServerCapabilities, SaveOptions, SemanticTokensFullOptions, SemanticTokensLegend,
     SemanticTokensOptions, SemanticTokensServerCapabilities, ServerCapabilities,
     TextDocumentSyncCapability, TextDocumentSyncKind, TextDocumentSyncOptions,
@@ -47,7 +48,7 @@ pub(super) fn server_capabilities(encoding: PositionEncoding) -> ServerCapabilit
         code_lens_provider: Some(CodeLensOptions {
             resolve_provider: Some(true),
         }),
-        code_action_provider: None,
+        code_action_provider: Some(CodeActionProviderCapability::Simple(true)),
         execute_command_provider: Some(lsp_types::ExecuteCommandOptions {
             commands: vec![commands::OpenBamlPanel::COMMAND_ID.to_string()],
             work_done_progress_options: lsp_types::WorkDoneProgressOptions::default(),
