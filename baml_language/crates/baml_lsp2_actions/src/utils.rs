@@ -106,16 +106,18 @@ pub fn definition_span<'db>(
 
 // ── display_ty ────────────────────────────────────────────────────────────────
 
-/// Format a resolved `Ty` as a user-friendly string.
+/// Format a resolved `Ty` as the least-qualified user-friendly string.
 ///
-/// Delegates to the `Display` impl on `Ty`. For user-visible output (hover,
-/// inlay hints) we strip the package qualifier so `user.Foo` shows as `Foo`
-/// and `baml.PrimitiveClient` shows as `PrimitiveClient`.
+/// Shows the shortest name that would be valid in source code:
+/// - User-defined types (package `"user"`) are directly in scope, so we
+///   strip the package prefix: `user.Foo` displays as `Foo`.
+/// - All other packages (`baml`, `env`, future external packages) require
+///   the full qualified path to reference: `baml.fs.File` stays as-is.
 pub fn display_ty(ty: &Ty) -> String {
     use baml_compiler2_tir::ty::PrimitiveType;
     match ty {
-        Ty::Class(qn, _) | Ty::Enum(qn, _) | Ty::TypeAlias(qn, _) => qn.to_string(),
-        Ty::EnumVariant(qn, v, _) => format!("{qn}.{v}"),
+        Ty::Class(qn, _) | Ty::Enum(qn, _) | Ty::TypeAlias(qn, _) => display_qualified_type(qn),
+        Ty::EnumVariant(qn, v, _) => format!("{}.{v}", display_qualified_type(qn)),
         Ty::Primitive(p, _) => match p {
             PrimitiveType::Int => "int".to_string(),
             PrimitiveType::Float => "float".to_string(),
@@ -168,6 +170,18 @@ pub fn display_ty(ty: &Ty) -> String {
         Ty::RustType { .. } => "$rust_type".to_string(),
         Ty::Type { .. } => "type".to_string(),
         Ty::Error { .. } => "!error".to_string(),
+    }
+}
+
+/// Format a `QualifiedTypeName` as the least-qualified string.
+///
+/// User types (package `"user"`) are in scope directly and don't need
+/// qualification. All other packages need the full path.
+fn display_qualified_type(qn: &baml_compiler2_tir::ty::QualifiedTypeName) -> String {
+    if qn.package().as_str() == "user" {
+        qn.name().to_string()
+    } else {
+        qn.to_string()
     }
 }
 

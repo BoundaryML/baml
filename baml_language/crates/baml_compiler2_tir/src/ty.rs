@@ -391,6 +391,8 @@ impl Ty {
             Ty::Literal(lit, Freshness::Fresh, attr) => {
                 Ty::Primitive(PrimitiveType::from_literal(&lit), attr)
             }
+            // Widen enum variants to the enum type (Color.R -> Color)
+            Ty::EnumVariant(qn, _, attr) => Ty::Enum(qn, attr),
             Ty::Union(members, attr) => {
                 let widened: Vec<Ty> = members.into_iter().map(Ty::widen_fresh).collect();
                 dedup_and_collapse(widened, attr)

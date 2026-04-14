@@ -181,6 +181,9 @@ pub fn run_server(playground_via_browser: bool) -> anyhow::Result<()> {
         })?;
 
     // Main event loop: read from stdin, dispatch to bex_project.
+    // Enter the Tokio runtime context so `tokio::spawn` works from sync code.
+    let _guard = tokio_runtime.enter();
+
     let stdin = std::io::stdin();
     let mut stdin = stdin.lock();
 
