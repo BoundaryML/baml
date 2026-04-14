@@ -1258,21 +1258,35 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                     .and_then(|name| self.globals.get(name).copied())
                     .map(GlobalIndex::from_raw);
 
-                if let Some(global_callee) = global_callee {
+                // Special-case `baml.events.send(event_name, data)`:
+                // Instead of a normal Call, emit the dedicated SendEvent instruction
+                // which yields VmExecState::Event to the engine for event dispatch.
+                //
+                // Stack layout required by SendEvent (top-to-bottom): [data, event_name]
+                // So we push args in natural order: args[0]=event_name first, args[1]=data
+                // on top.
+                if func_name.as_deref() == Some("baml.events.send") {
+                    unwrap_infallible(pull_semantics::walk_call_direct_args(self, args));
+                    self.emit(Instruction::SendEvent);
+                    // SendEvent yields null; store null to the destination.
+                    self.emit_store_place(destination);
+                    self.emit_jump_unless_fallthrough(*target);
+                } else if let Some(global_callee) = global_callee {
                     unwrap_infallible(pull_semantics::walk_call_direct_args(self, args));
                     let inst = self.emit(Instruction::Call(global_callee));
                     if let Some(name) = &func_name {
                         self.set_operand(inst, OperandMeta::Callable(name.clone()));
                     }
+                    self.emit_store_place(destination);
+                    self.emit_jump_unless_fallthrough(*target);
                 } else {
                     unwrap_infallible(pull_semantics::walk_call_indirect_operands(
                         self, callee, args,
                     ));
                     self.emit(Instruction::CallIndirect);
+                    self.emit_store_place(destination);
+                    self.emit_jump_unless_fallthrough(*target);
                 }
-
-                self.emit_store_place(destination);
-                self.emit_jump_unless_fallthrough(*target);
             }
 
             Terminator::Unreachable => {

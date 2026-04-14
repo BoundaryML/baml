@@ -25,6 +25,8 @@ namespace baml.errors:
   class StackTrace { methods: [to_string] }
   class Timeout { methods: [] }
   class Unsupported { methods: [] }
+namespace baml.events:
+  function send
 namespace baml.fs:
   class File { methods: [read_string, read_bytes, close] }
   function open

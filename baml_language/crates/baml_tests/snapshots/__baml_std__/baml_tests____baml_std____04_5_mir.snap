@@ -75,6 +75,8 @@ fn baml.env.get_or_panic(key: string) -> string {
 
 fn baml.errors.StackTrace.to_string = builtin(vm)
 
+fn baml.events.send = builtin(vm)
+
 fn baml.fs.File.close = builtin(io)
 
 fn baml.fs.open = builtin(io)

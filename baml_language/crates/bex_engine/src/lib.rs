@@ -1617,6 +1617,11 @@ impl BexEngine {
                             }),
                         });
                     }
+                    // `baml.events.send()` returns null.  The SendEvent instruction
+                    // pops its two arguments but does not push a return value, so we
+                    // push null here before the VM resumes at the next instruction
+                    // (which will store or discard the return value).
+                    vm.stack.push(Value::Null);
                 }
 
                 VmExecState::Notify(_notification) => {

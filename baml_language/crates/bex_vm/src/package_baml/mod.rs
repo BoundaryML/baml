@@ -16,6 +16,7 @@
 //! 2. Implement the method in the appropriate sub-module's `impl` block
 
 mod array;
+mod events;
 mod map;
 mod math;
 mod media;

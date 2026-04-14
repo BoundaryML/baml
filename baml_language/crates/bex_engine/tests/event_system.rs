@@ -469,10 +469,8 @@ async fn test_send_event_bytecode_yields_custom_event() {
     assert_eq!(custom_event.ctx.root_span_id, guard.root);
 }
 
-// === Future tests for Phase 4+ ===
-// These tests are commented out until the corresponding features are implemented.
+// === Phase 4: baml.events.send() API ===
 
-/*
 #[tokio::test]
 async fn test_custom_event_emission() {
     let source = r#"
@@ -502,9 +500,18 @@ async fn test_custom_event_emission() {
     }).expect("Expected Custom event");
 
     assert_eq!(custom.name, "user_clicked");
-    // Verify data contains expected fields
+    // The event's span context must be rooted at our tracking root.
+    let custom_event = events
+        .iter()
+        .find(|e| matches!(&e.event, EventKind::Custom(_)))
+        .unwrap();
+    assert_eq!(custom_event.ctx.root_span_id, guard.root);
 }
 
+// === Future tests for Phase 5+ ===
+// These tests are commented out until the corresponding features are implemented.
+
+/*
 #[tokio::test]
 async fn test_log_event_emission() {
     let source = r#"
