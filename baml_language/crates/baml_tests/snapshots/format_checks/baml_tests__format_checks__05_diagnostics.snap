@@ -407,92 +407,73 @@ source: crates/baml_tests/src/generated_tests.rs
   [hir] Error: Duplicate binding `i` in `LoopStmts`
      ╭─[ loop_stmts.baml:76:14 ]
      │
-  71 │                 for (let i = 0; i < 10; i += 1) {
-     │                          ┬  
-     │                          ╰── first defined as binding here
+  71 │     for (let i = 0; i < 10; i += 1) {
+     │              ┬  
+     │              ╰── first defined as binding here
      │ 
-  76 │                 for (let i = 0; i < 100 && flag; i += 2) {
-     │                          ┬  
-     │                          ╰── duplicate binding definition
+  76 │     for (let i = 0; i < 100 && flag; i += 2) {
+     │              ┬  
+     │              ╰── duplicate binding definition
      │ 
-  88 │         ╭─▶     };
-     ┆         ┆   
-  95 │         ├─▶     };
-     │         │            
-     │         ╰──────────── duplicate binding definition
+  91 │     for (let i in [1, 2, 3]) {
+     │              ┬  
+     │              ╰── duplicate binding definition
      │ 
- 105 │                 i // 8 var name trailing
-     │                 ┬  
-     │                 ╰── duplicate binding definition
+ 105 │     i // 8 var name trailing
+     │     ┬  
+     │     ╰── duplicate binding definition
      │ 
- 134 │                 i /* 8 var name trailing */
-     │                 ┬  
-     │                 ╰── duplicate binding definition
+ 134 │     i /* 8 var name trailing */
+     │     ┬  
+     │     ╰── duplicate binding definition
      │ 
- 367 │       ╭───▶     ;
-     ┆       ┆     
- 378 │       ├───▶     };
-     │       │              
-     │       ╰────────────── duplicate binding definition
+ 372 │     for (let i in [1, 2, 3]) {
+     │              ┬  
+     │              ╰── duplicate binding definition
      │ 
- 393 │ ╭─────────▶     };
-     ┆ ┆           
- 414 │ ├─────────▶     };
-     │ │                    
-     │ ╰──────────────────── duplicate binding definition
+ 396 │     for (let i in [1, 2, 3, 4, 5]) {
+     │              ┬  
+     │              ╰── duplicate binding definition
      │ 
- 429 │     ╭─────▶     };
-     ┆     ┆       
- 436 │     ├─────▶     };
-     │     │             ▲  
-     │     ╰──────────────── duplicate binding definition
-     │                   │  
-     │   ╭───────────────╯  
-     ┆   ┆         
- 452 │   ├───────▶     };
-     │   │                  
-     │   ╰────────────────── duplicate binding definition
+ 432 │     for (let i in items) {
+     │              ┬  
+     │              ╰── duplicate binding definition
      │ 
- 459 │                 for    (  let  i  =  0  ;  i  <  10  ;  i  +=  1  )    {
-     │                                ┬  
-     │                                ╰── duplicate binding definition
-     │             
-     │             Note: Error code: E0012
+ 439 │     for (let i in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]) {
+     │              ┬  
+     │              ╰── duplicate binding definition
+     │ 
+ 459 │     for    (  let  i  =  0  ;  i  <  10  ;  i  +=  1  )    {
+     │                    ┬  
+     │                    ╰── duplicate binding definition
+     │ 
+     │ Note: Error code: E0012
 ─────╯
 
   [hir] Error: Duplicate binding `item` in `LoopStmts`
-     ╭─[ loop_stmts.baml:151:6 ]
+     ╭─[ loop_stmts.baml:163:5 ]
      │
-  78 │       ╭───▶     };
-     ┆       ┆     
-  83 │       ├───▶     };
-     │       │              
-     │       ╰────────────── first defined as binding here
+  81 │     for (let item in items) {
+     │              ──┬─  
+     │                ╰─── first defined as binding here
      │ 
- 151 │   ╭───────▶     ;
-     ┆   ┆         
- 174 │   ├───────▶     } // 18 body close trailing
-     │   │                                           
-     │   ╰─────────────────────────────────────────── duplicate binding definition
- 175 │ ╭─────────▶     ;
-     ┆ ┆           
- 196 │ ├─────────▶     } /* 18 body close trailing */
-     │ │                                                
-     │ ╰──────────────────────────────────────────────── duplicate binding definition
+ 163 │     item // 8 var name trailing
+     │     ──┬─  
+     │       ╰─── duplicate binding definition
      │ 
- 217 │     ╭─────▶     };
-     ┆     ┆       
- 222 │     ├─────▶     };
-     │     │                
-     │     ╰──────────────── duplicate binding definition
+ 185 │     item /* 8 var name trailing */
+     │     ──┬─  
+     │       ╰─── duplicate binding definition
      │ 
- 461 │         ╭─▶     };
-     ┆         ┆   
- 465 │         ├─▶     };
-     │         │            
-     │         ╰──────────── duplicate binding definition
-     │             
-     │             Note: Error code: E0012
+ 220 │     for (let item in ["very long string one", "very long string two", "very long string three", "very long string four"]) {
+     │              ──┬─  
+     │                ╰─── duplicate binding definition
+     │ 
+ 463 │     for    (  let  item  in  items  )    {
+     │                    ──┬─  
+     │                      ╰─── duplicate binding definition
+     │ 
+     │ Note: Error code: E0012
 ─────╯
 
   [hir] Error: Duplicate binding `extremely_long_loop_counter_variable` in `LoopStmts`
@@ -514,60 +495,47 @@ source: crates/baml_tests/src/generated_tests.rs
 ─────╯
 
   [hir] Error: Duplicate binding `extremely_long_item_variable_name` in `LoopStmts`
-     ╭─[ loop_stmts.baml:319:6 ]
+     ╭─[ loop_stmts.baml:331:5 ]
      │
- 222 │     ╭─▶     };
-     ┆     ┆   
- 227 │     ├─▶     };
-     │     │            
-     │     ╰──────────── first defined as binding here
+ 225 │     for (let extremely_long_item_variable_name in ["alpha bravo charlie", "delta echo foxtrot", "golf hotel india", "juliet kilo lima", "mike november oscar", "papa quebec romeo"]) {
+     │              ────────────────┬────────────────  
+     │                              ╰────────────────── first defined as binding here
      │ 
- 319 │   ╭───▶     ;
-     ┆   ┆     
- 342 │   ├───▶     } // 18 close trailing
-     │   │                                  
-     │   ╰────────────────────────────────── duplicate binding definition
- 343 │ ╭─────▶     ;
-     ┆ ┆       
- 366 │ ├─────▶     } /* 18 close trailing */
-     │ │                                       
-     │ ╰─────────────────────────────────────── duplicate binding definition
-     │         
-     │         Note: Error code: E0012
+ 331 │     extremely_long_item_variable_name // 8 name trailing
+     │     ────────────────┬────────────────  
+     │                     ╰────────────────── duplicate binding definition
+     │ 
+ 355 │     extremely_long_item_variable_name /* 8 name trailing */
+     │     ────────────────┬────────────────  
+     │                     ╰────────────────── duplicate binding definition
+     │ 
+     │ Note: Error code: E0012
 ─────╯
 
   [hir] Error: Duplicate binding `j` in `LoopStmts`
-     ╭─[ loop_stmts.baml:372:31 ]
+     ╭─[ loop_stmts.baml:373:18 ]
      │
-  91 │       ╭─▶     for (let i in [1, 2, 3]) {
-     ┆       ┆   
-  94 │       ├─▶         };
-     │       │                
-     │       ╰──────────────── first defined as binding here
+  92 │         for (let j in [4, 5, 6]) {
+     │                  ┬  
+     │                  ╰── first defined as binding here
      │ 
- 372 │     ╭───▶     for (let i in [1, 2, 3]) {
-     ┆     ┆     
- 377 │     ├───▶         };
-     │     │                  
-     │     ╰────────────────── duplicate binding definition
+ 373 │         for (let j in [4, 5, 6]) {
+     │                  ┬  
+     │                  ╰── duplicate binding definition
      │ 
- 399 │   ╭─────▶         }
-     ┆   ┆       
- 413 │   ├─────▶         };
-     │   │                    
-     │   ╰──────────────────── duplicate binding definition
+ 400 │         for (let j in [10, 20, 30, 40, 50]) {
+     │                  ┬  
+     │                  ╰── duplicate binding definition
      │ 
- 433 │                   for (let j = i * i + result * result; j < 1000000 && flag && i > 0 && result > 0 && j != 42; j += i + result + 1) {
-     │                            ┬  
-     │                            ╰── duplicate binding definition
+ 433 │         for (let j = i * i + result * result; j < 1000000 && flag && i > 0 && result > 0 && j != 42; j += i + result + 1) {
+     │                  ┬  
+     │                  ╰── duplicate binding definition
      │ 
- 439 │ ╭───────▶     for (let i in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]) {
-     ┆ ┆         
- 451 │ ├───────▶         };
-     │ │                      
-     │ ╰────────────────────── duplicate binding definition
-     │           
-     │           Note: Error code: E0012
+ 440 │         for (let j in [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]) {
+     │                  ┬  
+     │                  ╰── duplicate binding definition
+     │ 
+     │ Note: Error code: E0012
 ─────╯
 
   [type] Warning: unreachable code: 1 statement(s) after diverging statement
