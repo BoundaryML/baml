@@ -1,0 +1,13 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] Error: unresolved name: baml.to_string
+    ╭─[ main.baml:21:15 ]
+    │
+ 21 │     b + ": " + baml.to_string(a)
+    │               ───────┬───────  
+    │                      ╰───────── unresolved name: baml.to_string
+    │ 
+    │ Note: Error code: E0001
+────╯

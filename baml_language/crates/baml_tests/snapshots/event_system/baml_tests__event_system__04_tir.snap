@@ -1,0 +1,40 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== TIR2 ===
+function user.simple_function() -> int throws never {
+  { : 42
+    42 : 42
+  }
+}
+function user.nested_outer() -> int throws never {
+  { : int
+    nested_inner() + 1 : int
+  }
+}
+function user.nested_inner() -> int throws never {
+  { : 10
+    10 : 10
+  }
+}
+function user.with_args(a: int, b: string) -> string throws never {
+  { : string
+    b + ": " + baml.to_string(a) : string
+  }
+  !! 463..478: unresolved name: baml.to_string
+}
+function user.with_complex_return() -> map<string, int> throws never {
+  { : map<string, int>
+    map { "one": 1, "two": 2, "three": 3 } : map<string, int>
+  }
+}
+function user.future_custom_events(name: string) -> null throws never {
+  { : null
+    null : null
+  }
+}
+function user.future_logging(message: string) -> null throws never {
+  { : null
+    null : null
+  }
+}

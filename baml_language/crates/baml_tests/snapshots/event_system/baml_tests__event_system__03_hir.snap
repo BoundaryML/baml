@@ -1,0 +1,25 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== HIR2 ===
+function user.future_custom_events(name: string) -> null  [expr] {
+  {  } null
+}
+function user.future_logging(message: string) -> null  [expr] {
+  {  } null
+}
+function user.nested_inner() -> int  [expr] {
+  {  } 10
+}
+function user.nested_outer() -> int  [expr] {
+  {  } nested_inner() Add 1
+}
+function user.simple_function() -> int  [expr] {
+  {  } 42
+}
+function user.with_args(a: int, b: string) -> string  [expr] {
+  {  } b Add ": " Add baml.to_string(a)
+}
+function user.with_complex_return() -> map<string, int>  [expr] {
+  {  } map { "one": 1, "two": 2, "three": 3 }
+}

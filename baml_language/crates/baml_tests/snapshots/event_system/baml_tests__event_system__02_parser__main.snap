@@ -1,0 +1,194 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "simple_function"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR "{
+    42
+}"
+        L_BRACE "{"
+        INTEGER_LITERAL "42"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "nested_outer"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        BINARY_EXPR
+          CALL_EXPR
+            WORD "nested_inner"
+            CALL_ARGS "()"
+              L_PAREN "("
+              R_PAREN ")"
+          PLUS "+"
+          INTEGER_LITERAL "1"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "nested_inner"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR "{
+    10
+}"
+        L_BRACE "{"
+        INTEGER_LITERAL "10"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "with_args"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "a"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      COMMA ","
+      PARAMETER
+        WORD "b"
+        COLON ":"
+        TYPE_EXPR "string"
+          WORD "string"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        BINARY_EXPR
+          BINARY_EXPR
+            WORD "b"
+            PLUS "+"
+            STRING_LITERAL ": "
+              QUOTE """
+              COLON ":"
+              QUOTE """
+          PLUS "+"
+          CALL_EXPR
+            PATH_EXPR "baml.to_string"
+              WORD "baml"
+              DOT "."
+              WORD "to_string"
+            CALL_ARGS "(a)"
+              L_PAREN "("
+              WORD "a"
+              R_PAREN ")"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "with_complex_return"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR
+      WORD "map"
+      TYPE_ARGS
+        LESS "<"
+        TYPE_EXPR "string"
+          WORD "string"
+        COMMA ","
+        TYPE_EXPR "int"
+          WORD "int"
+        GREATER ">"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        MAP_LITERAL
+          L_BRACE "{"
+          OBJECT_FIELD
+            STRING_LITERAL "one"
+              QUOTE """
+              WORD "one"
+              QUOTE """
+            COLON ":"
+            INTEGER_LITERAL "1"
+          COMMA ","
+          OBJECT_FIELD
+            STRING_LITERAL "two"
+              QUOTE """
+              WORD "two"
+              QUOTE """
+            COLON ":"
+            INTEGER_LITERAL "2"
+          COMMA ","
+          OBJECT_FIELD
+            STRING_LITERAL "three"
+              QUOTE """
+              WORD "three"
+              QUOTE """
+            COLON ":"
+            INTEGER_LITERAL "3"
+          R_BRACE "}"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "future_custom_events"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "name"
+        COLON ":"
+        TYPE_EXPR "string"
+          WORD "string"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "null"
+      WORD "null"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR "{
+    // TODO: baml.events.send("user_action", { name: name })
+    null
+}"
+        L_BRACE "{"
+        WORD "null"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "future_logging"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "message"
+        COLON ":"
+        TYPE_EXPR "string"
+          WORD "string"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "null"
+      WORD "null"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR "{
+    // TODO: log.info(message, { source: "event_system_test" })
+    null
+}"
+        L_BRACE "{"
+        WORD "null"
+        R_BRACE "}"
+
+=== ERRORS ===
+None
