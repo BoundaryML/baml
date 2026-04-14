@@ -517,4 +517,25 @@ mod tests {
 
         assert_eq!(source_file.items.len(), 2);
     }
+
+    #[test]
+    fn test_colon_without_type_is_error() {
+        // A parameter with colon but no type should fail to parse in the formatter
+        let source = r#"
+            function BadParam(x:) -> int {
+                1
+            }
+            "#;
+
+        let mut db = ProjectDatabase::new();
+        let file = db.add_file("test.baml", source);
+        let parsed = parse_green(&db, file);
+        let syntax_tree = SyntaxNode::new_root(parsed);
+        let result = SourceFile::from_cst(SyntaxElement::Node(syntax_tree));
+
+        assert!(
+            result.is_err(),
+            "Expected error for parameter with colon but no type"
+        );
+    }
 }

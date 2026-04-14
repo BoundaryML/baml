@@ -5,11 +5,11 @@ source: crates/baml_tests/src/generated_tests.rs
 // as well as pattern matching formatting permutations
 
 class MatchSuccess {
-    data: string
+    data: string,
 }
 
 class MatchFailure {
-    reason: string
+    reason: string,
 }
 
 enum MatchStatus {

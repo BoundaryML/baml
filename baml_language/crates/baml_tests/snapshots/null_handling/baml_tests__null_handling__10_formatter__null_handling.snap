@@ -9,27 +9,27 @@ source: crates/baml_tests/src/generated_tests.rs
 // ============================================================================
 
 class Address {
-    street: string
-    zip: string?
+    street: string,
+    zip: string?,
 }
 
 class Profile {
-    name: string
-    address: Address?
-    scores: int[]?
-    settings: map<string, string>?
+    name: string,
+    address: Address?,
+    scores: int[]?,
+    settings: map<string, string>?,
 }
 
 class User {
-    id: int
-    profile: Profile?
+    id: int,
+    profile: Profile?,
 }
 
 class Node {
-    value: int
-    next: Node?
-    children: Node[]?
-    labels: map<string, Node>?
+    value: int,
+    next: Node?,
+    children: Node[]?,
+    labels: map<string, Node>?,
 }
 
 // ============================================================================

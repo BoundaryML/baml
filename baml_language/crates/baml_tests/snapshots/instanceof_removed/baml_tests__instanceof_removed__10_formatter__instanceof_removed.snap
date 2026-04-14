@@ -5,11 +5,11 @@ source: crates/baml_tests/src/generated_tests.rs
 // Using it should produce error E0098 with a migration hint.
 
 class Cat {
-    name: string
+    name: string,
 }
 
 class Dog {
-    breed: string
+    breed: string,
 }
 
 function check_instanceof(x: Cat | Dog) -> bool {

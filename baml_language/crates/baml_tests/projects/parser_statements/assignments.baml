@@ -55,3 +55,57 @@ function block_with_tail() -> int {
   };
   return x;
 }
+
+// Let without semicolons (formatter synthesizes them)
+function let_no_semicolons() -> int {
+  let x = 1
+  let y = 2
+  return x + y
+}
+
+// Mixed semicolons on let statements
+function let_mixed_semicolons() -> int {
+  let a = 1;
+  let b = 2
+  let c = 3;
+  let d = 4
+  return a + b + c + d
+}
+
+// Edge case: call followed by parens on next line - parses as foo()(1) (chained call)
+function edge_call_then_parens(foo: () -> (int) -> int) -> int {
+  foo()
+  (1)
+  2
+}
+
+// Edge case: call followed by bracket on next line - parses as foo()[0] (index into result)
+function edge_call_then_index(foo: () -> int[]) -> int {
+  foo()
+  [0]
+  1
+}
+
+// Edge case: identifier followed by object literal - parses as EdgeFoo{x:1} (constructor)
+class EdgeFoo {
+  x: int,
+}
+
+function edge_type_then_object() -> int {
+  EdgeFoo
+  {x: 1}.x
+}
+
+// Edge case: let with function call, then index on next line - parses as bar()[0]
+function edge_let_call_then_index(bar: () -> int[]) -> int {
+  let x = bar()
+  [0]
+  x
+}
+
+// Edge case: semicolon forces statement boundary - [0] is separate expression
+function edge_semicolon_forces_boundary(bar: () -> int[]) -> int {
+  bar();
+  [0]
+  1
+}

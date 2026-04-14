@@ -5,7 +5,7 @@ source: crates/baml_tests/src/generated_tests.rs
 function test_return_mismatch() -> int {
     let bad = (x: int) -> string {
         x * 2
-    }
+    };
     0
 }
 
@@ -13,13 +13,13 @@ function test_return_mismatch() -> int {
 function test_no_annotation_no_context() -> int {
     let bad = (x) -> {
         x * 2
-    }
+    };
     0
 }
 
 // Arity mismatch: lambda has wrong number of params for expected type
 function test_arity_mismatch() -> int[] {
-    let items: int[] = [1, 2, 3]
+    let items: int[] = [1, 2, 3];
     items
         .map(
             (x, y) -> {
@@ -30,7 +30,7 @@ function test_arity_mismatch() -> int[] {
 
 // Wrong param type annotation vs expected
 function test_param_type_mismatch() -> int[] {
-    let items: int[] = [1, 2, 3]
+    let items: int[] = [1, 2, 3];
     items
         .map(
             (x: string) -> {
@@ -43,7 +43,7 @@ function test_param_type_mismatch() -> int[] {
 function test_unknown_param_type() -> int {
     let f = (x: NonExistentType) -> {
         0
-    }
+    };
     0
 }
 
@@ -51,6 +51,6 @@ function test_unknown_param_type() -> int {
 function test_unknown_return_type() -> int {
     let f = (x: int) -> NonExistentType {
         x
-    }
+    };
     0
 }

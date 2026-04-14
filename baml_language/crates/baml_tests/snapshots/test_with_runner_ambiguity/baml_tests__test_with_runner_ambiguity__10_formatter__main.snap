@@ -20,7 +20,7 @@ test "call runner" with testing.Quorum(5, 3) {
 // Case 3: Constructor runner — `{ threshold: 0.5 }` is parsed as an object
 // literal because peek-ahead sees `<word> :` after the `{`.
 class MyRunner {
-    threshold: float
+    threshold: float,
 }
 
 test "constructor runner" with MyRunner { threshold: 0.5 } {

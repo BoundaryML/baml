@@ -4,19 +4,19 @@ source: crates/baml_tests/src/generated_tests.rs
 // Testing all the formatter cases for expressions that don't have their own files
 
 class OtherPoint {
-    x: int
-    y: int
+    x: int,
+    y: int,
 }
 
 class OtherVec {
-    p: OtherPoint
-    q: OtherPoint
+    p: OtherPoint,
+    q: OtherPoint,
 }
 
 class OtherTriple {
-    a: OtherVec
-    b: OtherVec
-    c: OtherVec
+    a: OtherVec,
+    b: OtherVec,
+    c: OtherVec,
 }
 
 function OtherExprs(a: int, b: int) -> int {

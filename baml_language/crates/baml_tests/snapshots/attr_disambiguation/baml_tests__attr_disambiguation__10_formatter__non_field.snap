@@ -5,16 +5,16 @@ source: crates/baml_tests/src/generated_tests.rs
 // Field attrs should produce diagnostics; type attrs are valid.
 
 class EFoo {
-    x: int
+    x: int,
 }
 class EA {
-    x: int
+    x: int,
 }
 class EB {
-    x: int
+    x: int,
 }
 class EC {
-    x: int
+    x: int,
 }
 
 // E1: type alias with field attr — ERROR

@@ -81,6 +81,169 @@ fn user.block_with_tail() -> int {
     }
 }
 
+fn user.edge_call_then_index(foo: () -> int[]) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: () -> int[] // foo // param
+    let _2: int[]
+    let _3: 0
+
+    bb0: {
+        _2 = call copy _1() -> [bb1];
+    }
+
+    bb1: {
+        _3 = const 0_i64;
+        _0 = const 1_i64;
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.edge_call_then_parens(foo: () -> (int) -> int) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: () -> (int) -> int // foo // param
+    let _2: int
+    let _3: (int) -> int
+
+    bb0: {
+        _3 = call copy _1() -> [bb1];
+    }
+
+    bb1: {
+        _2 = call copy _3(const 1_i64) -> [bb2];
+    }
+
+    bb2: {
+        _0 = const 2_i64;
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+fn user.edge_let_call_then_index(bar: () -> int[]) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: () -> int[] // bar // param
+    let _2: int // x
+    let _3: int[]
+    let _4: 0
+
+    bb0: {
+        _3 = call copy _1() -> [bb1];
+    }
+
+    bb1: {
+        _4 = const 0_i64;
+        _2 = copy _3[_4];
+        _0 = copy _2;
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.edge_semicolon_forces_boundary(bar: () -> int[]) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: () -> int[] // bar // param
+    let _2: int[]
+
+    bb0: {
+        _2 = call copy _1() -> [bb1];
+    }
+
+    bb1: {
+        _0 = const 1_i64;
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.edge_type_then_object() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: EdgeFoo
+
+    bb0: {
+        _1 = EdgeFoo { const 1_i64 };
+        _0 = copy _1.0;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.let_mixed_semicolons() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: int // a
+    let _2: int // b
+    let _3: int // c
+    let _4: int // d
+    let _5: int
+    let _6: int
+    let _7: int
+    let _8: int
+    let _9: int
+    let _10: int
+
+    bb0: {
+        _1 = const 1_i64;
+        _2 = const 2_i64;
+        _3 = const 3_i64;
+        _4 = const 4_i64;
+        _7 = copy _1;
+        _8 = copy _2;
+        _6 = copy _7 + copy _8;
+        _9 = copy _3;
+        _5 = copy _6 + copy _9;
+        _10 = copy _4;
+        _0 = copy _5 + copy _10;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.let_no_semicolons() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: int // x
+    let _2: int // y
+    let _3: int
+    let _4: int
+
+    bb0: {
+        _1 = const 1_i64;
+        _2 = const 2_i64;
+        _3 = copy _1;
+        _4 = copy _2;
+        _0 = copy _3 + copy _4;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
 fn user.mul_assign() -> int {
     // Locals:
     let _0: int // _0 // return

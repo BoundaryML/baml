@@ -3,8 +3,8 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 // llm namespace: defines Response, references root.Config
 class Response {
-    text: string
-    model: string
+    text: string,
+    model: string,
 }
 
 // Cross-namespace reference back to root

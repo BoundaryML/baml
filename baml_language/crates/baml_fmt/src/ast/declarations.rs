@@ -436,7 +436,8 @@ impl Printable for FunctionParamList {
 #[derive(Debug)]
 pub struct FunctionParam {
     pub name: t::Word,
-    pub ty: Option<(t::Colon, Type)>,
+    /// Type annotation with optional colon (colon is optional per BEP-019).
+    pub ty: Option<(Option<t::Colon>, Type)>,
 }
 
 impl FromCST for FunctionParam {
@@ -448,9 +449,18 @@ impl FromCST for FunctionParam {
 
         let name = it.expect_parse()?;
 
-        let ty = if let Some(colon_elem) = it.next_if_kind(SyntaxKind::COLON) {
-            let colon = t::Colon::from_cst(colon_elem)?;
-            Some((colon, it.expect_parse()?))
+        let colon = it
+            .next_if_kind(SyntaxKind::COLON)
+            .map(t::Colon::from_cst)
+            .transpose()?;
+        let ty = if colon.is_some() {
+            // Colon present - type is required
+            let ty: Type = it.expect_parse()?;
+            Some((colon, ty))
+        } else if it.peek().map(SyntaxElement::kind) == Some(SyntaxKind::TYPE_EXPR) {
+            // No colon but type present (BEP-019 optional colon)
+            let elem = it.next().expect("peeked");
+            Some((None, Type::from_cst(elem)?))
         } else {
             // No type annotation (e.g. `self`)
             None
@@ -473,9 +483,14 @@ impl Printable for FunctionParam {
         printer.print_raw_token(&self.name);
         if let Some((colon, ty)) = &self.ty {
             let mut trivia_len = 0;
-            let (_, colon_trailing) = printer.trivia.get_for_range_split(colon.span());
-            printer.print_str(": ");
-            trivia_len += printer.print_trivia_squished(colon_trailing);
+            // Colon is optional per BEP-019; synthesize if absent
+            if let Some(colon) = colon {
+                let (_, colon_trailing) = printer.trivia.get_for_range_split(colon.span());
+                printer.print_str(": ");
+                trivia_len += printer.print_trivia_squished(colon_trailing);
+            } else {
+                printer.print_str(": ");
+            }
             let ty_leading = printer.trivia.get_leading_for_element(ty);
             trivia_len += printer.print_trivia_squished(ty_leading);
 
@@ -890,8 +905,27 @@ impl FromCST for ClassDecl {
                 return Err(StrongAstError::missing(SyntaxKind::R_BRACE, it.parent));
             };
             match elem.kind() {
-                SyntaxKind::FIELD | SyntaxKind::FUNCTION_DEF | SyntaxKind::BLOCK_ATTRIBUTE => {
-                    items.push(ClassItem::from_cst(elem)?);
+                SyntaxKind::FIELD => {
+                    let field = ClassField::from_cst(elem)?;
+                    let delimiter = if let Some(comma_elem) = it.next_if_kind(SyntaxKind::COMMA) {
+                        Some(ClassFieldDelimiter::Comma(t::Comma::from_cst(comma_elem)?))
+                    } else if let Some(semi_elem) = it.next_if_kind(SyntaxKind::SEMICOLON) {
+                        Some(ClassFieldDelimiter::Semicolon(t::Semicolon::from_cst(
+                            semi_elem,
+                        )?))
+                    } else {
+                        None
+                    };
+                    items.push(ClassItem::Field(field, delimiter));
+                }
+                SyntaxKind::FUNCTION_DEF => {
+                    items.push(ClassItem::Function(FunctionDecl::from_cst(elem)?));
+                }
+                SyntaxKind::BLOCK_ATTRIBUTE => {
+                    items.push(ClassItem::BlockAttribute(BlockAttribute::from_cst(elem)?));
+                }
+                SyntaxKind::COMMA | SyntaxKind::SEMICOLON => {
+                    // Stray delimiter not following a field - skip silently
                 }
                 SyntaxKind::R_BRACE => {
                     break t::RBrace::from_cst(elem)?;
@@ -973,7 +1007,6 @@ pub struct ClassField {
     pub colon: Option<t::Colon>,
     pub ty: Type,
     pub attributes: Vec<Attribute>,
-    // pub comma: Option<t::Comma>,
 }
 
 impl FromCST for ClassField {
@@ -1136,10 +1169,18 @@ impl Printable for ClassField {
     }
 }
 
+/// Delimiter after a class field (comma or semicolon).
+/// The formatter normalizes to comma, but we preserve the original for trivia.
+#[derive(Debug)]
+pub enum ClassFieldDelimiter {
+    Comma(t::Comma),
+    Semicolon(t::Semicolon),
+}
+
 /// Any of the valid items in a [`ClassDecl`].
 #[derive(Debug)]
 pub enum ClassItem {
-    Field(ClassField),
+    Field(ClassField, Option<ClassFieldDelimiter>),
     Function(FunctionDecl),
     BlockAttribute(BlockAttribute),
 }
@@ -1147,7 +1188,7 @@ pub enum ClassItem {
 impl FromCST for ClassItem {
     fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
         let item = match elem.kind() {
-            SyntaxKind::FIELD => ClassItem::Field(ClassField::from_cst(elem)?),
+            SyntaxKind::FIELD => ClassItem::Field(ClassField::from_cst(elem)?, None),
             SyntaxKind::FUNCTION_DEF => ClassItem::Function(FunctionDecl::from_cst(elem)?),
             SyntaxKind::BLOCK_ATTRIBUTE => {
                 ClassItem::BlockAttribute(BlockAttribute::from_cst(elem)?)
@@ -1167,21 +1208,41 @@ impl FromCST for ClassItem {
 impl Printable for ClassItem {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         match self {
-            ClassItem::Field(field) => field.print(shape, printer),
+            ClassItem::Field(field, delimiter) => {
+                let info = field.print(shape, printer);
+                // Always print comma, but preserve trivia from original delimiter
+                match delimiter {
+                    Some(ClassFieldDelimiter::Comma(comma)) => {
+                        printer.print_raw_token(comma);
+                    }
+                    Some(ClassFieldDelimiter::Semicolon(_)) => {
+                        // Normalize to comma; parent handles trailing trivia via rightmost_token()
+                        printer.print_str(",");
+                    }
+                    None => {
+                        printer.print_str(",");
+                    }
+                }
+                info
+            }
             ClassItem::Function(function) => function.print(shape, printer),
             ClassItem::BlockAttribute(attr) => attr.print(shape, printer),
         }
     }
     fn leftmost_token(&self) -> TextRange {
         match self {
-            ClassItem::Field(field) => field.leftmost_token(),
+            ClassItem::Field(field, _) => field.leftmost_token(),
             ClassItem::Function(function) => function.leftmost_token(),
             ClassItem::BlockAttribute(attr) => attr.leftmost_token(),
         }
     }
     fn rightmost_token(&self) -> TextRange {
         match self {
-            ClassItem::Field(field) => field.rightmost_token(),
+            ClassItem::Field(field, delimiter) => match delimiter {
+                Some(ClassFieldDelimiter::Comma(comma)) => comma.span(),
+                Some(ClassFieldDelimiter::Semicolon(semi)) => semi.span(),
+                None => field.rightmost_token(),
+            },
             ClassItem::Function(function) => function.rightmost_token(),
             ClassItem::BlockAttribute(attr) => attr.rightmost_token(),
         }

@@ -163,11 +163,11 @@ type ConstrainedLong = map<string, int | string | bool> @check("valid", {{ this 
 
 // ===== Union of classes =====
 class TypeAliasSuccess {
-    data: string
+    data: string,
 }
 
 class TypeAliasFailure {
-    reason: string
+    reason: string,
 }
 
 type Result = TypeAliasSuccess | TypeAliasFailure;
