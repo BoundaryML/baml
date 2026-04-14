@@ -125,4 +125,21 @@ pub enum WsOutMessage {
     },
     #[serde(rename = "cursorContext")]
     CursorContext { context: serde_json::Value },
+    /// A runtime event was emitted during execution.
+    #[serde(rename = "runtimeEvent")]
+    RuntimeEvent {
+        #[serde(rename = "spanId")]
+        span_id: String,
+        #[serde(rename = "parentSpanId", skip_serializing_if = "Option::is_none")]
+        parent_span_id: Option<String>,
+        #[serde(rename = "rootSpanId")]
+        root_span_id: String,
+        #[serde(rename = "timestampMs")]
+        timestamp_ms: u64,
+        /// Event type: "function_start", "function_end", "log", "custom"
+        #[serde(rename = "eventType")]
+        event_type: String,
+        #[serde(rename = "eventData")]
+        event_data: serde_json::Value,
+    },
 }

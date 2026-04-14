@@ -132,6 +132,17 @@ pub enum PlaygroundNotification {
         call_id: u64,
         data: Vec<u8>,
     },
+    /// A runtime event was emitted during execution.
+    #[serde(rename_all = "camelCase")]
+    RuntimeEvent {
+        span_id: String,
+        parent_span_id: Option<String>,
+        root_span_id: String,
+        timestamp_ms: u64,
+        /// Event type: "function_start", "function_end", "log", "custom"
+        event_type: String,
+        event_data: serde_json::Value,
+    },
 }
 
 pub trait PlaygroundSender: Send + Sync {
