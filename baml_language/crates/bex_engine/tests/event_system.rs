@@ -508,12 +508,13 @@ async fn test_custom_event_emission() {
     assert_eq!(custom_event.ctx.root_span_id, guard.root);
 }
 
-// === Future tests for Phase 5+ ===
-// These tests are commented out until the corresponding features are implemented.
+// === Phase 5: ns_log Namespace ===
 
-/*
+/// Verify that `log.info()` emits a custom event with name="log" and the expected
+/// level/message fields.  The `log.*` functions are pure BAML wrappers around
+/// `baml.events.send("log", { level, message, data })`.
 #[tokio::test]
-async fn test_log_event_emission() {
+async fn test_log_info_event_emission() {
     let source = r#"
         function log_something() -> null {
             log.info("Processing started", { step: 1 })
@@ -530,16 +531,213 @@ async fn test_log_event_emission() {
         .with_host_ctx(host_ctx)
         .build();
 
-    engine.call_function("log_something", vec![], call_ctx, true).await.unwrap();
+    engine
+        .call_function("log_something", vec![], call_ctx, true)
+        .await
+        .unwrap();
 
     let events = collect_events(&guard);
 
-    let log = events.iter().find_map(|e| match &e.event {
-        EventKind::Log(l) => Some(l),
-        _ => None,
-    }).expect("Expected Log event");
+    // log.info() emits a CustomEvent with name="log"
+    let custom = events
+        .iter()
+        .find_map(|e| match &e.event {
+            EventKind::Custom(c) if c.name == "log" => Some(c),
+            _ => None,
+        })
+        .expect("Expected CustomEvent with name='log'");
 
-    assert_eq!(log.level, "info");
-    assert_eq!(log.message, "Processing started");
+    assert_eq!(custom.name, "log");
+
+    // Verify that the Collector's FunctionLog exposes this as a LogEvent
+    let collector = bex_events::Collector::new("test".into());
+    collector.track(&guard.root);
+    let logs = collector.logs();
+    // The collector was attached after execution so it won't have events here;
+    // instead verify extraction directly from the raw events.
+    let _ = logs; // suppress unused warning
+
+    // Check level and message are embedded correctly in custom.data
+    match &custom.data {
+        bex_external_types::BexExternalValue::Map { entries, .. } => {
+            assert_eq!(
+                entries.get("level"),
+                Some(&bex_external_types::BexExternalValue::String("info".into()))
+            );
+            assert_eq!(
+                entries.get("message"),
+                Some(&bex_external_types::BexExternalValue::String(
+                    "Processing started".into()
+                ))
+            );
+        }
+        other => panic!("Expected Map data in log custom event, got {:?}", other),
+    }
 }
-*/
+
+/// Verify that all log levels (debug, warn, error) emit the correct "level" field.
+#[tokio::test]
+async fn test_log_all_levels() {
+    let levels = [
+        ("log.debug", "debug"),
+        ("log.warn", "warn"),
+        ("log.error", "error"),
+    ];
+
+    for (fn_call, expected_level) in levels {
+        let source = format!(
+            r#"
+            function emit_log() -> null {{
+                {}("level test", {{}})
+            }}
+            "#,
+            fn_call
+        );
+
+        let snapshot = compile_for_engine(&source);
+        let engine = std::sync::Arc::new(
+            BexEngine::new(
+                snapshot,
+                std::sync::Arc::new(sys_native::SysOps::native()),
+                None,
+            )
+            .unwrap(),
+        );
+
+        let (host_ctx, guard) = setup_tracking();
+        let call_ctx = FunctionCallContextBuilder::new(sys_types::CallId::next())
+            .with_host_ctx(host_ctx)
+            .build();
+
+        engine
+            .call_function("emit_log", vec![], call_ctx, true)
+            .await
+            .unwrap();
+
+        let events = collect_events(&guard);
+        let custom = events
+            .iter()
+            .find_map(|e| match &e.event {
+                EventKind::Custom(c) if c.name == "log" => Some(c),
+                _ => None,
+            })
+            .unwrap_or_else(|| panic!("Expected log CustomEvent for level {}", expected_level));
+
+        match &custom.data {
+            bex_external_types::BexExternalValue::Map { entries, .. } => {
+                assert_eq!(
+                    entries.get("level"),
+                    Some(&bex_external_types::BexExternalValue::String(
+                        expected_level.into()
+                    )),
+                    "Wrong level for {} call",
+                    fn_call
+                );
+            }
+            other => panic!("Expected Map data, got {:?}", other),
+        }
+    }
+}
+
+/// Verify that the Collector's FunctionLog.log_events field is populated from
+/// log.info() calls via the extract_log_from_custom path.
+#[tokio::test]
+async fn test_collector_log_events_extraction() {
+    let source = r#"
+        function do_logging() -> null {
+            log.info("first message", { step: 1 })
+        }
+    "#;
+
+    let snapshot = compile_for_engine(source);
+    let engine = std::sync::Arc::new(
+        BexEngine::new(
+            snapshot,
+            std::sync::Arc::new(sys_native::SysOps::native()),
+            None,
+        )
+        .unwrap(),
+    );
+
+    let root = SpanId::new();
+    bex_events::event_store::track(&root);
+
+    let host_ctx = HostSpanContext {
+        root_span_id: root.clone(),
+        parent_span_id: root.clone(),
+        call_stack: vec![root.clone()],
+    };
+    let call_ctx = FunctionCallContextBuilder::new(sys_types::CallId::next())
+        .with_host_ctx(host_ctx)
+        .build();
+
+    engine
+        .call_function("do_logging", vec![], call_ctx, true)
+        .await
+        .unwrap();
+
+    // Build a FunctionLog from the raw events and check log_events.
+    let events = bex_events::event_store::events_for_span(&root).unwrap_or_default();
+    let log = bex_events::FunctionLog::from_events(root.clone(), &events);
+
+    assert_eq!(log.log_events.len(), 1, "Expected one log event");
+    assert_eq!(log.log_events[0].level, "info");
+    assert_eq!(log.log_events[0].message, "first message");
+
+    bex_events::event_store::untrack(&root);
+}
+
+/// Verify that log.info_simple() (no data argument) works correctly.
+#[tokio::test]
+async fn test_log_simple_variants() {
+    let source = r#"
+        function emit_simple() -> null {
+            log.info_simple("simple message")
+        }
+    "#;
+
+    let snapshot = compile_for_engine(source);
+    let engine = std::sync::Arc::new(
+        BexEngine::new(
+            snapshot,
+            std::sync::Arc::new(sys_native::SysOps::native()),
+            None,
+        )
+        .unwrap(),
+    );
+
+    let (host_ctx, guard) = setup_tracking();
+    let call_ctx = FunctionCallContextBuilder::new(sys_types::CallId::next())
+        .with_host_ctx(host_ctx)
+        .build();
+
+    engine
+        .call_function("emit_simple", vec![], call_ctx, true)
+        .await
+        .unwrap();
+
+    let events = collect_events(&guard);
+    let custom = events
+        .iter()
+        .find_map(|e| match &e.event {
+            EventKind::Custom(c) if c.name == "log" => Some(c),
+            _ => None,
+        })
+        .expect("Expected log CustomEvent from log.info_simple");
+
+    match &custom.data {
+        bex_external_types::BexExternalValue::Map { entries, .. } => {
+            assert_eq!(
+                entries.get("level"),
+                Some(&bex_external_types::BexExternalValue::String("info".into()))
+            );
+            assert_eq!(
+                entries.get("message"),
+                Some(&bex_external_types::BexExternalValue::String(
+                    "simple message".into()
+                ))
+            );
+        }
+        other => panic!("Expected Map data, got {:?}", other),
+    }
+}
