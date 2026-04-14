@@ -99,18 +99,26 @@ interface CollectionRunViewProps {
 }
 
 const CollectionRunView: FC<CollectionRunViewProps> = ({ run, expandedLogId, setExpandedLogId }) => {
+  const hasError = run.status === 'error' && run.error;
   return (
     <div className="flex-1 flex flex-col min-h-0">
       {/* Header */}
       <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-vsc-surface border-b border-vsc-border shrink-0">
-        <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-vsc-green" />
+        <span className={cn('w-1.5 h-1.5 rounded-full shrink-0', hasError ? 'bg-vsc-red' : 'bg-vsc-green')} />
         <span className="text-vsc-accent font-semibold text-[11px]">$collect_tests</span>
-        <span className="text-vsc-text-faint text-[10px] flex-1">collection fetch logs</span>
+        <span className="text-vsc-text-faint text-[10px] flex-1">{hasError ? 'expansion error' : 'collection fetch logs'}</span>
         <span className="text-vsc-text-faint text-[10px]">{run.fetchLogs.length} request{run.fetchLogs.length !== 1 ? 's' : ''}</span>
       </div>
+      {/* Error message */}
+      {hasError && (
+        <div className="px-2.5 py-2 bg-vsc-surface border-b border-vsc-border">
+          <div className="text-[10px] font-semibold text-red-500 mb-1 uppercase tracking-wide">Expansion Error</div>
+          <pre className="text-[11px] text-vsc-text whitespace-pre-wrap font-vsc-mono bg-vsc-bg p-2 rounded border border-vsc-border overflow-auto max-h-[300px]">{run.error}</pre>
+        </div>
+      )}
       {/* Fetch logs */}
       <div className="flex-1 overflow-auto font-vsc-mono text-xs bg-vsc-bg">
-        {run.fetchLogs.length === 0 && (
+        {run.fetchLogs.length === 0 && !hasError && (
           <div className="p-5 text-center text-vsc-text-faint text-[11px]">
             No fetch logs — collection may not have made any HTTP requests
           </div>
@@ -354,28 +362,13 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
                 const jsonStr = new TextDecoder().decode(new Uint8Array(n.data));
                 const tree = JSON.parse(jsonStr);
 
-                // Detect failed expansions: testsets that were pending but are
-                // still lazyTestSet in the returned tree.
-                const pending = pendingExpandsRef.current;
-                if (pending.names.size > 0 && pending.generation === n.generation) {
-                  const stillLazy = new Set<string>();
-                  const collectLazy = (items: any[]) => {
-                    for (const item of items) {
-                      if (item?.type === 'lazyTestSet' && pending.names.has(item.name)) {
-                        stillLazy.add(item.name);
-                      } else if (item?.items && Array.isArray(item.items)) {
-                        collectLazy(item.items);
-                      }
-                    }
-                  };
-                  if (Array.isArray(tree)) collectLazy(tree);
-                  if (stillLazy.size > 0) {
-                    setFailedExpands((prev) => {
-                      const next = new Set(prev);
-                      for (const name of stillLazy) next.add(name);
-                      return next;
-                    });
-                  }
+                // Track failed expansions from the server-provided error field
+                if (n.expandError) {
+                  setFailedExpands((prev) => {
+                    const next = new Set(prev);
+                    next.add(n.expandError!.testsetName);
+                    return next;
+                  });
                 }
 
                 setTestTree(tree);
@@ -387,14 +380,15 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
                 // fetch logs that arrived before this notification.
                 const buffered = pendingLogsRef.current.get(n.callId) ?? [];
                 pendingLogsRef.current.delete(n.callId);
+                const hasError = !!n.expandError;
                 const collectionEntry: RunEntry = {
                   id: n.callId,
                   functionName: '$collect_tests',
                   argsJson: '',
                   fetchLogs: buffered,
                   result: null,
-                  error: null,
-                  status: 'success',
+                  error: hasError ? n.expandError!.message : null,
+                  status: hasError ? 'error' : 'success',
                   startTime: performance.now(),
                   durationMs: null,
                 };
@@ -821,6 +815,27 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
     }
   }, [testTree, selectedProject, generation, port]);
 
+  // Retry expansion for a failed (or already expanded) testset
+  const handleRetryExpand = useCallback((testsetName: string) => {
+    if (!selectedProject) return;
+    // Remove from failed set so it shows spinner again
+    setFailedExpands((prev) => {
+      const next = new Set(prev);
+      next.delete(testsetName);
+      return next;
+    });
+    // Remove from pending so auto-expand doesn't skip it
+    pendingExpandsRef.current.names.delete(testsetName);
+    // Re-send expansion request
+    pendingExpandsRef.current.names.add(testsetName);
+    port.postMessage({
+      type: 'expandTestSet',
+      project: selectedProject,
+      generation,
+      testsetName,
+    });
+  }, [selectedProject, generation, port]);
+
   // ── Derived state ──────────────────────────────────────────────────────
 
   const currentUpdate = selectedProject ? projectUpdates[selectedProject] : undefined;
@@ -1030,6 +1045,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
                 onRunTest={handleRunTest}
                 testRunResults={testRunResults}
                 failedExpands={failedExpands}
+                onRetryExpand={handleRetryExpand}
                 collectionRun={collectionRun}
                 viewingCollection={viewingCollection}
                 onSelectCollectionView={() => { setViewingCollection(true); setViewingTestRun(false); setSelectedFn(null); }}

@@ -32,9 +32,10 @@ interface TestTreeNodeProps {
   onRunTest?: (name: string) => void;
   testRunResults?: Map<string, Record<string, unknown>>;
   failedExpands?: Set<string>;
+  onRetryExpand?: (name: string) => void;
 }
 
-function TestTreeNode({ def, depth = 0, onRunTest, testRunResults, failedExpands }: TestTreeNodeProps) {
+function TestTreeNode({ def, depth = 0, onRunTest, testRunResults, failedExpands, onRetryExpand }: TestTreeNodeProps) {
   const [expanded, setExpanded] = useState(true);
   const indent = 8 + depth * 12;
 
@@ -54,8 +55,17 @@ function TestTreeNode({ def, depth = 0, onRunTest, testRunResults, failedExpands
           {def.name.split('/').pop()}
         </span>
         <span className={cn('text-[9px] ml-1', isFailed ? 'text-red-500' : 'text-vsc-text-faint')}>
-          {isFailed ? 'expansion failed' : 'loading\u2026'}
+          {isFailed ? 'failed' : 'loading\u2026'}
         </span>
+        {isFailed && onRetryExpand && (
+          <button
+            className="ml-auto text-[9px] text-vsc-text-faint hover:text-vsc-text px-1 shrink-0"
+            onClick={(e) => { e.stopPropagation(); onRetryExpand(def.name); }}
+            title={`Retry expansion: ${def.name}`}
+          >
+            retry
+          </button>
+        )}
       </div>
     );
   }
@@ -119,6 +129,7 @@ function TestTreeNode({ def, depth = 0, onRunTest, testRunResults, failedExpands
             onRunTest={onRunTest}
             testRunResults={testRunResults}
             failedExpands={failedExpands}
+            onRetryExpand={onRetryExpand}
           />
         ))}
       </CollapsibleContent>
@@ -140,6 +151,8 @@ export interface FunctionSidebarProps {
   testRunResults?: Map<string, Record<string, unknown>>;
   /** Testset names whose expansion failed — shows error state instead of spinner */
   failedExpands?: Set<string>;
+  /** Called when the user clicks retry on a failed testset expansion */
+  onRetryExpand?: (name: string) => void;
   /** The synthetic collection RunEntry (if any) — used to show fetch log count badge */
   collectionRun?: RunEntry | null;
   /** True when the main panel is showing the collection view */
@@ -161,6 +174,7 @@ export const FunctionSidebar: FC<FunctionSidebarProps> = ({
   onRunTest,
   testRunResults,
   failedExpands,
+  onRetryExpand,
   collectionRun,
   viewingCollection,
   onSelectCollectionView,

@@ -651,6 +651,7 @@ impl BexMulitProject {
                                 call_id: call_id.0,
                                 data: serde_json::to_vec(&serde_json::json!([]))
                                     .unwrap_or_default(),
+                                expand_error: None,
                             },
                         );
                         return;
@@ -678,6 +679,7 @@ impl BexMulitProject {
                                     generation,
                                     call_id: call_id.0,
                                     data,
+                                    expand_error: None,
                                 },
                             );
                         }
@@ -690,6 +692,7 @@ impl BexMulitProject {
                                     call_id: call_id.0,
                                     data: serde_json::to_vec(&serde_json::json!([]))
                                         .unwrap_or_default(),
+                                    expand_error: None,
                                 },
                             );
                         }
@@ -704,6 +707,7 @@ impl BexMulitProject {
                             generation,
                             call_id: call_id.0,
                             data: serde_json::to_vec(&serde_json::json!([])).unwrap_or_default(),
+                            expand_error: None,
                         },
                     );
                 }
@@ -846,6 +850,10 @@ impl BexMulitProject {
                             generation,
                             call_id: call_id.0,
                             data,
+                            expand_error: Some(crate::bex_lsp::TestExpandError {
+                                testset_name: name.clone(),
+                                message: format!("{e}"),
+                            }),
                         },
                     );
                 }
@@ -875,6 +883,7 @@ impl BexMulitProject {
                             generation,
                             call_id: call_id.0,
                             data,
+                            expand_error: None,
                         },
                     );
                 }
@@ -887,6 +896,7 @@ impl BexMulitProject {
                             generation,
                             call_id: call_id.0,
                             data: serde_json::to_vec(&serde_json::json!([])).unwrap_or_default(),
+                            expand_error: None,
                         },
                     );
                 }

@@ -79,6 +79,8 @@ pub enum PlaygroundNotification {
         generation: u64,
         call_id: u64,
         data: Vec<u8>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        expand_error: Option<bex_project::TestExpandError>,
     },
 }
 
@@ -142,11 +144,13 @@ impl From<bex_project::PlaygroundNotification> for PlaygroundNotification {
                 generation,
                 call_id,
                 data,
+                expand_error,
             } => PlaygroundNotification::TestCollectionResult {
                 project,
                 generation,
                 call_id,
                 data,
+                expand_error,
             },
         }
     }
