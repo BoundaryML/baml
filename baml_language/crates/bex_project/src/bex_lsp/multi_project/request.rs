@@ -241,23 +241,33 @@ impl BexLspRequest for BexMulitProject {
         let lsp_hints: Vec<lsp_types::InlayHint> = hints
             .into_iter()
             .filter(|h| h.offset >= range_start && h.offset < range_end)
-            .map(|h| lsp_types::InlayHint {
-                position: baml_project::position::offset_to_lsp_position(
-                    text,
-                    usize::from(h.offset),
-                ),
-                label: lsp_types::InlayHintLabel::String(h.label),
-                kind: Some(match h.kind {
-                    baml_lsp2_actions::AnnotationKind::Type => lsp_types::InlayHintKind::TYPE,
-                    baml_lsp2_actions::AnnotationKind::Parameter => {
-                        lsp_types::InlayHintKind::PARAMETER
-                    }
-                }),
-                padding_left: Some(h.padding_left),
-                padding_right: Some(h.padding_right),
-                text_edits: None,
-                tooltip: None,
-                data: None,
+            .map(|h| {
+                let position =
+                    baml_project::position::offset_to_lsp_position(text, usize::from(h.offset));
+                // For type hints, double-click inserts the type annotation.
+                // Parameter hints don't get text edits (can't insert param names in calls).
+                let text_edits = match h.kind {
+                    baml_lsp2_actions::AnnotationKind::Type => Some(vec![lsp_types::TextEdit {
+                        range: lsp_types::Range::new(position, position),
+                        new_text: h.label.clone(),
+                    }]),
+                    baml_lsp2_actions::AnnotationKind::Parameter => None,
+                };
+                lsp_types::InlayHint {
+                    position,
+                    label: lsp_types::InlayHintLabel::String(h.label),
+                    kind: Some(match h.kind {
+                        baml_lsp2_actions::AnnotationKind::Type => lsp_types::InlayHintKind::TYPE,
+                        baml_lsp2_actions::AnnotationKind::Parameter => {
+                            lsp_types::InlayHintKind::PARAMETER
+                        }
+                    }),
+                    padding_left: Some(h.padding_left),
+                    padding_right: Some(h.padding_right),
+                    text_edits,
+                    tooltip: None,
+                    data: None,
+                }
             })
             .collect();
 
