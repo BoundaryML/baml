@@ -26,6 +26,7 @@
 
 use std::sync::Arc;
 
+use sys_types::BexExternalValue;
 #[cfg_attr(target_arch = "wasm32", allow(unused_imports))]
 use sys_types::runtime_io::{RuntimeIo, RuntimeIoError};
 
@@ -294,8 +295,11 @@ async fn project_id_from_credentials(
                         return Some(pid);
                     }
                     // File path? Read and extract.
-                    if let Ok(handle) = io.fs_open(val).await {
-                        if let Ok(contents) = io.fs_file_read_string(&handle).await {
+                    if let Ok(handle) = io
+                        .fs_file(val, BexExternalValue::String("r".to_string()))
+                        .await
+                    {
+                        if let Ok(contents) = io.fs_file_text(&handle).await {
                             if let Some(pid) = extract_project_id_from_json(&contents) {
                                 return Some(pid);
                             }
@@ -367,8 +371,11 @@ async fn project_id_from_adc_config(io: &dyn RuntimeIo) -> Option<String> {
     };
     let adc_path = format!("{config_dir}/application_default_credentials.json");
 
-    let handle = io.fs_open(adc_path).await.ok()?;
-    let contents = io.fs_file_read_string(&handle).await.ok()?;
+    let handle = io
+        .fs_file(adc_path, BexExternalValue::String("r".to_string()))
+        .await
+        .ok()?;
+    let contents = io.fs_file_text(&handle).await.ok()?;
     let parsed: serde_json::Value = serde_json::from_str(&contents).ok()?;
 
     parsed
@@ -383,12 +390,15 @@ async fn read_credentials_file(
     path: &str,
     io: &dyn RuntimeIo,
 ) -> Result<String, BuildRequestError> {
-    let handle = io.fs_open(path.to_string()).await.map_err(|e| {
-        BuildRequestError::AuthorizationFailed(format!(
-            "Google Cloud: failed to open credentials file '{path}': {e}"
-        ))
-    })?;
-    io.fs_file_read_string(&handle).await.map_err(|e| {
+    let handle = io
+        .fs_file(path.to_string(), BexExternalValue::String("r".to_string()))
+        .await
+        .map_err(|e| {
+            BuildRequestError::AuthorizationFailed(format!(
+                "Google Cloud: failed to open credentials file '{path}': {e}"
+            ))
+        })?;
+    io.fs_file_text(&handle).await.map_err(|e| {
         BuildRequestError::AuthorizationFailed(format!(
             "Google Cloud: failed to read credentials file '{path}': {e}"
         ))
@@ -405,7 +415,7 @@ mod native {
 
     use google_cloud_auth::{credentials::Builder, io};
 
-    use super::{BuildRequestError, RuntimeIo, RuntimeIoError};
+    use super::{BexExternalValue, BuildRequestError, RuntimeIo, RuntimeIoError};
 
     // -- IO provider adapters (RuntimeIo -> google-cloud-auth traits) --
 
@@ -451,10 +461,13 @@ mod native {
             let handle = tokio::runtime::Handle::current();
             std::thread::spawn(move || {
                 handle.block_on(async {
-                    let file_handle = io.fs_open(path).await.map_err(|_| {
-                        std::io::Error::new(std::io::ErrorKind::NotFound, "file not found")
-                    })?;
-                    io.fs_file_read_string(&file_handle).await.map_err(|_| {
+                    let file_handle = io
+                        .fs_file(path, BexExternalValue::String("r".to_string()))
+                        .await
+                        .map_err(|_| {
+                            std::io::Error::new(std::io::ErrorKind::NotFound, "file not found")
+                        })?;
+                    io.fs_file_text(&file_handle).await.map_err(|_| {
                         std::io::Error::new(std::io::ErrorKind::NotFound, "file not found")
                     })
                 })
@@ -1195,9 +1208,10 @@ mod tests {
             Box::pin(async { Ok(None) })
         }
 
-        fn fs_open(
+        fn fs_file(
             &self,
             _path: String,
+            _mode: BexExternalValue,
         ) -> Pin<
             Box<
                 dyn Future<Output = Result<sys_types::runtime_io::FsFileHandle, RuntimeIoError>>
@@ -1208,7 +1222,7 @@ mod tests {
             Box::pin(async { Err(RuntimeIoError::Other("not found".into())) })
         }
 
-        fn fs_file_read_string(
+        fn fs_file_text(
             &self,
             _: &sys_types::runtime_io::FsFileHandle,
         ) -> Pin<Box<dyn Future<Output = Result<String, RuntimeIoError>> + Send + '_>> {
@@ -1269,9 +1283,10 @@ mod tests {
             Box::pin(async { Ok(None) })
         }
 
-        fn fs_open(
+        fn fs_file(
             &self,
             path: String,
+            _mode: BexExternalValue,
         ) -> Pin<
             Box<
                 dyn Future<Output = Result<sys_types::runtime_io::FsFileHandle, RuntimeIoError>>
@@ -1291,7 +1306,7 @@ mod tests {
             })
         }
 
-        fn fs_file_read_string(
+        fn fs_file_text(
             &self,
             _: &sys_types::runtime_io::FsFileHandle,
         ) -> Pin<Box<dyn Future<Output = Result<String, RuntimeIoError>> + Send + '_>> {
@@ -1356,9 +1371,10 @@ mod tests {
             Box::pin(async move { Ok(val) })
         }
 
-        fn fs_open(
+        fn fs_file(
             &self,
             path: String,
+            _mode: BexExternalValue,
         ) -> Pin<
             Box<
                 dyn Future<Output = Result<sys_types::runtime_io::FsFileHandle, RuntimeIoError>>
@@ -1378,7 +1394,7 @@ mod tests {
             })
         }
 
-        fn fs_file_read_string(
+        fn fs_file_text(
             &self,
             handle: &sys_types::runtime_io::FsFileHandle,
         ) -> Pin<Box<dyn Future<Output = Result<String, RuntimeIoError>> + Send + '_>> {
@@ -1519,9 +1535,10 @@ mod tests {
             Box::pin(async { Ok(None) })
         }
 
-        fn fs_open(
+        fn fs_file(
             &self,
             _path: String,
+            _mode: BexExternalValue,
         ) -> Pin<
             Box<
                 dyn Future<Output = Result<sys_types::runtime_io::FsFileHandle, RuntimeIoError>>
@@ -1532,7 +1549,7 @@ mod tests {
             Box::pin(async { Err(RuntimeIoError::Other("not found".into())) })
         }
 
-        fn fs_file_read_string(
+        fn fs_file_text(
             &self,
             _: &sys_types::runtime_io::FsFileHandle,
         ) -> Pin<Box<dyn Future<Output = Result<String, RuntimeIoError>> + Send + '_>> {

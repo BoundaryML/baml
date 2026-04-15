@@ -84,10 +84,15 @@ function baml.errors.to_string(self: ?) -> string  [builtin]
 class baml.fs.File {
   _handle: $rust_type
 }
+function baml.fs.bytes(self: ?) -> uint8array  [builtin]
 function baml.fs.close(self: ?) -> null  [builtin]
-function baml.fs.open(path: string) -> baml.fs.File  [builtin]
-function baml.fs.read_bytes(self: ?) -> uint8array  [builtin]
-function baml.fs.read_string(self: ?) -> string  [builtin]
+function baml.fs.file(path: string, mode: "r" | "r+") -> baml.fs.File  [builtin]
+function baml.fs.seek(self: ?, offset: int) -> null  [builtin]
+function baml.fs.text(self: ?) -> string  [builtin]
+function baml.fs.write(path: string, data: string) -> int  [builtin]
+function baml.fs.write(self: ?, data: string) -> int  [builtin]
+function baml.fs.write_bytes(self: ?, data: uint8array) -> int  [builtin]
+function baml.fs.write_bytes(path: string, data: uint8array) -> int  [builtin]
 
 --- <builtin>/baml/ns_http/http.baml ---
 class baml.http.Request {

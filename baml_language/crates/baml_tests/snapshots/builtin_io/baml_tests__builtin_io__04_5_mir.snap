@@ -2,6 +2,92 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR2 ===
+fn user.FileWrite() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: baml.fs.File // f
+    let _2: future<baml.fs.File>
+    let _3: baml.fs.File
+    let _4: future<int>
+
+    bb0: {
+        _2 = dispatch_future const fn baml.fs.file(const "data.txt", const "r+") -> bb1;
+    }
+
+    bb1: {
+        _1 = await _2 -> [bb2];
+    }
+
+    bb2: {
+        _3 = copy _1;
+        _4 = dispatch_future const fn baml.fs.File.write(copy _3, const "hello") -> bb3;
+    }
+
+    bb3: {
+        _0 = await _4 -> [bb4];
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+fn user.FileWriteBytes() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: baml.fs.File // f
+    let _2: future<baml.fs.File>
+    let _3: uint8array // data
+    let _4: baml.fs.File
+    let _5: future<uint8array>
+    let _6: null
+    let _7: baml.fs.File
+    let _8: future<null>
+    let _9: baml.fs.File
+    let _10: uint8array
+    let _11: future<int>
+
+    bb0: {
+        _2 = dispatch_future const fn baml.fs.file(const "data.bin", const "r+") -> bb1;
+    }
+
+    bb1: {
+        _1 = await _2 -> [bb2];
+    }
+
+    bb2: {
+        _4 = copy _1;
+        _5 = dispatch_future const fn baml.fs.File.bytes(copy _4) -> bb3;
+    }
+
+    bb3: {
+        _3 = await _5 -> [bb4];
+    }
+
+    bb4: {
+        _7 = copy _1;
+        _8 = dispatch_future const fn baml.fs.File.seek(copy _7, const 0_i64) -> bb5;
+    }
+
+    bb5: {
+        _6 = await _8 -> [bb6];
+    }
+
+    bb6: {
+        _9 = copy _1;
+        _10 = copy _3;
+        _11 = dispatch_future const fn baml.fs.File.write_bytes(copy _9, copy _10) -> bb7;
+    }
+
+    bb7: {
+        _0 = await _11 -> [bb8];
+    }
+
+    bb8: {
+        return;
+    }
+}
+
 fn user.ReadAndClose() -> string {
     // Locals:
     let _0: string // _0 // return
@@ -15,7 +101,7 @@ fn user.ReadAndClose() -> string {
     let _8: future<null>
 
     bb0: {
-        _2 = dispatch_future const fn baml.fs.open(const "example.txt") -> bb1;
+        _2 = dispatch_future const fn baml.fs.file(const "example.txt", const "r") -> bb1;
     }
 
     bb1: {
@@ -24,7 +110,7 @@ fn user.ReadAndClose() -> string {
 
     bb2: {
         _4 = copy _1;
-        _5 = dispatch_future const fn baml.fs.File.read_string(copy _4) -> bb3;
+        _5 = dispatch_future const fn baml.fs.File.text(copy _4) -> bb3;
     }
 
     bb3: {
@@ -59,7 +145,7 @@ fn user.ReadFile() -> string {
     let _4: future<string>
 
     bb0: {
-        _2 = dispatch_future const fn baml.fs.open(const "example.txt") -> bb1;
+        _2 = dispatch_future const fn baml.fs.file(const "example.txt", const "r") -> bb1;
     }
 
     bb1: {
@@ -68,7 +154,7 @@ fn user.ReadFile() -> string {
 
     bb2: {
         _3 = copy _1;
-        _4 = dispatch_future const fn baml.fs.File.read_string(copy _3) -> bb3;
+        _4 = dispatch_future const fn baml.fs.File.text(copy _3) -> bb3;
     }
 
     bb3: {
@@ -89,7 +175,7 @@ fn user.ReadFileBytes() -> uint8array {
     let _4: future<uint8array>
 
     bb0: {
-        _2 = dispatch_future const fn baml.fs.open(const "binary.dat") -> bb1;
+        _2 = dispatch_future const fn baml.fs.file(const "binary.dat", const "r") -> bb1;
     }
 
     bb1: {
@@ -98,7 +184,7 @@ fn user.ReadFileBytes() -> uint8array {
 
     bb2: {
         _3 = copy _1;
-        _4 = dispatch_future const fn baml.fs.File.read_bytes(copy _3) -> bb3;
+        _4 = dispatch_future const fn baml.fs.File.bytes(copy _3) -> bb3;
     }
 
     bb3: {
@@ -123,7 +209,7 @@ fn user.ReadFileBytesAndClose() -> uint8array {
     let _8: future<null>
 
     bb0: {
-        _2 = dispatch_future const fn baml.fs.open(const "binary.dat") -> bb1;
+        _2 = dispatch_future const fn baml.fs.file(const "binary.dat", const "r") -> bb1;
     }
 
     bb1: {
@@ -132,7 +218,7 @@ fn user.ReadFileBytesAndClose() -> uint8array {
 
     bb2: {
         _4 = copy _1;
-        _5 = dispatch_future const fn baml.fs.File.read_bytes(copy _4) -> bb3;
+        _5 = dispatch_future const fn baml.fs.File.bytes(copy _4) -> bb3;
     }
 
     bb3: {
@@ -166,7 +252,7 @@ fn user.ReadFileBytesInline() -> uint8array {
     let _3: future<uint8array>
 
     bb0: {
-        _2 = dispatch_future const fn baml.fs.open(const "image.png") -> bb1;
+        _2 = dispatch_future const fn baml.fs.file(const "image.png", const "r") -> bb1;
     }
 
     bb1: {
@@ -174,7 +260,7 @@ fn user.ReadFileBytesInline() -> uint8array {
     }
 
     bb2: {
-        _3 = dispatch_future const fn baml.fs.File.read_bytes(copy _1) -> bb3;
+        _3 = dispatch_future const fn baml.fs.File.bytes(copy _1) -> bb3;
     }
 
     bb3: {
@@ -194,7 +280,7 @@ fn user.ReadFileInline() -> string {
     let _3: future<string>
 
     bb0: {
-        _2 = dispatch_future const fn baml.fs.open(const "data.json") -> bb1;
+        _2 = dispatch_future const fn baml.fs.file(const "data.json", const "r") -> bb1;
     }
 
     bb1: {
@@ -202,7 +288,7 @@ fn user.ReadFileInline() -> string {
     }
 
     bb2: {
-        _3 = dispatch_future const fn baml.fs.File.read_string(copy _1) -> bb3;
+        _3 = dispatch_future const fn baml.fs.File.text(copy _1) -> bb3;
     }
 
     bb3: {
@@ -231,7 +317,7 @@ fn user.ReadMultipleFiles() -> string {
     let _12: string
 
     bb0: {
-        _2 = dispatch_future const fn baml.fs.open(const "file1.txt") -> bb1;
+        _2 = dispatch_future const fn baml.fs.file(const "file1.txt", const "r") -> bb1;
     }
 
     bb1: {
@@ -239,7 +325,7 @@ fn user.ReadMultipleFiles() -> string {
     }
 
     bb2: {
-        _4 = dispatch_future const fn baml.fs.open(const "file2.txt") -> bb3;
+        _4 = dispatch_future const fn baml.fs.file(const "file2.txt", const "r") -> bb3;
     }
 
     bb3: {
@@ -248,7 +334,7 @@ fn user.ReadMultipleFiles() -> string {
 
     bb4: {
         _6 = copy _1;
-        _7 = dispatch_future const fn baml.fs.File.read_string(copy _6) -> bb5;
+        _7 = dispatch_future const fn baml.fs.File.text(copy _6) -> bb5;
     }
 
     bb5: {
@@ -257,7 +343,7 @@ fn user.ReadMultipleFiles() -> string {
 
     bb6: {
         _9 = copy _3;
-        _10 = dispatch_future const fn baml.fs.File.read_string(copy _9) -> bb7;
+        _10 = dispatch_future const fn baml.fs.File.text(copy _9) -> bb7;
     }
 
     bb7: {
@@ -272,6 +358,106 @@ fn user.ReadMultipleFiles() -> string {
     }
 
     bb9: {
+        return;
+    }
+}
+
+fn user.SeekAndRead() -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: baml.fs.File // f
+    let _2: future<baml.fs.File>
+    let _3: null
+    let _4: baml.fs.File
+    let _5: future<null>
+    let _6: baml.fs.File
+    let _7: future<string>
+
+    bb0: {
+        _2 = dispatch_future const fn baml.fs.file(const "data.txt", const "r+") -> bb1;
+    }
+
+    bb1: {
+        _1 = await _2 -> [bb2];
+    }
+
+    bb2: {
+        _4 = copy _1;
+        _5 = dispatch_future const fn baml.fs.File.seek(copy _4, const 10_i64) -> bb3;
+    }
+
+    bb3: {
+        _3 = await _5 -> [bb4];
+    }
+
+    bb4: {
+        _6 = copy _1;
+        _7 = dispatch_future const fn baml.fs.File.text(copy _6) -> bb5;
+    }
+
+    bb5: {
+        _0 = await _7 -> [bb6];
+    }
+
+    bb6: {
+        return;
+    }
+}
+
+fn user.WriteFile() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: future<int>
+
+    bb0: {
+        _1 = dispatch_future const fn baml.fs.write(const "output.txt", const "hello") -> bb1;
+    }
+
+    bb1: {
+        _0 = await _1 -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.WriteFileBytes() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: uint8array // data
+    let _2: baml.fs.File
+    let _3: future<baml.fs.File>
+    let _4: future<uint8array>
+    let _5: uint8array
+    let _6: future<int>
+
+    bb0: {
+        _3 = dispatch_future const fn baml.fs.file(const "source.bin", const "r") -> bb1;
+    }
+
+    bb1: {
+        _2 = await _3 -> [bb2];
+    }
+
+    bb2: {
+        _4 = dispatch_future const fn baml.fs.File.bytes(copy _2) -> bb3;
+    }
+
+    bb3: {
+        _1 = await _4 -> [bb4];
+    }
+
+    bb4: {
+        _5 = copy _1;
+        _6 = dispatch_future const fn baml.fs.write_bytes(const "output.bin", copy _5) -> bb5;
+    }
+
+    bb5: {
+        _0 = await _6 -> [bb6];
+    }
+
+    bb6: {
         return;
     }
 }

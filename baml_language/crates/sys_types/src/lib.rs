@@ -733,7 +733,7 @@ mod tests {
     #[test]
     fn all_sys_ops_have_contract_metadata() {
         use bex_vm_types::SysOp;
-        let ops = [SysOp::BamlFsOpen, SysOp::BamlHttpFetch, SysOp::BamlEnvGet];
+        let ops = [SysOp::BamlFsFile, SysOp::BamlHttpFetch, SysOp::BamlEnvGet];
         for op in ops {
             let cats = op.allowed_error_categories();
             let panics = op.allowed_panic_categories();

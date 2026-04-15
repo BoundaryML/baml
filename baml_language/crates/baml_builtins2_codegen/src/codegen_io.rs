@@ -354,6 +354,15 @@ fn external_to_typed_expr(
             let name_ident = format_ident!("{}", name);
             quote! { #owned::#ns_ident::#name_ident::from_external(#val_expr) }
         }
+        BamlType::Uint8Array => quote! {
+            match #val_expr {
+                BexExternalValue::Uint8Array(v) => Ok(v),
+                other => Err(AccessError::TypeMismatch {
+                    expected: "uint8array",
+                    actual: other.type_name().to_string(),
+                }),
+            }
+        },
         _ => quote! { Ok(#val_expr) },
     }
 }
@@ -508,7 +517,7 @@ fn glue_extract_expr(
             }
         }
         BamlType::RustType => quote! { #arg_ident.as_rust_data(&__p)? },
-        BamlType::List(_) | BamlType::Map(_, _) | BamlType::Optional(_) => {
+        BamlType::Uint8Array | BamlType::List(_) | BamlType::Map(_, _) | BamlType::Optional(_) => {
             let val = quote! { #arg_ident.as_owned_but_very_slow(&__p)? };
             let conv = external_to_typed_expr(&val, ty, class_ns_map, paths);
             quote! { (#conv)? }
@@ -1214,7 +1223,7 @@ fn emit_one_namespace_trait(
     let free_fn_glues: Vec<TokenStream> = node
         .free_fns
         .iter()
-        .map(|f| emit_free_fn_glue(f, class_ns_map, paths))
+        .map(|f| emit_free_fn_glue(f, &trait_ident, class_ns_map, paths))
         .collect();
 
     // Dispatch method body
@@ -1292,6 +1301,7 @@ fn emit_one_namespace_trait(
 
 fn emit_free_fn_glue(
     builtin: &NativeBuiltin,
+    ns_trait_ident: &syn::Ident,
     class_ns_map: &BTreeMap<String, String>,
     paths: &CodegenPaths,
 ) -> TokenStream {
@@ -1308,7 +1318,7 @@ fn emit_free_fn_glue(
                 ctx: &SysOpContext,
                 call_id: CallId,
             ) -> SysOpResult {
-                self.#clean_ident(heap, call_id, ctx).into_result(SysOp::#variant_ident)
+                #ns_trait_ident::#clean_ident(self, heap, call_id, ctx).into_result(SysOp::#variant_ident)
             }
         };
     }
@@ -1371,7 +1381,7 @@ fn emit_free_fn_glue(
 
             match __extraction {
                 Ok(#ok_pattern) => {
-                    self.#clean_ident(heap, call_id, #(#param_idents,)* ctx)
+                    #ns_trait_ident::#clean_ident(self, heap, call_id, #(#param_idents,)* ctx)
                         .into_result(SysOp::#variant_ident)
                 }
                 Err(e) => SysOpResult::Ready(Err(OpError::new(

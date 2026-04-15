@@ -167,16 +167,31 @@ function baml.env.get_or_panic(key: string) -> string {
 function baml.errors.StackTrace.to_string(self: null) -> string {
 }
 
+function baml.fs.File.bytes(self: null) -> uint8array {
+}
+
 function baml.fs.File.close(self: null) -> null {
 }
 
-function baml.fs.File.read_bytes(self: null) -> uint8array {
+function baml.fs.File.seek(self: null, offset: int) -> null {
 }
 
-function baml.fs.File.read_string(self: null) -> string {
+function baml.fs.File.text(self: null) -> string {
 }
 
-function baml.fs.open(path: string) -> void {
+function baml.fs.File.write(self: null, data: string) -> int {
+}
+
+function baml.fs.File.write_bytes(self: null, data: uint8array) -> int {
+}
+
+function baml.fs.file(path: string, mode: "r" | "r+") -> void {
+}
+
+function baml.fs.write(path: string, data: string) -> int {
+}
+
+function baml.fs.write_bytes(path: string, data: uint8array) -> int {
 }
 
 function baml.http.Response.bytes(self: null) -> uint8array {

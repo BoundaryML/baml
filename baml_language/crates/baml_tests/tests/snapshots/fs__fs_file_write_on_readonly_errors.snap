@@ -1,0 +1,14 @@
+---
+source: crates/baml_tests/tests/fs.rs
+expression: "stabilize(&output.bytecode, &root)"
+---
+function main() -> int {
+    load_const "{TMPDIR}/readonly.txt"
+    load_const "r"
+    dispatch_future baml.fs.file
+    await
+    load_const "should fail"
+    dispatch_future baml.fs.File.write
+    await
+    return
+}

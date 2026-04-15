@@ -1,0 +1,11 @@
+---
+source: crates/baml_tests/tests/fs.rs
+expression: "stabilize(&output.bytecode, &root)"
+---
+function main() -> int {
+    load_const "{TMPDIR}/nested/dir/file.txt"
+    load_const "nested content"
+    dispatch_future baml.fs.write
+    await
+    return
+}

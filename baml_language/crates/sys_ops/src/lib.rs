@@ -342,7 +342,7 @@ fn convert_io_primitive_client(
 struct DefaultIoOps;
 
 impl io::IoClassFsFile for DefaultIoOps {
-    fn read_string(
+    fn text(
         &self,
         _h: &Arc<BexHeap>,
         _c: CallId,
@@ -351,7 +351,7 @@ impl io::IoClassFsFile for DefaultIoOps {
     ) -> SysOpOutput<String> {
         SysOpOutput::err(OpErrorKind::Unsupported)
     }
-    fn read_bytes(
+    fn bytes(
         &self,
         _h: &Arc<BexHeap>,
         _c: CallId,
@@ -369,16 +369,69 @@ impl io::IoClassFsFile for DefaultIoOps {
     ) -> SysOpOutput<()> {
         SysOpOutput::err(OpErrorKind::Unsupported)
     }
+    fn seek(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _f: io::owned::fs::File,
+        _offset: i64,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+    fn write(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _f: io::owned::fs::File,
+        _data: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<i64> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+    fn write_bytes(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _f: io::owned::fs::File,
+        _data: Vec<u8>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<i64> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
 }
 
 impl io::IoNamespaceFs for DefaultIoOps {
-    fn open(
+    fn file(
         &self,
         _h: &Arc<BexHeap>,
         _c: CallId,
         _path: String,
+        _mode: BexExternalValue,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::fs::File> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+
+    fn write(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _path: String,
+        _data: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<i64> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+
+    fn write_bytes(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _path: String,
+        _data: Vec<u8>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<i64> {
         SysOpOutput::err(OpErrorKind::Unsupported)
     }
 }
@@ -549,22 +602,22 @@ impl IoSysOpsBuilder {
         mut self,
         instance: Arc<dyn io::IoNamespaceFs + Send + Sync + 'static>,
     ) -> Self {
-        self.inner.baml_fs_open = {
+        self.inner.baml_fs_file = {
             let t = instance.clone();
             Arc::new(move |heap, args, ctx, call_id| {
-                t.__glue_baml_fs_open(heap, args, ctx, call_id)
+                t.__glue_baml_fs_file(heap, args, ctx, call_id)
             })
         };
-        self.inner.baml_fs_file_read_string = {
+        self.inner.baml_fs_file_text = {
             let t = instance.clone();
             Arc::new(move |heap, args, ctx, call_id| {
-                t.__glue_baml_fs_file_read_string(heap, args, ctx, call_id)
+                t.__glue_baml_fs_file_text(heap, args, ctx, call_id)
             })
         };
-        self.inner.baml_fs_file_read_bytes = {
+        self.inner.baml_fs_file_bytes = {
             let t = instance.clone();
             Arc::new(move |heap, args, ctx, call_id| {
-                t.__glue_baml_fs_file_read_bytes(heap, args, ctx, call_id)
+                t.__glue_baml_fs_file_bytes(heap, args, ctx, call_id)
             })
         };
         self.inner.baml_fs_file_close = {
@@ -743,12 +796,12 @@ mod tests {
         let ctx = test_ctx();
         let ops = SysOps::all_unsupported();
 
-        // Test fs_open returns Unsupported
-        let result = (ops.baml_fs_open)(&heap, vec![], &ctx, CallId::next());
+        // Test fs_file returns Unsupported
+        let result = (ops.baml_fs_file)(&heap, vec![], &ctx, CallId::next());
         assert!(matches!(
             result,
             SysOpResult::Ready(Err(OpError {
-                fn_name: SysOp::BamlFsOpen,
+                fn_name: SysOp::BamlFsFile,
                 kind: OpErrorKind::Unsupported,
             }))
         ));
@@ -773,7 +826,7 @@ mod tests {
         let ctx = test_ctx();
 
         // Test that get() returns the correct function pointer
-        let fn_ptr = ops.get(SysOp::BamlFsOpen);
+        let fn_ptr = ops.get(SysOp::BamlFsFile);
         let result = fn_ptr(&heap, vec![], &ctx, CallId::next());
         assert!(matches!(result, SysOpResult::Ready(Err(_))));
     }

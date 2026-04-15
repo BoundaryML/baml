@@ -18,6 +18,7 @@ use aws_smithy_runtime_api::{
 };
 use aws_smithy_types::body::SdkBody;
 use indexmap::IndexMap;
+use sys_types::BexExternalValue;
 #[cfg_attr(target_arch = "wasm32", allow(unused_imports))]
 use sys_types::runtime_io::{RuntimeIo, RuntimeIoError};
 
@@ -56,7 +57,7 @@ mod native_providers {
 
     use aws_types::os_shim_internal::{ProvideEnv, ProvideFs};
 
-    use super::RuntimeIo;
+    use super::{BexExternalValue, RuntimeIo};
 
     pub(super) struct BexEnvProvider {
         pub io: Arc<dyn RuntimeIo>,
@@ -106,10 +107,13 @@ mod native_providers {
             let io = self.io.clone();
             let path_str = path.to_string_lossy().into_owned();
             Box::pin(async move {
-                let file_handle = io.fs_open(path_str).await.map_err(|_| {
-                    std::io::Error::new(std::io::ErrorKind::NotFound, "file not found")
-                })?;
-                let contents = io.fs_file_read_string(&file_handle).await.map_err(|_| {
+                let file_handle = io
+                    .fs_file(path_str, BexExternalValue::String("r".to_string()))
+                    .await
+                    .map_err(|_| {
+                        std::io::Error::new(std::io::ErrorKind::NotFound, "file not found")
+                    })?;
+                let contents = io.fs_file_text(&file_handle).await.map_err(|_| {
                     std::io::Error::new(std::io::ErrorKind::NotFound, "file not found")
                 })?;
                 Ok(contents.into_bytes())
@@ -557,9 +561,10 @@ mod tests {
             Box::pin(async { Ok(None) })
         }
 
-        fn fs_open(
+        fn fs_file(
             &self,
             _path: String,
+            _mode: BexExternalValue,
         ) -> Pin<
             Box<
                 dyn Future<Output = Result<sys_types::runtime_io::FsFileHandle, RuntimeIoError>>
@@ -570,7 +575,7 @@ mod tests {
             Box::pin(async { Err(RuntimeIoError::Other("not found".into())) })
         }
 
-        fn fs_file_read_string(
+        fn fs_file_text(
             &self,
             _: &sys_types::runtime_io::FsFileHandle,
         ) -> Pin<Box<dyn Future<Output = Result<String, RuntimeIoError>> + Send + '_>> {
@@ -629,9 +634,10 @@ mod tests {
             Box::pin(async { Ok(None) })
         }
 
-        fn fs_open(
+        fn fs_file(
             &self,
             _path: String,
+            _mode: BexExternalValue,
         ) -> Pin<
             Box<
                 dyn Future<Output = Result<sys_types::runtime_io::FsFileHandle, RuntimeIoError>>
@@ -642,7 +648,7 @@ mod tests {
             Box::pin(async { Err(RuntimeIoError::Other("not found".into())) })
         }
 
-        fn fs_file_read_string(
+        fn fs_file_text(
             &self,
             _: &sys_types::runtime_io::FsFileHandle,
         ) -> Pin<Box<dyn Future<Output = Result<String, RuntimeIoError>> + Send + '_>> {
@@ -707,9 +713,10 @@ mod tests {
             Box::pin(async move { Ok(result) })
         }
 
-        fn fs_open(
+        fn fs_file(
             &self,
             _path: String,
+            _mode: BexExternalValue,
         ) -> Pin<
             Box<
                 dyn Future<Output = Result<sys_types::runtime_io::FsFileHandle, RuntimeIoError>>
@@ -720,7 +727,7 @@ mod tests {
             Box::pin(async { Err(RuntimeIoError::Other("not found".into())) })
         }
 
-        fn fs_file_read_string(
+        fn fs_file_text(
             &self,
             _: &sys_types::runtime_io::FsFileHandle,
         ) -> Pin<Box<dyn Future<Output = Result<String, RuntimeIoError>> + Send + '_>> {
@@ -780,9 +787,10 @@ mod tests {
             Box::pin(async move { Ok(result) })
         }
 
-        fn fs_open(
+        fn fs_file(
             &self,
             path: String,
+            _mode: BexExternalValue,
         ) -> Pin<
             Box<
                 dyn Future<Output = Result<sys_types::runtime_io::FsFileHandle, RuntimeIoError>>
@@ -802,7 +810,7 @@ mod tests {
             }
         }
 
-        fn fs_file_read_string(
+        fn fs_file_text(
             &self,
             _: &sys_types::runtime_io::FsFileHandle,
         ) -> Pin<Box<dyn Future<Output = Result<String, RuntimeIoError>> + Send + '_>> {
@@ -869,9 +877,10 @@ mod tests {
             Box::pin(async move { Ok(result) })
         }
 
-        fn fs_open(
+        fn fs_file(
             &self,
             _path: String,
+            _mode: BexExternalValue,
         ) -> Pin<
             Box<
                 dyn Future<Output = Result<sys_types::runtime_io::FsFileHandle, RuntimeIoError>>
@@ -882,7 +891,7 @@ mod tests {
             Box::pin(async { Err(RuntimeIoError::Other("not found".into())) })
         }
 
-        fn fs_file_read_string(
+        fn fs_file_text(
             &self,
             _: &sys_types::runtime_io::FsFileHandle,
         ) -> Pin<Box<dyn Future<Output = Result<String, RuntimeIoError>> + Send + '_>> {

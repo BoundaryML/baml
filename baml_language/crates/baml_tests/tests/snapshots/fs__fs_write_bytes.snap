@@ -1,0 +1,18 @@
+---
+source: crates/baml_tests/tests/fs.rs
+expression: "stabilize(&output.bytecode, &root)"
+---
+function main() -> int {
+    load_const "{TMPDIR}/source.bin"
+    load_const "r"
+    dispatch_future baml.fs.file
+    await
+    dispatch_future baml.fs.File.bytes
+    await
+    store_var data
+    load_const "{TMPDIR}/copy.bin"
+    load_var data
+    dispatch_future baml.fs.write_bytes
+    await
+    return
+}

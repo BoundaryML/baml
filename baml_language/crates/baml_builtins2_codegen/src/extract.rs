@@ -816,7 +816,7 @@ mod tests {
             throws: vec![],
             source_file: String::new(),
         };
-        assert_eq!(make("baml.fs.open").sys_op_variant_name(), "BamlFsOpen");
+        assert_eq!(make("baml.fs.file").sys_op_variant_name(), "BamlFsFile");
         assert_eq!(
             make("baml.fs.File.read").sys_op_variant_name(),
             "BamlFsFileRead"
@@ -919,7 +919,7 @@ mod tests {
 
         let fs_open = io_builtins
             .iter()
-            .find(|b| b.path == "baml.fs.open")
+            .find(|b| b.path == "baml.fs.file")
             .unwrap();
         assert_eq!(fs_open.throws, vec!["Io"]);
 

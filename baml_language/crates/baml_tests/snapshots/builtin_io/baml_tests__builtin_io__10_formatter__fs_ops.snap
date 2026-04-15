@@ -4,41 +4,68 @@ source: crates/baml_tests/src/generated_tests.rs
 // Test file system operations typecheck correctly
 
 function ReadFile() -> string {
-    let f = baml.fs.open("example.txt");
-    f.read_string()
+    let f = baml.fs.file("example.txt", "r");
+    f.text()
 }
 
 function ReadFileInline() -> string {
-    baml.fs.open("data.json").read_string()
+    baml.fs.file("data.json", "r").text()
 }
 
 function ReadMultipleFiles() -> string {
-    let f1 = baml.fs.open("file1.txt");
-    let f2 = baml.fs.open("file2.txt");
-    let content1 = f1.read_string();
-    let content2 = f2.read_string();
+    let f1 = baml.fs.file("file1.txt", "r");
+    let f2 = baml.fs.file("file2.txt", "r");
+    let content1 = f1.text();
+    let content2 = f2.text();
     content1 + content2
 }
 
 function ReadAndClose() -> string {
-    let f = baml.fs.open("example.txt");
-    let content = f.read_string();
+    let f = baml.fs.file("example.txt", "r");
+    let content = f.text();
     f.close();
     content
 }
 
 function ReadFileBytes() -> uint8array {
-    let f = baml.fs.open("binary.dat");
-    f.read_bytes()
+    let f = baml.fs.file("binary.dat", "r");
+    f.bytes()
 }
 
 function ReadFileBytesInline() -> uint8array {
-    baml.fs.open("image.png").read_bytes()
+    baml.fs.file("image.png", "r").bytes()
 }
 
 function ReadFileBytesAndClose() -> uint8array {
-    let f = baml.fs.open("binary.dat");
-    let data = f.read_bytes();
+    let f = baml.fs.file("binary.dat", "r");
+    let data = f.bytes();
     f.close();
     data
+}
+
+function WriteFile() -> int {
+    baml.fs.write("output.txt", "hello")
+}
+
+function WriteFileBytes() -> int {
+    let data = baml.fs.file("source.bin", "r").bytes();
+    baml.fs.write_bytes("output.bin", data)
+}
+
+function SeekAndRead() -> string {
+    let f = baml.fs.file("data.txt", "r+");
+    f.seek(10);
+    f.text()
+}
+
+function FileWrite() -> int {
+    let f = baml.fs.file("data.txt", "r+");
+    f.write("hello")
+}
+
+function FileWriteBytes() -> int {
+    let f = baml.fs.file("data.bin", "r+");
+    let data = f.bytes();
+    f.seek(0);
+    f.write_bytes(data)
 }

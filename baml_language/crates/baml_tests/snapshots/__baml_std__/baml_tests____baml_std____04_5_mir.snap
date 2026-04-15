@@ -75,13 +75,23 @@ fn baml.env.get_or_panic(key: string) -> string {
 
 fn baml.errors.StackTrace.to_string = builtin(vm)
 
+fn baml.fs.File.bytes = builtin(io)
+
 fn baml.fs.File.close = builtin(io)
 
-fn baml.fs.open = builtin(io)
+fn baml.fs.file = builtin(io)
 
-fn baml.fs.File.read_bytes = builtin(io)
+fn baml.fs.File.seek = builtin(io)
 
-fn baml.fs.File.read_string = builtin(io)
+fn baml.fs.File.text = builtin(io)
+
+fn baml.fs.write = builtin(io)
+
+fn baml.fs.File.write = builtin(io)
+
+fn baml.fs.File.write_bytes = builtin(io)
+
+fn baml.fs.write_bytes = builtin(io)
 
 fn baml.http.Response.bytes = builtin(io)
 
