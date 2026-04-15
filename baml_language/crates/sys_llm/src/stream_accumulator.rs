@@ -66,20 +66,23 @@ pub fn new_accumulator(provider_str: &str) -> Result<ResourceHandle, LlmOpError>
         .map_err(|_| LlmOpError::Other(format!("Unknown provider: {provider_str}")))?;
 
     // Reject providers that don't have streaming support in extract_delta.
+    // Note: OpenAiResponses is intentionally excluded — its streaming format
+    // uses `output: [{ type: "message", content: [{ text: "..." }] }]` and
+    // `status` instead of chat-completions' `choices[0].delta.content` and
+    // `finish_reason`, and extract_delta() does not yet handle that shape.
     match provider {
         LlmProvider::OpenAi
         | LlmProvider::OpenAiGeneric
         | LlmProvider::AzureOpenAi
         | LlmProvider::Ollama
         | LlmProvider::OpenRouter
-        | LlmProvider::OpenAiResponses
         | LlmProvider::Anthropic => {}
         _ => {
             return Err(LlmOpError::NotImplemented {
                 message: format!(
                     "Streaming is not yet implemented for provider '{provider_str}'. \
                      Supported providers: openai, openai-generic, azure-openai, ollama, \
-                     openrouter, openai-responses, anthropic."
+                     openrouter, anthropic."
                 ),
             });
         }
@@ -145,13 +148,14 @@ pub fn add_events(handle: &ResourceHandle, events_json: &str) -> Result<(), LlmO
 /// Extract content delta from a parsed SSE event data payload.
 fn extract_delta(state: &mut AccumulatorState, data: &serde_json::Value) {
     match state.provider {
-        // OpenAI format: choices[0].delta.content
+        // OpenAI Chat Completions format: choices[0].delta.content
+        // (OpenAiResponses uses a different shape and is rejected upstream
+        // by new_accumulator until this function learns to parse it.)
         LlmProvider::OpenAi
         | LlmProvider::OpenAiGeneric
         | LlmProvider::AzureOpenAi
         | LlmProvider::Ollama
-        | LlmProvider::OpenRouter
-        | LlmProvider::OpenAiResponses => {
+        | LlmProvider::OpenRouter => {
             if let Some(model) = data.get("model").and_then(|m| m.as_str()) {
                 state.model = Some(model.to_string());
             }
@@ -425,7 +429,6 @@ mod tests {
             "azure-openai",
             "ollama",
             "openrouter",
-            "openai-responses",
             "anthropic",
         ];
         for p in providers {
@@ -442,7 +445,10 @@ mod tests {
 
     #[test]
     fn test_all_unsupported_providers_rejected() {
-        for p in ["google-ai", "aws-bedrock", "vertex-ai"] {
+        // openai-responses uses a different streaming shape (output[].content[].text
+        // + status) that extract_delta does not yet parse; treat it as unsupported
+        // until that handling lands.
+        for p in ["google-ai", "aws-bedrock", "vertex-ai", "openai-responses"] {
             let err = new_accumulator(p).unwrap_err();
             assert!(
                 matches!(err, LlmOpError::NotImplemented { .. }),

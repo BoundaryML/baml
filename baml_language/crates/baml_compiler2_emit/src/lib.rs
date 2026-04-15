@@ -947,7 +947,7 @@ fn compute_stream_return_type(
     use baml_compiler2_hir::{file_package::file_package, package::PackageId};
 
     let pkg_info = file_package(db, file);
-    let pkg_id = PackageId::new(db, pkg_info.package);
+    let pkg_id = PackageId::new(db, pkg_info.package.clone());
     let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
 
     let mut diags = Vec::new();
@@ -955,7 +955,7 @@ fn compute_stream_return_type(
         db,
         type_expr,
         pkg_items,
-        &[],
+        &pkg_info.namespace_path,
         &mut diags,
     );
     // Diagnostics are intentionally discarded here — same as

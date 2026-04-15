@@ -294,6 +294,12 @@ fn substitute(
                 .collect(),
             ret: Box::new(substitute(ret, var, replacement)),
         },
+        StructuralTy::Class(qn, args) => StructuralTy::Class(
+            qn.clone(),
+            args.iter()
+                .map(|t| substitute(t, var, replacement))
+                .collect(),
+        ),
         StructuralTy::Mu { var: v, body } if v != var => StructuralTy::Mu {
             var: v.clone(),
             body: Box::new(substitute(body, var, replacement)),
@@ -447,6 +453,9 @@ fn ty_has_cycle(
         Ty::Union(types, _) => types
             .iter()
             .any(|t| ty_has_cycle(t, aliases, visited, stack)),
+        Ty::Class(_, type_args, _) => type_args
+            .iter()
+            .any(|t| ty_has_cycle(t, aliases, visited, stack)),
         Ty::Function { params, ret, .. } => {
             params
                 .iter()
@@ -582,6 +591,14 @@ fn extract_type_alias_deps(
                 // Union passes through the structural context
                 for m in members {
                     visit(m, aliases, non_structural, structural, in_structural);
+                }
+            }
+            Ty::Class(_, type_args, _) => {
+                // Class type_args are pass-through for cycle classification.
+                // A user-defined class is not itself a structural guard like List/Map,
+                // so its generic arguments inherit the surrounding context.
+                for t in type_args {
+                    visit(t, aliases, non_structural, structural, in_structural);
                 }
             }
             Ty::Function { params, ret, .. } => {
@@ -1675,5 +1692,23 @@ mod tests {
             &t,
             &aliases
         ));
+    }
+
+    #[test]
+    fn test_recursive_alias_through_class_type_arg_is_detected() {
+        // `type A = Box<A>` — recursion goes through a class generic argument.
+        // Without descending into class type_args, cycle detection would miss
+        // this and normalization would recurse forever.
+        let mut aliases = HashMap::new();
+        aliases.insert(
+            qn("A"),
+            Ty::Class(qn("Box"), vec![type_alias("A")], TyAttr::default()),
+        );
+
+        let recursive = find_recursive_aliases(&aliases);
+        assert!(
+            recursive.contains(&qn("A")),
+            "expected `type A = Box<A>` to be detected as recursive, got {recursive:?}"
+        );
     }
 }

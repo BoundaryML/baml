@@ -597,7 +597,13 @@ impl io::IoNamespaceHttp for NativeSysOps {
                     }
                 }
 
+                // Stream ended cleanly — flush any event buffered without a
+                // trailing blank line (some servers omit the final delimiter).
+                let final_events = parser.finish();
                 let mut buf = buf_clone.lock().await;
+                if !final_events.is_empty() {
+                    buf.events.extend(final_events);
+                }
                 buf.done = true;
                 notify_clone.notify_waiters();
                 guard.completed = true;

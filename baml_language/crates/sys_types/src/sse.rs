@@ -104,6 +104,39 @@ impl SseParser {
         events
     }
 
+    /// Flush any pending event at end-of-stream.
+    ///
+    /// Per the WHATWG SSE spec, when the stream closes the parser should
+    /// behave as if a final newline was received: a partial trailing line is
+    /// processed, then any buffered event is dispatched even without the
+    /// usual trailing blank line.
+    pub fn finish(&mut self) -> Vec<SseEvent> {
+        // Treat any remaining bytes as a complete line by appending a newline,
+        // then run the standard parser to consume it.
+        if !self.buffer.is_empty() {
+            self.buffer.push(b'\n');
+        }
+        let mut events = self.feed(&[]);
+
+        // After processing the last line, an event may still be buffered in
+        // `data_lines` if no terminating blank line was seen.
+        if !self.data_lines.is_empty() {
+            let data = self.data_lines.join("\n");
+            events.push(SseEvent {
+                event: if self.event_type.is_empty() {
+                    "message".to_string()
+                } else {
+                    std::mem::take(&mut self.event_type)
+                },
+                data,
+                id: self.id.clone(),
+            });
+            self.data_lines.clear();
+        }
+        self.event_type.clear();
+        events
+    }
+
     /// Find the end of the next line in the buffer.
     /// Returns `(end_position, bytes_to_skip_for_delimiter)`.
     fn find_line_end(&self) -> Option<(usize, usize)> {
@@ -455,5 +488,62 @@ mod tests {
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].data.len(), 100_000);
         assert_eq!(events[0].data, payload);
+    }
+
+    #[test]
+    fn test_finish_flushes_pending_event_with_trailing_newline() {
+        let mut parser = SseParser::new();
+        let events = parser.feed(b"data: hello\n");
+        assert!(events.is_empty());
+
+        let events = parser.finish();
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].data, "hello");
+        assert_eq!(events[0].event, "message");
+    }
+
+    #[test]
+    fn test_finish_flushes_pending_event_without_trailing_newline() {
+        let mut parser = SseParser::new();
+        let events = parser.feed(b"data: hello");
+        assert!(events.is_empty());
+
+        let events = parser.finish();
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].data, "hello");
+    }
+
+    #[test]
+    fn test_finish_with_no_pending_event_is_empty() {
+        let mut parser = SseParser::new();
+        let events = parser.feed(b"data: a\n\n");
+        assert_eq!(events.len(), 1);
+
+        let events = parser.finish();
+        assert!(events.is_empty());
+    }
+
+    #[test]
+    fn test_finish_preserves_event_type_and_id() {
+        let mut parser = SseParser::new();
+        let events = parser.feed(b"id: 42\nevent: custom\ndata: hello\n");
+        assert!(events.is_empty());
+
+        let events = parser.finish();
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].event, "custom");
+        assert_eq!(events[0].data, "hello");
+        assert_eq!(events[0].id, Some("42".to_string()));
+    }
+
+    #[test]
+    fn test_finish_with_partial_unterminated_line() {
+        let mut parser = SseParser::new();
+        let events = parser.feed(b"data: line1\ndata: line2");
+        assert!(events.is_empty());
+
+        let events = parser.finish();
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].data, "line1\nline2");
     }
 }

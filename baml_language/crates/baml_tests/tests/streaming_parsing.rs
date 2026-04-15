@@ -51,7 +51,10 @@ fn streaming_llm_source(base_url: &str) -> String {
 async fn stream_string_final_value() {
     let server = MockServer::start().await;
     let sse_body = openai_sse_body(&["Hello", ", ", "world", "!"], "stop");
-    Mock::given(wiremock::matchers::any())
+    // OpenAI client appends `/chat/completions` to base_url (no `/v1` prefix
+    // when base_url is already a full host URI).
+    Mock::given(method("POST"))
+        .and(path("/chat/completions"))
         .respond_with(
             ResponseTemplate::new(200)
                 .insert_header("content-type", "text/event-stream")

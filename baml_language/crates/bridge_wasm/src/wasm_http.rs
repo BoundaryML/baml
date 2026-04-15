@@ -253,7 +253,15 @@ impl io::IoClassHttpSseStream for WasmHttp {
             let mut parser = parser;
 
             loop {
-                match stream.next().await {
+                let polled = stream.next().await;
+                // close() / mark_done() may have fired while we were awaiting.
+                // Discard whatever this poll produced and report end-of-stream —
+                // returning buffered events after done==true would violate the
+                // "close means no more events" invariant.
+                if handle.is_done() {
+                    return Ok(None);
+                }
+                match polled {
                     Some(Ok(bytes)) => {
                         let events = parser.feed(&bytes);
                         if !events.is_empty() {
@@ -277,16 +285,13 @@ impl io::IoClassHttpSseStream for WasmHttp {
                         // No complete events yet — continue reading.
                     }
                     Some(Err(e)) => {
-                        // Check if the error is an abort (from close()).
-                        if handle.is_done() {
-                            return Ok(None);
-                        }
                         handle.mark_done();
                         return Err(OpErrorKind::Other(format!("SSE stream error: {e}")));
                     }
                     None => {
-                        // Stream ended. Flush any remaining partial event.
-                        let final_events = parser.feed(b"\n");
+                        // Stream ended. Flush any event buffered without a
+                        // trailing blank line.
+                        let final_events = parser.finish();
                         handle.mark_done();
                         if final_events.is_empty() {
                             return Ok(None);
@@ -393,7 +398,7 @@ impl IoNamespaceHttp for WasmHttp {
                 )));
             }
 
-            let url = request.url.clone();
+            let url = response.url().to_string();
             let byte_stream = Box::pin(response.bytes_stream());
             let handle: Arc<dyn std::any::Any + Send + Sync> =
                 Arc::new(WasmSseStreamHandle::new(byte_stream));
