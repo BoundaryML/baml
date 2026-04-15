@@ -18,7 +18,7 @@ pub enum StreamingMode {
     Streaming,
 }
 
-/// Self-referential struct that owns the [`TypeCtx`] and the [`baml_type::Ty`]
+/// Self-referential struct that owns the [`sap_model::TypeCtx`] and the [`baml_type::Ty`]
 /// for the parse target, and borrows `TypeRefDb` + `AnnotatedTy` from them.
 pub struct CompiledSapModel {
     inner: CompiledSapModelInner,

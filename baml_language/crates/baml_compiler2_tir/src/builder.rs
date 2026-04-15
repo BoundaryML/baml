@@ -2525,7 +2525,10 @@ impl<'db> TypeInferenceBuilder<'db> {
                     || Self::ty_covers_fact(inner, fact)
             }
             Ty::Union(parts, _) => parts.iter().any(|part| Self::ty_covers_fact(part, fact)),
-            Ty::Class(qn, _, _) => matches!(fact, Ty::Class(fqn, _, _) if fqn == qn),
+            Ty::Class(qn, type_args, _) => matches!(
+                fact,
+                Ty::Class(fqn, fact_args, _) if fqn == qn && fact_args == type_args
+            ),
             Ty::Enum(qn, _) => match fact {
                 Ty::Enum(fqn, _) => fqn == qn,
                 Ty::EnumVariant(fqn, _, _) => fqn == qn,

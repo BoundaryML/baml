@@ -302,10 +302,16 @@ pub fn execute_parse_response_from_owned(
     let response = parse_response::parse_response(provider, response)
         .map_err(|e| LlmOpError::ParseResponseError(e.to_string()))?;
 
-    if !client.is_finish_reason_allowed(response.finish_reason_raw.as_deref()) {
+    // Normalize empty finish_reason to None so oneshot and streaming paths agree
+    // (matches `execute_validate_finish_reason`'s behavior above).
+    let finish_reason = response
+        .finish_reason_raw
+        .as_deref()
+        .filter(|s| !s.is_empty());
+    if !client.is_finish_reason_allowed(finish_reason) {
         return Err(LlmOpError::ParseResponseError(format!(
             "Finish reason not allowed: {}",
-            response.finish_reason_raw.as_deref().unwrap_or("unknown")
+            finish_reason.unwrap_or("unknown")
         )));
     }
 

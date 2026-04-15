@@ -159,8 +159,17 @@ impl WasmSseStreamHandle {
     }
 
     /// Return the byte stream and parser after `next()` is done.
+    ///
+    /// If the stream was marked done while checked out (e.g., by concurrent
+    /// `close()` / `mark_done()`), drop the resources instead of reviving them —
+    /// once done, the stream stays done.
     pub(crate) fn return_stream(&self, stream: ByteStream, parser: SseParser) {
         let mut inner = self.inner.borrow_mut();
+        if inner.done {
+            drop(stream);
+            drop(parser);
+            return;
+        }
         inner.stream = Some(stream);
         inner.parser = parser;
     }

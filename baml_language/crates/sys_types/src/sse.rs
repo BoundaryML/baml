@@ -63,7 +63,7 @@ impl SseParser {
                             std::mem::take(&mut self.event_type)
                         },
                         data,
-                        id: self.id.take(),
+                        id: self.id.clone(),
                     });
                     self.data_lines.clear();
                 }
@@ -83,7 +83,10 @@ impl SseParser {
                 match field {
                     "event" => self.event_type = value.to_string(),
                     "data" => self.data_lines.push(value.to_string()),
-                    "id" => self.id = Some(value.to_string()),
+                    "id" if !value.contains('\0') => {
+                        self.id = Some(value.to_string());
+                    }
+                    "id" => {}    // NUL-containing IDs ignored per WHATWG spec
                     "retry" => {} // Ignored for now
                     _ => {}       // Unknown fields ignored per spec
                 }
@@ -377,20 +380,31 @@ mod tests {
     }
 
     #[test]
-    fn test_id_consumed_after_dispatch() {
+    fn test_id_sticky_across_events() {
         let mut parser = SseParser::new();
         let events = parser.feed(b"id: 1\ndata: a\n\ndata: b\n\n");
         assert_eq!(events.len(), 2);
         assert_eq!(events[0].id, Some("1".to_string()));
-        assert_eq!(events[1].id, None);
+        // Per WHATWG spec, id persists until next id: field.
+        assert_eq!(events[1].id, Some("1".to_string()));
     }
 
     #[test]
-    fn test_id_with_null_byte() {
+    fn test_id_sticky_overridden_by_new_id() {
         let mut parser = SseParser::new();
+        let events = parser.feed(b"id: 1\ndata: a\n\nid: 2\ndata: b\n\n");
+        assert_eq!(events.len(), 2);
+        assert_eq!(events[0].id, Some("1".to_string()));
+        assert_eq!(events[1].id, Some("2".to_string()));
+    }
+
+    #[test]
+    fn test_id_with_null_byte_ignored() {
+        let mut parser = SseParser::new();
+        // NUL-containing id: field is ignored per WHATWG spec.
         let events = parser.feed(b"id: abc\x00def\ndata: hello\n\n");
         assert_eq!(events.len(), 1);
-        assert_eq!(events[0].id, Some("abc\x00def".to_string()));
+        assert_eq!(events[0].id, None);
     }
 
     #[test]

@@ -114,6 +114,9 @@ pub enum TirTypeError {
         expected: usize,
         got: usize,
     },
+    /// Type arguments were supplied for a type that is not generic
+    /// (enums and type aliases cannot take type parameters).
+    TypeIsNotGeneric { type_name: Name, kind: &'static str },
     /// A lambda parameter has no type annotation and no expected type context
     /// to infer the type from.
     CannotInferLambdaParamType { param_name: Name },
@@ -270,6 +273,12 @@ impl fmt::Display for TirTypeError {
                 write!(
                     f,
                     "class `{class_name}` expects {expected} type argument(s), got {got}"
+                )
+            }
+            TirTypeError::TypeIsNotGeneric { type_name, kind } => {
+                write!(
+                    f,
+                    "{kind} `{type_name}` is not generic and cannot take type arguments"
                 )
             }
             TirTypeError::TypeParamShadowed {

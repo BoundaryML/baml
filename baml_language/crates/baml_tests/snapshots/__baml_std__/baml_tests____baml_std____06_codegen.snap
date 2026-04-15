@@ -497,7 +497,7 @@ function baml.llm.Client.execute_once_oneshot(self: null, context: void, active_
     load_const ClientType.Primitive
     cmp_op ==
     pop_jump_if_false L0
-    jump L7
+    jump L9
 
   L0:
     load_var self
@@ -506,16 +506,25 @@ function baml.llm.Client.execute_once_oneshot(self: null, context: void, active_
     load_const ClientType.Fallback
     cmp_op ==
     pop_jump_if_false L1
-    jump L2
+    jump L4
 
   L1:
     load_var self
+    load_field .sub_clients
+    call baml.Array.length
+    load_const 0
+    cmp_op ==
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_var self
     load_field .counter
-    store_var _66
+    store_var _70
     load_var self
     load_field .sub_clients
     call baml.Array.length
-    store_var _67
+    store_var _71
     load_var self
     load_var self
     load_field .counter
@@ -524,56 +533,62 @@ function baml.llm.Client.execute_once_oneshot(self: null, context: void, active_
     store_field .counter
     load_var self
     load_field .sub_clients
-    load_var _66
-    load_var _67
+    load_var _70
+    load_var _71
     bin_op %
     load_array_element
     load_var context
     load_var active_delay_ms
     call baml.llm.Client.execute_oneshot
-    jump L13
+    jump L15
 
-  L2:
+  L3:
+    alloc_instance DevOther
+    load_const "RoundRobin client has no sub-clients"
+    init_field .message
+    throw
+
+  L4:
     load_var self
     load_field .sub_clients
     store_var _55
     load_const 0
     store_var __for_idx
 
-  L3:
+  L5:
     load_var __for_idx
     load_var _55
     call baml.Array.length
     cmp_op <
-    pop_jump_if_false L4
-    jump L5
+    pop_jump_if_false L6
+    jump L7
 
-  L4:
+  L6:
     alloc_instance DevOther
     load_const "All orchestration steps failed"
     init_field .message
     throw
 
-  L5:
+  L7:
     load_var _55
     load_var __for_idx
     load_array_element
     load_var context
     load_var active_delay_ms
     call baml.llm.Client.execute_oneshot
-    jump L6
+    jump L8
     load_var e
     throw_if_panic
     load_var __for_idx
     load_const 1
     bin_op +
     store_var __for_idx
-    jump L3
+    jump L5
 
-  L6:
-    jump L13
+  L8:
+    jump L15
 
-  L7:
+  L9:
     load_var self
     dispatch_future baml.llm.Client.get_constructor
     await
@@ -607,51 +622,21 @@ function baml.llm.Client.execute_once_oneshot(self: null, context: void, active_
     store_var http_response
     load_var http_response
     call baml.http.Response.ok
-    pop_jump_if_false L8
-    jump L11
+    pop_jump_if_false L10
+    jump L13
 
-  L8:
+  L10:
     load_var http_response
     dispatch_future baml.http.Response.text
     await
     store_var error_body
-    jump L9
+    jump L11
     load_var e
     throw_if_panic
     load_const ""
     store_var error_body
 
-  L9:
-    load_var active_delay_ms
-    load_const 0
-    cmp_op >
-    pop_jump_if_false L10
-    load_var active_delay_ms
-    dispatch_future baml.sys.sleep
-    await
-    pop 1
-
-  L10:
-    alloc_instance DevOther
-    load_const "HTTP request failed: "
-    load_var error_body
-    bin_op +
-    init_field .message
-    throw
-
   L11:
-    load_var http_response
-    dispatch_future baml.http.Response.text
-    await
-    store_var body
-    load_var primitive
-    load_var body
-    load_var return_type
-    dispatch_future baml.llm.PrimitiveClient.parse
-    await
-    jump L13
-    load_var e
-    throw_if_panic
     load_var active_delay_ms
     load_const 0
     cmp_op >
@@ -662,10 +647,40 @@ function baml.llm.Client.execute_once_oneshot(self: null, context: void, active_
     pop 1
 
   L12:
-    load_var e
+    alloc_instance DevOther
+    load_const "HTTP request failed: "
+    load_var error_body
+    bin_op +
+    init_field .message
     throw
 
   L13:
+    load_var http_response
+    dispatch_future baml.http.Response.text
+    await
+    store_var body
+    load_var primitive
+    load_var body
+    load_var return_type
+    dispatch_future baml.llm.PrimitiveClient.parse
+    await
+    jump L15
+    load_var e
+    throw_if_panic
+    load_var active_delay_ms
+    load_const 0
+    cmp_op >
+    pop_jump_if_false L14
+    load_var active_delay_ms
+    dispatch_future baml.sys.sleep
+    await
+    pop 1
+
+  L14:
+    load_var e
+    throw
+
+  L15:
     return
 }
 
@@ -676,7 +691,7 @@ function baml.llm.Client.execute_once_stream(self: null, context: void, active_d
     load_const ClientType.Primitive
     cmp_op ==
     pop_jump_if_false L0
-    jump L7
+    jump L9
 
   L0:
     load_var self
@@ -685,16 +700,25 @@ function baml.llm.Client.execute_once_stream(self: null, context: void, active_d
     load_const ClientType.Fallback
     cmp_op ==
     pop_jump_if_false L1
-    jump L2
+    jump L4
 
   L1:
     load_var self
+    load_field .sub_clients
+    call baml.Array.length
+    load_const 0
+    cmp_op ==
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_var self
     load_field .counter
-    store_var _56
+    store_var _60
     load_var self
     load_field .sub_clients
     call baml.Array.length
-    store_var _57
+    store_var _61
     load_var self
     load_var self
     load_field .counter
@@ -703,56 +727,62 @@ function baml.llm.Client.execute_once_stream(self: null, context: void, active_d
     store_field .counter
     load_var self
     load_field .sub_clients
-    load_var _56
-    load_var _57
+    load_var _60
+    load_var _61
     bin_op %
     load_array_element
     load_var context
     load_var active_delay_ms
     call baml.llm.Client.execute_stream
-    jump L8
+    jump L10
 
-  L2:
+  L3:
+    alloc_instance DevOther
+    load_const "RoundRobin client has no sub-clients"
+    init_field .message
+    throw
+
+  L4:
     load_var self
     load_field .sub_clients
     store_var _45
     load_const 0
     store_var __for_idx
 
-  L3:
+  L5:
     load_var __for_idx
     load_var _45
     call baml.Array.length
     cmp_op <
-    pop_jump_if_false L4
-    jump L5
+    pop_jump_if_false L6
+    jump L7
 
-  L4:
+  L6:
     alloc_instance DevOther
     load_const "All orchestration steps failed"
     init_field .message
     throw
 
-  L5:
+  L7:
     load_var _45
     load_var __for_idx
     load_array_element
     load_var context
     load_var active_delay_ms
     call baml.llm.Client.execute_stream
-    jump L6
+    jump L8
     load_var e
     throw_if_panic
     load_var __for_idx
     load_const 1
     bin_op +
     store_var __for_idx
-    jump L3
+    jump L5
 
-  L6:
-    jump L8
+  L8:
+    jump L10
 
-  L7:
+  L9:
     load_var self
     dispatch_future baml.llm.Client.get_constructor
     await
@@ -808,7 +838,7 @@ function baml.llm.Client.execute_once_stream(self: null, context: void, active_d
     load_var cache
     init_field ._cache
 
-  L8:
+  L10:
     return
 }
 

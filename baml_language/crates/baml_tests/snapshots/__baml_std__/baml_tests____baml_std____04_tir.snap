@@ -436,6 +436,10 @@ function baml.llm.Client.execute_once_stream<T, S>(self: baml.llm.Client, contex
         }
       ClientType.RoundRobin =>
         { : never
+          if (self.sub_clients.length() == 0 : bool) : void
+            { : never
+              throw DevOther { message: "RoundRobin client..." } : unknown
+            }
           let idx = self.counter % self.sub_clients.length() : int
           self.counter Add= 1 : int
           let result3 = self.sub_clients[idx].execute_stream(context, active_delay_ms) : baml.llm.Stream<T, S>
@@ -551,6 +555,10 @@ function baml.llm.Client.execute_once_oneshot<T>(self: baml.llm.Client, context:
         }
       ClientType.RoundRobin =>
         { : never
+          if (self.sub_clients.length() == 0 : bool) : void
+            { : never
+              throw DevOther { message: "RoundRobin client..." } : unknown
+            }
           let idx = self.counter % self.sub_clients.length() : int
           self.counter Add= 1 : int
           let result3 = self.sub_clients[idx].execute_oneshot<T>(context, active_delay_ms) : T

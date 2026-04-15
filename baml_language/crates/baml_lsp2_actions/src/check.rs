@@ -296,6 +296,7 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::TypeParamShadowed { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::CannotInferLambdaParamType { .. } => DiagnosticId::UnknownType,
         TirTypeError::WrongNumberOfTypeArgs { .. } => DiagnosticId::TypeMismatch,
+        TirTypeError::TypeIsNotGeneric { .. } => DiagnosticId::TypeMismatch,
         // Optional chaining diagnostics
         TirTypeError::UnnecessaryOptionalChaining { .. } => DiagnosticId::InvalidOperator,
         TirTypeError::UnnecessaryNullCoalesce { .. } => DiagnosticId::InvalidOperator,

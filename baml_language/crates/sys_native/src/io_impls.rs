@@ -529,7 +529,7 @@ impl io::IoNamespaceHttp for NativeSysOps {
                 )));
             }
 
-            let url = request.url.clone();
+            let url = response.url().to_string();
 
             let buffer = Arc::new(TokioMutex::new(SseBuffer {
                 events: Vec::new(),

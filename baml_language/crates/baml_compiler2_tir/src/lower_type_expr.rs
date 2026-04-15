@@ -121,7 +121,7 @@ pub fn lower_type_expr_in_ns(
                         Ty::Class(qualify_def(db, def, short), lowered_args, TyAttr::default())
                     }
                     Definition::Enum(_) => {
-                        // Enums are not generic — validate-and-discard any args.
+                        // Enums are not generic — validate args and emit a diagnostic if any were supplied.
                         for ga in generic_args {
                             let _ = lower_type_expr_in_ns(
                                 db,
@@ -132,10 +132,16 @@ pub fn lower_type_expr_in_ns(
                                 diagnostics,
                             );
                         }
+                        if !generic_args.is_empty() {
+                            diagnostics.push(TirTypeError::TypeIsNotGeneric {
+                                type_name: short.clone(),
+                                kind: "enum",
+                            });
+                        }
                         Ty::Enum(qualify_def(db, def, short), TyAttr::default())
                     }
                     Definition::TypeAlias(_) => {
-                        // Type aliases are not generic — validate-and-discard any args.
+                        // Type aliases are not generic — validate args and emit a diagnostic if any were supplied.
                         for ga in generic_args {
                             let _ = lower_type_expr_in_ns(
                                 db,
@@ -145,6 +151,12 @@ pub fn lower_type_expr_in_ns(
                                 generic_params,
                                 diagnostics,
                             );
+                        }
+                        if !generic_args.is_empty() {
+                            diagnostics.push(TirTypeError::TypeIsNotGeneric {
+                                type_name: short.clone(),
+                                kind: "type alias",
+                            });
                         }
                         Ty::TypeAlias(qualify_def(db, def, short), TyAttr::default())
                     }

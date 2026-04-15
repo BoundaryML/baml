@@ -681,7 +681,7 @@ function testing.run_test(body: () -> void, runner: (() -> testing.TestReport) -
         2    store_var 1            
 
   173   3    load_var 1             (body)
-        4    make_closure 316 1     
+        4    make_closure 318 1     
         5    store_var 3            (base_run)
 
   188   6    load_var 2             (runner)

@@ -822,7 +822,11 @@ fn collect_type_expr_deps(
 ) {
     use baml_compiler2_ast::TypeExpr;
     match te {
-        TypeExpr::Path { segments, .. } => {
+        TypeExpr::Path {
+            segments,
+            generic_args,
+            ..
+        } => {
             if let Some(last) = segments.last() {
                 let name_str = last.as_str().to_string();
                 if seen.insert(name_str.clone()) {
@@ -831,6 +835,9 @@ fn collect_type_expr_deps(
                         deps.push(dep);
                     }
                 }
+            }
+            for ga in generic_args {
+                collect_type_expr_deps(db, file, ga, deps, seen);
             }
         }
         TypeExpr::Optional { inner, .. } | TypeExpr::List { inner, .. } => {

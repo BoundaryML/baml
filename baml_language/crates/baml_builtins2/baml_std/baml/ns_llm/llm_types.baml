@@ -204,6 +204,9 @@ class Client {
       }
 
       ClientType.RoundRobin => {
+        if (self.sub_clients.length() == 0) {
+          throw root.errors.DevOther { message: "RoundRobin client has no sub-clients" };
+        }
         let idx = self.counter % self.sub_clients.length()
         self.counter += 1
         let result3: Stream<T, S> = self.sub_clients[idx].execute_stream(
@@ -314,6 +317,9 @@ class Client {
       }
 
       ClientType.RoundRobin => {
+        if (self.sub_clients.length() == 0) {
+          throw root.errors.DevOther { message: "RoundRobin client has no sub-clients" };
+        }
         let idx = self.counter % self.sub_clients.length()
         self.counter += 1
         let result3: T = self.sub_clients[idx].execute_oneshot(

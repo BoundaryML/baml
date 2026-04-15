@@ -1084,9 +1084,9 @@ fn emit_mut_receiver_extraction_indented(
 fn emit_arg_extractions_indented(out: &mut String, b: &NativeBuiltin, indent: &str) {
     if let Some(recv) = &b.receiver {
         if recv.receiver_type.is_static() {
-            // Static methods: no reciever
+            // Static methods: no receiver
             for (i, p) in b.params.iter().enumerate() {
-                let arg_idx = i + 1;
+                let arg_idx = i;
                 emit_single_extraction_indented(out, &p.name, arg_idx, &p.ty, indent);
             }
         } else if recv.receiver_type.is_mut() {

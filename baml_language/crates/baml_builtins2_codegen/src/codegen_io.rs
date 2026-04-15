@@ -1067,7 +1067,9 @@ fn emit_one_class_trait(
             let ns_ident = format_ident!("{}", ns);
             let class_ident = format_ident!("{}", class_name);
             let Some(receiver) = &m.receiver else {
-                return quote! { compile_error!("missing receiver for method {}", #method_ident); };
+                return quote! {
+                    compile_error!(concat!("missing receiver for method ", stringify!(#method_ident)));
+                };
             };
             let receiver_param = if receiver.receiver_type.is_static() {
                 None
@@ -1151,7 +1153,9 @@ fn emit_glue_method(
 ) -> TokenStream {
     let glue_ident = format_ident!("__glue_{}", builtin.fn_name);
     let Some(receiver) = &builtin.receiver else {
-        return quote! { compile_error!("missing receiver for glue method {}", #glue_ident); };
+        return quote! {
+            compile_error!(concat!("missing receiver for glue method ", stringify!(#glue_ident)));
+        };
     };
     let variant_ident = format_ident!("{}", builtin.sys_op_variant_name());
     let clean_method_ident = format_ident!("{}", io_method_name(builtin));

@@ -47,6 +47,6 @@ function send(request: Request) -> Response throws root.errors.Io | root.errors.
   $rust_io_function
 }
 
-function fetch_sse(request: Request) -> SseStream throws root.errors.Io {
+function fetch_sse(request: Request) -> SseStream throws root.errors.Io | root.errors.Timeout {
   $rust_io_function
 }

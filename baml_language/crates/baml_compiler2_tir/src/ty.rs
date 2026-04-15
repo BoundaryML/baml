@@ -477,13 +477,9 @@ impl fmt::Display for Ty {
                         .collect();
                     write!(f, "<{}>", args.join(", "))?;
                 } else if !qn.generic_params.is_empty() {
-                    // Fallback: show declared param names when no concrete args
-                    let params: Vec<_> = qn
-                        .generic_params
-                        .iter()
-                        .map(std::string::ToString::to_string)
-                        .collect();
-                    write!(f, "<{}>", params.join(", "))?;
+                    // Unspecialized generic class — show `_` placeholders, one per declared param.
+                    let placeholders = vec!["_"; qn.generic_params.len()];
+                    write!(f, "<{}>", placeholders.join(", "))?;
                 }
                 Ok(())
             }

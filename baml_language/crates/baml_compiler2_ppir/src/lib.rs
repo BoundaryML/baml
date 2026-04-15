@@ -423,7 +423,7 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
 
                 let companion = ast::FunctionDef {
                     name: companion_name,
-                    generic_params: vec![],
+                    generic_params: func.generic_params.clone(),
                     params: vec![sse_param],
                     return_type: Some(stream_return_type),
                     throws: None,
