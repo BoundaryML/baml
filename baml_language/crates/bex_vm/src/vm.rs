@@ -18,7 +18,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use ::bex_vm_types::types::ErrorClass;
 use ::core::any::TypeId;
-use bex_heap::{BexHeap, Tlab};
+use bex_heap::{BexHeap, Generation, Tlab};
 use bex_vm_types::{
     BinOp, CmpOp, FunctionKind, GlobalPool, HeapPtr, Instruction, Object, ObjectIndex, ObjectPool,
     ObjectType, PanicClass, StackIndex, UnaryOp, Value, Variant,
@@ -543,6 +543,42 @@ impl BexVm {
         unsafe { ptr.get_mut() }
     }
 
+    /// Write barrier for field/element/cell writes.
+    ///
+    /// Called *before* the actual field write at each mutation site. If `container_ptr`
+    /// is in an older generation than the object being written (`written_value`), the
+    /// card containing `container_ptr` is marked dirty so partial GC can discover
+    /// the cross-generation reference.
+    ///
+    /// This is a no-op when either side is not a heap object, or when the container
+    /// is in Gen0 (no card table for Gen0).
+    #[inline]
+    pub fn write_barrier(&self, container_ptr: HeapPtr, written_value: Value) {
+        if let Value::Object(ref_ptr) = written_value {
+            let container_gen = self.heap.generation_of(container_ptr);
+            let ref_gen = self.heap.generation_of(ref_ptr);
+            if container_gen > ref_gen {
+                self.heap.mark_card_for_ptr(container_ptr);
+            }
+        }
+    }
+
+    /// Conservative write barrier for mutable accessor paths (builtin dispatch).
+    ///
+    /// Unconditionally marks the card dirty if `container_ptr` is in an older
+    /// generation. Used by `as_array_mut` / `as_map_mut` where the actual written
+    /// value is not yet known (it's supplied by the callee trait method).
+    ///
+    /// This over-marks (any mutable access to an older-gen object dirties the card),
+    /// but it is always safe and the cost is negligible since most objects are Gen0.
+    #[inline]
+    pub(crate) fn conservative_write_barrier(&self, container_ptr: HeapPtr) {
+        let container_gen = self.heap.generation_of(container_ptr);
+        if container_gen > Generation::Gen0 {
+            self.heap.mark_card_for_ptr(container_ptr);
+        }
+    }
+
     /// Collect all `HeapPtr`s stored in call frames.
     /// - For bytecode frames, the function pointer
     /// - For native frames, the continuation pointer as well as all native-held GC roots
@@ -661,6 +697,11 @@ impl BexVm {
     /// Get mutable array from a Value.
     pub fn as_array_mut(&mut self, value: &Value) -> Result<&mut Vec<Value>, VmInternalError> {
         let ptr = self.as_object_ptr(value, ObjectType::Array)?;
+        // Conservative write barrier: any mutable access to an older-generation
+        // array may introduce cross-generation references. Used by builtin dispatch
+        // (Array.push, Array.pop, etc.) where the actual written values are not
+        // visible at this call site.
+        self.conservative_write_barrier(ptr);
         // Check type first to avoid borrow issues
         if !matches!(self.get_object(ptr), Object::Array(_)) {
             return Err(VmInternalError::TypeError {
@@ -693,6 +734,10 @@ impl BexVm {
         value: &Value,
     ) -> Result<&mut IndexMap<String, Value>, VmInternalError> {
         let index = self.as_object_ptr(value, ObjectType::Map)?;
+        // Conservative write barrier: any mutable access to an older-generation
+        // map may introduce cross-generation references. Used by builtin dispatch
+        // (Map.set, etc.) where the actual written values are not visible here.
+        self.conservative_write_barrier(index);
         // Check type first to avoid borrow issues
         if !matches!(self.get_object(index), Object::Map(_)) {
             return Err(VmInternalError::TypeError {
@@ -809,6 +854,9 @@ impl BexVm {
         future_ptr: HeapPtr,
         value: Value,
     ) -> Result<(), VmInternalError> {
+        // Write barrier before mutating the future object.
+        self.write_barrier(future_ptr, value);
+
         let Object::Future(future) = self.get_object_mut(future_ptr) else {
             return Err(VmInternalError::TypeError {
                 expected: FutureType::Any.into(),
@@ -2073,6 +2121,7 @@ impl BexVm {
                 // Consume the value. Read impl of Instruction::StoreVar.
                 let value = self.stack.ensure_pop()?;
 
+                // No write barrier: globals is a VM-owned root structure, not a heap object.
                 self.globals[index] = value;
             }
 
@@ -2128,6 +2177,9 @@ impl BexVm {
                     new_value,
                 );
 
+                // Write barrier: mark card if instance is in an older generation than the value.
+                self.write_barrier(instance_index, new_value);
+
                 // Set the new value.
                 if let Object::Instance(instance) = self.get_object_mut(instance_index) {
                     instance.fields[index] = new_value;
@@ -2173,6 +2225,9 @@ impl BexVm {
                     old_value,
                     new_value,
                 );
+
+                // Write barrier: mark card if instance is in an older generation than the value.
+                self.write_barrier(instance_index, new_value);
 
                 // Set the new value.
                 if let Object::Instance(instance) = self.get_object_mut(instance_index) {
@@ -2813,6 +2868,9 @@ impl BexVm {
                     new_value,
                 );
 
+                // Write barrier: mark card if array is in an older generation than the value.
+                self.write_barrier(array_object_index, new_value);
+
                 // Set the new value.
                 match self.get_object_mut(array_object_index) {
                     Object::Array(array) => {
@@ -2882,6 +2940,9 @@ impl BexVm {
                     old_value,
                     new_value,
                 );
+
+                // Write barrier: mark card if map is in an older generation than the value.
+                self.write_barrier(map_index, new_value);
 
                 // Set the new value.
                 if let Object::Map(map) = self.get_object_mut(map_index) {
@@ -3589,6 +3650,8 @@ impl BexVm {
                     }
                     .into());
                 };
+                // Write barrier before the mutable borrow so we hold only &self.heap.
+                self.write_barrier(cell_ptr, value);
                 // SAFETY: cell_ptr is a VM-owned Cell object; single-threaded.
                 let obj = unsafe { cell_ptr.get_mut() };
                 let Object::Cell(cell) = obj else {
@@ -3653,6 +3716,7 @@ impl BexVm {
                     .into());
                 };
                 let cell_value = closure.captures[idx];
+                // `closure` (and `obj`) are no longer used past this point.
                 let Value::Object(cell_ptr) = cell_value else {
                     return Err(VmInternalError::TypeError {
                         expected: ObjectType::Cell.into(),
@@ -3660,6 +3724,10 @@ impl BexVm {
                     }
                     .into());
                 };
+                // Write barrier: mark card if cell is in an older generation than the value.
+                // The shared borrows of `obj`/`closure` have ended, so `write_barrier`
+                // (which borrows `self` immutably via `self.heap`) is safe here.
+                self.write_barrier(cell_ptr, value);
                 // SAFETY: cell_ptr is a VM-owned Cell object; single-threaded.
                 let cell_obj = unsafe { cell_ptr.get_mut() };
                 let Object::Cell(cell) = cell_obj else {

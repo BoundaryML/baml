@@ -24,7 +24,10 @@ use std::{
 use bex_external_types::{Handle, WeakHeapRef};
 use bex_vm_types::{HeapPtr, Object, ObjectIndex};
 
-use crate::{HeapDebuggerConfig, HeapDebuggerState, chunked_vec::ChunkedVec, tlab::TlabChunk};
+use crate::{
+    HeapDebuggerConfig, HeapDebuggerState, card_table::CardTable, chunked_vec::ChunkedVec,
+    tlab::TlabChunk,
+};
 
 /// Which generation of the heap an object lives in.
 ///
@@ -137,6 +140,12 @@ pub struct BexHeap {
     /// chunk size to reserve its region.
     gen0_next_chunk: AtomicUsize,
 
+    /// Card table tracking dirty cards in Gen2.
+    ///
+    /// A card is marked dirty when a write barrier detects that a Gen2 object
+    /// holds a reference to a Gen0 or Gen1 object. Used during partial collections.
+    pub(crate) gen2_cards: UnsafeCell<CardTable>,
+
     /// Handle table for external/FFI boundary.
     ///
     /// Maps handle keys to HeapPtr values. Handles provide safe,
@@ -231,6 +240,7 @@ impl BexHeap {
             gen2: UnsafeCell::new(ChunkedVec::new()),
             inactive: UnsafeCell::new(ChunkedVec::new()),
             gen0_next_chunk: AtomicUsize::new(0),
+            gen2_cards: UnsafeCell::new(CardTable::new()),
             handles: RwLock::new(HashMap::new()),
             next_handle_key: AtomicUsize::new(0),
             tlab_size,
@@ -455,6 +465,55 @@ impl BexHeap {
             }
         }
         false
+    }
+
+    /// Mark the card dirty for the card containing `container_ptr` in Gen1 or Gen2.
+    ///
+    /// Called from write barriers when an older-generation object receives a
+    /// reference to a younger-generation object.
+    ///
+    /// # Safety
+    ///
+    /// Called from the VM during single-threaded execution (each VM runs on one
+    /// thread at a time). The `UnsafeCell` accesses are safe because no other
+    /// thread is mutating the card tables concurrently.
+    #[inline]
+    pub fn mark_card_for_ptr(&self, container_ptr: HeapPtr) {
+        let raw_ptr = container_ptr.as_ptr() as *const Object;
+        // SAFETY: Single-threaded VM execution; no concurrent card table mutations.
+        unsafe {
+            if let Some((chunk_idx, offset)) =
+                Self::locate_in_chunked_vec(&*self.gen2.get(), raw_ptr)
+            {
+                let cards = &mut *self.gen2_cards.get();
+                cards.ensure_capacity_for_chunks((*self.gen2.get()).num_chunks());
+                cards.mark_dirty_by_offset(chunk_idx, offset);
+            }
+        }
+    }
+
+    /// Locate a raw pointer within a `ChunkedVec`, returning `(chunk_idx, offset_in_chunk)`.
+    ///
+    /// Returns `None` if the pointer is not within any chunk of `vec`.
+    ///
+    /// # Safety
+    ///
+    /// Must only be called at safepoints or with appropriate external synchronization.
+    #[inline]
+    pub(crate) unsafe fn locate_in_chunked_vec(
+        vec: &ChunkedVec<Object>,
+        raw_ptr: *const Object,
+    ) -> Option<(usize, usize)> {
+        for chunk_idx in 0..vec.num_chunks() {
+            let chunk_start = vec.chunk_start_ptr(chunk_idx);
+            let chunk_end = unsafe { chunk_start.add(ChunkedVec::<Object>::CHUNK_SIZE) };
+            if raw_ptr >= chunk_start && raw_ptr < chunk_end {
+                // SAFETY: Both pointers are within the same allocated chunk.
+                let offset = unsafe { raw_ptr.offset_from(chunk_start) as usize };
+                return Some((chunk_idx, offset));
+            }
+        }
+        None
     }
 
     /// Convert a runtime space index to a global ObjectIndex.

@@ -250,6 +250,13 @@ impl Tlab {
     /// - The pointer must be valid (not collected by GC)
     /// - Caller must ensure exclusive access to this object
     /// - Only runtime objects can be written (compile-time objects are immutable)
+    ///
+    /// # Write Barrier
+    ///
+    /// Callers must ensure a write barrier is fired for any `HeapPtr` references
+    /// in the new object if the target is in an older generation. During normal
+    /// execution this is called only for Gen0 objects (newly allocated), so no
+    /// barrier is needed.
     pub unsafe fn set_object(&mut self, ptr: HeapPtr, obj: Object) {
         // SAFETY: Caller ensures exclusive access
         // Direct write to the object through the pointer

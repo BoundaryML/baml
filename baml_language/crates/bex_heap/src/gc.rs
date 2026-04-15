@@ -9,11 +9,30 @@
 //! - **Compacting**: No fragmentation; all live objects are contiguous in Gen2
 //! - **Handle-aware**: Handles updated to point to new object locations
 
-use std::collections::HashMap;
+use std::{cell::UnsafeCell, collections::HashMap};
 
 use bex_vm_types::{HeapPtr, Object, Value};
 
-use crate::BexHeap;
+use crate::{
+    BexHeap,
+    card_table::{CARD_SIZE, CARDS_PER_CHUNK},
+    chunked_vec::ChunkedVec,
+    heap::Generation,
+};
+
+/// Which generation level to collect.
+///
+/// - `Gen0`: Minor GC — traces Gen0 only, promotes survivors to Gen1.
+/// - `Minor`: Traces Gen0 + Gen1; Gen0 survivors → new Gen1 (via inactive swap),
+///   Gen1 survivors → Gen2.
+/// - `Major`: Full GC — traces all generations, survivors → Gen2 via inactive swap.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CollectionLevel {
+    /// Minor collection: Gen0 + Gen1.
+    Minor,
+    /// Full collection: Gen0 + Gen1 + Gen2.
+    Major,
+}
 
 /// Result of a garbage collection cycle.
 #[derive(Debug, Clone)]
@@ -24,6 +43,12 @@ pub struct GcStats {
     pub collected_count: usize,
     /// Handles invalidated.
     pub handles_invalidated: usize,
+    /// Which collection level was run.
+    pub level: CollectionLevel,
+    /// Objects promoted from Gen0 to Gen1 during this cycle.
+    pub promoted_to_gen1: usize,
+    /// Objects promoted from Gen1 to Gen2 during this cycle.
+    pub promoted_to_gen2: usize,
 }
 
 impl BexHeap {
@@ -152,6 +177,9 @@ impl BexHeap {
             live_count,
             collected_count,
             handles_invalidated,
+            level: CollectionLevel::Major,
+            promoted_to_gen1: 0,
+            promoted_to_gen2: live_count,
         };
 
         (stats, remapped_roots, forwarding)
@@ -354,6 +382,355 @@ impl BexHeap {
             && let Some(&new_ptr) = forwarding.get(ptr)
         {
             *ptr = new_ptr;
+        }
+    }
+
+    /// Fix up all object references in an arbitrary space.
+    ///
+    /// Like `fixup_references_in_inactive`, but works on any `ChunkedVec`.
+    ///
+    /// # Safety
+    ///
+    /// Must be called after all live objects in this space have been copied, and no
+    /// VMs are executing.
+    unsafe fn fixup_references_in_space(
+        &self,
+        space: &UnsafeCell<ChunkedVec<Object>>,
+        forwarding: &HashMap<HeapPtr, HeapPtr>,
+    ) {
+        // SAFETY: Caller ensures exclusive access at a GC safepoint.
+        unsafe {
+            let vec = &mut *space.get();
+            for obj in vec.iter_mut() {
+                self.fixup_object_references(obj, forwarding);
+            }
+        }
+    }
+
+    /// Fix up only the newly promoted tail of a space.
+    ///
+    /// After promoting objects from a younger generation, only the newly appended
+    /// objects need reference fixup (existing objects in the space already have
+    /// correct pointers, or will be handled by a full space fixup).
+    ///
+    /// `len_before` is the length of the space before any promotion.
+    ///
+    /// # Safety
+    ///
+    /// Must be called at a GC safepoint.
+    unsafe fn fixup_promoted_objects_from(
+        &self,
+        space: &UnsafeCell<ChunkedVec<Object>>,
+        len_before: usize,
+        forwarding: &HashMap<HeapPtr, HeapPtr>,
+    ) {
+        // SAFETY: Caller ensures exclusive access at a GC safepoint.
+        unsafe {
+            let vec = &mut *space.get();
+            let len_after = vec.len();
+            for i in len_before..len_after {
+                let obj = vec.get_mut(i);
+                self.fixup_object_references(obj, forwarding);
+            }
+        }
+    }
+
+    /// Copy a single object into an arbitrary destination space.
+    ///
+    /// Generalised version of `copy_object_to_inactive` that can target any
+    /// `ChunkedVec` (Gen1, Gen2, or inactive).
+    ///
+    /// Returns the new `HeapPtr` in the destination space.
+    fn copy_object_to_space(
+        &self,
+        space: &UnsafeCell<ChunkedVec<Object>>,
+        old_ptr: HeapPtr,
+        forwarding: &mut HashMap<HeapPtr, HeapPtr>,
+    ) -> HeapPtr {
+        // Clone the object from its old location.
+        // SAFETY: GC runs at safepoints, no VMs are executing.
+        let obj = unsafe { old_ptr.get().clone() };
+
+        // Append to the destination space and return a pointer to the new location.
+        // SAFETY: GC runs at safepoints, no VMs are executing.
+        let new_ptr = unsafe {
+            let vec = &mut *space.get();
+            let new_idx = vec.len();
+            vec.push_with(obj, || Object::String(String::new()));
+            let raw_ptr = vec.get_ptr(new_idx);
+            self.make_heap_ptr(raw_ptr)
+        };
+
+        forwarding.insert(old_ptr, new_ptr);
+        new_ptr
+    }
+
+    /// Scan dirty cards in `space`/`card_table` and push any references to
+    /// objects in `target_generations` onto `worklist`.
+    ///
+    /// # Safety
+    ///
+    /// Must be called at a GC safepoint.
+    unsafe fn scan_dirty_cards_for_roots(
+        &self,
+        card_table: &crate::card_table::CardTable,
+        space: &ChunkedVec<Object>,
+        worklist: &mut Vec<HeapPtr>,
+        target_generations: &[Generation],
+    ) {
+        for card_index in card_table.dirty_card_indices() {
+            let chunk_idx = card_index / CARDS_PER_CHUNK;
+            let card_offset_in_chunk = (card_index % CARDS_PER_CHUNK) * CARD_SIZE;
+
+            let start = chunk_idx * ChunkedVec::<Object>::CHUNK_SIZE + card_offset_in_chunk;
+            let end = (start + CARD_SIZE).min(space.len());
+
+            for i in start..end {
+                let obj = space.get(i);
+                self.collect_references_in_generations(obj, worklist, target_generations);
+            }
+        }
+    }
+
+    /// Like `add_references_to_worklist`, but only enqueues pointers whose
+    /// generation is one of `target_generations`.
+    fn collect_references_in_generations(
+        &self,
+        obj: &Object,
+        worklist: &mut Vec<HeapPtr>,
+        target_generations: &[Generation],
+    ) {
+        match obj {
+            Object::Array(arr) => {
+                for value in arr {
+                    if let Value::Object(ptr) = value
+                        && target_generations.contains(&self.generation_of(*ptr))
+                    {
+                        worklist.push(*ptr);
+                    }
+                }
+            }
+            Object::Map(map) => {
+                for value in map.values() {
+                    if let Value::Object(ptr) = value
+                        && target_generations.contains(&self.generation_of(*ptr))
+                    {
+                        worklist.push(*ptr);
+                    }
+                }
+            }
+            Object::Instance(inst) => {
+                if target_generations.contains(&self.generation_of(inst.class)) {
+                    worklist.push(inst.class);
+                }
+                for value in &inst.fields {
+                    if let Value::Object(ptr) = value
+                        && target_generations.contains(&self.generation_of(*ptr))
+                    {
+                        worklist.push(*ptr);
+                    }
+                }
+            }
+            Object::Closure(closure) => {
+                if target_generations.contains(&self.generation_of(closure.function)) {
+                    worklist.push(closure.function);
+                }
+                for value in &closure.captures {
+                    if let Value::Object(ptr) = value
+                        && target_generations.contains(&self.generation_of(*ptr))
+                    {
+                        worklist.push(*ptr);
+                    }
+                }
+            }
+            Object::Cell(cell) => {
+                if let Value::Object(ptr) = &cell.value
+                    && target_generations.contains(&self.generation_of(*ptr))
+                {
+                    worklist.push(*ptr);
+                }
+            }
+            Object::Variant(var) => {
+                if target_generations.contains(&self.generation_of(var.enm)) {
+                    worklist.push(var.enm);
+                }
+            }
+            Object::Future(fut) => {
+                use bex_vm_types::Future;
+                match fut {
+                    Future::Pending(pending) => {
+                        for value in &pending.args {
+                            if let Value::Object(ptr) = value
+                                && target_generations.contains(&self.generation_of(*ptr))
+                            {
+                                worklist.push(*ptr);
+                            }
+                        }
+                    }
+                    Future::Ready(value) => {
+                        if let Value::Object(ptr) = value
+                            && target_generations.contains(&self.generation_of(*ptr))
+                        {
+                            worklist.push(*ptr);
+                        }
+                    }
+                }
+            }
+            // Primitives/leaf variants have no heap references.
+            #[cfg(feature = "heap_debug")]
+            Object::Sentinel(_) => {}
+            Object::String(_)
+            | Object::Uint8Array(_)
+            | Object::Class(_)
+            | Object::Enum(_)
+            | Object::Function(_)
+            | Object::RustData(_)
+            | Object::Collector(_)
+            | Object::Type(_) => {}
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Generational collection implementations
+    // -------------------------------------------------------------------------
+
+    /// Minor collection (Gen0 + Gen1).
+    ///
+    /// Traces Gen0 + Gen1 with roots from `roots` plus dirty-card references
+    /// from Gen2. Gen0 survivors are copied to the inactive space (which becomes
+    /// the new Gen1 after a swap). Gen1 survivors are promoted directly to Gen2.
+    /// Gen0 is cleared after collection.
+    ///
+    /// Returns `(GcStats, remapped_roots, forwarding_map)`.
+    unsafe fn collect_garbage_minor(
+        &self,
+        roots: &[HeapPtr],
+    ) -> (GcStats, Vec<HeapPtr>, HashMap<HeapPtr, HeapPtr>) {
+        let mut forwarding: HashMap<HeapPtr, HeapPtr> = HashMap::new();
+
+        self.bump_epoch();
+
+        let gen0_count = unsafe { self.gen0_ref().len() };
+        let gen1_count = unsafe { self.gen1_ref().len() };
+
+        // Record Gen2 length before any promotion so we can fix up only new objects.
+        let gen2_len_before = unsafe { self.gen2_ref().len() };
+
+        // Clear inactive — it becomes the new Gen1 after the swap.
+        // SAFETY: GC safepoint.
+        unsafe {
+            self.inactive_mut().clear();
+        }
+
+        // Build worklist: roots + cross-generation references from Gen2 dirty cards.
+        let mut worklist: Vec<HeapPtr> = roots.to_vec();
+        unsafe {
+            self.scan_dirty_cards_for_roots(
+                &*self.gen2_cards.get(),
+                self.gen2_ref(),
+                &mut worklist,
+                &[Generation::Gen0, Generation::Gen1],
+            );
+        }
+
+        let mut promoted_to_gen2 = 0usize;
+
+        while let Some(old_ptr) = worklist.pop() {
+            if forwarding.contains_key(&old_ptr) {
+                continue;
+            }
+
+            let generation = self.generation_of(old_ptr);
+            match generation {
+                Generation::CompileTime => {
+                    forwarding.insert(old_ptr, old_ptr);
+                }
+                Generation::Gen0 => {
+                    // Gen0 survivors → new Gen1 (inactive).
+                    let new_ptr =
+                        self.copy_object_to_space(&self.inactive, old_ptr, &mut forwarding);
+                    let obj = unsafe { new_ptr.get() };
+                    self.add_references_to_worklist(obj, &mut worklist);
+                }
+                Generation::Gen1 => {
+                    // Gen1 survivors → promote to Gen2.
+                    let new_ptr = self.copy_object_to_space(&self.gen2, old_ptr, &mut forwarding);
+                    let obj = unsafe { new_ptr.get() };
+                    self.add_references_to_worklist(obj, &mut worklist);
+                    promoted_to_gen2 += 1;
+                }
+                Generation::Gen2 => {
+                    // Outside collected generations — identity-map.
+                    forwarding.insert(old_ptr, old_ptr);
+                }
+            }
+        }
+
+        // Fix up references:
+        // - Full fixup for inactive (new Gen1 — all objects are freshly copied).
+        // - Tail fixup for Gen2 (only the newly promoted tail needs updating).
+        // SAFETY: All live objects moved; no VMs executing.
+        unsafe {
+            self.fixup_references_in_space(&self.inactive, &forwarding);
+            self.fixup_promoted_objects_from(&self.gen2, gen2_len_before, &forwarding);
+        }
+
+        // Swap inactive ↔ Gen1; clear Gen0.
+        // SAFETY: GC safepoint; exclusive access to all spaces.
+        unsafe {
+            std::ptr::swap(self.gen1.get(), self.inactive.get());
+            self.gen0_mut().clear();
+        }
+        self.reset_next_chunk(0);
+        self.clear_tlab_canaries();
+
+        // Clear all card tables.
+        unsafe {
+            (*self.gen2_cards.get()).clear();
+        }
+
+        // Poison/clear the old Gen1 (now in inactive).
+        self.finalize_inactive_space();
+
+        let new_gen1_count = unsafe { self.gen1_ref().len() };
+        let total_live = new_gen1_count + promoted_to_gen2;
+        let total_before = gen0_count + gen1_count;
+
+        let remapped_roots = roots
+            .iter()
+            .map(|old_ptr| *forwarding.get(old_ptr).unwrap_or(old_ptr))
+            .collect();
+
+        let handles_invalidated = self.update_handles(&forwarding);
+
+        let stats = GcStats {
+            live_count: total_live,
+            collected_count: total_before.saturating_sub(total_live),
+            handles_invalidated,
+            level: CollectionLevel::Minor,
+            promoted_to_gen1: new_gen1_count,
+            promoted_to_gen2,
+        };
+
+        (stats, remapped_roots, forwarding)
+    }
+
+    /// Dispatch to the appropriate generational collection algorithm.
+    ///
+    /// - `Minor`: Gen0 + Gen1 traced; Gen0 survivors → new Gen1, Gen1 survivors → Gen2.
+    /// - `Major`: Full GC — equivalent to [`collect_garbage`], all generations traced.
+    ///
+    /// # Safety
+    ///
+    /// Caller must ensure all VMs are at safepoints (not executing).
+    pub unsafe fn collect_garbage_generational(
+        &self,
+        roots: &[HeapPtr],
+        level: CollectionLevel,
+    ) -> (GcStats, Vec<HeapPtr>, HashMap<HeapPtr, HeapPtr>) {
+        match level {
+            CollectionLevel::Minor => unsafe { self.collect_garbage_minor(roots) },
+            CollectionLevel::Major => unsafe { self.collect_garbage(roots) },
         }
     }
 }
