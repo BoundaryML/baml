@@ -68,9 +68,9 @@ jobs:
     #   GOARCH: ${{ matrix._.goarch }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
-      - uses: actions/cache@v4
+      - uses: actions/cache@v5
         with:
           path: |
             ~/.ollama/models
@@ -95,7 +95,7 @@ jobs:
       - name: Platform-specific setup
         run: ${{ matrix._.setup }}
 
-      - uses: infisical/secrets-action@v1.0.9
+      - uses: infisical/secrets-action@v1.0.15
         with:
           method: oidc
           # https://app.infisical.com/organization/identities/5b66a909-d5b3-4835-b518-27abf4c9b97d
