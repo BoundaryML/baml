@@ -826,9 +826,8 @@ impl BexEngine {
             parked_vms.len()
         );
 
-        // Run GC with forwarding map
-        let (stats, _remapped_roots, forwarding) =
-            unsafe { self.heap.collect_garbage_with_forwarding(&all_roots) };
+        // Run GC — always returns the forwarding map so we can update parked VM stacks.
+        let (stats, _remapped_roots, forwarding) = unsafe { self.heap.collect_garbage(&all_roots) };
 
         // Update all parked VM stacks with forwarding pointers and invalidate TLABs
         // SAFETY: VMs are still parked (gc_complete not yet notified), we have
@@ -1322,8 +1321,7 @@ impl BexEngine {
         if self.heap.should_gc() {
             let roots = Self::collect_vm_roots(vm);
             unsafe {
-                let (stats, _remapped_roots, forwarding) =
-                    self.heap.collect_garbage_with_forwarding(&roots);
+                let (stats, _remapped_roots, forwarding) = self.heap.collect_garbage(&roots);
 
                 // Update VM stack with forwarding pointers
                 for value in &mut vm.stack.0 {

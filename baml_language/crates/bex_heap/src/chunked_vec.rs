@@ -172,6 +172,9 @@ impl<T, const CHUNK_SIZE: usize> ChunkedVec<T, CHUNK_SIZE> {
         self.len() == 0
     }
 
+    /// The chunk size as a public associated constant.
+    pub const CHUNK_SIZE: usize = CHUNK_SIZE;
+
     /// Get the chunk size (compile-time constant).
     #[inline]
     pub const fn chunk_size(&self) -> usize {
@@ -185,6 +188,32 @@ impl<T, const CHUNK_SIZE: usize> ChunkedVec<T, CHUNK_SIZE> {
         unsafe {
             let chunks_ptr = self.chunks.get();
             (*chunks_ptr).len() * CHUNK_SIZE
+        }
+    }
+
+    /// Get the number of allocated chunks.
+    ///
+    /// Used for generation classification via pointer range checks.
+    /// Only called at safepoints or with appropriate synchronization.
+    #[inline]
+    pub fn num_chunks(&self) -> usize {
+        // SAFETY: Only called at safepoints or with appropriate synchronization
+        unsafe { (*self.chunks.get()).len() }
+    }
+
+    /// Get a raw pointer to the start of a chunk.
+    ///
+    /// Used for generation classification by pointer range checks.
+    ///
+    /// # Safety
+    ///
+    /// Only called at safepoints; `chunk_idx` must be < `num_chunks()`.
+    #[inline]
+    pub fn chunk_start_ptr(&self, chunk_idx: usize) -> *const T {
+        // SAFETY: Caller ensures chunk_idx is in bounds and we're at a safepoint
+        unsafe {
+            let chunks = &*self.chunks.get();
+            chunks[chunk_idx].as_ptr() as *const T
         }
     }
 

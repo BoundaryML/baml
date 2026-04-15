@@ -26,6 +26,22 @@ use bex_vm_types::{HeapPtr, Object, ObjectIndex};
 
 use crate::{HeapDebuggerConfig, HeapDebuggerState, chunked_vec::ChunkedVec, tlab::TlabChunk};
 
+/// Which generation of the heap an object lives in.
+///
+/// The ordering `CompileTime < Gen0 < Gen1 < Gen2` is intentional: write barriers
+/// use `container_gen > ref_gen` to decide whether to mark a card dirty.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Generation {
+    /// Permanent compile-time objects (never collected).
+    CompileTime,
+    /// Gen0 nursery — new allocations land here.
+    Gen0,
+    /// Gen1 intermediate — objects that survived one full GC.
+    Gen1,
+    /// Gen2 old generation — long-lived objects.
+    Gen2,
+}
+
 /// Default TLAB chunk size (number of object slots).
 ///
 /// This is the number of object slots each VM gets when it requests a new TLAB.
@@ -70,14 +86,17 @@ pub struct HeapStats {
 /// All heap-allocated objects live here. The heap is shared across
 /// all VM instances via `Arc<BexHeap>`.
 ///
-/// # Semi-Space Layout
+/// # Generational Layout
 ///
-/// The heap uses a semi-space structure for copy collection:
+/// The heap uses four `ChunkedVec<Object>` spaces:
 /// - `compile_time`: Permanent objects (functions, classes, enums) - never collected
-/// - `spaces[0]` and `spaces[1]`: Two runtime spaces - only one active at a time
+/// - `gen0`: Gen0 nursery — all new TLAB allocations land here
+/// - `gen1`: Gen1 intermediate — survivors of one full GC cycle
+/// - `gen2`: Gen2 old generation — long-lived objects
+/// - `inactive`: Scratch space used as copy destination during full GC
 ///
-/// During GC, live objects are copied from the active space to the other,
-/// then the spaces are swapped. This reclaims memory from dead objects.
+/// During a full GC, live objects are copied from gen0+gen1+gen2 into inactive,
+/// then inactive is swapped with gen2, and gen0+gen1 are cleared.
 ///
 /// # Example
 ///
@@ -89,7 +108,7 @@ pub struct BexHeap {
     /// These are permanent: functions, classes, enums, string literals.
     compile_time: Vec<Object>,
 
-    /// Two runtime spaces - only one active at a time.
+    /// Gen0 nursery — all TLAB allocations land here.
     /// Uses ChunkedVec for stable pointers during concurrent access.
     ///
     /// # Why ChunkedVec?
@@ -101,24 +120,22 @@ pub struct BexHeap {
     /// ChunkedVec stores objects in fixed-size chunks. Growing adds new chunks
     /// without moving existing data, so pointers remain stable even during
     /// concurrent growth.
-    ///
-    /// # Safety
-    ///
-    /// Access is safe because:
-    /// - Each VM has exclusive write access to its TLAB region
-    /// - BAML has no global mutable state
-    /// - GC only runs at safepoints when no VMs are executing
-    /// - ChunkedVec never moves existing elements during growth
-    pub(crate) spaces: [UnsafeCell<ChunkedVec<Object>>; 2],
+    pub(crate) gen0: UnsafeCell<ChunkedVec<Object>>,
 
-    /// Which space is currently active (0 or 1).
-    pub(crate) active_space: AtomicUsize,
+    /// Gen1 intermediate — survivors of one full GC.
+    pub(crate) gen1: UnsafeCell<ChunkedVec<Object>>,
 
-    /// Next TLAB chunk start index within active space.
+    /// Gen2 old generation — long-lived objects.
+    pub(crate) gen2: UnsafeCell<ChunkedVec<Object>>,
+
+    /// Inactive scratch space — copy destination during full GC.
+    pub(crate) inactive: UnsafeCell<ChunkedVec<Object>>,
+
+    /// Next TLAB chunk start index within Gen0.
     ///
     /// When a VM needs a new TLAB, it atomically increments this by the
     /// chunk size to reserve its region.
-    next_chunk: AtomicUsize,
+    gen0_next_chunk: AtomicUsize,
 
     /// Handle table for external/FFI boundary.
     ///
@@ -135,7 +152,7 @@ pub struct BexHeap {
     /// TLAB chunk size for new allocations.
     tlab_size: usize,
 
-    /// Lock for growing the objects vector (rare operation).
+    /// Lock for growing Gen0 (rare operation).
     ///
     /// Only held during Vec resizing when a TLAB chunk allocation needs to grow
     /// the backing storage. This doesn't affect fast-path allocation which is
@@ -209,12 +226,11 @@ impl BexHeap {
 
         Arc::new(Self {
             compile_time: compile_time_objects,
-            spaces: [
-                UnsafeCell::new(ChunkedVec::new()),
-                UnsafeCell::new(ChunkedVec::new()),
-            ],
-            active_space: AtomicUsize::new(0),
-            next_chunk: AtomicUsize::new(0), // Starts at 0 within active space
+            gen0: UnsafeCell::new(ChunkedVec::new()),
+            gen1: UnsafeCell::new(ChunkedVec::new()),
+            gen2: UnsafeCell::new(ChunkedVec::new()),
+            inactive: UnsafeCell::new(ChunkedVec::new()),
+            gen0_next_chunk: AtomicUsize::new(0),
             handles: RwLock::new(HashMap::new()),
             next_handle_key: AtomicUsize::new(0),
             tlab_size,
@@ -308,45 +324,137 @@ impl BexHeap {
         unsafe { self.make_heap_ptr(raw_ptr) }
     }
 
-    /// Get the currently active runtime space index (0 or 1).
-    #[inline]
-    pub fn active_space_index(&self) -> usize {
-        self.active_space.load(Ordering::Acquire)
-    }
-
-    /// Get a reference to the active runtime space.
+    /// Get a shared reference to Gen0 (the nursery / active allocation space).
     ///
     /// # Safety
     ///
-    /// Caller must ensure no concurrent mutations to the space.
+    /// Caller must ensure no concurrent mutations to Gen0.
     #[inline]
-    pub unsafe fn active_space(&self) -> &ChunkedVec<Object> {
+    pub unsafe fn gen0_ref(&self) -> &ChunkedVec<Object> {
         // SAFETY: Caller ensures no concurrent mutations
-        unsafe { &*self.spaces[self.active_space_index()].get() }
+        unsafe { &*self.gen0.get() }
     }
 
-    /// Get a mutable reference to a specific space.
+    /// Get a mutable reference to Gen0.
     ///
     /// # Safety
     ///
-    /// Caller must ensure exclusive access to the space. This is safe during GC
-    /// because all VMs are at safepoints (not executing).
+    /// Caller must ensure exclusive access (e.g., at a GC safepoint).
     #[inline]
     #[allow(clippy::mut_from_ref)] // Interior mutability via UnsafeCell
-    pub(crate) unsafe fn space_mut(&self, space_idx: usize) -> &mut ChunkedVec<Object> {
+    pub(crate) unsafe fn gen0_mut(&self) -> &mut ChunkedVec<Object> {
         // SAFETY: Caller ensures exclusive access
-        unsafe { &mut *self.spaces[space_idx].get() }
+        unsafe { &mut *self.gen0.get() }
     }
 
-    /// Get a reference to a specific space.
+    /// Get a shared reference to Gen1.
     ///
     /// # Safety
     ///
-    /// Caller must ensure no concurrent mutations to the space.
+    /// Caller must ensure no concurrent mutations to Gen1.
     #[inline]
-    pub(crate) unsafe fn space_ref(&self, space_idx: usize) -> &ChunkedVec<Object> {
+    pub(crate) unsafe fn gen1_ref(&self) -> &ChunkedVec<Object> {
         // SAFETY: Caller ensures no concurrent mutations
-        unsafe { &*self.spaces[space_idx].get() }
+        unsafe { &*self.gen1.get() }
+    }
+
+    /// Get a mutable reference to Gen1.
+    ///
+    /// # Safety
+    ///
+    /// Caller must ensure exclusive access (e.g., at a GC safepoint).
+    #[inline]
+    #[allow(clippy::mut_from_ref)] // Interior mutability via UnsafeCell
+    pub(crate) unsafe fn gen1_mut(&self) -> &mut ChunkedVec<Object> {
+        // SAFETY: Caller ensures exclusive access
+        unsafe { &mut *self.gen1.get() }
+    }
+
+    /// Get a shared reference to Gen2.
+    ///
+    /// # Safety
+    ///
+    /// Caller must ensure no concurrent mutations to Gen2.
+    #[inline]
+    pub(crate) unsafe fn gen2_ref(&self) -> &ChunkedVec<Object> {
+        // SAFETY: Caller ensures no concurrent mutations
+        unsafe { &*self.gen2.get() }
+    }
+
+    /// Get a mutable reference to Gen2.
+    ///
+    /// # Safety
+    ///
+    /// Caller must ensure exclusive access (e.g., at a GC safepoint).
+    #[inline]
+    #[allow(clippy::mut_from_ref)] // Interior mutability via UnsafeCell
+    #[allow(dead_code)] // Will be used in Phase 4 (generational collection algorithms)
+    pub(crate) unsafe fn gen2_mut(&self) -> &mut ChunkedVec<Object> {
+        // SAFETY: Caller ensures exclusive access
+        unsafe { &mut *self.gen2.get() }
+    }
+
+    /// Get a shared reference to the inactive (copy-destination) space.
+    ///
+    /// # Safety
+    ///
+    /// Caller must ensure no concurrent mutations to inactive.
+    #[inline]
+    pub(crate) unsafe fn inactive_ref(&self) -> &ChunkedVec<Object> {
+        // SAFETY: Caller ensures no concurrent mutations
+        unsafe { &*self.inactive.get() }
+    }
+
+    /// Get a mutable reference to the inactive space.
+    ///
+    /// # Safety
+    ///
+    /// Caller must ensure exclusive access (e.g., at a GC safepoint).
+    #[inline]
+    #[allow(clippy::mut_from_ref)] // Interior mutability via UnsafeCell
+    pub(crate) unsafe fn inactive_mut(&self) -> &mut ChunkedVec<Object> {
+        // SAFETY: Caller ensures exclusive access
+        unsafe { &mut *self.inactive.get() }
+    }
+
+    /// Determine which generation an object pointer belongs to.
+    ///
+    /// Returns `Generation::CompileTime` for compile-time objects,
+    /// `Generation::Gen0` / `Gen1` for objects in those spaces,
+    /// and `Generation::Gen2` for everything else (Gen2 or inactive).
+    #[inline]
+    pub fn generation_of(&self, ptr: HeapPtr) -> Generation {
+        if self.is_compile_time_ptr(ptr) {
+            return Generation::CompileTime;
+        }
+        let raw_ptr = ptr.as_ptr() as *const Object;
+        // SAFETY: Only reading lengths and chunk pointers at a safepoint.
+        unsafe {
+            if Self::ptr_in_chunked_vec(&*self.gen0.get(), raw_ptr) {
+                return Generation::Gen0;
+            }
+            if Self::ptr_in_chunked_vec(&*self.gen1.get(), raw_ptr) {
+                return Generation::Gen1;
+            }
+        }
+        Generation::Gen2
+    }
+
+    /// Check whether a raw pointer falls within any chunk of a `ChunkedVec`.
+    ///
+    /// # Safety
+    ///
+    /// Must only be called at GC safepoints or with appropriate external synchronization.
+    #[inline]
+    unsafe fn ptr_in_chunked_vec(vec: &ChunkedVec<Object>, raw_ptr: *const Object) -> bool {
+        for chunk_idx in 0..vec.num_chunks() {
+            let chunk_start = vec.chunk_start_ptr(chunk_idx);
+            let chunk_end = unsafe { chunk_start.add(ChunkedVec::<Object>::CHUNK_SIZE) };
+            if raw_ptr >= chunk_start && raw_ptr < chunk_end {
+                return true;
+            }
+        }
+        false
     }
 
     /// Convert a runtime space index to a global ObjectIndex.
@@ -373,14 +481,14 @@ impl BexHeap {
         self.tlab_size
     }
 
-    /// Write an object at the given runtime index in the active space.
+    /// Write an object at the given runtime index in Gen0 (the active nursery).
     ///
     /// # Safety
     ///
     /// Caller must ensure:
     /// 1. **Write exclusivity**: Only write to indices within your TLAB's
     ///    exclusive region (`tlab.alloc_ptr..tlab.alloc_limit`)
-    /// 2. **Index validity**: The index must be < the space's current length
+    /// 2. **Index validity**: The index must be < Gen0's current length
     ///
     /// # Why This API?
     ///
@@ -398,14 +506,15 @@ impl BexHeap {
     /// - **ChunkedVec**: Growing never moves existing elements
     #[inline]
     pub unsafe fn write_runtime_object(&self, runtime_idx: usize, obj: Object) {
-        // SAFETY: Caller ensures exclusive access to this index
-        // ChunkedVec's set() is internally safe for concurrent access to different indices
+        // SAFETY: Caller ensures exclusive access to this index.
+        // ChunkedVec's set() is internally safe for concurrent access to different indices.
+        // All TLAB allocations target Gen0.
         unsafe {
-            (*self.spaces[self.active_space_index()].get()).set(runtime_idx, obj);
+            (*self.gen0.get()).set(runtime_idx, obj);
         }
     }
 
-    /// Get a mutable reference to a runtime object.
+    /// Get a mutable reference to a runtime object in Gen0.
     ///
     /// # Safety
     ///
@@ -413,15 +522,14 @@ impl BexHeap {
     #[inline]
     #[allow(clippy::mut_from_ref)] // Interior mutability via UnsafeCell
     pub unsafe fn get_runtime_object_mut(&self, runtime_idx: usize) -> &mut Object {
-        // SAFETY: Caller ensures exclusive access
-        unsafe { &mut *(*self.spaces[self.active_space_index()].get()).get_ptr(runtime_idx) }
+        // SAFETY: Caller ensures exclusive access; Gen0 holds all runtime allocations
+        unsafe { &mut *(*self.gen0.get()).get_ptr(runtime_idx) }
     }
 
-    /// Get the current number of objects in the heap.
+    /// Get the current number of objects in the heap (compile-time + Gen0).
     pub fn len(&self) -> usize {
-        let active = self.active_space_index();
-        // SAFETY: Reading len is safe, it's just a usize
-        let runtime_len = unsafe { (*self.spaces[active].get()).len() };
+        // SAFETY: Reading len is safe (AtomicUsize load)
+        let runtime_len = unsafe { (*self.gen0.get()).len() };
         self.compile_time.len() + runtime_len
     }
 
@@ -430,7 +538,7 @@ impl BexHeap {
         self.len() == 0
     }
 
-    /// Allocate a new TLAB chunk.
+    /// Allocate a new TLAB chunk from Gen0 (the nursery).
     ///
     /// This method is thread-safe. Multiple VMs can request chunks
     /// concurrently - each gets a unique, non-overlapping region.
@@ -456,26 +564,24 @@ impl BexHeap {
         let use_canary = self.debug_config().enabled;
         let canary_slots = if use_canary { 1 } else { 0 };
 
-        // Atomically reserve a chunk range within active space
+        // Atomically reserve a chunk range within Gen0
         let step = self.tlab_size + canary_slots;
-        let runtime_start = self.next_chunk.fetch_add(step, Ordering::SeqCst);
+        let runtime_start = self.gen0_next_chunk.fetch_add(step, Ordering::SeqCst);
         let runtime_end = runtime_start + self.tlab_size;
         let reserve_end = runtime_end + canary_slots;
 
         // Lock only for growth (serializes chunk allocation)
         let _guard = self.growth_lock.lock().unwrap();
 
-        // Grow active space if needed - ChunkedVec never moves existing data
-        let active = self.active_space_index();
         let ct_len = self.compile_time.len();
         // SAFETY: We hold the growth_lock, so no other thread is resizing.
         // ChunkedVec's resize_with never moves existing elements, and takes &self
         // so we don't need a mutable reference - which avoids the data race.
-        let space = unsafe { &*self.spaces[active].get() };
-        if space.len() < reserve_end {
+        let gen0 = unsafe { &*self.gen0.get() };
+        if gen0.len() < reserve_end {
             // SAFETY: We hold the growth_lock, ensuring only one thread resizes at a time.
             unsafe {
-                space.resize_with(reserve_end, || {
+                gen0.resize_with(reserve_end, || {
                     // Placeholder object - will be overwritten by TLAB alloc
                     self.placeholder_object()
                 });
@@ -486,7 +592,7 @@ impl BexHeap {
             let chunk_end = ct_len + runtime_end;
             // SAFETY: We hold the growth_lock, index is within bounds
             unsafe {
-                space.set(runtime_end, self.tlab_canary_object(chunk_start, chunk_end));
+                gen0.set(runtime_end, self.tlab_canary_object(chunk_start, chunk_end));
             }
         }
 
@@ -519,21 +625,20 @@ impl BexHeap {
 
     /// Get statistics about heap usage.
     pub fn stats(&self) -> HeapStats {
-        let active = self.active_space_index();
-        // SAFETY: Reading len is safe
-        let runtime_len = unsafe { (*self.spaces[active].get()).len() };
+        // SAFETY: Reading len is safe (AtomicUsize load)
+        let gen0_len = unsafe { (*self.gen0.get()).len() };
         let ct_len = self.compile_time.len();
-        let total = ct_len + runtime_len;
+        let total = ct_len + gen0_len;
 
         let tlab_chunks = self
-            .next_chunk
+            .gen0_next_chunk
             .load(Ordering::Relaxed)
             .div_ceil(self.tlab_size);
 
         HeapStats {
             total_objects: total,
             compile_time_objects: ct_len,
-            runtime_objects: runtime_len,
+            runtime_objects: gen0_len,
             active_handles: self.handles.read().map(|h| h.len()).unwrap_or(0),
             tlab_chunks,
         }
@@ -558,14 +663,14 @@ impl BexHeap {
         self.allocs_since_gc.fetch_add(1, Ordering::Relaxed);
     }
 
-    /// Reset the TLAB allocation pointer (called by GC after collection).
+    /// Reset the Gen0 TLAB allocation pointer (called by GC after collection).
     pub(crate) fn reset_next_chunk(&self, new_value: usize) {
-        self.next_chunk.store(new_value, Ordering::Release);
+        self.gen0_next_chunk.store(new_value, Ordering::Release);
     }
 
     #[cfg(feature = "heap_debug")]
     pub(crate) fn next_chunk_value(&self) -> usize {
-        self.next_chunk.load(Ordering::Acquire)
+        self.gen0_next_chunk.load(Ordering::Acquire)
     }
 
     pub(crate) fn debug_state(&self) -> &HeapDebuggerState {
@@ -632,10 +737,19 @@ impl BexHeap {
 
 impl std::fmt::Debug for BexHeap {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // SAFETY: Reading lens is safe (AtomicUsize loads)
+        let (gen0_len, gen1_len, gen2_len) = unsafe {
+            (
+                (*self.gen0.get()).len(),
+                (*self.gen1.get()).len(),
+                (*self.gen2.get()).len(),
+            )
+        };
         f.debug_struct("BexHeap")
-            .field("len", &self.len())
             .field("compile_time_len", &self.compile_time.len())
-            .field("active_space", &self.active_space_index())
+            .field("gen0_len", &gen0_len)
+            .field("gen1_len", &gen1_len)
+            .field("gen2_len", &gen2_len)
             .field("tlab_size", &self.tlab_size)
             .finish()
     }

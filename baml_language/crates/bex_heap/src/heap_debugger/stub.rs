@@ -102,9 +102,9 @@ impl BexHeap {
         Object::String(String::new())
     }
 
-    pub(crate) fn finalize_from_space(&self, from_space: usize) {
+    pub(crate) fn finalize_inactive_space(&self) {
         unsafe {
-            (*self.spaces[from_space].get()).clear();
+            (*self.inactive.get()).clear();
         }
     }
 

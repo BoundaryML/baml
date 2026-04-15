@@ -1,13 +1,15 @@
 //! Garbage collection for the unified heap.
 //!
-//! BEX uses a safepoint-based, semi-space copying collector:
+//! BEX uses a safepoint-based, generational copying collector:
 //!
 //! - **Safepoints**: GC only runs when all VMs are yielded (async operations)
-//! - **Semi-space**: Live objects are copied from active to inactive space
-//! - **Compacting**: No fragmentation, all live objects are contiguous
+//! - **Generational**: Four spaces — Gen0 (nursery), Gen1, Gen2, and inactive
+//! - **Full collection**: Traces all three active generations, copies survivors
+//!   to inactive, swaps inactive↔Gen2, clears Gen0 and Gen1
+//! - **Compacting**: No fragmentation; all live objects are contiguous in Gen2
 //! - **Handle-aware**: Handles updated to point to new object locations
 
-use std::{collections::HashMap, sync::atomic::Ordering};
+use std::collections::HashMap;
 
 use bex_vm_types::{HeapPtr, Object, Value};
 
@@ -25,207 +27,125 @@ pub struct GcStats {
 }
 
 impl BexHeap {
-    /// Run garbage collection with the given roots.
+    /// Run a full garbage collection with the given roots.
+    ///
+    /// Traces all live objects reachable from `roots` across Gen0, Gen1, and Gen2,
+    /// copies survivors to the inactive space, then atomically swaps inactive↔Gen2
+    /// and clears Gen0 and Gen1. After collection all survivors reside in Gen2.
     ///
     /// # Safety
     ///
     /// Caller must ensure all VMs are at safepoints (not executing).
-    /// This is typically guaranteed by the engine's event loop.
+    /// This is typically guaranteed by the engine's epoch-based GC protocol.
     ///
     /// # Arguments
     ///
-    /// * `roots` - Stack roots from all yielded VMs, plus any externally-held handles
+    /// * `roots` — Stack roots from all yielded VMs plus any externally-held handles.
     ///
     /// # Returns
     ///
-    /// A tuple of (GcStats, remapped_roots) where remapped_roots contains the
-    /// new HeapPtr for each root after objects have been copied to the new space.
-    pub unsafe fn collect_garbage(&self, roots: &[HeapPtr]) -> (GcStats, Vec<HeapPtr>) {
+    /// A tuple of `(GcStats, remapped_roots, forwarding_map)` where:
+    /// - `GcStats` contains live/collected counts and invalidated handle count.
+    /// - `remapped_roots` contains the new `HeapPtr` for each input root (in order).
+    /// - `forwarding_map` maps every moved object's old `HeapPtr` to its new location.
+    ///   Callers must use this map to update any stale `HeapPtr` values they hold
+    ///   (e.g., parked-VM stacks, TLAB invalidation, continuation captures).
+    pub unsafe fn collect_garbage(
+        &self,
+        roots: &[HeapPtr],
+    ) -> (GcStats, Vec<HeapPtr>, HashMap<HeapPtr, HeapPtr>) {
         self.copy_collection(roots)
     }
 
-    /// Run garbage collection with the given roots, returning the forwarding map.
+    /// Full generational copy collection.
     ///
-    /// # Safety
+    /// Full generational copy collection — the core GC implementation.
     ///
-    /// Caller must ensure all VMs are at safepoints (not executing).
+    /// Traces all live objects reachable from `roots` across Gen0, Gen1, and Gen2,
+    /// copies survivors into the inactive space, then atomically swaps inactive↔Gen2
+    /// and clears Gen0 and Gen1. After collection all survivors reside in Gen2.
     ///
-    /// # Returns
-    ///
-    /// A tuple of (GcStats, remapped_roots, forwarding_map) where:
-    /// - remapped_roots contains the new HeapPtr for each root
-    /// - forwarding_map maps old HeapPtr to new HeapPtr for all moved objects
-    pub unsafe fn collect_garbage_with_forwarding(
-        &self,
-        roots: &[HeapPtr],
-    ) -> (GcStats, Vec<HeapPtr>, HashMap<HeapPtr, HeapPtr>) {
-        self.copy_collection_with_forwarding(roots)
-    }
-
-    /// Semi-space copy collection.
-    ///
-    /// Copies all live objects reachable from roots to the inactive space,
-    /// then swaps spaces. This frees all unreachable objects in one sweep.
-    fn copy_collection(&self, roots: &[HeapPtr]) -> (GcStats, Vec<HeapPtr>) {
-        // Track old -> new pointer mappings (forwarding pointers)
-        let mut forwarding: HashMap<HeapPtr, HeapPtr> = HashMap::new();
-
-        // Get current and next space indices
-        let from_space = self.active_space_index();
-        let to_space = 1 - from_space;
-
-        self.debug_verify_tlab_canaries();
-
-        // Advance epoch before creating any new runtime pointers.
-        self.bump_epoch();
-
-        // Get the old space size for stats calculation
-        // SAFETY: GC runs at safepoints, no VMs are executing
-        let old_space_size = unsafe { self.space_ref(from_space).len() };
-
-        // Clear the target space and prepare for copying
-        // SAFETY: GC runs at safepoints, no VMs are executing
-        unsafe {
-            self.space_mut(to_space).clear();
-        }
-
-        // Worklist for BFS traversal: HeapPtr values
-        let mut worklist: Vec<HeapPtr> = roots.to_vec();
-
-        // Process all reachable objects
-        while let Some(old_ptr) = worklist.pop() {
-            // Skip already forwarded objects
-            if forwarding.contains_key(&old_ptr) {
-                continue;
-            }
-
-            // Skip compile-time objects (they stay in place, don't need copying)
-            if self.is_compile_time_ptr(old_ptr) {
-                // Compile-time objects keep their pointer
-                forwarding.insert(old_ptr, old_ptr);
-                continue;
-            }
-
-            // Copy this object to the new space
-            let new_ptr = self.copy_object_to_new_space(old_ptr, to_space, &mut forwarding);
-
-            // Add this object's references to the worklist
-            // SAFETY: We just copied the object, so it exists in to_space
-            let obj = unsafe { new_ptr.get() };
-            self.add_references_to_worklist(obj, &mut worklist);
-        }
-
-        // Now fix up all references in the copied objects
-        unsafe {
-            self.fixup_references(to_space, &forwarding);
-        }
-
-        // Calculate stats before swapping
-        // SAFETY: GC runs at safepoints
-        let live_count = unsafe { self.space_ref(to_space).len() };
-        let collected_count = old_space_size.saturating_sub(live_count);
-
-        // Swap spaces: make to_space the new active space
-        self.active_space.store(to_space, Ordering::Release);
-
-        // Reset TLAB allocation pointer to end of new space
-        self.reset_next_chunk(live_count);
-        self.clear_tlab_canaries();
-
-        // Clear or poison the old (now inactive) space
-        self.finalize_from_space(from_space);
-
-        // Remap roots to their new locations
-        let remapped_roots: Vec<HeapPtr> = roots
-            .iter()
-            .map(|old_ptr| *forwarding.get(old_ptr).unwrap_or(old_ptr))
-            .collect();
-
-        // Update handle table entries to point to new object locations
-        let handles_invalidated = self.update_handles(&forwarding);
-
-        let stats = GcStats {
-            live_count,
-            collected_count,
-            handles_invalidated,
-        };
-
-        (stats, remapped_roots)
-    }
-
-    /// Semi-space copy collection, returning forwarding map for external use.
-    fn copy_collection_with_forwarding(
+    /// Returns `(GcStats, remapped_roots, forwarding_map)`.
+    fn copy_collection(
         &self,
         roots: &[HeapPtr],
     ) -> (GcStats, Vec<HeapPtr>, HashMap<HeapPtr, HeapPtr>) {
         // Track old -> new pointer mappings (forwarding pointers)
         let mut forwarding: HashMap<HeapPtr, HeapPtr> = HashMap::new();
 
-        // Get current and next space indices
-        let from_space = self.active_space_index();
-        let to_space = 1 - from_space;
-
         self.debug_verify_tlab_canaries();
 
         // Advance epoch before creating any new runtime pointers.
         self.bump_epoch();
 
-        // Get the old space size for stats calculation
-        // SAFETY: GC runs at safepoints, no VMs are executing
-        let old_space_size = unsafe { self.space_ref(from_space).len() };
+        // Count objects across all active generations for stats.
+        // SAFETY: GC runs at safepoints, no VMs are executing.
+        let old_count =
+            unsafe { self.gen0_ref().len() + self.gen1_ref().len() + self.gen2_ref().len() };
 
-        // Clear the target space and prepare for copying
-        // SAFETY: GC runs at safepoints, no VMs are executing
+        // Clear inactive space — it becomes our copy destination.
+        // SAFETY: GC runs at safepoints, exclusive access guaranteed.
         unsafe {
-            self.space_mut(to_space).clear();
+            self.inactive_mut().clear();
         }
 
-        // Worklist for BFS traversal
+        // BFS from roots — copy every reachable object into inactive.
         let mut worklist: Vec<HeapPtr> = roots.to_vec();
 
-        // Process all reachable objects
         while let Some(old_ptr) = worklist.pop() {
+            // Skip already-forwarded objects.
             if forwarding.contains_key(&old_ptr) {
                 continue;
             }
 
+            // Compile-time objects are permanent — keep their pointer unchanged.
             if self.is_compile_time_ptr(old_ptr) {
                 forwarding.insert(old_ptr, old_ptr);
                 continue;
             }
 
-            let new_ptr = self.copy_object_to_new_space(old_ptr, to_space, &mut forwarding);
+            // Copy this object to the inactive space.
+            let new_ptr = self.copy_object_to_inactive(old_ptr, &mut forwarding);
 
-            // SAFETY: GC runs at safepoints
+            // Enqueue this object's outgoing heap references.
+            // SAFETY: We just wrote the object into inactive, pointer is valid.
             let obj = unsafe { new_ptr.get() };
             self.add_references_to_worklist(obj, &mut worklist);
         }
 
-        // Fix up all references in the copied objects
+        // Patch all intra-heap pointers in the inactive space to their new locations.
+        // SAFETY: All live objects have been copied; no VMs are executing.
         unsafe {
-            self.fixup_references(to_space, &forwarding);
+            self.fixup_references_in_inactive(&forwarding);
         }
 
-        // Calculate stats before swapping
-        // SAFETY: GC runs at safepoints
-        let live_count = unsafe { self.space_ref(to_space).len() };
-        let collected_count = old_space_size.saturating_sub(live_count);
+        // SAFETY: GC runs at safepoints.
+        let live_count = unsafe { self.inactive_ref().len() };
+        let collected_count = old_count.saturating_sub(live_count);
 
-        // Swap spaces
-        self.active_space.store(to_space, Ordering::Release);
-        self.reset_next_chunk(live_count);
+        // Swap inactive ↔ Gen2; clear Gen0 and Gen1.
+        // After the swap: survivors are in Gen2, old-space debris is in inactive.
+        // SAFETY: GC safepoint; exclusive access to all four spaces.
+        unsafe {
+            std::ptr::swap(self.gen2.get(), self.inactive.get());
+            self.gen0_mut().clear();
+            self.gen1_mut().clear();
+        }
+
+        // Gen0 is now empty — reset the TLAB cursor to 0.
+        self.reset_next_chunk(0);
         self.clear_tlab_canaries();
 
-        // Clear or poison the old space
-        self.finalize_from_space(from_space);
+        // Poison or clear the inactive space (now holds old-space debris).
+        self.finalize_inactive_space();
 
-        // Remap roots to their new locations
+        // Remap each root to its new location (or keep it if it was compile-time).
         let remapped_roots: Vec<HeapPtr> = roots
             .iter()
             .map(|old_ptr| *forwarding.get(old_ptr).unwrap_or(old_ptr))
             .collect();
 
-        // Update handle table
+        // Update the handle table so external handles point to new locations.
         let handles_invalidated = self.update_handles(&forwarding);
 
         let stats = GcStats {
@@ -237,25 +157,24 @@ impl BexHeap {
         (stats, remapped_roots, forwarding)
     }
 
-    /// Copy a single object from old space to new space.
-    /// Returns the new HeapPtr.
-    fn copy_object_to_new_space(
+    /// Copy a single object from an active generation into the inactive space.
+    /// Returns the new HeapPtr in the inactive space.
+    fn copy_object_to_inactive(
         &self,
         old_ptr: HeapPtr,
-        to_space: usize,
         forwarding: &mut HashMap<HeapPtr, HeapPtr>,
     ) -> HeapPtr {
-        // Clone the object from old location
-        // SAFETY: GC runs at safepoints, no VMs are executing
+        // Clone the object from its old location.
+        // SAFETY: GC runs at safepoints, no VMs are executing.
         let obj = unsafe { old_ptr.get().clone() };
 
-        // Append to new space and get pointer to new location
-        // SAFETY: GC runs at safepoints, no VMs are executing
+        // Append to the inactive space and get a pointer to the new location.
+        // SAFETY: GC runs at safepoints, no VMs are executing.
         let new_ptr = unsafe {
-            let to_vec = self.space_mut(to_space);
-            let new_runtime_idx = to_vec.len();
-            to_vec.push_with(obj, || Object::String(String::new()));
-            let raw_ptr = to_vec.get_ptr(new_runtime_idx);
+            let inactive = self.inactive_mut();
+            let new_runtime_idx = inactive.len();
+            inactive.push_with(obj, || Object::String(String::new()));
+            let raw_ptr = inactive.get_ptr(new_runtime_idx);
             self.make_heap_ptr(raw_ptr)
         };
 
@@ -343,16 +262,15 @@ impl BexHeap {
         }
     }
 
-    /// Fix up all object references in the new space to use forwarded addresses.
+    /// Fix up all object references in the inactive space to use forwarded addresses.
     ///
     /// # Safety
-    /// Must be called after all live objects have been copied.
-    unsafe fn fixup_references(&self, to_space: usize, forwarding: &HashMap<HeapPtr, HeapPtr>) {
-        // SAFETY: All live objects have been copied to to_space, and no VMs are executing
+    /// Must be called after all live objects have been copied to inactive.
+    unsafe fn fixup_references_in_inactive(&self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
+        // SAFETY: All live objects have been copied to inactive, and no VMs are executing.
         unsafe {
-            let to_vec = self.space_mut(to_space);
-
-            for obj in to_vec.iter_mut() {
+            let inactive = self.inactive_mut();
+            for obj in inactive.iter_mut() {
                 self.fixup_object_references(obj, forwarding);
             }
         }
@@ -454,7 +372,7 @@ mod tests {
         let heap = BexHeap::new(vec![]);
 
         // Run GC with no roots
-        let (stats, remapped) = unsafe { heap.collect_garbage(&[]) };
+        let (stats, remapped, _) = unsafe { heap.collect_garbage(&[]) };
 
         assert_eq!(stats.live_count, 0);
         assert_eq!(stats.collected_count, 0);
@@ -476,7 +394,7 @@ mod tests {
 
         // Run GC with compile-time objects as roots
         let roots = vec![ct_ptr_0, ct_ptr_1];
-        let (stats, remapped) = unsafe { heap.collect_garbage(&roots) };
+        let (stats, remapped, _) = unsafe { heap.collect_garbage(&roots) };
 
         // Compile-time objects keep their pointers
         assert_eq!(remapped[0].as_ptr(), ct_ptr_0.as_ptr());
@@ -496,7 +414,7 @@ mod tests {
         let _obj3 = tlab.alloc_string("obj3".to_string());
 
         // Run GC with no roots - all objects should be collected
-        let (stats, _) = unsafe { heap.collect_garbage(&[]) };
+        let (stats, _, _) = unsafe { heap.collect_garbage(&[]) };
 
         assert_eq!(stats.live_count, 0);
         assert!(stats.collected_count > 0);
@@ -600,7 +518,7 @@ mod tests {
         let _obj3 = tlab.alloc_string("obj3".to_string());
 
         // Run GC with obj1 and obj2 as roots
-        let (stats, remapped) = unsafe { heap.collect_garbage(&[obj1, obj2]) };
+        let (stats, remapped, _) = unsafe { heap.collect_garbage(&[obj1, obj2]) };
 
         assert_eq!(stats.live_count, 2);
         assert_eq!(remapped.len(), 2);
@@ -629,7 +547,7 @@ mod tests {
         let _unreferenced = tlab.alloc_string("unreferenced".to_string());
 
         // Run GC with only the array as root
-        let (stats, remapped) = unsafe { heap.collect_garbage(&[arr]) };
+        let (stats, remapped, _) = unsafe { heap.collect_garbage(&[arr]) };
 
         // Should copy both the array and the string it references
         assert_eq!(stats.live_count, 2);
@@ -661,17 +579,19 @@ mod tests {
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(Arc::clone(&heap));
 
-        // Remember initial active space
-        let initial_space = heap.active_space_index();
-
-        // Allocate an object
+        // Allocate an object in Gen0
         let obj = tlab.alloc_string("test".to_string());
 
-        // Run GC with the object as root
-        let (_, _) = unsafe { heap.collect_garbage(&[obj]) };
+        // After GC, the survivor should be in Gen2 (inactive was swapped to Gen2).
+        let (stats, remapped, _) = unsafe { heap.collect_garbage(&[obj]) };
 
-        // Space should have swapped
-        assert_eq!(heap.active_space_index(), 1 - initial_space);
+        assert_eq!(stats.live_count, 1);
+        assert_eq!(remapped.len(), 1);
+
+        // Verify Gen0 is empty and Gen2 has the survivor
+        let (gen0_len, gen2_len) = unsafe { (heap.gen0_ref().len(), heap.gen2_ref().len()) };
+        assert_eq!(gen0_len, 0, "Gen0 should be empty after full GC");
+        assert_eq!(gen2_len, 1, "Gen2 should contain the survivor");
     }
 
     #[test]
@@ -689,7 +609,7 @@ mod tests {
         assert!(heap.resolve_handle_ptr(handle.slab_key()).is_some());
 
         // Run GC with no roots - object should be collected, handle invalidated
-        let (stats, _) = unsafe { heap.collect_garbage(&[]) };
+        let (stats, _, _) = unsafe { heap.collect_garbage(&[]) };
 
         assert_eq!(stats.handles_invalidated, 1);
         assert!(heap.resolve_handle_ptr(handle.slab_key()).is_none());
@@ -729,7 +649,7 @@ mod tests {
             }
 
             // Run GC with no roots - all should be collected
-            let (stats, _) = unsafe { heap.collect_garbage(&[]) };
+            let (stats, _, _) = unsafe { heap.collect_garbage(&[]) };
 
             assert_eq!(stats.live_count, 0, "Cycle {cycle}: expected no survivors");
         }
@@ -748,7 +668,7 @@ mod tests {
         let _runtime = tlab.alloc_string("runtime".to_string());
 
         // Run GC with no roots - runtime objects collected
-        let (stats, _) = unsafe { heap.collect_garbage(&[]) };
+        let (stats, _, _) = unsafe { heap.collect_garbage(&[]) };
 
         // Compile-time objects should still be accessible
         let ct_ptr_0 = heap.compile_time_ptr(0);
@@ -785,7 +705,7 @@ mod tests {
         let _garbage = tlab.alloc_string("garbage".to_string());
 
         // Run GC with only the map as root
-        let (stats, remapped) = unsafe { heap.collect_garbage(&[map_obj]) };
+        let (stats, remapped, _) = unsafe { heap.collect_garbage(&[map_obj]) };
 
         // Both map and string should survive
         assert_eq!(stats.live_count, 2);
@@ -858,8 +778,7 @@ mod tests {
         assert_eq!(roots.len(), 3);
 
         // Run GC with forwarding map
-        let (stats, _remapped, forwarding) =
-            unsafe { heap.collect_garbage_with_forwarding(&roots) };
+        let (stats, _remapped, forwarding) = unsafe { heap.collect_garbage(&roots) };
 
         // Should have collected the garbage
         assert_eq!(stats.live_count, 3);
@@ -917,8 +836,7 @@ mod tests {
         let _g2 = tlab.alloc_string("more_garbage".to_string());
 
         // Only root the outer array
-        let (stats, remapped, _forwarding) =
-            unsafe { heap.collect_garbage_with_forwarding(&[outer_array]) };
+        let (stats, remapped, _forwarding) = unsafe { heap.collect_garbage(&[outer_array]) };
 
         // All 4 objects in the chain should survive
         assert_eq!(stats.live_count, 4);
@@ -971,8 +889,7 @@ mod tests {
             }
 
             // Run GC with all persistent roots
-            let (stats, _remapped, forwarding) =
-                unsafe { heap.collect_garbage_with_forwarding(&persistent_roots) };
+            let (stats, _remapped, forwarding) = unsafe { heap.collect_garbage(&persistent_roots) };
 
             // Update our root set with forwarding pointers
             for root in &mut persistent_roots {
@@ -1001,7 +918,7 @@ mod tests {
         }
     }
 
-    /// Tests active space swap atomics during GC cycles.
+    /// Tests that survivors move to Gen2 and Gen0 is cleared after GC cycles.
     #[test]
     fn test_miri_active_space_swap() {
         let heap = BexHeap::new(vec![]);
@@ -1010,24 +927,32 @@ mod tests {
         let obj1 = tlab.alloc_string("object1".to_string());
         let obj2 = tlab.alloc_string("object2".to_string());
 
-        let initial_space = heap.active_space_index();
+        // First GC: survivors from Gen0 move to Gen2 via inactive swap.
+        let (stats, remapped, _) = unsafe { heap.collect_garbage(&[obj1, obj2]) };
 
-        // GC triggers space swap
-        let (stats, remapped, _) = unsafe { heap.collect_garbage_with_forwarding(&[obj1, obj2]) };
-
-        assert_eq!(heap.active_space_index(), 1 - initial_space);
         assert_eq!(stats.live_count, 2);
 
-        // Verify objects accessible in new space
+        // Gen0 should be empty, Gen2 should have 2 survivors.
+        unsafe {
+            assert_eq!(heap.gen0_ref().len(), 0);
+            assert_eq!(heap.gen2_ref().len(), 2);
+        }
+
+        // Verify objects accessible
         for ptr in &remapped {
             assert!(matches!(unsafe { ptr.get() }, Object::String(_)));
         }
 
-        // Second GC swaps back
-        let (stats2, remapped2, _) = unsafe { heap.collect_garbage_with_forwarding(&remapped) };
+        // Second GC: survivors from Gen2 cycle through inactive again.
+        let (stats2, remapped2, _) = unsafe { heap.collect_garbage(&remapped) };
 
-        assert_eq!(heap.active_space_index(), initial_space);
         assert_eq!(stats2.live_count, 2);
+
+        // Gen0 still empty, Gen2 still has 2 survivors.
+        unsafe {
+            assert_eq!(heap.gen0_ref().len(), 0);
+            assert_eq!(heap.gen2_ref().len(), 2);
+        }
 
         for ptr in &remapped2 {
             assert!(matches!(unsafe { ptr.get() }, Object::String(_)));
@@ -1056,7 +981,7 @@ mod tests {
         assert_eq!(resolved2, obj2);
 
         let roots = heap.collect_handle_roots();
-        let (stats, _, forwarding) = unsafe { heap.collect_garbage_with_forwarding(&roots) };
+        let (stats, _, forwarding) = unsafe { heap.collect_garbage(&roots) };
 
         assert_eq!(stats.live_count, 2);
         assert!(stats.collected_count > 0);
@@ -1074,5 +999,88 @@ mod tests {
 
         // Objects accessible through updated handles
         assert!(matches!(unsafe { new1_ptr.get() }, Object::String(s) if s == "handle_obj_1"));
+    }
+
+    // ========================================================================
+    // Phase 2: Generational heap infrastructure tests
+    // ========================================================================
+
+    /// TLAB allocations land in Gen0; after a full GC all survivors are in Gen2.
+    #[test]
+    fn test_generation_of_tlab_allocates_into_gen0() {
+        use crate::heap::Generation;
+
+        let heap = BexHeap::new(vec![]);
+        let mut tlab = Tlab::new(Arc::clone(&heap));
+
+        // Fresh allocations should be in Gen0 (the nursery).
+        let obj1 = tlab.alloc_string("nursery_1".to_string());
+        let obj2 = tlab.alloc_string("nursery_2".to_string());
+
+        assert_eq!(
+            heap.generation_of(obj1),
+            Generation::Gen0,
+            "fresh allocation should be in Gen0"
+        );
+        assert_eq!(
+            heap.generation_of(obj2),
+            Generation::Gen0,
+            "fresh allocation should be in Gen0"
+        );
+    }
+
+    /// After a full GC all survivors are promoted to Gen2.
+    #[test]
+    fn test_generation_of_survivors_in_gen2_after_gc() {
+        use crate::heap::Generation;
+
+        let heap = BexHeap::new(vec![]);
+        let mut tlab = Tlab::new(Arc::clone(&heap));
+
+        // Allocate some objects — all start in Gen0.
+        let obj1 = tlab.alloc_string("survivor_1".to_string());
+        let obj2 = tlab.alloc_string("survivor_2".to_string());
+        let _garbage = tlab.alloc_string("garbage".to_string());
+
+        // Run full GC; obj1 and obj2 are roots, garbage is not.
+        let (stats, remapped, _) = unsafe { heap.collect_garbage(&[obj1, obj2]) };
+
+        assert_eq!(stats.live_count, 2);
+        assert_eq!(remapped.len(), 2);
+
+        // Survivors should now be in Gen2 (inactive was swapped into Gen2).
+        for ptr in &remapped {
+            assert_eq!(
+                heap.generation_of(*ptr),
+                Generation::Gen2,
+                "survivors should be in Gen2 after full GC"
+            );
+        }
+
+        // Gen0 should be empty.
+        let gen0_len = unsafe { heap.gen0_ref().len() };
+        assert_eq!(gen0_len, 0, "Gen0 should be empty after full GC");
+
+        // Invalidate the TLAB so it refills from the now-empty Gen0.
+        // (In the engine this is done automatically; in unit tests we do it manually.)
+        tlab.invalidate();
+
+        // New allocations after GC still go to Gen0.
+        let post_gc = tlab.alloc_string("post_gc".to_string());
+        assert_eq!(
+            heap.generation_of(post_gc),
+            Generation::Gen0,
+            "allocations after GC should still land in Gen0"
+        );
+    }
+
+    /// Compile-time objects have Generation::CompileTime.
+    #[test]
+    fn test_generation_of_compile_time() {
+        use crate::heap::Generation;
+
+        let heap = BexHeap::new(vec![Object::String("builtin".to_string())]);
+        let ct_ptr = heap.compile_time_ptr(0);
+        assert_eq!(heap.generation_of(ct_ptr), Generation::CompileTime);
     }
 }
