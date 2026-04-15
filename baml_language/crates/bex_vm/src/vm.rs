@@ -977,7 +977,7 @@ impl BexVm {
 
     /// Allocate a type descriptor object on the heap.
     pub fn alloc_type(&mut self, ty: baml_type::Ty) -> Value {
-        Value::Object(self.tlab.alloc(Object::Type(ty)))
+        Value::Object(self.tlab.alloc(Object::Type(Box::new(ty))))
     }
 
     /// Stops the execution of the current bytecode in favor of the given

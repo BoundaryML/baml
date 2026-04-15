@@ -329,14 +329,14 @@ pub fn generate_project_bytecode_with_opt(
             let type_tag = bex_vm_types::type_tags::CLASS_BASE + class_type_tag_counter;
             class_type_tag_counter += 1;
 
-            let class_obj_idx = program.add_object(Object::Class(Class {
+            let class_obj_idx = program.add_object(Object::Class(Box::new(Class {
                 name: fq_to_type_name(&fq_name),
                 fields,
                 description: class_desc,
                 alias: class_alias,
                 type_tag,
                 ty_attr: TyAttr::default(),
-            }));
+            })));
             // Register with fully-qualified name for inter-package lookups.
             class_object_indices.insert(fq_name.clone(), class_obj_idx);
             classes.insert(fq_name, field_indices);
@@ -392,13 +392,13 @@ pub fn generate_project_bytecode_with_opt(
 
             let (enum_desc, enum_alias, _enum_skip) = extract_schema_attrs(&enum_data.attributes);
 
-            let enum_obj_idx = program.add_object(Object::Enum(Enum {
+            let enum_obj_idx = program.add_object(Object::Enum(Box::new(Enum {
                 name: fq_to_type_name(&fq_name),
                 variants,
                 description: enum_desc,
                 alias: enum_alias,
                 ty_attr: TyAttr::default(),
-            }));
+            })));
             enum_object_indices.insert(fq_name.clone(), enum_obj_idx);
             enum_variants.insert(fq_name, variant_map);
         }

@@ -515,7 +515,7 @@ mod tests {
 
         use crate::{HeapDebuggerConfig, heap_debugger::HeapVerifyMode};
 
-        let compile_time = vec![Object::Enum(bex_vm_types::Enum {
+        let compile_time = vec![Object::Enum(Box::new(bex_vm_types::Enum {
             name: baml_type::TypeName::local(baml_type::Name::new("E")),
             variants: vec![bex_vm_types::EnumVariant {
                 name: "A".to_string(),
@@ -526,7 +526,7 @@ mod tests {
             description: None,
             alias: None,
             ty_attr: baml_type::TyAttr::default(),
-        })];
+        }))];
         let debug = HeapDebuggerConfig {
             enabled: true,
             verify: HeapVerifyMode::Full,
@@ -553,7 +553,7 @@ mod tests {
 
         use crate::{HeapDebuggerConfig, heap_debugger::HeapVerifyMode};
 
-        let compile_time = vec![Object::Class(bex_vm_types::Class {
+        let compile_time = vec![Object::Class(Box::new(bex_vm_types::Class {
             name: baml_type::TypeName::local(baml_type::Name::new("C")),
             fields: vec![bex_vm_types::ClassField {
                 name: "x".to_string(),
@@ -568,7 +568,7 @@ mod tests {
             alias: None,
             type_tag: 100,
             ty_attr: baml_type::TyAttr::default(),
-        })];
+        }))];
         let debug = HeapDebuggerConfig {
             enabled: true,
             verify: HeapVerifyMode::Full,

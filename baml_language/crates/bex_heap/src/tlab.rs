@@ -454,7 +454,7 @@ mod tests {
         let mut tlab = Tlab::new(heap);
 
         // Simulate a class at index 0
-        let class_ptr = tlab.alloc(Object::Class(Class {
+        let class_ptr = tlab.alloc(Object::Class(Box::new(Class {
             name: baml_type::TypeName::local(baml_type::Name::new("TestClass")),
             fields: vec![
                 bex_vm_types::ClassField {
@@ -480,7 +480,7 @@ mod tests {
             alias: None,
             type_tag: 100,
             ty_attr: baml_type::TyAttr::default(),
-        }));
+        })));
 
         // Allocate an instance of that class
         let fields = vec![Value::Int(10), Value::Int(20)];
@@ -506,7 +506,7 @@ mod tests {
         let mut tlab = Tlab::new(heap);
 
         // Simulate an enum at index 0
-        let enum_ptr = tlab.alloc(Object::Enum(Enum {
+        let enum_ptr = tlab.alloc(Object::Enum(Box::new(Enum {
             name: baml_type::TypeName::local(baml_type::Name::new("Color")),
             variants: vec![
                 bex_vm_types::EnumVariant {
@@ -531,7 +531,7 @@ mod tests {
             description: None,
             alias: None,
             ty_attr: baml_type::TyAttr::default(),
-        }));
+        })));
 
         // Allocate a variant (Color::Green = index 1)
         let variant_ptr = tlab.alloc_variant(enum_ptr, 1);
