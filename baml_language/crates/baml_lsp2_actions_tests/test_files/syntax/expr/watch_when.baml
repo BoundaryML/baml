@@ -37,6 +37,11 @@ function BadFunction2(i: string) -> bool {
 //  5 |   x.$watch.options(baml.WatchOptions{ when: BadFunction2 });
 //    |
 
+// Known issue: diagnostic spans for member-access errors extend to the
+// preceding statement instead of pointing at the exact member token (`$watch`).
+// The spans below are wider than ideal — they should target `x.$watch` only.
+// See: https://github.com/BoundaryML/baml/pull/3369#discussion_r3088162711
+
 //----
 //- diagnostics
 // Error: type `int` has no member `$watch`

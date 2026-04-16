@@ -309,6 +309,38 @@ function Test() -> string[] {
         );
     }
 
+    /// Issue #3: Nested lambda parameter completion.
+    /// Inside a nested lambda (lambda inside lambda), the inner parameter's type
+    /// should be resolved for completions.
+    #[test]
+    fn test_nested_lambda_param_completion() {
+        let test = CursorTest::new(
+            r#"
+class Tag {
+    label string
+}
+
+class Item {
+    name string
+    tags Tag[]
+}
+
+function Test() -> string[][] {
+    let items = [Item { name: "a", tags: [Tag { label: "x" }] }]
+    items.map((item) -> { item.tags.map((tag) -> { tag.<[CURSOR] }) })
+}
+"#,
+        );
+
+        let completions = completions_at(&test.db, test.cursor.file, test.cursor.offset);
+        let labels: Vec<&str> = completions.iter().map(|c| c.label.as_str()).collect();
+
+        assert!(
+            labels.contains(&"label"),
+            "Should contain 'label' from Tag nested lambda param, got: {labels:?}"
+        );
+    }
+
     #[test]
     fn test_field_access_enum_variants() {
         let test = CursorTest::new(

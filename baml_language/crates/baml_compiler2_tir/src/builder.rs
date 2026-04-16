@@ -20,7 +20,7 @@ use baml_compiler2_ast::{Expr, ExprBody, ExprId, PatId, Stmt, StmtId, TypeExpr};
 use baml_compiler2_hir::{
     contributions::Definition,
     package::{PackageId, PackageItems},
-    scope::ScopeId,
+    scope::{FileScopeId, ScopeId},
 };
 use rustc_hash::{FxHashMap, FxHashSet};
 use text_size::TextRange;
@@ -150,6 +150,11 @@ pub struct TypeInferenceBuilder<'db> {
     /// Parameter types for this scope (populated for lambda/function scopes).
     /// Used by LSP to resolve lambda parameter types.
     pub param_types: Vec<(Name, Ty)>,
+    /// Accumulates `FileScopeId → Ty::Function` for every lambda expression
+    /// encountered during inline body inference (including nested lambdas).
+    /// NOT saved/restored by `infer_lambda_body`, so types from arbitrarily
+    /// nested lambdas are visible in the outermost (Function/Let) scope.
+    pub nested_lambda_types: FxHashMap<FileScopeId, Ty>,
 }
 
 impl<'db> TypeInferenceBuilder<'db> {
@@ -185,6 +190,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             path_root_types: FxHashMap::default(),
             path_member_resolutions: FxHashMap::default(),
             param_types: Vec::new(),
+            nested_lambda_types: FxHashMap::default(),
         }
     }
 
@@ -206,6 +212,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         FxHashMap<ExprId, Ty>,
         FxHashMap<ExprId, Vec<crate::inference::MemberResolution<'db>>>,
         Vec<(Name, Ty)>,
+        FxHashMap<FileScopeId, Ty>,
     ) {
         let diagnostics = self.context.finish();
         (
@@ -217,6 +224,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             self.path_root_types,
             self.path_member_resolutions,
             self.param_types,
+            self.nested_lambda_types,
         )
     }
 
@@ -737,18 +745,22 @@ impl<'db> TypeInferenceBuilder<'db> {
                 });
 
                 // Infer the lambda body using save/restore approach
-                let (ret_ty, _lambda_expressions) = self.infer_lambda_body(
+                let (ret_ty, _lambda_expressions, lambda_fsi) = self.infer_lambda_body(
                     func_def,
                     &param_tys,
                     return_annotation.as_ref(),
                     expr_id,
                 );
 
-                Ty::Function {
+                let result = Ty::Function {
                     params: param_tys,
                     ret: Box::new(ret_ty),
                     attr: TyAttr::default(),
+                };
+                if let Some(fsi) = lambda_fsi {
+                    self.nested_lambda_types.insert(fsi, result.clone());
                 }
+                result
             }
             Expr::Missing => Ty::Unknown {
                 attr: TyAttr::default(),
@@ -1207,7 +1219,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                             return_annotation.as_ref().unwrap_or(expected_ret.as_ref());
 
                         // Infer/check the lambda body using save/restore approach
-                        let (ret_ty, _lambda_expressions) = self.infer_lambda_body(
+                        let (ret_ty, _lambda_expressions, lambda_fsi) = self.infer_lambda_body(
                             func_def,
                             &param_tys,
                             Some(effective_ret),
@@ -1220,6 +1232,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                             attr: TyAttr::default(),
                         };
                         self.record_expr_type(expr_id, result.clone());
+                        if let Some(fsi) = lambda_fsi {
+                            self.nested_lambda_types.insert(fsi, result.clone());
+                        }
                         result
                     }
                     _ => {
@@ -3251,11 +3266,6 @@ impl<'db> TypeInferenceBuilder<'db> {
 
         let (pkg_items, item_path): (&baml_compiler2_hir::package::PackageItems<'db>, Vec<Name>) =
             if let Some(items) = self.res_ctx.items_for_package(db, &pkg_name) {
-                if items.namespaces.is_empty() {
-                    return Ty::Unknown {
-                        attr: TyAttr::default(),
-                    };
-                }
                 (items, segments[1..].to_vec())
             } else if baml_ns_shorthands.contains(&first.as_str()) {
                 // e.g. `env.get` → look up in the `"baml"` package as `baml.env.get`
@@ -5194,7 +5204,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         param_tys: &[(Option<baml_base::Name>, Ty)],
         expected_ret: Option<&Ty>,
         _lambda_expr_id: ExprId,
-    ) -> (Ty, FxHashMap<ExprId, Ty>) {
+    ) -> (Ty, FxHashMap<ExprId, Ty>, Option<FileScopeId>) {
         use baml_compiler2_ast::FunctionBodyDef;
 
         // Get the lambda's ExprBody
@@ -5204,6 +5214,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     attr: TyAttr::default(),
                 },
                 FxHashMap::default(),
+                None,
             );
         };
 
@@ -5213,6 +5224,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     attr: TyAttr::default(),
                 },
                 FxHashMap::default(),
+                None,
             );
         };
 
@@ -5248,15 +5260,24 @@ impl<'db> TypeInferenceBuilder<'db> {
         // grandparent scopes are NOT visible in `saved_locals`. Look up the lambda
         // scope by its span and seed its captures as `Ty::Unknown` to suppress false
         // "unresolved name" diagnostics. Names already in locals are left unchanged.
+        //
+        // Also captures the lambda's `FileScopeId` for use as a position-independent
+        // key in `nested_lambda_types` (avoids TextRange in Salsa-cached output).
+        let lambda_file_scope_id;
         {
             let db = self.context.db();
             let file = self.context.scope().file(db);
             let index = baml_compiler2_ppir::file_semantic_index(db, file);
             let lambda_span = func_def.span;
+            let mut found_fsi = None;
             for (i, scope) in index.scopes.iter().enumerate() {
                 if matches!(scope.kind, baml_compiler2_hir::scope::ScopeKind::Lambda)
                     && scope.range == lambda_span
                 {
+                    #[allow(clippy::cast_possible_truncation)]
+                    {
+                        found_fsi = Some(FileScopeId::new(i as u32));
+                    }
                     for (capture_name, _def_site) in &index.scope_bindings[i].captures {
                         if !self.locals.contains_key(capture_name) {
                             self.locals.insert(
@@ -5270,6 +5291,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     break;
                 }
             }
+            lambda_file_scope_id = found_fsi;
         }
 
         // Set return type context for return statement checking inside lambda
@@ -5304,7 +5326,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         self.declared_return_ty = saved_return_ty;
         self.generic_params = saved_generic_params;
 
-        (ret_ty, lambda_expressions)
+        (ret_ty, lambda_expressions, lambda_file_scope_id)
     }
 }
 

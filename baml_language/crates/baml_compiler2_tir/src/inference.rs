@@ -19,7 +19,7 @@ use baml_compiler2_hir::{
     contributions::Definition,
     loc::{ClassLoc, EnumLoc, FunctionLoc, LetLoc, TypeAliasLoc},
     package::{PackageId, PackageItems},
-    scope::{ScopeId, ScopeKind},
+    scope::{FileScopeId, ScopeId, ScopeKind},
 };
 use rustc_hash::{FxHashMap, FxHashSet};
 use text_size::TextRange;
@@ -99,6 +99,11 @@ pub struct ScopeInference<'db> {
     /// Used by MIR to emit chained `Place::Field` projections and by LSP to
     /// navigate to field definitions from within multi-segment paths.
     path_member_resolutions: FxHashMap<ExprId, Vec<MemberResolution<'db>>>,
+    /// Lambda span → `Ty::Function` for every lambda expression encountered
+    /// during inline body inference (including nested lambdas). Allows nested
+    /// lambda scopes to look up their contextual param types without calling
+    /// `infer_scope_types` on intermediate Lambda ancestors (which would cycle).
+    nested_lambda_types: FxHashMap<FileScopeId, Ty>,
     /// Lambda/function parameter types by index (name, inferred type).
     /// Populated for lambda scopes so LSP can resolve unannotated lambda
     /// parameter types (e.g. `items.map((item) -> { item. })`).
@@ -137,6 +142,13 @@ impl<'db> ScopeInference<'db> {
     /// Look up the type of an expression in this scope.
     pub fn expression_type(&self, expr_id: ExprId) -> Option<&Ty> {
         self.expressions.get(&expr_id)
+    }
+
+    /// Look up the `Ty::Function` type assigned to a nested lambda by its span.
+    /// Used by nested Lambda scopes to get contextual param types without
+    /// calling `infer_scope_types` on intermediate Lambda ancestors.
+    pub fn nested_lambda_type(&self, fsi: FileScopeId) -> Option<&Ty> {
+        self.nested_lambda_types.get(&fsi)
     }
 
     /// Look up the binding type for a pattern (the type the variable is bound to,
@@ -499,16 +511,19 @@ pub fn infer_scope_types<'db>(
                                 ref func_sm,
                             )) = func_data.body
                             {
-                                if let Some((func_def, lambda_body, _lambda_sm, lambda_expr_id)) =
+                                if let Some((func_def, lambda_body, _lambda_sm, _lambda_expr_id)) =
                                     find_lambda_by_span(func_body, func_sm, lambda_span)
                                 {
-                                    // Try to get contextual param types from the parent scope's
-                                    // inference (handles unannotated lambda params like `.map((x) -> ...)`).
+                                    // Look up contextual param types via the lambda's FileScopeId
+                                    // in the parent scope's nested_lambda_types map. This works
+                                    // for arbitrarily nested lambdas without calling
+                                    // infer_scope_types on intermediate Lambda ancestors (which
+                                    // would create a Salsa cycle through package_interface).
                                     let parent_scope_id =
                                         index.scope_ids[ancestor_fsi.index() as usize];
                                     let parent_inference = infer_scope_types(db, parent_scope_id);
                                     let contextual_param_tys = parent_inference
-                                        .expression_type(lambda_expr_id)
+                                        .nested_lambda_type(file_scope)
                                         .and_then(|ty| {
                                             if let Ty::Function { params, .. } = ty {
                                                 Some(params.clone())
@@ -572,15 +587,15 @@ pub fn infer_scope_types<'db>(
                             if let (LetBody::Expr(let_body), Some(let_sm)) =
                                 (body.as_ref(), source_map_opt)
                             {
-                                if let Some((func_def, lambda_body, _lambda_sm, lambda_expr_id)) =
+                                if let Some((func_def, lambda_body, _lambda_sm, _lambda_expr_id)) =
                                     find_lambda_by_span(let_body, &let_sm, lambda_span)
                                 {
-                                    // Try to get contextual param types from parent let scope
+                                    // Look up contextual param types via FileScopeId (same as Function branch).
                                     let parent_scope_id =
                                         index.scope_ids[ancestor_fsi.index() as usize];
                                     let parent_inference = infer_scope_types(db, parent_scope_id);
                                     let contextual_param_tys = parent_inference
-                                        .expression_type(lambda_expr_id)
+                                        .nested_lambda_type(file_scope)
                                         .and_then(|ty| {
                                             if let Ty::Function { params, .. } = ty {
                                                 Some(params.clone())
@@ -671,6 +686,7 @@ pub fn infer_scope_types<'db>(
         path_root_types,
         path_member_resolutions,
         param_types,
+        nested_lambda_types,
     ) = builder.finish();
 
     let extra = if diagnostics.is_empty() {
@@ -686,6 +702,7 @@ pub fn infer_scope_types<'db>(
         exhaustive_matches,
         path_root_types,
         path_member_resolutions,
+        nested_lambda_types,
         param_types,
         extra,
     }

@@ -833,7 +833,7 @@ impl BexMulitProject {
                     bex_engine::FunctionCallContextBuilder::new(sys_types::CallId::next())
                         .with_cancel_token(cancel)
                         .build();
-                if let Ok(serialized) = engine
+                let data = match engine
                     .call_function(
                         "testing.TestRegistry.serialize",
                         vec![registry_value],
@@ -842,21 +842,28 @@ impl BexMulitProject {
                     )
                     .await
                 {
-                    let data =
-                        serde_json::to_vec(&bex_value_to_json(&serialized)).unwrap_or_default();
-                    sender.send_playground_notification(
-                        crate::bex_lsp::PlaygroundNotification::TestCollectionResult {
-                            project,
-                            generation,
-                            call_id: call_id.0,
-                            data,
-                            expand_error: Some(crate::bex_lsp::TestExpandError {
-                                testset_name: name.clone(),
-                                message: format!("{e}"),
-                            }),
-                        },
-                    );
-                }
+                    Ok(serialized) => {
+                        serde_json::to_vec(&bex_value_to_json(&serialized)).unwrap_or_default()
+                    }
+                    Err(serialize_err) => {
+                        log::error!(
+                            "[expand_test_set] serialize after failed expand for '{name}' also failed: {serialize_err}"
+                        );
+                        serde_json::to_vec(&serde_json::json!([])).unwrap_or_default()
+                    }
+                };
+                sender.send_playground_notification(
+                    crate::bex_lsp::PlaygroundNotification::TestCollectionResult {
+                        project,
+                        generation,
+                        call_id: call_id.0,
+                        data,
+                        expand_error: Some(crate::bex_lsp::TestExpandError {
+                            testset_name: name.clone(),
+                            message: format!("{e}"),
+                        }),
+                    },
+                );
                 return;
             }
             log::info!("[expand_test_set] expanded testset '{name}' successfully");
