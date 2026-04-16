@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 12944
 ---
 === TIR2 ===
 function user.test_array_map_pure() -> int[] throws never {
@@ -714,10 +713,9 @@ function user.use_local_string_handler() -> null throws string {
 }
 function user.maybe_use_string_handler(h: user.Handler<string>?) -> null throws string {
   { : null
-    h?.run() : unknown
+    h?.run() : null
     null : null
   }
-  !! 560..570: `(() -> null throws string)?` is not a function — it cannot be called
 }
 function user.make_string_handler() -> user.Handler<string> throws never {
   { : user.Handler<string>
@@ -753,7 +751,7 @@ function user.test_local_string_handler() -> null throws string {
     use_local_string_handler() : null
   }
 }
-function user.test_optional_string_handler() -> null throws never {
+function user.test_optional_string_handler() -> null throws string {
   { : null
     maybe_use_string_handler(make_string_handler()) : null
   }
@@ -820,9 +818,9 @@ function user.run_local_tasks() -> null throws int | string {
     null : null
   }
 }
-function user.run_inline_tasks() -> null throws never {
+function user.run_inline_tasks() -> null throws int | string {
   { : null
-    let tasks = [Task { name: "a", run: () -> null { ... } }, Task { name: "b", run: () -> null { ... } }] : user.Task[]
+    let tasks = [Task { name: "a", run: () -> null { ... } }, Task { name: "b", run: () -> null { ... } }] : user.Task<string | int>[]
     for task in tasks
       { : null
         task.run() : null
@@ -849,7 +847,7 @@ function user.test_run_local_tasks() -> null throws int | string {
     run_local_tasks() : null
   }
 }
-function user.test_run_inline_tasks() -> null throws never {
+function user.test_run_inline_tasks() -> null throws int | string {
   { : null
     run_inline_tasks() : null
   }

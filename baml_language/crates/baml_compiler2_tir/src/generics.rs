@@ -42,6 +42,152 @@ pub fn bind_type_vars(generic_params: &[Name], concrete_args: &[Ty]) -> FxHashMa
     bindings
 }
 
+/// Infer nominal type arguments from already-typed object fields.
+///
+/// Callers pass the bare nominal type plus `(declared_field_ty, actual_field_ty)`
+/// pairs. If every generic parameter is bound from the provided fields, returns
+/// the nominal type with inferred type arguments applied.
+pub fn infer_nominal_type_args_from_fields(
+    nominal_ty: &Ty,
+    generic_params: &[Name],
+    field_pairs: &[(Ty, Ty)],
+) -> Option<Ty> {
+    if generic_params.is_empty() || field_pairs.is_empty() {
+        return None;
+    }
+
+    let mut bindings = FxHashMap::default();
+    for (declared_ty, actual_ty) in field_pairs {
+        infer_bindings(declared_ty, actual_ty, &mut bindings);
+    }
+
+    if !generic_params
+        .iter()
+        .all(|param| bindings.contains_key(param))
+    {
+        return None;
+    }
+
+    Some(
+        nominal_ty.clone().with_nominal_type_args(
+            generic_params
+                .iter()
+                .filter_map(|param| bindings.get(param).cloned())
+                .collect(),
+        ),
+    )
+}
+
+/// Merge collection element members while preserving shared nominal payload.
+///
+/// This keeps `Task<string>` and `Task<int>` from erasing to a bare `Task` or a
+/// non-callable union when they are joined as array elements.
+pub fn merge_collection_member_types(types: Vec<Ty>) -> Ty {
+    let mut members = Vec::new();
+    for ty in types {
+        push_collection_member(&mut members, ty);
+    }
+
+    match members.len() {
+        0 => Ty::Never {
+            attr: TyAttr::default(),
+        },
+        1 => members.pop().expect("single merged collection member"),
+        _ => Ty::Union(members, TyAttr::default()),
+    }
+}
+
+fn push_collection_member(members: &mut Vec<Ty>, ty: Ty) {
+    match ty {
+        Ty::Never { .. } => {}
+        Ty::Union(inner, _) => {
+            for member in inner {
+                push_collection_member(members, member);
+            }
+        }
+        other => {
+            if let Some(index) = members
+                .iter()
+                .position(|existing| same_nominal_identity(existing, &other))
+            {
+                members[index] = merge_same_nominal_type_args(&members[index], &other)
+                    .expect("same_nominal_identity implies mergeable nominal types");
+            } else if !members.contains(&other) {
+                members.push(other);
+            }
+        }
+    }
+}
+
+fn same_nominal_identity(a: &Ty, b: &Ty) -> bool {
+    match (a, b) {
+        (Ty::Class(a_nominal, _), Ty::Class(b_nominal, _)) => {
+            a_nominal.qtn() == b_nominal.qtn()
+                && a_nominal.type_args().len() == b_nominal.type_args().len()
+        }
+        (Ty::Enum(a_nominal, _), Ty::Enum(b_nominal, _)) => {
+            a_nominal.qtn() == b_nominal.qtn()
+                && a_nominal.type_args().len() == b_nominal.type_args().len()
+        }
+        (Ty::TypeAlias(a_nominal, _), Ty::TypeAlias(b_nominal, _)) => {
+            a_nominal.qtn() == b_nominal.qtn()
+                && a_nominal.type_args().len() == b_nominal.type_args().len()
+        }
+        _ => false,
+    }
+}
+
+fn merge_same_nominal_type_args(a: &Ty, b: &Ty) -> Option<Ty> {
+    match (a, b) {
+        (Ty::Class(a_nominal, _), Ty::Class(b_nominal, _))
+            if a_nominal.qtn() == b_nominal.qtn()
+                && a_nominal.type_args().len() == b_nominal.type_args().len() =>
+        {
+            Some(
+                a.clone().with_nominal_type_args(
+                    a_nominal
+                        .type_args()
+                        .iter()
+                        .zip(b_nominal.type_args().iter())
+                        .map(|(a_arg, b_arg)| union_ty(a_arg, b_arg))
+                        .collect(),
+                ),
+            )
+        }
+        (Ty::Enum(a_nominal, _), Ty::Enum(b_nominal, _))
+            if a_nominal.qtn() == b_nominal.qtn()
+                && a_nominal.type_args().len() == b_nominal.type_args().len() =>
+        {
+            Some(
+                a.clone().with_nominal_type_args(
+                    a_nominal
+                        .type_args()
+                        .iter()
+                        .zip(b_nominal.type_args().iter())
+                        .map(|(a_arg, b_arg)| union_ty(a_arg, b_arg))
+                        .collect(),
+                ),
+            )
+        }
+        (Ty::TypeAlias(a_nominal, _), Ty::TypeAlias(b_nominal, _))
+            if a_nominal.qtn() == b_nominal.qtn()
+                && a_nominal.type_args().len() == b_nominal.type_args().len() =>
+        {
+            Some(
+                a.clone().with_nominal_type_args(
+                    a_nominal
+                        .type_args()
+                        .iter()
+                        .zip(b_nominal.type_args().iter())
+                        .map(|(a_arg, b_arg)| union_ty(a_arg, b_arg))
+                        .collect(),
+                ),
+            )
+        }
+        _ => None,
+    }
+}
+
 // ── Type substitution ─────────────────────────────────────────────────────────
 
 /// Substitute type variables in a `Ty` using the provided bindings.

@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 13184
 ---
 === MIR2 ===
 fn user.test_array_map_pure() -> int[] {
@@ -1651,7 +1650,7 @@ fn user.maybe_use_string_handler(h: Handler?) -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: Handler? // h // param
-    let _2: void
+    let _2: null
     let _3: (() -> null throws string)?
     let _4: bool
 
@@ -1926,7 +1925,7 @@ fn user.run_inline_tasks() -> null {
     let _10: Task
     let _11: Task // task
     let _12: void
-    let _13: () -> null
+    let _13: () -> null throws string | int
     let _14: Task
 
     bb0: {

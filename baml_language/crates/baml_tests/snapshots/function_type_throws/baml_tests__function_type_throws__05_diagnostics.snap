@@ -329,16 +329,6 @@ source: crates/baml_tests/src/generated_tests.rs
    │ Note: Error code: E0001
 ───╯
 
-  [type] Error: `(() -> null throws string)?` is not a function — it cannot be called
-    ╭─[ generic_stored_callback.baml:27:1 ]
-    │
- 27 │   h?.run()
-    │ ─────┬────  
-    │      ╰────── `(() -> null throws string)?` is not a function — it cannot be called
-    │ 
-    │ Note: Error code: E0001
-────╯
-
   [type] Error: type mismatch: expected user.Box<string>, got user.Box<int>
     ╭─[ generic_subtype_rejection.baml:14:19 ]
     │

@@ -11,6 +11,7 @@ use baml_base::Name;
 use baml_compiler2_ast::{Expr, ExprBody, Literal, Pattern, TypeExpr};
 use baml_compiler2_hir::{
     contributions::Definition,
+    file_item_tree,
     package::{PackageId, PackageItems, package_items},
 };
 
@@ -905,7 +906,13 @@ impl<'a, 'db> MemberFieldCallCollector<'a, 'db> {
         let Some(base_ty) = self.recover_expr_ty(base_id, env) else {
             return;
         };
-        let resolved_base = crate::throws_semantics::resolve_alias_chain(&base_ty, self.aliases);
+        let resolved_base =
+            match crate::throws_semantics::resolve_alias_chain(&base_ty, self.aliases) {
+                Ty::Optional(inner, _) => {
+                    crate::throws_semantics::resolve_alias_chain(inner.as_ref(), self.aliases)
+                }
+                other => other,
+            };
         let Ty::Class(class_name, _) = &resolved_base else {
             return;
         };
@@ -935,6 +942,16 @@ impl<'a, 'db> MemberFieldCallCollector<'a, 'db> {
         env: &HashMap<Name, Ty>,
     ) -> Option<Ty> {
         match &self.body.exprs[expr_id] {
+            Expr::Literal(lit) => Some(match lit {
+                Literal::String(_) => Ty::Primitive(PrimitiveType::String, TyAttr::default()),
+                Literal::Int(_) => Ty::Primitive(PrimitiveType::Int, TyAttr::default()),
+                Literal::Float(_) => Ty::Primitive(PrimitiveType::Float, TyAttr::default()),
+                Literal::Bool(_) => Ty::Primitive(PrimitiveType::Bool, TyAttr::default()),
+            }),
+            Expr::ByteStringLiteral(_) => {
+                Some(Ty::Primitive(PrimitiveType::Uint8Array, TyAttr::default()))
+            }
+            Expr::Null => Some(Ty::Primitive(PrimitiveType::Null, TyAttr::default())),
             Expr::Path(segments) => self.recover_path_ty(segments, env),
             Expr::FieldAccess { base, field } | Expr::OptionalFieldAccess { base, field } => {
                 let base_ty = self.recover_expr_ty(*base, env)?;
@@ -954,9 +971,14 @@ impl<'a, 'db> MemberFieldCallCollector<'a, 'db> {
             Expr::Object {
                 type_name: Some(name),
                 type_args,
+                fields,
                 ..
-            } => self.recover_typed_object_ty(name, type_args),
+            } => self.recover_typed_object_ty(name, type_args, fields, env),
             Expr::Array { elements } => self.recover_array_ty(elements, env),
+            Expr::Block { tail_expr, .. } => {
+                tail_expr.and_then(|tail| self.recover_expr_ty(tail, env))
+            }
+            Expr::Lambda(func_def) => Some(self.recover_lambda_ty(func_def, env)),
             Expr::OptionalChain { expr } => self.recover_expr_ty(*expr, env),
             _ => None,
         }
@@ -977,7 +999,13 @@ impl<'a, 'db> MemberFieldCallCollector<'a, 'db> {
         }
     }
 
-    fn recover_typed_object_ty(&self, name: &Name, type_args: &[TypeExpr]) -> Option<Ty> {
+    fn recover_typed_object_ty(
+        &self,
+        name: &Name,
+        type_args: &[TypeExpr],
+        fields: &[(Name, baml_compiler2_ast::ExprId)],
+        env: &HashMap<Name, Ty>,
+    ) -> Option<Ty> {
         let def = self.res_ctx.own_items.lookup_type(self.ns_context, name)?;
         match def {
             Definition::Class(_) => {
@@ -996,10 +1024,44 @@ impl<'a, 'db> MemberFieldCallCollector<'a, 'db> {
                         )
                     })
                     .collect();
-                Some(Ty::Class(
-                    crate::ty::NominalTypeRef::new_with_type_args(qtn, lowered_type_args),
+                let class_ty = Ty::Class(
+                    crate::ty::NominalTypeRef::new_with_type_args(qtn.clone(), lowered_type_args),
                     TyAttr::default(),
-                ))
+                );
+                if !type_args.is_empty() {
+                    return Some(class_ty);
+                }
+
+                let class_loc = self.res_ctx.lookup_class_loc(self.db, &qtn)?;
+                let item_tree = file_item_tree(self.db, class_loc.file(self.db));
+                let class_data = &item_tree[class_loc.id(self.db)];
+                if class_data.generic_params.is_empty() {
+                    return Some(class_ty);
+                }
+
+                let Ty::Class(class_name, _) = &class_ty else {
+                    return Some(class_ty);
+                };
+                let field_types = self.res_ctx.lookup_class_fields(self.db, class_name);
+                let field_pairs: Vec<(Ty, Ty)> = fields
+                    .iter()
+                    .filter_map(|(field_name, field_expr)| {
+                        let declared_ty = field_types
+                            .iter()
+                            .find_map(|(name, ty)| (name == field_name).then(|| ty.clone()))?;
+                        let actual_ty = self.recover_expr_ty(*field_expr, env)?.widen_fresh();
+                        Some((declared_ty, actual_ty))
+                    })
+                    .collect();
+
+                Some(
+                    crate::generics::infer_nominal_type_args_from_fields(
+                        &class_ty,
+                        &class_data.generic_params,
+                        &field_pairs,
+                    )
+                    .unwrap_or(class_ty),
+                )
             }
             Definition::Enum(_) => {
                 let qtn = qualify_def(self.db, def, name);
@@ -1026,7 +1088,13 @@ impl<'a, 'db> MemberFieldCallCollector<'a, 'db> {
     }
 
     fn resolve_member_ty(&self, base_ty: &Ty, field: &Name) -> Option<Ty> {
-        let resolved_base = crate::throws_semantics::resolve_alias_chain(base_ty, self.aliases);
+        let resolved_base =
+            match crate::throws_semantics::resolve_alias_chain(base_ty, self.aliases) {
+                Ty::Optional(inner, _) => {
+                    crate::throws_semantics::resolve_alias_chain(inner.as_ref(), self.aliases)
+                }
+                other => other,
+            };
         let Ty::Class(class_name, _) = &resolved_base else {
             return None;
         };
@@ -1040,6 +1108,70 @@ impl<'a, 'db> MemberFieldCallCollector<'a, 'db> {
             .res_ctx
             .lookup_class_method(self.db, class_name, field)?;
         Some(method.function.as_ty())
+    }
+
+    fn recover_lambda_ty(
+        &self,
+        func_def: &baml_compiler2_ast::FunctionDef,
+        env: &HashMap<Name, Ty>,
+    ) -> Ty {
+        let params: Vec<(Option<Name>, Ty)> = func_def
+            .params
+            .iter()
+            .map(|param| {
+                let ty = param
+                    .type_expr
+                    .as_ref()
+                    .map(|te| self.lower_local_type_expr(&te.expr))
+                    .unwrap_or(Ty::Unknown {
+                        attr: TyAttr::default(),
+                    });
+                (Some(param.name.clone()), ty)
+            })
+            .collect();
+
+        let mut lambda_env = env.clone();
+        for (name, ty) in &params {
+            if let Some(name) = name {
+                lambda_env.insert(name.clone(), ty.clone());
+            }
+        }
+
+        let ret_ty = func_def
+            .return_type
+            .as_ref()
+            .map(|te| self.lower_local_type_expr(&te.expr))
+            .or_else(|| match &func_def.body {
+                Some(baml_compiler2_ast::FunctionBodyDef::Expr(body, _)) => body
+                    .root_expr
+                    .and_then(|root_expr| self.recover_expr_ty(root_expr, &lambda_env)),
+                _ => None,
+            })
+            .unwrap_or(Ty::Unknown {
+                attr: TyAttr::default(),
+            });
+
+        let throws_ty = if let Some(throws) = &func_def.throws {
+            self.lower_local_type_expr(&throws.expr)
+        } else if let Some(baml_compiler2_ast::FunctionBodyDef::Expr(body, _)) = &func_def.body {
+            crate::throws_semantics::concrete_throws_ty_from_facts(collect_direct_throws(
+                self.db,
+                self.res_ctx.own_items,
+                self.ns_context,
+                body,
+            ))
+        } else {
+            Ty::Never {
+                attr: TyAttr::default(),
+            }
+        };
+
+        Ty::Function {
+            params,
+            ret: Box::new(ret_ty),
+            throws: Box::new(throws_ty),
+            attr: TyAttr::default(),
+        }
     }
 
     fn named_callable_ty(&self, path: &[Name]) -> Option<Ty> {
@@ -1135,14 +1267,10 @@ impl<'a, 'db> MemberFieldCallCollector<'a, 'db> {
 }
 
 fn collapse_types(types: Vec<Ty>) -> Option<Ty> {
-    let mut unique = BTreeSet::new();
-    for ty in types {
-        unique.insert(ty);
-    }
-    match unique.len() {
-        0 => None,
-        1 => unique.into_iter().next(),
-        _ => Some(Ty::Union(unique.into_iter().collect(), TyAttr::default())),
+    if types.is_empty() {
+        None
+    } else {
+        Some(crate::generics::merge_collection_member_types(types))
     }
 }
 

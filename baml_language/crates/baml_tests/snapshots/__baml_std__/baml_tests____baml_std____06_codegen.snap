@@ -44,19 +44,81 @@ function baml.Map.map(self: null, f: (void, void) -> void) -> void[] {
 }
 
 function baml.Map.map_keys(self: null, f: (void) -> void) -> void[] {
+    alloc_array 0
+    store_var result
     load_var self
     call baml.Map.keys
-    load_var f
-    call baml.Array.map
+    store_var _4
+    load_const 0
+    store_var __for_idx
+
+  L0:
+    load_var __for_idx
+    load_var _4
+    call baml.Array.length
+    cmp_op <
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var result
     return
+
+  L2:
+    load_var _4
+    load_var __for_idx
+    load_array_element
+    load_var f
+    call_indirect
+    store_var _12
+    load_var result
+    load_var _12
+    call baml.Array.push
+    pop 1
+    load_var __for_idx
+    load_const 1
+    bin_op +
+    store_var __for_idx
+    jump L0
 }
 
 function baml.Map.map_values(self: null, f: (void) -> void) -> void[] {
+    alloc_array 0
+    store_var result
     load_var self
     call baml.Map.values
-    load_var f
-    call baml.Array.map
+    store_var _4
+    load_const 0
+    store_var __for_idx
+
+  L0:
+    load_var __for_idx
+    load_var _4
+    call baml.Array.length
+    cmp_op <
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var result
     return
+
+  L2:
+    load_var _4
+    load_var __for_idx
+    load_array_element
+    load_var f
+    call_indirect
+    store_var _12
+    load_var result
+    load_var _12
+    call baml.Array.push
+    pop 1
+    load_var __for_idx
+    load_const 1
+    bin_op +
+    store_var __for_idx
+    jump L0
 }
 
 function baml.Map.set(self: null, key: void, value: void) -> null {

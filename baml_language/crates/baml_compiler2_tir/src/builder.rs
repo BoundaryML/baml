@@ -19,6 +19,7 @@ use baml_base::{Name, SourceFile};
 use baml_compiler2_ast::{Expr, ExprBody, ExprId, PatId, Stmt, StmtId, TypeExpr};
 use baml_compiler2_hir::{
     contributions::Definition,
+    file_item_tree,
     package::{PackageId, PackageItems},
     scope::ScopeId,
 };
@@ -386,7 +387,8 @@ impl<'db> TypeInferenceBuilder<'db> {
             Expr::Array { elements } => {
                 let elem_types: Vec<Ty> =
                     elements.iter().map(|e| self.infer_expr(*e, body)).collect();
-                let elem_ty = Self::join_all(&elem_types).widen_fresh();
+                let elem_ty =
+                    crate::generics::merge_collection_member_types(elem_types).widen_fresh();
                 Ty::List(Box::new(elem_ty), TyAttr::default())
             }
             Expr::Map { entries } => {
@@ -488,7 +490,10 @@ impl<'db> TypeInferenceBuilder<'db> {
                             self.infer_expr(*field_expr, body);
                         }
                     }
-                    let ty = resolved_ty.expect("resolved class type");
+                    let resolved_ty = resolved_ty.expect("resolved class type");
+                    let ty = self
+                        .infer_object_literal_type_args(&resolved_ty, fields.as_slice())
+                        .unwrap_or(resolved_ty);
                     self.record_expr_type(expr_id, ty.clone());
                     ty
                 } else {
@@ -956,15 +961,34 @@ impl<'db> TypeInferenceBuilder<'db> {
                     return result_ty;
                 }
 
-                let is_method_call = matches!(&body.exprs[*callee], Expr::FieldAccess { .. });
+                let is_method_call = matches!(
+                    &body.exprs[*callee],
+                    Expr::FieldAccess { .. } | Expr::OptionalFieldAccess { .. }
+                );
+                let optional_chain_call =
+                    self.in_optional_chain > 0 && Self::expr_contains_optional(*callee, body);
                 let callee_ty = self.infer_expr(*callee, body);
 
                 // Expand type alias chains so alias-over-function types are callable.
                 // Bare alias cycles are already caught by find_invalid_alias_cycles (Tarjan SCC)
                 // before we reach here, so the depth guard is cheap insurance.
                 let callee_ty = throws_semantics::resolve_alias_chain(&callee_ty, &self.aliases);
+                let callable_ty = if optional_chain_call {
+                    crate::narrowing::remove_null(&callee_ty)
+                } else {
+                    callee_ty.clone()
+                };
 
-                match &callee_ty {
+                if optional_chain_call && matches!(&callable_ty, Ty::Never { .. }) {
+                    for arg in args {
+                        self.infer_expr(*arg, body);
+                    }
+                    let ty = Ty::Primitive(PrimitiveType::Null, TyAttr::default());
+                    self.record_expr_type(expr_id, ty.clone());
+                    return ty;
+                }
+
+                match &callable_ty {
                     Ty::Function {
                         params,
                         ret,
@@ -1074,6 +1098,12 @@ impl<'db> TypeInferenceBuilder<'db> {
                             self.record_expr_type(*callee, substituted_callee_ty);
                         }
 
+                        let result = if optional_chain_call {
+                            Self::make_optional(result)
+                        } else {
+                            result
+                        };
+
                         // Subtype check against expected type (skip if we did generic
                         // inference — the inference already accounts for expected)
                         if bindings.is_empty()
@@ -1106,7 +1136,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     _ => {
                         self.context.report_simple(
                             TirTypeError::NotCallable {
-                                ty: callee_ty.clone(),
+                                ty: callable_ty.clone(),
                             },
                             expr_id,
                         );
@@ -2317,6 +2347,42 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
 
         None
+    }
+
+    fn infer_object_literal_type_args(
+        &self,
+        class_ty: &Ty,
+        fields: &[(Name, ExprId)],
+    ) -> Option<Ty> {
+        let Ty::Class(class_name, _) = &class_ty else {
+            return None;
+        };
+        if !class_name.type_args().is_empty() {
+            return None;
+        }
+
+        let class_loc = self.resolve_class_loc(class_name.qtn())?;
+        let item_tree = file_item_tree(self.context.db(), class_loc.file(self.context.db()));
+        let class_data = &item_tree[class_loc.id(self.context.db())];
+        if class_data.generic_params.is_empty() {
+            return None;
+        }
+
+        let field_types = self.lookup_class_fields(class_name);
+        let field_pairs: Vec<(Ty, Ty)> = fields
+            .iter()
+            .filter_map(|(field_name, field_expr)| {
+                let declared_ty = field_types.get(field_name)?;
+                let actual_ty = self.expressions.get(field_expr)?.clone().widen_fresh();
+                Some((declared_ty.clone(), actual_ty))
+            })
+            .collect();
+
+        crate::generics::infer_nominal_type_args_from_fields(
+            class_ty,
+            &class_data.generic_params,
+            &field_pairs,
+        )
     }
 
     fn literal_case_name(lit: &baml_base::Literal) -> String {

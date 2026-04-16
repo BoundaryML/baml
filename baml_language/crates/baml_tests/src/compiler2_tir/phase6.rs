@@ -257,6 +257,34 @@ fn let_inferred_from_map_keys() {
     ");
 }
 
+#[test]
+fn map_keys_rethrows_callback_throws() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"function f(m: map<string, int>) -> int[] { return m.map_keys((k: string) -> int { throw "boom" }); }"#,
+    );
+    let tir = render_tir(&db, file);
+    assert!(
+        tir.contains("function user.f(m: map<string, int>) -> int[] throws string"),
+        "expected map_keys to propagate lambda throws, got:\n{tir}"
+    );
+}
+
+#[test]
+fn map_values_rethrows_callback_throws() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"function f(m: map<string, int>) -> string[] { return m.map_values((v: int) -> string { throw "boom" }); }"#,
+    );
+    let tir = render_tir(&db, file);
+    assert!(
+        tir.contains("function user.f(m: map<string, int>) -> string[] throws string"),
+        "expected map_values to propagate lambda throws, got:\n{tir}"
+    );
+}
+
 // ── Media type method resolution ──────────────────────────────────────────────
 
 #[test]

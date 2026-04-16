@@ -29,18 +29,58 @@ fn baml.Map.map_keys(self: baml.Map, f: (void) -> void) -> void[] {
     let _0: void[] // _0 // return
     let _1: baml.Map // self // param
     let _2: (void) -> void // f // param
-    let _3: void[]
+    let _3: void[] // result
+    let _4: void[]
+    let _5: int // __for_idx
+    let _6: int
+    let _7: bool
+    let _8: void
+    let _9: void // key
+    let _10: void
+    let _11: void[]
+    let _12: void
+    let _13: void
 
     bb0: {
-        _3 = call const fn baml.Map.keys(copy _1) -> [bb1];
+        _3 = [];
+        _4 = call const fn baml.Map.keys(copy _1) -> [bb1];
     }
 
     bb1: {
-        _0 = call const fn baml.Array.map(copy _3, copy _2) -> [bb2];
+        _5 = const 0_i64;
+        goto -> bb2;
     }
 
     bb2: {
+        _6 = len(_4);
+        _7 = copy _5 < copy _6;
+        branch copy _7 -> [bb5, bb3];
+    }
+
+    bb3: {
+        _0 = copy _3;
+        goto -> bb4;
+    }
+
+    bb4: {
         return;
+    }
+
+    bb5: {
+        _8 = copy _4[_5];
+        _9 = copy _8;
+        _11 = copy _3;
+        _13 = copy _9;
+        _12 = call copy _2(copy _13) -> [bb6];
+    }
+
+    bb6: {
+        _10 = call const fn baml.Array.push(copy _11, copy _12) -> [bb7];
+    }
+
+    bb7: {
+        _5 = copy _5 + const 1_i64;
+        goto -> bb2;
     }
 }
 
@@ -49,18 +89,58 @@ fn baml.Map.map_values(self: baml.Map, f: (void) -> void) -> void[] {
     let _0: void[] // _0 // return
     let _1: baml.Map // self // param
     let _2: (void) -> void // f // param
-    let _3: void[]
+    let _3: void[] // result
+    let _4: void[]
+    let _5: int // __for_idx
+    let _6: int
+    let _7: bool
+    let _8: void
+    let _9: void // value
+    let _10: void
+    let _11: void[]
+    let _12: void
+    let _13: void
 
     bb0: {
-        _3 = call const fn baml.Map.values(copy _1) -> [bb1];
+        _3 = [];
+        _4 = call const fn baml.Map.values(copy _1) -> [bb1];
     }
 
     bb1: {
-        _0 = call const fn baml.Array.map(copy _3, copy _2) -> [bb2];
+        _5 = const 0_i64;
+        goto -> bb2;
     }
 
     bb2: {
+        _6 = len(_4);
+        _7 = copy _5 < copy _6;
+        branch copy _7 -> [bb5, bb3];
+    }
+
+    bb3: {
+        _0 = copy _3;
+        goto -> bb4;
+    }
+
+    bb4: {
         return;
+    }
+
+    bb5: {
+        _8 = copy _4[_5];
+        _9 = copy _8;
+        _11 = copy _3;
+        _13 = copy _9;
+        _12 = call copy _2(copy _13) -> [bb6];
+    }
+
+    bb6: {
+        _10 = call const fn baml.Array.push(copy _11, copy _12) -> [bb7];
+    }
+
+    bb7: {
+        _5 = copy _5 + const 1_i64;
+        goto -> bb2;
     }
 }
 

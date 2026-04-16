@@ -10,14 +10,24 @@ class baml.Array {
 }
 class baml.Map {
 }
-function baml.Map.map_keys<U>(self: baml.Map, f: (unknown) -> U) -> U[] throws never {
+function baml.Map.map_keys<U>(self: baml.Map, f: (unknown) -> U throws __throws_f) -> U[] throws __throws_f {
   { : U[]
-    self.keys().map<K, U>(f) : U[]
+    let result = [] : U[]
+    for key in self.keys()
+      { : null
+        result.push(f(key)) : null
+      }
+    result : U[]
   }
 }
-function baml.Map.map_values<U>(self: baml.Map, f: (unknown) -> U) -> U[] throws never {
+function baml.Map.map_values<U>(self: baml.Map, f: (unknown) -> U throws __throws_f) -> U[] throws __throws_f {
   { : U[]
-    self.values().map<V, U>(f) : U[]
+    let result = [] : U[]
+    for value in self.values()
+      { : null
+        result.push(f(value)) : null
+      }
+    result : U[]
   }
 }
 class baml.Array$stream {
@@ -183,7 +193,7 @@ function baml.llm.render_prompt(client: baml.llm.Client, function_name: string, 
     primitive_client.specialize_prompt(prompt) : baml.llm.PromptAst
   }
 }
-function baml.llm.build_request(client: baml.llm.Client, function_name: string, args: map<string, unknown>) -> baml.http.Request throws baml.errors.LlmClient | unknown {
+function baml.llm.build_request(client: baml.llm.Client, function_name: string, args: map<string, unknown>) -> baml.http.Request throws baml.errors.LlmClient | baml.errors.RenderPrompt | unknown {
   { : baml.http.Request
     let primitive_client = client.to_primitive_client() : baml.llm.PrimitiveClient
     let specialized_prompt = render_prompt(client, function_name, args) : baml.llm.PromptAst
@@ -196,7 +206,7 @@ function baml.llm.parse<T>(function_name: string, json: string) -> T throws baml
     __sap_parse<T>(json, return_type) : T
   }
 }
-function baml.llm.call_llm_function<T>(client: baml.llm.Client, function_name: string, args: map<string, unknown>) -> T throws baml.errors.InvalidArgument | unknown {
+function baml.llm.call_llm_function<T>(client: baml.llm.Client, function_name: string, args: map<string, unknown>) -> T throws baml.errors.InvalidArgument | baml.errors.LlmClient | baml.errors.RenderPrompt | unknown {
   { : T
     let jinja_string = get_jinja_template(function_name) : string
     let context = ExecutionContext { jinja_string: jinja_string, args: args, function_name: function_name } : baml.llm.ExecutionContext
@@ -336,7 +346,7 @@ function baml.llm.Client.build_plan_with_state(self: baml.llm.Client, planner_st
         self.build_attempt_with_state(planner_state) : baml.llm.OrchestrationStep[]
   }
 }
-function baml.llm.Client.execute<T>(self: baml.llm.Client, context: baml.llm.ExecutionContext, inherited_delay_ms: int) -> T throws unknown {
+function baml.llm.Client.execute<T>(self: baml.llm.Client, context: baml.llm.ExecutionContext, inherited_delay_ms: int) -> T throws baml.errors.LlmClient | baml.errors.RenderPrompt | unknown {
   { : never
     match (self.retry : baml.llm.RetryPolicy?) : never
       r: RetryPolicy =>

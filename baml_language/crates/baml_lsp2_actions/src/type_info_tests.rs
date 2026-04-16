@@ -509,4 +509,120 @@ function <[CURSOR]qualified() -> null throws root.errors.Io | string {
             "Hover should preserve the qualified declared throws clause, got: {md}"
         );
     }
+
+    #[test]
+    fn hover_function_with_inferred_throws_from_inline_heterogeneous_collection() {
+        let test = CursorTest::new(
+            r#"
+class Task<E> {
+    name: string
+    run: () -> null throws E
+}
+
+function <[CURSOR]run_inline_tasks() -> null {
+    let tasks = [
+        Task { name: "a", run: () -> null { throw "error" } },
+        Task { name: "b", run: () -> null { throw 42 } },
+    ]
+    for (let task in tasks) {
+        task.run()
+    }
+    null
+}
+"#,
+        );
+        let info = test.type_info().expect("should resolve");
+        match &info {
+            TypeInfo::Function { throws, .. } => {
+                assert_eq!(throws.as_deref(), Some("int | string"));
+            }
+            other => panic!("Expected TypeInfo::Function, got: {other:?}"),
+        }
+        let md = info.to_hover_markdown();
+        assert!(
+            md.contains("throws int | string"),
+            "Hover should show inferred throws from inline stored callbacks, got: {md}"
+        );
+    }
+
+    #[test]
+    fn hover_local_var_preserves_generic_payload_for_inline_task_array() {
+        let test = CursorTest::new(
+            r#"
+class Task<E> {
+    name: string
+    run: () -> null throws E
+}
+
+function run_inline_tasks() -> null {
+    let <[CURSOR]tasks = [
+        Task { name: "a", run: () -> null { throw "error" } },
+        Task { name: "b", run: () -> null { throw 42 } },
+    ]
+    null
+}
+"#,
+        );
+        let info = test.type_info().expect("should resolve");
+        match &info {
+            TypeInfo::LocalVar { name, ty } => {
+                assert_eq!(name, "tasks");
+                assert_eq!(ty, "user.Task<string | int>[]");
+            }
+            other => panic!("Expected TypeInfo::LocalVar, got: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn hover_function_with_caught_optional_call_omits_throws_clause() {
+        let test = CursorTest::new(
+            r#"
+function <[CURSOR]optional_call_caught(cb: (() -> int throws string)?) -> int? {
+    cb?.() catch (e) {
+        _ => null
+    }
+}
+"#,
+        );
+        let info = test.type_info().expect("should resolve");
+        match &info {
+            TypeInfo::Function { throws, .. } => {
+                assert_eq!(throws, &None);
+            }
+            other => panic!("Expected TypeInfo::Function, got: {other:?}"),
+        }
+        let md = info.to_hover_markdown();
+        assert!(
+            !md.contains(") -> int? throws"),
+            "Caught optional callback hover should omit throws, got: {md}"
+        );
+    }
+
+    #[test]
+    fn hover_function_with_optional_method_call_shows_inferred_throws() {
+        let test = CursorTest::new(
+            r#"
+class Handler<E> {
+    run: () -> null throws E
+}
+
+function <[CURSOR]maybe_use_string_handler(h: Handler<string>?) -> null {
+    h?.run()
+    null
+}
+"#,
+        );
+        let info = test.type_info().expect("should resolve");
+        match &info {
+            TypeInfo::Function { throws, .. } => {
+                assert_eq!(throws.as_deref(), Some("string"));
+            }
+            other => panic!("Expected TypeInfo::Function, got: {other:?}"),
+        }
+        let md = info.to_hover_markdown();
+        assert!(
+            md.contains("throws string"),
+            "Optional method call hover should show inferred throws, got: {md}"
+        );
+    }
 }

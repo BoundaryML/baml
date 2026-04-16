@@ -375,13 +375,51 @@ fn inferred_throws_for_function(
     let throw_sets = baml_compiler2_tir::throw_inference::function_throw_sets(db, pkg_id);
     let key = baml_compiler2_tir::throw_inference::callable_throw_key(db, func_loc);
 
-    let facts = throw_sets.transitive_for(&key)?;
+    let pre_inference_facts = throw_sets.transitive_for(&key);
+    let has_effect_vars = pre_inference_facts.is_some_and(|facts| {
+        facts
+            .iter()
+            .any(|fact| matches!(fact, baml_compiler2_tir::ty::Ty::TypeVar(_, _)))
+    });
+
+    if !has_effect_vars
+        && let Some(effective_throws) = effective_throws_for_function(db, func_loc, pkg_id)
+    {
+        return match effective_throws {
+            baml_compiler2_tir::ty::Ty::Never { .. } => None,
+            other => Some(utils::display_ty(&other)),
+        };
+    }
+
+    let facts = pre_inference_facts?;
     if facts.is_empty() {
         return None;
     }
-
     let parts: Vec<String> = facts.iter().map(utils::display_ty).collect();
     Some(parts.join(" | "))
+}
+
+fn effective_throws_for_function(
+    db: &dyn Db,
+    func_loc: baml_compiler2_hir::loc::FunctionLoc<'_>,
+    pkg_id: baml_compiler2_hir::package::PackageId<'_>,
+) -> Option<baml_compiler2_tir::ty::Ty> {
+    let body = baml_compiler2_hir::body::function_body(db, func_loc);
+    let baml_compiler2_hir::body::FunctionBody::Expr(expr_body) = body.as_ref() else {
+        return None;
+    };
+
+    let item_tree = baml_compiler2_hir::file_item_tree(db, func_loc.file(db));
+    let func_data = &item_tree[func_loc.id(db)];
+    let index = baml_compiler2_hir::file_semantic_index(db, func_loc.file(db));
+    let (scope_idx, _) = index.scopes.iter().enumerate().find(|(_, scope)| {
+        scope.kind == ScopeKind::Function
+            && scope.range == func_data.span
+            && scope.name.as_ref() == Some(&func_data.name)
+    })?;
+    let scope_id = index.scope_ids[scope_idx];
+    let inference = baml_compiler2_tir::inference::infer_scope_types(db, scope_id);
+    Some(inference.effective_throws(db, pkg_id, expr_body))
 }
 
 fn declared_throws_for_function(
