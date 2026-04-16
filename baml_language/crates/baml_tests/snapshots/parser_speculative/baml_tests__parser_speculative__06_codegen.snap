@@ -28,6 +28,14 @@ function user.Ambiguous$parse(json: string) -> string {
     return
 }
 
+function user.Ambiguous$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream {
+    load_var sse
+    load_const "Ambiguous"
+    load_const null
+    call baml.llm.parse
+    return
+}
+
 function user.Ambiguous$render_prompt(input: string) -> baml.llm.PromptAst {
     load_const null
     load_const "Ambiguous"
@@ -61,6 +69,14 @@ function user.AnotherLLM$build_request(input: string) -> baml.http.Request {
 function user.AnotherLLM$parse(json: string) -> string {
     load_const "AnotherLLM"
     load_var json
+    call baml.llm.parse
+    return
+}
+
+function user.AnotherLLM$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream {
+    load_var sse
+    load_const "AnotherLLM"
+    load_const null
     call baml.llm.parse
     return
 }
@@ -102,6 +118,14 @@ function user.ChainedProcess$parse(json: string) -> string {
     return
 }
 
+function user.ChainedProcess$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream {
+    load_var sse
+    load_const "ChainedProcess"
+    load_const null
+    call baml.llm.parse
+    return
+}
+
 function user.ChainedProcess$render_prompt(input: string) -> baml.llm.PromptAst {
     load_const null
     load_const "ChainedProcess"
@@ -139,6 +163,14 @@ function user.ExtractData$parse(json: string) -> JsonData {
     return
 }
 
+function user.ExtractData$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream {
+    load_var sse
+    load_const "ExtractData"
+    load_const null
+    call baml.llm.parse
+    return
+}
+
 function user.ExtractData$render_prompt(text: string) -> baml.llm.PromptAst {
     load_const null
     load_const "ExtractData"
@@ -172,6 +204,14 @@ function user.LLMAnalyze$build_request(text: string) -> baml.http.Request {
 function user.LLMAnalyze$parse(json: string) -> Analysis {
     load_const "LLMAnalyze"
     load_var json
+    call baml.llm.parse
+    return
+}
+
+function user.LLMAnalyze$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream {
+    load_var sse
+    load_const "LLMAnalyze"
+    load_const null
     call baml.llm.parse
     return
 }

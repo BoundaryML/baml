@@ -28,6 +28,14 @@ function user.BadParam$parse(json: string) -> string {
     return
 }
 
+function user.BadParam$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream {
+    load_var sse
+    load_const "BadParam"
+    load_const null
+    call baml.llm.parse
+    return
+}
+
 function user.BadParam$render_prompt(x: map<string, int>) -> baml.llm.PromptAst {
     load_const null
     load_const "BadParam"
@@ -57,6 +65,14 @@ function user.BadReturnType$build_request() -> baml.http.Request {
 function user.BadReturnType$parse(json: string) -> map<string, int> {
     load_const "BadReturnType"
     load_var json
+    call baml.llm.parse
+    return
+}
+
+function user.BadReturnType$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream {
+    load_var sse
+    load_const "BadReturnType"
+    load_const null
     call baml.llm.parse
     return
 }

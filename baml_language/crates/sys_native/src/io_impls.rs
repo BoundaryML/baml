@@ -323,6 +323,88 @@ fn build_io_http_response(response: reqwest::Response, url: String) -> owned::ht
     }
 }
 
+impl io::IoClassHttpSseStream for NativeSysOps {
+    #[cfg(feature = "bundle-http")]
+    fn next(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        sse_stream: owned::http::SseStream,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Option<String>> {
+        use std::sync::atomic::Ordering;
+
+        SysOpOutput::async_op(async move {
+            let handle = sse_stream
+                ._handle
+                .downcast::<bex_resource_types::ResourceHandle>()
+                .map_err(|_| OpErrorKind::Other("Invalid SSE stream handle type".into()))?;
+
+            let (buffer, notify, closed) =
+                crate::registry::REGISTRY
+                    .get_sse_stream(handle.key())
+                    .ok_or_else(|| OpErrorKind::Other("SSE stream handle is invalid".into()))?;
+
+            loop {
+                let notified = notify.notified();
+                {
+                    let mut buf = buffer.lock().await;
+                    if closed.load(Ordering::Acquire) {
+                        buf.done = true;
+                        buf.error = None;
+                        return Ok(None);
+                    }
+                    if !buf.events.is_empty() {
+                        let events: Vec<serde_json::Value> = std::mem::take(&mut buf.events)
+                            .into_iter()
+                            .map(|e| {
+                                serde_json::json!({
+                                    "event": e.event,
+                                    "data": e.data,
+                                    "id": e.id,
+                                })
+                            })
+                            .collect();
+                        return Ok(Some(serde_json::to_string(&events).map_err(|e| {
+                            OpErrorKind::Other(format!("Failed to serialize SSE events: {e}"))
+                        })?));
+                    }
+                    if let Some(err) = buf.error.take() {
+                        return Err(OpErrorKind::Other(err));
+                    }
+                    if buf.done {
+                        return Ok(None);
+                    }
+                }
+                notified.await;
+            }
+        })
+    }
+
+    #[cfg(not(feature = "bundle-http"))]
+    fn next(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _sse_stream: owned::http::SseStream,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Option<String>> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+
+    fn close(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _sse_stream: owned::http::SseStream,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        // Dropping the owned SseStream drops its ResourceHandle, which
+        // triggers cleanup via ResourceRegistryRef::remove.
+        SysOpOutput::ok(())
+    }
+}
+
 impl io::IoNamespaceHttp for NativeSysOps {
     #[cfg(feature = "bundle-http")]
     fn fetch(
@@ -396,6 +478,160 @@ impl io::IoNamespaceHttp for NativeSysOps {
         _request: owned::http::Request,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<owned::http::Response> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+
+    #[cfg(feature = "bundle-http")]
+    fn fetch_sse(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        request: owned::http::Request,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<owned::http::SseStream> {
+        use std::sync::atomic::{AtomicBool, Ordering};
+
+        use futures::StreamExt;
+        use sys_types::sse::SseParser;
+        use tokio::sync::{Mutex as TokioMutex, Notify};
+
+        use crate::registry::{REGISTRY, SseBuffer};
+
+        SysOpOutput::async_op(async move {
+            let method = reqwest::Method::from_bytes(request.method.as_bytes()).map_err(|e| {
+                OpErrorKind::Other(format!("Invalid HTTP method '{}': {e}", request.method))
+            })?;
+
+            let client = reqwest::Client::new();
+            let mut builder = client.request(method, &request.url);
+
+            for (key, value) in &request.headers {
+                builder = builder.header(key.as_str(), value.as_str());
+            }
+
+            if !request.body.is_empty() {
+                builder = builder.body(request.body.clone());
+            }
+
+            let response = builder
+                .send()
+                .await
+                .map_err(|e| OpErrorKind::Other(format!("SSE connection failed: {e}")))?;
+
+            if !response.status().is_success() {
+                let status = response.status().as_u16();
+                let body = response
+                    .text()
+                    .await
+                    .unwrap_or_else(|_| "<could not read body>".to_string());
+                return Err(OpErrorKind::Other(format!(
+                    "SSE request failed with status {status}: {body}"
+                )));
+            }
+
+            let url = response.url().to_string();
+
+            let buffer = Arc::new(TokioMutex::new(SseBuffer {
+                events: Vec::new(),
+                done: false,
+                error: None,
+            }));
+            let closed = Arc::new(AtomicBool::new(false));
+            let notify = Arc::new(Notify::new());
+
+            let buf_clone = buffer.clone();
+            let closed_clone = closed.clone();
+            let notify_clone = notify.clone();
+            let consumer = tokio::spawn(async move {
+                struct SseDropGuard {
+                    buffer: Arc<TokioMutex<SseBuffer>>,
+                    closed: Arc<AtomicBool>,
+                    notify: Arc<Notify>,
+                    completed: bool,
+                }
+
+                impl Drop for SseDropGuard {
+                    fn drop(&mut self) {
+                        if !self.completed {
+                            if let Ok(mut buf) = self.buffer.try_lock() {
+                                if !buf.done {
+                                    if !self.closed.load(Ordering::Acquire) {
+                                        buf.error = Some("SSE stream task was cancelled".into());
+                                    }
+                                    buf.done = true;
+                                }
+                            }
+                            self.notify.notify_waiters();
+                        }
+                    }
+                }
+
+                let mut guard = SseDropGuard {
+                    buffer: buf_clone.clone(),
+                    closed: closed_clone.clone(),
+                    notify: notify_clone.clone(),
+                    completed: false,
+                };
+
+                let mut parser = SseParser::new();
+                let mut byte_stream = response.bytes_stream();
+
+                while let Some(chunk_result) = byte_stream.next().await {
+                    match chunk_result {
+                        Ok(bytes) => {
+                            let events = parser.feed(&bytes);
+                            if !events.is_empty() {
+                                let mut buf = buf_clone.lock().await;
+                                buf.events.extend(events);
+                                notify_clone.notify_waiters();
+                            }
+                        }
+                        Err(e) => {
+                            let mut buf = buf_clone.lock().await;
+                            buf.error = Some(format!("SSE stream error: {e}"));
+                            buf.done = true;
+                            notify_clone.notify_waiters();
+                            guard.completed = true;
+                            return;
+                        }
+                    }
+                }
+
+                // Stream ended cleanly — flush any event buffered without a
+                // trailing blank line (some servers omit the final delimiter).
+                let final_events = parser.finish();
+                let mut buf = buf_clone.lock().await;
+                if !final_events.is_empty() {
+                    buf.events.extend(final_events);
+                }
+                buf.done = true;
+                notify_clone.notify_waiters();
+                guard.completed = true;
+            });
+
+            let handle = REGISTRY.register_sse_stream(
+                buffer,
+                closed,
+                notify,
+                consumer.abort_handle(),
+                url.clone(),
+            );
+            let handle: Arc<dyn std::any::Any + Send + Sync> = Arc::new(handle);
+            Ok(owned::http::SseStream {
+                url,
+                _handle: handle,
+            })
+        })
+    }
+
+    #[cfg(not(feature = "bundle-http"))]
+    fn fetch_sse(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _request: owned::http::Request,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<owned::http::SseStream> {
         SysOpOutput::err(OpErrorKind::Unsupported)
     }
 }

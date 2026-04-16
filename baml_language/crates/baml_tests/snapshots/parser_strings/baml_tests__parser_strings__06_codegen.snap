@@ -28,6 +28,14 @@ function user.FormatMessage$parse(json: string) -> string {
     return
 }
 
+function user.FormatMessage$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream {
+    load_var sse
+    load_const "FormatMessage"
+    load_const null
+    call baml.llm.parse
+    return
+}
+
 function user.FormatMessage$render_prompt(name: string) -> baml.llm.PromptAst {
     load_const null
     load_const "FormatMessage"
@@ -66,6 +74,14 @@ function user.ProcessText$build_request(input: string) -> baml.http.Request {
 function user.ProcessText$parse(json: string) -> string {
     load_const "ProcessText"
     load_var json
+    call baml.llm.parse
+    return
+}
+
+function user.ProcessText$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream {
+    load_var sse
+    load_const "ProcessText"
+    load_const null
     call baml.llm.parse
     return
 }
