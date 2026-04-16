@@ -5,6 +5,14 @@ import './globals.css';
 
 import { GeistMono } from 'geist/font/mono';
 import { GeistSans } from 'geist/font/sans';
+import { Instrument_Serif } from 'next/font/google';
+
+const instrumentSerif = Instrument_Serif({
+  subsets: ['latin'],
+  weight: '400',
+  style: ['normal', 'italic'],
+  variable: '--font-serif',
+});
 import type { Viewport } from 'next';
 import { Suspense } from 'react';
 import { AnalyticsProvider } from '@/context/analytics';
@@ -63,6 +71,7 @@ export default function RootLayout(props: { children: React.ReactNode }) {
           'bg-background text-foreground relative min-h-screen font-sans antialiased',
           GeistSans.variable,
           GeistMono.variable,
+          instrumentSerif.variable,
         )}
       >
         <Suspense>
