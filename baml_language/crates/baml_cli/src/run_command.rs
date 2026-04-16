@@ -1484,6 +1484,16 @@ mod tests {
         }
     }
 
+    // Tests that touch the filesystem build paths under $TMPDIR. Appending
+    // pid + a monotonic counter prevents collisions between parallel `cargo
+    // test` runs and stale files left behind by a crashed prior run.
+    fn unique_temp_dir(prefix: &str) -> std::path::PathBuf {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static COUNTER: AtomicU64 = AtomicU64::new(0);
+        let n = COUNTER.fetch_add(1, Ordering::Relaxed);
+        std::env::temp_dir().join(format!("{prefix}_{}_{n}", std::process::id()))
+    }
+
     // ── parse_cli_value ────────────────────────────────────────────
 
     #[test]
@@ -1846,7 +1856,7 @@ mod tests {
 
     #[test]
     fn test_load_json_source_file() {
-        let dir = std::env::temp_dir().join("baml_test_json");
+        let dir = unique_temp_dir("baml_test_json");
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("test.json");
         std::fs::write(&path, r#"{"x": 42}"#).unwrap();
@@ -1914,7 +1924,7 @@ mod tests {
 
     #[test]
     fn test_load_expression_file() {
-        let dir = std::env::temp_dir().join("baml_test_expr");
+        let dir = unique_temp_dir("baml_test_expr");
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("expr.baml");
         std::fs::write(&path, "let x = 42\nx").unwrap();
@@ -1940,7 +1950,7 @@ mod tests {
 
     #[test]
     fn test_load_json_source_file_with_invalid_json() {
-        let dir = std::env::temp_dir().join("baml_test_invalid_json");
+        let dir = unique_temp_dir("baml_test_invalid_json");
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("bad.json");
         std::fs::write(&path, "{ not valid json").unwrap();
@@ -2011,7 +2021,7 @@ mod tests {
     /// stable path so argv[1] is identical across machines.
     #[test]
     fn test_bep_argv_baml_file_target_is_canonicalized() {
-        let dir = std::env::temp_dir().join("baml_test_argv_file");
+        let dir = unique_temp_dir("baml_test_argv_file");
         std::fs::create_dir_all(&dir).unwrap();
         let file = dir.join("hello.baml");
         std::fs::write(&file, "function main() { print(\"hi\") }").unwrap();
@@ -2058,7 +2068,7 @@ mod tests {
     /// BEP-027 §"Expression mode": `-e @file` resolves to the canonical path.
     #[test]
     fn test_bep_argv_expression_file_canonicalized() {
-        let dir = std::env::temp_dir().join("baml_test_argv_expr");
+        let dir = unique_temp_dir("baml_test_argv_expr");
         std::fs::create_dir_all(&dir).unwrap();
         let file = dir.join("expr.baml");
         std::fs::write(&file, "1 + 1").unwrap();
@@ -2204,7 +2214,7 @@ mod tests {
     /// BEP-027 §"JSON argument form": `@file` source for `--json-args`.
     #[test]
     fn test_bep_build_args_json_from_file() {
-        let dir = std::env::temp_dir().join("baml_test_json_args_file");
+        let dir = unique_temp_dir("baml_test_json_args_file");
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("args.json");
         std::fs::write(&path, r#"{"text": "filed", "max_words": 7}"#).unwrap();

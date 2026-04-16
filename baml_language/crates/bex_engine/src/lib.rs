@@ -1157,12 +1157,6 @@ impl BexEngine {
     pub fn user_functions(&self) -> Vec<UserFunctionInfo> {
         self.resolved_function_names
             .iter()
-            .filter(|(name, _)| {
-                name.starts_with("user.")
-                    && !name.contains("$init")
-                    && !name.contains(".$")
-                    && !name.contains("$lambda")
-            })
             .filter_map(|(name, (ptr, kind))| {
                 if !matches!(kind, bex_vm_types::FunctionKind::Bytecode) {
                     return None;
