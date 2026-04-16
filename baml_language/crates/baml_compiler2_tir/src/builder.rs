@@ -104,6 +104,28 @@ struct CheckedCallInner {
     had_bindings: bool,
 }
 
+#[derive(Clone, Copy)]
+struct CallContext<'a> {
+    expr_id: ExprId,
+    args: &'a [ExprId],
+    body: &'a ExprBody,
+    expected: &'a Ty,
+}
+
+struct CallCheckRequest<'a> {
+    context: CallContext<'a>,
+    callee_ty: Ty,
+    is_method_call: bool,
+    is_optional_call: bool,
+}
+
+#[derive(Clone, Copy)]
+struct OptionalCallContext<'a> {
+    call: CallContext<'a>,
+    callee_id: ExprId,
+    is_method_call: bool,
+}
+
 /// Per-scope inference builder.
 ///
 /// Created at the start of `infer_scope_types`, discarded when done.
@@ -288,20 +310,23 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
-    /// Shared call pipeline: alias expansion, function matching, skip_self_param,
+    /// Shared call pipeline: alias expansion, function matching, `skip_self_param`,
     /// arity check, two-pass generic inference, return type substitution.
     ///
-    /// Does NOT perform the final subtype check or record_expr_type — callers handle those.
-    fn check_call_inner(
-        &mut self,
-        expr_id: ExprId,
-        callee_ty: Ty,
-        is_method_call: bool,
-        args: &[ExprId],
-        body: &ExprBody,
-        expected: &Ty,
-        is_optional_call: bool,
-    ) -> CheckedCallInner {
+    /// Does NOT perform the final subtype check or `record_expr_type`; callers handle those.
+    fn check_call_inner(&mut self, request: CallCheckRequest<'_>) -> CheckedCallInner {
+        let CallCheckRequest {
+            context:
+                CallContext {
+                    expr_id,
+                    args,
+                    body,
+                    expected,
+                },
+            callee_ty,
+            is_method_call,
+            is_optional_call,
+        } = request;
         let callee_ty = self.expand_alias_chains(callee_ty);
 
         match &callee_ty {
@@ -456,15 +481,21 @@ impl<'db> TypeInferenceBuilder<'db> {
 
     fn finalize_optional_callee_call(
         &mut self,
-        expr_id: ExprId,
-        callee_id: ExprId,
-        callee_ty: Ty,
-        is_method_call: bool,
-        args: &[ExprId],
-        body: &ExprBody,
-        expected: &Ty,
+        context: OptionalCallContext<'_>,
+        callee_ty: &Ty,
     ) -> Ty {
-        let callee_info = self.analyze_optional_base(&callee_ty);
+        let OptionalCallContext {
+            call,
+            callee_id,
+            is_method_call,
+        } = context;
+        let CallContext {
+            expr_id,
+            args,
+            body,
+            expected,
+        } = call;
+        let callee_info = self.analyze_optional_base(callee_ty);
 
         if let Some(result_ty) = self.try_container_method_call(callee_id, args, body) {
             let final_ty = Self::make_optional(result_ty);
@@ -481,15 +512,12 @@ impl<'db> TypeInferenceBuilder<'db> {
             return ty;
         }
 
-        let checked = self.check_call_inner(
-            expr_id,
-            callee_info.inner,
+        let checked = self.check_call_inner(CallCheckRequest {
+            context: call,
+            callee_ty: callee_info.inner,
             is_method_call,
-            args,
-            body,
-            expected,
-            true,
-        );
+            is_optional_call: true,
+        });
         let final_ty = Self::make_optional(checked.result);
         self.report_result_type_mismatch(expr_id, &final_ty, expected);
         self.record_expr_type(expr_id, final_ty.clone());
@@ -1138,7 +1166,17 @@ impl<'db> TypeInferenceBuilder<'db> {
                 {
                     let callee_ty = self.infer_expr(*callee, body);
                     return self.finalize_optional_callee_call(
-                        expr_id, *callee, callee_ty, true, args, body, expected,
+                        OptionalCallContext {
+                            call: CallContext {
+                                expr_id,
+                                args,
+                                body,
+                                expected,
+                            },
+                            callee_id: *callee,
+                            is_method_call: true,
+                        },
+                        &callee_ty,
                     );
                 }
 
@@ -1154,15 +1192,17 @@ impl<'db> TypeInferenceBuilder<'db> {
                 let is_method_call = matches!(&body.exprs[*callee], Expr::FieldAccess { .. });
                 let callee_ty = self.infer_expr(*callee, body);
 
-                let checked = self.check_call_inner(
-                    expr_id,
+                let checked = self.check_call_inner(CallCheckRequest {
+                    context: CallContext {
+                        expr_id,
+                        args,
+                        body,
+                        expected,
+                    },
                     callee_ty,
                     is_method_call,
-                    args,
-                    body,
-                    expected,
-                    false,
-                );
+                    is_optional_call: false,
+                });
 
                 if !checked.had_bindings {
                     self.report_result_type_mismatch(expr_id, &checked.result, expected);
@@ -1193,13 +1233,17 @@ impl<'db> TypeInferenceBuilder<'db> {
                 }
 
                 self.finalize_optional_callee_call(
-                    expr_id,
-                    *callee,
-                    callee_ty,
-                    is_method_call,
-                    args,
-                    body,
-                    expected,
+                    OptionalCallContext {
+                        call: CallContext {
+                            expr_id,
+                            args,
+                            body,
+                            expected,
+                        },
+                        callee_id: *callee,
+                        is_method_call,
+                    },
+                    &callee_ty,
                 )
             }
             // Catch: propagate expected type to the base expression
@@ -4462,7 +4506,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     self.context.report(
                         TirTypeError::TypeMismatch {
                             expected: *elem_ty.clone(),
-                            got: widened_arg.clone(),
+                            got: widened_arg,
                         },
                         args[0],
                         Vec::new(),
@@ -4492,8 +4536,8 @@ impl<'db> TypeInferenceBuilder<'db> {
                     },
                 };
                 let callee_expr_ty = match &body.exprs[callee_id] {
-                    Expr::OptionalFieldAccess { .. } => Self::make_optional(method_ty.clone()),
-                    _ => method_ty.clone(),
+                    Expr::OptionalFieldAccess { .. } => Self::make_optional(method_ty),
+                    _ => method_ty,
                 };
 
                 self.record_expr_type(base_id, effective_local_ty);

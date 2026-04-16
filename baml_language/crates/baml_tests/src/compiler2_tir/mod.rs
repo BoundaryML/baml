@@ -1770,7 +1770,7 @@ pub(crate) mod support {
         let matches: Vec<_> = body
             .exprs
             .iter()
-            .filter_map(|(expr_id, _)| (expr_desc(expr_id, &body) == expr_text).then_some(expr_id))
+            .filter_map(|(expr_id, _)| (expr_desc(expr_id, body) == expr_text).then_some(expr_id))
             .collect();
         let expr_id = match matches.as_slice() {
             [expr_id] => *expr_id,
