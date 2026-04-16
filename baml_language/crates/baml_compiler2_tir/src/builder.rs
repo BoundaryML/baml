@@ -3247,7 +3247,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             let ns_context = pkg_info.namespace_path;
             self.resolutions.insert(
                 expr_id,
-                crate::inference::MemberResolution::FreeFunction { func_loc },
+                crate::inference::MemberResolution::Free { func_loc },
             );
             let sig = baml_compiler2_ppir::function_signature(db, func_loc);
             let mut diags = Vec::new();

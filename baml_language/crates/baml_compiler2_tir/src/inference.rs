@@ -49,9 +49,9 @@ pub enum MemberResolution<'db> {
         enum_loc: EnumLoc<'db>,
         variant_name: Name,
     },
-    /// A free function accessed via a package/namespace path.
+    /// A free item accessed via a package/namespace path.
     /// e.g. `env.get` → package="env", namespace=[], name="get"
-    FreeFunction { func_loc: FunctionLoc<'db> },
+    Free { func_loc: FunctionLoc<'db> },
     /// A method on a class (user-defined or builtin).
     /// e.g. `arr.length` → package="baml", namespace=[], class="Array", name="length"
     /// e.g. `baz.Greeting` → package="user", namespace=[], class="Baz", name="Greeting"

@@ -221,8 +221,6 @@ pub struct RetryPolicy {
 pub struct Let {
     pub name: Name,
     pub initializer: Option<(ast::ExprBody, ast::AstSourceMap)>,
-    /// Optional declared type (see `LetDef::declared_type`).
-    pub declared_type: Option<ast::TypeExpr>,
     pub origin: ast::LetOrigin,
     pub span: TextRange,
     pub name_span: TextRange,
@@ -557,7 +555,6 @@ impl ItemTree {
             Let {
                 name: l.name.clone(),
                 initializer: l.initializer.clone(),
-                declared_type: l.declared_type.clone(),
                 origin: l.origin,
                 span: l.span,
                 name_span: l.name_span,

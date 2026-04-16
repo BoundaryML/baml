@@ -105,7 +105,6 @@ impl<'db> SemanticIndexBuilder<'db> {
         for item in items {
             self.lower_item(item);
         }
-
         self.validate_phase1_builtin_contracts(items);
 
         // Pop: File, Namespace*, Package, Project

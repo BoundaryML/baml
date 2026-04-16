@@ -356,7 +356,7 @@ fn resolve_field_access_at(
                 range: variant_spans[variant_idx],
             })
         }
-        MemberResolution::FreeFunction { func_loc } => {
+        MemberResolution::Free { func_loc } => {
             let def = baml_compiler2_hir::contributions::Definition::Function(*func_loc);
             let (def_file, range) = utils::definition_span(db, def)?;
             Some(Location {

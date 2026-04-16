@@ -1386,7 +1386,6 @@ fn synthesize_retry_policy_let(
     Some(Item::Let(LetDef {
         name: Name::new(name_token.text()),
         initializer: Some((body, source_map)),
-        declared_type: None,
         origin: LetOrigin::RetryPolicy,
         span,
         name_span: name_token.text_range(),
@@ -1630,7 +1629,6 @@ fn synthesize_client_let(
     Item::Let(LetDef {
         name: Name::new(client_name),
         initializer: Some((body, source_map)),
-        declared_type: None,
         origin: LetOrigin::Client,
         span,
         name_span: name_token.text_range(),

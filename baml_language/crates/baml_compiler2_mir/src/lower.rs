@@ -282,7 +282,7 @@ fn resolution_to_item_ref(
 ) -> Option<ItemRef> {
     use baml_compiler2_tir::inference::MemberResolution;
     match res {
-        MemberResolution::FreeFunction { func_loc } => {
+        MemberResolution::Free { func_loc } => {
             let pkg_info = file_package(db, func_loc.file(db));
             let item_tree = file_item_tree(db, func_loc.file(db));
             let func_data = &item_tree[func_loc.id(db)];
@@ -1610,7 +1610,7 @@ impl<'db> LoweringContext<'db> {
             {
                 use baml_compiler2_tir::inference::MemberResolution;
                 match &resolution {
-                    MemberResolution::Method { .. } | MemberResolution::FreeFunction { .. } => {
+                    MemberResolution::Method { .. } | MemberResolution::Free { .. } => {
                         if let Some(item) = resolution_to_item_ref(self.db, &resolution) {
                             self.builder.assign(
                                 dest,
@@ -2181,7 +2181,7 @@ impl LoweringContext<'_> {
                     use baml_compiler2_tir::inference::MemberResolution;
                     matches!(
                         r,
-                        MemberResolution::Method { .. } | MemberResolution::FreeFunction { .. }
+                        MemberResolution::Method { .. } | MemberResolution::Free { .. }
                     )
                 })
             {
@@ -2201,7 +2201,7 @@ impl LoweringContext<'_> {
                         .get(&(self.current_scope, callee))
                         .is_some_and(|r| match r {
                             MemberResolution::Method { func_loc, .. }
-                            | MemberResolution::FreeFunction { func_loc } => {
+                            | MemberResolution::Free { func_loc } => {
                                 let sig =
                                     baml_compiler2_ppir::function_signature(self.db, *func_loc);
                                 sig.params
@@ -2328,7 +2328,7 @@ impl LoweringContext<'_> {
                 self.resolutions
                     .get(&(self.current_scope, callee))
                     .and_then(|res| match res {
-                        MemberResolution::FreeFunction { func_loc } => Some(*func_loc),
+                        MemberResolution::Free { func_loc } => Some(*func_loc),
                         MemberResolution::Method { func_loc, .. } => Some(*func_loc),
                         MemberResolution::Field { .. } | MemberResolution::Variant { .. } => None,
                     })
@@ -2347,7 +2347,7 @@ impl LoweringContext<'_> {
             if let Some(resolution) = self.resolutions.get(&(self.current_scope, callee)) {
                 let func_loc = match resolution {
                     MemberResolution::Method { func_loc, .. } => Some(*func_loc),
-                    MemberResolution::FreeFunction { func_loc } => Some(*func_loc),
+                    MemberResolution::Free { func_loc } => Some(*func_loc),
                     MemberResolution::Field { .. } | MemberResolution::Variant { .. } => None,
                 };
                 if let Some(fl) = func_loc {
@@ -2603,7 +2603,7 @@ impl LoweringContext<'_> {
         {
             use baml_compiler2_tir::inference::MemberResolution;
             match &resolution {
-                MemberResolution::Method { .. } | MemberResolution::FreeFunction { .. } => {
+                MemberResolution::Method { .. } | MemberResolution::Free { .. } => {
                     let item = resolution_to_item_ref(self.db, &resolution);
                     if let Some(item) = item {
                         self.builder.assign(
