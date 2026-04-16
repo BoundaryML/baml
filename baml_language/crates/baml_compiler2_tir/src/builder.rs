@@ -916,6 +916,11 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
             Expr::OptionalCall { callee, args } => {
                 // Optional chaining: func?.(args) — short-circuits to null if callee is null.
+                // Container mutation fast path (e.g. xs?.push?.(val) on EvolvingList).
+                if let Some(result_ty) = self.try_container_method_call(*callee, args, body) {
+                    return Self::make_optional(result_ty);
+                }
+
                 let is_method_call = matches!(
                     &body.exprs[*callee],
                     Expr::MemberAccess { .. } | Expr::OptionalMemberAccess { .. }
