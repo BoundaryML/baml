@@ -34,6 +34,7 @@ async fn test_handle_prevents_gc_collection() {
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
             None,
+            vec![],
         )
         .unwrap(),
     );
@@ -97,6 +98,7 @@ async fn test_array_preserved_through_gc() {
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
             None,
+            vec![],
         )
         .unwrap(),
     );
@@ -154,6 +156,7 @@ async fn test_gc_updates_forwarding_pointers() {
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
             None,
+            vec![],
         )
         .unwrap(),
     );
@@ -203,6 +206,7 @@ async fn test_multiple_handles_survive_gc() {
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
             None,
+            vec![],
         )
         .unwrap(),
     );
@@ -266,6 +270,7 @@ async fn test_primitive_returns_are_external_values() {
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
             None,
+            vec![],
         )
         .unwrap(),
     );

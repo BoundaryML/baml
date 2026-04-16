@@ -1073,15 +1073,19 @@ dependencies = [
  "baml_project",
  "baml_workspace",
  "bex_engine",
+ "bex_events",
+ "bex_events_native",
  "bex_vm_types",
  "clap",
  "clap-cargo",
  "ctrlc",
  "regex",
  "serde_json",
+ "strsim",
  "sys_native",
  "text-size",
  "tokio",
+ "toml",
 ]
 
 [[package]]

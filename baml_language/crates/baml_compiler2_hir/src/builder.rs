@@ -105,6 +105,17 @@ impl<'db> SemanticIndexBuilder<'db> {
         for item in items {
             self.lower_item(item);
         }
+
+        // Synthesize builtin global let bindings for the `baml` package root.
+        // These are injected into the first root-namespace builtin file
+        // (core.baml) so they flow through the standard let-binding pipeline.
+        if pkg_info.package.as_str() == "baml"
+            && pkg_info.namespace_path.is_empty()
+            && self.file.path(self.db).ends_with("core.baml")
+        {
+            self.synthesize_builtin_globals();
+        }
+
         self.validate_phase1_builtin_contracts(items);
 
         // Pop: File, Namespace*, Package, Project
@@ -703,6 +714,27 @@ impl<'db> SemanticIndexBuilder<'db> {
 
         self.push_scope(ScopeKind::Item, Some(rp.name.clone()), rp.span);
         self.pop_scope();
+    }
+
+    /// Synthesize `Item::Let` entries for builtin globals (`baml.argv`, etc.).
+    /// These have no source-level declaration; the engine populates them at
+    /// load time. The `declared_type` drives TIR type inference.
+    fn synthesize_builtin_globals(&mut self) {
+        let dummy_span = text_size::TextRange::default();
+
+        // baml.argv: string[]
+        let argv_let = ast::LetDef {
+            name: Name::new("argv"),
+            initializer: None,
+            declared_type: Some(ast::TypeExpr::List {
+                inner: Box::new(ast::TypeExpr::String { attrs: vec![] }),
+                attrs: vec![],
+            }),
+            origin: ast::LetOrigin::Compiler,
+            span: dummy_span,
+            name_span: dummy_span,
+        };
+        self.lower_let(&argv_let);
     }
 
     fn lower_let(&mut self, l: &ast::LetDef) {

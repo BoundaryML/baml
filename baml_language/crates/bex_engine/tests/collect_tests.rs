@@ -21,6 +21,7 @@ fn make_engine(source: &str) -> Arc<BexEngine> {
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
             None,
+            vec![],
         )
         .expect("Failed to create engine"),
     )
