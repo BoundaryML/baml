@@ -31,6 +31,14 @@ function user.CommentAfterArrow$parse(json: string) -> string {
     return
 }
 
+function user.CommentAfterArrow$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream {
+    load_var sse
+    load_const "CommentAfterArrow"
+    load_global user.TestClient
+    call baml.llm.parse
+    return
+}
+
 function user.CommentAfterArrow$render_prompt() -> baml.llm.PromptAst {
     load_global user.TestClient
     load_const "CommentAfterArrow"
@@ -66,6 +74,14 @@ function user.FunctionWithComments$build_request(a: string, b: int) -> baml.http
 function user.FunctionWithComments$parse(json: string) -> string {
     load_const "FunctionWithComments"
     load_var json
+    call baml.llm.parse
+    return
+}
+
+function user.FunctionWithComments$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream {
+    load_var sse
+    load_const "FunctionWithComments"
+    load_global user.TestClient
     call baml.llm.parse
     return
 }

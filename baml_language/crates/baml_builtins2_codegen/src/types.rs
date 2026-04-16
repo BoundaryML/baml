@@ -22,7 +22,7 @@ pub struct NativeBuiltin {
     /// None for free functions; Some for methods with a `self` receiver.
     pub receiver: Option<Receiver>,
     /// How the method uses the VM parameter, determined by `//baml:vm` or `//baml:mut_vm`
-    /// directives. Mutually exclusive with `receiver.is_mut` (enforced at extraction time).
+    /// directives. Mutually exclusive with `ReceiverType::MutSelf` (enforced at extraction time).
     pub vm_usage: VmUsage,
     /// When true, the trait method returns `NativeCallResult` directly instead of
     /// `Result<T, VmRustFnError>`. Set by `//baml:may_yield` directive.
@@ -78,8 +78,28 @@ pub struct Receiver {
     pub class_name: String,
     /// Generic type parameters of the class (e.g. `["T"]` for `Array<T>`).
     pub class_generics: Vec<String>,
-    /// True when preceded by `//baml:mut_self` in the source.
-    pub is_mut: bool,
+    pub receiver_type: ReceiverType,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ReceiverType {
+    /// Static method: no `self` parameters.
+    /// The receiver is set for dispatch routing but the generated trait method and
+    /// glue should not include a receiver parameter.
+    Static,
+    /// Instance method: has `&self` parameter.
+    RefSelf,
+    /// Instance method with `//baml:mut_self` annotation.
+    /// Rust binding gets `&mut self` parameter.
+    MutSelf,
+}
+impl ReceiverType {
+    pub fn is_static(&self) -> bool {
+        matches!(self, Self::Static)
+    }
+    pub fn is_mut(&self) -> bool {
+        matches!(self, Self::MutSelf)
+    }
 }
 
 /// BAML type extracted from a type expression.

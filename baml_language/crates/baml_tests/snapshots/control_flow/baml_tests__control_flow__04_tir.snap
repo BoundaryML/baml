@@ -133,3 +133,6 @@ function user.LlmFunction$build_request(input: string) -> baml.http.Request thro
 function user.LlmFunction$parse(json: string) -> string throws never {
   baml.llm.parse<T>("LlmFunction", json) : string
 }
+function user.LlmFunction$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<string, null | string> throws never {
+  baml.llm.__make_stream(sse, "LlmFunction", TestClient) : unknown
+}
