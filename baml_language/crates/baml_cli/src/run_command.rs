@@ -7,7 +7,10 @@ use std::{
 };
 
 use anyhow::{Context, Result, anyhow};
-use baml_db::{baml_compiler_diagnostics::Severity, baml_compiler2_emit};
+use baml_db::{
+    baml_compiler_diagnostics::{Severity, render},
+    baml_compiler2_emit,
+};
 use baml_project::ProjectDatabase;
 use baml_workspace::discover_baml_files;
 use bex_engine::{BexEngine, BexExternalValue, FunctionCallContextBuilder, Ty, UserFunctionInfo};
@@ -174,21 +177,35 @@ impl RunArgs {
             .ok_or_else(|| anyhow!("No project context"))?;
         let source_files = db.get_source_files();
         let diagnostics = baml_project::collect_diagnostics(db, project, &source_files);
-        let mut error_count = 0;
-        for diag in &diagnostics {
-            match diag.severity {
-                Severity::Warning => self.vlog(format_args!("warning: {}", diag.message)),
-                Severity::Error => {
-                    if error_count == 0 {
-                        eprintln!("Compilation errors:");
-                    }
-                    error_count += 1;
-                    eprintln!("  error: {}", diag.message);
-                }
-                _ => {}
-            }
+
+        let errors: Vec<_> = diagnostics
+            .iter()
+            .filter(|d| d.severity == Severity::Error)
+            .collect();
+        let warnings: Vec<_> = diagnostics
+            .iter()
+            .filter(|d| d.severity == Severity::Warning)
+            .collect();
+
+        for w in &warnings {
+            self.vlog(format_args!("warning: {}", w.message));
         }
-        if error_count > 0 {
+
+        if !errors.is_empty() {
+            let mut sources = HashMap::new();
+            let mut file_paths = HashMap::new();
+            for sf in &source_files {
+                let file_id = sf.file_id(db);
+                sources.insert(file_id, sf.text(db).to_string());
+                file_paths.insert(file_id, sf.path(db));
+            }
+            let rendered = render::render_diagnostics(
+                &errors.iter().copied().cloned().collect::<Vec<_>>(),
+                &sources,
+                &file_paths,
+                &render::RenderConfig::cli(),
+            );
+            eprintln!("{rendered}");
             anyhow::bail!("{bail_context}");
         }
         Ok(())
