@@ -283,7 +283,7 @@ fn same_local_definition(a: &ResolvedName<'_>, b: &ResolvedName<'_>) -> bool {
 /// Uses text pre-filter + `ScopeInference` confirmation pattern:
 /// 1. Check that cursor is on a class field definition (Class scope).
 /// 2. Collect all source files.
-/// 3. For each file, scan function scopes for `FieldAccess` and Object constructor
+/// 3. For each file, scan function scopes for `MemberAccess` and Object constructor
 ///    expressions that reference the same field of the same class.
 fn find_field_definition_usages(
     db: &dyn Db,
@@ -370,7 +370,7 @@ fn find_field_definition_usages(
             let scope_id_salsa = sf_index.scope_ids[file_scope_id.index() as usize];
             let inference = baml_compiler2_tir::inference::infer_scope_types(db, scope_id_salsa);
 
-            // FieldAccess sites: scan resolutions for matching Field
+            // MemberAccess sites: scan resolutions for matching Field
             for (expr_id, resolution) in inference.iter_resolutions() {
                 use baml_compiler2_tir::inference::MemberResolution;
                 if let MemberResolution::Field {
@@ -379,7 +379,7 @@ fn find_field_definition_usages(
                 } = resolution
                 {
                     if *res_class_loc == class_loc && field_name.as_str() == field_name_text {
-                        // Get field name range from the FieldAccess expression span
+                        // Get field name range from the MemberAccess expression span
                         let expr_span = source_map.expr_span(*expr_id);
                         // Extract just the field name portion (after the last dot)
                         let start: usize = expr_span.start().into();
@@ -398,6 +398,43 @@ fn find_field_definition_usages(
                                     file: sf,
                                     range: field_range,
                                 });
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Multi-segment Path sites: scan path_member_resolutions for matching Field.
+            // For `obj.field` which is Path(["obj", "field"]), the field resolution is
+            // in path_member_resolutions[expr_id][0] (index into segments[1..]).
+            for (expr_id, member_resolutions) in inference.iter_path_member_resolutions() {
+                use baml_compiler2_tir::inference::MemberResolution;
+                // Look up the Path's segments to find which segment index matched.
+                let Some((_, path_expr)) = expr_body.exprs.iter().find(|(id, _)| id == expr_id)
+                else {
+                    continue;
+                };
+                let baml_compiler2_ast::Expr::Path(segments) = path_expr else {
+                    continue;
+                };
+                for (res_idx, resolution) in member_resolutions.iter().enumerate() {
+                    if let MemberResolution::Field {
+                        class_loc: res_class_loc,
+                        field_name,
+                    } = resolution
+                    {
+                        if *res_class_loc == class_loc && field_name.as_str() == field_name_text {
+                            // segment index in the full segments array = res_idx + 1
+                            // (since res_idx 0 corresponds to segments[1])
+                            let seg_idx = res_idx + 1;
+                            if seg_idx < segments.len() {
+                                let seg_span = source_map.path_segment_span(*expr_id, seg_idx);
+                                if !seg_span.is_empty() {
+                                    results.push(Location {
+                                        file: sf,
+                                        range: seg_span,
+                                    });
+                                }
                             }
                         }
                     }

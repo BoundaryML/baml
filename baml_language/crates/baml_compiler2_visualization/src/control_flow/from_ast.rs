@@ -718,11 +718,11 @@ fn render_expr_compact_ast(body: &ast::ExprBody, id: ast::ExprId) -> String {
             };
             format!("{op_str}{}", render_expr_compact_ast(body, *expr))
         }
-        ast::Expr::FieldAccess { base, field } => {
-            format!("{}.{field}", render_expr_compact_ast(body, *base))
+        ast::Expr::MemberAccess { base, member } => {
+            format!("{}.{member}", render_expr_compact_ast(body, *base))
         }
-        ast::Expr::OptionalFieldAccess { base, field } => {
-            format!("{}?.{field}", render_expr_compact_ast(body, *base))
+        ast::Expr::OptionalMemberAccess { base, member } => {
+            format!("{}?.{member}", render_expr_compact_ast(body, *base))
         }
         ast::Expr::Index { base, index } => {
             format!(

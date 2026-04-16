@@ -353,6 +353,18 @@ struct LoweringContext<'db> {
         FxHashMap<(FileScopeId, AstExprId), baml_compiler2_tir::inference::MemberResolution<'db>>,
     // Match expressions that TIR determined are exhaustive
     exhaustive_matches: rustc_hash::FxHashSet<(FileScopeId, AstExprId)>,
+    // TIR-inferred root segment type for each multi-segment Path expression.
+    // Used by lower_multi_segment_path_as_field_chain to get the correct root
+    // type even when the MIR local was declared with a coarser type (e.g.
+    // catch variables declared as BuiltinUnknown).
+    path_root_types: FxHashMap<(FileScopeId, AstExprId), Tir2Ty>,
+    // Per-segment member resolutions for multi-segment local-rooted Path expressions.
+    // Set by TIR's infer_local_rooted_path; indexed by (scope, Path ExprId).
+    // path_member_resolutions[(scope, expr_id)][i] is the resolution for segments[i+1].
+    path_member_resolutions: FxHashMap<
+        (FileScopeId, AstExprId),
+        Vec<baml_compiler2_tir::inference::MemberResolution<'db>>,
+    >,
 
     // The FileScopeId of the expression body currently being lowered.
     // Updated when descending into lambda bodies (Phase 3+).
@@ -543,7 +555,7 @@ impl<'db> LoweringContext<'db> {
             })
             .unwrap_or_else(|| index.scope_at_offset(func_span.start(), Some(&func_data.name)));
 
-        // --- Eagerly aggregate expr_types, pat_types, resolutions, and exhaustive_matches from all scopes ---
+        // --- Eagerly aggregate expr_types, pat_types, resolutions, exhaustive_matches, path_root_types, and path_member_resolutions from all scopes ---
         let mut expr_types: FxHashMap<(FileScopeId, AstExprId), Tir2Ty> = FxHashMap::default();
         let mut pat_types: FxHashMap<(FileScopeId, AstPatId), Tir2Ty> = FxHashMap::default();
         let mut resolutions: FxHashMap<
@@ -552,6 +564,11 @@ impl<'db> LoweringContext<'db> {
         > = FxHashMap::default();
         let mut exhaustive_matches: rustc_hash::FxHashSet<(FileScopeId, AstExprId)> =
             rustc_hash::FxHashSet::default();
+        let mut path_root_types: FxHashMap<(FileScopeId, AstExprId), Tir2Ty> = FxHashMap::default();
+        let mut path_member_resolutions: FxHashMap<
+            (FileScopeId, AstExprId),
+            Vec<baml_compiler2_tir::inference::MemberResolution<'db>>,
+        > = FxHashMap::default();
 
         let merge_scope =
             |fsi: FileScopeId,
@@ -561,7 +578,12 @@ impl<'db> LoweringContext<'db> {
                 (FileScopeId, AstExprId),
                 baml_compiler2_tir::inference::MemberResolution<'db>,
             >,
-             exhaustive_matches: &mut rustc_hash::FxHashSet<(FileScopeId, AstExprId)>| {
+             exhaustive_matches: &mut rustc_hash::FxHashSet<(FileScopeId, AstExprId)>,
+             path_root_types: &mut FxHashMap<(FileScopeId, AstExprId), Tir2Ty>,
+             path_member_resolutions: &mut FxHashMap<
+                (FileScopeId, AstExprId),
+                Vec<baml_compiler2_tir::inference::MemberResolution<'db>>,
+            >| {
                 let scope_id = index.scope_ids[fsi.index() as usize];
                 let inference = infer_scope_types(db, scope_id);
                 for (&expr_id, ty) in inference.iter_expressions() {
@@ -576,6 +598,12 @@ impl<'db> LoweringContext<'db> {
                 for &expr_id in inference.iter_exhaustive_matches() {
                     exhaustive_matches.insert((fsi, expr_id));
                 }
+                for (&expr_id, ty) in inference.iter_path_root_types() {
+                    path_root_types.insert((fsi, expr_id), ty.clone());
+                }
+                for (&expr_id, member_resolutions) in inference.iter_path_member_resolutions() {
+                    path_member_resolutions.insert((fsi, expr_id), member_resolutions.clone());
+                }
             };
 
         // Include the function scope itself
@@ -585,6 +613,8 @@ impl<'db> LoweringContext<'db> {
             &mut pat_types,
             &mut resolutions,
             &mut exhaustive_matches,
+            &mut path_root_types,
+            &mut path_member_resolutions,
         );
 
         // Include all descendant scopes (blocks, lambdas, etc.)
@@ -598,6 +628,8 @@ impl<'db> LoweringContext<'db> {
                 &mut pat_types,
                 &mut resolutions,
                 &mut exhaustive_matches,
+                &mut path_root_types,
+                &mut path_member_resolutions,
             );
         }
 
@@ -675,6 +707,8 @@ impl<'db> LoweringContext<'db> {
             pat_types,
             resolutions,
             exhaustive_matches,
+            path_root_types,
+            path_member_resolutions,
             current_scope: func_scope_id,
             body: expr_body,
             source_map,
@@ -717,7 +751,7 @@ impl<'db> LoweringContext<'db> {
         let index = file_semantic_index(db, file);
         let let_scope_id: FileScopeId = index.scope_at_offset(let_span.start(), Some(&let_name));
 
-        // --- Eagerly aggregate expr_types, pat_types, resolutions from let scope ---
+        // --- Eagerly aggregate expr_types, pat_types, resolutions, path_root_types, path_member_resolutions from let scope ---
         let mut expr_types: FxHashMap<(FileScopeId, AstExprId), Tir2Ty> = FxHashMap::default();
         let mut pat_types: FxHashMap<(FileScopeId, AstPatId), Tir2Ty> = FxHashMap::default();
         let mut resolutions: FxHashMap<
@@ -726,6 +760,11 @@ impl<'db> LoweringContext<'db> {
         > = FxHashMap::default();
         let mut exhaustive_matches: rustc_hash::FxHashSet<(FileScopeId, AstExprId)> =
             rustc_hash::FxHashSet::default();
+        let mut path_root_types: FxHashMap<(FileScopeId, AstExprId), Tir2Ty> = FxHashMap::default();
+        let mut path_member_resolutions: FxHashMap<
+            (FileScopeId, AstExprId),
+            Vec<baml_compiler2_tir::inference::MemberResolution<'db>>,
+        > = FxHashMap::default();
 
         let merge_scope =
             |fsi: FileScopeId,
@@ -735,7 +774,12 @@ impl<'db> LoweringContext<'db> {
                 (FileScopeId, AstExprId),
                 baml_compiler2_tir::inference::MemberResolution<'db>,
             >,
-             exhaustive_matches: &mut rustc_hash::FxHashSet<(FileScopeId, AstExprId)>| {
+             exhaustive_matches: &mut rustc_hash::FxHashSet<(FileScopeId, AstExprId)>,
+             path_root_types: &mut FxHashMap<(FileScopeId, AstExprId), Tir2Ty>,
+             path_member_resolutions: &mut FxHashMap<
+                (FileScopeId, AstExprId),
+                Vec<baml_compiler2_tir::inference::MemberResolution<'db>>,
+            >| {
                 let scope_id = index.scope_ids[fsi.index() as usize];
                 let inference = infer_scope_types(db, scope_id);
                 for (&expr_id, ty) in inference.iter_expressions() {
@@ -750,6 +794,12 @@ impl<'db> LoweringContext<'db> {
                 for &expr_id in inference.iter_exhaustive_matches() {
                     exhaustive_matches.insert((fsi, expr_id));
                 }
+                for (&expr_id, ty) in inference.iter_path_root_types() {
+                    path_root_types.insert((fsi, expr_id), ty.clone());
+                }
+                for (&expr_id, member_resolutions) in inference.iter_path_member_resolutions() {
+                    path_member_resolutions.insert((fsi, expr_id), member_resolutions.clone());
+                }
             };
 
         // Include the let scope itself
@@ -759,6 +809,8 @@ impl<'db> LoweringContext<'db> {
             &mut pat_types,
             &mut resolutions,
             &mut exhaustive_matches,
+            &mut path_root_types,
+            &mut path_member_resolutions,
         );
 
         // Include all descendant scopes (blocks, closures within the initializer)
@@ -772,6 +824,8 @@ impl<'db> LoweringContext<'db> {
                 &mut pat_types,
                 &mut resolutions,
                 &mut exhaustive_matches,
+                &mut path_root_types,
+                &mut path_member_resolutions,
             );
         }
 
@@ -822,6 +876,8 @@ impl<'db> LoweringContext<'db> {
             pat_types,
             resolutions,
             exhaustive_matches,
+            path_root_types,
+            path_member_resolutions,
             current_scope: let_scope_id,
             body: expr_body,
             source_map,
@@ -876,6 +932,14 @@ impl<'db> LoweringContext<'db> {
             .unwrap_or(Ty::Void {
                 attr: TyAttr::default(),
             })
+    }
+
+    /// Get the TIR-inferred root segment type for a multi-segment Path expression.
+    /// Returns `None` if no root type was recorded (e.g. single-segment paths).
+    fn path_root_ty(&self, expr_id: AstExprId) -> Option<Ty> {
+        self.path_root_types
+            .get(&(self.current_scope, expr_id))
+            .map(|ty| convert_tir2_ty(ty, &self.resolved_aliases))
     }
 
     /// Resolve a `TypeExpr` annotation directly to a `baml_type::Ty`.
@@ -1494,12 +1558,12 @@ impl LoweringContext<'_> {
                 self.lower_object(expr_id, type_name.as_ref(), &fields, &spreads, dest);
             }
 
-            AstExpr::FieldAccess { base, field } => {
-                self.lower_field_access(expr_id, base, &field, dest);
+            AstExpr::MemberAccess { base, member } => {
+                self.lower_member_access(expr_id, base, &member, dest);
             }
 
-            AstExpr::OptionalFieldAccess { base, field } => {
-                self.lower_optional_field_access(expr_id, base, &field, dest);
+            AstExpr::OptionalMemberAccess { base, member } => {
+                self.lower_optional_member_access(expr_id, base, &member, dest);
             }
 
             AstExpr::OptionalIndex { base, index } => {
@@ -1601,8 +1665,50 @@ impl LoweringContext<'_> {
 
 impl<'db> LoweringContext<'db> {
     fn lower_path_expr(&mut self, expr_id: AstExprId, segments: &[Name], dest: Place) {
-        // Multi-segment paths (e.g. baml.llm.render_prompt) — check TIR resolution first
+        // Multi-segment paths (e.g. baml.llm.render_prompt, self.field, obj.method) — check TIR resolution first
         if segments.len() > 1 {
+            // Check path_member_resolutions first (set by infer_local_rooted_path for local-rooted paths).
+            // This takes priority over the flat resolutions map since infer_local_rooted_path
+            // moves resolutions from the flat map into path_member_resolutions.
+            if let Some(member_resolutions) = self
+                .path_member_resolutions
+                .get(&(self.current_scope, expr_id))
+                .cloned()
+            {
+                use baml_compiler2_tir::inference::MemberResolution;
+                // The last resolution corresponds to the final segment of the path.
+                // - If the last resolution is a Method/Free, this path is a callee reference;
+                //   emit a function constant. The receiver will be prepended by lower_call.
+                // - If the last resolution is a Field, this is a pure field-chain access.
+                // Note: for paths like `user.profile.items.slice`, the member_resolutions
+                // are [Field{profile}, Field{items}, Method{slice}], so we check last().
+                match member_resolutions.last() {
+                    Some(MemberResolution::Method { .. } | MemberResolution::Free { .. }) => {
+                        // Local-rooted method/free call reference — emit a function constant.
+                        // The receiver will be prepended by lower_call.
+                        let resolution = member_resolutions.into_iter().last().unwrap();
+                        if let Some(item) = resolution_to_item_ref(self.db, &resolution) {
+                            self.builder.assign(
+                                dest,
+                                Rvalue::Use(Operand::Constant(Constant::Function(item))),
+                            );
+                            return;
+                        }
+                    }
+                    Some(MemberResolution::Field { .. }) => {
+                        // Local-rooted field access — chain field projections.
+                        self.lower_multi_segment_path_as_field_chain(expr_id, segments, dest);
+                        return;
+                    }
+                    Some(MemberResolution::Variant { .. }) => {
+                        // Handled by expr_types check below.
+                    }
+                    None => {}
+                }
+            }
+
+            // Check flat resolutions (set by infer_multi_segment_path for package-rooted paths
+            // like baml.fs.open, env.get, etc.).
             if let Some(resolution) = self
                 .resolutions
                 .get(&(self.current_scope, expr_id))
@@ -1619,11 +1725,39 @@ impl<'db> LoweringContext<'db> {
                             return;
                         }
                     }
-                    MemberResolution::Field { .. } | MemberResolution::Variant { .. } => {
-                        // Not a callable — fall through to null placeholder
+                    MemberResolution::Variant { .. } => {
+                        // Handled by expr_types check below.
+                    }
+                    MemberResolution::Field { .. } => {
+                        // Local-rooted field access — chain field projections.
+                        // The root segment is a local; chain through class fields.
+                        self.lower_multi_segment_path_as_field_chain(expr_id, segments, dest);
+                        return;
                     }
                 }
             }
+            // Check for enum variant (e.g. Status.Active lowered to Path(["Status","Active"]))
+            if let Some(Tir2Ty::EnumVariant(qtn, variant, _)) = self
+                .expr_types
+                .get(&(self.current_scope, expr_id))
+                .cloned()
+                .as_ref()
+            {
+                let enum_ref = ItemRef::EnumType {
+                    package: qtn.package().clone(),
+                    namespace: qtn.namespace().clone(),
+                    name: qtn.name().clone(),
+                };
+                self.builder.assign(
+                    dest,
+                    Rvalue::Use(Operand::Constant(Constant::EnumVariant {
+                        enum_ref,
+                        variant: variant.clone(),
+                    })),
+                );
+                return;
+            }
+            // Namespace intermediate or unresolved — emit null placeholder.
             self.builder
                 .assign(dest, Rvalue::Use(Operand::Constant(Constant::Null)));
             return;
@@ -1689,6 +1823,147 @@ impl<'db> LoweringContext<'db> {
                 }
             }
         }
+    }
+
+    /// Lower a multi-segment `Path` expression (`a.b.c`) as chained field projections.
+    ///
+    /// The first segment is resolved as a local variable; subsequent segments are
+    /// projected as struct fields (using `class_fields`) or map keys (fallback).
+    fn lower_multi_segment_path_as_field_chain(
+        &mut self,
+        expr_id: AstExprId,
+        segments: &[Name],
+        dest: Place,
+    ) {
+        let (mut current_place, mut current_ty) =
+            if let Some(&root_local) = self.locals.get(&segments[0]) {
+                let place = Place::Local(root_local);
+                let ty = if let Some(tir_root) = self.path_root_ty(expr_id) {
+                    // If TIR inferred a more specific type for the root local,
+                    // update the MIR local's declared type so the emitter can
+                    // resolve field names for display (e.g. `load_field .index`).
+                    if matches!(self.builder.local_ty(root_local), Ty::BuiltinUnknown { .. })
+                        && !matches!(tir_root, Ty::BuiltinUnknown { .. } | Ty::Void { .. })
+                    {
+                        self.builder.local_decl_mut(root_local).ty = tir_root.clone();
+                    }
+                    tir_root
+                } else {
+                    self.builder.local_ty(root_local)
+                };
+                (place, ty)
+            } else if let Some(cap_idx) = self
+                .capture_indices
+                .as_ref()
+                .and_then(|m| m.get(&segments[0]))
+                .copied()
+            {
+                let place = Place::Capture(cap_idx);
+                let ty = self
+                    .path_root_ty(expr_id)
+                    .unwrap_or_else(|| Ty::BuiltinUnknown {
+                        attr: TyAttr::default(),
+                    });
+                (place, ty)
+            } else {
+                // Root not found as a local or capture — emit null.
+                self.builder
+                    .assign(dest, Rvalue::Use(Operand::Constant(Constant::Null)));
+                return;
+            };
+
+        for seg in &segments[1..] {
+            if let Ty::Class(ref tn, _) = current_ty.clone() {
+                if let Some(fields) = self.class_fields.get(tn) {
+                    if let Some(&idx) = fields.get(seg.as_str()) {
+                        let next_ty = self.class_field_ty(tn, seg);
+                        current_place = Place::Field {
+                            base: Box::new(current_place),
+                            field: idx,
+                        };
+                        current_ty = next_ty;
+                        continue;
+                    }
+                }
+            }
+            // Dynamic map key fallback
+            let key_local = self.builder.temp(Ty::String {
+                attr: TyAttr::default(),
+            });
+            self.builder.assign(
+                Place::local(key_local),
+                Rvalue::Use(Operand::Constant(Constant::String(seg.to_string()))),
+            );
+            current_place = Place::Index {
+                base: Box::new(current_place),
+                index: key_local,
+                kind: IndexKind::Map,
+            };
+            break;
+        }
+
+        self.builder
+            .assign(dest, Rvalue::Use(Operand::Copy(current_place)));
+    }
+
+    /// Look up the MIR type of a named field on a class, for chained field access.
+    ///
+    /// Returns `Ty::Null` if the field is not found or the type cannot be resolved.
+    /// Used by `lower_multi_segment_path_as_field_chain` to track the type through
+    /// a chain of field projections (`a.b.c` needs the type of `b` to find `c`).
+    fn class_field_ty(&self, class_tn: &TypeName, field_name: &Name) -> Ty {
+        use baml_compiler2_hir::{contributions::Definition, package::package_items};
+        use baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns;
+        let db = self.db;
+
+        // class_tn.module_path is [pkg_name, ...namespace_parts].
+        // Use the package name (module_path[0]) to get PackageItems.
+        let Some(pkg_name) = class_tn.module_path.first() else {
+            return Ty::Null {
+                attr: TyAttr::default(),
+            };
+        };
+        let pkg_id = baml_compiler2_hir::package::PackageId::new(db, pkg_name.clone());
+        let pkg_items_ref = package_items(db, pkg_id);
+
+        // namespace = module_path[1..] (everything after the package name)
+        let namespace: Vec<Name> = class_tn.module_path[1..].to_vec();
+
+        let Some(Definition::Class(class_loc)) =
+            pkg_items_ref.lookup_type(&namespace, &class_tn.name)
+        else {
+            return Ty::Null {
+                attr: TyAttr::default(),
+            };
+        };
+
+        let item_tree = baml_compiler2_ppir::file_item_tree(db, class_loc.file(db));
+        let class_data = &item_tree[class_loc.id(db)];
+
+        let field = class_data.fields.iter().find(|f| &f.name == field_name);
+        let Some(field) = field else {
+            return Ty::Null {
+                attr: TyAttr::default(),
+            };
+        };
+        let Some(ref te) = field.type_expr else {
+            return Ty::Null {
+                attr: TyAttr::default(),
+            };
+        };
+
+        let pkg_ns =
+            baml_compiler2_hir::file_package::file_package(db, class_loc.file(db)).namespace_path;
+        let mut diags = Vec::new();
+        let tir_ty = lower_type_expr_in_ns(
+            db,
+            &te.expr,
+            pkg_items_ref,
+            &pkg_ns,
+            &class_data.generic_params,
+            &mut diags,
+        );
+        self.resolved_aliases.convert(&tir_ty)
     }
 
     fn lower_item_ref(&mut self, expr_id: AstExprId, def: Definition<'db>, dest: Place) {
@@ -1968,8 +2243,8 @@ impl LoweringContext<'_> {
         self.builder.set_current_block(bb_join);
     }
 
-    /// Lower `obj?.field` — null-check obj, then access field or produce null.
-    fn lower_optional_field_access(
+    /// Lower `obj?.member` — null-check obj, then access member or produce null.
+    fn lower_optional_member_access(
         &mut self,
         expr_id: AstExprId,
         base: AstExprId,
@@ -1997,7 +2272,7 @@ impl LoweringContext<'_> {
                 .branch(Operand::Copy(Place::Local(test_local)), bb_null, bb_access);
 
             self.builder.set_current_block(bb_access);
-            self.lower_field_access(expr_id, base, field, dest);
+            self.lower_member_access(expr_id, base, field, dest);
             // Don't create our own join — the OptionalChain handler does that
         } else {
             // Standalone (no wrapping OptionalChain) — fall back to own null/join blocks
@@ -2008,7 +2283,7 @@ impl LoweringContext<'_> {
                 .branch(Operand::Copy(Place::Local(test_local)), bb_null, bb_access);
 
             self.builder.set_current_block(bb_access);
-            self.lower_field_access(expr_id, base, field, dest.clone());
+            self.lower_member_access(expr_id, base, field, dest.clone());
             if !self.builder.is_current_terminated() {
                 self.builder.goto(bb_join);
             }
@@ -2157,22 +2432,23 @@ impl LoweringContext<'_> {
         args: &[AstExprId],
         dest: Place,
     ) {
-        // Check if callee is a field access (potential watch method call)
+        // Check if callee is a member access (potential watch method call)
         let callee_expr = self.body.exprs[callee].clone();
-        if let AstExpr::FieldAccess { base, field } = &callee_expr {
-            let field_name = field.clone();
+        if let AstExpr::MemberAccess { base, member } = &callee_expr {
+            let member_name = member.clone();
             let base_id = *base;
-            if field_name.as_str() == "options" || field_name.as_str() == "notify" {
+            if member_name.as_str() == "options" || member_name.as_str() == "notify" {
                 let args_owned = args.to_vec();
-                self.lower_watch_method(expr_id, base_id, &field_name, &args_owned, dest);
+                self.lower_watch_method(expr_id, base_id, &member_name, &args_owned, dest);
                 return;
             }
         }
 
-        // Check if callee is a method call (FieldAccess with a MemberResolution::Method/Free).
-        // Field and Variant resolutions are not callable — treat them like unresolved accesses.
+        // Check if callee is a method call (MemberAccess or multi-segment Path with a
+        // MemberResolution::Method/Free). Field and Variant resolutions are not callable.
         // If the base is a real value (not a package namespace), prepend it as self.
-        let (callee_operand, arg_operands) = if let AstExpr::FieldAccess { base, .. } = &callee_expr
+        let (callee_operand, arg_operands) = if let AstExpr::MemberAccess { base, .. } =
+            &callee_expr
         {
             if self
                 .resolutions
@@ -2220,6 +2496,80 @@ impl LoweringContext<'_> {
                     (callee_op, all_args)
                 } else {
                     // Package function reference: baml.Array.length(array) — no self prepend
+                    let callee_op = self.lower_to_operand(callee);
+                    let arg_ops: Vec<Operand> =
+                        args.iter().map(|&a| self.lower_to_operand(a)).collect();
+                    (callee_op, arg_ops)
+                }
+            } else {
+                let callee_op = self.lower_to_operand(callee);
+                let arg_ops: Vec<Operand> =
+                    args.iter().map(|&a| self.lower_to_operand(a)).collect();
+                (callee_op, arg_ops)
+            }
+        } else if let AstExpr::Path(segments) = &callee_expr {
+            // Check path_member_resolutions first (local-rooted paths like `self.method()`
+            // or `obj.field.method()`). The last resolution determines if the final segment
+            // is a method call (e.g. for `user.profile.items.slice`, resolutions are
+            // [Field{profile}, Field{items}, Method{slice}] — last() is Method).
+            let is_local_method = segments.len() >= 2
+                && self
+                    .path_member_resolutions
+                    .get(&(self.current_scope, callee))
+                    .and_then(|resolutions| resolutions.last())
+                    .is_some_and(|r| {
+                        use baml_compiler2_tir::inference::MemberResolution;
+                        matches!(r, MemberResolution::Method { .. })
+                    });
+            // Also check flat resolutions (package-path method call, kept for compatibility).
+            let is_pkg_method = !is_local_method
+                && segments.len() >= 2
+                && self
+                    .resolutions
+                    .get(&(self.current_scope, callee))
+                    .is_some_and(|r| {
+                        use baml_compiler2_tir::inference::MemberResolution;
+                        matches!(r, MemberResolution::Method { .. })
+                    });
+
+            if is_local_method {
+                // Multi-segment path callee with a local-rooted Method resolution.
+                // The last segment is the method; segments[0..n-1] form the receiver.
+                // e.g. `self.method()` → receiver=self, `user.profile.items.slice()` → receiver=user.profile.items.
+                let receiver_segments = &segments[..segments.len() - 1];
+                let callee_op = self.lower_to_operand(callee);
+                let receiver_op = if receiver_segments.len() == 1 {
+                    // Simple local variable receiver (e.g. `self`).
+                    if let Some(&recv_local) = self.locals.get(&receiver_segments[0]) {
+                        Operand::Copy(Place::Local(recv_local))
+                    } else {
+                        Operand::Constant(Constant::Null)
+                    }
+                } else {
+                    // Multi-segment receiver (e.g. `user.profile.items`): lower as field chain.
+                    let recv_ty = self.expr_ty(callee); // approximation; actual type not critical here
+                    let recv_local = self.builder.temp(recv_ty);
+                    self.lower_multi_segment_path_as_field_chain(
+                        callee,
+                        receiver_segments,
+                        Place::local(recv_local),
+                    );
+                    Operand::Copy(Place::local(recv_local))
+                };
+                let mut all_args = vec![receiver_op];
+                all_args.extend(args.iter().map(|&a| self.lower_to_operand(a)));
+                (callee_op, all_args)
+            } else if is_pkg_method {
+                // Package-path method call (via flat resolutions): same treatment.
+                let first_seg = &segments[0];
+                let receiver_local = self.locals.get(first_seg).copied();
+                if let Some(receiver_local) = receiver_local {
+                    let receiver_op = Operand::Copy(Place::Local(receiver_local));
+                    let callee_op = self.lower_to_operand(callee);
+                    let mut all_args = vec![receiver_op];
+                    all_args.extend(args.iter().map(|&a| self.lower_to_operand(a)));
+                    (callee_op, all_args)
+                } else {
                     let callee_op = self.lower_to_operand(callee);
                     let arg_ops: Vec<Operand> =
                         args.iter().map(|&a| self.lower_to_operand(a)).collect();
@@ -2323,15 +2673,32 @@ impl LoweringContext<'_> {
                     _ => None,
                 }
             } else {
-                // Multi-segment: check TIR resolution
+                // Multi-segment: check path_member_resolutions first (local-rooted paths
+                // like `file.read_string`), then fall back to flat resolutions (package paths).
+                // The last resolution in path_member_resolutions is the final-segment resolution.
                 use baml_compiler2_tir::inference::MemberResolution;
-                self.resolutions
+                let from_pmr = self
+                    .path_member_resolutions
                     .get(&(self.current_scope, callee))
+                    .and_then(|resolutions| resolutions.last())
                     .and_then(|res| match res {
                         MemberResolution::Free { func_loc } => Some(*func_loc),
                         MemberResolution::Method { func_loc, .. } => Some(*func_loc),
                         MemberResolution::Field { .. } | MemberResolution::Variant { .. } => None,
-                    })
+                    });
+                if from_pmr.is_some() {
+                    from_pmr
+                } else {
+                    self.resolutions
+                        .get(&(self.current_scope, callee))
+                        .and_then(|res| match res {
+                            MemberResolution::Free { func_loc } => Some(*func_loc),
+                            MemberResolution::Method { func_loc, .. } => Some(*func_loc),
+                            MemberResolution::Field { .. } | MemberResolution::Variant { .. } => {
+                                None
+                            }
+                        })
+                }
             };
             if let Some(fl) = func_loc {
                 let body = baml_compiler2_ppir::function_body(self.db, fl);
@@ -2341,8 +2708,8 @@ impl LoweringContext<'_> {
             }
         }
 
-        // ── NEW: FieldAccess callee (e.g. f.read, sock.recv) ──────────────────
-        if let AstExpr::FieldAccess { .. } = &self.body.exprs[callee] {
+        // ── NEW: MemberAccess callee (e.g. f.read, sock.recv) ──────────────────
+        if let AstExpr::MemberAccess { .. } = &self.body.exprs[callee] {
             use baml_compiler2_tir::inference::MemberResolution;
             if let Some(resolution) = self.resolutions.get(&(self.current_scope, callee)) {
                 let func_loc = match resolution {
@@ -2587,7 +2954,7 @@ impl LoweringContext<'_> {
         }
     }
 
-    fn lower_field_access(
+    fn lower_member_access(
         &mut self,
         expr_id: AstExprId,
         base: AstExprId,
@@ -2667,7 +3034,7 @@ impl LoweringContext<'_> {
         let base_op = self.lower_to_operand(base);
         let field_str = field.to_string();
 
-        // Unwrap Optional — when called from lower_optional_field_access,
+        // Unwrap Optional — when called from lower_optional_member_access,
         // the base type is T? but we've already null-checked, so use the inner type.
         let unwrapped_ty = match &base_ty {
             Ty::Optional(inner, _) => inner.as_ref(),
@@ -3253,14 +3620,78 @@ impl LoweringContext<'_> {
                     Place::Local(temp)
                 }
             }
-            AstExpr::FieldAccess { base, field } => {
+            AstExpr::Path(segments) if segments.len() >= 2 => {
+                // Multi-segment path lvalue: `a.b` or `a.b.c`.
+                // Chain field projections from the root local or capture.
+                let (mut current_place, mut current_ty) =
+                    if let Some(&l) = self.locals.get(&segments[0]) {
+                        let ty = self
+                            .path_root_ty(expr_id)
+                            .unwrap_or_else(|| self.builder.local_ty(l));
+                        (Place::Local(l), ty)
+                    } else if let Some(cap_idx) = self
+                        .capture_indices
+                        .as_ref()
+                        .and_then(|m| m.get(&segments[0]))
+                        .copied()
+                    {
+                        let ty = self
+                            .path_root_ty(expr_id)
+                            .unwrap_or_else(|| Ty::BuiltinUnknown {
+                                attr: TyAttr::default(),
+                            });
+                        (Place::Capture(cap_idx), ty)
+                    } else {
+                        let tmp = self.builder.temp(Ty::Null {
+                            attr: TyAttr::default(),
+                        });
+                        (
+                            Place::Local(tmp),
+                            Ty::Null {
+                                attr: TyAttr::default(),
+                            },
+                        )
+                    };
+
+                for seg in &segments[1..] {
+                    if let Ty::Class(ref tn, _) = current_ty.clone() {
+                        if let Some(fields) = self.class_fields.get(tn) {
+                            if let Some(&idx) = fields.get(seg.as_str()) {
+                                let next_ty = self.class_field_ty(tn, seg);
+                                current_place = Place::Field {
+                                    base: Box::new(current_place),
+                                    field: idx,
+                                };
+                                current_ty = next_ty;
+                                continue;
+                            }
+                        }
+                    }
+                    // Dynamic map fallback for non-class base or unknown field
+                    let key_local = self.builder.temp(Ty::String {
+                        attr: TyAttr::default(),
+                    });
+                    self.builder.assign(
+                        Place::local(key_local),
+                        Rvalue::Use(Operand::Constant(Constant::String(seg.to_string()))),
+                    );
+                    current_place = Place::Index {
+                        base: Box::new(current_place),
+                        index: key_local,
+                        kind: IndexKind::Map,
+                    };
+                    break;
+                }
+                current_place
+            }
+            AstExpr::MemberAccess { base, member } => {
                 let base_id = *base;
-                let field_name = field.clone();
+                let member_name = member.clone();
                 let base_place = self.lower_lvalue(base_id);
                 let base_ty = self.expr_ty(base_id);
                 if let Ty::Class(ref tn, _) = base_ty {
                     if let Some(fields) = self.class_fields.get(tn) {
-                        if let Some(&idx) = fields.get(field_name.as_str()) {
+                        if let Some(&idx) = fields.get(member_name.as_str()) {
                             return Place::Field {
                                 base: Box::new(base_place),
                                 field: idx,
@@ -3269,10 +3700,10 @@ impl LoweringContext<'_> {
                     }
                     self.emit_panic_call(
                         &format!(
-                            "internal compiler error: MIR failed to resolve field access \
+                            "internal compiler error: MIR failed to resolve member access \
                              .{} against class definition '{}' (module_path: {:?}). \
                              This class should be in class_fields but isn't.",
-                            field_name, tn.name, tn.module_path,
+                            member_name, tn.name, tn.module_path,
                         ),
                         base_id,
                     );
@@ -3288,7 +3719,7 @@ impl LoweringContext<'_> {
                 });
                 self.builder.assign(
                     Place::local(key_local),
-                    Rvalue::Use(Operand::Constant(Constant::String(field_name.to_string()))),
+                    Rvalue::Use(Operand::Constant(Constant::String(member_name.to_string()))),
                 );
                 Place::Index {
                     base: Box::new(base_place),
@@ -3319,9 +3750,9 @@ impl LoweringContext<'_> {
                     kind,
                 }
             }
-            AstExpr::OptionalFieldAccess { base, field } => {
+            AstExpr::OptionalMemberAccess { base, member } => {
                 let base_id = *base;
-                let field_name = field.clone();
+                let member_name = member.clone();
 
                 // Evaluate base once into a temp local
                 let base_op = self.lower_to_operand(base_id);
@@ -3343,7 +3774,7 @@ impl LoweringContext<'_> {
                 let bb_null = *self
                     .chain_null_exits
                     .last()
-                    .expect("OptionalFieldAccess in lvalue must be inside OptionalChain");
+                    .expect("OptionalMemberAccess in lvalue must be inside OptionalChain");
                 self.builder.branch(
                     Operand::Copy(Place::Local(test_local)),
                     bb_null,
@@ -3352,7 +3783,7 @@ impl LoweringContext<'_> {
 
                 self.builder.set_current_block(bb_continue);
 
-                // Project field from the same temp local — no second evaluation
+                // Project member from the same temp local — no second evaluation
                 let base_place = Place::Local(base_local);
                 // Unwrap Optional — we've already null-checked, so use the inner type.
                 let unwrapped_ty = match &base_ty {
@@ -3361,7 +3792,7 @@ impl LoweringContext<'_> {
                 };
                 if let Ty::Class(tn, _) = unwrapped_ty {
                     if let Some(fields) = self.class_fields.get(tn) {
-                        if let Some(&idx) = fields.get(field_name.as_str()) {
+                        if let Some(&idx) = fields.get(member_name.as_str()) {
                             return Place::Field {
                                 base: Box::new(base_place),
                                 field: idx,
@@ -3375,7 +3806,7 @@ impl LoweringContext<'_> {
                 });
                 self.builder.assign(
                     Place::local(key_local),
-                    Rvalue::Use(Operand::Constant(Constant::String(field_name.to_string()))),
+                    Rvalue::Use(Operand::Constant(Constant::String(member_name.to_string()))),
                 );
                 Place::Index {
                     base: Box::new(base_place),

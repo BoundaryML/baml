@@ -237,11 +237,11 @@ pub(crate) mod support {
                 let tail = if tail_expr.is_some() { " + tail" } else { "" };
                 format!("{{ {} stmts{tail} }}", stmts.len())
             }
-            Expr::FieldAccess { base, field } => {
-                format!("{}.{field}", expr_desc(*base, body))
+            Expr::MemberAccess { base, member } => {
+                format!("{}.{member}", expr_desc(*base, body))
             }
-            Expr::OptionalFieldAccess { base, field } => {
-                format!("{}?.{field}", expr_desc(*base, body))
+            Expr::OptionalMemberAccess { base, member } => {
+                format!("{}?.{member}", expr_desc(*base, body))
             }
             Expr::Index { base, index } => {
                 format!("{}[{}]", expr_desc(*base, body), expr_desc(*index, body))
@@ -1427,15 +1427,15 @@ pub(crate) mod support {
                         .unwrap_or_default();
                     format!("{{ {} }}{tail}", stmt_strs.join("; "))
                 }
-                Expr::FieldAccess { base, field } => {
+                Expr::MemberAccess { base, member } => {
                     format!(
-                        "{}.{field}",
+                        "{}.{member}",
                         expr_desc_hir(*base, body, prefix, local_type_names)
                     )
                 }
-                Expr::OptionalFieldAccess { base, field } => {
+                Expr::OptionalMemberAccess { base, member } => {
                     format!(
-                        "{}?.{field}",
+                        "{}?.{member}",
                         expr_desc_hir(*base, body, prefix, local_type_names)
                     )
                 }

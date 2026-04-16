@@ -422,6 +422,7 @@ fn body_stmt_to_pat_id(
     let FunctionBody::Expr(expr_body) = body else {
         return None;
     };
+
     let stmt = &expr_body.stmts[stmt_id];
     match stmt {
         baml_compiler2_ast::Stmt::Let { pattern, .. } => Some(*pattern),

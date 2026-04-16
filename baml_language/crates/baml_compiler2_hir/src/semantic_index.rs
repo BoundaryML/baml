@@ -10,6 +10,30 @@ use baml_base::Name;
 use baml_compiler2_ast::{ExprId, LoweringDiagnostic, PatId, StmtId};
 use text_size::{TextRange, TextSize};
 
+// ── PathResolution ────────────────────────────────────────────────────────────
+
+/// Scope-level resolution of a multi-segment `Path` expression's root segment.
+///
+/// Produced during HIR scope building for `Path` nodes with ≥ 2 segments.
+/// Only distinguishes whether the root is a locally-declared variable/param
+/// (in which case segments[1..] are field accesses on the local) or not
+/// (in which case the path is a package-qualified name, to be resolved by TIR).
+///
+/// Note: Package-item resolution requires cross-file `package_items` queries
+/// that are not available during HIR building (would create a circular
+/// dependency: `file_semantic_index` → `package_items` → `file_semantic_index`).
+/// Full resolution (namespace vs package-item vs unknown) is done in TIR.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PathResolution {
+    /// Root segment is a local variable, parameter, or capture in the current scope.
+    /// Segments[1..] are field/method accesses on the local, resolved by TIR type
+    /// checking.
+    Local { name: Name },
+    /// Root segment is not a known local. May be a package name, namespace
+    /// shorthand, or truly unresolved — TIR determines which.
+    Unknown,
+}
+
 use crate::{
     contributions::FileSymbolContributions,
     diagnostic::Hir2Diagnostic,
@@ -120,6 +144,16 @@ pub struct FileSemanticIndex<'db> {
     /// Diagnostics and other rare data. Heap-allocated only when non-empty,
     /// following Ty's `Option<Box<Extra>>` pattern.
     pub extra: Option<Box<SemanticIndexExtra>>,
+
+    /// Root-segment resolution for multi-segment `Path` expressions.
+    ///
+    /// For each `Path` with ≥ 2 segments, records whether the root is a local
+    /// variable/parameter (`PathResolution::Local`) or not
+    /// (`PathResolution::Unknown`). Sorted by `ExprId` for binary-search lookup.
+    ///
+    /// Package-item resolution (namespace, split point) is deferred to TIR
+    /// since it requires cross-file `package_items` queries.
+    pub path_resolutions: Vec<(ExprId, PathResolution)>,
 }
 
 // ── salsa::Update impl ────────────────────────────────────────────────────────
@@ -228,5 +262,16 @@ impl FileSemanticIndex<'_> {
             .as_ref()
             .map(|e| e.diagnostics.as_slice())
             .unwrap_or(&[])
+    }
+
+    /// Look up the path resolution for a multi-segment `Path` expression.
+    ///
+    /// Returns `None` if `expr_id` was not a multi-segment path (i.e., single-
+    /// segment paths and non-path expressions are not recorded here).
+    pub fn path_resolution(&self, expr_id: ExprId) -> Option<&PathResolution> {
+        self.path_resolutions
+            .binary_search_by_key(&expr_id, |(id, _)| *id)
+            .ok()
+            .map(|idx| &self.path_resolutions[idx].1)
     }
 }

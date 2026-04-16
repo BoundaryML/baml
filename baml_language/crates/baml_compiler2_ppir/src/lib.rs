@@ -576,6 +576,19 @@ pub fn scope_bindings_query<'db>(db: &'db dyn Db, scope_id: ScopeId<'db>) -> Sco
     index.scope_bindings[local_id.index() as usize].clone()
 }
 
+/// Returns the scope-level `PathResolution` for a multi-segment `Path` expression.
+///
+/// Uses the canonical (PPIR) semantic index, which includes *$stream synthetic items.
+/// Returns `None` if `expr_id` was not recorded as a multi-segment path.
+pub fn path_resolution_query(
+    db: &dyn Db,
+    file: baml_base::SourceFile,
+    expr_id: baml_compiler2_ast::ExprId,
+) -> Option<baml_compiler2_hir::PathResolution> {
+    let index = file_semantic_index(db, file);
+    index.path_resolution(expr_id).cloned()
+}
+
 /// Canonical namespace items (original + *$stream types).
 #[salsa::tracked(returns(ref))]
 pub fn namespace_items<'db>(

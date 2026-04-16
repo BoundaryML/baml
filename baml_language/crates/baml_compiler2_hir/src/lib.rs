@@ -30,6 +30,7 @@ use std::sync::Arc;
 
 use baml_base::SourceFile;
 pub use builder::SemanticIndexBuilder;
+pub use semantic_index::PathResolution;
 
 use crate::{
     contributions::FileSymbolContributions,
@@ -152,4 +153,18 @@ pub fn scope_bindings_query<'db>(
     let index = file_semantic_index(db, file);
     let local_id = scope_id.file_scope_id(db);
     index.scope_bindings[local_id.index() as usize].clone()
+}
+
+/// Returns the scope-level `PathResolution` for a multi-segment `Path` expression.
+///
+/// Not tracked — callers should use the cached `file_semantic_index` result.
+/// Returns `None` if `expr_id` was not recorded (i.e., single-segment paths
+/// or non-path expressions).
+pub fn path_resolution_query(
+    db: &dyn Db,
+    file: baml_base::SourceFile,
+    expr_id: baml_compiler2_ast::ExprId,
+) -> Option<PathResolution> {
+    let index = file_semantic_index(db, file);
+    index.path_resolution(expr_id).cloned()
 }

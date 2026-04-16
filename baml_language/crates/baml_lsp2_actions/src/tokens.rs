@@ -627,8 +627,8 @@ fn ty_to_token_type(ty: &Ty) -> Option<SemanticTokenType> {
 /// - `Expr::Path(names)` — single-segment path; `expr_span` is exactly the
 ///   identifier's range. Ty from `ScopeInference::expression_type`.
 ///
-/// - `Expr::FieldAccess { field, .. }` — `expr_span` covers `base.field`.
-///   We extract just the field name by text-scanning the tail of the span.
+/// - `Expr::MemberAccess { member, .. }` — `expr_span` covers `base.member`.
+///   We extract just the member name by text-scanning the tail of the span.
 ///
 /// - `Expr::Object { type_name, fields, .. }` — the constructor name is
 ///   inside the `expr_span`; extracted via text search. Field names are
@@ -648,23 +648,49 @@ fn build_resolution_map(
     for (expr_id, expr) in expr_body.exprs.iter() {
         match expr {
             Expr::Path(names) if !names.is_empty() => {
-                // Single-segment path after AST lowering; multi-segment paths
-                // were desugared to FieldAccess chains. The expr_span is the
-                // identifier's own range.
-                let span = source_map.expr_span(expr_id);
-                if span.is_empty() {
-                    continue;
-                }
-                // Only classify if we have a type for this expression.
-                if let Some(ty) = inference.expression_type(expr_id) {
-                    if let Some(token_type) = ty_to_token_type(ty) {
-                        map.insert(span, token_type);
+                if names.len() == 1 {
+                    // Single-segment path: the expr_span is exactly the identifier range.
+                    let span = source_map.expr_span(expr_id);
+                    if span.is_empty() {
+                        continue;
+                    }
+                    // Only classify if we have a type for this expression.
+                    if let Some(ty) = inference.expression_type(expr_id) {
+                        if let Some(token_type) = ty_to_token_type(ty) {
+                            map.insert(span, token_type);
+                        }
+                    }
+                } else {
+                    // Multi-segment path (e.g. `Status.Active`, `obj.field`, `env.get`).
+                    // Intermediate segments (between root and last) are Property.
+                    // The final segment gets a type-aware classification from the
+                    // expression type (e.g. EnumMember for `Status.Active`).
+                    if let Some(seg_spans) = source_map.path_segment_spans.get(&expr_id) {
+                        let last_idx = seg_spans.len().saturating_sub(1);
+                        for (i, span) in seg_spans.iter().enumerate().skip(1) {
+                            if i == last_idx {
+                                continue;
+                            }
+                            if !span.is_empty() {
+                                map.insert(*span, SemanticTokenType::Property);
+                            }
+                        }
+                        // Final segment → type-aware classification
+                        if let Some(final_span) = seg_spans.last() {
+                            if !final_span.is_empty() {
+                                let token_type = inference
+                                    .expression_type(expr_id)
+                                    .and_then(ty_to_token_type)
+                                    .unwrap_or(SemanticTokenType::Property);
+                                map.insert(*final_span, token_type);
+                            }
+                        }
                     }
                 }
             }
 
-            Expr::FieldAccess { field, .. } => {
-                // expr_span covers `base.field` — extract only the field name.
+            Expr::MemberAccess { member, .. } => {
+                // expr_span covers `base.member` — extract only the member name.
                 let span = source_map.expr_span(expr_id);
                 if span.is_empty() {
                     continue;
@@ -675,22 +701,22 @@ fn build_resolution_map(
                     continue;
                 }
                 let text = &file_text[start..end];
-                let field_str = field.as_str();
-                // The field name is at the end of the span (after the last dot).
-                if let Some(offset) = text.rfind(field_str) {
+                let member_str = member.as_str();
+                // The member name is at the end of the span (after the last dot).
+                if let Some(offset) = text.rfind(member_str) {
                     // Verify the character before is a dot (avoids substring false matches).
                     let dot_pos = if offset > 0 { offset - 1 } else { 0 };
                     if offset > 0 && text.as_bytes().get(dot_pos) != Some(&b'.') {
                         continue;
                     }
-                    let field_start = start + offset;
-                    let field_end = field_start + field_str.len();
-                    if field_start < field_end && field_end <= file_text.len() {
-                        let field_range = TextRange::new(
-                            field_start.try_into().unwrap_or_default(),
-                            field_end.try_into().unwrap_or_default(),
+                    let member_start = start + offset;
+                    let member_end = member_start + member_str.len();
+                    if member_start < member_end && member_end <= file_text.len() {
+                        let member_range = TextRange::new(
+                            member_start.try_into().unwrap_or_default(),
+                            member_end.try_into().unwrap_or_default(),
                         );
-                        map.insert(field_range, SemanticTokenType::Property);
+                        map.insert(member_range, SemanticTokenType::Property);
                     }
                 }
             }
