@@ -1271,8 +1271,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                     );
                 }
 
-                // Container mutation fast path (e.g. x.push(val) on EvolvingList)
-                if matches!(&body.exprs[*callee], Expr::MemberAccess { .. })
+                // Container mutation fast path (e.g. x.push(val) on EvolvingList).
+                // Matches MemberAccess and 2-segment Path (multi-segment paths).
+                if Self::is_method_like_callee(&body.exprs[*callee])
                     && let Some(result_ty) = self.try_container_method_call(*callee, args, body)
                 {
                     self.report_result_type_mismatch(expr_id, &result_ty, expected);
@@ -4739,6 +4740,16 @@ impl<'db> TypeInferenceBuilder<'db> {
 
     /// Extract the local variable name from an expression, if it's a simple
     /// single-segment path that refers to a known local.
+    /// Check if a callee expression looks like a method call (`MemberAccess` or
+    /// 2-segment `Path` like `["x", "push"]`).
+    fn is_method_like_callee(callee: &Expr) -> bool {
+        match callee {
+            Expr::MemberAccess { .. } => true,
+            Expr::Path(segs) if segs.len() == 2 => true,
+            _ => false,
+        }
+    }
+
     fn expr_local_name(&self, expr_id: ExprId, body: &ExprBody) -> Option<Name> {
         match &body.exprs[expr_id] {
             Expr::Path(segments) if segments.len() == 1 => {
@@ -4775,8 +4786,9 @@ impl<'db> TypeInferenceBuilder<'db> {
         args: &[ExprId],
         body: &ExprBody,
     ) -> Option<Ty> {
-        // After AST lowering, method calls are always MemberAccess:
-        //   x.push(val) → Call { callee: MemberAccess { base: Path(["x"]), member: "push" }, ... }
+        // After AST lowering, mutating container calls arrive through either a
+        // MemberAccess (`x.push(...)`), an OptionalMemberAccess (`x?.push(...)`),
+        // or a 2-segment Path (`["x", "push"]`) when multi-segment paths are preserved.
         let (base_id, local_name, method_name) = match &body.exprs[callee_id] {
             Expr::MemberAccess { base, member } => {
                 let name = self.expr_local_name(*base, body)?;
@@ -4785,6 +4797,13 @@ impl<'db> TypeInferenceBuilder<'db> {
             Expr::OptionalMemberAccess { base, member } => {
                 let name = self.expr_local_name(*base, body)?;
                 (*base, name, member.clone())
+            }
+            Expr::Path(segments) if segments.len() == 2 => {
+                let receiver = &segments[0];
+                if !self.locals.contains_key(receiver) {
+                    return None;
+                }
+                (callee_id, receiver.clone(), segments[1].clone())
             }
             _ => return None,
         };

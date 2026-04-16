@@ -781,13 +781,12 @@ function f() -> null {
     insta::assert_snapshot!(render_tir(&db, file), @r#"
     function user.f() -> null throws never {
       { : never
-        let xs = [] : never[] -> _[]
+        let xs = [] : never[] -> string[] (evolving)
         xs?.push?.(1) : int?
         xs.push("a") : int
         return null : null
       }
       !! 44..52: did you mean `xs.push`? `xs?.push` is unnecessary, because `xs` cannot be null
-      !! 70..73: type mismatch: expected never, got "a"
     }
     "#);
 }
@@ -815,7 +814,7 @@ function f() -> null {
         return null : null
       }
       !! 44..52: did you mean `xs.push`? `xs?.push` is unnecessary, because `xs` cannot be null
-      !! 68..71: type mismatch: expected int, got "a"
+      !! 68..71: type mismatch: expected int, got string
     }
     "#);
 }
@@ -865,11 +864,10 @@ function f() -> null {
     }
     function user.f() -> null throws never {
       { : never
-        let callbacks = [] : never[] -> _[]
+        let callbacks = [] : never[] -> (() -> int)[] (evolving)
         callbacks.push(cb) : int
         return null : null
       }
-      !! 105..107: type mismatch: expected never, got () -> int
     }
     ");
 }

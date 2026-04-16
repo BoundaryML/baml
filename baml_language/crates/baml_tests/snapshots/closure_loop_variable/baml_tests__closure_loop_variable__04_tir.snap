@@ -5,7 +5,7 @@ source: crates/baml_tests/src/generated_tests.rs
 function user.sum_array(arr: int[]) -> int throws never {
   { : int
     let sum = 0 : 0 -> int
-    let total = [] : never[] -> _[]
+    let total = [] : never[] -> (() -> void)[] (evolving)
     for i in arr
       { : int
         total.push(() -> { ... }) : int
@@ -16,12 +16,10 @@ function user.sum_array(arr: int[]) -> int throws never {
       }
     for cb in total
       { : void
-        cb() : unknown
+        cb() : void
       }
     sum : int
   }
-  !! 121..156: type mismatch: expected never, got () -> void
-  !! 200..204: `never` is not a function — it cannot be called
 }
 lambda user.sum_array {
 }
