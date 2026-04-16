@@ -5,12 +5,11 @@ use std::{collections::BTreeMap, path::PathBuf, sync::Arc};
 use anyhow::{Context, Result, anyhow};
 use baml_db::{baml_compiler_diagnostics::Severity, baml_compiler2_emit};
 use baml_project::ProjectDatabase;
-use baml_workspace::discover_baml_files;
 use bex_engine::{BexEngine, BexExternalValue, FunctionCallContextBuilder, test_arg_to_external};
 use clap::Args;
 use sys_native::{CallId, SysOpsExt};
 
-use crate::test_filter::TestFilter;
+use crate::{project_load::load_project_from, test_filter::TestFilter};
 
 #[derive(Args, Clone, Debug)]
 pub struct TestArgs {
@@ -51,23 +50,14 @@ struct DiscoveredTest {
 
 impl TestArgs {
     pub fn run(&self) -> Result<crate::ExitCode> {
-        let from = std::fs::canonicalize(&self.from)
-            .with_context(|| format!("Could not resolve baml_src path: {}", self.from.display()))?;
-
-        // Set up the compiler database and load all .baml files.
-        let mut db = ProjectDatabase::new();
-        let project = db.set_project_root(&from);
-        let baml_files = discover_baml_files(&from);
+        let (db, from, baml_files) = load_project_from(&self.from)?;
         if baml_files.is_empty() {
             eprintln!("No .baml files found in {}", from.display());
             return Ok(crate::ExitCode::NoTestsRun);
         }
-
-        for file_path in &baml_files {
-            let content = std::fs::read_to_string(file_path)
-                .with_context(|| format!("Failed to read {}", file_path.display()))?;
-            db.add_or_update_file(file_path, &content);
-        }
+        let project = db
+            .get_project()
+            .ok_or_else(|| anyhow!("No project context"))?;
 
         // Discover all (function, test) pairs from the HIR.
         let discovered = discover_tests(&db, project);

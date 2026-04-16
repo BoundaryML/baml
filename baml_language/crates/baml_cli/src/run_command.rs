@@ -15,6 +15,8 @@ use bex_engine::{BexEngine, BexExternalValue, FunctionCallContextBuilder, Ty, Us
 use clap::Args;
 use sys_native::{CallId, SysOpsExt};
 
+use crate::project_load::load_project_from;
+
 // ============================================================================
 // Script expansion types
 // ============================================================================
@@ -153,24 +155,77 @@ pub enum OutputFormat {
 // ============================================================================
 
 impl RunArgs {
+    /// Print a `[verbose]`-prefixed line when `--verbose` is set; no-op otherwise.
+    fn vlog(&self, args: std::fmt::Arguments<'_>) {
+        if self.verbose {
+            eprintln!("[verbose] {args}");
+        }
+    }
+
+    /// Collect diagnostics on `db` and bail with `bail_context` if any are errors.
+    /// Warnings are surfaced only in verbose mode.
+    fn check_project_diagnostics(&self, db: &ProjectDatabase, bail_context: &str) -> Result<()> {
+        let project = db
+            .get_project()
+            .ok_or_else(|| anyhow!("No project context"))?;
+        let source_files = db.get_source_files();
+        let diagnostics = baml_project::collect_diagnostics(db, project, &source_files);
+        let mut error_count = 0;
+        for diag in &diagnostics {
+            match diag.severity {
+                Severity::Warning => self.vlog(format_args!("warning: {}", diag.message)),
+                Severity::Error => {
+                    if error_count == 0 {
+                        eprintln!("Compilation errors:");
+                    }
+                    error_count += 1;
+                    eprintln!("  error: {}", diag.message);
+                }
+                _ => {}
+            }
+        }
+        if error_count > 0 {
+            anyhow::bail!("{bail_context}");
+        }
+        Ok(())
+    }
+
+    /// Compile `db` to bytecode and build a `BexEngine`.
+    fn compile_to_engine(
+        &self,
+        db: &ProjectDatabase,
+        event_sink: Option<Arc<dyn bex_events::EventSink>>,
+        argv: Vec<String>,
+    ) -> Result<BexEngine> {
+        let bytecode = baml_compiler2_emit::generate_project_bytecode(
+            db,
+            &baml_compiler2_emit::CompileOptions {
+                emit_test_cases: false,
+            },
+        )
+        .map_err(|e| anyhow!("Compilation failed: {e:?}"))?;
+        BexEngine::new(
+            bytecode,
+            Arc::new(sys_native::SysOps::native()),
+            event_sink,
+            argv,
+        )
+        .map_err(|e| anyhow!("Failed to create engine: {e:?}"))
+    }
+
     pub fn run(&self) -> Result<crate::ExitCode> {
-        // Set up event sink for --log-file.
         let event_sink: Option<Arc<dyn bex_events::EventSink>> =
             self.log_file.as_ref().map(|path| {
-                if self.verbose {
-                    eprintln!("[verbose] Writing logs to {}", path.display());
-                }
+                self.vlog(format_args!("Writing logs to {}", path.display()));
                 bex_events_native::start(path.clone())
             });
 
-        // Expression mode: -e '<expr>'
         if let Some(expr_source) = &self.expression {
             return self.run_expression(expr_source, event_sink);
         }
 
         let argv = self.build_argv();
 
-        // Detect hermetic standalone file mode: target ends in .baml.
         let (db, engine) = if self.target.as_ref().is_some_and(|t| t.ends_with(".baml")) {
             self.load_and_compile_standalone(
                 self.target.as_ref().unwrap(),
@@ -186,10 +241,8 @@ impl RunArgs {
             return self.run_list(&engine);
         }
 
-        // Resolve which function to call.
         let resolved = self.resolve_target(&engine)?;
 
-        // For scripts, merge script args with CLI args.
         let (function_name, effective_target_args) = match resolved {
             ResolvedTarget::Function(name) => (name, self.target_args.clone()),
             ResolvedTarget::Script(expansion) => {
@@ -197,41 +250,34 @@ impl RunArgs {
                 if !engine.function_exists(&func) {
                     return Err(self.function_not_found_error(&engine, &func));
                 }
-                // Script args come first, CLI args (after --) override/append.
+                // Script args come first so CLI args (after `--`) can override them.
                 let mut merged_args = expansion.extra_args;
                 merged_args.extend(self.target_args.iter().cloned());
                 (func, merged_args)
             }
         };
 
-        // Get function params for auto-CLI and arg building.
         let params = engine
             .function_params(&function_name)
             .map_err(|e| anyhow!("{e}"))?;
         let param_names: Vec<String> = params.iter().map(|(n, _)| (*n).to_string()).collect();
         let param_types: Vec<Ty> = params.iter().map(|(_, t)| (*t).clone()).collect();
 
-        // Per-target --help: only when --help is the sole arg and came from
-        // the user (not from forwarded extras after `--`). When --help appears
-        // alongside other target args it's a forwarded value, not a help request.
-        // Per BEP-027: "everything after `--` is forwarded to the function
-        // without being parsed against the signature."
+        // Per BEP-027, tokens after `--` are forwarded to the function verbatim,
+        // so `--help` alongside other args is a value, not a help request. Only
+        // treat it as help when it's the sole forwarded token.
         if effective_target_args.len() == 1 && effective_target_args[0] == "--help" {
             self.print_target_help(&function_name, &param_names, &param_types, &engine);
             return Ok(crate::ExitCode::Success);
         }
 
-        // Parse arguments (JSON + auto-CLI merge).
         let args = self.build_args_from(&effective_target_args, &param_names, &param_types)?;
 
-        if self.verbose {
-            eprintln!(
-                "[verbose] Calling {function_name} with {} arg(s)",
-                args.len()
-            );
-        }
+        self.vlog(format_args!(
+            "Calling {function_name} with {} arg(s)",
+            args.len()
+        ));
 
-        // Execute the function.
         let rt = tokio::runtime::Runtime::new().context("Failed to create tokio runtime")?;
         let engine = Arc::new(engine);
         let start = std::time::Instant::now();
@@ -242,11 +288,8 @@ impl RunArgs {
             true,
         ));
 
-        if self.verbose {
-            eprintln!("[verbose] Completed in {:.2?}", start.elapsed());
-        }
+        self.vlog(format_args!("Completed in {:.2?}", start.elapsed()));
 
-        // Flush event sink before printing result.
         if let Some(sink) = &event_sink {
             sink.flush();
         }
@@ -319,81 +362,20 @@ impl RunArgs {
         event_sink: Option<Arc<dyn bex_events::EventSink>>,
         argv: Vec<String>,
     ) -> Result<(ProjectDatabase, BexEngine)> {
-        let from = std::fs::canonicalize(&self.from)
-            .with_context(|| format!("Could not resolve project path: {}", self.from.display()))?;
-
-        if self.verbose {
-            eprintln!("[verbose] Loading project from {}", from.display());
-        }
-
-        // Set up the compiler database and load all .baml files.
-        let mut db = ProjectDatabase::new();
-        let project = db.set_project_root(&from);
-        let baml_files = discover_baml_files(&from);
+        let (db, from, baml_files) = load_project_from(&self.from)?;
+        self.vlog(format_args!("Loading project from {}", from.display()));
         if baml_files.is_empty() {
             anyhow::bail!("No .baml files found in {}", from.display());
         }
+        self.vlog(format_args!("Found {} .baml file(s)", baml_files.len()));
 
-        if self.verbose {
-            eprintln!("[verbose] Found {} .baml file(s)", baml_files.len());
-        }
-
-        for file_path in &baml_files {
-            let content = std::fs::read_to_string(file_path)
-                .with_context(|| format!("Failed to read {}", file_path.display()))?;
-            db.add_or_update_file(file_path, &content);
-        }
-
-        // Check for diagnostic errors.
-        let source_files = db.get_source_files();
-        let diagnostics = baml_project::collect_diagnostics(&db, project, &source_files);
-        let warnings: Vec<_> = diagnostics
-            .iter()
-            .filter(|d| d.severity == baml_db::baml_compiler_diagnostics::Severity::Warning)
-            .collect();
-        let errors: Vec<_> = diagnostics
-            .iter()
-            .filter(|d| d.severity == Severity::Error)
-            .collect();
-
-        if self.verbose && !warnings.is_empty() {
-            for diag in &warnings {
-                eprintln!("[verbose] warning: {}", diag.message);
-            }
-        }
-
-        if !errors.is_empty() {
-            eprintln!("Compilation errors ({}):", errors.len());
-            for diag in &errors {
-                eprintln!("  error: {}", diag.message);
-            }
-            anyhow::bail!("Cannot run: compilation errors found");
-        }
-
-        // Compile to bytecode.
-        if self.verbose {
-            eprintln!("[verbose] Compiling...");
-        }
-        let compile_options = baml_compiler2_emit::CompileOptions {
-            emit_test_cases: false,
-        };
-        let bytecode = baml_compiler2_emit::generate_project_bytecode(&db, &compile_options)
-            .map_err(|e| anyhow!("Compilation failed: {e:?}"))?;
-
-        // Create the engine.
-        let engine = BexEngine::new(
-            bytecode,
-            Arc::new(sys_native::SysOps::native()),
-            event_sink,
-            argv,
-        )
-        .map_err(|e| anyhow!("Failed to create engine: {e:?}"))?;
-
-        if self.verbose {
-            let funcs = engine.user_functions();
-            eprintln!("[verbose] Compiled {} user function(s)", funcs.len());
-        }
-
+        self.check_project_diagnostics(&db, "Cannot run: compilation errors found")?;
+        self.vlog(format_args!("Compiling..."));
+        let engine = self.compile_to_engine(&db, event_sink, argv)?;
+        self.vlog(format_args!(
+            "Compiled {} user function(s)",
+            engine.user_functions().len()
+        ));
         Ok((db, engine))
     }
 
@@ -407,64 +389,32 @@ impl RunArgs {
         event_sink: Option<Arc<dyn bex_events::EventSink>>,
         argv: Vec<String>,
     ) -> Result<(ProjectDatabase, BexEngine)> {
-        let path = std::path::Path::new(file_path);
-        let canonical =
-            std::fs::canonicalize(path).with_context(|| format!("File not found: {file_path}"))?;
-
-        if self.verbose {
-            eprintln!("[verbose] Standalone mode: loading {}", canonical.display());
-        }
+        let canonical = std::fs::canonicalize(Path::new(file_path))
+            .with_context(|| format!("File not found: {file_path}"))?;
+        self.vlog(format_args!(
+            "Standalone mode: loading {}",
+            canonical.display()
+        ));
 
         let content = std::fs::read_to_string(&canonical)
             .with_context(|| format!("Failed to read {}", canonical.display()))?;
 
-        // Use the file's parent directory as the project root (for relative path resolution).
-        let parent = canonical
-            .parent()
-            .unwrap_or_else(|| std::path::Path::new("."));
+        // Project root is the file's parent so relative imports resolve.
+        let parent = canonical.parent().unwrap_or_else(|| Path::new("."));
 
         let mut db = ProjectDatabase::new();
-        let project = db.set_project_root(parent);
+        db.set_project_root(parent);
         db.add_or_update_file(&canonical, &content);
 
-        // Check for diagnostic errors.
-        let source_files = db.get_source_files();
-        let diagnostics = baml_project::collect_diagnostics(&db, project, &source_files);
-        let errors: Vec<_> = diagnostics
-            .iter()
-            .filter(|d| d.severity == Severity::Error)
-            .collect();
-        if !errors.is_empty() {
-            eprintln!("Compilation errors ({}):", errors.len());
-            for diag in &errors {
-                eprintln!("  error: {}", diag.message);
-            }
-            anyhow::bail!("Cannot run: compilation errors in {file_path}");
-        }
-
-        // Compile to bytecode.
-        let compile_options = baml_compiler2_emit::CompileOptions {
-            emit_test_cases: false,
-        };
-        let bytecode = baml_compiler2_emit::generate_project_bytecode(&db, &compile_options)
-            .map_err(|e| anyhow!("Compilation failed: {e:?}"))?;
-
-        let engine = BexEngine::new(
-            bytecode,
-            Arc::new(sys_native::SysOps::native()),
-            event_sink,
-            argv,
-        )
-        .map_err(|e| anyhow!("Failed to create engine: {e:?}"))?;
-
-        if self.verbose {
-            let funcs = engine.user_functions();
-            eprintln!(
-                "[verbose] Compiled {} function(s) from standalone file",
-                funcs.len()
-            );
-        }
-
+        self.check_project_diagnostics(
+            &db,
+            &format!("Cannot run: compilation errors in {file_path}"),
+        )?;
+        let engine = self.compile_to_engine(&db, event_sink, argv)?;
+        self.vlog(format_args!(
+            "Compiled {} function(s) from standalone file",
+            engine.user_functions().len()
+        ));
         Ok((db, engine))
     }
 
@@ -481,24 +431,17 @@ impl RunArgs {
         source: &str,
         event_sink: Option<Arc<dyn bex_events::EventSink>>,
     ) -> Result<crate::ExitCode> {
-        // Load the expression source.
         let expr_body = load_expression_source(source)?;
+        self.vlog(format_args!(
+            "Expression mode: evaluating {} byte(s)",
+            expr_body.len()
+        ));
 
-        if self.verbose {
-            eprintln!(
-                "[verbose] Expression mode: evaluating {} byte(s)",
-                expr_body.len()
-            );
-        }
-
-        // Wrap in a synthetic function. Use `-> unknown` so any return type is accepted.
+        // `-> unknown` lets any return type through.
         let synthetic = format!("function baml_run_expr_main__() -> unknown {{\n{expr_body}\n}}");
 
-        // Expression mode uses a minimal project context.
-        // If --from points to a directory with a baml.toml or baml_src, load it.
-        // Otherwise, use a temp directory with just the synthetic file.
-        // The default --from is "." (cwd), which always exists. If the user
-        // explicitly passed a different path and it doesn't exist, that's an error.
+        // Default --from is "." (cwd) which always exists. If user passed an
+        // explicit path that can't be resolved, that's a hard error.
         let from = match std::fs::canonicalize(&self.from) {
             Ok(path) => Some(path),
             Err(_) if self.from == Path::new(".") => None,
@@ -506,16 +449,13 @@ impl RunArgs {
         };
 
         let mut db = ProjectDatabase::new();
-
-        // Check if there's an explicit project (baml.toml or baml_src directory).
         let has_explicit_project = from
             .as_ref()
             .is_some_and(|f| f.join("baml.toml").exists() || f.join("baml_src").exists());
 
         let project_root = if has_explicit_project {
             let root = from.as_ref().unwrap();
-            let project = db.set_project_root(root);
-            // Load only baml_src if it exists, not the whole directory.
+            db.set_project_root(root);
             let src_dir = if root.join("baml_src").exists() {
                 root.join("baml_src")
             } else {
@@ -527,61 +467,25 @@ impl RunArgs {
                     db.add_or_update_file(file_path, &content);
                 }
             }
-            if self.verbose {
-                eprintln!(
-                    "[verbose] Project context: loaded {} file(s)",
-                    baml_files.len()
-                );
-            }
-            let _ = project;
+            self.vlog(format_args!(
+                "Project context: loaded {} file(s)",
+                baml_files.len()
+            ));
             root.clone()
         } else {
-            // No project — use a temp directory.
             let tmp = std::env::temp_dir().join("baml_expr");
             std::fs::create_dir_all(&tmp).ok();
             db.set_project_root(&tmp);
-            if self.verbose {
-                eprintln!("[verbose] Project context: none (standalone expression)");
-            }
+            self.vlog(format_args!(
+                "Project context: none (standalone expression)"
+            ));
             tmp
         };
 
-        // Inject the synthetic expression file.
-        let synthetic_path = project_root.join("__expr__.baml");
-        db.add_or_update_file(&synthetic_path, &synthetic);
+        db.add_or_update_file(&project_root.join("__expr__.baml"), &synthetic);
 
-        // Check for diagnostic errors.
-        let source_files = db.get_source_files();
-        let project = db
-            .get_project()
-            .ok_or_else(|| anyhow!("No project context"))?;
-        let diagnostics = baml_project::collect_diagnostics(&db, project, &source_files);
-        let errors: Vec<_> = diagnostics
-            .iter()
-            .filter(|d| d.severity == Severity::Error)
-            .collect();
-        if !errors.is_empty() {
-            eprintln!("Expression errors ({}):", errors.len());
-            for diag in &errors {
-                eprintln!("  error: {}", diag.message);
-            }
-            anyhow::bail!("Cannot evaluate expression: compilation errors");
-        }
-
-        // Compile and run.
-        let compile_options = baml_compiler2_emit::CompileOptions {
-            emit_test_cases: false,
-        };
-        let bytecode = baml_compiler2_emit::generate_project_bytecode(&db, &compile_options)
-            .map_err(|e| anyhow!("Compilation failed: {e:?}"))?;
-
-        let engine = BexEngine::new(
-            bytecode,
-            Arc::new(sys_native::SysOps::native()),
-            event_sink.clone(),
-            self.build_argv(),
-        )
-        .map_err(|e| anyhow!("Failed to create engine: {e:?}"))?;
+        self.check_project_diagnostics(&db, "Cannot evaluate expression: compilation errors")?;
+        let engine = self.compile_to_engine(&db, event_sink.clone(), self.build_argv())?;
 
         let rt = tokio::runtime::Runtime::new().context("Failed to create tokio runtime")?;
         let engine = Arc::new(engine);
@@ -659,9 +563,9 @@ impl RunArgs {
                 // Check [scripts] in baml.toml.
                 let scripts = self.load_scripts();
                 if let Some(script_tokens) = scripts.get(target.as_str()) {
-                    if self.verbose {
-                        eprintln!("[verbose] Expanding script `{target}`: {script_tokens:?}");
-                    }
+                    self.vlog(format_args!(
+                        "Expanding script `{target}`: {script_tokens:?}"
+                    ));
                     return Ok(ResolvedTarget::Script(parse_script_body(script_tokens)?));
                 }
 
@@ -762,7 +666,6 @@ impl RunArgs {
         param_names: &[String],
         param_types: &[Ty],
     ) -> Result<Vec<BexExternalValue>> {
-        // Parse --json-args if present.
         let json_map = match &self.json_args {
             Some(source) => {
                 let json = load_json_source(source)?;
@@ -771,11 +674,9 @@ impl RunArgs {
                     .ok_or_else(|| anyhow!("--json-args must be a JSON object, got: {json}"))?;
                 let mut map = HashMap::new();
                 for (key, value) in obj {
-                    // If this key names a known parameter, coerce using its
-                    // declared type so enums/classes/lists/maps marshal
-                    // correctly. Unknown keys fall through to untyped
-                    // conversion (the caller emits an "unknown argument"
-                    // warning later).
+                    // Known keys coerce with their declared type so enums/classes/
+                    // lists/maps marshal correctly. Unknown keys fall through to
+                    // untyped conversion and are reported as "unknown argument".
                     let converted = match param_names.iter().position(|n| n == key) {
                         Some(idx) => json_to_external_with_ty(value, &param_types[idx])
                             .with_context(|| format!("--json-args: parameter `{key}`"))?,
@@ -788,16 +689,14 @@ impl RunArgs {
             None => HashMap::new(),
         };
 
-        // Parse auto-CLI flags from target_args (tokens after --).
         let cli_map = parse_auto_cli_args(target_args, param_names, param_types)?;
 
-        // Merge: CLI overrides JSON.
+        // CLI args override --json-args values.
         let mut merged = json_map;
         for (key, value) in cli_map {
             merged.insert(key, value);
         }
 
-        // Build ordered args matching function parameter order.
         let mut ordered = Vec::with_capacity(param_names.len());
         for (i, name) in param_names.iter().enumerate() {
             match merged.remove(name.as_str()) {
@@ -812,7 +711,6 @@ impl RunArgs {
             }
         }
 
-        // Warn about unknown args.
         if !merged.is_empty() {
             let unknown: Vec<&str> = merged.keys().map(String::as_str).collect();
             eprintln!(
@@ -848,7 +746,6 @@ impl RunArgs {
     fn print_list_debug(&self, functions: &[UserFunctionInfo]) {
         println!("Available targets:\n");
 
-        // Group by namespace prefix, sorting by (namespace, short_name).
         let mut grouped: std::collections::BTreeMap<String, Vec<&UserFunctionInfo>> =
             std::collections::BTreeMap::new();
         for func in functions {
@@ -931,11 +828,9 @@ impl RunArgs {
         param_types: &[Ty],
         engine: &BexEngine,
     ) {
-        // Display name: strip "user." prefix.
         let display = function_name.strip_prefix("user.").unwrap_or(function_name);
 
         let ret_type = engine.function_params(function_name).ok().and_then(|_| {
-            // Get return type from user_functions.
             engine
                 .user_functions()
                 .into_iter()
@@ -1019,7 +914,6 @@ fn parse_auto_cli_args(
     param_types: &[Ty],
 ) -> Result<HashMap<String, BexExternalValue>> {
     if tokens.is_empty() || param_names.is_empty() {
-        // No tokens to parse, or no params to bind.
         return Ok(HashMap::new());
     }
 
@@ -1036,40 +930,28 @@ fn parse_auto_cli_args(
     let mut i = 0;
     while i < tokens.len() {
         let token = &tokens[i];
-
         if !token.starts_with("--") {
             anyhow::bail!(
                 "Unexpected positional argument: `{token}`.\n\
                  Use `--param_name value` syntax for named arguments."
             );
         }
+        let raw = &token[2..];
 
-        let raw = &token[2..]; // strip leading "--"
-
-        // Handle --name=value syntax.
-        if let Some(eq_pos) = raw.find('=') {
-            let key = &raw[..eq_pos];
-            let val_str = &raw[eq_pos + 1..];
-
-            let param_idx = find_param_index(key, param_names)?;
-            let value = parse_cli_value(val_str, &param_types[param_idx])
-                .with_context(|| format!("Invalid value for `--{key}`: {val_str}"))?;
-            args.insert(key.to_string(), value);
+        let (key, val_str) = if let Some(eq_pos) = raw.find('=') {
+            (&raw[..eq_pos], &raw[eq_pos + 1..])
         } else {
-            // --name value (two tokens).
-            let key = raw;
-            let param_idx = find_param_index(key, param_names)?;
-
             i += 1;
             if i >= tokens.len() {
-                anyhow::bail!("Missing value for `--{key}`");
+                anyhow::bail!("Missing value for `--{raw}`");
             }
-            let val_str = &tokens[i];
-            let value = parse_cli_value(val_str, &param_types[param_idx])
-                .with_context(|| format!("Invalid value for `--{key}`: {val_str}"))?;
-            args.insert(key.to_string(), value);
-        }
+            (raw, tokens[i].as_str())
+        };
 
+        let param_idx = find_param_index(key, param_names)?;
+        let value = parse_cli_value(val_str, &param_types[param_idx])
+            .with_context(|| format!("Invalid value for `--{key}`: {val_str}"))?;
+        args.insert(key.to_string(), value);
         i += 1;
     }
 
@@ -1133,9 +1015,9 @@ fn parse_cli_value(raw: &str, ty: &Ty) -> Result<BexExternalValue> {
             variant_name: raw.to_string(),
         }),
 
-        // Complex types: user should use --json-args.
+        // Complex types accept inline JSON as a convenience; anything else must
+        // go through `--json-args`.
         Ty::Class(..) | Ty::Map { .. } | Ty::List(..) | Ty::Union(..) => {
-            // Try parsing as JSON as a convenience.
             match serde_json::from_str::<serde_json::Value>(raw) {
                 Ok(json) => json_to_external_with_ty(&json, ty),
                 Err(_) => anyhow::bail!(
@@ -1145,10 +1027,7 @@ fn parse_cli_value(raw: &str, ty: &Ty) -> Result<BexExternalValue> {
             }
         }
 
-        _ => {
-            // Fallback: try as string.
-            Ok(BexExternalValue::String(raw.to_string()))
-        }
+        _ => Ok(BexExternalValue::String(raw.to_string())),
     }
 }
 
@@ -1318,21 +1197,24 @@ fn json_to_external_with_ty(value: &serde_json::Value, ty: &Ty) -> Result<BexExt
             _ => anyhow::bail!("Expected object for map `{ty}`, got `{value}`"),
         },
 
-        Ty::Union(variants, _) => {
-            // Best effort: try each variant in order, returning the first success.
-            let mut last_err: Option<anyhow::Error> = None;
-            for variant in variants {
-                match json_to_external_with_ty(value, variant) {
-                    Ok(v) => return Ok(v),
-                    Err(e) => last_err = Some(e),
-                }
-            }
-            Err(last_err.unwrap_or_else(|| anyhow!("No union variant matched value `{value}`")))
-        }
+        Ty::Union(variants, _) => coerce_json_union(value, variants),
 
         // Types we don't specifically coerce: fall back to untyped conversion.
         _ => Ok(json_to_external(value)),
     }
+}
+
+/// Best-effort coercion into a union: try each variant and return the first
+/// that succeeds. On failure, surface the last variant's error.
+fn coerce_json_union(value: &serde_json::Value, variants: &[Ty]) -> Result<BexExternalValue> {
+    let mut last_err: Option<anyhow::Error> = None;
+    for variant in variants {
+        match json_to_external_with_ty(value, variant) {
+            Ok(v) => return Ok(v),
+            Err(e) => last_err = Some(e),
+        }
+    }
+    Err(last_err.unwrap_or_else(|| anyhow!("No union variant matched value `{value}`")))
 }
 
 // ============================================================================
