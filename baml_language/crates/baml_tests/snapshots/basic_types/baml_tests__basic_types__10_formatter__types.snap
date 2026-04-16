@@ -2,9 +2,9 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 class User {
-    id: int
-    name: string
-    email: string
+    id: int,
+    name: string,
+    email: string,
 }
 
 enum Status {

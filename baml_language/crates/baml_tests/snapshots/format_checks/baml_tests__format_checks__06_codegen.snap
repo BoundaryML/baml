@@ -1227,6 +1227,11 @@ function user.F() -> int {
     return
 }
 
+function user.FieldsAndMethods.greet() -> string {
+    load_const "hello"
+    return
+}
+
 function user.FinalExpr(a: int, b: int) -> int {
     load_var a
     load_var b
@@ -1308,6 +1313,14 @@ function user.LlmBasic$parse(json: string) -> string {
     return
 }
 
+function user.LlmBasic$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream {
+    load_var sse
+    load_const "LlmBasic"
+    load_const null
+    call baml.llm.parse
+    return
+}
+
 function user.LlmBasic$render_prompt(name: string) -> baml.llm.PromptAst {
     load_const null
     load_const "LlmBasic"
@@ -1345,6 +1358,14 @@ function user.LlmMultiLine$parse(json: string) -> string {
     return
 }
 
+function user.LlmMultiLine$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream {
+    load_var sse
+    load_const "LlmMultiLine"
+    load_const null
+    call baml.llm.parse
+    return
+}
+
 function user.LlmMultiLine$render_prompt(text: string) -> baml.llm.PromptAst {
     load_const null
     load_const "LlmMultiLine"
@@ -1378,6 +1399,14 @@ function user.LlmReversedOrder$build_request(text: string) -> baml.http.Request 
 function user.LlmReversedOrder$parse(json: string) -> string {
     load_const "LlmReversedOrder"
     load_var json
+    call baml.llm.parse
+    return
+}
+
+function user.LlmReversedOrder$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream {
+    load_var sse
+    load_const "LlmReversedOrder"
+    load_const null
     call baml.llm.parse
     return
 }
@@ -1441,6 +1470,26 @@ function user.LlmStringClient$parse(json: string) -> string {
     return
 }
 
+function user.LlmStringClient$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream {
+    load_var sse
+    load_const "LlmStringClient"
+    alloc_instance baml.llm.Client
+    load_const "openai/gpt-4o"
+    init_field .name
+    load_const null
+    load_const "Primitive"
+    load_map_element
+    init_field .client_type
+    alloc_array 0
+    init_field .sub_clients
+    load_const null
+    init_field .retry
+    load_const 0
+    init_field .counter
+    call baml.llm.parse
+    return
+}
+
 function user.LlmStringClient$render_prompt(text: string) -> baml.llm.PromptAst {
     alloc_instance baml.llm.Client
     load_const "openai/gpt-4o"
@@ -1497,6 +1546,14 @@ function user.LlmWithLongSignature$build_request(first_context: string, second_c
 function user.LlmWithLongSignature$parse(json: string) -> string {
     load_const "LlmWithLongSignature"
     load_var json
+    call baml.llm.parse
+    return
+}
+
+function user.LlmWithLongSignature$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream {
+    load_var sse
+    load_const "LlmWithLongSignature"
+    load_const null
     call baml.llm.parse
     return
 }
@@ -3923,6 +3980,11 @@ function user.Minimal() -> int {
     return
 }
 
+function user.MixedColons(a: int, b: string, c: bool) -> int {
+    load_var a
+    return
+}
+
 function user.MixedValuesClient$new() -> null {
     alloc_instance baml.llm.PrimitiveClient
     load_const "MixedValuesClient"
@@ -4200,6 +4262,21 @@ function user.NestedLoops(matrix: int[][]) -> int {
     jump L3
 }
 
+function user.NoColonComplexTypes(items: int[], mapping: map<string, int>) -> string {
+    load_const "done"
+    return
+}
+
+function user.NoColonMultiple(a: int, b: string, c: bool) -> int {
+    load_var a
+    return
+}
+
+function user.NoColonSingle(x: int) -> int {
+    load_var x
+    return
+}
+
 function user.OtherExprs(a: int, b: int) -> int {
     load_var a
     load_var b
@@ -4411,6 +4488,14 @@ function user.TestTarget$build_request() -> baml.http.Request {
 function user.TestTarget$parse(json: string) -> string {
     load_const "TestTarget"
     load_var json
+    call baml.llm.parse
+    return
+}
+
+function user.TestTarget$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream {
+    load_var sse
+    load_const "TestTarget"
+    load_global user.BasicClient
     call baml.llm.parse
     return
 }

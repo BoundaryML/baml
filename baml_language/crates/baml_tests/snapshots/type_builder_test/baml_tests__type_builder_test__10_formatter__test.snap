@@ -7,7 +7,7 @@ function Fn() -> string {
 }
 
 class TopLevelClass {
-    a: string
+    a: string,
 }
 
 enum TopLevelEnum {
@@ -19,10 +19,10 @@ test MyTest {
     functions: [Fn],
     type_builder {
         class InnerClass {
-            b: int
+            b: int,
         }
         dynamic class DynamicInner {
-            c: string
+            c: string,
         }
         enum InnerEnum {
             X,

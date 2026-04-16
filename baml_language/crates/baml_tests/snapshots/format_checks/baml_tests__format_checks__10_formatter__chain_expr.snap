@@ -5,39 +5,39 @@ source: crates/baml_tests/src/generated_tests.rs
 // including paths, field access, calls, index, and permutations of these
 
 class ChainUser {
-    name: string
-    profile: ChainProfile
-    tags: string[]
-    scores: int[][]
+    name: string,
+    profile: ChainProfile,
+    tags: string[],
+    scores: int[][],
 }
 
 class ChainProfile {
-    bio: string
-    settings: ChainSettings
-    items: ChainItem[]
+    bio: string,
+    settings: ChainSettings,
+    items: ChainItem[],
 }
 
 class ChainSettings {
-    theme: string
-    notifications: bool
-    preferences: ChainPreferences
+    theme: string,
+    notifications: bool,
+    preferences: ChainPreferences,
 }
 
 class ChainPreferences {
-    color: string
-    font: string
-    size: int
+    color: string,
+    font: string,
+    size: int,
 }
 
 class ChainItem {
-    label: string
-    value: int
-    metadata: ChainMetadata
+    label: string,
+    value: int,
+    metadata: ChainMetadata,
 }
 
 class ChainMetadata {
-    created_at: string
-    tags: string[]
+    created_at: string,
+    tags: string[],
 }
 
 function ChainExprs(user: ChainUser, items: ChainItem[], m: map<string, int>) -> string {

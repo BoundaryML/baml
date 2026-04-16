@@ -374,10 +374,10 @@ test TypeBuilderTest {
     functions: [TestTarget],
     type_builder {
         class InnerClass {
-            b: int
+            b: int,
         }
         dynamic class DynamicInner {
-            c: string
+            c: string,
         }
         enum InnerEnum {
             X,
@@ -421,8 +421,8 @@ test LongTypeBuilderTest {
     functions: [TestTarget],
     type_builder {
         class VeryLongClassNameThatExceedsTheLineLimitWhenCombinedWithTheTypeBuilderIndentation {
-            extremely_long_field_name_for_testing_wrapping: int
-            another_very_long_field_name: string
+            extremely_long_field_name_for_testing_wrapping: int,
+            another_very_long_field_name: string,
         }
         enum VeryLongEnumNameThatAlsoExceedsTheLineLimitWhenCombinedWithTheTypeBuilderIndentation {
             VeryLongVariantNameThatExceedsLimit,
@@ -449,7 +449,7 @@ test TriviaTypeBuilderTest { // 6 open brace trailing
         // 15 class leading
         class TbInnerClass { // 20 class brace trailing
             // 21 field leading
-            field_name: int // 24 type trailing
+            field_name: int, // 24 type trailing
             // 25 class close leading
         } // 26 class close trailing
         // 27 enum leading
@@ -481,7 +481,7 @@ test TriviaTypeBuilderTestBlock { /* 6 open brace trailing */
         /* 15 class leading */
         class TbInnerClassBlock { /* 20 class brace trailing */
             /* 21 field leading */
-            field_name: /* 22 field name trailing *//* 23 type leading */int /* 24 type trailing */
+            field_name: /* 22 field name trailing *//* 23 type leading */int, /* 24 type trailing */
             /* 25 class close leading */
         } /* 26 class close trailing */
         /* 27 enum leading */

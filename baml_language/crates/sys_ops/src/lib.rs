@@ -219,6 +219,71 @@ impl<T> io::IoClassLlmPrimitiveClient for T {
                 .map_err(OpErrorKind::from),
         )
     }
+
+    fn build_request_stream(
+        &self,
+        _heap: &std::sync::Arc<BexHeap>,
+        _call_id: CallId,
+        client: io::owned::llm::PrimitiveClient,
+        prompt: io::owned::llm::PromptAst,
+        ctx: &SysOpContext,
+    ) -> SysOpOutput<BexExternalValue> {
+        let old_client = match convert_io_primitive_client(&client) {
+            Ok(c) => c,
+            Err(e) => return SysOpOutput::err(OpErrorKind::Other(e.to_string())),
+        };
+        let prompt_ast = unwrap_prompt_ast(&prompt);
+        let io = ctx.runtime_io.clone();
+        SysOpOutput::async_op(async move {
+            sys_llm::execute_build_request_stream_from_owned(&old_client, prompt_ast, io)
+                .await
+                .map(|req| {
+                    io::owned::http::Request {
+                        method: req.method,
+                        url: req.url,
+                        headers: req.headers,
+                        body: req.body,
+                    }
+                    .into_bex_external_value()
+                })
+                .map_err(OpErrorKind::from)
+        })
+    }
+
+    fn new_stream_accumulator(
+        &self,
+        _heap: &std::sync::Arc<BexHeap>,
+        _call_id: CallId,
+        client: io::owned::llm::PrimitiveClient,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::llm::StreamAccumulator> {
+        match sys_llm::stream_accumulator::new_accumulator(&client.provider) {
+            Ok(handle) => {
+                let handle: std::sync::Arc<dyn std::any::Any + Send + Sync> =
+                    std::sync::Arc::new(handle);
+                SysOpOutput::ok(io::owned::llm::StreamAccumulator { _handle: handle })
+            }
+            Err(e) => SysOpOutput::err(OpErrorKind::from(e)),
+        }
+    }
+
+    fn validate_finish_reason(
+        &self,
+        _heap: &std::sync::Arc<BexHeap>,
+        _call_id: CallId,
+        client: io::owned::llm::PrimitiveClient,
+        finish_reason: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        let old_client = match convert_io_primitive_client(&client) {
+            Ok(c) => c,
+            Err(e) => return SysOpOutput::err(OpErrorKind::Other(e.to_string())),
+        };
+        SysOpOutput::Ready(
+            sys_llm::execute_validate_finish_reason(&old_client, &finish_reason)
+                .map_err(OpErrorKind::from),
+        )
+    }
 }
 
 /// Look up an LLM function by name, trying the bare name first then "user.{name}".
@@ -229,6 +294,178 @@ fn lookup_llm_function<'a>(
     llm_functions
         .get(function_name)
         .or_else(|| llm_functions.get(&format!("user.{function_name}")))
+}
+
+/// Blanket impl — all types get real `StreamAccumulator` behavior via `sys_llm` delegation.
+impl<T> io::IoClassLlmStreamAccumulator for T {
+    fn add_events(
+        &self,
+        _heap: &std::sync::Arc<BexHeap>,
+        _call_id: CallId,
+        accumulator: io::owned::llm::StreamAccumulator,
+        events: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        let Ok(handle) = accumulator
+            ._handle
+            .downcast::<bex_resource_types::ResourceHandle>()
+        else {
+            return SysOpOutput::err(OpErrorKind::Other(
+                "Invalid stream accumulator handle".into(),
+            ));
+        };
+        match sys_llm::stream_accumulator::add_events(&handle, &events) {
+            Ok(()) => SysOpOutput::ok(()),
+            Err(e) => SysOpOutput::err(OpErrorKind::from(e)),
+        }
+    }
+
+    fn content(
+        &self,
+        _heap: &std::sync::Arc<BexHeap>,
+        _call_id: CallId,
+        accumulator: io::owned::llm::StreamAccumulator,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<String> {
+        let Ok(handle) = accumulator
+            ._handle
+            .downcast::<bex_resource_types::ResourceHandle>()
+        else {
+            return SysOpOutput::err(OpErrorKind::Other(
+                "Invalid stream accumulator handle".into(),
+            ));
+        };
+        match sys_llm::stream_accumulator::get_content(&handle) {
+            Ok(content) => SysOpOutput::ok(content),
+            Err(e) => SysOpOutput::err(OpErrorKind::from(e)),
+        }
+    }
+
+    fn is_done(
+        &self,
+        _heap: &std::sync::Arc<BexHeap>,
+        _call_id: CallId,
+        accumulator: io::owned::llm::StreamAccumulator,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<bool> {
+        let Ok(handle) = accumulator
+            ._handle
+            .downcast::<bex_resource_types::ResourceHandle>()
+        else {
+            return SysOpOutput::err(OpErrorKind::Other(
+                "Invalid stream accumulator handle".into(),
+            ));
+        };
+        match sys_llm::stream_accumulator::is_done(&handle) {
+            Ok(done) => SysOpOutput::ok(done),
+            Err(e) => SysOpOutput::err(OpErrorKind::from(e)),
+        }
+    }
+
+    fn model(
+        &self,
+        _heap: &std::sync::Arc<BexHeap>,
+        _call_id: CallId,
+        accumulator: io::owned::llm::StreamAccumulator,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Option<String>> {
+        let Ok(handle) = accumulator
+            ._handle
+            .downcast::<bex_resource_types::ResourceHandle>()
+        else {
+            return SysOpOutput::err(OpErrorKind::Other(
+                "Invalid stream accumulator handle".into(),
+            ));
+        };
+        match sys_llm::stream_accumulator::get_model(&handle) {
+            Ok(model) => SysOpOutput::ok(model),
+            Err(e) => SysOpOutput::err(OpErrorKind::from(e)),
+        }
+    }
+
+    fn finish_reason(
+        &self,
+        _heap: &std::sync::Arc<BexHeap>,
+        _call_id: CallId,
+        accumulator: io::owned::llm::StreamAccumulator,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Option<String>> {
+        let Ok(handle) = accumulator
+            ._handle
+            .downcast::<bex_resource_types::ResourceHandle>()
+        else {
+            return SysOpOutput::err(OpErrorKind::Other(
+                "Invalid stream accumulator handle".into(),
+            ));
+        };
+        match sys_llm::stream_accumulator::get_finish_reason(&handle) {
+            Ok(reason) => SysOpOutput::ok(reason),
+            Err(e) => SysOpOutput::err(OpErrorKind::from(e)),
+        }
+    }
+
+    fn input_tokens(
+        &self,
+        _heap: &std::sync::Arc<BexHeap>,
+        _call_id: CallId,
+        accumulator: io::owned::llm::StreamAccumulator,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Option<i64>> {
+        let Ok(handle) = accumulator
+            ._handle
+            .downcast::<bex_resource_types::ResourceHandle>()
+        else {
+            return SysOpOutput::err(OpErrorKind::Other(
+                "Invalid stream accumulator handle".into(),
+            ));
+        };
+        match sys_llm::stream_accumulator::get_input_tokens(&handle) {
+            Ok(tokens) => SysOpOutput::ok(tokens.map(u64::cast_signed)),
+            Err(e) => SysOpOutput::err(OpErrorKind::from(e)),
+        }
+    }
+
+    fn output_tokens(
+        &self,
+        _heap: &std::sync::Arc<BexHeap>,
+        _call_id: CallId,
+        accumulator: io::owned::llm::StreamAccumulator,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Option<i64>> {
+        let Ok(handle) = accumulator
+            ._handle
+            .downcast::<bex_resource_types::ResourceHandle>()
+        else {
+            return SysOpOutput::err(OpErrorKind::Other(
+                "Invalid stream accumulator handle".into(),
+            ));
+        };
+        match sys_llm::stream_accumulator::get_output_tokens(&handle) {
+            Ok(tokens) => SysOpOutput::ok(tokens.map(u64::cast_signed)),
+            Err(e) => SysOpOutput::err(OpErrorKind::from(e)),
+        }
+    }
+}
+
+/// Blanket impl — `StreamCache.new()` creates a SAP cache from a type descriptor.
+impl<T> io::IoClassLlmStreamCache for T {
+    fn new(
+        &self,
+        _heap: &std::sync::Arc<BexHeap>,
+        _call_id: CallId,
+        target: baml_type::Ty,
+        stream_target: baml_type::Ty,
+        ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::llm::StreamCache> {
+        let compiled =
+            match ::bex_sap::CompiledSapModel::from_sys_op_context(ctx, target, stream_target) {
+                Ok(compiled) => compiled,
+                Err(e) => return SysOpOutput::err(OpErrorKind::Other(e.to_string())),
+            };
+        let sap = ::sys_llm::SapStreamCache::new(compiled);
+        let data: std::sync::Arc<dyn std::any::Any + Send + Sync> = std::sync::Arc::new(sap);
+        SysOpOutput::ok(io::owned::llm::StreamCache { _data: data })
+    }
 }
 
 impl<T> io::IoNamespaceLlm for T {
@@ -268,17 +505,61 @@ impl<T> io::IoNamespaceLlm for T {
         SysOpOutput::ok(info.return_type.clone())
     }
 
-    fn __sap_parse(
+    fn get_stream_return_type(
+        &self,
+        _heap: &std::sync::Arc<BexHeap>,
+        _call_id: CallId,
+        function_name: String,
+        ctx: &SysOpContext,
+    ) -> SysOpOutput<baml_type::Ty> {
+        let Some(info) = lookup_llm_function(&function_name, &ctx.llm_functions) else {
+            return SysOpOutput::err(OpErrorKind::Other(format!(
+                "LLM function not found: {function_name}"
+            )));
+        };
+        SysOpOutput::ok(info.stream_return_type.clone())
+    }
+
+    fn __sap_parse_final(
         &self,
         _heap: &std::sync::Arc<BexHeap>,
         _call_id: CallId,
         json: String,
-        ty: baml_type::Ty,
+        cache: io::owned::llm::StreamCache,
         ctx: &SysOpContext,
     ) -> SysOpOutput<BexExternalValue> {
+        let Ok(sap) = cache._data.downcast::<::sys_llm::SapStreamCache>() else {
+            return SysOpOutput::err(OpErrorKind::Other(
+                "Invalid StreamCache: expected SapStreamCache".into(),
+            ));
+        };
         SysOpOutput::Ready(
-            sys_llm::execute_sap_parse(&json, &ty, ctx, true).map_err(OpErrorKind::from),
+            sys_llm::execute_sap_parse_final(&json, &sap, ctx).map_err(OpErrorKind::from),
         )
+    }
+
+    fn __sap_parse_partial(
+        &self,
+        _heap: &std::sync::Arc<BexHeap>,
+        _call_id: CallId,
+        json: String,
+        cache: io::owned::llm::StreamCache,
+        ctx: &SysOpContext,
+    ) -> SysOpOutput<BexExternalValue> {
+        let Ok(sap) = cache._data.downcast::<::sys_llm::SapStreamCache>() else {
+            return SysOpOutput::err(OpErrorKind::Other(
+                "Invalid StreamCache: expected SapStreamCache".into(),
+            ));
+        };
+        let result = match sys_llm::execute_sap_parse_partial(&json, &sap, ctx) {
+            Ok(Some(value)) => Ok(value),
+            Ok(None) => Ok(BexExternalValue::instance(
+                "baml.stream.StreamNoYield",
+                ::indexmap::IndexMap::new(),
+            )),
+            Err(e) => Err(OpErrorKind::from(e)),
+        };
+        SysOpOutput::Ready(result)
     }
 }
 
@@ -404,6 +685,27 @@ impl io::IoClassHttpResponse for DefaultIoOps {
     }
 }
 
+impl io::IoClassHttpSseStream for DefaultIoOps {
+    fn next(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _s: io::owned::http::SseStream,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Option<String>> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+    fn close(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _s: io::owned::http::SseStream,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+}
+
 impl io::IoNamespaceHttp for DefaultIoOps {
     fn fetch(
         &self,
@@ -421,6 +723,15 @@ impl io::IoNamespaceHttp for DefaultIoOps {
         _req: io::owned::http::Request,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::http::Response> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+    fn fetch_sse(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _req: io::owned::http::Request,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::http::SseStream> {
         SysOpOutput::err(OpErrorKind::Unsupported)
     }
 }
@@ -607,9 +918,27 @@ impl IoSysOpsBuilder {
             })
         };
         self.inner.baml_http_response_bytes = {
-            let t = instance;
+            let t = instance.clone();
             Arc::new(move |heap, args, ctx, call_id| {
                 t.__glue_baml_http_response_bytes(heap, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_http_fetch_sse = {
+            let t = instance.clone();
+            Arc::new(move |heap, args, ctx, call_id| {
+                t.__glue_baml_http_fetch_sse(heap, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_http_ssestream_next = {
+            let t = instance.clone();
+            Arc::new(move |heap, args, ctx, call_id| {
+                t.__glue_baml_http_ssestream_next(heap, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_http_ssestream_close = {
+            let t = instance;
+            Arc::new(move |heap, args, ctx, call_id| {
+                t.__glue_baml_http_ssestream_close(heap, args, ctx, call_id)
             })
         };
         self

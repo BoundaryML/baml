@@ -3,7 +3,7 @@ members = [
   "crates/*",
   "rig_tests/crates/*",
 ]
-exclude = [  ]
+exclude = [ "crates/bridge_go" ]
 resolver = "2"
 
 [workspace.package]
@@ -97,6 +97,7 @@ aws-smithy-runtime-api = { git = "https://github.com/boundaryml/aws-sdk-rust.git
 aws-smithy-types = { git = "https://github.com/boundaryml/aws-sdk-rust.git", rev = "28d4f67bac1214320320905c1f6908ea32b6b0ac" }
 aws-types = { git = "https://github.com/boundaryml/aws-sdk-rust.git", rev = "28d4f67bac1214320320905c1f6908ea32b6b0ac" }
 axum = { version = "0.8.4", features = [ "ws" ] }
+bytes = "1"
 cargo_metadata = { version = "0.23.1" }
 cbindgen = "0.28.0"
 clap = { version = "4.4.6", features = [ "cargo", "derive" ] }

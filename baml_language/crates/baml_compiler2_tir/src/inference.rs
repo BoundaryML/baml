@@ -332,8 +332,8 @@ pub fn infer_scope_types<'db>(
             for (local_id, func_data) in &item_tree.functions {
                 if func_data.span == scope.range && scope.name.as_ref() == Some(&func_data.name) {
                     let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(db, file, *local_id);
-                    let body = baml_compiler2_hir::body::function_body(db, func_loc);
-                    let sig = baml_compiler2_hir::signature::function_signature(db, func_loc);
+                    let body = baml_compiler2_ppir::function_body(db, func_loc);
+                    let sig = baml_compiler2_ppir::function_signature(db, func_loc);
 
                     // Compute the generic params for this function scope.
                     // If this is a method inside a class, also include the class's generic params.
@@ -344,6 +344,18 @@ pub fn infer_scope_types<'db>(
                             if let Some(class_name) = &parent.name {
                                 for class_data in item_tree.classes.values() {
                                     if class_data.name == *class_name {
+                                        // Check for method-level type params that shadow class-level ones.
+                                        for mp in &func_data.generic_params {
+                                            if class_data.generic_params.iter().any(|cp| cp == mp) {
+                                                builder.report_at_span(
+                                                    crate::infer_context::TirTypeError::TypeParamShadowed {
+                                                        param_name: mp.clone(),
+                                                        class_name: class_name.clone(),
+                                                    },
+                                                    func_data.span,
+                                                );
+                                            }
+                                        }
                                         let mut merged = class_data.generic_params.clone();
                                         merged.extend(generic_params);
                                         generic_params = merged;
@@ -378,9 +390,7 @@ pub fn infer_scope_types<'db>(
                         // Report unresolved type diagnostics for return type
                         if !diags.is_empty() {
                             let sig_sm =
-                                baml_compiler2_hir::signature::function_signature_source_map(
-                                    db, func_loc,
-                                );
+                                baml_compiler2_ppir::function_signature_source_map(db, func_loc);
                             if let Some(ret_span) = sig_sm.return_type_span {
                                 for diag in diags.drain(..) {
                                     builder.report_at_span(diag, ret_span);
@@ -403,9 +413,8 @@ pub fn infer_scope_types<'db>(
                             });
 
                         // Add parameter bindings as locals
-                        let sig_sm = baml_compiler2_hir::signature::function_signature_source_map(
-                            db, func_loc,
-                        );
+                        let sig_sm =
+                            baml_compiler2_ppir::function_signature_source_map(db, func_loc);
                         for (i, (param_name, param_te)) in sig.params.iter().enumerate() {
                             let param_ty = if param_name.as_str() == "self"
                                 && matches!(param_te, baml_compiler2_ast::TypeExpr::Unknown { .. })
@@ -418,6 +427,7 @@ pub fn infer_scope_types<'db>(
                                         pkg_items.lookup_type(ns_path, cn).map(|def| {
                                             Ty::Class(
                                                 crate::lower_type_expr::qualify_def(db, def, cn),
+                                                vec![],
                                                 TyAttr::default(),
                                             )
                                         })
@@ -1010,15 +1020,17 @@ pub fn render_scope_diagnostics<'db>(
         }
         _ => {
             // For Function/Let scopes, find the source map directly.
+            // Use PPIR's canonical version so PPIR-synthesized functions are found.
             item_tree
                 .functions
                 .iter()
                 .find(|(_, f)| f.span == scope.range && scope.name.as_ref() == Some(&f.name))
                 .and_then(|(local_id, _)| {
                     let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(db, file, *local_id);
-                    baml_compiler2_hir::body::function_body_source_map(db, func_loc)
+                    baml_compiler2_ppir::function_body_source_map(db, func_loc)
                 })
                 .or_else(|| {
+                    // Also search let bindings.
                     item_tree
                         .lets
                         .iter()

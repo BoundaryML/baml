@@ -9,13 +9,13 @@ source: crates/baml_tests/src/generated_tests.rs
 // ═══════════════════════════════════════════════════════════════════
 
 class Config {
-    key: string
-    env: string
+    key: string,
+    env: string,
 }
 
 class Error {
-    code: int
-    message: string
+    code: int,
+    message: string,
 }
 
 enum Status {
@@ -119,17 +119,17 @@ function RootMixedConfigs(root_cfg: Config, llm_cfg: root.llm.Config) -> string 
 
 // Root class with fields from other namespaces
 class RootWithCrossNsFields {
-    own_config: Config
-    llm_config: root.llm.Config
-    auth_config: root.auth.Config
-    llm_response: root.llm.Response
-    nested_client: root.llm.openai.Client
-    own_status: Status
-    own_alias: ConfigAlias
+    own_config: Config,
+    llm_config: root.llm.Config,
+    auth_config: root.auth.Config,
+    llm_response: root.llm.Response,
+    nested_client: root.llm.openai.Client,
+    own_status: Status,
+    own_alias: ConfigAlias,
 }
 
 // Root class referencing a cross-namespace type alias
 class RootWithCrossNsAlias {
-    llm_alias: root.llm.ResponseAlias
-    own_alias: ConfigAlias
+    llm_alias: root.llm.ResponseAlias,
+    own_alias: ConfigAlias,
 }

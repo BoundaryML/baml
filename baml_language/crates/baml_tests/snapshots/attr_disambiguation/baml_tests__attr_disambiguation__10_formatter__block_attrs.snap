@@ -51,21 +51,21 @@ enum GSize {
 
 // G6: class with @@stream.done (referenced by G9)
 class GPoint {
-    x: float
-    y: float
+    x: float,
+    y: float,
     @@stream.done
 }
 
 // G7: class without @@stream.done (control group, referenced by G9)
 class GCoord {
-    lat: float
-    lng: float
+    lat: float,
+    lng: float,
 }
 
 // G8: class with @@stream.done + @@description
 class GConfig {
-    key: string
-    value: string
+    key: string,
+    value: string,
     @@stream.done
     @@description("Configuration entry")
 }
@@ -74,35 +74,35 @@ class GConfig {
 
 // G9: references both @@stream.done and plain types — compare $stream behavior
 class GProfile {
-    status: GStatus
-    role: GRole
-    name: string
-    location: GPoint
-    fallback: GCoord
+    status: GStatus,
+    role: GRole,
+    name: string,
+    location: GPoint,
+    fallback: GCoord,
 }
 
 // G10: references @@stream.done types with field @alias
 class GAliased {
-    status: GStatus @alias("s")
-    role: GRole @alias("r")
-    point: GPoint @alias("p")
-    coord: GCoord @alias("c")
+    status: GStatus @alias("s"),
+    role: GRole @alias("r"),
+    point: GPoint @alias("p"),
+    coord: GCoord @alias("c"),
 }
 
 // G11: @@stream.done types in complex type positions
 class GComplex {
-    statuses: GStatus[]
-    maybe_status: GStatus?
-    role_or_status: GRole | GStatus
-    points: GPoint[]
-    maybe_point: GPoint?
-    config_map: map<string, GConfig>
+    statuses: GStatus[],
+    maybe_status: GStatus?,
+    role_or_status: GRole | GStatus,
+    points: GPoint[],
+    maybe_point: GPoint?,
+    config_map: map<string, GConfig>,
 }
 
 // G12: references enum with all layers (@@stream.done + @@description + variant attrs)
 class GIncident {
-    severity: GSeverity
-    priority: GPriority
-    title: string
-    config: GConfig
+    severity: GSeverity,
+    priority: GPriority,
+    title: string,
+    config: GConfig,
 }

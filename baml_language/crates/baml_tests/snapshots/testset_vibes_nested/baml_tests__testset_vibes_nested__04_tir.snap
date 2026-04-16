@@ -60,7 +60,7 @@ function user.ClassifySentiment2$build_request(text: string) -> baml.http.Reques
 function user.ClassifySentiment2$parse(json: string) -> string throws never {
   baml.llm.parse<T>("ClassifySentiment2", json) : string
 }
-function user.$init_test_20(registry: testing.TestCollector) -> ? throws never {
+function user.$init_test_21(registry: testing.TestCollector) -> ? throws never {
   { : null
     registry.register_test_set("test", (testset: testing.TestCollector) -> void { ... }, null) : void
       (testset: testing.TestCollector) -> void { ... } : (testset: testing.TestCollector) -> void
@@ -76,20 +76,29 @@ function user.$init_test_20(registry: testing.TestCollector) -> ? throws never {
     null : null
   }
 }
-lambda user.$init_test_20 {
+lambda user.$init_test_21 {
 }
-lambda user.$init_test_20 {
+lambda user.$init_test_21 {
 }
-lambda user.$init_test_20 {
+lambda user.$init_test_21 {
 }
-lambda user.$init_test_20 {
+lambda user.$init_test_21 {
 }
-lambda user.$init_test_20 {
+lambda user.$init_test_21 {
 }
-lambda user.$init_test_20 {
+lambda user.$init_test_21 {
 }
 class user.Sentiment$stream {
   feeling: null | string
   confidence: null | float
   reasoning: null | string
+}
+function user.ClassifySentiment$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<user.Sentiment, null | user.Sentiment$stream> throws never {
+  baml.llm.__make_stream(sse, "ClassifySentiment", GPT4o) : unknown
+}
+function user.GenerateTests$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<string[], string[]> throws never {
+  baml.llm.__make_stream(sse, "GenerateTests", GPT4o) : unknown
+}
+function user.ClassifySentiment2$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<string, null | string> throws never {
+  baml.llm.__make_stream(sse, "ClassifySentiment2", GPT4o) : unknown
 }

@@ -1,22 +1,30 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-function user.RootUsesLlmStream(r: void) -> string {
-    load_const null
+function user.RootUsesLlmStream(r: llm.Response$stream) -> string {
+    load_var r
+    load_const "text"
+    load_map_element
     return
 }
 
-function user.RootUsesOwnStream(c: void) -> string {
-    load_const null
+function user.RootUsesOwnStream(c: Config$stream) -> string {
+    load_var c
+    load_const "key"
+    load_map_element
     return
 }
 
-function user.llm.LlmUsesOwnStream(r: void) -> string {
-    load_const null
+function user.llm.LlmUsesOwnStream(r: Response$stream) -> string {
+    load_var r
+    load_const "text"
+    load_map_element
     return
 }
 
-function user.llm.LlmUsesRootStream(c: void) -> string {
-    load_const null
+function user.llm.LlmUsesRootStream(c: Config$stream) -> string {
+    load_var c
+    load_const "key"
+    load_map_element
     return
 }

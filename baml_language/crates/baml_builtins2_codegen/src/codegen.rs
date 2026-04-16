@@ -840,6 +840,18 @@ fn emit_root_trait(out: &mut String, root: &NamespaceNode) {
 // ============================================================================
 
 fn emit_required_method(out: &mut String, method_name: &str, b: &NativeBuiltin) {
+    if b.may_yield {
+        // Yielding methods return NativeCallResult directly.
+        // may_yield implies mut_vm, so always include vm parameter.
+        let params = clean_param_list(b);
+        writeln!(
+            out,
+            "    fn {method_name}(vm: &mut BexVm, {params}) -> NativeCallResult;",
+        )
+        .unwrap();
+        return;
+    }
+
     let return_type = clean_return_type(b);
     let params = clean_param_list(b);
 
@@ -862,23 +874,45 @@ fn emit_required_method(out: &mut String, method_name: &str, b: &NativeBuiltin) 
 
 fn emit_glue_method(out: &mut String, method_name: &str, b: &NativeBuiltin) {
     let glue_name = format!("__glue_{method_name}");
-    let fallible = is_fallible(&b.path);
 
     writeln!(
         out,
-        "    fn {glue_name}(vm: &mut BexVm, args: &[Value]) -> NativeFunctionResult {{"
+        "    fn {glue_name}(vm: &mut BexVm, args: &[Value]) -> NativeCallResult {{"
     )
     .unwrap();
 
-    emit_arg_extractions(out, b);
+    if b.may_yield {
+        // Yielding method — returns NativeCallResult directly.
+        // Use a closure returning Result<NativeCallResult, VmRustFnError> so `?`
+        // operators in arg extractions work (VmInternalError -> VmRustFnError via From),
+        // then flatten the result.
+        out.push_str("        let __result: Result<NativeCallResult, VmRustFnError> = (|| {\n");
+        emit_arg_extractions_indented(out, b, "            ");
+        let call_args = call_arg_list(b);
+        writeln!(out, "            Ok(Self::{method_name}(vm, {call_args}))").unwrap();
+        out.push_str("        })();\n");
+        out.push_str("        match __result {\n");
+        out.push_str("            Ok(r) => r,\n");
+        out.push_str("            Err(e) => NativeCallResult::Error(e),\n");
+        out.push_str("        }\n");
+        out.push_str("    }\n");
+        return;
+    }
+
+    let fallible = is_fallible(&b.path);
+
+    // Use a closure returning NativeFunctionResult so `?` operators work inside.
+    out.push_str("        let __result: NativeFunctionResult = (|| {\n");
+
+    emit_arg_extractions_indented(out, b, "            ");
 
     let call_args = call_arg_list(b);
     let returns_null = matches!(b.return_type, BamlType::Null);
 
     let binding = if returns_null {
-        "        "
+        "            "
     } else {
-        "        let result = "
+        "            let result = "
     };
     let suffix = if fallible { "?;\n" } else { ";\n" };
 
@@ -891,8 +925,13 @@ fn emit_glue_method(out: &mut String, method_name: &str, b: &NativeBuiltin) {
         }
     }
 
-    emit_result_conversion(out, b);
+    emit_result_conversion_ok(out, b, "            ");
 
+    out.push_str("        })();\n");
+    out.push_str("        match __result {\n");
+    out.push_str("            Ok(v) => NativeCallResult::Done(v),\n");
+    out.push_str("            Err(e) => NativeCallResult::Error(e),\n");
+    out.push_str("        }\n");
     out.push_str("    }\n");
 }
 
@@ -904,19 +943,21 @@ fn emit_glue_method(out: &mut String, method_name: &str, b: &NativeBuiltin) {
 fn clean_param_list(b: &NativeBuiltin) -> String {
     let mut parts: Vec<String> = Vec::new();
 
-    if let Some(recv) = &b.receiver {
+    let has_instance_receiver = b
+        .receiver
+        .as_ref()
+        .is_some_and(|r| !r.receiver_type.is_static());
+
+    if has_instance_receiver {
+        let recv = b.receiver.as_ref().unwrap();
         parts.push(format!(
             "{}: {}",
             receiver_param_name(recv),
             receiver_input_type(recv)
         ));
-        for p in &b.params {
-            parts.push(format!("{}: {}", p.name, baml_type_to_input(&p.ty, false)));
-        }
-    } else {
-        for p in &b.params {
-            parts.push(format!("{}: {}", p.name, baml_type_to_input(&p.ty, false)));
-        }
+    }
+    for p in &b.params {
+        parts.push(format!("{}: {}", p.name, baml_type_to_input(&p.ty, false)));
     }
 
     parts.join(", ")
@@ -924,7 +965,10 @@ fn clean_param_list(b: &NativeBuiltin) -> String {
 
 fn clean_return_type(b: &NativeBuiltin) -> String {
     // Static constructors on media classes return copy types
-    if b.receiver.is_none() {
+    if b.receiver
+        .as_ref()
+        .is_none_or(|r| r.receiver_type.is_static())
+    {
         if let Some(class_name) = constructor_media_class(b) {
             let ns = constructor_media_namespace(b);
             let inner = format!("copy::{ns}::{class_name}");
@@ -942,10 +986,13 @@ fn clean_return_type(b: &NativeBuiltin) -> String {
     }
 }
 
-/// If this is a static constructor for a media class (no receiver, path has a media class segment),
+/// If this is a static constructor for a media class (no instance receiver, path has a media class segment),
 /// return the class name. Used to determine copy return type.
 fn constructor_media_class(b: &NativeBuiltin) -> Option<&str> {
-    if b.receiver.is_some() {
+    if b.receiver
+        .as_ref()
+        .is_some_and(|r| !r.receiver_type.is_static())
+    {
         return None;
     }
     let rest = b.path.strip_prefix("baml.")?;
@@ -978,58 +1025,51 @@ fn constructor_media_namespace(b: &NativeBuiltin) -> &str {
 // Argument extraction
 // ============================================================================
 
-fn emit_arg_extractions(out: &mut String, b: &NativeBuiltin) {
-    if let Some(recv) = &b.receiver {
-        if recv.is_mut {
-            for (i, p) in b.params.iter().enumerate() {
-                let arg_idx = i + 1;
-                emit_single_extraction(out, &p.name, arg_idx, &p.ty);
-            }
-            let recv_name = receiver_param_name(recv);
-            emit_mut_receiver_extraction(out, &recv_name, recv);
-        } else {
-            let recv_name = receiver_param_name(recv);
-            emit_immut_receiver_extraction(out, &recv_name, 0, recv);
-            for (i, p) in b.params.iter().enumerate() {
-                let arg_idx = i + 1;
-                emit_single_extraction(out, &p.name, arg_idx, &p.ty);
-            }
-        }
-    } else {
-        for (i, p) in b.params.iter().enumerate() {
-            emit_single_extraction(out, &p.name, i, &p.ty);
-        }
-    }
-}
-
-fn emit_single_extraction(out: &mut String, name: &str, idx: usize, ty: &BamlType) {
+fn emit_single_extraction_indented(
+    out: &mut String,
+    name: &str,
+    idx: usize,
+    ty: &BamlType,
+    indent: &str,
+) {
     let rhs = extraction_expr(&format!("&args[{idx}]"), ty, false);
-    writeln!(out, "        let {name} = {rhs};").unwrap();
+    writeln!(out, "{indent}let {name} = {rhs};").unwrap();
 }
 
-fn emit_immut_receiver_extraction(out: &mut String, name: &str, idx: usize, recv: &Receiver) {
+fn emit_immut_receiver_extraction_indented(
+    out: &mut String,
+    name: &str,
+    idx: usize,
+    recv: &Receiver,
+    indent: &str,
+) {
     match recv.class_name.as_str() {
         _ if is_media_class(recv.class_name.as_str()) => {
             let cls = &recv.class_name;
             writeln!(
                 out,
-                "        let __instance = vm.as_instance(&args[{idx}])?;"
+                "{indent}let __instance = vm.as_instance(&args[{idx}])?;"
             )
             .unwrap();
             writeln!(
                 out,
-                "        let {name} = view::media::{cls} {{ instance: __instance }};"
+                "{indent}let {name} = view::media::{cls} {{ instance: __instance }};"
             )
             .unwrap();
         }
         _ => {
             let rhs = receiver_immut_extraction_expr(&format!("&args[{idx}]"), recv);
-            writeln!(out, "        let {name} = {rhs};").unwrap();
+            writeln!(out, "{indent}let {name} = {rhs};").unwrap();
         }
     }
 }
 
-fn emit_mut_receiver_extraction(out: &mut String, name: &str, recv: &Receiver) {
+fn emit_mut_receiver_extraction_indented(
+    out: &mut String,
+    name: &str,
+    recv: &Receiver,
+    indent: &str,
+) {
     let expr = match recv.class_name.as_str() {
         "Array" => "vm.as_array_mut(&args[0])?".to_string(),
         "Map" => "vm.as_map_mut(&args[0])?".to_string(),
@@ -1037,7 +1077,38 @@ fn emit_mut_receiver_extraction(out: &mut String, name: &str, recv: &Receiver) {
         "Uint8Array" => "vm.as_uint8array_mut(&args[0])?".to_string(),
         _ => "vm.as_value_mut(&args[0])?".to_string(),
     };
-    writeln!(out, "        let {name} = {expr};").unwrap();
+    writeln!(out, "{indent}let {name} = {expr};").unwrap();
+}
+
+/// Like `emit_arg_extractions` but uses `indent` for each line.
+fn emit_arg_extractions_indented(out: &mut String, b: &NativeBuiltin, indent: &str) {
+    if let Some(recv) = &b.receiver {
+        if recv.receiver_type.is_static() {
+            // Static methods: no receiver
+            for (i, p) in b.params.iter().enumerate() {
+                let arg_idx = i;
+                emit_single_extraction_indented(out, &p.name, arg_idx, &p.ty, indent);
+            }
+        } else if recv.receiver_type.is_mut() {
+            for (i, p) in b.params.iter().enumerate() {
+                let arg_idx = i + 1;
+                emit_single_extraction_indented(out, &p.name, arg_idx, &p.ty, indent);
+            }
+            let recv_name = receiver_param_name(recv);
+            emit_mut_receiver_extraction_indented(out, &recv_name, recv, indent);
+        } else {
+            let recv_name = receiver_param_name(recv);
+            emit_immut_receiver_extraction_indented(out, &recv_name, 0, recv, indent);
+            for (i, p) in b.params.iter().enumerate() {
+                let arg_idx = i + 1;
+                emit_single_extraction_indented(out, &p.name, arg_idx, &p.ty, indent);
+            }
+        }
+    } else {
+        for (i, p) in b.params.iter().enumerate() {
+            emit_single_extraction_indented(out, &p.name, i, &p.ty, indent);
+        }
+    }
 }
 
 // ============================================================================
@@ -1114,19 +1185,17 @@ fn call_arg_list(b: &NativeBuiltin) -> String {
     let mut args: Vec<String> = Vec::new();
 
     if let Some(recv) = &b.receiver {
-        let name = receiver_param_name(recv);
-        if recv.is_mut {
-            args.push(name);
-        } else {
-            args.push(call_arg_for_type(&name, &receiver_baml_type(recv)));
+        if !recv.receiver_type.is_static() {
+            let name = receiver_param_name(recv);
+            if recv.receiver_type.is_mut() {
+                args.push(name);
+            } else {
+                args.push(call_arg_for_type(&name, &receiver_baml_type(recv)));
+            }
         }
-        for p in &b.params {
-            args.push(call_arg_for_type(&p.name, &p.ty));
-        }
-    } else {
-        for p in &b.params {
-            args.push(call_arg_for_type(&p.name, &p.ty));
-        }
+    }
+    for p in &b.params {
+        args.push(call_arg_for_type(&p.name, &p.ty));
     }
 
     args.join(", ")
@@ -1176,14 +1245,18 @@ fn call_arg_needs_ref(ty: &BamlType) -> bool {
 // Result conversion
 // ============================================================================
 
-fn emit_result_conversion(out: &mut String, b: &NativeBuiltin) {
-    // Static constructors on media classes: result is a copy struct, call .to_value(vm)
-    if b.receiver.is_none() && constructor_media_class(b).is_some() {
-        out.push_str("        Ok(result.to_value(vm))\n");
+/// Emit `Ok(...)` return for the inner closure body with the given indentation.
+fn emit_result_conversion_ok(out: &mut String, b: &NativeBuiltin, indent: &str) {
+    if b.receiver
+        .as_ref()
+        .is_none_or(|r| r.receiver_type.is_static())
+        && constructor_media_class(b).is_some()
+    {
+        writeln!(out, "{indent}Ok(result.to_value(vm))").unwrap();
         return;
     }
     let conversion = result_conversion_expr("result", &b.return_type);
-    writeln!(out, "        Ok({conversion})").unwrap();
+    writeln!(out, "{indent}Ok({conversion})").unwrap();
 }
 
 fn result_conversion_expr(name: &str, ty: &BamlType) -> String {
@@ -1284,28 +1357,28 @@ fn receiver_param_name(recv: &Receiver) -> String {
 fn receiver_input_type(recv: &Receiver) -> String {
     match recv.class_name.as_str() {
         "Array" => {
-            if recv.is_mut {
+            if recv.receiver_type.is_mut() {
                 "&mut Vec<Value>".to_string()
             } else {
                 "&[Value]".to_string()
             }
         }
         "Map" => {
-            if recv.is_mut {
+            if recv.receiver_type.is_mut() {
                 "&mut IndexMap<String, Value>".to_string()
             } else {
                 "&IndexMap<String, Value>".to_string()
             }
         }
         "String" => {
-            if recv.is_mut {
+            if recv.receiver_type.is_mut() {
                 "&mut String".to_string()
             } else {
                 "&str".to_string()
             }
         }
         "Uint8Array" => {
-            if recv.is_mut {
+            if recv.receiver_type.is_mut() {
                 "&mut Vec<u8>".to_string()
             } else {
                 "&[u8]".to_string()
@@ -1568,7 +1641,10 @@ mod tests {
             let segments: Vec<&str> = rest.split('.').collect();
             let baml_name = segments.last().unwrap();
             let name = camel_to_snake(baml_name);
-            let has_mut_receiver = b.receiver.as_ref().is_some_and(|r| r.is_mut);
+            let has_mut_receiver = b
+                .receiver
+                .as_ref()
+                .is_some_and(|r| r.receiver_type.is_mut());
             let has_mut_vm = output.contains(&format!("fn {name}(vm: &mut BexVm,"));
             let has_ref_vm = output.contains(&format!("fn {name}(vm: &BexVm,"));
 

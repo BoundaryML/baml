@@ -125,7 +125,7 @@ pub fn convert_tir2_ty(ty: &Tir2Ty, resolved: &ResolvedAliases) -> Ty {
         Tir2Ty::Primitive(PrimitiveType::Pdf, attr) => Ty::Media(MediaKind::Pdf, attr.clone()),
 
         // Named types
-        Tir2Ty::Class(qtn, attr) => Ty::Class(qtn_to_type_name(qtn), attr.clone()),
+        Tir2Ty::Class(qtn, _, attr) => Ty::Class(qtn_to_type_name(qtn), attr.clone()),
         Tir2Ty::Enum(qtn, attr) => Ty::Enum(qtn_to_type_name(qtn), attr.clone()),
         Tir2Ty::TypeAlias(qtn, attr) => {
             if resolved.recursive.contains(qtn) {
@@ -321,15 +321,11 @@ use baml_compiler2_ast::{
     Pattern as AstPattern, Stmt as AstStmt, StmtId as AstStmtId, UnaryOp as AstUnaryOp,
 };
 use baml_compiler2_hir::{
-    body::{
-        FunctionBody, LetBody, function_body, function_body_source_map, let_body,
-        let_body_source_map,
-    },
+    body::{FunctionBody, LetBody, let_body, let_body_source_map},
     file_semantic_index,
     loc::{FunctionLoc, LetLoc},
     package::{PackageId, package_dependencies, package_items},
     scope::FileScopeId,
-    signature::function_signature,
 };
 use baml_compiler2_tir::{
     inference::infer_scope_types,
@@ -675,7 +671,7 @@ impl<'db> LoweringContext<'db> {
         let resolved_aliases = ResolvedAliases::for_package(db, pkg_id);
 
         // --- Determine arity from function signature ---
-        let sig = function_signature(db, func_loc);
+        let sig = baml_compiler2_ppir::function_signature(db, func_loc);
         let arity = sig.params.len();
 
         // Detect if this function is a class method by checking the parent scope.
@@ -991,7 +987,7 @@ impl LoweringContext<'_> {
         let func_loc = self
             .func_loc
             .expect("lower_function_body called on non-function LoweringContext");
-        let sig = function_signature(self.db, func_loc);
+        let sig = baml_compiler2_ppir::function_signature(self.db, func_loc);
 
         // Return place _0
         let pkg_info = file_package(self.db, self.file);
@@ -1060,6 +1056,7 @@ impl LoweringContext<'_> {
                                     baml_compiler2_tir::lower_type_expr::qualify_def(
                                         self.db, def, cn,
                                     ),
+                                    vec![],
                                     baml_compiler2_tir::ty::TyAttr::default(),
                                 );
                                 self.resolved_aliases.convert(&tir_ty)
@@ -2471,8 +2468,27 @@ impl LoweringContext<'_> {
                     .get(&(self.current_scope, *base))
                     .map(|ty| !matches!(ty, Tir2Ty::Unknown { .. }))
                     .unwrap_or(false);
-                if base_is_value {
-                    // Method call: arr.length() — prepend receiver as self
+                // Check if the resolved method expects a `self` receiver.
+                // Static methods (e.g. StreamCache.new) have no `self` param
+                // and must not get the class reference prepended as an argument.
+                let method_takes_self = {
+                    use baml_compiler2_tir::inference::MemberResolution;
+                    self.resolutions
+                        .get(&(self.current_scope, callee))
+                        .is_some_and(|r| match r {
+                            MemberResolution::Method { func_loc, .. }
+                            | MemberResolution::Free { func_loc } => {
+                                let sig =
+                                    baml_compiler2_ppir::function_signature(self.db, *func_loc);
+                                sig.params
+                                    .first()
+                                    .is_some_and(|(name, _)| name.as_str() == "self")
+                            }
+                            _ => false,
+                        })
+                };
+                if base_is_value && method_takes_self {
+                    // Instance method call: arr.length() — prepend receiver as self
                     let receiver_op = self.lower_to_operand(*base);
                     let callee_op = self.lower_to_operand(callee);
                     let mut all_args = vec![receiver_op];
@@ -2685,7 +2701,7 @@ impl LoweringContext<'_> {
                 }
             };
             if let Some(fl) = func_loc {
-                let body = function_body(self.db, fl);
+                let body = baml_compiler2_ppir::function_body(self.db, fl);
                 if let FunctionBody::Builtin(BuiltinKind::Io) = body.as_ref() {
                     return true;
                 }
@@ -2702,7 +2718,7 @@ impl LoweringContext<'_> {
                     MemberResolution::Field { .. } | MemberResolution::Variant { .. } => None,
                 };
                 if let Some(fl) = func_loc {
-                    let body = function_body(self.db, fl);
+                    let body = baml_compiler2_ppir::function_body(self.db, fl);
                     if let FunctionBody::Builtin(BuiltinKind::Io) = body.as_ref() {
                         return true;
                     }
@@ -4856,13 +4872,13 @@ pub fn lower_function<'db>(
     func_loc: FunctionLoc<'db>,
     opt: crate::OptLevel,
 ) -> MirFunction {
-    let body = function_body(db, func_loc);
-    let source_map = function_body_source_map(db, func_loc);
+    let body = baml_compiler2_ppir::function_body(db, func_loc);
+    let source_map = baml_compiler2_ppir::function_body_source_map(db, func_loc);
     let item_ref = def_to_item_ref(
         db,
         baml_compiler2_hir::contributions::Definition::Function(func_loc),
     );
-    let sig = function_signature(db, func_loc);
+    let sig = baml_compiler2_ppir::function_signature(db, func_loc);
     let arity = sig.params.len();
 
     match body.as_ref() {

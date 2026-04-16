@@ -2057,6 +2057,124 @@ string"
         L_BRACE "{"
         INTEGER_LITERAL "1"
         R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "NoColonSingle"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "x"
+        TYPE_EXPR "int"
+          WORD "int"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR "{
+    x
+}"
+        L_BRACE "{"
+        WORD "x"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "NoColonMultiple"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "a"
+        TYPE_EXPR "int"
+          WORD "int"
+      COMMA ","
+      PARAMETER
+        WORD "b"
+        TYPE_EXPR "string"
+          WORD "string"
+      COMMA ","
+      PARAMETER
+        WORD "c"
+        TYPE_EXPR "bool"
+          WORD "bool"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR "{
+    a
+}"
+        L_BRACE "{"
+        WORD "a"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "MixedColons"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "a"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      COMMA ","
+      PARAMETER
+        WORD "b"
+        TYPE_EXPR "string"
+          WORD "string"
+      COMMA ","
+      PARAMETER
+        WORD "c"
+        COLON ":"
+        TYPE_EXPR "bool"
+          WORD "bool"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR "{
+    a
+}"
+        L_BRACE "{"
+        WORD "a"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "NoColonComplexTypes"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "items"
+        TYPE_EXPR "int[]"
+          WORD "int"
+          L_BRACKET "["
+          R_BRACKET "]"
+      COMMA ","
+      PARAMETER
+        WORD "mapping"
+        TYPE_EXPR
+          WORD "map"
+          TYPE_ARGS
+            LESS "<"
+            TYPE_EXPR "string"
+              WORD "string"
+            COMMA ","
+            TYPE_EXPR "int"
+              WORD "int"
+            GREATER ">"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        STRING_LITERAL "done"
+          QUOTE """
+          WORD "done"
+          QUOTE """
+        R_BRACE "}"
 
 === ERRORS ===
 None

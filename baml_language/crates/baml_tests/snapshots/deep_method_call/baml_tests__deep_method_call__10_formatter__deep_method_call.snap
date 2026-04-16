@@ -6,7 +6,7 @@ source: crates/baml_tests/src/generated_tests.rs
 // ("a"/"b") instead of using the receiver type and last segment ("B.method").
 
 class B {
-    label: string
+    label: string,
 
     function greet(self) -> string {
         self.label
@@ -14,7 +14,7 @@ class B {
 }
 
 class A {
-    b: B
+    b: B,
 }
 
 // Two-segment method call: a.b is the receiver, greet is the method.

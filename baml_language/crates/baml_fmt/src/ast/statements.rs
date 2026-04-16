@@ -281,6 +281,8 @@ impl Printable for LetStmt {
             let (semicolon_leading, _) = printer.trivia.get_for_range_split(semicolon.span());
             printer.print_trivia_squished(semicolon_leading);
             printer.print_raw_token(semicolon);
+        } else {
+            printer.print_str(";");
         }
         PrintInfo { multi_lined }
     }

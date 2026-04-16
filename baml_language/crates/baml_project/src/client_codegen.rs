@@ -239,7 +239,7 @@ fn convert_tir_leaf(ty: &TirTy) -> cg::Ty {
         TirTy::Primitive(PrimitiveType::Pdf, _) => cg::Ty::Media(baml_db::MediaKind::Pdf),
 
         // Named types
-        TirTy::Class(qtn, _) => cg::Ty::Class(cg::Name {
+        TirTy::Class(qtn, _, _) => cg::Ty::Class(cg::Name {
             name: qtn.name().clone(),
             namespace: namespace_for(qtn.name().as_str()),
         }),

@@ -1092,6 +1092,7 @@ impl LoweringContext {
                                     name,
                                     ty: crate::ast::TypeExpr::Path {
                                         segments: vec![Name::new(&text)],
+                                        generic_args: vec![],
                                         attrs: vec![],
                                     },
                                 };
@@ -2862,6 +2863,7 @@ impl LoweringContext {
             type_expr: Some(SpannedTypeExpr {
                 expr: TypeExpr::Path {
                     segments: vec![Name::new("testing"), Name::new("TestCollector")],
+                    generic_args: vec![],
                     attrs: vec![],
                 },
                 span,

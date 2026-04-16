@@ -38,9 +38,11 @@ pub struct RawAttributeArg {
 /// happens once during `lower_file` and is never repeated.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum TypeExpr {
-    /// Named type path: `User`, `baml.http.Request`
+    /// Named type path: `User`, `baml.http.Request`, `Stream<T>`
     Path {
         segments: Vec<Name>,
+        /// Generic type arguments (e.g., `<T>` in `Stream<T>`). Empty for non-generic paths.
+        generic_args: Vec<TypeExpr>,
         attrs: Vec<RawAttribute>,
     },
     /// Primitive types

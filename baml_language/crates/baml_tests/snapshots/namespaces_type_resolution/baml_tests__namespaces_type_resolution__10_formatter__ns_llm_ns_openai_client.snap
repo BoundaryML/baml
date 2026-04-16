@@ -9,13 +9,13 @@ source: crates/baml_tests/src/generated_tests.rs
 // ═══════════════════════════════════════════════════════════════════
 
 class Client {
-    api_key: string
-    org_id: string
+    api_key: string,
+    org_id: string,
 }
 
 class Error {
-    status_code: int
-    body: string
+    status_code: int,
+    body: string,
 }
 
 enum Model {

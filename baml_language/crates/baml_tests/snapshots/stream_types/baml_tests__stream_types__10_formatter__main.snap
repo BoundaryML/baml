@@ -4,10 +4,10 @@ source: crates/baml_tests/src/generated_tests.rs
 // ── Primitives ──────────────────────────────────────────────
 
 class Primitives {
-    name: string
-    count: int
-    flag: bool
-    score: float
+    name: string,
+    count: int,
+    flag: bool,
+    score: float,
 }
 
 // ── Enums ───────────────────────────────────────────────────
@@ -18,59 +18,59 @@ enum Status {
 }
 
 class WithEnum {
-    status: Status
+    status: Status,
 }
 
 // ── Literals ────────────────────────────────────────────────
 
 class WithLiterals {
-    type: "resume"
-    version: 1
-    enabled: true
+    type: "resume",
+    version: 1,
+    enabled: true,
 }
 
 // ── Classes ─────────────────────────────────────────────────
 
 class Inner {
-    value: string
+    value: string,
 }
 
 class Outer {
-    inner: Inner
+    inner: Inner,
 }
 
 // ── Collections ─────────────────────────────────────────────
 
 class WithLists {
-    strings: string[]
-    ints: int[]
-    classes: Inner[]
+    strings: string[],
+    ints: int[],
+    classes: Inner[],
 }
 
 class WithMaps {
-    simple: map<string, int>
-    complex: map<string, Inner>
+    simple: map<string, int>,
+    complex: map<string, Inner>,
 }
 
 class WithNested {
-    matrix: int[][]
-    class_matrix: Inner[][]
-    nested_map: map<string, int[]>
-    class_nested_map: map<string, Inner[]>
+    matrix: int[][],
+    class_matrix: Inner[][],
+    nested_map: map<string, int[]>,
+    class_nested_map: map<string, Inner[]>,
 }
 
 // ── Unions & Optionals ──────────────────────────────────────
 
 class WithUnions {
-    simple: int | string
-    with_class: Inner | Primitives
-    mixed: int | Inner
+    simple: int | string,
+    with_class: Inner | Primitives,
+    mixed: int | Inner,
 }
 
 class WithOptionals {
-    name: string?
-    inner: Inner?
-    items: int[]?
+    name: string?,
+    inner: Inner?,
+    items: int[]?,
 }
 
 // ── Type Aliases ────────────────────────────────────────────
@@ -86,48 +86,48 @@ type OptionalAlias = Inner?;
 // ── Dynamic ─────────────────────────────────────────────────
 
 class DynamicClass {
-    name: string
+    name: string,
     @@dynamic
 }
 
 // ── All Defaults (comprehensive) ────────────────────────────
 
 class Education {
-    school: string
-    year: int
+    school: string,
+    year: int,
 }
 
 type AliasedType = string | int;
 
 class AllDefaults {
-    name: string
-    age: int
-    score: float
-    active: bool
-    type: "resume"
-    version: 42
-    status: Status
-    edu: Education
-    scores: int[]
-    education: Education[]
-    nested_edu: Education[][]
-    edu_map: map<string, Education>
-    data: AliasedType
-    mixed: int | Education
-    maybe: string?
-    maybe_list: int[]?
+    name: string,
+    age: int,
+    score: float,
+    active: bool,
+    type: "resume",
+    version: 42,
+    status: Status,
+    edu: Education,
+    scores: int[],
+    education: Education[],
+    nested_edu: Education[][],
+    edu_map: map<string, Education>,
+    data: AliasedType,
+    mixed: int | Education,
+    maybe: string?,
+    maybe_list: int[]?,
 }
 
 // ── Basic Generation ────────────────────────────────────────
 
 class Resume {
-    name: string
-    age: int
-    type: "resume"
-    status: Status
-    education: Education[]
-    scores: int[]
-    metadata: map<string, string>
+    name: string,
+    age: int,
+    type: "resume",
+    status: Status,
+    education: Education[],
+    scores: int[],
+    metadata: map<string, string>,
 }
 
 type MixedType = int | Education;
@@ -135,14 +135,14 @@ type MixedType = int | Education;
 // ── Complex / Recursive ─────────────────────────────────────
 
 class TreeNode {
-    value: string
-    children: TreeNode[]
+    value: string,
+    children: TreeNode[],
 }
 
 class Container {
-    matrix: int[][]
-    grid: TreeNode[][]
-    groups: map<string, TreeNode[]>
+    matrix: int[][],
+    grid: TreeNode[][],
+    groups: map<string, TreeNode[]>,
 }
 
 type Foo = int | string;

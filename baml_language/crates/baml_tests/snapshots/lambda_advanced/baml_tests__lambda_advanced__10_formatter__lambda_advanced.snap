@@ -3,13 +3,13 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 // ── Chained map: two-step transform ───────────────────────────────
 function test_chained_map() -> int[] {
-    let items: int[] = [1, 2, 3]
+    let items: int[] = [1, 2, 3];
     let step1: int[] = items
         .map(
             (x) -> {
                 x * 10
             },
-        )
+        );
     step1
         .map(
             (x) -> {
@@ -20,7 +20,7 @@ function test_chained_map() -> int[] {
 
 // ── Map over strings to ints ──────────────────────────────────────
 function test_map_string_to_int() -> int[] {
-    let words: string[] = ["hello", "world"]
+    let words: string[] = ["hello", "world"];
     words
         .map(
             (w: string) -> int {
@@ -34,10 +34,10 @@ function test_higher_order_return() -> int {
     let make_adder = (n: int) -> {
         let adder = (x: int) -> int {
             x + n
-        }
+        };
         adder
-    }
-    let add5 = make_adder(5)
+    };
+    let add5 = make_adder(5);
     add5(37)
 }
 
@@ -45,22 +45,22 @@ function test_higher_order_return() -> int {
 function test_lambda_calling_lambda() -> int {
     let double = (x: int) -> int {
         x * 2
-    }
+    };
     let apply_twice = (f: (int) -> int, x: int) -> int {
         f(f(x))
-    }
+    };
     apply_twice(double, 3)
 }
 
 // ── Capture across two nesting levels ────────────────────────────
 function test_deep_capture() -> int {
-    let a = 1
+    let a = 1;
     let f = (b: int) -> {
         let g = (c: int) -> int {
             a + b + c // captures a from grandparent, b from parent
-        }
+        };
         g(100)
-    }
+    };
     f(10) // 1 + 10 + 100 = 111
 }
 
@@ -68,9 +68,9 @@ function test_deep_capture() -> int {
 function test_generic_multi_instantiation() -> int {
     let id = <T>(x: T) -> T {
         x
-    }
-    let a: int = id(42)
-    let b: string = id("hello")
+    };
+    let a: int = id(42);
+    let b: string = id("hello");
     a
 }
 
@@ -82,7 +82,7 @@ function test_lambda_with_match() -> string {
             1 => "one",
             _ => "many",
         }
-    }
+    };
     describe(1)
 }
 
@@ -96,14 +96,14 @@ function test_lambda_with_if() -> string {
         } else {
             "positive"
         }
-    }
+    };
     classify(-5)
 }
 
 // ── Map with captured variable in lambda ─────────────────────────
 function test_map_with_capture() -> int[] {
-    let items: int[] = [1, 2, 3]
-    let factor = 10
+    let items: int[] = [1, 2, 3];
+    let factor = 10;
     items
         .map(
             (x) -> {
@@ -114,7 +114,7 @@ function test_map_with_capture() -> int[] {
 
 // ── Nested map: map inside a map callback ────────────────────────
 function test_nested_map() -> int[][] {
-    let matrix: int[][] = [[1, 2], [3, 4]]
+    let matrix: int[][] = [[1, 2], [3, 4]];
     // Flatten-map: for each row, map and collect
     matrix
         .map(
@@ -130,68 +130,38 @@ function test_nested_map() -> int[][] {
 
 // ── Map with multi-statement lambda body ─────────────────────────
 function test_map_multi_statement() -> int[] {
-    let items: int[] = [1, 2, 3]
+    let items: int[] = [1, 2, 3];
     items
         .map(
             (x) -> {
-                let doubled = x * 2
-                let offset = 100
+                let doubled = x * 2;
+                let offset = 100;
                 doubled + offset
-            },
-        )
-}
-
-// ── Map.map with two-param lambda ────────────────────────────────
-function test_map_entries() -> string[] {
-    let m: map<string, int> = { "a": 1, "b": 2 }
-    m.map(
-            (k: string, v: int) -> string {
-                k
-            },
-        )
-}
-
-// ── Map.map_values ───────────────────────────────────────────────
-function test_map_values_transform() -> int[] {
-    let m: map<string, int> = { "x": 10, "y": 20 }
-    m.map_values(
-            (v) -> {
-                v * 2
-            },
-        )
-}
-
-// ── Map.map_keys ─────────────────────────────────────────────────
-function test_map_keys_transform() -> string[] {
-    let m: map<string, int> = { "hello": 1 }
-    m.map_keys(
-            (k) -> {
-                k
             },
         )
 }
 
 // ── Lambda assigned then passed ──────────────────────────────────
 function test_lambda_variable_then_pass() -> int[] {
-    let items: int[] = [10, 20, 30]
+    let items: int[] = [10, 20, 30];
     let halve = (x: int) -> int {
         x / 2
-    }
+    };
     items.map(halve)
 }
 
 // ── Shadowing: lambda param shadows outer variable ───────────────
 function test_shadowing() -> string {
-    let x = "999"
-    let items: int[] = [1, 2, 3]
+    let x = "999";
+    let items: int[] = [1, 2, 3];
     let mapped: int[] = items
         .map(
             (x) -> {
                 x + 1
             },
-        )
+        );
     for (let y in mapped) {
-        let i = 0
+        let i = 0;
         while (i < y) {
             x += "1";
             i += 1
@@ -206,7 +176,7 @@ function test_iife() -> int {
         (x: int) -> int {
             x * x
         }
-    )(7) // 49
+    )(7); // 49
     result
 }
 
@@ -218,7 +188,7 @@ function test_optional_return() -> int? {
         } else {
             null
         }
-    }
+    };
     maybe(-1)
 }
 
@@ -228,7 +198,7 @@ function test_optional_return() -> int? {
 
 // ── map with no annotations at all: param AND return inferred ────
 function test_fully_inferred_map() -> int[] {
-    let items: int[] = [1, 2, 3]
+    let items: int[] = [1, 2, 3];
     items
         .map(
             (x) -> {
@@ -242,7 +212,7 @@ function test_fully_inferred_map() -> int[] {
 
 // ── map where return type changes: infer U != T ──────────────────
 function test_map_type_change_inferred() -> string[] {
-    let nums: int[] = [1, 2, 3]
+    let nums: int[] = [1, 2, 3];
     nums.map(
             (n) -> {
                 match (n) {
@@ -256,23 +226,9 @@ function test_map_type_change_inferred() -> string[] {
     // U binds to "one"|"two"|"other", result is string[]?
 }
 
-// ── map_values: V inferred, return type inferred ─────────────────
-function test_map_values_fully_inferred() -> string[] {
-    let m: map<string, int> = { "x": 10, "y": 20 }
-    m.map_values(
-            (v) -> {
-                if (v > 15) {
-                    "big"
-                } else {
-                    "small"
-                }
-            },
-        )
-}
-
 // ── Lambda returning literal 0 — does U bind to 0 or int? ───────
 function test_literal_return_inference() -> int[] {
-    let items: int[] = [1, 2, 3]
+    let items: int[] = [1, 2, 3];
     items
         .map(
             (x) -> {
@@ -285,13 +241,13 @@ function test_literal_return_inference() -> int[] {
 
 // ── Compose: fully inferred lambdas ──────────────────────────────
 function test_compose_inferred() -> int[] {
-    let items: int[] = [1, 2, 3]
+    let items: int[] = [1, 2, 3];
     let step1: int[] = items
         .map(
             (x) -> {
                 x * 2
             },
-        )
+        );
     step1
         .map(
             (x) -> {
@@ -306,11 +262,11 @@ function test_higher_order_inferred() -> int {
     let make_adder = (n: int) -> {
         let adder = (x: int) -> {
             x + n
-        }
+        };
         adder
-    }
+    };
     // make_adder return type inferred from body: (int) -> int
-    let add5 = make_adder(5)
+    let add5 = make_adder(5);
     add5(37)
 }
 
@@ -318,22 +274,22 @@ function test_higher_order_inferred() -> int {
 function test_apply_twice_inferred() -> int {
     let double = (x: int) -> {
         x * 2
-    }
+    };
     let apply_twice = (f: (int) -> int, x: int) -> {
         f(f(x))
-    }
+    };
     apply_twice(double, 3)
 }
 
 // ── Deep capture with inferred return types ──────────────────────
 function test_deep_capture_inferred() -> int {
-    let a = 1
+    let a = 1;
     let f = (b: int) -> {
         let g = (c: int) -> {
             a + b + c
-        }
+        };
         g(100)
-    }
+    };
     f(10)
 }
 
@@ -341,7 +297,7 @@ function test_deep_capture_inferred() -> int {
 function test_generic_apply_inferred() -> int {
     let apply = <T, U>(f: (T) -> U, x: T) -> U {
         f(x)
-    }
+    };
     apply(
         (x) -> {
             x * 2
@@ -356,7 +312,7 @@ function test_generic_apply_inferred() -> int {
 function test_two_transforms_inferred() -> int {
     let apply_both = (f: (int) -> int, g: (int) -> int, x: int) -> {
         g(f(x))
-    }
+    };
     apply_both(
         (x: int) -> {
             x * 2
@@ -370,7 +326,7 @@ function test_two_transforms_inferred() -> int {
 
 // ── Lambda in match arms: return type unified across arms ────────
 function test_lambda_in_match_inferred() -> int {
-    let op = "double"
+    let op = "double";
     let f = match (op) {
         "double" => {
             (x: int) -> {
@@ -387,14 +343,14 @@ function test_lambda_in_match_inferred() -> int {
                 x
             }
         },
-    }
+    };
     f(21)
 }
 
 // ── Capture + map: inferred capture type flows into lambda ───────
 function test_capture_in_map_inferred() -> int[] {
-    let items: int[] = [1, 2, 3]
-    let factor = 10
+    let items: int[] = [1, 2, 3];
+    let factor = 10;
     items
         .map(
             (x) -> {
@@ -406,10 +362,10 @@ function test_capture_in_map_inferred() -> int[] {
 
 // ── Void lambda: no return value ─────────────────────────────────
 function test_void_lambda_inferred() -> int {
-    let count = 0
+    let count = 0;
     let inc = () -> {
         count += 1
-    }
+    };
     inc();
     inc();
     count
@@ -417,7 +373,7 @@ function test_void_lambda_inferred() -> int {
 
 function test_void_lambda_inferred_captures() -> int {
     let inc = () -> {
-        let count = 0
+        let count = 0;
         let inc = () -> {
             count += 1;
             count
@@ -433,16 +389,16 @@ function test_void_lambda_inferred_captures() -> int {
 function test_capture_lambda_inferred() -> int {
     let multiply = (a: int, b: int) -> {
         a * b
-    }
+    };
     let double = (x: int) -> {
         multiply(x, 2)
-    }
+    };
     double(21)
 }
 
 // ── Map over optional array: param type int? inferred ────────────
 function test_map_optional_inferred() -> int[] {
-    let items: int?[] = [1, null, 3]
+    let items: int?[] = [1, null, 3];
     items
         .map(
             (x) -> {
@@ -458,8 +414,8 @@ function test_map_optional_inferred() -> int[] {
 
 // ── Shadowing with inferred types ────────────────────────────────
 function test_shadowing_inferred() -> int[] {
-    let x = "not a number"
-    let items: int[] = [1, 2, 3]
+    let x = "not a number";
+    let items: int[] = [1, 2, 3];
     items
         .map(
             (x) -> {
@@ -476,15 +432,4 @@ function test_iife_inferred() -> int {
             x * x
         }
     )(7)
-}
-
-// ── Map.map two-param lambda with inferred types ─────────────────
-function test_map_entries_inferred() -> string[] {
-    let m: map<string, int> = { "a": 1, "b": 2 }
-    m.map(
-            (k, v) -> {
-                k
-            },
-        )
-    // k: string inferred from K, v: int inferred from V
 }

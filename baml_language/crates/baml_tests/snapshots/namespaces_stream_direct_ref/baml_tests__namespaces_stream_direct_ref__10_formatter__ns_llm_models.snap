@@ -4,11 +4,11 @@ source: crates/baml_tests/src/generated_tests.rs
 // llm namespace types for cross-namespace $stream references.
 
 class Config {
-    model: string
+    model: string,
 }
 
 class Response {
-    text: string
+    text: string,
 }
 
 // Bare $stream from same namespace
@@ -23,6 +23,6 @@ function LlmUsesRootStream(c: root.Config$stream) -> string {
 
 // Class with cross-namespace $stream fields
 class LlmWithStreamFields {
-    own_stream: Response$stream
-    root_stream: root.Config$stream
+    own_stream: Response$stream,
+    root_stream: root.Config$stream,
 }

@@ -80,6 +80,52 @@ impl BuiltinResolution<'_> {
     }
 }
 
+struct OptionalBaseInfo {
+    expanded: Ty,
+    inner: Ty,
+}
+
+impl OptionalBaseInfo {
+    fn is_nullable(&self) -> bool {
+        self.expanded != self.inner
+    }
+
+    fn is_null_only(&self) -> bool {
+        matches!(self.inner, Ty::Never { .. })
+    }
+}
+
+/// Result from the shared call pipeline. Callers use this to decide
+/// expression-specific postprocessing (subtype checks, optional wrapping).
+struct CheckedCallInner {
+    /// The inferred return type after generic substitution and typevar erasure.
+    result: Ty,
+    /// Whether generic bindings were inferred while checking the call.
+    had_bindings: bool,
+}
+
+#[derive(Clone, Copy)]
+struct CallContext<'a> {
+    expr_id: ExprId,
+    args: &'a [ExprId],
+    body: &'a ExprBody,
+    expected: &'a Ty,
+}
+
+struct CallCheckRequest<'a> {
+    context: CallContext<'a>,
+    callee_ty: Ty,
+    is_method_call: bool,
+    is_optional_call: bool,
+}
+
+#[derive(Clone, Copy)]
+struct OptionalCallContext<'a> {
+    call: CallContext<'a>,
+    callee_id: ExprId,
+    is_method_call: bool,
+}
+
 /// Per-scope inference builder.
 ///
 /// Created at the start of `infer_scope_types`, discarded when done.
@@ -92,6 +138,10 @@ pub struct TypeInferenceBuilder<'db> {
     /// Binding types: the type a variable is bound to (may differ from the
     /// initializer expression type due to widening or annotation).
     bindings: FxHashMap<PatId, Ty>,
+    /// Tracks `let`-bound locals back to their binding pattern so container
+    /// establishment can keep declaration-side binding types in sync with the
+    /// flow-sensitive local type seen by MIR lowering.
+    let_binding_patterns: FxHashMap<Name, PatId>,
     /// Member resolutions: for field-access expressions that resolved to a
     /// class field, enum variant, method, or free function — records the
     /// structural path so MIR can emit the correct `QualifiedName` and LSP
@@ -173,6 +223,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             context,
             expressions: FxHashMap::default(),
             bindings: FxHashMap::default(),
+            let_binding_patterns: FxHashMap::default(),
             resolutions: FxHashMap::default(),
             res_ctx,
             package_items,
@@ -250,9 +301,255 @@ impl<'db> TypeInferenceBuilder<'db> {
         self.locals.insert(name, ty);
     }
 
+    fn sync_let_binding_type(&mut self, name: &Name, ty: Ty) {
+        if let Some(pattern_id) = self.let_binding_patterns.get(name).copied() {
+            self.bindings.insert(pattern_id, ty);
+        }
+    }
+
     /// Record the type of an expression.
     pub fn record_expr_type(&mut self, expr_id: ExprId, ty: Ty) {
         self.expressions.insert(expr_id, ty);
+    }
+
+    fn expand_alias_chains(&self, ty: Ty) -> Ty {
+        let mut ty = ty;
+        for _ in 0..64 {
+            match &ty {
+                Ty::TypeAlias(qtn, _) => match self.aliases.get(qtn) {
+                    Some(expanded) => ty = expanded.clone(),
+                    None => break,
+                },
+                _ => break,
+            }
+        }
+        ty
+    }
+
+    fn analyze_optional_base(&self, ty: &Ty) -> OptionalBaseInfo {
+        let expanded = self.expand_alias_chains(ty.clone());
+        let inner = crate::narrowing::remove_null(&expanded);
+        OptionalBaseInfo { expanded, inner }
+    }
+
+    fn infer_args_for_recovery(&mut self, args: &[ExprId], body: &ExprBody) {
+        for arg in args {
+            self.infer_expr(*arg, body);
+        }
+    }
+
+    /// Shared call pipeline: alias expansion, function matching, `skip_self_param`,
+    /// arity check, two-pass generic inference, return type substitution.
+    ///
+    /// Does NOT perform the final subtype check or `record_expr_type`; callers handle those.
+    fn check_call_inner(&mut self, request: CallCheckRequest<'_>) -> CheckedCallInner {
+        let CallCheckRequest {
+            context:
+                CallContext {
+                    expr_id,
+                    args,
+                    body,
+                    expected,
+                },
+            callee_ty,
+            is_method_call,
+            is_optional_call,
+        } = request;
+        let callee_ty = self.expand_alias_chains(callee_ty);
+
+        match &callee_ty {
+            Ty::Function { params, ret, .. } => {
+                let effective_params = if is_method_call {
+                    crate::generics::skip_self_param(params)
+                } else {
+                    params.as_slice()
+                };
+
+                if effective_params.len() != args.len() {
+                    self.context.report_simple(
+                        TirTypeError::ArgumentCountMismatch {
+                            expected: effective_params.len(),
+                            got: args.len(),
+                        },
+                        expr_id,
+                    );
+                }
+
+                let mut bindings = FxHashMap::default();
+
+                let phase0_expected = if is_optional_call
+                    && !matches!(expected, Ty::Unknown { .. } | Ty::Error { .. })
+                {
+                    let ret_info = self.analyze_optional_base(ret);
+                    let expected_info = self.analyze_optional_base(expected);
+                    if ret_info.is_nullable() {
+                        Some(expected_info.expanded)
+                    } else if expected_info.is_null_only() {
+                        None
+                    } else {
+                        Some(expected_info.inner)
+                    }
+                } else {
+                    Some(expected.clone())
+                };
+
+                // Phase 0: reverse-infer from expected return type (low priority).
+                // Skip when expected is Unknown/Error — it provides no information
+                // and would pollute forward-inferred bindings.
+                if let Some(phase0_expected) = phase0_expected.as_ref() {
+                    if crate::generics::contains_typevar(ret)
+                        && !matches!(phase0_expected, Ty::Unknown { .. } | Ty::Error { .. })
+                    {
+                        crate::generics::infer_bindings(ret, phase0_expected, &mut bindings);
+                    }
+                }
+
+                // Phase 1: forward-infer from arguments (high priority, overrides).
+                // Two-pass: first process non-lambda args to bind type vars,
+                // then process lambda args with resolved bindings.
+                let param_arg_pairs: Vec<_> = effective_params.iter().zip(args.iter()).collect();
+
+                for ((_, param_ty), arg) in &param_arg_pairs {
+                    if matches!(&body.exprs[**arg], Expr::Lambda(_)) {
+                        continue;
+                    }
+                    let substituted = crate::generics::substitute_ty(param_ty, &bindings);
+                    let arg_ty = if !crate::generics::contains_typevar(&substituted) {
+                        self.check_expr(**arg, body, &substituted)
+                    } else {
+                        self.infer_expr(**arg, body)
+                    };
+                    crate::generics::infer_bindings(param_ty, &arg_ty, &mut bindings);
+                }
+
+                for ((_, param_ty), arg) in &param_arg_pairs {
+                    if !matches!(&body.exprs[**arg], Expr::Lambda(_)) {
+                        continue;
+                    }
+                    let substituted = crate::generics::substitute_ty(param_ty, &bindings);
+                    let arg_ty = if !crate::generics::contains_typevar(&substituted) {
+                        self.check_expr(**arg, body, &substituted)
+                    } else if let Ty::Function {
+                        params: fn_params, ..
+                    } = &substituted
+                    {
+                        let all_params_concrete = fn_params
+                            .iter()
+                            .all(|(_, t)| !crate::generics::contains_typevar(t));
+                        if all_params_concrete {
+                            self.check_expr(**arg, body, &substituted)
+                        } else {
+                            self.infer_expr(**arg, body)
+                        }
+                    } else {
+                        self.infer_expr(**arg, body)
+                    };
+                    crate::generics::infer_bindings(param_ty, &arg_ty, &mut bindings);
+                }
+
+                // Infer any extra args beyond param count (error recovery)
+                for arg in args.iter().skip(effective_params.len()) {
+                    self.infer_expr(*arg, body);
+                }
+
+                let substituted_ret = crate::generics::substitute_ty(ret, &bindings);
+                let mut erase_diags = Vec::new();
+                let result =
+                    crate::generics::erase_unresolved_typevars(&substituted_ret, &mut erase_diags);
+                for d in erase_diags {
+                    self.context.report_simple(d, expr_id);
+                }
+
+                CheckedCallInner {
+                    result,
+                    had_bindings: !bindings.is_empty(),
+                }
+            }
+            Ty::Unknown { .. } | Ty::Error { .. } => {
+                self.infer_args_for_recovery(args, body);
+                CheckedCallInner {
+                    result: Ty::Unknown {
+                        attr: TyAttr::default(),
+                    },
+                    had_bindings: false,
+                }
+            }
+            _ => {
+                self.context.report_simple(
+                    TirTypeError::NotCallable {
+                        ty: callee_ty.clone(),
+                    },
+                    expr_id,
+                );
+                self.infer_args_for_recovery(args, body);
+                CheckedCallInner {
+                    result: Ty::Unknown {
+                        attr: TyAttr::default(),
+                    },
+                    had_bindings: false,
+                }
+            }
+        }
+    }
+
+    fn report_result_type_mismatch(&mut self, expr_id: ExprId, got: &Ty, expected: &Ty) {
+        if !matches!(expected, Ty::Unknown { .. } | Ty::Error { .. })
+            && !self.is_subtype(got, expected)
+        {
+            self.context.report(
+                TirTypeError::TypeMismatch {
+                    expected: expected.clone(),
+                    got: got.clone(),
+                },
+                expr_id,
+                Vec::new(),
+            );
+        }
+    }
+
+    fn finalize_optional_callee_call(
+        &mut self,
+        context: OptionalCallContext<'_>,
+        callee_ty: &Ty,
+    ) -> Ty {
+        let OptionalCallContext {
+            call,
+            callee_id,
+            is_method_call,
+        } = context;
+        let CallContext {
+            expr_id,
+            args,
+            body,
+            expected,
+        } = call;
+        let callee_info = self.analyze_optional_base(callee_ty);
+
+        if let Some(result_ty) = self.try_container_method_call(callee_id, args, body) {
+            let final_ty = Self::make_optional(result_ty);
+            self.report_result_type_mismatch(expr_id, &final_ty, expected);
+            self.record_expr_type(expr_id, final_ty.clone());
+            return final_ty;
+        }
+
+        if callee_info.is_null_only() {
+            self.infer_args_for_recovery(args, body);
+            let ty = Ty::Primitive(PrimitiveType::Null, TyAttr::default());
+            self.report_result_type_mismatch(expr_id, &ty, expected);
+            self.record_expr_type(expr_id, ty.clone());
+            return ty;
+        }
+
+        let checked = self.check_call_inner(CallCheckRequest {
+            context: call,
+            callee_ty: callee_info.inner,
+            is_method_call,
+            is_optional_call: true,
+        });
+        let final_ty = Self::make_optional(checked.result);
+        self.report_result_type_mismatch(expr_id, &final_ty, expected);
+        self.record_expr_type(expr_id, final_ty.clone());
+        final_ty
     }
 
     // ── Bidirectional Type Checking ─────────────────────────────────────────
@@ -388,9 +685,10 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // Optional chaining: a?.b — if a is null, short-circuit to null.
                 // Type: if a: T?, resolve member on T, wrap result in Optional.
                 let base_ty = self.infer_expr(*base, body);
-                let inner_ty = crate::narrowing::remove_null(&base_ty);
+                let base_info = self.analyze_optional_base(&base_ty);
                 // E2: warn if base is not nullable (?.  is unnecessary)
-                if inner_ty == base_ty && !matches!(base_ty, Ty::Unknown { .. } | Ty::Error { .. })
+                if !base_info.is_nullable()
+                    && !matches!(base_ty, Ty::Unknown { .. } | Ty::Error { .. })
                 {
                     let base_text = body.display_expr(*base);
                     self.context.report_simple(
@@ -401,11 +699,11 @@ impl<'db> TypeInferenceBuilder<'db> {
                         expr_id,
                     );
                 }
-                if matches!(inner_ty, Ty::Never { .. }) {
+                if base_info.is_null_only() {
                     // Base is just null — result is null
                     Ty::Primitive(PrimitiveType::Null, TyAttr::default())
                 } else {
-                    let member_ty = self.resolve_member(&inner_ty, member, expr_id);
+                    let member_ty = self.resolve_member(&base_info.inner, member, expr_id);
                     Self::make_optional(member_ty)
                 }
             }
@@ -509,6 +807,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                             .map(|def| {
                                 Ty::Class(
                                     crate::lower_type_expr::qualify_def(self.context.db(), def, n),
+                                    vec![],
                                     TyAttr::default(),
                                 )
                             })
@@ -572,9 +871,10 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // Optional chaining: a?.[expr] — short-circuits to null if a is null.
                 let base_ty = self.infer_expr(*base, body);
                 self.infer_expr(*index, body);
-                let inner_ty = crate::narrowing::remove_null(&base_ty);
+                let base_info = self.analyze_optional_base(&base_ty);
                 // E2: warn if base is not nullable
-                if inner_ty == base_ty && !matches!(base_ty, Ty::Unknown { .. } | Ty::Error { .. })
+                if !base_info.is_nullable()
+                    && !matches!(base_ty, Ty::Unknown { .. } | Ty::Error { .. })
                 {
                     let base_text = body.display_expr(*base);
                     let expr_text = body.display_expr(expr_id);
@@ -586,19 +886,23 @@ impl<'db> TypeInferenceBuilder<'db> {
                         expr_id,
                     );
                 }
-                if matches!(inner_ty, Ty::Never { .. }) {
+                if base_info.is_null_only() {
                     Ty::Primitive(PrimitiveType::Null, TyAttr::default())
                 } else {
-                    let elem_ty = match inner_ty {
-                        Ty::List(elem_ty, _) | Ty::EvolvingList(elem_ty, _) => *elem_ty,
-                        Ty::Map(_, val_ty, _) | Ty::EvolvingMap(_, val_ty, _) => *val_ty,
+                    let elem_ty = match &base_info.inner {
+                        Ty::List(elem_ty, _) | Ty::EvolvingList(elem_ty, _) => {
+                            elem_ty.as_ref().clone()
+                        }
+                        Ty::Map(_, val_ty, _) | Ty::EvolvingMap(_, val_ty, _) => {
+                            val_ty.as_ref().clone()
+                        }
                         Ty::Unknown { .. } | Ty::Error { .. } => Ty::Unknown {
                             attr: TyAttr::default(),
                         },
                         _ => {
                             self.context.report_simple(
                                 TirTypeError::NotIndexable {
-                                    ty: inner_ty.clone(),
+                                    ty: base_info.inner.clone(),
                                 },
                                 expr_id,
                             );
@@ -883,8 +1187,8 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
             // Object: if expected is Class(name), check fields against declared types.
             Expr::Object { fields, .. } => {
-                if let Ty::Class(class_name, _) = expected {
-                    let field_types = self.lookup_class_fields(class_name);
+                if let Ty::Class(class_name, type_args, _) = expected {
+                    let field_types = self.lookup_class_fields(class_name, type_args);
                     for (field_name, field_expr) in fields {
                         if let Some(declared_ty) = field_types.get(field_name) {
                             self.check_expr(*field_expr, body, declared_ty);
@@ -948,10 +1252,30 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
             // Call expressions: generic type inference + argument checking.
             Expr::Call { callee, args } => {
-                // Container mutation fast path (e.g. x.push(val) on EvolvingList)
-                if let Some(result_ty) =
-                    self.try_container_method_call(expr_id, *callee, args, body)
+                if matches!(&body.exprs[*callee], Expr::OptionalMemberAccess { .. })
+                    && self.in_optional_chain > 0
                 {
+                    let callee_ty = self.infer_expr(*callee, body);
+                    return self.finalize_optional_callee_call(
+                        OptionalCallContext {
+                            call: CallContext {
+                                expr_id,
+                                args,
+                                body,
+                                expected,
+                            },
+                            callee_id: *callee,
+                            is_method_call: true,
+                        },
+                        &callee_ty,
+                    );
+                }
+
+                // Container mutation fast path (e.g. x.push(val) on EvolvingList)
+                if matches!(&body.exprs[*callee], Expr::MemberAccess { .. })
+                    && let Some(result_ty) = self.try_container_method_call(*callee, args, body)
+                {
+                    self.report_result_type_mismatch(expr_id, &result_ty, expected);
                     self.record_expr_type(expr_id, result_ty.clone());
                     return result_ty;
                 }
@@ -972,163 +1296,59 @@ impl<'db> TypeInferenceBuilder<'db> {
                 };
                 let callee_ty = self.infer_expr(*callee, body);
 
-                // Expand type alias chains so alias-over-function types are callable.
-                // Bare alias cycles are already caught by find_invalid_alias_cycles (Tarjan SCC)
-                // before we reach here, so the depth guard is cheap insurance.
-                let callee_ty = {
-                    let mut ty = callee_ty;
-                    for _ in 0..64 {
-                        match &ty {
-                            Ty::TypeAlias(qtn, _) => match self.aliases.get(qtn) {
-                                Some(expanded) => ty = expanded.clone(),
-                                None => break,
-                            },
-                            _ => break,
-                        }
-                    }
-                    ty
-                };
+                let checked = self.check_call_inner(CallCheckRequest {
+                    context: CallContext {
+                        expr_id,
+                        args,
+                        body,
+                        expected,
+                    },
+                    callee_ty,
+                    is_method_call,
+                    is_optional_call: false,
+                });
 
-                match &callee_ty {
-                    Ty::Function { params, ret, .. } => {
-                        let effective_params = if is_method_call {
-                            crate::generics::skip_self_param(params)
-                        } else {
-                            params.as_slice()
-                        };
-
-                        if effective_params.len() != args.len() {
-                            self.context.report_simple(
-                                TirTypeError::ArgumentCountMismatch {
-                                    expected: effective_params.len(),
-                                    got: args.len(),
-                                },
-                                expr_id,
-                            );
-                        }
-
-                        let mut bindings = FxHashMap::default();
-
-                        // Phase 0: reverse-infer from expected return type (low priority).
-                        // Skip when expected is Unknown/Error — it provides no
-                        // information and would pollute forward-inferred bindings
-                        // via union_ty (e.g. T = unknown | Node instead of Node).
-                        if crate::generics::contains_typevar(ret)
-                            && !matches!(expected, Ty::Unknown { .. } | Ty::Error { .. })
-                        {
-                            crate::generics::infer_bindings(ret, expected, &mut bindings);
-                        }
-
-                        // Phase 1: forward-infer from arguments (high priority, overrides).
-                        // Two-pass: first process non-lambda args to bind type vars,
-                        // then process lambda args with resolved bindings. This allows
-                        // `apply((x) -> { x * 2 }, 21)` to bind T=int from `21` before
-                        // checking the lambda against `(T) -> U`.
-                        let param_arg_pairs: Vec<_> =
-                            effective_params.iter().zip(args.iter()).collect();
-
-                        // Pass 1: non-lambda arguments — bind type variables
-                        for ((_, param_ty), arg) in &param_arg_pairs {
-                            if matches!(&body.exprs[**arg], Expr::Lambda(_)) {
-                                continue;
-                            }
-                            let substituted = crate::generics::substitute_ty(param_ty, &bindings);
-                            let arg_ty = if !crate::generics::contains_typevar(&substituted) {
-                                self.check_expr(**arg, body, &substituted)
-                            } else {
-                                self.infer_expr(**arg, body)
-                            };
-                            crate::generics::infer_bindings(param_ty, &arg_ty, &mut bindings);
-                        }
-
-                        // Pass 2: lambda arguments — type vars now resolved from pass 1
-                        for ((_, param_ty), arg) in &param_arg_pairs {
-                            if !matches!(&body.exprs[**arg], Expr::Lambda(_)) {
-                                continue;
-                            }
-                            let substituted = crate::generics::substitute_ty(param_ty, &bindings);
-                            let arg_ty = if !crate::generics::contains_typevar(&substituted) {
-                                self.check_expr(**arg, body, &substituted)
-                            } else if let Ty::Function {
-                                params: fn_params, ..
-                            } = &substituted
-                            {
-                                let all_params_concrete = fn_params
-                                    .iter()
-                                    .all(|(_, t)| !crate::generics::contains_typevar(t));
-                                if all_params_concrete {
-                                    self.check_expr(**arg, body, &substituted)
-                                } else {
-                                    self.infer_expr(**arg, body)
-                                }
-                            } else {
-                                self.infer_expr(**arg, body)
-                            };
-                            crate::generics::infer_bindings(param_ty, &arg_ty, &mut bindings);
-                        }
-
-                        // Infer any extra args beyond param count (error recovery)
-                        for arg in args.iter().skip(effective_params.len()) {
-                            self.infer_expr(*arg, body);
-                        }
-
-                        // Phase 2: substitute return type and erase unresolved typevars
-                        let substituted_ret = crate::generics::substitute_ty(ret, &bindings);
-                        let mut erase_diags = Vec::new();
-                        let result = crate::generics::erase_unresolved_typevars(
-                            &substituted_ret,
-                            &mut erase_diags,
-                        );
-                        for d in erase_diags {
-                            self.context.report_simple(d, expr_id);
-                        }
-
-                        // Subtype check against expected type (skip if we did generic
-                        // inference — the inference already accounts for expected)
-                        if bindings.is_empty()
-                            && !matches!(expected, Ty::Unknown { .. } | Ty::Error { .. })
-                            && !self.is_subtype(&result, expected)
-                        {
-                            self.context.report(
-                                TirTypeError::TypeMismatch {
-                                    expected: expected.clone(),
-                                    got: result.clone(),
-                                },
-                                expr_id,
-                                Vec::new(),
-                            );
-                        }
-
-                        self.record_expr_type(expr_id, result.clone());
-                        result
-                    }
-                    Ty::Unknown { .. } | Ty::Error { .. } => {
-                        for arg in args {
-                            self.infer_expr(*arg, body);
-                        }
-                        let ty = Ty::Unknown {
-                            attr: TyAttr::default(),
-                        };
-                        self.record_expr_type(expr_id, ty.clone());
-                        ty
-                    }
-                    _ => {
-                        self.context.report_simple(
-                            TirTypeError::NotCallable {
-                                ty: callee_ty.clone(),
-                            },
-                            expr_id,
-                        );
-                        for arg in args {
-                            self.infer_expr(*arg, body);
-                        }
-                        let ty = Ty::Unknown {
-                            attr: TyAttr::default(),
-                        };
-                        self.record_expr_type(expr_id, ty.clone());
-                        ty
-                    }
+                if !checked.had_bindings {
+                    self.report_result_type_mismatch(expr_id, &checked.result, expected);
                 }
+
+                self.record_expr_type(expr_id, checked.result.clone());
+                checked.result
+            }
+            Expr::OptionalCall { callee, args } => {
+                let is_method_call = matches!(
+                    &body.exprs[*callee],
+                    Expr::MemberAccess { .. } | Expr::OptionalMemberAccess { .. }
+                );
+                let callee_ty = self.infer_expr(*callee, body);
+
+                if !self.analyze_optional_base(&callee_ty).is_nullable()
+                    && !matches!(&callee_ty, Ty::Unknown { .. } | Ty::Error { .. })
+                {
+                    let callee_text = body.display_expr(*callee);
+                    let expr_text = body.display_expr(expr_id);
+                    self.context.report_simple(
+                        TirTypeError::UnnecessaryOptionalChaining {
+                            expr: expr_text,
+                            base: callee_text,
+                        },
+                        expr_id,
+                    );
+                }
+
+                self.finalize_optional_callee_call(
+                    OptionalCallContext {
+                        call: CallContext {
+                            expr_id,
+                            args,
+                            body,
+                            expected,
+                        },
+                        callee_id: *callee,
+                        is_method_call,
+                    },
+                    &callee_ty,
+                )
             }
             // Catch: propagate expected type to the base expression
             Expr::Catch { base, clauses } => {
@@ -1368,6 +1588,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                         _ => None,
                     };
                     if let Some(name) = name {
+                        self.let_binding_patterns.insert(name.clone(), *pattern);
                         self.locals.insert(name.clone(), ty);
                         // Record declared type only for annotated let-bindings.
                         if let Some(decl_ty) = ann_ty_for_decl {
@@ -1784,6 +2005,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                         let st_name = baml_base::Name::new("StackTrace");
                         Ty::Class(
                             crate::lower_type_expr::qualify_def(db, def, &st_name),
+                            Vec::new(),
                             TyAttr::default(),
                         )
                     })
@@ -2170,6 +2392,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     self.lower_pattern_type_expr(
                         &TypeExpr::Path {
                             segments: vec![name.clone()],
+                            generic_args: vec![],
                             attrs: vec![],
                         },
                         at_expr,
@@ -2263,6 +2486,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     self.lower_pattern_type_expr(
                         &TypeExpr::Path {
                             segments: vec![name.clone()],
+                            generic_args: vec![],
                             attrs: vec![],
                         },
                         at_expr,
@@ -2296,7 +2520,7 @@ impl<'db> TypeInferenceBuilder<'db> {
 
     fn ty_panic_subset(&self, ty: &Ty) -> Option<Ty> {
         match ty {
-            Ty::Class(qtn, _) => qtn.is_panic_type().then(|| ty.clone()),
+            Ty::Class(qtn, _, _) => qtn.is_panic_type().then(|| ty.clone()),
             Ty::TypeAlias(qtn, _) => {
                 if let Some(expanded) = self.aliases.get(qtn) {
                     self.ty_panic_subset(expanded)
@@ -2471,6 +2695,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                         self.lower_pattern_type_expr(
                             &TypeExpr::Path {
                                 segments: vec![name.clone()],
+                                generic_args: vec![],
                                 attrs: vec![],
                             },
                             at_expr,
@@ -2570,7 +2795,10 @@ impl<'db> TypeInferenceBuilder<'db> {
                     || Self::ty_covers_fact(inner, fact)
             }
             Ty::Union(parts, _) => parts.iter().any(|part| Self::ty_covers_fact(part, fact)),
-            Ty::Class(qn, _) => matches!(fact, Ty::Class(fqn, _) if fqn == qn),
+            Ty::Class(qn, type_args, _) => matches!(
+                fact,
+                Ty::Class(fqn, fact_args, _) if fqn == qn && fact_args == type_args
+            ),
             Ty::Enum(qn, _) => match fact {
                 Ty::Enum(fqn, _) => fqn == qn,
                 Ty::EnumVariant(fqn, _, _) => fqn == qn,
@@ -2989,7 +3217,7 @@ impl<'db> TypeInferenceBuilder<'db> {
 
         // Fallback: 2-segment path with locals lookup (existing logic)
         let receiver = &segments[0];
-        if let Some(Ty::Class(qn, _)) = self.locals.get(receiver) {
+        if let Some(Ty::Class(qn, _, _)) = self.locals.get(receiver) {
             let ns = qn.namespace();
             let key = if ns.is_empty() {
                 format!("{}.{}", qn.name(), method)
@@ -3323,7 +3551,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 expr_id,
                 crate::inference::MemberResolution::Free { func_loc },
             );
-            let sig = baml_compiler2_hir::signature::function_signature(db, func_loc);
+            let sig = baml_compiler2_ppir::function_signature(db, func_loc);
             let mut diags = Vec::new();
             let ty = Ty::Function {
                 params: sig
@@ -3372,7 +3600,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             match def {
                 Definition::Class(_) => {
                     let class_qtn = crate::lower_type_expr::qualify_def(db, def, name);
-                    return Some(Ty::Class(class_qtn, TyAttr::default()));
+                    return Some(Ty::Class(class_qtn, vec![], TyAttr::default()));
                 }
                 Definition::Enum(_) => {
                     let enum_qtn = crate::lower_type_expr::qualify_def(db, def, name);
@@ -3432,7 +3660,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 Definition::Function(func_loc) => {
                     // Get function signature to build the function type
                     let db = self.context.db();
-                    let sig = baml_compiler2_hir::signature::function_signature(db, func_loc);
+                    let sig = baml_compiler2_ppir::function_signature(db, func_loc);
                     let item_tree = baml_compiler2_ppir::file_item_tree(db, func_loc.file(db));
                     let func_data = &item_tree[func_loc.id(db)];
                     let generic_params = &func_data.generic_params;
@@ -3490,6 +3718,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             match def {
                 Definition::Class(_) => Ty::Class(
                     crate::lower_type_expr::qualify_def(db, def, name),
+                    vec![],
                     TyAttr::default(),
                 ),
                 Definition::Enum(_) => Ty::Enum(
@@ -3520,9 +3749,9 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// the member doesn't exist.
     pub fn resolve_member(&mut self, base_ty: &Ty, member: &Name, at: ExprId) -> Ty {
         match base_ty {
-            Ty::Class(class_name, _) => {
+            Ty::Class(class_name, type_args, _) => {
                 // Check class fields
-                let class_fields = self.lookup_class_fields(class_name);
+                let class_fields = self.lookup_class_fields(class_name, type_args);
                 if let Some(field_ty) = class_fields.get(member) {
                     // Store field resolution for LSP navigation
                     if let Some(class_loc) = self.resolve_class_loc(class_name) {
@@ -3540,7 +3769,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // Check class methods via the item tree (methods are stored
                 // directly on the Class entry, not in the package namespace).
                 if let Some((ty, class_loc, func_loc)) =
-                    self.lookup_class_method(class_name, member)
+                    self.lookup_class_method(class_name, type_args, member)
                 {
                     self.resolutions.insert(
                         at,
@@ -3771,7 +4000,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         seg_idx: usize,
     ) -> Ty {
         match base_ty {
-            Ty::Class(class_name, _) => {
+            Ty::Class(class_name, _, _) => {
                 // Use the no-side-effect helper to check membership WITHOUT
                 // calling lookup_class_fields (which emits field-type diagnostics).
                 if self.class_has_member(class_name, member) {
@@ -3877,12 +4106,14 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// Used by `resolve_member` for union type handling.
     fn try_resolve_member_on_ty(&self, ty: &Ty, member: &Name) -> Option<Ty> {
         match ty {
-            Ty::Class(class_name, _) => {
-                let fields = self.lookup_class_fields(class_name);
+            Ty::Class(class_name, type_args, _) => {
+                let fields = self.lookup_class_fields(class_name, type_args);
                 if let Some(field_ty) = fields.get(member) {
                     return Some(field_ty.clone());
                 }
-                if let Some((method_ty, _, _)) = self.lookup_class_method(class_name, member) {
+                if let Some((method_ty, _, _)) =
+                    self.lookup_class_method(class_name, type_args, member)
+                {
                     return Some(method_ty);
                 }
                 None
@@ -3935,10 +4166,16 @@ impl<'db> TypeInferenceBuilder<'db> {
 
     /// Look up class fields from the package items (via item tree).
     ///
+    /// `class_type_args` are the concrete type arguments for the class (e.g.
+    /// `[Sentiment, Sentiment$stream]` for `Stream<Sentiment, Sentiment$stream>`).
+    /// When non-empty, field types are resolved with `lower_type_expr_with_generics`
+    /// so that type variables like `T` and `S` are substituted with concrete types.
+    ///
     /// Returns a map of field name → resolved field type.
     fn lookup_class_fields(
         &self,
         class_name: &crate::ty::QualifiedTypeName,
+        class_type_args: &[Ty],
     ) -> FxHashMap<Name, Ty> {
         let mut result = FxHashMap::default();
         let Some(pkg_items_for_class) = self.resolve_class_pkg_items(class_name.package()) else {
@@ -3953,20 +4190,36 @@ impl<'db> TypeInferenceBuilder<'db> {
                     .namespace_path;
             let item_tree = baml_compiler2_ppir::file_item_tree(self.context.db(), file);
             let class_data = &item_tree[class_loc.id(self.context.db())];
+
+            // Build bindings from declared generic params → concrete type args.
+            let bindings =
+                crate::generics::bind_type_vars(&class_data.generic_params, class_type_args);
+
             for field in &class_data.fields {
                 let mut diags = Vec::new();
                 let field_ty = field
                     .type_expr
                     .as_ref()
                     .map(|te| {
-                        let ty = crate::lower_type_expr::lower_type_expr_in_ns(
-                            self.context.db(),
-                            &te.expr,
-                            pkg_items_for_class,
-                            &ns_context,
-                            &class_data.generic_params,
-                            &mut diags,
-                        );
+                        let ty = if bindings.is_empty() {
+                            crate::lower_type_expr::lower_type_expr_in_ns(
+                                self.context.db(),
+                                &te.expr,
+                                pkg_items_for_class,
+                                &ns_context,
+                                &class_data.generic_params,
+                                &mut diags,
+                            )
+                        } else {
+                            crate::generics::lower_type_expr_with_generics(
+                                self.context.db(),
+                                &te.expr,
+                                pkg_items_for_class,
+                                &ns_context,
+                                &bindings,
+                                &mut diags,
+                            )
+                        };
                         for diag in diags.drain(..) {
                             self.context.report_at_span(diag, te.span);
                         }
@@ -4004,7 +4257,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             return true;
         }
         // Check methods.
-        self.lookup_class_method(class_name, member).is_some()
+        self.lookup_class_method(class_name, &[], member).is_some()
     }
 
     /// Check whether an enum has a variant with the given name.
@@ -4062,9 +4315,15 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// namespace), so we resolve the class, iterate its method IDs, and match
     /// by name. Returns the method type along with the class and function locs
     /// so callers can record a `MemberResolution`.
+    ///
+    /// `class_type_args` are the concrete type arguments for the class (e.g.
+    /// `[Sentiment, Sentiment$stream]` for `Stream<Sentiment, Sentiment$stream>`).
+    /// When non-empty, return types are resolved with `lower_type_expr_with_generics`
+    /// so that type variables like `T` and `S` are substituted with concrete types.
     fn lookup_class_method(
         &self,
         class_name: &crate::ty::QualifiedTypeName,
+        class_type_args: &[Ty],
         method_name: &Name,
     ) -> Option<(
         Ty,
@@ -4085,12 +4344,32 @@ impl<'db> TypeInferenceBuilder<'db> {
         for &method_id in &class_data.methods {
             let method_data = &item_tree[method_id];
             if method_data.name == *method_name {
+                // Build bindings from class-level generic params → concrete args.
+                let mut bindings =
+                    crate::generics::bind_type_vars(&class_data.generic_params, class_type_args);
+                // Seed method-level generics as TypeVar entries so they survive
+                // lowering and can be resolved by call-site inference.
+                for gp in &method_data.generic_params {
+                    bindings
+                        .entry(gp.clone())
+                        .or_insert_with(|| Ty::TypeVar(gp.clone(), TyAttr::default()));
+                }
+
+                let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(db, file, method_id);
+                let sig = baml_compiler2_ppir::function_signature(db, func_loc);
+                let mut diags = Vec::new();
+
+                // Build the self type WITH concrete type args.
+                let class_ty = Ty::Class(
+                    class_name.clone(),
+                    class_type_args.to_vec(),
+                    TyAttr::default(),
+                );
+
+                // All generic params for fallback lowering (class + method).
                 let mut all_generic_params = class_data.generic_params.clone();
                 all_generic_params.extend(method_data.generic_params.iter().cloned());
-                let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(db, file, method_id);
-                let sig = baml_compiler2_hir::signature::function_signature(db, func_loc);
-                let mut diags = Vec::new();
-                let class_ty = Ty::Class(class_name.clone(), TyAttr::default());
+
                 let ty = Ty::Function {
                     params: sig
                         .params
@@ -4101,13 +4380,22 @@ impl<'db> TypeInferenceBuilder<'db> {
                             {
                                 // self with no annotation → use the enclosing class type
                                 class_ty.clone()
-                            } else {
+                            } else if bindings.is_empty() {
                                 crate::lower_type_expr::lower_type_expr_in_ns(
                                     db,
                                     te,
                                     pkg_items_for_class,
                                     &ns_context,
                                     &all_generic_params,
+                                    &mut diags,
+                                )
+                            } else {
+                                crate::generics::lower_type_expr_with_generics(
+                                    db,
+                                    te,
+                                    pkg_items_for_class,
+                                    &ns_context,
+                                    &bindings,
                                     &mut diags,
                                 )
                             };
@@ -4118,14 +4406,25 @@ impl<'db> TypeInferenceBuilder<'db> {
                         sig.return_type
                             .as_ref()
                             .map(|te| {
-                                crate::lower_type_expr::lower_type_expr_in_ns(
-                                    db,
-                                    te,
-                                    pkg_items_for_class,
-                                    &ns_context,
-                                    &all_generic_params,
-                                    &mut diags,
-                                )
+                                if bindings.is_empty() {
+                                    crate::lower_type_expr::lower_type_expr_in_ns(
+                                        db,
+                                        te,
+                                        pkg_items_for_class,
+                                        &ns_context,
+                                        &all_generic_params,
+                                        &mut diags,
+                                    )
+                                } else {
+                                    crate::generics::lower_type_expr_with_generics(
+                                        db,
+                                        te,
+                                        pkg_items_for_class,
+                                        &ns_context,
+                                        &bindings,
+                                        &mut diags,
+                                    )
+                                }
                             })
                             .unwrap_or(Ty::Unknown {
                                 attr: TyAttr::default(),
@@ -4261,7 +4560,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                         .or_insert_with(|| Ty::TypeVar(gp.clone(), TyAttr::default()));
                 }
                 let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(db, file, method_id);
-                let sig = baml_compiler2_hir::signature::function_signature(db, func_loc);
+                let sig = baml_compiler2_ppir::function_signature(db, func_loc);
                 let mut diags = Vec::new();
                 // Build the class type for self parameter resolution.
                 // For generics, apply type_args (e.g. Array<int>).
@@ -4274,6 +4573,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                             class_data.name.clone(),
                             class_data.generic_params.clone(),
                         ),
+                        vec![],
                         TyAttr::default(),
                     )
                 } else if type_args.len() == 1 {
@@ -4288,6 +4588,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                                     pkg_info.namespace_path,
                                     class_data.name.clone(),
                                 ),
+                                type_args.to_vec(),
                                 TyAttr::default(),
                             )
                         }
@@ -4307,6 +4608,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                                     pkg_info.namespace_path,
                                     class_data.name.clone(),
                                 ),
+                                type_args.to_vec(),
                                 TyAttr::default(),
                             )
                         }
@@ -4319,6 +4621,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                             pkg_info.namespace_path,
                             class_data.name.clone(),
                         ),
+                        type_args.to_vec(),
                         TyAttr::default(),
                     )
                 };
@@ -4450,7 +4753,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
-    /// Try to handle a container mutation method call: x.push(val) / x.append(val).
+    /// Try to handle a container mutation method call: `x.push(val)` or `x?.push?.(val)`.
     ///
     /// This is the "evolving path" for container mutations — it intercepts
     /// `.push()` / `.append()` and index assignment *before* normal method
@@ -4463,11 +4766,11 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// - If `arg_ty <: T`: ok
     /// - Otherwise: type error
     ///
-    /// Returns `Some(return_ty)` if handled, `None` to fall through to the
-    /// builtin method resolution path.
+    /// Returns the inner method result type (e.g. `int` for `Array.push`) if
+    /// handled. Callers own the enclosing expression semantics such as optional
+    /// wrapping, final subtype checks, and recording the call expression type.
     fn try_container_method_call(
         &mut self,
-        call_expr_id: ExprId,
         callee_id: ExprId,
         args: &[ExprId],
         body: &ExprBody,
@@ -4476,6 +4779,10 @@ impl<'db> TypeInferenceBuilder<'db> {
         //   x.push(val) → Call { callee: MemberAccess { base: Path(["x"]), member: "push" }, ... }
         let (base_id, local_name, method_name) = match &body.exprs[callee_id] {
             Expr::MemberAccess { base, member } => {
+                let name = self.expr_local_name(*base, body)?;
+                (*base, name, member.clone())
+            }
+            Expr::OptionalMemberAccess { base, member } => {
                 let name = self.expr_local_name(*base, body)?;
                 (*base, name, member.clone())
             }
@@ -4495,13 +4802,15 @@ impl<'db> TypeInferenceBuilder<'db> {
                 let arg_ty = self.infer_expr(args[0], body);
                 let widened_arg = arg_ty.widen_fresh();
 
-                if matches!(**elem_ty, Ty::Never { .. }) {
+                let effective_local_ty = if matches!(**elem_ty, Ty::Never { .. }) {
                     let new_ty = if is_evolving {
                         Ty::EvolvingList(Box::new(widened_arg), container_attr)
                     } else {
                         Ty::List(Box::new(widened_arg), container_attr)
                     };
-                    self.locals.insert(local_name, new_ty);
+                    self.locals.insert(local_name.clone(), new_ty.clone());
+                    self.sync_let_binding_type(&local_name, new_ty.clone());
+                    new_ty
                 } else if !self.is_subtype(&widened_arg, elem_ty) {
                     self.context.report(
                         TirTypeError::TypeMismatch {
@@ -4511,27 +4820,37 @@ impl<'db> TypeInferenceBuilder<'db> {
                         args[0],
                         Vec::new(),
                     );
-                }
+                    local_ty.clone()
+                } else {
+                    local_ty.clone()
+                };
 
                 // Record a MemberResolution so MIR emits a proper method call
                 // instead of a dynamic map lookup.
-                let effective_elem = match &local_ty {
+                let effective_elem = match &effective_local_ty {
                     Ty::EvolvingList(e, _) | Ty::List(e, _) => e.as_ref().clone(),
                     _ => Ty::Unknown {
                         attr: TyAttr::default(),
                     },
                 };
-                self.resolve_builtin_member(&["Array"], &[effective_elem], &method_name, callee_id);
-
-                self.record_expr_type(base_id, local_ty);
-                self.record_expr_type(
-                    callee_id,
-                    Ty::Unknown {
+                let method_ty = self
+                    .resolve_builtin_member(&["Array"], &[effective_elem], &method_name, callee_id)
+                    .unwrap_or(Ty::Unknown {
+                        attr: TyAttr::default(),
+                    });
+                let result = match &method_ty {
+                    Ty::Function { ret, .. } => ret.as_ref().clone(),
+                    _ => Ty::Unknown {
                         attr: TyAttr::default(),
                     },
-                );
-                let result = Ty::Primitive(PrimitiveType::Null, TyAttr::default());
-                self.record_expr_type(call_expr_id, result.clone());
+                };
+                let callee_expr_ty = match &body.exprs[callee_id] {
+                    Expr::OptionalMemberAccess { .. } => Self::make_optional(method_ty),
+                    _ => method_ty,
+                };
+
+                self.record_expr_type(base_id, effective_local_ty);
+                self.record_expr_type(callee_id, callee_expr_ty);
                 Some(result)
             }
             _ => None,

@@ -6,12 +6,12 @@ source: crates/baml_tests/src/generated_tests.rs
 // and captured-variable path resolution in nested lambdas (Finding 3).
 
 class Inner {
-    value: int
+    value: int,
 }
 
 class Outer {
-    inner: Inner
-    name: string
+    inner: Inner,
+    name: string,
 }
 
 // Case 1: Lambda captures a class variable and accesses its field.
@@ -19,7 +19,7 @@ class Outer {
 function test_captured_field_access(obj: Outer) -> string {
     let get_name = () -> string {
         obj.name
-    }
+    };
     get_name()
 }
 
@@ -28,7 +28,7 @@ function test_captured_field_access(obj: Outer) -> string {
 function test_captured_nested_field(obj: Outer) -> int {
     let get_value = () -> int {
         obj.inner.value
-    }
+    };
     get_value()
 }
 
@@ -38,10 +38,10 @@ function test_captured_nested_field(obj: Outer) -> int {
 function test_no_leak_after_lambda(obj: Outer) -> string {
     let get_value = () -> int {
         obj.inner.value
-    }
-    let v = get_value()
+    };
+    let v = get_value();
     // This field access is in the parent scope — must have its own clean resolutions
-    let result = obj
+    let result = obj;
     result.name
 }
 
@@ -54,9 +54,9 @@ function test_nested_lambda_capture(obj: Outer) -> string {
         let inner_fn = () -> string {
             // obj is captured from intermediate lambda which itself captures from grandparent
             obj.name
-        }
+        };
         inner_fn()
-    }
+    };
     outer_fn()
 }
 
@@ -65,11 +65,11 @@ function test_nested_lambda_capture(obj: Outer) -> string {
 function test_sequential_lambdas(obj: Outer) -> int {
     let get_name = () -> string {
         obj.name
-    }
+    };
     let get_value = () -> int {
         obj.inner.value
-    }
-    let n = get_name()
+    };
+    let n = get_name();
     get_value()
 }
 
@@ -78,6 +78,6 @@ function test_sequential_lambdas(obj: Outer) -> int {
 function test_lambda_param_and_capture(obj: Outer) -> int {
     let add_to_value = (x: int) -> int {
         x + obj.inner.value
-    }
+    };
     add_to_value(10)
 }

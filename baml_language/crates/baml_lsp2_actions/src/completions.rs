@@ -473,7 +473,7 @@ fn completions_for_field_access(
 /// For a `Ty::Class`, looks up resolved class fields and returns the field's type.
 fn resolve_field_type(db: &dyn Db, ty: &Ty, field_name: &str) -> Option<Ty> {
     match ty {
-        Ty::Class(qn, _) => {
+        Ty::Class(qn, _, _) => {
             let pkg_info_name = qn.package().as_str();
             let pkg_id = PackageId::new(db, Name::new(pkg_info_name));
             let pkg = package_items(db, pkg_id);
@@ -579,7 +579,7 @@ fn find_path_segments_for_word_after_dot(token: &baml_compiler_syntax::SyntaxTok
 /// Returns completions for the members of `ty`.
 fn completions_for_ty_members(db: &dyn Db, ty: &Ty) -> Vec<Completion> {
     match ty {
-        Ty::Class(qn, _) => {
+        Ty::Class(qn, _, _) => {
             // Find the class definition and return its fields and methods.
             let pkg_info_name = qn.package().as_str();
             let pkg_id = PackageId::new(db, Name::new(pkg_info_name));
@@ -714,6 +714,7 @@ fn definition_to_ty(db: &dyn Db, def: Definition<'_>) -> Option<Ty> {
                     pkg_info.namespace_path,
                     class.name.clone(),
                 ),
+                vec![],
                 TyAttr::default(),
             ))
         }

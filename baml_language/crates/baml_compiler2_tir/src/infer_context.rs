@@ -106,6 +106,17 @@ pub enum TirTypeError {
     ExtraneousThrowsDeclaration { extra_types: Vec<String> },
     /// A type parameter could not be inferred at a call site.
     CannotInferTypeParameter { name: Name },
+    /// A method's generic type parameter shadows a class-level type parameter.
+    TypeParamShadowed { param_name: Name, class_name: Name },
+    /// Wrong number of type arguments for a generic class.
+    WrongNumberOfTypeArgs {
+        class_name: Name,
+        expected: usize,
+        got: usize,
+    },
+    /// Type arguments were supplied for a type that is not generic
+    /// (enums and type aliases cannot take type parameters).
+    TypeIsNotGeneric { type_name: Name, kind: &'static str },
     /// A lambda parameter has no type annotation and no expected type context
     /// to infer the type from.
     CannotInferLambdaParamType { param_name: Name },
@@ -253,6 +264,32 @@ impl fmt::Display for TirTypeError {
             ),
             TirTypeError::CannotInferTypeParameter { name } => {
                 write!(f, "cannot infer type parameter `{name}`")
+            }
+            TirTypeError::WrongNumberOfTypeArgs {
+                class_name,
+                expected,
+                got,
+            } => {
+                write!(
+                    f,
+                    "class `{class_name}` expects {expected} type argument(s), got {got}"
+                )
+            }
+            TirTypeError::TypeIsNotGeneric { type_name, kind } => {
+                write!(
+                    f,
+                    "{kind} `{type_name}` is not generic and cannot take type arguments"
+                )
+            }
+            TirTypeError::TypeParamShadowed {
+                param_name,
+                class_name,
+            } => {
+                write!(
+                    f,
+                    "type parameter `{param_name}` on method shadows the same parameter on class `{class_name}`. \
+                    Please use a different name for the type parameter."
+                )
             }
             TirTypeError::CannotInferLambdaParamType { param_name } => {
                 write!(

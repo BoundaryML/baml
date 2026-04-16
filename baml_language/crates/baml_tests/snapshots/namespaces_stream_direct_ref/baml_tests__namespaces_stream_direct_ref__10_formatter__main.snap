@@ -12,11 +12,11 @@ source: crates/baml_tests/src/generated_tests.rs
 // user-referenceable, these errors should disappear.
 
 class Config {
-    key: string
+    key: string,
 }
 
 class Response {
-    text: string
+    text: string,
 }
 
 // Bare $stream from root namespace
@@ -31,6 +31,6 @@ function RootUsesLlmStream(r: root.llm.Response$stream) -> string {
 
 // Class with $stream fields
 class RootWithStreamFields {
-    own_stream: Config$stream
-    llm_stream: root.llm.Config$stream
+    own_stream: Config$stream,
+    llm_stream: root.llm.Config$stream,
 }
