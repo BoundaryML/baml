@@ -1,7 +1,7 @@
 #![allow(clippy::print_stdout, clippy::print_stderr)]
 
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -118,7 +118,7 @@ pub struct RunArgs {
     #[arg(long)]
     pub json_args: Option<String>,
 
-    /// List runnable targets (functions, namespace mains).
+    /// List runnable targets (scripts, namespace mains, functions).
     #[arg(long)]
     pub list: bool,
 
@@ -133,6 +133,10 @@ pub struct RunArgs {
     /// Verbose output.
     #[arg(long)]
     pub verbose: bool,
+
+    /// Show help for the run verb, or auto-derived help for the target.
+    #[arg(long)]
+    pub help: bool,
 
     /// Project root directory.
     #[arg(long, default_value = ".")]
@@ -214,11 +218,23 @@ impl RunArgs {
     }
 
     pub fn run(&self) -> Result<crate::ExitCode> {
+        if self.expression.is_some() && self.function.is_some() {
+            anyhow::bail!(
+                "`-e` and `--function` are mutually exclusive dispatch modes.\n\
+                 Use one or the other, not both."
+            );
+        }
+
         let event_sink: Option<Arc<dyn bex_events::EventSink>> =
             self.log_file.as_ref().map(|path| {
                 self.vlog(format_args!("Writing logs to {}", path.display()));
                 bex_events_native::start(path.clone())
             });
+
+        if self.help && (self.function.is_none() && self.target.is_none()) {
+            Self::print_run_help();
+            return Ok(crate::ExitCode::Success);
+        }
 
         if let Some(expr_source) = &self.expression {
             return self.run_expression(expr_source, event_sink);
@@ -237,41 +253,53 @@ impl RunArgs {
         };
         let _ = db; // keep db alive for engine lifetime
 
+        let toml_content = std::fs::read_to_string(self.from.join("baml.toml")).unwrap_or_default();
+        let scripts = Self::parse_scripts(&toml_content);
+        let namespaces = collect_namespaces(&engine);
+
         if self.list {
-            return self.run_list(&engine);
+            return Self::print_list(&engine, &scripts, &namespaces, &self.output);
         }
 
-        let resolved = self.resolve_target(&engine)?;
+        self.validate_scripts(&engine, &scripts, &namespaces, &toml_content)?;
+
+        let resolved = self.resolve_target(&engine, &scripts)?;
 
         let (function_name, effective_target_args) = match resolved {
             ResolvedTarget::Function(name) => (name, self.target_args.clone()),
             ResolvedTarget::Script(expansion) => {
                 let func = expansion.function.unwrap_or_else(|| "main".to_string());
                 if !engine.function_exists(&func) {
-                    return Err(self.function_not_found_error(&engine, &func));
+                    return Err(Self::target_not_found_error(&scripts, &engine, &func));
                 }
-                // Script args come first so CLI args (after `--`) can override them.
                 let mut merged_args = expansion.extra_args;
                 merged_args.extend(self.target_args.iter().cloned());
                 (func, merged_args)
             }
         };
 
-        let params = engine
-            .function_params(&function_name)
-            .map_err(|e| anyhow!("{e}"))?;
-        let param_names: Vec<String> = params.iter().map(|(n, _)| (*n).to_string()).collect();
-        let param_types: Vec<Ty> = params.iter().map(|(_, t)| (*t).clone()).collect();
+        let func_info = engine
+            .user_functions()
+            .into_iter()
+            .find(|f| {
+                f.qualified_name == function_name
+                    || f.display_name
+                        == function_name
+                            .strip_prefix("user.")
+                            .unwrap_or(&function_name)
+            })
+            .ok_or_else(|| anyhow!("Function `{function_name}` not found"))?;
 
-        // Per BEP-027, tokens after `--` are forwarded to the function verbatim,
-        // so `--help` alongside other args is a value, not a help request. Only
-        // treat it as help when it's the sole forwarded token.
-        if effective_target_args.len() == 1 && effective_target_args[0] == "--help" {
-            self.print_target_help(&function_name, &param_names, &param_types, &engine);
+        if self.help || (effective_target_args.len() == 1 && effective_target_args[0] == "--help") {
+            Self::print_target_help(&function_name, &func_info);
             return Ok(crate::ExitCode::Success);
         }
 
-        let args = self.build_args_from(&effective_target_args, &param_names, &param_types)?;
+        let args = self.build_args_from(
+            &effective_target_args,
+            &func_info.param_names,
+            &func_info.param_types,
+        )?;
 
         self.vlog(format_args!(
             "Calling {function_name} with {} arg(s)",
@@ -525,18 +553,20 @@ impl RunArgs {
     /// 4. Target matches a `[scripts]` entry in `baml.toml` → expand alias
     /// 5. Target matches a namespace with a `main` → that namespace's main
     /// 6. Otherwise → error with suggestions
-    fn resolve_target(&self, engine: &BexEngine) -> Result<ResolvedTarget> {
-        // --function takes priority over positional target.
+    fn resolve_target(
+        &self,
+        engine: &BexEngine,
+        scripts: &HashMap<String, Vec<String>>,
+    ) -> Result<ResolvedTarget> {
         if let Some(func) = &self.function {
             if engine.function_exists(func) {
                 return Ok(ResolvedTarget::function(func.clone()));
             }
-            return Err(self.function_not_found_error(engine, func));
+            return Err(Self::target_not_found_error(scripts, engine, func));
         }
 
         match &self.target {
             None => {
-                // No target → root namespace's `main`.
                 if engine.function_exists("main") {
                     Ok(ResolvedTarget::function("main".to_string()))
                 } else {
@@ -548,8 +578,6 @@ impl RunArgs {
                 }
             }
             Some(target) => {
-                // Ends in .baml → hermetic standalone. The engine was already
-                // loaded in standalone mode; just look for `main`.
                 if target.ends_with(".baml") {
                     if engine.function_exists("main") {
                         return Ok(ResolvedTarget::function("main".to_string()));
@@ -560,8 +588,6 @@ impl RunArgs {
                     );
                 }
 
-                // Check [scripts] in baml.toml.
-                let scripts = self.load_scripts();
                 if let Some(script_tokens) = scripts.get(target.as_str()) {
                     self.vlog(format_args!(
                         "Expanding script `{target}`: {script_tokens:?}"
@@ -569,28 +595,18 @@ impl RunArgs {
                     return Ok(ResolvedTarget::Script(parse_script_body(script_tokens)?));
                 }
 
-                // Try namespace main: target.main
                 let ns_main = format!("{target}.main");
                 if engine.function_exists(&ns_main) {
                     return Ok(ResolvedTarget::function(ns_main));
                 }
 
-                // Try as a direct function name.
-                if engine.function_exists(target) {
-                    return Ok(ResolvedTarget::function(target.clone()));
-                }
-
-                Err(self.function_not_found_error(engine, target))
+                Err(Self::target_not_found_error(scripts, engine, target))
             }
         }
     }
 
-    /// Load `[scripts]` from `baml.toml` in the project directory.
-    fn load_scripts(&self) -> HashMap<String, Vec<String>> {
-        let toml_path = self.from.join("baml.toml");
-        let Ok(content) = std::fs::read_to_string(&toml_path) else {
-            return HashMap::new();
-        };
+    /// Parse `[scripts]` from raw `baml.toml` content.
+    fn parse_scripts(content: &str) -> HashMap<String, Vec<String>> {
         let Ok(table) = content.parse::<toml::Table>() else {
             return HashMap::new();
         };
@@ -622,20 +638,166 @@ impl RunArgs {
             .collect()
     }
 
-    /// Build a helpful error message when a function/target isn't found.
-    fn function_not_found_error(&self, engine: &BexEngine, name: &str) -> anyhow::Error {
-        let mut functions = engine.user_functions();
-        functions.sort_by(|a, b| a.display_name.cmp(&b.display_name));
+    /// Find the 1-based line number of a `[scripts]` key in `baml.toml`.
+    fn find_script_line(content: &str, key: &str) -> Option<usize> {
+        for (i, line) in content.lines().enumerate() {
+            let trimmed = line.trim_start();
+            if trimmed.starts_with(key) && trimmed[key.len()..].trim_start().starts_with('=') {
+                return Some(i + 1);
+            }
+            if trimmed.starts_with(&format!("\"{key}\""))
+                && trimmed[key.len() + 2..].trim_start().starts_with('=')
+            {
+                return Some(i + 1);
+            }
+        }
+        None
+    }
 
-        let suggestions: Vec<&str> = functions
+    /// Format a script error with file:line reference when available.
+    fn script_error(toml_path: &Path, content: &str, name: &str, msg: &str) -> String {
+        match Self::find_script_line(content, name) {
+            Some(line) => format!("{}:{line}: [scripts] `{name}`: {msg}", toml_path.display()),
+            None => format!("{}: [scripts] `{name}`: {msg}", toml_path.display()),
+        }
+    }
+
+    /// Validate `[scripts]` entries at load time per BEP-027.
+    fn validate_scripts(
+        &self,
+        engine: &BexEngine,
+        scripts: &HashMap<String, Vec<String>>,
+        namespaces: &HashSet<String>,
+        toml_content: &str,
+    ) -> Result<()> {
+        if scripts.is_empty() {
+            return Ok(());
+        }
+
+        let toml_path = self.from.join("baml.toml");
+        let mut errors: Vec<String> = Vec::new();
+
+        for (name, tokens) in scripts {
+            if RESERVED_VERBS.contains(&name.as_str()) {
+                errors.push(Self::script_error(
+                    &toml_path,
+                    toml_content,
+                    name,
+                    "name is a reserved verb and cannot be used as a script name",
+                ));
+                continue;
+            }
+
+            if namespaces.contains(name) {
+                let loc = Self::find_script_line(toml_content, name)
+                    .map(|l| format!("{}:{l}", toml_path.display()))
+                    .unwrap_or_else(|| toml_path.display().to_string());
+                eprintln!(
+                    "warning: {loc}: [scripts] `{name}` shadows namespace `{name}` — \
+                     the script takes precedence"
+                );
+            }
+
+            match parse_script_body(tokens) {
+                Ok(expansion) => {
+                    let target_func = if let Some(func) = &expansion.function {
+                        if !engine.function_exists(func) {
+                            errors.push(Self::script_error(
+                                &toml_path,
+                                toml_content,
+                                name,
+                                &format!("--function target `{func}` not found"),
+                            ));
+                            None
+                        } else {
+                            Some(func.as_str())
+                        }
+                    } else if engine.function_exists("main") {
+                        Some("main")
+                    } else {
+                        None
+                    };
+
+                    if let Some(func_name) = target_func
+                        && let Ok(params) = engine.function_params(func_name)
+                    {
+                        let param_names: Vec<String> =
+                            params.iter().map(|(n, _)| (*n).to_string()).collect();
+                        let flag_keys = extract_flag_keys(&expansion.extra_args);
+                        for flag in flag_keys.iter().filter(|k| !param_names.contains(k)) {
+                            errors.push(Self::script_error(
+                                &toml_path,
+                                toml_content,
+                                name,
+                                &format!(
+                                    "unknown parameter `--{flag}` for function `{func_name}` \
+                                     (available: {})",
+                                    param_names.join(", ")
+                                ),
+                            ));
+                        }
+                    }
+                }
+                Err(e) => {
+                    errors.push(Self::script_error(
+                        &toml_path,
+                        toml_content,
+                        name,
+                        &e.to_string(),
+                    ));
+                }
+            }
+        }
+
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            let joined = errors.join("\n  ");
+            anyhow::bail!("Invalid [scripts] in baml.toml:\n  {joined}");
+        }
+    }
+
+    fn target_not_found_error(
+        scripts: &HashMap<String, Vec<String>>,
+        engine: &BexEngine,
+        name: &str,
+    ) -> anyhow::Error {
+        let namespaces = collect_namespaces(engine);
+        struct Candidate {
+            name: String,
+            label: String,
+        }
+
+        let mut candidates: Vec<Candidate> = Vec::new();
+        for script_name in scripts.keys() {
+            candidates.push(Candidate {
+                name: script_name.clone(),
+                label: format!("{script_name} (script)"),
+            });
+        }
+        for ns in namespaces {
+            candidates.push(Candidate {
+                name: ns.clone(),
+                label: format!("{ns} (namespace)"),
+            });
+        }
+        for f in &engine.user_functions() {
+            candidates.push(Candidate {
+                name: f.display_name.clone(),
+                label: f.display_name.clone(),
+            });
+        }
+        candidates.sort_by(|a, b| a.name.cmp(&b.name));
+
+        let suggestions: Vec<&str> = candidates
             .iter()
-            .filter(|f| {
-                f.display_name.contains(name)
-                    || name.contains(&f.display_name)
-                    || strsim::jaro_winkler(&f.display_name, name) > 0.7
+            .filter(|c| {
+                c.name.contains(name)
+                    || name.contains(&c.name)
+                    || strsim::jaro_winkler(&c.name, name) > 0.7
             })
             .take(5)
-            .map(|f| f.display_name.as_str())
+            .map(|c| c.label.as_str())
             .collect();
 
         if suggestions.is_empty() {
@@ -726,25 +888,54 @@ impl RunArgs {
     // --list
     // ========================================================================
 
-    fn run_list(&self, engine: &BexEngine) -> Result<crate::ExitCode> {
+    fn print_list(
+        engine: &BexEngine,
+        scripts: &HashMap<String, Vec<String>>,
+        namespaces: &HashSet<String>,
+        output: &OutputFormat,
+    ) -> Result<crate::ExitCode> {
         let mut functions = engine.user_functions();
         functions.sort_by(|a, b| a.display_name.cmp(&b.display_name));
 
-        if functions.is_empty() {
+        if functions.is_empty() && scripts.is_empty() && namespaces.is_empty() {
             println!("No runnable targets found.");
             return Ok(crate::ExitCode::Success);
         }
 
-        match self.output {
-            OutputFormat::Debug => self.print_list_debug(&functions),
-            OutputFormat::Json => self.print_list_json(&functions),
+        match output {
+            OutputFormat::Debug => Self::print_list_debug(&functions, scripts, namespaces),
+            OutputFormat::Json => Self::print_list_json(&functions, scripts, namespaces),
         }
 
         Ok(crate::ExitCode::Success)
     }
 
-    fn print_list_debug(&self, functions: &[UserFunctionInfo]) {
+    fn print_list_debug(
+        functions: &[UserFunctionInfo],
+        scripts: &HashMap<String, Vec<String>>,
+        namespaces: &HashSet<String>,
+    ) {
         println!("Available targets:\n");
+
+        if !scripts.is_empty() {
+            println!("  Scripts:");
+            let mut names: Vec<&String> = scripts.keys().collect();
+            names.sort();
+            for name in names {
+                println!("    {name}");
+            }
+            println!();
+        }
+
+        if !namespaces.is_empty() {
+            println!("  Namespaces:");
+            let mut ns_list: Vec<&String> = namespaces.iter().collect();
+            ns_list.sort();
+            for ns in ns_list {
+                println!("    {ns}");
+            }
+            println!();
+        }
 
         let mut grouped: std::collections::BTreeMap<String, Vec<&UserFunctionInfo>> =
             std::collections::BTreeMap::new();
@@ -757,28 +948,31 @@ impl RunArgs {
             grouped.entry(ns).or_default().push(func);
         }
 
-        for (ns, funcs) in &grouped {
-            let label = if ns.is_empty() { "(root)" } else { ns.as_str() };
-            println!("  {label}:");
-            for func in funcs {
-                let short_name = if let Some(dot) = func.display_name.rfind('.') {
-                    &func.display_name[dot + 1..]
-                } else {
-                    &func.display_name
-                };
+        if !functions.is_empty() {
+            println!("  Functions:");
+            for (ns, funcs) in &grouped {
+                let label = if ns.is_empty() { "(root)" } else { ns.as_str() };
+                println!("    {label}:");
+                for func in funcs {
+                    let short_name = if let Some(dot) = func.display_name.rfind('.') {
+                        &func.display_name[dot + 1..]
+                    } else {
+                        &func.display_name
+                    };
 
-                let params: Vec<String> = func
-                    .param_names
-                    .iter()
-                    .zip(func.param_types.iter())
-                    .map(|(name, ty)| format!("{name}: {ty}"))
-                    .collect();
+                    let params: Vec<String> = func
+                        .param_names
+                        .iter()
+                        .zip(func.param_types.iter())
+                        .map(|(name, ty)| format!("{name}: {ty}"))
+                        .collect();
 
-                println!(
-                    "    {short_name}({}) -> {}",
-                    params.join(", "),
-                    func.return_type
-                );
+                    println!(
+                        "      {short_name}({}) -> {}",
+                        params.join(", "),
+                        func.return_type
+                    );
+                }
             }
             println!();
         }
@@ -786,8 +980,12 @@ impl RunArgs {
         println!("Run with: baml run --function <name> -- --arg1 value1");
     }
 
-    fn print_list_json(&self, functions: &[UserFunctionInfo]) {
-        let items: Vec<serde_json::Value> = functions
+    fn print_list_json(
+        functions: &[UserFunctionInfo],
+        scripts: &HashMap<String, Vec<String>>,
+        namespaces: &HashSet<String>,
+    ) {
+        let function_items: Vec<serde_json::Value> = functions
             .iter()
             .map(|f| {
                 let params: Vec<serde_json::Value> = f
@@ -811,9 +1009,33 @@ impl RunArgs {
             })
             .collect();
 
+        let script_items: Vec<serde_json::Value> = {
+            let mut names: Vec<&String> = scripts.keys().collect();
+            names.sort();
+            names
+                .into_iter()
+                .map(|name| serde_json::json!({ "name": name }))
+                .collect()
+        };
+
+        let namespace_items: Vec<serde_json::Value> = {
+            let mut ns_list: Vec<&String> = namespaces.iter().collect();
+            ns_list.sort();
+            ns_list
+                .into_iter()
+                .map(|ns| serde_json::json!({ "name": ns }))
+                .collect()
+        };
+
+        let output = serde_json::json!({
+            "scripts": script_items,
+            "namespaces": namespace_items,
+            "functions": function_items,
+        });
+
         println!(
             "{}",
-            serde_json::to_string_pretty(&items).unwrap_or_else(|_| "[]".to_string())
+            serde_json::to_string_pretty(&output).unwrap_or_else(|_| "{}".to_string())
         );
     }
 
@@ -821,26 +1043,11 @@ impl RunArgs {
     // Per-target --help
     // ========================================================================
 
-    fn print_target_help(
-        &self,
-        function_name: &str,
-        param_names: &[String],
-        param_types: &[Ty],
-        engine: &BexEngine,
-    ) {
+    fn print_target_help(function_name: &str, func_info: &UserFunctionInfo) {
         let display = function_name.strip_prefix("user.").unwrap_or(function_name);
-
-        let ret_type = engine.function_params(function_name).ok().and_then(|_| {
-            engine
-                .user_functions()
-                .into_iter()
-                .find(|f| f.qualified_name == function_name || f.display_name == display)
-                .map(|f| f.return_type)
-        });
-
-        let ret_str = ret_type
-            .as_ref()
-            .map_or("?".to_string(), std::string::ToString::to_string);
+        let param_names = &func_info.param_names;
+        let param_types = &func_info.param_types;
+        let ret_str = func_info.return_type.to_string();
 
         let params_str: Vec<String> = param_names
             .iter()
@@ -896,6 +1103,44 @@ impl RunArgs {
             }
         }
     }
+
+    fn print_run_help() {
+        use clap::CommandFactory;
+        let mut cmd = crate::commands::RuntimeCli::command();
+        for sub in cmd.get_subcommands_mut() {
+            if sub.get_name() == "run" {
+                let _ = sub.print_help();
+                return;
+            }
+        }
+    }
+}
+
+// ============================================================================
+// Reserved verbs & namespace helpers
+// ============================================================================
+
+/// BEP-027 Appendix A: names that cannot be used as `[scripts]` keys.
+const RESERVED_VERBS: &[&str] = &[
+    "run", "test", "repl", "init", "help", "version", "fmt", "lint", "check", "build", "generate",
+    "dev", "start", "serve", "add", "remove", "install", "update", "publish", "upgrade", "deps",
+    "clean", "config", "info", "search", "new", "doc", "docs",
+];
+
+/// Extract the set of namespace prefixes from the engine's function list.
+///
+/// A function named `foo.Bar` contributes namespace `foo`; `main` (no dot)
+/// contributes nothing.
+fn collect_namespaces(engine: &BexEngine) -> HashSet<String> {
+    engine
+        .user_functions()
+        .iter()
+        .filter_map(|f| {
+            f.display_name
+                .rfind('.')
+                .map(|i| f.display_name[..i].to_string())
+        })
+        .collect()
 }
 
 // ============================================================================
@@ -906,8 +1151,11 @@ impl RunArgs {
 ///
 /// Supports:
 /// - `--name value` (two tokens)
-/// - `--name=value` (single token with `=`)
+/// - `--name=value` (single token with `=`, including `--name=` for empty string)
 /// - Positional sugar: single bare token when function has exactly one parameter
+///
+/// Bare tokens that don't match a `--flag` are skipped — they remain
+/// accessible via `baml.argv` but don't bind to parameters.
 fn parse_auto_cli_args(
     tokens: &[String],
     param_names: &[String],
@@ -931,10 +1179,9 @@ fn parse_auto_cli_args(
     while i < tokens.len() {
         let token = &tokens[i];
         if !token.starts_with("--") {
-            anyhow::bail!(
-                "Unexpected positional argument: `{token}`.\n\
-                 Use `--param_name value` syntax for named arguments."
-            );
+            // Bare token — not a flag. Skipped here; still in baml.argv.
+            i += 1;
+            continue;
         }
         let raw = &token[2..];
 
@@ -967,6 +1214,28 @@ fn find_param_index(key: &str, param_names: &[String]) -> Result<usize> {
             available.join(", ")
         )
     })
+}
+
+/// Extract flag names (`--key value` or `--key=value`) from a token list,
+/// skipping bare (non-flag) tokens. Shared by `parse_auto_cli_args` and
+/// script validation.
+fn extract_flag_keys(tokens: &[String]) -> Vec<String> {
+    let mut keys = Vec::new();
+    let mut i = 0;
+    while i < tokens.len() {
+        let token = &tokens[i];
+        if let Some(raw) = token.strip_prefix("--") {
+            let key = raw.split('=').next().unwrap_or(raw);
+            if !key.is_empty() {
+                keys.push(key.to_string());
+            }
+            if !raw.contains('=') {
+                i += 1; // skip the value token
+            }
+        }
+        i += 1;
+    }
+    keys
 }
 
 /// Convert a CLI string value to a `BexExternalValue` based on the target type.
@@ -1501,12 +1770,13 @@ mod tests {
 
     #[test]
     fn test_auto_cli_positional_sugar_requires_single_param() {
-        // Two params — positional sugar should not apply.
+        // Two params — positional sugar should not apply; bare token is
+        // skipped (accessible via baml.argv, not bound to a param).
         let tokens = vec![s("hello")];
         let names = vec![s("a"), s("b")];
         let types = vec![ty_string(), ty_string()];
-        let result = parse_auto_cli_args(&tokens, &names, &types);
-        assert!(result.is_err());
+        let result = parse_auto_cli_args(&tokens, &names, &types).unwrap();
+        assert!(result.is_empty());
     }
 
     #[test]
@@ -1863,6 +2133,7 @@ mod tests {
             output: OutputFormat::Debug,
             log_file: None,
             verbose: false,
+            help: false,
             from: PathBuf::from("."),
             target_args: vec![],
         }
@@ -2200,6 +2471,38 @@ mod tests {
         );
     }
 
+    /// BEP-027 §"baml.argv": bare tokens after `--` are skipped by auto-CLI
+    /// and remain accessible via `baml.argv`. They do not error.
+    #[test]
+    fn test_bep_auto_cli_bare_tokens_skipped() {
+        let tokens = vec![s("--text"), s("hi"), s("extra"), s("data")];
+        let names = vec![s("text")];
+        let types = vec![ty_string()];
+        let r = parse_auto_cli_args(&tokens, &names, &types).unwrap();
+        assert!(matches!(r.get("text"), Some(BexExternalValue::String(s)) if s == "hi"));
+        assert_eq!(r.len(), 1, "bare tokens should not produce entries");
+    }
+
+    /// Bare tokens interspersed with flags all work.
+    #[test]
+    fn test_bep_auto_cli_bare_tokens_interspersed() {
+        let tokens = vec![
+            s("before"),
+            s("--a"),
+            s("1"),
+            s("middle"),
+            s("--b"),
+            s("2"),
+            s("after"),
+        ];
+        let names = vec![s("a"), s("b")];
+        let types = vec![ty_int(), ty_int()];
+        let r = parse_auto_cli_args(&tokens, &names, &types).unwrap();
+        assert!(matches!(r.get("a"), Some(BexExternalValue::Int(1))));
+        assert!(matches!(r.get("b"), Some(BexExternalValue::Int(2))));
+        assert_eq!(r.len(), 2);
+    }
+
     // ── BEP-027 §"Scripts in baml.toml" — parse_script_body ────────
 
     /// An empty script body resolves to a zero-arg expansion (runs the
@@ -2471,6 +2774,10 @@ mod tests {
         .expect("BexEngine::new should succeed")
     }
 
+    fn no_scripts() -> HashMap<String, Vec<String>> {
+        HashMap::new()
+    }
+
     /// RunArgs pointing at an empty tempdir so `load_scripts()` sees no
     /// `baml.toml` and doesn't pick up the host project's config.
     fn run_args_with_clean_from(dir: &std::path::Path) -> RunArgs {
@@ -2486,7 +2793,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let args = run_args_with_clean_from(tmp.path());
 
-        match args.resolve_target(&engine).unwrap() {
+        match args.resolve_target(&engine, &no_scripts()).unwrap() {
             ResolvedTarget::Function(name) => assert_eq!(name, "main"),
             other => panic!("expected Function(main), got {other:?}"),
         }
@@ -2499,7 +2806,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let args = run_args_with_clean_from(tmp.path());
 
-        let err = args.resolve_target(&engine).unwrap_err();
+        let err = args.resolve_target(&engine, &no_scripts()).unwrap_err();
         let msg = format!("{err}");
         assert!(msg.contains("No `main` function"), "got: {msg}");
         assert!(msg.contains("--function"), "should suggest --function");
@@ -2520,7 +2827,7 @@ mod tests {
         args.target = Some(s("backfill"));
         args.function = Some(s("Summarize"));
 
-        match args.resolve_target(&engine).unwrap() {
+        match args.resolve_target(&engine, &no_scripts()).unwrap() {
             ResolvedTarget::Function(name) => assert_eq!(name, "Summarize"),
             other => panic!("expected Function(Summarize), got {other:?}"),
         }
@@ -2538,7 +2845,7 @@ mod tests {
         let mut args = run_args_with_clean_from(tmp.path());
         args.function = Some(s("DoesNotExist"));
 
-        let err = args.resolve_target(&engine).unwrap_err();
+        let err = args.resolve_target(&engine, &no_scripts()).unwrap_err();
         let msg = format!("{err}");
         assert!(
             msg.contains("No runnable target"),
@@ -2556,7 +2863,7 @@ mod tests {
         let mut args = run_args_with_clean_from(tmp.path());
         args.target = Some(s("hello.baml"));
 
-        match args.resolve_target(&engine).unwrap() {
+        match args.resolve_target(&engine, &no_scripts()).unwrap() {
             ResolvedTarget::Function(name) => assert_eq!(name, "main"),
             other => panic!("expected Function(main), got {other:?}"),
         }
@@ -2571,7 +2878,7 @@ mod tests {
         let mut args = run_args_with_clean_from(tmp.path());
         args.target = Some(s("scratch.baml"));
 
-        let err = args.resolve_target(&engine).unwrap_err();
+        let err = args.resolve_target(&engine, &no_scripts()).unwrap_err();
         let msg = format!("{err}");
         assert!(msg.contains("no `main`"), "got: {msg}");
         assert!(msg.contains("--function"));
@@ -2590,7 +2897,7 @@ mod tests {
         let mut args = run_args_with_clean_from(tmp.path());
         args.target = Some(s("not_a_thing"));
 
-        let err = args.resolve_target(&engine).unwrap_err();
+        let err = args.resolve_target(&engine, &no_scripts()).unwrap_err();
         assert!(format!("{err}").contains("No runnable target"));
     }
 
@@ -2621,7 +2928,7 @@ mod tests {
         let (_db, engine) = args
             .load_and_compile(None, Vec::new())
             .expect("compile should succeed");
-        match args.resolve_target(&engine).unwrap() {
+        match args.resolve_target(&engine, &no_scripts()).unwrap() {
             ResolvedTarget::Function(name) => assert_eq!(name, "eval.main"),
             other => panic!("expected Function(eval.main), got {other:?}"),
         }
@@ -2657,7 +2964,9 @@ backfill = "--function scripts.Backfill"
         args_dev.from = project.to_path_buf();
         args_dev.target = Some(s("dev"));
         let (_db, engine) = args_dev.load_and_compile(None, Vec::new()).unwrap();
-        match args_dev.resolve_target(&engine).unwrap() {
+        let toml = std::fs::read_to_string(project.join("baml.toml")).unwrap();
+        let scripts = RunArgs::parse_scripts(&toml);
+        match args_dev.resolve_target(&engine, &scripts).unwrap() {
             ResolvedTarget::Script(expansion) => {
                 assert!(expansion.function.is_none());
                 assert_eq!(expansion.extra_args, vec!["--verbose=true"]);
@@ -2670,7 +2979,7 @@ backfill = "--function scripts.Backfill"
         args_bf.from = project.to_path_buf();
         args_bf.target = Some(s("backfill"));
         let (_db, engine) = args_bf.load_and_compile(None, Vec::new()).unwrap();
-        match args_bf.resolve_target(&engine).unwrap() {
+        match args_bf.resolve_target(&engine, &scripts).unwrap() {
             ResolvedTarget::Script(expansion) => {
                 assert_eq!(expansion.function.as_deref(), Some("scripts.Backfill"));
             }
@@ -2678,28 +2987,15 @@ backfill = "--function scripts.Backfill"
         }
     }
 
-    /// BEP-027: "The toml loader type-checks each script body at load time."
-    /// Tests `load_scripts` directly — both cargo-style forms:
-    ///   - string form (split on whitespace, no shell quoting)
-    ///   - array form (each element verbatim, preserves values with spaces)
+    /// Tests `parse_scripts` — both cargo-style forms.
     #[test]
-    fn test_load_scripts_string_and_array_forms() {
-        let tmp = tempfile::tempdir().unwrap();
-        let project = tmp.path();
-        std::fs::write(
-            project.join("baml.toml"),
-            r#"
+    fn test_parse_scripts_string_and_array_forms() {
+        let toml = r#"
 [scripts]
-# Cargo-style string form: split on whitespace.
 dev = "-- --verbose=true --model gpt-4o-mini"
-# Array form: each element verbatim — preserves values containing spaces.
 greet = ["--function", "g.Hello", "--", "--name", "Ada Lovelace"]
-"#,
-        )
-        .unwrap();
-
-        let args = run_args_with_clean_from(project);
-        let scripts = args.load_scripts();
+"#;
+        let scripts = RunArgs::parse_scripts(toml);
 
         let dev = scripts.get("dev").expect("dev alias should load");
         assert_eq!(
@@ -2713,7 +3009,6 @@ greet = ["--function", "g.Hello", "--", "--name", "Ada Lovelace"]
         );
 
         let greet = scripts.get("greet").expect("greet alias should load");
-        // Array form preserves "Ada Lovelace" as a single token.
         assert_eq!(
             greet,
             &vec![
@@ -2726,28 +3021,23 @@ greet = ["--function", "g.Hello", "--", "--name", "Ada Lovelace"]
         );
     }
 
-    /// Missing `baml.toml` is not an error — `load_scripts` returns an empty
-    /// map so projects without scripts still work.
+    /// Empty or missing content → empty map.
     #[test]
-    fn test_load_scripts_missing_toml_returns_empty() {
-        let tmp = tempfile::tempdir().unwrap();
-        let args = run_args_with_clean_from(tmp.path());
-        assert!(args.load_scripts().is_empty());
+    fn test_parse_scripts_empty_content() {
+        assert!(RunArgs::parse_scripts("").is_empty());
     }
 
-    /// A `baml.toml` with no `[scripts]` table is also non-fatal.
+    /// TOML with no `[scripts]` table → empty map.
     #[test]
-    fn test_load_scripts_no_scripts_table_returns_empty() {
-        let tmp = tempfile::tempdir().unwrap();
-        std::fs::write(tmp.path().join("baml.toml"), "[project]\nname = \"x\"\n").unwrap();
-        let args = run_args_with_clean_from(tmp.path());
-        assert!(args.load_scripts().is_empty());
+    fn test_parse_scripts_no_scripts_table() {
+        assert!(RunArgs::parse_scripts("[project]\nname = \"x\"\n").is_empty());
     }
 
-    /// BEP-027: a positional target matching a direct function name (rare —
-    /// the preferred form is `--function`) still resolves.
+    /// BEP-027 §"Target resolution" step 4: a positional target that matches
+    /// a function name (but not a script or namespace) is an error. Functions
+    /// are only reachable via `--function`.
     #[test]
-    fn test_resolve_positional_direct_function_name() {
+    fn test_resolve_positional_direct_function_name_errors() {
         let engine = engine_from_source(
             r#"
                 function Summarize(text: string) -> string { text }
@@ -2757,16 +3047,788 @@ greet = ["--function", "g.Hello", "--", "--name", "Ada Lovelace"]
         let mut args = run_args_with_clean_from(tmp.path());
         args.target = Some(s("Summarize"));
 
-        match args.resolve_target(&engine).unwrap() {
-            ResolvedTarget::Function(name) => {
-                // May be qualified internally; CLI pass-through keeps the
-                // user-typed form.
-                assert!(
-                    name == "Summarize" || name.ends_with(".Summarize"),
-                    "got: {name}"
-                );
-            }
-            other => panic!("expected Function, got {other:?}"),
+        let err = args.resolve_target(&engine, &no_scripts()).unwrap_err();
+        assert!(format!("{err}").contains("No runnable target"));
+    }
+
+    // ── E2E: expression mode resolves project-defined symbols ─────
+
+    /// E2E: `-e 'Foo { x: 1 }'` compiles and runs against a class defined
+    /// in a BAML file under the project's `baml_src/`.
+    #[test]
+    fn test_expression_resolves_project_class() {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::write(tmp.path().join("baml.toml"), "").unwrap();
+        let src = tmp.path().join("baml_src");
+        std::fs::create_dir_all(&src).unwrap();
+        std::fs::write(src.join("foo.baml"), "class Foo { x int }\n").unwrap();
+
+        let mut args = run_args();
+        args.from = tmp.path().to_path_buf();
+        args.expression = Some(s("Foo { x: 1 }"));
+
+        let exit = args.run().expect("run should not hard-fail");
+        assert!(
+            matches!(exit, crate::ExitCode::Success),
+            "expected Success, got {exit:?}"
+        );
+    }
+
+    /// E2E: expression can call a function defined in a project file.
+    #[test]
+    fn test_expression_calls_project_function() {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::write(tmp.path().join("baml.toml"), "").unwrap();
+        let src = tmp.path().join("baml_src");
+        std::fs::create_dir_all(&src).unwrap();
+        std::fs::write(
+            src.join("lib.baml"),
+            "function Double(x: int) -> int { x * 2 }\n",
+        )
+        .unwrap();
+
+        let mut args = run_args();
+        args.from = tmp.path().to_path_buf();
+        args.expression = Some(s("Double(21)"));
+
+        let exit = args.run().expect("run should not hard-fail");
+        assert!(
+            matches!(exit, crate::ExitCode::Success),
+            "expected Success, got {exit:?}"
+        );
+    }
+
+    /// E2E: without a project (tempdir has no `baml.toml` / `baml_src`),
+    /// expressions still work for pure computation, but project symbols
+    /// are unavailable — referencing one is a compile error (not Success).
+    #[test]
+    fn test_expression_standalone_has_no_project_symbols() {
+        let tmp = tempfile::tempdir().unwrap();
+
+        let mut args = run_args();
+        args.from = tmp.path().to_path_buf();
+        args.expression = Some(s("DoesNotExist()"));
+
+        // Referencing an undefined symbol must not succeed: the call either
+        // returns Err (compile-time bail) or a non-Success exit code.
+        if let Ok(exit) = args.run() {
+            assert!(
+                !matches!(exit, crate::ExitCode::Success),
+                "expected failure, got Success"
+            );
         }
+    }
+
+    // ========================================================================
+    // E2E `run()` tests — one per RunArgs flag / target form.
+    //
+    // These invoke the full `RunArgs::run()` pipeline against a real tempdir
+    // project. Output goes to real stdout (we can't capture println! here),
+    // so assertions focus on the returned `ExitCode` and on side effects like
+    // `--log-file` output.
+    // ========================================================================
+
+    /// Minimal helper: write `baml.toml` + a single `.baml` file into a tempdir
+    /// and return an empty `RunArgs` pointing at it.
+    fn e2e_project(contents: &str) -> (tempfile::TempDir, RunArgs) {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::write(tmp.path().join("baml.toml"), "").unwrap();
+        let src = tmp.path().join("baml_src");
+        std::fs::create_dir_all(&src).unwrap();
+        std::fs::write(src.join("main.baml"), contents).unwrap();
+        let mut args = run_args();
+        args.from = tmp.path().to_path_buf();
+        (tmp, args)
+    }
+
+    /// `--function FN` runs the named function end-to-end.
+    #[test]
+    fn test_run_function_flag_e2e() {
+        let (_tmp, mut args) = e2e_project("function Answer() -> int { 42 }\n");
+        args.function = Some(s("Answer"));
+        assert!(matches!(args.run().unwrap(), crate::ExitCode::Success));
+    }
+
+    /// `--function FN` on an unknown function returns a non-Success exit.
+    #[test]
+    fn test_run_function_flag_unknown_e2e() {
+        let (_tmp, mut args) = e2e_project("function Answer() -> int { 42 }\n");
+        args.function = Some(s("DoesNotExist"));
+        if let Ok(exit) = args.run() {
+            assert!(!matches!(exit, crate::ExitCode::Success));
+        }
+    }
+
+    /// No target + root `main` runs `main`.
+    #[test]
+    fn test_run_no_target_runs_main_e2e() {
+        let (_tmp, args) = e2e_project("function main() -> int { 1 }\n");
+        assert!(matches!(args.run().unwrap(), crate::ExitCode::Success));
+    }
+
+    /// No target + no `main` → error exit.
+    #[test]
+    fn test_run_no_target_no_main_errors_e2e() {
+        let (_tmp, args) = e2e_project("function Other() -> int { 1 }\n");
+        if let Ok(exit) = args.run() {
+            assert!(!matches!(exit, crate::ExitCode::Success));
+        }
+    }
+
+    /// Positional target = namespace (subdirectory of `baml_src`) with `main`.
+    /// Uses the same layout as `test_bep_resolve_namespace_main_via_load_and_compile`
+    /// so the resolver sees `eval.main` as runnable.
+    #[test]
+    fn test_run_positional_namespace_main_e2e() {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::write(tmp.path().join("baml.toml"), "[project]\nname = \"test\"\n").unwrap();
+        let baml_src = tmp.path().join("baml_src");
+        let ns_eval = baml_src.join("ns_eval");
+        std::fs::create_dir_all(&ns_eval).unwrap();
+        std::fs::write(
+            baml_src.join("root.baml"),
+            "function other() -> int { 1 }\n",
+        )
+        .unwrap();
+        std::fs::write(ns_eval.join("main.baml"), "function main() -> int { 99 }\n").unwrap();
+
+        let mut args = run_args();
+        args.from = tmp.path().to_path_buf();
+        args.target = Some(s("eval"));
+        assert!(matches!(args.run().unwrap(), crate::ExitCode::Success));
+    }
+
+    /// Positional target = bare function name → error (use --function instead).
+    #[test]
+    fn test_run_positional_function_name_errors_e2e() {
+        let (_tmp, mut args) = e2e_project("function Ping() -> int { 0 }\n");
+        args.target = Some(s("Ping"));
+        if let Ok(exit) = args.run() {
+            assert!(!matches!(exit, crate::ExitCode::Success));
+        }
+    }
+
+    /// Positional `.baml` file runs in hermetic standalone mode.
+    #[test]
+    fn test_run_standalone_baml_file_e2e() {
+        let tmp = tempfile::tempdir().unwrap();
+        let file = tmp.path().join("hello.baml");
+        std::fs::write(&file, "function main() -> int { 99 }\n").unwrap();
+
+        let mut args = run_args();
+        args.from = tmp.path().to_path_buf();
+        args.target = Some(file.to_string_lossy().into_owned());
+        assert!(matches!(args.run().unwrap(), crate::ExitCode::Success));
+    }
+
+    /// Positional `.baml` file without `main` → error.
+    #[test]
+    fn test_run_standalone_baml_file_without_main_e2e() {
+        let tmp = tempfile::tempdir().unwrap();
+        let file = tmp.path().join("hello.baml");
+        std::fs::write(&file, "function Other() -> int { 1 }\n").unwrap();
+
+        let mut args = run_args();
+        args.from = tmp.path().to_path_buf();
+        args.target = Some(file.to_string_lossy().into_owned());
+        if let Ok(exit) = args.run() {
+            assert!(!matches!(exit, crate::ExitCode::Success));
+        }
+    }
+
+    /// `[scripts]` alias in `baml.toml` expands and runs.
+    #[test]
+    fn test_run_script_alias_e2e() {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::write(
+            tmp.path().join("baml.toml"),
+            "[scripts]\nBackfill = \"--function Run\"\n",
+        )
+        .unwrap();
+        let src = tmp.path().join("baml_src");
+        std::fs::create_dir_all(&src).unwrap();
+        std::fs::write(src.join("main.baml"), "function Run() -> int { 5 }\n").unwrap();
+
+        let mut args = run_args();
+        args.from = tmp.path().to_path_buf();
+        args.target = Some(s("Backfill"));
+        assert!(matches!(args.run().unwrap(), crate::ExitCode::Success));
+    }
+
+    /// `--list` prints available targets and exits Success.
+    #[test]
+    fn test_run_list_flag_e2e() {
+        let (_tmp, mut args) =
+            e2e_project("function Alpha() -> int { 1 }\nfunction Beta() -> int { 2 }\n");
+        args.list = true;
+        assert!(matches!(args.run().unwrap(), crate::ExitCode::Success));
+    }
+
+    /// `--list --output json` uses the JSON format path (exits Success).
+    #[test]
+    fn test_run_list_json_output_e2e() {
+        let (_tmp, mut args) = e2e_project("function Alpha() -> int { 1 }\n");
+        args.list = true;
+        args.output = OutputFormat::Json;
+        assert!(matches!(args.run().unwrap(), crate::ExitCode::Success));
+    }
+
+    /// `--output json` exercises the JSON formatter on a real return value.
+    #[test]
+    fn test_run_output_json_e2e() {
+        let (_tmp, mut args) = e2e_project("function Answer() -> int { 42 }\n");
+        args.function = Some(s("Answer"));
+        args.output = OutputFormat::Json;
+        assert!(matches!(args.run().unwrap(), crate::ExitCode::Success));
+    }
+
+    /// `--verbose` doesn't alter correctness; it just enables logging.
+    #[test]
+    fn test_run_verbose_flag_e2e() {
+        let (_tmp, mut args) = e2e_project("function main() -> int { 1 }\n");
+        args.verbose = true;
+        assert!(matches!(args.run().unwrap(), crate::ExitCode::Success));
+    }
+
+    /// `--log-file` creates a file and writes at least one byte.
+    #[test]
+    fn test_run_log_file_is_written_e2e() {
+        let (tmp, mut args) = e2e_project("function main() -> int { 1 }\n");
+        let log = tmp.path().join("run.log");
+        args.log_file = Some(log.clone());
+        assert!(matches!(args.run().unwrap(), crate::ExitCode::Success));
+        assert!(log.exists(), "log file should exist after run");
+    }
+
+    /// `--json-args '{...}'` supplies arguments inline.
+    #[test]
+    fn test_run_json_args_inline_e2e() {
+        let (_tmp, mut args) = e2e_project("function Add(x: int, y: int) -> int { x + y }\n");
+        args.function = Some(s("Add"));
+        args.json_args = Some(s(r#"{"x": 1, "y": 2}"#));
+        assert!(matches!(args.run().unwrap(), crate::ExitCode::Success));
+    }
+
+    /// `--json-args @file` reads JSON from a file.
+    #[test]
+    fn test_run_json_args_from_file_e2e() {
+        let (tmp, mut args) = e2e_project("function Add(x: int, y: int) -> int { x + y }\n");
+        let json_path = tmp.path().join("args.json");
+        std::fs::write(&json_path, r#"{"x": 10, "y": 20}"#).unwrap();
+        args.function = Some(s("Add"));
+        args.json_args = Some(format!("@{}", json_path.display()));
+        assert!(matches!(args.run().unwrap(), crate::ExitCode::Success));
+    }
+
+    /// Args after `--` are parsed as auto-CLI flags for the target function.
+    #[test]
+    fn test_run_target_args_via_double_dash_e2e() {
+        let (_tmp, mut args) = e2e_project("function Greet(name: string) -> string { name }\n");
+        args.function = Some(s("Greet"));
+        args.target_args = vec![s("--name"), s("ada")];
+        assert!(matches!(args.run().unwrap(), crate::ExitCode::Success));
+    }
+
+    /// `-- --name=value` (equals form) also works.
+    #[test]
+    fn test_run_target_args_equals_form_e2e() {
+        let (_tmp, mut args) = e2e_project("function Greet(name: string) -> string { name }\n");
+        args.function = Some(s("Greet"));
+        args.target_args = vec![s("--name=ada")];
+        assert!(matches!(args.run().unwrap(), crate::ExitCode::Success));
+    }
+
+    /// Positional sugar: single-param function accepts a bare token after `--`.
+    #[test]
+    fn test_run_target_args_positional_sugar_e2e() {
+        let (_tmp, mut args) = e2e_project("function Echo(msg: string) -> string { msg }\n");
+        args.function = Some(s("Echo"));
+        args.target_args = vec![s("hello")];
+        assert!(matches!(args.run().unwrap(), crate::ExitCode::Success));
+    }
+
+    /// `-- --help` as the sole forwarded token prints target help and exits
+    /// Success without invoking the function (BEP-027 §"Auto-CLI help").
+    #[test]
+    fn test_run_target_help_single_token_e2e() {
+        let (_tmp, mut args) = e2e_project("function Echo(msg: string) -> string { msg }\n");
+        args.function = Some(s("Echo"));
+        args.target_args = vec![s("--help")];
+        assert!(matches!(args.run().unwrap(), crate::ExitCode::Success));
+    }
+
+    /// `-- --help value` — `--help` is a *value*, not a help request (BEP-027).
+    #[test]
+    fn test_run_target_help_with_other_args_is_a_value_e2e() {
+        let (_tmp, mut args) = e2e_project("function Echo(msg: string) -> string { msg }\n");
+        args.function = Some(s("Echo"));
+        args.target_args = vec![s("--msg"), s("--help")];
+        assert!(matches!(args.run().unwrap(), crate::ExitCode::Success));
+    }
+
+    /// CLI args override JSON args when both are supplied.
+    #[test]
+    fn test_run_cli_overrides_json_args_e2e() {
+        let (_tmp, mut args) = e2e_project("function Add(x: int, y: int) -> int { x + y }\n");
+        args.function = Some(s("Add"));
+        args.json_args = Some(s(r#"{"x": 1, "y": 2}"#));
+        args.target_args = vec![s("--x"), s("100")];
+        assert!(matches!(args.run().unwrap(), crate::ExitCode::Success));
+    }
+
+    /// `--from` pointing to a nonexistent directory errors (expression mode).
+    #[test]
+    fn test_run_from_nonexistent_expression_errors_e2e() {
+        let mut args = run_args();
+        args.from = PathBuf::from("/definitely/does/not/exist/baml");
+        args.expression = Some(s("1 + 1"));
+        assert!(
+            args.run().is_err(),
+            "expected hard error on unresolvable --from"
+        );
+    }
+
+    /// Function returning a class: exercises format_output on an instance.
+    #[test]
+    fn test_run_returns_class_instance_e2e() {
+        let (_tmp, mut args) = e2e_project(
+            "class Point { x int  y int }\n\
+             function Origin() -> Point { Point { x: 0, y: 0 } }\n",
+        );
+        args.function = Some(s("Origin"));
+        assert!(matches!(args.run().unwrap(), crate::ExitCode::Success));
+    }
+
+    /// Same, with `--output json` — exercises external_to_json on an instance.
+    #[test]
+    fn test_run_returns_class_instance_as_json_e2e() {
+        let (_tmp, mut args) = e2e_project(
+            "class Point { x int  y int }\n\
+             function Origin() -> Point { Point { x: 0, y: 0 } }\n",
+        );
+        args.function = Some(s("Origin"));
+        args.output = OutputFormat::Json;
+        assert!(matches!(args.run().unwrap(), crate::ExitCode::Success));
+    }
+
+    // ========================================================================
+    // Script validation tests (BEP-027 §"Scripts in baml.toml")
+    // ========================================================================
+
+    /// Reserved verb as a script name → error at validation time.
+    #[test]
+    fn test_validate_scripts_rejects_reserved_verb() {
+        let (_tmp, args) = e2e_project("function main() -> int { 1 }\n");
+        std::fs::write(
+            args.from.join("baml.toml"),
+            "[scripts]\ntest = \"--function main\"\n",
+        )
+        .unwrap();
+        let result = args.run();
+        let err = result.unwrap_err();
+        let msg = format!("{err}");
+        assert!(
+            msg.contains("reserved verb"),
+            "expected reserved-verb error, got: {msg}"
+        );
+    }
+
+    /// Script whose `--function` target doesn't exist → error at validation.
+    #[test]
+    fn test_validate_scripts_bad_function_target() {
+        let (_tmp, args) = e2e_project("function main() -> int { 1 }\n");
+        std::fs::write(
+            args.from.join("baml.toml"),
+            "[scripts]\nmyscript = \"--function DoesNotExist\"\n",
+        )
+        .unwrap();
+        let result = args.run();
+        let err = result.unwrap_err();
+        let msg = format!("{err}");
+        assert!(
+            msg.contains("not found"),
+            "expected function-not-found error, got: {msg}"
+        );
+    }
+
+    /// Script with malformed body (--function without value) → error.
+    #[test]
+    fn test_validate_scripts_malformed_body() {
+        let (_tmp, args) = e2e_project("function main() -> int { 1 }\n");
+        std::fs::write(
+            args.from.join("baml.toml"),
+            "[scripts]\nbad = \"--function\"\n",
+        )
+        .unwrap();
+        let result = args.run();
+        let err = result.unwrap_err();
+        let msg = format!("{err}");
+        assert!(
+            msg.contains("[scripts]") && msg.contains("bad"),
+            "expected script-name in error, got: {msg}"
+        );
+    }
+
+    /// Valid script with real function target passes validation.
+    #[test]
+    fn test_validate_scripts_valid_passes() {
+        let (_tmp, mut args) = e2e_project("function Greet() -> int { 1 }\n");
+        std::fs::write(
+            args.from.join("baml.toml"),
+            "[scripts]\nhello = \"--function Greet\"\n",
+        )
+        .unwrap();
+        args.target = Some(s("hello"));
+        assert!(matches!(args.run().unwrap(), crate::ExitCode::Success));
+    }
+
+    // ── "did you mean…" suggestions ──────────────────────────────────
+
+    /// Suggestions include script names, not just functions.
+    #[test]
+    fn test_did_you_mean_includes_scripts() {
+        let (_tmp, mut args) = e2e_project("function main() -> int { 1 }\n");
+        std::fs::write(
+            args.from.join("baml.toml"),
+            "[scripts]\nbackfill = \"--function main\"\n",
+        )
+        .unwrap();
+        args.target = Some(s("backfil")); // close to "backfill"
+        let err = args.run().unwrap_err();
+        let msg = format!("{err}");
+        assert!(
+            msg.contains("backfill") && msg.contains("script"),
+            "expected script in suggestions, got: {msg}"
+        );
+    }
+
+    /// Suggestions include namespace names.
+    #[test]
+    fn test_did_you_mean_includes_namespaces() {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::write(tmp.path().join("baml.toml"), "[project]\nname = \"test\"\n").unwrap();
+        let baml_src = tmp.path().join("baml_src");
+        let ns = baml_src.join("ns_eval");
+        std::fs::create_dir_all(&ns).unwrap();
+        std::fs::write(
+            baml_src.join("root.baml"),
+            "function other() -> int { 1 }\n",
+        )
+        .unwrap();
+        std::fs::write(ns.join("main.baml"), "function main() -> int { 1 }\n").unwrap();
+
+        let mut args = run_args();
+        args.from = tmp.path().to_path_buf();
+        args.target = Some(s("evl")); // close to "eval"
+        let err = args.run().unwrap_err();
+        let msg = format!("{err}");
+        assert!(
+            msg.contains("eval") && msg.contains("namespace"),
+            "expected namespace in suggestions, got: {msg}"
+        );
+    }
+
+    // ── Expression mode with namespaced symbols ──────────────────────
+
+    /// Known gap: expression mode cannot currently call namespace-qualified
+    /// functions (`math.Triple(7)`). The namespace resolves but the function
+    /// isn't callable via dot-access in expression context. This test
+    /// documents the current behavior; flip the assertion when upstream
+    /// compiler2 namespace resolution is fixed.
+    #[test]
+    fn test_expression_namespaced_function_is_known_gap() {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::write(tmp.path().join("baml.toml"), "[project]\nname = \"test\"\n").unwrap();
+        let baml_src = tmp.path().join("baml_src");
+        let ns = baml_src.join("ns_math");
+        std::fs::create_dir_all(&ns).unwrap();
+        std::fs::write(
+            ns.join("lib.baml"),
+            "function Triple(x: int) -> int { x * 3 }\n",
+        )
+        .unwrap();
+
+        let mut args = run_args();
+        args.from = tmp.path().to_path_buf();
+        args.expression = Some(s("math.Triple(7)"));
+
+        // TODO: should succeed once compiler2 supports namespace-qualified
+        // calls in expression context. For now, it fails at runtime.
+        if let Ok(exit) = args.run() {
+            assert!(
+                !matches!(exit, crate::ExitCode::Success),
+                "namespace calls started working — update this test to expect Success!"
+            );
+        }
+    }
+
+    // ========================================================================
+    // --list includes scripts and namespaces (BEP-027 §"Flag reference")
+    // ========================================================================
+
+    /// `--list` on a project with scripts shows scripts in output.
+    #[test]
+    fn test_list_includes_scripts_e2e() {
+        let (_tmp, mut args) = e2e_project("function main() -> int { 1 }\n");
+        std::fs::write(
+            args.from.join("baml.toml"),
+            "[scripts]\nbackfill = \"--function main\"\n",
+        )
+        .unwrap();
+        args.list = true;
+        assert!(matches!(args.run().unwrap(), crate::ExitCode::Success));
+    }
+
+    /// `--list --output json` includes scripts and namespaces in the JSON output.
+    #[test]
+    fn test_list_json_includes_scripts_and_namespaces_e2e() {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::write(
+            tmp.path().join("baml.toml"),
+            "[scripts]\nbackfill = \"--function main\"\n",
+        )
+        .unwrap();
+        let baml_src = tmp.path().join("baml_src");
+        let ns_eval = baml_src.join("ns_eval");
+        std::fs::create_dir_all(&ns_eval).unwrap();
+        std::fs::write(baml_src.join("root.baml"), "function main() -> int { 1 }\n").unwrap();
+        std::fs::write(ns_eval.join("main.baml"), "function main() -> int { 1 }\n").unwrap();
+
+        let mut args = run_args();
+        args.from = tmp.path().to_path_buf();
+        args.list = true;
+        args.output = OutputFormat::Json;
+        assert!(matches!(args.run().unwrap(), crate::ExitCode::Success));
+    }
+
+    // ========================================================================
+    // --help before `--` (BEP-027 §"Flag reference")
+    // ========================================================================
+
+    /// `--help` with no target shows generic run-verb help and exits Success.
+    #[test]
+    fn test_help_no_target_shows_run_help_e2e() {
+        let (_tmp, mut args) = e2e_project("function main() -> int { 1 }\n");
+        args.help = true;
+        assert!(matches!(args.run().unwrap(), crate::ExitCode::Success));
+    }
+
+    /// `--help` with `--function` shows target-specific help.
+    #[test]
+    fn test_help_with_function_shows_target_help_e2e() {
+        let (_tmp, mut args) = e2e_project("function Greet(name: string) -> string { name }\n");
+        args.function = Some(s("Greet"));
+        args.help = true;
+        assert!(matches!(args.run().unwrap(), crate::ExitCode::Success));
+    }
+
+    /// `--help` with a positional target (namespace) shows target-specific help.
+    #[test]
+    fn test_help_with_namespace_target_shows_target_help_e2e() {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::write(tmp.path().join("baml.toml"), "[project]\nname = \"test\"\n").unwrap();
+        let baml_src = tmp.path().join("baml_src");
+        let ns = baml_src.join("ns_eval");
+        std::fs::create_dir_all(&ns).unwrap();
+        std::fs::write(
+            baml_src.join("root.baml"),
+            "function other() -> int { 1 }\n",
+        )
+        .unwrap();
+        std::fs::write(
+            ns.join("main.baml"),
+            "function main(suite: string) -> int { 1 }\n",
+        )
+        .unwrap();
+
+        let mut args = run_args();
+        args.from = tmp.path().to_path_buf();
+        args.target = Some(s("eval"));
+        args.help = true;
+        assert!(matches!(args.run().unwrap(), crate::ExitCode::Success));
+    }
+
+    // ========================================================================
+    // Script validation file:line references (BEP-027 §"Scripts in baml.toml")
+    // ========================================================================
+
+    /// Script validation errors include the baml.toml file path.
+    #[test]
+    fn test_validate_scripts_error_includes_file_path() {
+        let (_tmp, args) = e2e_project("function main() -> int { 1 }\n");
+        std::fs::write(
+            args.from.join("baml.toml"),
+            "[scripts]\ntest = \"--function main\"\n",
+        )
+        .unwrap();
+        let err = args.run().unwrap_err();
+        let msg = format!("{err}");
+        assert!(
+            msg.contains("baml.toml"),
+            "expected file path in error, got: {msg}"
+        );
+    }
+
+    /// Script validation errors include line numbers.
+    #[test]
+    fn test_validate_scripts_error_includes_line_number() {
+        let (_tmp, args) = e2e_project("function main() -> int { 1 }\n");
+        std::fs::write(
+            args.from.join("baml.toml"),
+            "[scripts]\ntest = \"--function main\"\n",
+        )
+        .unwrap();
+        let err = args.run().unwrap_err();
+        let msg = format!("{err}");
+        // `test` is on line 2 of the toml file.
+        assert!(
+            msg.contains(":2:"),
+            "expected line number in error, got: {msg}"
+        );
+    }
+
+    /// `find_script_line` finds keys in both bare and quoted forms.
+    #[test]
+    fn test_find_script_line_bare_and_quoted() {
+        let content = "[scripts]\ndev = \"something\"\n\"dev:cheap\" = \"other\"\n";
+        assert_eq!(RunArgs::find_script_line(content, "dev"), Some(2));
+        assert_eq!(RunArgs::find_script_line(content, "dev:cheap"), Some(3));
+        assert_eq!(RunArgs::find_script_line(content, "nonexistent"), None);
+    }
+
+    // ========================================================================
+    // Positional target → function name no longer resolves (BEP-027 compliance)
+    // ========================================================================
+
+    /// Functions are NOT reachable via positional target — only via `--function`.
+    #[test]
+    fn test_positional_function_name_not_reachable() {
+        let engine = engine_from_source(
+            r#"
+                function main() -> int { 1 }
+                function Summarize(text: string) -> string { text }
+            "#,
+        );
+        let tmp = tempfile::tempdir().unwrap();
+        let mut args = run_args_with_clean_from(tmp.path());
+        args.target = Some(s("Summarize"));
+        assert!(args.resolve_target(&engine, &no_scripts()).is_err());
+
+        // But --function still works.
+        args.target = None;
+        args.function = Some(s("Summarize"));
+        assert!(args.resolve_target(&engine, &no_scripts()).is_ok());
+    }
+
+    // ========================================================================
+    // Mutual exclusivity: -e and --function (BEP-027 §"Target resolution")
+    // ========================================================================
+
+    /// `-e` and `--function` together → error.
+    #[test]
+    fn test_expression_and_function_mutually_exclusive() {
+        let (_tmp, mut args) = e2e_project("function main() -> int { 1 }\n");
+        args.expression = Some(s("1 + 1"));
+        args.function = Some(s("main"));
+        let err = args.run().unwrap_err();
+        let msg = format!("{err}");
+        assert!(
+            msg.contains("mutually exclusive"),
+            "expected mutual-exclusivity error, got: {msg}"
+        );
+    }
+
+    /// `-e` alone still works.
+    #[test]
+    fn test_expression_alone_works() {
+        let (_tmp, mut args) = e2e_project("function main() -> int { 1 }\n");
+        args.expression = Some(s("1 + 1"));
+        assert!(matches!(args.run().unwrap(), crate::ExitCode::Success));
+    }
+
+    /// `--function` alone still works.
+    #[test]
+    fn test_function_alone_works() {
+        let (_tmp, mut args) = e2e_project("function Answer() -> int { 42 }\n");
+        args.function = Some(s("Answer"));
+        assert!(matches!(args.run().unwrap(), crate::ExitCode::Success));
+    }
+
+    // ========================================================================
+    // Script parameter reference validation (BEP-027 §"Scripts in baml.toml")
+    // ========================================================================
+
+    /// extract_flag_keys returns flag names from tokens.
+    #[test]
+    fn test_extract_flag_keys_basic() {
+        let args = vec![s("--text"), s("hi"), s("--bogus"), s("val")];
+        assert_eq!(extract_flag_keys(&args), vec!["text", "bogus"]);
+    }
+
+    /// extract_flag_keys handles --key=value form.
+    #[test]
+    fn test_extract_flag_keys_equals_form() {
+        let args = vec![s("--verbose=true"), s("--name=ada")];
+        assert_eq!(extract_flag_keys(&args), vec!["verbose", "name"]);
+    }
+
+    /// extract_flag_keys skips bare tokens.
+    #[test]
+    fn test_extract_flag_keys_skips_bare() {
+        let args = vec![s("bare"), s("--flag"), s("val"), s("another")];
+        assert_eq!(extract_flag_keys(&args), vec!["flag"]);
+    }
+
+    /// extract_flag_keys with empty input.
+    #[test]
+    fn test_extract_flag_keys_empty() {
+        assert!(extract_flag_keys(&[]).is_empty());
+    }
+
+    /// Script with unknown parameter flag → error at validation time.
+    #[test]
+    fn test_validate_scripts_catches_bad_param_reference() {
+        let (_tmp, args) = e2e_project("function Greet(name: string) -> string { name }\n");
+        std::fs::write(
+            args.from.join("baml.toml"),
+            "[scripts]\nhello = \"--function Greet -- --nonexistent hi\"\n",
+        )
+        .unwrap();
+        let err = args.run().unwrap_err();
+        let msg = format!("{err}");
+        assert!(
+            msg.contains("nonexistent") && msg.contains("unknown parameter"),
+            "expected unknown-parameter error, got: {msg}"
+        );
+    }
+
+    /// Script with valid parameter flags passes validation.
+    #[test]
+    fn test_validate_scripts_valid_params_pass() {
+        let (_tmp, mut args) = e2e_project("function Greet(name: string) -> string { name }\n");
+        std::fs::write(
+            args.from.join("baml.toml"),
+            "[scripts]\nhello = \"--function Greet -- --name World\"\n",
+        )
+        .unwrap();
+        args.target = Some(s("hello"));
+        assert!(matches!(args.run().unwrap(), crate::ExitCode::Success));
+    }
+
+    /// Script targeting default main validates extra_args against main's params.
+    #[test]
+    fn test_validate_scripts_checks_default_main_params() {
+        let (_tmp, args) = e2e_project("function main(verbose: bool) -> int { 1 }\n");
+        std::fs::write(
+            args.from.join("baml.toml"),
+            "[scripts]\nmyscript = \"-- --not_a_param=true\"\n",
+        )
+        .unwrap();
+        let err = args.run().unwrap_err();
+        let msg = format!("{err}");
+        assert!(
+            msg.contains("not_a_param") && msg.contains("unknown parameter"),
+            "expected unknown-parameter error for default main, got: {msg}"
+        );
     }
 }

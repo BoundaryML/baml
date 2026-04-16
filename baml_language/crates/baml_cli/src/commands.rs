@@ -69,7 +69,7 @@ pub(crate) enum Commands {
     #[command(about = "Run BAML tests")]
     Test(crate::test_command::TestArgs),
 
-    #[command(about = "Run a BAML function or script")]
+    #[command(about = "Run a BAML function or script", disable_help_flag = true)]
     Run(crate::run_command::RunArgs),
 
     #[command(about = "Starts a language server", name = "lsp")]
