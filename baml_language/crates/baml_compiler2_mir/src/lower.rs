@@ -2215,7 +2215,7 @@ impl LoweringContext<'_> {
                         .get(&(self.current_scope, callee))
                         .is_some_and(|r| match r {
                             MemberResolution::Method { func_loc, .. }
-                            | MemberResolution::Free { func_loc } => {
+                            | MemberResolution::FreeFunction { func_loc } => {
                                 let sig =
                                     baml_compiler2_ppir::function_signature(self.db, *func_loc);
                                 sig.params
