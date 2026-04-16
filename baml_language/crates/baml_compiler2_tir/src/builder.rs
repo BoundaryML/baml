@@ -80,6 +80,30 @@ impl BuiltinResolution<'_> {
     }
 }
 
+struct OptionalBaseInfo {
+    expanded: Ty,
+    inner: Ty,
+}
+
+impl OptionalBaseInfo {
+    fn is_nullable(&self) -> bool {
+        self.expanded != self.inner
+    }
+
+    fn is_null_only(&self) -> bool {
+        matches!(self.inner, Ty::Never { .. })
+    }
+}
+
+/// Result from the shared call pipeline. Callers use this to decide
+/// expression-specific postprocessing (subtype checks, optional wrapping).
+struct CheckedCallInner {
+    /// The inferred return type after generic substitution and typevar erasure.
+    result: Ty,
+    /// Whether generic bindings were inferred while checking the call.
+    had_bindings: bool,
+}
+
 /// Per-scope inference builder.
 ///
 /// Created at the start of `infer_scope_types`, discarded when done.
@@ -92,6 +116,10 @@ pub struct TypeInferenceBuilder<'db> {
     /// Binding types: the type a variable is bound to (may differ from the
     /// initializer expression type due to widening or annotation).
     bindings: FxHashMap<PatId, Ty>,
+    /// Tracks `let`-bound locals back to their binding pattern so container
+    /// establishment can keep declaration-side binding types in sync with the
+    /// flow-sensitive local type seen by MIR lowering.
+    let_binding_patterns: FxHashMap<Name, PatId>,
     /// Member resolutions: for field-access expressions that resolved to a
     /// class field, enum variant, method, or free function — records the
     /// structural path so MIR can emit the correct `QualifiedName` and LSP
@@ -157,6 +185,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             context,
             expressions: FxHashMap::default(),
             bindings: FxHashMap::default(),
+            let_binding_patterns: FxHashMap::default(),
             resolutions: FxHashMap::default(),
             res_ctx,
             package_items,
@@ -222,9 +251,249 @@ impl<'db> TypeInferenceBuilder<'db> {
         self.locals.insert(name, ty);
     }
 
+    fn sync_let_binding_type(&mut self, name: &Name, ty: Ty) {
+        if let Some(pattern_id) = self.let_binding_patterns.get(name).copied() {
+            self.bindings.insert(pattern_id, ty);
+        }
+    }
+
     /// Record the type of an expression.
     pub fn record_expr_type(&mut self, expr_id: ExprId, ty: Ty) {
         self.expressions.insert(expr_id, ty);
+    }
+
+    fn expand_alias_chains(&self, ty: Ty) -> Ty {
+        let mut ty = ty;
+        for _ in 0..64 {
+            match &ty {
+                Ty::TypeAlias(qtn, _) => match self.aliases.get(qtn) {
+                    Some(expanded) => ty = expanded.clone(),
+                    None => break,
+                },
+                _ => break,
+            }
+        }
+        ty
+    }
+
+    fn analyze_optional_base(&self, ty: &Ty) -> OptionalBaseInfo {
+        let expanded = self.expand_alias_chains(ty.clone());
+        let inner = crate::narrowing::remove_null(&expanded);
+        OptionalBaseInfo { expanded, inner }
+    }
+
+    fn infer_args_for_recovery(&mut self, args: &[ExprId], body: &ExprBody) {
+        for arg in args {
+            self.infer_expr(*arg, body);
+        }
+    }
+
+    /// Shared call pipeline: alias expansion, function matching, skip_self_param,
+    /// arity check, two-pass generic inference, return type substitution.
+    ///
+    /// Does NOT perform the final subtype check or record_expr_type — callers handle those.
+    fn check_call_inner(
+        &mut self,
+        expr_id: ExprId,
+        callee_ty: Ty,
+        is_method_call: bool,
+        args: &[ExprId],
+        body: &ExprBody,
+        expected: &Ty,
+        is_optional_call: bool,
+    ) -> CheckedCallInner {
+        let callee_ty = self.expand_alias_chains(callee_ty);
+
+        match &callee_ty {
+            Ty::Function { params, ret, .. } => {
+                let effective_params = if is_method_call {
+                    crate::generics::skip_self_param(params)
+                } else {
+                    params.as_slice()
+                };
+
+                if effective_params.len() != args.len() {
+                    self.context.report_simple(
+                        TirTypeError::ArgumentCountMismatch {
+                            expected: effective_params.len(),
+                            got: args.len(),
+                        },
+                        expr_id,
+                    );
+                }
+
+                let mut bindings = FxHashMap::default();
+
+                let phase0_expected = if is_optional_call
+                    && !matches!(expected, Ty::Unknown { .. } | Ty::Error { .. })
+                {
+                    let ret_info = self.analyze_optional_base(ret);
+                    let expected_info = self.analyze_optional_base(expected);
+                    if ret_info.is_nullable() {
+                        Some(expected_info.expanded)
+                    } else if expected_info.is_null_only() {
+                        None
+                    } else {
+                        Some(expected_info.inner)
+                    }
+                } else {
+                    Some(expected.clone())
+                };
+
+                // Phase 0: reverse-infer from expected return type (low priority).
+                // Skip when expected is Unknown/Error — it provides no information
+                // and would pollute forward-inferred bindings.
+                if let Some(phase0_expected) = phase0_expected.as_ref() {
+                    if crate::generics::contains_typevar(ret)
+                        && !matches!(phase0_expected, Ty::Unknown { .. } | Ty::Error { .. })
+                    {
+                        crate::generics::infer_bindings(ret, phase0_expected, &mut bindings);
+                    }
+                }
+
+                // Phase 1: forward-infer from arguments (high priority, overrides).
+                // Two-pass: first process non-lambda args to bind type vars,
+                // then process lambda args with resolved bindings.
+                let param_arg_pairs: Vec<_> = effective_params.iter().zip(args.iter()).collect();
+
+                for ((_, param_ty), arg) in &param_arg_pairs {
+                    if matches!(&body.exprs[**arg], Expr::Lambda(_)) {
+                        continue;
+                    }
+                    let substituted = crate::generics::substitute_ty(param_ty, &bindings);
+                    let arg_ty = if !crate::generics::contains_typevar(&substituted) {
+                        self.check_expr(**arg, body, &substituted)
+                    } else {
+                        self.infer_expr(**arg, body)
+                    };
+                    crate::generics::infer_bindings(param_ty, &arg_ty, &mut bindings);
+                }
+
+                for ((_, param_ty), arg) in &param_arg_pairs {
+                    if !matches!(&body.exprs[**arg], Expr::Lambda(_)) {
+                        continue;
+                    }
+                    let substituted = crate::generics::substitute_ty(param_ty, &bindings);
+                    let arg_ty = if !crate::generics::contains_typevar(&substituted) {
+                        self.check_expr(**arg, body, &substituted)
+                    } else if let Ty::Function {
+                        params: fn_params, ..
+                    } = &substituted
+                    {
+                        let all_params_concrete = fn_params
+                            .iter()
+                            .all(|(_, t)| !crate::generics::contains_typevar(t));
+                        if all_params_concrete {
+                            self.check_expr(**arg, body, &substituted)
+                        } else {
+                            self.infer_expr(**arg, body)
+                        }
+                    } else {
+                        self.infer_expr(**arg, body)
+                    };
+                    crate::generics::infer_bindings(param_ty, &arg_ty, &mut bindings);
+                }
+
+                // Infer any extra args beyond param count (error recovery)
+                for arg in args.iter().skip(effective_params.len()) {
+                    self.infer_expr(*arg, body);
+                }
+
+                let substituted_ret = crate::generics::substitute_ty(ret, &bindings);
+                let mut erase_diags = Vec::new();
+                let result =
+                    crate::generics::erase_unresolved_typevars(&substituted_ret, &mut erase_diags);
+                for d in erase_diags {
+                    self.context.report_simple(d, expr_id);
+                }
+
+                CheckedCallInner {
+                    result,
+                    had_bindings: !bindings.is_empty(),
+                }
+            }
+            Ty::Unknown { .. } | Ty::Error { .. } => {
+                self.infer_args_for_recovery(args, body);
+                CheckedCallInner {
+                    result: Ty::Unknown {
+                        attr: TyAttr::default(),
+                    },
+                    had_bindings: false,
+                }
+            }
+            _ => {
+                self.context.report_simple(
+                    TirTypeError::NotCallable {
+                        ty: callee_ty.clone(),
+                    },
+                    expr_id,
+                );
+                self.infer_args_for_recovery(args, body);
+                CheckedCallInner {
+                    result: Ty::Unknown {
+                        attr: TyAttr::default(),
+                    },
+                    had_bindings: false,
+                }
+            }
+        }
+    }
+
+    fn report_result_type_mismatch(&mut self, expr_id: ExprId, got: &Ty, expected: &Ty) {
+        if !matches!(expected, Ty::Unknown { .. } | Ty::Error { .. })
+            && !self.is_subtype(got, expected)
+        {
+            self.context.report(
+                TirTypeError::TypeMismatch {
+                    expected: expected.clone(),
+                    got: got.clone(),
+                },
+                expr_id,
+                Vec::new(),
+            );
+        }
+    }
+
+    fn finalize_optional_callee_call(
+        &mut self,
+        expr_id: ExprId,
+        callee_id: ExprId,
+        callee_ty: Ty,
+        is_method_call: bool,
+        args: &[ExprId],
+        body: &ExprBody,
+        expected: &Ty,
+    ) -> Ty {
+        let callee_info = self.analyze_optional_base(&callee_ty);
+
+        if let Some(result_ty) = self.try_container_method_call(callee_id, args, body) {
+            let final_ty = Self::make_optional(result_ty);
+            self.report_result_type_mismatch(expr_id, &final_ty, expected);
+            self.record_expr_type(expr_id, final_ty.clone());
+            return final_ty;
+        }
+
+        if callee_info.is_null_only() {
+            self.infer_args_for_recovery(args, body);
+            let ty = Ty::Primitive(PrimitiveType::Null, TyAttr::default());
+            self.report_result_type_mismatch(expr_id, &ty, expected);
+            self.record_expr_type(expr_id, ty.clone());
+            return ty;
+        }
+
+        let checked = self.check_call_inner(
+            expr_id,
+            callee_info.inner,
+            is_method_call,
+            args,
+            body,
+            expected,
+            true,
+        );
+        let final_ty = Self::make_optional(checked.result);
+        self.report_result_type_mismatch(expr_id, &final_ty, expected);
+        self.record_expr_type(expr_id, final_ty.clone());
+        final_ty
     }
 
     // ── Bidirectional Type Checking ─────────────────────────────────────────
@@ -358,9 +627,10 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // Optional chaining: a?.b — if a is null, short-circuit to null.
                 // Type: if a: T?, resolve member on T, wrap result in Optional.
                 let base_ty = self.infer_expr(*base, body);
-                let inner_ty = crate::narrowing::remove_null(&base_ty);
+                let base_info = self.analyze_optional_base(&base_ty);
                 // E2: warn if base is not nullable (?.  is unnecessary)
-                if inner_ty == base_ty && !matches!(base_ty, Ty::Unknown { .. } | Ty::Error { .. })
+                if !base_info.is_nullable()
+                    && !matches!(base_ty, Ty::Unknown { .. } | Ty::Error { .. })
                 {
                     let base_text = body.display_expr(*base);
                     self.context.report_simple(
@@ -371,11 +641,11 @@ impl<'db> TypeInferenceBuilder<'db> {
                         expr_id,
                     );
                 }
-                if matches!(inner_ty, Ty::Never { .. }) {
+                if base_info.is_null_only() {
                     // Base is just null — result is null
                     Ty::Primitive(PrimitiveType::Null, TyAttr::default())
                 } else {
-                    let member_ty = self.resolve_member(&inner_ty, field, expr_id);
+                    let member_ty = self.resolve_member(&base_info.inner, field, expr_id);
                     Self::make_optional(member_ty)
                 }
             }
@@ -542,9 +812,10 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // Optional chaining: a?.[expr] — short-circuits to null if a is null.
                 let base_ty = self.infer_expr(*base, body);
                 self.infer_expr(*index, body);
-                let inner_ty = crate::narrowing::remove_null(&base_ty);
+                let base_info = self.analyze_optional_base(&base_ty);
                 // E2: warn if base is not nullable
-                if inner_ty == base_ty && !matches!(base_ty, Ty::Unknown { .. } | Ty::Error { .. })
+                if !base_info.is_nullable()
+                    && !matches!(base_ty, Ty::Unknown { .. } | Ty::Error { .. })
                 {
                     let base_text = body.display_expr(*base);
                     let expr_text = body.display_expr(expr_id);
@@ -556,19 +827,23 @@ impl<'db> TypeInferenceBuilder<'db> {
                         expr_id,
                     );
                 }
-                if matches!(inner_ty, Ty::Never { .. }) {
+                if base_info.is_null_only() {
                     Ty::Primitive(PrimitiveType::Null, TyAttr::default())
                 } else {
-                    let elem_ty = match inner_ty {
-                        Ty::List(elem_ty, _) | Ty::EvolvingList(elem_ty, _) => *elem_ty,
-                        Ty::Map(_, val_ty, _) | Ty::EvolvingMap(_, val_ty, _) => *val_ty,
+                    let elem_ty = match &base_info.inner {
+                        Ty::List(elem_ty, _) | Ty::EvolvingList(elem_ty, _) => {
+                            elem_ty.as_ref().clone()
+                        }
+                        Ty::Map(_, val_ty, _) | Ty::EvolvingMap(_, val_ty, _) => {
+                            val_ty.as_ref().clone()
+                        }
                         Ty::Unknown { .. } | Ty::Error { .. } => Ty::Unknown {
                             attr: TyAttr::default(),
                         },
                         _ => {
                             self.context.report_simple(
                                 TirTypeError::NotIndexable {
-                                    ty: inner_ty.clone(),
+                                    ty: base_info.inner.clone(),
                                 },
                                 expr_id,
                             );
@@ -580,70 +855,13 @@ impl<'db> TypeInferenceBuilder<'db> {
                     Self::make_optional(elem_ty)
                 }
             }
-            Expr::OptionalCall { callee, args } => {
-                // Optional chaining: func?.(args) — short-circuits to null if callee is null.
-                let is_method_call = matches!(
-                    &body.exprs[*callee],
-                    Expr::FieldAccess { .. } | Expr::OptionalFieldAccess { .. }
-                );
-                let callee_ty = self.infer_expr(*callee, body);
-                for arg in args {
-                    self.infer_expr(*arg, body);
-                }
-                let inner_ty = crate::narrowing::remove_null(&callee_ty);
-                // E2: warn if callee is not nullable
-                if inner_ty == callee_ty
-                    && !matches!(callee_ty, Ty::Unknown { .. } | Ty::Error { .. })
-                {
-                    let callee_text = body.display_expr(*callee);
-                    let expr_text = body.display_expr(expr_id);
-                    self.context.report_simple(
-                        TirTypeError::UnnecessaryOptionalChaining {
-                            expr: expr_text,
-                            base: callee_text,
-                        },
-                        expr_id,
-                    );
-                }
-                if matches!(inner_ty, Ty::Never { .. }) {
-                    Ty::Primitive(PrimitiveType::Null, TyAttr::default())
-                } else {
-                    let result_ty = match &inner_ty {
-                        Ty::Function { params, ret, .. } => {
-                            let effective_params = if is_method_call {
-                                crate::generics::skip_self_param(params)
-                            } else {
-                                params.as_slice()
-                            };
-                            if effective_params.len() != args.len() {
-                                self.context.report_simple(
-                                    TirTypeError::ArgumentCountMismatch {
-                                        expected: effective_params.len(),
-                                        got: args.len(),
-                                    },
-                                    expr_id,
-                                );
-                            }
-                            ret.as_ref().clone()
-                        }
-                        Ty::Unknown { .. } | Ty::Error { .. } => Ty::Unknown {
-                            attr: TyAttr::default(),
-                        },
-                        _ => {
-                            self.context.report_simple(
-                                TirTypeError::NotCallable {
-                                    ty: inner_ty.clone(),
-                                },
-                                expr_id,
-                            );
-                            Ty::Unknown {
-                                attr: TyAttr::default(),
-                            }
-                        }
-                    };
-                    Self::make_optional(result_ty)
-                }
-            }
+            Expr::OptionalCall { .. } => self.check_expr(
+                expr_id,
+                body,
+                &Ty::Unknown {
+                    attr: TyAttr::default(),
+                },
+            ),
             Expr::OptionalChain { expr } => {
                 // Transparent wrapper — type is the same as the inner expression's type.
                 // While inside the chain, FieldAccess/Index auto-unwrap nullable bases
@@ -914,10 +1132,20 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
             // Call expressions: generic type inference + argument checking.
             Expr::Call { callee, args } => {
-                // Container mutation fast path (e.g. x.push(val) on EvolvingList)
-                if let Some(result_ty) =
-                    self.try_container_method_call(expr_id, *callee, args, body)
+                if matches!(&body.exprs[*callee], Expr::OptionalFieldAccess { .. })
+                    && self.in_optional_chain > 0
                 {
+                    let callee_ty = self.infer_expr(*callee, body);
+                    return self.finalize_optional_callee_call(
+                        expr_id, *callee, callee_ty, true, args, body, expected,
+                    );
+                }
+
+                // Container mutation fast path (e.g. x.push(val) on EvolvingList)
+                if matches!(&body.exprs[*callee], Expr::FieldAccess { .. })
+                    && let Some(result_ty) = self.try_container_method_call(*callee, args, body)
+                {
+                    self.report_result_type_mismatch(expr_id, &result_ty, expected);
                     self.record_expr_type(expr_id, result_ty.clone());
                     return result_ty;
                 }
@@ -925,163 +1153,53 @@ impl<'db> TypeInferenceBuilder<'db> {
                 let is_method_call = matches!(&body.exprs[*callee], Expr::FieldAccess { .. });
                 let callee_ty = self.infer_expr(*callee, body);
 
-                // Expand type alias chains so alias-over-function types are callable.
-                // Bare alias cycles are already caught by find_invalid_alias_cycles (Tarjan SCC)
-                // before we reach here, so the depth guard is cheap insurance.
-                let callee_ty = {
-                    let mut ty = callee_ty;
-                    for _ in 0..64 {
-                        match &ty {
-                            Ty::TypeAlias(qtn, _) => match self.aliases.get(qtn) {
-                                Some(expanded) => ty = expanded.clone(),
-                                None => break,
-                            },
-                            _ => break,
-                        }
-                    }
-                    ty
-                };
+                let checked = self.check_call_inner(
+                    expr_id,
+                    callee_ty,
+                    is_method_call,
+                    args,
+                    body,
+                    expected,
+                    false,
+                );
 
-                match &callee_ty {
-                    Ty::Function { params, ret, .. } => {
-                        let effective_params = if is_method_call {
-                            crate::generics::skip_self_param(params)
-                        } else {
-                            params.as_slice()
-                        };
-
-                        if effective_params.len() != args.len() {
-                            self.context.report_simple(
-                                TirTypeError::ArgumentCountMismatch {
-                                    expected: effective_params.len(),
-                                    got: args.len(),
-                                },
-                                expr_id,
-                            );
-                        }
-
-                        let mut bindings = FxHashMap::default();
-
-                        // Phase 0: reverse-infer from expected return type (low priority).
-                        // Skip when expected is Unknown/Error — it provides no
-                        // information and would pollute forward-inferred bindings
-                        // via union_ty (e.g. T = unknown | Node instead of Node).
-                        if crate::generics::contains_typevar(ret)
-                            && !matches!(expected, Ty::Unknown { .. } | Ty::Error { .. })
-                        {
-                            crate::generics::infer_bindings(ret, expected, &mut bindings);
-                        }
-
-                        // Phase 1: forward-infer from arguments (high priority, overrides).
-                        // Two-pass: first process non-lambda args to bind type vars,
-                        // then process lambda args with resolved bindings. This allows
-                        // `apply((x) -> { x * 2 }, 21)` to bind T=int from `21` before
-                        // checking the lambda against `(T) -> U`.
-                        let param_arg_pairs: Vec<_> =
-                            effective_params.iter().zip(args.iter()).collect();
-
-                        // Pass 1: non-lambda arguments — bind type variables
-                        for ((_, param_ty), arg) in &param_arg_pairs {
-                            if matches!(&body.exprs[**arg], Expr::Lambda(_)) {
-                                continue;
-                            }
-                            let substituted = crate::generics::substitute_ty(param_ty, &bindings);
-                            let arg_ty = if !crate::generics::contains_typevar(&substituted) {
-                                self.check_expr(**arg, body, &substituted)
-                            } else {
-                                self.infer_expr(**arg, body)
-                            };
-                            crate::generics::infer_bindings(param_ty, &arg_ty, &mut bindings);
-                        }
-
-                        // Pass 2: lambda arguments — type vars now resolved from pass 1
-                        for ((_, param_ty), arg) in &param_arg_pairs {
-                            if !matches!(&body.exprs[**arg], Expr::Lambda(_)) {
-                                continue;
-                            }
-                            let substituted = crate::generics::substitute_ty(param_ty, &bindings);
-                            let arg_ty = if !crate::generics::contains_typevar(&substituted) {
-                                self.check_expr(**arg, body, &substituted)
-                            } else if let Ty::Function {
-                                params: fn_params, ..
-                            } = &substituted
-                            {
-                                let all_params_concrete = fn_params
-                                    .iter()
-                                    .all(|(_, t)| !crate::generics::contains_typevar(t));
-                                if all_params_concrete {
-                                    self.check_expr(**arg, body, &substituted)
-                                } else {
-                                    self.infer_expr(**arg, body)
-                                }
-                            } else {
-                                self.infer_expr(**arg, body)
-                            };
-                            crate::generics::infer_bindings(param_ty, &arg_ty, &mut bindings);
-                        }
-
-                        // Infer any extra args beyond param count (error recovery)
-                        for arg in args.iter().skip(effective_params.len()) {
-                            self.infer_expr(*arg, body);
-                        }
-
-                        // Phase 2: substitute return type and erase unresolved typevars
-                        let substituted_ret = crate::generics::substitute_ty(ret, &bindings);
-                        let mut erase_diags = Vec::new();
-                        let result = crate::generics::erase_unresolved_typevars(
-                            &substituted_ret,
-                            &mut erase_diags,
-                        );
-                        for d in erase_diags {
-                            self.context.report_simple(d, expr_id);
-                        }
-
-                        // Subtype check against expected type (skip if we did generic
-                        // inference — the inference already accounts for expected)
-                        if bindings.is_empty()
-                            && !matches!(expected, Ty::Unknown { .. } | Ty::Error { .. })
-                            && !self.is_subtype(&result, expected)
-                        {
-                            self.context.report(
-                                TirTypeError::TypeMismatch {
-                                    expected: expected.clone(),
-                                    got: result.clone(),
-                                },
-                                expr_id,
-                                Vec::new(),
-                            );
-                        }
-
-                        self.record_expr_type(expr_id, result.clone());
-                        result
-                    }
-                    Ty::Unknown { .. } | Ty::Error { .. } => {
-                        for arg in args {
-                            self.infer_expr(*arg, body);
-                        }
-                        let ty = Ty::Unknown {
-                            attr: TyAttr::default(),
-                        };
-                        self.record_expr_type(expr_id, ty.clone());
-                        ty
-                    }
-                    _ => {
-                        self.context.report_simple(
-                            TirTypeError::NotCallable {
-                                ty: callee_ty.clone(),
-                            },
-                            expr_id,
-                        );
-                        for arg in args {
-                            self.infer_expr(*arg, body);
-                        }
-                        let ty = Ty::Unknown {
-                            attr: TyAttr::default(),
-                        };
-                        self.record_expr_type(expr_id, ty.clone());
-                        ty
-                    }
+                if !checked.had_bindings {
+                    self.report_result_type_mismatch(expr_id, &checked.result, expected);
                 }
+
+                self.record_expr_type(expr_id, checked.result.clone());
+                checked.result
+            }
+            Expr::OptionalCall { callee, args } => {
+                let is_method_call = matches!(
+                    &body.exprs[*callee],
+                    Expr::FieldAccess { .. } | Expr::OptionalFieldAccess { .. }
+                );
+                let callee_ty = self.infer_expr(*callee, body);
+
+                if !self.analyze_optional_base(&callee_ty).is_nullable()
+                    && !matches!(&callee_ty, Ty::Unknown { .. } | Ty::Error { .. })
+                {
+                    let callee_text = body.display_expr(*callee);
+                    let expr_text = body.display_expr(expr_id);
+                    self.context.report_simple(
+                        TirTypeError::UnnecessaryOptionalChaining {
+                            expr: expr_text,
+                            base: callee_text,
+                        },
+                        expr_id,
+                    );
+                }
+
+                self.finalize_optional_callee_call(
+                    expr_id,
+                    *callee,
+                    callee_ty,
+                    is_method_call,
+                    args,
+                    body,
+                    expected,
+                )
             }
             // Catch: propagate expected type to the base expression
             Expr::Catch { base, clauses } => {
@@ -1318,6 +1436,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                         _ => None,
                     };
                     if let Some(name) = name {
+                        self.let_binding_patterns.insert(name.clone(), *pattern);
                         self.locals.insert(name.clone(), ty);
                         // Record declared type only for annotated let-bindings.
                         if let Some(decl_ty) = ann_ty_for_decl {
@@ -4197,7 +4316,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
-    /// Try to handle a container mutation method call: x.push(val) / x.append(val).
+    /// Try to handle a container mutation method call: `x.push(val)` or `x?.push?.(val)`.
     ///
     /// This is the "evolving path" for container mutations — it intercepts
     /// `.push()` / `.append()` and index assignment *before* normal method
@@ -4210,19 +4329,24 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// - If `arg_ty <: T`: ok
     /// - Otherwise: type error
     ///
-    /// Returns `Some(return_ty)` if handled, `None` to fall through to the
-    /// builtin method resolution path.
+    /// Returns the inner method result type (e.g. `int` for `Array.push`) if
+    /// handled. Callers own the enclosing expression semantics such as optional
+    /// wrapping, final subtype checks, and recording the call expression type.
     fn try_container_method_call(
         &mut self,
-        call_expr_id: ExprId,
         callee_id: ExprId,
         args: &[ExprId],
         body: &ExprBody,
     ) -> Option<Ty> {
-        // After AST lowering, method calls are always FieldAccess:
-        //   x.push(val) → Call { callee: FieldAccess { base: Path(["x"]), field: "push" }, ... }
+        // After AST lowering, mutating container calls arrive through either a
+        // plain field access (`x.push(...)`) or an optional field access
+        // (`x?.push?.(...)`).
         let (base_id, local_name, method_name) = match &body.exprs[callee_id] {
             Expr::FieldAccess { base, field } => {
+                let name = self.expr_local_name(*base, body)?;
+                (*base, name, field.clone())
+            }
+            Expr::OptionalFieldAccess { base, field } => {
                 let name = self.expr_local_name(*base, body)?;
                 (*base, name, field.clone())
             }
@@ -4242,43 +4366,55 @@ impl<'db> TypeInferenceBuilder<'db> {
                 let arg_ty = self.infer_expr(args[0], body);
                 let widened_arg = arg_ty.widen_fresh();
 
-                if matches!(**elem_ty, Ty::Never { .. }) {
+                let effective_local_ty = if matches!(**elem_ty, Ty::Never { .. }) {
                     let new_ty = if is_evolving {
                         Ty::EvolvingList(Box::new(widened_arg), container_attr)
                     } else {
                         Ty::List(Box::new(widened_arg), container_attr)
                     };
-                    self.locals.insert(local_name, new_ty);
+                    self.locals.insert(local_name.clone(), new_ty.clone());
+                    self.sync_let_binding_type(&local_name, new_ty.clone());
+                    new_ty
                 } else if !self.is_subtype(&widened_arg, elem_ty) {
                     self.context.report(
                         TirTypeError::TypeMismatch {
                             expected: *elem_ty.clone(),
-                            got: widened_arg,
+                            got: widened_arg.clone(),
                         },
                         args[0],
                         Vec::new(),
                     );
-                }
+                    local_ty.clone()
+                } else {
+                    local_ty.clone()
+                };
 
                 // Record a MemberResolution so MIR emits a proper method call
                 // instead of a dynamic map lookup.
-                let effective_elem = match &local_ty {
+                let effective_elem = match &effective_local_ty {
                     Ty::EvolvingList(e, _) | Ty::List(e, _) => e.as_ref().clone(),
                     _ => Ty::Unknown {
                         attr: TyAttr::default(),
                     },
                 };
-                self.resolve_builtin_member(&["Array"], &[effective_elem], &method_name, callee_id);
-
-                self.record_expr_type(base_id, local_ty);
-                self.record_expr_type(
-                    callee_id,
-                    Ty::Unknown {
+                let method_ty = self
+                    .resolve_builtin_member(&["Array"], &[effective_elem], &method_name, callee_id)
+                    .unwrap_or(Ty::Unknown {
+                        attr: TyAttr::default(),
+                    });
+                let result = match &method_ty {
+                    Ty::Function { ret, .. } => ret.as_ref().clone(),
+                    _ => Ty::Unknown {
                         attr: TyAttr::default(),
                     },
-                );
-                let result = Ty::Primitive(PrimitiveType::Null, TyAttr::default());
-                self.record_expr_type(call_expr_id, result.clone());
+                };
+                let callee_expr_ty = match &body.exprs[callee_id] {
+                    Expr::OptionalFieldAccess { .. } => Self::make_optional(method_ty.clone()),
+                    _ => method_ty.clone(),
+                };
+
+                self.record_expr_type(base_id, effective_local_ty);
+                self.record_expr_type(callee_id, callee_expr_ty);
                 Some(result)
             }
             _ => None,

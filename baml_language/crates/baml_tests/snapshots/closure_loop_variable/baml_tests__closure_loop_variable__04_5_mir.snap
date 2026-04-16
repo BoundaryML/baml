@@ -7,14 +7,14 @@ fn user.sum_array(arr: int[]) -> int {
     let _0: int // _0 // return
     let _1: int[] // arr // param
     let _2: int // sum [captured]
-    let _3: void[] // total
+    let _3: () -> void[] // total
     let _4: int // __for_idx
     let _5: int
     let _6: bool
     let _7: int
     let _8: int // i [captured]
     let _9: void
-    let _10: void[]
+    let _10: () -> void[]
     let _11: () -> void
     let _12: () -> void[]
     let _13: int // __for_idx_1

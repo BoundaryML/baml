@@ -625,7 +625,7 @@ fn baml.llm.Client.build_plan_with_state(self: baml.llm.Client, planner_state: b
     let _34: bool
     let _35: baml.llm.OrchestrationStep
     let _36: baml.llm.OrchestrationStep // step
-    let _37: null
+    let _37: int
     let _38: baml.llm.OrchestrationStep[]
     let _39: baml.llm.OrchestrationStep
     let _40: baml.llm.PrimitiveClient
