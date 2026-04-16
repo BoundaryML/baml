@@ -3234,10 +3234,9 @@ impl<'db> TypeInferenceBuilder<'db> {
             return None;
         }
 
-        // Try as a value (function or let binding) in a nested namespace
+        // Try as a value (function) in a nested namespace
         let item = path.last().expect("non-empty path");
         let lookup_val = pkg_items.lookup_value(&path[..path.len() - 1], item);
-
         if let Some(Definition::Function(func_loc)) = lookup_val {
             let db = self.context.db();
             let item_tree_for_func = baml_compiler2_ppir::file_item_tree(db, func_loc.file(db));
@@ -4127,23 +4126,6 @@ impl<'db> TypeInferenceBuilder<'db> {
             .collect();
         let result = self.resolve_package_item(pkg_items, &full_path, at);
         if result.is_none() {
-            // The full path didn't resolve. Before reporting an error, check
-            // whether a prefix of the path resolves to a value (function, let
-            // binding, or builtin global). If so, the remaining segment is a
-            // method call on that value — bail so the normal FieldAccess path
-            // can resolve the method on the value's type.
-            //
-            // Example: `foo.bar.baz()` → full path ["bar","baz"] fails,
-            // but prefix ["bar"] is a value, so `.baz` is a method call.
-            if !item_path.is_empty() {
-                let prefix_name = &item_path[item_path.len() - 1];
-                let prefix_ns = &item_path[..item_path.len() - 1];
-                let prefix_is_value = pkg_items.lookup_value(prefix_ns, prefix_name).is_some();
-                if prefix_is_value {
-                    return None;
-                }
-            }
-
             // Package was found but the member doesn't exist — report a clear error
             // with the full dotted path as context (e.g. "unresolved member: testing.Quorum").
             let base_path = segments.join(".");
