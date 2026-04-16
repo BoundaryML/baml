@@ -389,8 +389,11 @@ pub enum RelatedLocation<'db> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DiagnosticLocation {
     Expr(ExprId),
-    /// The member-name portion of a `FieldAccess` expression (after the dot).
+    /// The member-name portion of a `MemberAccess` expression (after the dot).
     ExprMember(ExprId),
+    /// A specific segment of a multi-segment `Path` expression.
+    /// `ExprSegment(path_id, segment_idx)` resolves to `path_segment_span(path_id, segment_idx)`.
+    ExprSegment(ExprId, usize),
     Stmt(StmtId),
     TypeAnnot(TypeAnnotId),
     Span(TextRange),
@@ -421,7 +424,10 @@ impl TirDiagnostic<'_> {
                 source_map.map(|sm| sm.expr_span(*id)).unwrap_or_default()
             }
             DiagnosticLocation::ExprMember(id) => source_map
-                .map(|sm| sm.field_access_member_span(*id))
+                .map(|sm| sm.member_access_member_span(*id))
+                .unwrap_or_default(),
+            DiagnosticLocation::ExprSegment(id, seg_idx) => source_map
+                .map(|sm| sm.path_segment_span(*id, *seg_idx))
                 .unwrap_or_default(),
             DiagnosticLocation::Stmt(id) => {
                 source_map.map(|sm| sm.stmt_span(*id)).unwrap_or_default()
@@ -529,7 +535,7 @@ impl<'db> InferContext<'db> {
         self.report(error, at, Vec::new());
     }
 
-    /// Report a type error at the member-name portion of a `FieldAccess` expression.
+    /// Report a type error at the member-name portion of a `MemberAccess` expression.
     pub fn report_at_member(
         &self,
         error: TirTypeError,
@@ -550,6 +556,26 @@ impl<'db> InferContext<'db> {
     /// Convenience: report at member with no related locations.
     pub fn report_at_member_simple(&self, error: TirTypeError, at: ExprId) {
         self.report_at_member(error, at, Vec::new());
+    }
+
+    /// Report a type error at a specific segment of a multi-segment `Path` expression.
+    /// `segment_idx` is the index into `path_segment_spans[at]`.
+    pub fn report_at_segment(
+        &self,
+        error: TirTypeError,
+        at: ExprId,
+        segment_idx: usize,
+        related: Vec<(RelatedLocation<'db>, &'static str)>,
+    ) {
+        self.diagnostics
+            .borrow_mut()
+            .diagnostics
+            .push(TirDiagnostic {
+                error,
+                severity: DiagnosticSeverity::Error,
+                primary: DiagnosticLocation::ExprSegment(at, segment_idx),
+                related,
+            });
     }
 
     /// Report a type error at a type annotation location.

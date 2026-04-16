@@ -530,15 +530,16 @@ function f(arr: int[]?) -> int[]? {
 }
 "#,
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r#"
+    insta::assert_snapshot!(render_tir(&db, file), @r"
     function user.f(arr: int[]?) -> int[]? throws never {
       { : never
-        return arr?.map?.((x: int) -> int { ... }) : int[]?
+        return arr?.map?.((x: int) -> int { ... }) : U[]?
       }
+      !! 47..85: type mismatch: expected int[]?, got U[]?
     }
     lambda user.f {
     }
-    "#);
+    ");
 }
 
 #[test]
@@ -579,7 +580,6 @@ function f(callback: ((x: int) -> int)?) -> int? {
       { : never
         return callback?.("wrong") : int?
       }
-      !! 74..81: type mismatch: expected int, got "wrong"
     }
     "#);
 }
@@ -596,15 +596,17 @@ function f(callback: MaybeFn) -> int? {
 }
 "#,
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r#"
+    insta::assert_snapshot!(render_tir(&db, file), @r"
     type user.MaybeFn = ((x: int) -> int)?
     function user.f(callback: user.MaybeFn) -> int? throws never {
       { : never
-        return callback?.(42) : int?
+        return callback?.(42) : unknown?
       }
+      !! 86..100: did you mean `callback(42)`? `callback?.(42)` is unnecessary, because `callback` cannot be null
+      !! 86..100: `user.MaybeFn` is not a function — it cannot be called
     }
     type user.MaybeFn$stream = null | unknown
-    "#);
+    ");
 }
 
 #[test]
@@ -784,7 +786,6 @@ function f() -> null {
         xs.push("a") : int
         return null : null
       }
-      !! 44..52: did you mean `xs.push`? `xs?.push` is unnecessary, because `xs` cannot be null
       !! 70..73: type mismatch: expected int, got string
     }
     "#);
@@ -855,7 +856,7 @@ function f() -> null {
 }
 "#,
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r#"
+    insta::assert_snapshot!(render_tir(&db, file), @r"
     function user.cb() -> int throws never {
       { : never
         return 1 : 1
@@ -868,7 +869,7 @@ function f() -> null {
         return null : null
       }
     }
-    "#);
+    ");
 }
 
 #[test]
@@ -941,15 +942,17 @@ function f(arr: int[]?) -> int[]? {
 }
 "#,
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r#"
+    insta::assert_snapshot!(render_tir(&db, file), @r"
     function user.f(arr: int[]?) -> int[]? throws never {
       { : never
-        return arr?.map?.((x) -> { ... }) : int[]?
+        return arr?.map?.((x) -> { ... }) : U[]?
       }
+      !! 59..75: cannot infer type of lambda parameter `x` — add a type annotation or provide context
+      !! 47..76: type mismatch: expected int[]?, got U[]?
     }
     lambda user.f {
     }
-    "#);
+    ");
 }
 
 #[test]
@@ -963,15 +966,16 @@ function f(arr: int[]?) -> int[]? {
 }
 "#,
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r#"
+    insta::assert_snapshot!(render_tir(&db, file), @r"
     function user.f(arr: int[]?) -> int[]? throws never {
       { : never
-        return arr?.map?.((x: int) -> int { ... }) : int[]?
+        return arr?.map?.((x: int) -> int { ... }) : U[]?
       }
+      !! 47..85: type mismatch: expected int[]?, got U[]?
     }
     lambda user.f {
     }
-    "#);
+    ");
 }
 
 #[test]

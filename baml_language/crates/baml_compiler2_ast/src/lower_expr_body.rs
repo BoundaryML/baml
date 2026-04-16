@@ -1668,25 +1668,15 @@ impl LoweringContext {
             }
         }
 
-        // Desugar multi-segment paths into FieldAccess chains:
-        //   Color.Red  → FieldAccess { base: Path(["Color"]), field: "Red" }
-        //   a.b.c      → FieldAccess { base: FieldAccess { base: Path(["a"]), field: "b" }, field: "c" }
-        // After this, Path is always single-segment (a bare identifier).
-        let mut base = self.alloc_expr(Expr::Path(vec![segments[0].0.clone()]), node.text_range());
-        for (seg, seg_range) in &segments[1..] {
-            let id = self.alloc_expr(
-                Expr::FieldAccess {
-                    base,
-                    field: seg.clone(),
-                },
-                node.text_range(),
-            );
-            self.source_map
-                .field_access_member_spans
-                .insert(id, *seg_range);
-            base = id;
+        // Multi-segment paths stay as Path(["a", "b", "c"]).
+        // Record per-segment spans for diagnostics and LSP.
+        let names: Vec<Name> = segments.iter().map(|(n, _)| n.clone()).collect();
+        let id = self.alloc_expr(Expr::Path(names), node.text_range());
+        if segments.len() > 1 {
+            let spans: Vec<TextRange> = segments.iter().map(|(_, r)| *r).collect();
+            self.source_map.path_segment_spans.insert(id, spans);
         }
-        base
+        id
     }
 
     fn lower_field_access_expr(&mut self, node: &SyntaxNode) -> ExprId {
@@ -1711,11 +1701,11 @@ impl LoweringContext {
         }
 
         let base = base.unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.text_range()));
-        let field = field.unwrap_or_else(|| Name::new("_"));
+        let member = field.unwrap_or_else(|| Name::new("_"));
 
-        let id = self.alloc_expr(Expr::FieldAccess { base, field }, node.text_range());
+        let id = self.alloc_expr(Expr::MemberAccess { base, member }, node.text_range());
         if let Some(range) = field_range {
-            self.source_map.field_access_member_spans.insert(id, range);
+            self.source_map.member_access_member_spans.insert(id, range);
         }
         if self.needs_chain_wrap.remove(&base) {
             self.needs_chain_wrap.insert(id);
@@ -1833,11 +1823,14 @@ impl LoweringContext {
         }
 
         let base = base.unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.text_range()));
-        let field = field.unwrap_or_else(|| Name::new("_"));
+        let member = field.unwrap_or_else(|| Name::new("_"));
 
-        let id = self.alloc_expr(Expr::OptionalFieldAccess { base, field }, node.text_range());
+        let id = self.alloc_expr(
+            Expr::OptionalMemberAccess { base, member },
+            node.text_range(),
+        );
         if let Some(range) = field_range {
-            self.source_map.field_access_member_spans.insert(id, range);
+            self.source_map.member_access_member_spans.insert(id, range);
         }
         self.needs_chain_wrap.remove(&base); // consume base's flag if any
         self.needs_chain_wrap.insert(id); // mark ourselves
@@ -2810,9 +2803,9 @@ impl LoweringContext {
         // <collector>.register_test(name_expr, lambda, runner_or_null)
         let collector_ref = self.alloc_expr(Expr::Path(vec![collector_name]), span);
         let method_target = self.alloc_expr(
-            Expr::FieldAccess {
+            Expr::MemberAccess {
                 base: collector_ref,
-                field: Name::new("register_test"),
+                member: Name::new("register_test"),
             },
             span,
         );
@@ -2895,9 +2888,9 @@ impl LoweringContext {
         // <collector>.register_test_set(name_expr, sub_collector_lambda, runner_or_null)
         let collector_ref = self.alloc_expr(Expr::Path(vec![collector_name]), span);
         let method_target = self.alloc_expr(
-            Expr::FieldAccess {
+            Expr::MemberAccess {
                 base: collector_ref,
-                field: Name::new("register_test_set"),
+                member: Name::new("register_test_set"),
             },
             span,
         );

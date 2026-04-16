@@ -624,19 +624,36 @@ impl BexMulitProject {
                             );
                             false
                         } else {
-                            // Extract Handle from BexExternalValue::Handle
+                            // Extract Handle from BexExternalValue::Handle.
+                            // Null means the project has no tests ($init_test absent).
                             let handle = match &registry {
-                                bex_engine::BexExternalValue::Handle(h) => h.clone(),
+                                bex_engine::BexExternalValue::Handle(h) => Some(h.clone()),
+                                bex_engine::BexExternalValue::Null => None,
                                 _ => {
-                                    log::error!("[collect_tests] unexpected non-Handle result");
+                                    log::error!("[collect_tests] unexpected result type");
                                     return;
                                 }
                             };
-                            state.registry = Some(handle);
+                            state.registry = handle;
                             true
                         }
                     };
                     if !should_continue {
+                        return;
+                    }
+
+                    // If the project has no tests, send an empty test tree.
+                    if matches!(registry, bex_engine::BexExternalValue::Null) {
+                        sender.send_playground_notification(
+                            crate::bex_lsp::PlaygroundNotification::TestCollectionResult {
+                                project,
+                                generation,
+                                call_id: call_id.0,
+                                data: serde_json::to_vec(&serde_json::json!([]))
+                                    .unwrap_or_default(),
+                                expand_error: None,
+                            },
+                        );
                         return;
                     }
 
@@ -662,6 +679,7 @@ impl BexMulitProject {
                                     generation,
                                     call_id: call_id.0,
                                     data,
+                                    expand_error: None,
                                 },
                             );
                         }
@@ -674,6 +692,7 @@ impl BexMulitProject {
                                     call_id: call_id.0,
                                     data: serde_json::to_vec(&serde_json::json!([]))
                                         .unwrap_or_default(),
+                                    expand_error: None,
                                 },
                             );
                         }
@@ -688,6 +707,7 @@ impl BexMulitProject {
                             generation,
                             call_id: call_id.0,
                             data: serde_json::to_vec(&serde_json::json!([])).unwrap_or_default(),
+                            expand_error: None,
                         },
                     );
                 }
@@ -793,21 +813,60 @@ impl BexMulitProject {
                 .build();
 
             // Expand — mutates registry.expansions in-place on the heap
+            log::info!("[expand_test_set] expanding testset: {name}");
             if let Err(e) = engine
                 .call_function(
                     "testing.TestRegistry.expand_set",
                     vec![
                         registry_value.clone(),
-                        bex_engine::BexExternalValue::String(name),
+                        bex_engine::BexExternalValue::String(name.clone()),
                     ],
                     ctx,
                     true,
                 )
                 .await
             {
-                log::error!("[expand_test_set] expand failed: {e}");
+                log::error!("[expand_test_set] expand failed for testset '{name}': {e}");
+                // Re-serialize and send the current (pre-expansion) state so the
+                // UI unblocks from the loading spinner instead of spinning forever.
+                let ctx_resend =
+                    bex_engine::FunctionCallContextBuilder::new(sys_types::CallId::next())
+                        .with_cancel_token(cancel)
+                        .build();
+                let data = match engine
+                    .call_function(
+                        "testing.TestRegistry.serialize",
+                        vec![registry_value],
+                        ctx_resend,
+                        true,
+                    )
+                    .await
+                {
+                    Ok(serialized) => {
+                        serde_json::to_vec(&bex_value_to_json(&serialized)).unwrap_or_default()
+                    }
+                    Err(serialize_err) => {
+                        log::error!(
+                            "[expand_test_set] serialize after failed expand for '{name}' also failed: {serialize_err}"
+                        );
+                        serde_json::to_vec(&serde_json::json!([])).unwrap_or_default()
+                    }
+                };
+                sender.send_playground_notification(
+                    crate::bex_lsp::PlaygroundNotification::TestCollectionResult {
+                        project,
+                        generation,
+                        call_id: call_id.0,
+                        data,
+                        expand_error: Some(crate::bex_lsp::TestExpandError {
+                            testset_name: name.clone(),
+                            message: format!("{e}"),
+                        }),
+                    },
+                );
                 return;
             }
+            log::info!("[expand_test_set] expanded testset '{name}' successfully");
 
             // Re-serialize full state
             let ctx2 = bex_engine::FunctionCallContextBuilder::new(sys_types::CallId::next())
@@ -831,10 +890,23 @@ impl BexMulitProject {
                             generation,
                             call_id: call_id.0,
                             data,
+                            expand_error: None,
                         },
                     );
                 }
-                Err(e) => log::error!("[expand_test_set] serialize after expand failed: {e}"),
+                Err(e) => {
+                    log::error!("[expand_test_set] serialize after expanding '{name}' failed: {e}");
+                    // Send empty result so the UI unblocks
+                    sender.send_playground_notification(
+                        crate::bex_lsp::PlaygroundNotification::TestCollectionResult {
+                            project,
+                            generation,
+                            call_id: call_id.0,
+                            data: serde_json::to_vec(&serde_json::json!([])).unwrap_or_default(),
+                            expand_error: None,
+                        },
+                    );
+                }
             }
         });
     }

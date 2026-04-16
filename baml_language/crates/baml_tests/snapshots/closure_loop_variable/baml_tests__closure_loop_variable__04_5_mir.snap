@@ -14,16 +14,15 @@ fn user.sum_array(arr: int[]) -> int {
     let _7: int
     let _8: int // i [captured]
     let _9: void
-    let _10: () -> void[]
-    let _11: () -> void
-    let _12: () -> void[]
-    let _13: int // __for_idx_1
-    let _14: int
-    let _15: bool
-    let _16: () -> void
-    let _17: () -> void // cb
-    let _18: void
-    let _19: () -> void
+    let _10: () -> void
+    let _11: () -> void[]
+    let _12: int // __for_idx_1
+    let _13: int
+    let _14: bool
+    let _15: () -> void
+    let _16: () -> void // cb
+    let _17: void
+    let _18: () -> void
 
     bb0: {
         _2 = const 0_i64;
@@ -39,15 +38,15 @@ fn user.sum_array(arr: int[]) -> int {
     }
 
     bb2: {
-        _12 = copy _3;
-        _13 = const 0_i64;
+        _11 = copy _3;
+        _12 = const 0_i64;
         goto -> bb3;
     }
 
     bb3: {
-        _14 = len(_12);
-        _15 = copy _13 < copy _14;
-        branch copy _15 -> [bb6, bb4];
+        _13 = len(_11);
+        _14 = copy _12 < copy _13;
+        branch copy _14 -> [bb6, bb4];
     }
 
     bb4: {
@@ -60,15 +59,15 @@ fn user.sum_array(arr: int[]) -> int {
     }
 
     bb6: {
-        _16 = copy _12[_13];
-        fresh_cell(_17);
-        _17 = copy _16;
-        _19 = copy _17;
-        _18 = call copy _19() -> [bb7];
+        _15 = copy _11[_12];
+        fresh_cell(_16);
+        _16 = copy _15;
+        _18 = copy _16;
+        _17 = call copy _18() -> [bb7];
     }
 
     bb7: {
-        _13 = copy _13 + const 1_i64;
+        _12 = copy _12 + const 1_i64;
         goto -> bb3;
     }
 
@@ -76,9 +75,8 @@ fn user.sum_array(arr: int[]) -> int {
         _7 = copy _1[_4];
         fresh_cell(_8);
         _8 = copy _7;
-        _10 = copy _3;
-        _11 = make_closure lambda[0](copy _2, copy _8);
-        _9 = call const fn baml.Array.push(copy _10, copy _11) -> [bb9];
+        _10 = make_closure lambda[0](copy _2, copy _8);
+        _9 = call const fn baml.Array.push(copy _3, copy _10) -> [bb9];
     }
 
     bb9: {

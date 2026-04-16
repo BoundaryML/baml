@@ -3,73 +3,86 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] Error: type `string` has no member `len`
-    ╭─[ chain_expr.baml:86:15 ]
+    ╭─[ chain_expr.baml:83:6 ]
     │
- 86 │     user.name.len();
-    │               ─┬─  
-    │                ╰─── type `string` has no member `len`
-    │ 
-    │ Note: Error code: E0001
+ 83 │ ╭─▶     ;
+    ┆ ┆   
+ 86 │ ├─▶     user.name.len();
+    │ │                          
+    │ ╰────────────────────────── type `string` has no member `len`
+    │     
+    │     Note: Error code: E0001
 ────╯
 
   [type] Error: type `user.ChainItem[]` has no member `len`
-    ╭─[ chain_expr.baml:87:11 ]
+    ╭─[ chain_expr.baml:86:21 ]
     │
- 87 │     items.len();
-    │           ─┬─  
-    │            ╰─── type `user.ChainItem[]` has no member `len`
-    │ 
-    │ Note: Error code: E0001
+ 86 │ ╭─▶     user.name.len();
+ 87 │ ├─▶     items.len();
+    │ │                      
+    │ ╰────────────────────── type `user.ChainItem[]` has no member `len`
+    │     
+    │     Note: Error code: E0001
 ────╯
 
   [type] Error: type `user.ChainItem[]` has no member `get`
-    ╭─[ chain_expr.baml:90:24 ]
+    ╭─[ chain_expr.baml:87:17 ]
     │
- 90 │     user.profile.items.get(0);
-    │                        ─┬─  
-    │                         ╰─── type `user.ChainItem[]` has no member `get`
-    │ 
-    │ Note: Error code: E0001
+ 87 │ ╭─▶     items.len();
+    ┆ ┆   
+ 90 │ ├─▶     user.profile.items.get(0);
+    │ │                                    
+    │ ╰──────────────────────────────────── type `user.ChainItem[]` has no member `get`
+    │     
+    │     Note: Error code: E0001
 ────╯
 
   [type] Error: type `user.ChainItem[]` has no member `get`
-    ╭─[ chain_expr.baml:98:5 ]
+    ╭─[ chain_expr.baml:90:31 ]
     │
- 98 │     get // 6 method trailing
-    │     ─┬─  
-    │      ╰─── type `user.ChainItem[]` has no member `get`
-    │ 
-    │ Note: Error code: E0001
+ 90 │ ╭─▶     user.profile.items.get(0);
+    ┆ ┆   
+ 98 │ ├─▶     get // 6 method trailing
+    │ │                                  
+    │ ╰────────────────────────────────── type `user.ChainItem[]` has no member `get`
+    │     
+    │     Note: Error code: E0001
 ────╯
 
   [type] Error: type `user.ChainItem[]` has no member `get`
-     ╭─[ chain_expr.baml:112:5 ]
+     ╭─[ chain_expr.baml:104:6 ]
      │
- 112 │     get /* 6 method trailing */
-     │     ─┬─  
-     │      ╰─── type `user.ChainItem[]` has no member `get`
-     │ 
-     │ Note: Error code: E0001
+ 104 │ ╭─▶     ;
+     ┆ ┆   
+ 112 │ ├─▶     get /* 6 method trailing */
+     │ │                                     
+     │ ╰───────────────────────────────────── type `user.ChainItem[]` has no member `get`
+     │     
+     │     Note: Error code: E0001
 ─────╯
 
   [type] Error: type `string` has no member `len`
-     ╭─[ chain_expr.baml:149:15 ]
+     ╭─[ chain_expr.baml:146:6 ]
      │
- 149 │     user.name.len().to_string();
-     │               ─┬─  
-     │                ╰─── type `string` has no member `len`
-     │ 
-     │ Note: Error code: E0001
+ 146 │ ╭─▶     ;
+     ┆ ┆   
+ 149 │ ├─▶     user.name.len().to_string();
+     │ │                                      
+     │ ╰────────────────────────────────────── type `string` has no member `len`
+     │     
+     │     Note: Error code: E0001
 ─────╯
 
   [type] Error: type `string` has no member `len`
-     ╭─[ chain_expr.baml:152:45 ]
+     ╭─[ chain_expr.baml:149:33 ]
      │
- 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │                                             ─┬─  
-     │                                              ╰─── type `string` has no member `len`
-     │ 
-     │ Note: Error code: E0001
+ 149 │ ╭─▶     user.name.len().to_string();
+     ┆ ┆   
+ 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │ │                                                                                                                          
+     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── type `string` has no member `len`
+     │     
+     │     Note: Error code: E0001
 ─────╯
 
   [type] Error: type `string` has no member `len`
@@ -83,41 +96,43 @@ source: crates/baml_tests/src/generated_tests.rs
 ─────╯
 
   [type] Error: type `user.ChainItem[]` has no member `get`
-     ╭─[ chain_expr.baml:158:24 ]
+     ╭─[ chain_expr.baml:155:98 ]
+     │
+ 155 │ ╭─▶     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
+     ┆ ┆   
+ 158 │ ├─▶     user.profile.items.get(user.profile.items.len() - 1 + user.profile.items.len() - 2 + user.profile.items.len() - 3).label;
+     │ │                                                                                                                                   
+     │ ╰─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── type `user.ChainItem[]` has no member `get`
+     │     
+     │     Note: Error code: E0001
+─────╯
+
+  [type] Error: type `user.ChainItem[]` has no member `len`
+     ╭─[ chain_expr.baml:158:28 ]
      │
  158 │     user.profile.items.get(user.profile.items.len() - 1 + user.profile.items.len() - 2 + user.profile.items.len() - 3).label;
-     │                        ─┬─  
-     │                         ╰─── type `user.ChainItem[]` has no member `get`
+     │                            ───────────┬──────────  
+     │                                       ╰──────────── type `user.ChainItem[]` has no member `len`
      │ 
      │ Note: Error code: E0001
 ─────╯
 
   [type] Error: type `user.ChainItem[]` has no member `len`
-     ╭─[ chain_expr.baml:158:47 ]
+     ╭─[ chain_expr.baml:158:58 ]
      │
  158 │     user.profile.items.get(user.profile.items.len() - 1 + user.profile.items.len() - 2 + user.profile.items.len() - 3).label;
-     │                                               ─┬─  
-     │                                                ╰─── type `user.ChainItem[]` has no member `len`
+     │                                                          ───────────┬───────────  
+     │                                                                     ╰───────────── type `user.ChainItem[]` has no member `len`
      │ 
      │ Note: Error code: E0001
 ─────╯
 
   [type] Error: type `user.ChainItem[]` has no member `len`
-     ╭─[ chain_expr.baml:158:78 ]
+     ╭─[ chain_expr.baml:158:89 ]
      │
  158 │     user.profile.items.get(user.profile.items.len() - 1 + user.profile.items.len() - 2 + user.profile.items.len() - 3).label;
-     │                                                                              ─┬─  
-     │                                                                               ╰─── type `user.ChainItem[]` has no member `len`
-     │ 
-     │ Note: Error code: E0001
-─────╯
-
-  [type] Error: type `user.ChainItem[]` has no member `len`
-     ╭─[ chain_expr.baml:158:109 ]
-     │
- 158 │     user.profile.items.get(user.profile.items.len() - 1 + user.profile.items.len() - 2 + user.profile.items.len() - 3).label;
-     │                                                                                                             ─┬─  
-     │                                                                                                              ╰─── type `user.ChainItem[]` has no member `len`
+     │                                                                                         ───────────┬───────────  
+     │                                                                                                    ╰───────────── type `user.ChainItem[]` has no member `len`
      │ 
      │ Note: Error code: E0001
 ─────╯
@@ -135,71 +150,79 @@ source: crates/baml_tests/src/generated_tests.rs
 ─────╯
 
   [type] Error: type `user.ChainItem[]` has no member `len`
-     ╭─[ chain_expr.baml:161:52 ]
+     ╭─[ chain_expr.baml:161:32 ]
      │
  161 │     user.profile.items.slice(0, user.profile.items.len() - 1, user.profile.settings.preferences.size);
-     │                                                    ─┬─  
-     │                                                     ╰─── type `user.ChainItem[]` has no member `len`
+     │                                ───────────┬───────────  
+     │                                           ╰───────────── type `user.ChainItem[]` has no member `len`
      │ 
      │ Note: Error code: E0001
 ─────╯
 
   [type] Error: type `string` has no member `len`
-     ╭─[ chain_expr.baml:180:5 ]
+     ╭─[ chain_expr.baml:161:103 ]
      │
- 180 │     len // 17 trailing
-     │     ─┬─  
-     │      ╰─── type `string` has no member `len`
-     │ 
-     │ Note: Error code: E0001
+ 161 │ ╭─▶     user.profile.items.slice(0, user.profile.items.len() - 1, user.profile.settings.preferences.size);
+     ┆ ┆   
+ 180 │ ├─▶     len // 17 trailing
+     │ │                            
+     │ ╰──────────────────────────── type `string` has no member `len`
+     │     
+     │     Note: Error code: E0001
 ─────╯
 
   [type] Error: type `string` has no member `len`
-     ╭─[ chain_expr.baml:212:5 ]
+     ╭─[ chain_expr.baml:193:6 ]
      │
- 212 │     len /* 17 trailing */
-     │     ─┬─  
-     │      ╰─── type `string` has no member `len`
-     │ 
-     │ Note: Error code: E0001
+ 193 │ ╭─▶     ;
+     ┆ ┆   
+ 212 │ ├─▶     len /* 17 trailing */
+     │ │                               
+     │ ╰─────────────────────────────── type `string` has no member `len`
+     │     
+     │     Note: Error code: E0001
 ─────╯
 
   [type] Error: type `user.ChainItem[]` has no member `get`
-     ╭─[ chain_expr.baml:238:5 ]
+     ╭─[ chain_expr.baml:225:6 ]
      │
- 238 │     get // 11 trailing
-     │     ─┬─  
-     │      ╰─── type `user.ChainItem[]` has no member `get`
-     │ 
-     │ Note: Error code: E0001
+ 225 │ ╭─▶     ;
+     ┆ ┆   
+ 238 │ ├─▶     get // 11 trailing
+     │ │                            
+     │ ╰──────────────────────────── type `user.ChainItem[]` has no member `get`
+     │     
+     │     Note: Error code: E0001
 ─────╯
 
   [type] Error: type `user.ChainItem[]` has no member `len`
-     ╭─[ chain_expr.baml:241:24 ]
+     ╭─[ chain_expr.baml:239:6 ]
      │
- 241 │     user.profile.items.len() - 1 + user.profile.items.len() - 2 // 14 trailing
-     │                        ─┬─  
-     │                         ╰─── type `user.ChainItem[]` has no member `len`
-     │ 
-     │ Note: Error code: E0001
+ 239 │ ╭─▶     ( // 12 trailing
+     ┆ ┆   
+ 241 │ ├─▶     user.profile.items.len() - 1 + user.profile.items.len() - 2 // 14 trailing
+     │ │                                                                                    
+     │ ╰──────────────────────────────────────────────────────────────────────────────────── type `user.ChainItem[]` has no member `len`
+     │     
+     │     Note: Error code: E0001
 ─────╯
 
   [type] Error: type `user.ChainItem[]` has no member `len`
-     ╭─[ chain_expr.baml:241:55 ]
+     ╭─[ chain_expr.baml:241:35 ]
      │
  241 │     user.profile.items.len() - 1 + user.profile.items.len() - 2 // 14 trailing
-     │                                                       ─┬─  
-     │                                                        ╰─── type `user.ChainItem[]` has no member `len`
+     │                                   ───────────┬───────────  
+     │                                              ╰───────────── type `user.ChainItem[]` has no member `len`
      │ 
      │ Note: Error code: E0001
 ─────╯
 
   [type] Error: type `int[][]` has no member `len`
-     ╭─[ chain_expr.baml:251:29 ]
+     ╭─[ chain_expr.baml:251:17 ]
      │
  251 │     user.scores[user.scores.len() - 1][user.scores[0].len() - 1];
-     │                             ─┬─  
-     │                              ╰─── type `int[][]` has no member `len`
+     │                 ───────┬───────  
+     │                        ╰───────── type `int[][]` has no member `len`
      │ 
      │ Note: Error code: E0001
 ─────╯
@@ -215,13 +238,14 @@ source: crates/baml_tests/src/generated_tests.rs
 ─────╯
 
   [type] Error: type `user.ChainItem[]` has no member `get`
-     ╭─[ chain_expr.baml:256:15 ]
+     ╭─[ chain_expr.baml:255:20 ]
      │
- 256 │     items  .  get  (  0  );
-     │               ─┬─  
-     │                ╰─── type `user.ChainItem[]` has no member `get`
-     │ 
-     │ Note: Error code: E0001
+ 255 │ ╭─▶     items  [  0  ];
+ 256 │ ├─▶     items  .  get  (  0  );
+     │ │                                 
+     │ ╰───────────────────────────────── type `user.ChainItem[]` has no member `get`
+     │     
+     │     Note: Error code: E0001
 ─────╯
 
   [type] Error: type `string` has no member `len`
