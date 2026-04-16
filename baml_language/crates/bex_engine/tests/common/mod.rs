@@ -73,13 +73,8 @@ pub(crate) async fn assert_engine_executes(input: EngineProgram) -> anyhow::Resu
 
     let snapshot = compile_for_engine(&source);
     let engine = Arc::new(
-        BexEngine::new(
-            snapshot,
-            Arc::new(sys_native::SysOps::native()),
-            None,
-            vec![],
-        )
-        .expect("Failed to create engine"),
+        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), None)
+            .expect("Failed to create engine"),
     );
 
     let result = engine
@@ -207,13 +202,8 @@ function get_prompt() -> baml.llm.PromptAst {{
     for i in 0..3 {
         let snapshot = compile_for_engine(&source);
         let engine = Arc::new(
-            BexEngine::new(
-                snapshot,
-                Arc::new(sys_native::SysOps::native()),
-                None,
-                vec![],
-            )
-            .expect("Failed to create engine"),
+            BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), None)
+                .expect("Failed to create engine"),
         );
 
         let result = engine

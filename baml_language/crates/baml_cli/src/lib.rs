@@ -1,5 +1,5 @@
-// TODO: This CLI has been simplified to only support the LSP command for now.
-// Other commands that depend on baml_runtime are commented out.
+// This crate provides the BAML CLI, including the LSP server and
+// standalone execution via `baml run`.
 #![allow(
     dead_code,
     unreachable_pub,

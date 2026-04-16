@@ -69,9 +69,9 @@ use bex_events::{EventKind, FunctionEnd, FunctionEvent, FunctionStart, SpanConte
 // Re-export event types for callers.
 pub use bex_events::{RuntimeEvent, SpanId};
 pub use bex_external_types::{BexExternalValue, EpochGuard, Ty, TypeName, UnionMetadata};
+use bex_heap::BexHeap;
 // Re-export GcStats for users of the engine
 pub use bex_heap::GcStats;
-use bex_heap::{BexHeap, Tlab};
 use bex_vm::{BexVm, SpanNotification, VmExecState};
 use bex_vm_types::{FunctionMeta, GlobalPool, HeapPtr, Object, SysOp, Value};
 pub use conversion::test_arg_to_external;
@@ -437,14 +437,9 @@ impl BexEngine {
         bytecode_program: bex_vm_types::Program,
         sys_ops: std::sync::Arc<sys_ops::SysOps>,
         event_sink: Option<std::sync::Arc<dyn bex_events::EventSink>>,
-        argv: Vec<String>,
     ) -> Result<Self, EngineError> {
-        // Extract package_init_order and argv slot before consuming bytecode_program.
+        // Extract package_init_order before consuming bytecode_program.
         let package_init_order = bytecode_program.package_init_order.clone();
-        let argv_global_index = bytecode_program
-            .let_global_indices
-            .get("baml.argv")
-            .copied();
 
         // Convert the pure bytecode to a VM-ready program with native functions attached
         let bytecode =
@@ -561,17 +556,6 @@ impl BexEngine {
                     }
                 }
             }
-        }
-
-        // Populate the `baml.argv` global slot with a heap-allocated string[].
-        if let Some(slot) = argv_global_index {
-            let mut tlab = Tlab::new(Arc::clone(&heap));
-            let values: Vec<Value> = argv
-                .into_iter()
-                .map(|s| Value::Object(tlab.alloc_string(s)))
-                .collect();
-            let array_ptr = tlab.alloc_array(values);
-            globals[bex_vm_types::GlobalIndex::from_raw(slot)] = Value::Object(array_ptr);
         }
 
         // Build SysOpContext by pre-extracting LLM function metadata from the heap.

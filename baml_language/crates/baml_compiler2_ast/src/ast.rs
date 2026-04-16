@@ -885,8 +885,7 @@ pub struct LetDef {
     pub name: Name,
     pub initializer: Option<(ExprBody, AstSourceMap)>,
     /// Optional declared type for the binding. When present, TIR uses this
-    /// instead of inferring from the initializer (useful for synthesized lets
-    /// whose value is populated at engine load time, e.g. `baml.argv`).
+    /// instead of inferring from the initializer.
     pub declared_type: Option<TypeExpr>,
     pub origin: LetOrigin,
     pub span: TextRange,

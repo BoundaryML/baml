@@ -1,6 +1,10 @@
 #![allow(clippy::print_stdout, clippy::print_stderr)]
 
-use std::{collections::HashMap, path::PathBuf, sync::Arc};
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use anyhow::{Context, Result, anyhow};
 use baml_db::{baml_compiler_diagnostics::Severity, baml_compiler2_emit};
@@ -39,19 +43,31 @@ impl ResolvedTarget {
     }
 }
 
-/// Parse a script body string into its components.
+/// Parse a script body (as pre-split tokens) into its components.
 ///
-/// Script bodies are `baml run` arguments without the `baml run` prefix.
-/// Examples: `"-- --verbose=true --model gpt-4o"`, `"--function scripts.Backfill"`.
-fn parse_script_body(body: &str) -> Result<ScriptExpansion> {
-    let tokens: Vec<&str> = body.split_whitespace().collect();
+/// Tokens are `baml run` arguments without the `baml run` prefix.
+/// They come from the `[scripts]` section of `baml.toml`, which supports two
+/// forms (following the same convention as Cargo's `[alias]`):
+///
+/// **String form** — tokenized via `split_whitespace` (no shell-style quoting):
+/// ```toml
+/// [scripts]
+/// Backfill = "--function scripts.Backfill -- --verbose=true"
+/// ```
+///
+/// **Array form** — each element is one argument, so values with spaces work:
+/// ```toml
+/// [scripts]
+/// Backfill = ["--function", "scripts.Backfill", "--", "--name", "Ada Lovelace"]
+/// ```
+fn parse_script_body(tokens: &[String]) -> Result<ScriptExpansion> {
     let mut function = None;
     let mut extra_args = Vec::new();
     let mut after_separator = false;
     let mut i = 0;
 
     while i < tokens.len() {
-        let token = tokens[i];
+        let token = tokens[i].as_str();
         if token == "--" {
             after_separator = true;
             i += 1;
@@ -62,7 +78,7 @@ fn parse_script_body(body: &str) -> Result<ScriptExpansion> {
         } else if token == "--function" {
             i += 1;
             if i < tokens.len() {
-                function = Some(tokens[i].to_string());
+                function = Some(tokens[i].clone());
             } else {
                 anyhow::bail!("Script body has --function without a value");
             }
@@ -152,18 +168,11 @@ impl RunArgs {
             return self.run_expression(expr_source, event_sink);
         }
 
-        // Build baml.argv per BEP-027: [executable, entry, ...user_tokens_after_--]
-        let argv = self.build_argv();
-
         // Detect hermetic standalone file mode: target ends in .baml.
         let (db, engine) = if self.target.as_ref().is_some_and(|t| t.ends_with(".baml")) {
-            self.load_and_compile_standalone(
-                self.target.as_ref().unwrap(),
-                event_sink.clone(),
-                argv,
-            )?
+            self.load_and_compile_standalone(self.target.as_ref().unwrap(), event_sink.clone())?
         } else {
-            self.load_and_compile(event_sink.clone(), argv)?
+            self.load_and_compile(event_sink.clone())?
         };
         let _ = db; // keep db alive for engine lifetime
 
@@ -196,8 +205,12 @@ impl RunArgs {
         let param_names: Vec<String> = params.iter().map(|(n, _)| (*n).to_string()).collect();
         let param_types: Vec<Ty> = params.iter().map(|(_, t)| (*t).clone()).collect();
 
-        // Per-target --help: if target_args contains --help, print signature and exit.
-        if effective_target_args.iter().any(|a| a == "--help") {
+        // Per-target --help: only when --help is the sole arg and came from
+        // the user (not from forwarded extras after `--`). When --help appears
+        // alongside other target args it's a forwarded value, not a help request.
+        // Per BEP-027: "everything after `--` is forwarded to the function
+        // without being parsed against the signature."
+        if effective_target_args.len() == 1 && effective_target_args[0] == "--help" {
             self.print_target_help(&function_name, &param_names, &param_types, &engine);
             return Ok(crate::ExitCode::Success);
         }
@@ -248,7 +261,6 @@ impl RunArgs {
     fn load_and_compile(
         &self,
         event_sink: Option<Arc<dyn bex_events::EventSink>>,
-        argv: Vec<String>,
     ) -> Result<(ProjectDatabase, BexEngine)> {
         let from = std::fs::canonicalize(&self.from)
             .with_context(|| format!("Could not resolve project path: {}", self.from.display()))?;
@@ -312,13 +324,8 @@ impl RunArgs {
             .map_err(|e| anyhow!("Compilation failed: {e:?}"))?;
 
         // Create the engine.
-        let engine = BexEngine::new(
-            bytecode,
-            Arc::new(sys_native::SysOps::native()),
-            event_sink,
-            argv,
-        )
-        .map_err(|e| anyhow!("Failed to create engine: {e:?}"))?;
+        let engine = BexEngine::new(bytecode, Arc::new(sys_native::SysOps::native()), event_sink)
+            .map_err(|e| anyhow!("Failed to create engine: {e:?}"))?;
 
         if self.verbose {
             let funcs = engine.user_functions();
@@ -336,7 +343,6 @@ impl RunArgs {
         &self,
         file_path: &str,
         event_sink: Option<Arc<dyn bex_events::EventSink>>,
-        argv: Vec<String>,
     ) -> Result<(ProjectDatabase, BexEngine)> {
         let path = std::path::Path::new(file_path);
         let canonical =
@@ -380,13 +386,8 @@ impl RunArgs {
         let bytecode = baml_compiler2_emit::generate_project_bytecode(&db, &compile_options)
             .map_err(|e| anyhow!("Compilation failed: {e:?}"))?;
 
-        let engine = BexEngine::new(
-            bytecode,
-            Arc::new(sys_native::SysOps::native()),
-            event_sink,
-            argv,
-        )
-        .map_err(|e| anyhow!("Failed to create engine: {e:?}"))?;
+        let engine = BexEngine::new(bytecode, Arc::new(sys_native::SysOps::native()), event_sink)
+            .map_err(|e| anyhow!("Failed to create engine: {e:?}"))?;
 
         if self.verbose {
             let funcs = engine.user_functions();
@@ -428,7 +429,13 @@ impl RunArgs {
         // Expression mode uses a minimal project context.
         // If --from points to a directory with a baml.toml or baml_src, load it.
         // Otherwise, use a temp directory with just the synthetic file.
-        let from = std::fs::canonicalize(&self.from).ok();
+        // The default --from is "." (cwd), which always exists. If the user
+        // explicitly passed a different path and it doesn't exist, that's an error.
+        let from = match std::fs::canonicalize(&self.from) {
+            Ok(path) => Some(path),
+            Err(_) if self.from == Path::new(".") => None,
+            Err(e) => anyhow::bail!("Cannot resolve --from path `{}`: {e}", self.from.display()),
+        };
 
         let mut db = ProjectDatabase::new();
 
@@ -500,21 +507,10 @@ impl RunArgs {
         let bytecode = baml_compiler2_emit::generate_project_bytecode(&db, &compile_options)
             .map_err(|e| anyhow!("Compilation failed: {e:?}"))?;
 
-        // Expression mode: argv is [executable, <expression_source>, ...target_args].
-        // argv[1] is the expression target per BEP-027, not the "-e" flag.
-        let mut expr_argv = vec![
-            std::env::current_exe()
-                .unwrap_or_default()
-                .to_string_lossy()
-                .into_owned(),
-            source.to_string(),
-        ];
-        expr_argv.extend(self.target_args.iter().cloned());
         let engine = BexEngine::new(
             bytecode,
             Arc::new(sys_native::SysOps::native()),
             event_sink.clone(),
-            expr_argv,
         )
         .map_err(|e| anyhow!("Failed to create engine: {e:?}"))?;
 
@@ -593,11 +589,11 @@ impl RunArgs {
 
                 // Check [scripts] in baml.toml.
                 let scripts = self.load_scripts();
-                if let Some(script_body) = scripts.get(target.as_str()) {
+                if let Some(script_tokens) = scripts.get(target.as_str()) {
                     if self.verbose {
-                        eprintln!("[verbose] Expanding script `{target}`: {script_body}");
+                        eprintln!("[verbose] Expanding script `{target}`: {script_tokens:?}");
                     }
-                    return Ok(ResolvedTarget::Script(parse_script_body(script_body)?));
+                    return Ok(ResolvedTarget::Script(parse_script_body(script_tokens)?));
                 }
 
                 // Try namespace main: target.main
@@ -617,7 +613,7 @@ impl RunArgs {
     }
 
     /// Load `[scripts]` from `baml.toml` in the project directory.
-    fn load_scripts(&self) -> HashMap<String, String> {
+    fn load_scripts(&self) -> HashMap<String, Vec<String>> {
         let toml_path = self.from.join("baml.toml");
         let Ok(content) = std::fs::read_to_string(&toml_path) else {
             return HashMap::new();
@@ -630,7 +626,26 @@ impl RunArgs {
         };
         scripts
             .iter()
-            .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
+            .filter_map(|(k, v)| {
+                // String form: tokenized via split_whitespace (like Cargo aliases).
+                if let Some(s) = v.as_str() {
+                    return Some((
+                        k.clone(),
+                        s.split_whitespace().map(|t| t.to_string()).collect(),
+                    ));
+                }
+                // Array form: each element is one argument verbatim.
+                if let Some(arr) = v.as_array() {
+                    let tokens: Vec<String> = arr
+                        .iter()
+                        .filter_map(|item| item.as_str().map(|s| s.to_string()))
+                        .collect();
+                    if !tokens.is_empty() {
+                        return Some((k.clone(), tokens));
+                    }
+                }
+                None
+            })
             .collect()
     }
 
@@ -892,33 +907,6 @@ impl RunArgs {
     }
 
     // ========================================================================
-    // baml.argv construction
-    // ========================================================================
-
-    /// Build the `baml.argv` array per BEP-027:
-    ///   [0] = path to baml executable
-    ///   [1] = entry path (target file, namespace, or function name)
-    ///   [2+] = user tokens after `--`
-    fn build_argv(&self) -> Vec<String> {
-        let executable = std::env::current_exe()
-            .unwrap_or_default()
-            .to_string_lossy()
-            .into_owned();
-
-        let entry = if let Some(func) = &self.function {
-            func.clone()
-        } else if let Some(target) = &self.target {
-            target.clone()
-        } else {
-            "main".to_string()
-        };
-
-        let mut argv = vec![executable, entry];
-        argv.extend(self.target_args.iter().cloned());
-        argv
-    }
-
-    // ========================================================================
     // Output formatting
     // ========================================================================
 
@@ -952,7 +940,7 @@ fn parse_auto_cli_args(
     param_types: &[Ty],
 ) -> Result<HashMap<String, BexExternalValue>> {
     if tokens.is_empty() || param_names.is_empty() {
-        // No tokens to parse, or no params to bind — tokens go to baml.argv only.
+        // No tokens to parse, or no params to bind.
         return Ok(HashMap::new());
     }
 
@@ -1533,16 +1521,21 @@ mod tests {
 
     // ── parse_script_body ──────────────────────────────────────────
 
+    /// Helper: split a string the same way load_scripts does for string-form entries.
+    fn tokens(s: &str) -> Vec<String> {
+        s.split_whitespace().map(|t| t.to_string()).collect()
+    }
+
     #[test]
     fn test_parse_script_function_only() {
-        let expansion = parse_script_body("--function scripts.Backfill").unwrap();
+        let expansion = parse_script_body(&tokens("--function scripts.Backfill")).unwrap();
         assert_eq!(expansion.function.as_deref(), Some("scripts.Backfill"));
         assert!(expansion.extra_args.is_empty());
     }
 
     #[test]
     fn test_parse_script_args_only() {
-        let expansion = parse_script_body("-- --verbose=true --model gpt-4o").unwrap();
+        let expansion = parse_script_body(&tokens("-- --verbose=true --model gpt-4o")).unwrap();
         assert!(expansion.function.is_none());
         assert_eq!(
             expansion.extra_args,
@@ -1552,9 +1545,24 @@ mod tests {
 
     #[test]
     fn test_parse_script_function_and_args() {
-        let expansion = parse_script_body("--function F -- --x 1 --y 2").unwrap();
+        let expansion = parse_script_body(&tokens("--function F -- --x 1 --y 2")).unwrap();
         assert_eq!(expansion.function.as_deref(), Some("F"));
         assert_eq!(expansion.extra_args, vec!["--x", "1", "--y", "2"]);
+    }
+
+    #[test]
+    fn test_parse_script_array_form_with_spaces() {
+        // Array form: each element is one token, so values with spaces are preserved.
+        let arr = vec![
+            "--function".to_string(),
+            "scripts.Greet".to_string(),
+            "--".to_string(),
+            "--name".to_string(),
+            "Ada Lovelace".to_string(),
+        ];
+        let expansion = parse_script_body(&arr).unwrap();
+        assert_eq!(expansion.function.as_deref(), Some("scripts.Greet"));
+        assert_eq!(expansion.extra_args, vec!["--name", "Ada Lovelace"]);
     }
 
     // ── load_expression_source ─────────────────────────────────────

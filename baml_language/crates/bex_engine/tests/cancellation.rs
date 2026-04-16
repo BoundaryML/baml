@@ -34,7 +34,6 @@ async fn cancel_before_call_returns_cancelled() {
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
             None,
-            vec![],
         )
         .expect("Failed to create engine"),
     );
@@ -78,7 +77,6 @@ async fn cancel_during_sleep_returns_promptly() {
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
             None,
-            vec![],
         )
         .expect("Failed to create engine"),
     );
@@ -156,7 +154,6 @@ async fn cancel_during_http_returns_promptly() {
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
             None,
-            vec![],
         )
         .expect("Failed to create engine"),
     );
@@ -222,7 +219,6 @@ async fn selective_cancellation_only_affects_target() {
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
             None,
-            vec![],
         )
         .expect("Failed to create engine"),
     );
@@ -304,7 +300,6 @@ async fn cancel_interrupts_sequential_sleeps() {
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
             None,
-            vec![],
         )
         .expect("Failed to create engine"),
     );
@@ -366,7 +361,6 @@ async fn non_cancelled_token_completes_normally() {
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
             None,
-            vec![],
         )
         .expect("Failed to create engine"),
     );
@@ -403,7 +397,6 @@ async fn cancel_is_idempotent() {
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
             None,
-            vec![],
         )
         .expect("Failed to create engine"),
     );

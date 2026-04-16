@@ -202,12 +202,8 @@ impl BexProject {
                 });
             }
         };
-        let runtime = match BexEngine::new(
-            bytecode,
-            self.sys_ops.clone(),
-            self.event_sink.clone(),
-            vec![],
-        ) {
+        let runtime = match BexEngine::new(bytecode, self.sys_ops.clone(), self.event_sink.clone())
+        {
             Ok(r) => r,
             Err(e) => {
                 log::warn!("update_bex: BexEngine::new failed: {e}");

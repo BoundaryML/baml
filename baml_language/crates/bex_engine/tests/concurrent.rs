@@ -36,7 +36,6 @@ async fn test_concurrent_calls_no_race() {
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
             None,
-            vec![],
         )
         .expect("Failed to create engine"),
     );
@@ -85,7 +84,6 @@ async fn test_concurrent_allocations_no_overlap() {
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
             None,
-            vec![],
         )
         .expect("Failed to create engine"),
     );
@@ -151,7 +149,6 @@ async fn test_heap_stats_during_concurrent_execution() {
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
             None,
-            vec![],
         )
         .expect("Failed to create engine"),
     );
@@ -214,7 +211,6 @@ async fn test_concurrent_string_allocations() {
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
             None,
-            vec![],
         )
         .expect("Failed to create engine"),
     );
@@ -277,7 +273,6 @@ async fn test_concurrent_array_allocations() {
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
             None,
-            vec![],
         )
         .expect("Failed to create engine"),
     );
@@ -348,7 +343,6 @@ async fn test_call_function_with_external_args() {
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
             None,
-            vec![],
         )
         .expect("Failed to create engine"),
     );
@@ -430,7 +424,6 @@ async fn test_closures_in_loop_vars() {
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
             None,
-            vec![],
         )
         .expect("Failed to create engine"),
     );

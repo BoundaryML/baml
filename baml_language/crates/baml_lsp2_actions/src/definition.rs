@@ -376,14 +376,6 @@ fn resolve_field_access_at(
                 range: *name_range,
             })
         }
-        MemberResolution::FreeLet { let_loc } => {
-            let def = baml_compiler2_hir::contributions::Definition::Let(*let_loc);
-            let (def_file, range) = utils::definition_span(db, def)?;
-            Some(Location {
-                file: def_file,
-                range,
-            })
-        }
     }
 }
 

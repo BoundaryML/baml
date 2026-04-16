@@ -77,7 +77,6 @@ async fn trace_single_function() {
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
             None,
-            vec![],
         )
         .unwrap(),
     );
@@ -127,7 +126,6 @@ async fn trace_nested_expression_calls_no_child_spans() {
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
             None,
-            vec![],
         )
         .unwrap(),
     );
@@ -177,7 +175,6 @@ async fn trace_deeply_nested_expression_calls_no_child_spans() {
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
             None,
-            vec![],
         )
         .unwrap(),
     );
@@ -221,7 +218,6 @@ async fn trace_sibling_expression_calls_no_child_spans() {
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
             None,
-            vec![],
         )
         .unwrap(),
     );
@@ -257,7 +253,6 @@ async fn trace_captures_root_args() {
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
             None,
-            vec![],
         )
         .unwrap(),
     );
@@ -307,7 +302,6 @@ async fn trace_captures_root_result() {
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
             None,
-            vec![],
         )
         .unwrap(),
     );

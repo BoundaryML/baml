@@ -20,7 +20,6 @@ async fn run(source: &str, entry: &str) -> Result<BexExternalValue, bex_engine::
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
             None,
-            vec![],
         )
         .expect("Failed to create engine"),
     );

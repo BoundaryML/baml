@@ -3238,35 +3238,6 @@ impl<'db> TypeInferenceBuilder<'db> {
         let item = path.last().expect("non-empty path");
         let lookup_val = pkg_items.lookup_value(&path[..path.len() - 1], item);
 
-        // Let bindings: use the declared type if available, otherwise Unknown.
-        if let Some(Definition::Let(let_loc)) = lookup_val {
-            let db = self.context.db();
-            let item_tree = baml_compiler2_ppir::file_item_tree(db, let_loc.file(db));
-            let let_data = &item_tree[let_loc.id(db)];
-            self.resolutions.insert(
-                expr_id,
-                crate::inference::MemberResolution::FreeLet { let_loc },
-            );
-            let ty = if let Some(type_expr) = &let_data.declared_type {
-                let pkg_info = baml_compiler2_hir::file_package::file_package(db, let_loc.file(db));
-                let ns_context = pkg_info.namespace_path;
-                let mut diags = Vec::new();
-                crate::lower_type_expr::lower_type_expr_in_ns(
-                    db,
-                    type_expr,
-                    pkg_items,
-                    &ns_context,
-                    &[],
-                    &mut diags,
-                )
-            } else {
-                Ty::Unknown {
-                    attr: TyAttr::default(),
-                }
-            };
-            return Some(ty);
-        }
-
         if let Some(Definition::Function(func_loc)) = lookup_val {
             let db = self.context.db();
             let item_tree_for_func = baml_compiler2_ppir::file_item_tree(db, func_loc.file(db));
@@ -4162,8 +4133,8 @@ impl<'db> TypeInferenceBuilder<'db> {
             // method call on that value — bail so the normal FieldAccess path
             // can resolve the method on the value's type.
             //
-            // Example: `baml.argv.map(fn)` → full path ["argv","map"] fails,
-            // but prefix ["argv"] is a value, so `.map` is a method call.
+            // Example: `foo.bar.baz()` → full path ["bar","baz"] fails,
+            // but prefix ["bar"] is a value, so `.baz` is a method call.
             if !item_path.is_empty() {
                 let prefix_name = &item_path[item_path.len() - 1];
                 let prefix_ns = &item_path[..item_path.len() - 1];
