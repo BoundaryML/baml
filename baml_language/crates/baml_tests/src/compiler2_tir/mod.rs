@@ -1744,7 +1744,7 @@ pub(crate) mod support {
                     .then_some((FunctionLoc::new(db, file, *local_id), func_data.span))
             })
             .unwrap_or_else(|| panic!("function `{function_name}` not found"));
-        let func_body = function_body(db, func_loc);
+        let func_body = baml_compiler2_ppir::function_body(db, func_loc);
         let body = match func_body.as_ref() {
             FunctionBody::Expr(body) => body,
             _ => panic!("function `{function_name}` has no expression body"),
@@ -1770,7 +1770,7 @@ pub(crate) mod support {
         let matches: Vec<_> = body
             .exprs
             .iter()
-            .filter_map(|(expr_id, _)| (expr_desc(expr_id, body) == expr_text).then_some(expr_id))
+            .filter_map(|(expr_id, _)| (expr_desc(expr_id, &body) == expr_text).then_some(expr_id))
             .collect();
         let expr_id = match matches.as_slice() {
             [expr_id] => *expr_id,
