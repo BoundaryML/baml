@@ -74,6 +74,7 @@ function DesktopActionButtons() {
       >
         Get Started
       </Link> */}
+      <GithubStars />
       <Button asChild className="rounded-full" variant="secondary">
         <Link
           href="https://docs.boundaryml.com/?utm_source=marketing-site&utm_medium=navbar-docs"
@@ -82,12 +83,6 @@ function DesktopActionButtons() {
           Docs
         </Link>
       </Button>
-      {/* <Button asChild className="hidden md:flex rounded-full" variant="outline">
-        <Link href="https://github.com/boundaryml/baml?utm_source=marketing-site&utm_medium=navbar-github">
-          GitHub
-        </Link>
-      </Button> */}
-      <GithubStars />
     </div>
   );
 }

@@ -18,15 +18,78 @@ const BamlPlayground = dynamic(
 import { ScriptCopyBtn } from '../magicui/script-copy-btn';
 import { siteConfig } from '@/app/_lib/config';
 
+const ROTATING_WORDS = ['writing', 'building', 'running', 'evaluating', 'debugging', 'orchestrating', 'shipping', 'testing', 'training', 'deploying', 'scaling', 'securing', 'streaming'];
+const HOLD_MS = 2200;
+const TRANSITION_MS = 400;
+
+const RotatingWord = () => {
+  const [index, setIndex] = useState(0);
+  const [visible, setVisible] = useState(true);
+  const [reduced, setReduced] = useState(false);
+
+  useEffect(() => {
+    setReduced(window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  }, []);
+
+  useEffect(() => {
+    if (reduced) return;
+
+    let interval: ReturnType<typeof setInterval> | null = null;
+
+    const startCycle = () => {
+      interval = setInterval(() => {
+        setVisible(false);
+        setTimeout(() => {
+          setIndex((i) => (i + 1) % ROTATING_WORDS.length);
+          setVisible(true);
+        }, TRANSITION_MS);
+      }, HOLD_MS + TRANSITION_MS);
+    };
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'hidden') {
+        if (interval) clearInterval(interval);
+      } else {
+        startCycle();
+      }
+    };
+
+    startCycle();
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      if (interval) clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [reduced]);
+
+  return (
+    <span
+      aria-live="polite"
+      aria-atomic="true"
+      style={{
+        display: 'inline-block',
+        fontFamily: 'var(--font-serif)',
+        fontStyle: 'italic',
+        fontWeight: 500,
+        color: '#6D28D9',
+        opacity: visible ? 1 : 0,
+        transform: visible ? 'translateY(0)' : 'translateY(6px)',
+        transition: reduced ? 'none' : `opacity ${TRANSITION_MS}ms cubic-bezier(0.4,0,0.2,1), transform ${TRANSITION_MS}ms cubic-bezier(0.4,0,0.2,1)`,
+      }}
+    >
+      {ROTATING_WORDS[index]}
+    </span>
+  );
+};
+
 const customStyles = {
   root: {
-    '--bg': '#E8E3DB',
-    '--fg': '#141414',
-    '--border': '#C8C2B7',
-    '--accent': '#7C3AED',
-    '--accent-hover': '#6025C0',
-    // Override global secondary (green) with purple for this layout
-    '--secondary': '#7C3AED',
+    '--bg': '#F5F1E8',
+    '--fg': '#1A1612',
+    '--border': '#D9D3C4',
+    '--accent': '#6D28D9',
+    '--accent-hover': '#5B21B6',
+    '--secondary': '#6D28D9',
     '--syn-purple': '#8B5CF6',
     '--syn-green': '#059669',
     '--syn-teal': '#0D9488',
@@ -37,13 +100,13 @@ const customStyles = {
     width: '100%',
     maxWidth: '1600px',
     margin: '0 auto',
-    borderLeft: '1px solid #C8C2B7',
-    borderRight: '1px solid #C8C2B7',
+    borderLeft: '1px solid #D9D3C4',
+    borderRight: '1px solid #D9D3C4',
     minHeight: '100vh',
     display: 'flex',
     flexDirection: 'column',
-    backgroundColor: '#E8E3DB',
-    color: '#141414',
+    backgroundColor: '#F5F1E8',
+    color: '#1A1612',
     fontSize: '14px',
     lineHeight: '1.5',
   } as React.CSSProperties,
@@ -51,11 +114,12 @@ const customStyles = {
     display: 'grid',
     gridTemplateColumns: 'auto 1fr auto auto auto',
     alignItems: 'center',
+    columnGap: '16px',
     padding: '16px 24px',
-    fontSize: '13px',
+    fontSize: '15px',
     letterSpacing: '0.05em',
     textTransform: 'uppercase',
-    borderBottom: '1px solid #C8C2B7',
+    borderBottom: '1px solid #D9D3C4',
   } as React.CSSProperties,
   logo: {
     fontWeight: 600,
@@ -70,21 +134,21 @@ const customStyles = {
     textAlign: 'right' as const,
   },
   refMark: {
-    color: '#7C3AED',
+    color: '#6D28D9',
     fontWeight: 'normal' as const,
   },
   hero: {
     display: 'grid',
     gridTemplateColumns: '1fr 3fr',
-    minHeight: '800px',
-    borderBottom: '1px solid #C8C2B7',
+    minHeight: '640px',
+    borderBottom: '1px solid #D9D3C4',
   } as React.CSSProperties,
   heroLeft: {
     padding: '48px 48px 64px',
     display: 'flex',
     flexDirection: 'column' as const,
     justifyContent: 'space-between',
-    borderRight: '1px solid #C8C2B7',
+    borderRight: '1px solid #D9D3C4',
   },
   heroMeta: {
     fontSize: '12px',
@@ -104,11 +168,12 @@ const customStyles = {
     alignItems: 'center',
   },
   h1: {
-    fontSize: 'clamp(1.6rem, 3vw, 2.4rem)',
+    fontSize: 'clamp(2rem, 4.5vw, 3.5rem)',
     fontWeight: 600,
-    lineHeight: '1.2',
-    letterSpacing: '-0.02em',
-    marginBottom: '2rem',
+    lineHeight: '1.02',
+    letterSpacing: '-0.03em',
+    color: '#1A1612',
+    marginBottom: '1.5rem',
   } as React.CSSProperties,
   h2: {
     fontSize: 'clamp(2rem, 4vw, 3.5rem)',
@@ -117,6 +182,11 @@ const customStyles = {
     letterSpacing: '-0.02em',
   } as React.CSSProperties,
   p: {
+    fontSize: '17px',
+    fontWeight: 400,
+    lineHeight: '1.6',
+    color: '#5C5852',
+    maxWidth: '480px',
     marginBottom: '1rem',
   },
   ctaContainer: {
@@ -140,7 +210,7 @@ const customStyles = {
     transition: 'transform 0.2s ease',
   },
   botanicalAccent: {
-    color: '#7C3AED',
+    color: '#6D28D9',
     opacity: 0.6,
   },
   heroRight: {
@@ -156,7 +226,7 @@ const customStyles = {
   codeWindow: {
     width: '100%',
     backgroundColor: '#FAFAF9',
-    border: '1px solid #C8C2B7',
+    border: '1px solid #D9D3C4',
     boxShadow: '0 20px 40px rgba(0,0,0,0.05)',
     borderRadius: '6px',
     overflow: 'hidden',
@@ -166,7 +236,7 @@ const customStyles = {
   codeWindowNoShadow: {
     width: '100%',
     backgroundColor: '#FAFAF9',
-    border: '1px solid #C8C2B7',
+    border: '1px solid #D9D3C4',
     boxShadow: 'none',
     borderRadius: '6px',
     overflow: 'hidden',
@@ -176,7 +246,7 @@ const customStyles = {
   codeWindowAccent: {
     width: '100%',
     backgroundColor: '#FAFAF9',
-    border: '1px solid #7C3AED',
+    border: '1px solid #6D28D9',
     boxShadow: 'none',
     borderRadius: '6px',
     overflow: 'hidden',
@@ -188,7 +258,7 @@ const customStyles = {
     gridTemplateColumns: '80px 1fr 80px',
     alignItems: 'center',
     padding: '12px 16px',
-    borderBottom: '1px solid #C8C2B7',
+    borderBottom: '1px solid #D9D3C4',
     backgroundColor: '#F5F5F4',
   },
   windowDots: {
@@ -234,17 +304,17 @@ const customStyles = {
     color: '#A8A29E',
     fontSize: '13px',
     userSelect: 'none' as const,
-    borderRight: '1px solid #C8C2B7',
+    borderRight: '1px solid #D9D3C4',
     backgroundColor: '#F5F5F4',
     lineHeight: '1.5',
   },
   lineNumbersAccent: {
     padding: '16px 12px',
     textAlign: 'right' as const,
-    color: '#7C3AED',
+    color: '#6D28D9',
     fontSize: '13px',
     userSelect: 'none' as const,
-    borderRight: '1px solid #7C3AED',
+    borderRight: '1px solid #6D28D9',
     backgroundColor: '#F5F5F4',
     lineHeight: '1.5',
   },
@@ -258,11 +328,11 @@ const customStyles = {
     fontFamily:
       "'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
     fontSize: '13px',
-    color: '#141414',
+    color: '#1A1612',
   },
   statementSection: {
     padding: '48px 48px',
-    borderBottom: '1px solid #C8C2B7',
+    borderBottom: '1px solid #D9D3C4',
   },
   statementText: {
     maxWidth: '700px',
@@ -278,13 +348,13 @@ const customStyles = {
   featureIndex: {
     display: 'flex',
     flexDirection: 'column' as const,
-    borderTop: '2px solid #141414',
+    borderTop: '2px solid #1A1612',
   },
   indexRow: {
     display: 'grid',
     gridTemplateColumns: '60px 1fr 100px',
     padding: '16px 0',
-    borderBottom: '1px solid #C8C2B7',
+    borderBottom: '1px solid #D9D3C4',
     alignItems: 'baseline',
     transition: 'background-color 0.2s ease',
     cursor: 'default',
@@ -300,7 +370,7 @@ const customStyles = {
   indexMeta: {
     textAlign: 'right' as const,
     fontSize: '12px',
-    color: '#7C3AED',
+    color: '#6D28D9',
   },
   exhibitHeader: {
     display: 'grid',
@@ -315,7 +385,7 @@ const customStyles = {
   exhibitGrid: {
     display: 'grid',
     gridTemplateColumns: '1fr 1fr',
-    borderTop: '1px solid #C8C2B7',
+    borderTop: '1px solid #D9D3C4',
   },
   exhibitPanel: {
     padding: '48px',
@@ -324,13 +394,13 @@ const customStyles = {
   exhibitPanelLeft: {
     padding: '48px',
     backgroundColor: 'rgba(255,255,255,0.1)',
-    borderRight: '1px solid #C8C2B7',
+    borderRight: '1px solid #D9D3C4',
   },
   panelHeader: {
     fontSize: '12px',
     textTransform: 'uppercase' as const,
     marginBottom: '24px',
-    color: '#7C3AED',
+    color: '#6D28D9',
     display: 'flex',
     justifyContent: 'space-between',
   },
@@ -349,6 +419,40 @@ const WindowDots = () => (
   </div>
 );
 
+const NavStars = () => {
+  const [stars, setStars] = useState<number | undefined>(undefined);
+  const [hovered, setHovered] = useState(false);
+  useEffect(() => {
+    fetch('https://api.github.com/repos/boundaryml/baml')
+      .then((r) => r.json())
+      .then((d) => setStars(d.stargazers_count as number))
+      .catch(() => { });
+  }, []);
+
+  const display = stars !== undefined
+    ? (hovered ? stars + 1 : stars).toLocaleString()
+    : 'GitHub';
+
+  return (
+    <Link
+      href="https://github.com/boundaryml/baml"
+      target="_blank"
+      style={customStyles.navItem}
+      className="flex items-center gap-1.5 hover:text-[#6D28D9] transition-colors"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      <img
+        src="/github-mark.svg"
+        alt="GitHub"
+        className="size-3.5 transition-all duration-150"
+        style={{ opacity: hovered ? 1 : 0.6, filter: hovered ? 'invert(27%) sepia(80%) saturate(800%) hue-rotate(240deg) brightness(90%)' : 'none' }}
+      />
+      <span className="tabular-nums">{display}</span><span style={customStyles.refMark}>)</span>
+    </Link>
+  );
+};
+
 const Nav = () => (
   <nav
     className="nav-responsive"
@@ -362,18 +466,34 @@ const Nav = () => (
         <Link
           key={link.id}
           href={link.href}
-          className="mr-6 text-[11px] tracking-[0.18em] uppercase text-muted-foreground hover:text-[#7C3AED] transition-colors"
+          className="mr-6 text-[13px] tracking-[0.15em] uppercase text-muted-foreground hover:text-[#6D28D9] transition-colors"
         >
           {link.name}
         </Link>
       ))}
+      <Link
+        href="https://docs.boundaryml.com/?utm_source=marketing-site&utm_medium=navbar-docs"
+        target="_blank"
+        className="mr-6 text-[13px] tracking-[0.15em] uppercase text-muted-foreground hover:text-[#6D28D9] transition-colors"
+      >
+        Docs
+      </Link>
     </div>
-    <div style={customStyles.navItem}>
-      Docs <span style={customStyles.refMark}>)</span>
-    </div>
-    <div style={customStyles.navItem}>
-      GitHub <span style={customStyles.refMark}>)</span>
-    </div>
+    <NavStars />
+    <Link
+      href="/signin"
+      style={{ ...customStyles.navItem, padding: '6px 10px', borderRadius: '8px' }}
+      className="hover:bg-[#e0dbd3] transition-colors"
+    >
+      Sign in
+    </Link>
+    <Link
+      href="/try"
+      style={{ ...customStyles.navItem, color: '#e8d5ff', backgroundColor: '#6d28d9', border: '2px solid #a78bfa', borderRadius: '8px', padding: '6px 14px' }}
+      className="hover:opacity-90 transition-opacity"
+    >
+      Start your project
+    </Link>
   </nav>
 );
 
@@ -424,11 +544,20 @@ const HeroCodeWindow = () => (
   </div>
 );
 
+type InstallPath = 'claude' | 'codex' | 'human';
+
+const humanCommand = 'curl -fsSL https://baml.dev/install | sh';
+
+const installOptions: { id: InstallPath; label: string; icon?: string; command: string }[] = [
+  { id: 'claude', label: 'Claude', icon: '/Claude Color SVG.svg', command: 'curl http://baml.dev/agent | claude' },
+  { id: 'codex', label: 'Codex', icon: '/Codex Color.svg', command: 'curl http://baml.dev/agent | codex' },
+  { id: 'human', label: 'Human', command: humanCommand },
+];
+
 const HeroSection = () => {
-  const [hovered, setHovered] = useState(false);
-  const commandMap = {
-    bash: 'curl -fsSL https://baml.dev/install | sh',
-  } as const;
+  const [installPath, setInstallPath] = useState<InstallPath>('claude');
+
+  const selected = installOptions.find((o) => o.id === installPath)!;
 
   return (
     <section
@@ -438,38 +567,60 @@ const HeroSection = () => {
       <div style={customStyles.heroLeft}>
         <div>
           <h1 style={customStyles.h1}>
-            The first language
-            <br />
-            designed with
-            <br />
-            LLMs in mind.
+            The language
+            <br />for <RotatingWord />
+            <br />AI.
           </h1>
-          <p style={customStyles.p}>
-            Build robust AI agents with a programming language that treats LLM
-            prompts, schemas, and non-deterministic logic as first-class
-            citizens.
-          </p>
           <div style={customStyles.ctaContainer}>
             <div className="w-full max-w-xl">
-              <p className="mb-3 text-xs font-medium text-foreground sm:text-sm">
+              <p style={{ fontSize: '11px', fontWeight: 500, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#8A8580', marginBottom: '12px' }}>
                 Install BAML
               </p>
-              <p className="mb-4 text-[11px] text-muted-foreground sm:text-xs">
-                Run this one-liner to install the BAML toolchain in your
-                environment.
-              </p>
-              <ScriptCopyBtn
-                className="block w-full"
-                codeLanguage="bash"
-                commandMap={commandMap}
-                darkTheme="none"
-                lightTheme="none"
-                showMultiplePackageOptions={false}
-              />
-              <p className="mt-4 text-[10px] uppercase tracking-[0.15em] text-muted-foreground/60 leading-relaxed">
+              <div className="relative">
+                {/* invisible spacer always sized to the longest command */}
+                <div className="invisible pointer-events-none">
+                  <ScriptCopyBtn
+                    className="block w-full"
+                    codeLanguage="bash"
+                    commandMap={{ bash: humanCommand } as const}
+                    darkTheme="none"
+                    lightTheme="none"
+                    showMultiplePackageOptions={false}
+                  />
+                </div>
+                {/* active command overlaid on top */}
+                <div className="absolute inset-0">
+                  <ScriptCopyBtn
+                    className="block w-full"
+                    codeLanguage="bash"
+                    commandMap={{ bash: selected.command } as const}
+                    darkTheme="none"
+                    lightTheme="none"
+                    showMultiplePackageOptions={false}
+                  />
+                </div>
+              </div>
+              <div className="mt-3 flex gap-2">
+                {installOptions.map((opt) => (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => setInstallPath(opt.id)}
+                    className="rounded-md px-3 py-1 text-xs font-medium transition-colors flex items-center gap-1.5"
+                    style={installPath === opt.id
+                      ? { background: '#1A1612', color: '#fff', border: '1px solid #1A1612' }
+                      : { background: 'transparent', color: '#5C5852', border: '1px solid #D9D3C4' }
+                    }
+                  >
+                    {opt.icon && <img src={opt.icon} alt={opt.label} className="size-3.5" />}
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+              <p style={{ marginTop: '16px', fontSize: '11px', fontWeight: 500, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#8A8580', lineHeight: '1.6' }}>
                 Trusted by developers at
                 <br />
-                {['SAP', 'AWS', 'AMD', 'EY', 'Product Hunt', 'Aer Compliance', 'PMMI', 'Cerebral Valley'].join(' · ')}
+                <span style={{ color: '#5C5852' }}>{['SAP', 'AWS', 'AMD', 'EY', 'Product Hunt', 'Aer Compliance', 'PMMI', 'Cerebral Valley'].join(' · ')}</span>
               </p>
             </div>
           </div>
@@ -667,7 +818,7 @@ export function VariantHome() {
     style.textContent = `
       @media (max-width: 1024px) {
         .hero-responsive { grid-template-columns: 1fr !important; }
-        .hero-right-responsive { border-top: 1px solid #C8C2B7; border-right: none !important; }
+        .hero-right-responsive { border-top: 1px solid #D9D3C4; border-right: none !important; }
         .exhibit-grid-responsive { grid-template-columns: 1fr !important; }
       }
       @media (max-width: 600px) {
