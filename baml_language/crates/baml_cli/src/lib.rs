@@ -79,7 +79,10 @@ impl From<ExitCode> for u32 {
 }
 
 /// Run the CLI with the given arguments.
-/// This is a simplified version that only supports the LSP command.
+///
+/// Dispatches to one of: `run`, `describe`, `generate`, `grep`, `test`,
+/// `format`, or `language-server`. `baml run` is the top-level entry for
+/// standalone execution.
 pub fn run_cli(argv: Vec<String>) -> Result<ExitCode> {
     let cli = commands::RuntimeCli::parse_from_smart(argv);
     cli.run()

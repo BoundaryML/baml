@@ -1,5 +1,6 @@
-// TODO: This file has been simplified to only support the LSP command for now.
-// Other commands that depend on baml_runtime are commented out.
+// Wires up the BAML CLI subcommands: Run, Describe, Generate, Grep, Test,
+// Format, and LanguageServer. `baml run` is the top-level entry for
+// standalone execution.
 
 use anyhow::Result;
 use clap::{CommandFactory, Parser, Subcommand};
