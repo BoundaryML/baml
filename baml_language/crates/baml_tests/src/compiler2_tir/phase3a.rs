@@ -732,6 +732,64 @@ function f(u: User?) -> string? { u?.address?.street }
     insta::assert_snapshot!(render_tir(&db, file));
 }
 
+#[test]
+fn optional_method_call_basic() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+class User {
+    function getName(self) -> string { self.name }
+    name string
+}
+function f(u: User?) -> string? { u?.getName() }
+"#,
+    );
+    insta::assert_snapshot!(render_tir(&db, file));
+}
+
+#[test]
+fn optional_call_chain_continues() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+class User { name string }
+function f(callback: (() -> User)?) -> string? {
+    callback?.()?.name
+}
+"#,
+    );
+    insta::assert_snapshot!(render_tir(&db, file));
+}
+
+#[test]
+fn optional_field_access_through_optional_alias() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+class User { name string }
+type MaybeUser = User?
+function f(u: MaybeUser) -> string? { u?.name }
+"#,
+    );
+    insta::assert_snapshot!(render_tir(&db, file));
+}
+
+#[test]
+fn optional_index_through_optional_alias() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+type MaybeInts = int[]?
+function f(xs: MaybeInts) -> int? { xs?.[0] }
+"#,
+    );
+    insta::assert_snapshot!(render_tir(&db, file));
+}
+
 // ── Void return type ───────────────────────────────────────────────────────
 
 #[test]

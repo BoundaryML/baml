@@ -290,8 +290,8 @@ function baml.llm.Client.build_attempt_with_state(self: baml.llm.Client, planner
           for sub in self.sub_clients
             { : void
               for step in sub.build_plan_with_state(planner_state)
-                { : null
-                  steps.push(step) : null
+                { : int
+                  steps.push(step) : int
                 }
             }
           steps : baml.llm.OrchestrationStep[]
@@ -344,7 +344,7 @@ function baml.llm.Client.build_plan_with_state(self: baml.llm.Client, planner_st
                 let inner = self.build_attempt_with_state(planner_state) : baml.llm.OrchestrationStep[]
                 for step in inner
                   { : void
-                    result.push(OrchestrationStep { primitive_client: step.primitive_client, delay_ms: delay }) : null
+                    result.push(OrchestrationStep { primitive_client: step.primitive_client, delay_ms: delay }) : int
                   }
               }
           }

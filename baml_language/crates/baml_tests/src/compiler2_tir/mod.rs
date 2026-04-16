@@ -1729,6 +1729,67 @@ pub(crate) mod support {
         output
     }
 
+    pub fn expr_type_in_function(
+        db: &ProjectDatabase,
+        file: baml_base::SourceFile,
+        function_name: &str,
+        expr_text: &str,
+    ) -> String {
+        let item_tree = baml_compiler2_hir::file_item_tree(db, file);
+        let (func_loc, func_span) = item_tree
+            .functions
+            .iter()
+            .find_map(|(local_id, func_data)| {
+                (func_data.name.as_str() == function_name)
+                    .then_some((FunctionLoc::new(db, file, *local_id), func_data.span))
+            })
+            .unwrap_or_else(|| panic!("function `{function_name}` not found"));
+        let func_body = baml_compiler2_ppir::function_body(db, func_loc);
+        let body = match func_body.as_ref() {
+            FunctionBody::Expr(body) => body,
+            _ => panic!("function `{function_name}` has no expression body"),
+        };
+
+        let index = baml_compiler2_ppir::file_semantic_index(db, file);
+        let scope_id = index
+            .scopes
+            .iter()
+            .enumerate()
+            .find_map(|(i, scope)| {
+                (matches!(scope.kind, ScopeKind::Function)
+                    && scope.range == func_span
+                    && scope
+                        .name
+                        .as_ref()
+                        .is_some_and(|name| name.as_str() == function_name))
+                .then_some(index.scope_ids[i])
+            })
+            .unwrap_or_else(|| panic!("scope for function `{function_name}` not found"));
+        let inference = infer_scope_types(db, scope_id);
+
+        let matches: Vec<_> = body
+            .exprs
+            .iter()
+            .filter_map(|(expr_id, _)| (expr_desc(expr_id, body) == expr_text).then_some(expr_id))
+            .collect();
+        let expr_id = match matches.as_slice() {
+            [expr_id] => *expr_id,
+            [] => panic!("expression `{expr_text}` not found in function `{function_name}`"),
+            _ => panic!(
+                "expression `{expr_text}` matched multiple nodes in function `{function_name}`"
+            ),
+        };
+
+        inference
+            .expression_type(expr_id)
+            .map(|ty| ty.to_string())
+            .unwrap_or_else(|| {
+                panic!(
+                    "expression `{expr_text}` in function `{function_name}` has no inferred type"
+                )
+            })
+    }
+
     pub fn make_db() -> ProjectDatabase {
         let mut db = ProjectDatabase::new();
         db.set_project_root(std::path::Path::new("."));
