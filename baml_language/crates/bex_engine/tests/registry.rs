@@ -30,6 +30,7 @@ async fn registry_new_copy_objects_true_returns_instance() {
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
             None,
+            Vec::new(),
         )
         .expect("Failed to create engine"),
     );
@@ -79,6 +80,7 @@ async fn registry_new_copy_objects_false_returns_handle() {
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
             None,
+            Vec::new(),
         )
         .expect("Failed to create engine"),
     );

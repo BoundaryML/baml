@@ -384,6 +384,9 @@ pub struct BexEngine {
     event_sink: Option<std::sync::Arc<dyn bex_events::EventSink>>,
     /// Compiled test cases from the BAML program.
     test_cases: Vec<bex_vm_types::TestCase>,
+    /// Process argv passed in at engine creation. Exposed to BAML via
+    /// `baml.sys.argv()`. Shared (cheap to clone) with each spawned VM.
+    argv: Arc<[String]>,
 
     // --- Epoch-based GC coordination ---
     /// Current epoch counter (monotonically increasing).
@@ -433,11 +436,17 @@ impl BexEngine {
     ///
     /// * `bytecode_program` - The compiled BAML program bytecode
     /// * `sys_ops` - System operations provider (use `sys_types_native::SysOps::native()` for default)
+    /// * `event_sink` - Optional event sink for persisting events.
+    /// * `argv` - Process-style argv values exposed to BAML via `baml.sys.argv()`.
+    ///   Pass `Vec::new()` when argv is not applicable (e.g. tests, IDE, library embedding).
     pub fn new(
         bytecode_program: bex_vm_types::Program,
         sys_ops: std::sync::Arc<sys_ops::SysOps>,
         event_sink: Option<std::sync::Arc<dyn bex_events::EventSink>>,
+        argv: Vec<String>,
     ) -> Result<Self, EngineError> {
+        let argv: Arc<[String]> = Arc::from(argv);
+
         // Extract package_init_order before consuming bytecode_program.
         let package_init_order = bytecode_program.package_init_order.clone();
 
@@ -526,6 +535,7 @@ impl BexEngine {
                         .iter()
                         .map(|(k, v)| (k.clone(), *v))
                         .collect(),
+                    Arc::clone(&argv),
                 );
                 vm.set_entry_point(*init_ptr, &[]);
                 // Drive the VM to completion. $init only contains synchronous
@@ -592,6 +602,7 @@ impl BexEngine {
             sys_op_ctx,
             event_sink,
             test_cases,
+            argv,
             // Initialize epoch tracking
             current_epoch: AtomicU64::new(0),
             epoch_states: [EpochState::new(), EpochState::new()],
@@ -921,6 +932,7 @@ impl BexEngine {
                 .iter()
                 .map(|(k, v)| (k.clone(), *v))
                 .collect(),
+            Arc::clone(&self.argv),
         );
 
         // Snapshot args for the root FunctionStart event before converting to VM values

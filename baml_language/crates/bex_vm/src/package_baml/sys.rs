@@ -1,5 +1,7 @@
+use bex_vm_types::types::Value;
+
 use super::{BamlNamespaceSys, PackageBamlImpl};
-use crate::errors::VmRustFnError;
+use crate::{errors::VmRustFnError, vm::BexVm};
 
 impl BamlNamespaceSys for PackageBamlImpl {
     #[allow(clippy::cast_possible_truncation)]
@@ -14,5 +16,10 @@ impl BamlNamespaceSys for PackageBamlImpl {
         Err(VmRustFnError::Panic(crate::VmPanic::UserPanic {
             message: message.to_string(),
         }))
+    }
+
+    fn argv(vm: &mut BexVm) -> Vec<Value> {
+        let argv = std::sync::Arc::clone(&vm.argv);
+        argv.iter().map(|s| vm.alloc_string(s.clone())).collect()
     }
 }
