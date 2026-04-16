@@ -99,6 +99,10 @@ pub struct ScopeInference<'db> {
     /// Used by MIR to emit chained `Place::Field` projections and by LSP to
     /// navigate to field definitions from within multi-segment paths.
     path_member_resolutions: FxHashMap<ExprId, Vec<MemberResolution<'db>>>,
+    /// Lambda/function parameter types by index (name, inferred type).
+    /// Populated for lambda scopes so LSP can resolve unannotated lambda
+    /// parameter types (e.g. `items.map((item) -> { item. })`).
+    param_types: Vec<(Name, Ty)>,
     /// Diagnostics and other rare data. Heap-allocated only when non-empty.
     extra: Option<Box<ScopeInferenceExtra<'db>>>,
 }
@@ -139,6 +143,11 @@ impl<'db> ScopeInference<'db> {
     /// which may differ from the initializer expression type due to widening).
     pub fn binding_type(&self, pat_id: PatId) -> Option<&Ty> {
         self.bindings.get(&pat_id)
+    }
+
+    /// Look up the type of a parameter by index.
+    pub fn param_type(&self, param_idx: usize) -> Option<&Ty> {
+        self.param_types.get(param_idx).map(|(_, ty)| ty)
     }
 
     /// Iterate over all (`ExprId`, Ty) pairs for expressions in this scope.
@@ -490,13 +499,28 @@ pub fn infer_scope_types<'db>(
                                 ref func_sm,
                             )) = func_data.body
                             {
-                                if let Some((func_def, lambda_body, _lambda_sm, _lambda_expr_id)) =
+                                if let Some((func_def, lambda_body, _lambda_sm, lambda_expr_id)) =
                                     find_lambda_by_span(func_body, func_sm, lambda_span)
                                 {
+                                    // Try to get contextual param types from the parent scope's
+                                    // inference (handles unannotated lambda params like `.map((x) -> ...)`).
+                                    let parent_scope_id =
+                                        index.scope_ids[ancestor_fsi.index() as usize];
+                                    let parent_inference = infer_scope_types(db, parent_scope_id);
+                                    let contextual_param_tys = parent_inference
+                                        .expression_type(lambda_expr_id)
+                                        .and_then(|ty| {
+                                            if let Ty::Function { params, .. } = ty {
+                                                Some(params.clone())
+                                            } else {
+                                                None
+                                            }
+                                        });
+
                                     // Seed builder with lambda params
                                     let generic_params: Vec<Name> = func_def.generic_params.clone();
                                     builder.set_generic_params(generic_params.clone());
-                                    for param in &func_def.params {
+                                    for (i, param) in func_def.params.iter().enumerate() {
                                         let param_ty = param
                                             .type_expr
                                             .as_ref()
@@ -510,10 +534,18 @@ pub fn infer_scope_types<'db>(
                                                     &mut Vec::new(),
                                                 )
                                             })
+                                            .or_else(|| {
+                                                // Fall back to contextual type from parent inference
+                                                contextual_param_tys
+                                                    .as_ref()
+                                                    .and_then(|pts| pts.get(i))
+                                                    .map(|(_, ty)| ty.clone())
+                                            })
                                             .unwrap_or(Ty::Unknown {
                                                 attr: TyAttr::default(),
                                             });
-                                        builder.add_local(param.name.clone(), param_ty);
+                                        builder.add_local(param.name.clone(), param_ty.clone());
+                                        builder.param_types.push((param.name.clone(), param_ty));
                                     }
                                     // Infer the lambda body
                                     if let Some(root_expr) = lambda_body.root_expr {
@@ -540,13 +572,27 @@ pub fn infer_scope_types<'db>(
                             if let (LetBody::Expr(let_body), Some(let_sm)) =
                                 (body.as_ref(), source_map_opt)
                             {
-                                if let Some((func_def, lambda_body, _lambda_sm, _lambda_expr_id)) =
+                                if let Some((func_def, lambda_body, _lambda_sm, lambda_expr_id)) =
                                     find_lambda_by_span(let_body, &let_sm, lambda_span)
                                 {
+                                    // Try to get contextual param types from parent let scope
+                                    let parent_scope_id =
+                                        index.scope_ids[ancestor_fsi.index() as usize];
+                                    let parent_inference = infer_scope_types(db, parent_scope_id);
+                                    let contextual_param_tys = parent_inference
+                                        .expression_type(lambda_expr_id)
+                                        .and_then(|ty| {
+                                            if let Ty::Function { params, .. } = ty {
+                                                Some(params.clone())
+                                            } else {
+                                                None
+                                            }
+                                        });
+
                                     // Seed builder with lambda params
                                     let generic_params: Vec<Name> = func_def.generic_params.clone();
                                     builder.set_generic_params(generic_params.clone());
-                                    for param in &func_def.params {
+                                    for (i, param) in func_def.params.iter().enumerate() {
                                         let param_ty = param
                                             .type_expr
                                             .as_ref()
@@ -560,10 +606,17 @@ pub fn infer_scope_types<'db>(
                                                     &mut Vec::new(),
                                                 )
                                             })
+                                            .or_else(|| {
+                                                contextual_param_tys
+                                                    .as_ref()
+                                                    .and_then(|pts| pts.get(i))
+                                                    .map(|(_, ty)| ty.clone())
+                                            })
                                             .unwrap_or(Ty::Unknown {
                                                 attr: TyAttr::default(),
                                             });
-                                        builder.add_local(param.name.clone(), param_ty);
+                                        builder.add_local(param.name.clone(), param_ty.clone());
+                                        builder.param_types.push((param.name.clone(), param_ty));
                                     }
                                     if let Some(root_expr) = lambda_body.root_expr {
                                         builder.infer_expr(root_expr, lambda_body);
@@ -617,6 +670,7 @@ pub fn infer_scope_types<'db>(
         diagnostics,
         path_root_types,
         path_member_resolutions,
+        param_types,
     ) = builder.finish();
 
     let extra = if diagnostics.is_empty() {
@@ -632,6 +686,7 @@ pub fn infer_scope_types<'db>(
         exhaustive_matches,
         path_root_types,
         path_member_resolutions,
+        param_types,
         extra,
     }
 }

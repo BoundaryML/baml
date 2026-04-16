@@ -147,6 +147,9 @@ pub struct TypeInferenceBuilder<'db> {
     /// Per-segment member resolutions for multi-segment local-rooted `Path`
     /// expressions. Populated by `infer_local_rooted_path`.
     pub path_member_resolutions: FxHashMap<ExprId, Vec<crate::inference::MemberResolution<'db>>>,
+    /// Parameter types for this scope (populated for lambda/function scopes).
+    /// Used by LSP to resolve lambda parameter types.
+    pub param_types: Vec<(Name, Ty)>,
 }
 
 impl<'db> TypeInferenceBuilder<'db> {
@@ -181,6 +184,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             in_optional_chain: 0,
             path_root_types: FxHashMap::default(),
             path_member_resolutions: FxHashMap::default(),
+            param_types: Vec::new(),
         }
     }
 
@@ -201,6 +205,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         TypeCheckDiagnostics<'db>,
         FxHashMap<ExprId, Ty>,
         FxHashMap<ExprId, Vec<crate::inference::MemberResolution<'db>>>,
+        Vec<(Name, Ty)>,
     ) {
         let diagnostics = self.context.finish();
         (
@@ -211,6 +216,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             diagnostics,
             self.path_root_types,
             self.path_member_resolutions,
+            self.param_types,
         )
     }
 
@@ -2942,10 +2948,32 @@ impl<'db> TypeInferenceBuilder<'db> {
                 Some(segments[0].clone())
             };
         }
-        // Multi-segment: receiver.method — resolve the receiver's type to get
-        // the class name so the target matches throw_inference's "Class.method" keys.
+        let method = segments.last().unwrap();
+
+        // Check path_member_resolutions — handles 2+ segment paths correctly.
+        // The last resolution for the callee path tells us the receiver class.
+        if let Some(resolutions) = self.path_member_resolutions.get(&callee_expr_id) {
+            if let Some(crate::inference::MemberResolution::Method { class_loc, .. }) =
+                resolutions.last()
+            {
+                let db = self.context.db();
+                let item_tree = baml_compiler2_ppir::file_item_tree(db, class_loc.file(db));
+                let class_data = &item_tree[class_loc.id(db)];
+                let pkg_info =
+                    baml_compiler2_hir::file_package::file_package(db, class_loc.file(db));
+                let ns = &pkg_info.namespace_path;
+                let key = if ns.is_empty() {
+                    format!("{}.{}", class_data.name, method)
+                } else {
+                    let ns_str = ns.iter().map(Name::as_str).collect::<Vec<_>>().join(".");
+                    format!("{}.{}.{}", ns_str, class_data.name, method)
+                };
+                return Some(Name::new(key));
+            }
+        }
+
+        // Fallback: 2-segment path with locals lookup (existing logic)
         let receiver = &segments[0];
-        let method = &segments[1];
         if let Some(Ty::Class(qn, _)) = self.locals.get(receiver) {
             let ns = qn.namespace();
             let key = if ns.is_empty() {

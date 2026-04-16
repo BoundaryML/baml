@@ -231,6 +231,84 @@ function TestIt() -> string {
         );
     }
 
+    // Issue #7: Multi-segment chained completion.
+    // `foo.bar.<cursor>` should resolve the type of `foo.bar` (not just `bar`),
+    // then offer completions based on that type.
+    #[test]
+    fn test_chained_field_access_completion() {
+        let test = CursorTest::new(
+            r#"
+class Inner {
+    name string
+    value int
+}
+
+class Outer {
+    inner Inner
+    label string
+}
+
+function Test() -> string {
+    let o = Outer { inner: Inner { name: "hi", value: 1 }, label: "x" }
+    o.inner.<[CURSOR]
+    "done"
+}
+"#,
+        );
+
+        let completions = completions_at(&test.db, test.cursor.file, test.cursor.offset);
+        let labels: Vec<&str> = completions.iter().map(|c| c.label.as_str()).collect();
+
+        assert!(
+            labels.contains(&"name"),
+            "Should contain 'name' from Inner, got: {labels:?}"
+        );
+        assert!(
+            labels.contains(&"value"),
+            "Should contain 'value' from Inner, got: {labels:?}"
+        );
+        // Should NOT contain Outer's fields
+        assert!(
+            !labels.contains(&"label"),
+            "Should NOT contain 'label' from Outer, got: {labels:?}"
+        );
+        assert!(
+            !labels.contains(&"inner"),
+            "Should NOT contain 'inner' from Outer, got: {labels:?}"
+        );
+    }
+
+    // Issue #8: Lambda parameter member completion.
+    // Inside a lambda, the parameter's type should be resolved for completions.
+    #[test]
+    fn test_lambda_param_completion() {
+        let test = CursorTest::new(
+            r#"
+class Item {
+    name string
+    price int
+}
+
+function Test() -> string[] {
+    let items = [Item { name: "a", price: 1 }]
+    items.map((item) -> { item.<[CURSOR] })
+}
+"#,
+        );
+
+        let completions = completions_at(&test.db, test.cursor.file, test.cursor.offset);
+        let labels: Vec<&str> = completions.iter().map(|c| c.label.as_str()).collect();
+
+        assert!(
+            labels.contains(&"name"),
+            "Should contain 'name' from Item lambda param, got: {labels:?}"
+        );
+        assert!(
+            labels.contains(&"price"),
+            "Should contain 'price' from Item lambda param, got: {labels:?}"
+        );
+    }
+
     #[test]
     fn test_field_access_enum_variants() {
         let test = CursorTest::new(

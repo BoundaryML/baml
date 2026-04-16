@@ -1838,30 +1838,42 @@ impl<'db> LoweringContext<'db> {
         segments: &[Name],
         dest: Place,
     ) {
-        let Some(&root_local) = self.locals.get(&segments[0]) else {
-            // Root not found as a local — emit null.
-            self.builder
-                .assign(dest, Rvalue::Use(Operand::Constant(Constant::Null)));
-            return;
-        };
-
-        let mut current_place = Place::Local(root_local);
-        // Prefer the TIR-inferred root type over builder.local_ty, since catch
-        // variables are declared as BuiltinUnknown by lower_catch even though TIR
-        // knows their narrowed type (e.g. baml.panics.IndexOutOfBounds).
-        let mut current_ty = if let Some(tir_root) = self.path_root_ty(expr_id) {
-            // If TIR inferred a more specific type for the root local,
-            // update the MIR local's declared type so the emitter can
-            // resolve field names for display (e.g. `load_field .index`).
-            if matches!(self.builder.local_ty(root_local), Ty::BuiltinUnknown { .. })
-                && !matches!(tir_root, Ty::BuiltinUnknown { .. } | Ty::Void { .. })
+        let (mut current_place, mut current_ty) =
+            if let Some(&root_local) = self.locals.get(&segments[0]) {
+                let place = Place::Local(root_local);
+                let ty = if let Some(tir_root) = self.path_root_ty(expr_id) {
+                    // If TIR inferred a more specific type for the root local,
+                    // update the MIR local's declared type so the emitter can
+                    // resolve field names for display (e.g. `load_field .index`).
+                    if matches!(self.builder.local_ty(root_local), Ty::BuiltinUnknown { .. })
+                        && !matches!(tir_root, Ty::BuiltinUnknown { .. } | Ty::Void { .. })
+                    {
+                        self.builder.local_decl_mut(root_local).ty = tir_root.clone();
+                    }
+                    tir_root
+                } else {
+                    self.builder.local_ty(root_local)
+                };
+                (place, ty)
+            } else if let Some(cap_idx) = self
+                .capture_indices
+                .as_ref()
+                .and_then(|m| m.get(&segments[0]))
+                .copied()
             {
-                self.builder.local_decl_mut(root_local).ty = tir_root.clone();
-            }
-            tir_root
-        } else {
-            self.builder.local_ty(root_local)
-        };
+                let place = Place::Capture(cap_idx);
+                let ty = self
+                    .path_root_ty(expr_id)
+                    .unwrap_or_else(|| Ty::BuiltinUnknown {
+                        attr: TyAttr::default(),
+                    });
+                (place, ty)
+            } else {
+                // Root not found as a local or capture — emit null.
+                self.builder
+                    .assign(dest, Rvalue::Use(Operand::Constant(Constant::Null)));
+                return;
+            };
 
         for seg in &segments[1..] {
             if let Ty::Class(ref tn, _) = current_ty.clone() {
@@ -3594,20 +3606,36 @@ impl LoweringContext<'_> {
             }
             AstExpr::Path(segments) if segments.len() >= 2 => {
                 // Multi-segment path lvalue: `a.b` or `a.b.c`.
-                // Chain field projections from the root local.
-                let root_local = if let Some(&l) = self.locals.get(&segments[0]) {
-                    l
-                } else {
-                    self.builder.temp(Ty::Null {
-                        attr: TyAttr::default(),
-                    })
-                };
-                let mut current_place = Place::Local(root_local);
-                // Prefer TIR-inferred root type (handles catch variables declared
-                // as BuiltinUnknown) over builder.local_ty.
-                let mut current_ty = self
-                    .path_root_ty(expr_id)
-                    .unwrap_or_else(|| self.builder.local_ty(root_local));
+                // Chain field projections from the root local or capture.
+                let (mut current_place, mut current_ty) =
+                    if let Some(&l) = self.locals.get(&segments[0]) {
+                        let ty = self
+                            .path_root_ty(expr_id)
+                            .unwrap_or_else(|| self.builder.local_ty(l));
+                        (Place::Local(l), ty)
+                    } else if let Some(cap_idx) = self
+                        .capture_indices
+                        .as_ref()
+                        .and_then(|m| m.get(&segments[0]))
+                        .copied()
+                    {
+                        let ty = self
+                            .path_root_ty(expr_id)
+                            .unwrap_or_else(|| Ty::BuiltinUnknown {
+                                attr: TyAttr::default(),
+                            });
+                        (Place::Capture(cap_idx), ty)
+                    } else {
+                        let tmp = self.builder.temp(Ty::Null {
+                            attr: TyAttr::default(),
+                        });
+                        (
+                            Place::Local(tmp),
+                            Ty::Null {
+                                attr: TyAttr::default(),
+                            },
+                        )
+                    };
 
                 for seg in &segments[1..] {
                     if let Ty::Class(ref tn, _) = current_ty.clone() {

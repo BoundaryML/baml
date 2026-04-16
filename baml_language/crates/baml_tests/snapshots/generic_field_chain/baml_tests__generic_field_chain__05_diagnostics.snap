@@ -1,0 +1,35 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] Error: type `T` has no member `name`
+    ╭─[ generic_field_chain.baml:16:56 ]
+    │
+ 16 │ ╭─▶ function test_generic_chain(box: Box<User>) -> string {
+ 17 │ ├─▶   box.value.name
+    │ │                      
+    │ ╰────────────────────── type `T` has no member `name`
+    │     
+    │     Note: Error code: E0001
+────╯
+
+  [type] Error: type `T` has no member `value`
+    ╭─[ generic_field_chain.baml:21:68 ]
+    │
+ 21 │ ╭─▶ function test_nested_generic_chain(box: Box<Box<User>>) -> string {
+ 22 │ ├─▶   box.value.value.name
+    │ │                            
+    │ ╰──────────────────────────── type `T` has no member `value`
+    │     
+    │     Note: Error code: E0001
+────╯
+
+  [type] Error: type `T` has no member `name`
+    ╭─[ generic_field_chain.baml:27:17 ]
+    │
+ 27 │   let get_name = () -> string { box.value.name }
+    │                 ────────────────┬───────────────  
+    │                                 ╰───────────────── type `T` has no member `name`
+    │ 
+    │ Note: Error code: E0001
+────╯

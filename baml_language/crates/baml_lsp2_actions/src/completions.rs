@@ -433,21 +433,23 @@ fn completions_for_field_access(
     token: &baml_compiler_syntax::SyntaxToken,
     offset: TextSize,
 ) -> Vec<Completion> {
-    // Find base name from CST depending on whether token is DOT or WORD.
-    let base_name = if token.kind() == SyntaxKind::DOT {
-        find_word_before_dot(token)
+    // Collect all path segments before the cursor dot.
+    let segments = if token.kind() == SyntaxKind::DOT {
+        find_path_segments_before_dot(token)
     } else {
-        find_base_for_field_access(token)
+        // WORD after a dot — collect segments before the preceding dot.
+        find_path_segments_for_word_after_dot(token)
     };
 
-    let Some(base_name) = base_name else {
+    if segments.is_empty() {
         return Vec::new();
-    };
+    }
 
-    let base = Name::new(&base_name);
-    let resolved = baml_compiler2_tir::resolve::resolve_name_at(db, file, offset, &base);
+    // Resolve root segment type.
+    let root = Name::new(&segments[0]);
+    let resolved = baml_compiler2_tir::resolve::resolve_name_at(db, file, offset, &root);
 
-    let ty = match resolved {
+    let mut ty = match resolved {
         baml_compiler2_tir::resolve::ResolvedName::Item(def)
         | baml_compiler2_tir::resolve::ResolvedName::Builtin(def) => definition_to_ty(db, def),
         baml_compiler2_tir::resolve::ResolvedName::Local {
@@ -457,14 +459,50 @@ fn completions_for_field_access(
         _ => None,
     };
 
+    // Chain through intermediate segments to get the type at the last segment.
+    for seg in &segments[1..] {
+        ty = ty.and_then(|t| resolve_field_type(db, &t, seg));
+    }
+
     ty.map(|t| completions_for_ty_members(db, &t))
         .unwrap_or_default()
 }
 
-/// Find the WORD token immediately before a DOT token in the same parent node.
-fn find_word_before_dot(dot_token: &baml_compiler_syntax::SyntaxToken) -> Option<String> {
-    let parent = dot_token.parent()?;
-    let mut last_word: Option<String> = None;
+/// Resolve the type of a field/member on a given type.
+///
+/// For a `Ty::Class`, looks up resolved class fields and returns the field's type.
+fn resolve_field_type(db: &dyn Db, ty: &Ty, field_name: &str) -> Option<Ty> {
+    match ty {
+        Ty::Class(qn, _) => {
+            let pkg_info_name = qn.package().as_str();
+            let pkg_id = PackageId::new(db, Name::new(pkg_info_name));
+            let pkg = package_items(db, pkg_id);
+
+            let class_def = pkg.lookup_type(qn.namespace(), qn.name());
+            let Definition::Class(class_loc) = class_def? else {
+                return None;
+            };
+
+            let resolved = baml_compiler2_tir::inference::resolve_class_fields(db, class_loc);
+            for (name, field_ty, _) in &resolved.fields {
+                if name.as_str() == field_name {
+                    return Some(field_ty.clone());
+                }
+            }
+            None
+        }
+        _ => None,
+    }
+}
+
+/// Collect all WORD tokens in the parent node up to (not including) the given DOT token.
+///
+/// For `o.inner.` this returns `["o", "inner"]`.
+fn find_path_segments_before_dot(dot_token: &baml_compiler_syntax::SyntaxToken) -> Vec<String> {
+    let Some(parent) = dot_token.parent() else {
+        return Vec::new();
+    };
+    let mut segments = Vec::new();
     for child in parent.children_with_tokens() {
         match &child {
             NodeOrToken::Token(t) => {
@@ -472,33 +510,70 @@ fn find_word_before_dot(dot_token: &baml_compiler_syntax::SyntaxToken) -> Option
                     break;
                 }
                 if t.kind() == SyntaxKind::WORD {
-                    last_word = Some(t.text().to_string());
+                    segments.push(t.text().to_string());
                 }
             }
             NodeOrToken::Node(n) => {
                 if n.text_range().end() <= dot_token.text_range().start() {
-                    let w = n
-                        .descendants_with_tokens()
-                        .filter_map(|d| {
-                            if let NodeOrToken::Token(t) = d {
-                                if t.kind() == SyntaxKind::WORD {
-                                    Some(t.text().to_string())
-                                } else {
-                                    None
-                                }
-                            } else {
-                                None
+                    for d in n.descendants_with_tokens() {
+                        if let NodeOrToken::Token(t) = d {
+                            if t.kind() == SyntaxKind::WORD {
+                                segments.push(t.text().to_string());
                             }
-                        })
-                        .last();
-                    if w.is_some() {
-                        last_word = w;
+                        }
                     }
                 }
             }
         }
     }
-    last_word
+    segments
+}
+
+/// Collect all WORD segments before the dot that precedes the current WORD token.
+///
+/// For `o.inner.na` (cursor at `na`), this returns `["o", "inner"]`.
+fn find_path_segments_for_word_after_dot(token: &baml_compiler_syntax::SyntaxToken) -> Vec<String> {
+    let Some(parent) = token.parent() else {
+        return Vec::new();
+    };
+    // Find the DOT preceding this WORD token.
+    let mut dot_pos: Option<text_size::TextSize> = None;
+    for child in parent.children_with_tokens() {
+        if let NodeOrToken::Token(t) = &child {
+            if t.kind() == SyntaxKind::DOT && t.text_range().end() <= token.text_range().start() {
+                dot_pos = Some(t.text_range().start());
+            }
+        }
+    }
+    let Some(dot_pos) = dot_pos else {
+        return Vec::new();
+    };
+    // Collect all WORD tokens before the dot.
+    let mut segments = Vec::new();
+    for child in parent.children_with_tokens() {
+        match &child {
+            NodeOrToken::Token(t) => {
+                if t.text_range().start() >= dot_pos {
+                    break;
+                }
+                if t.kind() == SyntaxKind::WORD {
+                    segments.push(t.text().to_string());
+                }
+            }
+            NodeOrToken::Node(n) => {
+                if n.text_range().end() <= dot_pos {
+                    for d in n.descendants_with_tokens() {
+                        if let NodeOrToken::Token(t) = d {
+                            if t.kind() == SyntaxKind::WORD {
+                                segments.push(t.text().to_string());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    segments
 }
 
 /// Returns completions for the members of `ty`.
@@ -623,68 +698,6 @@ fn builtin_string_completions() -> Vec<Completion> {
     ]
 }
 
-/// Find the base identifier before the `.` in a field access.
-///
-/// Given a token at position `bar` in `foo.bar`, returns `"foo"`.
-/// Handles both `PATH_EXPR` (where siblings are in the parent) and
-/// `FIELD_ACCESS_EXPR` (where the base is a child node).
-fn find_base_for_field_access(token: &baml_compiler_syntax::SyntaxToken) -> Option<String> {
-    let parent = token.parent()?;
-
-    // Collect all tokens in the parent that come before a DOT that precedes our token.
-    let mut dot_offset: Option<text_size::TextSize> = None;
-
-    for child in parent.children_with_tokens() {
-        if let NodeOrToken::Token(t) = &child {
-            if t.kind() == SyntaxKind::DOT && t.text_range().end() <= token.text_range().start() {
-                dot_offset = Some(t.text_range().start());
-            }
-        }
-    }
-
-    let dot_pos = dot_offset?;
-
-    // Find the last WORD token before the dot.
-    let mut base: Option<String> = None;
-    for child in parent.children_with_tokens() {
-        if let NodeOrToken::Token(t) = &child {
-            if t.kind() == SyntaxKind::WORD && t.text_range().end() <= dot_pos {
-                base = Some(t.text().to_string());
-            }
-        }
-    }
-
-    // Also check child nodes (for FIELD_ACCESS_EXPR where base is a sub-expression).
-    if base.is_none() {
-        for child in parent.children_with_tokens() {
-            if let NodeOrToken::Node(n) = &child {
-                if n.text_range().end() <= dot_pos {
-                    // Take the last WORD token inside this sub-node.
-                    let last_word = n
-                        .descendants_with_tokens()
-                        .filter_map(|d| {
-                            if let NodeOrToken::Token(t) = d {
-                                if t.kind() == SyntaxKind::WORD {
-                                    Some(t)
-                                } else {
-                                    None
-                                }
-                            } else {
-                                None
-                            }
-                        })
-                        .last();
-                    if let Some(w) = last_word {
-                        base = Some(w.text().to_string());
-                    }
-                }
-            }
-        }
-    }
-
-    base
-}
-
 /// Convert a `Definition` to its representative `Ty`.
 ///
 /// Used by field-access completions to determine what fields/variants are
@@ -736,33 +749,56 @@ fn local_variable_ty(
 
     match site {
         baml_compiler2_hir::semantic_index::DefinitionSite::Parameter(param_idx) => {
-            // Get declared type from function signature.
+            // Get declared type from function or lambda signature.
             let item_tree = baml_compiler2_hir::file_item_tree(db, file);
             let scope_id = index.scope_at_offset(at_offset, None);
-            let enclosing_func_scope =
-                index
-                    .ancestor_scopes(scope_id)
-                    .into_iter()
-                    .find(|ancestor_id| {
-                        matches!(
-                            index.scopes[ancestor_id.index() as usize].kind,
-                            ScopeKind::Function
+            let ancestors = index.ancestor_scopes(scope_id);
+
+            // Find the nearest Function or Lambda scope.
+            let enclosing_scope = ancestors.iter().find(|ancestor_id| {
+                matches!(
+                    index.scopes[ancestor_id.index() as usize].kind,
+                    ScopeKind::Function | ScopeKind::Lambda
+                )
+            })?;
+            let enclosing_scope_data = &index.scopes[enclosing_scope.index() as usize];
+
+            match enclosing_scope_data.kind {
+                ScopeKind::Function => {
+                    // Function parameter — look up from function signature.
+                    let func_scope_range = enclosing_scope_data.range;
+                    let (func_local_id, _) = item_tree
+                        .functions
+                        .iter()
+                        .find(|(_, f)| f.span == func_scope_range)?;
+                    let func_loc =
+                        baml_compiler2_hir::loc::FunctionLoc::new(db, file, *func_local_id);
+                    let sig = baml_compiler2_hir::signature::function_signature(db, func_loc);
+                    sig.params.get(param_idx).map(|(_, te)| {
+                        let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
+                        let pkg_id = PackageId::new(db, pkg_info.package);
+                        let pkg = package_items(db, pkg_id);
+                        let mut diags = Vec::new();
+                        baml_compiler2_tir::lower_type_expr::lower_type_expr(
+                            db,
+                            te,
+                            pkg,
+                            &[],
+                            &mut diags,
                         )
-                    })?;
-            let func_scope_range = index.scopes[enclosing_func_scope.index() as usize].range;
-            let (func_local_id, _) = item_tree
-                .functions
-                .iter()
-                .find(|(_, f)| f.span == func_scope_range)?;
-            let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(db, file, *func_local_id);
-            let sig = baml_compiler2_hir::signature::function_signature(db, func_loc);
-            sig.params.get(param_idx).map(|(_, te)| {
-                let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
-                let pkg_id = PackageId::new(db, pkg_info.package);
-                let pkg = package_items(db, pkg_id);
-                let mut diags = Vec::new();
-                baml_compiler2_tir::lower_type_expr::lower_type_expr(db, te, pkg, &[], &mut diags)
-            })
+                    })
+                }
+                ScopeKind::Lambda => {
+                    // Lambda parameter — use TIR inference for the lambda scope
+                    // to get the inferred param type (handles both annotated and
+                    // unannotated params like those in `.map((item) -> { ... })`).
+                    let lambda_scope_id = index.scope_ids[enclosing_scope.index() as usize];
+                    let inference =
+                        baml_compiler2_tir::inference::infer_scope_types(db, lambda_scope_id);
+                    inference.param_type(param_idx).cloned()
+                }
+                _ => None,
+            }
         }
         baml_compiler2_hir::semantic_index::DefinitionSite::Statement(_) => {
             // Search all scopes for the binding type. This handles variables

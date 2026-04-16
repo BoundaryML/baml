@@ -1,0 +1,43 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== TIR2 ===
+class user.Box {
+  value: T
+}
+class user.User {
+  name: string
+  age: int
+}
+function user.test_generic_chain(box: user.Box) -> string throws never {
+  { : unknown
+    box.value.name : unknown
+  }
+  !! 452..469: type `T` has no member `name`
+}
+function user.test_nested_generic_chain(box: user.Box) -> string throws never {
+  { : unknown
+    box.value.value.name : unknown
+  }
+  !! 592..615: type `T` has no member `value`
+}
+function user.test_generic_capture(box: user.Box) -> string throws never {
+  { : unknown
+    let get_name = : () -> unknown
+      () -> string { ... } : () -> unknown
+        {
+          box.value.name
+        }
+    get_name() : unknown
+  }
+  !! 775..807: type `T` has no member `name`
+}
+lambda user.test_generic_capture {
+}
+class user.Box$stream {
+  value: null | unknown
+}
+class user.User$stream {
+  name: null | string
+  age: null | int
+}

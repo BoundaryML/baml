@@ -662,22 +662,27 @@ fn build_resolution_map(
                     }
                 } else {
                     // Multi-segment path (e.g. `Status.Active`, `obj.field`, `env.get`).
-                    // The expr_span covers the whole `a.b.c` expression.
-                    // Segments after the root (segments[1..]) are member accesses — mark as Property.
+                    // Intermediate segments (between root and last) are Property.
+                    // The final segment gets a type-aware classification from the
+                    // expression type (e.g. EnumMember for `Status.Active`).
                     if let Some(seg_spans) = source_map.path_segment_spans.get(&expr_id) {
-                        for span in seg_spans.iter().skip(1) {
+                        let last_idx = seg_spans.len().saturating_sub(1);
+                        for (i, span) in seg_spans.iter().enumerate().skip(1) {
+                            if i == last_idx {
+                                continue;
+                            }
                             if !span.is_empty() {
                                 map.insert(*span, SemanticTokenType::Property);
                             }
                         }
-                    }
-                    // Also classify the whole expression for type-based highlighting (e.g. enum variant).
-                    let span = source_map.expr_span(expr_id);
-                    if !span.is_empty() {
-                        if let Some(ty) = inference.expression_type(expr_id) {
-                            if let Some(token_type) = ty_to_token_type(ty) {
-                                // Only insert the whole-expression span if not overridden per-segment.
-                                map.entry(span).or_insert(token_type);
+                        // Final segment → type-aware classification
+                        if let Some(final_span) = seg_spans.last() {
+                            if !final_span.is_empty() {
+                                let token_type = inference
+                                    .expression_type(expr_id)
+                                    .and_then(ty_to_token_type)
+                                    .unwrap_or(SemanticTokenType::Property);
+                                map.insert(*final_span, token_type);
                             }
                         }
                     }

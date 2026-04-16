@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 14435
 ---
 === MIR2 ===
 fn user.test_apply_twice_inferred() -> int {
@@ -457,7 +458,7 @@ fn .<lambda(test_generic_apply_inferred, 1)>(x: null) -> null {
     let _1: null // x // param
 
     bb0: {
-        _0 = copy _1 * const 2_i64;
+        _0 = const 42_i64;
         goto -> bb1;
     }
 
@@ -1144,9 +1145,9 @@ fn .<lambda(test_map_multi_statement, 0)>(x: null) -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: null // x // param
-    let _2: void // doubled
+    let _2: int // doubled
     let _3: int // offset
-    let _4: void
+    let _4: int
     let _5: int
 
     bb0: {
