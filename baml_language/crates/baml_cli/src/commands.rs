@@ -1,5 +1,6 @@
-// TODO: This file has been simplified to only support the LSP command for now.
-// Other commands that depend on baml_runtime are commented out.
+// Wires up the BAML CLI subcommands: Run, Describe, Generate, Grep, Test,
+// Format, and LanguageServer. `baml run` is the top-level entry for
+// standalone execution.
 
 use anyhow::Result;
 use clap::{CommandFactory, Parser, Subcommand};
@@ -68,6 +69,9 @@ pub(crate) enum Commands {
     #[command(about = "Run BAML tests")]
     Test(crate::test_command::TestArgs),
 
+    #[command(about = "Run a BAML function or script", disable_help_flag = true)]
+    Run(crate::run_command::RunArgs),
+
     #[command(about = "Starts a language server", name = "lsp")]
     LanguageServer(crate::lsp::LanguageServerArgs),
     // #[command(about = "Start an interactive REPL for BAML expressions", hide = true)]
@@ -120,6 +124,7 @@ impl RuntimeCli {
 
     pub fn run(&self) -> Result<crate::ExitCode> {
         match &self.command {
+            Commands::Run(args) => args.run(),
             Commands::Describe(args) => args.run(),
             Commands::Generate(args) => args.run(),
             Commands::Grep(args) => args.run(),

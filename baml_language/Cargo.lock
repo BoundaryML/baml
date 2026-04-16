@@ -1071,17 +1071,23 @@ dependencies = [
  "baml_lsp2_actions",
  "baml_lsp_server",
  "baml_project",
+ "baml_tests",
  "baml_workspace",
  "bex_engine",
+ "bex_events",
+ "bex_events_native",
  "bex_vm_types",
  "clap",
  "clap-cargo",
  "ctrlc",
  "regex",
  "serde_json",
+ "strsim",
  "sys_native",
+ "tempfile",
  "text-size",
  "tokio",
+ "toml",
 ]
 
 [[package]]

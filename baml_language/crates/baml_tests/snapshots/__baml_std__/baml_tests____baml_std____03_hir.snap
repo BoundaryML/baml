@@ -380,6 +380,7 @@ class baml.stream.StreamNoYield {
 }
 
 --- <builtin>/baml/ns_sys/sys.baml ---
+function baml.sys.argv() -> string[]  [builtin]
 function baml.sys.now_ms() -> int  [builtin]
 function baml.sys.panic(message: string) -> never  [builtin]
 function baml.sys.shell(command: string) -> string  [builtin]

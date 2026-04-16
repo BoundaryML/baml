@@ -87,6 +87,7 @@ namespace baml.stream:
   class StreamFinished { methods: [] }
   class StreamNoYield { methods: [] }
 namespace baml.sys:
+  function argv
   function now_ms
   function panic
   function shell
