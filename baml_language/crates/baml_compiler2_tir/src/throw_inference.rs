@@ -11,7 +11,7 @@ use baml_base::Name;
 use baml_compiler2_ast::{Expr, ExprBody, Literal, Pattern, TypeExpr};
 use baml_compiler2_hir::{
     contributions::Definition,
-    package::{PackageId, PackageItems, package_dependencies, package_items},
+    package::{PackageId, PackageItems, package_dependencies},
 };
 
 use crate::{
@@ -63,7 +63,7 @@ pub fn function_throw_sets<'db>(
     db: &'db dyn crate::Db,
     package_id: PackageId<'db>,
 ) -> FunctionThrowSets {
-    let pkg_items = package_items(db, package_id);
+    let pkg_items = baml_compiler2_ppir::package_items(db, package_id);
     // Load dependency interfaces for cross-package throw lookup
     let dep_interfaces: Vec<(Name, &crate::package_interface::PackageInterface)> =
         package_dependencies(db, package_id)
@@ -90,14 +90,14 @@ pub fn function_throw_sets<'db>(
             };
 
             let key = function_key(db, *func_loc, short_name);
-            let sig = baml_compiler2_hir::signature::function_signature(db, *func_loc);
-            let body = baml_compiler2_hir::body::function_body(db, *func_loc);
+            let sig = baml_compiler2_ppir::function_signature(db, *func_loc);
+            let body = baml_compiler2_ppir::function_body(db, *func_loc);
             let func_ns = baml_compiler2_hir::file_package::file_package(db, func_loc.file(db))
                 .namespace_path;
 
             let declared_throws = sig.throws.as_ref().map(|te| {
                 let mut diags = Vec::new();
-                let item_tree = baml_compiler2_hir::file_item_tree(db, func_loc.file(db));
+                let item_tree = baml_compiler2_ppir::file_item_tree(db, func_loc.file(db));
                 let func_data = &item_tree[func_loc.id(db)];
                 let lowered = lower_type_expr_in_ns(
                     db,
@@ -133,7 +133,7 @@ pub fn function_throw_sets<'db>(
                 continue;
             };
             let file = class_loc.file(db);
-            let item_tree = baml_compiler2_hir::file_item_tree(db, file);
+            let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
             let class_data = &item_tree[class_loc.id(db)];
 
             for &method_id in &class_data.methods {
@@ -144,8 +144,8 @@ pub fn function_throw_sets<'db>(
                 let method_short = Name::new(format!("{class_name}.{method_name}"));
                 let key = function_key(db, func_loc, &method_short);
 
-                let sig = baml_compiler2_hir::signature::function_signature(db, func_loc);
-                let body = baml_compiler2_hir::body::function_body(db, func_loc);
+                let sig = baml_compiler2_ppir::function_signature(db, func_loc);
+                let body = baml_compiler2_ppir::function_body(db, func_loc);
 
                 let method_ns =
                     baml_compiler2_hir::file_package::file_package(db, file).namespace_path;
@@ -309,7 +309,7 @@ pub fn collect_direct_throws<'db>(
 fn fact_display_name(fact: &Ty) -> String {
     match fact {
         Ty::Primitive(p, _) => p.to_string(),
-        Ty::Class(qn, _) | Ty::Enum(qn, _) | Ty::TypeAlias(qn, _) => qn.to_string(),
+        Ty::Class(qn, _, _) | Ty::Enum(qn, _) | Ty::TypeAlias(qn, _) => qn.to_string(),
         Ty::EnumVariant(qn, variant, _) => format!("{qn}.{variant}"),
         Ty::Unknown { .. } => "unknown".to_string(),
         _ => format!("{fact}"),
@@ -361,7 +361,7 @@ fn throw_fact_from_expr<'db>(
             if let Some(def) = pkg_items.lookup_type(ns_context, name) {
                 match def {
                     Definition::Class(_) => {
-                        Ty::Class(qualify_def(db, def, name), TyAttr::default())
+                        Ty::Class(qualify_def(db, def, name), vec![], TyAttr::default())
                     }
                     Definition::Enum(_) => Ty::Enum(qualify_def(db, def, name), TyAttr::default()),
                     _ => Ty::Unknown {
@@ -437,7 +437,9 @@ fn resolve_path_to_ty<'db>(
     };
     if let Some(def) = def {
         return match def {
-            Definition::Class(_) => Ty::Class(qualify_def(db, def, name), TyAttr::default()),
+            Definition::Class(_) => {
+                Ty::Class(qualify_def(db, def, name), vec![], TyAttr::default())
+            }
             Definition::Enum(_) => Ty::Enum(qualify_def(db, def, name), TyAttr::default()),
             Definition::TypeAlias(_) => {
                 Ty::TypeAlias(qualify_def(db, def, name), TyAttr::default())

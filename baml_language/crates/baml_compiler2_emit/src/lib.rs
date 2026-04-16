@@ -18,7 +18,7 @@ use baml_compiler2_hir::{
     contributions::Definition,
     file_package::file_package,
     loc::{FunctionLoc, LetLoc},
-    package::{PackageId, package_items},
+    package::PackageId,
 };
 use baml_compiler2_mir::{
     BuiltinKind, MirFunctionKind, ResolvedAliases, def_to_item_ref, lower_function, lower_let_body,
@@ -269,7 +269,7 @@ pub fn generate_project_bytecode_with_opt(
         let item_tree = file_item_tree(db, *file);
         let pkg_info = file_package(db, *file);
         let pkg_id = PackageId::new(db, pkg_info.package.clone());
-        let pkg_items = package_items(db, pkg_id);
+        let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
         let cache = &alias_caches[&pkg_info.package];
         for class_data in item_tree.classes.values() {
             // Build fully-qualified name: "user.MyClass" or "baml.ns.MyClass"
@@ -461,6 +461,9 @@ pub fn generate_project_bytecode_with_opt(
                         return_type: baml_type::Ty::Null {
                             attr: baml_type::TyAttr::default(),
                         },
+                        stream_return_type: baml_type::Ty::Null {
+                            attr: baml_type::TyAttr::default(),
+                        },
                         param_names: Vec::new(),
                         param_types: Vec::new(),
                         throws_type: None,
@@ -481,6 +484,9 @@ pub fn generate_project_bytecode_with_opt(
                     block_notifications: Vec::new(),
                     viz_nodes: Vec::new(),
                     return_type: baml_type::Ty::Null {
+                        attr: baml_type::TyAttr::default(),
+                    },
+                    stream_return_type: baml_type::Ty::Null {
                         attr: baml_type::TyAttr::default(),
                     },
                     param_names: Vec::new(),
@@ -505,6 +511,16 @@ pub fn generate_project_bytecode_with_opt(
             if let Some(baml_compiler2_ast::DeclarativeMeta::Llm(llm_meta)) =
                 &func_data.declarative_meta
             {
+                // Look up the PPIR's pre-computed stream-expanded return type.
+                let expansion = baml_compiler2_ppir::ppir_expansion_items(db, *file);
+                for (name, stream_te) in expansion.stream_return_types(db) {
+                    if *name == fq_name {
+                        compiled_fn.stream_return_type =
+                            compute_stream_return_type(db, *file, stream_te, cache_pass4);
+                        break;
+                    }
+                }
+
                 if let (Some(client), Some(prompt)) = (&llm_meta.client, &llm_meta.prompt) {
                     compiled_fn.body_meta = Some(FunctionMeta::Llm {
                         prompt_template: prompt.text.clone(),
@@ -693,6 +709,9 @@ pub fn generate_project_bytecode_with_opt(
                 return_type: baml_type::Ty::Null {
                     attr: baml_type::TyAttr::default(),
                 },
+                stream_return_type: baml_type::Ty::Null {
+                    attr: baml_type::TyAttr::default(),
+                },
                 param_names: vec!["registry".to_string()],
                 param_types: Vec::new(), // type not needed for chainer dispatch
                 throws_type: None,
@@ -878,7 +897,7 @@ fn compute_function_metadata_from_item_tree(
 
     let pkg_info = file_package(db, file);
     let pkg_id = PackageId::new(db, pkg_info.package);
-    let pkg_items = package_items(db, pkg_id);
+    let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
     let null_ty = || baml_type::Ty::Null {
         attr: baml_type::TyAttr::default(),
     };
@@ -913,6 +932,37 @@ fn compute_function_metadata_from_item_tree(
         .unwrap_or_else(null_ty);
 
     (param_names, param_types, return_type)
+}
+
+/// Lower a PPIR-computed stream-expanded `TypeExpr` to `baml_type::Ty`.
+///
+/// Reuses the same TIR lowering + MIR conversion pipeline as
+/// `compute_function_metadata_from_item_tree`.
+fn compute_stream_return_type(
+    db: &dyn baml_compiler2_mir::Db,
+    file: baml_base::SourceFile,
+    type_expr: &baml_compiler2_ast::TypeExpr,
+    cache: &ResolvedAliases,
+) -> baml_type::Ty {
+    use baml_compiler2_hir::{file_package::file_package, package::PackageId};
+
+    let pkg_info = file_package(db, file);
+    let pkg_id = PackageId::new(db, pkg_info.package.clone());
+    let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
+
+    let mut diags = Vec::new();
+    let tir_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr(
+        db,
+        type_expr,
+        pkg_items,
+        &pkg_info.namespace_path,
+        &mut diags,
+    );
+    // Diagnostics are intentionally discarded here — same as
+    // compute_function_metadata_from_item_tree. Type errors in stream-expanded
+    // types are reported upstream by TIR's infer_scope_types via
+    // builder.report_at_span().
+    baml_compiler2_mir::convert_tir2_ty(&tir_ty, cache)
 }
 
 /// Build a table of byte offsets where each line starts in the source text.
@@ -1221,6 +1271,9 @@ fn compile_init_function<'db>(
                     return_type: baml_type::Ty::Null {
                         attr: baml_type::TyAttr::default(),
                     },
+                    stream_return_type: baml_type::Ty::Null {
+                        attr: baml_type::TyAttr::default(),
+                    },
                     param_names: Vec::new(),
                     param_types: Vec::new(),
                     throws_type: None,
@@ -1287,6 +1340,9 @@ fn compile_init_function<'db>(
         block_notifications: Vec::new(),
         viz_nodes: Vec::new(),
         return_type: baml_type::Ty::Null {
+            attr: baml_type::TyAttr::default(),
+        },
+        stream_return_type: baml_type::Ty::Null {
             attr: baml_type::TyAttr::default(),
         },
         param_names: Vec::new(),

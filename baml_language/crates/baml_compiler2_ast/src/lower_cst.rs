@@ -544,6 +544,100 @@ pub(crate) fn synthesize_llm_parse_call(
     (body, source_map)
 }
 
+/// Synthesize a `baml.llm.__make_stream(sse, "FunctionName", CLIENT)` call.
+///
+/// Used by the PPIR to generate `$parse_stream` companion function bodies.
+pub fn synthesize_llm_make_stream_call(
+    function_name: &str,
+    client_name: Option<&str>,
+    span: text_size::TextRange,
+) -> (crate::ast::ExprBody, crate::ast::AstSourceMap) {
+    use la_arena::Arena;
+
+    use crate::ast::{AstSourceMap, Expr, ExprBody, Literal};
+
+    let mut exprs = Arena::new();
+    let mut expr_spans = Arena::new();
+
+    let mut alloc = |expr: Expr| -> crate::ast::ExprId {
+        let id = exprs.alloc(expr);
+        expr_spans.alloc(span);
+        id
+    };
+
+    // 1. `sse` parameter reference
+    let sse_expr = alloc(Expr::Path(vec![Name::new("sse")]));
+
+    // 2. Function name literal: "FunctionName"
+    let fn_name_expr = alloc(Expr::Literal(Literal::String(function_name.to_string())));
+
+    // 3. Callee: baml.llm.__make_stream
+    let callee = alloc(Expr::Path(vec![
+        Name::new("baml"),
+        Name::new("llm"),
+        Name::new("__make_stream"),
+    ]));
+
+    // 4. Client argument (same logic as synthesize_llm_builtin_call)
+    let client_arg = match client_name {
+        Some(name) if name.contains('/') => {
+            let name_lit = alloc(Expr::Literal(Literal::String(name.to_string())));
+            let ct_path = alloc(Expr::Path(vec![
+                Name::new("baml"),
+                Name::new("llm"),
+                Name::new("ClientType"),
+            ]));
+            let ct_variant = alloc(Expr::FieldAccess {
+                base: ct_path,
+                field: Name::new("Primitive"),
+            });
+            let sub = alloc(Expr::Array { elements: vec![] });
+            let retry = alloc(Expr::Null);
+            let counter = alloc(Expr::Literal(Literal::Int(0)));
+            alloc(Expr::Object {
+                type_name: Some(Name::new("baml.llm.Client")),
+                fields: vec![
+                    (Name::new("name"), name_lit),
+                    (Name::new("client_type"), ct_variant),
+                    (Name::new("sub_clients"), sub),
+                    (Name::new("retry"), retry),
+                    (Name::new("counter"), counter),
+                ],
+                spreads: vec![],
+            })
+        }
+        Some(name) => alloc(Expr::Path(vec![Name::new(name)])),
+        None => alloc(Expr::Null),
+    };
+
+    let call = alloc(Expr::Call {
+        callee,
+        args: vec![sse_expr, fn_name_expr, client_arg],
+    });
+
+    let body = ExprBody {
+        exprs,
+        stmts: Arena::new(),
+        patterns: Arena::new(),
+        match_arms: Arena::new(),
+        catch_arms: Arena::new(),
+        type_annotations: Arena::new(),
+        root_expr: Some(call),
+    };
+
+    let source_map = AstSourceMap {
+        expr_spans,
+        stmt_spans: Arena::new(),
+        pattern_spans: Arena::new(),
+        match_arm_spans: Arena::new(),
+        type_annotation_spans: Arena::new(),
+        catch_arm_spans: Arena::new(),
+        field_access_member_spans: std::collections::HashMap::new(),
+    };
+
+    (body, source_map)
+}
+
 fn lower_raw_prompt(raw_string: &ast::RawStringLiteral) -> RawPrompt {
     use baml_compiler_syntax::{
         SyntaxKind,
@@ -982,6 +1076,7 @@ fn synthesize_init_test_function(
         type_expr: Some(SpannedTypeExpr {
             expr: crate::ast::TypeExpr::Path {
                 segments: vec![Name::new("testing"), Name::new("TestCollector")],
+                generic_args: vec![],
                 attrs: vec![],
             },
             span,
@@ -1085,6 +1180,7 @@ fn synthesize_register_call(
                 type_expr: Some(SpannedTypeExpr {
                     expr: crate::ast::TypeExpr::Path {
                         segments: vec![Name::new("testing"), Name::new("TestCollector")],
+                        generic_args: vec![],
                         attrs: vec![],
                     },
                     span,

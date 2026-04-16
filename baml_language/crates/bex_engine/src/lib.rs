@@ -629,6 +629,7 @@ impl BexEngine {
                             prompt_template: prompt_template.clone(),
                             client_name: client.clone(),
                             return_type: func.return_type.clone(),
+                            stream_return_type: func.stream_return_type.clone(),
                         },
                     );
                 }

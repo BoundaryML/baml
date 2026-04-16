@@ -100,6 +100,7 @@ fn make_llm_companion(
     let return_type = SpannedTypeExpr {
         expr: TypeExpr::Path {
             segments: return_type_path.iter().map(Name::new).collect(),
+            generic_args: vec![],
             attrs: vec![],
         },
         span: parent.span,

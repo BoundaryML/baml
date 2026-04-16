@@ -17,6 +17,9 @@ function user.TypeBuilderFn$parse(json: string) -> user.Resume throws never {
 class user.Resume {
   name: string
 }
+function user.TypeBuilderFn$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<user.Resume, null | user.Resume$stream> throws never {
+  baml.llm.__make_stream(sse, "TypeBuilderFn", baml.llm.Client { name: "openai/gpt-4o-mini", client_type: baml.llm.ClientType.Primitive, sub_clients: [], retry: null, counter: 0 }) : unknown
+}
 class user.Resume$stream {
   name: null | string
 }

@@ -19,7 +19,7 @@ use crate::sap_model::{
 impl crate::sap_model::TypeIdent for TypeName {}
 
 #[derive(thiserror::Error, Debug)]
-pub enum ConvertError<'t> {
+pub enum ConvertError {
     #[error("Failed to parse float: {0}")]
     ParseFloat(#[from] std::num::ParseFloatError),
     #[error("Unknown media kind")]
@@ -27,7 +27,7 @@ pub enum ConvertError<'t> {
     #[error("Float literals cannot be parsed")]
     FloatLiteral,
     #[error("Non-parsable type: {0:?}")]
-    NonParsableType(&'t baml_type::Ty),
+    NonParsableType(Box<baml_type::Ty>),
     #[error("Unknown class: {0}")]
     UnknownClass(baml_type::TypeName),
     #[error("Unknown enum: {0}")]
@@ -147,8 +147,24 @@ impl TypeCtx {
         }
     }
 
+    pub fn from_sys_op_context<E: Send + Sync + 'static>(
+        ctx: &::sys_types::SysOpContext<E>,
+    ) -> Self {
+        let type_alias_definitions = ctx
+            .type_alias_definitions
+            .iter()
+            .map(|(name, ty)| (name.clone(), ty.clone()))
+            .collect();
+
+        Self::new(
+            &ctx.class_definitions,
+            ctx.enum_definitions.clone(),
+            &type_alias_definitions,
+        )
+    }
+
     /// Constructs a full [`TypeRefDb`] from the given context with all types converted.
-    pub fn build_db(&self) -> Result<TypeRefDb<'_, TypeName>, ConvertError<'_>> {
+    pub fn build_db(&self) -> Result<TypeRefDb<'_, TypeName>, ConvertError> {
         let mut db = TypeRefDb::new();
         for (name, cls) in &self.class_definitions {
             if self.sap_parseable.get(name).is_some_and(|v| !v) {
@@ -178,7 +194,7 @@ impl TypeCtx {
         &'a self,
         name: &baml_type::TypeName,
         class_def: &'a ::sys_types::ClassDefinition,
-    ) -> Result<ClassTy<'a, TypeName>, ConvertError<'a>> {
+    ) -> Result<ClassTy<'a, TypeName>, ConvertError> {
         let fields = class_def
             .fields
             .iter()
@@ -250,7 +266,7 @@ impl TypeCtx {
         name: &baml_type::TypeName,
         alias_ty: &'a baml_type::Ty,
         recursion_depth: usize,
-    ) -> Result<TyResolved<'a, TypeName>, ConvertError<'a>> {
+    ) -> Result<TyResolved<'a, TypeName>, ConvertError> {
         if recursion_depth > 16 {
             return Err(ConvertError::RecursionDepthExceeded("type alias"));
         }
@@ -294,7 +310,7 @@ impl TypeCtx {
     pub fn convert_ty<'a>(
         &'a self,
         ty: &'a baml_type::Ty,
-    ) -> Result<AnnotatedTy<'a, TypeName>, ConvertError<'a>> {
+    ) -> Result<AnnotatedTy<'a, TypeName>, ConvertError> {
         let ty = match ty {
             baml_type::Ty::Int { attr } => TyWithMeta::new(
                 sap_model::Ty::Resolved(TyResolved::Int(IntTy)),
@@ -350,7 +366,7 @@ impl TypeCtx {
             ),
             baml_type::Ty::Class(type_name, attr) => {
                 if self.sap_parseable.get(type_name).is_some_and(|v| !v) {
-                    return Err(ConvertError::NonParsableType(ty));
+                    return Err(ConvertError::NonParsableType(Box::new(ty.clone())));
                 }
                 TyWithMeta::new(
                     // currently [`ClassDefinition`] does not have attributes attached to it.
@@ -442,7 +458,7 @@ impl TypeCtx {
             }
             baml_type::Ty::TypeAlias(type_name, attr) => {
                 if self.sap_parseable.get(type_name).is_some_and(|v| !v) {
-                    return Err(ConvertError::NonParsableType(ty));
+                    return Err(ConvertError::NonParsableType(Box::new(ty.clone())));
                 }
                 // if it hasn't already, we flatten type aliases:
                 // with `type A = B; type B = C; class C { ... }`,
@@ -488,7 +504,7 @@ impl TypeCtx {
             | baml_type::Ty::WatchAccessor(_, _)
             | baml_type::Ty::BuiltinUnknown { .. }
             | baml_type::Ty::Future(_, _)) => {
-                return Err(ConvertError::NonParsableType(unparsable));
+                return Err(ConvertError::NonParsableType(Box::new(unparsable.clone())));
             }
         };
         Ok(ty)
@@ -515,7 +531,7 @@ impl TypeCtx {
         &'a self,
         field_type: &'a ::baml_type::Ty,
         recursion_depth: usize,
-    ) -> Result<(AttrLiteral<'a, TypeName>, AttrLiteral<'a, TypeName>), ConvertError<'a>> {
+    ) -> Result<(AttrLiteral<'a, TypeName>, AttrLiteral<'a, TypeName>), ConvertError> {
         if recursion_depth > 16 {
             return Err(ConvertError::RecursionDepthExceeded(
                 "class field attribute derivation",
@@ -566,7 +582,7 @@ impl TypeCtx {
             | ::baml_type::Ty::WatchAccessor(_, _)
             | ::baml_type::Ty::BuiltinUnknown { .. }
             | ::baml_type::Ty::Future(_, _)) => {
-                return Err(ConvertError::NonParsableType(unparsable));
+                return Err(ConvertError::NonParsableType(Box::new(unparsable.clone())));
             }
         };
         Ok(field_attrs)
@@ -579,7 +595,7 @@ impl TypeCtx {
 )]
 fn convert_ty_attrs(
     attrs: &baml_type::TyAttr,
-) -> Result<TypeAnnotations<'static, TypeName>, ConvertError<'static>> {
+) -> Result<TypeAnnotations<'static, TypeName>, ConvertError> {
     let in_progress = match attrs.sap_pending_never {
         TyAttrValue::Set => Some(AttrLiteral::Never),
         TyAttrValue::Unset => None,

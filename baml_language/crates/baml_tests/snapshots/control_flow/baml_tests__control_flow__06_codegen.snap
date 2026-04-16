@@ -111,6 +111,14 @@ function user.LlmFunction$parse(json: string) -> string {
     return
 }
 
+function user.LlmFunction$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream {
+    load_var sse
+    load_const "LlmFunction"
+    load_global user.TestClient
+    call baml.llm.parse
+    return
+}
+
 function user.LlmFunction$render_prompt(input: string) -> baml.llm.PromptAst {
     load_global user.TestClient
     load_const "LlmFunction"

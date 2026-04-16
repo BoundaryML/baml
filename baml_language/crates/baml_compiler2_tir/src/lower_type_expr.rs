@@ -50,7 +50,11 @@ pub fn lower_type_expr_in_ns(
     diagnostics: &mut Vec<TirTypeError>,
 ) -> Ty {
     match type_expr {
-        TypeExpr::Path { segments, .. } => {
+        TypeExpr::Path {
+            segments,
+            generic_args,
+            ..
+        } => {
             let item = segments.last().expect("non-empty path");
             let seg_ns = &segments[..segments.len() - 1];
             // When we have a namespace context, try the qualified path first.
@@ -83,11 +87,77 @@ pub fn lower_type_expr_in_ns(
             if let Some(def) = resolved {
                 let short = segments.last().expect("non-empty path");
                 match def {
-                    Definition::Class(_) => {
-                        Ty::Class(qualify_def(db, def, short), TyAttr::default())
+                    Definition::Class(class_loc) => {
+                        // Collect and lower generic args, storing them in Ty::Class.
+                        let lowered_args: Vec<Ty> = generic_args
+                            .iter()
+                            .map(|ga| {
+                                lower_type_expr_in_ns(
+                                    db,
+                                    ga,
+                                    package_items,
+                                    ns_context,
+                                    generic_params,
+                                    diagnostics,
+                                )
+                            })
+                            .collect();
+
+                        // Validate arity against the class's declared generic params.
+                        let file = class_loc.file(db);
+                        let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
+                        let class_data = &item_tree[class_loc.id(db)];
+                        let expected = class_data.generic_params.len();
+                        let got = lowered_args.len();
+
+                        if got != expected {
+                            diagnostics.push(TirTypeError::WrongNumberOfTypeArgs {
+                                class_name: short.clone(),
+                                expected,
+                                got,
+                            });
+                        }
+
+                        Ty::Class(qualify_def(db, def, short), lowered_args, TyAttr::default())
                     }
-                    Definition::Enum(_) => Ty::Enum(qualify_def(db, def, short), TyAttr::default()),
+                    Definition::Enum(_) => {
+                        // Enums are not generic — validate args and emit a diagnostic if any were supplied.
+                        for ga in generic_args {
+                            let _ = lower_type_expr_in_ns(
+                                db,
+                                ga,
+                                package_items,
+                                ns_context,
+                                generic_params,
+                                diagnostics,
+                            );
+                        }
+                        if !generic_args.is_empty() {
+                            diagnostics.push(TirTypeError::TypeIsNotGeneric {
+                                type_name: short.clone(),
+                                kind: "enum",
+                            });
+                        }
+                        Ty::Enum(qualify_def(db, def, short), TyAttr::default())
+                    }
                     Definition::TypeAlias(_) => {
+                        // Type aliases are not generic — validate args and emit a diagnostic if any were supplied.
+                        for ga in generic_args {
+                            let _ = lower_type_expr_in_ns(
+                                db,
+                                ga,
+                                package_items,
+                                ns_context,
+                                generic_params,
+                                diagnostics,
+                            );
+                        }
+                        if !generic_args.is_empty() {
+                            diagnostics.push(TirTypeError::TypeIsNotGeneric {
+                                type_name: short.clone(),
+                                kind: "type alias",
+                            });
+                        }
                         Ty::TypeAlias(qualify_def(db, def, short), TyAttr::default())
                     }
                     // Let bindings are values, not types — produce Unknown in a type position.

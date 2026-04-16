@@ -15,8 +15,17 @@ use baml_compiler2_ast::ast::{
 
 use crate::types::{
     BamlType, BuiltinPipeline, NativeBuiltin, NativeClassDef, NativeClassField, Param, Receiver,
-    VmUsage,
+    ReceiverType, VmUsage,
 };
+
+/// Convert a byte offset in source text to a 1-based `(line, column)` pair.
+fn offset_to_line_col(source: &str, offset: u32) -> (usize, usize) {
+    let offset = (offset as usize).min(source.len());
+    let prefix = &source[..offset];
+    let line = prefix.matches('\n').count() + 1;
+    let col = offset - prefix.rfind('\n').map_or(0, |p| p + 1) + 1;
+    (line, col)
+}
 
 /// Returned when a builtin `.baml` file has parse errors or HIR lowering diagnostics.
 pub struct ExtractNativeBuiltinsError {
@@ -61,12 +70,27 @@ pub fn extract_native_builtins()
         .filter(|f| f.package == baml_builtins2::PACKAGE_BAML)
     {
         let path = builtin_file.virtual_path();
+        // Real filesystem path for diagnostic messages (clickable in editors).
+        let diag_path = format!(
+            "{}/{}/{}",
+            baml_builtins2::BAML_STD_DIR,
+            builtin_file.package,
+            builtin_file.relative_path
+        );
         // Lex and parse into a lossless CST.
         let tokens = baml_compiler_lexer::lex_lossless(builtin_file.contents, FileId::new(0));
         let (green, errors) = baml_compiler_parser::parse_file(&tokens);
         for e in &errors {
             let d = e.to_diagnostic();
-            diagnostic_lines.push(format!("  {path}: [{}] {}", d.id.code(), d.message));
+            let location = d
+                .primary_span()
+                .map(|span| {
+                    let (line, col) =
+                        offset_to_line_col(builtin_file.contents, span.range.start().into());
+                    format!("{diag_path}:{line}:{col}")
+                })
+                .unwrap_or_else(|| diag_path.clone());
+            diagnostic_lines.push(format!("  {location}: [{}] {}", d.id.code(), d.message));
         }
         if !errors.is_empty() {
             continue;
@@ -77,7 +101,15 @@ pub fn extract_native_builtins()
         let (items, diags) = baml_compiler2_ast::lower_file(&cst_root);
         for ld in &diags {
             let d = ld.to_diagnostic(FileId::new(0));
-            diagnostic_lines.push(format!("  {path}: [{}] {}", d.id.code(), d.message));
+            let location = d
+                .primary_span()
+                .map(|span| {
+                    let (line, col) =
+                        offset_to_line_col(builtin_file.contents, span.range.start().into());
+                    format!("{diag_path}:{line}:{col}")
+                })
+                .unwrap_or_else(|| diag_path.clone());
+            diagnostic_lines.push(format!("  {location}: [{}] {}", d.id.code(), d.message));
         }
         if !diags.is_empty() {
             continue;
@@ -217,16 +249,25 @@ fn extract_from_class(
             vec![]
         };
 
-        let (params, receiver) = if has_self {
-            let params = extract_params_skip_self(method, &all_generics);
-            let receiver = Some(Receiver {
-                class_name: class_name.to_string(),
-                class_generics: class_generics.clone(),
-                is_mut,
-            });
-            (params, receiver)
+        // Always set receiver for class methods — even static methods (no `self`)
+        // need it for dispatch routing. The runtime path is
+        // "baml.llm.StreamCache.new" which dispatches via class name.
+        let receiver_type = if !has_self {
+            ReceiverType::Static
+        } else if is_mut {
+            ReceiverType::MutSelf
         } else {
-            let params: Vec<Param> = method
+            ReceiverType::RefSelf
+        };
+        let receiver = Some(Receiver {
+            class_name: class_name.to_string(),
+            class_generics: class_generics.clone(),
+            receiver_type,
+        });
+        let params = if has_self {
+            extract_params_skip_self(method, &all_generics)
+        } else {
+            method
                 .params
                 .iter()
                 .map(|p| Param {
@@ -237,8 +278,7 @@ fn extract_from_class(
                         .map(|te| type_expr_to_baml_type(&te.expr, &all_generics))
                         .unwrap_or(BamlType::Named("unknown".to_string())),
                 })
-                .collect();
-            (params, None)
+                .collect()
         };
 
         let return_type = method
@@ -871,7 +911,7 @@ mod tests {
             .iter()
             .find(|b| b.path == "baml.Array.push")
             .expect("missing Array.push");
-        assert!(array_push.receiver.as_ref().unwrap().is_mut);
+        assert!(array_push.receiver.as_ref().unwrap().receiver_type.is_mut());
 
         let string_length = vm_builtins
             .iter()

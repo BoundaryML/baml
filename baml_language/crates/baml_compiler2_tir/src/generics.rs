@@ -81,7 +81,14 @@ pub fn substitute_ty(ty: &Ty, bindings: &FxHashMap<Name, Ty>) -> Ty {
             ret: Box::new(substitute_ty(ret, bindings)),
             attr: attr.clone(),
         },
-        // All other types are leaves (primitives, class refs, enums, etc.) — pass through.
+        Ty::Class(name, type_args, attr) => {
+            let substituted_args: Vec<Ty> = type_args
+                .iter()
+                .map(|t| substitute_ty(t, bindings))
+                .collect();
+            Ty::Class(name.clone(), substituted_args, attr.clone())
+        }
+        // All other types are leaves (primitives, enums, etc.) — pass through.
         _ => ty.clone(),
     }
 }
@@ -229,8 +236,22 @@ pub fn lower_type_expr_with_generics(
         },
         // For all other type expressions (primitives, multi-segment paths, etc.),
         // lower normally and then substitute in the result.
+        //
+        // We pass the binding keys as `generic_params` so that nested type variable
+        // references inside path generic args (e.g. `StreamCache<T, S>`) are preserved
+        // as `Ty::TypeVar` by `lower_type_expr_in_ns` rather than triggering "unresolved
+        // type" diagnostics. `substitute_ty` then replaces those TypeVars with the
+        // concrete bound types.
         other => {
-            let ty = lower_type_expr_in_ns(db, other, package_items, ns_context, &[], diagnostics);
+            let binding_keys: Vec<Name> = bindings.keys().cloned().collect();
+            let ty = lower_type_expr_in_ns(
+                db,
+                other,
+                package_items,
+                ns_context,
+                &binding_keys,
+                diagnostics,
+            );
             substitute_ty(&ty, bindings)
         }
     }
@@ -268,6 +289,7 @@ pub fn contains_typevar(ty: &Ty) -> bool {
         Ty::Function { params, ret, .. } => {
             params.iter().any(|(_, t)| contains_typevar(t)) || contains_typevar(ret)
         }
+        Ty::Class(_, type_args, _) => type_args.iter().any(contains_typevar),
         _ => false,
     }
 }
@@ -313,6 +335,11 @@ pub fn infer_bindings(formal: &Ty, actual: &Ty, bindings: &mut FxHashMap<Name, T
                 infer_bindings(ft, at, bindings);
             }
             infer_bindings(fr, ar, bindings);
+        }
+        (Ty::Class(fn_name, f_args, _), Ty::Class(an_name, a_args, _)) if fn_name == an_name => {
+            for (ft, at) in f_args.iter().zip(a_args.iter()) {
+                infer_bindings(ft, at, bindings);
+            }
         }
         _ => {} // Concrete types: nothing to infer
     }
@@ -395,6 +422,14 @@ pub fn erase_unresolved_typevars(
         },
         Ty::Union(tys, attr) => Ty::Union(
             tys.iter()
+                .map(|t| erase_unresolved_typevars(t, diagnostics))
+                .collect(),
+            attr.clone(),
+        ),
+        Ty::Class(name, type_args, attr) => Ty::Class(
+            name.clone(),
+            type_args
+                .iter()
                 .map(|t| erase_unresolved_typevars(t, diagnostics))
                 .collect(),
             attr.clone(),
