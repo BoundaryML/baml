@@ -620,8 +620,8 @@ async fn fs_file_close_is_idempotent() {
 
 #[tokio::test]
 async fn fs_write_wrapper_closes_on_error() {
-    // Writing to a directory errors out; the wrapper must still close the
-    // handle so subsequent ops on the same path succeed.
+    // Writing to a directory errors out; the wrapper must still release the
+    // underlying handle so the directory remains usable afterward.
     let (_tmp, root) = tmp(indexmap! {});
     std::fs::create_dir(format!("{root}/is_a_dir")).unwrap();
 
@@ -637,5 +637,140 @@ async fn fs_write_wrapper_closes_on_error() {
         output.result.is_err(),
         "Expected write-to-dir to fail: {:?}",
         output.result
+    );
+    // If the wrapper leaked the handle, removing the dir on Windows would
+    // fail with a sharing violation; on Unix it's a soft check.
+    std::fs::remove_dir(format!("{root}/is_a_dir")).unwrap();
+}
+
+#[tokio::test]
+async fn fs_read_returns_contents() {
+    let (_tmp, root) = tmp(indexmap! { "hello.txt" => "Hello from fs.read!" });
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> string {{
+                baml.fs.read("{root}/hello.txt")
+            }}
+        "#
+    ));
+
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("Hello from fs.read!".to_string()))
+    );
+}
+
+#[tokio::test]
+async fn fs_read_nonexistent_errors() {
+    let (_tmp, root) = tmp(indexmap! {});
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> string {{
+                baml.fs.read("{root}/missing.txt")
+            }}
+        "#
+    ));
+
+    assert!(output.result.is_err());
+}
+
+#[tokio::test]
+async fn fs_file_seek_negative_errors() {
+    let (_tmp, root) = tmp(indexmap! { "data.txt" => "content" });
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> string {{
+                let f = baml.fs.open("{root}/data.txt", "r+");
+                f.seek(-1);
+                f.text()
+            }}
+        "#
+    ));
+
+    assert!(output.result.is_err());
+}
+
+#[tokio::test]
+async fn fs_open_w_truncates_existing() {
+    let (_tmp, root) = tmp(indexmap! { "data.txt" => "original content" });
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> int {{
+                let f = baml.fs.open("{root}/data.txt", "w");
+                f.write("new")
+            }}
+        "#
+    ));
+
+    assert_eq!(output.result, Ok(BexExternalValue::Int(3)));
+    assert_eq!(
+        std::fs::read_to_string(format!("{root}/data.txt")).unwrap(),
+        "new"
+    );
+}
+
+#[tokio::test]
+async fn fs_open_w_creates_missing_file() {
+    let (_tmp, root) = tmp(indexmap! {});
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> int {{
+                let f = baml.fs.open("{root}/new.txt", "w");
+                f.write("hi")
+            }}
+        "#
+    ));
+
+    assert_eq!(output.result, Ok(BexExternalValue::Int(2)));
+    assert_eq!(
+        std::fs::read_to_string(format!("{root}/new.txt")).unwrap(),
+        "hi"
+    );
+}
+
+#[tokio::test]
+async fn fs_open_w_plus_reads_after_write() {
+    let (_tmp, root) = tmp(indexmap! { "data.txt" => "original" });
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> string {{
+                let f = baml.fs.open("{root}/data.txt", "w+");
+                f.write("fresh");
+                f.seek(0);
+                f.text()
+            }}
+        "#
+    ));
+
+    // "w+" truncates on open, so only the new write is visible.
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("fresh".to_string()))
+    );
+}
+
+#[tokio::test]
+async fn fs_open_w_creates_parent_dirs() {
+    let (_tmp, root) = tmp(indexmap! {});
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> int {{
+                let f = baml.fs.open("{root}/nested/dir/new.txt", "w");
+                f.write("nested")
+            }}
+        "#
+    ));
+
+    assert_eq!(output.result, Ok(BexExternalValue::Int(6)));
+    assert_eq!(
+        std::fs::read_to_string(format!("{root}/nested/dir/new.txt")).unwrap(),
+        "nested"
     );
 }
