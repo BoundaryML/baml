@@ -320,6 +320,18 @@ This folder contains the structure and instructions for creating a new BEP via t
 
 The next available BEP number is: **${nextNumber}** (${bepNum})
 
+## Getting Your API Token
+
+**Only BoundaryML team members can create BEPs via the API.**
+
+1. Go to your profile page: ${apiBaseUrl}/profile
+2. Click "Generate API Token"
+3. Copy the token (starts with \`bep_\`)
+
+Your token identifies you as the author of any BEPs you create or update.
+
+---
+
 ## Directory Structure
 
 Create your BEP with this structure:
@@ -369,45 +381,17 @@ Context and history for this proposal...
 
 ## API Usage
 
-### Step 1: Get or Create a User
+All API requests require a Bearer token in the Authorization header.
 
-First, authenticate to get a user ID:
-
-\`\`\`bash
-curl -X POST "${apiBaseUrl}/api/agent/users" \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "name": "Your Name",
-    "passkey": "<LOGIN_PASSKEY>"
-  }'
-\`\`\`
-
-Response:
-\`\`\`json
-{
-  "userId": "abc123...",
-  "name": "Your Name",
-  "isNew": false
-}
-\`\`\`
-
-### Step 2: Create the BEP
+### Create a New BEP
 
 \`\`\`bash
 curl -X POST "${apiBaseUrl}/api/agent/beps" \\
+  -H "Authorization: Bearer <your-api-token>" \\
   -H "Content-Type: application/json" \\
   -d '{
     "title": "Your Proposal Title",
-    "content": "# ${bepNum}: Your Proposal Title\\n\\n## Summary\\n\\n...",
-    "pages": [
-      {
-        "slug": "background",
-        "title": "Background",
-        "content": "# Background\\n\\n..."
-      }
-    ],
-    "userId": "<your-user-id>",
-    "shepherds": ["<user-id-1>", "<user-id-2>"]
+    "content": "# ${bepNum}: Your Proposal Title\\n\\n## Summary\\n\\n..."
   }'
 \`\`\`
 
@@ -417,11 +401,37 @@ Response:
   "success": true,
   "bepId": "xyz789...",
   "number": ${nextNumber},
+  "formattedId": "${bepNum}",
+  "createdBy": "Your Name",
   "url": "${apiBaseUrl}/beps/${nextNumber}"
 }
 \`\`\`
 
-### API Fields
+### Create BEP with Additional Pages
+
+\`\`\`bash
+curl -X POST "${apiBaseUrl}/api/agent/beps" \\
+  -H "Authorization: Bearer <your-api-token>" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "title": "Your Proposal Title",
+    "content": "# ${bepNum}: Your Proposal Title\\n\\n## Summary\\n\\n...",
+    "pages": [
+      {
+        "slug": "background",
+        "title": "Background",
+        "content": "# Background\\n\\nContext and history..."
+      },
+      {
+        "slug": "alternatives",
+        "title": "Alternatives Considered",
+        "content": "# Alternatives Considered\\n\\n..."
+      }
+    ]
+  }'
+\`\`\`
+
+### API Fields for Creating BEPs
 
 | Field | Required | Description |
 |-------|----------|-------------|
@@ -431,40 +441,43 @@ Response:
 | \`pages[].slug\` | Yes | URL-safe identifier (lowercase, hyphens) |
 | \`pages[].title\` | Yes | Page display title |
 | \`pages[].content\` | Yes | Page content (markdown) |
-| \`userId\` | Yes | Your user ID from Step 1 |
 | \`shepherds\` | No | Array of user IDs to assign as shepherds |
 
-### Step 3: Update an Existing BEP
-
-To update a BEP after creation:
+### Update an Existing BEP
 
 \`\`\`bash
 curl -X PUT "${apiBaseUrl}/api/agent/beps" \\
+  -H "Authorization: Bearer <your-api-token>" \\
   -H "Content-Type: application/json" \\
   -d '{
     "number": ${nextNumber},
     "content": "# ${bepNum}: Updated Title\\n\\n...",
-    "pages": [...],
-    "userId": "<your-user-id>",
     "editNote": "Updated based on feedback",
     "versionMode": "new"
   }'
 \`\`\`
 
-| Field | Description |
-|-------|-------------|
-| \`number\` | The BEP number to update |
-| \`versionMode\` | \`"new"\` creates a new version, \`"current"\` updates in place |
-| \`editNote\` | Optional note describing the changes |
+### API Fields for Updating BEPs
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| \`number\` | Yes | The BEP number to update |
+| \`content\` | No* | Updated main content |
+| \`pages\` | No* | Updated pages array (replaces all pages) |
+| \`editNote\` | No | Note describing the changes |
+| \`versionMode\` | No | \`"new"\` (default) creates a new version, \`"current"\` updates in place |
+
+*At least one of \`content\` or \`pages\` must be provided.
 
 ---
 
 ## Tips
 
-1. **Use existing BEPs as reference** - Look at implemented/accepted BEPs for structure
+1. **Use existing BEPs as reference** - Look at implemented/accepted BEPs in this bundle
 2. **Keep pages focused** - One topic per page
 3. **Use descriptive slugs** - \`background\`, \`alternatives\`, \`implementation\`
 4. **Include code examples** - Show proposed syntax with \`\`\`baml blocks
+5. **Set versionMode** - Use \`"new"\` for major updates, \`"current"\` for typo fixes
 `;
 }
 
