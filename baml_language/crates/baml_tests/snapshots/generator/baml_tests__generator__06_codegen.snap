@@ -24,6 +24,14 @@ function user.GetUser$parse(json: string) -> MyClass {
     return
 }
 
+function user.GetUser$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream {
+    load_var sse
+    load_const "GetUser"
+    load_const null
+    call baml.llm.parse
+    return
+}
+
 function user.GetUser$render_prompt() -> baml.llm.PromptAst {
     load_const null
     load_const "GetUser"

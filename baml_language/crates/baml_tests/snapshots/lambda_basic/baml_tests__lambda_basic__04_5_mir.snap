@@ -142,14 +142,12 @@ fn user.test_map_inferred() -> int[] {
     // Locals:
     let _0: int[] // _0 // return
     let _1: int[] // items
-    let _2: int[]
-    let _3: (int) -> int
+    let _2: (int) -> int
 
     bb0: {
         _1 = [const 1_i64, const 2_i64, const 3_i64];
-        _2 = copy _1;
-        _3 = make_closure lambda[0]();
-        _0 = call const fn baml.Array.map(copy _2, copy _3) -> [bb1];
+        _2 = make_closure lambda[0]();
+        _0 = call const fn baml.Array.map(copy _1, copy _2) -> [bb1];
     }
 
     bb1: {

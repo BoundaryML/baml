@@ -23,3 +23,6 @@ function user.FetchDatax$parse(json: string) -> user.Hi throws never {
 class user.Hi$stream {
   name: null | string
 }
+function user.FetchDatax$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<user.Hi, null | user.Hi$stream> throws never {
+  baml.llm.__make_stream(sse, "FetchDatax", VertexGCP) : unknown
+}

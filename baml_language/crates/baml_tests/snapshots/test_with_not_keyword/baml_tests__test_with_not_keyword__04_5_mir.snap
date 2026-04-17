@@ -2,7 +2,7 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR2 ===
-fn user.$init_test_20(registry: testing.TestCollector) -> null {
+fn user.$init_test_21(registry: testing.TestCollector) -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: testing.TestCollector // registry // param
@@ -25,16 +25,16 @@ fn user.$init_test_20(registry: testing.TestCollector) -> null {
 }
 
 // lambda[0]
-fn .<lambda($init_test_20, 0)>() -> null {
+fn .<lambda($init_test_21, 0)>() -> null {
     // Locals:
     let _0: null // _0 // return
-    let _1: int
-    let _2: HasWith
+    let _1: HasWith // h
+    let _2: int
 
     bb0: {
-        _2 = const null;
-        _1 = copy _2.0;
-        _0 = call const fn assert.equal(copy _1, const 1_i64) -> [bb1];
+        _1 = HasWith { const 1_i64 };
+        _2 = copy _1.0;
+        _0 = call const fn assert.equal(copy _2, const 1_i64) -> [bb1];
     }
 
     bb1: {

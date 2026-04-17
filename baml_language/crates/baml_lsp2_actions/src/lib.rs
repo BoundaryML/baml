@@ -56,6 +56,8 @@ pub mod usages;
 pub mod utils;
 
 #[cfg(test)]
+mod completions_tests;
+#[cfg(test)]
 mod definition_at_tests;
 #[cfg(test)]
 mod describe_tests;

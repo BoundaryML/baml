@@ -1,0 +1,23 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== HIR2 ===
+class user.Box {
+  value: user.T
+}
+class user.User {
+  name: string
+  age: int
+}
+function user.test_generic_capture(box: user.Box) -> string  [expr] {
+  { let get_name = () -> string { {  } box.value.name } } get_name()
+}
+function user.test_generic_chain(box: user.Box) -> string  [expr] {
+  {  } box.value.name
+}
+function user.test_nested_generic_chain(box: user.Box) -> string  [expr] {
+  {  } box.value.value.name
+}
+
+--- captures ---
+lambda () in test_generic_capture: captures [box]

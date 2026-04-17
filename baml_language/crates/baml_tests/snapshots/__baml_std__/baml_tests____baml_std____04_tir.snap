@@ -132,6 +132,10 @@ function baml.http.Response.ok(self: baml.http.Response) -> bool throws never {
     self.status_code >= 200 && self.status_code < 300 : bool
   }
 }
+class baml.http.SseStream {
+  url: string
+  _handle: $rust_type
+}
 class baml.http.Request$stream {
   method: null | string
   url: null | string
@@ -144,15 +148,15 @@ class baml.http.Response$stream {
   url: null | string
   _body: $rust_type
 }
+class baml.http.SseStream$stream {
+  url: null | string
+  _handle: $rust_type
+}
 
 --- <builtin>/baml/ns_llm/llm.baml ---
 class baml.llm.OrchestrationStep {
   primitive_client: baml.llm.PrimitiveClient
   delay_ms: int
-}
-class baml.llm.ExecutionResult {
-  ok: bool
-  value: unknown
 }
 class baml.llm.ExecutionContext {
   jinja_string: string
@@ -198,27 +202,33 @@ function baml.llm.build_request(client: baml.llm.Client, function_name: string, 
     primitive_client.build_request(specialized_prompt) : baml.http.Request
   }
 }
-function baml.llm.parse<T>(function_name: string, json: string) -> T throws never {
+function baml.llm.parse<T, S>(function_name: string, json: string) -> T throws never {
   { : T
     let return_type = get_return_type(function_name) : type
-    __sap_parse<T>(json, return_type) : T
+    let stream_return_type = get_stream_return_type(function_name) : type
+    let cache = StreamCache.new(return_type, stream_return_type) : baml.llm.StreamCache<T, S>
+    __sap_parse_final<T>(json, cache) : T
   }
 }
 function baml.llm.call_llm_function<T>(client: baml.llm.Client, function_name: string, args: map<string, unknown>) -> T throws never {
   { : T
     let jinja_string = get_jinja_template(function_name) : string
     let context = ExecutionContext { jinja_string: jinja_string, args: args, function_name: function_name } : baml.llm.ExecutionContext
-    let result = client.execute<T>(context, 0) : T
+    let result = client.execute_oneshot<T>(context, 0) : T
     result : T
+  }
+}
+function baml.llm.stream_llm_function<T, S>(client: baml.llm.Client, function_name: string, args: map<string, unknown>) -> baml.llm.Stream<T, S> throws never {
+  { : baml.llm.Stream<T, S>
+    let jinja_string = get_jinja_template(function_name) : string
+    let context = ExecutionContext { jinja_string: jinja_string, args: args, function_name: function_name } : baml.llm.ExecutionContext
+    let result = client.execute_stream(context, 0) : baml.llm.Stream<T, S>
+    result : baml.llm.Stream<T, S>
   }
 }
 class baml.llm.OrchestrationStep$stream {
   primitive_client: null | baml.llm.PrimitiveClient$stream
   delay_ms: null | int
-}
-class baml.llm.ExecutionResult$stream {
-  ok: null | bool
-  value: unknown
 }
 class baml.llm.ExecutionContext$stream {
   jinja_string: null | string
@@ -280,8 +290,8 @@ function baml.llm.Client.build_attempt_with_state(self: baml.llm.Client, planner
           for sub in self.sub_clients
             { : void
               for step in sub.build_plan_with_state(planner_state)
-                { : null
-                  steps.push(step) : null
+                { : int
+                  steps.push(step) : int
                 }
             }
           steps : baml.llm.OrchestrationStep[]
@@ -334,7 +344,7 @@ function baml.llm.Client.build_plan_with_state(self: baml.llm.Client, planner_st
                 let inner = self.build_attempt_with_state(planner_state) : baml.llm.OrchestrationStep[]
                 for step in inner
                   { : void
-                    result.push(OrchestrationStep { primitive_client: step.primitive_client, delay_ms: delay }) : null
+                    result.push(OrchestrationStep { primitive_client: step.primitive_client, delay_ms: delay }) : int
                   }
               }
           }
@@ -344,7 +354,100 @@ function baml.llm.Client.build_plan_with_state(self: baml.llm.Client, planner_st
         self.build_attempt_with_state(planner_state) : baml.llm.OrchestrationStep[]
   }
 }
-function baml.llm.Client.execute<T>(self: baml.llm.Client, context: baml.llm.ExecutionContext, inherited_delay_ms: int) -> T throws never {
+function baml.llm.Client.execute_stream<T, S>(self: baml.llm.Client, context: baml.llm.ExecutionContext, inherited_delay_ms: int) -> baml.llm.Stream<T, S> throws never {
+  { : never
+    match (self.retry : baml.llm.RetryPolicy?) : never
+      r: RetryPolicy =>
+        { : never
+          let current_delay = r.initial_delay_ms + 0.0 : float
+          { : void
+            let attempt = 0 : 0 -> int
+            while attempt <= r.max_retries
+              { : never
+                let attempt_delay = inherited_delay_ms : int
+                if (attempt > 0 : bool) : void
+                  { : void
+                    attempt_delay = root.math.trunc(current_delay) : int
+                    let next = current_delay * r.multiplier : float
+                    if (next > r.max_delay_ms + 0.0 : bool) : void
+                      { : void
+                        current_delay = r.max_delay_ms + 0.0 : float
+                      }
+                    else
+                      { : void
+                        current_delay = next : float
+                      }
+                  }
+                if (attempt == r.max_retries : bool) : void
+                  { : void
+                    attempt_delay = inherited_delay_ms : int
+                  }
+                let result2 = : unknown -> baml.llm.Stream<T, S>
+                  catch (self.execute_once_stream(context, attempt_delay) : baml.llm.Stream<T, S>) : unknown
+                    catch (e)
+                      _ =>
+                        { : never
+                          continue
+                        }
+                return result2 : baml.llm.Stream<T, S>
+              }
+          }
+          throw DevOther { message: "All orchestration..." } : unknown
+        }
+      null =>
+        { : never
+          let result = self.execute_once_stream(context, inherited_delay_ms) : baml.llm.Stream<T, S>
+          return result : baml.llm.Stream<T, S>
+        }
+  }
+}
+function baml.llm.Client.execute_once_stream<T, S>(self: baml.llm.Client, context: baml.llm.ExecutionContext, active_delay_ms: int) -> baml.llm.Stream<T, S> throws never {
+  { : never
+    match (self.client_type : baml.llm.ClientType) : never
+      ClientType.Primitive =>
+        { : never
+          let resolve_fn = self.get_constructor() : () -> baml.llm.PrimitiveClient
+          let primitive = resolve_fn() : baml.llm.PrimitiveClient
+          let return_type = get_return_type(context.function_name) : type
+          let stream_return_type = get_stream_return_type(context.function_name) : type
+          let prompt = primitive.render_prompt(context.jinja_string, context.args, return_type) : baml.llm.PromptAst
+          let specialized = primitive.specialize_prompt(prompt) : baml.llm.PromptAst
+          let http_request = primitive.build_request_stream(specialized) : baml.http.Request
+          let sse = root.http.fetch_sse(http_request) : baml.http.SseStream
+          let acc = primitive.new_stream_accumulator() : baml.llm.StreamAccumulator
+          let cache = StreamCache.new(return_type, stream_return_type) : baml.llm.StreamCache<T, S>
+          let stream = Stream { _client: primitive, _acc: acc, _sse: sse, _cache: cache } : baml.llm.Stream<T, S>
+          return stream : baml.llm.Stream<T, S>
+        }
+      ClientType.Fallback =>
+        { : never
+          for sub in self.sub_clients
+            { : never
+              let result2 = : unknown -> baml.llm.Stream<T, S>
+                catch (sub.execute_stream(context, active_delay_ms) : baml.llm.Stream<T, S>) : unknown
+                  catch (e)
+                    _ =>
+                      { : never
+                        continue
+                      }
+              return result2 : baml.llm.Stream<T, S>
+            }
+          throw DevOther { message: "All orchestration..." } : unknown
+        }
+      ClientType.RoundRobin =>
+        { : never
+          if (self.sub_clients.length() == 0 : bool) : void
+            { : never
+              throw DevOther { message: "RoundRobin client..." } : unknown
+            }
+          let idx = self.counter % self.sub_clients.length() : int
+          self.counter Add= 1 : int
+          let result3 = self.sub_clients[idx].execute_stream(context, active_delay_ms) : baml.llm.Stream<T, S>
+          return result3 : baml.llm.Stream<T, S>
+        }
+  }
+}
+function baml.llm.Client.execute_oneshot<T>(self: baml.llm.Client, context: baml.llm.ExecutionContext, inherited_delay_ms: int) -> T throws never {
   { : never
     match (self.retry : baml.llm.RetryPolicy?) : never
       r: RetryPolicy =>
@@ -373,7 +476,7 @@ function baml.llm.Client.execute<T>(self: baml.llm.Client, context: baml.llm.Exe
                     attempt_delay = inherited_delay_ms : int
                   }
                 let result2 = : unknown -> T
-                  catch (self.execute_once<T>(context, attempt_delay) : T) : unknown
+                  catch (self.execute_once_oneshot<T>(context, attempt_delay) : T) : unknown
                     catch (e)
                       _ =>
                         { : never
@@ -386,12 +489,12 @@ function baml.llm.Client.execute<T>(self: baml.llm.Client, context: baml.llm.Exe
         }
       null =>
         { : never
-          let result = self.execute_once<T>(context, inherited_delay_ms) : T
+          let result = self.execute_once_oneshot<T>(context, inherited_delay_ms) : T
           return result : T
         }
   }
 }
-function baml.llm.Client.execute_once<T>(self: baml.llm.Client, context: baml.llm.ExecutionContext, active_delay_ms: int) -> T throws never {
+function baml.llm.Client.execute_once_oneshot<T>(self: baml.llm.Client, context: baml.llm.ExecutionContext, active_delay_ms: int) -> T throws never {
   { : T
     match (self.client_type : baml.llm.ClientType) : T
       ClientType.Primitive =>
@@ -440,7 +543,7 @@ function baml.llm.Client.execute_once<T>(self: baml.llm.Client, context: baml.ll
           for sub in self.sub_clients
             { : never
               let result2 = : unknown -> T
-                catch (sub.execute<T>(context, active_delay_ms) : T) : unknown
+                catch (sub.execute_oneshot<T>(context, active_delay_ms) : T) : unknown
                   catch (e)
                     _ =>
                       { : never
@@ -452,9 +555,13 @@ function baml.llm.Client.execute_once<T>(self: baml.llm.Client, context: baml.ll
         }
       ClientType.RoundRobin =>
         { : never
+          if (self.sub_clients.length() == 0 : bool) : void
+            { : never
+              throw DevOther { message: "RoundRobin client..." } : unknown
+            }
           let idx = self.counter % self.sub_clients.length() : int
           self.counter Add= 1 : int
-          let result3 = self.sub_clients[idx].execute<T>(context, active_delay_ms) : T
+          let result3 = self.sub_clients[idx].execute_oneshot<T>(context, active_delay_ms) : T
           return result3 : T
         }
   }
@@ -508,6 +615,81 @@ class baml.llm.BedrockOptions {
   max_tokens: int | null
   temperature: float | null
   top_p: float | null
+}
+class baml.llm.StreamAccumulator {
+  _handle: $rust_type
+}
+class baml.llm.StreamCache {
+  _data: $rust_type
+}
+class baml.llm.Stream {
+  _client: baml.llm.PrimitiveClient
+  _acc: baml.llm.StreamAccumulator
+  _sse: baml.http.SseStream
+  _cache: baml.llm.StreamCache<T, S>
+}
+function baml.llm.Stream.next(self: baml.llm.Stream) -> unknown | baml.stream.StreamFinished throws never {
+  { : never
+    while true
+      { : never
+        let next = : string
+          match (self._sse.next() : string?) : string
+            _: null =>
+              { : never
+                return StreamFinished {  } : unknown
+              }
+            next: string =>
+              next : string
+        self._acc.add_events(next) : null
+        if (self._acc.is_done() : bool) : void
+          { : never
+            self._sse.close() : null
+            return StreamFinished {  } : unknown
+          }
+        let content = self._acc.content() : string
+        let parsed = __sap_parse_partial<S>(content, self._cache) : S | baml.stream.StreamNoYield
+        match (parsed : S | baml.stream.StreamNoYield) : never
+          _: root.stream.StreamNoYield =>
+            { : never
+              continue
+            }
+          parsed: S =>
+            { : never
+              return parsed : S
+            }
+      }
+    root.sys.panic("Unreachable") : never
+  }
+}
+function baml.llm.Stream.final(self: baml.llm.Stream) -> unknown throws never {
+  { : T
+    while Not self._acc.is_done()
+      { : void
+        let next = : string
+          match (self._sse.next() : string?) : string
+            _: null =>
+              { : never
+                break
+              }
+            next: string =>
+              next : string
+        self._acc.add_events(next) : null
+        if (self._acc.is_done() : bool) : void
+          { : never
+            self._sse.close() : null
+            break
+          }
+      }
+    match (self._acc.finish_reason() : string?) : null
+      null =>
+        { : never
+          throw LlmClientError { message: "Streaming finishe..." } : unknown
+        }
+      reason: string =>
+        self._client.validate_finish_reason(reason) : null
+    let content = self._acc.content() : string
+    __sap_parse_final<T>(content, self._cache) : T
+  }
 }
 class baml.llm.PrimitiveClient {
   name: string
@@ -579,6 +761,18 @@ class baml.llm.BedrockOptions$stream {
   max_tokens: int | null
   temperature: float | null
   top_p: float | null
+}
+class baml.llm.StreamAccumulator$stream {
+  _handle: $rust_type
+}
+class baml.llm.StreamCache$stream {
+  _data: $rust_type
+}
+class baml.llm.Stream$stream {
+  _client: null | baml.llm.PrimitiveClient$stream
+  _acc: null | baml.llm.StreamAccumulator$stream
+  _sse: null | baml.http.SseStream$stream
+  _cache: null | baml.llm.StreamCache$stream
 }
 class baml.llm.PrimitiveClient$stream {
   name: null | string
@@ -675,6 +869,16 @@ class baml.panics.AllocFailure$stream {
   message: null | string
 }
 type baml.panics.Panic$stream = baml.panics.DivisionByZero$stream | baml.panics.IndexOutOfBounds$stream | baml.panics.MapKeyNotFound$stream | baml.panics.StackOverflow$stream | baml.panics.AssertionFailed$stream | baml.panics.Unreachable$stream | baml.panics.UserPanic$stream | baml.panics.AllocFailure$stream
+
+--- <builtin>/baml/ns_stream/stream.baml ---
+class baml.stream.StreamFinished {
+}
+class baml.stream.StreamNoYield {
+}
+class baml.stream.StreamFinished$stream {
+}
+class baml.stream.StreamNoYield$stream {
+}
 
 --- <builtin>/baml/ns_sys/sys.baml ---
 

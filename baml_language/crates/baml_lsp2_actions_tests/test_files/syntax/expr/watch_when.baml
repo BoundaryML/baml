@@ -37,32 +37,40 @@ function BadFunction2(i: string) -> bool {
 //  5 |   x.$watch.options(baml.WatchOptions{ when: BadFunction2 });
 //    |
 
+// Known issue: diagnostic spans for member-access errors extend to the
+// preceding statement instead of pointing at the exact member token (`$watch`).
+// The spans below are wider than ideal — they should target `x.$watch` only.
+// See: https://github.com/BoundaryML/baml/pull/3369#discussion_r3088162711
+
 //----
 //- diagnostics
 // Error: type `int` has no member `$watch`
-//    ╭─[ expr_watch_when.baml:3:5 ]
+//    ╭─[ expr_watch_when.baml:2:20 ]
 //    │
-//  3 │   x.$watch.options(baml.WatchOptions{ when: GoodFunction });
-//    │     ───┬──  
-//    │        ╰──── type `int` has no member `$watch`
-//    │ 
-//    │ Note: Error code: E0001
+//  2 │ ╭─▶   watch let x = 10;
+//  3 │ ├─▶   x.$watch.options(baml.WatchOptions{ when: GoodFunction });
+//    │ │                                                                  
+//    │ ╰────────────────────────────────────────────────────────────────── type `int` has no member `$watch`
+//    │     
+//    │     Note: Error code: E0001
 // ───╯
 // Error: type `int` has no member `$watch`
-//    ╭─[ expr_watch_when.baml:4:5 ]
+//    ╭─[ expr_watch_when.baml:3:61 ]
 //    │
-//  4 │   x.$watch.options(baml.WatchOptions{ when: BadFunction1 });
-//    │     ───┬──  
-//    │        ╰──── type `int` has no member `$watch`
-//    │ 
-//    │ Note: Error code: E0001
+//  3 │ ╭─▶   x.$watch.options(baml.WatchOptions{ when: GoodFunction });
+//  4 │ ├─▶   x.$watch.options(baml.WatchOptions{ when: BadFunction1 });
+//    │ │                                                                  
+//    │ ╰────────────────────────────────────────────────────────────────── type `int` has no member `$watch`
+//    │     
+//    │     Note: Error code: E0001
 // ───╯
 // Error: type `int` has no member `$watch`
-//    ╭─[ expr_watch_when.baml:5:5 ]
+//    ╭─[ expr_watch_when.baml:4:61 ]
 //    │
-//  5 │   x.$watch.options(baml.WatchOptions{ when: BadFunction2 });
-//    │     ───┬──  
-//    │        ╰──── type `int` has no member `$watch`
-//    │ 
-//    │ Note: Error code: E0001
+//  4 │ ╭─▶   x.$watch.options(baml.WatchOptions{ when: BadFunction1 });
+//  5 │ ├─▶   x.$watch.options(baml.WatchOptions{ when: BadFunction2 });
+//    │ │                                                                  
+//    │ ╰────────────────────────────────────────────────────────────────── type `int` has no member `$watch`
+//    │     
+//    │     Note: Error code: E0001
 // ───╯

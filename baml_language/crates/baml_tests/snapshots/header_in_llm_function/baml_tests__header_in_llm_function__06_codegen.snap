@@ -35,6 +35,14 @@ function user.FetchDatax$parse(json: string) -> Hi {
     return
 }
 
+function user.FetchDatax$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream {
+    load_var sse
+    load_const "FetchDatax"
+    load_global user.VertexGCP
+    call baml.llm.parse
+    return
+}
+
 function user.FetchDatax$render_prompt(user_id: string) -> baml.llm.PromptAst {
     load_global user.VertexGCP
     load_const "FetchDatax"

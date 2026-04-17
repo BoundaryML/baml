@@ -13,3 +13,8 @@ function panic(message: string) -> never {
 function now_ms() -> int {
   $rust_function
 }
+
+//baml:mut_vm
+function argv() -> string[] {
+  $rust_function
+}

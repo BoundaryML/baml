@@ -32,8 +32,13 @@ async fn run_baml_with_args(
 ) -> BexExternalValue {
     let snapshot = common::compile_for_engine(source);
     let engine = Arc::new(
-        BexEngine::new(snapshot, sys_native::SysOps::native().into(), None)
-            .expect("Failed to create engine"),
+        BexEngine::new(
+            snapshot,
+            sys_native::SysOps::native().into(),
+            None,
+            Vec::new(),
+        )
+        .expect("Failed to create engine"),
     );
 
     engine

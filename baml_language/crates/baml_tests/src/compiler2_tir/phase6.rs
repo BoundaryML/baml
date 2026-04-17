@@ -4,7 +4,7 @@
 //! resolve methods to the builtin `.baml` stub declarations with type variable
 //! substitution applied.
 
-use super::support::{make_db, render_tir};
+use super::support::{expr_type_in_function, make_db, render_tir};
 
 // ── Array method resolution ───────────────────────────────────────────────────
 
@@ -495,4 +495,594 @@ fn snapshot_builtin_method_calls() {
 }"#,
     );
     insta::assert_snapshot!(render_tir(&db, file));
+}
+
+// ── Optional call (?.()) type inference ──────────────────────────────────────
+
+#[test]
+fn optional_call_basic() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function f(callback: ((x: int) -> int)?) -> int? {
+    return callback?.(42)
+}
+"#,
+    );
+    insta::assert_snapshot!(render_tir(&db, file), @r#"
+    function user.f(callback: ((x: int) -> int)?) -> int? throws never {
+      { : never
+        return callback?.(42) : int?
+      }
+    }
+    "#);
+}
+
+#[test]
+fn optional_call_generic_map() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function f(arr: int[]?) -> int[]? {
+    return arr?.map?.((x: int) -> int { x + 1 })
+}
+"#,
+    );
+    insta::assert_snapshot!(render_tir(&db, file), @r"
+    function user.f(arr: int[]?) -> int[]? throws never {
+      { : never
+        return arr?.map?.((x: int) -> int { ... }) : U[]?
+      }
+      !! 47..85: type mismatch: expected int[]?, got U[]?
+    }
+    lambda user.f {
+    }
+    ");
+}
+
+#[test]
+fn direct_optional_method_call_generic_map() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function f(arr: int[]?) -> int[]? {
+    return arr?.map((x) -> { x + 1 })
+}
+"#,
+    );
+    insta::assert_snapshot!(render_tir(&db, file), @r#"
+    function user.f(arr: int[]?) -> int[]? throws never {
+      { : never
+        return arr?.map((x) -> { ... }) : int[]?
+      }
+    }
+    lambda user.f {
+    }
+    "#);
+}
+
+#[test]
+fn optional_call_arg_type_checking() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function f(callback: ((x: int) -> int)?) -> int? {
+    return callback?.("wrong")
+}
+"#,
+    );
+    insta::assert_snapshot!(render_tir(&db, file), @r#"
+    function user.f(callback: ((x: int) -> int)?) -> int? throws never {
+      { : never
+        return callback?.("wrong") : int?
+      }
+    }
+    "#);
+}
+
+#[test]
+fn optional_call_through_type_alias() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+type MaybeFn = ((x: int) -> int)?
+function f(callback: MaybeFn) -> int? {
+    return callback?.(42)
+}
+"#,
+    );
+    insta::assert_snapshot!(render_tir(&db, file), @r"
+    type user.MaybeFn = ((x: int) -> int)?
+    function user.f(callback: user.MaybeFn) -> int? throws never {
+      { : never
+        return callback?.(42) : unknown?
+      }
+      !! 86..100: did you mean `callback(42)`? `callback?.(42)` is unnecessary, because `callback` cannot be null
+      !! 86..100: `user.MaybeFn` is not a function — it cannot be called
+    }
+    type user.MaybeFn$stream = null | unknown
+    ");
+}
+
+#[test]
+fn optional_field_access_through_type_alias() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+class User { name string }
+type MaybeUser = User?
+function f(u: MaybeUser) -> string? {
+    return u?.name
+}
+"#,
+    );
+    insta::assert_snapshot!(render_tir(&db, file), @r#"
+    class user.User {
+      name: string
+    }
+    type user.MaybeUser = user.User?
+    function user.f(u: user.MaybeUser) -> string? throws never {
+      { : never
+        return u?.name : string?
+      }
+    }
+    class user.User$stream {
+      name: null | string
+    }
+    type user.MaybeUser$stream = null | user.User$stream
+    "#);
+}
+
+#[test]
+fn optional_index_through_type_alias() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+type MaybeInts = int[]?
+function f(xs: MaybeInts) -> int? {
+    return xs?.[0]
+}
+"#,
+    );
+    insta::assert_snapshot!(render_tir(&db, file), @r#"
+    type user.MaybeInts = int[]?
+    function user.f(xs: user.MaybeInts) -> int? throws never {
+      { : never
+        return xs?.[0] : int?
+      }
+    }
+    type user.MaybeInts$stream = null | int[]
+    "#);
+}
+
+#[test]
+fn optional_call_expected_nonoptional_still_mismatches() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function f(cb: ((x: int) -> int)?) -> int {
+    return cb?.(1)
+}
+"#,
+    );
+    insta::assert_snapshot!(render_tir(&db, file), @r#"
+    function user.f(cb: ((x: int) -> int)?) -> int throws never {
+      { : never
+        return cb?.(1) : int?
+      }
+      !! 56..63: type mismatch: expected int, got int?
+    }
+    "#);
+}
+
+#[test]
+fn optional_call_nullable_return_preserves_phase0() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function f(cb: ((x: int) -> string?)?) -> string? {
+    return cb?.(1)
+}
+"#,
+    );
+    insta::assert_snapshot!(render_tir(&db, file), @r#"
+    function user.f(cb: ((x: int) -> string?)?) -> string? throws never {
+      { : never
+        return cb?.(1) : string?
+      }
+    }
+    "#);
+}
+
+#[test]
+fn optional_call_null_short_circuit_still_checks_args() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function f() -> null {
+    let cb = null
+    return cb?.(unknown_name)
+}
+"#,
+    );
+    let output = render_tir(&db, file);
+    assert!(
+        output.contains("unresolved name: unknown_name"),
+        "Expected unresolved-name diagnostic from argument inference, got:\n{output}"
+    );
+}
+
+#[test]
+fn optional_call_null_short_circuit_does_not_emit_call_diagnostics() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function f() -> null {
+    let cb = null
+    return cb?.(1, 2)
+}
+"#,
+    );
+    let output = render_tir(&db, file);
+    assert!(
+        !output.contains("argument(s)"),
+        "Did not expect call-site arity diagnostics for statically-null optional call, got:\n{output}"
+    );
+}
+
+#[test]
+fn optional_call_null_short_circuit_respects_expected() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function f() -> int {
+    let cb = null
+    return cb?.(1)
+}
+"#,
+    );
+    insta::assert_snapshot!(render_tir(&db, file), @r#"
+    function user.f() -> int throws never {
+      { : never
+        let cb = null : null
+        return cb?.(1) : null
+      }
+      !! 52..59: type mismatch: expected int, got null
+    }
+    "#);
+}
+
+#[test]
+fn optional_push_establishes_element_type() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function f() -> null {
+    let xs = []
+    xs?.push?.(1)
+    xs.push("a")
+    return null
+}
+"#,
+    );
+    insta::assert_snapshot!(render_tir(&db, file), @r#"
+    function user.f() -> null throws never {
+      { : never
+        let xs = [] : never[] -> int[] (evolving)
+        xs?.push?.(1) : int?
+        xs.push("a") : int
+        return null : null
+      }
+      !! 70..73: type mismatch: expected int, got string
+    }
+    "#);
+}
+
+#[test]
+fn direct_optional_push_establishes_element_type() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function f() -> null {
+    let xs = []
+    xs?.push(1)
+    xs.push("a")
+    return null
+}
+"#,
+    );
+    insta::assert_snapshot!(render_tir(&db, file), @r#"
+    function user.f() -> null throws never {
+      { : never
+        let xs = [] : never[] -> int[] (evolving)
+        xs?.push(1) : int?
+        xs.push("a") : int
+        return null : null
+      }
+      !! 44..52: did you mean `xs.push`? `xs?.push` is unnecessary, because `xs` cannot be null
+      !! 68..71: type mismatch: expected int, got string
+    }
+    "#);
+}
+
+#[test]
+fn optional_push_returns_optional_int() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function f(xs: int[]?) -> int? {
+    return xs?.push?.(2)
+}
+"#,
+    );
+    insta::assert_snapshot!(render_tir(&db, file), @r#"
+    function user.f(xs: int[]?) -> int? throws never {
+      { : never
+        return xs?.push?.(2) : int?
+      }
+    }
+    "#);
+}
+
+#[test]
+fn push_establishment_updates_let_binding_type_for_function_values() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function cb() -> int {
+    return 1
+}
+
+function f() -> null {
+    let callbacks = []
+    callbacks.push(cb)
+    return null
+}
+"#,
+    );
+    insta::assert_snapshot!(render_tir(&db, file), @r"
+    function user.cb() -> int throws never {
+      { : never
+        return 1 : 1
+      }
+    }
+    function user.f() -> null throws never {
+      { : never
+        let callbacks = [] : never[] -> (() -> int)[] (evolving)
+        callbacks.push(cb) : int
+        return null : null
+      }
+    }
+    ");
+}
+
+#[test]
+fn optional_push_inner_callee_stays_optional_callable() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function f(xs: int[]?) -> int? {
+    return xs?.push?.(2)
+}
+"#,
+    );
+    assert_eq!(
+        expr_type_in_function(&db, file, "f", "xs?.push"),
+        "((self: int[], item: int) -> int)?"
+    );
+}
+
+#[test]
+fn plain_push_fast_path_still_checked_against_expected() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function f(xs: int[]) -> string {
+    return xs.push(1)
+}
+"#,
+    );
+    insta::assert_snapshot!(render_tir(&db, file), @r#"
+    function user.f(xs: int[]) -> string throws never {
+      { : never
+        return xs.push(1) : int
+      }
+      !! 45..56: type mismatch: expected string, got int
+    }
+    "#);
+}
+
+#[test]
+fn optional_push_fast_path_still_checked_against_expected() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function f(xs: int[]?) -> string {
+    return xs?.push?.(1)
+}
+"#,
+    );
+    insta::assert_snapshot!(render_tir(&db, file), @r#"
+    function user.f(xs: int[]?) -> string throws never {
+      { : never
+        return xs?.push?.(1) : int?
+      }
+      !! 46..60: type mismatch: expected string, got int?
+    }
+    "#);
+}
+
+#[test]
+fn optional_call_lambda_contextual_typing() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function f(arr: int[]?) -> int[]? {
+    return arr?.map?.((x) -> { x + 1 })
+}
+"#,
+    );
+    insta::assert_snapshot!(render_tir(&db, file), @r"
+    function user.f(arr: int[]?) -> int[]? throws never {
+      { : never
+        return arr?.map?.((x) -> { ... }) : U[]?
+      }
+      !! 59..75: cannot infer type of lambda parameter `x` — add a type annotation or provide context
+      !! 47..76: type mismatch: expected int[]?, got U[]?
+    }
+    lambda user.f {
+    }
+    ");
+}
+
+#[test]
+fn optional_call_lambda_with_explicit_types() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function f(arr: int[]?) -> int[]? {
+    return arr?.map?.((x: int) -> int { x + 1 })
+}
+"#,
+    );
+    insta::assert_snapshot!(render_tir(&db, file), @r"
+    function user.f(arr: int[]?) -> int[]? throws never {
+      { : never
+        return arr?.map?.((x: int) -> int { ... }) : U[]?
+      }
+      !! 47..85: type mismatch: expected int[]?, got U[]?
+    }
+    lambda user.f {
+    }
+    ");
+}
+
+#[test]
+fn optional_call_builtin_string_method() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function f(s: string?) -> string[]? {
+    return s?.split?.(",")
+}
+"#,
+    );
+    insta::assert_snapshot!(render_tir(&db, file), @r#"
+    function user.f(s: string?) -> string[]? throws never {
+      { : never
+        return s?.split?.(",") : string[]?
+      }
+    }
+    "#);
+}
+
+#[test]
+fn optional_call_builtin_map_method() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function f(m: map<string, int>?) -> string[]? {
+    return m?.keys?.()
+}
+"#,
+    );
+    insta::assert_snapshot!(render_tir(&db, file), @r#"
+    function user.f(m: map<string, int>?) -> string[]? throws never {
+      { : never
+        return m?.keys?.() : string[]?
+      }
+    }
+    "#);
+}
+
+#[test]
+fn optional_call_unnecessary_chaining_diagnostic() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function f(callback: (x: int) -> int) -> int? {
+    return callback?.(42)
+}
+"#,
+    );
+    insta::assert_snapshot!(render_tir(&db, file), @r#"
+    function user.f(callback: (x: int) -> int) -> int? throws never {
+      { : never
+        return callback?.(42) : int?
+      }
+      !! 60..74: did you mean `callback(42)`? `callback?.(42)` is unnecessary, because `callback` cannot be null
+    }
+    "#);
+}
+
+#[test]
+fn parenthesized_optional_method_call_breaks_chain() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+class User {
+    function getName(self) -> string { self.name }
+    name string
+}
+
+function f(u: User?) -> string {
+    return (u?.getName)()
+}
+"#,
+    );
+    let output = render_tir(&db, file);
+    assert!(
+        output.contains("return u?.getName() : unknown"),
+        "Expected broken-chain call result in output, got:\n{output}"
+    );
+    assert!(
+        output.contains("cannot be called"),
+        "Expected broken-chain call diagnostic, got:\n{output}"
+    );
+}
+
+#[test]
+fn optional_call_arity_mismatch() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function f(callback: ((x: int) -> int)?) -> int? {
+    return callback?.(1, 2)
+}
+"#,
+    );
+    insta::assert_snapshot!(render_tir(&db, file), @r#"
+    function user.f(callback: ((x: int) -> int)?) -> int? throws never {
+      { : never
+        return callback?.(1, 2) : int?
+      }
+      !! 63..79: expected 1 argument(s), got 2
+    }
+    "#);
 }

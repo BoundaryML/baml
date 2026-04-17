@@ -31,23 +31,41 @@ interface TestTreeNodeProps {
   depth?: number;
   onRunTest?: (name: string) => void;
   testRunResults?: Map<string, Record<string, unknown>>;
+  failedExpands?: Set<string>;
+  onRetryExpand?: (name: string) => void;
 }
 
-function TestTreeNode({ def, depth = 0, onRunTest, testRunResults }: TestTreeNodeProps) {
+function TestTreeNode({ def, depth = 0, onRunTest, testRunResults, failedExpands, onRetryExpand }: TestTreeNodeProps) {
   const [expanded, setExpanded] = useState(true);
   const indent = 8 + depth * 12;
 
   if ('type' in def && def.type === 'lazyTestSet') {
+    const isFailed = failedExpands?.has(def.name);
     return (
       <div
         className="flex items-center gap-1.5 pr-2 py-0.5 text-[10px] font-vsc-mono text-vsc-text-muted"
         style={{ paddingLeft: indent }}
       >
-        <Loader2 size={12} className="animate-spin text-vsc-text-faint shrink-0" />
+        {isFailed ? (
+          <FlaskConical size={12} className="text-red-500 shrink-0" />
+        ) : (
+          <Loader2 size={12} className="animate-spin text-vsc-text-faint shrink-0" />
+        )}
         <span className="truncate text-[11px] font-medium italic text-vsc-text-faint">
           {def.name.split('/').pop()}
         </span>
-        <span className="text-[9px] text-vsc-text-faint ml-1">loading…</span>
+        <span className={cn('text-[9px] ml-1', isFailed ? 'text-red-500' : 'text-vsc-text-faint')}>
+          {isFailed ? 'failed' : 'loading\u2026'}
+        </span>
+        {isFailed && onRetryExpand && (
+          <button
+            className="ml-auto text-[9px] text-vsc-text-faint hover:text-vsc-text px-1 shrink-0"
+            onClick={(e) => { e.stopPropagation(); onRetryExpand(def.name); }}
+            title={`Retry expansion: ${def.name}`}
+          >
+            retry
+          </button>
+        )}
       </div>
     );
   }
@@ -110,6 +128,8 @@ function TestTreeNode({ def, depth = 0, onRunTest, testRunResults }: TestTreeNod
             depth={depth + 1}
             onRunTest={onRunTest}
             testRunResults={testRunResults}
+            failedExpands={failedExpands}
+            onRetryExpand={onRetryExpand}
           />
         ))}
       </CollapsibleContent>
@@ -129,6 +149,10 @@ export interface FunctionSidebarProps {
   onRefreshTests: () => void;
   onRunTest?: (name: string) => void;
   testRunResults?: Map<string, Record<string, unknown>>;
+  /** Testset names whose expansion failed — shows error state instead of spinner */
+  failedExpands?: Set<string>;
+  /** Called when the user clicks retry on a failed testset expansion */
+  onRetryExpand?: (name: string) => void;
   /** The synthetic collection RunEntry (if any) — used to show fetch log count badge */
   collectionRun?: RunEntry | null;
   /** True when the main panel is showing the collection view */
@@ -149,6 +173,8 @@ export const FunctionSidebar: FC<FunctionSidebarProps> = ({
   onRefreshTests,
   onRunTest,
   testRunResults,
+  failedExpands,
+  onRetryExpand,
   collectionRun,
   viewingCollection,
   onSelectCollectionView,
@@ -259,6 +285,7 @@ export const FunctionSidebar: FC<FunctionSidebarProps> = ({
               def={def}
               onRunTest={onRunTest}
               testRunResults={testRunResults}
+              failedExpands={failedExpands}
             />
           ))}
         </div>

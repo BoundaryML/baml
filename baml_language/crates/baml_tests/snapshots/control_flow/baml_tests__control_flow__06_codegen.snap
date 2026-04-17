@@ -56,11 +56,7 @@ function user.Headers() -> string {
     notify_block Setup
     notify_block Configuration
     notify_block Processing
-    load_const 1
-    load_const 2
-    bin_op +
-    load_const "to_string"
-    load_map_element
+    load_const null
     call_indirect
     return
 }
@@ -107,6 +103,14 @@ function user.LlmFunction$build_request(input: string) -> baml.http.Request {
 function user.LlmFunction$parse(json: string) -> string {
     load_const "LlmFunction"
     load_var json
+    call baml.llm.parse
+    return
+}
+
+function user.LlmFunction$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream {
+    load_var sse
+    load_const "LlmFunction"
+    load_global user.TestClient
     call baml.llm.parse
     return
 }

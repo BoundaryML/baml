@@ -11,6 +11,8 @@ pub enum ResourceType {
     File,
     Socket,
     Response,
+    SseStream,
+    StreamAccumulator,
 }
 
 /// Trait for releasing resource handles back to the registry.
@@ -123,6 +125,10 @@ impl std::fmt::Display for ResourceHandle {
             ResourceType::File => write!(f, "file:{}", self.display_name()),
             ResourceType::Socket => write!(f, "socket:{}", self.display_name()),
             ResourceType::Response => write!(f, "http-response:{}", self.display_name()),
+            ResourceType::SseStream => write!(f, "sse-stream:{}", self.display_name()),
+            ResourceType::StreamAccumulator => {
+                write!(f, "stream-accumulator:{}", self.display_name())
+            }
         }
     }
 }

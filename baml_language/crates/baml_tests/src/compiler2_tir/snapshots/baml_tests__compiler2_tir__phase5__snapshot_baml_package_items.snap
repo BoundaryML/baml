@@ -36,31 +36,38 @@ namespace baml.fs:
 namespace baml.http:
   class Request { methods: [] }
   class Response { methods: [text, bytes, ok] }
+  class SseStream { methods: [next, close] }
   function fetch
+  function fetch_sse
   function send
 namespace baml.llm:
   class AnthropicOptions { methods: [] }
   class AzureOpenAiOptions { methods: [] }
   class BedrockOptions { methods: [] }
-  class Client { methods: [to_primitive_client, get_constructor, build_attempt, build_attempt_with_state, build_plan, build_plan_with_state, execute, execute_once] }
+  class Client { methods: [to_primitive_client, get_constructor, build_attempt, build_attempt_with_state, build_plan, build_plan_with_state, execute_stream, execute_once_stream, execute_oneshot, execute_once_oneshot] }
   enum ClientType
   class ExecutionContext { methods: [] }
-  class ExecutionResult { methods: [] }
   class MediaUrlHandler { methods: [] }
   class OrchestrationStep { methods: [] }
   class PlannerState { methods: [rr_local_offset, rr_pick_index] }
-  class PrimitiveClient { methods: [render_prompt, specialize_prompt, build_request, parse] }
+  class PrimitiveClient { methods: [render_prompt, specialize_prompt, build_request, build_request_stream, new_stream_accumulator, validate_finish_reason, parse] }
   class PrimitiveClientOptions { methods: [] }
   class PromptAst { methods: [] }
   class RetryPolicy { methods: [] }
+  class Stream<T, S> { methods: [next, final] }
+  class StreamAccumulator { methods: [add_events, content, is_done, model, finish_reason, input_tokens, output_tokens] }
+  class StreamCache<T, S> { methods: [new] }
   class VertexAiOptions { methods: [] }
-  function __sap_parse<T>
+  function __sap_parse_final<T, S>
+  function __sap_parse_partial<T, S>
   function build_request
   function call_llm_function<T>
   function get_jinja_template
   function get_return_type
-  function parse<T>
+  function get_stream_return_type
+  function parse<T, S>
   function render_prompt
+  function stream_llm_function<T, S>
 namespace baml.math:
   function trunc
 namespace baml.media:
@@ -81,7 +88,11 @@ namespace baml.panics:
   class StackOverflow { methods: [] }
   class Unreachable { methods: [] }
   class UserPanic { methods: [] }
+namespace baml.stream:
+  class StreamFinished { methods: [] }
+  class StreamNoYield { methods: [] }
 namespace baml.sys:
+  function argv
   function now_ms
   function panic
   function shell

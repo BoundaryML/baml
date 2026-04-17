@@ -8,8 +8,9 @@ use baml_lsp2_actions::{
     grep, list_symbols,
 };
 use baml_project::ProjectDatabase;
-use baml_workspace::discover_baml_files;
 use clap::Args;
+
+use crate::project_load::load_project_from;
 
 #[derive(Args, Clone, Debug)]
 pub struct GrepArgs {
@@ -65,22 +66,10 @@ pub struct GrepArgs {
 
 impl GrepArgs {
     pub fn run(&self) -> Result<crate::ExitCode> {
-        let from = std::fs::canonicalize(&self.from)
-            .with_context(|| format!("Could not resolve path: {}", self.from.display()))?;
-
-        // Set up the compiler database.
-        let mut db = ProjectDatabase::new();
-        let _project = db.set_project_root(&from);
-        let baml_files = discover_baml_files(&from);
+        let (db, from, baml_files) = load_project_from(&self.from)?;
         if baml_files.is_empty() {
             eprintln!("No .baml files found in {}", from.display());
             return Ok(crate::ExitCode::Other);
-        }
-
-        for file_path in &baml_files {
-            let content = std::fs::read_to_string(file_path)
-                .with_context(|| format!("Failed to read {}", file_path.display()))?;
-            db.add_or_update_file(file_path, &content);
         }
 
         let source_files = db.get_source_files();

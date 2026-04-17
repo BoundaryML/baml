@@ -234,6 +234,10 @@ pub struct BexVm {
     /// Frame depths for traced function calls. Always sorted ascending (LIFO).
     /// Checked on `Return` to yield `FunctionExit` notifications.
     traced_frames: Vec<usize>,
+
+    /// Process argv passed to the engine at startup. Exposed to BAML via
+    /// `baml.sys.argv()`. Shared (cheap to clone) across VMs.
+    pub argv: Arc<[String]>,
 }
 
 /// VM execution state.
@@ -443,6 +447,7 @@ impl BexVm {
         heap: Arc<BexHeap>,
         globals: GlobalPool,
         resolved_class_names: HashMap<String, HeapPtr>,
+        argv: Arc<[String]>,
     ) -> Self {
         let tlab = Tlab::new(Arc::clone(&heap));
 
@@ -479,6 +484,7 @@ impl BexVm {
             watched_vars: HashMap::new(),
             interrupt_frame: None,
             traced_frames: Vec::new(),
+            argv,
         }
     }
 
@@ -718,7 +724,12 @@ impl BexVm {
             .map(|(name, idx)| (name, heap.compile_time_ptr(idx.into_raw())))
             .collect();
 
-        Ok(Self::new(heap, globals, resolved_class_names))
+        Ok(Self::new(
+            heap,
+            globals,
+            resolved_class_names,
+            Arc::from(Vec::<String>::new()),
+        ))
     }
 
     /// Bootstraps the VM preparing the given function to run.
