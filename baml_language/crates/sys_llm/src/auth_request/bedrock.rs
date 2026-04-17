@@ -18,9 +18,11 @@ use aws_smithy_runtime_api::{
 };
 use aws_smithy_types::body::SdkBody;
 use indexmap::IndexMap;
-use sys_types::BexExternalValue;
 #[cfg_attr(target_arch = "wasm32", allow(unused_imports))]
-use sys_types::runtime_io::{RuntimeIo, RuntimeIoError};
+use sys_types::{
+    BexExternalValue,
+    runtime_io::{RuntimeIo, RuntimeIoError},
+};
 
 use crate::{
     baml_std::{BedrockOptions, HttpRequest, PrimitiveClient, ProviderOptions},

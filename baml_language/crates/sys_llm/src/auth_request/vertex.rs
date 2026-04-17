@@ -26,9 +26,11 @@
 
 use std::sync::Arc;
 
-use sys_types::BexExternalValue;
 #[cfg_attr(target_arch = "wasm32", allow(unused_imports))]
-use sys_types::runtime_io::{RuntimeIo, RuntimeIoError};
+use sys_types::{
+    BexExternalValue,
+    runtime_io::{RuntimeIo, RuntimeIoError},
+};
 
 use crate::{
     baml_std::{HttpRequest, PrimitiveClient, ProviderOptions, VertexAiOptions},
