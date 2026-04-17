@@ -13,6 +13,7 @@
 pub mod bytecode;
 pub mod heap_ptr;
 pub mod indexable;
+mod roots;
 pub mod types;
 
 pub use bytecode::{
@@ -21,6 +22,7 @@ pub use bytecode::{
 };
 pub use heap_ptr::HeapPtr;
 pub use indexable::{GlobalIndex, GlobalPool, ObjectIndex, ObjectPool, StackIndex};
+pub use roots::RootHaver;
 pub use types::{
     Class, ClassField, ClientBuildMeta, ClientBuildType, CollectorRef, ConstValue, Enum,
     EnumVariant, Function, FunctionKind, FunctionMeta, Future, Instance, MediaValue, Object,

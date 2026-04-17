@@ -8,6 +8,7 @@ mod common;
 
 use std::sync::Arc;
 
+use ::bex_heap::CollectionLevel;
 use bex_engine::{BexEngine, BexExternalValue, FunctionCallContextBuilder};
 use common::compile_for_engine;
 use sys_native::SysOpsExt;
@@ -101,7 +102,7 @@ async fn registry_new_copy_objects_false_returns_handle() {
     );
 
     // The handle should survive a GC cycle (GC-rooted).
-    let _stats = engine.collect_garbage().await;
+    let _stats = engine.collect_garbage(CollectionLevel::Major).await;
     assert!(
         matches!(result, BexExternalValue::Handle(_)),
         "handle should still be valid after GC"

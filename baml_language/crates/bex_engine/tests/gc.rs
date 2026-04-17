@@ -7,6 +7,7 @@ mod common;
 
 use std::sync::Arc;
 
+use ::bex_heap::CollectionLevel;
 use bex_engine::{BexEngine, BexExternalValue, FunctionCallContextBuilder};
 use common::compile_for_engine;
 use sys_native::SysOpsExt;
@@ -55,7 +56,7 @@ async fn test_handle_prevents_gc_collection() {
     );
 
     // Trigger GC
-    let _stats = engine.collect_garbage().await;
+    let _stats = engine.collect_garbage(CollectionLevel::Major).await;
 
     // Value should still be correct after GC (basic local-binding check)
     assert_eq!(
@@ -119,7 +120,7 @@ async fn test_array_preserved_through_gc() {
     );
 
     // Trigger GC
-    let _stats = engine.collect_garbage().await;
+    let _stats = engine.collect_garbage(CollectionLevel::Major).await;
 
     // Array and all its elements should be preserved
     match result {
@@ -174,7 +175,7 @@ async fn test_gc_updates_forwarding_pointers() {
 
     // Trigger multiple GC cycles to ensure forwarding works
     for _ in 0..3 {
-        let _stats = engine.collect_garbage().await;
+        let _stats = engine.collect_garbage(CollectionLevel::Major).await;
     }
 
     // Objects should still be accessible with correct values
@@ -241,7 +242,7 @@ async fn test_multiple_handles_survive_gc() {
         .unwrap();
 
     // Trigger GC
-    let _stats = engine.collect_garbage().await;
+    let _stats = engine.collect_garbage(CollectionLevel::Major).await;
 
     // All handles should still be valid
     assert_eq!(h1, BexExternalValue::String("hello".to_string()));
@@ -291,7 +292,7 @@ async fn test_gc_with_nested_class_instances() {
         .unwrap();
 
     // Force GC to move objects and test that forwarding works correctly.
-    let _stats = engine.collect_garbage().await;
+    let _stats = engine.collect_garbage(CollectionLevel::Major).await;
 
     // Access nested field through the GC'd handle.  If Gen2 fixup is broken
     // the inner pointer will be stale and the engine will return wrong data.
@@ -348,7 +349,7 @@ async fn test_gc_with_enum_variant_round_trip() {
         .unwrap();
 
     // Force GC.
-    let _stats = engine.collect_garbage().await;
+    let _stats = engine.collect_garbage(CollectionLevel::Major).await;
 
     let echoed = engine
         .call_function(

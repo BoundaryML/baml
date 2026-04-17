@@ -16,7 +16,7 @@
 
 use std::{collections::HashMap, sync::Arc};
 
-use ::bex_vm_types::types::ErrorClass;
+use ::bex_vm_types::{RootHaver, types::ErrorClass};
 use ::core::any::TypeId;
 use bex_heap::{BexHeap, Generation, Tlab};
 use bex_vm_types::{
@@ -53,6 +53,15 @@ pub(crate) struct BytecodeFrame {
     pub(crate) locals_offset: StackIndex,
 }
 
+impl RootHaver for BytecodeFrame {
+    fn collect_roots(&self, roots: &mut Vec<HeapPtr>) {
+        roots.push(self.function);
+    }
+    fn forward_roots(&mut self, roots: &HashMap<HeapPtr, HeapPtr>) {
+        self.function = roots.get(&self.function).copied().unwrap_or(self.function);
+    }
+}
+
 /// Native continuation frame — pushed when a native function yields via
 /// `NativeCallResult::YieldToCall`. Sits below the callback's bytecode
 /// frame on the call stack and is popped when the callback returns.
@@ -61,6 +70,17 @@ pub(crate) struct NativeFrame {
     pub(crate) function: HeapPtr,
     /// The continuation to invoke with the callback's return value.
     pub(crate) continuation: Box<dyn crate::package_baml::Continuation>,
+}
+
+impl RootHaver for NativeFrame {
+    fn collect_roots(&self, roots: &mut Vec<HeapPtr>) {
+        roots.push(self.function);
+        roots.extend_from_slice(&self.continuation.gc_roots());
+    }
+    fn forward_roots(&mut self, roots: &HashMap<HeapPtr, HeapPtr>) {
+        self.function = roots.get(&self.function).copied().unwrap_or(self.function);
+        self.continuation.apply_forwarding(roots);
+    }
 }
 
 /// Call frame — either a bytecode frame or a native continuation frame.
@@ -75,6 +95,21 @@ impl Frame {
         match self {
             Frame::Bytecode(f) => f.function,
             Frame::Native(f) => f.function,
+        }
+    }
+}
+
+impl RootHaver for Frame {
+    fn collect_roots(&self, roots: &mut Vec<HeapPtr>) {
+        match self {
+            Frame::Bytecode(f) => f.collect_roots(roots),
+            Frame::Native(f) => f.collect_roots(roots),
+        }
+    }
+    fn forward_roots(&mut self, roots: &HashMap<HeapPtr, HeapPtr>) {
+        match self {
+            Frame::Bytecode(f) => f.forward_roots(roots),
+            Frame::Native(f) => f.forward_roots(roots),
         }
     }
 }
@@ -3799,5 +3834,43 @@ impl BexVm {
         }
 
         Ok(None)
+    }
+}
+
+impl ::bex_vm_types::RootHaver for BexVm {
+    fn collect_roots(&self, roots: &mut Vec<HeapPtr>) {
+        // Stack values
+        roots.extend(self.stack.iter().filter_map(|v| match v {
+            Value::Object(ptr) => Some(*ptr),
+            _ => None,
+        }));
+
+        // Watch state (last_assigned/last_notified values that aren't on the stack)
+        self.watch.collect_roots(roots);
+
+        // Frame function pointers (needed once closures are heap-allocated)
+        roots.extend(self.collect_frame_roots());
+
+        // Note: Frame locals are stored in the stack at the locals_offset position,
+        // so they're already included in the stack iteration above.
+    }
+
+    fn forward_roots(&mut self, roots: &HashMap<HeapPtr, HeapPtr>) {
+        // Stack values
+        for value in &mut self.stack {
+            if let Value::Object(ptr) = value {
+                if let Some(&new_ptr) = roots.get(ptr) {
+                    *ptr = new_ptr;
+                }
+            }
+        }
+
+        // Watch state (last_assigned/last_notified values that aren't on the stack)
+        self.watch.forward_roots(roots);
+
+        // Frame function pointers (needed once closures are heap-allocated)
+        for frame in &mut self.frames {
+            frame.forward_roots(roots);
+        }
     }
 }
