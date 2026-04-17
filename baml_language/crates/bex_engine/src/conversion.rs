@@ -207,6 +207,9 @@ impl BexEngine {
             Object::Closure(_) => Err(EngineError::CannotConvert {
                 type_name: "closure".to_string(),
             }),
+            Object::BoundMethod(_) => Err(EngineError::CannotConvert {
+                type_name: "bound_method".to_string(),
+            }),
             Object::Cell(_) => Err(EngineError::CannotConvert {
                 type_name: "cell".to_string(),
             }),
@@ -547,6 +550,7 @@ fn find_matching_union_member<'a>(value: &Value, members: &'a [Ty]) -> Option<&'
                 // Types that don't participate in union discrimination.
                 Object::Function(_)
                 | Object::Closure(_)
+                | Object::BoundMethod(_)
                 | Object::Cell(_)
                 | Object::Class(_)
                 | Object::Enum(_)
@@ -643,6 +647,7 @@ pub(crate) fn vm_arg_to_external(vm: &BexVm, value: &Value) -> BexExternalValue 
                 // These types should not appear as sys op arguments.
                 Object::Function(_)
                 | Object::Closure(_)
+                | Object::BoundMethod(_)
                 | Object::Cell(_)
                 | Object::Class(_)
                 | Object::Enum(_)

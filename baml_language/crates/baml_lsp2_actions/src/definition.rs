@@ -407,7 +407,8 @@ fn resolve_field_access_at(
                 range,
             })
         }
-        MemberResolution::Method { func_loc, .. } => {
+        MemberResolution::BoundMethod { func_loc, .. }
+        | MemberResolution::UnboundMethod { func_loc, .. } => {
             // Methods are not in FileSymbolContributions — use ItemTreeSourceMap.
             let target_file = func_loc.file(db);
             let target_source_map = baml_compiler2_hir::file_item_tree_source_map(db, target_file);

@@ -292,7 +292,11 @@ fn resolution_to_item_ref(
                 name: func_data.name.clone(),
             })
         }
-        MemberResolution::Method {
+        MemberResolution::BoundMethod {
+            class_loc,
+            func_loc,
+        }
+        | MemberResolution::UnboundMethod {
             class_loc,
             func_loc,
         } => {
@@ -1677,15 +1681,57 @@ impl<'db> LoweringContext<'db> {
             {
                 use baml_compiler2_tir::inference::MemberResolution;
                 // The last resolution corresponds to the final segment of the path.
-                // - If the last resolution is a Method/Free, this path is a callee reference;
-                //   emit a function constant. The receiver will be prepended by lower_call.
+                // - If the last resolution is a BoundMethod/UnboundMethod/Free, this path is a
+                //   callee reference; emit a function constant. The receiver will be prepended
+                //   by lower_call.
                 // - If the last resolution is a Field, this is a pure field-chain access.
                 // Note: for paths like `user.profile.items.slice`, the member_resolutions
-                // are [Field{profile}, Field{items}, Method{slice}], so we check last().
+                // are [Field{profile}, Field{items}, BoundMethod{slice}], so we check last().
                 match member_resolutions.last() {
-                    Some(MemberResolution::Method { .. } | MemberResolution::Free { .. }) => {
-                        // Local-rooted method/free call reference — emit a function constant.
-                        // The receiver will be prepended by lower_call.
+                    Some(MemberResolution::BoundMethod { .. }) => {
+                        // Bound method reference: lower receiver and emit MakeBoundMethod.
+                        let resolution = member_resolutions.into_iter().last().unwrap();
+                        if let Some(item) = resolution_to_item_ref(self.db, &resolution) {
+                            let receiver_segments = &segments[..segments.len() - 1];
+                            let receiver_op = if receiver_segments.len() == 1 {
+                                if let Some(&recv_local) = self.locals.get(&receiver_segments[0]) {
+                                    Operand::Copy(Place::Local(recv_local))
+                                } else if let Some(cap_idx) = self
+                                    .capture_indices
+                                    .as_ref()
+                                    .and_then(|m| m.get(&receiver_segments[0]))
+                                    .copied()
+                                {
+                                    // Receiver is a captured variable — use capture slot.
+                                    Operand::Copy(Place::Capture(cap_idx))
+                                } else {
+                                    Operand::Constant(Constant::Null)
+                                }
+                            } else {
+                                // Multi-segment receiver (e.g. `cfg.encoder`): lower as field chain.
+                                let recv_ty = self.expr_ty(expr_id);
+                                let recv_local = self.builder.temp(recv_ty);
+                                self.lower_multi_segment_path_as_field_chain(
+                                    expr_id,
+                                    receiver_segments,
+                                    Place::local(recv_local),
+                                );
+                                Operand::Copy(Place::local(recv_local))
+                            };
+                            self.builder.assign(
+                                dest,
+                                Rvalue::MakeBoundMethod {
+                                    item_ref: item,
+                                    receiver: receiver_op,
+                                },
+                            );
+                            return;
+                        }
+                    }
+                    Some(
+                        MemberResolution::UnboundMethod { .. } | MemberResolution::Free { .. },
+                    ) => {
+                        // Unbound method or free function reference — emit a plain function constant.
                         let resolution = member_resolutions.into_iter().last().unwrap();
                         if let Some(item) = resolution_to_item_ref(self.db, &resolution) {
                             self.builder.assign(
@@ -1716,7 +1762,45 @@ impl<'db> LoweringContext<'db> {
             {
                 use baml_compiler2_tir::inference::MemberResolution;
                 match &resolution {
-                    MemberResolution::Method { .. } | MemberResolution::Free { .. } => {
+                    MemberResolution::BoundMethod { .. } => {
+                        // Bound method reference via flat resolutions: emit MakeBoundMethod.
+                        if let Some(item) = resolution_to_item_ref(self.db, &resolution) {
+                            let receiver_segments = &segments[..segments.len() - 1];
+                            let receiver_op = if receiver_segments.len() == 1 {
+                                if let Some(&recv_local) = self.locals.get(&receiver_segments[0]) {
+                                    Operand::Copy(Place::Local(recv_local))
+                                } else if let Some(cap_idx) = self
+                                    .capture_indices
+                                    .as_ref()
+                                    .and_then(|m| m.get(&receiver_segments[0]))
+                                    .copied()
+                                {
+                                    // Receiver is a captured variable — use capture slot.
+                                    Operand::Copy(Place::Capture(cap_idx))
+                                } else {
+                                    Operand::Constant(Constant::Null)
+                                }
+                            } else {
+                                let recv_ty = self.expr_ty(expr_id);
+                                let recv_local = self.builder.temp(recv_ty);
+                                self.lower_multi_segment_path_as_field_chain(
+                                    expr_id,
+                                    receiver_segments,
+                                    Place::local(recv_local),
+                                );
+                                Operand::Copy(Place::local(recv_local))
+                            };
+                            self.builder.assign(
+                                dest,
+                                Rvalue::MakeBoundMethod {
+                                    item_ref: item,
+                                    receiver: receiver_op,
+                                },
+                            );
+                            return;
+                        }
+                    }
+                    MemberResolution::UnboundMethod { .. } | MemberResolution::Free { .. } => {
                         if let Some(item) = resolution_to_item_ref(self.db, &resolution) {
                             self.builder.assign(
                                 dest,
@@ -2445,7 +2529,7 @@ impl LoweringContext<'_> {
         }
 
         // Check if callee is a method call (MemberAccess or multi-segment Path with a
-        // MemberResolution::Method/Free). Field and Variant resolutions are not callable.
+        // MemberResolution::BoundMethod/UnboundMethod/Free). Field and Variant resolutions are not callable.
         // If the base is a real value (not a package namespace), prepend it as self.
         let (callee_operand, arg_operands) = if let AstExpr::MemberAccess { base, .. } =
             &callee_expr
@@ -2457,7 +2541,9 @@ impl LoweringContext<'_> {
                     use baml_compiler2_tir::inference::MemberResolution;
                     matches!(
                         r,
-                        MemberResolution::Method { .. } | MemberResolution::Free { .. }
+                        MemberResolution::BoundMethod { .. }
+                            | MemberResolution::UnboundMethod { .. }
+                            | MemberResolution::Free { .. }
                     )
                 })
             {
@@ -2476,7 +2562,8 @@ impl LoweringContext<'_> {
                     self.resolutions
                         .get(&(self.current_scope, callee))
                         .is_some_and(|r| match r {
-                            MemberResolution::Method { func_loc, .. }
+                            MemberResolution::BoundMethod { func_loc, .. }
+                            | MemberResolution::UnboundMethod { func_loc, .. }
                             | MemberResolution::Free { func_loc } => {
                                 let sig =
                                     baml_compiler2_ppir::function_signature(self.db, *func_loc);
@@ -2488,15 +2575,42 @@ impl LoweringContext<'_> {
                         })
                 };
                 if base_is_value && method_takes_self {
-                    // Instance method call: arr.length() — prepend receiver as self
+                    // Instance method call: arr.length() — prepend receiver as self.
+                    // For immediate calls, emit the callee as a plain function constant
+                    // (not MakeBoundMethod) since the receiver is passed explicitly as self.
                     let receiver_op = self.lower_to_operand(*base);
-                    let callee_op = self.lower_to_operand(callee);
+                    let callee_op = {
+                        let resolution =
+                            self.resolutions.get(&(self.current_scope, callee)).cloned();
+                        match resolution
+                            .as_ref()
+                            .and_then(|r| resolution_to_item_ref(self.db, r))
+                        {
+                            Some(item) => Operand::Constant(Constant::Function(item)),
+                            None => self.lower_to_operand(callee),
+                        }
+                    };
                     let mut all_args = vec![receiver_op];
                     all_args.extend(args.iter().map(|&a| self.lower_to_operand(a)));
                     (callee_op, all_args)
                 } else {
-                    // Package function reference: baml.Array.length(array) — no self prepend
-                    let callee_op = self.lower_to_operand(callee);
+                    // Non-self method or package function reference:
+                    // e.g. Factory<int>.create(42), baml.Array.length(array).
+                    // Resolve the callee as a plain function constant using
+                    // resolution_to_item_ref to avoid lower_member_access emitting
+                    // MakeBoundMethod (which would try to load the base type as a
+                    // runtime value).
+                    let callee_op = {
+                        let resolution =
+                            self.resolutions.get(&(self.current_scope, callee)).cloned();
+                        match resolution
+                            .as_ref()
+                            .and_then(|r| resolution_to_item_ref(self.db, r))
+                        {
+                            Some(item) => Operand::Constant(Constant::Function(item)),
+                            None => self.lower_to_operand(callee),
+                        }
+                    };
                     let arg_ops: Vec<Operand> =
                         args.iter().map(|&a| self.lower_to_operand(a)).collect();
                     (callee_op, arg_ops)
@@ -2519,7 +2633,11 @@ impl LoweringContext<'_> {
                     .and_then(|resolutions| resolutions.last())
                     .is_some_and(|r| {
                         use baml_compiler2_tir::inference::MemberResolution;
-                        matches!(r, MemberResolution::Method { .. })
+                        matches!(
+                            r,
+                            MemberResolution::BoundMethod { .. }
+                                | MemberResolution::UnboundMethod { .. }
+                        )
                     });
             // Also check flat resolutions (package-path method call, kept for compatibility).
             let is_pkg_method = !is_local_method
@@ -2529,15 +2647,33 @@ impl LoweringContext<'_> {
                     .get(&(self.current_scope, callee))
                     .is_some_and(|r| {
                         use baml_compiler2_tir::inference::MemberResolution;
-                        matches!(r, MemberResolution::Method { .. })
+                        matches!(
+                            r,
+                            MemberResolution::BoundMethod { .. }
+                                | MemberResolution::UnboundMethod { .. }
+                        )
                     });
 
             if is_local_method {
                 // Multi-segment path callee with a local-rooted Method resolution.
                 // The last segment is the method; segments[0..n-1] form the receiver.
                 // e.g. `self.method()` → receiver=self, `user.profile.items.slice()` → receiver=user.profile.items.
+                //
+                // For immediate calls we emit the callee as a plain function constant
+                // (not MakeBoundMethod) since the receiver is passed explicitly as self.
                 let receiver_segments = &segments[..segments.len() - 1];
-                let callee_op = self.lower_to_operand(callee);
+                let method_resolution = self
+                    .path_member_resolutions
+                    .get(&(self.current_scope, callee))
+                    .and_then(|resolutions| resolutions.last())
+                    .cloned();
+                let callee_op = match method_resolution
+                    .as_ref()
+                    .and_then(|r| resolution_to_item_ref(self.db, r))
+                {
+                    Some(item) => Operand::Constant(Constant::Function(item)),
+                    None => self.lower_to_operand(callee),
+                };
                 let receiver_op = if receiver_segments.len() == 1 {
                     // Simple local variable receiver (e.g. `self`).
                     if let Some(&recv_local) = self.locals.get(&receiver_segments[0]) {
@@ -2561,16 +2697,24 @@ impl LoweringContext<'_> {
                 (callee_op, all_args)
             } else if is_pkg_method {
                 // Package-path method call (via flat resolutions): same treatment.
+                // For immediate calls, emit the callee as a plain function constant
+                // (not MakeBoundMethod) since the receiver is passed explicitly as self.
+                let flat_resolution = self.resolutions.get(&(self.current_scope, callee)).cloned();
+                let callee_op = match flat_resolution
+                    .as_ref()
+                    .and_then(|r| resolution_to_item_ref(self.db, r))
+                {
+                    Some(item) => Operand::Constant(Constant::Function(item)),
+                    None => self.lower_to_operand(callee),
+                };
                 let first_seg = &segments[0];
                 let receiver_local = self.locals.get(first_seg).copied();
                 if let Some(receiver_local) = receiver_local {
                     let receiver_op = Operand::Copy(Place::Local(receiver_local));
-                    let callee_op = self.lower_to_operand(callee);
                     let mut all_args = vec![receiver_op];
                     all_args.extend(args.iter().map(|&a| self.lower_to_operand(a)));
                     (callee_op, all_args)
                 } else {
-                    let callee_op = self.lower_to_operand(callee);
                     let arg_ops: Vec<Operand> =
                         args.iter().map(|&a| self.lower_to_operand(a)).collect();
                     (callee_op, arg_ops)
@@ -2683,7 +2827,8 @@ impl LoweringContext<'_> {
                     .and_then(|resolutions| resolutions.last())
                     .and_then(|res| match res {
                         MemberResolution::Free { func_loc } => Some(*func_loc),
-                        MemberResolution::Method { func_loc, .. } => Some(*func_loc),
+                        MemberResolution::BoundMethod { func_loc, .. }
+                        | MemberResolution::UnboundMethod { func_loc, .. } => Some(*func_loc),
                         MemberResolution::Field { .. } | MemberResolution::Variant { .. } => None,
                     });
                 if from_pmr.is_some() {
@@ -2693,7 +2838,8 @@ impl LoweringContext<'_> {
                         .get(&(self.current_scope, callee))
                         .and_then(|res| match res {
                             MemberResolution::Free { func_loc } => Some(*func_loc),
-                            MemberResolution::Method { func_loc, .. } => Some(*func_loc),
+                            MemberResolution::BoundMethod { func_loc, .. }
+                            | MemberResolution::UnboundMethod { func_loc, .. } => Some(*func_loc),
                             MemberResolution::Field { .. } | MemberResolution::Variant { .. } => {
                                 None
                             }
@@ -2713,7 +2859,8 @@ impl LoweringContext<'_> {
             use baml_compiler2_tir::inference::MemberResolution;
             if let Some(resolution) = self.resolutions.get(&(self.current_scope, callee)) {
                 let func_loc = match resolution {
-                    MemberResolution::Method { func_loc, .. } => Some(*func_loc),
+                    MemberResolution::BoundMethod { func_loc, .. }
+                    | MemberResolution::UnboundMethod { func_loc, .. } => Some(*func_loc),
                     MemberResolution::Free { func_loc } => Some(*func_loc),
                     MemberResolution::Field { .. } | MemberResolution::Variant { .. } => None,
                 };
@@ -2961,8 +3108,9 @@ impl LoweringContext<'_> {
         field: &Name,
         dest: Place,
     ) {
-        // Check if TIR resolved this to a method or free function — if so, emit a function constant.
-        // Field and Variant resolutions fall through to the existing lowering paths below.
+        // Check if TIR resolved this to a method or free function — if so, emit a function constant
+        // (unbound) or MakeBoundMethod (bound). Field and Variant resolutions fall through to the
+        // existing lowering paths below.
         if let Some(resolution) = self
             .resolutions
             .get(&(self.current_scope, expr_id))
@@ -2970,7 +3118,23 @@ impl LoweringContext<'_> {
         {
             use baml_compiler2_tir::inference::MemberResolution;
             match &resolution {
-                MemberResolution::Method { .. } | MemberResolution::Free { .. } => {
+                MemberResolution::BoundMethod { .. } => {
+                    // Bound method reference: lower receiver and emit MakeBoundMethod.
+                    let item = resolution_to_item_ref(self.db, &resolution);
+                    if let Some(item) = item {
+                        let receiver_op = self.lower_to_operand(base);
+                        self.builder.assign(
+                            dest,
+                            Rvalue::MakeBoundMethod {
+                                item_ref: item,
+                                receiver: receiver_op,
+                            },
+                        );
+                        return;
+                    }
+                }
+                MemberResolution::UnboundMethod { .. } | MemberResolution::Free { .. } => {
+                    // Unbound method or free function reference: emit a plain function constant.
                     let item = resolution_to_item_ref(self.db, &resolution);
                     if let Some(item) = item {
                         self.builder.assign(

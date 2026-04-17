@@ -4986,6 +4986,7 @@ fn format_vm_value(value: &bex_vm_types::Value, vm: &bex_vm::BexVm) -> String {
                 Object::Collector(_) => "<collector>".to_string(),
                 Object::Type(ty) => format!("<type: {ty}>"),
                 Object::Closure(c) => format!("<closure captures={}>", c.captures.len()),
+                Object::BoundMethod(_) => "<bound_method>".to_string(),
                 Object::Cell(c) => format!("<cell {}>", format_vm_value(&c.value, vm)),
                 Object::Uint8Array(bytes) => format!("<uint8array len={}>", bytes.len()),
                 Object::RustData(_) => "<rust_data>".to_string(),

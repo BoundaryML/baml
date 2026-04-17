@@ -654,6 +654,11 @@ pub enum Object {
     /// A closure: a function paired with captured variable cells.
     Closure(Closure),
 
+    /// A method bound to a specific receiver instance.
+    /// Created by `MakeBoundMethod`. The receiver is inserted as `self`
+    /// at call time by `CallIndirect`.
+    BoundMethod(BoundMethod),
+
     /// A mutable cell holding a single captured value.
     Cell(Cell),
 
@@ -702,6 +707,18 @@ pub struct Closure {
     pub captures: Vec<Value>,
 }
 
+/// A method bound to a specific receiver instance.
+///
+/// Created by `MakeBoundMethod`. The receiver is inserted as `self`
+/// at call time by `CallIndirect`.
+#[derive(Clone, Debug)]
+pub struct BoundMethod {
+    /// Pointer to the underlying `Object::Function`.
+    pub function: HeapPtr,
+    /// The receiver value (inserted as `self` at call time).
+    pub receiver: Value,
+}
+
 /// A mutable cell wrapping a single captured value.
 ///
 /// Variables that are closed over are heap-allocated as `Cell` objects so that
@@ -723,6 +740,7 @@ impl std::fmt::Display for Object {
                 let captures_len = closure.captures.len();
                 write!(f, "<closure captures={captures_len}>")
             }
+            Object::BoundMethod(_) => write!(f, "<bound_method>"),
             Object::Cell(cell) => write!(f, "<cell {}>", cell.value),
             Object::String(string) => string.fmt(f),
             Object::Uint8Array(bytes) => write!(f, "<uint8array len={}>", bytes.len()),
@@ -838,6 +856,7 @@ impl ObjectType {
         match ob {
             Object::Function(func) => Self::Function(FunctionType::from(&func.kind)),
             Object::Closure(_) => Self::Closure,
+            Object::BoundMethod(_) => Self::Closure, // Treat as callable like closures
             Object::Cell(_) => Self::Cell,
             Object::Class(_) => Self::Class,
             Object::Instance(_) => Self::Instance,

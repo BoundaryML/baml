@@ -391,6 +391,11 @@ fn write_rvalue(f: &mut impl Write, rvalue: &Rvalue) -> fmt::Result {
             }
             write!(f, ")")
         }
+        Rvalue::MakeBoundMethod { item_ref, receiver } => {
+            write!(f, "make_bound_method {item_ref}(")?;
+            write_operand(f, receiver)?;
+            write!(f, ")")
+        }
     }
 }
 

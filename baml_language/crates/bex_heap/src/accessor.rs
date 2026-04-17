@@ -697,6 +697,9 @@ impl<'a> BexValue<'a> {
                     Object::Closure(_) => Err(AccessError::CannotConvertToOwned {
                         reason: "closure".to_string(),
                     }),
+                    Object::BoundMethod(_) => Err(AccessError::CannotConvertToOwned {
+                        reason: "bound_method".to_string(),
+                    }),
                     Object::Cell(_) => Err(AccessError::CannotConvertToOwned {
                         reason: "cell".to_string(),
                     }),

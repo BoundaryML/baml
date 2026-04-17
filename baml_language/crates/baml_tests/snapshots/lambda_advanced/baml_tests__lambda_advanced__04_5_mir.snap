@@ -84,7 +84,7 @@ fn .<lambda(test_capture_in_map_inferred, 0)>(x: null) -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: null // x // param
-    let _2: void
+    let _2: int
 
     bb0: {
         _2 = copy capture[0];
@@ -138,7 +138,7 @@ fn .<lambda(test_capture_lambda_inferred, 1)>(x: int) -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: int // x // param
-    let _2: void
+    let _2: (int, int) -> int
 
     bb0: {
         _2 = copy capture[0];
@@ -305,9 +305,9 @@ fn .<lambda(<lambda(test_deep_capture, 0)>, 1)>(c: int) -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: int // c // param
-    let _2: void
-    let _3: void
-    let _4: void
+    let _2: int
+    let _3: int
+    let _4: int
 
     bb0: {
         _3 = copy capture[0];
@@ -365,9 +365,9 @@ fn .<lambda(<lambda(test_deep_capture_inferred, 0)>, 1)>(c: int) -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: int // c // param
-    let _2: void
-    let _3: void
-    let _4: void
+    let _2: int
+    let _3: int
+    let _4: int
 
     bb0: {
         _3 = copy capture[0];
@@ -559,7 +559,7 @@ fn .<lambda(<lambda(test_higher_order_inferred, 0)>, 1)>(x: int) -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: int // x // param
-    let _2: void
+    let _2: int
 
     bb0: {
         _2 = copy capture[0];
@@ -619,7 +619,7 @@ fn .<lambda(<lambda(test_higher_order_return, 0)>, 1)>(x: int) -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: int // x // param
-    let _2: void
+    let _2: int
 
     bb0: {
         _2 = copy capture[0];
@@ -1209,7 +1209,7 @@ fn .<lambda(test_map_with_capture, 0)>(x: null) -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: null // x // param
-    let _2: void
+    let _2: int
 
     bb0: {
         _2 = copy capture[0];
