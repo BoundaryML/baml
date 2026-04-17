@@ -115,6 +115,7 @@ function postOut(msg: WorkerOutMessage, transfer?: Transferable[]): void {
 // ---------------------------------------------------------------------------
 
 let nextLogId = 0;
+let nextRuntimeEventId = 0;
 
 async function loggingFetch(
   callId: number,
@@ -260,6 +261,24 @@ function onPlaygroundNotification(notification: PlaygroundNotification): void {
       postOut({
         type: "cursorContext",
         context: notification.context,
+      });
+      break;
+    case "runtimeEvent":
+      // Runtime events (log.info, baml.events.send, etc.) get forwarded to UI
+      // Note: We don't have callId from the notification, so we use rootSpanId to match
+      // This will need to be associated with a run on the UI side
+      postOut({
+        type: "runtimeEventNew",
+        entry: {
+          id: nextRuntimeEventId++,
+          callId: 0, // Will be matched by rootSpanId on UI side
+          spanId: notification.spanId,
+          parentSpanId: notification.parentSpanId ?? null,
+          rootSpanId: notification.rootSpanId,
+          timestampMs: notification.timestampMs,
+          eventType: notification.eventType,
+          eventData: notification.eventData,
+        },
       });
       break;
     default:

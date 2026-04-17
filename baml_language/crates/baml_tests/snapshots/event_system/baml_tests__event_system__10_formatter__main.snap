@@ -3,6 +3,12 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 // Test project for event system observability
 
+class User {
+    id: int,
+    name: string,
+    email: string,
+}
+
 function simple_function() -> int {
     42
 }
@@ -29,21 +35,22 @@ function emit_multiple_events() -> null {
 
 // Test logging at different levels
 function test_logging() -> null {
-    log.debug_simple("Starting process");
-    log.info("Processing item", { id: 123 });
-    log.warn_simple("Resource usage high");
-    log.error("Operation failed", { code: "E001", retries: 3 })
+    let user = User { id: 123, name: "Alice", email: "alice@example.com" };
+    baml.log.debug({ message: "Starting process" });
+    baml.log.info({ user: user, status: "processing" });
+    baml.log.warn({ warning: "Resource usage high" });
+    baml.log.error({ code: "E001", retries: 3 })
 }
 
 // Test combined function execution with events
 function process_with_logging(input: string) -> string {
-    log.info("Processing started", { input: input });
+    baml.log.info({ event: "start", input: input });
     baml.events.send("processing", { stage: "start" });
 
     let result = "Processed: " + input;
 
     baml.events.send("processing", { stage: "complete" });
-    log.info("Processing complete", { result: result });
+    baml.log.info({ event: "complete", result: result });
 
     result
 }

@@ -44,10 +44,11 @@ function user.nested_outer() -> int {
 }
 
 function user.process_with_logging(input: string) -> string {
-    load_const "Processing started"
+    load_const "start"
     load_var input
+    load_const "event"
     load_const "input"
-    alloc_map 1
+    alloc_map 2
     call baml.log.info
     pop 1
     load_const "processing"
@@ -66,10 +67,11 @@ function user.process_with_logging(input: string) -> string {
     alloc_map 1
     send_event
     pop 1
-    load_const "Processing complete"
+    load_const "complete"
     load_var result
+    load_const "event"
     load_const "result"
-    alloc_map 1
+    alloc_map 2
     call baml.log.info
     pop 1
     load_var result
@@ -83,18 +85,28 @@ function user.simple_function() -> int {
 
 function user.test_logging() -> null {
     load_const "Starting process"
-    call baml.log.debug_simple
-    pop 1
-    load_const "Processing item"
-    load_const 123
-    load_const "id"
+    load_const "message"
     alloc_map 1
+    call baml.log.debug
+    pop 1
+    alloc_instance User
+    load_const 123
+    init_field .id
+    load_const "Alice"
+    init_field .name
+    load_const "alice@example.com"
+    init_field .email
+    load_const "processing"
+    load_const "user"
+    load_const "status"
+    alloc_map 2
     call baml.log.info
     pop 1
     load_const "Resource usage high"
-    call baml.log.warn_simple
+    load_const "warning"
+    alloc_map 1
+    call baml.log.warn
     pop 1
-    load_const "Operation failed"
     load_const "E001"
     load_const 3
     load_const "code"

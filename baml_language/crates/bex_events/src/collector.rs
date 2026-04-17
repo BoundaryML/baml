@@ -293,7 +293,7 @@ fn sum_option(a: Option<i64>, b: Option<i64>) -> Option<i64> {
 /// Try to extract a `LogEvent` from a `CustomEvent` emitted by `log.info()` etc.
 ///
 /// The `log.*` BAML functions emit custom events with name="log" and data structured as:
-/// `{ level: string, message: string, data: map<string, unknown> }`.
+/// `{ level: string, data: map<string, unknown> }`.
 fn extract_log_from_custom(custom: &CustomEvent) -> Option<LogEvent> {
     if custom.name != "log" {
         return None;
@@ -305,19 +305,11 @@ fn extract_log_from_custom(custom: &CustomEvent) -> Option<LogEvent> {
                 BexExternalValue::String(s) => s.clone(),
                 _ => return None,
             };
-            let message = match entries.get("message")? {
-                BexExternalValue::String(s) => s.clone(),
-                _ => return None,
-            };
             let data = entries
                 .get("data")
                 .cloned()
                 .unwrap_or(BexExternalValue::Null);
-            Some(LogEvent {
-                level,
-                message,
-                data,
-            })
+            Some(LogEvent { level, data })
         }
         _ => None,
     }

@@ -10,11 +10,25 @@
  */
 
 import type { FC } from 'react';
+import { useState } from 'react';
 import { usePlayground } from './PlaygroundProvider';
 import { MonacoEditor } from './MonacoEditor';
+import { RotateCcw } from 'lucide-react';
 
 export const SplitPreview: FC = () => {
-  const { files, setFiles } = usePlayground();
+  const { files, setFiles, resetFiles } = usePlayground();
+  const [showConfirm, setShowConfirm] = useState(false);
+
+  const handleReset = () => {
+    if (showConfirm) {
+      resetFiles();
+      setShowConfirm(false);
+      window.location.reload();
+    } else {
+      setShowConfirm(true);
+      setTimeout(() => setShowConfirm(false), 3000);
+    }
+  };
 
   return (
     <div className="font-vsc text-vsc-text relative h-full w-full">
@@ -23,6 +37,14 @@ export const SplitPreview: FC = () => {
         onFilesChange={setFiles}
         height="100%"
       />
+      <button
+        onClick={handleReset}
+        className="absolute bottom-4 left-4 z-50 flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded bg-vsc-bg-secondary hover:bg-vsc-bg-tertiary border border-vsc-border text-vsc-text-muted hover:text-vsc-text transition-colors"
+        title="Reset to default code"
+      >
+        <RotateCcw size={14} />
+        {showConfirm ? 'Click again to confirm' : 'Reset'}
+      </button>
     </div>
   );
 };

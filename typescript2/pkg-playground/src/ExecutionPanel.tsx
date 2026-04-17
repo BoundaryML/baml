@@ -35,6 +35,7 @@ import type {
   FunctionInfo,
   ProjectUpdate,
   RunEntry,
+  RuntimeEventEntry,
   WorkerOutMessage,
 } from './worker-protocol';
 import { decodeCallResult } from '@b/pkg-proto';
@@ -367,6 +368,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
                   functionName: '$collect_tests',
                   argsJson: '',
                   fetchLogs: buffered,
+                  runtimeEvents: [],
                   result: null,
                   error: null,
                   status: 'success',
@@ -451,6 +453,20 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
             })),
           );
           break;
+
+        case 'runtimeEventNew': {
+          const eventEntry = data.entry;
+          // Add runtime event to all currently running runs
+          // (typically only one run is active at a time)
+          setRuns((prev) =>
+            prev.map((r) =>
+              r.status === 'running'
+                ? { ...r, runtimeEvents: [...r.runtimeEvents, eventEntry] }
+                : r
+            ),
+          );
+          break;
+        }
 
         case 'envVarRequest': {
           // Always track as a known required key (proactive indicator)
@@ -653,6 +669,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
       functionName: selectedFn,
       argsJson,
       fetchLogs: [],
+      runtimeEvents: [],
       result: null,
       error: null,
       status: 'running',
@@ -712,6 +729,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
       testName: name,
       argsJson: `(test: ${name})`,
       fetchLogs: [],
+      runtimeEvents: [],
       result: null,
       error: null,
       status: 'running',
@@ -971,20 +989,6 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
             >
               {isRunning ? 'Running...' : 'Run'}
             </Button>
-            {runs.length > 0 && !isRunning && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="text-[10px]"
-                onClick={() => {
-                  const runIds = runs.map((r) => r.id);
-                  port.postMessage({ type: 'clearHandles', runIds });
-                  setRuns([]);
-                }}
-              >
-                Clear
-              </Button>
-            )}
           </div>
         )}
       </div>
@@ -1105,6 +1109,77 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
                         </div>
                       );
                     })}
+                    {/* Runtime events (log.info, baml.events.send, etc.) */}
+                    {run.runtimeEvents.length > 0 && (
+                      <div className="py-1.5 pr-2.5 pl-[22px] border-b border-vsc-border-subtle">
+                        <div className="text-[10px] font-semibold text-vsc-text-muted mb-1 uppercase tracking-wide">
+                          Events ({run.runtimeEvents.length})
+                        </div>
+                        <div className="flex flex-col gap-0.5">
+                          {run.runtimeEvents.map((evt) => {
+                            // Handle different event structures:
+                            // - Native log: eventType="log", eventData={ level, data }
+                            // - Custom "log": eventType="custom", eventData={ name: "log", data: { level, data } }
+                            // - Function events: eventType="function_start"/"function_end"
+                            // - Other custom: eventType="custom", eventData={ name, data }
+                            const rawData = evt.eventData as { level?: string; data?: unknown; name?: string; function_display_name?: string } | null;
+                            const isLogViaCustom = evt.eventType === 'custom' && rawData?.name === 'log';
+                            const isNativeLog = evt.eventType === 'log';
+                            const isLog = isNativeLog || isLogViaCustom;
+                            const isFunctionStart = evt.eventType === 'function_start';
+                            const isFunctionEnd = evt.eventType === 'function_end';
+                            const isFunctionEvent = isFunctionStart || isFunctionEnd;
+
+                            // Extract label and payload based on event structure
+                            let label: string;
+                            let payload: unknown;
+                            let colorCls: string;
+
+                            if (isFunctionStart) {
+                              label = 'START';
+                              payload = rawData?.function_display_name ?? '';
+                              colorCls = 'text-vsc-green';
+                            } else if (isFunctionEnd) {
+                              label = 'END';
+                              const duration = (rawData as any)?.duration_ms;
+                              payload = `${rawData?.function_display_name ?? ''}${duration != null ? ` (${duration}ms)` : ''}`;
+                              colorCls = 'text-vsc-text-muted';
+                            } else if (isLogViaCustom) {
+                              // Custom "log" event: { name: "log", data: { level, data } }
+                              const inner = rawData?.data as { level?: string; data?: unknown } | undefined;
+                              label = inner?.level ?? 'info';
+                              payload = inner?.data;
+                              colorCls = label === 'error' ? 'text-vsc-red'
+                                : label === 'warn' ? 'text-vsc-yellow'
+                                : label === 'debug' ? 'text-vsc-text-muted'
+                                : 'text-vsc-blue';
+                            } else if (isNativeLog) {
+                              // Native log event: { level, data }
+                              label = rawData?.level ?? 'info';
+                              payload = rawData?.data;
+                              colorCls = label === 'error' ? 'text-vsc-red'
+                                : label === 'warn' ? 'text-vsc-yellow'
+                                : label === 'debug' ? 'text-vsc-text-muted'
+                                : 'text-vsc-blue';
+                            } else {
+                              // Other custom events
+                              label = evt.eventType === 'custom' ? 'EVENT' : evt.eventType;
+                              payload = rawData?.name ? `${rawData.name}: ${JSON.stringify(rawData.data)}` : evt.eventData;
+                              colorCls = 'text-vsc-purple';
+                            }
+
+                            return (
+                              <div key={evt.id} className="flex items-start gap-1.5 text-[11px]">
+                                <span className={`${colorCls} font-semibold shrink-0 w-10 uppercase`}>{label}</span>
+                                <span className="text-vsc-text flex-1 font-mono truncate">
+                                  {typeof payload === 'string' ? payload : JSON.stringify(payload)}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
                     {run.status === 'cancelled' && (
                       <div className="py-1.5 pr-2.5 pl-[22px]">
                         <div className="text-[11px] text-vsc-text-faint italic">Cancelled</div>
@@ -1132,21 +1207,37 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
               onValueChange={(v) => setActiveTab(v as typeof activeTab)}
               className="flex-1 flex flex-col min-h-0"
             >
-              <TabsList className="px-2.5 shrink-0 bg-vsc-surface">
-                <TabsTrigger value="run">Run</TabsTrigger>
-                <TabsTrigger value="graph">Graph</TabsTrigger>
-                {canPreviewPrompt && (
-                  <TabsTrigger value="prompt">
-                    Prompt
-                    {selectedFnInfo?.capabilities?.clientName && (
-                      <span className="ml-1 px-1 py-0 text-[9px] rounded bg-vsc-bg-secondary text-vsc-text-faint">
-                        {selectedFnInfo.capabilities.clientName}
-                      </span>
-                    )}
-                  </TabsTrigger>
+              <div className="flex items-center px-2.5 shrink-0 bg-vsc-surface">
+                <TabsList className="bg-transparent">
+                  <TabsTrigger value="run">Run</TabsTrigger>
+                  <TabsTrigger value="graph">Graph</TabsTrigger>
+                  {canPreviewPrompt && (
+                    <TabsTrigger value="prompt">
+                      Prompt
+                      {selectedFnInfo?.capabilities?.clientName && (
+                        <span className="ml-1 px-1 py-0 text-[9px] rounded bg-vsc-bg-secondary text-vsc-text-faint">
+                          {selectedFnInfo.capabilities.clientName}
+                        </span>
+                      )}
+                    </TabsTrigger>
+                  )}
+                  {canPreviewCurl && <TabsTrigger value="curl">cURL</TabsTrigger>}
+                </TabsList>
+                {runs.length > 0 && !isRunning && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="ml-auto text-[10px] text-vsc-text-muted hover:text-vsc-text"
+                    onClick={() => {
+                      const runIds = runs.map((r) => r.id);
+                      port.postMessage({ type: 'clearHandles', runIds });
+                      setRuns([]);
+                    }}
+                  >
+                    Clear
+                  </Button>
                 )}
-                {canPreviewCurl && <TabsTrigger value="curl">cURL</TabsTrigger>}
-              </TabsList>
+              </div>
 
               {/* Graph view */}
               <TabsContent value="graph" className="flex-1 min-h-0 mt-0 flex flex-col" style={{ minHeight: 300 }}>
@@ -1335,6 +1426,78 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
                             </div>
                           );
                         })}
+
+                        {/* Runtime events (log.info, baml.events.send, etc.) */}
+                        {run.runtimeEvents.length > 0 && (
+                          <div className="py-1.5 pr-2.5 pl-[22px] border-b border-vsc-border-subtle">
+                            <div className="text-[10px] font-semibold text-vsc-text-muted mb-1 uppercase tracking-wide">
+                              Events ({run.runtimeEvents.length})
+                            </div>
+                            <div className="flex flex-col gap-0.5">
+                              {run.runtimeEvents.map((evt) => {
+                                // Handle different event structures:
+                                // - Native log: eventType="log", eventData={ level, data }
+                                // - Custom "log": eventType="custom", eventData={ name: "log", data: { level, data } }
+                                // - Function events: eventType="function_start"/"function_end"
+                                // - Other custom: eventType="custom", eventData={ name, data }
+                                const rawData = evt.eventData as { level?: string; data?: unknown; name?: string; function_display_name?: string } | null;
+                                const isLogViaCustom = evt.eventType === 'custom' && rawData?.name === 'log';
+                                const isNativeLog = evt.eventType === 'log';
+                                const isLog = isNativeLog || isLogViaCustom;
+                                const isFunctionStart = evt.eventType === 'function_start';
+                                const isFunctionEnd = evt.eventType === 'function_end';
+                                const isFunctionEvent = isFunctionStart || isFunctionEnd;
+
+                                // Extract label and payload based on event structure
+                                let label: string;
+                                let payload: unknown;
+                                let colorCls: string;
+
+                                if (isFunctionStart) {
+                                  label = 'START';
+                                  payload = rawData?.function_display_name ?? '';
+                                  colorCls = 'text-vsc-green';
+                                } else if (isFunctionEnd) {
+                                  label = 'END';
+                                  const duration = (rawData as any)?.duration_ms;
+                                  payload = `${rawData?.function_display_name ?? ''}${duration != null ? ` (${duration}ms)` : ''}`;
+                                  colorCls = 'text-vsc-text-muted';
+                                } else if (isLogViaCustom) {
+                                  // Custom "log" event: { name: "log", data: { level, data } }
+                                  const inner = rawData?.data as { level?: string; data?: unknown } | undefined;
+                                  label = inner?.level ?? 'info';
+                                  payload = inner?.data;
+                                  colorCls = label === 'error' ? 'text-vsc-red'
+                                    : label === 'warn' ? 'text-vsc-yellow'
+                                    : label === 'debug' ? 'text-vsc-text-muted'
+                                    : 'text-vsc-blue';
+                                } else if (isNativeLog) {
+                                  // Native log event: { level, data }
+                                  label = rawData?.level ?? 'info';
+                                  payload = rawData?.data;
+                                  colorCls = label === 'error' ? 'text-vsc-red'
+                                    : label === 'warn' ? 'text-vsc-yellow'
+                                    : label === 'debug' ? 'text-vsc-text-muted'
+                                    : 'text-vsc-blue';
+                                } else {
+                                  // Other custom events
+                                  label = evt.eventType === 'custom' ? 'EVENT' : evt.eventType;
+                                  payload = rawData?.name ? `${rawData.name}: ${JSON.stringify(rawData.data)}` : evt.eventData;
+                                  colorCls = 'text-vsc-purple';
+                                }
+
+                                return (
+                                  <div key={evt.id} className="flex items-start gap-1.5 text-[11px]">
+                                    <span className={`${colorCls} font-semibold shrink-0 w-10 uppercase`}>{label}</span>
+                                    <span className="text-vsc-text flex-1 font-mono truncate">
+                                      {typeof payload === 'string' ? payload : JSON.stringify(payload)}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
 
                         {/* Result / Error / Cancelled for this run */}
                         {run.status === 'cancelled' && (

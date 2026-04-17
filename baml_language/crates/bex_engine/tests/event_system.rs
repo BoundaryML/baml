@@ -50,7 +50,7 @@ fn summarize_events(events: &[RuntimeEvent]) -> Vec<String> {
             EventKind::Function(FunctionEvent::End(e)) => format!("end:{}", e.name),
             EventKind::SetTags(_) => "tags".to_string(),
             EventKind::Custom(c) => format!("custom:{}", c.name),
-            EventKind::Log(l) => format!("log:{}:{}", l.level, l.message),
+            EventKind::Log(l) => format!("log:{}:{:?}", l.level, l.data),
         })
         .collect()
 }
@@ -510,14 +510,14 @@ async fn test_custom_event_emission() {
 
 // === Phase 5: ns_log Namespace ===
 
-/// Verify that `log.info()` emits a custom event with name="log" and the expected
-/// level/message fields.  The `log.*` functions are pure BAML wrappers around
-/// `baml.events.send("log", { level, message, data })`.
+/// Verify that `baml.log.info()` emits a custom event with name="log" and the expected
+/// level/data fields. The `log.*` functions are pure BAML wrappers around
+/// `baml.events.send("log", { level, data })`.
 #[tokio::test]
 async fn test_log_info_event_emission() {
     let source = r#"
         function log_something() -> null {
-            log.info("Processing started", { step: 1 })
+            baml.log.info({ step: 1, message: "Processing started" })
         }
     "#;
 
@@ -538,7 +538,7 @@ async fn test_log_info_event_emission() {
 
     let events = collect_events(&guard);
 
-    // log.info() emits a CustomEvent with name="log"
+    // baml.log.info() emits a CustomEvent with name="log"
     let custom = events
         .iter()
         .find_map(|e| match &e.event {
@@ -549,27 +549,23 @@ async fn test_log_info_event_emission() {
 
     assert_eq!(custom.name, "log");
 
-    // Verify that the Collector's FunctionLog exposes this as a LogEvent
-    let collector = bex_events::Collector::new("test".into());
-    collector.track(&guard.root);
-    let logs = collector.logs();
-    // The collector was attached after execution so it won't have events here;
-    // instead verify extraction directly from the raw events.
-    let _ = logs; // suppress unused warning
-
-    // Check level and message are embedded correctly in custom.data
+    // Check level and data are embedded correctly in custom.data
     match &custom.data {
         bex_external_types::BexExternalValue::Map { entries, .. } => {
             assert_eq!(
                 entries.get("level"),
                 Some(&bex_external_types::BexExternalValue::String("info".into()))
             );
-            assert_eq!(
-                entries.get("message"),
-                Some(&bex_external_types::BexExternalValue::String(
-                    "Processing started".into()
-                ))
-            );
+            // data should be a map containing step and message
+            match entries.get("data") {
+                Some(bex_external_types::BexExternalValue::Map { entries: data_entries, .. }) => {
+                    assert_eq!(
+                        data_entries.get("step"),
+                        Some(&bex_external_types::BexExternalValue::Int(1))
+                    );
+                }
+                other => panic!("Expected Map for data field, got {:?}", other),
+            }
         }
         other => panic!("Expected Map data in log custom event, got {:?}", other),
     }
@@ -579,16 +575,16 @@ async fn test_log_info_event_emission() {
 #[tokio::test]
 async fn test_log_all_levels() {
     let levels = [
-        ("log.debug", "debug"),
-        ("log.warn", "warn"),
-        ("log.error", "error"),
+        ("baml.log.debug", "debug"),
+        ("baml.log.warn", "warn"),
+        ("baml.log.error", "error"),
     ];
 
     for (fn_call, expected_level) in levels {
         let source = format!(
             r#"
             function emit_log() -> null {{
-                {}("level test", {{}})
+                {}({{{{ msg: "level check" }}}})
             }}
             "#,
             fn_call
@@ -645,7 +641,7 @@ async fn test_log_all_levels() {
 async fn test_collector_log_events_extraction() {
     let source = r#"
         function do_logging() -> null {
-            log.info("first message", { step: 1 })
+            baml.log.info({ step: 1, message: "first message" })
         }
     "#;
 
@@ -682,62 +678,16 @@ async fn test_collector_log_events_extraction() {
 
     assert_eq!(log.log_events.len(), 1, "Expected one log event");
     assert_eq!(log.log_events[0].level, "info");
-    assert_eq!(log.log_events[0].message, "first message");
-
-    bex_events::event_store::untrack(&root);
-}
-
-/// Verify that log.info_simple() (no data argument) works correctly.
-#[tokio::test]
-async fn test_log_simple_variants() {
-    let source = r#"
-        function emit_simple() -> null {
-            log.info_simple("simple message")
-        }
-    "#;
-
-    let snapshot = compile_for_engine(source);
-    let engine = std::sync::Arc::new(
-        BexEngine::new(
-            snapshot,
-            std::sync::Arc::new(sys_native::SysOps::native()),
-            None,
-        )
-        .unwrap(),
-    );
-
-    let (host_ctx, guard) = setup_tracking();
-    let call_ctx = FunctionCallContextBuilder::new(sys_types::CallId::next())
-        .with_host_ctx(host_ctx)
-        .build();
-
-    engine
-        .call_function("emit_simple", vec![], call_ctx, true)
-        .await
-        .unwrap();
-
-    let events = collect_events(&guard);
-    let custom = events
-        .iter()
-        .find_map(|e| match &e.event {
-            EventKind::Custom(c) if c.name == "log" => Some(c),
-            _ => None,
-        })
-        .expect("Expected log CustomEvent from log.info_simple");
-
-    match &custom.data {
+    // Check that data contains expected fields
+    match &log.log_events[0].data {
         bex_external_types::BexExternalValue::Map { entries, .. } => {
             assert_eq!(
-                entries.get("level"),
-                Some(&bex_external_types::BexExternalValue::String("info".into()))
-            );
-            assert_eq!(
-                entries.get("message"),
-                Some(&bex_external_types::BexExternalValue::String(
-                    "simple message".into()
-                ))
+                entries.get("step"),
+                Some(&bex_external_types::BexExternalValue::Int(1))
             );
         }
         other => panic!("Expected Map data, got {:?}", other),
     }
+
+    bex_events::event_store::untrack(&root);
 }

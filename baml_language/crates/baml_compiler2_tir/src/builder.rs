@@ -2977,6 +2977,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     | "errors"
                     | "unstable"
                     | "log"
+                    | "events"
             );
             // Don't report "unresolved name" for dependency package names —
             // they'll be resolved by the parent FieldAccess expression.
@@ -3789,7 +3790,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         // → `baml.env.get`, `sys.panic` → `baml.sys.panic`).
         let baml_ns_shorthands: &[&str] = &[
             "env", "sys", "http", "math", "fs", "net", "media", "llm", "errors", "unstable",
-            "log",
+            "log", "events",
         ];
         let (pkg_items, item_path_owned): (
             &baml_compiler2_hir::package::PackageItems<'db>,

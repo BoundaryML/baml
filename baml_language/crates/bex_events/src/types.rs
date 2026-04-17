@@ -36,9 +36,7 @@ pub enum EventKind {
 pub struct LogEvent {
     /// Log level: "info", "debug", "warn", "error"
     pub level: String,
-    /// Log message
-    pub message: String,
-    /// Additional structured data
+    /// Structured data
     pub data: BexExternalValue,
 }
 

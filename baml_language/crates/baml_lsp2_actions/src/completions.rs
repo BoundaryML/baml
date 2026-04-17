@@ -422,7 +422,19 @@ fn completions_for_field_access(
     token: &baml_compiler_syntax::SyntaxToken,
     offset: TextSize,
 ) -> Vec<Completion> {
-    // Find the base expression: the WORD token preceding the `.`.
+    // Find the full path expression segments (e.g., ["baml", "events"] for `baml.events.`).
+    let path_segments = find_path_segments_for_field_access(token);
+
+    // If we have path segments, check if this is a package/namespace access.
+    if !path_segments.is_empty() {
+        // Check if the first segment is a known package name.
+        let known_packages = ["baml", "testing", "assert", "env"];
+        if known_packages.contains(&path_segments[0].as_str()) {
+            return completions_for_package_path(db, &path_segments);
+        }
+    }
+
+    // Fall back to single-segment field access (the original behavior).
     let Some(base_name) = find_base_for_field_access(token) else {
         return Vec::new();
     };
@@ -454,6 +466,165 @@ fn completions_for_field_access(
     };
 
     completions_for_ty_members(db, &ty)
+}
+
+/// Completions for a package path (e.g., `baml.` → namespaces, `baml.events.` → functions).
+fn completions_for_package_path(db: &dyn Db, path_segments: &[String]) -> Vec<Completion> {
+    if path_segments.is_empty() {
+        return Vec::new();
+    }
+
+    let pkg_name = Name::new(&path_segments[0]);
+    let pkg_id = PackageId::new(db, pkg_name);
+    let pkg = package_items(db, pkg_id);
+
+    if path_segments.len() == 1 {
+        // `baml.` → show top-level namespaces and root items.
+        let mut items = Vec::new();
+
+        // Collect namespace names (first segment of each namespace path).
+        let mut seen_ns: std::collections::HashSet<&Name> = std::collections::HashSet::new();
+        for ns_path in pkg.namespaces.keys() {
+            if !ns_path.is_empty() {
+                let first = &ns_path[0];
+                if seen_ns.insert(first) {
+                    items.push(
+                        Completion::new(first.as_str(), CompletionKind::Class)
+                            .with_detail("namespace")
+                            .with_sort(format!("0_{}", first.as_str())),
+                    );
+                }
+            }
+        }
+
+        // Also include root-level items (values and types in the empty namespace).
+        if let Some(root_ns) = pkg.namespaces.get(&vec![] as &Vec<Name>) {
+            for (name, def) in &root_ns.values {
+                let (kind, detail) = match def {
+                    Definition::Function(_) => (CompletionKind::Function, "function"),
+                    Definition::TemplateString(_) => (CompletionKind::TemplateString, "template_string"),
+                    Definition::Client(_) => (CompletionKind::Client, "client"),
+                    _ => continue,
+                };
+                items.push(
+                    Completion::new(name.as_str(), kind)
+                        .with_detail(detail)
+                        .with_sort(format!("1_{}", name.as_str())),
+                );
+            }
+            for (name, def) in &root_ns.types {
+                let (kind, detail) = match def {
+                    Definition::Class(_) => (CompletionKind::Class, "class"),
+                    Definition::Enum(_) => (CompletionKind::Enum, "enum"),
+                    Definition::TypeAlias(_) => (CompletionKind::TypeAlias, "type"),
+                    _ => continue,
+                };
+                items.push(
+                    Completion::new(name.as_str(), kind)
+                        .with_detail(detail)
+                        .with_sort(format!("2_{}", name.as_str())),
+                );
+            }
+        }
+
+        items
+    } else {
+        // `baml.events.` → show items in the `events` namespace.
+        let ns_path: Vec<Name> = path_segments[1..].iter().map(|s| Name::new(s)).collect();
+
+        let mut items = Vec::new();
+
+        // Check for sub-namespaces.
+        let mut seen_sub_ns: std::collections::HashSet<&Name> = std::collections::HashSet::new();
+        for other_ns_path in pkg.namespaces.keys() {
+            // Check if other_ns_path starts with ns_path and has one more segment.
+            if other_ns_path.len() > ns_path.len()
+                && other_ns_path[..ns_path.len()] == ns_path[..]
+            {
+                let next = &other_ns_path[ns_path.len()];
+                if seen_sub_ns.insert(next) {
+                    items.push(
+                        Completion::new(next.as_str(), CompletionKind::Class)
+                            .with_detail("namespace")
+                            .with_sort(format!("0_{}", next.as_str())),
+                    );
+                }
+            }
+        }
+
+        // Items in this namespace.
+        if let Some(ns_items) = pkg.namespaces.get(&ns_path) {
+            for (name, def) in &ns_items.values {
+                let (kind, detail) = match def {
+                    Definition::Function(_) => (CompletionKind::Function, "function"),
+                    Definition::TemplateString(_) => (CompletionKind::TemplateString, "template_string"),
+                    Definition::Client(_) => (CompletionKind::Client, "client"),
+                    _ => continue,
+                };
+                items.push(
+                    Completion::new(name.as_str(), kind)
+                        .with_detail(detail)
+                        .with_sort(format!("1_{}", name.as_str())),
+                );
+            }
+            for (name, def) in &ns_items.types {
+                let (kind, detail) = match def {
+                    Definition::Class(_) => (CompletionKind::Class, "class"),
+                    Definition::Enum(_) => (CompletionKind::Enum, "enum"),
+                    Definition::TypeAlias(_) => (CompletionKind::TypeAlias, "type"),
+                    _ => continue,
+                };
+                items.push(
+                    Completion::new(name.as_str(), kind)
+                        .with_detail(detail)
+                        .with_sort(format!("2_{}", name.as_str())),
+                );
+            }
+        }
+
+        items
+    }
+}
+
+/// Find all path segments before the current position in a field access.
+///
+/// For `baml.events.send`, when cursor is after `events.`, returns `["baml", "events"]`.
+fn find_path_segments_for_field_access(token: &baml_compiler_syntax::SyntaxToken) -> Vec<String> {
+    let Some(parent) = token.parent() else {
+        return Vec::new();
+    };
+
+    // Collect WORD tokens that come before a DOT that precedes our token.
+    let mut segments: Vec<String> = Vec::new();
+
+    for child in parent.children_with_tokens() {
+        match &child {
+            NodeOrToken::Token(t) => {
+                if t.text_range().start() >= token.text_range().start() {
+                    // Reached our token or beyond
+                    break;
+                }
+                if t.kind() == SyntaxKind::WORD {
+                    segments.push(t.text().to_string());
+                }
+            }
+            NodeOrToken::Node(n) => {
+                // Recursively collect WORD tokens from sub-nodes
+                for sub in n.descendants_with_tokens() {
+                    if let NodeOrToken::Token(t) = sub {
+                        if t.text_range().start() >= token.text_range().start() {
+                            break;
+                        }
+                        if t.kind() == SyntaxKind::WORD {
+                            segments.push(t.text().to_string());
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    segments
 }
 
 /// Returns completions for the members of `ty`.

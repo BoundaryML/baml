@@ -61,12 +61,11 @@ pub fn event_to_jsonl(event: &RuntimeEvent) -> String {
                 }
             })
         }
-        EventKind::Log(LogEvent { level, message, data }) => {
+        EventKind::Log(LogEvent { level, data }) => {
             serde_json::json!({
                 "type": "log",
                 "data": {
                     "level": level,
-                    "message": message,
                     "data": bex_value_to_json(data),
                 }
             })
@@ -186,8 +185,7 @@ mod tests {
             timestamp: SystemTime::now(),
             event: EventKind::Log(LogEvent {
                 level: "info".into(),
-                message: "hello world".into(),
-                data: BexExternalValue::Null,
+                data: BexExternalValue::String("hello world".into()),
             }),
         };
 
@@ -196,8 +194,7 @@ mod tests {
 
         assert_eq!(parsed["content"]["type"], "log");
         assert_eq!(parsed["content"]["data"]["level"], "info");
-        assert_eq!(parsed["content"]["data"]["message"], "hello world");
-        assert!(parsed["content"]["data"]["data"].is_null());
+        assert_eq!(parsed["content"]["data"]["data"], "hello world");
     }
 
     #[test]

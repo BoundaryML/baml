@@ -253,32 +253,20 @@ function baml.llm.to_primitive_client(self: ?) -> baml.llm.PrimitiveClient  [exp
 }
 
 --- <builtin>/baml/ns_log/log.baml ---
-function baml.log._log(level: string, message: string, data: map<string, unknown>) -> null  [expr] {
-  {  } baml.events.send("log", map { "level": level, "message": message, "data": data })
+function baml.log._log(level: string, data: map<string, unknown>) -> null  [expr] {
+  {  } baml.events.send("log", map { "level": level, "data": data })
 }
-function baml.log.debug(message: string, data: map<string, unknown>) -> null  [expr] {
-  {  } _log("debug", message, data)
+function baml.log.debug(data: map<string, unknown>) -> null  [expr] {
+  {  } _log("debug", data)
 }
-function baml.log.debug_simple(message: string) -> null  [expr] {
-  {  } _log("debug", message, map {  })
+function baml.log.error(data: map<string, unknown>) -> null  [expr] {
+  {  } _log("error", data)
 }
-function baml.log.error(message: string, data: map<string, unknown>) -> null  [expr] {
-  {  } _log("error", message, data)
+function baml.log.info(data: map<string, unknown>) -> null  [expr] {
+  {  } _log("info", data)
 }
-function baml.log.error_simple(message: string) -> null  [expr] {
-  {  } _log("error", message, map {  })
-}
-function baml.log.info(message: string, data: map<string, unknown>) -> null  [expr] {
-  {  } _log("info", message, data)
-}
-function baml.log.info_simple(message: string) -> null  [expr] {
-  {  } _log("info", message, map {  })
-}
-function baml.log.warn(message: string, data: map<string, unknown>) -> null  [expr] {
-  {  } _log("warn", message, data)
-}
-function baml.log.warn_simple(message: string) -> null  [expr] {
-  {  } _log("warn", message, map {  })
+function baml.log.warn(data: map<string, unknown>) -> null  [expr] {
+  {  } _log("warn", data)
 }
 
 --- <builtin>/baml/ns_math/math.baml ---

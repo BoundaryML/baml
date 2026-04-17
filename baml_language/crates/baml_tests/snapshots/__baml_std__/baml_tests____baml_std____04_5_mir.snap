@@ -1288,32 +1288,16 @@ fn baml.llm.Client.to_primitive_client(self: baml.llm.Client) -> baml.llm.Primit
     }
 }
 
-fn baml.log._log(level: string, message: string, data: map<string, unknown>) -> null {
+fn baml.log._log(level: string, data: map<string, unknown>) -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: string // level // param
-    let _2: string // message // param
-    let _3: map<string, unknown> // data // param
-    let _4: map<string, unknown>
-
-    bb0: {
-        _4 = { const "level": copy _1, const "message": copy _2, const "data": copy _3 };
-        _0 = call const fn baml.events.send(const "log", copy _4) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.log.debug(message: string, data: map<string, unknown>) -> null {
-    // Locals:
-    let _0: null // _0 // return
-    let _1: string // message // param
     let _2: map<string, unknown> // data // param
+    let _3: map<string, unknown>
 
     bb0: {
-        _0 = call const fn baml.log._log(const "debug", copy _1, copy _2) -> [bb1];
+        _3 = { const "level": copy _1, const "data": copy _2 };
+        _0 = call const fn baml.events.send(const "log", copy _3) -> [bb1];
     }
 
     bb1: {
@@ -1321,15 +1305,13 @@ fn baml.log.debug(message: string, data: map<string, unknown>) -> null {
     }
 }
 
-fn baml.log.debug_simple(message: string) -> null {
+fn baml.log.debug(data: map<string, unknown>) -> null {
     // Locals:
     let _0: null // _0 // return
-    let _1: string // message // param
-    let _2: map<string, unknown>
+    let _1: map<string, unknown> // data // param
 
     bb0: {
-        _2 = {  };
-        _0 = call const fn baml.log._log(const "debug", copy _1, copy _2) -> [bb1];
+        _0 = call const fn baml.log._log(const "debug", copy _1) -> [bb1];
     }
 
     bb1: {
@@ -1337,14 +1319,13 @@ fn baml.log.debug_simple(message: string) -> null {
     }
 }
 
-fn baml.log.error(message: string, data: map<string, unknown>) -> null {
+fn baml.log.error(data: map<string, unknown>) -> null {
     // Locals:
     let _0: null // _0 // return
-    let _1: string // message // param
-    let _2: map<string, unknown> // data // param
+    let _1: map<string, unknown> // data // param
 
     bb0: {
-        _0 = call const fn baml.log._log(const "error", copy _1, copy _2) -> [bb1];
+        _0 = call const fn baml.log._log(const "error", copy _1) -> [bb1];
     }
 
     bb1: {
@@ -1352,15 +1333,13 @@ fn baml.log.error(message: string, data: map<string, unknown>) -> null {
     }
 }
 
-fn baml.log.error_simple(message: string) -> null {
+fn baml.log.info(data: map<string, unknown>) -> null {
     // Locals:
     let _0: null // _0 // return
-    let _1: string // message // param
-    let _2: map<string, unknown>
+    let _1: map<string, unknown> // data // param
 
     bb0: {
-        _2 = {  };
-        _0 = call const fn baml.log._log(const "error", copy _1, copy _2) -> [bb1];
+        _0 = call const fn baml.log._log(const "info", copy _1) -> [bb1];
     }
 
     bb1: {
@@ -1368,61 +1347,13 @@ fn baml.log.error_simple(message: string) -> null {
     }
 }
 
-fn baml.log.info(message: string, data: map<string, unknown>) -> null {
+fn baml.log.warn(data: map<string, unknown>) -> null {
     // Locals:
     let _0: null // _0 // return
-    let _1: string // message // param
-    let _2: map<string, unknown> // data // param
+    let _1: map<string, unknown> // data // param
 
     bb0: {
-        _0 = call const fn baml.log._log(const "info", copy _1, copy _2) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.log.info_simple(message: string) -> null {
-    // Locals:
-    let _0: null // _0 // return
-    let _1: string // message // param
-    let _2: map<string, unknown>
-
-    bb0: {
-        _2 = {  };
-        _0 = call const fn baml.log._log(const "info", copy _1, copy _2) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.log.warn(message: string, data: map<string, unknown>) -> null {
-    // Locals:
-    let _0: null // _0 // return
-    let _1: string // message // param
-    let _2: map<string, unknown> // data // param
-
-    bb0: {
-        _0 = call const fn baml.log._log(const "warn", copy _1, copy _2) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.log.warn_simple(message: string) -> null {
-    // Locals:
-    let _0: null // _0 // return
-    let _1: string // message // param
-    let _2: map<string, unknown>
-
-    bb0: {
-        _2 = {  };
-        _0 = call const fn baml.log._log(const "warn", copy _1, copy _2) -> [bb1];
+        _0 = call const fn baml.log._log(const "warn", copy _1) -> [bb1];
     }
 
     bb1: {

@@ -2,6 +2,11 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === TIR2 ===
+class user.User {
+  id: int
+  name: string
+  email: string
+}
 function user.simple_function() -> int throws never {
   { : 42
     42 : 42
@@ -31,19 +36,25 @@ function user.emit_multiple_events() -> null throws never {
 }
 function user.test_logging() -> null throws never {
   { : null
-    log.debug_simple("Starting process") : null
-    log.info("Processing item", map { "id": 123 }) : null
-    log.warn_simple("Resource usage high") : null
-    log.error("Operation failed", map { "code": "E001", "retries": 3 }) : null
+    let user = User { id: 123, name: "Alice", email: "alice@example.com" } : user.User
+    baml.log.debug(map { "message": "Starting process" }) : null
+    baml.log.info(map { "user": user, "status": "processing" }) : null
+    baml.log.warn(map { "warning": "Resource usage high" }) : null
+    baml.log.error(map { "code": "E001", "retries": 3 }) : null
   }
 }
 function user.process_with_logging(input: string) -> string throws never {
   { : string
-    log.info("Processing started", map { "input": input }) : null
+    baml.log.info(map { "event": "start", "input": input }) : null
     baml.events.send("processing", map { "stage": "start" }) : null
     let result = "Processed: " + input : string
     baml.events.send("processing", map { "stage": "complete" }) : null
-    log.info("Processing complete", map { "result": result }) : null
+    baml.log.info(map { "event": "complete", "result": result }) : null
     result : string
   }
+}
+class user.User$stream {
+  id: null | int
+  name: null | string
+  email: null | string
 }

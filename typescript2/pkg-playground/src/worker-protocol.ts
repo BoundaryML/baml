@@ -52,7 +52,8 @@ export type PlaygroundNotification =
   | { type: 'openPlayground'; project: string; functionName?: string }
   | { type: 'controlFlowGraphResult'; functionName: string; graph: ControlFlowGraph | null }
   | { type: 'cursorContext'; context: CursorContext }
-  | { type: 'testCollectionResult'; project: string; generation: number; callId: number; data: number[] };
+  | { type: 'testCollectionResult'; project: string; generation: number; callId: number; data: number[] }
+  | { type: 'runtimeEvent'; spanId: string; parentSpanId: string | null; rootSpanId: string; timestampMs: number; eventType: string; eventData: unknown };
 
 // ---------------------------------------------------------------------------
 // Control flow graph types (matches Rust serde output from baml_compiler2_visualization)
@@ -122,6 +123,26 @@ export interface FetchLogEntry {
   responseHeaders: Record<string, string> | null;
 }
 
+/** A runtime event (log or custom event) emitted during execution. */
+export interface RuntimeEventEntry {
+  /** Unique ID for this event (auto-generated). */
+  id: number;
+  /** Call ID that emitted this event. */
+  callId: number;
+  /** Span ID from the event context. */
+  spanId: string;
+  /** Parent span ID (may be null for root spans). */
+  parentSpanId: string | null;
+  /** Root span ID for the entire call tree. */
+  rootSpanId: string;
+  /** Unix timestamp in milliseconds. */
+  timestampMs: number;
+  /** Event type: "function_start", "function_end", "log", "custom". */
+  eventType: string;
+  /** Event-specific data (varies by eventType). */
+  eventData: unknown;
+}
+
 export interface EnvVarRequest {
   id: number;
   variable: string;
@@ -134,6 +155,8 @@ export interface RunEntry {
   argsJson: string;
   testName?: string;
   fetchLogs: FetchLogEntry[];
+  /** Runtime events (log.info, baml.events.send, etc.) emitted during this run. */
+  runtimeEvents: RuntimeEventEntry[];
   result: string | null;
   error: string | null;
   status: 'running' | 'success' | 'error' | 'cancelled';
@@ -153,6 +176,7 @@ export type WorkerOutMessage =
   | { type: 'callFunctionError'; id: number; error: string; cancelled?: boolean }
   | { type: 'fetchLogNew'; entry: FetchLogEntry }
   | { type: 'fetchLogUpdate'; logId: number; patch: Partial<FetchLogEntry> }
+  | { type: 'runtimeEventNew'; entry: RuntimeEventEntry }
   | { type: 'envVarRequest'; id: number; variable: string }
   | { type: 'vfsFileChanged'; path: string; content: string }
   | { type: 'vfsFileDeleted'; path: string }

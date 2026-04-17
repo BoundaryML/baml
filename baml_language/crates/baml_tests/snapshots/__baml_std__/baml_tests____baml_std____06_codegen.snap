@@ -951,79 +951,41 @@ function baml.llm.render_prompt(client: void, function_name: string, args: map<s
     return
 }
 
-function baml.log._log(level: string, message: string, data: map<string, unknown>) -> null {
+function baml.log._log(level: string, data: map<string, unknown>) -> null {
     load_const "log"
     load_var level
-    load_var message
     load_var data
     load_const "level"
-    load_const "message"
     load_const "data"
-    alloc_map 3
+    alloc_map 2
     send_event
     return
 }
 
-function baml.log.debug(message: string, data: map<string, unknown>) -> null {
+function baml.log.debug(data: map<string, unknown>) -> null {
     load_const "debug"
-    load_var message
     load_var data
     call baml.log._log
     return
 }
 
-function baml.log.debug_simple(message: string) -> null {
-    load_const "debug"
-    load_var message
-    alloc_map 0
-    call baml.log._log
-    return
-}
-
-function baml.log.error(message: string, data: map<string, unknown>) -> null {
+function baml.log.error(data: map<string, unknown>) -> null {
     load_const "error"
-    load_var message
     load_var data
     call baml.log._log
     return
 }
 
-function baml.log.error_simple(message: string) -> null {
-    load_const "error"
-    load_var message
-    alloc_map 0
-    call baml.log._log
-    return
-}
-
-function baml.log.info(message: string, data: map<string, unknown>) -> null {
+function baml.log.info(data: map<string, unknown>) -> null {
     load_const "info"
-    load_var message
     load_var data
     call baml.log._log
     return
 }
 
-function baml.log.info_simple(message: string) -> null {
-    load_const "info"
-    load_var message
-    alloc_map 0
-    call baml.log._log
-    return
-}
-
-function baml.log.warn(message: string, data: map<string, unknown>) -> null {
+function baml.log.warn(data: map<string, unknown>) -> null {
     load_const "warn"
-    load_var message
     load_var data
-    call baml.log._log
-    return
-}
-
-function baml.log.warn_simple(message: string) -> null {
-    load_const "warn"
-    load_var message
-    alloc_map 0
     call baml.log._log
     return
 }

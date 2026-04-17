@@ -61,13 +61,9 @@ namespace baml.llm:
 namespace baml.log:
   function _log
   function debug
-  function debug_simple
   function error
-  function error_simple
   function info
-  function info_simple
   function warn
-  function warn_simple
 namespace baml.math:
   function trunc
 namespace baml.media:

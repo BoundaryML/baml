@@ -16,6 +16,8 @@ type PlaygroundState = {
   files: Record<string, string>;
   /** Replace the full file map and persist to localStorage. */
   setFiles: (files: Record<string, string>) => void;
+  /** Reset files to defaults and clear localStorage. */
+  resetFiles: () => void;
 };
 
 // ---------------------------------------------------------------------------
@@ -143,8 +145,18 @@ export const usePlayground = (): PlaygroundState => {
     } catch { /* localStorage full or unavailable */ }
   }, [setFilesRaw]);
 
+  const resetFiles = useCallback(() => {
+    const defaults = { ...DEFAULT_FILES };
+    setFilesRaw(defaults);
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(MEDIA_STORAGE_KEY);
+      localStorage.removeItem(OLD_STORAGE_KEY);
+    } catch { /* localStorage unavailable */ }
+  }, [setFilesRaw]);
+
   return useMemo<PlaygroundState>(
-    () => ({ files, setFiles }),
-    [files, setFiles],
+    () => ({ files, setFiles, resetFiles }),
+    [files, setFiles, resetFiles],
   );
 };
