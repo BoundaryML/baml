@@ -19,16 +19,17 @@ import { ScriptCopyBtn } from '../magicui/script-copy-btn';
 import Marquee from '../magicui/marquee';
 import { siteConfig } from '@/app/_lib/config';
 
-const TRUST_LOGOS = [
-  { alt: 'SAP', src: '/testimonials/logos/sapLogo.png' },
-  { alt: 'AWS', src: '/testimonials/logos/aws.png' },
-  { alt: 'AMD', src: '/testimonials/logos/amd.png' },
-  { alt: 'Cisco', src: '/testimonials/logos/cisco.png' },
-  { alt: 'EY', src: '/testimonials/logos/ey.png' },
-  { alt: 'Product Hunt', src: '/testimonials/logos/product-hunt.png' },
-  { alt: 'Aer Compliance', src: '/testimonials/logos/aer.png' },
-  { alt: 'PMMI', src: '/testimonials/logos/pmmi.png' },
-  { alt: 'Cerebral Valley', src: '/testimonials/logos/cerebral.png' },
+const TRUST_LOGOS: { alt: string; src: string; heightPx: number }[] = [
+  { alt: 'SAP', src: '/testimonials/logos/sapLogo.png', heightPx: 40 },
+  { alt: 'AWS', src: '/testimonials/logos/aws.png', heightPx: 36 },
+  { alt: 'AMD', src: '/testimonials/logos/amd.png', heightPx: 30 },
+  { alt: 'Cisco', src: '/testimonials/logos/cisco.png', heightPx: 28 },
+  { alt: 'EY', src: '/testimonials/logos/ey.png', heightPx: 44 },
+  { alt: 'Product Hunt', src: '/testimonials/logos/product-hunt.png', heightPx: 26 },
+  { alt: 'Aer Compliance', src: '/testimonials/logos/aer.png', heightPx: 32 },
+  { alt: 'PMMI', src: '/testimonials/logos/pmmi.png', heightPx: 32 },
+  { alt: 'Cerebral Valley', src: '/testimonials/logos/cerebral.png', heightPx: 32 },
+  { alt: 'DoorDash', src: '/Doordash Logo.svg', heightPx: 22 },
 ];
 
 const TrustMarquee = () => (
@@ -43,13 +44,14 @@ const TrustMarquee = () => (
         WebkitMaskImage: 'linear-gradient(to right, transparent 0%, #000 10%, #000 90%, transparent 100%)',
       }}
     >
-      <Marquee className="[--duration:40s] [--gap:3rem] py-2">
+      <Marquee className="[--duration:40s] [--gap:4rem] py-2">
         {TRUST_LOGOS.map((logo) => (
-          <div key={logo.alt} className="relative h-14 w-36 flex-shrink-0 flex items-center justify-center">
+          <div key={logo.alt} className="flex h-12 flex-shrink-0 items-center justify-center">
             <img
               src={logo.src}
               alt={logo.alt}
-              className="max-h-full max-w-full object-contain grayscale opacity-60 hover:grayscale-0 hover:opacity-100 transition-all duration-300"
+              style={{ height: `${logo.heightPx}px` }}
+              className="w-auto object-contain grayscale opacity-60 hover:grayscale-0 hover:opacity-100 transition-all duration-300"
             />
           </div>
         ))}
@@ -872,8 +874,6 @@ export function VariantHome() {
       <div style={customStyles.container}>
         <Nav />
         <HeroSection />
-        <StatementSection />
-        <ExhibitSection />
       </div>
     </div>
   );
