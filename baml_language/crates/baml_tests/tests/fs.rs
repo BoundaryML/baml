@@ -148,7 +148,15 @@ async fn fs_write_string() {
         "#
     ));
 
-    insta::assert_snapshot!(stabilize(&output.bytecode, &root));
+    insta::assert_snapshot!(stabilize(&output.bytecode, &root), @r#"
+    function main() -> int {
+        load_const "{TMPDIR}/output.txt"
+        load_const "Hello, world!"
+        dispatch_future baml.fs.write
+        await
+        return
+    }
+    "#);
     assert_eq!(output.result, Ok(BexExternalValue::Int(13)));
     assert_eq!(
         std::fs::read_to_string(format!("{root}/output.txt")).unwrap(),
@@ -169,7 +177,22 @@ async fn fs_write_bytes() {
         "#
     ));
 
-    insta::assert_snapshot!(stabilize(&output.bytecode, &root));
+    insta::assert_snapshot!(stabilize(&output.bytecode, &root), @r#"
+    function main() -> int {
+        load_const "{TMPDIR}/source.bin"
+        load_const "r"
+        dispatch_future baml.fs.open
+        await
+        dispatch_future baml.fs.File.bytes
+        await
+        store_var data
+        load_const "{TMPDIR}/copy.bin"
+        load_var data
+        dispatch_future baml.fs.write_bytes
+        await
+        return
+    }
+    "#);
     assert_eq!(output.result, Ok(BexExternalValue::Int(11)));
     assert_eq!(
         std::fs::read(format!("{root}/copy.bin")).unwrap(),
@@ -189,7 +212,15 @@ async fn fs_write_creates_parent_dirs() {
         "#
     ));
 
-    insta::assert_snapshot!(stabilize(&output.bytecode, &root));
+    insta::assert_snapshot!(stabilize(&output.bytecode, &root), @r#"
+    function main() -> int {
+        load_const "{TMPDIR}/nested/dir/file.txt"
+        load_const "nested content"
+        dispatch_future baml.fs.write
+        await
+        return
+    }
+    "#);
     assert_eq!(output.result, Ok(BexExternalValue::Int(14)));
     assert_eq!(
         std::fs::read_to_string(format!("{root}/nested/dir/file.txt")).unwrap(),
@@ -209,7 +240,15 @@ async fn fs_write_overwrites_existing() {
         "#
     ));
 
-    insta::assert_snapshot!(stabilize(&output.bytecode, &root));
+    insta::assert_snapshot!(stabilize(&output.bytecode, &root), @r#"
+    function main() -> int {
+        load_const "{TMPDIR}/existing.txt"
+        load_const "new content"
+        dispatch_future baml.fs.write
+        await
+        return
+    }
+    "#);
     assert_eq!(output.result, Ok(BexExternalValue::Int(11)));
     assert_eq!(
         std::fs::read_to_string(format!("{root}/existing.txt")).unwrap(),
@@ -231,7 +270,22 @@ async fn fs_roundtrip_write_and_read() {
         "#
     ));
 
-    insta::assert_snapshot!(stabilize(&output.bytecode, &root));
+    insta::assert_snapshot!(stabilize(&output.bytecode, &root), @r#"
+    function main() -> string {
+        load_const "{TMPDIR}/roundtrip.txt"
+        load_const "roundtrip data"
+        dispatch_future baml.fs.write
+        await
+        pop 1
+        load_const "{TMPDIR}/roundtrip.txt"
+        load_const "r"
+        dispatch_future baml.fs.open
+        await
+        dispatch_future baml.fs.File.text
+        await
+        return
+    }
+    "#);
     assert_eq!(
         output.result,
         Ok(BexExternalValue::String("roundtrip data".to_string()))
@@ -252,7 +306,24 @@ async fn fs_file_rw_seek_and_read() {
         "#
     ));
 
-    insta::assert_snapshot!(stabilize(&output.bytecode, &root));
+    insta::assert_snapshot!(stabilize(&output.bytecode, &root), @r#"
+    function main() -> string {
+        load_const "{TMPDIR}/data.txt"
+        load_const "r+"
+        dispatch_future baml.fs.open
+        await
+        store_var file
+        load_var file
+        load_const 6
+        dispatch_future baml.fs.File.seek
+        await
+        pop 1
+        load_var file
+        dispatch_future baml.fs.File.text
+        await
+        return
+    }
+    "#);
     assert_eq!(
         output.result,
         Ok(BexExternalValue::String("from BAML!".to_string()))
@@ -275,7 +346,34 @@ async fn fs_file_rw_write_and_read_back() {
         "#
     ));
 
-    insta::assert_snapshot!(stabilize(&output.bytecode, &root));
+    insta::assert_snapshot!(stabilize(&output.bytecode, &root), @r#"
+    function main() -> string {
+        load_const "{TMPDIR}/data.txt"
+        load_const "r+"
+        dispatch_future baml.fs.open
+        await
+        store_var file
+        load_var file
+        load_const 6
+        dispatch_future baml.fs.File.seek
+        await
+        pop 1
+        load_var file
+        load_const "to Rust!!"
+        dispatch_future baml.fs.File.write
+        await
+        pop 1
+        load_var file
+        load_const 0
+        dispatch_future baml.fs.File.seek
+        await
+        pop 1
+        load_var file
+        dispatch_future baml.fs.File.text
+        await
+        return
+    }
+    "#);
     assert_eq!(
         output.result,
         Ok(BexExternalValue::String("Hello to Rust!!!".to_string()))
@@ -300,7 +398,32 @@ async fn fs_file_rw_write_bytes() {
         "#
     ));
 
-    insta::assert_snapshot!(stabilize(&output.bytecode, &root));
+    insta::assert_snapshot!(stabilize(&output.bytecode, &root), @r#"
+    function main() -> int {
+        load_const "{TMPDIR}/source.bin"
+        load_const "r"
+        dispatch_future baml.fs.open
+        await
+        dispatch_future baml.fs.File.bytes
+        await
+        store_var bytes
+        load_const "{TMPDIR}/data.bin"
+        load_const "r+"
+        dispatch_future baml.fs.open
+        await
+        store_var file
+        load_var file
+        load_const 0
+        dispatch_future baml.fs.File.seek
+        await
+        pop 1
+        load_var file
+        load_var bytes
+        dispatch_future baml.fs.File.write_bytes
+        await
+        return
+    }
+    "#);
     assert_eq!(output.result, Ok(BexExternalValue::Int(2)));
     assert_eq!(
         &std::fs::read(format!("{root}/data.bin")).unwrap()[..2],
@@ -321,11 +444,28 @@ async fn fs_file_write_on_readonly_errors() {
         "#
     ));
 
-    insta::assert_snapshot!(stabilize(&output.bytecode, &root));
+    insta::assert_snapshot!(stabilize(&output.bytecode, &root), @r#"
+    function main() -> int {
+        load_const "{TMPDIR}/readonly.txt"
+        load_const "r"
+        dispatch_future baml.fs.open
+        await
+        load_const "should fail"
+        dispatch_future baml.fs.File.write
+        await
+        return
+    }
+    "#);
+    let Err(bex_engine::EngineError::ExternalOpFailed(op_err)) = &output.result else {
+        panic!("expected ExternalOpFailed, got: {:?}", output.result);
+    };
+    assert_eq!(op_err.fn_name, sys_types::SysOp::BamlFsFileWrite);
+    let sys_types::OpErrorKind::Other(msg) = &op_err.kind else {
+        panic!("expected OpErrorKind::Other, got: {:?}", op_err.kind);
+    };
     assert!(
-        output.result.is_err(),
-        "Expected error but got: {:?}",
-        output.result
+        msg.starts_with("Failed to write:"),
+        "unexpected error message: {msg}"
     );
 }
 
@@ -358,7 +498,14 @@ async fn fs_exists_returns_true() {
         "#
     ));
 
-    insta::assert_snapshot!(stabilize(&output.bytecode, &root));
+    insta::assert_snapshot!(stabilize(&output.bytecode, &root), @r#"
+    function main() -> bool {
+        load_const "{TMPDIR}/here.txt"
+        dispatch_future baml.fs.exists
+        await
+        return
+    }
+    "#);
     assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
 }
 
@@ -422,7 +569,14 @@ async fn fs_size_returns_length() {
         "#
     ));
 
-    insta::assert_snapshot!(stabilize(&output.bytecode, &root));
+    insta::assert_snapshot!(stabilize(&output.bytecode, &root), @r#"
+    function main() -> int {
+        load_const "{TMPDIR}/data.bin"
+        dispatch_future baml.fs.size
+        await
+        return
+    }
+    "#);
     assert_eq!(output.result, Ok(BexExternalValue::Int(10)));
 }
 

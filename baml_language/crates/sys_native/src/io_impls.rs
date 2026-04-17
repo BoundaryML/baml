@@ -46,7 +46,6 @@ fn downcast_handle(file: &owned::fs::File) -> Result<Arc<FsFileHandle>, OpErrorK
         .map_err(|_| OpErrorKind::Other("Invalid file handle type".into()))
 }
 
-/// Error returned for operations on a closed file.
 fn closed_err() -> OpErrorKind {
     OpErrorKind::Other("File is closed".into())
 }
@@ -187,27 +186,16 @@ impl io::IoClassFsFile for NativeSysOps {
 async fn read_up_to(file: &owned::fs::File, n: i64) -> Result<Vec<u8>, OpErrorKind> {
     use tokio::io::AsyncReadExt;
 
-    if n < 0 {
-        return Err(OpErrorKind::Other(format!("Negative read length: {n}")));
-    }
+    let cap =
+        u64::try_from(n).map_err(|_| OpErrorKind::Other(format!("Negative read length: {n}")))?;
     let handle = downcast_handle(file)?;
     let mut guard = handle.lock().await;
     let f = guard.as_mut().ok_or_else(closed_err)?;
-    let cap = usize::try_from(n)
-        .map_err(|_| OpErrorKind::Other(format!("Read length out of range: {n}")))?;
-    let mut buf = vec![0u8; cap];
-    let mut filled = 0;
-    while filled < cap {
-        let read = f
-            .read(&mut buf[filled..])
-            .await
-            .map_err(|e| OpErrorKind::Other(format!("Failed to read file: {e}")))?;
-        if read == 0 {
-            break;
-        }
-        filled += read;
-    }
-    buf.truncate(filled);
+    let mut buf = Vec::new();
+    f.take(cap)
+        .read_to_end(&mut buf)
+        .await
+        .map_err(|e| OpErrorKind::Other(format!("Failed to read file: {e}")))?;
     Ok(buf)
 }
 
@@ -238,10 +226,8 @@ impl io::IoNamespaceFs for NativeSysOps {
         _ctx: &SysOpContext,
     ) -> SysOpOutput<owned::fs::File> {
         SysOpOutput::async_op(async move {
-            #[allow(clippy::manual_let_else)]
-            let mode = match mode {
-                BexExternalValue::String(s) => s,
-                _ => return Err(OpErrorKind::Other("Invalid mode type".into())),
+            let BexExternalValue::String(mode) = mode else {
+                return Err(OpErrorKind::Other("Invalid mode type".into()));
             };
             // Modes that create the file also auto-create missing parent dirs,
             // matching Bun's `Bun.write` behavior.
@@ -392,8 +378,7 @@ impl io::IoNamespaceFs for NativeSysOps {
     }
 }
 
-/// Write `data` to `path`, auto-creating missing parent dirs
-/// (matches Bun's `Bun.write` behavior). Returns the number of bytes written.
+// Auto-creates missing parent dirs, matching Bun's `Bun.write` behavior.
 async fn write_path(path: &str, data: &[u8]) -> Result<i64, OpErrorKind> {
     if let Some(parent) = std::path::Path::new(path).parent() {
         if !parent.as_os_str().is_empty() {
