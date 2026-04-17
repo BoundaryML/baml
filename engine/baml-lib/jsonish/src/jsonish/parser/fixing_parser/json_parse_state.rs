@@ -3,7 +3,7 @@ use std::iter::Peekable;
 use anyhow::Result;
 use baml_types::CompletionState;
 
-use super::json_collection::JsonCollection;
+use super::{json_collection::JsonCollection, QuoteParityMode, UNICODE_QUOTE_CHARS};
 use crate::jsonish::{value::Fixes, Value};
 
 /// Tracks quote and backslash state incrementally for quoted strings
@@ -68,7 +68,7 @@ impl JsonParseState {
 
     /// Update quote tracking when consuming a character into a quoted string.
     /// Must be called BEFORE the character is added to the string.
-    fn update_quote_tracking(&mut self, token: char) {
+    fn update_quote_tracking(&mut self, token: char, quote_parity: QuoteParityMode) {
         if token == '\\' {
             self.string_quote_tracking.trailing_backslashes += 1;
         } else {
@@ -81,6 +81,15 @@ impl JsonParseState {
                 {
                     self.string_quote_tracking.unescaped_quote_count += 1;
                 }
+            } else if quote_parity == QuoteParityMode::AllUnicode
+                && UNICODE_QUOTE_CHARS.contains(&token)
+            {
+                // Under AllUnicode, double-quote-role unicode marks (e.g.
+                // `„`, `"`, `»`, `「`) also flip parity so a stray opener
+                // inside an ASCII-quoted string prevents early close on
+                // the next `,`. Single-quote-role marks are intentionally
+                // excluded — see `UNICODE_QUOTE_CHARS` for why.
+                self.string_quote_tracking.unescaped_quote_count += 1;
             }
             self.string_quote_tracking.trailing_backslashes = 0;
         }
@@ -136,7 +145,7 @@ impl JsonParseState {
 
     /// Appends a character to the current string-like collection on top of the stack.
     /// Returns `Ok(0)` on success (no additional characters to skip).
-    fn consume(&mut self, token: char) -> Result<usize> {
+    fn consume(&mut self, token: char, quote_parity: QuoteParityMode) -> Result<usize> {
         // First check if we're in a QuotedString and need to update tracking
         // (done before getting mutable borrow to avoid borrow checker conflict)
         let is_quoted_string = matches!(
@@ -145,7 +154,7 @@ impl JsonParseState {
         );
         if is_quoted_string {
             // Track quote/backslash state incrementally for O(1) quote counting
-            self.update_quote_tracking(token);
+            self.update_quote_tracking(token, quote_parity);
         }
 
         // Now get mutable access to push the token
@@ -211,6 +220,7 @@ impl JsonParseState {
     fn should_close_unescaped_string(
         &mut self,
         mut next: Peekable<impl Iterator<Item = (usize, char)>>,
+        quote_parity: QuoteParityMode,
     ) -> CloseStringResult {
         let pos: Pos = if self.collection_stack.len() >= 2 {
             self.collection_stack
@@ -242,7 +252,7 @@ impl JsonParseState {
                             return CloseStringResult::Close(idx, CompletionState::Complete)
                         }
                         x => {
-                            let _ = self.consume(x);
+                            let _ = self.consume(x, quote_parity);
                         }
                     }
                 }
@@ -258,7 +268,7 @@ impl JsonParseState {
                     match c {
                         ':' => return CloseStringResult::Close(idx, CompletionState::Complete),
                         x => {
-                            let _ = self.consume(x);
+                            let _ = self.consume(x, quote_parity);
                         }
                     }
                 }
@@ -360,11 +370,11 @@ impl JsonParseState {
                                             }
                                         }
                                         for c in buffer.chars() {
-                                            let _ = self.consume(c);
+                                            let _ = self.consume(c, quote_parity);
                                         }
                                     }
                                     _ => {
-                                        let _ = self.consume(c);
+                                        let _ = self.consume(c, quote_parity);
                                     }
                                 }
                             } else {
@@ -374,7 +384,7 @@ impl JsonParseState {
                         }
                         '}' => return CloseStringResult::Close(idx, CompletionState::Complete),
                         x => {
-                            let _ = self.consume(x);
+                            let _ = self.consume(x, quote_parity);
                         }
                     }
                 }
@@ -390,7 +400,7 @@ impl JsonParseState {
                         ',' => return CloseStringResult::Close(idx, CompletionState::Complete),
                         ']' => return CloseStringResult::Close(idx, CompletionState::Complete),
                         x => {
-                            let _ = self.consume(x);
+                            let _ = self.consume(x, quote_parity);
                         }
                     }
                 }
@@ -527,6 +537,7 @@ impl JsonParseState {
         &mut self,
         token: char,
         mut next: Peekable<impl Iterator<Item = (usize, char)>>,
+        quote_parity: QuoteParityMode,
     ) -> Result<usize> {
         // println!("Processing: {:?}..{:?}", token, next.peek());
         match self.collection_stack.last() {
@@ -541,7 +552,7 @@ impl JsonParseState {
                         // We can safely ignore these tokens
                         ',' | ':' => Ok(0),
                         // look for a new key or value
-                        _ => self.find_any_starting_value(token, next),
+                        _ => self.find_any_starting_value(token, next, quote_parity),
                     }
                 }
                 JsonCollection::Array(_, _) => {
@@ -557,7 +568,7 @@ impl JsonParseState {
                         }
                         // Skip these tokens
                         ',' => Ok(0),
-                        _ => self.find_any_starting_value(token, next),
+                        _ => self.find_any_starting_value(token, next, quote_parity),
                     }
                 }
                 JsonCollection::TripleQuotedString(_, _) => {
@@ -577,10 +588,10 @@ impl JsonParseState {
                             self.complete_collection(CompletionState::Complete);
                             Ok(3)
                         } else {
-                            self.consume(token)
+                            self.consume(token, quote_parity)
                         }
                     } else {
-                        self.consume(token)
+                        self.consume(token, quote_parity)
                     }
                 }
                 JsonCollection::QuotedString(_, _) => {
@@ -595,38 +606,38 @@ impl JsonParseState {
                                 self.complete_collection(CompletionState::Complete);
                                 Ok(0)
                             } else {
-                                self.consume(token)
+                                self.consume(token, quote_parity)
                             }
                         }
                         '\\' => {
                             // Capture escaped characters
                             match next.peek() {
                                 Some((_, 'n')) => {
-                                    self.consume('\n')?;
+                                    self.consume('\n', quote_parity)?;
                                     Ok(1)
                                 }
                                 Some((_, 't')) => {
-                                    self.consume('\t')?;
+                                    self.consume('\t', quote_parity)?;
                                     Ok(1)
                                 }
                                 Some((_, 'r')) => {
-                                    self.consume('\r')?;
+                                    self.consume('\r', quote_parity)?;
                                     Ok(1)
                                 }
                                 Some((_, 'b')) => {
-                                    self.consume('\x08')?;
+                                    self.consume('\x08', quote_parity)?;
                                     Ok(1)
                                 }
                                 Some((_, 'f')) => {
-                                    self.consume('\x0C')?;
+                                    self.consume('\x0C', quote_parity)?;
                                     Ok(1)
                                 }
                                 Some((_, '\\')) => {
-                                    self.consume('\\')?;
+                                    self.consume('\\', quote_parity)?;
                                     Ok(1)
                                 }
                                 Some((_, '"')) => {
-                                    self.consume('"')?;
+                                    self.consume('"', quote_parity)?;
                                     Ok(1)
                                 }
                                 Some((_, 'u')) => {
@@ -641,14 +652,14 @@ impl JsonParseState {
                                         }
                                     }
                                     for c in buffer.chars() {
-                                        let _ = self.consume(c);
+                                        let _ = self.consume(c, quote_parity);
                                     }
                                     Ok(5)
                                 }
-                                _ => self.consume(token),
+                                _ => self.consume(token, quote_parity),
                             }
                         }
-                        _ => self.consume(token),
+                        _ => self.consume(token, quote_parity),
                     }
                 }
                 JsonCollection::TripleBacktickString { .. } => {
@@ -665,10 +676,10 @@ impl JsonParseState {
                             self.complete_collection(CompletionState::Complete);
                             Ok(2)
                         } else {
-                            self.consume(token)
+                            self.consume(token, quote_parity)
                         }
                     } else {
-                        self.consume(token)
+                        self.consume(token, quote_parity)
                     }
                 }
                 JsonCollection::BacktickString(_, _) => {
@@ -681,10 +692,10 @@ impl JsonParseState {
                                 self.complete_collection(CompletionState::Complete);
                                 Ok(0)
                             } else {
-                                self.consume(token)
+                                self.consume(token, quote_parity)
                             }
                         }
-                        _ => self.consume(token),
+                        _ => self.consume(token, quote_parity),
                     }
                 }
                 JsonCollection::SingleQuotedString(_, _) => {
@@ -700,19 +711,19 @@ impl JsonParseState {
                                 self.complete_collection(CompletionState::Complete);
                                 Ok(0)
                             } else {
-                                self.consume(token)
+                                self.consume(token, quote_parity)
                             }
                         }
-                        _ => self.consume(token),
+                        _ => self.consume(token, quote_parity),
                     }
                 }
                 JsonCollection::UnquotedString(_, _) => {
                     // We could be expecting:
                     // - A terminating json character (comma, colon, bracket, space, newline)
                     // - A character
-                    let res = self.consume(token);
+                    let res = self.consume(token, quote_parity);
                     if let CloseStringResult::Close(count, completion) =
-                        self.should_close_unescaped_string(next)
+                        self.should_close_unescaped_string(next, quote_parity)
                     {
                         self.complete_collection(completion);
                         Ok(count)
@@ -730,7 +741,7 @@ impl JsonParseState {
                             self.complete_collection(CompletionState::Complete);
                             Ok(0)
                         }
-                        _ => self.consume(token),
+                        _ => self.consume(token, quote_parity),
                     }
                 }
                 JsonCollection::BlockComment(_, _) => {
@@ -749,7 +760,7 @@ impl JsonParseState {
                                 _ => Ok(0),
                             }
                         }
-                        _ => self.consume(token),
+                        _ => self.consume(token, quote_parity),
                     }
                 }
             },
@@ -758,7 +769,7 @@ impl JsonParseState {
                 // - A value
                 // - Any leading whitespace
                 let preview = next.peekable();
-                self.find_any_starting_value(token, preview)
+                self.find_any_starting_value(token, preview, quote_parity)
             }
         }
     }
@@ -770,6 +781,7 @@ impl JsonParseState {
         &mut self,
         token: char,
         mut next: Peekable<impl Iterator<Item = (usize, char)>>,
+        quote_parity: QuoteParityMode,
     ) -> Result<usize> {
         match token {
             '{' => {
@@ -890,7 +902,7 @@ impl JsonParseState {
                     Default::default(),
                 ));
                 if let CloseStringResult::Close(count, completion) =
-                    self.should_close_unescaped_string(next)
+                    self.should_close_unescaped_string(next, quote_parity)
                 {
                     self.complete_collection(completion);
                     return Ok(count);
@@ -939,7 +951,10 @@ mod tests {
 
         // Remaining chars: "world" — no ',' or '}' to trigger Complete
         let remaining: Vec<(usize, char)> = vec![(0, 'w'), (1, 'o'), (2, 'r'), (3, 'l'), (4, 'd')];
-        let result = state.should_close_unescaped_string(remaining.into_iter().peekable());
+        let result = state.should_close_unescaped_string(
+            remaining.into_iter().peekable(),
+            QuoteParityMode::AsciiOnly,
+        );
 
         // counter should be 5 (last idx=4, +1), not 4
         assert_eq!(

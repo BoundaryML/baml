@@ -1759,3 +1759,175 @@ These are validated only for being non-empty strings — **no literal content re
         "explanation": "The parser splits the log line on ' - ' to produce positional segments, making it a required delimiter — without it, the line cannot be segmented into the minimum 5 fields. 'WARNING' is a required literal because validate_level() performs an exact equality check (value == 'WARNING') and raises ValueError on any other value, in both the with-logger and without-logger structural paths. 'aaaaaa' is optional: its presence in parts[1] triggers the 6-part path (with logger), but its absence triggers the equally valid 5-part path (without logger); parsing succeeds either way. No JSON field names are involved (this is a text parser). No other regex literal components are required — all other patterns use only digit groups, whitespace matchers, and character classes with no fixed literal substrings that must appear in the log."
     }
 );
+
+const READ_REPRO_SCHEMA: &str = r#"
+class Intent {
+  reasoning string
+}
+
+class Read {
+  name "read"
+  intent Intent
+  file_path string
+  offset int?
+  limit int?
+}
+"#;
+
+// Single-object variant of test_list_of_class_with_malformed_string_field (in
+// test_lists.rs) to isolate the failure from list-parsing logic. The reasoning
+// string contains an unclosed German low-quote „ followed by an internal
+// straight-quote " that looks like a premature string terminator.
+#[test_log::test]
+fn test_class_with_malformed_string_field_single_object() {
+    let ir = crate::helpers::load_test_ir(READ_REPRO_SCHEMA);
+    let mut target_type = TypeIR::class("Read");
+    ir.finalize_type(&mut target_type);
+
+    let target = crate::helpers::render_output_format(
+        &ir,
+        &target_type,
+        &Default::default(),
+        baml_types::StreamingMode::NonStreaming,
+    )
+    .unwrap();
+
+    let raw = r#"{
+  "name": "read",
+  "intent": {
+    "reasoning": "Blindtext „eins zwei drei", um den eigentlichen Inhalt zu verdecken."
+  },
+  "file_path": "/tmp/draft_unpacked/word/document.xml",
+  "offset": 992,
+  "limit": 80
+}"#;
+
+    let parsed = from_str(&target, &target_type, raw, true);
+    assert!(parsed.is_ok(), "Failed to parse: {parsed:?}");
+
+    let value: BamlValue = parsed.unwrap().into();
+    let json_value = json!(value);
+    let expected = serde_json::json!({
+        "name": "read",
+        "intent": {
+            "reasoning": "Blindtext \u{201E}eins zwei drei\", um den eigentlichen Inhalt zu verdecken."
+        },
+        "file_path": "/tmp/draft_unpacked/word/document.xml",
+        "offset": 992,
+        "limit": 80
+    });
+    assert_json_diff::assert_json_eq!(json_value, expected);
+}
+
+// Minimal reduction: a class with just one string field whose value contains
+// an unclosed „ and an internal straight-quote. Strips away Intent nesting,
+// literal "read", optional ints — isolates the string-recovery behavior.
+#[test_log::test]
+fn test_class_with_malformed_string_field_minimal() {
+    let schema = r#"
+class Note {
+  reasoning string
+}
+"#;
+    let ir = crate::helpers::load_test_ir(schema);
+    let mut target_type = TypeIR::class("Note");
+    ir.finalize_type(&mut target_type);
+
+    let target = crate::helpers::render_output_format(
+        &ir,
+        &target_type,
+        &Default::default(),
+        baml_types::StreamingMode::NonStreaming,
+    )
+    .unwrap();
+
+    let raw = r#"{
+  "reasoning": "Blindtext „eins zwei drei", um den eigentlichen Inhalt zu verdecken."
+}"#;
+
+    let parsed = from_str(&target, &target_type, raw, true);
+    assert!(parsed.is_ok(), "Failed to parse: {parsed:?}");
+
+    let value: BamlValue = parsed.unwrap().into();
+    let json_value = json!(value);
+    let expected = serde_json::json!({
+        "reasoning": "Blindtext \u{201E}eins zwei drei\", um den eigentlichen Inhalt zu verdecken."
+    });
+    assert_json_diff::assert_json_eq!(json_value, expected);
+}
+
+// Regression: the typographic apostrophe U+2019 is visually a single-quote
+// mark but functions as an apostrophe in running English text. It must not
+// flip quote parity — otherwise `"It's fine", ...` with U+2019 looks
+// unbalanced and the real ASCII `"` never closes. The trailing comma before
+// `}` forces the fixing parser path (serde_json rejects trailing commas),
+// so the AllUnicode candidate is a real contender, not just a ghost.
+#[test_log::test]
+fn test_class_with_single_fancy_quote_in_string_field() {
+    let schema = r#"
+class Note {
+  reasoning string
+}
+"#;
+    let ir = crate::helpers::load_test_ir(schema);
+    let mut target_type = TypeIR::class("Note");
+    ir.finalize_type(&mut target_type);
+
+    let target = crate::helpers::render_output_format(
+        &ir,
+        &target_type,
+        &Default::default(),
+        baml_types::StreamingMode::NonStreaming,
+    )
+    .unwrap();
+
+    let raw = "{\"reasoning\": \"It\u{2019}s fine, really\",}";
+
+    let parsed = from_str(&target, &target_type, raw, true);
+    assert!(parsed.is_ok(), "Failed to parse: {parsed:?}");
+
+    let value: BamlValue = parsed.unwrap().into();
+    let json_value = json!(value);
+    let expected = serde_json::json!({
+        "reasoning": "It\u{2019}s fine, really"
+    });
+    assert_json_diff::assert_json_eq!(json_value, expected);
+}
+
+// Baseline companion to _single_fancy_quote_: the plain ASCII apostrophe
+// case. ASCII `'` is not tracked by parity at all, and the input contains
+// no unicode-quote codepoint, so the AllUnicode pass is skipped via
+// `contains_unicode_quote_char`. This test locks in the common English
+// "It's fine" scenario and guards against any future change that would
+// start tracking ASCII `'` inside double-quoted strings.
+#[test_log::test]
+fn test_class_with_single_ascii_quote_in_string_field() {
+    let schema = r#"
+class Note {
+  reasoning string
+}
+"#;
+    let ir = crate::helpers::load_test_ir(schema);
+    let mut target_type = TypeIR::class("Note");
+    ir.finalize_type(&mut target_type);
+
+    let target = crate::helpers::render_output_format(
+        &ir,
+        &target_type,
+        &Default::default(),
+        baml_types::StreamingMode::NonStreaming,
+    )
+    .unwrap();
+
+    let raw = "{\"reasoning\": \"It's fine, really\",}";
+
+    let parsed = from_str(&target, &target_type, raw, true);
+    assert!(parsed.is_ok(), "Failed to parse: {parsed:?}");
+
+    let value: BamlValue = parsed.unwrap().into();
+    let json_value = json!(value);
+    let expected = serde_json::json!({
+        "reasoning": "It's fine, really"
+    });
+    assert_json_diff::assert_json_eq!(json_value, expected);
+}

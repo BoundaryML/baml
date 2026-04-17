@@ -4,7 +4,7 @@ use baml_types::CompletionState;
 use super::ParseOptions;
 use crate::jsonish::{
     parser::{
-        fixing_parser,
+        fixing_parser::{self, contains_unicode_quote_char, QuoteParityMode},
         markdown_parser::{self, MarkdownResult},
         multi_json_parser,
     },
@@ -174,7 +174,60 @@ pub(super) fn parse_func(str: &str, mut options: ParseOptions, is_done: bool) ->
     }
 
     if options.allow_fixes {
-        match fixing_parser::parse(str, &options) {
+        // Strict pass: today's behaviour. Every ASCII-only input returns
+        // identical results to before this change.
+        let strict = fixing_parser::parse(str, &options, QuoteParityMode::AsciiOnly);
+
+        // Unicode-parity pass: only meaningful when the input actually
+        // contains a unicode quote. Skipping it on pure-ASCII input keeps
+        // the common case bit-identical and avoids doubling `AnyOf` depth
+        // gratuitously.
+        let unicode = if contains_unicode_quote_char(str) {
+            log::debug!(
+                "jsonish: running AllUnicode parity pass for input with non-ASCII quote char"
+            );
+            fixing_parser::parse(str, &options, QuoteParityMode::AllUnicode).ok()
+        } else {
+            None
+        };
+
+        // Merge: Unicode-parity items first so that when strict and Unicode
+        // passes produce structurally equivalent candidates (identical score),
+        // the Unicode candidate wins the index tiebreaker. Strict items that
+        // duplicate a Unicode item (by structural `Value` equality) are
+        // dropped; unique strict items are appended. On pure-ASCII inputs the
+        // Unicode pass is skipped entirely and `merged` == `strict`, preserving
+        // today's behaviour exactly. Fix tags are whatever the fixing parser
+        // itself produced — no new variant.
+        let merged: Result<Vec<(Value, Vec<Fixes>)>> = match strict {
+            Ok(strict_items) => {
+                if let Some(unicode_items) = unicode {
+                    // Unicode candidates come first; append strict items that
+                    // are not already represented.
+                    let mut merged = unicode_items;
+                    for (v, fixes) in strict_items {
+                        if merged.iter().any(|(existing, _)| existing == &v) {
+                            continue;
+                        }
+                        merged.push((v, fixes));
+                    }
+                    Ok(merged)
+                } else {
+                    // No Unicode pass (pure-ASCII input): identical to today.
+                    Ok(strict_items)
+                }
+            }
+            Err(e) => {
+                // The strict pass errored; fall back to the Unicode pass
+                // alone if it succeeded.
+                match unicode {
+                    Some(items) => Ok(items),
+                    None => Err(e),
+                }
+            }
+        };
+
+        match merged {
             Ok(items) => {
                 match items.len() {
                     0 => {}

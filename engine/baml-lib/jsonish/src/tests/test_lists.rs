@@ -170,3 +170,103 @@ test_deserializer!(
     ),
     ["a"]
 );
+
+const READ_LIST_REPRO_SCHEMA: &str = r#"
+class Intent {
+  reasoning string
+}
+
+class Read {
+  name "read"
+  intent Intent
+  file_path string
+  offset int?
+  limit int?
+}
+"#;
+
+#[test_log::test]
+fn test_list_of_class_with_malformed_string_field() {
+    let ir = crate::helpers::load_test_ir(READ_LIST_REPRO_SCHEMA);
+    let mut target_type = TypeIR::class("Read").as_list();
+    ir.finalize_type(&mut target_type);
+
+    let target = crate::helpers::render_output_format(
+        &ir,
+        &target_type,
+        &Default::default(),
+        baml_types::StreamingMode::NonStreaming,
+    )
+    .unwrap();
+
+    let raw = r#"[
+  {
+    "name": "read",
+    "intent": {
+      "reasoning": "Blindtext „eins zwei drei", um den eigentlichen Inhalt zu verdecken."
+    },
+    "file_path": "/tmp/draft_unpacked/word/document.xml",
+    "offset": 992,
+    "limit": 80
+  },
+  {
+    "name": "read",
+    "intent": {
+      "reasoning": "Fuelltext „vier fuenf sechs" fuer eine weitere Beispielstelle."
+    },
+    "file_path": "/tmp/draft_unpacked/word/document.xml",
+    "offset": 958,
+    "limit": 35
+  }
+]"#;
+
+    let parsed = from_str(&target, &target_type, raw, true);
+    assert!(parsed.is_ok(), "Failed to parse: {parsed:?}");
+
+    let value: BamlValue = parsed.unwrap().into();
+    let json_value = json!(value);
+    let expected = serde_json::json!([
+        {
+            "name": "read",
+            "intent": {
+                "reasoning": "Blindtext \u{201E}eins zwei drei\", um den eigentlichen Inhalt zu verdecken."
+            },
+            "file_path": "/tmp/draft_unpacked/word/document.xml",
+            "offset": 992,
+            "limit": 80
+        },
+        {
+            "name": "read",
+            "intent": {
+                "reasoning": "Fuelltext \u{201E}vier fuenf sechs\" fuer eine weitere Beispielstelle."
+            },
+            "file_path": "/tmp/draft_unpacked/word/document.xml",
+            "offset": 958,
+            "limit": 35
+        }
+    ]);
+
+    assert_json_diff::assert_json_eq!(json_value, expected);
+}
+
+test_deserializer!(
+    test_list_of_strings_with_unicode_opener_in_first_element,
+    "",
+    "[\"\u{201E}eins\", \"zwei\"]",
+    TypeIR::List(
+        TypeIR::Primitive(TypeValue::String, TypeMeta::default()).into(),
+        TypeMeta::default()
+    ),
+    ["\u{201E}eins", "zwei"]
+);
+
+test_deserializer!(
+    test_list_with_ascii_only_internal_quotes_unchanged,
+    "",
+    r#"["He said \"hi\"", "ok"]"#,
+    TypeIR::List(
+        TypeIR::Primitive(TypeValue::String, TypeMeta::default()).into(),
+        TypeMeta::default()
+    ),
+    ["He said \"hi\"", "ok"]
+);
