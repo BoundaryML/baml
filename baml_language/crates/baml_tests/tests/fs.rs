@@ -284,20 +284,28 @@ async fn fs_file_rw_write_and_read_back() {
 
 #[tokio::test]
 async fn fs_file_rw_write_bytes() {
-    let (_tmp, root) = tmp(indexmap! { "data.bin" => "\x00\x00\x00\x00" });
+    let (_tmp, root) = tmp(indexmap! {
+        "data.bin" => "\x00\x00\x00\x00",
+        "source.bin" => "AB",
+    });
 
     let output = baml_test!(&format!(
         r#"
             function main() -> int {{
+                let bytes = baml.fs.file("{root}/source.bin", "r").bytes();
                 let file = baml.fs.file("{root}/data.bin", "r+");
                 file.seek(0);
-                file.write("AB")
+                file.write_bytes(bytes)
             }}
         "#
     ));
 
     insta::assert_snapshot!(stabilize(&output.bytecode, &root));
     assert_eq!(output.result, Ok(BexExternalValue::Int(2)));
+    assert_eq!(
+        &std::fs::read(format!("{root}/data.bin")).unwrap()[..2],
+        b"AB"
+    );
 }
 
 #[tokio::test]

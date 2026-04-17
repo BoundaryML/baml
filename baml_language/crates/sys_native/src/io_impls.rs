@@ -107,6 +107,11 @@ impl io::IoClassFsFile for NativeSysOps {
         use tokio::io::AsyncSeekExt;
 
         SysOpOutput::async_op(async move {
+            if offset < 0 {
+                return Err(OpErrorKind::Other(format!(
+                    "Negative seek offset: {offset}"
+                )));
+            }
             let handle: Arc<FsFileHandle> = file
                 ._handle
                 .downcast::<FsFileHandle>()
