@@ -26,8 +26,11 @@ namespace baml.errors:
   class Timeout { methods: [] }
   class Unsupported { methods: [] }
 namespace baml.fs:
-  class File { methods: [text, bytes, close, seek, write, write_bytes] }
-  function file
+  class File { methods: [text, bytes, read, read_bytes, close, seek, write, write_bytes] }
+  function exists
+  function open
+  function remove
+  function size
   function write
   function write_bytes
 namespace baml.http:

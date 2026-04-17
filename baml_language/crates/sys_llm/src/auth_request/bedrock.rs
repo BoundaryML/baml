@@ -108,7 +108,7 @@ mod native_providers {
             let path_str = path.to_string_lossy().into_owned();
             Box::pin(async move {
                 let file_handle = io
-                    .fs_file(path_str, BexExternalValue::String("r".to_string()))
+                    .fs_open(path_str, BexExternalValue::String("r".to_string()))
                     .await
                     .map_err(|_| {
                         std::io::Error::new(std::io::ErrorKind::NotFound, "file not found")
@@ -561,7 +561,7 @@ mod tests {
             Box::pin(async { Ok(None) })
         }
 
-        fn fs_file(
+        fn fs_open(
             &self,
             _path: String,
             _mode: BexExternalValue,
@@ -634,7 +634,7 @@ mod tests {
             Box::pin(async { Ok(None) })
         }
 
-        fn fs_file(
+        fn fs_open(
             &self,
             _path: String,
             _mode: BexExternalValue,
@@ -713,7 +713,7 @@ mod tests {
             Box::pin(async move { Ok(result) })
         }
 
-        fn fs_file(
+        fn fs_open(
             &self,
             _path: String,
             _mode: BexExternalValue,
@@ -787,7 +787,7 @@ mod tests {
             Box::pin(async move { Ok(result) })
         }
 
-        fn fs_file(
+        fn fs_open(
             &self,
             path: String,
             _mode: BexExternalValue,
@@ -877,7 +877,7 @@ mod tests {
             Box::pin(async move { Ok(result) })
         }
 
-        fn fs_file(
+        fn fs_open(
             &self,
             _path: String,
             _mode: BexExternalValue,

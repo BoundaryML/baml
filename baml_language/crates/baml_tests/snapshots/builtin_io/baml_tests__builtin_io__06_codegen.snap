@@ -1,6 +1,39 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
+function user.Append() -> int {
+    load_const "log.txt"
+    load_const "a"
+    dispatch_future baml.fs.open
+    await
+    load_const "line\\n"
+    dispatch_future baml.fs.File.write
+    await
+    return
+}
+
+function user.AppendAndRead() -> string {
+    load_const "log.txt"
+    load_const "a+"
+    dispatch_future baml.fs.open
+    await
+    store_var f
+    load_var f
+    load_const "line\\n"
+    dispatch_future baml.fs.File.write
+    await
+    pop 1
+    load_var f
+    load_const 0
+    dispatch_future baml.fs.File.seek
+    await
+    pop 1
+    load_var f
+    dispatch_future baml.fs.File.text
+    await
+    return
+}
+
 function user.ChainCommands() -> string {
     load_const "pwd"
     dispatch_future baml.sys.shell
@@ -53,10 +86,17 @@ function user.ConnectReadAndClose() -> string {
     return
 }
 
+function user.Exists() -> bool {
+    load_const "maybe.txt"
+    dispatch_future baml.fs.exists
+    await
+    return
+}
+
 function user.FileWrite() -> int {
     load_const "data.txt"
     load_const "r+"
-    dispatch_future baml.fs.file
+    dispatch_future baml.fs.open
     await
     load_const "hello"
     dispatch_future baml.fs.File.write
@@ -67,7 +107,7 @@ function user.FileWrite() -> int {
 function user.FileWriteBytes() -> int {
     load_const "data.bin"
     load_const "r+"
-    dispatch_future baml.fs.file
+    dispatch_future baml.fs.open
     await
     store_var f
     load_var f
@@ -112,7 +152,7 @@ function user.MultipleConnections() -> string {
 function user.ReadAndClose() -> string {
     load_const "example.txt"
     load_const "r"
-    dispatch_future baml.fs.file
+    dispatch_future baml.fs.open
     await
     store_var f
     load_var f
@@ -127,10 +167,32 @@ function user.ReadAndClose() -> string {
     return
 }
 
+function user.ReadChunk() -> string {
+    load_const "log.txt"
+    load_const "r"
+    dispatch_future baml.fs.open
+    await
+    load_const 512
+    dispatch_future baml.fs.File.read
+    await
+    return
+}
+
+function user.ReadChunkBytes() -> uint8array {
+    load_const "data.bin"
+    load_const "r"
+    dispatch_future baml.fs.open
+    await
+    load_const 4096
+    dispatch_future baml.fs.File.read_bytes
+    await
+    return
+}
+
 function user.ReadFile() -> string {
     load_const "example.txt"
     load_const "r"
-    dispatch_future baml.fs.file
+    dispatch_future baml.fs.open
     await
     dispatch_future baml.fs.File.text
     await
@@ -140,7 +202,7 @@ function user.ReadFile() -> string {
 function user.ReadFileBytes() -> uint8array {
     load_const "binary.dat"
     load_const "r"
-    dispatch_future baml.fs.file
+    dispatch_future baml.fs.open
     await
     dispatch_future baml.fs.File.bytes
     await
@@ -150,7 +212,7 @@ function user.ReadFileBytes() -> uint8array {
 function user.ReadFileBytesAndClose() -> uint8array {
     load_const "binary.dat"
     load_const "r"
-    dispatch_future baml.fs.file
+    dispatch_future baml.fs.open
     await
     store_var f
     load_var f
@@ -168,7 +230,7 @@ function user.ReadFileBytesAndClose() -> uint8array {
 function user.ReadFileBytesInline() -> uint8array {
     load_const "image.png"
     load_const "r"
-    dispatch_future baml.fs.file
+    dispatch_future baml.fs.open
     await
     dispatch_future baml.fs.File.bytes
     await
@@ -178,7 +240,7 @@ function user.ReadFileBytesInline() -> uint8array {
 function user.ReadFileInline() -> string {
     load_const "data.json"
     load_const "r"
-    dispatch_future baml.fs.file
+    dispatch_future baml.fs.open
     await
     dispatch_future baml.fs.File.text
     await
@@ -188,12 +250,12 @@ function user.ReadFileInline() -> string {
 function user.ReadMultipleFiles() -> string {
     load_const "file1.txt"
     load_const "r"
-    dispatch_future baml.fs.file
+    dispatch_future baml.fs.open
     await
     store_var f1
     load_const "file2.txt"
     load_const "r"
-    dispatch_future baml.fs.file
+    dispatch_future baml.fs.open
     await
     store_var f2
     load_var f1
@@ -207,6 +269,13 @@ function user.ReadMultipleFiles() -> string {
     load_var content1
     load_var content2
     bin_op +
+    return
+}
+
+function user.Remove() -> null {
+    load_const "stale.txt"
+    dispatch_future baml.fs.remove
+    await
     return
 }
 
@@ -227,7 +296,7 @@ function user.RunCommandWithVar() -> string {
 function user.SeekAndRead() -> string {
     load_const "data.txt"
     load_const "r+"
-    dispatch_future baml.fs.file
+    dispatch_future baml.fs.open
     await
     store_var f
     load_var f
@@ -237,6 +306,13 @@ function user.SeekAndRead() -> string {
     pop 1
     load_var f
     dispatch_future baml.fs.File.text
+    await
+    return
+}
+
+function user.Size() -> int {
+    load_const "data.bin"
+    dispatch_future baml.fs.size
     await
     return
 }
@@ -252,7 +328,7 @@ function user.WriteFile() -> int {
 function user.WriteFileBytes() -> int {
     load_const "source.bin"
     load_const "r"
-    dispatch_future baml.fs.file
+    dispatch_future baml.fs.open
     await
     dispatch_future baml.fs.File.bytes
     await

@@ -37,7 +37,19 @@ impl io::IoNamespaceEnv for NativeSysOps {
 // File System
 // ============================================================================
 
-type FsFileHandle = tokio::sync::Mutex<tokio::fs::File>;
+type FsFileHandle = tokio::sync::Mutex<Option<tokio::fs::File>>;
+
+fn downcast_handle(file: &owned::fs::File) -> Result<Arc<FsFileHandle>, OpErrorKind> {
+    file._handle
+        .clone()
+        .downcast::<FsFileHandle>()
+        .map_err(|_| OpErrorKind::Other("Invalid file handle type".into()))
+}
+
+/// Error returned for operations on a closed file.
+fn closed_err() -> OpErrorKind {
+    OpErrorKind::Other("File is closed".into())
+}
 
 impl io::IoClassFsFile for NativeSysOps {
     fn text(
@@ -50,11 +62,9 @@ impl io::IoClassFsFile for NativeSysOps {
         use tokio::io::AsyncReadExt;
 
         SysOpOutput::async_op(async move {
-            let handle: Arc<FsFileHandle> = file
-                ._handle
-                .downcast::<FsFileHandle>()
-                .map_err(|_| OpErrorKind::Other("Invalid file handle type".into()))?;
-            let mut f = handle.lock().await;
+            let handle = downcast_handle(&file)?;
+            let mut guard = handle.lock().await;
+            let f = guard.as_mut().ok_or_else(closed_err)?;
             let mut contents = String::new();
             f.read_to_string(&mut contents)
                 .await
@@ -73,11 +83,9 @@ impl io::IoClassFsFile for NativeSysOps {
         use tokio::io::AsyncReadExt;
 
         SysOpOutput::async_op(async move {
-            let handle: Arc<FsFileHandle> = file
-                ._handle
-                .downcast::<FsFileHandle>()
-                .map_err(|_| OpErrorKind::Other("Invalid file handle type".into()))?;
-            let mut f = handle.lock().await;
+            let handle = downcast_handle(&file)?;
+            let mut guard = handle.lock().await;
+            let f = guard.as_mut().ok_or_else(closed_err)?;
             let mut contents = Vec::new();
             f.read_to_end(&mut contents)
                 .await
@@ -86,14 +94,44 @@ impl io::IoClassFsFile for NativeSysOps {
         })
     }
 
+    fn read(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        file: owned::fs::File,
+        n: i64,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<String> {
+        SysOpOutput::async_op(async move {
+            let bytes = read_up_to(&file, n).await?;
+            String::from_utf8(bytes)
+                .map_err(|e| OpErrorKind::Other(format!("Invalid UTF-8 in file: {e}")))
+        })
+    }
+
+    fn read_bytes(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        file: owned::fs::File,
+        n: i64,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Vec<u8>> {
+        SysOpOutput::async_op(async move { read_up_to(&file, n).await })
+    }
+
     fn close(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
-        _file: owned::fs::File,
+        file: owned::fs::File,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        SysOpOutput::ok(())
+        SysOpOutput::async_op(async move {
+            let handle = downcast_handle(&file)?;
+            handle.lock().await.take();
+            Ok(())
+        })
     }
 
     fn seek(
@@ -112,11 +150,9 @@ impl io::IoClassFsFile for NativeSysOps {
                     "Negative seek offset: {offset}"
                 )));
             }
-            let handle: Arc<FsFileHandle> = file
-                ._handle
-                .downcast::<FsFileHandle>()
-                .map_err(|_| OpErrorKind::Other("Invalid file handle type".into()))?;
-            let mut f = handle.lock().await;
+            let handle = downcast_handle(&file)?;
+            let mut guard = handle.lock().await;
+            let f = guard.as_mut().ok_or_else(closed_err)?;
             #[allow(clippy::cast_sign_loss)]
             f.seek(std::io::SeekFrom::Start(offset as u64))
                 .await
@@ -133,24 +169,7 @@ impl io::IoClassFsFile for NativeSysOps {
         data: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<i64> {
-        use tokio::io::AsyncWriteExt;
-
-        SysOpOutput::async_op(async move {
-            let handle: Arc<FsFileHandle> = file
-                ._handle
-                .downcast::<FsFileHandle>()
-                .map_err(|_| OpErrorKind::Other("Invalid file handle type".into()))?;
-            let mut f = handle.lock().await;
-            let bytes = data.as_bytes();
-            f.write_all(bytes)
-                .await
-                .map_err(|e| OpErrorKind::Other(format!("Failed to write: {e}")))?;
-            f.flush()
-                .await
-                .map_err(|e| OpErrorKind::Other(format!("Failed to write: {e}")))?;
-            #[allow(clippy::cast_possible_wrap)]
-            Ok(bytes.len() as i64)
-        })
+        SysOpOutput::async_op(async move { write_all_bytes(&file, data.into_bytes()).await })
     }
 
     fn write_bytes(
@@ -161,29 +180,56 @@ impl io::IoClassFsFile for NativeSysOps {
         data: Vec<u8>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<i64> {
-        use tokio::io::AsyncWriteExt;
-
-        SysOpOutput::async_op(async move {
-            let handle: Arc<FsFileHandle> = file
-                ._handle
-                .downcast::<FsFileHandle>()
-                .map_err(|_| OpErrorKind::Other("Invalid file handle type".into()))?;
-            let mut f = handle.lock().await;
-            #[allow(clippy::cast_possible_wrap)]
-            let len = data.len() as i64;
-            f.write_all(&data)
-                .await
-                .map_err(|e| OpErrorKind::Other(format!("Failed to write: {e}")))?;
-            f.flush()
-                .await
-                .map_err(|e| OpErrorKind::Other(format!("Failed to write: {e}")))?;
-            Ok(len)
-        })
+        SysOpOutput::async_op(async move { write_all_bytes(&file, data).await })
     }
 }
 
+async fn read_up_to(file: &owned::fs::File, n: i64) -> Result<Vec<u8>, OpErrorKind> {
+    use tokio::io::AsyncReadExt;
+
+    if n < 0 {
+        return Err(OpErrorKind::Other(format!("Negative read length: {n}")));
+    }
+    let handle = downcast_handle(file)?;
+    let mut guard = handle.lock().await;
+    let f = guard.as_mut().ok_or_else(closed_err)?;
+    let cap = usize::try_from(n)
+        .map_err(|_| OpErrorKind::Other(format!("Read length out of range: {n}")))?;
+    let mut buf = vec![0u8; cap];
+    let mut filled = 0;
+    while filled < cap {
+        let read = f
+            .read(&mut buf[filled..])
+            .await
+            .map_err(|e| OpErrorKind::Other(format!("Failed to read file: {e}")))?;
+        if read == 0 {
+            break;
+        }
+        filled += read;
+    }
+    buf.truncate(filled);
+    Ok(buf)
+}
+
+async fn write_all_bytes(file: &owned::fs::File, data: Vec<u8>) -> Result<i64, OpErrorKind> {
+    use tokio::io::AsyncWriteExt;
+
+    let handle = downcast_handle(file)?;
+    let mut guard = handle.lock().await;
+    let f = guard.as_mut().ok_or_else(closed_err)?;
+    #[allow(clippy::cast_possible_wrap)]
+    let len = data.len() as i64;
+    f.write_all(&data)
+        .await
+        .map_err(|e| OpErrorKind::Other(format!("Failed to write: {e}")))?;
+    f.flush()
+        .await
+        .map_err(|e| OpErrorKind::Other(format!("Failed to write: {e}")))?;
+    Ok(len)
+}
+
 impl io::IoNamespaceFs for NativeSysOps {
-    fn file(
+    fn open(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
@@ -206,16 +252,75 @@ impl io::IoNamespaceFs for NativeSysOps {
                         .open(&path)
                         .await
                 }
+                "a" => {
+                    tokio::fs::OpenOptions::new()
+                        .append(true)
+                        .create(true)
+                        .open(&path)
+                        .await
+                }
+                "a+" => {
+                    tokio::fs::OpenOptions::new()
+                        .read(true)
+                        .append(true)
+                        .create(true)
+                        .open(&path)
+                        .await
+                }
                 _ => {
                     return Err(OpErrorKind::Other(format!(
-                        "Unsupported file mode '{mode}': expected \"r\" or \"r+\""
+                        "Unsupported file mode '{mode}': expected \"r\", \"r+\", \"a\", or \"a+\""
                     )));
                 }
             }
             .map_err(|e| OpErrorKind::Other(format!("Failed to open file '{path}': {e}")))?;
             let handle: Arc<dyn std::any::Any + Send + Sync> =
-                Arc::new(tokio::sync::Mutex::new(file));
+                Arc::new(tokio::sync::Mutex::new(Some(file)));
             Ok(owned::fs::File { _handle: handle })
+        })
+    }
+
+    fn exists(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        path: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<bool> {
+        SysOpOutput::async_op(async move {
+            tokio::fs::try_exists(&path).await.map_err(|e| {
+                OpErrorKind::Other(format!("Failed to check existence of '{path}': {e}"))
+            })
+        })
+    }
+
+    fn remove(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        path: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::async_op(async move {
+            tokio::fs::remove_file(&path)
+                .await
+                .map_err(|e| OpErrorKind::Other(format!("Failed to remove file '{path}': {e}")))
+        })
+    }
+
+    fn size(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        path: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<i64> {
+        SysOpOutput::async_op(async move {
+            let metadata = tokio::fs::metadata(&path)
+                .await
+                .map_err(|e| OpErrorKind::Other(format!("Failed to stat '{path}': {e}")))?;
+            i64::try_from(metadata.len())
+                .map_err(|_| OpErrorKind::Other(format!("File '{path}' size exceeds i64::MAX")))
         })
     }
 

@@ -260,7 +260,7 @@ async fn resolve_file(
     io: &dyn RuntimeIo,
 ) -> Result<(), BuildRequestError> {
     let file = io
-        .fs_file(path.to_string(), BexExternalValue::String("r".to_string()))
+        .fs_open(path.to_string(), BexExternalValue::String("r".to_string()))
         .await
         .map_err(|e| {
             BuildRequestError::FileNotResolved(format!("failed to open file {path}: {e}"))
@@ -444,13 +444,13 @@ mod tests {
     }
 
     /// Mock `RuntimeIo` for file-read tests. Returns configurable file content
-    /// from `fs_file` + `fs_file_bytes`.
+    /// from `fs_open` + `fs_file_bytes`.
     struct MockFsIo {
         content: Vec<u8>,
     }
 
     impl RuntimeIo for MockFsIo {
-        fn fs_file(
+        fn fs_open(
             &self,
             _path: String,
             _mode: BexExternalValue,

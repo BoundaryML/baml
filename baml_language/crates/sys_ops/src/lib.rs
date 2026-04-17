@@ -360,6 +360,26 @@ impl io::IoClassFsFile for DefaultIoOps {
     ) -> SysOpOutput<Vec<u8>> {
         SysOpOutput::err(OpErrorKind::Unsupported)
     }
+    fn read(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _f: io::owned::fs::File,
+        _n: i64,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<String> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+    fn read_bytes(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _f: io::owned::fs::File,
+        _n: i64,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Vec<u8>> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
     fn close(
         &self,
         _h: &Arc<BexHeap>,
@@ -402,7 +422,7 @@ impl io::IoClassFsFile for DefaultIoOps {
 }
 
 impl io::IoNamespaceFs for DefaultIoOps {
-    fn file(
+    fn open(
         &self,
         _h: &Arc<BexHeap>,
         _c: CallId,
@@ -410,6 +430,36 @@ impl io::IoNamespaceFs for DefaultIoOps {
         _mode: BexExternalValue,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::fs::File> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+
+    fn exists(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _path: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<bool> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+
+    fn remove(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _path: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+
+    fn size(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _path: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<i64> {
         SysOpOutput::err(OpErrorKind::Unsupported)
     }
 
@@ -602,10 +652,40 @@ impl IoSysOpsBuilder {
         mut self,
         instance: Arc<dyn io::IoNamespaceFs + Send + Sync + 'static>,
     ) -> Self {
-        self.inner.baml_fs_file = {
+        self.inner.baml_fs_open = {
             let t = instance.clone();
             Arc::new(move |heap, args, ctx, call_id| {
-                t.__glue_baml_fs_file(heap, args, ctx, call_id)
+                t.__glue_baml_fs_open(heap, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_fs_exists = {
+            let t = instance.clone();
+            Arc::new(move |heap, args, ctx, call_id| {
+                t.__glue_baml_fs_exists(heap, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_fs_remove = {
+            let t = instance.clone();
+            Arc::new(move |heap, args, ctx, call_id| {
+                t.__glue_baml_fs_remove(heap, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_fs_size = {
+            let t = instance.clone();
+            Arc::new(move |heap, args, ctx, call_id| {
+                t.__glue_baml_fs_size(heap, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_fs_write = {
+            let t = instance.clone();
+            Arc::new(move |heap, args, ctx, call_id| {
+                t.__glue_baml_fs_write(heap, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_fs_write_bytes = {
+            let t = instance.clone();
+            Arc::new(move |heap, args, ctx, call_id| {
+                t.__glue_baml_fs_write_bytes(heap, args, ctx, call_id)
             })
         };
         self.inner.baml_fs_file_text = {
@@ -620,10 +700,40 @@ impl IoSysOpsBuilder {
                 t.__glue_baml_fs_file_bytes(heap, args, ctx, call_id)
             })
         };
+        self.inner.baml_fs_file_read = {
+            let t = instance.clone();
+            Arc::new(move |heap, args, ctx, call_id| {
+                t.__glue_baml_fs_file_read(heap, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_fs_file_read_bytes = {
+            let t = instance.clone();
+            Arc::new(move |heap, args, ctx, call_id| {
+                t.__glue_baml_fs_file_read_bytes(heap, args, ctx, call_id)
+            })
+        };
         self.inner.baml_fs_file_close = {
-            let t = instance;
+            let t = instance.clone();
             Arc::new(move |heap, args, ctx, call_id| {
                 t.__glue_baml_fs_file_close(heap, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_fs_file_seek = {
+            let t = instance.clone();
+            Arc::new(move |heap, args, ctx, call_id| {
+                t.__glue_baml_fs_file_seek(heap, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_fs_file_write = {
+            let t = instance.clone();
+            Arc::new(move |heap, args, ctx, call_id| {
+                t.__glue_baml_fs_file_write(heap, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_fs_file_write_bytes = {
+            let t = instance;
+            Arc::new(move |heap, args, ctx, call_id| {
+                t.__glue_baml_fs_file_write_bytes(heap, args, ctx, call_id)
             })
         };
         self
@@ -796,12 +906,12 @@ mod tests {
         let ctx = test_ctx();
         let ops = SysOps::all_unsupported();
 
-        // Test fs_file returns Unsupported
-        let result = (ops.baml_fs_file)(&heap, vec![], &ctx, CallId::next());
+        // Test fs_open returns Unsupported
+        let result = (ops.baml_fs_open)(&heap, vec![], &ctx, CallId::next());
         assert!(matches!(
             result,
             SysOpResult::Ready(Err(OpError {
-                fn_name: SysOp::BamlFsFile,
+                fn_name: SysOp::BamlFsOpen,
                 kind: OpErrorKind::Unsupported,
             }))
         ));
@@ -826,7 +936,7 @@ mod tests {
         let ctx = test_ctx();
 
         // Test that get() returns the correct function pointer
-        let fn_ptr = ops.get(SysOp::BamlFsFile);
+        let fn_ptr = ops.get(SysOp::BamlFsOpen);
         let result = fn_ptr(&heap, vec![], &ctx, CallId::next());
         assert!(matches!(result, SysOpResult::Ready(Err(_))));
     }

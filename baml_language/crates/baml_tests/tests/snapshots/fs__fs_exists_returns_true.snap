@@ -1,0 +1,10 @@
+---
+source: crates/baml_tests/tests/fs.rs
+expression: "stabilize(&output.bytecode, &root)"
+---
+function main() -> bool {
+    load_const "{TMPDIR}/here.txt"
+    dispatch_future baml.fs.exists
+    await
+    return
+}

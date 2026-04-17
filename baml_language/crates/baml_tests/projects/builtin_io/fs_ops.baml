@@ -1,43 +1,53 @@
 // Test file system operations typecheck correctly
 
 function ReadFile() -> string {
-    let f = baml.fs.file("example.txt", "r");
+    let f = baml.fs.open("example.txt", "r");
     f.text()
 }
 
 function ReadFileInline() -> string {
-    baml.fs.file("data.json", "r").text()
+    baml.fs.open("data.json", "r").text()
 }
 
 function ReadMultipleFiles() -> string {
-    let f1 = baml.fs.file("file1.txt", "r");
-    let f2 = baml.fs.file("file2.txt", "r");
+    let f1 = baml.fs.open("file1.txt", "r");
+    let f2 = baml.fs.open("file2.txt", "r");
     let content1 = f1.text();
     let content2 = f2.text();
     content1 + content2
 }
 
 function ReadAndClose() -> string {
-    let f = baml.fs.file("example.txt", "r");
+    let f = baml.fs.open("example.txt", "r");
     let content = f.text();
     f.close();
     content
 }
 
 function ReadFileBytes() -> uint8array {
-    let f = baml.fs.file("binary.dat", "r");
+    let f = baml.fs.open("binary.dat", "r");
     f.bytes()
 }
 
 function ReadFileBytesInline() -> uint8array {
-    baml.fs.file("image.png", "r").bytes()
+    baml.fs.open("image.png", "r").bytes()
 }
 
 function ReadFileBytesAndClose() -> uint8array {
-    let f = baml.fs.file("binary.dat", "r");
+    let f = baml.fs.open("binary.dat", "r");
     let data = f.bytes();
     f.close();
     data
+}
+
+function ReadChunk() -> string {
+    let f = baml.fs.open("log.txt", "r");
+    f.read(512)
+}
+
+function ReadChunkBytes() -> uint8array {
+    let f = baml.fs.open("data.bin", "r");
+    f.read_bytes(4096)
 }
 
 function WriteFile() -> int {
@@ -45,24 +55,48 @@ function WriteFile() -> int {
 }
 
 function WriteFileBytes() -> int {
-    let data = baml.fs.file("source.bin", "r").bytes();
+    let data = baml.fs.open("source.bin", "r").bytes();
     baml.fs.write_bytes("output.bin", data)
 }
 
 function SeekAndRead() -> string {
-    let f = baml.fs.file("data.txt", "r+");
+    let f = baml.fs.open("data.txt", "r+");
     f.seek(10);
     f.text()
 }
 
 function FileWrite() -> int {
-    let f = baml.fs.file("data.txt", "r+");
+    let f = baml.fs.open("data.txt", "r+");
     f.write("hello")
 }
 
 function FileWriteBytes() -> int {
-    let f = baml.fs.file("data.bin", "r+");
+    let f = baml.fs.open("data.bin", "r+");
     let data = f.bytes();
     f.seek(0);
     f.write_bytes(data)
+}
+
+function Append() -> int {
+    let f = baml.fs.open("log.txt", "a");
+    f.write("line\n")
+}
+
+function AppendAndRead() -> string {
+    let f = baml.fs.open("log.txt", "a+");
+    f.write("line\n");
+    f.seek(0);
+    f.text()
+}
+
+function Exists() -> bool {
+    baml.fs.exists("maybe.txt")
+}
+
+function Remove() -> null {
+    baml.fs.remove("stale.txt")
+}
+
+function Size() -> int {
+    baml.fs.size("data.bin")
 }

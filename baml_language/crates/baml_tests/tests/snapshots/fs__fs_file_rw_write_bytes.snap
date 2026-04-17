@@ -5,14 +5,14 @@ expression: "stabilize(&output.bytecode, &root)"
 function main() -> int {
     load_const "{TMPDIR}/source.bin"
     load_const "r"
-    dispatch_future baml.fs.file
+    dispatch_future baml.fs.open
     await
     dispatch_future baml.fs.File.bytes
     await
     store_var bytes
     load_const "{TMPDIR}/data.bin"
     load_const "r+"
-    dispatch_future baml.fs.file
+    dispatch_future baml.fs.open
     await
     store_var file
     load_var file

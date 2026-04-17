@@ -5,7 +5,7 @@ expression: "stabilize(&output.bytecode, &root)"
 function main() -> string {
     load_const "{TMPDIR}/data.txt"
     load_const "r+"
-    dispatch_future baml.fs.file
+    dispatch_future baml.fs.open
     await
     store_var file
     load_var file

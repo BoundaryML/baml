@@ -296,7 +296,7 @@ async fn project_id_from_credentials(
                     }
                     // File path? Read and extract.
                     if let Ok(handle) = io
-                        .fs_file(val, BexExternalValue::String("r".to_string()))
+                        .fs_open(val, BexExternalValue::String("r".to_string()))
                         .await
                     {
                         if let Ok(contents) = io.fs_file_text(&handle).await {
@@ -372,7 +372,7 @@ async fn project_id_from_adc_config(io: &dyn RuntimeIo) -> Option<String> {
     let adc_path = format!("{config_dir}/application_default_credentials.json");
 
     let handle = io
-        .fs_file(adc_path, BexExternalValue::String("r".to_string()))
+        .fs_open(adc_path, BexExternalValue::String("r".to_string()))
         .await
         .ok()?;
     let contents = io.fs_file_text(&handle).await.ok()?;
@@ -391,7 +391,7 @@ async fn read_credentials_file(
     io: &dyn RuntimeIo,
 ) -> Result<String, BuildRequestError> {
     let handle = io
-        .fs_file(path.to_string(), BexExternalValue::String("r".to_string()))
+        .fs_open(path.to_string(), BexExternalValue::String("r".to_string()))
         .await
         .map_err(|e| {
             BuildRequestError::AuthorizationFailed(format!(
@@ -462,7 +462,7 @@ mod native {
             std::thread::spawn(move || {
                 handle.block_on(async {
                     let file_handle = io
-                        .fs_file(path, BexExternalValue::String("r".to_string()))
+                        .fs_open(path, BexExternalValue::String("r".to_string()))
                         .await
                         .map_err(|_| {
                             std::io::Error::new(std::io::ErrorKind::NotFound, "file not found")
@@ -1208,7 +1208,7 @@ mod tests {
             Box::pin(async { Ok(None) })
         }
 
-        fn fs_file(
+        fn fs_open(
             &self,
             _path: String,
             _mode: BexExternalValue,
@@ -1283,7 +1283,7 @@ mod tests {
             Box::pin(async { Ok(None) })
         }
 
-        fn fs_file(
+        fn fs_open(
             &self,
             path: String,
             _mode: BexExternalValue,
@@ -1371,7 +1371,7 @@ mod tests {
             Box::pin(async move { Ok(val) })
         }
 
-        fn fs_file(
+        fn fs_open(
             &self,
             path: String,
             _mode: BexExternalValue,
@@ -1535,7 +1535,7 @@ mod tests {
             Box::pin(async { Ok(None) })
         }
 
-        fn fs_file(
+        fn fs_open(
             &self,
             _path: String,
             _mode: BexExternalValue,

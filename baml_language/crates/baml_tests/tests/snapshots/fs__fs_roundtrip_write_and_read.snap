@@ -10,7 +10,7 @@ function main() -> string {
     pop 1
     load_const "{TMPDIR}/roundtrip.txt"
     load_const "r"
-    dispatch_future baml.fs.file
+    dispatch_future baml.fs.open
     await
     dispatch_future baml.fs.File.text
     await

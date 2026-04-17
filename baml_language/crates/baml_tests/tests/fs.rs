@@ -28,7 +28,7 @@ async fn fs_open_only() {
     let output = baml_test!(&format!(
         r#"
             function main() -> int {{
-                let file = baml.fs.file("{root}/hello.txt", "r");
+                let file = baml.fs.open("{root}/hello.txt", "r");
                 42
             }}
         "#
@@ -38,7 +38,7 @@ async fn fs_open_only() {
     function main() -> int {
         load_const "{TMPDIR}/hello.txt"
         load_const "r"
-        dispatch_future baml.fs.file
+        dispatch_future baml.fs.open
         await
         store_var file
         load_const 42
@@ -55,7 +55,7 @@ async fn fs_open_and_read() {
     let output = baml_test!(&format!(
         r#"
             function main() -> string {{
-                let file = baml.fs.file("{root}/hello.txt", "r");
+                let file = baml.fs.open("{root}/hello.txt", "r");
                 file.text()
             }}
         "#
@@ -65,7 +65,7 @@ async fn fs_open_and_read() {
     function main() -> string {
         load_const "{TMPDIR}/hello.txt"
         load_const "r"
-        dispatch_future baml.fs.file
+        dispatch_future baml.fs.open
         await
         dispatch_future baml.fs.File.text
         await
@@ -85,7 +85,7 @@ async fn fs_open_and_read_bytes() {
     let output = baml_test!(&format!(
         r#"
             function main() -> uint8array {{
-                let file = baml.fs.file("{root}/hello.txt", "r");
+                let file = baml.fs.open("{root}/hello.txt", "r");
                 file.bytes()
             }}
         "#
@@ -95,7 +95,7 @@ async fn fs_open_and_read_bytes() {
     function main() -> uint8array {
         load_const "{TMPDIR}/hello.txt"
         load_const "r"
-        dispatch_future baml.fs.file
+        dispatch_future baml.fs.open
         await
         dispatch_future baml.fs.File.bytes
         await
@@ -115,7 +115,7 @@ async fn fs_open_nonexistent_file() {
     let output = baml_test!(&format!(
         r#"
             function main() -> string {{
-                let file = baml.fs.file("{root}/nonexistent.txt", "r");
+                let file = baml.fs.open("{root}/nonexistent.txt", "r");
                 file.text()
             }}
         "#
@@ -125,7 +125,7 @@ async fn fs_open_nonexistent_file() {
     function main() -> string {
         load_const "{TMPDIR}/nonexistent.txt"
         load_const "r"
-        dispatch_future baml.fs.file
+        dispatch_future baml.fs.open
         await
         dispatch_future baml.fs.File.text
         await
@@ -163,7 +163,7 @@ async fn fs_write_bytes() {
     let output = baml_test!(&format!(
         r#"
             function main() -> int {{
-                let data = baml.fs.file("{root}/source.bin", "r").bytes();
+                let data = baml.fs.open("{root}/source.bin", "r").bytes();
                 baml.fs.write_bytes("{root}/copy.bin", data)
             }}
         "#
@@ -225,7 +225,7 @@ async fn fs_roundtrip_write_and_read() {
         r#"
             function main() -> string {{
                 baml.fs.write("{root}/roundtrip.txt", "roundtrip data");
-                let f = baml.fs.file("{root}/roundtrip.txt", "r");
+                let f = baml.fs.open("{root}/roundtrip.txt", "r");
                 f.text()
             }}
         "#
@@ -245,7 +245,7 @@ async fn fs_file_rw_seek_and_read() {
     let output = baml_test!(&format!(
         r#"
             function main() -> string {{
-                let file = baml.fs.file("{root}/data.txt", "r+");
+                let file = baml.fs.open("{root}/data.txt", "r+");
                 file.seek(6);
                 file.text()
             }}
@@ -266,7 +266,7 @@ async fn fs_file_rw_write_and_read_back() {
     let output = baml_test!(&format!(
         r#"
             function main() -> string {{
-                let file = baml.fs.file("{root}/data.txt", "r+");
+                let file = baml.fs.open("{root}/data.txt", "r+");
                 file.seek(6);
                 file.write("to Rust!!");
                 file.seek(0);
@@ -292,8 +292,8 @@ async fn fs_file_rw_write_bytes() {
     let output = baml_test!(&format!(
         r#"
             function main() -> int {{
-                let bytes = baml.fs.file("{root}/source.bin", "r").bytes();
-                let file = baml.fs.file("{root}/data.bin", "r+");
+                let bytes = baml.fs.open("{root}/source.bin", "r").bytes();
+                let file = baml.fs.open("{root}/data.bin", "r+");
                 file.seek(0);
                 file.write_bytes(bytes)
             }}
@@ -315,7 +315,7 @@ async fn fs_file_write_on_readonly_errors() {
     let output = baml_test!(&format!(
         r#"
             function main() -> int {{
-                let file = baml.fs.file("{root}/readonly.txt", "r");
+                let file = baml.fs.open("{root}/readonly.txt", "r");
                 file.write("should fail")
             }}
         "#
@@ -334,14 +334,286 @@ async fn fs_file_write_on_readonly_errors() {
 async fn fs_file_invalid_mode() {
     let (_tmp, root) = tmp(indexmap! { "file.txt" => "content" });
 
-    // The mode parameter is typed as "r" | "r+", so invalid modes like "w"
-    // are caught at compile time as a type mismatch.
+    // The mode parameter is typed as "r" | "r+" | "a" | "a+", so invalid modes
+    // like "w" are caught at compile time as a type mismatch.
     let _output = baml_test!(&format!(
         r#"
             function main() -> string {{
-                let file = baml.fs.file("{root}/file.txt", "w");
+                let file = baml.fs.open("{root}/file.txt", "w");
                 file.text()
             }}
         "#
     ));
+}
+
+#[tokio::test]
+async fn fs_exists_returns_true() {
+    let (_tmp, root) = tmp(indexmap! { "here.txt" => "x" });
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> bool {{
+                baml.fs.exists("{root}/here.txt")
+            }}
+        "#
+    ));
+
+    insta::assert_snapshot!(stabilize(&output.bytecode, &root));
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
+async fn fs_exists_returns_false() {
+    let (_tmp, root) = tmp(indexmap! {});
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> bool {{
+                baml.fs.exists("{root}/missing.txt")
+            }}
+        "#
+    ));
+
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(false)));
+}
+
+#[tokio::test]
+async fn fs_remove_deletes_file() {
+    let (_tmp, root) = tmp(indexmap! { "doomed.txt" => "bye" });
+    let path = format!("{root}/doomed.txt");
+    assert!(std::path::Path::new(&path).exists());
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> null {{
+                baml.fs.remove("{path}")
+            }}
+        "#
+    ));
+
+    assert_eq!(output.result, Ok(BexExternalValue::Null));
+    assert!(!std::path::Path::new(&path).exists());
+}
+
+#[tokio::test]
+async fn fs_remove_nonexistent_errors() {
+    let (_tmp, root) = tmp(indexmap! {});
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> null {{
+                baml.fs.remove("{root}/nope.txt")
+            }}
+        "#
+    ));
+
+    assert!(output.result.is_err());
+}
+
+#[tokio::test]
+async fn fs_size_returns_length() {
+    let (_tmp, root) = tmp(indexmap! { "data.bin" => "0123456789" });
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> int {{
+                baml.fs.size("{root}/data.bin")
+            }}
+        "#
+    ));
+
+    insta::assert_snapshot!(stabilize(&output.bytecode, &root));
+    assert_eq!(output.result, Ok(BexExternalValue::Int(10)));
+}
+
+#[tokio::test]
+async fn fs_file_read_n_bytes() {
+    let (_tmp, root) = tmp(indexmap! { "data.txt" => "Hello, world!" });
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> string {{
+                let f = baml.fs.open("{root}/data.txt", "r");
+                f.read(5)
+            }}
+        "#
+    ));
+
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("Hello".to_string()))
+    );
+}
+
+#[tokio::test]
+async fn fs_file_read_truncates_at_eof() {
+    let (_tmp, root) = tmp(indexmap! { "short.txt" => "abc" });
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> string {{
+                let f = baml.fs.open("{root}/short.txt", "r");
+                f.read(100)
+            }}
+        "#
+    ));
+
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("abc".to_string()))
+    );
+}
+
+#[tokio::test]
+async fn fs_file_read_bytes_n() {
+    let (_tmp, root) = tmp(indexmap! { "bin.dat" => "\x01\x02\x03\x04\x05" });
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> uint8array {{
+                let f = baml.fs.open("{root}/bin.dat", "r");
+                f.read_bytes(3)
+            }}
+        "#
+    ));
+
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::Uint8Array(vec![1, 2, 3]))
+    );
+}
+
+#[tokio::test]
+async fn fs_file_read_advances_cursor() {
+    let (_tmp, root) = tmp(indexmap! { "data.txt" => "ABCDEFGH" });
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> string {{
+                let f = baml.fs.open("{root}/data.txt", "r");
+                f.read(3);
+                f.read(3)
+            }}
+        "#
+    ));
+
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("DEF".to_string()))
+    );
+}
+
+#[tokio::test]
+async fn fs_file_read_negative_n_errors() {
+    let (_tmp, root) = tmp(indexmap! { "data.txt" => "abc" });
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> string {{
+                let f = baml.fs.open("{root}/data.txt", "r");
+                f.read(-1)
+            }}
+        "#
+    ));
+
+    assert!(output.result.is_err());
+}
+
+#[tokio::test]
+async fn fs_open_append_creates_and_appends() {
+    let (_tmp, root) = tmp(indexmap! { "log.txt" => "start!" });
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> int {{
+                let f = baml.fs.open("{root}/log.txt", "a");
+                f.write("more!")
+            }}
+        "#
+    ));
+
+    assert_eq!(output.result, Ok(BexExternalValue::Int(5)));
+    assert_eq!(
+        std::fs::read_to_string(format!("{root}/log.txt")).unwrap(),
+        "start!more!"
+    );
+}
+
+#[tokio::test]
+async fn fs_open_append_creates_missing_file() {
+    let (_tmp, root) = tmp(indexmap! {});
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> int {{
+                let f = baml.fs.open("{root}/new.txt", "a");
+                f.write("hi")
+            }}
+        "#
+    ));
+
+    assert_eq!(output.result, Ok(BexExternalValue::Int(2)));
+    assert_eq!(
+        std::fs::read_to_string(format!("{root}/new.txt")).unwrap(),
+        "hi"
+    );
+}
+
+#[tokio::test]
+async fn fs_open_append_plus_can_read() {
+    let (_tmp, root) = tmp(indexmap! { "data.txt" => "existing" });
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> string {{
+                let f = baml.fs.open("{root}/data.txt", "a+");
+                f.write(" more");
+                f.seek(0);
+                f.text()
+            }}
+        "#
+    ));
+
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("existing more".to_string()))
+    );
+}
+
+#[tokio::test]
+async fn fs_file_close_invalidates_handle() {
+    let (_tmp, root) = tmp(indexmap! { "data.txt" => "content" });
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> string {{
+                let f = baml.fs.open("{root}/data.txt", "r");
+                f.close();
+                f.text()
+            }}
+        "#
+    ));
+
+    assert!(
+        output.result.is_err(),
+        "Expected error reading after close, got: {:?}",
+        output.result
+    );
+}
+
+#[tokio::test]
+async fn fs_file_close_is_idempotent() {
+    let (_tmp, root) = tmp(indexmap! { "data.txt" => "x" });
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> null {{
+                let f = baml.fs.open("{root}/data.txt", "r");
+                f.close();
+                f.close()
+            }}
+        "#
+    ));
+
+    assert_eq!(output.result, Ok(BexExternalValue::Null));
 }

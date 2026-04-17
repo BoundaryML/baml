@@ -9,6 +9,14 @@ class File {
     $rust_io_function
   }
 
+  function read(self, n: int) -> string throws root.errors.Io {
+    $rust_io_function
+  }
+
+  function read_bytes(self, n: int) -> uint8array throws root.errors.Io {
+    $rust_io_function
+  }
+
   function close(self) -> null throws root.errors.Io {
     $rust_io_function
   }
@@ -26,7 +34,19 @@ class File {
   }
 }
 
-function file(path: string, mode: "r" | "r+") -> File throws root.errors.Io {
+function open(path: string, mode: "r" | "r+" | "a" | "a+") -> File throws root.errors.Io {
+  $rust_io_function
+}
+
+function exists(path: string) -> bool throws root.errors.Io {
+  $rust_io_function
+}
+
+function remove(path: string) -> null throws root.errors.Io {
+  $rust_io_function
+}
+
+function size(path: string) -> int throws root.errors.Io {
   $rust_io_function
 }
 

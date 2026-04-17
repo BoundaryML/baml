@@ -173,6 +173,12 @@ function baml.fs.File.bytes(self: null) -> uint8array {
 function baml.fs.File.close(self: null) -> null {
 }
 
+function baml.fs.File.read(self: null, n: int) -> string {
+}
+
+function baml.fs.File.read_bytes(self: null, n: int) -> uint8array {
+}
+
 function baml.fs.File.seek(self: null, offset: int) -> null {
 }
 
@@ -185,7 +191,16 @@ function baml.fs.File.write(self: null, data: string) -> int {
 function baml.fs.File.write_bytes(self: null, data: uint8array) -> int {
 }
 
-function baml.fs.file(path: string, mode: "r" | "r+") -> void {
+function baml.fs.exists(path: string) -> bool {
+}
+
+function baml.fs.open(path: string, mode: "r" | "r+" | "a" | "a+") -> void {
+}
+
+function baml.fs.remove(path: string) -> null {
+}
+
+function baml.fs.size(path: string) -> int {
 }
 
 function baml.fs.write(path: string, data: string) -> int {
