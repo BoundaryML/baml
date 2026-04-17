@@ -1,0 +1,81 @@
+name: oncall
+
+on:
+  pull_request:
+    paths:
+      - 'tools/bctl'
+      - 'tools/bctl_src/**'
+  schedule:
+    - cron: '0 17 * * 5'
+  workflow_dispatch:
+    inputs:
+      action:
+        type: choice
+        options: [notify, fill-schedule]
+        default: fill-schedule
+
+jobs:
+  review:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    environment: boundary-tools-prod
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v3
+      - run: ./tools/bctl oncall check
+
+      - name: Scope check - schedule-file-only PR?
+        id: scope
+        run: |
+          files=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} | tr '\n' ' ' | xargs)
+          if [ "$files" = 'tools/bctl_src/oncall/data/schedule.oncall' ]; then
+            echo "only_schedule=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # The intent of auto-merge here is to allow both automated schedule
+      # filling to work and to allow team members to do shift swaps using
+      # just github.dev.
+      - name: Enable auto-merge
+        if: steps.scope.outputs.only_schedule == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh pr merge ${{ github.event.pull_request.number }} --auto --squash
+
+  notify:
+    # TODO: remove `pull_request` from this condition once the notify job is
+    # validated end-to-end. While we're still iterating on it, we want PRs
+    # that touch this workflow / the oncall tool to actually exercise the
+    # Slack-posting path.
+    if: github.event_name == 'pull_request' || github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.action == 'notify')
+    runs-on: ubuntu-latest
+    environment: boundary-tools-prod
+    env:
+      SLACK_BOUNDARY_BOT_TOKEN: ${{ secrets.SLACK_BOUNDARY_BOT_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - name: Validate schedule
+        run: ./tools/bctl oncall check
+      - name: Post weekly handoff
+        run: ./tools/bctl oncall notify --post-to-slack
+
+  fill-schedule:
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.action == 'fill-schedule')
+    runs-on: ubuntu-latest
+    environment: boundary-tools-prod
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - run: ./tools/bctl oncall fill-schedule
+      - uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.SAM_GITHUB_BOUNDARYML_READWRITE }}
+          branch: oncall/fill-schedule
+          title: "oncall: fill schedule horizon"
+          commit-message: "fill schedule to 4mo horizon"
+          body: "Automated: extending oncall schedule to 4-month horizon."
