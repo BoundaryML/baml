@@ -229,6 +229,10 @@ BEPs are sorted by maturity - **implemented and accepted BEPs are the best refer
 
 ## Creating a New BEP
 
+See the \`NEW-BEP/\` folder for:
+- Directory structure to follow
+- API instructions for uploading your BEP
+
 When creating a new BEP, consider referencing:
 1. **Implemented/Accepted BEPs** - For proven patterns and structure
 2. **BEPs in the same domain** - For consistency with related features
@@ -302,16 +306,189 @@ ${page.content}
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// NEW-BEP Instructions Generation
+// ─────────────────────────────────────────────────────────────────────────────
+
+export function generateNewBepInstructions(nextNumber: number, apiBaseUrl: string): string {
+  const bepNum = formatBepNumber(nextNumber);
+
+  return `# Creating a New BEP
+
+This folder contains the structure and instructions for creating a new BEP via the API.
+
+## Next Available Number
+
+The next available BEP number is: **${nextNumber}** (${bepNum})
+
+## Directory Structure
+
+Create your BEP with this structure:
+
+\`\`\`
+${bepNum}/
+├── README.md           # Main proposal content (REQUIRED)
+└── pages/              # Additional pages (optional)
+    ├── background.md
+    ├── alternatives.md
+    └── ...
+\`\`\`
+
+### README.md Format
+
+Your README.md should start with a title heading:
+
+\`\`\`markdown
+# ${bepNum}: Your Proposal Title
+
+## Summary
+
+Brief description of what this BEP proposes...
+
+## Motivation
+
+Why is this needed...
+
+## Proposal
+
+The detailed design...
+\`\`\`
+
+### Additional Pages
+
+Each page in \`pages/\` becomes a subpage. The filename (without .md) becomes the slug.
+The first \`# Heading\` in each file becomes the page title.
+
+Example \`pages/background.md\`:
+\`\`\`markdown
+# Background
+
+Context and history for this proposal...
+\`\`\`
+
+---
+
+## API Usage
+
+### Step 1: Get or Create a User
+
+First, authenticate to get a user ID:
+
+\`\`\`bash
+curl -X POST "${apiBaseUrl}/api/agent/users" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "name": "Your Name",
+    "passkey": "<LOGIN_PASSKEY>"
+  }'
+\`\`\`
+
+Response:
+\`\`\`json
+{
+  "userId": "abc123...",
+  "name": "Your Name",
+  "isNew": false
+}
+\`\`\`
+
+### Step 2: Create the BEP
+
+\`\`\`bash
+curl -X POST "${apiBaseUrl}/api/agent/beps" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "title": "Your Proposal Title",
+    "content": "# ${bepNum}: Your Proposal Title\\n\\n## Summary\\n\\n...",
+    "pages": [
+      {
+        "slug": "background",
+        "title": "Background",
+        "content": "# Background\\n\\n..."
+      }
+    ],
+    "userId": "<your-user-id>",
+    "shepherds": ["<user-id-1>", "<user-id-2>"]
+  }'
+\`\`\`
+
+Response:
+\`\`\`json
+{
+  "success": true,
+  "bepId": "xyz789...",
+  "number": ${nextNumber},
+  "url": "${apiBaseUrl}/beps/${nextNumber}"
+}
+\`\`\`
+
+### API Fields
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| \`title\` | Yes | The BEP title (without "BEP-XXX:" prefix) |
+| \`content\` | Yes | Main README.md content (markdown) |
+| \`pages\` | No | Array of additional pages |
+| \`pages[].slug\` | Yes | URL-safe identifier (lowercase, hyphens) |
+| \`pages[].title\` | Yes | Page display title |
+| \`pages[].content\` | Yes | Page content (markdown) |
+| \`userId\` | Yes | Your user ID from Step 1 |
+| \`shepherds\` | No | Array of user IDs to assign as shepherds |
+
+### Step 3: Update an Existing BEP
+
+To update a BEP after creation:
+
+\`\`\`bash
+curl -X PUT "${apiBaseUrl}/api/agent/beps" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "number": ${nextNumber},
+    "content": "# ${bepNum}: Updated Title\\n\\n...",
+    "pages": [...],
+    "userId": "<your-user-id>",
+    "editNote": "Updated based on feedback",
+    "versionMode": "new"
+  }'
+\`\`\`
+
+| Field | Description |
+|-------|-------------|
+| \`number\` | The BEP number to update |
+| \`versionMode\` | \`"new"\` creates a new version, \`"current"\` updates in place |
+| \`editNote\` | Optional note describing the changes |
+
+---
+
+## Tips
+
+1. **Use existing BEPs as reference** - Look at implemented/accepted BEPs for structure
+2. **Keep pages focused** - One topic per page
+3. **Use descriptive slugs** - \`background\`, \`alternatives\`, \`implementation\`
+4. **Include code examples** - Show proposed syntax with \`\`\`baml blocks
+`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Generate All Files
 // ─────────────────────────────────────────────────────────────────────────────
 
-export function generateAllBepsExportFiles(data: ExportAllData): ExportAllFile[] {
+export function generateAllBepsExportFiles(data: ExportAllData, apiBaseUrl: string = "https://beps.boundaryml.com"): ExportAllFile[] {
   const files: ExportAllFile[] = [];
+
+  // Calculate next BEP number
+  const maxNumber = data.beps.reduce((max, bep) => Math.max(max, bep.number), 0);
+  const nextNumber = maxNumber + 1;
 
   // Index file
   files.push({
     path: "INDEX.md",
     content: generateIndexMd(data),
+  });
+
+  // NEW-BEP instructions
+  files.push({
+    path: "NEW-BEP/INSTRUCTIONS.md",
+    content: generateNewBepInstructions(nextNumber, apiBaseUrl),
   });
 
   // Individual BEP folders

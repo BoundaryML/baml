@@ -97,8 +97,9 @@ export function BepExportAllDialog({ trigger }: BepExportAllDialogProps) {
       // Cast the export data to our expected type
       const data = exportData as unknown as ExportAllData;
 
-      // Generate all files
-      const files = generateAllBepsExportFiles(data);
+      // Generate all files with the current origin as API base
+      const apiBaseUrl = typeof window !== "undefined" ? window.location.origin : "https://beps.boundaryml.com";
+      const files = generateAllBepsExportFiles(data, apiBaseUrl);
 
       for (const file of files) {
         // Handle nested paths by creating folders as needed
@@ -228,13 +229,13 @@ export function BepExportAllDialog({ trigger }: BepExportAllDialogProps) {
               <pre className="mt-2 text-xs font-mono text-muted-foreground whitespace-pre">
 {`all-beps/
   INDEX.md              # Overview with status-sorted list
+  NEW-BEP/
+    INSTRUCTIONS.md     # How to create & upload a new BEP
   BEP-001/
     README.md           # Full proposal content
     pages/              # Additional pages (if any)
   BEP-002/
-    README.md
-    pages/
-  ...`}
+    ...`}
               </pre>
             </div>
 

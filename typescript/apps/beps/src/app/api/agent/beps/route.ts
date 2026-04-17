@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, OPTIONS",
+  "Access-Control-Allow-Methods": "GET, POST, PUT, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type",
 };
 
@@ -200,6 +200,249 @@ export async function OPTIONS(): Promise<Response> {
     status: 204,
     headers: CORS_HEADERS,
   });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST - Create a new BEP
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface CreateBepRequest {
+  title: string;
+  content: string;
+  pages?: Array<{
+    slug: string;
+    title: string;
+    content: string;
+  }>;
+  userId: string;
+  shepherds?: string[];
+}
+
+export async function POST(request: NextRequest): Promise<Response> {
+  const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL;
+  if (!convexUrl) {
+    return jsonResponse(
+      { error: "Missing NEXT_PUBLIC_CONVEX_URL environment variable." },
+      500
+    );
+  }
+
+  const convex = new ConvexHttpClient(convexUrl);
+
+  let body: CreateBepRequest;
+  try {
+    body = await request.json();
+  } catch {
+    return jsonResponse({ error: "Invalid JSON body." }, 400);
+  }
+
+  // Validate required fields
+  if (!body.title || typeof body.title !== "string") {
+    return jsonResponse({ error: "Missing or invalid 'title' field." }, 400);
+  }
+  if (!body.content || typeof body.content !== "string") {
+    return jsonResponse({ error: "Missing or invalid 'content' field." }, 400);
+  }
+  if (!body.userId || typeof body.userId !== "string") {
+    return jsonResponse({ error: "Missing or invalid 'userId' field." }, 400);
+  }
+
+  // Validate pages if provided
+  if (body.pages) {
+    if (!Array.isArray(body.pages)) {
+      return jsonResponse({ error: "'pages' must be an array." }, 400);
+    }
+    for (let i = 0; i < body.pages.length; i++) {
+      const page = body.pages[i];
+      if (!page.slug || typeof page.slug !== "string") {
+        return jsonResponse({ error: `Page ${i}: missing or invalid 'slug'.` }, 400);
+      }
+      if (!page.title || typeof page.title !== "string") {
+        return jsonResponse({ error: `Page ${i}: missing or invalid 'title'.` }, 400);
+      }
+      if (!page.content || typeof page.content !== "string") {
+        return jsonResponse({ error: `Page ${i}: missing or invalid 'content'.` }, 400);
+      }
+    }
+  }
+
+  // Get the next available BEP number
+  let nextNumber: number;
+  try {
+    nextNumber = await convex.query(api.beps.getNextNumber, {});
+  } catch (err) {
+    return jsonResponse(
+      {
+        error: "Failed to get next BEP number.",
+        detail: err instanceof Error ? err.message : String(err),
+      },
+      502
+    );
+  }
+
+  // Create the BEP
+  try {
+    const result = await convex.mutation(api.beps.create, {
+      number: nextNumber,
+      title: body.title,
+      content: body.content,
+      pages: body.pages,
+      userId: body.userId as Id<"users">,
+      shepherds: (body.shepherds ?? []) as Id<"users">[],
+    });
+
+    const origin = request.nextUrl.origin;
+    return jsonResponse({
+      success: true,
+      bepId: result.bepId,
+      number: result.number,
+      formattedId: formatBepId(result.number),
+      url: `${origin}/beps/${result.number}`,
+    });
+  } catch (err) {
+    return jsonResponse(
+      {
+        error: "Failed to create BEP.",
+        detail: err instanceof Error ? err.message : String(err),
+      },
+      500
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PUT - Update an existing BEP
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface UpdateBepRequest {
+  number: number;
+  title?: string;
+  content?: string;
+  pages?: Array<{
+    slug: string;
+    title: string;
+    content: string;
+  }>;
+  userId: string;
+  editNote?: string;
+  versionMode?: "new" | "current";
+}
+
+export async function PUT(request: NextRequest): Promise<Response> {
+  const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL;
+  if (!convexUrl) {
+    return jsonResponse(
+      { error: "Missing NEXT_PUBLIC_CONVEX_URL environment variable." },
+      500
+    );
+  }
+
+  const convex = new ConvexHttpClient(convexUrl);
+
+  let body: UpdateBepRequest;
+  try {
+    body = await request.json();
+  } catch {
+    return jsonResponse({ error: "Invalid JSON body." }, 400);
+  }
+
+  // Validate required fields
+  if (typeof body.number !== "number") {
+    return jsonResponse({ error: "Missing or invalid 'number' field." }, 400);
+  }
+  if (!body.userId || typeof body.userId !== "string") {
+    return jsonResponse({ error: "Missing or invalid 'userId' field." }, 400);
+  }
+
+  // Must provide at least one thing to update
+  if (!body.title && !body.content && !body.pages) {
+    return jsonResponse(
+      { error: "Must provide at least one of: 'title', 'content', or 'pages'." },
+      400
+    );
+  }
+
+  // Validate pages if provided
+  if (body.pages) {
+    if (!Array.isArray(body.pages)) {
+      return jsonResponse({ error: "'pages' must be an array." }, 400);
+    }
+    for (let i = 0; i < body.pages.length; i++) {
+      const page = body.pages[i];
+      if (!page.slug || typeof page.slug !== "string") {
+        return jsonResponse({ error: `Page ${i}: missing or invalid 'slug'.` }, 400);
+      }
+      if (!page.title || typeof page.title !== "string") {
+        return jsonResponse({ error: `Page ${i}: missing or invalid 'title'.` }, 400);
+      }
+      if (!page.content || typeof page.content !== "string") {
+        return jsonResponse({ error: `Page ${i}: missing or invalid 'content'.` }, 400);
+      }
+    }
+  }
+
+  // Find the BEP by number
+  let beps: ListBepResult[];
+  try {
+    const bepsRaw = await convex.query(api.beps.list, { limit: BEP_LIST_PROBE_LIMIT });
+    beps = bepsRaw.map((bep: RawBepListItem) => ({
+      _id: String(bep._id),
+      number: bep.number,
+      title: bep.title,
+      status: bep.status,
+      updatedAt: bep.updatedAt,
+    }));
+  } catch (err) {
+    return jsonResponse(
+      {
+        error: "Failed to fetch BEP list.",
+        detail: err instanceof Error ? err.message : String(err),
+      },
+      502
+    );
+  }
+
+  const targetBep = beps.find((b) => b.number === body.number);
+  if (!targetBep) {
+    return jsonResponse(
+      { error: `BEP-${String(body.number).padStart(3, "0")} not found.` },
+      404
+    );
+  }
+
+  // Use importVersion for updating (it handles pages correctly)
+  try {
+    const result = await convex.mutation(api.beps.importVersion, {
+      bepId: targetBep._id as Id<"beps">,
+      content: body.content ?? "",
+      pages: body.pages ?? [],
+      editNote: body.editNote,
+      userId: body.userId as Id<"users">,
+      versionMode: body.versionMode ?? "new",
+    });
+
+    const origin = request.nextUrl.origin;
+    return jsonResponse({
+      success: true,
+      bepId: targetBep._id,
+      number: body.number,
+      formattedId: formatBepId(body.number),
+      versionNumber: result.versionNumber,
+      versionAction: result.versionAction,
+      pagesCreated: result.pagesCreated,
+      pagesUpdated: result.pagesUpdated,
+      pagesDeleted: result.pagesDeleted,
+      url: `${origin}/beps/${body.number}`,
+    });
+  } catch (err) {
+    return jsonResponse(
+      {
+        error: "Failed to update BEP.",
+        detail: err instanceof Error ? err.message : String(err),
+      },
+      500
+    );
+  }
 }
 
 export async function GET(request: NextRequest): Promise<Response> {
