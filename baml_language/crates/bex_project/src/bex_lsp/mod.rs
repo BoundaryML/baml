@@ -131,6 +131,9 @@ pub enum PlaygroundNotification {
         generation: u64,
         call_id: u64,
         data: Vec<u8>,
+        /// If a testset expansion failed, the name + error message.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        expand_error: Option<TestExpandError>,
     },
     /// A runtime event was emitted during execution.
     #[serde(rename_all = "camelCase")]
@@ -143,6 +146,13 @@ pub enum PlaygroundNotification {
         event_type: String,
         event_data: serde_json::Value,
     },
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TestExpandError {
+    pub testset_name: String,
+    pub message: String,
 }
 
 pub trait PlaygroundSender: Send + Sync {

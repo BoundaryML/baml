@@ -40,31 +40,4 @@ function GetTodoMissingTypeArg() -> Todo {
 
 //----
 //- diagnostics
-// Error: unresolved name: baml.HttpMethod.Get
-//     ╭─[ expr_builtin.baml:10:12 ]
-//     │
-//  10 │     method: baml.HttpMethod.Get,
-//     │            ──────────┬─────────  
-//     │                      ╰─────────── unresolved name: baml.HttpMethod.Get
-//     │ 
-//     │ Note: Error code: E0001
-// ────╯
-// Error: unresolved name: baml.fetch_as
-//     ╭─[ expr_builtin.baml:15:43 ]
-//     │
-//  15 │ ╭─▶ function GetTodoMissingTypeArg() -> Todo {
-//  16 │ ├─▶   baml.fetch_as(baml.HttpRequest {
-//     │ │                                        
-//     │ ╰──────────────────────────────────────── unresolved name: baml.fetch_as
-//     │     
-//     │     Note: Error code: E0001
-// ────╯
-// Error: unresolved name: baml.HttpMethod.Get
-//     ╭─[ expr_builtin.baml:17:12 ]
-//     │
-//  17 │     method: baml.HttpMethod.Get,
-//     │            ──────────┬─────────  
-//     │                      ╰─────────── unresolved name: baml.HttpMethod.Get
-//     │ 
-//     │ Note: Error code: E0001
-// ────╯
+// <no-diagnostics-expected>

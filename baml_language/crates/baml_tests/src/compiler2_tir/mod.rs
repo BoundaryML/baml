@@ -28,11 +28,7 @@ pub(crate) mod support {
         CatchClauseKind, Expr, ExprBody, ExprId, Literal, PatId, Pattern, Stmt, StmtId, TypeExpr,
     };
     use baml_compiler2_hir::{
-        body::{FunctionBody, function_body},
-        contributions::Definition,
-        loc::FunctionLoc,
-        scope::ScopeKind,
-        signature::function_signature,
+        body::FunctionBody, contributions::Definition, loc::FunctionLoc, scope::ScopeKind,
     };
     use baml_compiler2_tir::{
         inference::{
@@ -241,11 +237,11 @@ pub(crate) mod support {
                 let tail = if tail_expr.is_some() { " + tail" } else { "" };
                 format!("{{ {} stmts{tail} }}", stmts.len())
             }
-            Expr::FieldAccess { base, field } => {
-                format!("{}.{field}", expr_desc(*base, body))
+            Expr::MemberAccess { base, member } => {
+                format!("{}.{member}", expr_desc(*base, body))
             }
-            Expr::OptionalFieldAccess { base, field } => {
-                format!("{}?.{field}", expr_desc(*base, body))
+            Expr::OptionalMemberAccess { base, member } => {
+                format!("{}?.{member}", expr_desc(*base, body))
             }
             Expr::Index { base, index } => {
                 format!("{}[{}]", expr_desc(*base, body), expr_desc(*index, body))
@@ -840,7 +836,7 @@ pub(crate) mod support {
     /// Render a file's TIR output in the same format as the onion skin tool.
     /// Uses the PPIR semantic index which includes synthetic stream_* types.
     pub fn render_tir(db: &ProjectDatabase, file: baml_base::SourceFile) -> String {
-        use baml_compiler2_hir::package::{PackageId, package_items};
+        use baml_compiler2_hir::package::PackageId;
         use baml_compiler2_tir::inference::{
             detect_invalid_alias_cycles, detect_invalid_class_cycles,
         };
@@ -851,7 +847,7 @@ pub(crate) mod support {
         // Get package items for resolving TypeExpr -> Ty in signatures
         let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
         let pkg_id = PackageId::new(db, pkg_info.package.clone());
-        let pkg_items = package_items(db, pkg_id);
+        let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
 
         // Pre-compute throw sets for the package
         let throw_sets = baml_compiler2_tir::throw_inference::function_throw_sets(db, pkg_id);
@@ -1004,8 +1000,8 @@ pub(crate) mod support {
                     let name_matches = scope.name.as_ref().is_none_or(|n| *n == func_data.name);
                     if func_data.span == scope.range && name_matches {
                         let func_loc = FunctionLoc::new(db, file, *local_id);
-                        func_body_opt = Some(function_body(db, func_loc));
-                        let sig = function_signature(db, func_loc);
+                        func_body_opt = Some(baml_compiler2_ppir::function_body(db, func_loc));
+                        let sig = baml_compiler2_ppir::function_signature(db, func_loc);
                         let ns = &pkg_info.namespace_path;
 
                         let enclosing_class_ty: Option<baml_compiler2_tir::ty::Ty> =
@@ -1018,6 +1014,7 @@ pub(crate) mod support {
                                                 baml_compiler2_tir::lower_type_expr::qualify_def(
                                                     db, def, cn,
                                                 ),
+                                                vec![],
                                                 Default::default(),
                                             )
                                         })
@@ -1430,15 +1427,15 @@ pub(crate) mod support {
                         .unwrap_or_default();
                     format!("{{ {} }}{tail}", stmt_strs.join("; "))
                 }
-                Expr::FieldAccess { base, field } => {
+                Expr::MemberAccess { base, member } => {
                     format!(
-                        "{}.{field}",
+                        "{}.{member}",
                         expr_desc_hir(*base, body, prefix, local_type_names)
                     )
                 }
-                Expr::OptionalFieldAccess { base, field } => {
+                Expr::OptionalMemberAccess { base, member } => {
                     format!(
-                        "{}?.{field}",
+                        "{}?.{member}",
                         expr_desc_hir(*base, body, prefix, local_type_names)
                     )
                 }
@@ -1730,6 +1727,67 @@ pub(crate) mod support {
         }
 
         output
+    }
+
+    pub fn expr_type_in_function(
+        db: &ProjectDatabase,
+        file: baml_base::SourceFile,
+        function_name: &str,
+        expr_text: &str,
+    ) -> String {
+        let item_tree = baml_compiler2_hir::file_item_tree(db, file);
+        let (func_loc, func_span) = item_tree
+            .functions
+            .iter()
+            .find_map(|(local_id, func_data)| {
+                (func_data.name.as_str() == function_name)
+                    .then_some((FunctionLoc::new(db, file, *local_id), func_data.span))
+            })
+            .unwrap_or_else(|| panic!("function `{function_name}` not found"));
+        let func_body = baml_compiler2_ppir::function_body(db, func_loc);
+        let body = match func_body.as_ref() {
+            FunctionBody::Expr(body) => body,
+            _ => panic!("function `{function_name}` has no expression body"),
+        };
+
+        let index = baml_compiler2_ppir::file_semantic_index(db, file);
+        let scope_id = index
+            .scopes
+            .iter()
+            .enumerate()
+            .find_map(|(i, scope)| {
+                (matches!(scope.kind, ScopeKind::Function)
+                    && scope.range == func_span
+                    && scope
+                        .name
+                        .as_ref()
+                        .is_some_and(|name| name.as_str() == function_name))
+                .then_some(index.scope_ids[i])
+            })
+            .unwrap_or_else(|| panic!("scope for function `{function_name}` not found"));
+        let inference = infer_scope_types(db, scope_id);
+
+        let matches: Vec<_> = body
+            .exprs
+            .iter()
+            .filter_map(|(expr_id, _)| (expr_desc(expr_id, body) == expr_text).then_some(expr_id))
+            .collect();
+        let expr_id = match matches.as_slice() {
+            [expr_id] => *expr_id,
+            [] => panic!("expression `{expr_text}` not found in function `{function_name}`"),
+            _ => panic!(
+                "expression `{expr_text}` matched multiple nodes in function `{function_name}`"
+            ),
+        };
+
+        inference
+            .expression_type(expr_id)
+            .map(|ty| ty.to_string())
+            .unwrap_or_else(|| {
+                panic!(
+                    "expression `{expr_text}` in function `{function_name}` has no inferred type"
+                )
+            })
     }
 
     pub fn make_db() -> ProjectDatabase {

@@ -750,9 +750,7 @@ function user.ChainExprs(user: ChainUser, items: ChainItem[], m: map<string, int
     load_map_element
     call_indirect
     pop 1
-    load_var items
-    load_const "len"
-    load_map_element
+    load_const null
     call_indirect
     pop 1
     load_const 0
@@ -764,15 +762,11 @@ function user.ChainExprs(user: ChainUser, items: ChainItem[], m: map<string, int
     call_indirect
     pop 1
     load_const 0
-    load_var items
-    load_const "get"
-    load_map_element
+    load_const null
     call_indirect
     pop 1
     load_const 0
-    load_var items
-    load_const "get"
-    load_map_element
+    load_const null
     call_indirect
     pop 1
     load_const null
@@ -787,17 +781,17 @@ function user.ChainExprs(user: ChainUser, items: ChainItem[], m: map<string, int
     load_var user
     load_field .profile
     load_field .items
-    store_var _55
+    store_var _34
     load_var user
     load_field .profile
     load_field .items
     load_const "len"
     load_map_element
     call_indirect
-    store_var _58
-    load_var _55
+    store_var _36
+    load_var _34
     load_const 0
-    load_var _58
+    load_var _36
     load_const 1
     bin_op -
     load_var user
@@ -815,13 +809,13 @@ function user.ChainExprs(user: ChainUser, items: ChainItem[], m: map<string, int
     pop 1
     load_var user
     load_field .scores
-    store_var _78
+    store_var _51
     load_var user
     load_field .scores
     load_const "len"
     load_map_element
     call_indirect
-    store_var _80
+    store_var _53
     load_var user
     load_field .scores
     load_const 0
@@ -829,11 +823,9 @@ function user.ChainExprs(user: ChainUser, items: ChainItem[], m: map<string, int
     load_const "len"
     load_map_element
     call_indirect
-    store_var _85
+    store_var _57
     load_const 0
-    load_var items
-    load_const "get"
-    load_map_element
+    load_const null
     call_indirect
     pop 1
     load_var user
@@ -1321,6 +1313,14 @@ function user.LlmBasic$parse(json: string) -> string {
     return
 }
 
+function user.LlmBasic$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream {
+    load_var sse
+    load_const "LlmBasic"
+    load_const null
+    call baml.llm.parse
+    return
+}
+
 function user.LlmBasic$render_prompt(name: string) -> baml.llm.PromptAst {
     load_const null
     load_const "LlmBasic"
@@ -1358,6 +1358,14 @@ function user.LlmMultiLine$parse(json: string) -> string {
     return
 }
 
+function user.LlmMultiLine$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream {
+    load_var sse
+    load_const "LlmMultiLine"
+    load_const null
+    call baml.llm.parse
+    return
+}
+
 function user.LlmMultiLine$render_prompt(text: string) -> baml.llm.PromptAst {
     load_const null
     load_const "LlmMultiLine"
@@ -1391,6 +1399,14 @@ function user.LlmReversedOrder$build_request(text: string) -> baml.http.Request 
 function user.LlmReversedOrder$parse(json: string) -> string {
     load_const "LlmReversedOrder"
     load_var json
+    call baml.llm.parse
+    return
+}
+
+function user.LlmReversedOrder$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream {
+    load_var sse
+    load_const "LlmReversedOrder"
+    load_const null
     call baml.llm.parse
     return
 }
@@ -1454,6 +1470,26 @@ function user.LlmStringClient$parse(json: string) -> string {
     return
 }
 
+function user.LlmStringClient$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream {
+    load_var sse
+    load_const "LlmStringClient"
+    alloc_instance baml.llm.Client
+    load_const "openai/gpt-4o"
+    init_field .name
+    load_const null
+    load_const "Primitive"
+    load_map_element
+    init_field .client_type
+    alloc_array 0
+    init_field .sub_clients
+    load_const null
+    init_field .retry
+    load_const 0
+    init_field .counter
+    call baml.llm.parse
+    return
+}
+
 function user.LlmStringClient$render_prompt(text: string) -> baml.llm.PromptAst {
     alloc_instance baml.llm.Client
     load_const "openai/gpt-4o"
@@ -1510,6 +1546,14 @@ function user.LlmWithLongSignature$build_request(first_context: string, second_c
 function user.LlmWithLongSignature$parse(json: string) -> string {
     load_const "LlmWithLongSignature"
     load_var json
+    call baml.llm.parse
+    return
+}
+
+function user.LlmWithLongSignature$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream {
+    load_var sse
+    load_const "LlmWithLongSignature"
+    load_const null
     call baml.llm.parse
     return
 }
@@ -4444,6 +4488,14 @@ function user.TestTarget$build_request() -> baml.http.Request {
 function user.TestTarget$parse(json: string) -> string {
     load_const "TestTarget"
     load_var json
+    call baml.llm.parse
+    return
+}
+
+function user.TestTarget$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream {
+    load_var sse
+    load_const "TestTarget"
+    load_global user.BasicClient
     call baml.llm.parse
     return
 }

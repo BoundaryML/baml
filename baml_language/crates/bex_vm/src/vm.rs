@@ -239,6 +239,10 @@ pub struct BexVm {
     /// Available to `//baml:mut_vm` native functions that need to emit events
     /// with the correct span context.
     pub current_span_context: Option<bex_events::SpanContext>,
+
+    /// Process argv passed to the engine at startup. Exposed to BAML via
+    /// `baml.sys.argv()`. Shared (cheap to clone) across VMs.
+    pub argv: Arc<[String]>,
 }
 
 /// VM execution state.
@@ -459,6 +463,7 @@ impl BexVm {
         heap: Arc<BexHeap>,
         globals: GlobalPool,
         resolved_class_names: HashMap<String, HeapPtr>,
+        argv: Arc<[String]>,
     ) -> Self {
         let tlab = Tlab::new(Arc::clone(&heap));
 
@@ -496,6 +501,7 @@ impl BexVm {
             interrupt_frame: None,
             traced_frames: Vec::new(),
             current_span_context: None,
+            argv,
         }
     }
 
@@ -735,7 +741,12 @@ impl BexVm {
             .map(|(name, idx)| (name, heap.compile_time_ptr(idx.into_raw())))
             .collect();
 
-        Ok(Self::new(heap, globals, resolved_class_names))
+        Ok(Self::new(
+            heap,
+            globals,
+            resolved_class_names,
+            Arc::from(Vec::<String>::new()),
+        ))
     }
 
     /// Bootstraps the VM preparing the given function to run.

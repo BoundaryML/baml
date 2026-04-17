@@ -8,17 +8,17 @@ class user.Config {
 class user.Response {
   text: string
 }
-function user.RootUsesOwnStream(c: unknown) -> string throws never {
-  { : unknown
-    c.key : unknown
+function user.RootUsesOwnStream(c: user.Config$stream) -> string throws never {
+  { : null | string
+    c.key : null | string
   }
-  !! 610..624: unresolved type: Config$stream
+  !! 637..647: type mismatch: expected string, got null | string
 }
-function user.RootUsesLlmStream(r: unknown) -> string throws never {
-  { : unknown
-    r.text : unknown
+function user.RootUsesLlmStream(r: user.llm.Response$stream) -> string throws never {
+  { : null | string
+    r.text : null | string
   }
-  !! 720..745: unresolved type: root.llm.Response$stream
+  !! 758..769: type mismatch: expected string, got null | string
 }
 class user.RootWithStreamFields {
   own_stream: user.Config$stream
@@ -40,17 +40,17 @@ class user.llm.Config {
 class user.llm.Response {
   text: string
 }
-function user.llm.LlmUsesOwnStream(r: unknown) -> string throws never {
-  { : unknown
-    r.text : unknown
+function user.llm.LlmUsesOwnStream(r: user.llm.Response$stream) -> string throws never {
+  { : null | string
+    r.text : null | string
   }
-  !! 199..215: unresolved type: Response$stream
+  !! 228..239: type mismatch: expected string, got null | string
 }
-function user.llm.LlmUsesRootStream(c: unknown) -> string throws never {
-  { : unknown
-    c.key : unknown
+function user.llm.LlmUsesRootStream(c: user.Config$stream) -> string throws never {
+  { : null | string
+    c.key : null | string
   }
-  !! 313..332: unresolved type: root.Config$stream
+  !! 345..355: type mismatch: expected string, got null | string
 }
 class user.llm.LlmWithStreamFields {
   own_stream: user.llm.Response$stream

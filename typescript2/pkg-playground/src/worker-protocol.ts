@@ -52,8 +52,8 @@ export type PlaygroundNotification =
   | { type: 'openPlayground'; project: string; functionName?: string }
   | { type: 'controlFlowGraphResult'; functionName: string; graph: ControlFlowGraph | null }
   | { type: 'cursorContext'; context: CursorContext }
-  | { type: 'testCollectionResult'; project: string; generation: number; callId: number; data: number[] }
-  | { type: 'runtimeEvent'; spanId: string; parentSpanId: string | null; rootSpanId: string; timestampMs: number; eventType: string; eventData: unknown };
+  | { type: 'testCollectionResult'; project: string; generation: number; callId: number; data: number[]; expandError?: { testsetName: string; message: string } }
+  | { type: 'runtimeEvent'; data: number[] };
 
 // ---------------------------------------------------------------------------
 // Control flow graph types (matches Rust serde output from baml_compiler2_visualization)

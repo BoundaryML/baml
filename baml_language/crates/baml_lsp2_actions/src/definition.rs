@@ -211,7 +211,7 @@ fn resolve_member_at(
             };
             let source_map = baml_compiler2_hir::body::function_body_source_map(db, func_loc)?;
 
-            // Try FieldAccess path first
+            // Try MemberAccess path first
             if let Some(loc) = resolve_field_access_at(
                 db,
                 file,
@@ -290,7 +290,8 @@ fn resolve_variant_definition(
     None
 }
 
-/// Cursor is on a `FieldAccess` expression (e.g. `p.name`, `Status.Active`, `s.Celebrate()`).
+/// Cursor is on a `MemberAccess` expression or a multi-segment `Path`
+/// (e.g. `p.name`, `Status.Active`, `s.Celebrate()`).
 fn resolve_field_access_at(
     db: &dyn Db,
     _file: SourceFile,
@@ -303,26 +304,68 @@ fn resolve_field_access_at(
     use baml_compiler2_ast::Expr;
     use baml_compiler2_tir::inference::MemberResolution;
 
-    // Find the FieldAccess expr whose span contains the cursor and field name matches.
-    // Pick smallest (innermost) span for nested chains like a.b.c.
-    let mut best: Option<(baml_compiler2_ast::ExprId, TextRange)> = None;
+    // Find the best matching expr — either a MemberAccess or a multi-segment Path
+    // whose span contains the cursor and whose member name matches the token.
+    // Pick smallest (innermost) span for nested chains.
+    // For Path nodes, also record which segment index the cursor is on.
+    let mut best: Option<(baml_compiler2_ast::ExprId, TextRange, Option<usize>)> = None;
     for (expr_id, expr) in expr_body.exprs.iter() {
-        if let Expr::FieldAccess { field, .. } = expr {
-            if field.as_str() != token_text {
-                continue;
+        match expr {
+            Expr::MemberAccess { member, .. } => {
+                if member.as_str() != token_text {
+                    continue;
+                }
+                let span = source_map.expr_span(expr_id);
+                if !span.contains(offset) && span.end() != offset {
+                    continue;
+                }
+                if best.is_none_or(|(_, prev_span, _)| span.len() < prev_span.len()) {
+                    best = Some((expr_id, span, None));
+                }
             }
-            let span = source_map.expr_span(expr_id);
-            if !span.contains(offset) && span.end() != offset {
-                continue;
+            Expr::Path(segments) if segments.len() >= 2 => {
+                // Check if the cursor is on a non-first segment of this path.
+                // Only segments[1..] can be member accesses — segments[0] is the root.
+                let segment_idx = segments[1..]
+                    .iter()
+                    .enumerate()
+                    .find(|(i, seg)| {
+                        if seg.as_str() != token_text {
+                            return false;
+                        }
+                        let seg_span = source_map.path_segment_span(expr_id, *i + 1);
+                        seg_span.contains(offset) || seg_span.end() == offset
+                    })
+                    .map(|(i, _)| i + 1);
+                if segment_idx.is_none() {
+                    continue;
+                }
+                let span = source_map.expr_span(expr_id);
+                if best.is_none_or(|(_, prev_span, _)| span.len() < prev_span.len()) {
+                    best = Some((expr_id, span, segment_idx));
+                }
             }
-            if best.is_none_or(|(_, prev_span)| span.len() < prev_span.len()) {
-                best = Some((expr_id, span));
-            }
+            _ => {}
         }
     }
 
-    let (expr_id, _) = best?;
-    match inference.resolution(expr_id)? {
+    let (expr_id, _, path_seg_idx) = best?;
+
+    // For multi-segment Path nodes, look up the per-segment resolution
+    // from path_member_resolutions. For MemberAccess, use the top-level resolution.
+    let resolution = if let Some(seg_idx) = path_seg_idx {
+        // seg_idx is the index into the full segments array (0-based, with 0 being the root).
+        // path_member_resolutions[i] corresponds to segments[i+1], so the member resolution
+        // for segment seg_idx is at index seg_idx - 1 in path_member_resolutions.
+        inference
+            .path_member_resolution(expr_id)
+            .and_then(|resolutions| resolutions.get(seg_idx - 1))
+            .or_else(|| inference.resolution(expr_id))
+    } else {
+        inference.resolution(expr_id)
+    };
+
+    match resolution? {
         MemberResolution::Field {
             class_loc,
             field_name,
@@ -406,7 +449,7 @@ fn resolve_constructor_field_at(
 
             // Get the Object's type
             let obj_ty = inference.expression_type(expr_id)?;
-            let Ty::Class(qtn, _) = obj_ty else {
+            let Ty::Class(qtn, _, _) = obj_ty else {
                 return None;
             };
 

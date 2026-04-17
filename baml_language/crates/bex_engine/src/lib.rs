@@ -88,6 +88,16 @@ use web_time::{Instant, SystemTime};
 // Engine Types
 // ============================================================================
 
+/// Information about a user-callable function, used by `baml run --list`.
+#[derive(Debug, Clone)]
+pub struct UserFunctionInfo {
+    pub qualified_name: String,
+    pub display_name: String,
+    pub param_names: Vec<String>,
+    pub param_types: Vec<Ty>,
+    pub return_type: Ty,
+}
+
 /// Result of an external future.
 struct FutureResult {
     id: HeapPtr,
@@ -374,6 +384,9 @@ pub struct BexEngine {
     event_sink: Option<std::sync::Arc<dyn bex_events::EventSink>>,
     /// Compiled test cases from the BAML program.
     test_cases: Vec<bex_vm_types::TestCase>,
+    /// Process argv passed in at engine creation. Exposed to BAML via
+    /// `baml.sys.argv()`. Shared (cheap to clone) with each spawned VM.
+    argv: Arc<[String]>,
 
     // --- Epoch-based GC coordination ---
     /// Current epoch counter (monotonically increasing).
@@ -423,11 +436,17 @@ impl BexEngine {
     ///
     /// * `bytecode_program` - The compiled BAML program bytecode
     /// * `sys_ops` - System operations provider (use `sys_types_native::SysOps::native()` for default)
+    /// * `event_sink` - Optional event sink for persisting events.
+    /// * `argv` - Process-style argv values exposed to BAML via `baml.sys.argv()`.
+    ///   Pass `Vec::new()` when argv is not applicable (e.g. tests, IDE, library embedding).
     pub fn new(
         bytecode_program: bex_vm_types::Program,
         sys_ops: std::sync::Arc<sys_ops::SysOps>,
         event_sink: Option<std::sync::Arc<dyn bex_events::EventSink>>,
+        argv: Vec<String>,
     ) -> Result<Self, EngineError> {
+        let argv: Arc<[String]> = Arc::from(argv);
+
         // Extract package_init_order before consuming bytecode_program.
         let package_init_order = bytecode_program.package_init_order.clone();
 
@@ -516,6 +535,7 @@ impl BexEngine {
                         .iter()
                         .map(|(k, v)| (k.clone(), *v))
                         .collect(),
+                    Arc::clone(&argv),
                 );
                 vm.set_entry_point(*init_ptr, &[]);
                 // Drive the VM to completion. $init only contains synchronous
@@ -582,6 +602,7 @@ impl BexEngine {
             sys_op_ctx,
             event_sink,
             test_cases,
+            argv,
             // Initialize epoch tracking
             current_epoch: AtomicU64::new(0),
             epoch_states: [EpochState::new(), EpochState::new()],
@@ -629,6 +650,7 @@ impl BexEngine {
                             prompt_template: prompt_template.clone(),
                             client_name: client.clone(),
                             return_type: func.return_type.clone(),
+                            stream_return_type: func.stream_return_type.clone(),
                         },
                     );
                 }
@@ -910,6 +932,7 @@ impl BexEngine {
                 .iter()
                 .map(|(k, v)| (k.clone(), *v))
                 .collect(),
+            Arc::clone(&self.argv),
         );
 
         // Snapshot args for the root FunctionStart event before converting to VM values
@@ -1123,6 +1146,37 @@ impl BexEngine {
                 message: format!("Expected Function, got {other:?}"),
             }),
         }
+    }
+
+    /// Check if a function exists by name (tries exact then "user." prefix).
+    pub fn function_exists(&self, name: &str) -> bool {
+        self.resolve_function_name(name).is_some()
+    }
+
+    /// List all user-callable functions with signature info.
+    pub fn user_functions(&self) -> Vec<UserFunctionInfo> {
+        self.resolved_function_names
+            .iter()
+            .filter_map(|(name, (ptr, kind))| {
+                if !matches!(kind, bex_vm_types::FunctionKind::Bytecode) {
+                    return None;
+                }
+                let obj = unsafe { ptr.get() };
+                match obj {
+                    Object::Function(func) => {
+                        let display_name = name.strip_prefix("user.").unwrap_or(name).to_string();
+                        Some(UserFunctionInfo {
+                            qualified_name: name.clone(),
+                            display_name,
+                            param_names: func.param_names.clone(),
+                            param_types: func.param_types.clone(),
+                            return_type: func.return_type.clone(),
+                        })
+                    }
+                    _ => None,
+                }
+            })
+            .collect()
     }
 
     /// Get all compiled test cases.

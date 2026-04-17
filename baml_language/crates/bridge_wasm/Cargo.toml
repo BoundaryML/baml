@@ -20,12 +20,15 @@ bridge_ctypes = { workspace = true }
 sys_ops = { workspace = true }
 sys_types = { workspace = true }
 async-trait = { workspace = true }
+bytes = { workspace = true }
 console_error_panic_hook = { workspace = true, optional = true }
+futures = { workspace = true }
 indexmap = { workspace = true }
 js-sys = { workspace = true }
 log = { workspace = true }
 lsp-server = { workspace = true }
 prost = { workspace = true }
+reqwest = { workspace = true }
 serde = { workspace = true, features = [ "derive" ] }
 serde_json = { workspace = true }
 thiserror = { workspace = true }

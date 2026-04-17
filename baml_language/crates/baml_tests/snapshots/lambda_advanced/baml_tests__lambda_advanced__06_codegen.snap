@@ -318,13 +318,13 @@ function user.test_shadowing() -> string {
     alloc_array 3
     make_closure .<lambda(test_shadowing, 0)>, 0
     call baml.Array.map
-    store_var _6
+    store_var _5
     load_const 0
     store_var __for_idx
 
   L0:
     load_var __for_idx
-    load_var _6
+    load_var _5
     call baml.Array.length
     cmp_op <
     pop_jump_if_false L1
@@ -335,7 +335,7 @@ function user.test_shadowing() -> string {
     return
 
   L2:
-    load_var _6
+    load_var _5
     load_var __for_idx
     load_array_element
     store_var y

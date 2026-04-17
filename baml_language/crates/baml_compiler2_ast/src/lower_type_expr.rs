@@ -233,21 +233,23 @@ fn lower_base_type(type_expr: &CstTypeExpr) -> TypeExpr {
 
     // Check for map type with type args
     if let Some(name) = type_expr.dotted_name() {
-        if name == "map" {
-            let args = type_expr.type_arg_exprs();
-            if args.len() == 2 {
-                let key = lower_type_expr_inner(&args[0], false);
-                let value = lower_type_expr_inner(&args[1], false);
-                return TypeExpr::Map {
-                    key: Box::new(key),
-                    value: Box::new(value),
-                    attrs: vec![],
-                };
-            }
+        let args = type_expr.type_arg_exprs();
+        if name == "map" && args.len() == 2 {
+            let key = lower_type_expr_inner(&args[0], false);
+            let value = lower_type_expr_inner(&args[1], false);
+            return TypeExpr::Map {
+                key: Box::new(key),
+                value: Box::new(value),
+                attrs: vec![],
+            };
         }
 
-        // Named type (primitive or user-defined)
-        return lower_from_type_name(&name);
+        // Named type (primitive or user-defined), preserving generic args
+        let generic_args: Vec<TypeExpr> = args
+            .iter()
+            .map(|arg| lower_type_expr_inner(arg, false))
+            .collect();
+        return lower_from_type_name_with_generic_args(&name, generic_args);
     }
 
     TypeExpr::Unknown { attrs: vec![] }
@@ -347,6 +349,14 @@ fn lower_union_member_base(parts: &baml_compiler_syntax::ast::UnionMemberParts) 
 
 /// Create a `TypeExpr` from a type name string (primitive or user-defined).
 fn lower_from_type_name(name: &str) -> TypeExpr {
+    lower_from_type_name_with_generic_args(name, vec![])
+}
+
+/// Create a `TypeExpr` from a type name string with optional generic arguments.
+///
+/// Generic args are preserved on `Path` types (e.g., `Stream<T>`). For primitive
+/// types, generic args are silently dropped (primitives can't be generic).
+fn lower_from_type_name_with_generic_args(name: &str, generic_args: Vec<TypeExpr>) -> TypeExpr {
     match name {
         "int" => TypeExpr::Int { attrs: vec![] },
         "float" => TypeExpr::Float { attrs: vec![] },
@@ -380,11 +390,13 @@ fn lower_from_type_name(name: &str) -> TypeExpr {
                 let segments: Vec<Name> = name.split('.').map(Name::new).collect();
                 TypeExpr::Path {
                     segments,
+                    generic_args,
                     attrs: vec![],
                 }
             } else {
                 TypeExpr::Path {
                     segments: vec![Name::new(name)],
+                    generic_args,
                     attrs: vec![],
                 }
             }

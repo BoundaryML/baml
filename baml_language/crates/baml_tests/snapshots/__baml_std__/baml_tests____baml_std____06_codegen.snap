@@ -167,19 +167,49 @@ function baml.env.get_or_panic(key: string) -> string {
 function baml.errors.StackTrace.to_string(self: null) -> string {
 }
 
-function baml.events.send(event_name: string, data: map<string, unknown>) -> null {
+function baml.fs.File.bytes(self: null) -> uint8array {
 }
 
 function baml.fs.File.close(self: null) -> null {
 }
 
-function baml.fs.File.read_bytes(self: null) -> uint8array {
+function baml.fs.File.read(self: null, n: int) -> string {
 }
 
-function baml.fs.File.read_string(self: null) -> string {
+function baml.fs.File.read_bytes(self: null, n: int) -> uint8array {
 }
 
-function baml.fs.open(path: string) -> void {
+function baml.fs.File.seek_from(self: null, whence: "start" | "current" | "end", offset: int) -> int {
+}
+
+function baml.fs.File.text(self: null) -> string {
+}
+
+function baml.fs.File.write(self: null, data: string) -> int {
+}
+
+function baml.fs.File.write_bytes(self: null, data: uint8array) -> int {
+}
+
+function baml.fs.exists(path: string) -> bool {
+}
+
+function baml.fs.open(path: string, mode: "r" | "r+" | "w" | "w+" | "a" | "a+") -> void {
+}
+
+function baml.fs.read(path: string) -> string {
+}
+
+function baml.fs.remove(path: string) -> null {
+}
+
+function baml.fs.size(path: string) -> int {
+}
+
+function baml.fs.write(path: string, content: string) -> int {
+}
+
+function baml.fs.write_bytes(path: string, content: uint8array) -> int {
 }
 
 function baml.http.Response.bytes(self: null) -> uint8array {
@@ -204,7 +234,16 @@ function baml.http.Response.ok(self: null) -> bool {
 function baml.http.Response.text(self: null) -> string {
 }
 
+function baml.http.SseStream.close(self: null) -> null {
+}
+
+function baml.http.SseStream.next(self: null) -> string? {
+}
+
 function baml.http.fetch(url: string) -> void {
+}
+
+function baml.http.fetch_sse(request: void) -> void {
 }
 
 function baml.http.send(request: void) -> void {
@@ -249,18 +288,18 @@ function baml.llm.Client.build_attempt_with_state(self: null, planner_state: voi
   L2:
     load_var self
     load_field .name
-    store_var _32
+    store_var _30
     load_var self
     load_field .counter
-    store_var _33
+    store_var _31
     load_var self
     load_field .sub_clients
     call baml.Array.length
-    store_var _34
+    store_var _32
     load_var planner_state
+    load_var _30
+    load_var _31
     load_var _32
-    load_var _33
-    load_var _34
     call baml.llm.PlannerState.rr_pick_index
     store_var idx
     load_var self
@@ -446,13 +485,13 @@ function baml.llm.Client.build_plan_with_state(self: null, planner_state: void) 
     load_var self
     load_var planner_state
     call baml.llm.Client.build_attempt_with_state
-    store_var _31
+    store_var _26
     load_const 0
     store_var __for_idx
 
   L9:
     load_var __for_idx
-    load_var _31
+    load_var _26
     call baml.Array.length
     cmp_op <
     pop_jump_if_false L10
@@ -468,7 +507,7 @@ function baml.llm.Client.build_plan_with_state(self: null, planner_state: void) 
   L11:
     load_var result
     alloc_instance OrchestrationStep
-    load_var _31
+    load_var _26
     load_var __for_idx
     load_array_element
     load_field .primitive_client
@@ -484,7 +523,360 @@ function baml.llm.Client.build_plan_with_state(self: null, planner_state: void) 
     jump L9
 }
 
-function baml.llm.Client.execute(self: null, context: void, inherited_delay_ms: int) -> void {
+function baml.llm.Client.execute_once_oneshot(self: null, context: void, active_delay_ms: int) -> void {
+    load_var self
+    load_field .client_type
+    discriminant
+    load_const ClientType.Primitive
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L9
+
+  L0:
+    load_var self
+    load_field .client_type
+    discriminant
+    load_const ClientType.Fallback
+    cmp_op ==
+    pop_jump_if_false L1
+    jump L4
+
+  L1:
+    load_var self
+    load_field .sub_clients
+    call baml.Array.length
+    load_const 0
+    cmp_op ==
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_var self
+    load_field .counter
+    store_var _62
+    load_var self
+    load_field .sub_clients
+    call baml.Array.length
+    store_var _63
+    load_var self
+    load_var self
+    load_field .counter
+    load_const 1
+    bin_op +
+    store_field .counter
+    load_var self
+    load_field .sub_clients
+    load_var _62
+    load_var _63
+    bin_op %
+    load_array_element
+    load_var context
+    load_var active_delay_ms
+    call baml.llm.Client.execute_oneshot
+    jump L15
+
+  L3:
+    alloc_instance DevOther
+    load_const "RoundRobin client has no sub-clients"
+    init_field .message
+    throw
+
+  L4:
+    load_var self
+    load_field .sub_clients
+    store_var _48
+    load_const 0
+    store_var __for_idx
+
+  L5:
+    load_var __for_idx
+    load_var _48
+    call baml.Array.length
+    cmp_op <
+    pop_jump_if_false L6
+    jump L7
+
+  L6:
+    alloc_instance DevOther
+    load_const "All orchestration steps failed"
+    init_field .message
+    throw
+
+  L7:
+    load_var _48
+    load_var __for_idx
+    load_array_element
+    load_var context
+    load_var active_delay_ms
+    call baml.llm.Client.execute_oneshot
+    jump L8
+    load_var e
+    throw_if_panic
+    load_var __for_idx
+    load_const 1
+    bin_op +
+    store_var __for_idx
+    jump L5
+
+  L8:
+    jump L15
+
+  L9:
+    load_var self
+    dispatch_future baml.llm.Client.get_constructor
+    await
+    call_indirect
+    store_var primitive
+    load_var context
+    load_field .function_name
+    dispatch_future baml.llm.get_return_type
+    await
+    store_var return_type
+    load_var primitive
+    load_var context
+    load_field .jinja_string
+    load_var context
+    load_field .args
+    load_var return_type
+    dispatch_future baml.llm.PrimitiveClient.render_prompt
+    await
+    store_var prompt
+    load_var primitive
+    load_var prompt
+    dispatch_future baml.llm.PrimitiveClient.specialize_prompt
+    await
+    store_var specialized
+    load_var primitive
+    load_var specialized
+    dispatch_future baml.llm.PrimitiveClient.build_request
+    await
+    dispatch_future baml.http.send
+    await
+    store_var http_response
+    load_var http_response
+    call baml.http.Response.ok
+    pop_jump_if_false L10
+    jump L13
+
+  L10:
+    load_var http_response
+    dispatch_future baml.http.Response.text
+    await
+    store_var error_body
+    jump L11
+    load_var e
+    throw_if_panic
+    load_const ""
+    store_var error_body
+
+  L11:
+    load_var active_delay_ms
+    load_const 0
+    cmp_op >
+    pop_jump_if_false L12
+    load_var active_delay_ms
+    dispatch_future baml.sys.sleep
+    await
+    pop 1
+
+  L12:
+    alloc_instance DevOther
+    load_const "HTTP request failed: "
+    load_var error_body
+    bin_op +
+    init_field .message
+    throw
+
+  L13:
+    load_var http_response
+    dispatch_future baml.http.Response.text
+    await
+    store_var body
+    load_var primitive
+    load_var body
+    load_var return_type
+    dispatch_future baml.llm.PrimitiveClient.parse
+    await
+    jump L15
+    load_var e
+    throw_if_panic
+    load_var active_delay_ms
+    load_const 0
+    cmp_op >
+    pop_jump_if_false L14
+    load_var active_delay_ms
+    dispatch_future baml.sys.sleep
+    await
+    pop 1
+
+  L14:
+    load_var e
+    throw
+
+  L15:
+    return
+}
+
+function baml.llm.Client.execute_once_stream(self: null, context: void, active_delay_ms: int) -> void {
+    load_var self
+    load_field .client_type
+    discriminant
+    load_const ClientType.Primitive
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L9
+
+  L0:
+    load_var self
+    load_field .client_type
+    discriminant
+    load_const ClientType.Fallback
+    cmp_op ==
+    pop_jump_if_false L1
+    jump L4
+
+  L1:
+    load_var self
+    load_field .sub_clients
+    call baml.Array.length
+    load_const 0
+    cmp_op ==
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_var self
+    load_field .counter
+    store_var _55
+    load_var self
+    load_field .sub_clients
+    call baml.Array.length
+    store_var _56
+    load_var self
+    load_var self
+    load_field .counter
+    load_const 1
+    bin_op +
+    store_field .counter
+    load_var self
+    load_field .sub_clients
+    load_var _55
+    load_var _56
+    bin_op %
+    load_array_element
+    load_var context
+    load_var active_delay_ms
+    call baml.llm.Client.execute_stream
+    jump L10
+
+  L3:
+    alloc_instance DevOther
+    load_const "RoundRobin client has no sub-clients"
+    init_field .message
+    throw
+
+  L4:
+    load_var self
+    load_field .sub_clients
+    store_var _41
+    load_const 0
+    store_var __for_idx
+
+  L5:
+    load_var __for_idx
+    load_var _41
+    call baml.Array.length
+    cmp_op <
+    pop_jump_if_false L6
+    jump L7
+
+  L6:
+    alloc_instance DevOther
+    load_const "All orchestration steps failed"
+    init_field .message
+    throw
+
+  L7:
+    load_var _41
+    load_var __for_idx
+    load_array_element
+    load_var context
+    load_var active_delay_ms
+    call baml.llm.Client.execute_stream
+    jump L8
+    load_var e
+    throw_if_panic
+    load_var __for_idx
+    load_const 1
+    bin_op +
+    store_var __for_idx
+    jump L5
+
+  L8:
+    jump L10
+
+  L9:
+    load_var self
+    dispatch_future baml.llm.Client.get_constructor
+    await
+    call_indirect
+    store_var primitive
+    load_var context
+    load_field .function_name
+    dispatch_future baml.llm.get_return_type
+    await
+    store_var return_type
+    load_var context
+    load_field .function_name
+    dispatch_future baml.llm.get_stream_return_type
+    await
+    store_var stream_return_type
+    load_var primitive
+    load_var context
+    load_field .jinja_string
+    load_var context
+    load_field .args
+    load_var return_type
+    dispatch_future baml.llm.PrimitiveClient.render_prompt
+    await
+    store_var prompt
+    load_var primitive
+    load_var prompt
+    dispatch_future baml.llm.PrimitiveClient.specialize_prompt
+    await
+    store_var specialized
+    load_var primitive
+    load_var specialized
+    dispatch_future baml.llm.PrimitiveClient.build_request_stream
+    await
+    dispatch_future baml.http.fetch_sse
+    await
+    store_var sse
+    load_var primitive
+    dispatch_future baml.llm.PrimitiveClient.new_stream_accumulator
+    await
+    store_var acc
+    load_const null
+    load_var return_type
+    load_var stream_return_type
+    dispatch_future baml.llm.StreamCache.new
+    await
+    store_var cache
+    alloc_instance Stream
+    load_var primitive
+    init_field ._client
+    load_var acc
+    init_field ._acc
+    load_var sse
+    init_field ._sse
+    load_var cache
+    init_field ._cache
+
+  L10:
+    return
+}
+
+function baml.llm.Client.execute_oneshot(self: null, context: void, inherited_delay_ms: int) -> void {
     load_var self
     load_field .retry
     store_var _4
@@ -501,7 +893,7 @@ function baml.llm.Client.execute(self: null, context: void, inherited_delay_ms: 
     load_var self
     load_var context
     load_var inherited_delay_ms
-    call baml.llm.Client.execute_once
+    call baml.llm.Client.execute_once_oneshot
     jump L9
 
   L1:
@@ -578,7 +970,7 @@ function baml.llm.Client.execute(self: null, context: void, inherited_delay_ms: 
     load_var self
     load_var context
     load_var attempt_delay
-    call baml.llm.Client.execute_once
+    call baml.llm.Client.execute_once_oneshot
     jump L9
     load_var e
     throw_if_panic
@@ -592,182 +984,111 @@ function baml.llm.Client.execute(self: null, context: void, inherited_delay_ms: 
     return
 }
 
-function baml.llm.Client.execute_once(self: null, context: void, active_delay_ms: int) -> void {
+function baml.llm.Client.execute_stream(self: null, context: void, inherited_delay_ms: int) -> void {
     load_var self
-    load_field .client_type
-    discriminant
-    load_const ClientType.Primitive
-    cmp_op ==
+    load_field .retry
+    store_var _4
+    load_var _4
+    is_type baml.llm.RetryPolicy
     pop_jump_if_false L0
-    jump L7
+    jump L1
 
   L0:
-    load_var self
-    load_field .client_type
-    discriminant
-    load_const ClientType.Fallback
+    load_var _4
+    load_const null
     cmp_op ==
-    pop_jump_if_false L1
-    jump L2
+    pop_jump_if_false L9
+    load_var self
+    load_var context
+    load_var inherited_delay_ms
+    call baml.llm.Client.execute_once_stream
+    jump L9
 
   L1:
-    load_var self
-    load_field .counter
-    store_var _66
-    load_var self
-    load_field .sub_clients
-    call baml.Array.length
-    store_var _67
-    load_var self
-    load_var self
-    load_field .counter
-    load_const 1
+    load_var _4
+    store_var r
+    load_var r
+    load_field .initial_delay_ms
+    load_const 0.0
     bin_op +
-    store_field .counter
-    load_var self
-    load_field .sub_clients
-    load_var _66
-    load_var _67
-    bin_op %
-    load_array_element
-    load_var context
-    load_var active_delay_ms
-    call baml.llm.Client.execute
-    jump L13
+    store_var current_delay
+    load_const 0
+    store_var attempt
 
   L2:
-    load_var self
-    load_field .sub_clients
-    store_var _55
-    load_const 0
-    store_var __for_idx
+    load_var attempt
+    load_var r
+    load_field .max_retries
+    cmp_op <=
+    pop_jump_if_false L3
+    jump L4
 
   L3:
-    load_var __for_idx
-    load_var _55
-    call baml.Array.length
-    cmp_op <
-    pop_jump_if_false L4
-    jump L5
-
-  L4:
     alloc_instance DevOther
     load_const "All orchestration steps failed"
     init_field .message
     throw
 
-  L5:
-    load_var _55
-    load_var __for_idx
-    load_array_element
-    load_var context
-    load_var active_delay_ms
-    call baml.llm.Client.execute
-    jump L6
-    load_var e
-    throw_if_panic
-    load_var __for_idx
-    load_const 1
+  L4:
+    load_var inherited_delay_ms
+    store_var attempt_delay
+    load_var attempt
+    load_const 0
+    cmp_op >
+    pop_jump_if_false L7
+    load_var current_delay
+    call baml.math.trunc
+    store_var attempt_delay
+    load_var current_delay
+    load_var r
+    load_field .multiplier
+    bin_op *
+    store_var next
+    load_var next
+    load_var r
+    load_field .max_delay_ms
+    load_const 0.0
     bin_op +
-    store_var __for_idx
-    jump L3
+    cmp_op >
+    pop_jump_if_false L5
+    jump L6
+
+  L5:
+    load_var next
+    store_var current_delay
+    jump L7
 
   L6:
-    jump L13
+    load_var r
+    load_field .max_delay_ms
+    load_const 0.0
+    bin_op +
+    store_var current_delay
 
   L7:
-    load_var self
-    dispatch_future baml.llm.Client.get_constructor
-    await
-    call_indirect
-    store_var primitive
-    load_var context
-    load_field .function_name
-    dispatch_future baml.llm.get_return_type
-    await
-    store_var return_type
-    load_var primitive
-    load_var context
-    load_field .jinja_string
-    load_var context
-    load_field .args
-    load_var return_type
-    dispatch_future baml.llm.PrimitiveClient.render_prompt
-    await
-    store_var prompt
-    load_var primitive
-    load_var prompt
-    dispatch_future baml.llm.PrimitiveClient.specialize_prompt
-    await
-    store_var specialized
-    load_var primitive
-    load_var specialized
-    dispatch_future baml.llm.PrimitiveClient.build_request
-    await
-    dispatch_future baml.http.send
-    await
-    store_var http_response
-    load_var http_response
-    call baml.http.Response.ok
+    load_var attempt
+    load_var r
+    load_field .max_retries
+    cmp_op ==
     pop_jump_if_false L8
-    jump L11
+    load_var inherited_delay_ms
+    store_var attempt_delay
 
   L8:
-    load_var http_response
-    dispatch_future baml.http.Response.text
-    await
-    store_var error_body
+    load_var self
+    load_var context
+    load_var attempt_delay
+    call baml.llm.Client.execute_once_stream
     jump L9
     load_var e
     throw_if_panic
-    load_const ""
-    store_var error_body
+    load_var attempt
+    load_const 1
+    bin_op +
+    store_var attempt
+    jump L2
 
   L9:
-    load_var active_delay_ms
-    load_const 0
-    cmp_op >
-    pop_jump_if_false L10
-    load_var active_delay_ms
-    dispatch_future baml.sys.sleep
-    await
-    pop 1
-
-  L10:
-    alloc_instance DevOther
-    load_const "HTTP request failed: "
-    load_var error_body
-    bin_op +
-    init_field .message
-    throw
-
-  L11:
-    load_var http_response
-    dispatch_future baml.http.Response.text
-    await
-    store_var body
-    load_var primitive
-    load_var body
-    load_var return_type
-    dispatch_future baml.llm.PrimitiveClient.parse
-    await
-    jump L13
-    load_var e
-    throw_if_panic
-    load_var active_delay_ms
-    load_const 0
-    cmp_op >
-    pop_jump_if_false L12
-    load_var active_delay_ms
-    dispatch_future baml.sys.sleep
-    await
-    pop 1
-
-  L12:
-    load_var e
-    throw
-
-  L13:
     return
 }
 
@@ -861,6 +1182,12 @@ function baml.llm.PlannerState.rr_pick_index(self: null, client_name: string, co
 function baml.llm.PrimitiveClient.build_request(self: null, prompt: void) -> baml.http.Request {
 }
 
+function baml.llm.PrimitiveClient.build_request_stream(self: null, prompt: void) -> baml.http.Request {
+}
+
+function baml.llm.PrimitiveClient.new_stream_accumulator(self: null) -> void {
+}
+
 function baml.llm.PrimitiveClient.parse(self: null, http_response_body: string, type_def: type) -> void {
 }
 
@@ -870,7 +1197,203 @@ function baml.llm.PrimitiveClient.render_prompt(self: null, template: string, ar
 function baml.llm.PrimitiveClient.specialize_prompt(self: null, prompt: void) -> void {
 }
 
-function baml.llm.__sap_parse(json: string, ty: type) -> void {
+function baml.llm.PrimitiveClient.validate_finish_reason(self: null, finish_reason: string) -> null {
+}
+
+function baml.llm.Stream.final(self: null) -> void {
+  L0:
+    load_var self
+    load_field ._acc
+    dispatch_future baml.llm.StreamAccumulator.is_done
+    await
+    unary_op !
+    pop_jump_if_false L3
+    load_var self
+    load_field ._sse
+    dispatch_future baml.http.SseStream.next
+    await
+    store_var _6
+    load_var _6
+    is_type null
+    pop_jump_if_false L1
+    jump L3
+
+  L1:
+    load_var _6
+    is_type string
+    pop_jump_if_false L2
+    load_var _6
+    store_var next
+
+  L2:
+    load_var self
+    load_field ._acc
+    load_var next
+    dispatch_future baml.llm.StreamAccumulator.add_events
+    await
+    pop 1
+    load_var self
+    load_field ._acc
+    dispatch_future baml.llm.StreamAccumulator.is_done
+    await
+    pop_jump_if_false L0
+    load_var self
+    load_field ._sse
+    dispatch_future baml.http.SseStream.close
+    await
+    pop 1
+
+  L3:
+    load_var self
+    load_field ._acc
+    dispatch_future baml.llm.StreamAccumulator.finish_reason
+    await
+    store_var _23
+    load_var _23
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L4
+    jump L6
+
+  L4:
+    load_var _23
+    is_type string
+    pop_jump_if_false L5
+    load_var self
+    load_field ._client
+    load_var _23
+    dispatch_future baml.llm.PrimitiveClient.validate_finish_reason
+    await
+    pop 1
+
+  L5:
+    load_var self
+    load_field ._acc
+    dispatch_future baml.llm.StreamAccumulator.content
+    await
+    load_var self
+    load_field ._cache
+    dispatch_future baml.llm.__sap_parse_final
+    await
+    return
+
+  L6:
+    load_const null /* unknown class: LlmClientError */
+    load_const "Streaming finished without finish_reason"
+    init_field .0
+    throw
+}
+
+function baml.llm.Stream.next(self: null) -> void | baml.stream.StreamFinished {
+  L0:
+    load_const true
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const "Unreachable"
+    call baml.sys.panic
+    jump L9
+
+  L2:
+    load_var self
+    load_field ._sse
+    dispatch_future baml.http.SseStream.next
+    await
+    store_var _2
+    load_var _2
+    is_type null
+    pop_jump_if_false L3
+    jump L8
+
+  L3:
+    load_var _2
+    is_type string
+    pop_jump_if_false L4
+    load_var _2
+    store_var next
+
+  L4:
+    load_var self
+    load_field ._acc
+    load_var next
+    dispatch_future baml.llm.StreamAccumulator.add_events
+    await
+    pop 1
+    load_var self
+    load_field ._acc
+    dispatch_future baml.llm.StreamAccumulator.is_done
+    await
+    pop_jump_if_false L5
+    jump L7
+
+  L5:
+    load_var self
+    load_field ._acc
+    dispatch_future baml.llm.StreamAccumulator.content
+    await
+    load_var self
+    load_field ._cache
+    dispatch_future baml.llm.__sap_parse_partial
+    await
+    store_var parsed
+    load_var parsed
+    is_type baml.stream.StreamNoYield
+    pop_jump_if_false L6
+    jump L0
+
+  L6:
+    load_var parsed
+    pop 1
+    load_const false
+    pop_jump_if_false L0
+    load_var parsed
+    jump L9
+
+  L7:
+    load_var self
+    load_field ._sse
+    dispatch_future baml.http.SseStream.close
+    await
+    pop 1
+    alloc_instance StreamFinished
+    jump L9
+
+  L8:
+    alloc_instance StreamFinished
+
+  L9:
+    return
+}
+
+function baml.llm.StreamAccumulator.add_events(self: null, events: string) -> null {
+}
+
+function baml.llm.StreamAccumulator.content(self: null) -> string {
+}
+
+function baml.llm.StreamAccumulator.finish_reason(self: null) -> string? {
+}
+
+function baml.llm.StreamAccumulator.input_tokens(self: null) -> int? {
+}
+
+function baml.llm.StreamAccumulator.is_done(self: null) -> bool {
+}
+
+function baml.llm.StreamAccumulator.model(self: null) -> string? {
+}
+
+function baml.llm.StreamAccumulator.output_tokens(self: null) -> int? {
+}
+
+function baml.llm.StreamCache.new(target: type, streaming: type) -> void {
+}
+
+function baml.llm.__sap_parse_final(json: string, cache: void) -> void {
+}
+
+function baml.llm.__sap_parse_partial(json: string, cache: void) -> void | baml.stream.StreamNoYield {
 }
 
 function baml.llm.build_request(client: void, function_name: string, args: map<string, unknown>) -> baml.http.Request {
@@ -903,7 +1426,7 @@ function baml.llm.call_llm_function(client: void, function_name: string, args: m
     load_var function_name
     init_field .function_name
     load_const 0
-    call baml.llm.Client.execute
+    call baml.llm.Client.execute_oneshot
     return
 }
 
@@ -913,14 +1436,27 @@ function baml.llm.get_jinja_template(function_name: string) -> string {
 function baml.llm.get_return_type(function_name: string) -> type {
 }
 
+function baml.llm.get_stream_return_type(function_name: string) -> type {
+}
+
 function baml.llm.parse(function_name: string, json: string) -> void {
     load_var function_name
     dispatch_future baml.llm.get_return_type
     await
     store_var return_type
-    load_var json
+    load_var function_name
+    dispatch_future baml.llm.get_stream_return_type
+    await
+    store_var stream_return_type
+    load_const null
     load_var return_type
-    dispatch_future baml.llm.__sap_parse
+    load_var stream_return_type
+    dispatch_future baml.llm.StreamCache.new
+    await
+    store_var cache
+    load_var json
+    load_var cache
+    dispatch_future baml.llm.__sap_parse_final
     await
     return
 }
@@ -951,42 +1487,21 @@ function baml.llm.render_prompt(client: void, function_name: string, args: map<s
     return
 }
 
-function baml.log._log(level: string, data: map<string, unknown>) -> null {
-    load_const "log"
-    load_var level
-    load_var data
-    load_const "level"
-    load_const "data"
-    alloc_map 2
-    send_event
-    return
-}
-
-function baml.log.debug(data: map<string, unknown>) -> null {
-    load_const "debug"
-    load_var data
-    call baml.log._log
-    return
-}
-
-function baml.log.error(data: map<string, unknown>) -> null {
-    load_const "error"
-    load_var data
-    call baml.log._log
-    return
-}
-
-function baml.log.info(data: map<string, unknown>) -> null {
-    load_const "info"
-    load_var data
-    call baml.log._log
-    return
-}
-
-function baml.log.warn(data: map<string, unknown>) -> null {
-    load_const "warn"
-    load_var data
-    call baml.log._log
+function baml.llm.stream_llm_function(client: void, function_name: string, args: map<string, unknown>) -> void {
+    load_var function_name
+    dispatch_future baml.llm.get_jinja_template
+    await
+    store_var jinja_string
+    load_var client
+    alloc_instance ExecutionContext
+    load_var jinja_string
+    init_field .jinja_string
+    load_var args
+    init_field .args
+    load_var function_name
+    init_field .function_name
+    load_const 0
+    call baml.llm.Client.execute_stream
     return
 }
 
@@ -1084,6 +1599,9 @@ function baml.net.Socket.read(self: null) -> string {
 }
 
 function baml.net.connect(addr: string) -> void {
+}
+
+function baml.sys.argv() -> string[] {
 }
 
 function baml.sys.now_ms() -> int {

@@ -18,4 +18,3 @@ function Chat() -> string {
 //
 //- completions
 // (new pipeline doesn't support prompt template completions)
-// SHOULD_CONTAIN: class, enum, function
