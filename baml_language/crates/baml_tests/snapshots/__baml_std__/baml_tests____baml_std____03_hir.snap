@@ -84,10 +84,21 @@ function baml.errors.to_string(self: ?) -> string  [builtin]
 class baml.fs.File {
   _handle: $rust_type
 }
+function baml.fs.bytes(self: ?) -> uint8array  [builtin]
 function baml.fs.close(self: ?) -> null  [builtin]
-function baml.fs.open(path: string) -> baml.fs.File  [builtin]
-function baml.fs.read_bytes(self: ?) -> uint8array  [builtin]
-function baml.fs.read_string(self: ?) -> string  [builtin]
+function baml.fs.exists(path: string) -> bool  [builtin]
+function baml.fs.open(path: string, mode: "r" | "r+" | "w" | "w+" | "a" | "a+") -> baml.fs.File  [builtin]
+function baml.fs.read(path: string) -> string  [builtin]
+function baml.fs.read(self: ?, n: int) -> string  [builtin]
+function baml.fs.read_bytes(self: ?, n: int) -> uint8array  [builtin]
+function baml.fs.remove(path: string) -> null  [builtin]
+function baml.fs.seek_from(self: ?, whence: "start" | "current" | "end", offset: int) -> int  [builtin]
+function baml.fs.size(path: string) -> int  [builtin]
+function baml.fs.text(self: ?) -> string  [builtin]
+function baml.fs.write(self: ?, data: string) -> int  [builtin]
+function baml.fs.write(path: string, content: string) -> int  [builtin]
+function baml.fs.write_bytes(self: ?, data: uint8array) -> int  [builtin]
+function baml.fs.write_bytes(path: string, content: uint8array) -> int  [builtin]
 
 --- <builtin>/baml/ns_http/http.baml ---
 class baml.http.Request {

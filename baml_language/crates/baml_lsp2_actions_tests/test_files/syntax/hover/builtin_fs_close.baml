@@ -1,8 +1,8 @@
 // Test hover on File.close method
 
 function TestFileClose() -> string {
-    let f = baml.fs.open("example.txt");
-    let content = f.read_string();
+    let f = baml.fs.open("example.txt", "r");
+    let content = f.text();
     f.close<[CURSOR]();
     content
 }
