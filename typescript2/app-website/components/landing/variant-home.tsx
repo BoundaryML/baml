@@ -24,7 +24,7 @@ const TRUST_LOGOS: { alt: string; src: string; heightPx: number }[] = [
   { alt: 'AWS', src: '/testimonials/logos/aws.png', heightPx: 36 },
   { alt: 'AMD', src: '/testimonials/logos/amd.png', heightPx: 30 },
   { alt: 'Cisco', src: '/testimonials/logos/cisco.png', heightPx: 28 },
-  { alt: 'EY', src: '/testimonials/logos/ey.png', heightPx: 44 },
+  { alt: 'EY', src: '/EY.svg', heightPx: 44 },
   { alt: 'Product Hunt', src: '/testimonials/logos/product-hunt.png', heightPx: 26 },
   { alt: 'Aer Compliance', src: '/testimonials/logos/aer.png', heightPx: 32 },
   { alt: 'PMMI', src: '/testimonials/logos/pmmi.png', heightPx: 32 },
