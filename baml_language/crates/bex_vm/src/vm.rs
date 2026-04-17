@@ -3173,6 +3173,10 @@ impl BexVm {
                             .into());
                         }
                     };
+                    debug_assert!(
+                        full_arity >= 1,
+                        "BoundMethod's inner function must have self parameter (arity >= 1), got {full_arity}"
+                    );
                     let visible_arity = full_arity.saturating_sub(1);
                     let receiver = bm.receiver;
                     let fn_ptr = bm.function;
@@ -3500,6 +3504,11 @@ impl BexVm {
                 let callee_value = self.globals[global_idx];
                 let function_ptr =
                     self.as_object_ptr(&callee_value, FunctionType::Callable.into())?;
+                debug_assert!(
+                    matches!(self.get_object(function_ptr), Object::Function(_)),
+                    "MakeBoundMethod expects a Function global, got {:?}",
+                    ObjectType::of(self.get_object(function_ptr)),
+                );
                 let bound = Object::BoundMethod(BoundMethod {
                     function: function_ptr,
                     receiver,

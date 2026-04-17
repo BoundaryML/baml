@@ -3,8 +3,6 @@
 //! These tests verify that bound method references (`p.get_name`) and unbound
 //! method references (`Person.get_name`) compile to correct bytecode and execute
 //! at runtime, returning the expected values.
-//!
-//! All tests in this file are expected to FAIL until Phases 2-5 are implemented.
 
 use baml_tests::baml_test;
 use baml_type::Ty;
