@@ -229,8 +229,6 @@ BEPs are sorted by maturity - **implemented and accepted BEPs are the best refer
 
 ## Creating a New BEP
 
-See [TEMPLATE.md](./TEMPLATE.md) for the standard BEP structure.
-
 When creating a new BEP, consider referencing:
 1. **Implemented/Accepted BEPs** - For proven patterns and structure
 2. **BEPs in the same domain** - For consistency with related features
@@ -240,107 +238,6 @@ When creating a new BEP, consider referencing:
   return md;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// TEMPLATE.md Generation
-// ─────────────────────────────────────────────────────────────────────────────
-
-export function generateTemplateMd(): string {
-  return `# BEP-XXX: [Title]
-
----
-id: BEP-XXX
-title: "[Title]"
-shepherds: [Your Name <email@example.com>]
-status: draft
-created: YYYY-MM-DD
----
-
-## Summary
-
-A brief (2-3 sentence) summary of the proposal. What problem does it solve?
-What is the high-level approach?
-
-## Motivation
-
-Why is this change needed? What problems does it solve? Include:
-- Pain points in the current system
-- Use cases that aren't well-supported
-- User feedback or requests
-
-## Proposal
-
-The detailed technical design. This is the heart of the BEP.
-
-### Core Concepts
-
-Introduce key concepts and terminology.
-
-### Syntax/API
-
-Show the proposed syntax or API with examples:
-
-\`\`\`baml
-// Example BAML code showing the feature
-\`\`\`
-
-### Behavior
-
-Describe how the feature behaves:
-- Normal cases
-- Edge cases
-- Error handling
-
-### Implementation Notes
-
-Technical details for implementers:
-- Parser changes
-- Type checker changes
-- Runtime changes
-- Codegen changes
-
-## Alternatives Considered
-
-What other approaches were considered? Why were they rejected?
-
-### Alternative A: [Name]
-
-Brief description and why it was not chosen.
-
-### Alternative B: [Name]
-
-Brief description and why it was not chosen.
-
-## Compatibility
-
-- Backward compatibility considerations
-- Migration path for existing code
-- Breaking changes (if any)
-
-## Open Questions
-
-List any unresolved questions or decisions:
-
-1. Question 1?
-2. Question 2?
-
-## References
-
-- Links to related BEPs
-- External references (papers, other languages, etc.)
-- Discussion threads
-
----
-
-## Tips for Writing Good BEPs
-
-1. **Be specific** - Include concrete examples and syntax
-2. **Show, don't tell** - Code examples are worth 1000 words
-3. **Address edge cases** - Think about what could go wrong
-4. **Consider alternatives** - Show you've thought about other approaches
-5. **Keep it focused** - One BEP, one feature
-6. **Reference existing BEPs** - Learn from accepted/implemented proposals
-`;
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Individual BEP README.md Generation
@@ -415,12 +312,6 @@ export function generateAllBepsExportFiles(data: ExportAllData): ExportAllFile[]
   files.push({
     path: "INDEX.md",
     content: generateIndexMd(data),
-  });
-
-  // Template file
-  files.push({
-    path: "TEMPLATE.md",
-    content: generateTemplateMd(),
   });
 
   // Individual BEP folders

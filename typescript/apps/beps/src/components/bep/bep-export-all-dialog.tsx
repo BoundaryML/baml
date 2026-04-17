@@ -228,7 +228,6 @@ export function BepExportAllDialog({ trigger }: BepExportAllDialogProps) {
               <pre className="mt-2 text-xs font-mono text-muted-foreground whitespace-pre">
 {`all-beps/
   INDEX.md              # Overview with status-sorted list
-  TEMPLATE.md           # Template for new BEPs
   BEP-001/
     README.md           # Full proposal content
     pages/              # Additional pages (if any)
