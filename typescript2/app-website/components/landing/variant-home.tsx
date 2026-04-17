@@ -23,6 +23,7 @@ const TRUST_LOGOS = [
   { alt: 'SAP', src: '/testimonials/logos/sapLogo.png' },
   { alt: 'AWS', src: '/testimonials/logos/aws.png' },
   { alt: 'AMD', src: '/testimonials/logos/amd.png' },
+  { alt: 'Cisco', src: '/testimonials/logos/cisco.png' },
   { alt: 'EY', src: '/testimonials/logos/ey.png' },
   { alt: 'Product Hunt', src: '/testimonials/logos/product-hunt.png' },
   { alt: 'Aer Compliance', src: '/testimonials/logos/aer.png' },
@@ -31,7 +32,7 @@ const TRUST_LOGOS = [
 ];
 
 const TrustMarquee = () => (
-  <div style={{ marginTop: '24px', width: '100%' }}>
+  <div style={{ marginTop: '56px', width: '100%' }}>
     <p style={{ fontSize: '11px', fontWeight: 500, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#8A8580', marginBottom: '12px' }}>
       Trusted by developers at
     </p>
@@ -44,7 +45,7 @@ const TrustMarquee = () => (
     >
       <Marquee className="[--duration:40s] [--gap:3rem] py-2">
         {TRUST_LOGOS.map((logo) => (
-          <div key={logo.alt} className="relative h-10 w-28 flex-shrink-0 flex items-center justify-center">
+          <div key={logo.alt} className="relative h-14 w-36 flex-shrink-0 flex items-center justify-center">
             <img
               src={logo.src}
               alt={logo.alt}
@@ -178,7 +179,7 @@ const customStyles = {
   },
   hero: {
     display: 'grid',
-    gridTemplateColumns: '1fr 3fr',
+    gridTemplateColumns: '480px 1fr',
     minHeight: '640px',
     borderBottom: '1px solid #D9D3C4',
   } as React.CSSProperties,
@@ -588,8 +589,8 @@ type InstallPath = 'claude' | 'codex' | 'human';
 const humanCommand = 'curl -fsSL https://baml.dev/install | sh';
 
 const installOptions: { id: InstallPath; label: string; icon?: string; command: string }[] = [
-  { id: 'claude', label: 'Claude', icon: '/Claude Color SVG.svg', command: 'curl http://baml.dev/agent | claude' },
-  { id: 'codex', label: 'Codex', icon: '/Codex Color.svg', command: 'curl http://baml.dev/agent | codex' },
+  { id: 'claude', label: 'Claude', icon: '/Claude Color SVG.svg', command: 'curl -fsSL http://baml.dev/agent | claude' },
+  { id: 'codex', label: 'Codex', icon: '/Codex Color.svg', command: 'curl -fsSL http://baml.dev/agent | codex' },
   { id: 'human', label: 'Human', command: humanCommand },
 ];
 

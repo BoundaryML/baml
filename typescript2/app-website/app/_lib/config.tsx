@@ -534,11 +534,9 @@ export const siteConfig = {
   name: 'BAML',
   nav: {
     links: [
-      { href: '/', id: 1, name: 'Home' },
       { href: '/blog', id: 3, name: 'Blog' },
       { href: '/podcast', id: 4, name: 'Podcast' },
       { href: '/who-are-we', id: 5, name: 'Team' },
-      { href: '/jobs', id: 6, name: 'Jobs' },
       // { href: '/play', id: 5, name: 'Playground' },
       // { href: '/solutions', id: 6, name: 'Solutions' },
       // { href: '/pricing', id: 7, name: 'Pricing' },

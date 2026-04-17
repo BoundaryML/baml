@@ -714,7 +714,8 @@ export function BamlPlayground({ compact }: BamlPlaygroundProps = {}) {
         </div>
 
         {/* Right panel: Run + Graph stacked */}
-        <div className={`w-full lg:w-[520px] flex flex-col gap-3 ${compact ? 'overflow-auto' : ''}`}>
+        {!compact && (
+        <div className="w-full lg:w-[520px] flex flex-col gap-3">
           {/* Run section */}
           {selectedFn && (
             <>
@@ -818,6 +819,7 @@ export function BamlPlayground({ compact }: BamlPlaygroundProps = {}) {
             </Card>
           )}
         </div>
+        )}
       </div>
     </div>
   );
