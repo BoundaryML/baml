@@ -16,7 +16,46 @@ const BamlPlayground = dynamic(
   },
 );
 import { ScriptCopyBtn } from '../magicui/script-copy-btn';
+import Marquee from '../magicui/marquee';
 import { siteConfig } from '@/app/_lib/config';
+
+const TRUST_LOGOS = [
+  { alt: 'SAP', src: '/testimonials/logos/sapLogo.png' },
+  { alt: 'AWS', src: '/testimonials/logos/aws.png' },
+  { alt: 'AMD', src: '/testimonials/logos/amd.png' },
+  { alt: 'EY', src: '/testimonials/logos/ey.png' },
+  { alt: 'Product Hunt', src: '/testimonials/logos/product-hunt.png' },
+  { alt: 'Aer Compliance', src: '/testimonials/logos/aer.png' },
+  { alt: 'PMMI', src: '/testimonials/logos/pmmi.png' },
+  { alt: 'Cerebral Valley', src: '/testimonials/logos/cerebral.png' },
+];
+
+const TrustMarquee = () => (
+  <div style={{ marginTop: '24px', width: '100%' }}>
+    <p style={{ fontSize: '11px', fontWeight: 500, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#8A8580', marginBottom: '12px' }}>
+      Trusted by developers at
+    </p>
+    <div
+      className="relative w-full overflow-hidden"
+      style={{
+        maskImage: 'linear-gradient(to right, transparent 0%, #000 10%, #000 90%, transparent 100%)',
+        WebkitMaskImage: 'linear-gradient(to right, transparent 0%, #000 10%, #000 90%, transparent 100%)',
+      }}
+    >
+      <Marquee className="[--duration:40s] [--gap:3rem] py-2">
+        {TRUST_LOGOS.map((logo) => (
+          <div key={logo.alt} className="relative h-10 w-28 flex-shrink-0 flex items-center justify-center">
+            <img
+              src={logo.src}
+              alt={logo.alt}
+              className="max-h-full max-w-full object-contain grayscale opacity-60 hover:grayscale-0 hover:opacity-100 transition-all duration-300"
+            />
+          </div>
+        ))}
+      </Marquee>
+    </div>
+  </div>
+);
 
 const ROTATING_WORDS = ['writing', 'building', 'running', 'evaluating', 'debugging', 'orchestrating', 'shipping', 'testing', 'training', 'deploying', 'scaling', 'securing', 'streaming'];
 const HOLD_MS = 2200;
@@ -214,7 +253,7 @@ const customStyles = {
     opacity: 0.6,
   },
   heroRight: {
-    padding: '24px 32px',
+    padding: 0,
     backgroundColor: 'rgba(255,255,255,0.3)',
     backgroundImage:
       "url(\"data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M20 5c0 0-5 5-5 10s5 10 5 10 5-5 5-10-5-10-5-10zm0 2c2 2 3 6 3 8s-1 6-3 8-3-6-3-8 1-6 3-8z' fill='%237C3AED' fill-opacity='0.05'/%3E%3C/svg%3E\")",
@@ -573,7 +612,7 @@ const HeroSection = () => {
           </h1>
           <div style={customStyles.ctaContainer}>
             <div className="w-full max-w-xl">
-              <p style={{ fontSize: '11px', fontWeight: 500, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#8A8580', marginBottom: '12px' }}>
+              <p style={{ fontSize: '18px', fontWeight: 500, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#8A8580', marginBottom: '20px' }}>
                 Install BAML
               </p>
               <div className="relative">
@@ -606,22 +645,18 @@ const HeroSection = () => {
                     key={opt.id}
                     type="button"
                     onClick={() => setInstallPath(opt.id)}
-                    className="rounded-md px-3 py-1 text-xs font-medium transition-colors flex items-center gap-1.5"
+                    className="rounded-md px-3 py-2 text-sm font-medium transition-colors flex items-center gap-1.5"
                     style={installPath === opt.id
                       ? { background: '#1A1612', color: '#fff', border: '1px solid #1A1612' }
                       : { background: 'transparent', color: '#5C5852', border: '1px solid #D9D3C4' }
                     }
                   >
-                    {opt.icon && <img src={opt.icon} alt={opt.label} className="size-3.5" />}
+                    {opt.icon && <img src={opt.icon} alt={opt.label} className="size-4" />}
                     {opt.label}
                   </button>
                 ))}
               </div>
-              <p style={{ marginTop: '16px', fontSize: '11px', fontWeight: 500, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#8A8580', lineHeight: '1.6' }}>
-                Trusted by developers at
-                <br />
-                <span style={{ color: '#5C5852' }}>{['SAP', 'AWS', 'AMD', 'EY', 'Product Hunt', 'Aer Compliance', 'PMMI', 'Cerebral Valley'].join(' · ')}</span>
-              </p>
+              <TrustMarquee />
             </div>
           </div>
         </div>
@@ -630,11 +665,10 @@ const HeroSection = () => {
         className="hero-right-responsive relative"
         style={customStyles.heroRight}
       >
-        <div className="absolute inset-0 p-6 flex flex-col">
+        <div className="absolute inset-0 flex flex-col">
           <div className="flex-1 min-h-0">
             <BamlPlayground compact />
           </div>
-
         </div>
       </div>
     </section>
