@@ -75,7 +75,7 @@ function user.WriteFileBytes() -> int throws never {
 function user.SeekAndRead() -> string throws never {
   { : string
     let f = baml.fs.open("data.txt", "r+") : baml.fs.File
-    f.seek(10) : null
+    f.seek_from("start", 10) : int
     f.text() : string
   }
 }
@@ -89,7 +89,7 @@ function user.FileWriteBytes() -> int throws never {
   { : int
     let f = baml.fs.open("data.bin", "r+") : baml.fs.File
     let data = f.bytes() : uint8array
-    f.seek(0) : null
+    f.seek_from("start", 0) : int
     f.write_bytes(data) : int
   }
 }
@@ -103,7 +103,7 @@ function user.AppendAndRead() -> string throws never {
   { : string
     let f = baml.fs.open("log.txt", "a+") : baml.fs.File
     f.write("line\n") : int
-    f.seek(0) : null
+    f.seek_from("start", 0) : int
     f.text() : string
   }
 }

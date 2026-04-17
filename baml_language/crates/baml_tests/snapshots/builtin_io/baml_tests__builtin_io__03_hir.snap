@@ -6,7 +6,7 @@ function user.Append() -> int  [expr] {
   { let f = baml.fs.open("log.txt", "a") } f.write("line\n")
 }
 function user.AppendAndRead() -> string  [expr] {
-  { let f = baml.fs.open("log.txt", "a+"); f.write("line\n"); f.seek(0) } f.text()
+  { let f = baml.fs.open("log.txt", "a+"); f.write("line\n"); f.seek_from("start", 0) } f.text()
 }
 function user.Exists() -> bool  [expr] {
   {  } baml.fs.exists("maybe.txt")
@@ -15,7 +15,7 @@ function user.FileWrite() -> int  [expr] {
   { let f = baml.fs.open("data.txt", "r+") } f.write("hello")
 }
 function user.FileWriteBytes() -> int  [expr] {
-  { let f = baml.fs.open("data.bin", "r+"); let data = f.bytes(); f.seek(0) } f.write_bytes(data)
+  { let f = baml.fs.open("data.bin", "r+"); let data = f.bytes(); f.seek_from("start", 0) } f.write_bytes(data)
 }
 function user.ReadAndClose() -> string  [expr] {
   { let f = baml.fs.open("example.txt", "r"); let content = f.text(); f.close() } content
@@ -48,7 +48,7 @@ function user.Remove() -> null  [expr] {
   {  } baml.fs.remove("stale.txt")
 }
 function user.SeekAndRead() -> string  [expr] {
-  { let f = baml.fs.open("data.txt", "r+"); f.seek(10) } f.text()
+  { let f = baml.fs.open("data.txt", "r+"); f.seek_from("start", 10) } f.text()
 }
 function user.Size() -> int  [expr] {
   {  } baml.fs.size("data.bin")

@@ -24,8 +24,9 @@ function user.AppendAndRead() -> string {
     await
     pop 1
     load_var f
+    load_const "start"
     load_const 0
-    dispatch_future baml.fs.File.seek
+    dispatch_future baml.fs.File.seek_from
     await
     pop 1
     load_var f
@@ -115,8 +116,9 @@ function user.FileWriteBytes() -> int {
     await
     store_var data
     load_var f
+    load_const "start"
     load_const 0
-    dispatch_future baml.fs.File.seek
+    dispatch_future baml.fs.File.seek_from
     await
     pop 1
     load_var f
@@ -300,8 +302,9 @@ function user.SeekAndRead() -> string {
     await
     store_var f
     load_var f
+    load_const "start"
     load_const 10
-    dispatch_future baml.fs.File.seek
+    dispatch_future baml.fs.File.seek_from
     await
     pop 1
     load_var f

@@ -179,7 +179,7 @@ function baml.fs.File.read(self: null, n: int) -> string {
 function baml.fs.File.read_bytes(self: null, n: int) -> uint8array {
 }
 
-function baml.fs.File.seek(self: null, offset: int) -> null {
+function baml.fs.File.seek_from(self: null, whence: "start" | "current" | "end", offset: int) -> int {
 }
 
 function baml.fs.File.text(self: null) -> string {

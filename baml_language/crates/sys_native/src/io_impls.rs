@@ -133,30 +133,47 @@ impl io::IoClassFsFile for NativeSysOps {
         })
     }
 
-    fn seek(
+    fn seek_from(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
         file: owned::fs::File,
+        whence: BexExternalValue,
         offset: i64,
         _ctx: &SysOpContext,
-    ) -> SysOpOutput<()> {
+    ) -> SysOpOutput<i64> {
         use tokio::io::AsyncSeekExt;
 
         SysOpOutput::async_op(async move {
-            if offset < 0 {
-                return Err(OpErrorKind::Other(format!(
-                    "Negative seek offset: {offset}"
-                )));
-            }
+            let BexExternalValue::String(whence) = whence else {
+                return Err(OpErrorKind::Other("Invalid whence type".into()));
+            };
+            let from = match whence.as_str() {
+                "start" => {
+                    let off = u64::try_from(offset).map_err(|_| {
+                        OpErrorKind::Other(format!(
+                            "Negative offset with whence=\"start\": {offset}"
+                        ))
+                    })?;
+                    std::io::SeekFrom::Start(off)
+                }
+                "current" => std::io::SeekFrom::Current(offset),
+                "end" => std::io::SeekFrom::End(offset),
+                _ => {
+                    return Err(OpErrorKind::Other(format!(
+                        "Unsupported whence '{whence}': expected \"start\", \"current\", or \"end\""
+                    )));
+                }
+            };
             let handle = downcast_handle(&file)?;
             let mut guard = handle.lock().await;
             let f = guard.as_mut().ok_or_else(closed_err)?;
-            #[allow(clippy::cast_sign_loss)]
-            f.seek(std::io::SeekFrom::Start(offset as u64))
+            let pos = f
+                .seek(from)
                 .await
                 .map_err(|e| OpErrorKind::Other(format!("Failed to seek: {e}")))?;
-            Ok(())
+            i64::try_from(pos)
+                .map_err(|_| OpErrorKind::Other(format!("Seek position out of range: {pos}")))
         })
     }
 

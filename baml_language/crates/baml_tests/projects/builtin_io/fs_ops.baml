@@ -61,7 +61,7 @@ function WriteFileBytes() -> int {
 
 function SeekAndRead() -> string {
     let f = baml.fs.open("data.txt", "r+");
-    f.seek(10);
+    f.seek_from("start", 10);
     f.text()
 }
 
@@ -73,7 +73,7 @@ function FileWrite() -> int {
 function FileWriteBytes() -> int {
     let f = baml.fs.open("data.bin", "r+");
     let data = f.bytes();
-    f.seek(0);
+    f.seek_from("start", 0);
     f.write_bytes(data)
 }
 
@@ -85,7 +85,7 @@ function Append() -> int {
 function AppendAndRead() -> string {
     let f = baml.fs.open("log.txt", "a+");
     f.write("line\n");
-    f.seek(0);
+    f.seek_from("start", 0);
     f.text()
 }
 

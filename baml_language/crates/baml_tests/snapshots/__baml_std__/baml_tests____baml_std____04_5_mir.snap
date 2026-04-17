@@ -91,7 +91,7 @@ fn baml.fs.File.read_bytes = builtin(io)
 
 fn baml.fs.remove = builtin(io)
 
-fn baml.fs.File.seek = builtin(io)
+fn baml.fs.File.seek_from = builtin(io)
 
 fn baml.fs.size = builtin(io)
 

@@ -21,7 +21,7 @@ class File {
     $rust_io_function
   }
 
-  function seek(self, offset: int) -> null throws root.errors.Io {
+  function seek_from(self, whence: "start" | "current" | "end", offset: int) -> int throws root.errors.Io {
     $rust_io_function
   }
 

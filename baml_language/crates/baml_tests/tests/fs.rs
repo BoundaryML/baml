@@ -300,7 +300,7 @@ async fn fs_file_rw_seek_and_read() {
         r#"
             function main() -> string {{
                 let file = baml.fs.open("{root}/data.txt", "r+");
-                file.seek(6);
+                file.seek_from("start", 6);
                 file.text()
             }}
         "#
@@ -314,8 +314,9 @@ async fn fs_file_rw_seek_and_read() {
         await
         store_var file
         load_var file
+        load_const "start"
         load_const 6
-        dispatch_future baml.fs.File.seek
+        dispatch_future baml.fs.File.seek_from
         await
         pop 1
         load_var file
@@ -338,9 +339,9 @@ async fn fs_file_rw_write_and_read_back() {
         r#"
             function main() -> string {{
                 let file = baml.fs.open("{root}/data.txt", "r+");
-                file.seek(6);
+                file.seek_from("start", 6);
                 file.write("to Rust!!");
-                file.seek(0);
+                file.seek_from("start", 0);
                 file.text()
             }}
         "#
@@ -354,8 +355,9 @@ async fn fs_file_rw_write_and_read_back() {
         await
         store_var file
         load_var file
+        load_const "start"
         load_const 6
-        dispatch_future baml.fs.File.seek
+        dispatch_future baml.fs.File.seek_from
         await
         pop 1
         load_var file
@@ -364,8 +366,9 @@ async fn fs_file_rw_write_and_read_back() {
         await
         pop 1
         load_var file
+        load_const "start"
         load_const 0
-        dispatch_future baml.fs.File.seek
+        dispatch_future baml.fs.File.seek_from
         await
         pop 1
         load_var file
@@ -392,7 +395,7 @@ async fn fs_file_rw_write_bytes() {
             function main() -> int {{
                 let bytes = baml.fs.open("{root}/source.bin", "r").bytes();
                 let file = baml.fs.open("{root}/data.bin", "r+");
-                file.seek(0);
+                file.seek_from("start", 0);
                 file.write_bytes(bytes)
             }}
         "#
@@ -413,8 +416,9 @@ async fn fs_file_rw_write_bytes() {
         await
         store_var file
         load_var file
+        load_const "start"
         load_const 0
-        dispatch_future baml.fs.File.seek
+        dispatch_future baml.fs.File.seek_from
         await
         pop 1
         load_var file
@@ -722,7 +726,7 @@ async fn fs_open_append_plus_can_read() {
             function main() -> string {{
                 let f = baml.fs.open("{root}/data.txt", "a+");
                 f.write(" more");
-                f.seek(0);
+                f.seek_from("start", 0);
                 f.text()
             }}
         "#
@@ -838,7 +842,7 @@ async fn fs_file_seek_negative_errors() {
         r#"
             function main() -> string {{
                 let f = baml.fs.open("{root}/data.txt", "r+");
-                f.seek(-1);
+                f.seek_from("start", -1);
                 f.text()
             }}
         "#
@@ -896,7 +900,7 @@ async fn fs_open_w_plus_reads_after_write() {
             function main() -> string {{
                 let f = baml.fs.open("{root}/data.txt", "w+");
                 f.write("fresh");
-                f.seek(0);
+                f.seek_from("start", 0);
                 f.text()
             }}
         "#

@@ -670,14 +670,15 @@ impl io::IoClassFsFile for DefaultIoOps {
     ) -> SysOpOutput<()> {
         SysOpOutput::err(OpErrorKind::Unsupported)
     }
-    fn seek(
+    fn seek_from(
         &self,
         _h: &Arc<BexHeap>,
         _c: CallId,
         _f: io::owned::fs::File,
+        _whence: BexExternalValue,
         _offset: i64,
         _ctx: &SysOpContext,
-    ) -> SysOpOutput<()> {
+    ) -> SysOpOutput<i64> {
         SysOpOutput::err(OpErrorKind::Unsupported)
     }
     fn write(
@@ -1045,10 +1046,10 @@ impl IoSysOpsBuilder {
                 t.__glue_baml_fs_file_close(heap, args, ctx, call_id)
             })
         };
-        self.inner.baml_fs_file_seek = {
+        self.inner.baml_fs_file_seek_from = {
             let t = instance.clone();
             Arc::new(move |heap, args, ctx, call_id| {
-                t.__glue_baml_fs_file_seek(heap, args, ctx, call_id)
+                t.__glue_baml_fs_file_seek_from(heap, args, ctx, call_id)
             })
         };
         self.inner.baml_fs_file_write = {
