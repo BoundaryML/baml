@@ -6,7 +6,7 @@
 
 use std::sync::Arc;
 
-use bex_heap::BexHeap;
+use bex_heap::{BexExternalValue, BexHeap};
 use sys_ops::io::{self, CallId, OpErrorKind, SysOpContext, SysOpOutput, owned};
 
 use crate::NativeSysOps;
@@ -37,10 +37,21 @@ impl io::IoNamespaceEnv for NativeSysOps {
 // File System
 // ============================================================================
 
-type FsFileHandle = tokio::sync::Mutex<tokio::fs::File>;
+type FsFileHandle = tokio::sync::Mutex<Option<tokio::fs::File>>;
+
+fn downcast_handle(file: &owned::fs::File) -> Result<Arc<FsFileHandle>, OpErrorKind> {
+    file._handle
+        .clone()
+        .downcast::<FsFileHandle>()
+        .map_err(|_| OpErrorKind::Other("Invalid file handle type".into()))
+}
+
+fn closed_err() -> OpErrorKind {
+    OpErrorKind::Other("File is closed".into())
+}
 
 impl io::IoClassFsFile for NativeSysOps {
-    fn read_string(
+    fn text(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
@@ -50,11 +61,9 @@ impl io::IoClassFsFile for NativeSysOps {
         use tokio::io::AsyncReadExt;
 
         SysOpOutput::async_op(async move {
-            let handle: Arc<FsFileHandle> = file
-                ._handle
-                .downcast::<FsFileHandle>()
-                .map_err(|_| OpErrorKind::Other("Invalid file handle type".into()))?;
-            let mut f = handle.lock().await;
+            let handle = downcast_handle(&file)?;
+            let mut guard = handle.lock().await;
+            let f = guard.as_mut().ok_or_else(closed_err)?;
             let mut contents = String::new();
             f.read_to_string(&mut contents)
                 .await
@@ -63,7 +72,7 @@ impl io::IoClassFsFile for NativeSysOps {
         })
     }
 
-    fn read_bytes(
+    fn bytes(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
@@ -73,11 +82,9 @@ impl io::IoClassFsFile for NativeSysOps {
         use tokio::io::AsyncReadExt;
 
         SysOpOutput::async_op(async move {
-            let handle: Arc<FsFileHandle> = file
-                ._handle
-                .downcast::<FsFileHandle>()
-                .map_err(|_| OpErrorKind::Other("Invalid file handle type".into()))?;
-            let mut f = handle.lock().await;
+            let handle = downcast_handle(&file)?;
+            let mut guard = handle.lock().await;
+            let f = guard.as_mut().ok_or_else(closed_err)?;
             let mut contents = Vec::new();
             f.read_to_end(&mut contents)
                 .await
@@ -86,15 +93,144 @@ impl io::IoClassFsFile for NativeSysOps {
         })
     }
 
+    fn read(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        file: owned::fs::File,
+        n: i64,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<String> {
+        SysOpOutput::async_op(async move {
+            let bytes = read_up_to(&file, n).await?;
+            String::from_utf8(bytes)
+                .map_err(|e| OpErrorKind::Other(format!("Invalid UTF-8 in file: {e}")))
+        })
+    }
+
+    fn read_bytes(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        file: owned::fs::File,
+        n: i64,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Vec<u8>> {
+        SysOpOutput::async_op(async move { read_up_to(&file, n).await })
+    }
+
     fn close(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
-        _file: owned::fs::File,
+        file: owned::fs::File,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        SysOpOutput::ok(())
+        SysOpOutput::async_op(async move {
+            let handle = downcast_handle(&file)?;
+            handle.lock().await.take();
+            Ok(())
+        })
     }
+
+    fn seek_from(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        file: owned::fs::File,
+        whence: BexExternalValue,
+        offset: i64,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<i64> {
+        use tokio::io::AsyncSeekExt;
+
+        SysOpOutput::async_op(async move {
+            let BexExternalValue::String(whence) = whence else {
+                return Err(OpErrorKind::Other("Invalid whence type".into()));
+            };
+            let from = match whence.as_str() {
+                "start" => {
+                    let off = u64::try_from(offset).map_err(|_| {
+                        OpErrorKind::Other(format!(
+                            "Negative offset with whence=\"start\": {offset}"
+                        ))
+                    })?;
+                    std::io::SeekFrom::Start(off)
+                }
+                "current" => std::io::SeekFrom::Current(offset),
+                "end" => std::io::SeekFrom::End(offset),
+                _ => {
+                    return Err(OpErrorKind::Other(format!(
+                        "Unsupported whence '{whence}': expected \"start\", \"current\", or \"end\""
+                    )));
+                }
+            };
+            let handle = downcast_handle(&file)?;
+            let mut guard = handle.lock().await;
+            let f = guard.as_mut().ok_or_else(closed_err)?;
+            let pos = f
+                .seek(from)
+                .await
+                .map_err(|e| OpErrorKind::Other(format!("Failed to seek: {e}")))?;
+            i64::try_from(pos)
+                .map_err(|_| OpErrorKind::Other(format!("Seek position out of range: {pos}")))
+        })
+    }
+
+    fn write(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        file: owned::fs::File,
+        data: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<i64> {
+        SysOpOutput::async_op(async move { write_all_bytes(&file, data.into_bytes()).await })
+    }
+
+    fn write_bytes(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        file: owned::fs::File,
+        data: Vec<u8>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<i64> {
+        SysOpOutput::async_op(async move { write_all_bytes(&file, data).await })
+    }
+}
+
+async fn read_up_to(file: &owned::fs::File, n: i64) -> Result<Vec<u8>, OpErrorKind> {
+    use tokio::io::AsyncReadExt;
+
+    let cap =
+        u64::try_from(n).map_err(|_| OpErrorKind::Other(format!("Negative read length: {n}")))?;
+    let handle = downcast_handle(file)?;
+    let mut guard = handle.lock().await;
+    let f = guard.as_mut().ok_or_else(closed_err)?;
+    let mut buf = Vec::new();
+    f.take(cap)
+        .read_to_end(&mut buf)
+        .await
+        .map_err(|e| OpErrorKind::Other(format!("Failed to read file: {e}")))?;
+    Ok(buf)
+}
+
+async fn write_all_bytes(file: &owned::fs::File, data: Vec<u8>) -> Result<i64, OpErrorKind> {
+    use tokio::io::AsyncWriteExt;
+
+    let handle = downcast_handle(file)?;
+    let mut guard = handle.lock().await;
+    let f = guard.as_mut().ok_or_else(closed_err)?;
+    #[allow(clippy::cast_possible_wrap)]
+    let len = data.len() as i64;
+    f.write_all(&data)
+        .await
+        .map_err(|e| OpErrorKind::Other(format!("Failed to write: {e}")))?;
+    f.flush()
+        .await
+        .map_err(|e| OpErrorKind::Other(format!("Failed to write: {e}")))?;
+    Ok(len)
 }
 
 impl io::IoNamespaceFs for NativeSysOps {
@@ -103,17 +239,178 @@ impl io::IoNamespaceFs for NativeSysOps {
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
         path: String,
+        mode: BexExternalValue,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<owned::fs::File> {
         SysOpOutput::async_op(async move {
-            let file = tokio::fs::File::open(&path)
-                .await
-                .map_err(|e| OpErrorKind::Other(format!("Failed to open file '{path}': {e}")))?;
+            let BexExternalValue::String(mode) = mode else {
+                return Err(OpErrorKind::Other("Invalid mode type".into()));
+            };
+            // Modes that create the file also auto-create missing parent dirs,
+            // matching Bun's `Bun.write` behavior.
+            let creates = matches!(mode.as_str(), "w" | "w+" | "a" | "a+");
+            if creates {
+                if let Some(parent) = std::path::Path::new(&path).parent() {
+                    if !parent.as_os_str().is_empty() {
+                        tokio::fs::create_dir_all(parent).await.map_err(|e| {
+                            OpErrorKind::Other(format!(
+                                "Failed to create parent directories for '{path}': {e}"
+                            ))
+                        })?;
+                    }
+                }
+            }
+            let file = match mode.as_str() {
+                "r" => tokio::fs::File::open(&path).await,
+                "r+" => {
+                    tokio::fs::OpenOptions::new()
+                        .read(true)
+                        .write(true)
+                        .open(&path)
+                        .await
+                }
+                "w" => {
+                    tokio::fs::OpenOptions::new()
+                        .write(true)
+                        .create(true)
+                        .truncate(true)
+                        .open(&path)
+                        .await
+                }
+                "w+" => {
+                    tokio::fs::OpenOptions::new()
+                        .read(true)
+                        .write(true)
+                        .create(true)
+                        .truncate(true)
+                        .open(&path)
+                        .await
+                }
+                "a" => {
+                    tokio::fs::OpenOptions::new()
+                        .append(true)
+                        .create(true)
+                        .open(&path)
+                        .await
+                }
+                "a+" => {
+                    tokio::fs::OpenOptions::new()
+                        .read(true)
+                        .append(true)
+                        .create(true)
+                        .open(&path)
+                        .await
+                }
+                _ => {
+                    return Err(OpErrorKind::Other(format!(
+                        "Unsupported file mode '{mode}': expected \"r\", \"r+\", \"w\", \"w+\", \"a\", or \"a+\""
+                    )));
+                }
+            }
+            .map_err(|e| OpErrorKind::Other(format!("Failed to open file '{path}': {e}")))?;
             let handle: Arc<dyn std::any::Any + Send + Sync> =
-                Arc::new(tokio::sync::Mutex::new(file));
+                Arc::new(tokio::sync::Mutex::new(Some(file)));
             Ok(owned::fs::File { _handle: handle })
         })
     }
+
+    fn exists(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        path: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<bool> {
+        SysOpOutput::async_op(async move {
+            tokio::fs::try_exists(&path).await.map_err(|e| {
+                OpErrorKind::Other(format!("Failed to check existence of '{path}': {e}"))
+            })
+        })
+    }
+
+    fn remove(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        path: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::async_op(async move {
+            tokio::fs::remove_file(&path)
+                .await
+                .map_err(|e| OpErrorKind::Other(format!("Failed to remove file '{path}': {e}")))
+        })
+    }
+
+    fn size(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        path: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<i64> {
+        SysOpOutput::async_op(async move {
+            let metadata = tokio::fs::metadata(&path)
+                .await
+                .map_err(|e| OpErrorKind::Other(format!("Failed to stat '{path}': {e}")))?;
+            i64::try_from(metadata.len())
+                .map_err(|_| OpErrorKind::Other(format!("File '{path}' size exceeds i64::MAX")))
+        })
+    }
+
+    fn read(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        path: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<String> {
+        SysOpOutput::async_op(async move {
+            tokio::fs::read_to_string(&path)
+                .await
+                .map_err(|e| OpErrorKind::Other(format!("Failed to read file '{path}': {e}")))
+        })
+    }
+
+    fn write(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        path: String,
+        content: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<i64> {
+        SysOpOutput::async_op(async move { write_path(&path, content.as_bytes()).await })
+    }
+
+    fn write_bytes(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        path: String,
+        content: Vec<u8>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<i64> {
+        SysOpOutput::async_op(async move { write_path(&path, &content).await })
+    }
+}
+
+// Auto-creates missing parent dirs, matching Bun's `Bun.write` behavior.
+async fn write_path(path: &str, data: &[u8]) -> Result<i64, OpErrorKind> {
+    if let Some(parent) = std::path::Path::new(path).parent() {
+        if !parent.as_os_str().is_empty() {
+            tokio::fs::create_dir_all(parent).await.map_err(|e| {
+                OpErrorKind::Other(format!(
+                    "Failed to create parent directories for '{path}': {e}"
+                ))
+            })?;
+        }
+    }
+    tokio::fs::write(path, data)
+        .await
+        .map_err(|e| OpErrorKind::Other(format!("Failed to write file '{path}': {e}")))?;
+    i64::try_from(data.len())
+        .map_err(|_| OpErrorKind::Other(format!("Write size {} exceeds i64::MAX", data.len())))
 }
 
 // ============================================================================

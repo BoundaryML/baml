@@ -1,8 +1,8 @@
 // Test hover on file system builtins
 
 function TestFsOpen() -> string {
-    let f = baml.fs<[CURSOR].open("example.txt");
-    f.read_string()
+    let f = baml.fs<[CURSOR].open("example.txt", "r");
+    f.text()
 }
 
 //----

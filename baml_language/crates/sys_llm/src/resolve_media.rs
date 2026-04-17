@@ -6,7 +6,7 @@ use std::{str::FromStr, sync::Arc};
 use baml_base::MediaKind;
 use baml_builtins2::{MediaContent, MediaValue, PromptAstSimple};
 use base64::Engine as _;
-use sys_types::runtime_io::RuntimeIo;
+use sys_types::{BexExternalValue, runtime_io::RuntimeIo};
 
 use crate::build_request::BuildRequestError;
 
@@ -259,10 +259,13 @@ async fn resolve_file(
     path: &str,
     io: &dyn RuntimeIo,
 ) -> Result<(), BuildRequestError> {
-    let file = io.fs_open(path.to_string()).await.map_err(|e| {
-        BuildRequestError::FileNotResolved(format!("failed to open file {path}: {e}"))
-    })?;
-    let bytes = io.fs_file_read_bytes(&file).await.map_err(|e| {
+    let file = io
+        .fs_open(path.to_string(), BexExternalValue::String("r".to_string()))
+        .await
+        .map_err(|e| {
+            BuildRequestError::FileNotResolved(format!("failed to open file {path}: {e}"))
+        })?;
+    let bytes = io.fs_file_bytes(&file).await.map_err(|e| {
         BuildRequestError::FileNotResolved(format!("failed to read file {path}: {e}"))
     })?;
 
@@ -441,7 +444,7 @@ mod tests {
     }
 
     /// Mock `RuntimeIo` for file-read tests. Returns configurable file content
-    /// from `fs_open` + `fs_file_read_bytes`.
+    /// from `fs_open` + `fs_file_bytes`.
     struct MockFsIo {
         content: Vec<u8>,
     }
@@ -450,6 +453,7 @@ mod tests {
         fn fs_open(
             &self,
             _path: String,
+            _mode: BexExternalValue,
         ) -> Pin<
             Box<
                 dyn Future<Output = Result<sys_types::runtime_io::FsFileHandle, RuntimeIoError>>
@@ -464,7 +468,7 @@ mod tests {
             })
         }
 
-        fn fs_file_read_bytes(
+        fn fs_file_bytes(
             &self,
             _: &sys_types::runtime_io::FsFileHandle,
         ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, RuntimeIoError>> + Send + '_>> {
