@@ -24,7 +24,8 @@ use bex_vm_types::{
     ObjectType, PanicClass, StackIndex, UnaryOp, Value, Variant,
     bytecode::{self, BlockNotification},
     types::{
-        Cell, Closure, Function, FunctionType, Future, FutureType, Instance, PendingFuture, Type,
+        BoundMethod, Cell, Closure, Function, FunctionType, Future, FutureType, Instance,
+        PendingFuture, Type,
     },
 };
 use indexmap::IndexMap;
@@ -417,6 +418,7 @@ fn value_type_tag(value: &Value) -> i64 {
                 Object::Map(_) => type_tags::MAP,
                 Object::Function(_) => type_tags::FUNCTION,
                 Object::Closure(_) => type_tags::FUNCTION,
+                Object::BoundMethod(_) => type_tags::FUNCTION,
                 Object::Cell(_) => type_tags::UNKNOWN,
                 Object::Future(_) => type_tags::FUTURE,
                 Object::Enum(_) => type_tags::ENUM,
@@ -1014,6 +1016,20 @@ impl BexVm {
                     }
                 }
             }
+            Object::BoundMethod(bm) => {
+                // SAFETY: bm.function points to a Function object with appropriate
+                // lifetime guarantees.
+                let func_obj = unsafe { bm.function.get() };
+                match func_obj {
+                    Object::Function(f) => f.real_local_count,
+                    _ => {
+                        return Err(VmInternalError::TypeError {
+                            expected: Type::Object(ObjectType::Function(FunctionType::Any)),
+                            got: Type::Object(ObjectType::of(func_obj)),
+                        });
+                    }
+                }
+            }
             _ => {
                 return Err(VmInternalError::TypeError {
                     expected: Type::Object(ObjectType::Any),
@@ -1339,10 +1355,45 @@ impl BexVm {
                     }),
                 }
             }
+            Object::BoundMethod(bm) => {
+                // BoundMethod: the arity reported here is the full arity (including
+                // self). CallIndirect has a dedicated path for BoundMethod that
+                // inserts the receiver and passes full_arity; this arm handles any
+                // edge-case callers that go through resolve_callable_target.
+                let func_obj = unsafe { bm.function.get() };
+                match func_obj {
+                    Object::Function(callee_fn) => Ok((callee_ptr, callee_fn.arity)),
+                    _ => Err(VmInternalError::TypeError {
+                        expected: expected_type.into(),
+                        got: ObjectType::of(func_obj).into(),
+                    }),
+                }
+            }
             _ => Err(VmInternalError::TypeError {
                 expected: expected_type.into(),
                 got: ObjectType::of(obj).into(),
             }),
+        }
+    }
+
+    /// Prepare a `YieldToCall`-style invocation: if `callee` is a
+    /// `BoundMethod`, insert the receiver at the front of `args` and return
+    /// the inner `Function`'s `HeapPtr`; otherwise return `callee` unchanged.
+    ///
+    /// This ensures that native builtins (e.g. `Array.map`) that call user
+    /// callbacks via `YieldToCall { callee, args }` work correctly with bound
+    /// methods — the receiver is transparently prepended so the arity check in
+    /// `execute_call_from_locals_offset` sees the full argument count.
+    fn resolve_bound_method_callee(&self, callee: HeapPtr, args: &mut Vec<Value>) -> HeapPtr {
+        let obj = self.get_object(callee);
+        if let Object::BoundMethod(bm) = obj {
+            let receiver = bm.receiver;
+            let fn_ptr = bm.function;
+            // Prepend receiver so the inner function sees [self, arg1, ..., argN].
+            args.insert(0, receiver);
+            fn_ptr
+        } else {
+            callee
         }
     }
 
@@ -1354,13 +1405,29 @@ impl BexVm {
         frame_idx: &mut usize,
         function: &mut &'static Function,
     ) -> Result<Option<VmExecState>, VmError> {
-        // Resolve the callee: either a plain Function or a Closure wrapping one.
+        // Resolve the callee: either a plain Function, a Closure, or a BoundMethod wrapping one.
         let callee = match self.get_object(callee_ptr) {
             Object::Function(f) => f,
             Object::Closure(c) => {
                 // SAFETY: closure.function is a compile-time or TLAB-allocated
                 // Function object whose lifetime is at least as long as the closure.
                 let func_obj: &'static Object = unsafe { c.function.get() };
+                match func_obj {
+                    Object::Function(f) => f,
+                    _ => {
+                        return Err(VmInternalError::TypeError {
+                            expected: FunctionType::Callable.into(),
+                            got: ObjectType::of(func_obj).into(),
+                        }
+                        .into());
+                    }
+                }
+            }
+            Object::BoundMethod(bm) => {
+                // SAFETY: bm.function points to a Function object allocated in the
+                // compile-time object pool or TLAB, with lifetime at least as long
+                // as the BoundMethod.
+                let func_obj: &'static Object = unsafe { bm.function.get() };
                 match func_obj {
                     Object::Function(f) => f,
                     _ => {
@@ -1424,7 +1491,7 @@ impl BexVm {
                     }
                     NativeCallResult::YieldToCall {
                         callee,
-                        args: callback_args,
+                        args: mut callback_args,
                         continuation,
                     } => {
                         // Push a Native continuation frame, then dispatch the
@@ -1436,12 +1503,20 @@ impl BexVm {
                             continuation,
                         }));
 
+                        // If callee is a BoundMethod, insert receiver into args.
+                        let real_callee =
+                            self.resolve_bound_method_callee(callee, &mut callback_args);
+
                         let arg_count = callback_args.len();
                         let cb_locals = StackIndex::from_raw(self.stack.len());
                         self.stack.extend(callback_args);
 
                         return self.execute_call_from_locals_offset(
-                            callee, cb_locals, arg_count, frame_idx, function,
+                            real_callee,
+                            cb_locals,
+                            arg_count,
+                            frame_idx,
+                            function,
                         );
                     }
                 }
@@ -1661,6 +1736,12 @@ impl BexVm {
                 let func_obj: &'static Object = unsafe { closure.function.get() };
                 func_obj.as_function()
             }
+            Object::BoundMethod(bm) => {
+                // SAFETY: See doc comment — same lifetime guarantee applies to the
+                // inner function referenced by the bound method.
+                let func_obj: &'static Object = unsafe { bm.function.get() };
+                func_obj.as_function()
+            }
             _ => Err(VmInternalError::TypeError {
                 expected: FunctionType::Callable.into(),
                 got: ObjectType::of(obj).into(),
@@ -1715,7 +1796,7 @@ impl BexVm {
                     },
                     NativeCallResult::YieldToCall {
                         callee,
-                        args: callback_args,
+                        args: mut callback_args,
                         continuation,
                     } => {
                         // The continuation wants to call another function.
@@ -1726,12 +1807,16 @@ impl BexVm {
                             continuation,
                         }));
 
+                        // If callee is a BoundMethod, insert receiver into args.
+                        let real_callee =
+                            self.resolve_bound_method_callee(callee, &mut callback_args);
+
                         let arg_count = callback_args.len();
                         let cb_locals = StackIndex::from_raw(self.stack.len());
                         self.stack.extend(callback_args);
 
                         let ecflo_result = match self.execute_call_from_locals_offset(
-                            callee,
+                            real_callee,
                             cb_locals,
                             arg_count,
                             &mut frame_idx,
@@ -3066,23 +3151,81 @@ impl BexVm {
                 // Stack layout: [arg1, arg2, ..., argN, callee]
                 let callee_slot = self.stack.ensure_stack_top()?;
                 let callee_value = self.stack[callee_slot];
-                let (callee_ptr, arg_count) = self.resolve_callable_target(callee_value)?;
-                let args_offset = self
-                    .stack
-                    .len()
-                    .checked_sub(arg_count + 1)
-                    .ok_or(VmInternalError::NotEnoughItemsOnStack(arg_count + 1))?;
-                let _popped_callee = self.stack.ensure_pop()?;
-                let locals_offset = StackIndex::from_raw(args_offset);
+                let callee_ptr =
+                    self.as_object_ptr(&callee_value, FunctionType::Callable.into())?;
+                let obj = self.get_object(callee_ptr);
 
-                if let Some(state) = self.execute_call_from_locals_offset(
-                    callee_ptr,
-                    locals_offset,
-                    arg_count,
-                    frame_idx,
-                    function,
-                )? {
-                    return Ok(Some(state));
+                if let Object::BoundMethod(bm) = obj {
+                    // BoundMethod: insert receiver as `self` before the visible args.
+                    //
+                    // Stack before: [arg1, ..., argN, bound_method]
+                    //   where N = visible_arity = full_arity - 1
+                    // Stack after:  [receiver, arg1, ..., argN]
+                    //   which the bytecode sees as locals 1..full_arity
+                    let func_obj = unsafe { bm.function.get() };
+                    let full_arity = match func_obj {
+                        Object::Function(f) => f.arity,
+                        _ => {
+                            return Err(VmInternalError::TypeError {
+                                expected: FunctionType::Callable.into(),
+                                got: ObjectType::of(func_obj).into(),
+                            }
+                            .into());
+                        }
+                    };
+                    debug_assert!(
+                        full_arity >= 1,
+                        "BoundMethod's inner function must have self parameter (arity >= 1), got {full_arity}"
+                    );
+                    let visible_arity = full_arity.saturating_sub(1);
+                    let receiver = bm.receiver;
+                    let fn_ptr = bm.function;
+
+                    // Pop the callee (bound_method) off the top.
+                    let _popped = self.stack.ensure_pop()?;
+
+                    // Stack: [arg1, ..., argN] where N = visible_arity.
+                    let args_offset = self
+                        .stack
+                        .len()
+                        .checked_sub(visible_arity)
+                        .ok_or(VmInternalError::NotEnoughItemsOnStack(visible_arity))?;
+
+                    // Insert receiver at args_offset, shifting args right by one slot.
+                    self.stack.insert(args_offset, receiver);
+
+                    // Stack: [receiver, arg1, ..., argN] — full_arity items at args_offset.
+                    let locals_offset = StackIndex::from_raw(args_offset);
+
+                    if let Some(state) = self.execute_call_from_locals_offset(
+                        fn_ptr,
+                        locals_offset,
+                        full_arity,
+                        frame_idx,
+                        function,
+                    )? {
+                        return Ok(Some(state));
+                    }
+                } else {
+                    // Plain Function or Closure: existing path.
+                    let (callee_ptr, arg_count) = self.resolve_callable_target(callee_value)?;
+                    let args_offset = self
+                        .stack
+                        .len()
+                        .checked_sub(arg_count + 1)
+                        .ok_or(VmInternalError::NotEnoughItemsOnStack(arg_count + 1))?;
+                    let _popped_callee = self.stack.ensure_pop()?;
+                    let locals_offset = StackIndex::from_raw(args_offset);
+
+                    if let Some(state) = self.execute_call_from_locals_offset(
+                        callee_ptr,
+                        locals_offset,
+                        arg_count,
+                        frame_idx,
+                        function,
+                    )? {
+                        return Ok(Some(state));
+                    }
                 }
             }
 
@@ -3353,6 +3496,24 @@ impl BexVm {
                     captures,
                 });
                 let ptr = self.tlab.alloc(closure);
+                self.stack.push(Value::Object(ptr));
+            }
+
+            Instruction::MakeBoundMethod(global_idx) => {
+                let receiver = self.stack.ensure_pop()?;
+                let callee_value = self.globals[global_idx];
+                let function_ptr =
+                    self.as_object_ptr(&callee_value, FunctionType::Callable.into())?;
+                debug_assert!(
+                    matches!(self.get_object(function_ptr), Object::Function(_)),
+                    "MakeBoundMethod expects a Function global, got {:?}",
+                    ObjectType::of(self.get_object(function_ptr)),
+                );
+                let bound = Object::BoundMethod(BoundMethod {
+                    function: function_ptr,
+                    receiver,
+                });
+                let ptr = self.tlab.alloc(bound);
                 self.stack.push(Value::Object(ptr));
             }
 

@@ -238,7 +238,7 @@ impl StructuralTy {
                 if !ret1.is_subtype_of(ret2, assumptions) {
                     return false;
                 }
-                if params2.len() > params1.len() {
+                if params1.len() != params2.len() {
                     return false;
                 }
                 for (p1, p2) in params1.iter().zip(params2.iter()) {

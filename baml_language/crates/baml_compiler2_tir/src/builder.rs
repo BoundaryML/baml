@@ -651,6 +651,20 @@ impl<'db> TypeInferenceBuilder<'db> {
                     ty
                 } else {
                     let base_ty = self.infer_expr(*base, body);
+
+                    // Determine if the base is a runtime value (local variable, function
+                    // result, etc.) or a bare type name used as a namespace (e.g.
+                    // `Factory<int>` in `Factory<int>.create(42)`).
+                    // A base is a type name if it's a single-segment Path whose name is
+                    // NOT a local variable — in that case the access is an "unbound"
+                    // method reference (bound = false).
+                    let base_is_value = match &body.exprs[*base] {
+                        Expr::Path(segments) if segments.len() == 1 => {
+                            self.locals.contains_key(&segments[0])
+                        }
+                        _ => true, // complex expressions are always values
+                    };
+
                     let inner = crate::narrowing::remove_null(&base_ty);
                     if inner != base_ty && !matches!(base_ty, Ty::Unknown { .. } | Ty::Error { .. })
                     {
@@ -658,7 +672,8 @@ impl<'db> TypeInferenceBuilder<'db> {
                             // Inside an OptionalChain: auto-unwrap nullable base,
                             // resolve the member, and re-wrap in Optional.
                             // This allows `a?.b.c` where `a?.b` returns `T?`.
-                            let member_ty = self.resolve_member(&inner, member, expr_id);
+                            let member_ty =
+                                self.resolve_member(&inner, member, expr_id, base_is_value);
                             Self::make_optional(member_ty)
                         } else {
                             // Outside any chain: accessing `.member` on a nullable type
@@ -673,11 +688,12 @@ impl<'db> TypeInferenceBuilder<'db> {
                                 expr_id,
                             );
                             // Still resolve for downstream inference
-                            let member_ty = self.resolve_member(&inner, member, expr_id);
+                            let member_ty =
+                                self.resolve_member(&inner, member, expr_id, base_is_value);
                             Self::make_optional(member_ty)
                         }
                     } else {
-                        self.resolve_member(&base_ty, member, expr_id)
+                        self.resolve_member(&base_ty, member, expr_id, base_is_value)
                     }
                 }
             }
@@ -703,7 +719,8 @@ impl<'db> TypeInferenceBuilder<'db> {
                     // Base is just null — result is null
                     Ty::Primitive(PrimitiveType::Null, TyAttr::default())
                 } else {
-                    let member_ty = self.resolve_member(&base_info.inner, member, expr_id);
+                    // OptionalMemberAccess always has a value base → bound = true.
+                    let member_ty = self.resolve_member(&base_info.inner, member, expr_id, true);
                     Self::make_optional(member_ty)
                 }
             }
@@ -3202,8 +3219,10 @@ impl<'db> TypeInferenceBuilder<'db> {
         // Check path_member_resolutions — handles 2+ segment paths correctly.
         // The last resolution for the callee path tells us the receiver class.
         if let Some(resolutions) = self.path_member_resolutions.get(&callee_expr_id) {
-            if let Some(crate::inference::MemberResolution::Method { class_loc, .. }) =
-                resolutions.last()
+            if let Some(
+                crate::inference::MemberResolution::BoundMethod { class_loc, .. }
+                | crate::inference::MemberResolution::UnboundMethod { class_loc, .. },
+            ) = resolutions.last()
             {
                 let db = self.context.db();
                 let item_tree = baml_compiler2_ppir::file_item_tree(db, class_loc.file(db));
@@ -3310,7 +3329,8 @@ impl<'db> TypeInferenceBuilder<'db> {
             // and are not globally unique across functions in a file.
             if self.locals.contains_key(&segments[0]) {
                 // Root is a local variable — chain resolve_member for segments[1..].
-                self.infer_local_rooted_path(segments, expr_id)
+                // The last segment resolves as a bound method reference.
+                self.infer_local_rooted_path(segments, expr_id, true)
             } else {
                 // Root is not a known local. Try full package/namespace resolution:
                 // 1. Package path (e.g. baml.llm.ClientType.Primitive, env.get)
@@ -3338,11 +3358,13 @@ impl<'db> TypeInferenceBuilder<'db> {
                     }
                 }
                 // 3. Type-rooted access: root resolves as a type in the namespace
-                //    (e.g. `Status.Active` where Status is an enum, or enum static methods).
+                //    (e.g. `Status.Active` where Status is an enum, or enum static methods,
+                //    or unbound method references like `Person.get_name`).
                 //    Use infer_local_rooted_path which chains resolve_member for segments[1..].
+                //    root_is_value = false → last segment is an unbound method reference.
                 let root_ty = self.infer_single_name(&segments[0]);
                 if !matches!(root_ty, Ty::Unknown { .. }) {
-                    return self.infer_local_rooted_path(segments, expr_id);
+                    return self.infer_local_rooted_path(segments, expr_id, false);
                 }
                 // 4. Truly unresolved — report error if not a known namespace/package name.
                 let is_baml_ns_shorthand = matches!(
@@ -3391,7 +3413,12 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// for each subsequent segment. Captures per-segment `MemberResolution`
     /// values into `path_member_resolutions` for MIR field-chain lowering and
     /// LSP navigation.
-    fn infer_local_rooted_path(&mut self, segments: &[Name], expr_id: ExprId) -> Ty {
+    fn infer_local_rooted_path(
+        &mut self,
+        segments: &[Name],
+        expr_id: ExprId,
+        root_is_value: bool,
+    ) -> Ty {
         let root_ty = self.infer_single_name(&segments[0]);
         if matches!(root_ty, Ty::Unknown { .. }) {
             return Ty::Unknown {
@@ -3407,9 +3434,16 @@ impl<'db> TypeInferenceBuilder<'db> {
         // Chain resolve_member for remaining segments, capturing per-segment resolutions.
         let mut current_ty = root_ty;
         let mut member_resolutions: Vec<crate::inference::MemberResolution<'db>> = Vec::new();
+        let total_segments = segments.len();
 
         for (i, seg) in segments[1..].iter().enumerate() {
             let seg_idx = i + 1; // index into the path segments (0 is the root)
+
+            // For the last segment: bound iff root was a value (local variable or field chain).
+            // Intermediate segments are always field accesses (bound doesn't affect fields).
+            let is_last_segment = seg_idx == total_segments - 1;
+            let bound = root_is_value || !is_last_segment;
+
             let inner = crate::narrowing::remove_null(&current_ty);
             let is_nullable =
                 inner != current_ty && !matches!(current_ty, Ty::Unknown { .. } | Ty::Error { .. });
@@ -3417,7 +3451,8 @@ impl<'db> TypeInferenceBuilder<'db> {
             if is_nullable {
                 if self.in_optional_chain > 0 {
                     // Inside an OptionalChain: resolve and re-wrap the result.
-                    member_ty = self.resolve_member_for_path_segment(&inner, seg, expr_id, seg_idx);
+                    member_ty =
+                        self.resolve_member_for_path_segment(&inner, seg, expr_id, seg_idx, bound);
                     current_ty = Self::make_optional(member_ty.clone());
                 } else {
                     // Outside any chain: null-safety violation — suggest `?.`.
@@ -3440,11 +3475,13 @@ impl<'db> TypeInferenceBuilder<'db> {
                         },
                         expr_id,
                     );
-                    member_ty = self.resolve_member_for_path_segment(&inner, seg, expr_id, seg_idx);
+                    member_ty =
+                        self.resolve_member_for_path_segment(&inner, seg, expr_id, seg_idx, bound);
                     current_ty = Self::make_optional(member_ty.clone());
                 }
             } else {
-                member_ty = self.resolve_member_for_path_segment(&inner, seg, expr_id, seg_idx);
+                member_ty =
+                    self.resolve_member_for_path_segment(&inner, seg, expr_id, seg_idx, bound);
                 current_ty = member_ty.clone();
             }
 
@@ -3753,7 +3790,7 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// bridges to the `.baml`-declared builtin classes via `resolve_builtin_method`.
     /// Emits `UnresolvedMember` diagnostics when the base type is known but
     /// the member doesn't exist.
-    pub fn resolve_member(&mut self, base_ty: &Ty, member: &Name, at: ExprId) -> Ty {
+    pub fn resolve_member(&mut self, base_ty: &Ty, member: &Name, at: ExprId, bound: bool) -> Ty {
         match base_ty {
             Ty::Class(class_name, type_args, _) => {
                 // Check class fields
@@ -3777,13 +3814,35 @@ impl<'db> TypeInferenceBuilder<'db> {
                 if let Some((ty, class_loc, func_loc)) =
                     self.lookup_class_method(class_name, type_args, member)
                 {
-                    self.resolutions.insert(
-                        at,
-                        crate::inference::MemberResolution::Method {
-                            class_loc,
-                            func_loc,
-                        },
-                    );
+                    if bound {
+                        // Bound method reference: strip `self` from the type so the
+                        // caller doesn't need to pass the receiver explicitly.
+                        self.resolutions.insert(
+                            at,
+                            crate::inference::MemberResolution::BoundMethod {
+                                class_loc,
+                                func_loc,
+                            },
+                        );
+                        if let Ty::Function { params, ret, attr } = ty {
+                            let stripped_params =
+                                crate::generics::skip_self_param(&params).to_vec();
+                            return Ty::Function {
+                                params: stripped_params,
+                                ret,
+                                attr,
+                            };
+                        }
+                    } else {
+                        // Unbound method reference: keep `self` as the first parameter.
+                        self.resolutions.insert(
+                            at,
+                            crate::inference::MemberResolution::UnboundMethod {
+                                class_loc,
+                                func_loc,
+                            },
+                        );
+                    }
                     return ty;
                 }
 
@@ -3961,7 +4020,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // Expand the alias to its concrete type, then recurse.
                 if let Some(expanded) = self.aliases.get(qtn) {
                     let expanded = expanded.clone();
-                    return self.resolve_member(&expanded, member, at);
+                    return self.resolve_member(&expanded, member, at, bound);
                 }
                 // Alias not in map (cyclic or unresolved) — treat as Unknown
                 Ty::Unknown {
@@ -4004,6 +4063,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         member: &Name,
         path_id: ExprId,
         seg_idx: usize,
+        bound: bool,
     ) -> Ty {
         match base_ty {
             Ty::Class(class_name, _, _) => {
@@ -4012,7 +4072,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 if self.class_has_member(class_name, member) {
                     // Field/method found — delegate to resolve_member which stores
                     // the resolution and handles field-type diagnostics once.
-                    return self.resolve_member(base_ty, member, path_id);
+                    return self.resolve_member(base_ty, member, path_id, bound);
                 }
                 // Not found — report at segment for the correct span.
                 let class_def = self
@@ -4037,7 +4097,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             Ty::Enum(enum_name, _) => {
                 // Use the no-side-effect helper.
                 if self.enum_has_variant(enum_name, member) {
-                    return self.resolve_member(base_ty, member, path_id);
+                    return self.resolve_member(base_ty, member, path_id, bound);
                 }
                 // Not found — report at segment.
                 let enum_def = self
@@ -4101,7 +4161,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             _ => {
                 // For List, Map, String, primitives, etc. — fall through
                 // to resolve_member which handles them with proper error reporting.
-                self.resolve_member(base_ty, member, path_id)
+                self.resolve_member(base_ty, member, path_id, bound)
             }
         }
     }
@@ -4513,9 +4573,10 @@ impl<'db> TypeInferenceBuilder<'db> {
                 class_loc,
                 func_loc,
             } => {
+                // Builtin methods are always accessed on value bases → BoundMethod.
                 self.resolutions.insert(
                     at,
-                    crate::inference::MemberResolution::Method {
+                    crate::inference::MemberResolution::BoundMethod {
                         class_loc,
                         func_loc,
                     },

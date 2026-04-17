@@ -32,8 +32,9 @@ impl ObjectTrait for Object {
         }
     }
 
-    /// Unwrap either an [`Object::Function`] or the inner function of an
-    /// [`Object::Closure`], returning a reference to the underlying `Function`.
+    /// Unwrap either an [`Object::Function`], the inner function of an
+    /// [`Object::Closure`], or the inner function of an [`Object::BoundMethod`],
+    /// returning a reference to the underlying `Function`.
     ///
     /// This mirrors the dual-dispatch pattern in `load_function()` in `vm.rs`.
     #[inline]
@@ -45,6 +46,12 @@ impl ObjectTrait for Object {
                 // for the lifetime of the program (stored in the object pool).
                 // Same guarantee as in load_function() in vm.rs.
                 let func_obj: &Object = unsafe { closure.function.get() };
+                func_obj.as_function()
+            }
+            Object::BoundMethod(bm) => {
+                // SAFETY: bm.function points to a Function object that lives for
+                // the lifetime of the program. Same guarantee as closures.
+                let func_obj: &Object = unsafe { bm.function.get() };
                 func_obj.as_function()
             }
             _ => Err(VmInternalError::TypeError {

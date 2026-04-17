@@ -36,7 +36,7 @@ fn user.test_deep_method(a: A) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: A // a // param
-    let _2: (B) -> string
+    let _2: () -> string
 
     bb0: {
         _2 = copy _1.0;

@@ -381,5 +381,9 @@ pub(crate) fn walk_rvalue_pull<S: PullSink>(sink: &mut S, rvalue: &Rvalue) -> Re
             }
             sink.make_closure(*lambda_idx, captures.len())
         }
+        Rvalue::MakeBoundMethod { .. } => {
+            // Handled specially in emit_rvalue_pull before this function is called.
+            unreachable!("MakeBoundMethod must be handled in emit_rvalue_pull")
+        }
     }
 }

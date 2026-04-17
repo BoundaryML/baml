@@ -1009,6 +1009,21 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             unwrap_infallible(self.make_closure(*lambda_idx, captures.len()));
             return;
         }
+        if let Rvalue::MakeBoundMethod { item_ref, receiver } = rvalue {
+            // Emit the receiver onto the stack first.
+            self.emit_operand_pull(receiver);
+            // Resolve the item_ref to a GlobalIndex.
+            let func_name = item_ref.to_string();
+            let global_idx = *self
+                .globals
+                .get(&func_name)
+                .unwrap_or_else(|| panic!("MakeBoundMethod: global not found for {func_name}"));
+            let inst = self.emit(Instruction::MakeBoundMethod(GlobalIndex::from_raw(
+                global_idx,
+            )));
+            self.set_operand(inst, OperandMeta::Global(func_name));
+            return;
+        }
         unwrap_infallible(pull_semantics::walk_rvalue_pull(self, rvalue));
     }
 
@@ -1951,7 +1966,12 @@ impl PullSink for StackifyCodegen<'_, '_> {
                 // cell pointers (LoadVar) not cell values (LoadDeref). We intercept
                 // here so that `emit_rvalue_pull` (which sets loading_for_closure_capture)
                 // is called rather than the generic `walk_rvalue_pull` inlining path.
-                if matches!(rvalue, Rvalue::MakeClosure { .. }) {
+                // MakeBoundMethod must also be handled specially: it is not handled by
+                // `walk_rvalue_pull` (which panics on it), so route through `emit_rvalue_pull`.
+                if matches!(
+                    rvalue,
+                    Rvalue::MakeClosure { .. } | Rvalue::MakeBoundMethod { .. }
+                ) {
                     self.emit_rvalue_pull(&rvalue);
                     return Ok(LocalPullAction::Done);
                 }

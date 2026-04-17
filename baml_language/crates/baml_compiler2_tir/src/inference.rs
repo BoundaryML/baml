@@ -13,13 +13,16 @@
 use std::{collections::HashMap, sync::Arc};
 
 use baml_base::Name;
-use baml_compiler2_ast::{AstSourceMap, Expr as AstExpr, ExprBody, ExprId, FunctionDef, PatId};
+use baml_compiler2_ast::{
+    AstSourceMap, Expr as AstExpr, ExprBody, ExprId, FunctionDef, PatId, Stmt as AstStmt,
+};
 use baml_compiler2_hir::{
     body::{FunctionBody, LetBody},
     contributions::Definition,
     loc::{ClassLoc, EnumLoc, FunctionLoc, LetLoc, TypeAliasLoc},
     package::{PackageId, PackageItems},
     scope::{FileScopeId, ScopeId, ScopeKind},
+    semantic_index::DefinitionSite,
 };
 use rustc_hash::{FxHashMap, FxHashSet};
 use text_size::TextRange;
@@ -52,10 +55,15 @@ pub enum MemberResolution<'db> {
     /// A free item accessed via a package/namespace path.
     /// e.g. `env.get` → package="env", namespace=[], name="get"
     Free { func_loc: FunctionLoc<'db> },
-    /// A method on a class (user-defined or builtin).
-    /// e.g. `arr.length` → package="baml", namespace=[], class="Array", name="length"
-    /// e.g. `baz.Greeting` → package="user", namespace=[], class="Baz", name="Greeting"
-    Method {
+    /// A bound method reference: root is a value (local variable or field chain).
+    /// e.g. `p.get_name` where `p` is a local — type has `self` stripped.
+    BoundMethod {
+        class_loc: ClassLoc<'db>,
+        func_loc: FunctionLoc<'db>,
+    },
+    /// An unbound method reference: root is a type name.
+    /// e.g. `Person.get_name` where `Person` is a class type — type keeps `self`.
+    UnboundMethod {
         class_loc: ClassLoc<'db>,
         func_loc: FunctionLoc<'db>,
     },
@@ -491,7 +499,7 @@ pub fn infer_scope_types<'db>(
 
             // Seed captured variables as Ty::Unknown so that the lambda's builder
             // can resolve references to captures without reporting "unresolved name"
-            // diagnostics. Proper capture types will be propagated in a later phase.
+            // diagnostics. The loop below will override these with proper types.
             let captures = &index.scope_bindings[file_scope.index() as usize].captures;
             for (capture_name, _def_site) in captures {
                 builder.add_local(
@@ -500,6 +508,156 @@ pub fn infer_scope_types<'db>(
                         attr: TyAttr::default(),
                     },
                 );
+            }
+
+            // Re-seed captured variables with their actual types by walking ALL
+            // ancestor scopes (including Lambda ancestors). Each ancestor scope's
+            // ScopeInference holds types for declarations in that specific scope.
+            // A capture's DefinitionSite identifies which ancestor scope owns it:
+            // - PatternBinding(pat_id): pat_id valid in the ancestor's inference
+            // - Parameter(idx): ancestor's param_types[idx]
+            // - Statement(stmt_id): stmt_id in the ancestor's body, but we detect
+            //   ownership by checking the ancestor's scope_bindings.
+            //
+            // We walk all ancestors so that captures from intermediate lambda scopes
+            // (not just the enclosing Function/Let) are also resolved correctly.
+            {
+                let captures = &index.scope_bindings[file_scope.index() as usize].captures;
+                for ancestor_fsi in index.ancestor_scopes(file_scope) {
+                    let anc_bindings = &index.scope_bindings[ancestor_fsi.index() as usize];
+                    let anc_scope = &index.scopes[ancestor_fsi.index() as usize];
+                    let anc_scope_id = index.scope_ids[ancestor_fsi.index() as usize];
+                    // Only call infer_scope_types if this ancestor has any of
+                    // the captures we still need (avoids unnecessary Salsa calls).
+                    // For efficiency, check if any capture is declared in this scope.
+                    let has_relevant_capture =
+                        captures.iter().any(|(name, def_site)| match def_site {
+                            DefinitionSite::Parameter(idx) => anc_bindings
+                                .params
+                                .iter()
+                                .any(|(n, i)| n == name && i == idx),
+                            DefinitionSite::Statement(_) | DefinitionSite::PatternBinding(_) => {
+                                anc_bindings
+                                    .bindings
+                                    .iter()
+                                    .any(|(n, def, _)| n == name && def == def_site)
+                            }
+                        });
+                    if !has_relevant_capture {
+                        continue;
+                    }
+                    let anc_inference = infer_scope_types(db, anc_scope_id);
+                    for (capture_name, def_site) in captures {
+                        // Check if this ancestor declares this capture.
+                        let is_declared_here = match def_site {
+                            DefinitionSite::Parameter(idx) => anc_bindings
+                                .params
+                                .iter()
+                                .any(|(n, i)| n == capture_name && i == idx),
+                            DefinitionSite::Statement(_) | DefinitionSite::PatternBinding(_) => {
+                                anc_bindings
+                                    .bindings
+                                    .iter()
+                                    .any(|(n, def, _)| n == capture_name && def == def_site)
+                            }
+                        };
+                        if !is_declared_here {
+                            continue;
+                        }
+                        let actual_ty = match def_site {
+                            DefinitionSite::Parameter(idx) => {
+                                anc_inference.param_type(*idx).cloned()
+                            }
+                            DefinitionSite::PatternBinding(pat_id) => {
+                                anc_inference.binding_type(*pat_id).cloned()
+                            }
+                            DefinitionSite::Statement(stmt_id) => {
+                                // Get the ancestor's body to look up the Pat for this stmt.
+                                // We must use the SAME body that the stmt_id was allocated in.
+                                let body_opt: Option<&baml_compiler2_ast::ExprBody> =
+                                    match &anc_scope.kind {
+                                        ScopeKind::Function => {
+                                            // Find the function body in item_tree.
+                                            item_tree
+                                                .functions
+                                                .values()
+                                                .find(|fd| {
+                                                    fd.span == anc_scope.range
+                                                        && anc_scope.name.as_ref() == Some(&fd.name)
+                                                })
+                                                .and_then(|fd| {
+                                                    if let Some(
+                                                        baml_compiler2_ast::FunctionBodyDef::Expr(
+                                                            ref b,
+                                                            _,
+                                                        ),
+                                                    ) = fd.body
+                                                    {
+                                                        // SAFETY: body is stored in item_tree which
+                                                        // lives for the duration of this query.
+                                                        Some(b)
+                                                    } else {
+                                                        None
+                                                    }
+                                                })
+                                        }
+                                        ScopeKind::Let => None, // handled below
+                                        _ => None,              // Lambda bodies not accessible here
+                                    };
+                                if let Some(body) = body_opt {
+                                    let raw: u32 = (*stmt_id).into_raw().into_u32();
+                                    if (raw as usize) < body.stmts.len() {
+                                        if let AstStmt::Let { pattern, .. } = &body.stmts[*stmt_id]
+                                        {
+                                            anc_inference.binding_type(*pattern).cloned()
+                                        } else {
+                                            None
+                                        }
+                                    } else {
+                                        None
+                                    }
+                                } else if matches!(anc_scope.kind, ScopeKind::Let) {
+                                    // Let scope: look up the let body.
+                                    item_tree
+                                        .lets
+                                        .iter()
+                                        .find(|(_, ld)| {
+                                            ld.span == anc_scope.range
+                                                && anc_scope.name.as_ref() == Some(&ld.name)
+                                        })
+                                        .and_then(|(local_id, _)| {
+                                            let let_loc = LetLoc::new(db, file, *local_id);
+                                            let body =
+                                                baml_compiler2_hir::body::let_body(db, let_loc);
+                                            if let LetBody::Expr(let_body) = body.as_ref() {
+                                                let raw: u32 = (*stmt_id).into_raw().into_u32();
+                                                if (raw as usize) < let_body.stmts.len() {
+                                                    if let AstStmt::Let { pattern, .. } =
+                                                        &let_body.stmts[*stmt_id]
+                                                    {
+                                                        anc_inference
+                                                            .binding_type(*pattern)
+                                                            .cloned()
+                                                    } else {
+                                                        None
+                                                    }
+                                                } else {
+                                                    None
+                                                }
+                                            } else {
+                                                None
+                                            }
+                                        })
+                                } else {
+                                    None
+                                }
+                            }
+                        };
+                        if let Some(ty) = actual_ty {
+                            builder.add_local(capture_name.clone(), ty);
+                        }
+                    }
+                }
             }
 
             // Walk ancestors to find a Function or Let scope that has a body.

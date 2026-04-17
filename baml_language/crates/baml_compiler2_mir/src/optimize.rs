@@ -373,6 +373,9 @@ fn collect_place_index_locals(body: &MirFunctionBody) -> HashSet<Local> {
                     scan_operand(cap, set);
                 }
             }
+            crate::Rvalue::MakeBoundMethod { receiver, .. } => {
+                scan_operand(receiver, set);
+            }
         }
     }
 
@@ -554,6 +557,9 @@ fn count_in_rvalue(rv: &crate::Rvalue, uses: &mut [usize]) {
             for cap in captures {
                 count_in_operand(cap, uses);
             }
+        }
+        crate::Rvalue::MakeBoundMethod { receiver, .. } => {
+            count_in_operand(receiver, uses);
         }
     }
 }
@@ -845,6 +851,9 @@ fn apply_subst_to_rvalue(rv: &mut crate::Rvalue, subst: &HashMap<Local, Operand>
                 apply_subst_to_operand(cap, subst);
             }
         }
+        crate::Rvalue::MakeBoundMethod { receiver, .. } => {
+            apply_subst_to_operand(receiver, subst);
+        }
     }
 }
 
@@ -1052,6 +1061,9 @@ fn remap_rvalue(rv: &mut crate::Rvalue, map: &[Option<Local>]) {
                 remap_operand(cap, map);
             }
         }
+        crate::Rvalue::MakeBoundMethod { receiver, .. } => {
+            remap_operand(receiver, map);
+        }
     }
 }
 
@@ -1252,6 +1264,9 @@ fn verify_mir(body: &MirFunctionBody, name: &crate::ItemRef) {
                             for cap in captures {
                                 check_operand(cap, &blk);
                             }
+                        }
+                        crate::Rvalue::MakeBoundMethod { receiver, .. } => {
+                            check_operand(receiver, &blk);
                         }
                     }
                 }
