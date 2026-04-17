@@ -471,13 +471,9 @@ curl -X PUT "${apiBaseUrl}/api/agent/beps" \\
 
 ---
 
-## Tips
+## Writing Style
 
-1. **Use existing BEPs as reference** - Look at implemented/accepted BEPs in this bundle
-2. **Keep pages focused** - One topic per page
-3. **Use descriptive slugs** - \`background\`, \`alternatives\`, \`implementation\`
-4. **Include code examples** - Show proposed syntax with \`\`\`baml blocks
-5. **Set versionMode** - Use \`"new"\` for major updates, \`"current"\` for typo fixes
+Write in the style of a [PEP](https://peps.python.org/) or [TC39 proposal](https://github.com/tc39/proposals).
 `;
 }
 
