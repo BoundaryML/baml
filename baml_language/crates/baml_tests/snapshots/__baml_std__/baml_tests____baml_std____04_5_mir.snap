@@ -83,6 +83,8 @@ fn baml.fs.exists = builtin(io)
 
 fn baml.fs.open = builtin(io)
 
+fn baml.fs.read = builtin(io)
+
 fn baml.fs.File.read = builtin(io)
 
 fn baml.fs.File.read_bytes = builtin(io)

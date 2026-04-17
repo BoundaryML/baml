@@ -744,12 +744,22 @@ impl io::IoNamespaceFs for DefaultIoOps {
         SysOpOutput::err(OpErrorKind::Unsupported)
     }
 
+    fn read(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _path: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<String> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+
     fn write(
         &self,
         _h: &Arc<BexHeap>,
         _c: CallId,
         _path: String,
-        _data: String,
+        _content: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<i64> {
         SysOpOutput::err(OpErrorKind::Unsupported)
@@ -760,7 +770,7 @@ impl io::IoNamespaceFs for DefaultIoOps {
         _h: &Arc<BexHeap>,
         _c: CallId,
         _path: String,
-        _data: Vec<u8>,
+        _content: Vec<u8>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<i64> {
         SysOpOutput::err(OpErrorKind::Unsupported)
@@ -985,6 +995,12 @@ impl IoSysOpsBuilder {
             let t = instance.clone();
             Arc::new(move |heap, args, ctx, call_id| {
                 t.__glue_baml_fs_size(heap, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_fs_read = {
+            let t = instance.clone();
+            Arc::new(move |heap, args, ctx, call_id| {
+                t.__glue_baml_fs_read(heap, args, ctx, call_id)
             })
         };
         self.inner.baml_fs_write = {

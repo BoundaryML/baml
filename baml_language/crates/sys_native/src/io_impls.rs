@@ -243,12 +243,43 @@ impl io::IoNamespaceFs for NativeSysOps {
                 BexExternalValue::String(s) => s,
                 _ => return Err(OpErrorKind::Other("Invalid mode type".into())),
             };
+            // Modes that create the file also auto-create missing parent dirs,
+            // matching Bun's `Bun.write` behavior.
+            let creates = matches!(mode.as_str(), "w" | "w+" | "a" | "a+");
+            if creates {
+                if let Some(parent) = std::path::Path::new(&path).parent() {
+                    if !parent.as_os_str().is_empty() {
+                        tokio::fs::create_dir_all(parent).await.map_err(|e| {
+                            OpErrorKind::Other(format!(
+                                "Failed to create parent directories for '{path}': {e}"
+                            ))
+                        })?;
+                    }
+                }
+            }
             let file = match mode.as_str() {
                 "r" => tokio::fs::File::open(&path).await,
                 "r+" => {
                     tokio::fs::OpenOptions::new()
                         .read(true)
                         .write(true)
+                        .open(&path)
+                        .await
+                }
+                "w" => {
+                    tokio::fs::OpenOptions::new()
+                        .write(true)
+                        .create(true)
+                        .truncate(true)
+                        .open(&path)
+                        .await
+                }
+                "w+" => {
+                    tokio::fs::OpenOptions::new()
+                        .read(true)
+                        .write(true)
+                        .create(true)
+                        .truncate(true)
                         .open(&path)
                         .await
                 }
@@ -269,7 +300,7 @@ impl io::IoNamespaceFs for NativeSysOps {
                 }
                 _ => {
                     return Err(OpErrorKind::Other(format!(
-                        "Unsupported file mode '{mode}': expected \"r\", \"r+\", \"a\", or \"a+\""
+                        "Unsupported file mode '{mode}': expected \"r\", \"r+\", \"w\", \"w+\", \"a\", or \"a+\""
                     )));
                 }
             }
@@ -324,31 +355,29 @@ impl io::IoNamespaceFs for NativeSysOps {
         })
     }
 
+    fn read(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        path: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<String> {
+        SysOpOutput::async_op(async move {
+            tokio::fs::read_to_string(&path)
+                .await
+                .map_err(|e| OpErrorKind::Other(format!("Failed to read file '{path}': {e}")))
+        })
+    }
+
     fn write(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
         path: String,
-        data: String,
+        content: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<i64> {
-        SysOpOutput::async_op(async move {
-            if let Some(parent) = std::path::Path::new(&path).parent() {
-                if !parent.as_os_str().is_empty() {
-                    tokio::fs::create_dir_all(parent).await.map_err(|e| {
-                        OpErrorKind::Other(format!(
-                            "Failed to create parent directories for '{path}': {e}"
-                        ))
-                    })?;
-                }
-            }
-            let bytes = data.as_bytes();
-            tokio::fs::write(&path, bytes)
-                .await
-                .map_err(|e| OpErrorKind::Other(format!("Failed to write file '{path}': {e}")))?;
-            #[allow(clippy::cast_possible_wrap)]
-            Ok(bytes.len() as i64)
-        })
+        SysOpOutput::async_op(async move { write_path(&path, content.as_bytes()).await })
     }
 
     fn write_bytes(
@@ -356,27 +385,30 @@ impl io::IoNamespaceFs for NativeSysOps {
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
         path: String,
-        data: Vec<u8>,
+        content: Vec<u8>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<i64> {
-        SysOpOutput::async_op(async move {
-            if let Some(parent) = std::path::Path::new(&path).parent() {
-                if !parent.as_os_str().is_empty() {
-                    tokio::fs::create_dir_all(parent).await.map_err(|e| {
-                        OpErrorKind::Other(format!(
-                            "Failed to create parent directories for '{path}': {e}"
-                        ))
-                    })?;
-                }
-            }
-            #[allow(clippy::cast_possible_wrap)]
-            let len = data.len() as i64;
-            tokio::fs::write(&path, &data)
-                .await
-                .map_err(|e| OpErrorKind::Other(format!("Failed to write file '{path}': {e}")))?;
-            Ok(len)
-        })
+        SysOpOutput::async_op(async move { write_path(&path, &content).await })
     }
+}
+
+/// Write `data` to `path`, auto-creating missing parent dirs
+/// (matches Bun's `Bun.write` behavior). Returns the number of bytes written.
+async fn write_path(path: &str, data: &[u8]) -> Result<i64, OpErrorKind> {
+    if let Some(parent) = std::path::Path::new(path).parent() {
+        if !parent.as_os_str().is_empty() {
+            tokio::fs::create_dir_all(parent).await.map_err(|e| {
+                OpErrorKind::Other(format!(
+                    "Failed to create parent directories for '{path}': {e}"
+                ))
+            })?;
+        }
+    }
+    tokio::fs::write(path, data)
+        .await
+        .map_err(|e| OpErrorKind::Other(format!("Failed to write file '{path}': {e}")))?;
+    i64::try_from(data.len())
+        .map_err(|_| OpErrorKind::Other(format!("Write size {} exceeds i64::MAX", data.len())))
 }
 
 // ============================================================================

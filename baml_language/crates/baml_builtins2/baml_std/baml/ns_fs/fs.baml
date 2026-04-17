@@ -34,7 +34,7 @@ class File {
   }
 }
 
-function open(path: string, mode: "r" | "r+" | "a" | "a+") -> File throws root.errors.Io {
+function open(path: string, mode: "r" | "r+" | "w" | "w+" | "a" | "a+") -> File throws root.errors.Io {
   $rust_io_function
 }
 
@@ -50,10 +50,14 @@ function size(path: string) -> int throws root.errors.Io {
   $rust_io_function
 }
 
-function write(path: string, data: string) -> int throws root.errors.Io {
+function read(path: string) -> string throws root.errors.Io {
   $rust_io_function
 }
 
-function write_bytes(path: string, data: uint8array) -> int throws root.errors.Io {
+function write(path: string, content: string) -> int throws root.errors.Io {
+  $rust_io_function
+}
+
+function write_bytes(path: string, content: uint8array) -> int throws root.errors.Io {
   $rust_io_function
 }

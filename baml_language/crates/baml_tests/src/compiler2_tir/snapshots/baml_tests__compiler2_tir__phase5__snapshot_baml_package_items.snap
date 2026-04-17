@@ -29,6 +29,7 @@ namespace baml.fs:
   class File { methods: [text, bytes, read, read_bytes, close, seek, write, write_bytes] }
   function exists
   function open
+  function read
   function remove
   function size
   function write

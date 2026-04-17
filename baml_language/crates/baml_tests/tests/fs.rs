@@ -334,12 +334,12 @@ async fn fs_file_write_on_readonly_errors() {
 async fn fs_file_invalid_mode() {
     let (_tmp, root) = tmp(indexmap! { "file.txt" => "content" });
 
-    // The mode parameter is typed as "r" | "r+" | "a" | "a+", so invalid modes
-    // like "w" are caught at compile time as a type mismatch.
+    // The mode parameter is a string-literal union, so invalid modes like "x"
+    // are caught at compile time as a type mismatch.
     let _output = baml_test!(&format!(
         r#"
             function main() -> string {{
-                let file = baml.fs.open("{root}/file.txt", "w");
+                let file = baml.fs.open("{root}/file.txt", "x");
                 file.text()
             }}
         "#
@@ -616,4 +616,26 @@ async fn fs_file_close_is_idempotent() {
     ));
 
     assert_eq!(output.result, Ok(BexExternalValue::Null));
+}
+
+#[tokio::test]
+async fn fs_write_wrapper_closes_on_error() {
+    // Writing to a directory errors out; the wrapper must still close the
+    // handle so subsequent ops on the same path succeed.
+    let (_tmp, root) = tmp(indexmap! {});
+    std::fs::create_dir(format!("{root}/is_a_dir")).unwrap();
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> int {{
+                baml.fs.write("{root}/is_a_dir", "oops")
+            }}
+        "#
+    ));
+
+    assert!(
+        output.result.is_err(),
+        "Expected write-to-dir to fail: {:?}",
+        output.result
+    );
 }
