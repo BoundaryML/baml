@@ -3,7 +3,81 @@ import { v } from "convex/values";
 import { Id } from "./_generated/dataModel";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// EXPORT QUERY - Compiles all BEP data for download
+// EXPORT ALL BEPS - Lightweight export for AI reference
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const getAllBepsForExport = query({
+  args: {},
+  handler: async (ctx) => {
+    // Get all BEPs ordered by number
+    const beps = await ctx.db
+      .query("beps")
+      .withIndex("by_number")
+      .collect();
+
+    // Fetch all related data in parallel for each BEP
+    const enrichedBeps = await Promise.all(
+      beps.map(async (bep) => {
+        const [pages, shepherds, versions, openIssueCount] = await Promise.all([
+          // Pages ordered by order field
+          ctx.db
+            .query("bepPages")
+            .withIndex("by_bep_order", (q) => q.eq("bepId", bep._id))
+            .collect(),
+
+          // Shepherd info
+          Promise.all(bep.shepherds.map((id) => ctx.db.get(id))),
+
+          // Get versions to find the current version number
+          ctx.db
+            .query("bepVersions")
+            .withIndex("by_bep", (q) => q.eq("bepId", bep._id))
+            .order("desc")
+            .take(1),
+
+          // Open issues count
+          ctx.db
+            .query("openIssues")
+            .withIndex("by_bep_unresolved", (q) =>
+              q.eq("bepId", bep._id).eq("resolved", false)
+            )
+            .collect()
+            .then((issues) => issues.length),
+        ]);
+
+        return {
+          _id: bep._id,
+          number: bep.number,
+          title: bep.title,
+          status: bep.status,
+          content: bep.content ?? "",
+          shepherdNames: shepherds
+            .filter((s) => s !== null)
+            .map((s) => s!.name),
+          currentVersion: versions[0]?.version ?? 1,
+          openIssueCount,
+          createdAt: bep.createdAt,
+          updatedAt: bep.updatedAt,
+          pages: pages.map((p) => ({
+            _id: p._id,
+            slug: p.slug,
+            title: p.title,
+            content: p.content,
+            order: p.order,
+          })),
+        };
+      })
+    );
+
+    return {
+      beps: enrichedBeps,
+      exportedAt: Date.now(),
+    };
+  },
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EXPORT QUERY - Compiles all BEP data for download (single BEP)
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const getFullBepForExport = query({

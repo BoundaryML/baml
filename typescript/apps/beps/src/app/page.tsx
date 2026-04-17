@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useUser } from "@/components/providers/user-provider";
 import { BepList } from "@/components/bep/bep-list";
 import { BepCreateModal } from "@/components/bep/bep-create-modal";
+import { BepExportAllDialog } from "@/components/bep/bep-export-all-dialog";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -101,7 +102,10 @@ export default function Home() {
       <main className="max-w-[1600px] mx-auto px-4 py-8">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-xl font-semibold">All Proposals</h2>
-          <BepCreateModal userId={userId} />
+          <div className="flex items-center gap-2">
+            <BepExportAllDialog />
+            <BepCreateModal userId={userId} />
+          </div>
         </div>
         <BepList />
       </main>
