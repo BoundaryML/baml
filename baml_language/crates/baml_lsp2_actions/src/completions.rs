@@ -493,7 +493,7 @@ fn completions_for_field_access(
         .unwrap_or_default()
 }
 
-/// Completions for package namespace paths like `baml.` or `baml.log.`.
+/// Completions for package namespace paths like `baml.`, `log.`, etc.
 ///
 /// When the first segment is a known package name, we provide completions for
 /// items within that package's namespace. This handles cases where the path
@@ -518,7 +518,7 @@ fn completions_for_package_path(
 
     // The namespace path within the package.
     // For `baml.` we have segments=["baml"], so namespace_path=[].
-    // For `baml.log.` we have segments=["baml", "log"], so namespace_path=["log"].
+    // For `baml.events.` we have segments=["baml", "events"], so namespace_path=["events"].
     let namespace_path: Vec<Name> = segments[1..].iter().map(|s| Name::new(s)).collect();
 
     let mut items = Vec::new();

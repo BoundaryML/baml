@@ -782,33 +782,6 @@ class baml.llm.PrimitiveClient$stream {
   options: null | baml.llm.PrimitiveClientOptions$stream
 }
 
---- <builtin>/baml/ns_log/log.baml ---
-function baml.log._log(level: string, data: map<string, unknown>) -> null throws never {
-  { : null
-    baml.events.send("log", map { "level": level, "data": data }) : null
-  }
-}
-function baml.log.info(data: map<string, unknown>) -> null throws never {
-  { : null
-    _log("info", data) : null
-  }
-}
-function baml.log.debug(data: map<string, unknown>) -> null throws never {
-  { : null
-    _log("debug", data) : null
-  }
-}
-function baml.log.warn(data: map<string, unknown>) -> null throws never {
-  { : null
-    _log("warn", data) : null
-  }
-}
-function baml.log.error(data: map<string, unknown>) -> null throws never {
-  { : null
-    _log("error", data) : null
-  }
-}
-
 --- <builtin>/baml/ns_math/math.baml ---
 
 --- <builtin>/baml/ns_media/media.baml ---

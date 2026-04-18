@@ -237,9 +237,7 @@ SOURCE_FILE
                 QUOTE """
             R_BRACE "}"
         CALL_EXPR
-          PATH_EXPR "baml.log.debug"
-            WORD "baml"
-            DOT "."
+          PATH_EXPR "log.debug"
             WORD "log"
             DOT "."
             WORD "debug"
@@ -258,9 +256,7 @@ SOURCE_FILE
               R_BRACE "}"
             R_PAREN ")"
         CALL_EXPR
-          PATH_EXPR "baml.log.info"
-            WORD "baml"
-            DOT "."
+          PATH_EXPR "log.info"
             WORD "log"
             DOT "."
             WORD "info"
@@ -283,9 +279,7 @@ SOURCE_FILE
               R_BRACE "}"
             R_PAREN ")"
         CALL_EXPR
-          PATH_EXPR "baml.log.warn"
-            WORD "baml"
-            DOT "."
+          PATH_EXPR "log.warn"
             WORD "log"
             DOT "."
             WORD "warn"
@@ -305,9 +299,7 @@ SOURCE_FILE
               R_BRACE "}"
             R_PAREN ")"
         CALL_EXPR
-          PATH_EXPR "baml.log.error"
-            WORD "baml"
-            DOT "."
+          PATH_EXPR "log.error"
             WORD "log"
             DOT "."
             WORD "error"
@@ -348,9 +340,7 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         CALL_EXPR
-          PATH_EXPR "baml.log.info"
-            WORD "baml"
-            DOT "."
+          PATH_EXPR "log.info"
             WORD "log"
             DOT "."
             WORD "info"
@@ -435,9 +425,7 @@ SOURCE_FILE
               R_BRACE "}"
             R_PAREN ")"
         CALL_EXPR
-          PATH_EXPR "baml.log.info"
-            WORD "baml"
-            DOT "."
+          PATH_EXPR "log.info"
             WORD "log"
             DOT "."
             WORD "info"

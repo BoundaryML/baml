@@ -1275,13 +1275,13 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                     self.emit_store_place(destination);
                     self.emit_jump_unless_fallthrough(*target);
                 } else if let Some(level) = func_name.as_deref().and_then(|name| match name {
-                    "baml.log.info" => Some("info"),
-                    "baml.log.debug" => Some("debug"),
-                    "baml.log.warn" => Some("warn"),
-                    "baml.log.error" => Some("error"),
+                    "log.info" => Some("info"),
+                    "log.debug" => Some("debug"),
+                    "log.warn" => Some("warn"),
+                    "log.error" => Some("error"),
                     _ => None,
                 }) {
-                    // Special-case `baml.log.{info,debug,warn,error}(data)`:
+                    // Special-case `log.{info,debug,warn,error}(data)`:
                     // Emit SendEvent directly with event_name="log" and data={level, data}.
                     // This ensures the source location is captured at the call site,
                     // not inside the builtin log function body.

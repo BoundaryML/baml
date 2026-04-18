@@ -53,6 +53,8 @@ pub const PACKAGE_BAML: &str = "baml";
 pub const PACKAGE_TESTING: &str = "testing";
 /// Package name for the assert package.
 pub const PACKAGE_ASSERT: &str = "assert";
+/// Package name for the log package.
+pub const PACKAGE_LOG: &str = "log";
 
 /// Absolute path to the `baml_std/` source tree, captured at compile time via
 /// `CARGO_MANIFEST_DIR`. Used by `baml_builtins2_codegen` to produce clickable
@@ -86,7 +88,6 @@ pub const ALL: &[BuiltinFile] = &[
     builtin!("baml", "ns_env/env.baml"),
     builtin!("baml", "ns_http/http.baml"),
     builtin!("baml", "ns_events/events.baml"),
-    builtin!("baml", "ns_log/log.baml"),
     builtin!("baml", "ns_math/math.baml"),
     builtin!("baml", "ns_sys/sys.baml"),
     builtin!("baml", "ns_fs/fs.baml"),
@@ -101,6 +102,8 @@ pub const ALL: &[BuiltinFile] = &[
     builtin!("testing", "types.baml"),
     // --- assert package ---
     builtin!("assert", "assert.baml"),
+    // --- log package ---
+    builtin!("log", "log.baml"),
 ];
 
 mod adt;

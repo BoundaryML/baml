@@ -385,20 +385,20 @@ function Test() -> string {
         let completions = completions_at(&test.db, test.cursor.file, test.cursor.offset);
         let labels: Vec<&str> = completions.iter().map(|c| c.label.as_str()).collect();
 
-        // baml package should have `log` namespace with info, debug, warn, error
+        // baml package should have `events` namespace (log is now a top-level package)
         assert!(
-            labels.contains(&"log"),
-            "Should contain 'log' namespace, got: {labels:?}"
+            labels.contains(&"events"),
+            "Should contain 'events' namespace, got: {labels:?}"
         );
     }
 
     #[test]
-    fn test_baml_log_namespace_completions() {
-        // Test that `baml.log.` shows completions for log functions.
+    fn test_log_package_completions() {
+        // Test that `log.` shows completions for log functions.
         let test = CursorTest::new(
             r#"
 function Test() -> string {
-    baml.log.<[CURSOR]
+    log.<[CURSOR]
     "done"
 }
 "#,
@@ -407,7 +407,7 @@ function Test() -> string {
         let completions = completions_at(&test.db, test.cursor.file, test.cursor.offset);
         let labels: Vec<&str> = completions.iter().map(|c| c.label.as_str()).collect();
 
-        // baml.log namespace should have info, debug, warn, error functions
+        // log package should have info, debug, warn, error functions
         assert!(
             labels.contains(&"info"),
             "Should contain 'info' function, got: {labels:?}"

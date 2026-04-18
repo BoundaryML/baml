@@ -1,6 +1,26 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
+function log.debug(data: map<string, unknown>) -> null {
+    load_const null
+    return
+}
+
+function log.error(data: map<string, unknown>) -> null {
+    load_const null
+    return
+}
+
+function log.info(data: map<string, unknown>) -> null {
+    load_const null
+    return
+}
+
+function log.warn(data: map<string, unknown>) -> null {
+    load_const null
+    return
+}
+
 function user.emit_custom_event(name: string) -> null {
     load_const "user_action"
     load_var name

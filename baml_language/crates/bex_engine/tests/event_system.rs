@@ -515,16 +515,16 @@ async fn test_custom_event_emission() {
     assert_eq!(custom_event.ctx.root_span_id, guard.root);
 }
 
-// === Phase 5: ns_log Namespace ===
+// === Phase 5: log Package ===
 
-/// Verify that `baml.log.info()` emits a custom event with name="log" and the expected
+/// Verify that `log.info()` emits a custom event with name="log" and the expected
 /// level/data fields. The `log.*` functions are pure BAML wrappers around
 /// `baml.events.send("log", { level, data })`.
 #[tokio::test]
 async fn test_log_info_event_emission() {
     let source = r#"
         function log_something() -> null {
-            baml.log.info({ step: 1, message: "Processing started" })
+            log.info({ step: 1, message: "Processing started" })
         }
     "#;
 
@@ -545,7 +545,7 @@ async fn test_log_info_event_emission() {
 
     let events = collect_events(&guard);
 
-    // baml.log.info() emits a LogEvent
+    // log.info() emits a LogEvent
     let log_event = events
         .iter()
         .find_map(|e| match &e.event {
@@ -578,9 +578,9 @@ async fn test_log_info_event_emission() {
 #[tokio::test]
 async fn test_log_all_levels() {
     let levels = [
-        ("baml.log.debug", "debug"),
-        ("baml.log.warn", "warn"),
-        ("baml.log.error", "error"),
+        ("log.debug", "debug"),
+        ("log.warn", "warn"),
+        ("log.error", "error"),
     ];
 
     for (fn_call, expected_level) in levels {
@@ -644,7 +644,7 @@ async fn test_log_all_levels() {
 async fn test_collector_log_events_extraction() {
     let source = r#"
         function do_logging() -> null {
-            baml.log.info({ step: 1, message: "first message" })
+            log.info({ step: 1, message: "first message" })
         }
     "#;
 

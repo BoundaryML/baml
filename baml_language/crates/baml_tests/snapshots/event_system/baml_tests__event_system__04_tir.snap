@@ -37,19 +37,19 @@ function user.emit_multiple_events() -> null throws never {
 function user.test_logging() -> null throws never {
   { : null
     let user = User { id: 123, name: "Alice", email: "alice@example.com" } : user.User
-    baml.log.debug(map { "message": "Starting process" }) : null
-    baml.log.info(map { "user": user, "status": "processing" }) : null
-    baml.log.warn(map { "warning": "Resource usage high" }) : null
-    baml.log.error(map { "code": "E001", "retries": 3 }) : null
+    log.debug(map { "message": "Starting process" }) : null
+    log.info(map { "user": user, "status": "processing" }) : null
+    log.warn(map { "warning": "Resource usage high" }) : null
+    log.error(map { "code": "E001", "retries": 3 }) : null
   }
 }
 function user.process_with_logging(input: string) -> string throws never {
   { : string
-    baml.log.info(map { "event": "start", "input": input }) : null
+    log.info(map { "event": "start", "input": input }) : null
     baml.events.send("processing", map { "stage": "start" }) : null
     let result = "Processed: " + input : string
     baml.events.send("processing", map { "stage": "complete" }) : null
-    baml.log.info(map { "event": "complete", "result": result }) : null
+    log.info(map { "event": "complete", "result": result }) : null
     result : string
   }
 }

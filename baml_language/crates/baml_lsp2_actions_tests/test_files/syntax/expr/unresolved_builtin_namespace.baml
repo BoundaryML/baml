@@ -8,8 +8,8 @@ function TestBamlLo() -> void {
     baml.lo.info("test")
 }
 
-function TestBamlLogInf() -> void {
-    baml.log.inf("test")
+function TestLogInf() -> void {
+    log.inf("test")
 }
 
 function TestBamlEventsTypo() -> void {
@@ -39,12 +39,12 @@ function TestBamlEventsTypo() -> void {
 //    │     Note: Error code: E0001
 // ───╯
 // Error: unresolved name: inf
-//     ╭─[ expr_unresolved_builtin_namespace.baml:11:36 ]
+//     ╭─[ expr_unresolved_builtin_namespace.baml:11:32 ]
 //     │
-//  11 │ ╭─▶ function TestBamlLogInf() -> void {
-//  12 │ ├─▶     baml.log.inf("test")
-//     │ │                              
-//     │ ╰────────────────────────────── unresolved name: inf
+//  11 │ ╭─▶ function TestLogInf() -> void {
+//  12 │ ├─▶     log.inf("test")
+//     │ │                         
+//     │ ╰───────────────────────── unresolved name: inf
 //     │     
 //     │     Note: Error code: E0001
 // ────╯

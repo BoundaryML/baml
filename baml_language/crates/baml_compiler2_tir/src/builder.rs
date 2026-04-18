@@ -3527,24 +3527,36 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // Check each prefix of the namespace path to find the first invalid segment.
                 if !item_path.is_empty() {
                     let namespace_path = &item_path[..item_path.len() - 1];
-                    let mut unresolved_segment = item_path.last().unwrap();
+                    let mut unresolved_segment: Option<&Name> = Some(item_path.last().unwrap());
 
                     // Check each prefix of the namespace path
                     for i in 0..namespace_path.len() {
                         let prefix = &namespace_path[..=i];
                         if !pkg_items.namespaces.contains_key(prefix) {
                             // This prefix doesn't exist, so namespace_path[i] is the first invalid segment
-                            unresolved_segment = &namespace_path[i];
+                            unresolved_segment = Some(&namespace_path[i]);
                             break;
                         }
                     }
 
-                    self.context.report_simple(
-                        TirTypeError::UnresolvedName {
-                            name: unresolved_segment.clone(),
-                        },
-                        expr_id,
-                    );
+                    // Don't report an error if the "unresolved" segment is actually a valid namespace.
+                    // This handles cases like `baml.events` where `events` is a namespace (user is typing).
+                    if unresolved_segment.is_some() {
+                        // Check if item_path (e.g., ["log"]) is a valid namespace in this package
+                        let is_valid_namespace = pkg_items.namespaces.keys().any(|k| k == &item_path);
+                        if is_valid_namespace {
+                            unresolved_segment = None;
+                        }
+                    }
+
+                    if let Some(seg) = unresolved_segment {
+                        self.context.report_simple(
+                            TirTypeError::UnresolvedName {
+                                name: seg.clone(),
+                            },
+                            expr_id,
+                        );
+                    }
                 }
                 Ty::Unknown {
                     attr: TyAttr::default(),

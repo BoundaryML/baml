@@ -97,7 +97,7 @@ fn user.process_with_logging(input: string) -> string {
 
     bb0: {
         _3 = { const "event": const "start", const "input": copy _1 };
-        _2 = call const fn baml.log.info(copy _3) -> [bb1];
+        _2 = call const fn log.info(copy _3) -> [bb1];
     }
 
     bb1: {
@@ -114,7 +114,7 @@ fn user.process_with_logging(input: string) -> string {
     bb3: {
         _11 = copy _6;
         _10 = { const "event": const "complete", const "result": copy _11 };
-        _9 = call const fn baml.log.info(copy _10) -> [bb4];
+        _9 = call const fn log.info(copy _10) -> [bb4];
     }
 
     bb4: {
@@ -157,23 +157,23 @@ fn user.test_logging() -> null {
     bb0: {
         _1 = User { const 123_i64, const "Alice", const "alice@example.com" };
         _3 = { const "message": const "Starting process" };
-        _2 = call const fn baml.log.debug(copy _3) -> [bb1];
+        _2 = call const fn log.debug(copy _3) -> [bb1];
     }
 
     bb1: {
         _6 = copy _1;
         _5 = { const "user": copy _6, const "status": const "processing" };
-        _4 = call const fn baml.log.info(copy _5) -> [bb2];
+        _4 = call const fn log.info(copy _5) -> [bb2];
     }
 
     bb2: {
         _8 = { const "warning": const "Resource usage high" };
-        _7 = call const fn baml.log.warn(copy _8) -> [bb3];
+        _7 = call const fn log.warn(copy _8) -> [bb3];
     }
 
     bb3: {
         _9 = { const "code": const "E001", const "retries": const 3_i64 };
-        _0 = call const fn baml.log.error(copy _9) -> [bb4];
+        _0 = call const fn log.error(copy _9) -> [bb4];
     }
 
     bb4: {

@@ -111,6 +111,7 @@ pub fn display_user_functions(program: &Program) -> String {
             !name.starts_with("baml.")
                 && !name.starts_with("testing.")
                 && !name.starts_with("assert.")
+                && !name.starts_with("log.")
                 && !name.starts_with("env.")
         })
         .filter_map(|(name, idx)| match program.objects.get(*idx) {

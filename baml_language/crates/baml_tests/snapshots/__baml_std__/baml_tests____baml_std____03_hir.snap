@@ -306,23 +306,6 @@ function baml.llm.to_primitive_client(self: ?) -> baml.llm.PrimitiveClient  [exp
 }
 function baml.llm.validate_finish_reason(self: ?, finish_reason: string) -> null  [builtin]
 
---- <builtin>/baml/ns_log/log.baml ---
-function baml.log._log(level: string, data: map<string, unknown>) -> null  [expr] {
-  {  } baml.events.send("log", map { "level": level, "data": data })
-}
-function baml.log.debug(data: map<string, unknown>) -> null  [expr] {
-  {  } _log("debug", data)
-}
-function baml.log.error(data: map<string, unknown>) -> null  [expr] {
-  {  } _log("error", data)
-}
-function baml.log.info(data: map<string, unknown>) -> null  [expr] {
-  {  } _log("info", data)
-}
-function baml.log.warn(data: map<string, unknown>) -> null  [expr] {
-  {  } _log("warn", data)
-}
-
 --- <builtin>/baml/ns_math/math.baml ---
 function baml.math.trunc(value: float) -> int  [builtin]
 

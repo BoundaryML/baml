@@ -20,11 +20,11 @@ function user.nested_outer() -> int  [expr] {
   {  } nested_inner() Add 1
 }
 function user.process_with_logging(input: string) -> string  [expr] {
-  { baml.log.info(map { "event": "start", "input": input }); baml.events.send("processing", map { "stage": "start" }); let result = "Processed: " Add input; baml.events.send("processing", map { "stage": "complete" }); baml.log.info(map { "event": "complete", "result": result }) } result
+  { log.info(map { "event": "start", "input": input }); baml.events.send("processing", map { "stage": "start" }); let result = "Processed: " Add input; baml.events.send("processing", map { "stage": "complete" }); log.info(map { "event": "complete", "result": result }) } result
 }
 function user.simple_function() -> int  [expr] {
   {  } 42
 }
 function user.test_logging() -> null  [expr] {
-  { let user = user.User { id: 123, name: "Alice", email: "alice@example.com" }; baml.log.debug(map { "message": "Starting process" }); baml.log.info(map { "user": user, "status": "processing" }); baml.log.warn(map { "warning": "Resource usage high" }) } baml.log.error(map { "code": "E001", "retries": 3 })
+  { let user = user.User { id: 123, name: "Alice", email: "alice@example.com" }; log.debug(map { "message": "Starting process" }); log.info(map { "user": user, "status": "processing" }); log.warn(map { "warning": "Resource usage high" }) } log.error(map { "code": "E001", "retries": 3 })
 }

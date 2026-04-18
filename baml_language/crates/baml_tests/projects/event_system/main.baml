@@ -35,21 +35,21 @@ function emit_multiple_events() -> null {
 // Test logging at different levels
 function test_logging() -> null {
     let user = User { id: 123, name: "Alice", email: "alice@example.com" }
-    baml.log.debug({ message: "Starting process" })
-    baml.log.info({ user: user, status: "processing" })
-    baml.log.warn({ warning: "Resource usage high" })
-    baml.log.error({ code: "E001", retries: 3 })
+    log.debug({ message: "Starting process" })
+    log.info({ user: user, status: "processing" })
+    log.warn({ warning: "Resource usage high" })
+    log.error({ code: "E001", retries: 3 })
 }
 
 // Test combined function execution with events
 function process_with_logging(input: string) -> string {
-    baml.log.info({ event: "start", input: input })
+    log.info({ event: "start", input: input })
     baml.events.send("processing", { stage: "start" })
 
     let result = "Processed: " + input
 
     baml.events.send("processing", { stage: "complete" })
-    baml.log.info({ event: "complete", result: result })
+    log.info({ event: "complete", result: result })
 
     result
 }
