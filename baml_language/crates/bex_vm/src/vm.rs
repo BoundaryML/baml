@@ -285,6 +285,9 @@ pub enum VmExecState {
         event_name: String,
         /// Event payload (raw VM value; engine converts to `BexExternalValue`).
         data: Value,
+        /// Source location where the event was emitted:
+        /// (file_id, line, column, start_offset, end_offset).
+        source_location: Option<(u32, u32, u32, u32, u32)>,
     },
 }
 
@@ -3523,7 +3526,31 @@ impl BexVm {
                 // Extract the event name string from the heap.
                 let event_name = self.as_string(&name_value)?.clone();
 
-                return Ok(Some(VmExecState::Event { event_name, data }));
+                // Capture source location from the current frame's line table.
+                let source_location = if let Frame::Bytecode(bf) = &self.frames[*frame_idx] {
+                    let pc = bf.instruction_ptr.saturating_sub(1);
+                    self.get_object(bf.function)
+                        .as_callable()
+                        .ok()
+                        .and_then(|func| func.bytecode.line_entry_for_pc(pc))
+                        .map(|entry| {
+                            (
+                                entry.span.file_id.as_u32(),
+                                entry.line as u32,
+                                entry.span.range.start().into(),
+                                u32::from(entry.span.range.start()),
+                                u32::from(entry.span.range.end()),
+                            )
+                        })
+                } else {
+                    None
+                };
+
+                return Ok(Some(VmExecState::Event {
+                    event_name,
+                    data,
+                    source_location,
+                }));
             }
         }
 

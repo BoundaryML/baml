@@ -69,6 +69,7 @@ async fn test_simple_function_events() {
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
             None,
+            vec![],
         )
         .unwrap(),
     );
@@ -105,6 +106,7 @@ async fn test_function_with_args_events() {
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
             None,
+            vec![],
         )
         .unwrap(),
     );
@@ -175,6 +177,7 @@ async fn test_nested_function_events() {
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
             None,
+            vec![],
         )
         .unwrap(),
     );
@@ -212,6 +215,7 @@ async fn test_complex_return_type_events() {
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
             None,
+            vec![],
         )
         .unwrap(),
     );
@@ -267,6 +271,7 @@ async fn test_span_context_consistency() {
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
             None,
+            vec![],
         )
         .unwrap(),
     );
@@ -316,6 +321,7 @@ async fn test_vm_span_context_is_set_during_execution() {
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
             None,
+            vec![],
         )
         .unwrap(),
     );
@@ -434,6 +440,7 @@ async fn test_send_event_bytecode_yields_custom_event() {
             program,
             std::sync::Arc::new(sys_native::SysOps::native()),
             None,
+            vec![],
         )
         .expect("engine creation must succeed"),
     );
@@ -481,7 +488,7 @@ async fn test_custom_event_emission() {
 
     let snapshot = compile_for_engine(source);
     let engine = std::sync::Arc::new(
-        BexEngine::new(snapshot, std::sync::Arc::new(sys_native::SysOps::native()), None).unwrap(),
+        BexEngine::new(snapshot, std::sync::Arc::new(sys_native::SysOps::native()), None, vec![]).unwrap(),
     );
 
     let (host_ctx, guard) = setup_tracking();
@@ -523,7 +530,7 @@ async fn test_log_info_event_emission() {
 
     let snapshot = compile_for_engine(source);
     let engine = std::sync::Arc::new(
-        BexEngine::new(snapshot, std::sync::Arc::new(sys_native::SysOps::native()), None).unwrap(),
+        BexEngine::new(snapshot, std::sync::Arc::new(sys_native::SysOps::native()), None, vec![]).unwrap(),
     );
 
     let (host_ctx, guard) = setup_tracking();
@@ -538,37 +545,33 @@ async fn test_log_info_event_emission() {
 
     let events = collect_events(&guard);
 
-    // baml.log.info() emits a CustomEvent with name="log"
-    let custom = events
+    // baml.log.info() emits a LogEvent
+    let log_event = events
         .iter()
         .find_map(|e| match &e.event {
-            EventKind::Custom(c) if c.name == "log" => Some(c),
+            EventKind::Log(log) => Some(log),
             _ => None,
         })
-        .expect("Expected CustomEvent with name='log'");
+        .expect("Expected LogEvent");
 
-    assert_eq!(custom.name, "log");
+    assert_eq!(log_event.level, "info");
 
-    // Check level and data are embedded correctly in custom.data
-    match &custom.data {
+    // Check data contains step and message
+    match &log_event.data {
         bex_external_types::BexExternalValue::Map { entries, .. } => {
             assert_eq!(
-                entries.get("level"),
-                Some(&bex_external_types::BexExternalValue::String("info".into()))
+                entries.get("step"),
+                Some(&bex_external_types::BexExternalValue::Int(1))
             );
-            // data should be a map containing step and message
-            match entries.get("data") {
-                Some(bex_external_types::BexExternalValue::Map { entries: data_entries, .. }) => {
-                    assert_eq!(
-                        data_entries.get("step"),
-                        Some(&bex_external_types::BexExternalValue::Int(1))
-                    );
-                }
-                other => panic!("Expected Map for data field, got {:?}", other),
-            }
         }
-        other => panic!("Expected Map data in log custom event, got {:?}", other),
+        other => panic!("Expected Map data in LogEvent, got {:?}", other),
     }
+
+    // Verify source location is captured
+    assert!(
+        log_event.source.is_some(),
+        "Expected source location in LogEvent"
+    );
 }
 
 /// Verify that all log levels (debug, warn, error) emit the correct "level" field.
@@ -596,6 +599,7 @@ async fn test_log_all_levels() {
                 snapshot,
                 std::sync::Arc::new(sys_native::SysOps::native()),
                 None,
+                vec![],
             )
             .unwrap(),
         );
@@ -611,27 +615,26 @@ async fn test_log_all_levels() {
             .unwrap();
 
         let events = collect_events(&guard);
-        let custom = events
+        let log_event = events
             .iter()
             .find_map(|e| match &e.event {
-                EventKind::Custom(c) if c.name == "log" => Some(c),
+                EventKind::Log(log) => Some(log),
                 _ => None,
             })
-            .unwrap_or_else(|| panic!("Expected log CustomEvent for level {}", expected_level));
+            .unwrap_or_else(|| panic!("Expected LogEvent for level {}", expected_level));
 
-        match &custom.data {
-            bex_external_types::BexExternalValue::Map { entries, .. } => {
-                assert_eq!(
-                    entries.get("level"),
-                    Some(&bex_external_types::BexExternalValue::String(
-                        expected_level.into()
-                    )),
-                    "Wrong level for {} call",
-                    fn_call
-                );
-            }
-            other => panic!("Expected Map data, got {:?}", other),
-        }
+        assert_eq!(
+            log_event.level, expected_level,
+            "Wrong level for {} call",
+            fn_call
+        );
+
+        // Verify source location is captured
+        assert!(
+            log_event.source.is_some(),
+            "Expected source location for {} call",
+            fn_call
+        );
     }
 }
 
@@ -651,6 +654,7 @@ async fn test_collector_log_events_extraction() {
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
             None,
+            vec![],
         )
         .unwrap(),
     );

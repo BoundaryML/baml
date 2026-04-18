@@ -1019,6 +1019,7 @@ impl super::BexLsp for BexMulitProject {
             source_expr_id: None,
             source_expr_candidates: vec![],
             test_name: None,
+            cursor_offset: None,
         };
 
         let Ok(projects) = self.projects.lock() else {

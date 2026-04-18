@@ -36,6 +36,10 @@ pub struct CursorContext {
     #[serde(default)]
     pub source_expr_candidates: Vec<u32>,
     pub test_name: Option<String>,
+    /// Byte offset of the cursor position in the source file.
+    /// Used for cursor ↔ event matching via span containment.
+    #[serde(default)]
+    pub cursor_offset: Option<u32>,
 }
 
 // Note: Builtin BAML files (like llm.baml) are loaded in set_project_root().
@@ -450,6 +454,7 @@ impl ProjectDatabase {
             source_expr_id: None,
             source_expr_candidates: vec![],
             test_name: None,
+            cursor_offset: Some(byte_offset),
         };
 
         // 1. Find the SourceFile matching file_path
@@ -542,6 +547,7 @@ impl ProjectDatabase {
             source_expr_id,
             source_expr_candidates,
             test_name: None,
+            cursor_offset: Some(u32::from(offset)),
         }
     }
 
@@ -578,6 +584,7 @@ impl ProjectDatabase {
                     source_expr_id,
                     source_expr_candidates,
                     test_name: None,
+                    cursor_offset: Some(u32::from(offset)),
                 }
             }
             _ => {
@@ -589,6 +596,7 @@ impl ProjectDatabase {
                     source_expr_id: None,
                     source_expr_candidates: vec![],
                     test_name: None,
+                    cursor_offset: Some(u32::from(offset)),
                 }
             }
         }
@@ -621,6 +629,7 @@ impl ProjectDatabase {
             source_expr_id,
             source_expr_candidates,
             test_name: None,
+            cursor_offset: Some(u32::from(offset)),
         }
     }
 

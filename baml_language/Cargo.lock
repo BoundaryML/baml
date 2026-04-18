@@ -1560,6 +1560,7 @@ version = "0.0.0-beta"
 dependencies = [
  "bex_external_types",
  "indexmap 2.13.0",
+ "serde",
  "serde_json",
  "uuid",
  "web-time",
@@ -1834,6 +1835,8 @@ name = "bridge_ctypes"
 version = "0.1.0"
 dependencies = [
  "baml_type",
+ "bex_events",
+ "bex_external_types",
  "bex_project",
  "bex_resource_types",
  "indexmap 2.13.0",
@@ -1841,6 +1844,7 @@ dependencies = [
  "prost-build",
  "protoc-bin-vendored",
  "thiserror 2.0.18",
+ "web-time",
 ]
 
 [[package]]

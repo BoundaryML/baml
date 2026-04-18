@@ -5,6 +5,7 @@
 //! and `bridge_wasm`.
 
 mod error;
+mod event_encode;
 mod handle_table;
 mod utils;
 mod value_decode;
@@ -19,6 +20,7 @@ pub mod baml {
 }
 
 pub use error::CtypesError;
+pub use event_encode::{runtime_event_to_bytes, runtime_event_to_proto};
 pub use handle_table::{HANDLE_TABLE, HandleTable, HandleTableOptions, HandleTableValue};
 pub use utils::DecodeFromBuffer;
 pub use value_decode::{inbound_to_external, kwargs_to_bex_values};

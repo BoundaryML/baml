@@ -9,5 +9,5 @@ pub use event_store::EventSink;
 pub use span_id::{HostSpanContext, SpanContext, SpanId};
 pub use types::{
     CustomEvent, EventKind, FunctionEnd, FunctionEvent, FunctionStart, LogEvent, RuntimeEvent,
-    TraceTags,
+    SourceLocation, TraceTags,
 };

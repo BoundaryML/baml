@@ -22,6 +22,16 @@ import {
   type Connection,
 } from "vscode-languageserver/browser.js";
 
+import { installWasmPanicHook, onWasmPanic, isWasmPanic, getWasmError } from "@b/pkg-playground/wasm-panic";
+
+// Install panic hook before any WASM code runs
+installWasmPanicHook();
+
+// Register callback to notify main thread of any WASM panic
+onWasmPanic((message) => {
+  self.postMessage({ type: 'wasmPanic', message });
+});
+
 import initWasm, {
   BamlWasmRuntime,
   BamlHandle,
@@ -40,7 +50,7 @@ import type {
   PlaygroundNotification as WorkerPlaygroundNotification,
 } from "@b/pkg-playground";
 
-import { decodeCallResult } from "@b/pkg-proto";
+import { decodeCallResult, RuntimeEvent } from "@b/pkg-proto";
 
 import { BamlVfs } from "./vfs";
 
@@ -115,7 +125,6 @@ function postOut(msg: WorkerOutMessage, transfer?: Transferable[]): void {
 // ---------------------------------------------------------------------------
 
 let nextLogId = 0;
-let nextRuntimeEventId = 0;
 
 async function loggingFetch(
   callId: number,
@@ -263,24 +272,12 @@ function onPlaygroundNotification(notification: PlaygroundNotification): void {
         context: notification.context,
       });
       break;
-    case "runtimeEvent":
-      // Runtime events (log.info, baml.events.send, etc.) get forwarded to UI
-      // Note: We don't have callId from the notification, so we use rootSpanId to match
-      // This will need to be associated with a run on the UI side
-      postOut({
-        type: "runtimeEventNew",
-        entry: {
-          id: nextRuntimeEventId++,
-          callId: 0, // Will be matched by rootSpanId on UI side
-          spanId: notification.spanId,
-          parentSpanId: notification.parentSpanId ?? null,
-          rootSpanId: notification.rootSpanId,
-          timestampMs: notification.timestampMs,
-          eventType: notification.eventType,
-          eventData: notification.eventData,
-        },
-      });
+    case "runtimeEvent": {
+      // Decode and pass the raw proto through
+      const bytes = new Uint8Array(notification.data);
+      postOut({ type: "runtimeEventNew", event: RuntimeEvent.decode(bytes) });
       break;
+    }
     default:
       // Cast to worker-protocol type: the WASM-generated type uses `string` for severity
       // while the protocol narrows it to a literal union; the runtime values are always valid.
@@ -436,7 +433,13 @@ self.onmessage = async (event: MessageEvent) => {
         try {
           runtime?.handleLspRequest({ id, method: "initialize", params });
         } catch (e) {
-          console.error("[LSP] initialize request failed:", e);
+          if (e instanceof Error && isWasmPanic(e)) {
+            const { message, stack } = getWasmError(e);
+            console.error("[LSP] initialize request WASM panic:", message);
+            postOut({ type: 'wasmPanic', message, stack });
+          } else {
+            console.error("[LSP] initialize request failed:", e);
+          }
           requestPromises.delete(id);
           reject(e);
         }
@@ -448,7 +451,13 @@ self.onmessage = async (event: MessageEvent) => {
       try {
         runtime?.handleLspNotification({ method, params });
       } catch (e) {
-        console.error(`[LSP] notification "${method}" failed:`, e);
+        if (e instanceof Error && isWasmPanic(e)) {
+          const { message, stack } = getWasmError(e);
+          console.error(`[LSP] notification "${method}" WASM panic:`, message);
+          postOut({ type: 'wasmPanic', message, stack });
+        } else {
+          console.error(`[LSP] notification "${method}" failed:`, e);
+        }
       }
     });
 
@@ -468,7 +477,13 @@ self.onmessage = async (event: MessageEvent) => {
       try {
         runtime?.handleLspRequest({ id, method, params });
       } catch (e) {
-        console.error(`[LSP] request "${method}" failed:`, e);
+        if (e instanceof Error && isWasmPanic(e)) {
+          const { message, stack } = getWasmError(e);
+          console.error(`[LSP] request "${method}" WASM panic:`, message);
+          postOut({ type: 'wasmPanic', message, stack });
+        } else {
+          console.error(`[LSP] request "${method}" failed:`, e);
+        }
         requestPromises.delete(id);
         return Promise.reject(e);
       }
@@ -527,10 +542,19 @@ self.onmessage = async (event: MessageEvent) => {
         postOut({ type: "callFunctionResult", id: msg.id, result });
       } catch (e) {
         const isCancelled = e instanceof Error && (e as any).name === 'BamlCancelledError';
+        let errorMessage: string;
+        if (e instanceof Error && isWasmPanic(e)) {
+          const { message, stack } = getWasmError(e);
+          errorMessage = `WASM panic: ${message}`;
+          console.error('[Worker] WASM panic in callFunction:', message);
+          postOut({ type: 'wasmPanic', message, stack });
+        } else {
+          errorMessage = e instanceof Error ? e.message : String(e);
+        }
         postOut({
           type: "callFunctionError",
           id: msg.id,
-          error: e instanceof Error ? e.message : String(e),
+          error: errorMessage,
           cancelled: isCancelled || undefined,
         });
       }
@@ -627,11 +651,21 @@ self.onmessage = async (event: MessageEvent) => {
           result: JSON.stringify(decoded, null, 2),
         });
       } catch (e: any) {
+        const isCancelled = e instanceof Error && (e as any).name === 'BamlCancelledError';
+        let errorMessage: string;
+        if (e instanceof Error && isWasmPanic(e)) {
+          const { message, stack } = getWasmError(e);
+          errorMessage = `WASM panic: ${message}`;
+          console.error('[Worker] WASM panic in callTestFunction:', message);
+          postOut({ type: 'wasmPanic', message, stack });
+        } else {
+          errorMessage = e instanceof Error ? e.message : String(e);
+        }
         postOut({
           type: "callFunctionError",
           id: msg.id,
-          error: e instanceof Error ? e.message : String(e),
-          cancelled: e instanceof Error && (e as any).name === "BamlCancelledError" ? true : undefined,
+          error: errorMessage,
+          cancelled: isCancelled ? true : undefined,
         });
       }
       return;

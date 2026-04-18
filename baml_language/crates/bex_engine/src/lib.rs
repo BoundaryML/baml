@@ -1652,8 +1652,12 @@ impl BexEngine {
                     }
                 }
 
-                VmExecState::Event { event_name, data } => {
-                    // Emit a CustomEvent with the current span context.
+                VmExecState::Event {
+                    event_name,
+                    data,
+                    source_location,
+                } => {
+                    // Emit a CustomEvent or LogEvent with the current span context.
                     if let Some(state) = span_state.as_ref() {
                         let ctx = Self::build_span_context_from_state(state);
                         let mut call_stack = state.host_call_stack.clone();
@@ -1661,14 +1665,60 @@ impl BexEngine {
 
                         let external_data = self.vm_value_to_owned(&data);
 
+                        // Convert source location tuple to SourceLocation struct.
+                        let source =
+                            source_location.map(|(file_id, line, column, start_offset, end_offset)| {
+                                bex_events::SourceLocation {
+                                    file_id,
+                                    line,
+                                    column,
+                                    start_offset,
+                                    end_offset,
+                                }
+                            });
+
+                        // Check if this is a log event (emitted by log.info, log.debug, etc.)
+                        let event = if event_name == "log" {
+                            // Extract level and data from the log payload.
+                            if let BexExternalValue::Map { entries, .. } = &external_data {
+                                let level = entries
+                                    .get("level")
+                                    .and_then(|v| {
+                                        if let BexExternalValue::String(s) = v {
+                                            Some(s.clone())
+                                        } else {
+                                            None
+                                        }
+                                    })
+                                    .unwrap_or_else(|| "info".to_string());
+                                let log_data = entries
+                                    .get("data")
+                                    .cloned()
+                                    .unwrap_or(BexExternalValue::Null);
+                                EventKind::Log(bex_events::LogEvent {
+                                    level,
+                                    data: log_data,
+                                    source,
+                                })
+                            } else {
+                                // Fallback: treat as custom event if structure is unexpected.
+                                EventKind::Custom(bex_events::CustomEvent {
+                                    name: event_name,
+                                    data: external_data,
+                                })
+                            }
+                        } else {
+                            EventKind::Custom(bex_events::CustomEvent {
+                                name: event_name,
+                                data: external_data,
+                            })
+                        };
+
                         self.emit(RuntimeEvent {
                             ctx,
                             call_stack,
                             timestamp: SystemTime::now(),
-                            event: EventKind::Custom(bex_events::CustomEvent {
-                                name: event_name,
-                                data: external_data,
-                            }),
+                            event,
                         });
                     }
                     // `baml.events.send()` returns null.  The SendEvent instruction

@@ -44,12 +44,17 @@ function user.nested_outer() -> int {
 }
 
 function user.process_with_logging(input: string) -> string {
+    load_const "log"
+    load_const "info"
     load_const "start"
     load_var input
     load_const "event"
     load_const "input"
     alloc_map 2
-    call baml.log.info
+    load_const "level"
+    load_const "data"
+    alloc_map 2
+    send_event
     pop 1
     load_const "processing"
     load_const "start"
@@ -67,12 +72,17 @@ function user.process_with_logging(input: string) -> string {
     alloc_map 1
     send_event
     pop 1
+    load_const "log"
+    load_const "info"
     load_const "complete"
     load_var result
     load_const "event"
     load_const "result"
     alloc_map 2
-    call baml.log.info
+    load_const "level"
+    load_const "data"
+    alloc_map 2
+    send_event
     pop 1
     load_var result
     return
@@ -84,11 +94,18 @@ function user.simple_function() -> int {
 }
 
 function user.test_logging() -> null {
+    load_const "log"
+    load_const "debug"
     load_const "Starting process"
     load_const "message"
     alloc_map 1
-    call baml.log.debug
+    load_const "level"
+    load_const "data"
+    alloc_map 2
+    send_event
     pop 1
+    load_const "log"
+    load_const "info"
     alloc_instance User
     load_const 123
     init_field .id
@@ -100,18 +117,31 @@ function user.test_logging() -> null {
     load_const "user"
     load_const "status"
     alloc_map 2
-    call baml.log.info
+    load_const "level"
+    load_const "data"
+    alloc_map 2
+    send_event
     pop 1
+    load_const "log"
+    load_const "warn"
     load_const "Resource usage high"
     load_const "warning"
     alloc_map 1
-    call baml.log.warn
+    load_const "level"
+    load_const "data"
+    alloc_map 2
+    send_event
     pop 1
+    load_const "log"
+    load_const "error"
     load_const "E001"
     load_const 3
     load_const "code"
     load_const "retries"
     alloc_map 2
-    call baml.log.error
+    load_const "level"
+    load_const "data"
+    alloc_map 2
+    send_event
     return
 }

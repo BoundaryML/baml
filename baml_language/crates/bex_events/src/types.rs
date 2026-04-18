@@ -31,6 +31,21 @@ pub enum EventKind {
     Custom(CustomEvent),
 }
 
+/// Source location for a log or custom event.
+#[derive(Debug, Clone, Default)]
+pub struct SourceLocation {
+    /// File ID (index into the file table).
+    pub file_id: u32,
+    /// 1-indexed line number.
+    pub line: u32,
+    /// 0-indexed column (start of the expression).
+    pub column: u32,
+    /// Byte offset where this expression starts (for cursor matching).
+    pub start_offset: u32,
+    /// Byte offset where this expression ends (for cursor matching).
+    pub end_offset: u32,
+}
+
 /// A log event emitted via `log.info()`, `log.debug()`, etc.
 #[derive(Debug, Clone)]
 pub struct LogEvent {
@@ -38,6 +53,8 @@ pub struct LogEvent {
     pub level: String,
     /// Structured data
     pub data: BexExternalValue,
+    /// Source location where the log was called (if available).
+    pub source: Option<SourceLocation>,
 }
 
 /// A custom user-defined event emitted via `baml.events.send()`.

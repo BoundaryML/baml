@@ -135,16 +135,11 @@ pub enum PlaygroundNotification {
         #[serde(skip_serializing_if = "Option::is_none")]
         expand_error: Option<TestExpandError>,
     },
-    /// A runtime event was emitted during execution.
+    /// A runtime event was emitted during execution (protobuf-encoded).
     #[serde(rename_all = "camelCase")]
     RuntimeEvent {
-        span_id: String,
-        parent_span_id: Option<String>,
-        root_span_id: String,
-        timestamp_ms: u64,
-        /// Event type: "function_start", "function_end", "log", "custom"
-        event_type: String,
-        event_data: serde_json::Value,
+        /// Protobuf-encoded RuntimeEvent bytes (decode with RuntimeEvent.decode())
+        data: Vec<u8>,
     },
 }
 

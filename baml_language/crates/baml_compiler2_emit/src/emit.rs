@@ -1274,6 +1274,71 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                     // SendEvent yields null; store null to the destination.
                     self.emit_store_place(destination);
                     self.emit_jump_unless_fallthrough(*target);
+                } else if let Some(level) = func_name.as_deref().and_then(|name| match name {
+                    "baml.log.info" => Some("info"),
+                    "baml.log.debug" => Some("debug"),
+                    "baml.log.warn" => Some("warn"),
+                    "baml.log.error" => Some("error"),
+                    _ => None,
+                }) {
+                    // Special-case `baml.log.{info,debug,warn,error}(data)`:
+                    // Emit SendEvent directly with event_name="log" and data={level, data}.
+                    // This ensures the source location is captured at the call site,
+                    // not inside the builtin log function body.
+                    //
+                    // Stack layout for SendEvent: [event_name, data]
+                    // Stack layout for AllocMap(2): [value1, value2, key1, key2]
+
+                    // Save the terminator span - walking args may change current_debug_span
+                    // to the argument expression's span, but we want SendEvent to use
+                    // the full call site span for proper source location capture.
+                    let call_site_span = self.current_debug_span;
+
+                    // 1. Push event name "log"
+                    let log_str_idx = self.objects.len();
+                    self.objects.push(Object::String("log".to_string()));
+                    let log_const_idx =
+                        self.add_constant(ConstValue::Object(ObjectIndex::from_raw(log_str_idx)));
+                    let inst = self.emit(Instruction::LoadConst(log_const_idx));
+                    self.set_operand(inst, OperandMeta::Const("\"log\"".to_string()));
+
+                    // 2. Push value1: level string (e.g., "info")
+                    let level_val_idx = self.objects.len();
+                    self.objects.push(Object::String(level.to_string()));
+                    let level_val_const_idx =
+                        self.add_constant(ConstValue::Object(ObjectIndex::from_raw(level_val_idx)));
+                    let inst = self.emit(Instruction::LoadConst(level_val_const_idx));
+                    self.set_operand(inst, OperandMeta::Const(format!("\"{level}\"")));
+
+                    // 3. Push value2: user's data argument (args[0])
+                    unwrap_infallible(pull_semantics::walk_call_direct_args(self, args));
+
+                    // 4. Push key1: "level"
+                    let level_key_idx = self.objects.len();
+                    self.objects.push(Object::String("level".to_string()));
+                    let level_key_const_idx =
+                        self.add_constant(ConstValue::Object(ObjectIndex::from_raw(level_key_idx)));
+                    let inst = self.emit(Instruction::LoadConst(level_key_const_idx));
+                    self.set_operand(inst, OperandMeta::Const("\"level\"".to_string()));
+
+                    // 5. Push key2: "data"
+                    let data_key_idx = self.objects.len();
+                    self.objects.push(Object::String("data".to_string()));
+                    let data_key_const_idx =
+                        self.add_constant(ConstValue::Object(ObjectIndex::from_raw(data_key_idx)));
+                    let inst = self.emit(Instruction::LoadConst(data_key_const_idx));
+                    self.set_operand(inst, OperandMeta::Const("\"data\"".to_string()));
+
+                    // 6. AllocMap(2) -> creates { level: "info", data: <user_data> }
+                    self.emit(Instruction::AllocMap(2));
+
+                    // 7. SendEvent - restore call site span for proper source location
+                    self.set_debug_span(call_site_span, true);
+                    self.emit(Instruction::SendEvent);
+
+                    // SendEvent yields null; store null to the destination.
+                    self.emit_store_place(destination);
+                    self.emit_jump_unless_fallthrough(*target);
                 } else if let Some(global_callee) = global_callee {
                     unwrap_infallible(pull_semantics::walk_call_direct_args(self, args));
                     let inst = self.emit(Instruction::Call(global_callee));

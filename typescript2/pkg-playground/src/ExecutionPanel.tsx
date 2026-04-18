@@ -11,7 +11,7 @@
 
 import type { ChangeEvent, FC, RefObject } from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { encodeCallArgs } from '@b/pkg-proto';
+import { encodeCallArgs, type BamlOutboundValue } from '@b/pkg-proto';
 import { KeyRound, PanelLeft, Square } from 'lucide-react';
 import { Button } from './components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs';
@@ -35,17 +35,90 @@ import type {
   FunctionInfo,
   ProjectUpdate,
   RunEntry,
-  RuntimeEventEntry,
   WorkerOutMessage,
 } from './worker-protocol';
 import { decodeCallResult } from '@b/pkg-proto';
 import type { ResultRendererProps } from './result-renderers';
 import { ResultDisplay } from './ResultDisplay';
 import { registerBuiltinResultRenderers } from './renderers/registerBuiltins';
+import { HttpRequestCurlRenderer, isHttpRequest } from './renderers/HttpRequestCurl';
 import { GraphView } from './graph/GraphView';
 import { FunctionSidebar } from './FunctionSidebar';
 
 registerBuiltinResultRenderers();
+// Format a BamlOutboundValue (proto) to a Rust-like debug string
+function formatValueDebug(holder: BamlOutboundValue | null | undefined): string {
+  if (!holder?.value) return 'null';
+
+  switch (holder.value.$case) {
+    case 'nullValue':
+      return 'null';
+    case 'stringValue':
+      return JSON.stringify(holder.value.stringValue);
+    case 'intValue':
+      return String(holder.value.intValue);
+    case 'floatValue':
+      return String(holder.value.floatValue);
+    case 'boolValue':
+      return String(holder.value.boolValue);
+    case 'classValue': {
+      const cls = holder.value.classValue;
+      const name = cls.name?.name ?? 'Class';
+      const fields = cls.fields
+        .map((f) => `${f.key}: ${formatValueDebug(f.value)}`)
+        .join(', ');
+      return `${name} { ${fields} }`;
+    }
+    case 'enumValue':
+      return holder.value.enumValue.value;
+    case 'listValue':
+      return `[${holder.value.listValue.items.map(formatValueDebug).join(', ')}]`;
+    case 'mapValue': {
+      const entries = holder.value.mapValue.entries
+        .map((e) => `${e.key}: ${formatValueDebug(e.value)}`)
+        .join(', ');
+      return `{${entries}}`;
+    }
+    case 'literalValue': {
+      const lit = holder.value.literalValue;
+      if (!lit.literal) return 'null';
+      switch (lit.literal.$case) {
+        case 'stringLiteral':
+          return JSON.stringify(lit.literal.stringLiteral.value);
+        case 'intLiteral':
+          return String(lit.literal.intLiteral.value);
+        case 'boolLiteral':
+          return String(lit.literal.boolLiteral.value);
+        default:
+          return 'null';
+      }
+    }
+    case 'unionVariantValue':
+      return formatValueDebug(holder.value.unionVariantValue.value);
+    case 'checkedValue':
+      return formatValueDebug(holder.value.checkedValue.value);
+    case 'streamingStateValue':
+      return formatValueDebug(holder.value.streamingStateValue.value);
+    case 'handleValue': {
+      const h = holder.value.handleValue;
+      return `<handle #${h.key}>`;
+    }
+    case 'mediaValue': {
+      const m = holder.value.mediaValue;
+      const mt = ['unspecified', 'image', 'audio', 'pdf', 'video', 'other'][m.media] ?? 'media';
+      if (m.value?.$case === 'url') return `<${mt}: ${m.value.url}>`;
+      if (m.value?.$case === 'file') return `<${mt}: file://${m.value.file}>`;
+      if (m.value?.$case === 'base64') return `<${mt}: base64...>`;
+      return `<${mt}>`;
+    }
+    case 'promptAstValue':
+      return '<prompt_ast>';
+    case 'uint8arrayValue':
+      return `<bytes: ${holder.value.uint8arrayValue.length}>`;
+    default:
+      return '?';
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -87,6 +160,8 @@ export interface ExecutionPanelProps {
    * Built-in renderers (e.g. curl for baml.http.Request) are always available.
    */
   resultRenderers?: Record<string, FC<ResultRendererProps>>;
+  /** Called when user clicks the WASM panic banner to reload the worker. */
+  onReload?: () => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -175,7 +250,7 @@ const CollectionRunView: FC<CollectionRunViewProps> = ({ run, expandedLogId, set
 // Component
 // ---------------------------------------------------------------------------
 
-export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersion, resultRenderers }) => {
+export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersion, resultRenderers, onReload }) => {
   const [projectRoots, setProjectRoots] = useState<string[]>([]);
   const [projectUpdates, setProjectUpdates] = useState<Record<string, ProjectUpdate>>({});
   const [testTree, setTestTree] = useState<any>(null);
@@ -203,6 +278,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
   const [controlFlowGraph, setControlFlowGraph] = useState<ControlFlowGraph | null>(null);
   const [activeTab, setActiveTab] = useState<'run' | 'graph' | 'prompt' | 'curl'>('run');
   const [highlightedNodeId, setHighlightedNodeId] = useState<number | null>(null);
+  const [cursorOffset, setCursorOffset] = useState<number | null>(null);
 
   // Workflow context: when a function belongs to multiple workflows,
   // this tracks which workflow is being viewed and the alternatives.
@@ -225,6 +301,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
 
   const [diagsExpanded, setDiagsExpanded] = useState(false);
   const [buildTime, setBuildTime] = useState<number | null>(null);
+  const [wasmPanic, setWasmPanic] = useState<{ message: string; stack?: string } | null>(null);
   const { envVars, knownRequiredKeys, addEnvVar, removeEnvVar, importEnvVars, addRequiredKey } = useEnvVars(port);
   // In-flight worker requests waiting for a value: id → variable name. Ref because it doesn't drive renders.
   const pendingEnvRequestsRef = useRef<Map<number, string>>(new Map());
@@ -298,6 +375,10 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
   }
 
   function handleCursorContext(ctx: CursorContext) {
+    // Update cursor offset for event highlighting (cursor ↔ event matching)
+    console.log('[DEBUG] CursorContext:', { cursorOffset: ctx.cursorOffset, functionName: ctx.functionName });
+    setCursorOffset(ctx.cursorOffset ?? null);
+
     if (!ctx.functionName) return;
 
     const currentFn = selectedFnRef.current;
@@ -475,16 +556,17 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
           break;
 
         case 'runtimeEventNew': {
-          const eventEntry = data.entry;
           // Add runtime event to all currently running runs
-          // (typically only one run is active at a time)
-          setRuns((prev) =>
-            prev.map((r) =>
+          console.log('[DEBUG] runtimeEventNew received:', data.event);
+          setRuns((prev) => {
+            const runningCount = prev.filter(r => r.status === 'running').length;
+            console.log('[DEBUG] runs with status running:', runningCount);
+            return prev.map((r) =>
               r.status === 'running'
-                ? { ...r, runtimeEvents: [...r.runtimeEvents, eventEntry] }
+                ? { ...r, runtimeEvents: [...r.runtimeEvents, data.event] }
                 : r
-            ),
-          );
+            );
+          });
           break;
         }
 
@@ -523,6 +605,10 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
 
         case "cursorContext":
           handleCursorContext(data.context);
+          break;
+
+        case "wasmPanic":
+          setWasmPanic({ message: data.message, stack: data.stack });
           break;
 
         default:
@@ -956,6 +1042,32 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
         </div>
       )}
 
+      {/* WASM Panic banner */}
+      {wasmPanic && (
+        <button
+          type="button"
+          onClick={() => {
+            setWasmPanic(null);
+            if (onReload) {
+              onReload();
+            } else {
+              window.location.reload();
+            }
+          }}
+          className="w-full flex items-center gap-2 px-2.5 py-2 border-none border-b border-vsc-border shrink-0 bg-[#5c1a1a] hover:bg-[#6e1f1f] transition-colors cursor-pointer text-left"
+        >
+          <span className="text-[12px]">⚠️</span>
+          <div className="flex-1 min-w-0">
+            <span className="font-vsc-mono text-[11px] text-[#ff6b6b] font-medium">
+              WASM Panic — Click to reload worker
+            </span>
+            <div className="font-vsc-mono text-[10px] text-[#ff6b6b]/70 truncate">
+              {wasmPanic.message}
+            </div>
+          </div>
+        </button>
+      )}
+
       {/* Diagnostics banner */}
       {(hasErrors || engineStale) && (
         <div className="border-b border-vsc-border shrink-0 bg-[#3e1a1a]">
@@ -1162,64 +1274,68 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
                           Events ({run.runtimeEvents.length})
                         </div>
                         <div className="flex flex-col gap-0.5">
-                          {run.runtimeEvents.map((evt) => {
-                            // Handle different event structures:
-                            // - Native log: eventType="log", eventData={ level, data }
-                            // - Custom "log": eventType="custom", eventData={ name: "log", data: { level, data } }
-                            // - Function events: eventType="function_start"/"function_end"
-                            // - Other custom: eventType="custom", eventData={ name, data }
-                            const rawData = evt.eventData as { level?: string; data?: unknown; name?: string; function_display_name?: string } | null;
-                            const isLogViaCustom = evt.eventType === 'custom' && rawData?.name === 'log';
-                            const isNativeLog = evt.eventType === 'log';
-                            const isLog = isNativeLog || isLogViaCustom;
-                            const isFunctionStart = evt.eventType === 'function_start';
-                            const isFunctionEnd = evt.eventType === 'function_end';
-                            const isFunctionEvent = isFunctionStart || isFunctionEnd;
+                          {run.runtimeEvents.map((evt, evtIdx) => {
+                            const kind = evt.event?.kind;
+                            console.log('[DEBUG] Event:', evtIdx, kind?.$case, kind);
+                            if (!kind) return null;
 
-                            // Extract label and payload based on event structure
                             let label: string;
-                            let payload: unknown;
+                            let payload: string;
                             let colorCls: string;
 
-                            if (isFunctionStart) {
-                              label = 'START';
-                              payload = rawData?.function_display_name ?? '';
-                              colorCls = 'text-vsc-green';
-                            } else if (isFunctionEnd) {
-                              label = 'END';
-                              const duration = (rawData as any)?.duration_ms;
-                              payload = `${rawData?.function_display_name ?? ''}${duration != null ? ` (${duration}ms)` : ''}`;
-                              colorCls = 'text-vsc-text-muted';
-                            } else if (isLogViaCustom) {
-                              // Custom "log" event: { name: "log", data: { level, data } }
-                              const inner = rawData?.data as { level?: string; data?: unknown } | undefined;
-                              label = inner?.level ?? 'info';
-                              payload = inner?.data;
-                              colorCls = label === 'error' ? 'text-vsc-red'
-                                : label === 'warn' ? 'text-vsc-yellow'
-                                : label === 'debug' ? 'text-vsc-text-muted'
-                                : 'text-vsc-blue';
-                            } else if (isNativeLog) {
-                              // Native log event: { level, data }
-                              label = rawData?.level ?? 'info';
-                              payload = rawData?.data;
-                              colorCls = label === 'error' ? 'text-vsc-red'
-                                : label === 'warn' ? 'text-vsc-yellow'
-                                : label === 'debug' ? 'text-vsc-text-muted'
-                                : 'text-vsc-blue';
-                            } else {
-                              // Other custom events
-                              label = evt.eventType === 'custom' ? 'EVENT' : evt.eventType;
-                              payload = rawData?.name ? `${rawData.name}: ${JSON.stringify(rawData.data)}` : evt.eventData;
-                              colorCls = 'text-vsc-purple';
+                            switch (kind.$case) {
+                              case 'functionStart':
+                                label = 'START';
+                                payload = kind.functionStart.name;
+                                colorCls = 'text-vsc-green';
+                                break;
+                              case 'functionEnd':
+                                label = 'END';
+                                payload = `${kind.functionEnd.name} (${kind.functionEnd.durationMs}ms)`;
+                                colorCls = 'text-vsc-text-muted';
+                                break;
+                              case 'log': {
+                                const lvl = kind.log.level;
+                                label = lvl;
+                                payload = formatValueDebug(kind.log.data);
+                                colorCls = lvl === 'error' ? 'text-vsc-red'
+                                  : lvl === 'warn' ? 'text-vsc-yellow'
+                                  : lvl === 'debug' ? 'text-vsc-text-muted'
+                                  : 'text-vsc-blue';
+                                break;
+                              }
+                              case 'custom':
+                                label = 'EVENT';
+                                payload = `${kind.custom.name}: ${formatValueDebug(kind.custom.data)}`;
+                                colorCls = 'text-vsc-purple';
+                                break;
+                              case 'setTags':
+                                label = 'TAGS';
+                                payload = kind.setTags.tags.map(t => `${t.key}=${t.value}`).join(', ');
+                                colorCls = 'text-vsc-text-muted';
+                                break;
+                              default:
+                                return null;
                             }
 
+                            // Check if cursor is within this event's source span
+                            const source = kind.$case === 'log' ? kind.log.source : undefined;
+                            if (kind.$case === 'log') {
+                              console.log('[DEBUG] LogEvent source:', source, 'cursorOffset:', cursorOffset);
+                            }
+                            const isCursorMatch = cursorOffset != null && source != null &&
+                              cursorOffset > source.startOffset && cursorOffset <= source.endOffset;
+
                             return (
-                              <div key={evt.id} className="flex items-start gap-1.5 text-[11px]">
+                              <div
+                                key={`${evt.spanId}-${evtIdx}`}
+                                className={cn(
+                                  "flex items-start gap-1.5 text-[11px]",
+                                  isCursorMatch && "bg-vsc-yellow/20 rounded px-1 -mx-1"
+                                )}
+                              >
                                 <span className={`${colorCls} font-semibold shrink-0 w-10 uppercase`}>{label}</span>
-                                <span className="text-vsc-text flex-1 font-mono truncate">
-                                  {typeof payload === 'string' ? payload : JSON.stringify(payload)}
-                                </span>
+                                <span className="text-vsc-text flex-1 font-mono truncate">{payload}</span>
                               </div>
                             );
                           })}
@@ -1480,64 +1596,68 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
                               Events ({run.runtimeEvents.length})
                             </div>
                             <div className="flex flex-col gap-0.5">
-                              {run.runtimeEvents.map((evt) => {
-                                // Handle different event structures:
-                                // - Native log: eventType="log", eventData={ level, data }
-                                // - Custom "log": eventType="custom", eventData={ name: "log", data: { level, data } }
-                                // - Function events: eventType="function_start"/"function_end"
-                                // - Other custom: eventType="custom", eventData={ name, data }
-                                const rawData = evt.eventData as { level?: string; data?: unknown; name?: string; function_display_name?: string } | null;
-                                const isLogViaCustom = evt.eventType === 'custom' && rawData?.name === 'log';
-                                const isNativeLog = evt.eventType === 'log';
-                                const isLog = isNativeLog || isLogViaCustom;
-                                const isFunctionStart = evt.eventType === 'function_start';
-                                const isFunctionEnd = evt.eventType === 'function_end';
-                                const isFunctionEvent = isFunctionStart || isFunctionEnd;
+                              {run.runtimeEvents.map((evt, evtIdx) => {
+                                const kind = evt.event?.kind;
+                                console.log('[DEBUG] Event (history):', evtIdx, kind?.$case, kind);
+                                if (!kind) return null;
 
-                                // Extract label and payload based on event structure
                                 let label: string;
-                                let payload: unknown;
+                                let payload: string;
                                 let colorCls: string;
 
-                                if (isFunctionStart) {
-                                  label = 'START';
-                                  payload = rawData?.function_display_name ?? '';
-                                  colorCls = 'text-vsc-green';
-                                } else if (isFunctionEnd) {
-                                  label = 'END';
-                                  const duration = (rawData as any)?.duration_ms;
-                                  payload = `${rawData?.function_display_name ?? ''}${duration != null ? ` (${duration}ms)` : ''}`;
-                                  colorCls = 'text-vsc-text-muted';
-                                } else if (isLogViaCustom) {
-                                  // Custom "log" event: { name: "log", data: { level, data } }
-                                  const inner = rawData?.data as { level?: string; data?: unknown } | undefined;
-                                  label = inner?.level ?? 'info';
-                                  payload = inner?.data;
-                                  colorCls = label === 'error' ? 'text-vsc-red'
-                                    : label === 'warn' ? 'text-vsc-yellow'
-                                    : label === 'debug' ? 'text-vsc-text-muted'
-                                    : 'text-vsc-blue';
-                                } else if (isNativeLog) {
-                                  // Native log event: { level, data }
-                                  label = rawData?.level ?? 'info';
-                                  payload = rawData?.data;
-                                  colorCls = label === 'error' ? 'text-vsc-red'
-                                    : label === 'warn' ? 'text-vsc-yellow'
-                                    : label === 'debug' ? 'text-vsc-text-muted'
-                                    : 'text-vsc-blue';
-                                } else {
-                                  // Other custom events
-                                  label = evt.eventType === 'custom' ? 'EVENT' : evt.eventType;
-                                  payload = rawData?.name ? `${rawData.name}: ${JSON.stringify(rawData.data)}` : evt.eventData;
-                                  colorCls = 'text-vsc-purple';
+                                switch (kind.$case) {
+                                  case 'functionStart':
+                                    label = 'START';
+                                    payload = kind.functionStart.name;
+                                    colorCls = 'text-vsc-green';
+                                    break;
+                                  case 'functionEnd':
+                                    label = 'END';
+                                    payload = `${kind.functionEnd.name} (${kind.functionEnd.durationMs}ms)`;
+                                    colorCls = 'text-vsc-text-muted';
+                                    break;
+                                  case 'log': {
+                                    const lvl = kind.log.level;
+                                    label = lvl;
+                                    payload = formatValueDebug(kind.log.data);
+                                    colorCls = lvl === 'error' ? 'text-vsc-red'
+                                      : lvl === 'warn' ? 'text-vsc-yellow'
+                                      : lvl === 'debug' ? 'text-vsc-text-muted'
+                                      : 'text-vsc-blue';
+                                    break;
+                                  }
+                                  case 'custom':
+                                    label = 'EVENT';
+                                    payload = `${kind.custom.name}: ${formatValueDebug(kind.custom.data)}`;
+                                    colorCls = 'text-vsc-purple';
+                                    break;
+                                  case 'setTags':
+                                    label = 'TAGS';
+                                    payload = kind.setTags.tags.map(t => `${t.key}=${t.value}`).join(', ');
+                                    colorCls = 'text-vsc-text-muted';
+                                    break;
+                                  default:
+                                    return null;
                                 }
 
+                                // Check if cursor is within this event's source span
+                                const source = kind.$case === 'log' ? kind.log.source : undefined;
+                                if (kind.$case === 'log') {
+                                  console.log('[DEBUG] LogEvent source (history):', source, 'cursorOffset:', cursorOffset);
+                                }
+                                const isCursorMatch = cursorOffset != null && source != null &&
+                                  cursorOffset > source.startOffset && cursorOffset <= source.endOffset;
+
                                 return (
-                                  <div key={evt.id} className="flex items-start gap-1.5 text-[11px]">
+                                  <div
+                                    key={`${evt.spanId}-${evtIdx}`}
+                                    className={cn(
+                                      "flex items-start gap-1.5 text-[11px]",
+                                      isCursorMatch && "bg-vsc-yellow/20 rounded px-1 -mx-1"
+                                    )}
+                                  >
                                     <span className={`${colorCls} font-semibold shrink-0 w-10 uppercase`}>{label}</span>
-                                    <span className="text-vsc-text flex-1 font-mono truncate">
-                                      {typeof payload === 'string' ? payload : JSON.stringify(payload)}
-                                    </span>
+                                    <span className="text-vsc-text flex-1 font-mono truncate">{payload}</span>
                                   </div>
                                 );
                               })}

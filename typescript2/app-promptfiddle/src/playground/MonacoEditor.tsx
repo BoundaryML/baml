@@ -876,13 +876,14 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, heig
         await workerReadyPromise;
         if (disposed) { worker.terminate(); return; }
 
-        const { setRuntimePort } = await import('./ExecutionPanelPane');
+        const { setRuntimePort, setReloadCallback } = await import('./ExecutionPanelPane');
         const { WorkerRuntimePort } = await import('@b/pkg-playground');
 
         const runtimePort = new WorkerRuntimePort(worker!);
         workerLspDisposables.push(runtimePort);
         onWorkerReadyRef.current?.(worker!);
         setRuntimePort(runtimePort, { connectionVersion: connectionVersionRef.current });
+        setReloadCallback(() => restartWorkerRef.current?.());
 
         connectionVersionRef.current += 1;
       };

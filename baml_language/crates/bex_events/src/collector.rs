@@ -309,7 +309,11 @@ fn extract_log_from_custom(custom: &CustomEvent) -> Option<LogEvent> {
                 .get("data")
                 .cloned()
                 .unwrap_or(BexExternalValue::Null);
-            Some(LogEvent { level, data })
+            Some(LogEvent {
+                level,
+                data,
+                source: None,
+            })
         }
         _ => None,
     }

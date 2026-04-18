@@ -30,6 +30,8 @@ let currentConnectionVersion = 0;
 /** Incremented when port changes on restart so ExecutionPanel remounts and requests state. */
 let portKey = 0;
 const portChangeListeners = new Set<(port: RuntimePort) => void>();
+/** Callback to reload the WASM worker (set by MonacoEditor). */
+let reloadCallback: (() => void) | null = null;
 
 const PANE_TYPE_ID = 'baml.executionPanel';
 
@@ -130,6 +132,7 @@ export async function registerExecutionPanelPane(): Promise<void> {
               port,
               key: `playground-${currentConnectionVersion}`,
               connectionVersion: currentConnectionVersion,
+              onReload: reloadCallback ?? undefined,
             }),
           );
         });
@@ -204,4 +207,12 @@ export function setRuntimePort(port: RuntimePort, options?: SetRuntimePortOption
     portKey += 1;
     portChangeListeners.forEach((cb) => cb(port));
   }
+}
+
+/**
+ * Set the callback to reload/restart the WASM worker.
+ * Called from MonacoEditor after worker setup.
+ */
+export function setReloadCallback(cb: () => void): void {
+  reloadCallback = cb;
 }

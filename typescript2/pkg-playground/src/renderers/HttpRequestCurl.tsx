@@ -27,7 +27,7 @@ function preserveExactBody(req: HttpRequestShape): boolean {
   return (req.url ?? '').includes('bedrock-runtime');
 }
 
-function isHttpRequest(value: unknown): value is HttpRequestShape {
+export function isHttpRequest(value: unknown): value is HttpRequestShape {
   if (value == null || typeof value !== 'object') return false;
   const o = value as Record<string, unknown>;
   return typeof o.url === 'string' && typeof o.method === 'string';
