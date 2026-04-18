@@ -58,6 +58,8 @@ impl io::IoNamespaceIo for NativeSysOps {
         SysOpOutput::async_op(async move {
             use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
 
+            let mut stdin = shared_stdin().lock().await;
+
             if let Some(p) = prompt {
                 let mut stdout = tokio::io::stdout();
                 stdout
@@ -70,9 +72,7 @@ impl io::IoNamespaceIo for NativeSysOps {
                     .map_err(|e| OpErrorKind::Other(format!("Failed to flush stdout: {e}")))?;
             }
             let mut line = String::new();
-            shared_stdin()
-                .lock()
-                .await
+            stdin
                 .read_line(&mut line)
                 .await
                 .map_err(|e| OpErrorKind::Other(format!("Failed to read stdin: {e}")))?;

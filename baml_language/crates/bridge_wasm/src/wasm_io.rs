@@ -16,7 +16,7 @@ use crate::send_wrapper::{SendFuture, SendWrapper};
 
 /// WASM io implementation that holds the JS `input` callback.
 ///
-/// Signature of the JS function: `(prompt: string | undefined) => Promise<string> | string`
+/// Signature of the JS function: `(callId: number, prompt: string | undefined) => Promise<string> | string`
 pub(crate) struct WasmIo {
     input_fn: SendWrapper<Function>,
 }
