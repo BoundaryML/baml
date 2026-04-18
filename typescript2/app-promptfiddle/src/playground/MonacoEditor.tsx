@@ -17,6 +17,7 @@ import './views-workbench.css';
 import { type IFileWriteOptions } from '@codingame/monaco-vscode-files-service-override';
 import { blobUrlsAtom } from './PlaygroundProvider';
 import type { Dimension } from '@codingame/monaco-vscode-api/vscode/vs/base/browser/dom';
+import type { DecorationOptions } from 'vscode';
 
 // ---------------------------------------------------------------------------
 // Media file helpers
@@ -876,14 +877,142 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, heig
         await workerReadyPromise;
         if (disposed) { worker.terminate(); return; }
 
-        const { setRuntimePort, setReloadCallback } = await import('./ExecutionPanelPane');
+        const { setRuntimePort, setReloadCallback, setNavigateToSource } = await import('./ExecutionPanelPane');
         const { WorkerRuntimePort } = await import('@b/pkg-playground');
+        const vscode = await import('vscode');
 
         const runtimePort = new WorkerRuntimePort(worker!);
         workerLspDisposables.push(runtimePort);
         onWorkerReadyRef.current?.(worker!);
         setRuntimePort(runtimePort, { connectionVersion: connectionVersionRef.current });
         setReloadCallback(() => restartWorkerRef.current?.());
+        setNavigateToSource((source) => {
+          const editor = vscode.window.activeTextEditor;
+          if (editor) {
+            const position = new vscode.Position(source.line, source.column);
+            editor.selection = new vscode.Selection(position, position);
+            editor.revealRange(new vscode.Range(position, position), vscode.TextEditorRevealType.InCenter);
+          }
+        });
+
+        // ── Log decorations (inline display like ErrorLens) ───────────────
+        // Create decoration types for each log level with inline after-text
+        console.log('[MonacoEditor] Creating log decoration types...');
+        const logDecorationTypes = {
+          debug: vscode.window.createTextEditorDecorationType({
+            after: { color: '#888888', margin: '0 0 0 1em' },
+            isWholeLine: true,
+          }),
+          info: vscode.window.createTextEditorDecorationType({
+            after: { color: '#3794ff', margin: '0 0 0 1em' },
+            isWholeLine: true,
+          }),
+          warn: vscode.window.createTextEditorDecorationType({
+            after: { color: '#cca700', margin: '0 0 0 1em' },
+            isWholeLine: true,
+          }),
+          error: vscode.window.createTextEditorDecorationType({
+            after: { color: '#f14c4c', margin: '0 0 0 1em' },
+            isWholeLine: true,
+          }),
+        };
+        console.log('[MonacoEditor] Log decoration types created:', logDecorationTypes);
+        workerLspDisposables.push(
+          { dispose: () => logDecorationTypes.debug.dispose() },
+          { dispose: () => logDecorationTypes.info.dispose() },
+          { dispose: () => logDecorationTypes.warn.dispose() },
+          { dispose: () => logDecorationTypes.error.dispose() },
+        );
+
+        // Apply log decorations to the active editor
+        const applyLogDecorations = (decorations: Array<{ line: number; level: string; message: string; count: number }>) => {
+          try {
+            console.log('[MonacoEditor] applyLogDecorations called with', decorations.length, 'decorations');
+
+            // Try activeTextEditor first, fall back to visibleTextEditors
+            let editor = vscode.window.activeTextEditor;
+            console.log('[MonacoEditor] activeTextEditor:', editor ? editor.document.uri.path : 'null');
+            console.log('[MonacoEditor] visibleTextEditors:', vscode.window.visibleTextEditors.map(e => e.document.uri.path));
+
+            if (!editor) {
+              // Find a BAML editor from visible editors
+              editor = vscode.window.visibleTextEditors.find(e => e.document.uri.path.endsWith('.baml')) ?? null;
+              console.log('[MonacoEditor] Found BAML editor from visible:', editor ? editor.document.uri.path : 'null');
+            }
+
+            if (!editor) {
+              console.log('[MonacoEditor] No editor found, skipping decorations');
+              return;
+            }
+
+            // Group decorations by level
+            const byLevel: Record<string, DecorationOptions[]> = {
+              debug: [], info: [], warn: [], error: [],
+            };
+
+            for (const dec of decorations) {
+              const level = dec.level as keyof typeof byLevel;
+              if (!(level in byLevel)) continue;
+
+              const line = dec.line - 1; // Convert to 0-indexed
+              if (line < 0) continue;
+
+              const countSuffix = dec.count > 1 ? ` ×${dec.count}` : '';
+              const text = `  // ${dec.level}: ${dec.message}${countSuffix}`;
+
+              byLevel[level].push({
+                range: new vscode.Range(line, 0, line, 0),
+                renderOptions: {
+                  after: { contentText: text },
+                },
+              });
+            }
+
+            console.log('[MonacoEditor] Grouped decorations:', {
+              debug: byLevel.debug.length,
+              info: byLevel.info.length,
+              warn: byLevel.warn.length,
+              error: byLevel.error.length,
+            });
+
+            // Apply decorations for each level
+            editor.setDecorations(logDecorationTypes.debug, byLevel.debug);
+            editor.setDecorations(logDecorationTypes.info, byLevel.info);
+            editor.setDecorations(logDecorationTypes.warn, byLevel.warn);
+            editor.setDecorations(logDecorationTypes.error, byLevel.error);
+            console.log('[MonacoEditor] setDecorations completed');
+          } catch (err) {
+            console.error('[MonacoEditor] Error in applyLogDecorations:', err);
+          }
+        };
+
+        // Clear all log decorations
+        const clearLogDecorations = () => {
+          let editor = vscode.window.activeTextEditor;
+          if (!editor) {
+            editor = vscode.window.visibleTextEditors.find(e => e.document.uri.path.endsWith('.baml')) ?? null;
+          }
+          if (!editor) return;
+          editor.setDecorations(logDecorationTypes.debug, []);
+          editor.setDecorations(logDecorationTypes.info, []);
+          editor.setDecorations(logDecorationTypes.warn, []);
+          editor.setDecorations(logDecorationTypes.error, []);
+        };
+
+        // Listen for log decoration messages from the worker
+        const onLogDecorations = (event: MessageEvent) => {
+          if (disposed) return;
+          const data = event.data;
+          if (data?.type === 'logDecorations') {
+            console.log('[MonacoEditor] Received logDecorations:', data.decorations);
+            applyLogDecorations(data.decorations);
+          } else if (data?.type === 'clearLogDecorations') {
+            console.log('[MonacoEditor] Received clearLogDecorations');
+            clearLogDecorations();
+          }
+        };
+        worker!.addEventListener('message', onLogDecorations);
+        workerLspDisposables.push({ dispose: () => worker?.removeEventListener('message', onLogDecorations) });
 
         connectionVersionRef.current += 1;
       };

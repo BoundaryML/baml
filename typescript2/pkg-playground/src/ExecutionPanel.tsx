@@ -162,6 +162,8 @@ export interface ExecutionPanelProps {
   resultRenderers?: Record<string, FC<ResultRendererProps>>;
   /** Called when user clicks the WASM panic banner to reload the worker. */
   onReload?: () => void;
+  /** Called when user clicks an event with source location to jump to that line. */
+  onNavigateToSource?: (source: { line: number; column: number }) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -250,7 +252,7 @@ const CollectionRunView: FC<CollectionRunViewProps> = ({ run, expandedLogId, set
 // Component
 // ---------------------------------------------------------------------------
 
-export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersion, resultRenderers, onReload }) => {
+export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersion, resultRenderers, onReload, onNavigateToSource }) => {
   const [projectRoots, setProjectRoots] = useState<string[]>([]);
   const [projectUpdates, setProjectUpdates] = useState<Record<string, ProjectUpdate>>({});
   const [testTree, setTestTree] = useState<any>(null);
@@ -609,6 +611,11 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
 
         case "wasmPanic":
           setWasmPanic({ message: data.message, stack: data.stack });
+          break;
+
+        case "logDecorations":
+        case "clearLogDecorations":
+          // These are handled by MonacoEditor, ignore here
           break;
 
         default:
@@ -1331,8 +1338,10 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
                                 key={`${evt.spanId}-${evtIdx}`}
                                 className={cn(
                                   "flex items-start gap-1.5 text-[11px]",
-                                  isCursorMatch && "bg-vsc-yellow/20 rounded px-1 -mx-1"
+                                  isCursorMatch && "bg-vsc-yellow/20 rounded px-1 -mx-1",
+                                  source && onNavigateToSource && "cursor-pointer hover:bg-vsc-bg-secondary"
                                 )}
+                                onClick={source && onNavigateToSource ? () => onNavigateToSource({ line: source.line, column: source.column }) : undefined}
                               >
                                 <span className={`${colorCls} font-semibold shrink-0 w-10 uppercase`}>{label}</span>
                                 <span className="text-vsc-text flex-1 font-mono truncate">{payload}</span>
@@ -1653,8 +1662,10 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
                                     key={`${evt.spanId}-${evtIdx}`}
                                     className={cn(
                                       "flex items-start gap-1.5 text-[11px]",
-                                      isCursorMatch && "bg-vsc-yellow/20 rounded px-1 -mx-1"
+                                      isCursorMatch && "bg-vsc-yellow/20 rounded px-1 -mx-1",
+                                      source && onNavigateToSource && "cursor-pointer hover:bg-vsc-bg-secondary"
                                     )}
+                                    onClick={source && onNavigateToSource ? () => onNavigateToSource({ line: source.line, column: source.column }) : undefined}
                                   >
                                     <span className={`${colorCls} font-semibold shrink-0 w-10 uppercase`}>{label}</span>
                                     <span className="text-vsc-text flex-1 font-mono truncate">{payload}</span>

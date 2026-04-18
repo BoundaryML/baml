@@ -9,6 +9,22 @@
 import type { RuntimeEvent } from '@b/pkg-proto';
 
 // ---------------------------------------------------------------------------
+// Log decoration types (inline log display like ErrorLens)
+// ---------------------------------------------------------------------------
+
+export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
+
+export interface LogDecoration {
+  /** 1-indexed line number */
+  line: number;
+  level: LogLevel;
+  /** Formatted log message (truncated to ~60 chars) */
+  message: string;
+  /** Number of logs on this line (for "×N" display) */
+  count: number;
+}
+
+// ---------------------------------------------------------------------------
 // Shared domain types
 // ---------------------------------------------------------------------------
 
@@ -167,6 +183,8 @@ export type WorkerOutMessage =
   | { type: 'buildTime'; value: string }
   | { type: 'controlFlowGraphResult'; functionName: string; graph: ControlFlowGraph | null }
   | { type: 'cursorContext'; context: CursorContext }
+  | { type: 'logDecorations'; decorations: LogDecoration[] }
+  | { type: 'clearLogDecorations' }
   | { type: 'wasmPanic'; message: string; stack?: string };
 
 // ---------------------------------------------------------------------------

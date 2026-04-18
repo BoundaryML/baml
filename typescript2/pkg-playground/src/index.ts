@@ -31,6 +31,8 @@ export type {
   PlaygroundNotification,
   ProjectUpdate,
   RunEntry,
+  LogDecoration,
+  LogLevel,
 } from './worker-protocol';
 
 // Utility
