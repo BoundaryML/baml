@@ -314,11 +314,39 @@ export function generateNewBepInstructions(nextNumber: number, apiBaseUrl: strin
 
   return `# Creating a New BEP
 
-This folder contains the structure and instructions for creating a new BEP via the API.
+Next available BEP number: **${nextNumber}** (${bepNum})
 
-## Next Available Number
+## Writing Style
 
-The next available BEP number is: **${nextNumber}** (${bepNum})
+Write in the style of a [PEP](https://peps.python.org/) or [TC39 proposal](https://github.com/tc39/proposals).
+
+A good BEP is a **single document** with this structure:
+
+\`\`\`markdown
+# Title
+
+## Summary
+
+Brief description + code example showing the feature in action.
+
+## Prior Art (optional)
+
+Research, other languages, related work.
+
+## Proposed Design
+
+The detailed technical design. This is the heart of the BEP.
+
+## Design Tradeoffs
+
+What alternatives were considered? Why this approach?
+
+## Open Questions
+
+Unresolved decisions, future work.
+\`\`\`
+
+---
 
 ## Getting Your API Token
 
@@ -328,60 +356,9 @@ The next available BEP number is: **${nextNumber}** (${bepNum})
 2. Click "Generate API Token"
 3. Copy the token (starts with \`bep_\`)
 
-Your token identifies you as the author of any BEPs you create or update.
-
----
-
-## Directory Structure
-
-Create your BEP with this structure:
-
-\`\`\`
-${bepNum}/
-├── README.md           # Main proposal content (REQUIRED)
-└── pages/              # Additional pages (optional)
-    ├── background.md
-    ├── alternatives.md
-    └── ...
-\`\`\`
-
-### README.md Format
-
-Your README.md should start with a title heading:
-
-\`\`\`markdown
-# ${bepNum}: Your Proposal Title
-
-## Summary
-
-Brief description of what this BEP proposes...
-
-## Motivation
-
-Why is this needed...
-
-## Proposal
-
-The detailed design...
-\`\`\`
-
-### Additional Pages
-
-Each page in \`pages/\` becomes a subpage. The filename (without .md) becomes the slug.
-The first \`# Heading\` in each file becomes the page title.
-
-Example \`pages/background.md\`:
-\`\`\`markdown
-# Background
-
-Context and history for this proposal...
-\`\`\`
-
 ---
 
 ## API Usage
-
-All API requests require a Bearer token in the Authorization header.
 
 ### Create a New BEP
 
@@ -391,7 +368,7 @@ curl -X POST "${apiBaseUrl}/api/agent/beps" \\
   -H "Content-Type: application/json" \\
   -d '{
     "title": "Your Proposal Title",
-    "content": "# ${bepNum}: Your Proposal Title\\n\\n## Summary\\n\\n..."
+    "content": "# Your Proposal Title\\n\\n## Summary\\n\\n..."
   }'
 \`\`\`
 
@@ -399,49 +376,12 @@ Response:
 \`\`\`json
 {
   "success": true,
-  "bepId": "xyz789...",
   "number": ${nextNumber},
   "formattedId": "${bepNum}",
   "createdBy": "Your Name",
   "url": "${apiBaseUrl}/beps/${nextNumber}"
 }
 \`\`\`
-
-### Create BEP with Additional Pages
-
-\`\`\`bash
-curl -X POST "${apiBaseUrl}/api/agent/beps" \\
-  -H "Authorization: Bearer <your-api-token>" \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "title": "Your Proposal Title",
-    "content": "# ${bepNum}: Your Proposal Title\\n\\n## Summary\\n\\n...",
-    "pages": [
-      {
-        "slug": "background",
-        "title": "Background",
-        "content": "# Background\\n\\nContext and history..."
-      },
-      {
-        "slug": "alternatives",
-        "title": "Alternatives Considered",
-        "content": "# Alternatives Considered\\n\\n..."
-      }
-    ]
-  }'
-\`\`\`
-
-### API Fields for Creating BEPs
-
-| Field | Required | Description |
-|-------|----------|-------------|
-| \`title\` | Yes | The BEP title (without "BEP-XXX:" prefix) |
-| \`content\` | Yes | Main README.md content (markdown) |
-| \`pages\` | No | Array of additional pages |
-| \`pages[].slug\` | Yes | URL-safe identifier (lowercase, hyphens) |
-| \`pages[].title\` | Yes | Page display title |
-| \`pages[].content\` | Yes | Page content (markdown) |
-| \`shepherds\` | No | Array of user IDs to assign as shepherds |
 
 ### Update an Existing BEP
 
@@ -451,29 +391,29 @@ curl -X PUT "${apiBaseUrl}/api/agent/beps" \\
   -H "Content-Type: application/json" \\
   -d '{
     "number": ${nextNumber},
-    "content": "# ${bepNum}: Updated Title\\n\\n...",
+    "content": "# Updated Title\\n\\n...",
     "editNote": "Updated based on feedback",
     "versionMode": "new"
   }'
 \`\`\`
 
-### API Fields for Updating BEPs
+### API Fields
+
+**Create (POST):**
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| \`title\` | Yes | The BEP title |
+| \`content\` | Yes | Full markdown content |
+
+**Update (PUT):**
 
 | Field | Required | Description |
 |-------|----------|-------------|
 | \`number\` | Yes | The BEP number to update |
-| \`content\` | No* | Updated main content |
-| \`pages\` | No* | Updated pages array (replaces all pages) |
+| \`content\` | Yes | Updated markdown content |
 | \`editNote\` | No | Note describing the changes |
-| \`versionMode\` | No | \`"new"\` (default) creates a new version, \`"current"\` updates in place |
-
-*At least one of \`content\` or \`pages\` must be provided.
-
----
-
-## Writing Style
-
-Write in the style of a [PEP](https://peps.python.org/) or [TC39 proposal](https://github.com/tc39/proposals).
+| \`versionMode\` | No | \`"new"\` (default) or \`"current"\` |
 `;
 }
 
