@@ -587,7 +587,7 @@ async fn test_log_all_levels() {
         let source = format!(
             r#"
             function emit_log() -> null {{
-                {}({{{{ msg: "level check" }}}})
+                {}({{ msg: "level check" }})
             }}
             "#,
             fn_call
