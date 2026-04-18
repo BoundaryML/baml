@@ -3774,7 +3774,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 {
                     self.resolutions.insert(
                         expr_id,
-                        crate::inference::MemberResolution::Method {
+                        crate::inference::MemberResolution::UnboundMethod {
                             class_loc,
                             func_loc,
                         },

@@ -10,7 +10,6 @@ use std::{
 };
 
 use baml_base::Span;
-use baml_builtins2::PACKAGE_LOG;
 use baml_compiler2_mir::{
     BasicBlock, BinOp, BlockId, Constant, IndexKind, Local, MirFunctionBody, Operand, Place,
     Rvalue, StatementKind, Terminator, UnaryOp,
@@ -1290,16 +1289,12 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                     // SendEvent yields null; store null to the destination.
                     self.emit_store_place(destination);
                     self.emit_jump_unless_fallthrough(*target);
-                } else if let Some(level) = func_name.as_deref().and_then(|name| {
-                    name.strip_prefix(PACKAGE_LOG)
-                        .and_then(|rest| rest.strip_prefix('.'))
-                        .and_then(|suffix| match suffix {
-                            "info" => Some("info"),
-                            "debug" => Some("debug"),
-                            "warn" => Some("warn"),
-                            "error" => Some("error"),
-                            _ => None,
-                        })
+                } else if let Some(level) = func_name.as_deref().and_then(|name| match name {
+                    "log.info" => Some("info"),
+                    "log.debug" => Some("debug"),
+                    "log.warn" => Some("warn"),
+                    "log.error" => Some("error"),
+                    _ => None,
                 }) {
                     // Special-case `log.{info,debug,warn,error}(data)`:
                     // Emit SendEvent directly with event_name="$baml_log" and data={level, data}.
