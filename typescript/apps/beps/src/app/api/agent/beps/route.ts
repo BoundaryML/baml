@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { ConvexHttpClient } from "convex/browser";
 import type { FunctionReturnType } from "convex/server";
 import type { Id } from "../../../../../convex/_generated/dataModel";
-import { api } from "../../../../../convex/_generated/api";
+import { api, internal } from "../../../../../convex/_generated/api";
 import {
   type ExportData,
   type ExportFile,
@@ -14,8 +14,8 @@ export const dynamic = "force-dynamic";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type",
+  "Access-Control-Allow-Methods": "GET, POST, PUT, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
 };
 
 type ListBepResult = {
@@ -200,6 +200,309 @@ export async function OPTIONS(): Promise<Response> {
     status: 204,
     headers: CORS_HEADERS,
   });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Authentication Helper
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface AuthenticatedUser {
+  _id: string;
+  name: string;
+  role: string;
+}
+
+async function authenticateRequest(
+  request: NextRequest,
+  convex: ConvexHttpClient
+): Promise<{ user: AuthenticatedUser } | { error: string; status: number }> {
+  const authHeader = request.headers.get("Authorization");
+
+  if (!authHeader) {
+    return {
+      error: "Missing Authorization header. Use 'Authorization: Bearer <token>'.",
+      status: 401,
+    };
+  }
+
+  if (!authHeader.startsWith("Bearer ")) {
+    return {
+      error: "Invalid Authorization header format. Use 'Authorization: Bearer <token>'.",
+      status: 401,
+    };
+  }
+
+  const token = authHeader.slice(7); // Remove "Bearer " prefix
+
+  if (!token) {
+    return { error: "Empty token.", status: 401 };
+  }
+
+  try {
+    const user = await convex.query(api.users.authenticateWithToken, { token });
+
+    if (!user) {
+      return { error: "Invalid or expired token.", status: 401 };
+    }
+
+    return { user };
+  } catch (err) {
+    return {
+      error: "Authentication failed.",
+      status: 500,
+    };
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST - Create a new BEP
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface CreateBepRequest {
+  title: string;
+  content: string;
+  pages?: Array<{
+    slug: string;
+    title: string;
+    content: string;
+  }>;
+  shepherds?: string[];
+}
+
+export async function POST(request: NextRequest): Promise<Response> {
+  const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL;
+  if (!convexUrl) {
+    return jsonResponse(
+      { error: "Missing NEXT_PUBLIC_CONVEX_URL environment variable." },
+      500
+    );
+  }
+
+  const convex = new ConvexHttpClient(convexUrl);
+
+  // Authenticate via Bearer token
+  const authResult = await authenticateRequest(request, convex);
+  if ("error" in authResult) {
+    return jsonResponse({ error: authResult.error }, authResult.status);
+  }
+  const { user } = authResult;
+
+  let body: CreateBepRequest;
+  try {
+    body = await request.json();
+  } catch {
+    return jsonResponse({ error: "Invalid JSON body." }, 400);
+  }
+
+  // Validate required fields
+  if (!body.title || typeof body.title !== "string") {
+    return jsonResponse({ error: "Missing or invalid 'title' field." }, 400);
+  }
+  if (!body.content || typeof body.content !== "string") {
+    return jsonResponse({ error: "Missing or invalid 'content' field." }, 400);
+  }
+
+  // Validate pages if provided
+  if (body.pages) {
+    if (!Array.isArray(body.pages)) {
+      return jsonResponse({ error: "'pages' must be an array." }, 400);
+    }
+    for (let i = 0; i < body.pages.length; i++) {
+      const page = body.pages[i];
+      if (!page.slug || typeof page.slug !== "string") {
+        return jsonResponse({ error: `Page ${i}: missing or invalid 'slug'.` }, 400);
+      }
+      if (!page.title || typeof page.title !== "string") {
+        return jsonResponse({ error: `Page ${i}: missing or invalid 'title'.` }, 400);
+      }
+      if (!page.content || typeof page.content !== "string") {
+        return jsonResponse({ error: `Page ${i}: missing or invalid 'content'.` }, 400);
+      }
+    }
+  }
+
+  // Get the next available BEP number
+  let nextNumber: number;
+  try {
+    nextNumber = await convex.query(api.beps.getNextNumber, {});
+  } catch (err) {
+    return jsonResponse(
+      {
+        error: "Failed to get next BEP number.",
+        detail: err instanceof Error ? err.message : String(err),
+      },
+      502
+    );
+  }
+
+  // Create the BEP
+  try {
+    const result = await convex.mutation(api.beps.create, {
+      number: nextNumber,
+      title: body.title,
+      content: body.content,
+      pages: body.pages,
+      userId: user._id as Id<"users">,
+      shepherds: (body.shepherds ?? []) as Id<"users">[],
+    });
+
+    const origin = request.nextUrl.origin;
+    return jsonResponse({
+      success: true,
+      bepId: result.bepId,
+      number: result.number,
+      formattedId: formatBepId(result.number),
+      createdBy: user.name,
+      url: `${origin}/beps/${result.number}`,
+    });
+  } catch (err) {
+    return jsonResponse(
+      {
+        error: "Failed to create BEP.",
+        detail: err instanceof Error ? err.message : String(err),
+      },
+      500
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PUT - Update an existing BEP
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface UpdateBepRequest {
+  number: number;
+  title?: string;
+  content?: string;
+  pages?: Array<{
+    slug: string;
+    title: string;
+    content: string;
+  }>;
+  editNote?: string;
+  versionMode?: "new" | "current";
+}
+
+export async function PUT(request: NextRequest): Promise<Response> {
+  const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL;
+  if (!convexUrl) {
+    return jsonResponse(
+      { error: "Missing NEXT_PUBLIC_CONVEX_URL environment variable." },
+      500
+    );
+  }
+
+  const convex = new ConvexHttpClient(convexUrl);
+
+  // Authenticate via Bearer token
+  const authResult = await authenticateRequest(request, convex);
+  if ("error" in authResult) {
+    return jsonResponse({ error: authResult.error }, authResult.status);
+  }
+  const { user } = authResult;
+
+  let body: UpdateBepRequest;
+  try {
+    body = await request.json();
+  } catch {
+    return jsonResponse({ error: "Invalid JSON body." }, 400);
+  }
+
+  // Validate required fields
+  if (typeof body.number !== "number") {
+    return jsonResponse({ error: "Missing or invalid 'number' field." }, 400);
+  }
+
+  // Must provide at least one thing to update
+  if (!body.title && !body.content && !body.pages) {
+    return jsonResponse(
+      { error: "Must provide at least one of: 'title', 'content', or 'pages'." },
+      400
+    );
+  }
+
+  // Validate pages if provided
+  if (body.pages) {
+    if (!Array.isArray(body.pages)) {
+      return jsonResponse({ error: "'pages' must be an array." }, 400);
+    }
+    for (let i = 0; i < body.pages.length; i++) {
+      const page = body.pages[i];
+      if (!page.slug || typeof page.slug !== "string") {
+        return jsonResponse({ error: `Page ${i}: missing or invalid 'slug'.` }, 400);
+      }
+      if (!page.title || typeof page.title !== "string") {
+        return jsonResponse({ error: `Page ${i}: missing or invalid 'title'.` }, 400);
+      }
+      if (!page.content || typeof page.content !== "string") {
+        return jsonResponse({ error: `Page ${i}: missing or invalid 'content'.` }, 400);
+      }
+    }
+  }
+
+  // Find the BEP by number
+  let beps: ListBepResult[];
+  try {
+    const bepsRaw = await convex.query(api.beps.list, { limit: BEP_LIST_PROBE_LIMIT });
+    beps = bepsRaw.map((bep: RawBepListItem) => ({
+      _id: String(bep._id),
+      number: bep.number,
+      title: bep.title,
+      status: bep.status,
+      updatedAt: bep.updatedAt,
+    }));
+  } catch (err) {
+    return jsonResponse(
+      {
+        error: "Failed to fetch BEP list.",
+        detail: err instanceof Error ? err.message : String(err),
+      },
+      502
+    );
+  }
+
+  const targetBep = beps.find((b) => b.number === body.number);
+  if (!targetBep) {
+    return jsonResponse(
+      { error: `BEP-${String(body.number).padStart(3, "0")} not found.` },
+      404
+    );
+  }
+
+  // Use importVersion for updating (it handles pages correctly)
+  try {
+    const result = await convex.mutation(api.beps.importVersion, {
+      bepId: targetBep._id as Id<"beps">,
+      content: body.content ?? "",
+      pages: body.pages ?? [],
+      editNote: body.editNote,
+      userId: user._id as Id<"users">,
+      versionMode: body.versionMode ?? "new",
+    });
+
+    const origin = request.nextUrl.origin;
+    return jsonResponse({
+      success: true,
+      bepId: targetBep._id,
+      number: body.number,
+      formattedId: formatBepId(body.number),
+      versionNumber: result.versionNumber,
+      versionAction: result.versionAction,
+      pagesCreated: result.pagesCreated,
+      pagesUpdated: result.pagesUpdated,
+      pagesDeleted: result.pagesDeleted,
+      updatedBy: user.name,
+      url: `${origin}/beps/${body.number}`,
+    });
+  } catch (err) {
+    return jsonResponse(
+      {
+        error: "Failed to update BEP.",
+        detail: err instanceof Error ? err.message : String(err),
+      },
+      500
+    );
+  }
 }
 
 export async function GET(request: NextRequest): Promise<Response> {

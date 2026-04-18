@@ -56,9 +56,12 @@ export default defineSchema({
     isSpecialAccount: v.optional(v.boolean()),
     boundaryEmail: v.optional(v.string()),
     slackUserId: v.optional(v.string()),
+    // API token for agent access
+    apiToken: v.optional(v.string()),
   })
     .index("by_name", ["name"])
-    .index("by_github_id", ["githubId"]),
+    .index("by_github_id", ["githubId"])
+    .index("by_api_token", ["apiToken"]),
 
   // ─────────────────────────────────────────────────────────────────────────
   // BEPs (main proposals)
@@ -86,6 +89,9 @@ export default defineSchema({
 
     // Slack integration - thread_ts for #beps channel notifications
     slackThreadTs: v.optional(v.string()),
+
+    // Good reference flag - marks this BEP as a good example for writing style
+    isGoodReference: v.optional(v.boolean()),
   })
     .index("by_number", ["number"])
     .index("by_status", ["status"])

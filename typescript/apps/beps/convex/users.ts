@@ -299,3 +299,114 @@ export const linkSlackUserId = internalMutation({
     await ctx.db.patch(args.userId, { slackUserId: args.slackUserId });
   },
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// API TOKEN MANAGEMENT
+// ─────────────────────────────────────────────────────────────────────────────
+
+function generateApiToken(): string {
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+  const prefix = "bep_";
+  let token = prefix;
+  for (let i = 0; i < 32; i++) {
+    token += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return token;
+}
+
+// Check if user is allowed to have an API token (team members only)
+function canHaveApiToken(user: { role: string; isSpecialAccount?: boolean }): boolean {
+  return user.isSpecialAccount === true || hasTeamPermissions(user.role);
+}
+
+// Get or generate API token for the current user (team members only)
+export const getOrCreateApiToken = mutation({
+  args: {
+    userId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    const user = await ctx.db.get(args.userId);
+    if (!user) {
+      throw new Error("User not found");
+    }
+
+    // Only team members can have API tokens
+    if (!canHaveApiToken(user)) {
+      throw new Error("Only BoundaryML team members can have API tokens");
+    }
+
+    // If user already has a token, return it
+    if (user.apiToken) {
+      return { token: user.apiToken, isNew: false };
+    }
+
+    // Generate a new token
+    const token = generateApiToken();
+    await ctx.db.patch(args.userId, { apiToken: token });
+
+    return { token, isNew: true };
+  },
+});
+
+// Regenerate API token (invalidates the old one)
+export const regenerateApiToken = mutation({
+  args: {
+    userId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    const user = await ctx.db.get(args.userId);
+    if (!user) {
+      throw new Error("User not found");
+    }
+
+    // Only team members can have API tokens
+    if (!canHaveApiToken(user)) {
+      throw new Error("Only BoundaryML team members can have API tokens");
+    }
+
+    const token = generateApiToken();
+    await ctx.db.patch(args.userId, { apiToken: token });
+
+    return { token };
+  },
+});
+
+// Get user by API token (for authentication) - internal version
+export const getByApiToken = internalQuery({
+  args: {
+    token: v.string(),
+  },
+  handler: async (ctx, args) => {
+    if (!args.token) return null;
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_api_token", (q) => q.eq("apiToken", args.token))
+      .unique();
+
+    return user;
+  },
+});
+
+// Authenticate via API token - returns user info if valid
+export const authenticateWithToken = query({
+  args: {
+    token: v.string(),
+  },
+  handler: async (ctx, args) => {
+    if (!args.token) return null;
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_api_token", (q) => q.eq("apiToken", args.token))
+      .unique();
+
+    if (!user) return null;
+
+    return {
+      _id: user._id,
+      name: user.name,
+      role: user.role,
+    };
+  },
+});
