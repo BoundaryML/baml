@@ -60,6 +60,11 @@ function dispose(): void {
     resolve(undefined);
   }
   pendingEnvResolvers.clear();
+  // Resolve any pending input requests with empty string so awaiting callers don't hang
+  for (const resolve of pendingInputResolvers.values()) {
+    resolve("");
+  }
+  pendingInputResolvers.clear();
   if (connection) {
     connection.dispose();
     connection = null;
@@ -95,6 +100,18 @@ function resolveEnv(variable: string): Promise<string | undefined> {
     const id = nextEnvReqId++;
     pendingEnvResolvers.set(id, resolve);
     postOut({ type: "envVarRequest", id, variable });
+  });
+}
+
+let nextInputReqId = 0;
+const pendingInputResolvers = new Map<number, (value: string) => void>();
+let currentCallId = 0;
+
+function resolveInput(prompt: string | undefined): Promise<string> {
+  return new Promise<string>((resolve) => {
+    const id = nextInputReqId++;
+    pendingInputResolvers.set(id, resolve);
+    postOut({ type: "inputRequest", id, prompt, callId: currentCallId });
   });
 }
 
@@ -358,6 +375,7 @@ self.onmessage = async (event: MessageEvent) => {
       {
         fetch: loggingFetch,
         env: resolveEnv,
+        input: resolveInput,
         lsp_send_notification: (notification: LspNotification) => {
           notification = mapsToRecordsDeep(notification);
 
@@ -482,12 +500,14 @@ self.onmessage = async (event: MessageEvent) => {
         return;
       }
       try {
+        currentCallId = msg.id;
         const resultBytes = await runtime.callFunction(
           msg.id,
           msg.project,
           msg.name,
           msg.argsProto,
         );
+        currentCallId = 0;
         const bytes = new Uint8Array(resultBytes);
         const handles: BamlHandle[] = [];
         const decoded = decodeCallResult(bytes, (key, handleType, typeName) => {
@@ -507,6 +527,7 @@ self.onmessage = async (event: MessageEvent) => {
         const result = JSON.stringify(decoded, null, 2);
         postOut({ type: "callFunctionResult", id: msg.id, result });
       } catch (e) {
+        currentCallId = 0;
         const isCancelled = e instanceof Error && (e as any).name === 'BamlCancelledError';
         postOut({
           type: "callFunctionError",
@@ -535,6 +556,15 @@ self.onmessage = async (event: MessageEvent) => {
         if (msg.value !== undefined && msg.variable) {
           envVars[msg.variable] = msg.value;
         }
+        resolve(msg.value);
+      }
+      return;
+    }
+
+    case "inputResponse": {
+      const resolve = pendingInputResolvers.get(msg.id);
+      if (resolve) {
+        pendingInputResolvers.delete(msg.id);
         resolve(msg.value);
       }
       return;
@@ -583,6 +613,7 @@ self.onmessage = async (event: MessageEvent) => {
         return;
       }
       try {
+        currentCallId = msg.id;
         const resultBytes = await runtime.callTestFunction(
           msg.id, msg.project, msg.generation, msg.testName,
         );
@@ -602,12 +633,14 @@ self.onmessage = async (event: MessageEvent) => {
         } else {
           liveHandles.delete(msg.id);
         }
+        currentCallId = 0;
         postOut({
           type: "callFunctionResult",
           id: msg.id,
           result: JSON.stringify(decoded, null, 2),
         });
       } catch (e: any) {
+        currentCallId = 0;
         postOut({
           type: "callFunctionError",
           id: msg.id,

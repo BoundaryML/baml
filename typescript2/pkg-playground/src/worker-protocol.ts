@@ -154,6 +154,7 @@ export type WorkerOutMessage =
   | { type: 'fetchLogNew'; entry: FetchLogEntry }
   | { type: 'fetchLogUpdate'; logId: number; patch: Partial<FetchLogEntry> }
   | { type: 'envVarRequest'; id: number; variable: string }
+  | { type: 'inputRequest'; id: number; prompt: string | undefined; callId: number }
   | { type: 'vfsFileChanged'; path: string; content: string }
   | { type: 'vfsFileDeleted'; path: string }
   | { type: 'buildTime'; value: string }
@@ -169,6 +170,7 @@ export type WorkerInMessage =
   | { type: 'cancelCall'; id: number; project: string }
   | { type: 'clearHandles'; runIds: number[] }
   | { type: 'envVarResponse'; id: number; value: string | undefined; variable?: string }
+  | { type: 'inputResponse'; id: number; value: string }
   | { type: 'setEnvVar'; key: string; value: string }
   | { type: 'deleteEnvVar'; key: string }
   | { type: 'selectProject'; root: string }

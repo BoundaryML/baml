@@ -50,6 +50,7 @@ mod send_wrapper;
 mod wasm_env;
 mod wasm_fs;
 mod wasm_http;
+mod wasm_io;
 mod wasm_lsp;
 mod wasm_playground;
 mod wasm_sys;
@@ -105,6 +106,8 @@ export type WasmFetchCallback = (
 
 export type WasmEnvVarsCallback = (variable: string) => Promise<string | undefined> | string | undefined;
 
+export type WasmInputCallback = (prompt: string | undefined) => Promise<string> | string;
+
 export type WasmSendNotificationCallback = (notification: LspNotification) => void;
 export type WasmSendResponseCallback = (response: LspResponse) => void;
 export type WasmMakeRequestCallback = (request: LspRequest) => void;
@@ -119,6 +122,7 @@ extern "C" {
     #[wasm_bindgen(typescript_type = r#"{
         fetch: WasmFetchCallback;
         env: WasmEnvVarsCallback;
+        input: WasmInputCallback;
         lsp_send_notification: WasmSendNotificationCallback;
         lsp_send_response: WasmSendResponseCallback;
         lsp_make_request: WasmMakeRequestCallback;
@@ -131,6 +135,9 @@ extern "C" {
 
     #[wasm_bindgen(method, getter, structural, js_name = "env")]
     fn env(this: &WasmCallbacks) -> Function;
+
+    #[wasm_bindgen(method, getter, structural, js_name = "input")]
+    fn input(this: &WasmCallbacks) -> Function;
 
     #[wasm_bindgen(method, getter, structural, js_name = "lsp_send_notification")]
     fn send_notification(this: &WasmCallbacks) -> Function;
@@ -175,6 +182,7 @@ impl BamlWasmRuntime {
     ) -> Result<BamlWasmRuntime, JsError> {
         let fetch_fn = callbacks.fetch();
         let env_vars_fn = callbacks.env();
+        let input_fn = callbacks.input();
         let send_notification_fn = callbacks.send_notification();
         let send_response_fn = callbacks.send_response();
         let make_request_fn = callbacks.make_request();
@@ -183,6 +191,7 @@ impl BamlWasmRuntime {
         let sys_ops = sys_ops::SysOpsBuilder::new()
             .with_http_instance(std::sync::Arc::new(wasm_http::WasmHttp::new(fetch_fn)))
             .with_env_instance(std::sync::Arc::new(wasm_env::WasmEnv::new(env_vars_fn)))
+            .with_io_instance(std::sync::Arc::new(wasm_io::WasmIo::new(input_fn)))
             .with_sys_instance(std::sync::Arc::new(wasm_sys::WasmSys::new()))
             .build();
         let sys_ops = std::sync::Arc::new(sys_ops);
