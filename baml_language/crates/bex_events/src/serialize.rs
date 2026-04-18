@@ -502,9 +502,7 @@ mod tests {
     use web_time::SystemTime;
 
     use super::*;
-    use crate::{FunctionStart, SpanContext, SpanId};
-
-    use crate::{CustomEvent, LogEvent};
+    use crate::{CustomEvent, FunctionStart, LogEvent, SpanContext, SpanId};
 
     #[test]
     fn test_serialize_log_event() {
@@ -1403,11 +1401,26 @@ mod tests {
         println!("\n\n========== DEBUG STRING EXAMPLES ==========\n");
 
         println!("=== Primitives ===");
-        println!("null: {}", bex_value_to_debug_string(&BexExternalValue::Null));
-        println!("bool: {}", bex_value_to_debug_string(&BexExternalValue::Bool(true)));
-        println!("int: {}", bex_value_to_debug_string(&BexExternalValue::Int(42)));
-        println!("float: {}", bex_value_to_debug_string(&BexExternalValue::Float(3.14)));
-        println!("string: {}", bex_value_to_debug_string(&BexExternalValue::String("hello".into())));
+        println!(
+            "null: {}",
+            bex_value_to_debug_string(&BexExternalValue::Null)
+        );
+        println!(
+            "bool: {}",
+            bex_value_to_debug_string(&BexExternalValue::Bool(true))
+        );
+        println!(
+            "int: {}",
+            bex_value_to_debug_string(&BexExternalValue::Int(42))
+        );
+        println!(
+            "float: {}",
+            bex_value_to_debug_string(&BexExternalValue::Float(3.14))
+        );
+        println!(
+            "string: {}",
+            bex_value_to_debug_string(&BexExternalValue::String("hello".into()))
+        );
         println!();
 
         println!("=== Class Instance ===");

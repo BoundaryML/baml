@@ -489,6 +489,7 @@ impl BexLspRequest for BexMulitProject {
                     baml_lsp2_actions::CompletionKind::Test => CompletionItemKind::METHOD,
                     baml_lsp2_actions::CompletionKind::RetryPolicy => CompletionItemKind::MODULE,
                     baml_lsp2_actions::CompletionKind::Method => CompletionItemKind::METHOD,
+                    baml_lsp2_actions::CompletionKind::Module => CompletionItemKind::MODULE,
                 }),
                 detail: item.detail,
                 insert_text: item.insert_text,

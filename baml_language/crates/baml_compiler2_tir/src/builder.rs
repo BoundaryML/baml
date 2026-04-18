@@ -3562,7 +3562,8 @@ impl<'db> TypeInferenceBuilder<'db> {
                     // This handles cases like `baml.events` where `events` is a namespace (user is typing).
                     if unresolved_segment.is_some() {
                         // Check if item_path (e.g., ["log"]) is a valid namespace in this package
-                        let is_valid_namespace = pkg_items.namespaces.keys().any(|k| k == &item_path);
+                        let is_valid_namespace =
+                            pkg_items.namespaces.keys().any(|k| k == &item_path);
                         if is_valid_namespace {
                             unresolved_segment = None;
                         }
@@ -3580,9 +3581,7 @@ impl<'db> TypeInferenceBuilder<'db> {
 
                     if let Some(seg) = unresolved_segment {
                         self.context.report_simple(
-                            TirTypeError::UnresolvedName {
-                                name: seg.clone(),
-                            },
+                            TirTypeError::UnresolvedName { name: seg.clone() },
                             expr_id,
                         );
                     }
@@ -3738,7 +3737,10 @@ impl<'db> TypeInferenceBuilder<'db> {
                 {
                     self.resolutions.insert(
                         expr_id,
-                        crate::inference::MemberResolution::Method { class_loc, func_loc },
+                        crate::inference::MemberResolution::Method {
+                            class_loc,
+                            func_loc,
+                        },
                     );
                     return Some(method_ty);
                 }

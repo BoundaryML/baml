@@ -99,6 +99,8 @@ pub enum CompletionKind {
     RetryPolicy,
     /// A class method.
     Method,
+    /// A namespace (module) containing other definitions.
+    Module,
 }
 
 // ── Completion ────────────────────────────────────────────────────────────────
@@ -528,14 +530,18 @@ fn completions_for_package_path(
     if let Some(ns_items) = pkg_items.namespaces.get(&namespace_path) {
         for (name, def) in &ns_items.values {
             let (kind, detail): (CompletionKind, String) = match def {
-                Definition::Function(func_loc) => {
-                    (CompletionKind::Function, format_function_signature(db, *func_loc))
-                }
-                Definition::TemplateString(_) => {
-                    (CompletionKind::TemplateString, "template_string".to_string())
-                }
+                Definition::Function(func_loc) => (
+                    CompletionKind::Function,
+                    format_function_signature(db, *func_loc),
+                ),
+                Definition::TemplateString(_) => (
+                    CompletionKind::TemplateString,
+                    "template_string".to_string(),
+                ),
                 Definition::Client(_) => (CompletionKind::Client, "client".to_string()),
-                Definition::RetryPolicy(_) => (CompletionKind::RetryPolicy, "retry_policy".to_string()),
+                Definition::RetryPolicy(_) => {
+                    (CompletionKind::RetryPolicy, "retry_policy".to_string())
+                }
                 _ => continue,
             };
             if seen.insert(name.as_str().to_string()) {
@@ -577,7 +583,7 @@ fn completions_for_package_path(
                 let child_name = &ns_path[namespace_path.len()];
                 if seen.insert(child_name.as_str().to_string()) {
                     items.push(
-                        Completion::new(child_name.as_str(), CompletionKind::Function)
+                        Completion::new(child_name.as_str(), CompletionKind::Module)
                             .with_detail("namespace")
                             .with_sort(format!("0_{}", child_name.as_str())),
                     );
@@ -586,11 +592,7 @@ fn completions_for_package_path(
         }
     }
 
-    if items.is_empty() {
-        None
-    } else {
-        Some(items)
-    }
+    if items.is_empty() { None } else { Some(items) }
 }
 
 /// Resolve the type of a field/member on a given type.
@@ -1131,14 +1133,18 @@ fn completions_for_value_position(
     for ns_items in pkg.namespaces.values() {
         for (name, def) in &ns_items.values {
             let (kind, detail): (CompletionKind, String) = match def {
-                Definition::Function(func_loc) => {
-                    (CompletionKind::Function, format_function_signature(db, *func_loc))
-                }
-                Definition::TemplateString(_) => {
-                    (CompletionKind::TemplateString, "template_string".to_string())
-                }
+                Definition::Function(func_loc) => (
+                    CompletionKind::Function,
+                    format_function_signature(db, *func_loc),
+                ),
+                Definition::TemplateString(_) => (
+                    CompletionKind::TemplateString,
+                    "template_string".to_string(),
+                ),
                 Definition::Client(_) => (CompletionKind::Client, "client".to_string()),
-                Definition::RetryPolicy(_) => (CompletionKind::RetryPolicy, "retry_policy".to_string()),
+                Definition::RetryPolicy(_) => {
+                    (CompletionKind::RetryPolicy, "retry_policy".to_string())
+                }
                 Definition::Let(loc) => {
                     let item_tree = baml_compiler2_hir::file_item_tree(db, loc.file(db));
                     match item_tree[loc.id(db)].origin {

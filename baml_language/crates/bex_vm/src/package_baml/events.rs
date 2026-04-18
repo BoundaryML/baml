@@ -13,11 +13,7 @@ use super::{BamlNamespaceEvents, PackageBamlImpl};
 use crate::BexVm;
 
 impl BamlNamespaceEvents for PackageBamlImpl {
-    fn send(
-        _vm: &mut BexVm,
-        _event_name: &str,
-        _data: &IndexMap<String, Value>,
-    ) {
+    fn send(_vm: &mut BexVm, _event_name: &str, _data: &IndexMap<String, Value>) {
         // Never called at runtime: the compiler emits Instruction::SendEvent
         // for all `baml.events.send(...)` calls, which yields control to the
         // engine via VmExecState::Event without invoking this function.

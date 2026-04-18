@@ -146,7 +146,10 @@ mod tests {
             timestamp: SystemTime::now(),
             event: EventKind::Function(FunctionEvent::Start(FunctionStart {
                 name: "my_func".into(),
-                args: vec![BexExternalValue::Int(42), BexExternalValue::String("hello".into())],
+                args: vec![
+                    BexExternalValue::Int(42),
+                    BexExternalValue::String("hello".into()),
+                ],
                 tags: vec![("env".into(), "prod".into())],
             })),
         };

@@ -230,13 +230,14 @@ pub fn package_dependencies<'db>(
         // implicitly depends on it.
         "baml" => vec![],
         // The "testing", "assert", and "log" packages depend on "baml" only.
-        "testing" | "assert" | "log" => vec![PackageId::new(db, Name::new("baml"))],
+        "testing" | "assert" => vec![PackageId::new(db, Name::new("baml"))],
+        s if s == baml_builtins2::PACKAGE_LOG => vec![PackageId::new(db, Name::new("baml"))],
         // User packages depend on "baml", "testing", "assert", and "log".
         _ => vec![
             PackageId::new(db, Name::new("baml")),
             PackageId::new(db, Name::new("testing")),
             PackageId::new(db, Name::new("assert")),
-            PackageId::new(db, Name::new("log")),
+            PackageId::new(db, Name::new(baml_builtins2::PACKAGE_LOG)),
         ],
     }
 }

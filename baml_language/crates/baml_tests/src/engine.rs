@@ -22,6 +22,7 @@
 
 use std::{path::Path, sync::Arc};
 
+use baml_builtins2::PACKAGE_LOG;
 pub use baml_compiler2_emit::OptLevel;
 use baml_project::ProjectDatabase;
 use bex_engine::{BexEngine, BexExternalValue, FunctionCallContextBuilder};
@@ -99,6 +100,12 @@ pub fn compile_source_with_opt(source: &str, opt: OptLevel) -> Program {
         .expect("generate_project_bytecode should succeed for valid test source")
 }
 
+/// True if `name` is a function in package `pkg` (for example `log.info` when `pkg` is `"log"`).
+fn qualified_pkg_function(name: &str, pkg: &str) -> bool {
+    name.strip_prefix(pkg)
+        .is_some_and(|rest| rest.starts_with('.'))
+}
+
 /// Extract user-defined functions from a program and display them in textual format.
 ///
 /// Strips the `"user."` package prefix from function names so snapshots show
@@ -111,7 +118,7 @@ pub fn display_user_functions(program: &Program) -> String {
             !name.starts_with("baml.")
                 && !name.starts_with("testing.")
                 && !name.starts_with("assert.")
-                && !name.starts_with("log.")
+                && !qualified_pkg_function(name, PACKAGE_LOG)
                 && !name.starts_with("env.")
         })
         .filter_map(|(name, idx)| match program.objects.get(*idx) {

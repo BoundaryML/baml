@@ -348,8 +348,7 @@ async fn test_vm_span_context_is_set_during_execution() {
     // so events emitted during that step reflect the correct span hierarchy.
     for event in &events {
         assert_eq!(
-            event.ctx.root_span_id,
-            expected_root,
+            event.ctx.root_span_id, expected_root,
             "Event root_span_id should match the tracking root — \
              this requires vm.current_span_context to be set correctly before vm.exec()"
         );
@@ -376,10 +375,7 @@ async fn test_vm_span_context_is_set_during_execution() {
 /// `VmExecState::Event` and emit a `CustomEvent` into the event store.
 #[tokio::test]
 async fn test_send_event_bytecode_yields_custom_event() {
-    use bex_vm_types::{
-        ConstValue, Instruction, Object,
-        indexable::ObjectIndex,
-    };
+    use bex_vm_types::{ConstValue, Instruction, Object, indexable::ObjectIndex};
 
     // 1. Compile a trivial null-returning function.
     let mut program = compile_for_engine(
@@ -424,7 +420,9 @@ async fn test_send_event_bytecode_yields_custom_event() {
         .expect("function must have a Return instruction");
 
     // Stack layout expected by SendEvent: name is pushed first, data on top.
-    func.bytecode.instructions.insert(return_pos, Instruction::SendEvent);
+    func.bytecode
+        .instructions
+        .insert(return_pos, Instruction::SendEvent);
     func.bytecode
         .instructions
         .insert(return_pos, Instruction::LoadConst(data_const_idx));
@@ -488,7 +486,13 @@ async fn test_custom_event_emission() {
 
     let snapshot = compile_for_engine(source);
     let engine = std::sync::Arc::new(
-        BexEngine::new(snapshot, std::sync::Arc::new(sys_native::SysOps::native()), None, vec![]).unwrap(),
+        BexEngine::new(
+            snapshot,
+            std::sync::Arc::new(sys_native::SysOps::native()),
+            None,
+            vec![],
+        )
+        .unwrap(),
     );
 
     let (host_ctx, guard) = setup_tracking();
@@ -496,15 +500,21 @@ async fn test_custom_event_emission() {
         .with_host_ctx(host_ctx)
         .build();
 
-    engine.call_function("emit_event", vec![], call_ctx, true).await.unwrap();
+    engine
+        .call_function("emit_event", vec![], call_ctx, true)
+        .await
+        .unwrap();
 
     let events = collect_events(&guard);
 
     // Should have: start:emit_event, custom:user_clicked, end:emit_event
-    let custom = events.iter().find_map(|e| match &e.event {
-        EventKind::Custom(c) => Some(c),
-        _ => None,
-    }).expect("Expected Custom event");
+    let custom = events
+        .iter()
+        .find_map(|e| match &e.event {
+            EventKind::Custom(c) => Some(c),
+            _ => None,
+        })
+        .expect("Expected Custom event");
 
     assert_eq!(custom.name, "user_clicked");
     // The event's span context must be rooted at our tracking root.
@@ -530,7 +540,13 @@ async fn test_log_info_event_emission() {
 
     let snapshot = compile_for_engine(source);
     let engine = std::sync::Arc::new(
-        BexEngine::new(snapshot, std::sync::Arc::new(sys_native::SysOps::native()), None, vec![]).unwrap(),
+        BexEngine::new(
+            snapshot,
+            std::sync::Arc::new(sys_native::SysOps::native()),
+            None,
+            vec![],
+        )
+        .unwrap(),
     );
 
     let (host_ctx, guard) = setup_tracking();

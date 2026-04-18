@@ -103,7 +103,11 @@ pub const ALL: &[BuiltinFile] = &[
     // --- assert package ---
     builtin!("assert", "assert.baml"),
     // --- log package ---
-    builtin!("log", "log.baml"),
+    BuiltinFile {
+        package: PACKAGE_LOG,
+        relative_path: "log.baml",
+        contents: include_str!("../baml_std/log/log.baml"),
+    },
 ];
 
 mod adt;

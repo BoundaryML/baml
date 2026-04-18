@@ -1673,8 +1673,8 @@ impl BexEngine {
                         let external_data = self.vm_value_to_owned(&data);
 
                         // Convert source location tuple to SourceLocation struct.
-                        let source =
-                            source_location.map(|(file_id, line, column, start_offset, end_offset)| {
+                        let source = source_location.map(
+                            |(file_id, line, column, start_offset, end_offset)| {
                                 bex_events::SourceLocation {
                                     file_id,
                                     line,
@@ -1682,7 +1682,8 @@ impl BexEngine {
                                     start_offset,
                                     end_offset,
                                 }
-                            });
+                            },
+                        );
 
                         // Check if this is a log event (emitted by log.info, log.debug, etc.)
                         // Uses reserved name "$baml_log" to distinguish from user events.
