@@ -38,12 +38,29 @@ use baml_compiler2_hir::{
     package::{PackageId, package_items},
     scope::ScopeKind,
     semantic_index::ScopeBindings,
+    signature::function_signature,
 };
 use baml_compiler2_tir::ty::Ty;
 use rowan::NodeOrToken;
 use text_size::TextSize;
 
 use crate::{Db, utils};
+
+/// Format a function signature as `(param1: type1, param2: type2) -> return_type`.
+fn format_function_signature(db: &dyn Db, func_loc: FunctionLoc<'_>) -> String {
+    let sig = function_signature(db, func_loc);
+    let params: Vec<String> = sig
+        .params
+        .iter()
+        .map(|(name, te)| format!("{}: {}", name.as_str(), utils::display_type_expr(te)))
+        .collect();
+    let ret = sig
+        .return_type
+        .as_ref()
+        .map(utils::display_type_expr)
+        .unwrap_or_else(|| "null".to_string());
+    format!("({}) -> {}", params.join(", "), ret)
+}
 
 // ── CompletionKind ────────────────────────────────────────────────────────────
 
@@ -459,6 +476,14 @@ fn completions_for_field_access(
         _ => None,
     };
 
+    // If the root didn't resolve to a type, check if it's a package namespace.
+    // This handles cases like `baml.` where `baml` is a package name, not a value.
+    if ty.is_none() {
+        if let Some(completions) = completions_for_package_path(db, file, &segments) {
+            return completions;
+        }
+    }
+
     // Chain through intermediate segments to get the type at the last segment.
     for seg in &segments[1..] {
         ty = ty.and_then(|t| resolve_field_type(db, &t, seg));
@@ -466,6 +491,106 @@ fn completions_for_field_access(
 
     ty.map(|t| completions_for_ty_members(db, &t))
         .unwrap_or_default()
+}
+
+/// Completions for package namespace paths like `baml.` or `baml.log.`.
+///
+/// When the first segment is a known package name, we provide completions for
+/// items within that package's namespace. This handles cases where the path
+/// doesn't resolve to a type (e.g., `baml` is a package, not a value).
+fn completions_for_package_path(
+    db: &dyn Db,
+    file: SourceFile,
+    segments: &[String],
+) -> Option<Vec<Completion>> {
+    if segments.is_empty() {
+        return None;
+    }
+
+    // Get the file's package context to access dependency packages.
+    let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
+    let own_pkg_id = PackageId::new(db, pkg_info.package.clone());
+    let res_ctx = baml_compiler2_tir::package_interface::package_resolution_context(db, own_pkg_id);
+
+    // Check if the first segment is a known package name.
+    let first_segment = Name::new(&segments[0]);
+    let pkg_items = res_ctx.items_for_package(db, &first_segment)?;
+
+    // The namespace path within the package.
+    // For `baml.` we have segments=["baml"], so namespace_path=[].
+    // For `baml.log.` we have segments=["baml", "log"], so namespace_path=["log"].
+    let namespace_path: Vec<Name> = segments[1..].iter().map(|s| Name::new(s)).collect();
+
+    let mut items = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+
+    // 1. Add items from the exact namespace (if it exists).
+    if let Some(ns_items) = pkg_items.namespaces.get(&namespace_path) {
+        for (name, def) in &ns_items.values {
+            let (kind, detail): (CompletionKind, String) = match def {
+                Definition::Function(func_loc) => {
+                    (CompletionKind::Function, format_function_signature(db, *func_loc))
+                }
+                Definition::TemplateString(_) => {
+                    (CompletionKind::TemplateString, "template_string".to_string())
+                }
+                Definition::Client(_) => (CompletionKind::Client, "client".to_string()),
+                Definition::RetryPolicy(_) => (CompletionKind::RetryPolicy, "retry_policy".to_string()),
+                _ => continue,
+            };
+            if seen.insert(name.as_str().to_string()) {
+                items.push(
+                    Completion::new(name.as_str(), kind)
+                        .with_detail(detail)
+                        .with_sort(format!("0_{}", name.as_str())),
+                );
+            }
+        }
+        for (name, def) in &ns_items.types {
+            let (kind, detail) = match def {
+                Definition::Class(_) => (CompletionKind::Class, "class"),
+                Definition::Enum(_) => (CompletionKind::Enum, "enum"),
+                Definition::TypeAlias(_) => (CompletionKind::TypeAlias, "type"),
+                _ => continue,
+            };
+            if seen.insert(name.as_str().to_string()) {
+                items.push(
+                    Completion::new(name.as_str(), kind)
+                        .with_detail(detail)
+                        .with_sort(format!("1_{}", name.as_str())),
+                );
+            }
+        }
+    }
+
+    // 2. Add child namespace names (sub-namespaces that extend our path).
+    for ns_path in pkg_items.namespaces.keys() {
+        // Check if this namespace is a child of our current path.
+        if ns_path.len() > namespace_path.len() {
+            let is_child = ns_path[..namespace_path.len()]
+                .iter()
+                .zip(namespace_path.iter())
+                .all(|(a, b)| a == b);
+
+            if is_child {
+                // The next segment after our namespace_path is a child namespace.
+                let child_name = &ns_path[namespace_path.len()];
+                if seen.insert(child_name.as_str().to_string()) {
+                    items.push(
+                        Completion::new(child_name.as_str(), CompletionKind::Function)
+                            .with_detail("namespace")
+                            .with_sort(format!("0_{}", child_name.as_str())),
+                    );
+                }
+            }
+        }
+    }
+
+    if items.is_empty() {
+        None
+    } else {
+        Some(items)
+    }
 }
 
 /// Resolve the type of a field/member on a given type.
@@ -1005,22 +1130,23 @@ fn completions_for_value_position(
 
     for ns_items in pkg.namespaces.values() {
         for (name, def) in &ns_items.values {
-            let (kind, detail) = match def {
-                Definition::Function(_) => (CompletionKind::Function, "function"),
-                Definition::TemplateString(_) => {
-                    (CompletionKind::TemplateString, "template_string")
+            let (kind, detail): (CompletionKind, String) = match def {
+                Definition::Function(func_loc) => {
+                    (CompletionKind::Function, format_function_signature(db, *func_loc))
                 }
-                Definition::Client(_) => (CompletionKind::Client, "client"),
-                Definition::RetryPolicy(_) => (CompletionKind::RetryPolicy, "retry_policy"),
-                // Let bindings with Client/RetryPolicy origin are compiler2 clients/retry policies.
+                Definition::TemplateString(_) => {
+                    (CompletionKind::TemplateString, "template_string".to_string())
+                }
+                Definition::Client(_) => (CompletionKind::Client, "client".to_string()),
+                Definition::RetryPolicy(_) => (CompletionKind::RetryPolicy, "retry_policy".to_string()),
                 Definition::Let(loc) => {
                     let item_tree = baml_compiler2_hir::file_item_tree(db, loc.file(db));
                     match item_tree[loc.id(db)].origin {
                         baml_compiler2_ast::ast::LetOrigin::Client => {
-                            (CompletionKind::Client, "client")
+                            (CompletionKind::Client, "client".to_string())
                         }
                         baml_compiler2_ast::ast::LetOrigin::RetryPolicy => {
-                            (CompletionKind::RetryPolicy, "retry_policy")
+                            (CompletionKind::RetryPolicy, "retry_policy".to_string())
                         }
                         _ => continue,
                     }

@@ -369,4 +369,89 @@ function Test() -> string {
             "Should contain 'Inactive' variant, got: {labels:?}"
         );
     }
+
+    #[test]
+    fn test_baml_package_completions() {
+        // Test that `baml.` shows completions for the baml package namespace.
+        let test = CursorTest::new(
+            r#"
+function Test() -> string {
+    baml.<[CURSOR]
+    "done"
+}
+"#,
+        );
+
+        let completions = completions_at(&test.db, test.cursor.file, test.cursor.offset);
+        let labels: Vec<&str> = completions.iter().map(|c| c.label.as_str()).collect();
+
+        // baml package should have `log` namespace with info, debug, warn, error
+        assert!(
+            labels.contains(&"log"),
+            "Should contain 'log' namespace, got: {labels:?}"
+        );
+    }
+
+    #[test]
+    fn test_baml_log_namespace_completions() {
+        // Test that `baml.log.` shows completions for log functions.
+        let test = CursorTest::new(
+            r#"
+function Test() -> string {
+    baml.log.<[CURSOR]
+    "done"
+}
+"#,
+        );
+
+        let completions = completions_at(&test.db, test.cursor.file, test.cursor.offset);
+        let labels: Vec<&str> = completions.iter().map(|c| c.label.as_str()).collect();
+
+        // baml.log namespace should have info, debug, warn, error functions
+        assert!(
+            labels.contains(&"info"),
+            "Should contain 'info' function, got: {labels:?}"
+        );
+        assert!(
+            labels.contains(&"debug"),
+            "Should contain 'debug' function, got: {labels:?}"
+        );
+    }
+
+    #[test]
+    fn test_function_completion_shows_signature() {
+        // Test that function completions show the full signature in the detail.
+        let test = CursorTest::new(
+            r#"
+function MyFunc(param1: string, param2: int) -> bool {
+    true
+}
+
+function Test() -> string {
+    My<[CURSOR]
+    "done"
+}
+"#,
+        );
+
+        let completions = completions_at(&test.db, test.cursor.file, test.cursor.offset);
+        let my_func = completions.iter().find(|c| c.label == "MyFunc");
+
+        assert!(my_func.is_some(), "Should have MyFunc completion");
+        let detail = my_func.unwrap().detail.as_ref();
+        assert!(detail.is_some(), "MyFunc should have a detail");
+        let detail_str = detail.unwrap();
+        assert!(
+            detail_str.contains("param1: string"),
+            "Detail should contain 'param1: string', got: {detail_str}"
+        );
+        assert!(
+            detail_str.contains("param2: int"),
+            "Detail should contain 'param2: int', got: {detail_str}"
+        );
+        assert!(
+            detail_str.contains("-> bool"),
+            "Detail should contain '-> bool', got: {detail_str}"
+        );
+    }
 }

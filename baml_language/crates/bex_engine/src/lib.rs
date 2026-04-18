@@ -553,6 +553,13 @@ impl BexEngine {
                             // Ignore watch/span notifications during init.
                             continue;
                         }
+                        Ok(VmExecState::Event { .. }) => {
+                            // Handle events during $init: push null and continue.
+                            // No span context exists during init, so the event is dropped,
+                            // but we must push a return value to keep the stack balanced.
+                            vm.stack.push(Value::Null);
+                            continue;
+                        }
                         Ok(other) => {
                             return Err(EngineError::InitFailed(format!(
                                 "$init function '{init_name}' yielded unexpectedly: {other:?}"

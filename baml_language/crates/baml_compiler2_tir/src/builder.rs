@@ -3519,10 +3519,38 @@ impl<'db> TypeInferenceBuilder<'db> {
                 };
             };
 
-        self.resolve_package_item(pkg_items, &item_path, expr_id)
-            .unwrap_or(Ty::Unknown {
-                attr: TyAttr::default(),
-            })
+        match self.resolve_package_item(pkg_items, &item_path, expr_id) {
+            Some(ty) => ty,
+            None => {
+                // Find the first invalid segment in the path.
+                // The path is [ns_0, ns_1, ..., ns_n, item].
+                // Check each prefix of the namespace path to find the first invalid segment.
+                if !item_path.is_empty() {
+                    let namespace_path = &item_path[..item_path.len() - 1];
+                    let mut unresolved_segment = item_path.last().unwrap();
+
+                    // Check each prefix of the namespace path
+                    for i in 0..namespace_path.len() {
+                        let prefix = &namespace_path[..=i];
+                        if !pkg_items.namespaces.contains_key(prefix) {
+                            // This prefix doesn't exist, so namespace_path[i] is the first invalid segment
+                            unresolved_segment = &namespace_path[i];
+                            break;
+                        }
+                    }
+
+                    self.context.report_simple(
+                        TirTypeError::UnresolvedName {
+                            name: unresolved_segment.clone(),
+                        },
+                        expr_id,
+                    );
+                }
+                Ty::Unknown {
+                    attr: TyAttr::default(),
+                }
+            }
+        }
     }
 
     /// Shared helper: resolve a value or type within a package's namespace.

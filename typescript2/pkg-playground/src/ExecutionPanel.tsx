@@ -558,17 +558,16 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
           break;
 
         case 'runtimeEventNew': {
-          // Add runtime event to all currently running runs
-          console.log('[DEBUG] runtimeEventNew received:', data.event);
-          setRuns((prev) => {
-            const runningCount = prev.filter(r => r.status === 'running').length;
-            console.log('[DEBUG] runs with status running:', runningCount);
-            return prev.map((r) =>
-              r.status === 'running'
-                ? { ...r, runtimeEvents: [...r.runtimeEvents, data.event] }
-                : r
+          const eventEntry = data.event;
+          if (data.callId != null) {
+            setRuns((prev) =>
+              prev.map((r) =>
+                r.id === data.callId
+                  ? { ...r, runtimeEvents: [...r.runtimeEvents, eventEntry] }
+                  : r
+              )
             );
-          });
+          }
           break;
         }
 

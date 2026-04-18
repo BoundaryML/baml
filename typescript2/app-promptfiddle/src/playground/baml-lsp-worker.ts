@@ -236,6 +236,7 @@ function postOut(msg: WorkerOutMessage, transfer?: Transferable[]): void {
 // ---------------------------------------------------------------------------
 
 let nextLogId = 0;
+const activeCallIds = new Set<number>();
 
 async function loggingFetch(
   callId: number,
@@ -387,7 +388,8 @@ function onPlaygroundNotification(notification: PlaygroundNotification): void {
       // Decode and pass the raw proto through
       const bytes = new Uint8Array(notification.data);
       const event = RuntimeEvent.decode(bytes);
-      postOut({ type: "runtimeEventNew", event });
+      const callId = activeCallIds.size === 1 ? [...activeCallIds][0] : null;
+      postOut({ type: "runtimeEventNew", event, callId });
 
       // Extract log events and update decorations
       const kind = event.event?.kind;
@@ -658,6 +660,7 @@ self.onmessage = async (event: MessageEvent) => {
         });
         return;
       }
+      activeCallIds.add(msg.id);
       try {
         const resultBytes = await runtime.callFunction(
           msg.id,
@@ -700,6 +703,8 @@ self.onmessage = async (event: MessageEvent) => {
           error: errorMessage,
           cancelled: isCancelled || undefined,
         });
+      } finally {
+        activeCallIds.delete(msg.id);
       }
       return;
     }
