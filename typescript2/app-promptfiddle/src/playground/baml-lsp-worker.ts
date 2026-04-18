@@ -60,6 +60,11 @@ function dispose(): void {
     resolve(undefined);
   }
   pendingEnvResolvers.clear();
+  // Resolve any pending input requests with empty string so awaiting callers don't hang
+  for (const entry of pendingInputResolvers.values()) {
+    entry.resolve("");
+  }
+  pendingInputResolvers.clear();
   if (connection) {
     connection.dispose();
     connection = null;
@@ -95,6 +100,17 @@ function resolveEnv(variable: string): Promise<string | undefined> {
     const id = nextEnvReqId++;
     pendingEnvResolvers.set(id, resolve);
     postOut({ type: "envVarRequest", id, variable });
+  });
+}
+
+let nextInputReqId = 0;
+const pendingInputResolvers = new Map<number, { callId: number; resolve: (value: string) => void }>();
+
+function resolveInput(callId: number, prompt: string | undefined): Promise<string> {
+  return new Promise<string>((resolve) => {
+    const id = nextInputReqId++;
+    pendingInputResolvers.set(id, { callId, resolve });
+    postOut({ type: "inputRequest", id, prompt, callId });
   });
 }
 
@@ -358,6 +374,7 @@ self.onmessage = async (event: MessageEvent) => {
       {
         fetch: loggingFetch,
         env: resolveEnv,
+        input: resolveInput,
         lsp_send_notification: (notification: LspNotification) => {
           notification = mapsToRecordsDeep(notification);
 
@@ -520,6 +537,13 @@ self.onmessage = async (event: MessageEvent) => {
 
     case "cancelCall": {
       if (!runtime) return;
+      // Resolve any pending input requests for this call so they don't hang
+      for (const [reqId, pending] of pendingInputResolvers) {
+        if (pending.callId === msg.id) {
+          pending.resolve("");
+          pendingInputResolvers.delete(reqId);
+        }
+      }
       try {
         runtime.cancelCall(msg.project, msg.id);
       } catch (e) {
@@ -536,6 +560,15 @@ self.onmessage = async (event: MessageEvent) => {
           envVars[msg.variable] = msg.value;
         }
         resolve(msg.value);
+      }
+      return;
+    }
+
+    case "inputResponse": {
+      const pending = pendingInputResolvers.get(msg.id);
+      if (pending) {
+        pendingInputResolvers.delete(msg.id);
+        pending.resolve(msg.value);
       }
       return;
     }

@@ -28,6 +28,7 @@ tokio = { workspace = true, features = [
   "net",
   "process",
   "io-util",
+  "io-std",
   "time",
 ] }
 
