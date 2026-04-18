@@ -255,6 +255,12 @@ pub enum EngineError {
     #[error("VM internal error: {0}")]
     VmInternalError(bex_vm::errors::VmInternalError),
 
+    #[error("{}", format_vm_internal_error(source, trace))]
+    TracedVmInternalError {
+        source: bex_vm::errors::VmInternalError,
+        trace: Vec<bex_vm::StackFrame>,
+    },
+
     /// Either a BAML panic or a BAML error value.
     #[error("{}", format_unhandled_throw(value, trace))]
     UnhandledThrow {
@@ -283,6 +289,20 @@ pub enum EngineError {
 
     #[error("Package initialization failed: {0}")]
     InitFailed(String),
+}
+
+fn format_vm_internal_error(
+    err: &bex_vm::errors::VmInternalError,
+    trace: &[bex_vm::StackFrame],
+) -> String {
+    use std::fmt::Write;
+    let mut out = bex_vm::format_traceback(
+        trace
+            .iter()
+            .map(|f| (f.file_path.as_str(), f.error_line, f.function_name.as_str())),
+    );
+    write!(out, "VM internal error: {err}").unwrap();
+    out
 }
 
 fn format_unhandled_throw(value: &BexExternalValue, trace: &[bex_vm::StackFrame]) -> String {
@@ -1423,6 +1443,9 @@ impl BexEngine {
                 }
                 Err(bex_vm::errors::VmError::InternalError(err)) => {
                     return Err(EngineError::VmInternalError(err));
+                }
+                Err(bex_vm::errors::VmError::TracedInternalError { source, trace }) => {
+                    return Err(EngineError::TracedVmInternalError { source, trace });
                 }
             };
             match exec_result {

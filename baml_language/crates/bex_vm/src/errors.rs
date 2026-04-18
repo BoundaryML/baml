@@ -143,6 +143,13 @@ pub enum VmError {
     /// Fatal VM errors
     #[error("{0}")]
     InternalError(#[from] VmInternalError),
+    /// Fatal VM error with captured stack trace.
+    /// Produced by `exec()` wrapper from `InternalError`.
+    #[error("{}", format_internal_error(source, trace))]
+    TracedInternalError {
+        source: VmInternalError,
+        trace: Vec<StackFrame>,
+    },
 }
 
 /// An error returned by a Rust function. Will generally be turned into a [`VmError`].
@@ -166,6 +173,17 @@ pub struct StackFrame {
     pub file_path: String,
     pub function_span: baml_type::Span,
     pub error_line: usize,
+}
+
+fn format_internal_error(err: &VmInternalError, trace: &[StackFrame]) -> String {
+    use std::fmt::Write;
+    let mut out = format_traceback(
+        trace
+            .iter()
+            .map(|f| (f.file_path.as_str(), f.error_line, f.function_name.as_str())),
+    );
+    write!(out, "VM internal error: {err}").unwrap();
+    out
 }
 
 /// Format a traceback header from an iterator of `(file, line, function_name)` tuples.

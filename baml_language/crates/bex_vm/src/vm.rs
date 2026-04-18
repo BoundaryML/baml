@@ -1195,17 +1195,8 @@ impl BexVm {
     }
 
     /// Unwinds error values (both thrown and panics).
-    fn try_unwind_exception(
-        &mut self,
-        frame_idx: &mut usize,
-        function: &mut &'static Function,
-        exception_value: Value,
-    ) -> Result<(), VmError> {
-        // Capture the stack trace before unwinding destroys frame information.
-        // We build it inline rather than calling stack_trace() to avoid
-        // constructing a StackTrace wrapper we don't need.
-        let trace: Vec<StackFrame> = self
-            .frames
+    fn capture_stack_trace(&self) -> Vec<StackFrame> {
+        self.frames
             .iter()
             .filter_map(|frame| {
                 let func = self.get_object(frame.function()).as_callable().ok()?;
@@ -1228,7 +1219,17 @@ impl BexVm {
                     }),
                 }
             })
-            .collect();
+            .collect()
+    }
+
+    fn try_unwind_exception(
+        &mut self,
+        frame_idx: &mut usize,
+        function: &mut &'static Function,
+        exception_value: Value,
+    ) -> Result<(), VmError> {
+        // Capture the stack trace before unwinding destroys frame information.
+        let trace: Vec<StackFrame> = self.capture_stack_trace();
 
         // Walk the call stack from the current frame outward looking for an
         // exception table entry that covers the faulting PC.
@@ -1772,7 +1773,19 @@ impl BexVm {
     /// Main VM execution loop.
     ///
     /// Each "cycle" (loop iteration) executes a single instruction.
+    /// Wraps `exec_inner` to convert `InternalError` → `TracedInternalError`
+    /// with a captured stack trace.
     pub fn exec(&mut self) -> Result<VmExecState, VmError> {
+        match self.exec_inner() {
+            Err(VmError::InternalError(err)) => {
+                let trace = self.capture_stack_trace();
+                Err(VmError::TracedInternalError { source: err, trace })
+            }
+            other => other,
+        }
+    }
+
+    fn exec_inner(&mut self) -> Result<VmExecState, VmError> {
         if self.frames.is_empty() {
             return Ok(VmExecState::Complete(Value::Null));
         }
@@ -1917,7 +1930,9 @@ impl BexVm {
                 Err(VmError::Thrown(exception_value)) => {
                     self.try_unwind_exception(&mut frame_idx, &mut function, exception_value)?;
                 }
-                Err(e @ VmError::ThrownUnhandled { .. }) => return Err(e),
+                Err(
+                    e @ (VmError::ThrownUnhandled { .. } | VmError::TracedInternalError { .. }),
+                ) => return Err(e),
             }
         }
     }
