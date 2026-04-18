@@ -41,6 +41,8 @@ namespace baml.http:
   function fetch
   function fetch_sse
   function send
+namespace baml.io:
+  function input
 namespace baml.llm:
   class AnthropicOptions { methods: [] }
   class AzureOpenAiOptions { methods: [] }

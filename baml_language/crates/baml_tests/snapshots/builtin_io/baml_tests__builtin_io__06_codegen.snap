@@ -35,6 +35,20 @@ function user.AppendAndRead() -> string {
     return
 }
 
+function user.AskName() -> string {
+    load_const "What is your name? "
+    dispatch_future baml.io.input
+    await
+    return
+}
+
+function user.AskNoPrompt() -> string {
+    load_const null
+    dispatch_future baml.io.input
+    await
+    return
+}
+
 function user.ChainCommands() -> string {
     load_const "pwd"
     dispatch_future baml.sys.shell

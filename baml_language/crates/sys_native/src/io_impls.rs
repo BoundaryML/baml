@@ -34,6 +34,49 @@ impl io::IoNamespaceEnv for NativeSysOps {
 }
 
 // ============================================================================
+// IO (stdin input)
+// ============================================================================
+
+impl io::IoNamespaceIo for NativeSysOps {
+    fn input(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        prompt: Option<String>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<String> {
+        SysOpOutput::async_op(async move {
+            use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
+
+            if let Some(p) = prompt {
+                let mut stdout = tokio::io::stdout();
+                stdout
+                    .write_all(p.as_bytes())
+                    .await
+                    .map_err(|e| OpErrorKind::Other(format!("Failed to write prompt: {e}")))?;
+                stdout
+                    .flush()
+                    .await
+                    .map_err(|e| OpErrorKind::Other(format!("Failed to flush stdout: {e}")))?;
+            }
+            let mut line = String::new();
+            tokio::io::BufReader::new(tokio::io::stdin())
+                .read_line(&mut line)
+                .await
+                .map_err(|e| OpErrorKind::Other(format!("Failed to read stdin: {e}")))?;
+            // Trim trailing newline (returns "" on EOF when read_line returns 0 bytes)
+            if line.ends_with('\n') {
+                line.pop();
+            }
+            if line.ends_with('\r') {
+                line.pop();
+            }
+            Ok(line)
+        })
+    }
+}
+
+// ============================================================================
 // File System
 // ============================================================================
 

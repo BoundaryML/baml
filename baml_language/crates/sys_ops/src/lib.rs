@@ -895,6 +895,18 @@ impl io::IoNamespaceEnv for DefaultIoOps {
     }
 }
 
+impl io::IoNamespaceIo for DefaultIoOps {
+    fn input(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _prompt: Option<String>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<String> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+}
+
 impl io::IoNamespaceSys for DefaultIoOps {
     fn shell(
         &self,
@@ -966,6 +978,27 @@ impl IoSysOpsBuilder {
     #[must_use]
     pub fn with_env<T: io::IoNamespaceEnv + Default + Send + Sync + 'static>(self) -> Self {
         self.with_env_instance(Arc::new(T::default()))
+    }
+
+    /// Override the `io` namespace with a pre-built instance.
+    #[must_use]
+    pub fn with_io_instance(
+        mut self,
+        instance: Arc<dyn io::IoNamespaceIo + Send + Sync + 'static>,
+    ) -> Self {
+        self.inner.baml_io_input = {
+            let t = instance;
+            Arc::new(move |heap, args, ctx, call_id| {
+                t.__glue_baml_io_input(heap, args, ctx, call_id)
+            })
+        };
+        self
+    }
+
+    /// Override the `io` namespace with a default-constructible type.
+    #[must_use]
+    pub fn with_io<T: io::IoNamespaceIo + Default + Send + Sync + 'static>(self) -> Self {
+        self.with_io_instance(Arc::new(T::default()))
     }
 
     /// Override the `fs` namespace (including `fs.File` methods) with a pre-built instance.

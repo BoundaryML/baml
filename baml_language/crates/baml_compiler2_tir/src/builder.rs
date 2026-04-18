@@ -3292,6 +3292,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             let is_baml_ns_shorthand = matches!(
                 name.as_str(),
                 "env"
+                    | "io"
                     | "sys"
                     | "http"
                     | "math"
@@ -3370,6 +3371,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 let is_baml_ns_shorthand = matches!(
                     segments[0].as_str(),
                     "env"
+                        | "io"
                         | "sys"
                         | "http"
                         | "math"
@@ -3532,7 +3534,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         };
 
         let baml_ns_shorthands: &[&str] = &[
-            "env", "sys", "http", "math", "fs", "net", "media", "llm", "errors", "unstable",
+            "env", "io", "sys", "http", "math", "fs", "net", "media", "llm", "errors", "unstable",
         ];
 
         let (pkg_items, item_path): (&baml_compiler2_hir::package::PackageItems<'db>, Vec<Name>) =

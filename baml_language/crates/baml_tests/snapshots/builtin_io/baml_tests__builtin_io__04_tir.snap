@@ -122,6 +122,16 @@ function user.Size() -> int throws never {
     baml.fs.size("data.bin") : int
   }
 }
+function user.AskName() -> string throws never {
+  { : string
+    io.input("What is your name? ") : string
+  }
+}
+function user.AskNoPrompt() -> string throws never {
+  { : string
+    io.input(null) : string
+  }
+}
 function user.ConnectAndRead() -> string throws never {
   { : string
     let sock = baml.net.connect("127.0.0.1:8080") : baml.net.Socket
