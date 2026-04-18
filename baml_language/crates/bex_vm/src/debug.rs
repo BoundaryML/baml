@@ -198,6 +198,7 @@ pub(crate) fn display_instruction(
         | Instruction::ThrowIfPanic
         | Instruction::Unreachable
         | Instruction::MakeClosure(_, _)
+        | Instruction::MakeBoundMethod(_)
         | Instruction::MakeCell
         | Instruction::LoadDeref(_)
         | Instruction::StoreDeref(_)
@@ -341,7 +342,9 @@ fn instruction_color(instruction: &Instruction) -> Color {
         | Instruction::IsType(_)
         | Instruction::ThrowIfPanic => Color::BrightBlue,
         Instruction::Unreachable => Color::BrightRed,
-        Instruction::MakeClosure(_, _) | Instruction::MakeCell => Color::Cyan,
+        Instruction::MakeClosure(_, _)
+        | Instruction::MakeBoundMethod(_)
+        | Instruction::MakeCell => Color::Cyan,
         Instruction::LoadDeref(_) | Instruction::LoadCapture(_) | Instruction::CaptureRef(_) => {
             Color::Blue
         }
@@ -797,6 +800,10 @@ fn display_instruction_textual(
         Instruction::MakeClosure(obj_idx, count) => {
             let name = meta_str(&obj_idx.raw());
             format!("make_closure {name}, {count}")
+        }
+        Instruction::MakeBoundMethod(_) => {
+            let name = meta_str(&"");
+            format!("make_bound_method {name}")
         }
         Instruction::MakeCell => "make_cell".to_string(),
         Instruction::LoadDeref(slot) => {

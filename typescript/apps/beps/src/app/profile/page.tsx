@@ -1,11 +1,14 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useMutation } from "convex/react";
+import { api } from "../../../convex/_generated/api";
 import { useUser } from "@/components/providers/user-provider";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Input } from "@/components/ui/input";
 import {
   Card,
   CardContent,
@@ -23,13 +26,25 @@ import {
   UserMinus,
   CheckCircle,
   XCircle,
+  Key,
+  Copy,
+  RefreshCw,
+  Eye,
+  EyeOff,
 } from "lucide-react";
+import { Id } from "../../../convex/_generated/dataModel";
 
 type UserRole = "bdfl" | "team" | "unset" | "admin" | "shepherd" | "member";
 
 // Check if role is a legacy role that needs migration
 function isLegacyRole(role: string): boolean {
   return role === "admin" || role === "shepherd" || role === "member";
+}
+
+// Check if user can have API tokens (team members only)
+function canHaveApiToken(user: { role: string; isSpecialAccount?: boolean }): boolean {
+  const hasTeamPermissions = ["bdfl", "team", "admin", "shepherd"].includes(user.role);
+  return user.isSpecialAccount === true || hasTeamPermissions;
 }
 
 function RoleBadge({ role }: { role: UserRole }) {
@@ -62,12 +77,61 @@ function RoleBadge({ role }: { role: UserRole }) {
 export default function ProfilePage() {
   const { user, userId, isLoading } = useUser();
   const router = useRouter();
+  const [apiToken, setApiToken] = useState<string | null>(null);
+  const [showToken, setShowToken] = useState(false);
+  const [isLoadingToken, setIsLoadingToken] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const getOrCreateToken = useMutation(api.users.getOrCreateApiToken);
+  const regenerateToken = useMutation(api.users.regenerateApiToken);
 
   useEffect(() => {
     if (!isLoading && !userId) {
       router.push("/login");
     }
   }, [isLoading, userId, router]);
+
+  const handleGetToken = async () => {
+    if (!userId) return;
+    setIsLoadingToken(true);
+    try {
+      const result = await getOrCreateToken({ userId: userId as Id<"users"> });
+      setApiToken(result.token);
+      setShowToken(true);
+    } catch (err) {
+      console.error("Failed to get token:", err);
+    } finally {
+      setIsLoadingToken(false);
+    }
+  };
+
+  const handleRegenerateToken = async () => {
+    if (!userId) return;
+    if (!confirm("This will invalidate your current token. Any agents using the old token will stop working. Continue?")) {
+      return;
+    }
+    setIsLoadingToken(true);
+    try {
+      const result = await regenerateToken({ userId: userId as Id<"users"> });
+      setApiToken(result.token);
+      setShowToken(true);
+    } catch (err) {
+      console.error("Failed to regenerate token:", err);
+    } finally {
+      setIsLoadingToken(false);
+    }
+  };
+
+  const handleCopyToken = async () => {
+    if (!apiToken) return;
+    try {
+      await navigator.clipboard.writeText(apiToken);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error("Failed to copy:", err);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -191,6 +255,100 @@ export default function ProfilePage() {
                 </div>
               </div>
             </div>
+
+            {/* API Token Section - Only for team members */}
+            {canHaveApiToken(user) && (
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold">API Access</h3>
+
+                <div className="p-4 border rounded-lg space-y-4">
+                  <div className="flex items-start gap-3">
+                    <Key className="h-5 w-5 text-muted-foreground mt-0.5" />
+                    <div className="flex-1">
+                      <div className="font-medium">API Token</div>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Use this token to authenticate API requests from agents or scripts.
+                      </p>
+                    </div>
+                  </div>
+
+                  {apiToken ? (
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type={showToken ? "text" : "password"}
+                          value={apiToken}
+                          readOnly
+                          className="font-mono text-sm"
+                        />
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          onClick={() => setShowToken(!showToken)}
+                          title={showToken ? "Hide token" : "Show token"}
+                        >
+                          {showToken ? (
+                            <EyeOff className="h-4 w-4" />
+                          ) : (
+                            <Eye className="h-4 w-4" />
+                          )}
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          onClick={handleCopyToken}
+                          title="Copy token"
+                        >
+                          {copied ? (
+                            <CheckCircle className="h-4 w-4 text-green-500" />
+                          ) : (
+                            <Copy className="h-4 w-4" />
+                          )}
+                        </Button>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={handleRegenerateToken}
+                          disabled={isLoadingToken}
+                        >
+                          <RefreshCw className={`h-4 w-4 mr-2 ${isLoadingToken ? "animate-spin" : ""}`} />
+                          Regenerate Token
+                        </Button>
+                        <span className="text-xs text-muted-foreground">
+                          This will invalidate the current token
+                        </span>
+                      </div>
+                    </div>
+                  ) : (
+                    <Button
+                      onClick={handleGetToken}
+                      disabled={isLoadingToken}
+                    >
+                      {isLoadingToken ? (
+                        <>
+                          <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                          Generating...
+                        </>
+                      ) : (
+                        <>
+                          <Key className="h-4 w-4 mr-2" />
+                          Generate API Token
+                        </>
+                      )}
+                    </Button>
+                  )}
+
+                  <div className="text-xs text-muted-foreground bg-muted p-3 rounded-md">
+                    <p className="font-medium mb-1">Usage:</p>
+                    <code className="block bg-background p-2 rounded text-xs overflow-x-auto">
+                      curl -H &quot;Authorization: Bearer YOUR_TOKEN&quot; ...
+                    </code>
+                  </div>
+                </div>
+              </div>
+            )}
 
             <div className="space-y-4">
               <h3 className="text-lg font-semibold">Role & Permissions</h3>

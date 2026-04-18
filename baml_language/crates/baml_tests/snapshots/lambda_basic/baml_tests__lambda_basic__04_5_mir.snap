@@ -59,7 +59,7 @@ fn .<lambda(test_capture, 0)>(x: int) -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: int // x // param
-    let _2: void
+    let _2: int
 
     bb0: {
         _2 = copy capture[0];
@@ -246,7 +246,7 @@ fn .<lambda(<lambda(test_nested, 0)>, 1)>(y: int) -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: int // y // param
-    let _2: void
+    let _2: int
 
     bb0: {
         _2 = copy capture[0];

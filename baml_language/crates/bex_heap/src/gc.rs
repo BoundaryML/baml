@@ -298,6 +298,12 @@ impl BexHeap {
                     }
                 }
             }
+            Object::BoundMethod(bm) => {
+                worklist.push(bm.function);
+                if let Value::Object(ptr) = &bm.receiver {
+                    worklist.push(*ptr);
+                }
+            }
             Object::Cell(cell) => {
                 if let Value::Object(ptr) = &cell.value {
                     worklist.push(*ptr);
@@ -381,6 +387,12 @@ impl BexHeap {
                 for value in &mut closure.captures {
                     self.fixup_value(value, forwarding);
                 }
+            }
+            Object::BoundMethod(bm) => {
+                if let Some(&new_ptr) = forwarding.get(&bm.function) {
+                    bm.function = new_ptr;
+                }
+                self.fixup_value(&mut bm.receiver, forwarding);
             }
             Object::Cell(cell) => {
                 self.fixup_value(&mut cell.value, forwarding);

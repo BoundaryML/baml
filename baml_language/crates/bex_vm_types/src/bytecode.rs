@@ -464,6 +464,14 @@ pub enum Instruction {
     /// Stack: `[cap_0, cap_1, ..., cap_{n-1}]` -> `[closure]`
     MakeClosure(ObjectIndex, usize),
 
+    /// Create a bound method from a global function index and a receiver on the stack.
+    ///
+    /// Pops the receiver from the stack, looks up the function at `global_idx` in
+    /// `Vm::globals`, and pushes the resulting `Object::BoundMethod`.
+    ///
+    /// Stack: `[receiver]` -> `[bound_method]`
+    MakeBoundMethod(GlobalIndex),
+
     /// Wrap the top-of-stack value in a `Cell` object.
     ///
     /// Stack: `[value]` -> `[cell]`
@@ -723,6 +731,9 @@ impl std::fmt::Display for Instruction {
             Instruction::Unreachable => f.write_str("UNREACHABLE"),
             Instruction::MakeClosure(obj_idx, count) => {
                 write!(f, "MAKE_CLOSURE {} {}", obj_idx.raw(), count)
+            }
+            Instruction::MakeBoundMethod(global_idx) => {
+                write!(f, "MAKE_BOUND_METHOD {global_idx}")
             }
             Instruction::MakeCell => f.write_str("MAKE_CELL"),
             Instruction::LoadDeref(slot) => write!(f, "LOAD_DEREF {slot}"),

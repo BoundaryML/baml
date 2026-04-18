@@ -1,0 +1,84 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== TIR2 ===
+class user.Formatter {
+  prefix: string
+}
+function user.Formatter.format(self: user.Formatter, text: string) -> string throws never {
+  { : string
+    self.prefix + text : string
+  }
+}
+class user.Counter {
+  value: int
+}
+function user.Counter.increment(self: user.Counter) -> int throws never {
+  { : int
+    self.value Add= 1 : int
+    self.value : int
+  }
+}
+class user.Employee {
+  first: string
+  last: string
+}
+function user.Employee.full_name(self: user.Employee) -> string throws never {
+  { : string
+    self.first + " " + self.last : string
+  }
+}
+function user.test_err_extra_arg() -> string throws never {
+  { : string
+    let fmt = Formatter { prefix: ">> " } : user.Formatter
+    let transform = fmt.format : (text: string) -> string
+    transform(fmt, "hello") : string
+  }
+  !! 474..497: expected 1 argument(s), got 2
+  !! 484..487: type mismatch: expected string, got user.Formatter
+}
+function user.test_err_missing_self() -> string throws never {
+  { : string
+    let f = Employee.full_name : (self: user.Employee) -> string
+    f() : string
+  }
+  !! 617..620: expected 1 argument(s), got 0
+}
+function user.test_err_bound_type_mismatch() -> int throws never {
+  { : 0
+    let c = Counter { value: 0 } : user.Counter
+    let inc = c.increment : () -> int
+    0 : 0
+  }
+  !! 789..801: type mismatch: expected (user.Counter) -> int, got () -> int
+}
+function user.test_err_unbound_type_mismatch() -> string throws never {
+  { : ""
+    let f = Employee.full_name : (self: user.Employee) -> string
+    "" : ""
+  }
+  !! 947..966: type mismatch: expected () -> string, got (self: user.Employee) -> string
+}
+function user.takes_unbound(f: (user.Employee) -> string) -> string throws never {
+  { : string
+    let e = Employee { first: "X", last: "Y" } : user.Employee
+    f(e) : string
+  }
+}
+function user.test_err_bound_for_unbound() -> string throws never {
+  { : string
+    let e = Employee { first: "Alice", last: "Smith" } : user.Employee
+    takes_unbound(e.full_name) : string
+  }
+  !! 1259..1270: type mismatch: expected (user.Employee) -> string, got () -> string
+}
+class user.Formatter$stream {
+  prefix: null | string
+}
+class user.Counter$stream {
+  value: null | int
+}
+class user.Employee$stream {
+  first: null | string
+  last: null | string
+}

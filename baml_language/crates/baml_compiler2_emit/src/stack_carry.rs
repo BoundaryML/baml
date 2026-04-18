@@ -611,6 +611,25 @@ fn simulate_rvalue_pull_stack(
     classifications: &HashMap<Local, LocalClassification>,
     def_use: &HashMap<Local, LocalDefUse>,
 ) -> bool {
+    // MakeBoundMethod: pops receiver (1 value), pushes bound_method (1 value).
+    // Net stack effect: 0 (receiver consumed, bound_method produced).
+    if let Rvalue::MakeBoundMethod { receiver, .. } = rvalue {
+        let mut sink = StackCarryPullSink {
+            sim,
+            carried_local,
+            classifications,
+            def_use,
+        };
+        if pull_semantics::walk_operand_pull(&mut sink, receiver).is_err() {
+            return false;
+        }
+        // Pop receiver, push bound_method (net zero: pop then push).
+        if !sim.pop_n(1) {
+            return false;
+        }
+        sim.push();
+        return true;
+    }
     let mut sink = StackCarryPullSink {
         sim,
         carried_local,

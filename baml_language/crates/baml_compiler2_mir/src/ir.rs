@@ -593,6 +593,15 @@ pub enum Rvalue {
         lambda_idx: usize,
         captures: Vec<Operand>,
     },
+
+    /// Create a bound method value from a method reference and its receiver.
+    ///
+    /// `item_ref` identifies the method (class + name).
+    /// `receiver` is the instance the method is bound to.
+    MakeBoundMethod {
+        item_ref: ItemRef,
+        receiver: Operand,
+    },
 }
 
 /// The kind of aggregate being constructed.

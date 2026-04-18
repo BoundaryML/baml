@@ -516,6 +516,22 @@ export const updateStatus = mutation({
   },
 });
 
+export const toggleGoodReference = mutation({
+  args: {
+    id: v.id("beps"),
+  },
+  handler: async (ctx, args) => {
+    const bep = await ctx.db.get(args.id);
+    if (!bep) throw new Error("BEP not found");
+
+    await ctx.db.patch(args.id, {
+      isGoodReference: !bep.isGoodReference,
+    });
+
+    return { isGoodReference: !bep.isGoodReference };
+  },
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // PAGE MUTATIONS
 // ─────────────────────────────────────────────────────────────────────────────

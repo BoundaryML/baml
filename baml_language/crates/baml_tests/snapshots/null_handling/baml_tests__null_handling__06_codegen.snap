@@ -943,7 +943,7 @@ function user.OptionalCall(callback: (int) -> string?, nonNullCb: (int) -> strin
     store_var c1
 
   L2:
-    load_var name
+    load_var callback
     load_const null
     cmp_op ==
     pop_jump_if_false L3
@@ -951,46 +951,72 @@ function user.OptionalCall(callback: (int) -> string?, nonNullCb: (int) -> strin
 
   L3:
     load_const 42
+    load_var callback
+    call_indirect
+    pop 1
+
+  L4:
+    load_var callback
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L5
+    jump L6
+
+  L5:
+    load_const 42
+    load_var callback
+    call_indirect
+    pop 1
+
+  L6:
+    load_var name
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L7
+    jump L8
+
+  L7:
+    load_const 42
     load_var name
     call_indirect
     store_var c4
-    jump L5
+    jump L9
 
-  L4:
+  L8:
     load_const null
     store_var c4
 
-  L5:
+  L9:
     load_var nonNullCb
     load_const null
     cmp_op ==
-    pop_jump_if_false L6
-    jump L7
+    pop_jump_if_false L10
+    jump L11
 
-  L6:
+  L10:
     load_const 42
     load_var nonNullCb
     call_indirect
     store_var c5
-    jump L8
+    jump L12
 
-  L7:
+  L11:
     load_const null
     store_var c5
 
-  L8:
+  L12:
     load_var c1
-    store_var _10
-    load_var _10
+    store_var _14
+    load_var _14
     store_var _0
-    load_var _10
+    load_var _14
     load_const null
     cmp_op ==
-    pop_jump_if_false L9
+    pop_jump_if_false L13
     load_const "default"
     store_var _0
 
-  L9:
+  L13:
     load_var _0
     return
 }
