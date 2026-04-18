@@ -17,6 +17,7 @@ import { BepContent } from "@/components/bep/bep-content";
 import { BepNav } from "@/components/bep/bep-nav";
 import { BepTableOfContents } from "@/components/bep/bep-table-of-contents";
 import { BepStatusSelect } from "@/components/bep/bep-status-select";
+import { BepGoodReferenceToggle } from "@/components/bep/bep-good-reference-toggle";
 import { BepVersionSelect } from "@/components/bep/bep-version-select";
 import { BepExportDialog } from "@/components/bep/bep-export-dialog";
 import { BepImportDialog } from "@/components/bep/bep-import-dialog";
@@ -855,7 +856,13 @@ const [copied, setCopied] = useState(false);
                 </Button>
               )}
               {!isViewingHistorical && (
-                <BepStatusSelect bepId={bep._id} currentStatus={bep.status} />
+                <>
+                  <BepGoodReferenceToggle
+                    bepId={bep._id}
+                    isGoodReference={bep.isGoodReference ?? false}
+                  />
+                  <BepStatusSelect bepId={bep._id} currentStatus={bep.status} />
+                </>
               )}
             </div>
           </div>
