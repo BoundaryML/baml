@@ -89,6 +89,9 @@ export default defineSchema({
 
     // Slack integration - thread_ts for #beps channel notifications
     slackThreadTs: v.optional(v.string()),
+
+    // Good reference flag - marks this BEP as a good example for writing style
+    isGoodReference: v.optional(v.boolean()),
   })
     .index("by_number", ["number"])
     .index("by_status", ["status"])

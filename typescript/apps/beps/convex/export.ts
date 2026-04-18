@@ -58,6 +58,7 @@ export const getAllBepsForExport = query({
           openIssueCount,
           createdAt: bep.createdAt,
           updatedAt: bep.updatedAt,
+          isGoodReference: bep.isGoodReference ?? false,
           pages: pages.map((p) => ({
             _id: p._id,
             slug: p.slug,

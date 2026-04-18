@@ -20,6 +20,7 @@ export interface ExportAllBep {
   openIssueCount: number;
   createdAt: number;
   updatedAt: number;
+  isGoodReference: boolean;
   pages: ExportAllPage[];
 }
 
@@ -199,8 +200,9 @@ BEPs are sorted by maturity - **implemented and accepted BEPs are the best refer
       const pageCount = bep.pages.length;
       const pageInfo = pageCount > 0 ? ` | ${pageCount} pages` : "";
       const issueInfo = bep.openIssueCount > 0 ? ` | ${bep.openIssueCount} open issues` : "";
+      const starBadge = bep.isGoodReference ? " ⭐" : "";
 
-      md += `- **[${bepNum}: ${bep.title}](./${bepNum}/README.md)** (v${bep.currentVersion}${pageInfo}${issueInfo})
+      md += `- **[${bepNum}: ${bep.title}](./${bepNum}/README.md)**${starBadge} (v${bep.currentVersion}${pageInfo}${issueInfo})
   ${summary}
   *Shepherds: ${bep.shepherdNames.join(", ") || "None"}*
 
@@ -221,7 +223,8 @@ BEPs are sorted by maturity - **implemented and accepted BEPs are the best refer
   for (const bep of byNumber) {
     const bepNum = formatBepNumber(bep.number);
     const emoji = getStatusEmoji(bep.status);
-    md += `| [${bepNum}](./${bepNum}/README.md) | ${bep.title} | ${emoji} ${bep.status} | v${bep.currentVersion} | ${bep.shepherdNames.join(", ") || "-"} |\n`;
+    const starBadge = bep.isGoodReference ? " ⭐" : "";
+    md += `| [${bepNum}](./${bepNum}/README.md)${starBadge} | ${bep.title} | ${emoji} ${bep.status} | v${bep.currentVersion} | ${bep.shepherdNames.join(", ") || "-"} |\n`;
   }
 
   md += `
@@ -258,9 +261,17 @@ version: ${bep.currentVersion}
 shepherds: [${bep.shepherdNames.join(", ")}]
 created: ${formatDate(bep.createdAt)}
 updated: ${formatDate(bep.updatedAt)}
+isGoodReference: ${bep.isGoodReference}
 ---
 
 `;
+
+  // Good reference badge
+  if (bep.isGoodReference) {
+    md += `> ⭐ **Good Reference** - This BEP is marked as an excellent example for writing style.
+
+`;
+  }
 
   // Status badge at the top for quick reference
   md += `> **Status:** ${getStatusEmoji(bep.status)} **${bep.status.toUpperCase()}** - ${getStatusDescription(bep.status)}
@@ -309,14 +320,39 @@ ${page.content}
 // NEW-BEP Instructions Generation
 // ─────────────────────────────────────────────────────────────────────────────
 
-export function generateNewBepInstructions(nextNumber: number, apiBaseUrl: string): string {
+export function generateNewBepInstructions(
+  nextNumber: number,
+  apiBaseUrl: string,
+  goodReferenceBeps: ExportAllBep[] = []
+): string {
   const bepNum = formatBepNumber(nextNumber);
 
-  return `# Creating a New BEP
+  let md = `# Creating a New BEP
 
 Next available BEP number: **${nextNumber}** (${bepNum})
 
-## Writing Style
+`;
+
+  if (goodReferenceBeps.length > 0) {
+    md += `## Good Reference BEPs
+
+These BEPs are excellent examples of writing style and structure:
+
+`;
+    for (const bep of goodReferenceBeps) {
+      const refBepNum = formatBepNumber(bep.number);
+      const summary = extractSummary(bep.content, 120);
+      md += `- **[${refBepNum}: ${bep.title}](../${refBepNum}/README.md)** (${getStatusEmoji(bep.status)} ${bep.status})
+  ${summary}
+
+`;
+    }
+    md += `---
+
+`;
+  }
+
+  md += `## Writing Style
 
 Write in the style of a [PEP](https://peps.python.org/) or [TC39 proposal](https://github.com/tc39/proposals).
 
@@ -415,6 +451,8 @@ curl -X PUT "${apiBaseUrl}/api/agent/beps" \\
 | \`editNote\` | No | Note describing the changes |
 | \`versionMode\` | No | \`"new"\` (default) or \`"current"\` |
 `;
+
+  return md;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -428,6 +466,11 @@ export function generateAllBepsExportFiles(data: ExportAllData, apiBaseUrl: stri
   const maxNumber = data.beps.reduce((max, bep) => Math.max(max, bep.number), 0);
   const nextNumber = maxNumber + 1;
 
+  // Find good reference BEPs (sorted by status priority, then number)
+  const goodReferenceBeps = sortBepsByStatus(
+    data.beps.filter((bep) => bep.isGoodReference)
+  );
+
   // Index file
   files.push({
     path: "INDEX.md",
@@ -437,7 +480,7 @@ export function generateAllBepsExportFiles(data: ExportAllData, apiBaseUrl: stri
   // NEW-BEP instructions
   files.push({
     path: "NEW-BEP/INSTRUCTIONS.md",
-    content: generateNewBepInstructions(nextNumber, apiBaseUrl),
+    content: generateNewBepInstructions(nextNumber, apiBaseUrl, goodReferenceBeps),
   });
 
   // Individual BEP folders
