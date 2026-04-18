@@ -4,10 +4,20 @@
 //! `sys_types::io`. They coexist with the legacy `SysOp*` trait impls in
 //! `lib.rs` during the transition.
 
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 use bex_heap::{BexExternalValue, BexHeap};
 use sys_ops::io::{self, CallId, OpErrorKind, SysOpContext, SysOpOutput, owned};
+
+// Process-level shared BufReader for stdin, preventing data loss when
+// BufReader over-reads into its internal buffer across multiple io.input() calls.
+static STDIN_READER: OnceLock<tokio::sync::Mutex<tokio::io::BufReader<tokio::io::Stdin>>> =
+    OnceLock::new();
+
+fn shared_stdin() -> &'static tokio::sync::Mutex<tokio::io::BufReader<tokio::io::Stdin>> {
+    STDIN_READER
+        .get_or_init(|| tokio::sync::Mutex::new(tokio::io::BufReader::new(tokio::io::stdin())))
+}
 
 use crate::NativeSysOps;
 
@@ -60,7 +70,9 @@ impl io::IoNamespaceIo for NativeSysOps {
                     .map_err(|e| OpErrorKind::Other(format!("Failed to flush stdout: {e}")))?;
             }
             let mut line = String::new();
-            tokio::io::BufReader::new(tokio::io::stdin())
+            shared_stdin()
+                .lock()
+                .await
                 .read_line(&mut line)
                 .await
                 .map_err(|e| OpErrorKind::Other(format!("Failed to read stdin: {e}")))?;

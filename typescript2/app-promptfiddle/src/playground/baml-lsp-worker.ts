@@ -61,8 +61,8 @@ function dispose(): void {
   }
   pendingEnvResolvers.clear();
   // Resolve any pending input requests with empty string so awaiting callers don't hang
-  for (const resolve of pendingInputResolvers.values()) {
-    resolve("");
+  for (const entry of pendingInputResolvers.values()) {
+    entry.resolve("");
   }
   pendingInputResolvers.clear();
   if (connection) {
@@ -104,14 +104,13 @@ function resolveEnv(variable: string): Promise<string | undefined> {
 }
 
 let nextInputReqId = 0;
-const pendingInputResolvers = new Map<number, (value: string) => void>();
-let currentCallId = 0;
+const pendingInputResolvers = new Map<number, { callId: number; resolve: (value: string) => void }>();
 
-function resolveInput(prompt: string | undefined): Promise<string> {
+function resolveInput(callId: number, prompt: string | undefined): Promise<string> {
   return new Promise<string>((resolve) => {
     const id = nextInputReqId++;
-    pendingInputResolvers.set(id, resolve);
-    postOut({ type: "inputRequest", id, prompt, callId: currentCallId });
+    pendingInputResolvers.set(id, { callId, resolve });
+    postOut({ type: "inputRequest", id, prompt, callId });
   });
 }
 
@@ -500,14 +499,12 @@ self.onmessage = async (event: MessageEvent) => {
         return;
       }
       try {
-        currentCallId = msg.id;
         const resultBytes = await runtime.callFunction(
           msg.id,
           msg.project,
           msg.name,
           msg.argsProto,
         );
-        currentCallId = 0;
         const bytes = new Uint8Array(resultBytes);
         const handles: BamlHandle[] = [];
         const decoded = decodeCallResult(bytes, (key, handleType, typeName) => {
@@ -527,7 +524,6 @@ self.onmessage = async (event: MessageEvent) => {
         const result = JSON.stringify(decoded, null, 2);
         postOut({ type: "callFunctionResult", id: msg.id, result });
       } catch (e) {
-        currentCallId = 0;
         const isCancelled = e instanceof Error && (e as any).name === 'BamlCancelledError';
         postOut({
           type: "callFunctionError",
@@ -541,6 +537,13 @@ self.onmessage = async (event: MessageEvent) => {
 
     case "cancelCall": {
       if (!runtime) return;
+      // Resolve any pending input requests for this call so they don't hang
+      for (const [reqId, pending] of pendingInputResolvers) {
+        if (pending.callId === msg.id) {
+          pending.resolve("");
+          pendingInputResolvers.delete(reqId);
+        }
+      }
       try {
         runtime.cancelCall(msg.project, msg.id);
       } catch (e) {
@@ -562,10 +565,10 @@ self.onmessage = async (event: MessageEvent) => {
     }
 
     case "inputResponse": {
-      const resolve = pendingInputResolvers.get(msg.id);
-      if (resolve) {
+      const pending = pendingInputResolvers.get(msg.id);
+      if (pending) {
         pendingInputResolvers.delete(msg.id);
-        resolve(msg.value);
+        pending.resolve(msg.value);
       }
       return;
     }
@@ -613,7 +616,6 @@ self.onmessage = async (event: MessageEvent) => {
         return;
       }
       try {
-        currentCallId = msg.id;
         const resultBytes = await runtime.callTestFunction(
           msg.id, msg.project, msg.generation, msg.testName,
         );
@@ -633,14 +635,12 @@ self.onmessage = async (event: MessageEvent) => {
         } else {
           liveHandles.delete(msg.id);
         }
-        currentCallId = 0;
         postOut({
           type: "callFunctionResult",
           id: msg.id,
           result: JSON.stringify(decoded, null, 2),
         });
       } catch (e: any) {
-        currentCallId = 0;
         postOut({
           type: "callFunctionError",
           id: msg.id,

@@ -106,7 +106,7 @@ export type WasmFetchCallback = (
 
 export type WasmEnvVarsCallback = (variable: string) => Promise<string | undefined> | string | undefined;
 
-export type WasmInputCallback = (prompt: string | undefined) => Promise<string> | string;
+export type WasmInputCallback = (callId: number, prompt: string | undefined) => Promise<string> | string;
 
 export type WasmSendNotificationCallback = (notification: LspNotification) => void;
 export type WasmSendResponseCallback = (response: LspResponse) => void;

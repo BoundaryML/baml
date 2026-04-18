@@ -2,7 +2,7 @@
 //!
 //! `WasmIo` holds the JS `input` function and implements the io `sys_ops`.
 //! The JS callback receives an optional prompt string and returns a string
-//! (or Promise<string>).
+//! (or `Promise<string>`).
 
 use std::sync::Arc;
 
@@ -37,17 +37,19 @@ impl IoNamespaceIo for WasmIo {
     fn input(
         &self,
         _heap: &Arc<BexHeap>,
-        _call_id: CallId,
+        call_id: CallId,
         prompt: Option<String>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<String> {
         let input_fn = self.input_fn().clone();
+        #[allow(clippy::cast_precision_loss)] // call IDs are small sequential integers
+        let js_call_id = wasm_bindgen::JsValue::from_f64(call_id.0 as f64);
         let js_prompt = match prompt {
             Some(p) => wasm_bindgen::JsValue::from_str(&p),
             None => wasm_bindgen::JsValue::UNDEFINED,
         };
         let result = input_fn
-            .call1(&wasm_bindgen::JsValue::NULL, &js_prompt)
+            .call2(&wasm_bindgen::JsValue::NULL, &js_call_id, &js_prompt)
             .map_err(|e| {
                 let msg = e.as_string().unwrap_or_else(|| format!("{e:?}"));
                 OpErrorKind::Other(format!("Failed to call input function: {msg}"))
