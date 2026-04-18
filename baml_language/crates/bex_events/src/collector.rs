@@ -292,7 +292,7 @@ fn sum_option(a: Option<i64>, b: Option<i64>) -> Option<i64> {
 
 /// Try to extract a `LogEvent` from a `CustomEvent` emitted by `log.info()` etc.
 ///
-/// The `log.*` BAML functions emit custom events with name="$baml_log" (reserved name
+/// The `log.*` BAML functions emit custom events with `name="$baml_log"` (reserved name
 /// to distinguish from user events) and data structured as:
 /// `{ level: string, data: map<string, unknown> }`.
 fn extract_log_from_custom(custom: &CustomEvent) -> Option<LogEvent> {

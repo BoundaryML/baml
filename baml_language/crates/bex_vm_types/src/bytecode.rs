@@ -519,7 +519,7 @@ pub enum Instruction {
     /// Stack: `[]` -> `[cell_ptr]`
     CaptureRef(usize),
 
-    /// Pop (event_name: String, data: any) from stack and yield to embedder.
+    /// Pop (`event_name`: String, data: any) from stack and yield to embedder.
     ///
     /// Stack: `[event_name: String, data: any]` -> `[]`
     ///

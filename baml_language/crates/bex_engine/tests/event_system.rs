@@ -237,7 +237,7 @@ async fn test_complex_return_type_events() {
             assert_eq!(entries.get("a"), Some(&BexExternalValue::Int(1)));
             assert_eq!(entries.get("b"), Some(&BexExternalValue::Int(2)));
         }
-        _ => panic!("Expected Map, got {:?}", result),
+        _ => panic!("Expected Map, got {result:?}"),
     }
 
     let events = collect_events(&guard);
@@ -580,7 +580,7 @@ async fn test_log_info_event_emission() {
                 Some(&bex_external_types::BexExternalValue::Int(1))
             );
         }
-        other => panic!("Expected Map data in LogEvent, got {:?}", other),
+        other => panic!("Expected Map data in LogEvent, got {other:?}"),
     }
 
     // Verify source location is captured
@@ -603,10 +603,9 @@ async fn test_log_all_levels() {
         let source = format!(
             r#"
             function emit_log() -> null {{
-                {}({{ msg: "level check" }})
+                {fn_call}({{ msg: "level check" }})
             }}
-            "#,
-            fn_call
+            "#
         );
 
         let snapshot = compile_for_engine(&source);
@@ -637,25 +636,23 @@ async fn test_log_all_levels() {
                 EventKind::Log(log) => Some(log),
                 _ => None,
             })
-            .unwrap_or_else(|| panic!("Expected LogEvent for level {}", expected_level));
+            .unwrap_or_else(|| panic!("Expected LogEvent for level {expected_level}"));
 
         assert_eq!(
             log_event.level, expected_level,
-            "Wrong level for {} call",
-            fn_call
+            "Wrong level for {fn_call} call"
         );
 
         // Verify source location is captured
         assert!(
             log_event.source.is_some(),
-            "Expected source location for {} call",
-            fn_call
+            "Expected source location for {fn_call} call"
         );
     }
 }
 
-/// Verify that the Collector's FunctionLog.log_events field is populated from
-/// log.info() calls via the extract_log_from_custom path.
+/// Verify that the Collector's `FunctionLog.log_events` field is populated from
+/// `log.info()` calls via the `extract_log_from_custom` path.
 #[tokio::test]
 async fn test_collector_log_events_extraction() {
     let source = r#"
@@ -706,7 +703,7 @@ async fn test_collector_log_events_extraction() {
                 Some(&bex_external_types::BexExternalValue::Int(1))
             );
         }
-        other => panic!("Expected Map data, got {:?}", other),
+        other => panic!("Expected Map data, got {other:?}"),
     }
 
     bex_events::event_store::untrack(&root);

@@ -511,7 +511,7 @@ fn completions_for_package_path(
 
     // Get the file's package context to access dependency packages.
     let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
-    let own_pkg_id = PackageId::new(db, pkg_info.package.clone());
+    let own_pkg_id = PackageId::new(db, pkg_info.package);
     let res_ctx = baml_compiler2_tir::package_interface::package_resolution_context(db, own_pkg_id);
 
     // Check if the first segment is a known package name.
@@ -521,7 +521,7 @@ fn completions_for_package_path(
     // The namespace path within the package.
     // For `baml.` we have segments=["baml"], so namespace_path=[].
     // For `baml.events.` we have segments=["baml", "events"], so namespace_path=["events"].
-    let namespace_path: Vec<Name> = segments[1..].iter().map(|s| Name::new(s)).collect();
+    let namespace_path: Vec<Name> = segments[1..].iter().map(Name::new).collect();
 
     let mut items = Vec::new();
     let mut seen = std::collections::HashSet::new();

@@ -287,7 +287,7 @@ pub enum VmExecState {
         /// Event payload (raw VM value; engine converts to `BexExternalValue`).
         data: Value,
         /// Source location where the event was emitted:
-        /// (file_id, line, column, start_offset, end_offset).
+        /// (`file_id`, line, column, `start_offset`, `end_offset`).
         source_location: Option<(u32, u32, u32, u32, u32)>,
     },
 }
@@ -3697,7 +3697,7 @@ impl BexVm {
                         .map(|entry| {
                             (
                                 entry.span.file_id.as_u32(),
-                                entry.line as u32,
+                                u32::try_from(entry.line).unwrap_or(u32::MAX),
                                 entry.span.range.start().into(),
                                 u32::from(entry.span.range.start()),
                                 u32::from(entry.span.range.end()),

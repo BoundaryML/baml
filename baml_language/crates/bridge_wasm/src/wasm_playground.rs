@@ -85,7 +85,7 @@ pub enum PlaygroundNotification {
     /// A runtime event was emitted during execution (protobuf-encoded).
     #[serde(rename_all = "camelCase")]
     RuntimeEvent {
-        /// Protobuf-encoded RuntimeEvent bytes (decode with RuntimeEvent.decode())
+        /// Protobuf-encoded `RuntimeEvent` bytes (decode with `RuntimeEvent.decode()`)
         data: Vec<u8>,
     },
 }

@@ -60,7 +60,7 @@ pub struct LogEvent {
 /// A custom user-defined event emitted via `baml.events.send()`.
 #[derive(Debug, Clone)]
 pub struct CustomEvent {
-    /// Event name (e.g., "user_clicked", "request_started")
+    /// Event name (e.g., `user_clicked`, `request_started`)
     pub name: String,
     /// Event payload
     pub data: BexExternalValue,
