@@ -177,6 +177,7 @@ export type WorkerOutMessage =
   | { type: 'fetchLogNew'; entry: FetchLogEntry }
   | { type: 'fetchLogUpdate'; logId: number; patch: Partial<FetchLogEntry> }
   | { type: 'runtimeEventNew'; event: RuntimeEvent; callId: number | null }
+  | { type: 'runtimeEventError'; error: string }
   | { type: 'envVarRequest'; id: number; variable: string }
   | { type: 'vfsFileChanged'; path: string; content: string }
   | { type: 'vfsFileDeleted'; path: string }

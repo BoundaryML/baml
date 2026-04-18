@@ -1685,7 +1685,8 @@ impl BexEngine {
                             });
 
                         // Check if this is a log event (emitted by log.info, log.debug, etc.)
-                        let event = if event_name == "log" {
+                        // Uses reserved name "$baml_log" to distinguish from user events.
+                        let event = if event_name == "$baml_log" {
                             // Extract level and data from the log payload.
                             if let BexExternalValue::Map { entries, .. } = &external_data {
                                 let level = entries

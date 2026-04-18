@@ -3533,8 +3533,27 @@ impl<'db> TypeInferenceBuilder<'db> {
                     for i in 0..namespace_path.len() {
                         let prefix = &namespace_path[..=i];
                         if !pkg_items.namespaces.contains_key(prefix) {
-                            // This prefix doesn't exist, so namespace_path[i] is the first invalid segment
-                            unresolved_segment = Some(&namespace_path[i]);
+                            // This prefix doesn't exist as a namespace.
+                            // Check if namespace_path[i] is a valid type or value in the parent namespace.
+                            let parent_ns = &namespace_path[..i];
+                            let segment_name = &namespace_path[i];
+
+                            let is_type_or_value =
+                                pkg_items.lookup_type(parent_ns, segment_name).is_some()
+                                    || pkg_items.lookup_value(parent_ns, segment_name).is_some();
+
+                            if is_type_or_value {
+                                // namespace_path[i] is a valid type/value, so the unresolved segment
+                                // is the next segment (or the final item if there's no next segment)
+                                if i + 1 < namespace_path.len() {
+                                    unresolved_segment = Some(&namespace_path[i + 1]);
+                                }
+                                // else: unresolved_segment already points to item_path.last(), keep it
+                            } else {
+                                // This segment doesn't exist as a namespace, type, or value
+                                // so namespace_path[i] is the first invalid segment
+                                unresolved_segment = Some(&namespace_path[i]);
+                            }
                             break;
                         }
                     }
@@ -3547,6 +3566,16 @@ impl<'db> TypeInferenceBuilder<'db> {
                         if is_valid_namespace {
                             unresolved_segment = None;
                         }
+                    }
+
+                    // Don't report errors for synthesized PPIR functions like __make_stream.
+                    // These are generated at the PPIR layer for $parse_stream companions.
+                    if unresolved_segment.is_some()
+                        && item_path.len() == 2
+                        && item_path[0].as_str() == "llm"
+                        && item_path[1].as_str() == "__make_stream"
+                    {
+                        unresolved_segment = None;
                     }
 
                     if let Some(seg) = unresolved_segment {
@@ -3683,6 +3712,36 @@ impl<'db> TypeInferenceBuilder<'db> {
                     variant_name.clone(),
                     TyAttr::default(),
                 ));
+            }
+        }
+
+        // Try as a class method (UFCS): for paths like ["Array", "length"],
+        // check if a prefix resolves to a class and the last segment is a method.
+        for split in 1..path.len() {
+            let ns = &path[..split - 1];
+            let type_name = &path[split - 1];
+            if let Some(Definition::Class(class_loc)) = pkg_items.lookup_type(ns, type_name) {
+                let method_name = &path[split];
+                // Only support single method name after class (no further chaining)
+                if split + 1 != path.len() {
+                    continue;
+                }
+                let db = self.context.db();
+                let class_qtn = crate::lower_type_expr::qualify_def(
+                    db,
+                    Definition::Class(class_loc),
+                    type_name,
+                );
+                // Look up method on this class (no type args for UFCS)
+                if let Some((method_ty, class_loc, func_loc)) =
+                    self.lookup_class_method(&class_qtn, &[], method_name)
+                {
+                    self.resolutions.insert(
+                        expr_id,
+                        crate::inference::MemberResolution::Method { class_loc, func_loc },
+                    );
+                    return Some(method_ty);
+                }
             }
         }
 
@@ -4393,6 +4452,13 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // Build bindings from class-level generic params → concrete args.
                 let mut bindings =
                     crate::generics::bind_type_vars(&class_data.generic_params, class_type_args);
+                // Seed class-level generics as TypeVar entries when no concrete args
+                // were provided (e.g., UFCS calls like `Array.length(arr)`).
+                for gp in &class_data.generic_params {
+                    bindings
+                        .entry(gp.clone())
+                        .or_insert_with(|| Ty::TypeVar(gp.clone(), TyAttr::default()));
+                }
                 // Seed method-level generics as TypeVar entries so they survive
                 // lowering and can be resolved by call-site inference.
                 for gp in &method_data.generic_params {
@@ -4405,12 +4471,18 @@ impl<'db> TypeInferenceBuilder<'db> {
                 let sig = baml_compiler2_ppir::function_signature(db, func_loc);
                 let mut diags = Vec::new();
 
-                // Build the self type WITH concrete type args.
-                let class_ty = Ty::Class(
-                    class_name.clone(),
-                    class_type_args.to_vec(),
-                    TyAttr::default(),
-                );
+                // Build the self type WITH concrete type args, or TypeVars for
+                // unbound generics (UFCS case).
+                let class_ty_args: Vec<Ty> = if class_type_args.is_empty() {
+                    class_data
+                        .generic_params
+                        .iter()
+                        .map(|gp| Ty::TypeVar(gp.clone(), TyAttr::default()))
+                        .collect()
+                } else {
+                    class_type_args.to_vec()
+                };
+                let class_ty = Ty::Class(class_name.clone(), class_ty_args, TyAttr::default());
 
                 // All generic params for fallback lowering (class + method).
                 let mut all_generic_params = class_data.generic_params.clone();

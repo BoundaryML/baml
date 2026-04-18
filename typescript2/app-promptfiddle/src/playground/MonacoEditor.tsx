@@ -887,7 +887,15 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, heig
         setRuntimePort(runtimePort, { connectionVersion: connectionVersionRef.current });
         setReloadCallback(() => restartWorkerRef.current?.());
         setNavigateToSource((source) => {
-          const editor = vscode.window.activeTextEditor;
+          // Find a visible BAML editor to navigate to.
+          // NOTE: The WASM runtime exposes runtime.resolveFileId(fileId) which returns the
+          // full file path. To use it from here, we'd need to add RPC from main thread → worker.
+          // For now, we search visible BAML editors as a fallback since promptfiddle typically
+          // has a single .baml file open.
+          const bamlEditor = vscode.window.visibleTextEditors.find(
+            (e) => e.document.uri.path.endsWith('.baml') || e.document.languageId === 'baml'
+          );
+          const editor = bamlEditor ?? vscode.window.activeTextEditor;
           if (editor) {
             const position = new vscode.Position(source.line, source.column);
             editor.selection = new vscode.Selection(position, position);
@@ -897,7 +905,7 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, heig
 
         // ── Log decorations (inline display like ErrorLens) ───────────────
         // Create decoration types for each log level with inline after-text
-        console.log('[MonacoEditor] Creating log decoration types...');
+        let lastDecoratedEditor: vscode.TextEditor | null = null;
         const logDecorationTypes = {
           debug: vscode.window.createTextEditorDecorationType({
             after: { color: '#888888', margin: '0 0 0 1em' },
@@ -916,7 +924,6 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, heig
             isWholeLine: true,
           }),
         };
-        console.log('[MonacoEditor] Log decoration types created:', logDecorationTypes);
         workerLspDisposables.push(
           { dispose: () => logDecorationTypes.debug.dispose() },
           { dispose: () => logDecorationTypes.info.dispose() },
@@ -927,23 +934,20 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, heig
         // Apply log decorations to the active editor
         const applyLogDecorations = (decorations: Array<{ line: number; level: string; message: string; count: number }>) => {
           try {
-            console.log('[MonacoEditor] applyLogDecorations called with', decorations.length, 'decorations');
-
             // Try activeTextEditor first, fall back to visibleTextEditors
             let editor = vscode.window.activeTextEditor;
-            console.log('[MonacoEditor] activeTextEditor:', editor ? editor.document.uri.path : 'null');
-            console.log('[MonacoEditor] visibleTextEditors:', vscode.window.visibleTextEditors.map(e => e.document.uri.path));
 
             if (!editor) {
               // Find a BAML editor from visible editors
               editor = vscode.window.visibleTextEditors.find(e => e.document.uri.path.endsWith('.baml')) ?? null;
-              console.log('[MonacoEditor] Found BAML editor from visible:', editor ? editor.document.uri.path : 'null');
             }
 
             if (!editor) {
-              console.log('[MonacoEditor] No editor found, skipping decorations');
               return;
             }
+
+            // Track this editor so we can clear its decorations later
+            lastDecoratedEditor = editor;
 
             // Group decorations by level
             const byLevel: Record<string, DecorationOptions[]> = {
@@ -968,35 +972,24 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, heig
               });
             }
 
-            console.log('[MonacoEditor] Grouped decorations:', {
-              debug: byLevel.debug.length,
-              info: byLevel.info.length,
-              warn: byLevel.warn.length,
-              error: byLevel.error.length,
-            });
-
             // Apply decorations for each level
             editor.setDecorations(logDecorationTypes.debug, byLevel.debug);
             editor.setDecorations(logDecorationTypes.info, byLevel.info);
             editor.setDecorations(logDecorationTypes.warn, byLevel.warn);
             editor.setDecorations(logDecorationTypes.error, byLevel.error);
-            console.log('[MonacoEditor] setDecorations completed');
-          } catch (err) {
-            console.error('[MonacoEditor] Error in applyLogDecorations:', err);
+          } catch {
+            // Silently ignore decoration errors
           }
         };
 
-        // Clear all log decorations
+        // Clear all log decorations on the editor that received them
         const clearLogDecorations = () => {
-          let editor = vscode.window.activeTextEditor;
-          if (!editor) {
-            editor = vscode.window.visibleTextEditors.find(e => e.document.uri.path.endsWith('.baml')) ?? null;
-          }
-          if (!editor) return;
-          editor.setDecorations(logDecorationTypes.debug, []);
-          editor.setDecorations(logDecorationTypes.info, []);
-          editor.setDecorations(logDecorationTypes.warn, []);
-          editor.setDecorations(logDecorationTypes.error, []);
+          if (!lastDecoratedEditor) return;
+          lastDecoratedEditor.setDecorations(logDecorationTypes.debug, []);
+          lastDecoratedEditor.setDecorations(logDecorationTypes.info, []);
+          lastDecoratedEditor.setDecorations(logDecorationTypes.warn, []);
+          lastDecoratedEditor.setDecorations(logDecorationTypes.error, []);
+          lastDecoratedEditor = null;
         };
 
         // Listen for log decoration messages from the worker
@@ -1004,10 +997,8 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, heig
           if (disposed) return;
           const data = event.data;
           if (data?.type === 'logDecorations') {
-            console.log('[MonacoEditor] Received logDecorations:', data.decorations);
             applyLogDecorations(data.decorations);
           } else if (data?.type === 'clearLogDecorations') {
-            console.log('[MonacoEditor] Received clearLogDecorations');
             clearLogDecorations();
           }
         };

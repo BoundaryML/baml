@@ -1,26 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-function log.debug(data: map<string, unknown>) -> null {
-    load_const null
-    return
-}
-
-function log.error(data: map<string, unknown>) -> null {
-    load_const null
-    return
-}
-
-function log.info(data: map<string, unknown>) -> null {
-    load_const null
-    return
-}
-
-function log.warn(data: map<string, unknown>) -> null {
-    load_const null
-    return
-}
-
 function user.emit_custom_event(name: string) -> null {
     load_const "user_action"
     load_var name
@@ -64,7 +44,7 @@ function user.nested_outer() -> int {
 }
 
 function user.process_with_logging(input: string) -> string {
-    load_const "log"
+    load_const "$baml_log"
     load_const "info"
     load_const "start"
     load_var input
@@ -92,7 +72,7 @@ function user.process_with_logging(input: string) -> string {
     alloc_map 1
     send_event
     pop 1
-    load_const "log"
+    load_const "$baml_log"
     load_const "info"
     load_const "complete"
     load_var result
@@ -114,7 +94,7 @@ function user.simple_function() -> int {
 }
 
 function user.test_logging() -> null {
-    load_const "log"
+    load_const "$baml_log"
     load_const "debug"
     load_const "Starting process"
     load_const "message"
@@ -124,7 +104,7 @@ function user.test_logging() -> null {
     alloc_map 2
     send_event
     pop 1
-    load_const "log"
+    load_const "$baml_log"
     load_const "info"
     alloc_instance User
     load_const 123
@@ -142,7 +122,7 @@ function user.test_logging() -> null {
     alloc_map 2
     send_event
     pop 1
-    load_const "log"
+    load_const "$baml_log"
     load_const "warn"
     load_const "Resource usage high"
     load_const "warning"
@@ -152,7 +132,7 @@ function user.test_logging() -> null {
     alloc_map 2
     send_event
     pop 1
-    load_const "log"
+    load_const "$baml_log"
     load_const "error"
     load_const "E001"
     load_const 3

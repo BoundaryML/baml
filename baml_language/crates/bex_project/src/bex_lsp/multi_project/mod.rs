@@ -1079,6 +1079,17 @@ impl super::BexLsp for BexMulitProject {
     fn expand_test_set(&self, project: &str, generation: u64, testset_name: &str) {
         self.expand_test_set_impl(project, generation, testset_name);
     }
+
+    fn resolve_file_id(&self, file_id: u32) -> Option<String> {
+        let projects = self.projects.lock().unwrap();
+        for project in projects.values() {
+            let db = project.project.db.lock().unwrap();
+            if let Some(path) = db.file_id_to_path(baml_base::FileId::new(file_id)) {
+                return Some(path.to_string_lossy().to_string());
+            }
+        }
+        None
+    }
 }
 
 pub fn new_lsp(

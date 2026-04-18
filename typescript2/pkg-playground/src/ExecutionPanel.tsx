@@ -163,7 +163,7 @@ export interface ExecutionPanelProps {
   /** Called when user clicks the WASM panic banner to reload the worker. */
   onReload?: () => void;
   /** Called when user clicks an event with source location to jump to that line. */
-  onNavigateToSource?: (source: { line: number; column: number }) => void;
+  onNavigateToSource?: (source: { fileId: number; line: number; column: number }) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -615,6 +615,10 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
         case "logDecorations":
         case "clearLogDecorations":
           // These are handled by MonacoEditor, ignore here
+          break;
+
+        case "runtimeEventError":
+          console.warn('[ExecutionPanel] runtimeEventError:', data.error);
           break;
 
         default:
@@ -1340,7 +1344,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
                                   isCursorMatch && "bg-vsc-yellow/20 rounded px-1 -mx-1",
                                   source && onNavigateToSource && "cursor-pointer hover:bg-vsc-bg-secondary"
                                 )}
-                                onClick={source && onNavigateToSource ? () => onNavigateToSource({ line: source.line, column: source.column }) : undefined}
+                                onClick={source && onNavigateToSource ? () => onNavigateToSource({ fileId: source.fileId, line: source.line, column: source.column }) : undefined}
                               >
                                 <span className={`${colorCls} font-semibold shrink-0 w-10 uppercase`}>{label}</span>
                                 <span className="text-vsc-text flex-1 font-mono truncate">{payload}</span>
@@ -1664,7 +1668,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
                                       isCursorMatch && "bg-vsc-yellow/20 rounded px-1 -mx-1",
                                       source && onNavigateToSource && "cursor-pointer hover:bg-vsc-bg-secondary"
                                     )}
-                                    onClick={source && onNavigateToSource ? () => onNavigateToSource({ line: source.line, column: source.column }) : undefined}
+                                    onClick={source && onNavigateToSource ? () => onNavigateToSource({ fileId: source.fileId, line: source.line, column: source.column }) : undefined}
                                   >
                                     <span className={`${colorCls} font-semibold shrink-0 w-10 uppercase`}>{label}</span>
                                     <span className="text-vsc-text flex-1 font-mono truncate">{payload}</span>

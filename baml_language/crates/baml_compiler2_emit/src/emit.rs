@@ -1294,13 +1294,13 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                     // the full call site span for proper source location capture.
                     let call_site_span = self.current_debug_span;
 
-                    // 1. Push event name "log"
+                    // 1. Push event name "$baml_log" (reserved name to distinguish from user events)
                     let log_str_idx = self.objects.len();
-                    self.objects.push(Object::String("log".to_string()));
+                    self.objects.push(Object::String("$baml_log".to_string()));
                     let log_const_idx =
                         self.add_constant(ConstValue::Object(ObjectIndex::from_raw(log_str_idx)));
                     let inst = self.emit(Instruction::LoadConst(log_const_idx));
-                    self.set_operand(inst, OperandMeta::Const("\"log\"".to_string()));
+                    self.set_operand(inst, OperandMeta::Const("\"$baml_log\"".to_string()));
 
                     // 2. Push value1: level string (e.g., "info")
                     let level_val_idx = self.objects.len();

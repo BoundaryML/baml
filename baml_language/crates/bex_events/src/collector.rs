@@ -248,8 +248,8 @@ impl FunctionLog {
                     log_events.push(log.clone());
                 }
                 EventKind::Custom(custom) => {
-                    // Recognize log events emitted by `log.info()` etc. via
-                    // `baml.events.send("log", { level, message, data })`.
+                    // Recognize log events emitted by `log.info()` etc. via the reserved
+                    // event name "$baml_log" (fallback path if not already converted to Log).
                     if let Some(log) = extract_log_from_custom(custom) {
                         log_events.push(log);
                     }
@@ -292,10 +292,11 @@ fn sum_option(a: Option<i64>, b: Option<i64>) -> Option<i64> {
 
 /// Try to extract a `LogEvent` from a `CustomEvent` emitted by `log.info()` etc.
 ///
-/// The `log.*` BAML functions emit custom events with name="log" and data structured as:
+/// The `log.*` BAML functions emit custom events with name="$baml_log" (reserved name
+/// to distinguish from user events) and data structured as:
 /// `{ level: string, data: map<string, unknown> }`.
 fn extract_log_from_custom(custom: &CustomEvent) -> Option<LogEvent> {
-    if custom.name != "log" {
+    if custom.name != "$baml_log" {
         return None;
     }
 

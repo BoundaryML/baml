@@ -483,7 +483,7 @@ fn bex_value_to_debug_impl(value: &BexExternalValue, depth: usize) -> String {
             enum_name,
             variant_name,
         } => format!("{enum_name}::{variant_name}"),
-        BexExternalValue::Union { value, .. } => bex_value_to_debug_impl(value, depth),
+        BexExternalValue::Union { value, .. } => bex_value_to_debug_impl(value, depth + 1),
         BexExternalValue::Handle(_) => "<handle>".to_string(),
         BexExternalValue::Uint8Array(bytes) => format!("<bytes[{}]>", bytes.len()),
         BexExternalValue::RustData(_) => "<rust_data>".to_string(),
@@ -647,7 +647,7 @@ mod tests {
         println!("{}", serde_json::to_string_pretty(&json).unwrap());
         assert_eq!(json["$baml"]["type"], "Person");
         assert_eq!(json["name"], "Bob");
-        assert_eq!(json["address"]["__class"], "Address");
+        assert_eq!(json["address"]["$baml"]["type"], "Address");
         assert_eq!(json["address"]["city"], "NYC");
     }
 
@@ -688,7 +688,7 @@ mod tests {
         let json = bex_value_to_json(&parent);
         assert_eq!(json["$baml"]["type"], "TreeNode");
         assert_eq!(json["value"], 0);
-        assert_eq!(json["children"][0]["__class"], "TreeNode");
+        assert_eq!(json["children"][0]["$baml"]["type"], "TreeNode");
         assert_eq!(json["children"][0]["value"], 1);
     }
 
@@ -803,9 +803,9 @@ mod tests {
         };
 
         let json = bex_value_to_json(&value);
-        assert_eq!(json["alice"]["__class"], "Person");
+        assert_eq!(json["alice"]["$baml"]["type"], "Person");
         assert_eq!(json["alice"]["age"], 30);
-        assert_eq!(json["bob"]["__class"], "Person");
+        assert_eq!(json["bob"]["$baml"]["type"], "Person");
         assert_eq!(json["bob"]["age"], 25);
     }
 
@@ -829,7 +829,7 @@ mod tests {
 
         let json = bex_value_to_json(&value);
         assert!(json.is_array());
-        assert_eq!(json[0]["__class"], "Item");
+        assert_eq!(json[0]["$baml"]["type"], "Item");
         assert_eq!(json[0]["id"], 0);
         assert_eq!(json[2]["id"], 2);
     }

@@ -326,6 +326,15 @@ impl BamlWasmRuntime {
         self.bex.request_cursor_context(file, line, column);
     }
 
+    /// Resolve a file ID to its file path.
+    ///
+    /// Used by the playground to navigate to source locations when clicking on
+    /// log events. Returns the file path if the ID is valid, or undefined if not found.
+    #[wasm_bindgen(js_name = resolveFileId)]
+    pub fn resolve_file_id(&self, file_id: u32) -> Option<String> {
+        self.bex.resolve_file_id(file_id)
+    }
+
     /// Request test collection for a project.
     ///
     /// Triggers async test collection for the given project root path and sends

@@ -385,38 +385,42 @@ function onPlaygroundNotification(notification: PlaygroundNotification): void {
       });
       break;
     case "runtimeEvent": {
-      // Decode and pass the raw proto through
-      const bytes = new Uint8Array(notification.data);
-      const event = RuntimeEvent.decode(bytes);
-      const callId = activeCallIds.size === 1 ? [...activeCallIds][0] : null;
-      postOut({ type: "runtimeEventNew", event, callId });
+      try {
+        // Decode and pass the raw proto through
+        const bytes = new Uint8Array(notification.data);
+        const event = RuntimeEvent.decode(bytes);
+        const callId = activeCallIds.size === 1 ? [...activeCallIds][0] : null;
+        postOut({ type: "runtimeEventNew", event, callId });
 
-      // Extract log events and update decorations
-      const kind = event.event?.kind;
-      console.log('[Worker] runtimeEvent kind:', kind?.$case, 'source:', kind?.$case === 'log' ? kind.log.source : null);
-      if (kind?.$case === 'log' && kind.log.source) {
-        const source = kind.log.source;
-        const line = source.line;
-        const level = normalizeLogLevel(kind.log.level);
-        const message = formatValueShort(kind.log.data);
+        // Extract log events and update decorations
+        const kind = event.event?.kind;
+        console.log('[Worker] runtimeEvent kind:', kind?.$case, 'source:', kind?.$case === 'log' ? kind.log.source : null);
+        if (kind?.$case === 'log' && kind.log.source) {
+          const source = kind.log.source;
+          const line = source.line;
+          const level = normalizeLogLevel(kind.log.level);
+          const message = formatValueShort(kind.log.data);
 
-        // Heuristic: only show decoration if the formatted output is longer than the source span.
-        // This filters out constant literals (where output ≈ source) and shows expanded variables.
-        const sourceSpanLength = source.endOffset - source.startOffset;
-        const isLikelyVariable = message.length > sourceSpanLength + 5;
-        console.log('[Worker] Log decoration - line:', line, 'level:', level, 'message:', message, 'spanLen:', sourceSpanLength, 'show:', isLikelyVariable);
+          // Heuristic: only show decoration if the formatted output is longer than the source span.
+          // This filters out constant literals (where output ≈ source) and shows expanded variables.
+          const sourceSpanLength = source.endOffset - source.startOffset;
+          const isLikelyVariable = message.length > sourceSpanLength + 5;
+          console.log('[Worker] Log decoration - line:', line, 'level:', level, 'message:', message, 'spanLen:', sourceSpanLength, 'show:', isLikelyVariable);
 
-        if (isLikelyVariable) {
-          const existing = decorationsByLine.get(line);
-          if (existing) {
-            existing.message = message;
-            existing.level = level;
-            existing.count += 1;
-          } else {
-            decorationsByLine.set(line, { level, message, count: 1 });
+          if (isLikelyVariable) {
+            const existing = decorationsByLine.get(line);
+            if (existing) {
+              existing.message = message;
+              existing.level = level;
+              existing.count += 1;
+            } else {
+              decorationsByLine.set(line, { level, message, count: 1 });
+            }
+            emitLogDecorations();
           }
-          emitLogDecorations();
         }
+      } catch (err) {
+        postOut({ type: "runtimeEventError", error: String(err) });
       }
       break;
     }

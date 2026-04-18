@@ -5,7 +5,7 @@ source: crates/baml_tests/src/generated_tests.rs
 function user.array_length() -> int throws never {
   { : never
     let array = [1, 2, 3] : int[]
-    return baml.Array.length(array) : unknown
+    return baml.Array.length(array) : int
   }
 }
 function user.Bar() -> int throws never {
