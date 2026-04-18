@@ -10,7 +10,7 @@
  */
 
 import type { FC } from 'react';
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { usePlayground } from './PlaygroundProvider';
 import { MonacoEditor } from './MonacoEditor';
 import { RotateCcw } from 'lucide-react';
@@ -18,15 +18,31 @@ import { RotateCcw } from 'lucide-react';
 export const SplitPreview: FC = () => {
   const { files, setFiles, resetFiles } = usePlayground();
   const [showConfirm, setShowConfirm] = useState(false);
+  const confirmTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (confirmTimeoutRef.current) {
+        clearTimeout(confirmTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const handleReset = () => {
     if (showConfirm) {
+      if (confirmTimeoutRef.current) {
+        clearTimeout(confirmTimeoutRef.current);
+        confirmTimeoutRef.current = null;
+      }
       resetFiles();
       setShowConfirm(false);
       window.location.reload();
     } else {
+      if (confirmTimeoutRef.current) {
+        clearTimeout(confirmTimeoutRef.current);
+      }
       setShowConfirm(true);
-      setTimeout(() => setShowConfirm(false), 3000);
+      confirmTimeoutRef.current = setTimeout(() => setShowConfirm(false), 3000);
     }
   };
 
