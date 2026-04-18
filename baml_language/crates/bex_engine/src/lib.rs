@@ -70,8 +70,8 @@ use bex_events::{EventKind, FunctionEnd, FunctionEvent, FunctionStart, SpanConte
 pub use bex_events::{RuntimeEvent, SpanId};
 pub use bex_external_types::{BexExternalValue, EpochGuard, Ty, TypeName, UnionMetadata};
 // Re-export GcStats for users of the engine
+use bex_heap::BexHeap;
 pub use bex_heap::GcStats;
-use bex_heap::{BexHeap, CollectionLevel};
 use bex_vm::{BexVm, SpanNotification, VmExecState};
 use bex_vm_types::{FunctionMeta, GlobalPool, HeapPtr, Object, SysOp, Value};
 pub use conversion::test_arg_to_external;
@@ -1317,17 +1317,20 @@ impl BexEngine {
 
     /// Run GC if conditions are met (called at safepoints).
     ///
+    /// Uses the adaptive `should_collect()` policy to choose the appropriate
+    /// collection level (Minor or Major) based on live object counts and
+    /// allocation pressure.
+    ///
     /// Note: This function is known to be incorrect for multi-VM workloads — it
     /// runs GC without coordinating with other VMs. It is kept working here for
     /// single-VM use but will be replaced by a proper coordinated path later.
     fn maybe_run_gc(&self, vm: &mut BexVm) {
         self.heap.verify_quick();
-        if self.heap.should_gc() {
+        if let Some(level) = self.heap.should_collect() {
             let roots = Self::collect_vm_roots(vm);
             unsafe {
-                let (stats, _remapped_roots, forwarding) = self
-                    .heap
-                    .collect_garbage_generational(&roots, CollectionLevel::Minor);
+                let (stats, _remapped_roots, forwarding) =
+                    self.heap.collect_garbage_generational(&roots, level);
 
                 // Update VM stack with forwarding pointers
                 for value in &mut vm.stack.0 {
@@ -1349,11 +1352,12 @@ impl BexEngine {
 
                 self.heap.reset_gc_counter();
                 tracing::debug!(
-                    "GC ({:?}) completed: {} live, {} collected, {} promoted to gen1",
+                    "GC ({:?}) completed: {} live, {} collected, {} promoted to gen1, {} promoted to gen2",
                     stats.level,
                     stats.live_count,
                     stats.collected_count,
                     stats.promoted_to_gen1,
+                    stats.promoted_to_gen2,
                 );
             }
             self.heap.verify_quick();

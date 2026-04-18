@@ -436,10 +436,6 @@ fn test_mark_card_for_gen2_object() {
 }
 
 #[test]
-#[ignore = "BUG: pre-existing Gen2 objects are not fixed up after minor GC. \
-    fixup_promoted_objects_from (gc.rs:663) only rewrites the newly promoted tail \
-    of Gen2; existing Gen2 objects keep stale pointers to cleared Gen0 space. \
-    Fix: minor GC needs a dirty-card fixup pass over pre-existing Gen2 objects."]
 fn test_dirty_card_roots_keep_gen0_alive_during_minor_gc() {
     let heap = BexHeap::new(vec![]);
     let mut tlab = Tlab::new(Arc::clone(&heap));
@@ -557,17 +553,7 @@ fn test_card_tables_cleared_after_minor_gc() {
 /// A pre-existing Gen2 container holds a reference to a Gen0 object.
 /// After a minor GC the Gen0 object is promoted to Gen1 and the Gen2
 /// container's reference should be updated to point at the new Gen1 copy.
-///
-/// This test asserts correct behavior.  It is currently ignored because
-/// `fixup_promoted_objects_from` (gc.rs:663) only rewrites the newly-promoted
-/// tail of Gen2; pre-existing Gen2 objects keep stale pointers to cleared
-/// Gen0 space after a minor GC.  The fix requires a dirty-card fixup pass
-/// over all pre-existing Gen2 objects.
 #[test]
-#[ignore = "BUG: pre-existing Gen2 objects are not fixed up after minor GC. \
-    fixup_promoted_objects_from (gc.rs:663) only rewrites the newly promoted tail \
-    of Gen2; existing Gen2 objects keep stale pointers to cleared Gen0 space. \
-    Fix: minor GC needs a dirty-card fixup pass over pre-existing Gen2 objects."]
 fn test_critical_gen2_stale_pointer_after_minor_gc() {
     let heap = BexHeap::new(vec![]);
     let mut tlab = Tlab::new(Arc::clone(&heap));
@@ -629,10 +615,6 @@ fn test_critical_gen2_stale_pointer_after_minor_gc() {
 ///
 /// Same root cause as `test_critical_gen2_stale_pointer_after_minor_gc`.
 #[test]
-#[ignore = "BUG: pre-existing Gen2 objects are not fixed up after minor GC. \
-    fixup_promoted_objects_from (gc.rs:663) only rewrites the newly promoted tail \
-    of Gen2; existing Gen2 objects keep stale pointers to cleared Gen0 space. \
-    Fix: minor GC needs a dirty-card fixup pass over pre-existing Gen2 objects."]
 fn test_critical_gen2_chain_through_gen0_after_minor_gc() {
     let heap = BexHeap::new(vec![]);
     let mut tlab = Tlab::new(Arc::clone(&heap));

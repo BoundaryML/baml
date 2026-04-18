@@ -29,6 +29,12 @@ use crate::{
     tlab::TlabChunk,
 };
 
+/// Minimum Gen1 live count before a Minor GC is triggered by Gen1 pressure.
+pub(crate) const GEN1_FLOOR: usize = 10_000;
+
+/// Minimum Gen2 live count before a Major GC is triggered by Gen2 pressure.
+pub(crate) const GEN2_FLOOR: usize = 50_000;
+
 /// Which generation of the heap an object lives in.
 ///
 /// The ordering `CompileTime < Gen0 < Gen1 < Gen2` is intentional: write barriers
@@ -43,6 +49,12 @@ pub enum Generation {
     Gen1,
     /// Gen2 old generation — long-lived objects.
     Gen2,
+}
+impl Generation {
+    /// Check if this generation is young (Gen0 or Gen1).
+    pub const fn is_young(self) -> bool {
+        matches!(self, Generation::Gen0 | Generation::Gen1)
+    }
 }
 
 /// Default TLAB chunk size (number of object slots).
@@ -171,6 +183,28 @@ pub struct BexHeap {
     /// Allocations since last GC (for triggering heuristic).
     allocs_since_gc: AtomicUsize,
 
+    /// Number of live Gen1 objects after the last collection (minor or major).
+    ///
+    /// Used to compute the adaptive Gen1 collection threshold.
+    gen1_live_after_last_collection: AtomicUsize,
+
+    /// Number of live Gen2 objects after the last collection.
+    ///
+    /// Used to compute the adaptive Gen2 collection threshold.
+    gen2_live_after_last_collection: AtomicUsize,
+
+    /// Gen1 size threshold that triggers a Minor GC.
+    ///
+    /// Starts at 10,000 objects; updated after each collection to 2× the live
+    /// Gen1 count (floor 10,000).
+    gen1_collection_threshold: AtomicUsize,
+
+    /// Gen2 size threshold that triggers a Major GC.
+    ///
+    /// Starts at 50,000 objects; updated after each collection to 2× the live
+    /// Gen2 count (floor 50,000).
+    gen2_collection_threshold: AtomicUsize,
+
     /// Debug instrumentation state and config.
     debug_state: HeapDebuggerState,
 }
@@ -246,6 +280,10 @@ impl BexHeap {
             tlab_size,
             growth_lock: Mutex::new(()),
             allocs_since_gc: AtomicUsize::new(0),
+            gen1_live_after_last_collection: AtomicUsize::new(0),
+            gen2_live_after_last_collection: AtomicUsize::new(0),
+            gen1_collection_threshold: AtomicUsize::new(GEN1_FLOOR),
+            gen2_collection_threshold: AtomicUsize::new(GEN2_FLOOR),
             debug_state: HeapDebuggerState::new(debug),
         })
     }
@@ -703,10 +741,9 @@ impl BexHeap {
         }
     }
 
-    /// Check if GC should run based on allocation pressure.
+    /// Check if GC should run based on allocation pressure (legacy, alloc-count only).
     ///
-    /// Simple heuristic: trigger GC after N allocations since last collection.
-    /// This can be tuned based on workload characteristics.
+    /// Use [`BexHeap::should_collect`] for the full adaptive triggering policy.
     pub fn should_gc(&self) -> bool {
         const GC_THRESHOLD: usize = 10_000; // Tune based on profiling
         self.allocs_since_gc.load(Ordering::Relaxed) >= GC_THRESHOLD
@@ -720,6 +757,55 @@ impl BexHeap {
     /// Increment allocation counter (called by TLAB on alloc).
     pub(crate) fn record_alloc(&self) {
         self.allocs_since_gc.fetch_add(1, Ordering::Relaxed);
+    }
+
+    /// Load the current allocation count since last GC.
+    pub(crate) fn allocs_since_gc(&self) -> usize {
+        self.allocs_since_gc.load(Ordering::Relaxed)
+    }
+
+    /// Load the Gen1 collection threshold.
+    pub(crate) fn gen1_collection_threshold(&self) -> usize {
+        self.gen1_collection_threshold.load(Ordering::Relaxed)
+    }
+
+    /// Load the Gen2 collection threshold.
+    pub(crate) fn gen2_collection_threshold(&self) -> usize {
+        self.gen2_collection_threshold.load(Ordering::Relaxed)
+    }
+
+    /// Update thresholds after a Minor (Gen0+Gen1) collection.
+    ///
+    /// Sets the Gen1 threshold to `max(2 * live_gen1, GEN1_FLOOR)` and updates
+    /// Gen2 tracking if objects were promoted.
+    pub(crate) fn update_thresholds_after_minor(&self, live_gen1: usize, live_gen2: usize) {
+        self.gen1_live_after_last_collection
+            .store(live_gen1, Ordering::Relaxed);
+        self.gen1_collection_threshold
+            .store((live_gen1 * 2).max(GEN1_FLOOR), Ordering::Relaxed);
+
+        // Also update Gen2 tracking (objects may have been promoted to Gen2).
+        self.gen2_live_after_last_collection
+            .store(live_gen2, Ordering::Relaxed);
+        self.gen2_collection_threshold
+            .store((live_gen2 * 2).max(GEN2_FLOOR), Ordering::Relaxed);
+    }
+
+    /// Update thresholds after a Major (full) collection.
+    ///
+    /// All survivors are in Gen2. Resets Gen1 tracking to zero (Gen1 is empty
+    /// after a full GC) and sets Gen2 threshold to `max(2 * live_gen2, GEN2_FLOOR)`.
+    pub(crate) fn update_thresholds_after_major(&self, live_gen2: usize) {
+        // Gen1 is empty after a full GC.
+        self.gen1_live_after_last_collection
+            .store(0, Ordering::Relaxed);
+        self.gen1_collection_threshold
+            .store(GEN1_FLOOR, Ordering::Relaxed);
+
+        self.gen2_live_after_last_collection
+            .store(live_gen2, Ordering::Relaxed);
+        self.gen2_collection_threshold
+            .store((live_gen2 * 2).max(GEN2_FLOOR), Ordering::Relaxed);
     }
 
     /// Reset the Gen0 TLAB allocation pointer (called by GC after collection).

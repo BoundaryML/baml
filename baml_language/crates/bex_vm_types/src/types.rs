@@ -517,6 +517,16 @@ pub enum Value {
     Object(HeapPtr),
 }
 
+impl Value {
+    /// Returns the [`HeapPtr`] if this is an [`Object`].
+    pub const fn as_object_ptr(&self) -> Option<HeapPtr> {
+        match self {
+            Value::Object(ptr) => Some(*ptr),
+            _ => None,
+        }
+    }
+}
+
 impl std::fmt::Display for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
