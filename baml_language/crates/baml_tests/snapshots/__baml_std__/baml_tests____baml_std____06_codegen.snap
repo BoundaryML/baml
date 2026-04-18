@@ -252,6 +252,9 @@ function baml.http.fetch_sse(request: void) -> void {
 function baml.http.send(request: void) -> void {
 }
 
+function baml.io.input(prompt: string?) -> string {
+}
+
 function baml.llm.Client.build_attempt(self: null) -> void[] {
     load_var self
     alloc_instance PlannerState

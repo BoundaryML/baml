@@ -5,7 +5,7 @@ source: crates/baml_tests/src/generated_tests.rs
 class user.MyRunner {
   threshold: float
 }
-function user.$init_test_23(registry: testing.TestCollector) -> ? throws never {
+function user.$init_test_24(registry: testing.TestCollector) -> ? throws never {
   { : null
     registry.register_test("simple runner", () -> void { ... }, my_runner) : void
       () -> void { ... } : () -> void
@@ -27,11 +27,11 @@ function user.$init_test_23(registry: testing.TestCollector) -> ? throws never {
   !! 384..393: unresolved name: my_runner
   !! 512..527: unresolved name: Quorum
 }
-lambda user.$init_test_23 {
+lambda user.$init_test_24 {
 }
-lambda user.$init_test_23 {
+lambda user.$init_test_24 {
 }
-lambda user.$init_test_23 {
+lambda user.$init_test_24 {
 }
 class user.MyRunner$stream {
   threshold: null | float

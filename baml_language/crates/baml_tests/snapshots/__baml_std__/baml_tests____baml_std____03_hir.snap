@@ -131,6 +131,9 @@ function baml.http.ok(self: ?) -> bool  [expr] {
 function baml.http.send(request: baml.http.Request) -> baml.http.Response  [builtin]
 function baml.http.text(self: ?) -> string  [builtin]
 
+--- <builtin>/baml/ns_io/io.baml ---
+function baml.io.input(prompt: string?) -> string  [builtin]
+
 --- <builtin>/baml/ns_llm/llm.baml ---
 class baml.llm.ExecutionContext {
   jinja_string: string

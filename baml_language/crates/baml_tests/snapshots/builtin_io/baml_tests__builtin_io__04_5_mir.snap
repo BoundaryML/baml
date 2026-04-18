@@ -620,6 +620,42 @@ fn user.WriteFileBytes() -> int {
     }
 }
 
+fn user.AskName() -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: future<string>
+
+    bb0: {
+        _1 = dispatch_future const fn baml.io.input(const "What is your name? ") -> bb1;
+    }
+
+    bb1: {
+        _0 = await _1 -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.AskNoPrompt() -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: future<string>
+
+    bb0: {
+        _1 = dispatch_future const fn baml.io.input(const null) -> bb1;
+    }
+
+    bb1: {
+        _0 = await _1 -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.ConnectAndRead() -> string {
     // Locals:
     let _0: string // _0 // return

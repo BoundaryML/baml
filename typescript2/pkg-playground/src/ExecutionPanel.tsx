@@ -301,6 +301,9 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
   const [showApiKeysDialog, setShowApiKeysDialog] = useState(false);
   const showApiKeysDialogRef = useRef(false);
 
+  // Pending io.input() requests keyed by callId, each entry is a queue of { id, prompt }
+  const [pendingInputs, setPendingInputs] = useState<Map<number, Array<{ id: number; prompt: string | undefined }>>>(new Map());
+
   const [diagsExpanded, setDiagsExpanded] = useState(false);
   const [buildTime, setBuildTime] = useState<number | null>(null);
   const [wasmPanic, setWasmPanic] = useState<{ message: string; stack?: string } | null>(null);
@@ -588,6 +591,17 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
           break;
         }
 
+        case 'inputRequest': {
+          const { id, prompt, callId } = data;
+          setPendingInputs((prev) => {
+            const next = new Map(prev);
+            const arr = next.get(callId) ?? [];
+            next.set(callId, [...arr, { id, prompt }]);
+            return next;
+          });
+          break;
+        }
+
         case "ready":
           break;
 
@@ -748,6 +762,17 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
     if (!selectedProject) return;
     port.postMessage({ type: 'cancelCall', id: runId, project: selectedProject });
   }, [port, selectedProject]);
+
+  const submitInput = useCallback((id: number, value: string, callId: number) => {
+    port.postMessage({ type: 'inputResponse', id, value });
+    setPendingInputs((prev) => {
+      const next = new Map(prev);
+      const arr = (next.get(callId) ?? []).filter((r) => r.id !== id);
+      if (arr.length === 0) next.delete(callId);
+      else next.set(callId, arr);
+      return next;
+    });
+  }, [port]);
 
   const toggleResultMode = useCallback((runId: number) => {
     setResultModes((prev) => ({
@@ -1354,6 +1379,21 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
                         </div>
                       </div>
                     )}
+                    {/* Inline io.input() prompts for this run */}
+                    {(pendingInputs.get(run.id) ?? []).map((req) => (
+                      <div key={req.id} className="flex items-center gap-2 px-[22px] py-1.5 border-b border-vsc-border bg-vsc-surface">
+                        <span className="text-vsc-text-faint text-xs shrink-0">{req.prompt ?? 'Input:'}</span>
+                        <input
+                          className="flex-1 bg-vsc-bg border border-vsc-border rounded px-2 py-1 text-xs text-vsc-text font-vsc-mono focus:outline-none focus:border-vsc-accent"
+                          autoFocus
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              submitInput(req.id, e.currentTarget.value, run.id);
+                            }
+                          }}
+                        />
+                      </div>
+                    ))}
                     {run.status === 'cancelled' && (
                       <div className="py-1.5 pr-2.5 pl-[22px]">
                         <div className="text-[11px] text-vsc-text-faint italic">Cancelled</div>
@@ -1678,6 +1718,21 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
                             </div>
                           </div>
                         )}
+                        {/* Inline io.input() prompts for this run */}
+                        {(pendingInputs.get(run.id) ?? []).map((req) => (
+                          <div key={req.id} className="flex items-center gap-2 px-[22px] py-1.5 border-b border-vsc-border bg-vsc-surface">
+                            <span className="text-vsc-text-faint text-xs shrink-0">{req.prompt ?? 'Input:'}</span>
+                            <input
+                              className="flex-1 bg-vsc-bg border border-vsc-border rounded px-2 py-1 text-xs text-vsc-text font-vsc-mono focus:outline-none focus:border-vsc-accent"
+                              autoFocus
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  submitInput(req.id, e.currentTarget.value, run.id);
+                                }
+                              }}
+                            />
+                          </div>
+                        ))}
 
                         {/* Result / Error / Cancelled for this run */}
                         {run.status === 'cancelled' && (

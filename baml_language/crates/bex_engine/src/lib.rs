@@ -1391,9 +1391,7 @@ impl BexEngine {
             Self::cancellation_safepoint(cancel, &abort_handles)?;
 
             // Update the VM's span context so native functions can read it.
-            vm.current_span_context = span_state
-                .as_ref()
-                .map(Self::build_span_context_from_state);
+            vm.current_span_context = span_state.as_ref().map(Self::build_span_context_from_state);
 
             let exec_result = match vm.exec() {
                 Ok(state) => state,

@@ -4,10 +4,20 @@
 //! `sys_types::io`. They coexist with the legacy `SysOp*` trait impls in
 //! `lib.rs` during the transition.
 
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 use bex_heap::{BexExternalValue, BexHeap};
 use sys_ops::io::{self, CallId, OpErrorKind, SysOpContext, SysOpOutput, owned};
+
+// Process-level shared BufReader for stdin, preventing data loss when
+// BufReader over-reads into its internal buffer across multiple io.input() calls.
+static STDIN_READER: OnceLock<tokio::sync::Mutex<tokio::io::BufReader<tokio::io::Stdin>>> =
+    OnceLock::new();
+
+fn shared_stdin() -> &'static tokio::sync::Mutex<tokio::io::BufReader<tokio::io::Stdin>> {
+    STDIN_READER
+        .get_or_init(|| tokio::sync::Mutex::new(tokio::io::BufReader::new(tokio::io::stdin())))
+}
 
 use crate::NativeSysOps;
 
@@ -30,6 +40,51 @@ impl io::IoNamespaceEnv for NativeSysOps {
                 format!("Environment variable '{key}' is not valid UTF-8"),
             )),
         }
+    }
+}
+
+// ============================================================================
+// IO (stdin input)
+// ============================================================================
+
+impl io::IoNamespaceIo for NativeSysOps {
+    fn input(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        prompt: Option<String>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<String> {
+        SysOpOutput::async_op(async move {
+            use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
+
+            let mut stdin = shared_stdin().lock().await;
+
+            if let Some(p) = prompt {
+                let mut stdout = tokio::io::stdout();
+                stdout
+                    .write_all(p.as_bytes())
+                    .await
+                    .map_err(|e| OpErrorKind::Other(format!("Failed to write prompt: {e}")))?;
+                stdout
+                    .flush()
+                    .await
+                    .map_err(|e| OpErrorKind::Other(format!("Failed to flush stdout: {e}")))?;
+            }
+            let mut line = String::new();
+            stdin
+                .read_line(&mut line)
+                .await
+                .map_err(|e| OpErrorKind::Other(format!("Failed to read stdin: {e}")))?;
+            // Trim trailing newline (returns "" on EOF when read_line returns 0 bytes)
+            if line.ends_with('\n') {
+                line.pop();
+            }
+            if line.ends_with('\r') {
+                line.pop();
+            }
+            Ok(line)
+        })
     }
 }
 

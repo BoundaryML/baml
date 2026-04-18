@@ -1,0 +1,6 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 34459
+---
+=== MIR2 ===
+Skipped: project has diagnostic errors

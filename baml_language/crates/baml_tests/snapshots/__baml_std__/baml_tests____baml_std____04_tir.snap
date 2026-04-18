@@ -155,6 +155,8 @@ class baml.http.SseStream$stream {
   _handle: $rust_type
 }
 
+--- <builtin>/baml/ns_io/io.baml ---
+
 --- <builtin>/baml/ns_llm/llm.baml ---
 class baml.llm.OrchestrationStep {
   primitive_client: baml.llm.PrimitiveClient

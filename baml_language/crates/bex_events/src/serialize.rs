@@ -494,4 +494,3 @@ fn bex_value_to_debug_impl(value: &BexExternalValue, depth: usize) -> String {
         BexExternalValue::Adt(BexExternalAdt::Media(_)) => "<Media>".to_string(),
     }
 }
-
