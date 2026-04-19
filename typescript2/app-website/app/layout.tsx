@@ -25,6 +25,10 @@ const baseUrl =
 export const metadata: Metadata = {
   alternates: {
     canonical: `${baseUrl}/`,
+    types: {
+      'text/markdown': '/agent.md',
+      'text/plain': '/llms.txt',
+    },
   },
   description:
     'BAML is the first language designed with LLMs in mind. Cognitive coding for AI—code that agents write, software that humans trust.',

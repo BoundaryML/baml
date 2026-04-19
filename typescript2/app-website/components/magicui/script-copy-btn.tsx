@@ -1,6 +1,6 @@
 'use client';
 
-import { Check, Copy } from 'lucide-react';
+import { ArrowRight, Check, Copy } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useTheme } from 'next-themes';
 import { type HTMLAttributes, useState } from 'react';
@@ -14,6 +14,7 @@ interface ScriptCopyBtnProps extends HTMLAttributes<HTMLDivElement> {
   darkTheme: string;
   commandMap: Record<string, string>;
   className?: string;
+  linkHref?: string;
 }
 
 export function ScriptCopyBtn({
@@ -23,6 +24,7 @@ export function ScriptCopyBtn({
   darkTheme,
   commandMap,
   className,
+  linkHref,
 }: ScriptCopyBtnProps) {
   const packageManagers = Object.keys(commandMap);
   const [packageManager, setPackageManager] = useState<string>(
@@ -94,21 +96,40 @@ export function ScriptCopyBtn({
             </div>
           </div>
           <Button
-            aria-label={copied ? 'Copied' : 'Copy to clipboard'}
+            aria-label={
+              linkHref
+                ? 'Open docs'
+                : copied
+                  ? 'Copied'
+                  : 'Copy to clipboard'
+            }
             className="relative ml-2 hidden rounded-md md:block"
-            onClick={copyToClipboard}
+            onClick={() => {
+              if (linkHref) {
+                window.open(linkHref, '_blank', 'noopener,noreferrer');
+              } else {
+                copyToClipboard();
+              }
+            }}
             size="icon"
             variant="outline"
           >
-            <span className="sr-only">{copied ? 'Copied' : 'Copy'}</span>
+            <span className="sr-only">
+              {linkHref ? 'Open docs' : copied ? 'Copied' : 'Copy'}
+            </span>
             <Copy
-              className={`m-auto h-4 w-4 inset-0 transition-all duration-300 ${
-                copied ? 'scale-0' : 'scale-100'
+              className={`m-auto h-4 w-4 inset-0 transition-all duration-700 ${
+                linkHref || copied ? 'scale-0 -rotate-90' : 'scale-100 rotate-0'
               }`}
             />
             <Check
-              className={`absolute inset-0 m-auto h-4 w-4 transition-all duration-300 ${
-                copied ? 'scale-100' : 'scale-0'
+              className={`absolute inset-0 m-auto h-4 w-4 transition-all duration-700 ${
+                !linkHref && copied ? 'scale-100' : 'scale-0'
+              }`}
+            />
+            <ArrowRight
+              className={`absolute inset-0 m-auto h-4 w-4 transition-all duration-700 ${
+                linkHref ? 'scale-100 rotate-0' : 'scale-0 rotate-90'
               }`}
             />
           </Button>

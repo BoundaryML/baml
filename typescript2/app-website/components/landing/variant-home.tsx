@@ -17,19 +17,20 @@ const BamlPlayground = dynamic(
 );
 import { ScriptCopyBtn } from '../magicui/script-copy-btn';
 import Marquee from '../magicui/marquee';
+import { AgentModeToggle } from '../agent-mode-toggle';
 import { siteConfig } from '@/app/_lib/config';
 
 const TRUST_LOGOS: { alt: string; src: string; heightPx: number }[] = [
-  { alt: 'SAP', src: '/testimonials/logos/sapLogo.png', heightPx: 40 },
+  { alt: 'SAP', src: '/testimonials/logos/sapLogo.png', heightPx: 36 },
   { alt: 'AWS', src: '/testimonials/logos/aws.png', heightPx: 36 },
-  { alt: 'AMD', src: '/testimonials/logos/amd.png', heightPx: 30 },
-  { alt: 'Cisco', src: '/testimonials/logos/cisco.png', heightPx: 28 },
+  { alt: 'AMD', src: '/testimonials/logos/amd.png', heightPx: 36 },
+  { alt: 'Cisco', src: '/testimonials/logos/cisco.png', heightPx: 36 },
   { alt: 'EY', src: '/EY.svg', heightPx: 44 },
-  { alt: 'Product Hunt', src: '/testimonials/logos/product-hunt.png', heightPx: 26 },
-  { alt: 'Aer Compliance', src: '/testimonials/logos/aer.png', heightPx: 32 },
-  { alt: 'PMMI', src: '/testimonials/logos/pmmi.png', heightPx: 32 },
-  { alt: 'Cerebral Valley', src: '/testimonials/logos/cerebral.png', heightPx: 32 },
-  { alt: 'DoorDash', src: '/Doordash Logo.svg', heightPx: 22 },
+  { alt: 'Product Hunt', src: '/testimonials/logos/product-hunt.png', heightPx: 36 },
+  { alt: 'Aer Compliance', src: '/testimonials/logos/aer.png', heightPx: 36 },
+  { alt: 'PMMI', src: '/testimonials/logos/pmmi.png', heightPx: 36 },
+  { alt: 'Cerebral Valley', src: '/testimonials/logos/cerebral.png', heightPx: 36 },
+  { alt: 'DoorDash', src: '/Doordash Logo.svg', heightPx: 32 },
 ];
 
 const TrustMarquee = () => (
@@ -522,19 +523,13 @@ const Nav = () => (
       </Link>
     </div>
     <NavStars />
-    <Link
-      href="/signin"
-      style={{ ...customStyles.navItem, padding: '6px 10px', borderRadius: '8px' }}
-      className="hover:bg-[#e0dbd3] transition-colors"
-    >
-      Sign in
-    </Link>
+    <AgentModeToggle />
     <Link
       href="/try"
       style={{ ...customStyles.navItem, color: '#e8d5ff', backgroundColor: '#6d28d9', border: '2px solid #a78bfa', borderRadius: '8px', padding: '6px 14px' }}
       className="hover:opacity-90 transition-opacity"
     >
-      Start your project
+      Learn BAML
     </Link>
   </nav>
 );
@@ -588,13 +583,59 @@ const HeroCodeWindow = () => (
 
 type InstallPath = 'claude' | 'codex' | 'human';
 
-const humanCommand = 'curl -fsSL https://baml.dev/install | sh';
+const humanCommand = 'Check our docs (you should really try Claude)';
+const humanDocsHref =
+  'https://docs.boundaryml.com/guide/introduction/what-is-baml';
 
 const installOptions: { id: InstallPath; label: string; icon?: string; command: string }[] = [
   { id: 'claude', label: 'Claude', icon: '/Claude Color SVG.svg', command: 'curl -fsSL http://baml.dev/agent | claude' },
   { id: 'codex', label: 'Codex', icon: '/Codex Color.svg', command: 'curl -fsSL http://baml.dev/agent | codex' },
   { id: 'human', label: 'Human', command: humanCommand },
 ];
+
+const playgroundExamples = [
+  { id: 'classification', label: 'Classification' },
+  { id: 'agentic', label: 'Agentic Workflows' },
+  { id: 'extraction', label: 'Data Extraction' },
+] as const;
+
+const PlaygroundExampleTabs = () => {
+  const [active, setActive] = useState<(typeof playgroundExamples)[number]['id']>(
+    'classification',
+  );
+
+  return (
+    <div className="flex gap-1 border-b border-[#D9D3C4] bg-[#F5F0E6] px-2 pt-2">
+      {playgroundExamples.map((ex) => {
+        const isActive = active === ex.id;
+        return (
+          <button
+            key={ex.id}
+            type="button"
+            onClick={() => setActive(ex.id)}
+            className="text-[12px] tracking-[0.08em] uppercase px-3 py-1.5 rounded-t-md transition-colors"
+            style={
+              isActive
+                ? {
+                    background: '#1A1612',
+                    color: '#fff',
+                    border: '1px solid #1A1612',
+                    borderBottom: 'none',
+                  }
+                : {
+                    background: 'transparent',
+                    color: '#5C5852',
+                    border: '1px solid transparent',
+                  }
+            }
+          >
+            {ex.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+};
 
 const HeroSection = () => {
   const [installPath, setInstallPath] = useState<InstallPath>('claude');
@@ -638,6 +679,9 @@ const HeroSection = () => {
                     commandMap={{ bash: selected.command } as const}
                     darkTheme="none"
                     lightTheme="none"
+                    linkHref={
+                      installPath === 'human' ? humanDocsHref : undefined
+                    }
                     showMultiplePackageOptions={false}
                   />
                 </div>
@@ -669,6 +713,7 @@ const HeroSection = () => {
         style={customStyles.heroRight}
       >
         <div className="absolute inset-0 flex flex-col">
+          <PlaygroundExampleTabs />
           <div className="flex-1 min-h-0">
             <BamlPlayground compact />
           </div>
