@@ -5,13 +5,19 @@ import './globals.css';
 
 import { GeistMono } from 'geist/font/mono';
 import { GeistSans } from 'geist/font/sans';
-import { Instrument_Serif } from 'next/font/google';
+import { Caveat, Instrument_Serif } from 'next/font/google';
 
 const instrumentSerif = Instrument_Serif({
   subsets: ['latin'],
   weight: '400',
   style: ['normal', 'italic'],
   variable: '--font-serif',
+});
+
+const caveat = Caveat({
+  subsets: ['latin'],
+  weight: ['400', '500'],
+  variable: '--font-caveat',
 });
 import type { Viewport } from 'next';
 import { Suspense } from 'react';
@@ -76,6 +82,7 @@ export default function RootLayout(props: { children: React.ReactNode }) {
           GeistSans.variable,
           GeistMono.variable,
           instrumentSerif.variable,
+          caveat.variable,
         )}
       >
         <Suspense>

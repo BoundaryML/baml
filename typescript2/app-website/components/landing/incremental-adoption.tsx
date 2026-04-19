@@ -7,7 +7,7 @@ import {
   useReducedMotion,
   useScroll,
 } from 'motion/react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 // Tokens
 const BG = '#F5F1E8';
@@ -17,7 +17,17 @@ const INK = '#1A1612';
 const MUTED = '#5C5852';
 const MONO =
   '"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
-const HAND = '"Caveat", cursive';
+const HAND = 'var(--font-caveat), "Caveat", cursive';
+
+// Code geometry — must match CodeBlock styles below.
+const TAB_HEIGHT = 30;
+const CODE_PAD_TOP = 12;
+const CODE_PAD_LEFT = 16;
+const LINE_HEIGHT = 20;
+const CHAR_WIDTH = 7.2;
+const lineCenterY = (n: number) =>
+  TAB_HEIGHT + 1 + CODE_PAD_TOP + (n - 0.5) * LINE_HEIGHT;
+const colCenterX = (c: number) => CODE_PAD_LEFT + (c - 1) * CHAR_WIDTH;
 
 // Code sources — rendered verbatim
 const STEP_1_PY = `from openai import OpenAI
@@ -139,117 +149,134 @@ test BillingQuery {
 }
 `;
 
-const STEPS = [
+type Annotation = {
+  text: string;
+  lineNumber: number;
+  column: number;
+};
+
+type BlockSpec = {
+  key: string;
+  code: string;
+  lang: 'python' | 'baml';
+  filename: string;
+  scale?: number;
+  annotations: Annotation[];
+};
+
+type Step = {
+  heading: string;
+  body: string;
+  blocks: BlockSpec[];
+};
+
+const STEPS: Step[] = [
   {
-    heading: "Every agent codebase starts here.",
-    body:
-      "A string prompt. Manual JSON parsing. No types, no retries, no guarantees. Works until it doesn't.",
+    heading: 'Every agent codebase starts here.',
+    body: "A string prompt. Manual JSON parsing. No types, no retries, no guarantees. Works until it doesn't.",
+    blocks: [
+      {
+        key: 's1-py',
+        code: STEP_1_PY,
+        lang: 'python',
+        filename: 'main.py',
+        annotations: [
+          {
+            text: 'string prompts.\nJSON.loads and hope.',
+            lineNumber: 11,
+            column: 26,
+          },
+          {
+            text: 'silent failure when\nJSON is malformed',
+            lineNumber: 22,
+            column: 16,
+          },
+        ],
+      },
+    ],
   },
   {
-    heading: "Types help. But the prompt is still a string.",
-    body:
-      "Pydantic validates after the model responds. If the JSON is wrong, you find out at runtime. The model is still guessing at what you want.",
+    heading: 'Types help. But the prompt is still a string.',
+    body: 'Pydantic validates after the model responds. If the JSON is wrong, you find out at runtime. The model is still guessing at what you want.',
+    blocks: [
+      {
+        key: 's2-py',
+        code: STEP_2_PY,
+        lang: 'python',
+        filename: 'main.py',
+        annotations: [
+          {
+            text: 'types — on your side',
+            lineNumber: 11,
+            column: 22,
+          },
+          {
+            text: 'but the model still\ngets a string.',
+            lineNumber: 23,
+            column: 28,
+          },
+        ],
+      },
+    ],
   },
   {
     heading:
-      "Define the schema and prompt once. Call it from your existing code.",
-    body:
-      "Schema, prompt, and model choice — all in one place. Your Python app stays Python. BAML handles the LLM boundary.",
+      'Define the schema and prompt once. Call it from your existing code.',
+    body: 'Schema, prompt, and model choice — all in one place. Your Python app stays Python. BAML handles the LLM boundary.',
+    blocks: [
+      {
+        key: 's3-baml',
+        code: STEP_3_BAML,
+        lang: 'baml',
+        filename: 'triage.baml',
+        annotations: [
+          {
+            text: 'BAML injects the schema.\nthe model knows what to return.',
+            lineNumber: 18,
+            column: 28,
+          },
+        ],
+      },
+      {
+        key: 's3-py',
+        code: STEP_3_PY,
+        lang: 'python',
+        filename: 'main.py',
+        annotations: [
+          {
+            text: 'your existing app,\nmostly unchanged',
+            lineNumber: 4,
+            column: 28,
+          },
+        ],
+      },
+    ],
   },
   {
     heading: "This is why it's a language.",
-    body:
-      "Retries, streaming, tests, multi-language codegen — compiler-level, not library-level. One file, every client, every guarantee.",
+    body: 'Retries, streaming, tests, multi-language codegen — compiler-level, not library-level. One file, every client, every guarantee.',
+    blocks: [
+      {
+        key: 's4-baml',
+        code: STEP_4_BAML,
+        lang: 'baml',
+        filename: 'triage.baml',
+        annotations: [
+          {
+            text: 'declarative retries.\nnot a library wrapper.',
+            lineNumber: 18,
+            column: 24,
+          },
+          {
+            text: 'tests live with the prompt.\nrun them in the playground or CI.',
+            lineNumber: 23,
+            column: 18,
+          },
+        ],
+      },
+    ],
   },
 ];
-
-// Annotations — positioned in % relative to the code panel bounds
-type Annotation = {
-  text: string;
-  // Label position (top-left corner) in % of panel
-  labelX: number;
-  labelY: number;
-  // Arrow end (where it points) in % of panel
-  targetX: number;
-  targetY: number;
-  // Curve bend direction: +1 bows right/down, -1 bows left/up
-  bend: number;
-};
-
-const ANNOTATIONS: Record<number, Annotation[]> = {
-  0: [
-    {
-      text: 'string prompts. JSON.loads and hope.',
-      labelX: 62,
-      labelY: 34,
-      targetX: 44,
-      targetY: 44,
-      bend: 1,
-    },
-    {
-      text: 'silent failure when JSON is malformed',
-      labelX: 60,
-      labelY: 82,
-      targetX: 40,
-      targetY: 88,
-      bend: -1,
-    },
-  ],
-  1: [
-    {
-      text: 'types — on your side',
-      labelX: 4,
-      labelY: 2,
-      targetX: 22,
-      targetY: 24,
-      bend: 1,
-    },
-    {
-      text: "but the model still gets a string.\nit doesn't know your schema.",
-      labelX: 58,
-      labelY: 62,
-      targetX: 42,
-      targetY: 70,
-      bend: -1,
-    },
-  ],
-  2: [
-    {
-      text: 'BAML injects the schema.\nthe model knows what to return.',
-      labelX: 58,
-      labelY: 60,
-      targetX: 32,
-      targetY: 66,
-      bend: 1,
-    },
-    {
-      text: 'your existing app, mostly unchanged',
-      labelX: 4,
-      labelY: 90,
-      targetX: 30,
-      targetY: 94,
-      bend: -1,
-    },
-  ],
-  3: [
-    {
-      text: 'declarative retries.\nnot a library wrapper.',
-      labelX: 58,
-      labelY: 58,
-      targetX: 34,
-      targetY: 66,
-      bend: 1,
-    },
-    {
-      text: 'tests live with the prompt.\nrun them in the playground or CI.',
-      labelX: 4,
-      labelY: 80,
-      targetX: 30,
-      targetY: 88,
-      bend: -1,
-    },
-  ],
-};
 
 // ── Shiki hook ────────────────────────────────────────────────────────────────
 
@@ -299,111 +326,14 @@ function escapeHtml(s: string): string {
     .replaceAll('>', '&gt;');
 }
 
-// ── SVG arrow (hand-drawn feel) ───────────────────────────────────────────────
-
-function ArrowSVG({ annotation }: { annotation: Annotation }) {
-  const { labelX, labelY, targetX, targetY, bend } = annotation;
-  // Start near the label's leading edge
-  const sx = labelX + (targetX > labelX ? 0 : 18);
-  const sy = labelY + 4;
-  const ex = targetX;
-  const ey = targetY;
-  // Two control points with slight wobble for hand-drawn feel
-  const midX = (sx + ex) / 2;
-  const midY = (sy + ey) / 2;
-  const offset = 10 * bend;
-  const c1x = midX + offset;
-  const c1y = sy + offset * 0.6;
-  const c2x = midX - offset * 0.4;
-  const c2y = ey - offset * 0.3;
-  const d = `M ${sx} ${sy} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${ex} ${ey}`;
-
-  // Arrow head — small, rotated to match endpoint tangent
-  const dx = ex - c2x;
-  const dy = ey - c2y;
-  const angle = (Math.atan2(dy, dx) * 180) / Math.PI;
-
-  return (
-    <svg
-      aria-hidden
-      style={{
-        position: 'absolute',
-        inset: 0,
-        width: '100%',
-        height: '100%',
-        pointerEvents: 'none',
-      }}
-      viewBox="0 0 100 100"
-      preserveAspectRatio="none"
-    >
-      <motion.path
-        d={d}
-        fill="none"
-        stroke={ACCENT}
-        strokeWidth={0.45}
-        strokeLinecap="round"
-        vectorEffect="non-scaling-stroke"
-        initial={{ pathLength: 0 }}
-        animate={{ pathLength: 1 }}
-        transition={{ duration: 0.7, ease: [0.65, 0, 0.35, 1] }}
-      />
-      <motion.g
-        transform={`translate(${ex} ${ey}) rotate(${angle})`}
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.6, duration: 0.2 }}
-      >
-        <path
-          d="M 0 0 L -2.4 -1.2 M 0 0 L -2.4 1.2"
-          stroke={ACCENT}
-          strokeWidth={0.5}
-          strokeLinecap="round"
-          fill="none"
-          vectorEffect="non-scaling-stroke"
-        />
-      </motion.g>
-    </svg>
-  );
-}
-
-// ── Annotation label ──────────────────────────────────────────────────────────
-
-function AnnotationLabel({ annotation }: { annotation: Annotation }) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 6 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: 0.3, delay: 0.25 }}
-      style={{
-        position: 'absolute',
-        left: `${annotation.labelX}%`,
-        top: `${annotation.labelY}%`,
-        maxWidth: 200,
-        fontFamily: HAND,
-        fontSize: 18,
-        lineHeight: 1.15,
-        color: ACCENT,
-        whiteSpace: 'pre-line',
-        pointerEvents: 'none',
-        textShadow: `0 0 6px ${BG}`,
-      }}
-    >
-      {annotation.text}
-    </motion.div>
-  );
-}
-
-// ── Code block — renders Shiki HTML with a shared style ───────────────────────
+// ── Code block — renders Shiki HTML with a shared style ──────────────────────
 
 function CodeBlock({
   html,
   filename,
-  scale = 1,
 }: {
   html: string;
   filename: string;
-  scale?: number;
 }) {
   return (
     <div
@@ -413,8 +343,6 @@ function CodeBlock({
         background: '#FBF8F1',
         boxShadow: '0 1px 0 rgba(0,0,0,0.02), 0 6px 24px -16px rgba(0,0,0,0.18)',
         overflow: 'hidden',
-        transform: scale !== 1 ? `scale(${scale})` : undefined,
-        transformOrigin: 'top left',
       }}
     >
       <div
@@ -423,6 +351,8 @@ function CodeBlock({
           alignItems: 'center',
           gap: 8,
           padding: '8px 12px',
+          height: TAB_HEIGHT,
+          boxSizing: 'border-box',
           borderBottom: `1px solid ${BORDER}`,
           fontFamily: MONO,
           fontSize: 11,
@@ -446,12 +376,129 @@ function CodeBlock({
         style={{
           fontFamily: MONO,
           fontSize: 12.5,
-          lineHeight: 1.6,
-          padding: '12px 16px',
+          lineHeight: `${LINE_HEIGHT}px`,
+          padding: `${CODE_PAD_TOP}px ${CODE_PAD_LEFT}px`,
           overflow: 'auto',
         }}
         dangerouslySetInnerHTML={{ __html: html }}
       />
+    </div>
+  );
+}
+
+// ── Annotated block: code on the left, caption gutter on the right ───────────
+
+function AnnotatedBlock({ html, block }: { html: string; block: BlockSpec }) {
+  const codeRef = useRef<HTMLDivElement>(null);
+  const [codeWidth, setCodeWidth] = useState(0);
+
+  useLayoutEffect(() => {
+    const el = codeRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([entry]) => {
+      setCodeWidth(entry.contentRect.width);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const GAP = 16;
+  const transform = block.scale ? `scale(${block.scale})` : undefined;
+
+  return (
+    <div
+      style={{
+        position: 'relative',
+        display: 'grid',
+        gridTemplateColumns: '1.6fr 1fr',
+        columnGap: GAP,
+        transform,
+        transformOrigin: 'top left',
+      }}
+    >
+      <div ref={codeRef}>
+        <CodeBlock html={html} filename={block.filename} />
+      </div>
+      <div style={{ position: 'relative' }}>
+        {block.annotations.map((a, i) => (
+          <motion.div
+            key={`${block.key}-${i}`}
+            initial={{ opacity: 0, x: -4 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.35, delay: 0.25 + i * 0.08 }}
+            style={{
+              position: 'absolute',
+              top: lineCenterY(a.lineNumber),
+              left: 12,
+              right: 0,
+              transform: 'translateY(-50%)',
+              fontFamily: HAND,
+              fontStyle: 'italic',
+              fontSize: 19,
+              lineHeight: 1.2,
+              color: ACCENT,
+              opacity: 0.78,
+              whiteSpace: 'pre-line',
+              pointerEvents: 'none',
+            }}
+          >
+            {a.text}
+          </motion.div>
+        ))}
+      </div>
+
+      {codeWidth > 0 && (
+        <svg
+          width="100%"
+          height="100%"
+          style={{
+            position: 'absolute',
+            inset: 0,
+            pointerEvents: 'none',
+            overflow: 'visible',
+          }}
+        >
+          <title>annotation arrows</title>
+          {block.annotations.map((a, i) => {
+            const tx = colCenterX(a.column);
+            const ty = lineCenterY(a.lineNumber);
+            const sx = codeWidth + GAP;
+            const sy = ty;
+            const dx = sx - tx;
+            const c1x = sx - dx * 0.35;
+            const c1y = sy - 22;
+            const c2x = tx + dx * 0.35;
+            const c2y = ty - 22;
+            const headSize = 5;
+            return (
+              <g
+                key={`${block.key}-arrow-${i}`}
+                stroke={ACCENT}
+                strokeOpacity={0.55}
+                fill="none"
+              >
+                <motion.path
+                  initial={{ pathLength: 0, opacity: 0 }}
+                  animate={{ pathLength: 1, opacity: 1 }}
+                  transition={{ duration: 0.5, delay: 0.15 + i * 0.08 }}
+                  d={`M ${sx} ${sy} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${tx + headSize} ${ty}`}
+                  strokeWidth={1.4}
+                  strokeLinecap="round"
+                />
+                <motion.path
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ duration: 0.2, delay: 0.6 + i * 0.08 }}
+                  d={`M ${tx + headSize + 1} ${ty - 3} L ${tx} ${ty} L ${tx + headSize + 1} ${ty + 3}`}
+                  strokeWidth={1.4}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </g>
+            );
+          })}
+        </svg>
+      )}
     </div>
   );
 }
@@ -468,9 +515,15 @@ function StickyPanel({ activeStep }: { activeStep: number }) {
     { code: STEP_4_BAML, lang: 'baml' },
   ]);
 
-  const fade = reduced
-    ? { duration: 0 }
-    : { duration: 0.35, ease: [0.4, 0, 0.2, 1] };
+  const fadeT = reduced ? { duration: 0 } : { duration: 0.35 };
+
+  const blockHtmlByKey: Record<string, string> = {
+    's1-py': html1,
+    's2-py': html2,
+    's3-baml': htmlBaml3,
+    's3-py': htmlPy3,
+    's4-baml': htmlBaml4,
+  };
 
   return (
     <div
@@ -482,86 +535,30 @@ function StickyPanel({ activeStep }: { activeStep: number }) {
       }}
     >
       <AnimatePresence initial={false} mode="popLayout">
-        {activeStep === 0 && (
-          <motion.div
-            key="s1"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={fade}
-            style={{ position: 'absolute', inset: 0 }}
-          >
-            <CodeBlock html={html1} filename="main.py" />
-            <AnnotationLayer step={0} />
-          </motion.div>
-        )}
-
-        {activeStep === 1 && (
-          <motion.div
-            key="s2"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{
-              opacity: 0,
-              scaleY: reduced ? 1 : 0.18,
-              transformOrigin: 'top',
-            }}
-            transition={reduced ? { duration: 0 } : { duration: 0.5 }}
-            style={{ position: 'absolute', inset: 0 }}
-          >
-            <CodeBlock html={html2} filename="main.py" />
-            <AnnotationLayer step={1} />
-          </motion.div>
-        )}
-
-        {activeStep === 2 && (
-          <motion.div
-            key="s3"
-            initial={reduced ? { opacity: 1 } : { opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={reduced ? { duration: 0 } : { duration: 0.5, delay: 0.15 }}
-            style={{
-              position: 'absolute',
-              inset: 0,
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 12,
-            }}
-          >
-            <motion.div
-              initial={reduced ? {} : { y: -16, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              transition={reduced ? { duration: 0 } : { duration: 0.45, delay: 0.2 }}
-            >
-              <CodeBlock html={htmlBaml3} filename="triage.baml" />
-            </motion.div>
-            <motion.div
-              initial={reduced ? {} : { opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={reduced ? { duration: 0 } : { duration: 0.3, delay: 0.5 }}
-            >
-              <CodeBlock html={htmlPy3} filename="main.py" scale={0.92} />
-            </motion.div>
-            <AnnotationLayer step={2} />
-          </motion.div>
-        )}
-
-        {activeStep === 3 && (
-          <motion.div
-            key="s4"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={fade}
-            style={{ position: 'absolute', inset: 0 }}
-          >
-            <CodeBlock html={htmlBaml4} filename="triage.baml" />
+        <motion.div
+          key={`step-${activeStep}`}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={fadeT}
+          style={{
+            position: 'absolute',
+            inset: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 12,
+          }}
+        >
+          {STEPS[activeStep].blocks.map((b) => (
+            <AnnotatedBlock key={b.key} block={b} html={blockHtmlByKey[b.key]} />
+          ))}
+          {activeStep === 3 && (
             <div
               style={{
-                marginTop: 10,
-                fontFamily: HAND,
-                fontSize: 16,
+                marginTop: 8,
+                fontFamily: 'var(--font-serif)',
+                fontStyle: 'italic',
+                fontSize: 14,
                 color: MUTED,
                 textAlign: 'center',
               }}
@@ -569,35 +566,11 @@ function StickyPanel({ activeStep }: { activeStep: number }) {
               the same .baml file generates python, typescript, ruby, and go
               clients.
             </div>
-            <AnnotationLayer step={3} />
-          </motion.div>
-        )}
+          )}
+        </motion.div>
       </AnimatePresence>
 
       <StepPills activeStep={activeStep} />
-    </div>
-  );
-}
-
-function AnnotationLayer({ step }: { step: number }) {
-  const notes = ANNOTATIONS[step] ?? [];
-  return (
-    <div
-      style={{
-        position: 'absolute',
-        inset: 0,
-        pointerEvents: 'none',
-      }}
-    >
-      {notes.map((n, i) => (
-        <div
-          key={i}
-          style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}
-        >
-          <ArrowSVG annotation={n} />
-          <AnnotationLabel annotation={n} />
-        </div>
-      ))}
     </div>
   );
 }
@@ -619,7 +592,7 @@ function StepPills({ activeStep }: { activeStep: number }) {
         const active = i === activeStep;
         return (
           <span
-            key={i}
+            key={`pill-${i}`}
             style={{
               width: active ? 22 : 10,
               height: 6,
@@ -646,8 +619,6 @@ export function IncrementalAdoption() {
   const [activeStep, setActiveStep] = useState(0);
 
   useMotionValueEvent(scrollYProgress, 'change', (latest) => {
-    // Map 0→1 across the container onto 4 steps with bias toward the middle
-    // so each step has similar dwell time.
     let idx = 0;
     if (latest < 0.22) idx = 0;
     else if (latest < 0.48) idx = 1;
@@ -715,7 +686,7 @@ export function IncrementalAdoption() {
             position: 'sticky',
             top: 'calc(var(--navigation-height, 56px) + 32px)',
             alignSelf: 'start',
-            height: 'min(620px, 80vh)',
+            height: 'min(640px, 82vh)',
           }}
         >
           <StickyPanel activeStep={activeStep} />
@@ -724,7 +695,7 @@ export function IncrementalAdoption() {
         <div>
           {STEPS.map((s, i) => (
             <section
-              key={i}
+              key={`step-text-${i}`}
               style={{
                 minHeight: '100vh',
                 display: 'flex',
