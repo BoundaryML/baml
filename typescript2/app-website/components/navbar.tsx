@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { siteConfig } from '@/app/_lib/config';
 // import { GitHubStarsButtonWrapper } from '@/components/ui/custom/github-stars-button/button-wrapper';
+import { AgentModeToggle } from '@/components/agent-mode-toggle';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { GithubStars } from './GithubStars';
@@ -75,6 +76,7 @@ function DesktopActionButtons() {
         Get Started
       </Link> */}
       <GithubStars />
+      <AgentModeToggle />
       <Button asChild className="rounded-full" variant="secondary">
         <Link
           href="https://docs.boundaryml.com/?utm_source=marketing-site&utm_medium=navbar-docs"

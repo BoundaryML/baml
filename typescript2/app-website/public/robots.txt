@@ -2,8 +2,5 @@
 User-agent: *
 Allow: /
 
-# Host
-Host: https://boundaryml.com
-
 # Sitemaps
 Sitemap: https://boundaryml.com/sitemap.xml
