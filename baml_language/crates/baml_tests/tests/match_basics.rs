@@ -21,7 +21,7 @@ async fn match_catch_all_underscore() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @"
+    insta::assert_snapshot!(output.bytecode, @r"
     function main() -> int {
         load_const 100
         return
@@ -43,7 +43,7 @@ async fn match_catch_all_named_binding() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @"
+    insta::assert_snapshot!(output.bytecode, @r"
     function main() -> int {
         load_const 42
         load_const 1
@@ -68,7 +68,7 @@ async fn match_catch_all_with_variable() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @"
+    insta::assert_snapshot!(output.bytecode, @r"
     function main() -> int {
         load_const 42
         load_const 1
@@ -99,7 +99,7 @@ async fn match_literal_int_first_arm() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @"
+    insta::assert_snapshot!(output.bytecode, @r"
     function main() -> int {
         load_const 1
         load_const 1
@@ -148,7 +148,7 @@ async fn match_literal_int_second_arm() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @"
+    insta::assert_snapshot!(output.bytecode, @r"
     function main() -> int {
         load_const 2
         load_const 1
@@ -197,7 +197,7 @@ async fn match_literal_int_fallback() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @"
+    insta::assert_snapshot!(output.bytecode, @r"
     function main() -> int {
         load_const 999
         load_const 1
@@ -243,7 +243,7 @@ async fn match_literal_int_single_arm() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @"
+    insta::assert_snapshot!(output.bytecode, @r"
     function main() -> int {
         load_const 100
         return
@@ -649,7 +649,7 @@ async fn match_as_expression_in_arithmetic() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @"
+    insta::assert_snapshot!(output.bytecode, @r"
     function main() -> int {
         load_const 2
         load_const 1
@@ -705,7 +705,7 @@ async fn match_nested() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @"
+    insta::assert_snapshot!(output.bytecode, @r"
     function main() -> int {
         load_const 1
         load_const 1
@@ -1099,7 +1099,7 @@ async fn match_catch_all_binding_with_int_patterns() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @"
+    insta::assert_snapshot!(output.bytecode, @r"
     function main() -> int {
         load_const 99
         jump_table [L4, L3, L2, L1], default L0
@@ -2073,7 +2073,7 @@ async fn match_computed_discriminant() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @"
+    insta::assert_snapshot!(output.bytecode, @r"
     function get_value() -> int {
         load_const 2
         return
@@ -2136,7 +2136,7 @@ async fn match_in_loop() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @"
+    insta::assert_snapshot!(output.bytecode, @r"
     function main() -> int {
         load_const 0
         store_var sum
@@ -2221,7 +2221,7 @@ async fn match_dense_with_catch_all_via_call() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @"
+    insta::assert_snapshot!(output.bytecode, @r"
     function classify(n: int) -> int {
         load_var n
         jump_table [L4, L3, L2, L1], default L0
@@ -2277,7 +2277,7 @@ async fn match_mixed_instanceof_and_literal() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @"
+    insta::assert_snapshot!(output.bytecode, @r"
     function main() -> int {
         alloc_instance Result
         load_const 200

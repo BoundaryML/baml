@@ -17,7 +17,7 @@ async fn if_else_true_branch() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @"
+    insta::assert_snapshot!(output.bytecode, @r"
     function main() -> int {
         load_const true
         pop_jump_if_false L0
@@ -48,7 +48,7 @@ async fn if_else_false_branch() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @"
+    insta::assert_snapshot!(output.bytecode, @r"
     function main() -> int {
         load_const false
         pop_jump_if_false L0
@@ -79,7 +79,7 @@ async fn if_else_comparison() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @"
+    insta::assert_snapshot!(output.bytecode, @r"
     function main() -> int {
         load_const 1
         load_const 2
@@ -112,7 +112,7 @@ async fn if_else_equality() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @"
+    insta::assert_snapshot!(output.bytecode, @r"
     function main() -> int {
         load_const 5
         load_const 5
@@ -146,7 +146,7 @@ async fn if_else_assign_to_variable() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @"
+    insta::assert_snapshot!(output.bytecode, @r"
     function main() -> int {
         load_const true
         pop_jump_if_false L0
@@ -183,7 +183,7 @@ async fn if_else_with_local_in_branches() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @"
+    insta::assert_snapshot!(output.bytecode, @r"
     function main() -> int {
         load_const true
         pop_jump_if_false L0
@@ -215,7 +215,7 @@ async fn if_else_with_parameter() {
         args: { "b" => BexExternalValue::Bool(true) },
     };
 
-    insta::assert_snapshot!(output.bytecode, @"
+    insta::assert_snapshot!(output.bytecode, @r"
     function main(b: bool) -> int {
         load_var b
         pop_jump_if_false L0
@@ -287,7 +287,7 @@ async fn if_else_assignment_with_param() {
         args: { "b" => BexExternalValue::Bool(true) },
     };
 
-    insta::assert_snapshot!(output.bytecode, @"
+    insta::assert_snapshot!(output.bytecode, @r"
     function main(b: bool) -> int {
         load_var b
         pop_jump_if_false L0
@@ -367,7 +367,7 @@ async fn if_else_nested() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @"
+    insta::assert_snapshot!(output.bytecode, @r"
     function main() -> int {
         load_const true
         pop_jump_if_false L0
@@ -413,7 +413,7 @@ async fn else_if_chain() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @"
+    insta::assert_snapshot!(output.bytecode, @r"
     function main() -> int {
         load_const false
         pop_jump_if_false L0
@@ -460,7 +460,7 @@ async fn else_if_with_comparisons() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @"
+    insta::assert_snapshot!(output.bytecode, @r"
     function main() -> int {
         load_const 5
         load_const 0
@@ -511,7 +511,7 @@ async fn else_if_with_parameter() {
         args: { "a" => BexExternalValue::Bool(false), "b" => BexExternalValue::Bool(true) },
     };
 
-    insta::assert_snapshot!(output.bytecode, @"
+    insta::assert_snapshot!(output.bytecode, @r"
     function main(a: bool, b: bool) -> int {
         load_var a
         pop_jump_if_false L0
@@ -560,7 +560,7 @@ async fn else_if_assignment() {
         args: { "a" => BexExternalValue::Bool(false), "b" => BexExternalValue::Bool(true) },
     };
 
-    insta::assert_snapshot!(output.bytecode, @"
+    insta::assert_snapshot!(output.bytecode, @r"
     function main(a: bool, b: bool) -> int {
         load_var a
         pop_jump_if_false L0
@@ -610,7 +610,7 @@ async fn else_if_return_expr_with_locals() {
         args: { "a" => BexExternalValue::Bool(false), "b" => BexExternalValue::Bool(true) },
     };
 
-    insta::assert_snapshot!(output.bytecode, @"
+    insta::assert_snapshot!(output.bytecode, @r"
     function main(a: bool, b: bool) -> int {
         load_var a
         pop_jump_if_false L0
@@ -662,7 +662,7 @@ async fn else_if_assignment_with_locals() {
         args: { "a" => BexExternalValue::Bool(false), "b" => BexExternalValue::Bool(true) },
     };
 
-    insta::assert_snapshot!(output.bytecode, @"
+    insta::assert_snapshot!(output.bytecode, @r"
     function main(a: bool, b: bool) -> int {
         load_var a
         pop_jump_if_false L0
@@ -710,7 +710,7 @@ async fn if_else_function_call_in_branch() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @"
+    insta::assert_snapshot!(output.bytecode, @r"
     function get_value() -> int {
         load_const 42
         return
@@ -746,7 +746,7 @@ async fn if_else_arithmetic_condition() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @"
+    insta::assert_snapshot!(output.bytecode, @r"
     function main() -> int {
         load_const 1
         load_const 1
@@ -781,7 +781,7 @@ async fn if_else_logical_and() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @"
+    insta::assert_snapshot!(output.bytecode, @r"
     function main() -> int {
         load_const true
         jump_if_false L0
@@ -817,7 +817,7 @@ async fn if_else_logical_or() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @"
+    insta::assert_snapshot!(output.bytecode, @r"
     function main() -> int {
         load_const false
         jump_if_false L0
@@ -860,7 +860,7 @@ async fn if_else_in_arithmetic() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @"
+    insta::assert_snapshot!(output.bytecode, @r"
     function main() -> int {
         load_const true
         pop_jump_if_false L0
@@ -898,7 +898,7 @@ async fn if_else_as_function_arg() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @"
+    insta::assert_snapshot!(output.bytecode, @r"
     function identity(x: int) -> int {
         load_var x
         return
@@ -938,7 +938,7 @@ async fn if_else_assigned_then_passed_to_call() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @"
+    insta::assert_snapshot!(output.bytecode, @r"
     function identity(x: int) -> int {
         load_var x
         return
@@ -975,7 +975,7 @@ async fn parenthesized_if_else_in_arithmetic() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @"
+    insta::assert_snapshot!(output.bytecode, @r"
     function main() -> int {
         load_const true
         pop_jump_if_false L0
@@ -1025,7 +1025,7 @@ async fn chained_if_else_in_arithmetic() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @"
+    insta::assert_snapshot!(output.bytecode, @r"
     function main() -> int {
         load_const true
         pop_jump_if_false L0
@@ -1083,7 +1083,7 @@ async fn if_without_else() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @"
+    insta::assert_snapshot!(output.bytecode, @r"
     function main() -> int {
         load_const 0
         store_var x
@@ -1115,7 +1115,7 @@ async fn if_without_else_with_local() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @"
+    insta::assert_snapshot!(output.bytecode, @r"
     function main() -> int {
         load_const true
         pop_jump_if_false L0
@@ -1142,7 +1142,7 @@ async fn consecutive_if_without_else() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @"
+    insta::assert_snapshot!(output.bytecode, @r"
     function main() -> int {
         load_const 0
         store_var x
@@ -1185,7 +1185,7 @@ async fn block_expression() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @"
+    insta::assert_snapshot!(output.bytecode, @r"
     function main() -> int {
         load_const 1
         return
@@ -1284,7 +1284,7 @@ async fn nested_block_with_if() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @"
+    insta::assert_snapshot!(output.bytecode, @r"
     function main() -> int {
         load_const 1
         store_var a

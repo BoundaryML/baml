@@ -702,8 +702,12 @@ fn propagate_copies(body: &mut MirFunctionBody, arity: usize) {
                 }
 
                 match operand {
-                    Operand::Copy(Place::Local(src)) if src.0 >= 1 && src.0 <= arity => {
-                        // Copy of param — substitute
+                    Operand::Copy(Place::Local(src))
+                        if src.0 >= 1 && src.0 <= arity && !used_as_place_index.contains(dest) =>
+                    {
+                        // Copy of param — substitute. Skip locals that appear
+                        // as a Place::Index index, since removing the copy would
+                        // leave the destination Place referencing a dead local.
                         subst.insert(*dest, Operand::Copy(Place::Local(*src)));
                     }
                     Operand::Constant(c)

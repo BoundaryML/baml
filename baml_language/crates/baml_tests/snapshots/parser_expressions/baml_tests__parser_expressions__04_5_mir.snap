@@ -63,29 +63,37 @@ fn user.IndexAccess(users: IndexUser[]) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: IndexUser[] // users // param
-    let _2: 0
-    let _3: int // idx
-    let _4: int
-    let _5: string // firstName
-    let _6: IndexUser
-    let _7: 0
-    let _8: string[]
-    let _9: IndexUser
+    let _2: IndexUser[]
+    let _3: 0
+    let _4: int // idx
+    let _5: IndexUser[]
+    let _6: int
+    let _7: string // firstName
+    let _8: IndexUser
+    let _9: IndexUser[]
     let _10: 0
-    let _11: 0
+    let _11: string[]
+    let _12: IndexUser
+    let _13: IndexUser[]
+    let _14: 0
+    let _15: 0
 
     bb0: {
-        _2 = const 0_i64;
-        _3 = const 1_i64;
-        _4 = copy _3;
-        _7 = const 0_i64;
-        _6 = copy _1[_7];
-        _5 = copy _6.0;
+        _2 = copy _1;
+        _3 = const 0_i64;
+        _4 = const 1_i64;
+        _5 = copy _1;
+        _6 = copy _4;
+        _9 = copy _1;
         _10 = const 0_i64;
-        _9 = copy _1[_10];
-        _8 = copy _9.2;
-        _11 = const 0_i64;
-        _0 = copy _5;
+        _8 = copy _9[_10];
+        _7 = copy _8.0;
+        _13 = copy _1;
+        _14 = const 0_i64;
+        _12 = copy _13[_14];
+        _11 = copy _12.2;
+        _15 = const 0_i64;
+        _0 = copy _7;
         goto -> bb1;
     }
 
