@@ -305,7 +305,7 @@ fn event_content_to_json(event: &EventKind) -> serde_json::Value {
     }
 }
 
-/// Convert a Vec<BexExternalValue> to a JSON array.
+/// Convert a `Vec<BexExternalValue>` to a JSON array.
 pub fn bex_value_vec_to_json(values: &[BexExternalValue]) -> serde_json::Value {
     bex_value_vec_to_json_impl(values, 0)
 }
