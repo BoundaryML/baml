@@ -20,10 +20,10 @@ workspace = true
 [dependencies]
 bex_external_types = { workspace = true }
 indexmap = { workspace = true }
+serde = { workspace = true }
 serde_json = { workspace = true }
 uuid = { workspace = true }
 web-time = { workspace = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 uuid = { workspace = true, features = [ "js" ] }
-

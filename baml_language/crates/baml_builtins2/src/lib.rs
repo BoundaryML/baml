@@ -86,6 +86,7 @@ pub const ALL: &[BuiltinFile] = &[
     builtin!("baml", "ns_env/env.baml"),
     builtin!("baml", "ns_io/io.baml"),
     builtin!("baml", "ns_http/http.baml"),
+    builtin!("baml", "ns_events/events.baml"),
     builtin!("baml", "ns_math/math.baml"),
     builtin!("baml", "ns_sys/sys.baml"),
     builtin!("baml", "ns_fs/fs.baml"),
@@ -100,6 +101,8 @@ pub const ALL: &[BuiltinFile] = &[
     builtin!("testing", "types.baml"),
     // --- assert package ---
     builtin!("assert", "assert.baml"),
+    // --- log package ---
+    builtin!("log", "log.baml"),
 ];
 
 mod adt;

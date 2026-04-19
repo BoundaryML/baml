@@ -594,6 +594,11 @@ fn count_in_statement(stmt: &crate::Statement, uses: &mut [usize]) {
         | crate::StatementKind::VizExit(_)
         | crate::StatementKind::NotifyBlock { .. }
         | crate::StatementKind::Nop => {}
+        crate::StatementKind::Intrinsic { args, .. } => {
+            for arg in args {
+                count_in_operand(arg, uses);
+            }
+        }
     }
 }
 
@@ -702,8 +707,12 @@ fn propagate_copies(body: &mut MirFunctionBody, arity: usize) {
                 }
 
                 match operand {
-                    Operand::Copy(Place::Local(src)) if src.0 >= 1 && src.0 <= arity => {
-                        // Copy of param — substitute
+                    Operand::Copy(Place::Local(src))
+                        if src.0 >= 1 && src.0 <= arity && !used_as_place_index.contains(dest) =>
+                    {
+                        // Copy of param — substitute. Skip locals that appear
+                        // as a Place::Index index, since removing the copy would
+                        // leave the destination Place referencing a dead local.
                         subst.insert(*dest, Operand::Copy(Place::Local(*src)));
                     }
                     Operand::Constant(c)
@@ -864,6 +873,11 @@ fn apply_subst_to_statement(stmt: &mut crate::Statement, subst: &HashMap<Local, 
         }
         crate::StatementKind::WatchOptions { filter, .. } => {
             apply_subst_to_operand(filter, subst);
+        }
+        crate::StatementKind::Intrinsic { args, .. } => {
+            for arg in args {
+                apply_subst_to_operand(arg, subst);
+            }
         }
         _ => {}
     }
@@ -1085,6 +1099,11 @@ fn rewrite_locals_in_statement(stmt: &mut crate::Statement, map: &[Option<Local>
         | crate::StatementKind::VizExit(_)
         | crate::StatementKind::NotifyBlock { .. }
         | crate::StatementKind::Nop => {}
+        crate::StatementKind::Intrinsic { args, .. } => {
+            for arg in args {
+                remap_operand(arg, map);
+            }
+        }
     }
 }
 

@@ -767,6 +767,9 @@ pub enum BuiltinKind {
     Vm,
     /// I/O operation — may be async, may fail with I/O errors.
     Io,
+    /// Compiler intrinsic — lowered to `StatementKind::Intrinsic` in MIR,
+    /// not compiled as a callable function.
+    Intrinsic,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

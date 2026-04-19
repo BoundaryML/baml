@@ -22,6 +22,16 @@ import {
   type Connection,
 } from "vscode-languageserver/browser.js";
 
+import { installWasmPanicHook, onWasmPanic, isWasmPanic, getWasmError } from "@b/pkg-playground/wasm-panic";
+
+// Install panic hook before any WASM code runs
+installWasmPanicHook();
+
+// Register callback to notify main thread of any WASM panic
+onWasmPanic((message) => {
+  self.postMessage({ type: 'wasmPanic', message });
+});
+
 import initWasm, {
   BamlWasmRuntime,
   BamlHandle,
@@ -38,9 +48,11 @@ import type {
   WorkerInMessage,
   WorkerInitMessage,
   PlaygroundNotification as WorkerPlaygroundNotification,
+  LogDecoration,
+  LogLevel,
 } from "@b/pkg-playground";
 
-import { decodeCallResult } from "@b/pkg-proto";
+import { decodeCallResult, RuntimeEvent, type BamlOutboundValue } from "@b/pkg-proto";
 
 import { BamlVfs } from "./vfs";
 
@@ -115,6 +127,115 @@ function resolveInput(callId: number, prompt: string | undefined): Promise<strin
 }
 
 // ---------------------------------------------------------------------------
+// Log decorations (inline display like ErrorLens)
+// ---------------------------------------------------------------------------
+
+/** Decorations aggregated by line number. Each entry tracks the latest message and count. */
+const decorationsByLine = new Map<number, { level: LogLevel; message: string; count: number }>();
+
+/** Format a BamlOutboundValue to a short string for inline display. */
+function formatValueShort(holder: BamlOutboundValue | null | undefined): string {
+  if (!holder?.value) return 'null';
+
+  switch (holder.value.$case) {
+    case 'nullValue':
+      return 'null';
+    case 'stringValue':
+      return JSON.stringify(holder.value.stringValue);
+    case 'intValue':
+      return String(holder.value.intValue);
+    case 'floatValue':
+      return String(holder.value.floatValue);
+    case 'boolValue':
+      return String(holder.value.boolValue);
+    case 'classValue': {
+      const cls = holder.value.classValue;
+      const name = cls.name?.name ?? 'Class';
+      const fields = cls.fields
+        .map((f) => `${f.key}: ${formatValueShort(f.value)}`)
+        .join(', ');
+      return `${name} { ${fields} }`;
+    }
+    case 'enumValue':
+      return holder.value.enumValue.value;
+    case 'listValue':
+      return `[${holder.value.listValue.items.map(formatValueShort).join(', ')}]`;
+    case 'mapValue': {
+      const entries = holder.value.mapValue.entries
+        .map((e) => `${e.key}: ${formatValueShort(e.value)}`)
+        .join(', ');
+      return `{${entries}}`;
+    }
+    case 'literalValue': {
+      const lit = holder.value.literalValue;
+      if (!lit.literal) return 'null';
+      switch (lit.literal.$case) {
+        case 'stringLiteral':
+          return JSON.stringify(lit.literal.stringLiteral.value);
+        case 'intLiteral':
+          return String(lit.literal.intLiteral.value);
+        case 'boolLiteral':
+          return String(lit.literal.boolLiteral.value);
+        default:
+          return 'null';
+      }
+    }
+    case 'unionVariantValue':
+      return formatValueShort(holder.value.unionVariantValue.value);
+    case 'checkedValue':
+      return formatValueShort(holder.value.checkedValue.value);
+    case 'streamingStateValue':
+      return formatValueShort(holder.value.streamingStateValue.value);
+    case 'handleValue': {
+      const h = holder.value.handleValue;
+      return `<handle #${h.key}>`;
+    }
+    case 'mediaValue': {
+      const m = holder.value.mediaValue;
+      return `<${m.mimeType ?? 'media'}>`;
+    }
+    default:
+      return '?';
+  }
+}
+
+/** Truncate a message to max length with ellipsis. */
+function truncateMessage(msg: string, maxLen: number = 60): string {
+  if (msg.length <= maxLen) return msg;
+  return msg.slice(0, maxLen - 1) + '…';
+}
+
+/** Map log level string to our LogLevel type. */
+function normalizeLogLevel(level: string): LogLevel {
+  switch (level.toLowerCase()) {
+    case 'error': return 'error';
+    case 'warn': case 'warning': return 'warn';
+    case 'debug': return 'debug';
+    default: return 'info';
+  }
+}
+
+/** Emit current decorations to the main thread. */
+function emitLogDecorations(): void {
+  const decorations: LogDecoration[] = [];
+  for (const [line, data] of decorationsByLine) {
+    decorations.push({
+      line,
+      level: data.level,
+      message: truncateMessage(data.message),
+      count: data.count,
+    });
+  }
+  postOut({ type: 'logDecorations', decorations });
+}
+
+/** Clear all decorations and notify the main thread. */
+function clearLogDecorations(): void {
+  decorationsByLine.clear();
+  postOut({ type: 'clearLogDecorations' });
+}
+
+// ---------------------------------------------------------------------------
 // Typed postMessage helper
 // ---------------------------------------------------------------------------
 
@@ -131,6 +252,7 @@ function postOut(msg: WorkerOutMessage, transfer?: Transferable[]): void {
 // ---------------------------------------------------------------------------
 
 let nextLogId = 0;
+const activeCallIds = new Set<number>();
 
 async function loggingFetch(
   callId: number,
@@ -278,6 +400,46 @@ function onPlaygroundNotification(notification: PlaygroundNotification): void {
         context: notification.context,
       });
       break;
+    case "runtimeEvent": {
+      try {
+        // Decode and pass the raw proto through
+        const bytes = new Uint8Array(notification.data);
+        const event = RuntimeEvent.decode(bytes);
+        const callId = activeCallIds.size === 1 ? [...activeCallIds][0] : null;
+        postOut({ type: "runtimeEventNew", event, callId });
+
+        // Extract log events and update decorations
+        const kind = event.event?.kind;
+        console.log('[Worker] runtimeEvent kind:', kind?.$case, 'source:', kind?.$case === 'log' ? kind.log.source : null);
+        if (kind?.$case === 'log' && kind.log.source) {
+          const source = kind.log.source;
+          const line = source.line;
+          const level = normalizeLogLevel(kind.log.level);
+          const message = formatValueShort(kind.log.data);
+
+          // Heuristic: only show decoration if the formatted output is longer than the source span.
+          // This filters out constant literals (where output ≈ source) and shows expanded variables.
+          const sourceSpanLength = source.endOffset - source.startOffset;
+          const isLikelyVariable = message.length > sourceSpanLength + 5;
+          console.log('[Worker] Log decoration - line:', line, 'level:', level, 'message:', message, 'spanLen:', sourceSpanLength, 'show:', isLikelyVariable);
+
+          if (isLikelyVariable) {
+            const existing = decorationsByLine.get(line);
+            if (existing) {
+              existing.message = message;
+              existing.level = level;
+              existing.count += 1;
+            } else {
+              decorationsByLine.set(line, { level, message, count: 1 });
+            }
+            emitLogDecorations();
+          }
+        }
+      } catch (err) {
+        postOut({ type: "runtimeEventError", error: String(err) });
+      }
+      break;
+    }
     default:
       // Cast to worker-protocol type: the WASM-generated type uses `string` for severity
       // while the protocol narrows it to a literal union; the runtime values are always valid.
@@ -434,7 +596,13 @@ self.onmessage = async (event: MessageEvent) => {
         try {
           runtime?.handleLspRequest({ id, method: "initialize", params });
         } catch (e) {
-          console.error("[LSP] initialize request failed:", e);
+          if (e instanceof Error && isWasmPanic(e)) {
+            const { message, stack } = getWasmError(e);
+            console.error("[LSP] initialize request WASM panic:", message);
+            postOut({ type: 'wasmPanic', message, stack });
+          } else {
+            console.error("[LSP] initialize request failed:", e);
+          }
           requestPromises.delete(id);
           reject(e);
         }
@@ -446,7 +614,13 @@ self.onmessage = async (event: MessageEvent) => {
       try {
         runtime?.handleLspNotification({ method, params });
       } catch (e) {
-        console.error(`[LSP] notification "${method}" failed:`, e);
+        if (e instanceof Error && isWasmPanic(e)) {
+          const { message, stack } = getWasmError(e);
+          console.error(`[LSP] notification "${method}" WASM panic:`, message);
+          postOut({ type: 'wasmPanic', message, stack });
+        } else {
+          console.error(`[LSP] notification "${method}" failed:`, e);
+        }
       }
     });
 
@@ -466,7 +640,13 @@ self.onmessage = async (event: MessageEvent) => {
       try {
         runtime?.handleLspRequest({ id, method, params });
       } catch (e) {
-        console.error(`[LSP] request "${method}" failed:`, e);
+        if (e instanceof Error && isWasmPanic(e)) {
+          const { message, stack } = getWasmError(e);
+          console.error(`[LSP] request "${method}" WASM panic:`, message);
+          postOut({ type: 'wasmPanic', message, stack });
+        } else {
+          console.error(`[LSP] request "${method}" failed:`, e);
+        }
         requestPromises.delete(id);
         return Promise.reject(e);
       }
@@ -490,6 +670,9 @@ self.onmessage = async (event: MessageEvent) => {
 
   switch (msg.type) {
     case "callFunction": {
+      // Clear previous decorations when starting a new call
+      clearLogDecorations();
+
       if (!runtime) {
         postOut({
           type: "callFunctionError",
@@ -498,6 +681,7 @@ self.onmessage = async (event: MessageEvent) => {
         });
         return;
       }
+      activeCallIds.add(msg.id);
       try {
         const resultBytes = await runtime.callFunction(
           msg.id,
@@ -525,12 +709,23 @@ self.onmessage = async (event: MessageEvent) => {
         postOut({ type: "callFunctionResult", id: msg.id, result });
       } catch (e) {
         const isCancelled = e instanceof Error && (e as any).name === 'BamlCancelledError';
+        let errorMessage: string;
+        if (e instanceof Error && isWasmPanic(e)) {
+          const { message, stack } = getWasmError(e);
+          errorMessage = `WASM panic: ${message}`;
+          console.error('[Worker] WASM panic in callFunction:', message);
+          postOut({ type: 'wasmPanic', message, stack });
+        } else {
+          errorMessage = e instanceof Error ? e.message : String(e);
+        }
         postOut({
           type: "callFunctionError",
           id: msg.id,
-          error: e instanceof Error ? e.message : String(e),
+          error: errorMessage,
           cancelled: isCancelled || undefined,
         });
+      } finally {
+        activeCallIds.delete(msg.id);
       }
       return;
     }
@@ -583,6 +778,8 @@ self.onmessage = async (event: MessageEvent) => {
 
     case "filesChanged": {
       vfs.setFiles(msg.files);
+      // Clear decorations when files change
+      clearLogDecorations();
       return;
     }
 
@@ -607,6 +804,9 @@ self.onmessage = async (event: MessageEvent) => {
       return;
 
     case "callTestFunction": {
+      // Clear previous decorations when starting a new test run.
+      clearLogDecorations();
+
       if (!runtime) {
         postOut({
           type: "callFunctionError",
@@ -641,11 +841,21 @@ self.onmessage = async (event: MessageEvent) => {
           result: JSON.stringify(decoded, null, 2),
         });
       } catch (e: any) {
+        const isCancelled = e instanceof Error && (e as any).name === 'BamlCancelledError';
+        let errorMessage: string;
+        if (e instanceof Error && isWasmPanic(e)) {
+          const { message, stack } = getWasmError(e);
+          errorMessage = `WASM panic: ${message}`;
+          console.error('[Worker] WASM panic in callTestFunction:', message);
+          postOut({ type: 'wasmPanic', message, stack });
+        } else {
+          errorMessage = e instanceof Error ? e.message : String(e);
+        }
         postOut({
           type: "callFunctionError",
           id: msg.id,
-          error: e instanceof Error ? e.message : String(e),
-          cancelled: e instanceof Error && (e as any).name === "BamlCancelledError" ? true : undefined,
+          error: errorMessage,
+          cancelled: isCancelled ? true : undefined,
         });
       }
       return;

@@ -199,7 +199,8 @@ impl BamlWasmRuntime {
 
         let lsp = wasm_lsp::WasmLsp::new(send_notification_fn, send_response_fn, make_request_fn);
         let playground =
-            wasm_playground::WasmPlaygroundSender::new(playground_send_notification_fn);
+            wasm_playground::WasmPlaygroundSender::new(playground_send_notification_fn.clone());
+        let event_sink = wasm_playground::WasmEventSink::new(playground_send_notification_fn);
 
         let vfs = wasm_fs::WasmFs::new(wasm_vfs);
         let vfs = std::sync::Arc::new(vfs);
@@ -209,7 +210,7 @@ impl BamlWasmRuntime {
             std::sync::Arc::new(lsp),
             std::sync::Arc::new(playground),
             bex_project::BamlVFS::new(vfs),
-            None,
+            Some(std::sync::Arc::new(event_sink)),
         );
 
         Ok(BamlWasmRuntime { bex: Box::new(bex) })
@@ -331,6 +332,15 @@ impl BamlWasmRuntime {
     #[wasm_bindgen(js_name = handleCursorPosition)]
     pub fn handle_cursor_position(&self, file: &str, line: u32, column: u32) {
         self.bex.request_cursor_context(file, line, column);
+    }
+
+    /// Resolve a file ID to its file path.
+    ///
+    /// Used by the playground to navigate to source locations when clicking on
+    /// log events. Returns the file path if the ID is valid, or undefined if not found.
+    #[wasm_bindgen(js_name = resolveFileId)]
+    pub fn resolve_file_id(&self, file_id: u32) -> Option<String> {
+        self.bex.resolve_file_id(file_id)
     }
 
     /// Request test collection for a project.

@@ -1,0 +1,55 @@
+// Test project for event system observability
+
+class User {
+    id int
+    name string
+    email string
+}
+
+function simple_function() -> int {
+    42
+}
+
+function nested_outer() -> int {
+    nested_inner() + 1
+}
+
+function nested_inner() -> int {
+    10
+}
+
+// Test custom event emission
+function emit_custom_event(name: string) -> void {
+    baml.events.send("user_action", {
+        action: name
+    })
+}
+
+// Test multiple events in sequence
+function emit_multiple_events() -> void {
+    baml.events.send("step", { step: 1 })
+    baml.events.send("step", { step: 2 })
+    baml.events.send("step", { step: 3 })
+}
+
+// Test logging at different levels
+function test_logging() -> void {
+    let user = User { id: 123, name: "Alice", email: "alice@example.com" }
+    log.debug({ message: "Starting process" })
+    log.info({ user: user, status: "processing" })
+    log.warn({ warning: "Resource usage high" })
+    log.error({ code: "E001", retries: 3 })
+}
+
+// Test combined function execution with events
+function process_with_logging(input: string) -> string {
+    log.info({ event: "start", input: input })
+    baml.events.send("processing", { stage: "start" })
+
+    let result = "Processed: " + input
+
+    baml.events.send("processing", { stage: "complete" })
+    log.info({ event: "complete", result: result })
+
+    result
+}

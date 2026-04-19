@@ -95,23 +95,16 @@ pub struct ResolvedMethod {
 
 /// Bundles a package's own items with its dependencies' pre-resolved interfaces.
 /// All cross-package lookups go through this context's methods.
+///
+/// This query result intentionally owns its contents. Storing borrowed refs to
+/// other `returns(ref)` queries here made incremental invalidation unsound
+/// under rapid edits, because the cached context could outlive the referenced
+/// query storage across revisions.
+#[derive(Debug, Clone, PartialEq)]
 pub struct PackageResolutionContext<'db> {
-    pub own_items: &'db PackageItems<'db>,
-    pub dep_interfaces: Vec<(Name, &'db PackageInterface)>,
+    pub own_items: PackageItems<'db>,
+    pub dep_interfaces: Vec<(Name, PackageInterface)>,
     pub own_package_name: Name,
-}
-
-impl PartialEq for PackageResolutionContext<'_> {
-    fn eq(&self, other: &Self) -> bool {
-        std::ptr::eq(self.own_items, other.own_items)
-            && self.own_package_name == other.own_package_name
-            && self.dep_interfaces.len() == other.dep_interfaces.len()
-            && self
-                .dep_interfaces
-                .iter()
-                .zip(other.dep_interfaces.iter())
-                .all(|((n1, i1), (n2, i2))| n1 == n2 && std::ptr::eq(*i1, *i2))
-    }
 }
 
 // ── Salsa Update impls ─────────────────────────────────────────────────────
@@ -138,11 +131,17 @@ unsafe impl salsa::Update for PackageInterface {
 unsafe impl salsa::Update for PackageResolutionContext<'_> {
     unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
         #[allow(unsafe_code)]
-        unsafe {
-            std::ptr::drop_in_place(old_pointer);
-            std::ptr::write(old_pointer, new_value);
+        let old_ref = unsafe { &*old_pointer };
+        if *old_ref == new_value {
+            false
+        } else {
+            #[allow(unsafe_code)]
+            unsafe {
+                std::ptr::drop_in_place(old_pointer);
+                std::ptr::write(old_pointer, new_value);
+            }
+            true
         }
-        true
     }
 }
 
@@ -468,13 +467,13 @@ pub fn package_resolution_context<'db>(
     db: &'db dyn crate::Db,
     pkg_id: PackageId<'db>,
 ) -> PackageResolutionContext<'db> {
-    let own_items = baml_compiler2_ppir::package_items(db, pkg_id);
+    let own_items = baml_compiler2_ppir::package_items(db, pkg_id).clone();
     let deps = package_dependencies(db, pkg_id);
-    let dep_interfaces: Vec<(Name, &PackageInterface)> = deps
+    let dep_interfaces: Vec<(Name, PackageInterface)> = deps
         .iter()
         .map(|dep_id| {
             let name = dep_id.name(db);
-            let iface = package_interface(db, *dep_id);
+            let iface = package_interface(db, *dep_id).clone();
             (name, iface)
         })
         .collect();
@@ -493,12 +492,12 @@ impl<'db> PackageResolutionContext<'db> {
     /// Returns `Some` for the own package and any declared dependency,
     /// `None` for undeclared packages.
     pub fn items_for_package(
-        &self,
+        &'db self,
         db: &'db dyn crate::Db,
         pkg_name: &Name,
     ) -> Option<&'db PackageItems<'db>> {
         if pkg_name.as_str() == self.own_package_name.as_str() {
-            Some(self.own_items)
+            Some(&self.own_items)
         } else if self
             .dep_interfaces
             .iter()
@@ -727,7 +726,7 @@ impl<'db> PackageResolutionContext<'db> {
                 let field_ty = lower_type_expr_in_ns(
                     db,
                     &te.expr,
-                    self.own_items,
+                    &self.own_items,
                     &ns,
                     &class_data.generic_params,
                     &mut diags,
@@ -780,7 +779,7 @@ impl<'db> PackageResolutionContext<'db> {
                 let param_ty = lower_type_expr_in_ns(
                     db,
                     param_te,
-                    self.own_items,
+                    &self.own_items,
                     &ns,
                     &all_generic_params,
                     &mut diags,
@@ -795,7 +794,7 @@ impl<'db> PackageResolutionContext<'db> {
                     lower_type_expr_in_ns(
                         db,
                         te,
-                        self.own_items,
+                        &self.own_items,
                         &ns,
                         &all_generic_params,
                         &mut diags,
@@ -803,7 +802,14 @@ impl<'db> PackageResolutionContext<'db> {
                 },
             );
             let throws = sig.throws.as_ref().map(|te| {
-                lower_type_expr_in_ns(db, te, self.own_items, &ns, &all_generic_params, &mut diags)
+                lower_type_expr_in_ns(
+                    db,
+                    te,
+                    &self.own_items,
+                    &ns,
+                    &all_generic_params,
+                    &mut diags,
+                )
             });
 
             let builtin_kind = match body.as_ref() {

@@ -16,7 +16,7 @@ async fn return_literal_int() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @"
+    insta::assert_snapshot!(output.bytecode, @r"
     function main() -> int {
         load_const 42
         return
@@ -36,7 +36,7 @@ async fn return_literal_bool() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @"
+    insta::assert_snapshot!(output.bytecode, @r"
     function main() -> bool {
         load_const true
         return
@@ -83,7 +83,7 @@ async fn return_function_call() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @"
+    insta::assert_snapshot!(output.bytecode, @r"
     function main() -> int {
         call user.one
         return
@@ -113,7 +113,7 @@ async fn call_function_assign_to_variable() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @"
+    insta::assert_snapshot!(output.bytecode, @r"
     function main() -> int {
         call user.two
         load_const 1
@@ -142,7 +142,7 @@ async fn mutable_variables() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @"
+    insta::assert_snapshot!(output.bytecode, @r"
     function main() -> int {
         load_const 3
         store_var y
@@ -171,7 +171,7 @@ async fn call_with_arguments() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @"
+    insta::assert_snapshot!(output.bytecode, @r"
     function main() -> int {
         load_const 1
         load_const 2
@@ -235,7 +235,7 @@ async fn early_return() {
         args: { "x" => BexExternalValue::Int(42) },
     };
 
-    insta::assert_snapshot!(output.bytecode, @"
+    insta::assert_snapshot!(output.bytecode, @r"
     function early_return(x: int) -> int {
         load_var x
         load_const 42
@@ -355,7 +355,7 @@ async fn recursion() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @"
+    insta::assert_snapshot!(output.bytecode, @r"
     function fib(n: int) -> int {
         load_var n
         load_const 1
@@ -415,7 +415,7 @@ async fn function_as_value() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @"
+    insta::assert_snapshot!(output.bytecode, @r"
     function add(a: int, b: int) -> int {
         load_var a
         load_var b

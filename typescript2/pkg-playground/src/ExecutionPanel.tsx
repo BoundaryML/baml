@@ -11,7 +11,7 @@
 
 import type { ChangeEvent, FC, RefObject } from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { encodeCallArgs } from '@b/pkg-proto';
+import { encodeCallArgs, type BamlOutboundValue } from '@b/pkg-proto';
 import { KeyRound, PanelLeft, Square } from 'lucide-react';
 import { Button } from './components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs';
@@ -41,10 +41,84 @@ import { decodeCallResult } from '@b/pkg-proto';
 import type { ResultRendererProps } from './result-renderers';
 import { ResultDisplay } from './ResultDisplay';
 import { registerBuiltinResultRenderers } from './renderers/registerBuiltins';
+import { HttpRequestCurlRenderer, isHttpRequest } from './renderers/HttpRequestCurl';
 import { GraphView } from './graph/GraphView';
 import { FunctionSidebar } from './FunctionSidebar';
 
 registerBuiltinResultRenderers();
+// Format a BamlOutboundValue (proto) to a Rust-like debug string
+function formatValueDebug(holder: BamlOutboundValue | null | undefined): string {
+  if (!holder?.value) return 'null';
+
+  switch (holder.value.$case) {
+    case 'nullValue':
+      return 'null';
+    case 'stringValue':
+      return JSON.stringify(holder.value.stringValue);
+    case 'intValue':
+      return String(holder.value.intValue);
+    case 'floatValue':
+      return String(holder.value.floatValue);
+    case 'boolValue':
+      return String(holder.value.boolValue);
+    case 'classValue': {
+      const cls = holder.value.classValue;
+      const name = cls.name?.name ?? 'Class';
+      const fields = cls.fields
+        .map((f) => `${f.key}: ${formatValueDebug(f.value)}`)
+        .join(', ');
+      return `${name} { ${fields} }`;
+    }
+    case 'enumValue':
+      return holder.value.enumValue.value;
+    case 'listValue':
+      return `[${holder.value.listValue.items.map(formatValueDebug).join(', ')}]`;
+    case 'mapValue': {
+      const entries = holder.value.mapValue.entries
+        .map((e) => `${e.key}: ${formatValueDebug(e.value)}`)
+        .join(', ');
+      return `{${entries}}`;
+    }
+    case 'literalValue': {
+      const lit = holder.value.literalValue;
+      if (!lit.literal) return 'null';
+      switch (lit.literal.$case) {
+        case 'stringLiteral':
+          return JSON.stringify(lit.literal.stringLiteral.value);
+        case 'intLiteral':
+          return String(lit.literal.intLiteral.value);
+        case 'boolLiteral':
+          return String(lit.literal.boolLiteral.value);
+        default:
+          return 'null';
+      }
+    }
+    case 'unionVariantValue':
+      return formatValueDebug(holder.value.unionVariantValue.value);
+    case 'checkedValue':
+      return formatValueDebug(holder.value.checkedValue.value);
+    case 'streamingStateValue':
+      return formatValueDebug(holder.value.streamingStateValue.value);
+    case 'handleValue': {
+      const h = holder.value.handleValue;
+      return `<handle #${h.key}>`;
+    }
+    case 'mediaValue': {
+      const m = holder.value.mediaValue;
+      const mt = ['unspecified', 'image', 'audio', 'pdf', 'video', 'other'][m.media] ?? 'media';
+      if (m.value?.$case === 'url') return `<${mt}: ${m.value.url}>`;
+      if (m.value?.$case === 'file') return `<${mt}: file://${m.value.file}>`;
+      if (m.value?.$case === 'base64') return `<${mt}: base64...>`;
+      return `<${mt}>`;
+    }
+    case 'promptAstValue':
+      return '<prompt_ast>';
+    case 'uint8arrayValue':
+      return `<bytes: ${holder.value.uint8arrayValue.length}>`;
+    default:
+      return '?';
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -86,6 +160,10 @@ export interface ExecutionPanelProps {
    * Built-in renderers (e.g. curl for baml.http.Request) are always available.
    */
   resultRenderers?: Record<string, FC<ResultRendererProps>>;
+  /** Called when user clicks the WASM panic banner to reload the worker. */
+  onReload?: () => void;
+  /** Called when user clicks an event with source location to jump to that line. */
+  onNavigateToSource?: (source: { fileId: number; line: number; column: number }) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -174,7 +252,7 @@ const CollectionRunView: FC<CollectionRunViewProps> = ({ run, expandedLogId, set
 // Component
 // ---------------------------------------------------------------------------
 
-export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersion, resultRenderers }) => {
+export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersion, resultRenderers, onReload, onNavigateToSource }) => {
   const [projectRoots, setProjectRoots] = useState<string[]>([]);
   const [projectUpdates, setProjectUpdates] = useState<Record<string, ProjectUpdate>>({});
   const [testTree, setTestTree] = useState<any>(null);
@@ -202,6 +280,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
   const [controlFlowGraph, setControlFlowGraph] = useState<ControlFlowGraph | null>(null);
   const [activeTab, setActiveTab] = useState<'run' | 'graph' | 'prompt' | 'curl'>('run');
   const [highlightedNodeId, setHighlightedNodeId] = useState<number | null>(null);
+  const [cursorOffset, setCursorOffset] = useState<number | null>(null);
 
   // Workflow context: when a function belongs to multiple workflows,
   // this tracks which workflow is being viewed and the alternatives.
@@ -227,6 +306,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
 
   const [diagsExpanded, setDiagsExpanded] = useState(false);
   const [buildTime, setBuildTime] = useState<number | null>(null);
+  const [wasmPanic, setWasmPanic] = useState<{ message: string; stack?: string } | null>(null);
   const { envVars, knownRequiredKeys, addEnvVar, removeEnvVar, importEnvVars, addRequiredKey } = useEnvVars(port);
   // In-flight worker requests waiting for a value: id → variable name. Ref because it doesn't drive renders.
   const pendingEnvRequestsRef = useRef<Map<number, string>>(new Map());
@@ -300,6 +380,10 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
   }
 
   function handleCursorContext(ctx: CursorContext) {
+    // Update cursor offset for event highlighting (cursor ↔ event matching)
+    console.log('[DEBUG] CursorContext:', { cursorOffset: ctx.cursorOffset, functionName: ctx.functionName });
+    setCursorOffset(ctx.cursorOffset ?? null);
+
     if (!ctx.functionName) return;
 
     const currentFn = selectedFnRef.current;
@@ -390,6 +474,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
                   functionName: '$collect_tests',
                   argsJson: '',
                   fetchLogs: buffered,
+                  runtimeEvents: [],
                   result: null,
                   error: hasError ? n.expandError!.message : null,
                   status: hasError ? 'error' : 'success',
@@ -475,6 +560,20 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
           );
           break;
 
+        case 'runtimeEventNew': {
+          const eventEntry = data.event;
+          if (data.callId != null) {
+            setRuns((prev) =>
+              prev.map((r) =>
+                r.id === data.callId
+                  ? { ...r, runtimeEvents: [...r.runtimeEvents, eventEntry] }
+                  : r
+              )
+            );
+          }
+          break;
+        }
+
         case 'envVarRequest': {
           // Always track as a known required key (proactive indicator)
           addRequiredKey(data.variable);
@@ -521,6 +620,19 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
 
         case "cursorContext":
           handleCursorContext(data.context);
+          break;
+
+        case "wasmPanic":
+          setWasmPanic({ message: data.message, stack: data.stack });
+          break;
+
+        case "logDecorations":
+        case "clearLogDecorations":
+          // These are handled by MonacoEditor, ignore here
+          break;
+
+        case "runtimeEventError":
+          console.warn('[ExecutionPanel] runtimeEventError:', data.error);
           break;
 
         default:
@@ -698,6 +810,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
       functionName: selectedFn,
       argsJson,
       fetchLogs: [],
+      runtimeEvents: [],
       result: null,
       error: null,
       status: 'running',
@@ -757,6 +870,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
       testName: name,
       argsJson: `(test: ${name})`,
       fetchLogs: [],
+      runtimeEvents: [],
       result: null,
       error: null,
       status: 'running',
@@ -963,6 +1077,32 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
         </div>
       )}
 
+      {/* WASM Panic banner */}
+      {wasmPanic && (
+        <button
+          type="button"
+          onClick={() => {
+            setWasmPanic(null);
+            if (onReload) {
+              onReload();
+            } else {
+              window.location.reload();
+            }
+          }}
+          className="w-full flex items-center gap-2 px-2.5 py-2 border-none border-b border-vsc-border shrink-0 bg-[#5c1a1a] hover:bg-[#6e1f1f] transition-colors cursor-pointer text-left"
+        >
+          <span className="text-[12px]">⚠️</span>
+          <div className="flex-1 min-w-0">
+            <span className="font-vsc-mono text-[11px] text-[#ff6b6b] font-medium">
+              WASM Panic — Click to reload worker
+            </span>
+            <div className="font-vsc-mono text-[10px] text-[#ff6b6b]/70 truncate">
+              {wasmPanic.message}
+            </div>
+          </div>
+        </button>
+      )}
+
       {/* Diagnostics banner */}
       {(hasErrors || engineStale) && (
         <div className="border-b border-vsc-border shrink-0 bg-[#3e1a1a]">
@@ -1040,20 +1180,6 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
             >
               {isRunning ? 'Running...' : 'Run'}
             </Button>
-            {runs.length > 0 && !isRunning && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="text-[10px]"
-                onClick={() => {
-                  const runIds = runs.map((r) => r.id);
-                  port.postMessage({ type: 'clearHandles', runIds });
-                  setRuns([]);
-                }}
-              >
-                Clear
-              </Button>
-            )}
           </div>
         )}
       </div>
@@ -1176,6 +1302,83 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
                         </div>
                       );
                     })}
+                    {/* Runtime events (log.info, baml.events.send, etc.) */}
+                    {run.runtimeEvents.length > 0 && (
+                      <div className="py-1.5 pr-2.5 pl-[22px] border-b border-vsc-border-subtle">
+                        <div className="text-[10px] font-semibold text-vsc-text-muted mb-1 uppercase tracking-wide">
+                          Events ({run.runtimeEvents.length})
+                        </div>
+                        <div className="flex flex-col gap-0.5">
+                          {run.runtimeEvents.map((evt, evtIdx) => {
+                            const kind = evt.event?.kind;
+                            console.log('[DEBUG] Event:', evtIdx, kind?.$case, kind);
+                            if (!kind) return null;
+
+                            let label: string;
+                            let payload: string;
+                            let colorCls: string;
+
+                            switch (kind.$case) {
+                              case 'functionStart':
+                                label = 'START';
+                                payload = kind.functionStart.name;
+                                colorCls = 'text-vsc-green';
+                                break;
+                              case 'functionEnd':
+                                label = 'END';
+                                payload = `${kind.functionEnd.name} (${kind.functionEnd.durationMs}ms)`;
+                                colorCls = 'text-vsc-text-muted';
+                                break;
+                              case 'log': {
+                                const lvl = kind.log.level;
+                                label = lvl;
+                                payload = formatValueDebug(kind.log.data);
+                                colorCls = lvl === 'error' ? 'text-vsc-red'
+                                  : lvl === 'warn' ? 'text-vsc-yellow'
+                                  : lvl === 'debug' ? 'text-vsc-text-muted'
+                                  : 'text-vsc-blue';
+                                break;
+                              }
+                              case 'custom':
+                                label = 'EVENT';
+                                payload = `${kind.custom.name}: ${formatValueDebug(kind.custom.data)}`;
+                                colorCls = 'text-vsc-purple';
+                                break;
+                              case 'setTags':
+                                label = 'TAGS';
+                                payload = kind.setTags.tags.map(t => `${t.key}=${t.value}`).join(', ');
+                                colorCls = 'text-vsc-text-muted';
+                                break;
+                              default:
+                                return null;
+                            }
+
+                            // Check if cursor is within this event's source span
+                            const source = kind.$case === 'log' ? kind.log.source : undefined;
+                            if (kind.$case === 'log') {
+                              console.log('[DEBUG] LogEvent source:', source, 'cursorOffset:', cursorOffset);
+                            }
+                            const isCursorMatch = cursorOffset != null && source != null &&
+                              cursorOffset > source.startOffset && cursorOffset <= source.endOffset;
+
+                            return (
+                              <div
+                                key={`${evt.spanId}-${evtIdx}`}
+                                className={cn(
+                                  "flex items-start gap-1.5 text-[11px]",
+                                  isCursorMatch && "bg-vsc-yellow/20 rounded px-1 -mx-1",
+                                  source && onNavigateToSource && "cursor-pointer hover:bg-vsc-bg-secondary"
+                                )}
+                                onClick={source && onNavigateToSource ? () => onNavigateToSource({ fileId: source.fileId, line: source.line, column: source.column }) : undefined}
+                              >
+                                <span className={`${colorCls} font-semibold shrink-0 w-10 uppercase`}>{label}</span>
+                                <span className="text-vsc-text flex-1 font-mono truncate">{payload}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
                     {/* Inline io.input() prompts for this run */}
                     {(pendingInputs.get(run.id) ?? []).map((req) => (
                       <div key={req.id} className="flex items-center gap-2 px-[22px] py-1.5 border-b border-vsc-border bg-vsc-surface">
@@ -1191,7 +1394,6 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
                         />
                       </div>
                     ))}
-
                     {run.status === 'cancelled' && (
                       <div className="py-1.5 pr-2.5 pl-[22px]">
                         <div className="text-[11px] text-vsc-text-faint italic">Cancelled</div>
@@ -1219,21 +1421,37 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
               onValueChange={(v) => setActiveTab(v as typeof activeTab)}
               className="flex-1 flex flex-col min-h-0"
             >
-              <TabsList className="px-2.5 shrink-0 bg-vsc-surface">
-                <TabsTrigger value="run">Run</TabsTrigger>
-                <TabsTrigger value="graph">Graph</TabsTrigger>
-                {canPreviewPrompt && (
-                  <TabsTrigger value="prompt">
-                    Prompt
-                    {selectedFnInfo?.capabilities?.clientName && (
-                      <span className="ml-1 px-1 py-0 text-[9px] rounded bg-vsc-bg-secondary text-vsc-text-faint">
-                        {selectedFnInfo.capabilities.clientName}
-                      </span>
-                    )}
-                  </TabsTrigger>
+              <div className="flex items-center px-2.5 shrink-0 bg-vsc-surface">
+                <TabsList className="bg-transparent">
+                  <TabsTrigger value="run">Run</TabsTrigger>
+                  <TabsTrigger value="graph">Graph</TabsTrigger>
+                  {canPreviewPrompt && (
+                    <TabsTrigger value="prompt">
+                      Prompt
+                      {selectedFnInfo?.capabilities?.clientName && (
+                        <span className="ml-1 px-1 py-0 text-[9px] rounded bg-vsc-bg-secondary text-vsc-text-faint">
+                          {selectedFnInfo.capabilities.clientName}
+                        </span>
+                      )}
+                    </TabsTrigger>
+                  )}
+                  {canPreviewCurl && <TabsTrigger value="curl">cURL</TabsTrigger>}
+                </TabsList>
+                {runs.length > 0 && !isRunning && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="ml-auto text-[10px] text-vsc-text-muted hover:text-vsc-text"
+                    onClick={() => {
+                      const runIds = runs.map((r) => r.id);
+                      port.postMessage({ type: 'clearHandles', runIds });
+                      setRuns([]);
+                    }}
+                  >
+                    Clear
+                  </Button>
                 )}
-                {canPreviewCurl && <TabsTrigger value="curl">cURL</TabsTrigger>}
-              </TabsList>
+              </div>
 
               {/* Graph view */}
               <TabsContent value="graph" className="flex-1 min-h-0 mt-0 flex flex-col" style={{ minHeight: 300 }}>
@@ -1423,6 +1641,83 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
                           );
                         })}
 
+                        {/* Runtime events (log.info, baml.events.send, etc.) */}
+                        {run.runtimeEvents.length > 0 && (
+                          <div className="py-1.5 pr-2.5 pl-[22px] border-b border-vsc-border-subtle">
+                            <div className="text-[10px] font-semibold text-vsc-text-muted mb-1 uppercase tracking-wide">
+                              Events ({run.runtimeEvents.length})
+                            </div>
+                            <div className="flex flex-col gap-0.5">
+                              {run.runtimeEvents.map((evt, evtIdx) => {
+                                const kind = evt.event?.kind;
+                                console.log('[DEBUG] Event (history):', evtIdx, kind?.$case, kind);
+                                if (!kind) return null;
+
+                                let label: string;
+                                let payload: string;
+                                let colorCls: string;
+
+                                switch (kind.$case) {
+                                  case 'functionStart':
+                                    label = 'START';
+                                    payload = kind.functionStart.name;
+                                    colorCls = 'text-vsc-green';
+                                    break;
+                                  case 'functionEnd':
+                                    label = 'END';
+                                    payload = `${kind.functionEnd.name} (${kind.functionEnd.durationMs}ms)`;
+                                    colorCls = 'text-vsc-text-muted';
+                                    break;
+                                  case 'log': {
+                                    const lvl = kind.log.level;
+                                    label = lvl;
+                                    payload = formatValueDebug(kind.log.data);
+                                    colorCls = lvl === 'error' ? 'text-vsc-red'
+                                      : lvl === 'warn' ? 'text-vsc-yellow'
+                                      : lvl === 'debug' ? 'text-vsc-text-muted'
+                                      : 'text-vsc-blue';
+                                    break;
+                                  }
+                                  case 'custom':
+                                    label = 'EVENT';
+                                    payload = `${kind.custom.name}: ${formatValueDebug(kind.custom.data)}`;
+                                    colorCls = 'text-vsc-purple';
+                                    break;
+                                  case 'setTags':
+                                    label = 'TAGS';
+                                    payload = kind.setTags.tags.map(t => `${t.key}=${t.value}`).join(', ');
+                                    colorCls = 'text-vsc-text-muted';
+                                    break;
+                                  default:
+                                    return null;
+                                }
+
+                                // Check if cursor is within this event's source span
+                                const source = kind.$case === 'log' ? kind.log.source : undefined;
+                                if (kind.$case === 'log') {
+                                  console.log('[DEBUG] LogEvent source (history):', source, 'cursorOffset:', cursorOffset);
+                                }
+                                const isCursorMatch = cursorOffset != null && source != null &&
+                                  cursorOffset > source.startOffset && cursorOffset <= source.endOffset;
+
+                                return (
+                                  <div
+                                    key={`${evt.spanId}-${evtIdx}`}
+                                    className={cn(
+                                      "flex items-start gap-1.5 text-[11px]",
+                                      isCursorMatch && "bg-vsc-yellow/20 rounded px-1 -mx-1",
+                                      source && onNavigateToSource && "cursor-pointer hover:bg-vsc-bg-secondary"
+                                    )}
+                                    onClick={source && onNavigateToSource ? () => onNavigateToSource({ fileId: source.fileId, line: source.line, column: source.column }) : undefined}
+                                  >
+                                    <span className={`${colorCls} font-semibold shrink-0 w-10 uppercase`}>{label}</span>
+                                    <span className="text-vsc-text flex-1 font-mono truncate">{payload}</span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
                         {/* Inline io.input() prompts for this run */}
                         {(pendingInputs.get(run.id) ?? []).map((req) => (
                           <div key={req.id} className="flex items-center gap-2 px-[22px] py-1.5 border-b border-vsc-border bg-vsc-surface">

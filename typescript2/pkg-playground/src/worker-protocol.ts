@@ -6,6 +6,24 @@
  * gives exhaustive switch narrowing.
  */
 
+import type { RuntimeEvent } from '@b/pkg-proto';
+
+// ---------------------------------------------------------------------------
+// Log decoration types (inline log display like ErrorLens)
+// ---------------------------------------------------------------------------
+
+export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
+
+export interface LogDecoration {
+  /** 1-indexed line number */
+  line: number;
+  level: LogLevel;
+  /** Formatted log message (truncated to ~60 chars) */
+  message: string;
+  /** Number of logs on this line (for "×N" display) */
+  count: number;
+}
+
 // ---------------------------------------------------------------------------
 // Shared domain types
 // ---------------------------------------------------------------------------
@@ -52,7 +70,8 @@ export type PlaygroundNotification =
   | { type: 'openPlayground'; project: string; functionName?: string }
   | { type: 'controlFlowGraphResult'; functionName: string; graph: ControlFlowGraph | null }
   | { type: 'cursorContext'; context: CursorContext }
-  | { type: 'testCollectionResult'; project: string; generation: number; callId: number; data: number[]; expandError?: { testsetName: string; message: string } };
+  | { type: 'testCollectionResult'; project: string; generation: number; callId: number; data: number[]; expandError?: { testsetName: string; message: string } }
+  | { type: 'runtimeEvent'; data: number[] };
 
 // ---------------------------------------------------------------------------
 // Control flow graph types (matches Rust serde output from baml_compiler2_visualization)
@@ -105,6 +124,8 @@ export interface CursorContext {
    *  in order, highlighting the first that matches a CFG node. */
   sourceExprCandidates?: number[];
   testName: string | null;
+  /** Byte offset of the cursor position for cursor ↔ event matching. */
+  cursorOffset?: number | null;
 }
 
 export interface FetchLogEntry {
@@ -134,6 +155,8 @@ export interface RunEntry {
   argsJson: string;
   testName?: string;
   fetchLogs: FetchLogEntry[];
+  /** Runtime events (log.info, baml.events.send, etc.) emitted during this run. */
+  runtimeEvents: RuntimeEvent[];
   result: string | null;
   error: string | null;
   status: 'running' | 'success' | 'error' | 'cancelled';
@@ -153,13 +176,18 @@ export type WorkerOutMessage =
   | { type: 'callFunctionError'; id: number; error: string; cancelled?: boolean }
   | { type: 'fetchLogNew'; entry: FetchLogEntry }
   | { type: 'fetchLogUpdate'; logId: number; patch: Partial<FetchLogEntry> }
+  | { type: 'runtimeEventNew'; event: RuntimeEvent; callId: number | null }
+  | { type: 'runtimeEventError'; error: string }
   | { type: 'envVarRequest'; id: number; variable: string }
   | { type: 'inputRequest'; id: number; prompt: string | undefined; callId: number }
   | { type: 'vfsFileChanged'; path: string; content: string }
   | { type: 'vfsFileDeleted'; path: string }
   | { type: 'buildTime'; value: string }
   | { type: 'controlFlowGraphResult'; functionName: string; graph: ControlFlowGraph | null }
-  | { type: 'cursorContext'; context: CursorContext };
+  | { type: 'cursorContext'; context: CursorContext }
+  | { type: 'logDecorations'; decorations: LogDecoration[] }
+  | { type: 'clearLogDecorations' }
+  | { type: 'wasmPanic'; message: string; stack?: string };
 
 // ---------------------------------------------------------------------------
 // Main thread → Worker messages

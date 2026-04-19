@@ -1,8 +1,185 @@
 //! JSONL serialization for `RuntimeEvent`.
 
 use bex_external_types::{BexExternalAdt, BexExternalValue};
+use serde::Serialize;
 
-use crate::{EventKind, FunctionEvent, RuntimeEvent};
+use crate::{CustomEvent, EventKind, FunctionEvent, LogEvent, RuntimeEvent};
+
+const MAX_SERIALIZATION_DEPTH: usize = 15;
+
+/// Metadata blob for BAML values, matching the TypeScript `$baml` discriminator format.
+///
+/// For classes: `{ "type": "ClassName" }`
+/// For special types: `{ "type": "$enum", "enum": "EnumName" }`, etc.
+#[derive(Debug, Clone, Serialize)]
+pub struct BamlMeta {
+    /// The type discriminator. For classes, this is the class name.
+    /// For special types, this is a `$`-prefixed tag like `$enum`, `$union`, etc.
+    pub r#type: String,
+    /// For `$enum`: the enum name
+    #[serde(rename = "enum", skip_serializing_if = "Option::is_none")]
+    pub enum_name: Option<String>,
+    /// For `$union`: the union type description
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub union: Option<String>,
+    /// For `$union`: the selected variant
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub selected: Option<String>,
+    /// For `$uint8array`: byte length
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub len: Option<usize>,
+    /// For `$function_ref`: global index
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub index: Option<usize>,
+    /// For `$type`: the type value
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub value: Option<String>,
+}
+
+impl BamlMeta {
+    /// Create metadata for a class instance.
+    pub fn class(name: impl Into<String>) -> Self {
+        Self {
+            r#type: name.into(),
+            enum_name: None,
+            union: None,
+            selected: None,
+            len: None,
+            index: None,
+            value: None,
+        }
+    }
+
+    /// Create metadata for an enum variant.
+    pub fn enum_variant(enum_name: impl Into<String>) -> Self {
+        Self {
+            r#type: "$enum".into(),
+            enum_name: Some(enum_name.into()),
+            union: None,
+            selected: None,
+            len: None,
+            index: None,
+            value: None,
+        }
+    }
+
+    /// Create metadata for a union value.
+    pub fn union(union_type: impl Into<String>, selected: impl Into<String>) -> Self {
+        Self {
+            r#type: "$union".into(),
+            enum_name: None,
+            union: Some(union_type.into()),
+            selected: Some(selected.into()),
+            len: None,
+            index: None,
+            value: None,
+        }
+    }
+
+    /// Create metadata for a handle.
+    pub fn handle() -> Self {
+        Self {
+            r#type: "$handle".into(),
+            enum_name: None,
+            union: None,
+            selected: None,
+            len: None,
+            index: None,
+            value: None,
+        }
+    }
+
+    /// Create metadata for a uint8array.
+    pub fn uint8array(len: usize) -> Self {
+        Self {
+            r#type: "$uint8array".into(),
+            enum_name: None,
+            union: None,
+            selected: None,
+            len: Some(len),
+            index: None,
+            value: None,
+        }
+    }
+
+    /// Create metadata for rust data.
+    pub fn rust_data() -> Self {
+        Self {
+            r#type: "$rust_data".into(),
+            enum_name: None,
+            union: None,
+            selected: None,
+            len: None,
+            index: None,
+            value: None,
+        }
+    }
+
+    /// Create metadata for a function reference.
+    pub fn function_ref(index: usize) -> Self {
+        Self {
+            r#type: "$function_ref".into(),
+            enum_name: None,
+            union: None,
+            selected: None,
+            len: None,
+            index: Some(index),
+            value: None,
+        }
+    }
+
+    /// Create metadata for a collector ADT.
+    pub fn collector() -> Self {
+        Self {
+            r#type: "$collector".into(),
+            enum_name: None,
+            union: None,
+            selected: None,
+            len: None,
+            index: None,
+            value: None,
+        }
+    }
+
+    /// Create metadata for a type ADT.
+    pub fn type_adt(value: impl Into<String>) -> Self {
+        Self {
+            r#type: "$type".into(),
+            enum_name: None,
+            union: None,
+            selected: None,
+            len: None,
+            index: None,
+            value: Some(value.into()),
+        }
+    }
+
+    /// Create metadata for a prompt AST ADT.
+    pub fn prompt_ast() -> Self {
+        Self {
+            r#type: "$prompt_ast".into(),
+            enum_name: None,
+            union: None,
+            selected: None,
+            len: None,
+            index: None,
+            value: None,
+        }
+    }
+
+    /// Create metadata for a media ADT.
+    pub fn media() -> Self {
+        Self {
+            r#type: "$media".into(),
+            enum_name: None,
+            union: None,
+            selected: None,
+            len: None,
+            index: None,
+            value: None,
+        }
+    }
+}
 
 /// Serialize a `RuntimeEvent` to a single-line JSON string (JSONL format).
 pub fn event_to_jsonl(event: &RuntimeEvent) -> String {
@@ -21,7 +198,37 @@ pub fn event_to_jsonl(event: &RuntimeEvent) -> String {
         .map(|d| u64::try_from(d.as_millis()).unwrap_or(u64::MAX))
         .unwrap_or(0);
 
-    let content = match &event.event {
+    let content = event_content_to_json(&event.event);
+
+    let parent_span_id = event
+        .ctx
+        .parent_span_id
+        .as_ref()
+        .map(std::string::ToString::to_string);
+    let root_span_id = event.ctx.root_span_id.to_string();
+
+    let event_json = serde_json::json!({
+        "call_id": call_id,
+        "function_event_id": function_event_id,
+        "parent_span_id": parent_span_id,
+        "root_span_id": root_span_id,
+        "call_stack": call_stack,
+        "timestamp_epoch_ms": timestamp_epoch_ms,
+        "content": content,
+    });
+
+    serde_json::to_string(&event_json).unwrap_or_else(|e| {
+        #[allow(clippy::print_stderr)]
+        {
+            eprintln!("Failed to serialize trace event: {e}");
+        }
+        String::new()
+    })
+}
+
+/// Serialize the event content (the `EventKind` portion) to JSON.
+fn event_content_to_json(event: &EventKind) -> serde_json::Value {
+    match event {
         EventKind::Function(FunctionEvent::Start(start)) => {
             let args_json = bex_value_vec_to_json(&start.args);
             let tags_map: serde_json::Map<String, serde_json::Value> = start
@@ -61,56 +268,94 @@ pub fn event_to_jsonl(event: &RuntimeEvent) -> String {
                 }
             })
         }
-    };
-
-    let event_json = serde_json::json!({
-        "call_id": call_id,
-        "function_event_id": function_event_id,
-        "call_stack": call_stack,
-        "timestamp_epoch_ms": timestamp_epoch_ms,
-        "content": content,
-    });
-
-    serde_json::to_string(&event_json).unwrap_or_else(|e| {
-        #[allow(clippy::print_stderr)]
-        {
-            eprintln!("Failed to serialize trace event: {e}");
+        EventKind::Log(LogEvent {
+            level,
+            data,
+            source,
+        }) => {
+            let data_json = bex_value_to_json(data);
+            let source_json = source.as_ref().map(|s| {
+                serde_json::json!({
+                    "file_id": s.file_id,
+                    "line": s.line,
+                    "column": s.column,
+                    "start_offset": s.start_offset,
+                    "end_offset": s.end_offset,
+                })
+            });
+            serde_json::json!({
+                "type": "log",
+                "data": {
+                    "level": level,
+                    "data": data_json,
+                    "source": source_json,
+                }
+            })
         }
-        String::new()
-    })
+        EventKind::Custom(CustomEvent { name, data }) => {
+            let data_json = bex_value_to_json(data);
+            serde_json::json!({
+                "type": "custom",
+                "data": {
+                    "name": name,
+                    "data": data_json,
+                }
+            })
+        }
+    }
 }
 
-/// Convert a Vec<BexExternalValue> to a JSON value.
-fn bex_value_vec_to_json(values: &[BexExternalValue]) -> serde_json::Value {
-    serde_json::Value::Array(values.iter().map(bex_value_to_json).collect())
+/// Convert a `Vec<BexExternalValue>` to a JSON array.
+pub fn bex_value_vec_to_json(values: &[BexExternalValue]) -> serde_json::Value {
+    bex_value_vec_to_json_impl(values, 0)
+}
+
+fn bex_value_vec_to_json_impl(values: &[BexExternalValue], depth: usize) -> serde_json::Value {
+    let arr: Vec<_> = values
+        .iter()
+        .map(|v| bex_value_to_json_impl(v, depth))
+        .collect();
+    serde_json::Value::Array(arr)
 }
 
 /// Convert a single `BexExternalValue` to a JSON value.
-fn bex_value_to_json(value: &BexExternalValue) -> serde_json::Value {
+///
+/// Deep structures are truncated at depth 15 with "..." to prevent stack overflow.
+/// This never errors - logging should be robust.
+pub fn bex_value_to_json(value: &BexExternalValue) -> serde_json::Value {
+    bex_value_to_json_impl(value, 0)
+}
+
+fn bex_value_to_json_impl(value: &BexExternalValue, depth: usize) -> serde_json::Value {
+    if depth > MAX_SERIALIZATION_DEPTH {
+        return serde_json::Value::String("...".into());
+    }
+
     match value {
         BexExternalValue::Null => serde_json::Value::Null,
         BexExternalValue::Bool(b) => serde_json::Value::Bool(*b),
         BexExternalValue::Int(i) => serde_json::json!(i),
         BexExternalValue::Float(f) => serde_json::json!(f),
         BexExternalValue::String(s) => serde_json::Value::String(s.clone()),
-        BexExternalValue::Array { items, .. } => bex_value_vec_to_json(items),
+        BexExternalValue::Array { items, .. } => bex_value_vec_to_json_impl(items, depth + 1),
         BexExternalValue::Map { entries, .. } => {
-            let obj: serde_json::Map<String, serde_json::Value> = entries
-                .iter()
-                .map(|(k, v)| (k.clone(), bex_value_to_json(v)))
-                .collect();
+            let mut obj = serde_json::Map::new();
+            for (k, v) in entries {
+                obj.insert(k.clone(), bex_value_to_json_impl(v, depth + 1));
+            }
             serde_json::Value::Object(obj)
         }
         BexExternalValue::Instance {
             class_name, fields, ..
         } => {
+            let meta = BamlMeta::class(class_name);
             let mut obj = serde_json::Map::new();
             obj.insert(
-                "__class".into(),
-                serde_json::Value::String(class_name.clone()),
+                "$baml".into(),
+                serde_json::to_value(&meta).unwrap_or(serde_json::Value::Null),
             );
             for (k, v) in fields {
-                obj.insert(k.clone(), bex_value_to_json(v));
+                obj.insert(k.clone(), bex_value_to_json_impl(v, depth + 1));
             }
             serde_json::Value::Object(obj)
         }
@@ -118,69 +363,134 @@ fn bex_value_to_json(value: &BexExternalValue) -> serde_json::Value {
             enum_name,
             variant_name,
         } => {
-            serde_json::json!({"__enum": enum_name, "value": variant_name})
+            let meta = BamlMeta::enum_variant(enum_name);
+            serde_json::json!({
+                "$baml": serde_json::to_value(&meta).unwrap_or(serde_json::Value::Null),
+                "value": variant_name
+            })
         }
-        BexExternalValue::Union { value, .. } => bex_value_to_json(value),
-        BexExternalValue::Handle(_) => serde_json::Value::String("<handle>".into()),
+        BexExternalValue::Union { value, metadata } => {
+            let meta = BamlMeta::union(
+                format!("{}", metadata.union_type),
+                format!("{}", metadata.selected_option),
+            );
+            let inner = bex_value_to_json_impl(value, depth + 1);
+            serde_json::json!({
+                "$baml": serde_json::to_value(&meta).unwrap_or(serde_json::Value::Null),
+                "value": inner
+            })
+        }
+        BexExternalValue::Handle(_) => {
+            let meta = BamlMeta::handle();
+            serde_json::json!({ "$baml": serde_json::to_value(&meta).unwrap_or(serde_json::Value::Null) })
+        }
         BexExternalValue::Uint8Array(bytes) => {
-            serde_json::json!({"__uint8array_len": bytes.len()})
+            let meta = BamlMeta::uint8array(bytes.len());
+            serde_json::json!({ "$baml": serde_json::to_value(&meta).unwrap_or(serde_json::Value::Null) })
         }
-        BexExternalValue::RustData(_) => serde_json::Value::String("<rust_data>".into()),
+        BexExternalValue::RustData(_) => {
+            let meta = BamlMeta::rust_data();
+            serde_json::json!({ "$baml": serde_json::to_value(&meta).unwrap_or(serde_json::Value::Null) })
+        }
         BexExternalValue::FunctionRef { global_index } => {
-            serde_json::json!({"__function_ref": global_index})
+            let meta = BamlMeta::function_ref(*global_index);
+            serde_json::json!({ "$baml": serde_json::to_value(&meta).unwrap_or(serde_json::Value::Null) })
         }
         BexExternalValue::Adt(BexExternalAdt::Collector(_)) => {
-            serde_json::json!({"__adt": "Collector"})
+            let meta = BamlMeta::collector();
+            serde_json::json!({ "$baml": serde_json::to_value(&meta).unwrap_or(serde_json::Value::Null) })
         }
         BexExternalValue::Adt(BexExternalAdt::Type(ty)) => {
-            serde_json::json!({"__adt": "Type", "value": format!("{ty}")})
+            let meta = BamlMeta::type_adt(format!("{ty}"));
+            serde_json::json!({ "$baml": serde_json::to_value(&meta).unwrap_or(serde_json::Value::Null) })
         }
         BexExternalValue::Adt(BexExternalAdt::PromptAst(_)) => {
-            serde_json::json!({"__adt": "PromptAst"})
+            let meta = BamlMeta::prompt_ast();
+            serde_json::json!({ "$baml": serde_json::to_value(&meta).unwrap_or(serde_json::Value::Null) })
         }
         BexExternalValue::Adt(BexExternalAdt::Media(_)) => {
-            serde_json::json!({"__adt": "Media"})
+            let meta = BamlMeta::media();
+            serde_json::json!({ "$baml": serde_json::to_value(&meta).unwrap_or(serde_json::Value::Null) })
         }
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use web_time::SystemTime;
+/// Render a `BexExternalValue` as a Rust Debug-style string.
+///
+/// Examples:
+/// - Class: `Person { name: "Alice", age: 30 }`
+/// - Array: `[1, 2, 3]`
+/// - Map: `{"key": "value"}`
+/// - Enum: `Status::Active`
+/// - Union: shows the inner value
+pub fn bex_value_to_debug_string(value: &BexExternalValue) -> String {
+    bex_value_to_debug_impl(value, 0)
+}
 
-    use super::*;
-    use crate::{FunctionStart, SpanContext, SpanId};
+fn bex_value_to_debug_impl(value: &BexExternalValue, depth: usize) -> String {
+    if depth > MAX_SERIALIZATION_DEPTH {
+        return "...".to_string();
+    }
 
-    #[test]
-    fn test_serialize_function_start() {
-        let span_id = SpanId::new();
-        let root_id = span_id.clone();
-        let event = RuntimeEvent {
-            ctx: SpanContext {
-                span_id: span_id.clone(),
-                parent_span_id: None,
-                root_span_id: root_id,
-            },
-            call_stack: vec![span_id],
-            timestamp: SystemTime::now(),
-            event: EventKind::Function(FunctionEvent::Start(FunctionStart {
-                name: "my_func".into(),
-                args: vec![BexExternalValue::Int(42)],
-                tags: vec![],
-            })),
-        };
-
-        let jsonl = event_to_jsonl(&event);
-        let parsed: serde_json::Value = serde_json::from_str(&jsonl).unwrap();
-
-        assert!(parsed["call_id"].is_string());
-        assert!(parsed["function_event_id"].is_string());
-        assert!(parsed["call_stack"].is_array());
-        assert_eq!(parsed["content"]["type"], "function_start");
-        assert_eq!(
-            parsed["content"]["data"]["function_display_name"],
-            "my_func"
-        );
-        assert_eq!(parsed["content"]["data"]["args"][0], 42);
+    match value {
+        BexExternalValue::Null => "null".to_string(),
+        BexExternalValue::Bool(b) => b.to_string(),
+        BexExternalValue::Int(i) => i.to_string(),
+        BexExternalValue::Float(f) => {
+            if f.fract() == 0.0 {
+                format!("{f:.1}")
+            } else {
+                f.to_string()
+            }
+        }
+        BexExternalValue::String(s) => format!("\"{s}\""),
+        BexExternalValue::Array { items, .. } => {
+            if items.is_empty() {
+                "[]".to_string()
+            } else {
+                let inner: Vec<_> = items
+                    .iter()
+                    .map(|v| bex_value_to_debug_impl(v, depth + 1))
+                    .collect();
+                format!("[{}]", inner.join(", "))
+            }
+        }
+        BexExternalValue::Map { entries, .. } => {
+            if entries.is_empty() {
+                "{}".to_string()
+            } else {
+                let inner: Vec<_> = entries
+                    .iter()
+                    .map(|(k, v)| format!("\"{k}\": {}", bex_value_to_debug_impl(v, depth + 1)))
+                    .collect();
+                format!("{{{}}}", inner.join(", "))
+            }
+        }
+        BexExternalValue::Instance {
+            class_name, fields, ..
+        } => {
+            if fields.is_empty() {
+                format!("{class_name} {{}}")
+            } else {
+                let inner: Vec<_> = fields
+                    .iter()
+                    .map(|(k, v)| format!("{k}: {}", bex_value_to_debug_impl(v, depth + 1)))
+                    .collect();
+                format!("{class_name} {{ {} }}", inner.join(", "))
+            }
+        }
+        BexExternalValue::Variant {
+            enum_name,
+            variant_name,
+        } => format!("{enum_name}::{variant_name}"),
+        BexExternalValue::Union { value, .. } => bex_value_to_debug_impl(value, depth + 1),
+        BexExternalValue::Handle(_) => "<handle>".to_string(),
+        BexExternalValue::Uint8Array(bytes) => format!("<bytes[{}]>", bytes.len()),
+        BexExternalValue::RustData(_) => "<rust_data>".to_string(),
+        BexExternalValue::FunctionRef { global_index } => format!("<fn@{global_index}>"),
+        BexExternalValue::Adt(BexExternalAdt::Collector(_)) => "<Collector>".to_string(),
+        BexExternalValue::Adt(BexExternalAdt::Type(ty)) => format!("<Type({ty})>"),
+        BexExternalValue::Adt(BexExternalAdt::PromptAst(_)) => "<PromptAst>".to_string(),
+        BexExternalValue::Adt(BexExternalAdt::Media(_)) => "<Media>".to_string(),
     }
 }

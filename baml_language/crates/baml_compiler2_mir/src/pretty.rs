@@ -23,8 +23,9 @@
 use std::fmt::{self, Write};
 
 use crate::{
-    AggregateKind, BasicBlock, BuiltinKind, Constant, Local, LocalDecl, MirFunction,
-    MirFunctionBody, MirFunctionKind, Operand, Rvalue, Statement, StatementKind, Terminator,
+    AggregateKind, BasicBlock, BuiltinKind, Constant, IntrinsicOp, Local, LocalDecl, LogLevel,
+    MirFunction, MirFunctionBody, MirFunctionKind, Operand, Rvalue, Statement, StatementKind,
+    Terminator,
 };
 
 /// Pretty print a MIR function.
@@ -41,6 +42,7 @@ pub fn write_function(f: &mut impl Write, func: &MirFunction) -> fmt::Result {
             let kind_str = match kind {
                 BuiltinKind::Io => "io",
                 BuiltinKind::Vm => "vm",
+                BuiltinKind::Intrinsic => "intrinsic",
             };
             writeln!(f, "fn {} = builtin({kind_str})", func.item_ref)
         }
@@ -179,6 +181,23 @@ fn write_statement(f: &mut impl Write, stmt: &Statement) -> fmt::Result {
         }
         StatementKind::FreshCell(local) => {
             write!(f, "fresh_cell({local});")
+        }
+        StatementKind::Intrinsic { op, args } => {
+            let op_str = match op {
+                IntrinsicOp::Log(LogLevel::Info) => "log_info",
+                IntrinsicOp::Log(LogLevel::Debug) => "log_debug",
+                IntrinsicOp::Log(LogLevel::Warn) => "log_warn",
+                IntrinsicOp::Log(LogLevel::Error) => "log_error",
+                IntrinsicOp::SendEvent => "send_event",
+            };
+            write!(f, "intrinsic {op_str}(")?;
+            for (i, arg) in args.iter().enumerate() {
+                if i > 0 {
+                    write!(f, ", ")?;
+                }
+                write_operand(f, arg)?;
+            }
+            write!(f, ");")
         }
         StatementKind::Nop => {
             write!(f, "nop;")

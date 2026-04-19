@@ -143,7 +143,7 @@ async fn catch_literal_int_match() {
         }
     "#
     );
-    insta::assert_snapshot!(output.bytecode, @"
+    insta::assert_snapshot!(output.bytecode, @r"
     function fails() -> int {
         load_const 42
         throw
@@ -320,7 +320,7 @@ async fn typed_binding_int() {
         }
     "#
     );
-    insta::assert_snapshot!(output.bytecode, @"
+    insta::assert_snapshot!(output.bytecode, @r"
     function fails() -> int {
         load_const 42
         throw
@@ -1370,7 +1370,7 @@ async fn unhandled_throw_int() {
         }
     "#
     );
-    insta::assert_snapshot!(output.bytecode, @"
+    insta::assert_snapshot!(output.bytecode, @r"
     function main() -> int {
         load_const 42
         throw
@@ -1397,7 +1397,7 @@ async fn catch_division_by_zero() {
         }
     "#
     );
-    insta::assert_snapshot!(output.bytecode, @"
+    insta::assert_snapshot!(output.bytecode, @r"
     function divides() -> int {
         load_const 1
         load_const 0
@@ -1439,7 +1439,7 @@ async fn catch_index_out_of_bounds() {
         }
     "#
     );
-    insta::assert_snapshot!(output.bytecode, @"
+    insta::assert_snapshot!(output.bytecode, @r"
     function main() -> int {
         call user.oob
         jump L2
@@ -1527,7 +1527,7 @@ async fn catch_negative_index_as_index_out_of_bounds() {
         }
     "#
     );
-    insta::assert_snapshot!(output.bytecode, @"
+    insta::assert_snapshot!(output.bytecode, @r"
     function bad() -> int {
         load_const 1
         load_const 2
@@ -1578,7 +1578,7 @@ async fn named_panic_binding_division_by_zero_field() {
         }
     "#
     );
-    insta::assert_snapshot!(output.bytecode, @"
+    insta::assert_snapshot!(output.bytecode, @r"
     function divides() -> int {
         load_const 10
         load_const 0
@@ -1622,7 +1622,7 @@ async fn named_panic_binding_index_out_of_bounds_fields() {
         }
     "#
     );
-    insta::assert_snapshot!(output.bytecode, @"
+    insta::assert_snapshot!(output.bytecode, @r"
     function main() -> int {
         call user.oob
         jump L2
@@ -1669,7 +1669,7 @@ async fn named_panic_binding_index_out_of_bounds_length() {
         }
     "#
     );
-    insta::assert_snapshot!(output.bytecode, @"
+    insta::assert_snapshot!(output.bytecode, @r"
     function main() -> int {
         call user.oob
         jump L2
@@ -2897,7 +2897,7 @@ async fn four_arms_no_error() {
 #[tokio::test]
 async fn uncaught_division_by_zero() {
     let output = baml_test!(r#" function main() -> int { 1 / 0 } "#);
-    insta::assert_snapshot!(output.bytecode, @"
+    insta::assert_snapshot!(output.bytecode, @r"
     function main() -> int {
         load_const 1
         load_const 0
@@ -2911,7 +2911,7 @@ async fn uncaught_division_by_zero() {
 #[tokio::test]
 async fn uncaught_index_out_of_bounds() {
     let output = baml_test!(r#" function main() -> int { let a = [1]; a[5] } "#);
-    insta::assert_snapshot!(output.bytecode, @"
+    insta::assert_snapshot!(output.bytecode, @r"
     function main() -> int {
         load_const 1
         alloc_array 1
@@ -2934,7 +2934,7 @@ async fn wrong_panic_pattern_propagates() {
         }
     "#
     );
-    insta::assert_snapshot!(output.bytecode, @"
+    insta::assert_snapshot!(output.bytecode, @r"
     function divides() -> int {
         load_const 1
         load_const 0
@@ -3013,7 +3013,7 @@ async fn panic_alias_catches_any_panic() {
         }
     "#
     );
-    insta::assert_snapshot!(output.bytecode, @"
+    insta::assert_snapshot!(output.bytecode, @r"
     function divides() -> int {
         load_const 1
         load_const 0
@@ -3328,7 +3328,7 @@ async fn inline_throw_catch() {
         }
     "
     );
-    insta::assert_snapshot!(output.bytecode, @"
+    insta::assert_snapshot!(output.bytecode, @r"
     function main() -> int {
         load_const 1
         throw_if_panic
@@ -3389,7 +3389,7 @@ async fn caught_panic_has_accessible_fields() {
         }
     "#
     );
-    insta::assert_snapshot!(output.bytecode, @"
+    insta::assert_snapshot!(output.bytecode, @r"
     function main() -> int {
         call user.oob
         jump L2
@@ -3456,7 +3456,7 @@ async fn catch_four_typed_arms_jump_table() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r#"
+    insta::assert_snapshot!(output.bytecode, @r"
     function main() -> int {
         load_const 2
         call user.risky
@@ -3533,7 +3533,7 @@ async fn catch_four_typed_arms_jump_table() {
         init_field .x
         throw
     }
-    "#);
+    ");
     assert_eq!(output.result, Ok(BexExternalValue::Int(30)));
 }
 
@@ -3901,7 +3901,7 @@ async fn catch_four_primitive_wildcard_on_float() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r#"
+    insta::assert_snapshot!(output.bytecode, @r"
     function fails() -> int {
         load_const 3.14
         throw
@@ -3938,7 +3938,7 @@ async fn catch_four_primitive_wildcard_on_float() {
       L5:
         return
     }
-    "#);
+    ");
     assert_eq!(output.result, Ok(BexExternalValue::Int(0)));
 }
 
@@ -3962,7 +3962,7 @@ async fn catch_three_type_arms_bool_throw() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r#"
+    insta::assert_snapshot!(output.bytecode, @r"
     function fails() -> int {
         load_const true
         throw
@@ -4008,7 +4008,7 @@ async fn catch_three_type_arms_bool_throw() {
       L6:
         return
     }
-    "#);
+    ");
     assert_eq!(output.result, Ok(BexExternalValue::Int(3)));
 }
 

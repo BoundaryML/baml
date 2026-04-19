@@ -8,9 +8,9 @@ use crate::{
         BamlFieldType, BamlFieldTypeBool, BamlFieldTypeFloat, BamlFieldTypeInt, BamlFieldTypeList,
         BamlFieldTypeLiteral, BamlFieldTypeMap, BamlFieldTypeMedia, BamlFieldTypeNull,
         BamlFieldTypeOptional, BamlFieldTypeString, BamlFieldTypeUint8Array,
-        BamlFieldTypeUnionVariant, BamlHandle, BamlOutboundMapEntry, BamlOutboundValue,
-        BamlTypeName, BamlTypeNamespace, BamlValueClass, BamlValueEnum, BamlValueList,
-        BamlValueMap, BamlValueUnionVariant, baml_field_type::Type as FieldType,
+        BamlFieldTypeUnionVariant, BamlFieldTypeUnknown, BamlHandle, BamlOutboundMapEntry,
+        BamlOutboundValue, BamlTypeName, BamlTypeNamespace, BamlValueClass, BamlValueEnum,
+        BamlValueList, BamlValueMap, BamlValueUnionVariant, baml_field_type::Type as FieldType,
         baml_outbound_value::Value as BamlValueVariant,
     },
     error::CtypesError,
@@ -304,12 +304,14 @@ fn ty_to_field_type(ty: &Ty) -> BamlFieldType {
             unreachable!("runtime-only {tn} should not reach FFI type encoding")
         }
         Ty::Uint8Array { .. } => Some(FieldType::Uint8arrayType(BamlFieldTypeUint8Array {})),
+        // BuiltinUnknown is used for dynamic types (e.g., map values, array elements)
+        // when the element type isn't known at compile time.
+        Ty::BuiltinUnknown { .. } => Some(FieldType::UnknownType(BamlFieldTypeUnknown {})),
         Ty::TypeAlias(_, _)
         | Ty::Future(..)
         | Ty::Function { .. }
         | Ty::Void { .. }
-        | Ty::WatchAccessor(_, _)
-        | Ty::BuiltinUnknown { .. } => {
+        | Ty::WatchAccessor(_, _) => {
             unreachable!("compiler-only variant should not reach FFI: {ty:?}")
         }
     };

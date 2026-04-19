@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 37673
 ---
 function user.bad_callback_use(cb: (int) -> void) -> int {
     load_const 1

@@ -256,3 +256,24 @@ fn two_functions_independent() {
     }
     ");
 }
+
+#[test]
+fn unresolved_path_after_valid_type() {
+    // Test: when a path like `media.Image.missing` fails, `missing` should be
+    // reported as unresolved (not `Image`, which is a valid type in the media namespace).
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        "function f() -> int { return media.Image.missing; }",
+    );
+    // The error should mention `missing`, not `Image`
+    let output = render_tir(&db, file);
+    assert!(
+        output.contains("unresolved name: missing"),
+        "Expected error to mention 'missing' as unresolved, got:\n{output}"
+    );
+    assert!(
+        !output.contains("unresolved name: Image"),
+        "Error should NOT mention 'Image' as unresolved (it's a valid type), got:\n{output}"
+    );
+}

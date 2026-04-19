@@ -100,3 +100,13 @@ source: crates/baml_tests/src/generated_tests.rs
      │     
      │     Note: Error code: E0001
 ─────╯
+
+  [type] Error: unresolved name: HttpMethod
+    ╭─[ fetch_as.baml:10:16 ]
+    │
+ 10 │         method: baml.HttpMethod.Get,
+    │                ──────────┬─────────  
+    │                          ╰─────────── unresolved name: HttpMethod
+    │ 
+    │ Note: Error code: E0001
+────╯

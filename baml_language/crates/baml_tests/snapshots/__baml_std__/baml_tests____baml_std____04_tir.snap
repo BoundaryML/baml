@@ -106,6 +106,8 @@ class baml.errors.StackTrace$stream {
   frames: baml.errors.StackFrame$stream[]
 }
 
+--- <builtin>/baml/ns_events/events.baml ---
+
 --- <builtin>/baml/ns_fs/fs.baml ---
 class baml.fs.File {
   _handle: $rust_type

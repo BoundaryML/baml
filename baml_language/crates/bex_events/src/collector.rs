@@ -17,7 +17,7 @@ use std::{collections::HashMap, sync::Mutex, time::Duration};
 use bex_external_types::BexExternalValue;
 use indexmap::IndexSet;
 
-use crate::{EventKind, FunctionEvent, RuntimeEvent, SpanId, event_store};
+use crate::{CustomEvent, EventKind, FunctionEvent, LogEvent, RuntimeEvent, SpanId, event_store};
 
 // ─────────────────────────── Collector ────────────────────────────────────
 
@@ -118,6 +118,10 @@ pub struct FunctionLog {
     pub tags: HashMap<String, String>,
     pub args: Vec<BexExternalValue>,
     pub result: Option<BexExternalValue>,
+    /// Structured log events emitted via `log.info()`, `log.debug()`, etc.
+    /// Extracted from `CustomEvent`s with name="log" that were emitted during
+    /// this function invocation.
+    pub log_events: Vec<LogEvent>,
 }
 
 /// Timing information for a span.
@@ -185,6 +189,7 @@ impl FunctionLog {
         let usage = Usage::default();
         let mut child_starts: HashMap<SpanId, ChildSpan> = HashMap::new();
         let mut calls: Vec<LLMCall> = vec![];
+        let mut log_events: Vec<LogEvent> = vec![];
 
         for event in events {
             let is_root = event.ctx.span_id == engine_span_id;
@@ -239,6 +244,16 @@ impl FunctionLog {
                         tags.insert(k.clone(), v.clone());
                     }
                 }
+                EventKind::Log(log) => {
+                    log_events.push(log.clone());
+                }
+                EventKind::Custom(custom) => {
+                    // Recognize log events emitted by `log.info()` etc. via the reserved
+                    // event name "$baml_log" (fallback path if not already converted to Log).
+                    if let Some(log) = extract_log_from_custom(custom) {
+                        log_events.push(log);
+                    }
+                }
             }
         }
 
@@ -251,6 +266,7 @@ impl FunctionLog {
             tags,
             args,
             result,
+            log_events,
         }
     }
 }
@@ -271,6 +287,36 @@ fn sum_option(a: Option<i64>, b: Option<i64>) -> Option<i64> {
         (Some(x), Some(y)) => Some(x + y),
         (Some(x), None) | (None, Some(x)) => Some(x),
         (None, None) => None,
+    }
+}
+
+/// Try to extract a `LogEvent` from a `CustomEvent` emitted by `log.info()` etc.
+///
+/// The `log.*` BAML functions emit custom events with `name="$baml_log"` (reserved name
+/// to distinguish from user events) and data structured as:
+/// `{ level: string, data: map<string, unknown> }`.
+fn extract_log_from_custom(custom: &CustomEvent) -> Option<LogEvent> {
+    if custom.name != "$baml_log" {
+        return None;
+    }
+
+    match &custom.data {
+        BexExternalValue::Map { entries, .. } => {
+            let level = match entries.get("level")? {
+                BexExternalValue::String(s) => s.clone(),
+                _ => return None,
+            };
+            let data = entries
+                .get("data")
+                .cloned()
+                .unwrap_or(BexExternalValue::Null);
+            Some(LogEvent {
+                level,
+                data,
+                source: None,
+            })
+        }
+        _ => None,
     }
 }
 

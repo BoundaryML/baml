@@ -135,6 +135,12 @@ pub enum PlaygroundNotification {
         #[serde(skip_serializing_if = "Option::is_none")]
         expand_error: Option<TestExpandError>,
     },
+    /// A runtime event was emitted during execution (protobuf-encoded).
+    #[serde(rename_all = "camelCase")]
+    RuntimeEvent {
+        /// Protobuf-encoded `RuntimeEvent` bytes (decode with `RuntimeEvent.decode()`)
+        data: Vec<u8>,
+    },
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -206,6 +212,12 @@ pub trait BexLsp: Send + Sync + notification::BexLspNotification + request::BexL
     /// Expand a lazy test set by name. Fire-and-forget — result comes via a
     /// `TestCollectionResult` playground notification with the full serialized tree.
     fn expand_test_set(&self, project: &str, generation: u64, testset_name: &str);
+
+    /// Resolve a file ID to its file path.
+    ///
+    /// Used by the playground to navigate to source locations when clicking on
+    /// log events. Returns the file path if the ID is valid, or None if not found.
+    fn resolve_file_id(&self, file_id: u32) -> Option<String>;
 }
 
 use ::std::sync::Arc;

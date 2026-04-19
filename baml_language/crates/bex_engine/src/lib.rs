@@ -255,6 +255,12 @@ pub enum EngineError {
     #[error("VM internal error: {0}")]
     VmInternalError(bex_vm::errors::VmInternalError),
 
+    #[error("{}", format_vm_internal_error(source, trace))]
+    TracedVmInternalError {
+        source: bex_vm::errors::VmInternalError,
+        trace: Vec<bex_vm::StackFrame>,
+    },
+
     /// Either a BAML panic or a BAML error value.
     #[error("{}", format_unhandled_throw(value, trace))]
     UnhandledThrow {
@@ -283,6 +289,20 @@ pub enum EngineError {
 
     #[error("Package initialization failed: {0}")]
     InitFailed(String),
+}
+
+fn format_vm_internal_error(
+    err: &bex_vm::errors::VmInternalError,
+    trace: &[bex_vm::StackFrame],
+) -> String {
+    use std::fmt::Write;
+    let mut out = bex_vm::format_traceback(
+        trace
+            .iter()
+            .map(|f| (f.file_path.as_str(), f.error_line, f.function_name.as_str())),
+    );
+    write!(out, "VM internal error: {err}").unwrap();
+    out
 }
 
 fn format_unhandled_throw(value: &BexExternalValue, trace: &[bex_vm::StackFrame]) -> String {
@@ -551,6 +571,13 @@ impl BexEngine {
                         }
                         Ok(VmExecState::Notify(_) | VmExecState::SpanNotify(_)) => {
                             // Ignore watch/span notifications during init.
+                            continue;
+                        }
+                        Ok(VmExecState::Event { .. }) => {
+                            // Handle events during $init: push null and continue.
+                            // No span context exists during init, so the event is dropped,
+                            // but we must push a return value to keep the stack balanced.
+                            vm.stack.push(Value::Null);
                             continue;
                         }
                         Ok(other) => {
@@ -1383,6 +1410,9 @@ impl BexEngine {
         'vm_exec: loop {
             Self::cancellation_safepoint(cancel, &abort_handles)?;
 
+            // Update the VM's span context so native functions can read it.
+            vm.current_span_context = span_state.as_ref().map(Self::build_span_context_from_state);
+
             let exec_result = match vm.exec() {
                 Ok(state) => state,
                 Err(bex_vm::errors::VmError::ThrownUnhandled { value, trace }) => {
@@ -1413,6 +1443,9 @@ impl BexEngine {
                 }
                 Err(bex_vm::errors::VmError::InternalError(err)) => {
                     return Err(EngineError::VmInternalError(err));
+                }
+                Err(bex_vm::errors::VmError::TracedInternalError { source, trace }) => {
+                    return Err(EngineError::TracedVmInternalError { source, trace });
                 }
             };
             match exec_result {
@@ -1647,6 +1680,84 @@ impl BexEngine {
                     }
                 }
 
+                VmExecState::Event {
+                    event_name,
+                    data,
+                    source_location,
+                } => {
+                    // Emit a CustomEvent or LogEvent with the current span context.
+                    if let Some(state) = span_state.as_ref() {
+                        let ctx = Self::build_span_context_from_state(state);
+                        let mut call_stack = state.host_call_stack.clone();
+                        call_stack.extend(state.stack.iter().map(|s| s.span_id.clone()));
+
+                        let external_data = self.vm_value_to_owned(&data);
+
+                        // Convert source location tuple to SourceLocation struct.
+                        let source = source_location.map(
+                            |(file_id, line, column, start_offset, end_offset)| {
+                                bex_events::SourceLocation {
+                                    file_id,
+                                    line,
+                                    column,
+                                    start_offset,
+                                    end_offset,
+                                }
+                            },
+                        );
+
+                        // Check if this is a log event (emitted by log.info, log.debug, etc.)
+                        // Uses reserved name "$baml_log" to distinguish from user events.
+                        let event = if event_name == "$baml_log" {
+                            // Extract level and data from the log payload.
+                            if let BexExternalValue::Map { entries, .. } = &external_data {
+                                let level = entries
+                                    .get("level")
+                                    .and_then(|v| {
+                                        if let BexExternalValue::String(s) = v {
+                                            Some(s.clone())
+                                        } else {
+                                            None
+                                        }
+                                    })
+                                    .unwrap_or_else(|| "info".to_string());
+                                let log_data = entries
+                                    .get("data")
+                                    .cloned()
+                                    .unwrap_or(BexExternalValue::Null);
+                                EventKind::Log(bex_events::LogEvent {
+                                    level,
+                                    data: log_data,
+                                    source,
+                                })
+                            } else {
+                                // Fallback: treat as custom event if structure is unexpected.
+                                EventKind::Custom(bex_events::CustomEvent {
+                                    name: event_name,
+                                    data: external_data,
+                                })
+                            }
+                        } else {
+                            EventKind::Custom(bex_events::CustomEvent {
+                                name: event_name,
+                                data: external_data,
+                            })
+                        };
+
+                        self.emit(RuntimeEvent {
+                            ctx,
+                            call_stack,
+                            timestamp: SystemTime::now(),
+                            event,
+                        });
+                    }
+                    // `baml.events.send()` returns null.  The SendEvent instruction
+                    // pops its two arguments but does not push a return value, so we
+                    // push null here before the VM resumes at the next instruction
+                    // (which will store or discard the return value).
+                    vm.stack.push(Value::Null);
+                }
+
                 VmExecState::Notify(_notification) => {
                     // Ignore watch notifications for now
                 }
@@ -1729,6 +1840,28 @@ impl BexEngine {
                         }
                     }
                 }
+            }
+        }
+    }
+
+    /// Build a `SpanContext` from the current `SpanState`.
+    ///
+    /// Returns the context for the innermost active span, or uses the root span
+    /// if the stack is empty (e.g. between span transitions).
+    fn build_span_context_from_state(state: &SpanState) -> bex_events::SpanContext {
+        if let Some(current_span) = state.stack.last() {
+            bex_events::SpanContext {
+                span_id: current_span.span_id.clone(),
+                parent_span_id: current_span.parent_span_id.clone(),
+                root_span_id: state.root_span_id.clone(),
+            }
+        } else {
+            // Stack is empty (e.g. root span has not been pushed yet, or has been popped).
+            // Use the root span as a fallback.
+            bex_events::SpanContext {
+                span_id: state.root_span_id.clone(),
+                parent_span_id: None,
+                root_span_id: state.root_span_id.clone(),
             }
         }
     }

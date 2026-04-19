@@ -236,6 +236,11 @@ pub struct BexVm {
     /// Checked on `Return` to yield `FunctionExit` notifications.
     traced_frames: Vec<usize>,
 
+    /// Current span context, set by the engine before each VM execution step.
+    /// Available to `//baml:mut_vm` native functions that need to emit events
+    /// with the correct span context.
+    pub current_span_context: Option<bex_events::SpanContext>,
+
     /// Process argv passed to the engine at startup. Exposed to BAML via
     /// `baml.sys.argv()`. Shared (cheap to clone) across VMs.
     pub argv: Arc<[String]>,
@@ -271,6 +276,20 @@ pub enum VmExecState {
 
     /// Notify about span lifecycle (from traced `Call` / `Return`).
     SpanNotify(SpanNotification),
+
+    /// The VM is yielding a custom event to be emitted.
+    ///
+    /// The engine handles this by converting both values to `BexExternalValue`
+    /// and emitting a `CustomEvent` with the current span context.
+    Event {
+        /// Name of the event (extracted from the String heap object).
+        event_name: String,
+        /// Event payload (raw VM value; engine converts to `BexExternalValue`).
+        data: Value,
+        /// Source location where the event was emitted:
+        /// (`file_id`, line, column, `start_offset`, `end_offset`).
+        source_location: Option<(u32, u32, u32, u32, u32)>,
+    },
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -486,6 +505,7 @@ impl BexVm {
             watched_vars: HashMap::new(),
             interrupt_frame: None,
             traced_frames: Vec::new(),
+            current_span_context: None,
             argv,
         }
     }
@@ -1175,17 +1195,8 @@ impl BexVm {
     }
 
     /// Unwinds error values (both thrown and panics).
-    fn try_unwind_exception(
-        &mut self,
-        frame_idx: &mut usize,
-        function: &mut &'static Function,
-        exception_value: Value,
-    ) -> Result<(), VmError> {
-        // Capture the stack trace before unwinding destroys frame information.
-        // We build it inline rather than calling stack_trace() to avoid
-        // constructing a StackTrace wrapper we don't need.
-        let trace: Vec<StackFrame> = self
-            .frames
+    fn capture_stack_trace(&self) -> Vec<StackFrame> {
+        self.frames
             .iter()
             .filter_map(|frame| {
                 let func = self.get_object(frame.function()).as_callable().ok()?;
@@ -1208,7 +1219,17 @@ impl BexVm {
                     }),
                 }
             })
-            .collect();
+            .collect()
+    }
+
+    fn try_unwind_exception(
+        &mut self,
+        frame_idx: &mut usize,
+        function: &mut &'static Function,
+        exception_value: Value,
+    ) -> Result<(), VmError> {
+        // Capture the stack trace before unwinding destroys frame information.
+        let trace: Vec<StackFrame> = self.capture_stack_trace();
 
         // Walk the call stack from the current frame outward looking for an
         // exception table entry that covers the faulting PC.
@@ -1752,7 +1773,19 @@ impl BexVm {
     /// Main VM execution loop.
     ///
     /// Each "cycle" (loop iteration) executes a single instruction.
+    /// Wraps `exec_inner` to convert `InternalError` → `TracedInternalError`
+    /// with a captured stack trace.
     pub fn exec(&mut self) -> Result<VmExecState, VmError> {
+        match self.exec_inner() {
+            Err(VmError::InternalError(err)) => {
+                let trace = self.capture_stack_trace();
+                Err(VmError::TracedInternalError { source: err, trace })
+            }
+            other => other,
+        }
+    }
+
+    fn exec_inner(&mut self) -> Result<VmExecState, VmError> {
         if self.frames.is_empty() {
             return Ok(VmExecState::Complete(Value::Null));
         }
@@ -1897,7 +1930,9 @@ impl BexVm {
                 Err(VmError::Thrown(exception_value)) => {
                     self.try_unwind_exception(&mut frame_idx, &mut function, exception_value)?;
                 }
-                Err(e @ VmError::ThrownUnhandled { .. }) => return Err(e),
+                Err(
+                    e @ (VmError::ThrownUnhandled { .. } | VmError::TracedInternalError { .. }),
+                ) => return Err(e),
             }
         }
     }
@@ -3656,6 +3691,42 @@ impl BexVm {
                     .into());
                 };
                 self.stack.push(closure.captures[idx]);
+            }
+
+            Instruction::SendEvent => {
+                // Stack layout (top-to-bottom): [data, event_name]
+                // Pop data first (it's on top), then event_name.
+                let data = self.stack.ensure_pop()?;
+                let name_value = self.stack.ensure_pop()?;
+
+                // Extract the event name string from the heap.
+                let event_name = self.as_string(&name_value)?.clone();
+
+                // Capture source location from the current frame's line table.
+                let source_location = if let Frame::Bytecode(bf) = &self.frames[*frame_idx] {
+                    let pc = bf.instruction_ptr.saturating_sub(1);
+                    self.get_object(bf.function)
+                        .as_callable()
+                        .ok()
+                        .and_then(|func| func.bytecode.line_entry_for_pc(pc))
+                        .map(|entry| {
+                            (
+                                entry.span.file_id.as_u32(),
+                                u32::try_from(entry.line).unwrap_or(u32::MAX),
+                                entry.span.range.start().into(),
+                                u32::from(entry.span.range.start()),
+                                u32::from(entry.span.range.end()),
+                            )
+                        })
+                } else {
+                    None
+                };
+
+                return Ok(Some(VmExecState::Event {
+                    event_name,
+                    data,
+                    source_location,
+                }));
             }
         }
 

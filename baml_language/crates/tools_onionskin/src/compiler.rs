@@ -3807,7 +3807,7 @@ impl CompilerRunner {
     /// Execute the selected function in the VM
     pub(crate) fn execute_selected_function(&mut self) {
         use bex_vm::{BexVm, VmExecState};
-        use bex_vm_types::Object;
+        use bex_vm_types::{Object, Value};
 
         let program = match self.db.get_bytecode() {
             Ok(p) => p,
@@ -3860,33 +3860,46 @@ impl CompilerRunner {
         let func_ptr = vm.heap.compile_time_ptr(func_index);
         vm.set_entry_point(func_ptr, &[]);
 
-        match vm.exec() {
-            Ok(VmExecState::Complete(value)) => {
-                let result_str = format_vm_value(&value, &vm);
-                self.vm_runner_state.execution_result =
-                    Some(VmExecutionResult::Success(result_str));
-            }
-            Ok(VmExecState::Await(_)) => {
-                self.vm_runner_state.execution_result = Some(VmExecutionResult::Error(
-                    "Function awaits a future (not supported in VM Runner)".to_string(),
-                ));
-            }
-            Ok(VmExecState::ScheduleFuture(_)) => {
-                self.vm_runner_state.execution_result = Some(VmExecutionResult::Error(
-                    "Function schedules a future (not supported in VM Runner)".to_string(),
-                ));
-            }
-            Ok(VmExecState::Notify(_)) => {
-                self.vm_runner_state.execution_result = Some(VmExecutionResult::Error(
-                    "Function sent a watch notification (not supported in VM Runner)".to_string(),
-                ));
-            }
-            Ok(VmExecState::SpanNotify(_)) => {
-                // Span notifications are ignored in the VM Runner — just continue.
-            }
-            Err(e) => {
-                self.vm_runner_state.execution_result =
-                    Some(VmExecutionResult::Error(format!("{:?}", e)));
+        loop {
+            match vm.exec() {
+                Ok(VmExecState::Complete(value)) => {
+                    let result_str = format_vm_value(&value, &vm);
+                    self.vm_runner_state.execution_result =
+                        Some(VmExecutionResult::Success(result_str));
+                    break;
+                }
+                Ok(VmExecState::Await(_)) => {
+                    self.vm_runner_state.execution_result = Some(VmExecutionResult::Error(
+                        "Function awaits a future (not supported in VM Runner)".to_string(),
+                    ));
+                    break;
+                }
+                Ok(VmExecState::ScheduleFuture(_)) => {
+                    self.vm_runner_state.execution_result = Some(VmExecutionResult::Error(
+                        "Function schedules a future (not supported in VM Runner)".to_string(),
+                    ));
+                    break;
+                }
+                Ok(VmExecState::Notify(_)) => {
+                    self.vm_runner_state.execution_result = Some(VmExecutionResult::Error(
+                        "Function sent a watch notification (not supported in VM Runner)"
+                            .to_string(),
+                    ));
+                    break;
+                }
+                Ok(VmExecState::SpanNotify(_)) => {
+                    // Span notifications are ignored — push null and continue.
+                    vm.stack.push(Value::Null);
+                }
+                Ok(VmExecState::Event { .. }) => {
+                    // Custom events are not surfaced — push null and continue.
+                    vm.stack.push(Value::Null);
+                }
+                Err(e) => {
+                    self.vm_runner_state.execution_result =
+                        Some(VmExecutionResult::Error(format!("{:?}", e)));
+                    break;
+                }
             }
         }
 

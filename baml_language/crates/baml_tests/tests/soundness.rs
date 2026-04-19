@@ -21,7 +21,7 @@ async fn call_result_immediate_right_operand_subtraction() {
         "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @"
+    insta::assert_snapshot!(output.bytecode, @r"
     function id(x: int) -> int {
         load_var x
         return
@@ -50,7 +50,7 @@ async fn phi_like_right_operand_subtraction() {
         "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @"
+    insta::assert_snapshot!(output.bytecode, @r"
     function main() -> int {
         load_const 2
         load_const 1
@@ -98,7 +98,7 @@ async fn cross_block_field_mutation() {
         "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @"
+    insta::assert_snapshot!(output.bytecode, @r"
     function main() -> int {
         alloc_instance Box
         load_const 1
@@ -139,7 +139,7 @@ async fn cross_block_let_mutation() {
         args: { "c" => BexExternalValue::Bool(true) },
     };
 
-    insta::assert_snapshot!(output.bytecode, @"
+    insta::assert_snapshot!(output.bytecode, @r"
     function main(c: bool) -> int {
         load_const 1
         store_var a
@@ -194,7 +194,7 @@ async fn cross_block_param_mutation() {
         },
     };
 
-    insta::assert_snapshot!(output.bytecode, @"
+    insta::assert_snapshot!(output.bytecode, @r"
     function main(c: bool, p: int) -> int {
         load_var p
         store_var x
@@ -224,7 +224,7 @@ async fn copy_of_mutable_param() {
         args: { "x" => BexExternalValue::Int(5) },
     };
 
-    insta::assert_snapshot!(output.bytecode, @"
+    insta::assert_snapshot!(output.bytecode, @r"
     function main(x: int) -> int {
         load_var x
         store_var y
@@ -256,7 +256,7 @@ async fn transitive_param_copy_mutation() {
         },
     };
 
-    insta::assert_snapshot!(output.bytecode, @"
+    insta::assert_snapshot!(output.bytecode, @r"
     function main(c: bool, p: int) -> int {
         load_var p
         store_var x
@@ -290,7 +290,7 @@ async fn multiple_defs_preserve_side_effects() {
         "#,
     };
 
-    insta::assert_snapshot!(output.bytecode, @"
+    insta::assert_snapshot!(output.bytecode, @r"
     function fail() -> int {
         load_const false
         call assert.is_true

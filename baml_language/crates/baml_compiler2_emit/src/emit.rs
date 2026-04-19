@@ -11,8 +11,8 @@ use std::{
 
 use baml_base::Span;
 use baml_compiler2_mir::{
-    BasicBlock, BinOp, BlockId, Constant, IndexKind, Local, MirFunctionBody, Operand, Place,
-    Rvalue, StatementKind, Terminator, UnaryOp,
+    BasicBlock, BinOp, BlockId, Constant, IndexKind, IntrinsicOp, Local, LogLevel, MirFunctionBody,
+    Operand, Place, Rvalue, StatementKind, Terminator, UnaryOp,
 };
 use baml_type::Ty;
 use bex_vm_types::{
@@ -974,6 +974,78 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                     }
                 }
             }
+            StatementKind::Intrinsic { op, args } => {
+                match op {
+                    IntrinsicOp::SendEvent => {
+                        // Same bytecode as the old baml.events.send string-match arm:
+                        // push args (event_name, data), then SendEvent.
+                        unwrap_infallible(pull_semantics::walk_call_direct_args(self, args));
+                        self.emit(Instruction::SendEvent);
+                        // The engine pushes `null` after resuming from SendEvent.
+                        // Since this is a statement (not an rvalue), discard it.
+                        self.emit(Instruction::Pop(1));
+                    }
+                    IntrinsicOp::Log(level) => {
+                        // Same bytecode as the old log.* string-match arm:
+                        // Synthesize SendEvent with "$baml_log" event name and
+                        // { level: "<level>", data: <user_arg> } payload.
+
+                        // Save call-site span — walking args may overwrite current_debug_span
+                        let call_site_span = self.current_debug_span;
+
+                        // 1. Push event name "$baml_log"
+                        let log_str_idx = self.objects.len();
+                        self.objects.push(Object::String("$baml_log".to_string()));
+                        let log_const_idx = self
+                            .add_constant(ConstValue::Object(ObjectIndex::from_raw(log_str_idx)));
+                        let inst = self.emit(Instruction::LoadConst(log_const_idx));
+                        self.set_operand(inst, OperandMeta::Const("\"$baml_log\"".to_string()));
+
+                        // 2. Push level value string
+                        let level_str = match level {
+                            LogLevel::Info => "info",
+                            LogLevel::Debug => "debug",
+                            LogLevel::Warn => "warn",
+                            LogLevel::Error => "error",
+                        };
+                        let level_val_idx = self.objects.len();
+                        self.objects.push(Object::String(level_str.to_string()));
+                        let level_val_const_idx = self
+                            .add_constant(ConstValue::Object(ObjectIndex::from_raw(level_val_idx)));
+                        let inst = self.emit(Instruction::LoadConst(level_val_const_idx));
+                        self.set_operand(inst, OperandMeta::Const(format!("\"{level_str}\"")));
+
+                        // 3. Push user data argument
+                        unwrap_infallible(pull_semantics::walk_call_direct_args(self, args));
+
+                        // 4. Push key "level"
+                        let level_key_idx = self.objects.len();
+                        self.objects.push(Object::String("level".to_string()));
+                        let level_key_const_idx = self
+                            .add_constant(ConstValue::Object(ObjectIndex::from_raw(level_key_idx)));
+                        let inst = self.emit(Instruction::LoadConst(level_key_const_idx));
+                        self.set_operand(inst, OperandMeta::Const("\"level\"".to_string()));
+
+                        // 5. Push key "data"
+                        let data_key_idx = self.objects.len();
+                        self.objects.push(Object::String("data".to_string()));
+                        let data_key_const_idx = self
+                            .add_constant(ConstValue::Object(ObjectIndex::from_raw(data_key_idx)));
+                        let inst = self.emit(Instruction::LoadConst(data_key_const_idx));
+                        self.set_operand(inst, OperandMeta::Const("\"data\"".to_string()));
+
+                        // 6. AllocMap(2) -> { level: "info", data: <user_data> }
+                        self.emit(Instruction::AllocMap(2));
+
+                        // 7. Restore call-site span and emit SendEvent
+                        self.set_debug_span(call_site_span, true);
+                        self.emit(Instruction::SendEvent);
+                        // The engine pushes `null` after resuming from SendEvent.
+                        // Since this is a statement (not an rvalue), discard it.
+                        self.emit(Instruction::Pop(1));
+                    }
+                }
+            }
             StatementKind::Nop => {}
         }
     }
@@ -1282,15 +1354,16 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                     if let Some(name) = &func_name {
                         self.set_operand(inst, OperandMeta::Callable(name.clone()));
                     }
+                    self.emit_store_place(destination);
+                    self.emit_jump_unless_fallthrough(*target);
                 } else {
                     unwrap_infallible(pull_semantics::walk_call_indirect_operands(
                         self, callee, args,
                     ));
                     self.emit(Instruction::CallIndirect);
+                    self.emit_store_place(destination);
+                    self.emit_jump_unless_fallthrough(*target);
                 }
-
-                self.emit_store_place(destination);
-                self.emit_jump_unless_fallthrough(*target);
             }
 
             Terminator::Unreachable => {

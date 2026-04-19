@@ -2891,6 +2891,9 @@ export namespace baml {
 
                 /** BamlFieldType uint8arrayType */
                 uint8arrayType?: (baml.cffi.v1.IBamlFieldTypeUint8Array|null);
+
+                /** BamlFieldType unknownType */
+                unknownType?: (baml.cffi.v1.IBamlFieldTypeUnknown|null);
             }
 
             /** Represents a BamlFieldType. */
@@ -2956,8 +2959,11 @@ export namespace baml {
                 /** BamlFieldType uint8arrayType. */
                 public uint8arrayType?: (baml.cffi.v1.IBamlFieldTypeUint8Array|null);
 
+                /** BamlFieldType unknownType. */
+                public unknownType?: (baml.cffi.v1.IBamlFieldTypeUnknown|null);
+
                 /** BamlFieldType type. */
-                public type?: ("stringType"|"intType"|"floatType"|"boolType"|"nullType"|"literalType"|"mediaType"|"enumType"|"classType"|"typeAliasType"|"listType"|"mapType"|"unionVariantType"|"optionalType"|"checkedType"|"streamStateType"|"anyType"|"uint8arrayType");
+                public type?: ("stringType"|"intType"|"floatType"|"boolType"|"nullType"|"literalType"|"mediaType"|"enumType"|"classType"|"typeAliasType"|"listType"|"mapType"|"unionVariantType"|"optionalType"|"checkedType"|"streamStateType"|"anyType"|"uint8arrayType"|"unknownType");
 
                 /**
                  * Creates a new BamlFieldType instance using the specified properties.
@@ -3668,6 +3674,97 @@ export namespace baml {
 
                 /**
                  * Gets the default type url for BamlFieldTypeAny
+                 * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+                 * @returns The default type url
+                 */
+                public static getTypeUrl(typeUrlPrefix?: string): string;
+            }
+
+            /** Properties of a BamlFieldTypeUnknown. */
+            interface IBamlFieldTypeUnknown {
+            }
+
+            /** Represents a BamlFieldTypeUnknown. */
+            class BamlFieldTypeUnknown implements IBamlFieldTypeUnknown {
+
+                /**
+                 * Constructs a new BamlFieldTypeUnknown.
+                 * @param [properties] Properties to set
+                 */
+                constructor(properties?: baml.cffi.v1.IBamlFieldTypeUnknown);
+
+                /**
+                 * Creates a new BamlFieldTypeUnknown instance using the specified properties.
+                 * @param [properties] Properties to set
+                 * @returns BamlFieldTypeUnknown instance
+                 */
+                public static create(properties?: baml.cffi.v1.IBamlFieldTypeUnknown): baml.cffi.v1.BamlFieldTypeUnknown;
+
+                /**
+                 * Encodes the specified BamlFieldTypeUnknown message. Does not implicitly {@link baml.cffi.v1.BamlFieldTypeUnknown.verify|verify} messages.
+                 * @param message BamlFieldTypeUnknown message or plain object to encode
+                 * @param [writer] Writer to encode to
+                 * @returns Writer
+                 */
+                public static encode(message: baml.cffi.v1.IBamlFieldTypeUnknown, writer?: $protobuf.Writer): $protobuf.Writer;
+
+                /**
+                 * Encodes the specified BamlFieldTypeUnknown message, length delimited. Does not implicitly {@link baml.cffi.v1.BamlFieldTypeUnknown.verify|verify} messages.
+                 * @param message BamlFieldTypeUnknown message or plain object to encode
+                 * @param [writer] Writer to encode to
+                 * @returns Writer
+                 */
+                public static encodeDelimited(message: baml.cffi.v1.IBamlFieldTypeUnknown, writer?: $protobuf.Writer): $protobuf.Writer;
+
+                /**
+                 * Decodes a BamlFieldTypeUnknown message from the specified reader or buffer.
+                 * @param reader Reader or buffer to decode from
+                 * @param [length] Message length if known beforehand
+                 * @returns BamlFieldTypeUnknown
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): baml.cffi.v1.BamlFieldTypeUnknown;
+
+                /**
+                 * Decodes a BamlFieldTypeUnknown message from the specified reader or buffer, length delimited.
+                 * @param reader Reader or buffer to decode from
+                 * @returns BamlFieldTypeUnknown
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): baml.cffi.v1.BamlFieldTypeUnknown;
+
+                /**
+                 * Verifies a BamlFieldTypeUnknown message.
+                 * @param message Plain object to verify
+                 * @returns `null` if valid, otherwise the reason why it is not
+                 */
+                public static verify(message: { [k: string]: any }): (string|null);
+
+                /**
+                 * Creates a BamlFieldTypeUnknown message from a plain object. Also converts values to their respective internal types.
+                 * @param object Plain object
+                 * @returns BamlFieldTypeUnknown
+                 */
+                public static fromObject(object: { [k: string]: any }): baml.cffi.v1.BamlFieldTypeUnknown;
+
+                /**
+                 * Creates a plain object from a BamlFieldTypeUnknown message. Also converts values to other types if specified.
+                 * @param message BamlFieldTypeUnknown
+                 * @param [options] Conversion options
+                 * @returns Plain object
+                 */
+                public static toObject(message: baml.cffi.v1.BamlFieldTypeUnknown, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+                /**
+                 * Converts this BamlFieldTypeUnknown to JSON.
+                 * @returns JSON object
+                 */
+                public toJSON(): { [k: string]: any };
+
+                /**
+                 * Gets the default type url for BamlFieldTypeUnknown
                  * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
                  * @returns The default type url
                  */

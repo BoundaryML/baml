@@ -17,7 +17,7 @@ export {
 export type { ResultRendererProps } from './result-renderers';
 export { ResultDisplay } from './ResultDisplay';
 export type { ResultDisplayProps } from './ResultDisplay';
-export { HttpRequestCurlRenderer, httpRequestToCurl } from './renderers/HttpRequestCurl';
+export { HttpRequestCurlRenderer, httpRequestToCurl, isHttpRequest } from './renderers/HttpRequestCurl';
 
 // Worker protocol types (needed by worker implementations and consumers)
 export type {
@@ -31,7 +31,21 @@ export type {
   PlaygroundNotification,
   ProjectUpdate,
   RunEntry,
+  LogDecoration,
+  LogLevel,
 } from './worker-protocol';
 
 // Utility
 export { cn } from './lib/utils';
+
+// WASM panic detection
+export {
+  installWasmPanicHook,
+  onWasmPanic,
+  isWasmPanic,
+  getWasmError,
+  getWasmPanicRegistry,
+  handleWasmError,
+  WasmPanicRegistry,
+  type WasmPanic,
+} from './wasm-panic';

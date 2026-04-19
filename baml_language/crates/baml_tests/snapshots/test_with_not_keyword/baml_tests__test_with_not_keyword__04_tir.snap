@@ -19,7 +19,7 @@ function user.use_with_as_var() -> int throws never {
 class user.HasWith {
   with: int
 }
-function user.$init_test_22(registry: testing.TestCollector) -> ? throws never {
+function user.$init_test_24(registry: testing.TestCollector) -> ? throws never {
   { : null
     registry.register_test("with as field", () -> void { ... }, null) : void
       () -> void { ... } : () -> void
@@ -30,7 +30,7 @@ function user.$init_test_22(registry: testing.TestCollector) -> ? throws never {
     null : null
   }
 }
-lambda user.$init_test_22 {
+lambda user.$init_test_24 {
 }
 class user.Foo$stream {
   x: null | int

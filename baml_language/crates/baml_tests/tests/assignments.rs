@@ -107,7 +107,7 @@ async fn virtual_cross_block_soundness() {
         entry: "entry"
     };
 
-    insta::assert_snapshot!(output.bytecode, @"
+    insta::assert_snapshot!(output.bytecode, @r"
     function entry() -> int {
         load_const true
         call user.main
@@ -152,7 +152,7 @@ async fn virtual_cross_block_param_mutation_soundness() {
         entry: "entry"
     };
 
-    insta::assert_snapshot!(output.bytecode, @"
+    insta::assert_snapshot!(output.bytecode, @r"
     function entry() -> int {
         load_const true
         load_const 42
@@ -234,7 +234,7 @@ async fn virtual_cross_block_transitive_param_mutation_soundness() {
         entry: "entry"
     };
 
-    insta::assert_snapshot!(output.bytecode, @"
+    insta::assert_snapshot!(output.bytecode, @r"
     function entry() -> int {
         load_const true
         load_const 42

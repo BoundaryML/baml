@@ -180,6 +180,7 @@ message BamlFieldType {
     BamlFieldTypeStreamState stream_state_type = 17;
     BamlFieldTypeAny any_type = 18;
     BamlFieldTypeUint8Array uint8array_type = 19;
+    BamlFieldTypeUnknown unknown_type = 20;
   }
 }
 
@@ -191,6 +192,7 @@ message BamlFieldTypeBool {}
 message BamlFieldTypeNull {}
 message BamlFieldTypeUint8Array {}
 message BamlFieldTypeAny {}
+message BamlFieldTypeUnknown {}
 
 // Literal: wraps a literal oneof.
 message BamlLiteralString {

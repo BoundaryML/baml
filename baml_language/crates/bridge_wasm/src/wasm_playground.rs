@@ -82,6 +82,12 @@ pub enum PlaygroundNotification {
         #[serde(skip_serializing_if = "Option::is_none")]
         expand_error: Option<bex_project::TestExpandError>,
     },
+    /// A runtime event was emitted during execution (protobuf-encoded).
+    #[serde(rename_all = "camelCase")]
+    RuntimeEvent {
+        /// Protobuf-encoded `RuntimeEvent` bytes (decode with `RuntimeEvent.decode()`)
+        data: Vec<u8>,
+    },
 }
 
 impl From<bex_project::PlaygroundNotification> for PlaygroundNotification {
@@ -152,6 +158,9 @@ impl From<bex_project::PlaygroundNotification> for PlaygroundNotification {
                 data,
                 expand_error,
             },
+            bex_project::PlaygroundNotification::RuntimeEvent { data } => {
+                PlaygroundNotification::RuntimeEvent { data }
+            }
         }
     }
 }
@@ -173,5 +182,38 @@ impl bex_project::PlaygroundSender for WasmPlaygroundSender {
         let wasm_notif: PlaygroundNotification = notification.into();
         let callback = self.callback.inner();
         let _ = callback.call1(&JsValue::NULL, &wasm_notif.into());
+    }
+}
+
+/// Event sink for WASM that forwards events to the playground notification callback.
+pub(crate) struct WasmEventSink {
+    callback: SendWrapper<Function>,
+}
+
+impl WasmEventSink {
+    pub(crate) fn new(callback: Function) -> Self {
+        Self {
+            callback: SendWrapper::new(callback),
+        }
+    }
+}
+
+impl bex_events::EventSink for WasmEventSink {
+    fn send(&self, event: bex_events::RuntimeEvent) {
+        let options = bridge_ctypes::HandleTableOptions::for_in_process();
+        match bridge_ctypes::runtime_event_to_bytes(&event, &options) {
+            Ok(data) => {
+                let notification = PlaygroundNotification::RuntimeEvent { data };
+                let callback = self.callback.inner();
+                let _ = callback.call1(&JsValue::NULL, &notification.into());
+            }
+            Err(e) => {
+                log::error!("Failed to encode runtime event: {e}");
+            }
+        }
+    }
+
+    fn flush(&self) {
+        // WASM is single-threaded and sends synchronously, nothing to flush.
     }
 }

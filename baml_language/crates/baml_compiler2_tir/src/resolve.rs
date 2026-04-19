@@ -118,7 +118,7 @@ pub fn resolve_name_at_in_scope<'db>(
             if let Some((_source, _ty)) =
                 res_ctx.resolve_type(db, name_path, &pkg_info.namespace_path)
             {
-                let pkg_items = res_ctx.own_items;
+                let pkg_items = &res_ctx.own_items;
                 if let Some(def) = pkg_items.lookup_type(&pkg_info.namespace_path, name) {
                     return ResolvedName::Item(def);
                 }

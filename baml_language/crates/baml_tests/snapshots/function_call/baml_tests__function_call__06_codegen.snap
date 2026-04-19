@@ -37,8 +37,7 @@ function user.array_length() -> int {
     load_const 2
     load_const 3
     alloc_array 3
-    load_const null
-    call_indirect
+    call baml.Array.length
     return
 }
 

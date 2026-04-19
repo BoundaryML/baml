@@ -518,6 +518,15 @@ pub enum Instruction {
     ///
     /// Stack: `[]` -> `[cell_ptr]`
     CaptureRef(usize),
+
+    /// Pop (`event_name`: String, data: any) from stack and yield to embedder.
+    ///
+    /// Stack: `[event_name: String, data: any]` -> `[]`
+    ///
+    /// The VM yields `VmExecState::Event { event_name, data }` so the engine
+    /// can emit a `CustomEvent` with full span context. Execution resumes
+    /// after the engine processes the event.
+    SendEvent,
 }
 
 /// Block notification metadata stored in the Function struct.
@@ -732,6 +741,7 @@ impl std::fmt::Display for Instruction {
             Instruction::LoadCapture(idx) => write!(f, "LOAD_CAPTURE {idx}"),
             Instruction::StoreCapture(idx) => write!(f, "STORE_CAPTURE {idx}"),
             Instruction::CaptureRef(idx) => write!(f, "CAPTURE_REF {idx}"),
+            Instruction::SendEvent => f.write_str("SEND_EVENT"),
         }
     }
 }
