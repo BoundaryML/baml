@@ -282,6 +282,7 @@ fn check_builtin_body(expr_body_node: &SyntaxNode) -> Option<BuiltinKind> {
         match text {
             "$rust_function" => return Some(BuiltinKind::Vm),
             "$rust_io_function" => return Some(BuiltinKind::Io),
+            "$compiler_intrinsic" => return Some(BuiltinKind::Intrinsic),
             _ => {}
         }
     }

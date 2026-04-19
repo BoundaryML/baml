@@ -7,9 +7,9 @@ use indexmap::IndexMap;
 use crate::{
     builder::MirBuilder,
     ir::{
-        AggregateKind, BasicBlock, BinOp, BlockId, CatchRegion, Constant, IndexKind, ItemRef,
-        Local, LocalDecl, MirFunction, MirFunctionBody, MirFunctionKind, Operand, Place, Rvalue,
-        StatementKind, Terminator,
+        AggregateKind, BasicBlock, BinOp, BlockId, CatchRegion, Constant, IndexKind, IntrinsicOp,
+        ItemRef, Local, LocalDecl, LogLevel, MirFunction, MirFunctionBody, MirFunctionKind,
+        Operand, Place, Rvalue, StatementKind, Terminator,
     },
     optimize,
 };
@@ -2734,6 +2734,21 @@ impl LoweringContext<'_> {
         let target = self.builder.create_block();
         let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
 
+        // Check if callee is a compiler intrinsic (log.*, baml.events.send).
+        // Intrinsics are void side effects — emit as a statement, not a call.
+        if let Some(op) = self.check_intrinsic(callee) {
+            self.builder.push_statement(
+                StatementKind::Intrinsic {
+                    op,
+                    args: arg_operands,
+                },
+                None,
+            );
+            self.builder.goto(target);
+            self.builder.set_current_block(target);
+            return;
+        }
+
         // Check if callee resolves to a builtin IO function (sys-op)
         let is_sys_op = self.check_sys_op(callee);
 
@@ -2874,6 +2889,77 @@ impl LoweringContext<'_> {
         }
 
         false
+    }
+
+    /// Check if the callee resolves to a `$compiler_intrinsic` function and return the
+    /// corresponding `IntrinsicOp`. Follows the same resolution pattern as `check_sys_op`.
+    fn check_intrinsic(&self, callee: AstExprId) -> Option<IntrinsicOp> {
+        use baml_compiler2_ast::BuiltinKind;
+
+        // ── Path callee (single- or multi-segment) ─────────────────────────────
+        if let AstExpr::Path(segments) = &self.body.exprs[callee] {
+            let func_loc = if segments.len() == 1 {
+                let span_start = self
+                    .source_map
+                    .as_ref()
+                    .map(|sm| sm.expr_span(callee).start())
+                    .unwrap_or_default();
+                let resolved = resolve_name_at_in_scope(
+                    self.db,
+                    self.file,
+                    span_start,
+                    &segments[0],
+                    self.scope_func_name.as_ref(),
+                );
+                match resolved {
+                    ResolvedName::Builtin(Definition::Function(fl)) => Some(fl),
+                    ResolvedName::Item(Definition::Function(fl)) => Some(fl),
+                    _ => None,
+                }
+            } else {
+                use baml_compiler2_tir::inference::MemberResolution;
+                let from_pmr = self
+                    .path_member_resolutions
+                    .get(&(self.current_scope, callee))
+                    .and_then(|resolutions| resolutions.last())
+                    .and_then(|res| match res {
+                        MemberResolution::Free { func_loc } => Some(*func_loc),
+                        MemberResolution::BoundMethod { func_loc, .. }
+                        | MemberResolution::UnboundMethod { func_loc, .. } => Some(*func_loc),
+                        MemberResolution::Field { .. } | MemberResolution::Variant { .. } => None,
+                    });
+                if from_pmr.is_some() {
+                    from_pmr
+                } else {
+                    self.resolutions
+                        .get(&(self.current_scope, callee))
+                        .and_then(|res| match res {
+                            MemberResolution::Free { func_loc } => Some(*func_loc),
+                            MemberResolution::BoundMethod { func_loc, .. }
+                            | MemberResolution::UnboundMethod { func_loc, .. } => Some(*func_loc),
+                            MemberResolution::Field { .. } | MemberResolution::Variant { .. } => {
+                                None
+                            }
+                        })
+                }
+            };
+            if let Some(fl) = func_loc {
+                let body = baml_compiler2_ppir::function_body(self.db, fl);
+                if let FunctionBody::Builtin(BuiltinKind::Intrinsic) = body.as_ref() {
+                    let item_ref = def_to_item_ref(self.db, Definition::Function(fl));
+                    return match item_ref.to_string().as_str() {
+                        "log.info" => Some(IntrinsicOp::Log(LogLevel::Info)),
+                        "log.debug" => Some(IntrinsicOp::Log(LogLevel::Debug)),
+                        "log.warn" => Some(IntrinsicOp::Log(LogLevel::Warn)),
+                        "log.error" => Some(IntrinsicOp::Log(LogLevel::Error)),
+                        "baml.events.send" => Some(IntrinsicOp::SendEvent),
+                        _ => None,
+                    };
+                }
+            }
+        }
+
+        None
     }
 }
 

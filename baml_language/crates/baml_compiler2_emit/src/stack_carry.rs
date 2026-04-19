@@ -386,6 +386,7 @@ fn simulate_statement_stack(
         | StatementKind::FreshCell(_)
         | StatementKind::VizEnter(_)
         | StatementKind::VizExit(_)
+        | StatementKind::Intrinsic { .. }
         | StatementKind::Nop => true,
         StatementKind::WatchOptions { local, filter } => {
             let mut sink = StackCarryPullSink {

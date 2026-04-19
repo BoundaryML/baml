@@ -479,7 +479,7 @@ async fn test_send_event_bytecode_yields_custom_event() {
 #[tokio::test]
 async fn test_custom_event_emission() {
     let source = r#"
-        function emit_event() -> null {
+        function emit_event() -> void {
             baml.events.send("user_clicked", { button: "submit", x: 100 })
         }
     "#;
@@ -533,7 +533,7 @@ async fn test_custom_event_emission() {
 #[tokio::test]
 async fn test_log_info_event_emission() {
     let source = r#"
-        function log_something() -> null {
+        function log_something() -> void {
             log.info({ step: 1, message: "Processing started" })
         }
     "#;
@@ -602,7 +602,7 @@ async fn test_log_all_levels() {
     for (fn_call, expected_level) in levels {
         let source = format!(
             r#"
-            function emit_log() -> null {{
+            function emit_log() -> void {{
                 {fn_call}({{ msg: "level check" }})
             }}
             "#
@@ -656,7 +656,7 @@ async fn test_log_all_levels() {
 #[tokio::test]
 async fn test_collector_log_events_extraction() {
     let source = r#"
-        function do_logging() -> null {
+        function do_logging() -> void {
             log.info({ step: 1, message: "first message" })
         }
     "#;

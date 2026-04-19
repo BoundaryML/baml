@@ -594,6 +594,11 @@ fn count_in_statement(stmt: &crate::Statement, uses: &mut [usize]) {
         | crate::StatementKind::VizExit(_)
         | crate::StatementKind::NotifyBlock { .. }
         | crate::StatementKind::Nop => {}
+        crate::StatementKind::Intrinsic { args, .. } => {
+            for arg in args {
+                count_in_operand(arg, uses);
+            }
+        }
     }
 }
 
@@ -869,6 +874,11 @@ fn apply_subst_to_statement(stmt: &mut crate::Statement, subst: &HashMap<Local, 
         crate::StatementKind::WatchOptions { filter, .. } => {
             apply_subst_to_operand(filter, subst);
         }
+        crate::StatementKind::Intrinsic { args, .. } => {
+            for arg in args {
+                apply_subst_to_operand(arg, subst);
+            }
+        }
         _ => {}
     }
 }
@@ -1089,6 +1099,11 @@ fn rewrite_locals_in_statement(stmt: &mut crate::Statement, map: &[Option<Local>
         | crate::StatementKind::VizExit(_)
         | crate::StatementKind::NotifyBlock { .. }
         | crate::StatementKind::Nop => {}
+        crate::StatementKind::Intrinsic { args, .. } => {
+            for arg in args {
+                remap_operand(arg, map);
+            }
+        }
     }
 }
 

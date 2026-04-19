@@ -226,6 +226,29 @@ pub struct Statement {
     pub span: Option<Span>,
 }
 
+/// Log level for the `Log` intrinsic.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LogLevel {
+    Info,
+    Debug,
+    Warn,
+    Error,
+}
+
+/// Compiler intrinsic operations.
+///
+/// These are lowered from calls to `$compiler_intrinsic` functions during
+/// MIR construction. They produce `StatementKind::Intrinsic` instead of
+/// `Terminator::Call`, emitting inline side effects without splitting the
+/// control-flow graph.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IntrinsicOp {
+    /// `log.info`, `log.debug`, `log.warn`, `log.error` — emit a `$baml_log` event.
+    Log(LogLevel),
+    /// `baml.events.send` — emit a custom user event.
+    SendEvent,
+}
+
 /// The kind of a MIR statement.
 #[derive(Debug, Clone)]
 pub enum StatementKind {
@@ -273,6 +296,10 @@ pub enum StatementKind {
     /// Emitted at the top of for-loop iteration bodies so each iteration's
     /// closures capture a distinct cell.
     FreshCell(Local),
+
+    /// Compiler intrinsic — a void side effect (log, send event).
+    /// Lowered from calls to `$compiler_intrinsic` functions.
+    Intrinsic { op: IntrinsicOp, args: Vec<Operand> },
 
     /// No-op (placeholder for removed statements).
     Nop,

@@ -229,11 +229,19 @@ pub fn generate_project_bytecode_with_opt(
     let mut global_idx = 0usize;
 
     // First sub-pass: assign slots to all functions across all files.
+    // Intrinsic functions are skipped: they are lowered to StatementKind::Intrinsic
+    // at call sites and never appear as callable objects in the globals pool.
+    // Including them here would create a mismatch between Pass-1 indices and the
+    // actual program.globals array built in Pass 4 (which also skips intrinsics).
     for file in &all_files {
         let item_tree = file_item_tree(db, *file);
         for local_id in item_tree.functions.keys() {
             let func_loc = FunctionLoc::new(db, *file, *local_id);
             let mir = lower_function(db, func_loc, opt);
+            // Skip intrinsic functions — they are never called via Call instruction.
+            if matches!(mir.kind, MirFunctionKind::Builtin(BuiltinKind::Intrinsic)) {
+                continue;
+            }
             let fq_name = mir.item_ref.to_string();
             globals.entry(fq_name).or_insert_with(|| {
                 let idx = global_idx;
@@ -442,6 +450,11 @@ pub fn generate_project_bytecode_with_opt(
                     f.name.clone_from(&fq_name);
                     f.source_file.clone_from(&source_file);
                     f
+                }
+                MirFunctionKind::Builtin(BuiltinKind::Intrinsic) => {
+                    // Intrinsic functions have no callable body — call sites use
+                    // StatementKind::Intrinsic directly. Skip compilation entirely.
+                    continue;
                 }
                 MirFunctionKind::Builtin(BuiltinKind::Io) => {
                     let sys_op = bex_vm_types::sys_op_for_path(&fq_name)

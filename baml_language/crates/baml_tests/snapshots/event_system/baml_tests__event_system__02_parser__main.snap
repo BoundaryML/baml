@@ -85,8 +85,8 @@ SOURCE_FILE
           WORD "string"
       R_PAREN ")"
     ARROW "->"
-    TYPE_EXPR "null"
-      WORD "null"
+    TYPE_EXPR "void"
+      WORD "void"
     EXPR_FUNCTION_BODY
       BLOCK_EXPR
         L_BRACE "{"
@@ -120,8 +120,8 @@ SOURCE_FILE
       L_PAREN "("
       R_PAREN ")"
     ARROW "->"
-    TYPE_EXPR "null"
-      WORD "null"
+    TYPE_EXPR "void"
+      WORD "void"
     EXPR_FUNCTION_BODY
       BLOCK_EXPR
         L_BRACE "{"
@@ -199,8 +199,8 @@ SOURCE_FILE
       L_PAREN "("
       R_PAREN ")"
     ARROW "->"
-    TYPE_EXPR "null"
-      WORD "null"
+    TYPE_EXPR "void"
+      WORD "void"
     EXPR_FUNCTION_BODY
       BLOCK_EXPR
         L_BRACE "{"

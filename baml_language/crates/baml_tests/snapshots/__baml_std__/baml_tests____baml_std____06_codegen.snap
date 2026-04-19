@@ -167,9 +167,6 @@ function baml.env.get_or_panic(key: string) -> string {
 function baml.errors.StackTrace.to_string(self: null) -> string {
 }
 
-function baml.events.send(event_name: string, data: map<string, unknown>) -> null {
-}
-
 function baml.fs.File.bytes(self: null) -> uint8array {
 }
 

@@ -595,6 +595,12 @@ fn collect_def_use(body: &MirFunctionBody) -> HashMap<Local, LocalDefUse> {
                 StatementKind::NotifyBlock { .. } => {
                     // NotifyBlock doesn't use any locals - it's a pure side effect
                 }
+                StatementKind::Intrinsic { args, .. } => {
+                    // Intrinsic args are reads — record uses for each operand
+                    for arg in args {
+                        collect_uses_in_operand(arg, block.id, stmt_ref, &mut def_use);
+                    }
+                }
                 StatementKind::WatchOptions { local, filter } => {
                     // WatchOptions uses the local and the filter operand
                     def_use.get_mut(local).unwrap().uses.push(UseLocation {
@@ -1109,6 +1115,8 @@ fn is_stack_neutral_statement(kind: &StatementKind) -> bool {
         StatementKind::NotifyBlock { .. } => true,
         StatementKind::WatchNotify(_) => true,
         StatementKind::FreshCell(_) => true,
+        // Intrinsics push args then SendEvent consumes them - net neutral
+        StatementKind::Intrinsic { .. } => true,
         StatementKind::Nop => true,
 
         // WatchOptions pushes 2 (channel, filter) then Watch pops 2 - net neutral
@@ -1529,6 +1537,7 @@ fn has_side_effect(kind: &StatementKind, rvalue_reads: &HashSet<Local>) -> bool 
         StatementKind::WatchNotify(_) => true, // WatchNotify has side effects (emits notification)
         StatementKind::FreshCell(local) => rvalue_reads.contains(local),
         StatementKind::VizEnter(_) | StatementKind::VizExit(_) => true, // VizEnter/VizExit emit notifications
+        StatementKind::Intrinsic { .. } => true, // Intrinsics emit events — observable side effect
         StatementKind::Nop => false,
     }
 }

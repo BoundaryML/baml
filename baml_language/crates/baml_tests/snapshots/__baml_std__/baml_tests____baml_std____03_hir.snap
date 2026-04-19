@@ -81,7 +81,7 @@ class baml.errors.StackTrace {
 function baml.errors.to_string(self: ?) -> string  [builtin]
 
 --- <builtin>/baml/ns_events/events.baml ---
-function baml.events.send(event_name: string, data: map<string, unknown>) -> null  [builtin]
+function baml.events.send(event_name: string, data: map<string, unknown>) -> void  [builtin]
 
 --- <builtin>/baml/ns_fs/fs.baml ---
 class baml.fs.File {

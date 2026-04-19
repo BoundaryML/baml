@@ -1,16 +1,18 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-function user.emit_custom_event(name: string) -> null {
+function user.emit_custom_event(name: string) -> void {
     load_const "user_action"
     load_var name
     load_const "action"
     alloc_map 1
     send_event
+    pop 1
+    load_var _0
     return
 }
 
-function user.emit_multiple_events() -> null {
+function user.emit_multiple_events() -> void {
     load_const "step"
     load_const 1
     load_const "step"
@@ -28,6 +30,8 @@ function user.emit_multiple_events() -> null {
     load_const "step"
     alloc_map 1
     send_event
+    pop 1
+    load_var _0
     return
 }
 
@@ -93,7 +97,15 @@ function user.simple_function() -> int {
     return
 }
 
-function user.test_logging() -> null {
+function user.test_logging() -> void {
+    alloc_instance User
+    load_const 123
+    init_field .id
+    load_const "Alice"
+    init_field .name
+    load_const "alice@example.com"
+    init_field .email
+    store_var user
     load_const "$baml_log"
     load_const "debug"
     load_const "Starting process"
@@ -106,13 +118,7 @@ function user.test_logging() -> null {
     pop 1
     load_const "$baml_log"
     load_const "info"
-    alloc_instance User
-    load_const 123
-    init_field .id
-    load_const "Alice"
-    init_field .name
-    load_const "alice@example.com"
-    init_field .email
+    load_var user
     load_const "processing"
     load_const "user"
     load_const "status"
@@ -143,5 +149,7 @@ function user.test_logging() -> null {
     load_const "data"
     alloc_map 2
     send_event
+    pop 1
+    load_var _0
     return
 }

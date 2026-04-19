@@ -77,26 +77,6 @@ function assert.not_null(value: unknown?) -> null {
     return
 }
 
-function log.debug(data: map<string, unknown>) -> null {
-    load_const null
-    return
-}
-
-function log.error(data: map<string, unknown>) -> null {
-    load_const null
-    return
-}
-
-function log.info(data: map<string, unknown>) -> null {
-    load_const null
-    return
-}
-
-function log.warn(data: map<string, unknown>) -> null {
-    load_const null
-    return
-}
-
 function testing.$invoke_collector(collector: (testing.TestCollector) -> void, c: testing.TestCollector) -> void {
     load_var c
     load_var collector
