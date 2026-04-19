@@ -3,5 +3,5 @@ recorded_at = "2026-03-12T00:00:00Z"
 git_sha = ""
 
 [artifacts.bridge_wasm]
-file_bytes = 11149370
-gzip_bytes = 3203271
+file_bytes = 11156143
+gzip_bytes = 3205453
