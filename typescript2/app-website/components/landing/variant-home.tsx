@@ -182,7 +182,7 @@ const customStyles = {
   },
   hero: {
     display: 'grid',
-    gridTemplateColumns: '480px 1fr',
+    gridTemplateColumns: '496px 1fr',
     minHeight: '640px',
     borderBottom: '1px solid #D9D3C4',
   } as React.CSSProperties,
@@ -617,16 +617,16 @@ const PlaygroundExampleTabs = () => {
             style={
               isActive
                 ? {
-                    background: '#1A1612',
-                    color: '#fff',
-                    border: '1px solid #1A1612',
-                    borderBottom: 'none',
-                  }
+                  background: '#1A1612',
+                  color: '#fff',
+                  border: '1px solid #1A1612',
+                  borderBottom: 'none',
+                }
                 : {
-                    background: 'transparent',
-                    color: '#5C5852',
-                    border: '1px solid transparent',
-                  }
+                  background: 'transparent',
+                  color: '#5C5852',
+                  border: '1px solid transparent',
+                }
             }
           >
             {ex.label}
@@ -659,32 +659,18 @@ const HeroSection = () => {
               <p style={{ fontSize: '18px', fontWeight: 500, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#8A8580', marginBottom: '20px' }}>
                 Install BAML
               </p>
-              <div className="relative">
-                {/* invisible spacer always sized to the longest command */}
-                <div className="invisible pointer-events-none">
-                  <ScriptCopyBtn
-                    className="block w-full"
-                    codeLanguage="bash"
-                    commandMap={{ bash: humanCommand } as const}
-                    darkTheme="none"
-                    lightTheme="none"
-                    showMultiplePackageOptions={false}
-                  />
-                </div>
-                {/* active command overlaid on top */}
-                <div className="absolute inset-0">
-                  <ScriptCopyBtn
-                    className="block w-full"
-                    codeLanguage="bash"
-                    commandMap={{ bash: selected.command } as const}
-                    darkTheme="none"
-                    lightTheme="none"
-                    linkHref={
-                      installPath === 'human' ? humanDocsHref : undefined
-                    }
-                    showMultiplePackageOptions={false}
-                  />
-                </div>
+              <div style={{ width: '100%', maxWidth: 512 }}>
+                <ScriptCopyBtn
+                  className="block w-full max-w-none"
+                  codeLanguage="bash"
+                  commandMap={{ bash: selected.command } as const}
+                  darkTheme="none"
+                  lightTheme="none"
+                  linkHref={
+                    installPath === 'human' ? humanDocsHref : undefined
+                  }
+                  showMultiplePackageOptions={false}
+                />
               </div>
               <div className="mt-3 flex gap-2">
                 {installOptions.map((opt) => (
