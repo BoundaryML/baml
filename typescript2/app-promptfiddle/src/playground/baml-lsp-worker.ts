@@ -804,6 +804,9 @@ self.onmessage = async (event: MessageEvent) => {
       return;
 
     case "callTestFunction": {
+      // Clear previous decorations when starting a new test run.
+      clearLogDecorations();
+
       if (!runtime) {
         postOut({
           type: "callFunctionError",

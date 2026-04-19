@@ -310,7 +310,7 @@ pub fn infer_scope_types<'db>(
     let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
     let pkg_id = PackageId::new(db, pkg_info.package.clone());
     let res_ctx = crate::package_interface::package_resolution_context(db, pkg_id);
-    let pkg_items = res_ctx.own_items;
+    let pkg_items = &res_ctx.own_items;
 
     let mut aliases = collect_type_aliases(db, pkg_items);
     // Also collect type aliases from dependency packages so that e.g.

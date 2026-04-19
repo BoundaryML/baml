@@ -216,7 +216,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         aliases: HashMap<crate::ty::QualifiedTypeName, Ty>,
     ) -> Self {
         let db = context.db();
-        let package_items = res_ctx.own_items;
+        let package_items = &res_ctx.own_items;
         let pkg_info = baml_compiler2_hir::file_package::file_package(db, scope.file(db));
         let ns_context = pkg_info.namespace_path;
         Self {

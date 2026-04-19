@@ -207,6 +207,7 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, heig
         storageOverride,
         vscode,
         { default: bamlTmLanguageGrammar },
+        { default: jinjaTmLanguageGrammar },
       ] = await Promise.all([
         import('monaco-languageclient/vscodeApiWrapper'),
         import('monaco-languageclient/vscodeApiLocales'),
@@ -227,6 +228,7 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, heig
         import('@codingame/monaco-vscode-storage-service-override'),
         import('vscode'),
         import('./baml.tmLanguage.json'),
+        import('./jinja.tmLanguage.json'),
       ]);
 
       if (disposed || !containerRef.current) return;
@@ -422,16 +424,76 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, heig
                 id: 'baml',
                 extensions: ['.baml'],
                 aliases: ['BAML', 'baml'],
+                configuration: './language-configuration.json',
+              }, {
+                id: 'baml-jinja',
+                aliases: ['Jinja baml', 'jinja baml'],
+                configuration: './jinja-language-configuration.json',
               }],
               grammars: [{
                 language: 'baml',
                 scopeName: 'source.baml',
                 path: './baml.tmLanguage.json',
+                embeddedLanguages: {
+                  'source.baml-jinja': 'baml-jinja',
+                  'string.quoted.block.baml.prompt': 'baml-jinja',
+                },
+              }, {
+                language: 'baml-jinja',
+                scopeName: 'source.baml-jinja',
+                path: './jinja.tmLanguage.json',
               }],
             },
           },
           filesOrContents: new Map<string, string | URL>([
             ['./baml.tmLanguage.json', JSON.stringify(bamlTmLanguageGrammar)],
+            ['./jinja.tmLanguage.json', JSON.stringify(jinjaTmLanguageGrammar)],
+            ['./language-configuration.json', JSON.stringify({
+              comments: {
+                lineComment: '//',
+                blockComment: ['{//', '//}'],
+              },
+              brackets: [['{', '}'], ['[', ']'], ['(', ')']],
+              autoClosingPairs: [
+                ['{', '}'],
+                ['[', ']'],
+                ['(', ')'],
+                { open: '"', close: '"' },
+                ['#"', '"#'],
+                ["'", "'"],
+                ['{#', '}'],
+                ['{//', '//}'],
+              ],
+              surroundingPairs: [
+                ['{', '}'],
+                ['[', ']'],
+                ['(', ')'],
+                ['"', '"'],
+                ["'", "'"],
+              ],
+            })],
+            ['./jinja-language-configuration.json', JSON.stringify({
+              comments: {
+                blockComment: ['{#', '#}'],
+              },
+              brackets: [['{{', '}}'], ['{%', '%}'], ['{#', '#}'], ['(', ')'], ['[', ']']],
+              autoClosingPairs: [
+                ['{{', '}}'],
+                ['{%', '%}'],
+                ['{#', '#}'],
+                ['(', ')'],
+                ['[', ']'],
+                { open: '"', close: '"' },
+                ["'", "'"],
+              ],
+              surroundingPairs: [
+                ['{#', '#}'],
+                ['(', ')'],
+                ['[', ']'],
+                ['"', '"'],
+                ["'", "'"],
+              ],
+            })],
           ]),
         }],
       });
