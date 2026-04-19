@@ -1,5 +1,4 @@
-use std::path::Path;
-use std::process::Command;
+use std::{path::Path, process::Command};
 
 use baml_project::{ProjectDatabase, collect_compiler2_diagnostics};
 
