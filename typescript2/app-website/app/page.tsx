@@ -1,5 +1,6 @@
 import { FooterSection } from '@/components/footer-section';
 import { VariantHome } from '@/components/landing/variant-home';
+import { IncrementalAdoption } from '@/components/landing/incremental-adoption';
 import { StoryTimeline } from '@/components/landing/story-timeline';
 import { ForceLightTheme } from '@/components/force-light-theme';
 
@@ -9,6 +10,9 @@ export default async function Page() {
       <ForceLightTheme />
       {/* Variant UI shell (Nav + Hero + Statement + Exhibit) */}
       <VariantHome />
+
+      {/* Incremental adoption — sticky scroll explainer */}
+      <IncrementalAdoption />
 
       <div className="relative z-10 mx-auto flex w-full max-w-[100rem] flex-col items-center gap-12 border-x border-border bg-background sm:gap-20">
       {/* Story timeline - history of languages (scroll to explore) */}
