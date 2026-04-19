@@ -128,7 +128,7 @@ mod tests {
     use std::time::Duration;
 
     use bex_events::{FunctionEnd, FunctionStart, SpanContext, SpanId};
-    use bex_external_types::BexExternalValue;
+    use bex_project::BexExternalValue;
     use web_time::SystemTime;
 
     use super::*;
