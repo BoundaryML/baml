@@ -1,7 +1,8 @@
 import { FooterSection } from '@/components/footer-section';
 import { VariantHome } from '@/components/landing/variant-home';
 import { IncrementalAdoption } from '@/components/landing/incremental-adoption';
-import { StoryTimeline } from '@/components/landing/story-timeline';
+// import { StoryTimeline } from '@/components/landing/story-timeline';
+import { WhyALanguage } from '@/components/landing/why-a-language';
 import { ForceLightTheme } from '@/components/force-light-theme';
 
 export default async function Page() {
@@ -11,18 +12,21 @@ export default async function Page() {
       {/* Variant UI shell (Nav + Hero + Statement + Exhibit) */}
       <VariantHome />
 
+      {/* Why a Language — typographic two-column argument */}
+      <WhyALanguage />
+
       {/* Incremental adoption — sticky scroll explainer */}
       <IncrementalAdoption />
 
       <div className="relative z-10 mx-auto flex w-full max-w-[100rem] flex-col items-center gap-12 border-x border-border bg-background sm:gap-20">
       {/* Story timeline - history of languages (scroll to explore) */}
-        <section
+        {/* <section
           className="w-full relative"
           id="story"
           aria-label="A brief history of languages"
         >
           <StoryTimeline />
-        </section>
+        </section> */}
 
         <FooterSection />
       </div>

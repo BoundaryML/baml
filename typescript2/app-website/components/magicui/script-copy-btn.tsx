@@ -88,7 +88,7 @@ export function ScriptCopyBtn({
           )}
         </div>
         <div className="relative flex items-center">
-          <div className="w-full grow font-mono">
+          <div className="min-w-0 w-full grow font-mono">
             <div className="h-10 rounded border border-border bg-background px-3 text-[11px] sm:text-xs flex items-center">
               <span className="block w-full overflow-x-auto whitespace-pre">
                 {command}

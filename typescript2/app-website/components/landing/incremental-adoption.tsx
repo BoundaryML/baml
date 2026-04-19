@@ -677,11 +677,11 @@ export function IncrementalAdoption() {
       >
         <p
           style={{
-            fontFamily: MONO,
-            fontSize: 12,
-            letterSpacing: '0.18em',
+            fontSize: 13,
+            fontWeight: 500,
+            letterSpacing: '0.12em',
             textTransform: 'uppercase',
-            color: MUTED,
+            color: '#8A8580',
             margin: 0,
           }}
         >
@@ -689,10 +689,11 @@ export function IncrementalAdoption() {
         </p>
         <h2
           style={{
-            fontFamily: 'var(--font-serif)',
             fontSize: 'clamp(2rem, 4vw, 3rem)',
-            margin: '8px 0 0',
-            letterSpacing: '-0.02em',
+            fontWeight: 600,
+            lineHeight: 1.05,
+            letterSpacing: '-0.03em',
+            margin: '12px 0 0',
           }}
         >
           From f-strings to a language, one step at a time.
@@ -734,11 +735,11 @@ export function IncrementalAdoption() {
             >
               <div
                 style={{
-                  fontFamily: MONO,
-                  fontSize: 11,
-                  letterSpacing: '0.16em',
+                  fontSize: 12,
+                  fontWeight: 500,
+                  letterSpacing: '0.14em',
                   textTransform: 'uppercase',
-                  color: MUTED,
+                  color: '#8A8580',
                   marginBottom: 12,
                 }}
               >
@@ -746,10 +747,11 @@ export function IncrementalAdoption() {
               </div>
               <h3
                 style={{
-                  fontFamily: 'var(--font-serif)',
                   fontSize: 'clamp(1.6rem, 2.5vw, 2.25rem)',
+                  fontWeight: 600,
+                  lineHeight: 1.08,
+                  letterSpacing: '-0.03em',
                   margin: 0,
-                  letterSpacing: '-0.02em',
                 }}
               >
                 {s.heading}
