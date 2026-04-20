@@ -392,12 +392,12 @@ fn infer_bindings_inner(
         // This enables UFCS calls like `Array.length(arr)` where the formal self
         // type is Class(Array, [T]) and the actual is List(int).
         (Ty::Class(class_name, f_args, _), Ty::List(actual_inner, _))
-            if class_name.name().as_str() == "Array" && f_args.len() == 1 =>
+            if class_name.is_builtin_root_type("Array") && f_args.len() == 1 =>
         {
             infer_bindings_inner(&f_args[0], actual_inner, bindings, allow_typevar_actuals);
         }
         (Ty::Class(class_name, f_args, _), Ty::Map(actual_key, actual_val, _))
-            if class_name.name().as_str() == "Map" && f_args.len() == 2 =>
+            if class_name.is_builtin_root_type("Map") && f_args.len() == 2 =>
         {
             infer_bindings_inner(&f_args[0], actual_key, bindings, allow_typevar_actuals);
             infer_bindings_inner(&f_args[1], actual_val, bindings, allow_typevar_actuals);

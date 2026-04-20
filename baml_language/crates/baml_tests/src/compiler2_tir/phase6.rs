@@ -72,6 +72,31 @@ fn array_join_returns_string() {
     "#);
 }
 
+#[test]
+fn user_defined_array_does_not_bridge_like_builtin_array() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+class Array<T> {}
+
+function keep<T>(value: Array<T>, fallback: T) -> T {
+    fallback
+}
+
+function f(xs: int[]) -> int {
+    return keep(xs, 0)
+}
+"#,
+    );
+
+    let tir = render_tir(&db, file);
+    assert!(
+        tir.contains("type mismatch: expected user.Array<int>, got int[]"),
+        "expected nominal user.Array<T> to stay distinct from builtin int[], got:\n{tir}"
+    );
+}
+
 // ── Map method resolution ─────────────────────────────────────────────────────
 
 #[test]

@@ -370,19 +370,19 @@ impl<'db> TypeInferenceBuilder<'db> {
 
         match (&expanded_expected, &expanded_got) {
             (Ty::Class(class_name, expected_args, _), Ty::List(actual_inner, _))
-                if class_name.name().as_str() == "Array" && expected_args.len() == 1 =>
+                if class_name.is_builtin_root_type("Array") && expected_args.len() == 1 =>
             {
                 self.is_subtype(actual_inner, &expected_args[0])
             }
             (Ty::Class(class_name, expected_args, _), Ty::EvolvingList(actual_inner, _))
-                if class_name.name().as_str() == "Array" && expected_args.len() == 1 =>
+                if class_name.is_builtin_root_type("Array") && expected_args.len() == 1 =>
             {
                 self.is_subtype(actual_inner, &expected_args[0])
             }
             (
                 Ty::Class(class_name, expected_args, _),
                 Ty::Map(actual_key, actual_val, _) | Ty::EvolvingMap(actual_key, actual_val, _),
-            ) if class_name.name().as_str() == "Map" && expected_args.len() == 2 => {
+            ) if class_name.is_builtin_root_type("Map") && expected_args.len() == 2 => {
                 self.is_subtype(actual_key, &expected_args[0])
                     && self.is_subtype(actual_val, &expected_args[1])
             }

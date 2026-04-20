@@ -54,6 +54,10 @@ impl QualifiedTypeName {
         &self.name
     }
 
+    pub fn is_builtin_root_type(&self, name: &str) -> bool {
+        self.pkg.as_str() == "baml" && self.namespace.is_empty() && self.name.as_str() == name
+    }
+
     /// Returns `true` if this type lives in the `baml.panics` namespace
     /// (i.e. it is a panic class or the `Panic` type alias).
     pub fn is_panic_type(&self) -> bool {
