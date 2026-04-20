@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 893
 ---
 === TIR2 ===
 
@@ -288,7 +287,7 @@ class testing.TestSetReport {
   results: testing.ChildReport[]
 }
 type testing.ChildReport = testing.TestReport | testing.TestSetReport
-type testing.TestBody = () -> void throws never
+type testing.TestBody = () -> void throws unknown
 type testing.TestReportThunk = () -> testing.TestReport throws never
 type testing.TestSetReportThunk = () -> testing.TestSetReport throws never
 type testing.TestRunner = (testing.TestReportThunk) -> testing.TestReportThunk throws never

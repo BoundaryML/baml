@@ -170,6 +170,66 @@ async fn expand_testset(
         .await
 }
 
+/// Helper: run a named test via the registry's `run_test` method.
+async fn run_named_test(
+    engine: &Arc<BexEngine>,
+    registry: BexExternalValue,
+    name: &str,
+) -> Result<BexExternalValue, bex_engine::EngineError> {
+    engine
+        .call_function(
+            "testing.TestRegistry.run_test",
+            vec![registry, BexExternalValue::String(name.to_string())],
+            bex_engine::FunctionCallContextBuilder::new(CallId::next()).build(),
+            true,
+        )
+        .await
+}
+
+#[tokio::test]
+async fn collect_tests_run_test_catches_typed_throwing_body() {
+    let source = r#"
+        function risky() -> void throws string {
+            throw "boom"
+        }
+
+        test "throws become failure" {
+            risky()
+        }
+    "#;
+
+    let engine = make_engine(source);
+    let registry = engine
+        .collect_tests("user", CallId::next(), CancellationToken::default())
+        .await
+        .expect("collect_tests should succeed");
+
+    let report = run_named_test(&engine, registry, "throws become failure")
+        .await
+        .expect("run_test should normalize typed body throws into a report");
+
+    let BexExternalValue::Instance { class_name, fields } = report else {
+        panic!("expected TestReport instance, got: {report:?}");
+    };
+    assert_eq!(class_name, "testing.TestReport");
+
+    match fields.get("outcome") {
+        Some(BexExternalValue::String(outcome)) => assert_eq!(outcome, "fail"),
+        Some(BexExternalValue::Union { value, .. }) => match value.as_ref() {
+            BexExternalValue::String(outcome) => assert_eq!(outcome, "fail"),
+            other => panic!("expected string outcome inside union, got: {other:?}"),
+        },
+        other => panic!("expected string outcome field, got: {other:?}"),
+    }
+
+    match fields.get("runs") {
+        Some(BexExternalValue::Array { items, .. }) => {
+            assert_eq!(items.len(), 1, "expected exactly one run record");
+        }
+        other => panic!("expected runs array field, got: {other:?}"),
+    }
+}
+
 /// A testset with an inline for loop should expand successfully and find tests.
 /// This is the "working" case from the bug report.
 #[tokio::test]

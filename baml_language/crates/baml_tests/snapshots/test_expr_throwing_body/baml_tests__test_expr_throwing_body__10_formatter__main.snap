@@ -1,0 +1,10 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+function risky() -> void throws string {
+    throw "boom"
+}
+
+test "throwing body becomes failure" {
+    risky()
+}

@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 1061
 ---
 function testing.$invoke_collector(collector: (testing.TestCollector) -> void throws never, c: testing.TestCollector) -> void {
     load_var c
@@ -65,7 +64,7 @@ function testing.TestCollector.new(prefix: string) -> testing.TestCollector {
     return
 }
 
-function testing.TestCollector.register_test(self: null, name: string, body: () -> void throws never, runner: ((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never)?) -> void {
+function testing.TestCollector.register_test(self: null, name: string, body: () -> void throws unknown, runner: ((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never)?) -> void {
     load_var self
     load_field .prefix
     load_const ""
@@ -657,7 +656,7 @@ function testing.TestRegistry.serialize(self: null) -> (testing.SerializedTest |
     jump L0
 }
 
-function testing.run_test(body: () -> void throws never, runner: ((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never)?) -> testing.TestReport {
+function testing.run_test(body: () -> void throws unknown, runner: ((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never)?) -> testing.TestReport {
     load_var ?1
     make_cell
     store_var ?1

@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 956
 ---
 === MIR2 ===
 
@@ -267,12 +266,12 @@ fn testing.TestCollector.new(prefix: string) -> testing.TestCollector {
     }
 }
 
-fn testing.TestCollector.register_test(self: testing.TestCollector, name: string, body: () -> void throws never, runner: ((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never)?) -> void {
+fn testing.TestCollector.register_test(self: testing.TestCollector, name: string, body: () -> void throws unknown, runner: ((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never)?) -> void {
     // Locals:
     let _0: void // _0 // return
     let _1: testing.TestCollector // self // param
     let _2: string // name // param
-    let _3: () -> void throws never // body // param
+    let _3: () -> void throws unknown // body // param
     let _4: ((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never)? // runner // param
     let _5: string // full_name
     let _6: bool
@@ -555,10 +554,10 @@ fn testing.TestCollector.register_test_set(self: testing.TestCollector, name: st
     }
 }
 
-fn testing.run_test(body: () -> void throws never, runner: ((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never)?) -> testing.TestReport {
+fn testing.run_test(body: () -> void throws unknown, runner: ((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never)?) -> testing.TestReport {
     // Locals:
     let _0: testing.TestReport // _0 // return
-    let _1: () -> void throws never // body // param [captured]
+    let _1: () -> void throws unknown // body // param [captured]
     let _2: ((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never)? // runner // param
     let _3: () -> testing.TestReport throws never // base_run
     let _4: bool
@@ -676,7 +675,7 @@ fn testing.TestRegistry.run_test(self: testing.TestRegistry, name: string) -> te
     let _8: testing.TestRegistration // t
     let _9: bool
     let _10: string
-    let _11: () -> void throws never
+    let _11: () -> void throws unknown
     let _12: ((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never)?
     let _13: string[]
     let _14: (map<string, testing.TestRegistry>) -> string[] throws never
