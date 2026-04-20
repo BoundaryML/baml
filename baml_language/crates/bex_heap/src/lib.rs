@@ -59,6 +59,7 @@
 //! ```
 
 mod accessor;
+pub(crate) mod card_table;
 mod chunked_vec;
 mod gc;
 mod heap;
@@ -68,7 +69,7 @@ mod tlab;
 // Re-export types from bex_external_types for convenience
 pub use accessor::{AccessError, BexClass, BexValue, BuiltinClass, GcProtectedHeap};
 pub use bex_external_types::{BexExternalValue, Handle};
-pub use gc::GcStats;
-pub use heap::{BexHeap, DEFAULT_TLAB_SIZE, HeapStats};
+pub use gc::{CollectionLevel, GcStats};
+pub use heap::{BexHeap, DEFAULT_TLAB_SIZE, Generation, HeapStats};
 pub(crate) use heap_debugger::{HeapDebuggerConfig, HeapDebuggerState};
 pub use tlab::Tlab;

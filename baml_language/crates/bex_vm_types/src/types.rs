@@ -517,6 +517,16 @@ pub enum Value {
     Object(HeapPtr),
 }
 
+impl Value {
+    /// Returns the [`HeapPtr`] if this is an [`Object`].
+    pub const fn as_object_ptr(&self) -> Option<HeapPtr> {
+        match self {
+            Value::Object(ptr) => Some(*ptr),
+            _ => None,
+        }
+    }
+}
+
 impl std::fmt::Display for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -640,13 +650,13 @@ pub enum Object {
     Function(Box<Function>),
 
     /// Class object.
-    Class(Class),
+    Class(Box<Class>),
 
     /// Class instance object.
     Instance(Instance),
 
     /// Enum object.
-    Enum(Enum),
+    Enum(Box<Enum>),
 
     /// Enum value object.
     Variant(Variant),
@@ -692,11 +702,16 @@ pub enum Object {
     Collector(CollectorRef),
 
     /// A type descriptor value — wraps a `baml_type::Ty`.
-    Type(baml_type::Ty),
+    Type(Box<baml_type::Ty>),
 
     #[cfg(feature = "heap_debug")]
     Sentinel(SentinelKind),
 }
+
+const _: () = assert!(
+    std::mem::size_of::<Object>() <= 80,
+    "Object enum size regression — expected <= 80 bytes"
+);
 
 /// A closure: a function object paired with a list of captured variable cells.
 #[derive(Clone, Debug)]

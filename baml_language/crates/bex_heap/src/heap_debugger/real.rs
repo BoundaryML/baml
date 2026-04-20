@@ -154,13 +154,12 @@ impl BexHeap {
             return;
         }
 
-        let active = self.active_space_index();
         let ct_len = self.compile_time_len();
         let runtime_len = self.len().saturating_sub(ct_len);
         let max_index = ct_len + runtime_len;
 
         unsafe {
-            let space = &*self.spaces[active].get();
+            let gen0 = &*self.gen0.get();
             for raw in canaries {
                 assert!(
                     raw >= ct_len,
@@ -171,7 +170,7 @@ impl BexHeap {
                     "tlab canary out of bounds: idx={raw} max={max_index}"
                 );
                 let runtime_idx = raw - ct_len;
-                let obj = &space[runtime_idx];
+                let obj = &gen0[runtime_idx];
                 match obj {
                     Object::Sentinel(SentinelKind::TlabCanary { .. }) => {}
                     _ => {
@@ -202,9 +201,6 @@ impl BexHeap {
     }
 
     fn verify_quick_impl(&self) {
-        let active = self.active_space_index();
-        assert!(active <= 1, "heap active_space out of range: {active}");
-
         let next_chunk = self.next_chunk_value();
         let runtime_len = self.len().saturating_sub(self.compile_time_len());
         assert!(
@@ -239,11 +235,11 @@ impl BexHeap {
             self.verify_object_invariants(idx, obj, ct_len);
         }
 
-        let active = self.active_space_index();
+        // Verify all runtime objects in Gen0 (the active nursery)
         unsafe {
-            let space = &*self.spaces[active].get();
-            for (runtime_idx, obj) in space.iter().enumerate() {
-                let ptr = space.get_ptr(runtime_idx);
+            let gen0 = &*self.gen0.get();
+            for (runtime_idx, obj) in gen0.iter().enumerate() {
+                let ptr = gen0.get_ptr(runtime_idx);
                 let idx = HeapPtr::from_ptr(ptr, self.heap_epoch());
                 if self.debug_handle_runtime_sentinel(idx, obj, ct_len) {
                     continue;
@@ -416,10 +412,10 @@ impl BexHeap {
         })
     }
 
-    pub(crate) fn finalize_from_space(&self, from_space: usize) {
+    pub(crate) fn finalize_inactive_space(&self) {
         let epoch = self.heap_epoch();
         unsafe {
-            let space = &mut *self.spaces[from_space].get();
+            let space = &mut *self.inactive.get();
             for slot in space.iter_mut() {
                 *slot = Object::Sentinel(SentinelKind::FromSpacePoison { epoch });
             }

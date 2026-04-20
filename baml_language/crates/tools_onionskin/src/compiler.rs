@@ -3847,8 +3847,10 @@ impl CompilerRunner {
             return;
         }
 
-        // Create VM and run
-        let mut vm = match BexVm::from_program(program) {
+        // Create VM and run. The VM runner has no GC coordinator, so the
+        // park_requested flag is a dummy atomic that will never be set.
+        let park_requested = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let mut vm = match BexVm::from_program(program, park_requested) {
             Ok(vm) => vm,
             Err(err) => {
                 self.vm_runner_state.execution_result =
@@ -3894,6 +3896,11 @@ impl CompilerRunner {
                 Ok(VmExecState::Event { .. }) => {
                     // Custom events are not surfaced — push null and continue.
                     vm.stack.push(Value::Null);
+                }
+                Ok(VmExecState::EarlyYield) => {
+                    // No GC coordinator is wired into the VM runner, so an early
+                    // yield has no other task to run — just resume execution.
+                    continue;
                 }
                 Err(e) => {
                     self.vm_runner_state.execution_result =
