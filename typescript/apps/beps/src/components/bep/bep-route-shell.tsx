@@ -233,6 +233,19 @@ const [copied, setCopied] = useState(false);
   ]);
 
   useEffect(() => {
+    if (bep) {
+      const bepNumberFormatted = String(bep.number).padStart(3, "0");
+      const title = isViewingHistorical && viewingVersion 
+        ? viewingVersion.title 
+        : bep.title;
+      document.title = `BEP-${bepNumberFormatted}: ${title}`;
+    }
+    return () => {
+      document.title = "BEP Feedback";
+    };
+  }, [bep, isViewingHistorical, viewingVersion]);
+
+  useEffect(() => {
     const focusComment = searchParams.get("focusComment");
     const focusIssue = searchParams.get("focusIssue");
     const focusDecision = searchParams.get("focusDecision");
