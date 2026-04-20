@@ -293,7 +293,12 @@ pub fn lower_type_expr_in_ns(
                 .collect(),
             TyAttr::default(),
         ),
-        TypeExpr::Function { params, ret, .. } => Ty::Function {
+        TypeExpr::Function {
+            params,
+            ret,
+            throws,
+            ..
+        } => Ty::Function {
             params: params
                 .iter()
                 .map(|p| {
@@ -318,6 +323,23 @@ pub fn lower_type_expr_in_ns(
                 generic_params,
                 diagnostics,
             )),
+            throws: Box::new(
+                throws
+                    .as_deref()
+                    .map(|throws| {
+                        lower_type_expr_in_ns(
+                            db,
+                            throws,
+                            package_items,
+                            ns_context,
+                            generic_params,
+                            diagnostics,
+                        )
+                    })
+                    .unwrap_or(Ty::Never {
+                        attr: TyAttr::default(),
+                    }),
+            ),
             attr: TyAttr::default(),
         },
         TypeExpr::Literal { value: lit, .. } => {

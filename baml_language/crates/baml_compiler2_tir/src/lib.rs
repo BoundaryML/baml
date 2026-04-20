@@ -18,6 +18,7 @@
 
 pub mod analysis;
 pub mod builder;
+pub mod callable;
 pub mod cycle_detector;
 pub mod generics;
 pub mod infer_context;
@@ -29,6 +30,7 @@ pub mod package_interface;
 pub mod resolve;
 pub mod throw_inference;
 pub mod ty;
+pub mod user_facing;
 
 // ── Db trait ──────────────────────────────────────────────────────────────────
 

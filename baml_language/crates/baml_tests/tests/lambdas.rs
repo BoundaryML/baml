@@ -268,6 +268,25 @@ async fn multiple_closures_share_cell_deep_copy() {
     assert_eq!(output.result, Ok(BexExternalValue::Int(2)));
 }
 
+#[tokio::test]
+async fn explicit_throwing_lambda_catches_error() {
+    let output = baml_test!(
+        r#"
+        function main() -> int {
+            let risky = (x: int) -> int throws string {
+                if (x < 0) { throw "negative" }
+                x
+            }
+            risky(-1) catch (e) {
+                "negative" => -1,
+                _ => -2
+            }
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(-1)));
+}
+
 /// Deep nesting (3 levels) with transitive captures at each level.
 /// a in main, b param of f, c param of g, d param of h.
 /// a + b + c + d = 1 + 10 + 100 + 1000 = 1111

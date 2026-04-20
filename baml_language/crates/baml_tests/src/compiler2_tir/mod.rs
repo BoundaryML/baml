@@ -42,6 +42,28 @@ pub(crate) mod support {
     // ── Rendering helpers ────────────────────────────────────────────────────
 
     fn type_expr_to_string(ty: &TypeExpr) -> String {
+        fn type_expr_needs_postfix_parens(ty: &TypeExpr) -> bool {
+            matches!(ty, TypeExpr::Union { .. } | TypeExpr::Function { .. })
+        }
+
+        fn type_expr_as_postfix_base(ty: &TypeExpr) -> String {
+            let rendered = type_expr_to_string(ty);
+            if type_expr_needs_postfix_parens(ty) {
+                format!("({rendered})")
+            } else {
+                rendered
+            }
+        }
+
+        fn type_expr_as_function_result(ty: &TypeExpr) -> String {
+            let rendered = type_expr_to_string(ty);
+            if matches!(ty, TypeExpr::Function { .. }) {
+                format!("({rendered})")
+            } else {
+                rendered
+            }
+        }
+
         match ty {
             TypeExpr::Path { segments, .. } => segments
                 .iter()
@@ -57,22 +79,8 @@ pub(crate) mod support {
             TypeExpr::Void { .. } => "void".into(),
             TypeExpr::Uint8Array { .. } => "uint8array".into(),
             TypeExpr::Media { kind: k, .. } => format!("{:?}", k).to_lowercase(),
-            TypeExpr::Optional { inner, .. } => {
-                let s = type_expr_to_string(inner);
-                if matches!(**inner, TypeExpr::Union { .. }) {
-                    format!("({s})?")
-                } else {
-                    format!("{s}?")
-                }
-            }
-            TypeExpr::List { inner, .. } => {
-                let s = type_expr_to_string(inner);
-                if matches!(**inner, TypeExpr::Union { .. }) {
-                    format!("({s})[]")
-                } else {
-                    format!("{s}[]")
-                }
-            }
+            TypeExpr::Optional { inner, .. } => format!("{}?", type_expr_as_postfix_base(inner)),
+            TypeExpr::List { inner, .. } => format!("{}[]", type_expr_as_postfix_base(inner)),
             TypeExpr::Map { key, value, .. } => format!(
                 "map<{}, {}>",
                 type_expr_to_string(key),
@@ -86,7 +94,12 @@ pub(crate) mod support {
                 .collect::<Vec<_>>()
                 .join(" | "),
             TypeExpr::Literal { value: lit, .. } => lit.to_string(),
-            TypeExpr::Function { params, ret, .. } => {
+            TypeExpr::Function {
+                params,
+                ret,
+                throws,
+                ..
+            } => {
                 let ps: Vec<String> = params
                     .iter()
                     .map(|p| {
@@ -96,7 +109,17 @@ pub(crate) mod support {
                             .unwrap_or_else(|| type_expr_to_string(&p.ty))
                     })
                     .collect();
-                format!("({}) -> {}", ps.join(", "), type_expr_to_string(ret))
+                let throws = throws
+                    .as_deref()
+                    .map(type_expr_to_string)
+                    .map(|throws| format!(" throws {throws}"))
+                    .unwrap_or_default();
+                format!(
+                    "({}) -> {}{}",
+                    ps.join(", "),
+                    type_expr_as_function_result(ret),
+                    throws
+                )
             }
             TypeExpr::BuiltinUnknown { .. } => "unknown".into(),
             TypeExpr::Type { .. } => "type".into(),
@@ -683,11 +706,17 @@ pub(crate) mod support {
                     collect_typevars_inner(m, out);
                 }
             }
-            Ty::Function { params, ret, .. } => {
+            Ty::Function {
+                params,
+                ret,
+                throws,
+                ..
+            } => {
                 for (_, p) in params {
                     collect_typevars_inner(p, out);
                 }
                 collect_typevars_inner(ret, out);
+                collect_typevars_inner(throws, out);
             }
             _ => {}
         }
@@ -1209,7 +1238,12 @@ pub(crate) mod support {
                     .collect::<Vec<_>>()
                     .join(" | "),
                 baml_compiler2_ast::TypeExpr::Literal { value: lit, .. } => lit.to_string(),
-                baml_compiler2_ast::TypeExpr::Function { params, ret, .. } => {
+                baml_compiler2_ast::TypeExpr::Function {
+                    params,
+                    ret,
+                    throws,
+                    ..
+                } => {
                     let ps: Vec<String> = params
                         .iter()
                         .map(|p| {
@@ -1225,10 +1259,16 @@ pub(crate) mod support {
                                 .unwrap_or_else(|| type_expr_to_string_hir(&p.ty, pkg_prefix))
                         })
                         .collect();
+                    let throws = throws
+                        .as_deref()
+                        .map(|throws| type_expr_to_string_hir(throws, pkg_prefix))
+                        .map(|throws| format!(" throws {throws}"))
+                        .unwrap_or_default();
                     format!(
-                        "({}) -> {}",
+                        "({}) -> {}{}",
                         ps.join(", "),
-                        type_expr_to_string_hir(ret, pkg_prefix)
+                        type_expr_to_string_hir(ret, pkg_prefix),
+                        throws
                     )
                 }
                 baml_compiler2_ast::TypeExpr::BuiltinUnknown { .. } => "unknown".into(),

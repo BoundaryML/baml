@@ -852,11 +852,19 @@ fn collect_type_expr_deps(
                 collect_type_expr_deps(db, file, v, deps, seen);
             }
         }
-        TypeExpr::Function { params, ret, .. } => {
+        TypeExpr::Function {
+            params,
+            ret,
+            throws,
+            ..
+        } => {
             for p in params {
                 collect_type_expr_deps(db, file, &p.ty, deps, seen);
             }
             collect_type_expr_deps(db, file, ret, deps, seen);
+            if let Some(throws) = throws {
+                collect_type_expr_deps(db, file, throws, deps, seen);
+            }
         }
         // Primitives and literals have no user-defined deps.
         _ => {}
@@ -906,11 +914,17 @@ fn collect_ty_deps(
                 collect_ty_deps(db, files, m, deps, seen);
             }
         }
-        Ty::Function { params, ret, .. } => {
+        Ty::Function {
+            params,
+            ret,
+            throws,
+            ..
+        } => {
             for (_name, ty) in params {
                 collect_ty_deps(db, files, ty, deps, seen);
             }
             collect_ty_deps(db, files, ret, deps, seen);
+            collect_ty_deps(db, files, throws, deps, seen);
         }
         _ => {}
     }

@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 484
 ---
 === HIR2 ===
 
@@ -288,7 +289,7 @@ function baml.llm.final(self: ?) -> baml.llm.T  [expr] {
   { while Not self._acc.is_done() { let next = match (self._sse.next()) { _: null => { break }, next: string => next }; self._acc.add_events(next) } if (self._acc.is_done()) { self._sse.close(); break }; match (self._acc.finish_reason()) { null => { throw LlmClientError { message: "Streaming finishe..." } }, reason: string => self._client.validate_finish_reason(reason) }; let content = self._acc.content() } __sap_parse_final(content, self._cache)
 }
 function baml.llm.finish_reason(self: ?) -> string?  [builtin]
-function baml.llm.get_constructor(self: ?) -> () -> baml.llm.PrimitiveClient  [builtin]
+function baml.llm.get_constructor(self: ?) -> () -> baml.llm.PrimitiveClient throws root.errors.InvalidArgument  [builtin]
 function baml.llm.get_jinja_template(function_name: string) -> string  [builtin]
 function baml.llm.get_return_type(function_name: string) -> type  [builtin]
 function baml.llm.get_stream_return_type(function_name: string) -> type  [builtin]

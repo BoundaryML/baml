@@ -879,3 +879,37 @@ function f() -> int { g(); 1 }
     }
     ");
 }
+
+#[test]
+fn lambda_checks_against_aliased_and_optional_function_contexts() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+type Body = () -> void throws never
+
+function takes_direct(cb: Body) -> void {
+    cb()
+}
+
+function takes_optional(cb: Body?) -> void {
+    cb?.()
+}
+
+function main() -> void {
+    takes_direct(() -> { assert.is_true(true); })
+    takes_optional(() -> { assert.is_true(true); })
+}
+"#,
+    );
+
+    let tir = render_tir(&db, file);
+    assert!(
+        !tir.contains("type mismatch"),
+        "expected lambda alias checking without mismatches, got:\n{tir}"
+    );
+    assert!(
+        tir.contains("() -> { ... } : () -> void throws never"),
+        "expected lambdas to inherit void-returning aliased function context, got:\n{tir}"
+    );
+}

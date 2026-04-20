@@ -1,7 +1,8 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 1061
 ---
-function testing.$invoke_collector(collector: (testing.TestCollector) -> void, c: testing.TestCollector) -> void {
+function testing.$invoke_collector(collector: (testing.TestCollector) -> void throws never, c: testing.TestCollector) -> void {
     load_var c
     load_var collector
     call_indirect
@@ -64,7 +65,7 @@ function testing.TestCollector.new(prefix: string) -> testing.TestCollector {
     return
 }
 
-function testing.TestCollector.register_test(self: null, name: string, body: () -> void, runner: (() -> testing.TestReport) -> () -> testing.TestReport?) -> void {
+function testing.TestCollector.register_test(self: null, name: string, body: () -> void throws never, runner: ((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never)?) -> void {
     load_var self
     load_field .prefix
     load_const ""
@@ -183,7 +184,7 @@ function testing.TestCollector.register_test(self: null, name: string, body: () 
     jump L3
 }
 
-function testing.TestCollector.register_test_set(self: null, name: string, collector: (testing.TestCollector) -> void, runner: (() -> testing.TestSetReport) -> () -> testing.TestSetReport?) -> void {
+function testing.TestCollector.register_test_set(self: null, name: string, collector: (testing.TestCollector) -> void throws never, runner: ((() -> testing.TestSetReport throws never) -> (() -> testing.TestSetReport throws never) throws never)?) -> void {
     load_var self
     load_field .prefix
     load_const ""
@@ -656,7 +657,7 @@ function testing.TestRegistry.serialize(self: null) -> (testing.SerializedTest |
     jump L0
 }
 
-function testing.run_test(body: () -> void, runner: (() -> testing.TestReport) -> () -> testing.TestReport?) -> testing.TestReport {
+function testing.run_test(body: () -> void throws never, runner: ((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never)?) -> testing.TestReport {
     load_var ?1
     make_cell
     store_var ?1
@@ -671,25 +672,23 @@ function testing.run_test(body: () -> void, runner: (() -> testing.TestReport) -
 
   L0:
     load_var runner
-    is_type (() -> testing.TestReport) -> () -> testing.TestReport
+    is_type (() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never
     pop_jump_if_false L2
     load_var base_run
     load_var runner
     call_indirect
-    store_var effective_run
+    call_indirect
     jump L2
 
   L1:
     load_var base_run
-    store_var effective_run
+    call_indirect
 
   L2:
-    load_var effective_run
-    call_indirect
     return
 }
 
-function testing.run_testset(run_children: () -> testing.TestSetReport, runner: (() -> testing.TestSetReport) -> () -> testing.TestSetReport?) -> testing.TestSetReport {
+function testing.run_testset(run_children: () -> testing.TestSetReport throws never, runner: ((() -> testing.TestSetReport throws never) -> (() -> testing.TestSetReport throws never) throws never)?) -> testing.TestSetReport {
     load_var runner
     load_const null
     cmp_op ==
@@ -698,20 +697,18 @@ function testing.run_testset(run_children: () -> testing.TestSetReport, runner: 
 
   L0:
     load_var runner
-    is_type (() -> testing.TestSetReport) -> () -> testing.TestSetReport
+    is_type (() -> testing.TestSetReport throws never) -> (() -> testing.TestSetReport throws never) throws never
     pop_jump_if_false L2
     load_var run_children
     load_var runner
     call_indirect
-    store_var effective_run
+    call_indirect
     jump L2
 
   L1:
     load_var run_children
-    store_var effective_run
+    call_indirect
 
   L2:
-    load_var effective_run
-    call_indirect
     return
 }

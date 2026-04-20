@@ -73,12 +73,18 @@ pub fn substitute_ty(ty: &Ty, bindings: &FxHashMap<Name, Ty>) -> Ty {
             members.iter().map(|m| substitute_ty(m, bindings)).collect(),
             attr.clone(),
         ),
-        Ty::Function { params, ret, attr } => Ty::Function {
+        Ty::Function {
+            params,
+            ret,
+            throws,
+            attr,
+        } => Ty::Function {
             params: params
                 .iter()
                 .map(|(n, t)| (n.clone(), substitute_ty(t, bindings)))
                 .collect(),
             ret: Box::new(substitute_ty(ret, bindings)),
+            throws: Box::new(substitute_ty(throws, bindings)),
             attr: attr.clone(),
         },
         Ty::Class(name, type_args, attr) => {
@@ -207,7 +213,12 @@ pub fn lower_type_expr_with_generics(
                 .collect(),
             TyAttr::default(),
         ),
-        TypeExpr::Function { params, ret, .. } => Ty::Function {
+        TypeExpr::Function {
+            params,
+            ret,
+            throws,
+            ..
+        } => Ty::Function {
             params: params
                 .iter()
                 .map(|p| {
@@ -232,6 +243,23 @@ pub fn lower_type_expr_with_generics(
                 bindings,
                 diagnostics,
             )),
+            throws: Box::new(
+                throws
+                    .as_deref()
+                    .map(|throws| {
+                        lower_type_expr_with_generics(
+                            db,
+                            throws,
+                            package_items,
+                            ns_context,
+                            bindings,
+                            diagnostics,
+                        )
+                    })
+                    .unwrap_or(Ty::Never {
+                        attr: TyAttr::default(),
+                    }),
+            ),
             attr: TyAttr::default(),
         },
         // For all other type expressions (primitives, multi-segment paths, etc.),
@@ -286,8 +314,15 @@ pub fn contains_typevar(ty: &Ty) -> bool {
         }
         Ty::Map(k, v, _) | Ty::EvolvingMap(k, v, _) => contains_typevar(k) || contains_typevar(v),
         Ty::Union(tys, _) => tys.iter().any(contains_typevar),
-        Ty::Function { params, ret, .. } => {
-            params.iter().any(|(_, t)| contains_typevar(t)) || contains_typevar(ret)
+        Ty::Function {
+            params,
+            ret,
+            throws,
+            ..
+        } => {
+            params.iter().any(|(_, t)| contains_typevar(t))
+                || contains_typevar(ret)
+                || contains_typevar(throws)
         }
         Ty::Class(_, type_args, _) => type_args.iter().any(contains_typevar),
         _ => false,
@@ -323,11 +358,13 @@ pub fn infer_bindings(formal: &Ty, actual: &Ty, bindings: &mut FxHashMap<Name, T
             Ty::Function {
                 params: fp,
                 ret: fr,
+                throws: fth,
                 ..
             },
             Ty::Function {
                 params: ap,
                 ret: ar,
+                throws: ath,
                 ..
             },
         ) => {
@@ -335,6 +372,7 @@ pub fn infer_bindings(formal: &Ty, actual: &Ty, bindings: &mut FxHashMap<Name, T
                 infer_bindings(ft, at, bindings);
             }
             infer_bindings(fr, ar, bindings);
+            infer_bindings(fth, ath, bindings);
         }
         (Ty::Class(fn_name, f_args, _), Ty::Class(an_name, a_args, _)) if fn_name == an_name => {
             for (ft, at) in f_args.iter().zip(a_args.iter()) {
@@ -426,12 +464,18 @@ pub fn erase_unresolved_typevars(
             Box::new(erase_unresolved_typevars(inner, diagnostics)),
             attr.clone(),
         ),
-        Ty::Function { params, ret, attr } => Ty::Function {
+        Ty::Function {
+            params,
+            ret,
+            throws,
+            attr,
+        } => Ty::Function {
             params: params
                 .iter()
                 .map(|(n, t)| (n.clone(), erase_unresolved_typevars(t, diagnostics)))
                 .collect(),
             ret: Box::new(erase_unresolved_typevars(ret, diagnostics)),
+            throws: Box::new(erase_unresolved_typevars(throws, diagnostics)),
             attr: attr.clone(),
         },
         Ty::Union(tys, attr) => Ty::Union(

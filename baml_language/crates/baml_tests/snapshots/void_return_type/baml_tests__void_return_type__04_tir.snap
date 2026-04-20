@@ -1,9 +1,51 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 37463
+assertion_line: 42337
 ---
 === TIR2 ===
-type user.Callback = (int) -> void
+type user.ExplicitHandler = (value: int) -> string throws never
+type user.ImplicitHandler = (value: int) -> string throws never
+type user.HiddenHandler = (value: int) -> string throws never
+function user.run_explicit(handler: user.ExplicitHandler, value: int) -> string throws never {
+  { : string
+    handler(value) : string
+  }
+}
+function user.run_implicit(handler: user.ImplicitHandler, value: int) -> string throws never {
+  { : string
+    handler(value) : string
+  }
+}
+function user.forward_direct(handler: (value: int) -> string throws never, value: int) -> string throws never {
+  { : string
+    handler<__effect_param_0>(value) : string
+  }
+}
+function user.forward_optional(handler: ((value: int) -> string throws never)?, value: int) -> string? throws never {
+  { : string?
+    handler?.(value) : string?
+  }
+}
+function user.run_hidden(handler: user.HiddenHandler, value: int) -> string throws never {
+  { : string
+    handler(value) : string
+  }
+}
+function user.return_closure(handler: (value: int) -> string throws never) -> (value: int) -> string throws never throws never {
+  { : never
+    return : (value: int) -> string throws never
+      (value: int) -> string { ... } : (value: int) -> string throws never
+        {
+          handler(value)
+        }
+  }
+}
+lambda user.return_closure {
+}
+type user.ExplicitHandler$stream = unknown
+type user.ImplicitHandler$stream = unknown
+type user.HiddenHandler$stream = unknown
+type user.Callback = (int) -> void throws never
 function user.run_callback(cb: user.Callback, x: int) -> int throws never {
   { : int
     cb(x) : void
@@ -20,8 +62,8 @@ function user.bad_callback_use(cb: user.Callback) -> int throws never {
 type user.Callback$stream = unknown
 function user.test_void_lambda() -> int throws never {
   { : 1
-    let f = : () -> void
-      () -> void { ... } : () -> void
+    let f = : () -> void throws never
+      () -> void { ... } : () -> void throws never
         {
         }
     f() : void
@@ -32,8 +74,8 @@ lambda user.test_void_lambda {
 }
 function user.test_void_lambda_assign() -> int throws never {
   { : 1
-    let f = : () -> void
-      () -> void { ... } : () -> void
+    let f = : () -> void throws never
+      () -> void { ... } : () -> void throws never
         {
         }
     let x = f() : void
@@ -45,8 +87,8 @@ lambda user.test_void_lambda_assign {
 }
 function user.test_void_lambda_stmt() -> int throws never {
   { : 1
-    let f = : (x: int) -> void
-      (x: int) -> void { ... } : (x: int) -> void
+    let f = : (x: int) -> void throws never
+      (x: int) -> void { ... } : (x: int) -> void throws never
         {
           x
         }

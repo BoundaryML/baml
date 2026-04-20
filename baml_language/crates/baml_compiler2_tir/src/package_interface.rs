@@ -62,7 +62,10 @@ pub struct ExportedFunction {
     pub name: Name,
     pub params: Vec<(Name, Ty)>,
     pub return_type: Ty,
-    pub throws: Option<Ty>,
+    pub declared_throws: Option<Ty>,
+    pub callable_throws: Ty,
+    /// Function-level generic parameters, including any synthetic callback
+    /// effect parameters introduced by bounded signature elaboration.
     pub generic_params: Vec<Name>,
     pub builtin_kind: Option<BuiltinKind>,
 }
@@ -81,7 +84,8 @@ pub struct ResolvedFunction {
     pub name: Name,
     pub params: Vec<(Name, Ty)>,
     pub return_type: Ty,
-    pub throws: Option<Ty>,
+    pub declared_throws: Option<Ty>,
+    pub callable_throws: Ty,
     pub generic_params: Vec<Name>,
     pub builtin_kind: Option<BuiltinKind>,
 }
@@ -233,11 +237,13 @@ pub fn package_interface<'db>(db: &'db dyn crate::Db, pkg_id: PackageId<'db>) ->
                             *method_id,
                         );
                         let method_data = &item_tree[*method_id];
-                        let sig = baml_compiler2_ppir::function_signature(db, method_loc);
+                        let sig =
+                            baml_compiler2_ppir::elaborated_function_signature(db, method_loc);
                         let body = baml_compiler2_ppir::function_body(db, method_loc);
 
                         let mut all_generic_params = class_data.generic_params.clone();
-                        all_generic_params.extend(method_data.generic_params.iter().cloned());
+                        all_generic_params.extend(sig.user_generic_params.iter().cloned());
+                        all_generic_params.extend(sig.synthetic_effect_params.iter().cloned());
 
                         let mut params = Vec::new();
                         for (param_name, param_te) in &sig.params {
@@ -274,7 +280,7 @@ pub fn package_interface<'db>(db: &'db dyn crate::Db, pkg_id: PackageId<'db>) ->
                             },
                         );
 
-                        let throws = sig.throws.as_ref().map(|te| {
+                        let declared_throws = sig.throws.as_ref().map(|te| {
                             lower_type_expr_in_ns(
                                 db,
                                 te,
@@ -284,6 +290,8 @@ pub fn package_interface<'db>(db: &'db dyn crate::Db, pkg_id: PackageId<'db>) ->
                                 &mut diags,
                             )
                         });
+                        let callable_throws =
+                            crate::callable::callable_throws(db, method_loc).clone();
 
                         let builtin_kind = match body.as_ref() {
                             baml_compiler2_hir::body::FunctionBody::Builtin(kind) => Some(*kind),
@@ -294,8 +302,14 @@ pub fn package_interface<'db>(db: &'db dyn crate::Db, pkg_id: PackageId<'db>) ->
                             name: method_data.name.clone(),
                             params,
                             return_type,
-                            throws,
-                            generic_params: method_data.generic_params.clone(),
+                            declared_throws,
+                            callable_throws,
+                            generic_params: sig
+                                .user_generic_params
+                                .iter()
+                                .chain(sig.synthetic_effect_params.iter())
+                                .cloned()
+                                .collect(),
                             builtin_kind,
                         });
                     }
@@ -347,12 +361,16 @@ pub fn package_interface<'db>(db: &'db dyn crate::Db, pkg_id: PackageId<'db>) ->
             let Definition::Function(func_loc) = def else {
                 continue;
             };
-            let item_tree = baml_compiler2_ppir::file_item_tree(db, func_loc.file(db));
-            let func_data = &item_tree[func_loc.id(db)];
             let func_ns = file_package::file_package(db, func_loc.file(db)).namespace_path;
-            let sig = baml_compiler2_ppir::function_signature(db, *func_loc);
+            let sig = baml_compiler2_ppir::elaborated_function_signature(db, *func_loc);
             let body = baml_compiler2_ppir::function_body(db, *func_loc);
             let mut diags = Vec::new();
+            let function_generic_params: Vec<Name> = sig
+                .user_generic_params
+                .iter()
+                .chain(sig.synthetic_effect_params.iter())
+                .cloned()
+                .collect();
 
             let mut params = Vec::new();
             for (param_name, param_te) in &sig.params {
@@ -361,7 +379,7 @@ pub fn package_interface<'db>(db: &'db dyn crate::Db, pkg_id: PackageId<'db>) ->
                     param_te,
                     pkg_items,
                     &func_ns,
-                    &func_data.generic_params,
+                    &function_generic_params,
                     &mut diags,
                 );
                 params.push((param_name.clone(), param_ty));
@@ -377,22 +395,23 @@ pub fn package_interface<'db>(db: &'db dyn crate::Db, pkg_id: PackageId<'db>) ->
                         te,
                         pkg_items,
                         &func_ns,
-                        &func_data.generic_params,
+                        &function_generic_params,
                         &mut diags,
                     )
                 },
             );
 
-            let throws = sig.throws.as_ref().map(|te| {
+            let declared_throws = sig.throws.as_ref().map(|te| {
                 lower_type_expr_in_ns(
                     db,
                     te,
                     pkg_items,
                     &func_ns,
-                    &func_data.generic_params,
+                    &function_generic_params,
                     &mut diags,
                 )
             });
+            let callable_throws = crate::callable::callable_throws(db, *func_loc).clone();
 
             let builtin_kind = match body.as_ref() {
                 baml_compiler2_hir::body::FunctionBody::Builtin(kind) => Some(*kind),
@@ -405,8 +424,9 @@ pub fn package_interface<'db>(db: &'db dyn crate::Db, pkg_id: PackageId<'db>) ->
                     name: name.clone(),
                     params,
                     return_type,
-                    throws,
-                    generic_params: func_data.generic_params.clone(),
+                    declared_throws,
+                    callable_throws,
+                    generic_params: function_generic_params,
                     builtin_kind,
                 },
             );
@@ -688,7 +708,8 @@ impl<'db> PackageResolutionContext<'db> {
                                 name: method.name.clone(),
                                 params: method.params.clone(),
                                 return_type: method.return_type.clone(),
-                                throws: method.throws.clone(),
+                                declared_throws: method.declared_throws.clone(),
+                                callable_throws: method.callable_throws.clone(),
                                 generic_params: method.generic_params.clone(),
                                 builtin_kind: method.builtin_kind,
                             },
@@ -768,11 +789,12 @@ impl<'db> PackageResolutionContext<'db> {
             }
             let method_loc =
                 baml_compiler2_hir::loc::FunctionLoc::new(db, class_loc.file(db), *method_id);
-            let sig = baml_compiler2_ppir::function_signature(db, method_loc);
+            let sig = baml_compiler2_ppir::elaborated_function_signature(db, method_loc);
             let body = baml_compiler2_ppir::function_body(db, method_loc);
 
             let mut all_generic_params = class_data.generic_params.clone();
-            all_generic_params.extend(method_data.generic_params.iter().cloned());
+            all_generic_params.extend(sig.user_generic_params.iter().cloned());
+            all_generic_params.extend(sig.synthetic_effect_params.iter().cloned());
 
             let mut params = Vec::new();
             for (param_name, param_te) in &sig.params {
@@ -801,7 +823,7 @@ impl<'db> PackageResolutionContext<'db> {
                     )
                 },
             );
-            let throws = sig.throws.as_ref().map(|te| {
+            let declared_throws = sig.throws.as_ref().map(|te| {
                 lower_type_expr_in_ns(
                     db,
                     te,
@@ -811,6 +833,7 @@ impl<'db> PackageResolutionContext<'db> {
                     &mut diags,
                 )
             });
+            let callable_throws = crate::callable::callable_throws(db, method_loc).clone();
 
             let builtin_kind = match body.as_ref() {
                 baml_compiler2_hir::body::FunctionBody::Builtin(kind) => Some(*kind),
@@ -822,8 +845,14 @@ impl<'db> PackageResolutionContext<'db> {
                     name: method_data.name.clone(),
                     params,
                     return_type,
-                    throws,
-                    generic_params: method_data.generic_params.clone(),
+                    declared_throws,
+                    callable_throws,
+                    generic_params: sig
+                        .user_generic_params
+                        .iter()
+                        .chain(sig.synthetic_effect_params.iter())
+                        .cloned()
+                        .collect(),
                     builtin_kind,
                 },
                 class_name: class_name.name().clone(),

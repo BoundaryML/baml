@@ -177,12 +177,18 @@ pub fn convert_tir2_ty(ty: &Tir2Ty, resolved: &ResolvedAliases) -> Ty {
         },
 
         // Functions — drop param names
-        Tir2Ty::Function { params, ret, attr } => Ty::Function {
+        Tir2Ty::Function {
+            params,
+            ret,
+            throws,
+            attr,
+        } => Ty::Function {
             params: params
                 .iter()
                 .map(|(_, t)| convert_tir2_ty(t, resolved))
                 .collect(),
             ret: Box::new(convert_tir2_ty(ret, resolved)),
+            throws: Box::new(convert_tir2_ty(throws, resolved)),
             attr: attr.clone(),
         },
 

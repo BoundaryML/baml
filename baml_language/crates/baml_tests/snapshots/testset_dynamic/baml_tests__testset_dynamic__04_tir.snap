@@ -1,11 +1,12 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 37496
 ---
 === TIR2 ===
 function user.$init_test_24(registry: testing.TestCollector) -> ? throws never {
   { : null
     registry.register_test_set("dynamic tests", (testset: testing.TestCollector) -> void { ... }, null) : void
-      (testset: testing.TestCollector) -> void { ... } : (testset: testing.TestCollector) -> void
+      (testset: testing.TestCollector) -> void { ... } : (testset: testing.TestCollector) -> void throws never
         {
           let cases = ["hello", "world", "foo"]
           for case in cases
@@ -15,7 +16,7 @@ function user.$init_test_24(registry: testing.TestCollector) -> ? throws never {
           null
         }
     registry.register_test_set("conditional tests", (testset: testing.TestCollector) -> void { ... }, null) : void
-      (testset: testing.TestCollector) -> void { ... } : (testset: testing.TestCollector) -> void
+      (testset: testing.TestCollector) -> void { ... } : (testset: testing.TestCollector) -> void throws never
         {
           {
             let run_slow = false

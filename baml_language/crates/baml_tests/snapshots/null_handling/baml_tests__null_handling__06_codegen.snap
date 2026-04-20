@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 23366
 ---
 function user.Combined(user: User?, node: Node?, items: int[]?) -> string {
     load_var user
@@ -924,7 +925,7 @@ function user.NullCoalescing(user: User?, fallback: string, count: int) -> strin
     return
 }
 
-function user.OptionalCall(callback: (int) -> string?, nonNullCb: (int) -> string, name: string?) -> string {
+function user.OptionalCall(callback: (int) -> string? throws never, nonNullCb: (int) -> string throws never, name: string?) -> string {
     load_var callback
     load_const null
     cmp_op ==

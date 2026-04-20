@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 522
 ---
 === TIR2 ===
 
@@ -284,7 +285,7 @@ function baml.llm.Client.build_attempt_with_state(self: baml.llm.Client, planner
     match (self.client_type : baml.llm.ClientType) : baml.llm.OrchestrationStep[] | never[]
       ClientType.Primitive =>
         { : baml.llm.OrchestrationStep[]
-          let resolve_fn = self.get_constructor() : () -> baml.llm.PrimitiveClient
+          let resolve_fn = self.get_constructor() : () -> baml.llm.PrimitiveClient throws baml.errors.InvalidArgument
           let primitive = resolve_fn() : baml.llm.PrimitiveClient
           [OrchestrationStep { primitive_client: primitive, delay_ms: 0 }] : baml.llm.OrchestrationStep[]
         }
@@ -410,7 +411,7 @@ function baml.llm.Client.execute_once_stream<T, S>(self: baml.llm.Client, contex
     match (self.client_type : baml.llm.ClientType) : never
       ClientType.Primitive =>
         { : never
-          let resolve_fn = self.get_constructor() : () -> baml.llm.PrimitiveClient
+          let resolve_fn = self.get_constructor() : () -> baml.llm.PrimitiveClient throws baml.errors.InvalidArgument
           let primitive = resolve_fn() : baml.llm.PrimitiveClient
           let return_type = get_return_type(context.function_name) : type
           let stream_return_type = get_stream_return_type(context.function_name) : type
@@ -503,7 +504,7 @@ function baml.llm.Client.execute_once_oneshot<T>(self: baml.llm.Client, context:
     match (self.client_type : baml.llm.ClientType) : T
       ClientType.Primitive =>
         { : T
-          let resolve_fn = self.get_constructor() : () -> baml.llm.PrimitiveClient
+          let resolve_fn = self.get_constructor() : () -> baml.llm.PrimitiveClient throws baml.errors.InvalidArgument
           let primitive = resolve_fn() : baml.llm.PrimitiveClient
           let return_type = get_return_type(context.function_name) : type
           let prompt = primitive.render_prompt(context.jinja_string, context.args, return_type) : baml.llm.PromptAst

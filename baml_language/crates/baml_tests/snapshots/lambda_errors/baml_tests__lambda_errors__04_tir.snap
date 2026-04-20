@@ -1,11 +1,12 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 16805
 ---
 === TIR2 ===
 function user.test_return_mismatch() -> int throws never {
   { : 0
-    let bad = : (x: int) -> int
-      (x: int) -> string { ... } : (x: int) -> int
+    let bad = : (x: int) -> int throws never
+      (x: int) -> string { ... } : (x: int) -> int throws never
         {
           x * 2
         }
@@ -17,8 +18,8 @@ lambda user.test_return_mismatch {
 }
 function user.test_no_annotation_no_context() -> int throws never {
   { : 0
-    let bad = : (x: unknown) -> unknown
-      (x) -> { ... } : (x: unknown) -> unknown
+    let bad = : (x: unknown) -> unknown throws never
+      (x) -> { ... } : (x: unknown) -> unknown throws never
         {
           x * 2
         }
@@ -32,7 +33,7 @@ function user.test_arity_mismatch() -> int[] throws never {
   { : int[]
     let items = [1, 2, 3] : int[]
     items.map<U>((x, y) -> { ... }) : int[]
-      (x, y) -> { ... } : (x: int, y: unknown) -> int
+      (x, y) -> { ... } : (x: int, y: unknown) -> int throws never
         {
           x
         }
@@ -45,7 +46,7 @@ function user.test_param_type_mismatch() -> int[] throws never {
   { : (int | string)[]
     let items = [1, 2, 3] : int[]
     items.map<U>((x: string) -> { ... }) : (int | string)[]
-      (x: string) -> { ... } : (x: string) -> string
+      (x: string) -> { ... } : (x: string) -> string throws never
         {
           x
         }
@@ -57,8 +58,8 @@ lambda user.test_param_type_mismatch {
 }
 function user.test_unknown_param_type() -> int throws never {
   { : 0
-    let f = : (x: unknown) -> 0
-      (x: NonExistentType) -> { ... } : (x: unknown) -> 0
+    let f = : (x: unknown) -> 0 throws never
+      (x: NonExistentType) -> { ... } : (x: unknown) -> 0 throws never
         {
           0
         }
@@ -70,8 +71,8 @@ lambda user.test_unknown_param_type {
 }
 function user.test_unknown_return_type() -> int throws never {
   { : 0
-    let f = : (x: int) -> int
-      (x: int) -> NonExistentType { ... } : (x: int) -> int
+    let f = : (x: int) -> int throws never
+      (x: int) -> NonExistentType { ... } : (x: int) -> int throws never
         {
           x
         }

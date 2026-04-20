@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 28190
 ---
 === TIR2 ===
 function user.simple_assign() -> int throws never {
@@ -78,13 +79,13 @@ function user.let_mixed_semicolons() -> int throws never {
     return a + b + c + d : int
   }
 }
-function user.edge_call_then_parens(foo: () -> (int) -> int) -> int throws never {
+function user.edge_call_then_parens(foo: () -> ((int) -> int throws never) throws never) -> int throws never {
   { : 2
     foo()(1) : int
     2 : 2
   }
 }
-function user.edge_call_then_index(foo: () -> int[]) -> int throws never {
+function user.edge_call_then_index(foo: () -> int[] throws never) -> int throws never {
   { : 1
     foo()[0] : int
     1 : 1
@@ -98,15 +99,15 @@ function user.edge_type_then_object() -> int throws never {
     EdgeFoo { x: 1 }.x : int
   }
 }
-function user.edge_let_call_then_index(bar: () -> int[]) -> int throws never {
+function user.edge_let_call_then_index(bar: () -> int[] throws never) -> int throws never {
   { : int
     let x = bar()[0] : int
     x : int
   }
 }
-function user.edge_semicolon_forces_boundary(bar: () -> int[]) -> int throws never {
+function user.edge_semicolon_forces_boundary(bar: () -> int[] throws never) -> int throws never {
   { : 1
-    bar() : int[]
+    bar<__effect_param_0>() : int[]
     [0] : int[]
     1 : 1
   }

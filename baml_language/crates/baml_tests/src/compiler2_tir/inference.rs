@@ -1,6 +1,30 @@
 //! Core type inference snapshot tests.
 
-use super::support::{make_db, render_tir};
+use super::support::{expr_type_in_function, make_db, render_tir};
+use baml_base::Name;
+use baml_compiler2_hir::{package::PackageId, scope::ScopeKind};
+use baml_compiler2_tir::{inference::infer_scope_types, package_interface::package_interface};
+
+fn find_function_scope_id<'db>(
+    db: &'db baml_project::ProjectDatabase,
+    file: baml_base::SourceFile,
+    name: &str,
+) -> baml_compiler2_hir::scope::ScopeId<'db> {
+    let index = baml_compiler2_ppir::file_semantic_index(db, file);
+    index
+        .scope_ids
+        .iter()
+        .copied()
+        .find(|scope_id| {
+            let scope = &index.scopes[scope_id.file_scope_id(db).index() as usize];
+            matches!(scope.kind, ScopeKind::Function)
+                && scope
+                    .name
+                    .as_ref()
+                    .is_some_and(|scope_name| scope_name.as_str() == name)
+        })
+        .unwrap_or_else(|| panic!("missing function scope {name}"))
+}
 
 #[test]
 fn literal_int() {
@@ -275,5 +299,42 @@ fn unresolved_path_after_valid_type() {
     assert!(
         !output.contains("unresolved name: Image"),
         "Error should NOT mention 'Image' as unresolved (it's a valid type), got:\n{output}"
+    );
+}
+
+#[test]
+fn function_type_throws_inference_opens_immediate_callback_param() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "callback.baml",
+        "function direct(cb: (value: int) -> string) -> string { let handler = cb; return \"ok\"; }",
+    );
+
+    assert_eq!(
+        expr_type_in_function(&db, file, "direct", "cb"),
+        "(value: int) -> string throws __effect_param_0"
+    );
+}
+
+#[test]
+fn function_type_throws_package_interface_exports_effect_params() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "callback.baml",
+        "function direct(cb: (value: int) -> string) -> string { return \"ok\"; }",
+    );
+
+    let scope_id = find_function_scope_id(&db, file, "direct");
+    let _ = infer_scope_types(&db, scope_id);
+
+    let iface = package_interface(&db, PackageId::new(&db, Name::new("user")));
+    let exported = iface
+        .lookup_function(&[], &Name::new("direct"))
+        .expect("exported function");
+
+    assert_eq!(exported.generic_params, vec![Name::new("__effect_param_0")]);
+    assert_eq!(
+        format!("{}", exported.params[0].1),
+        "(value: int) -> string throws __effect_param_0"
     );
 }

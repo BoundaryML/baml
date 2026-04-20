@@ -25,6 +25,7 @@ use baml_compiler_syntax::{SyntaxToken, TokenAtOffset};
 use baml_compiler2_ast::TypeExpr;
 use baml_compiler2_hir::contributions::Definition;
 use baml_compiler2_tir::ty::Ty;
+use baml_compiler2_tir::user_facing::humanize_type_string;
 use text_size::{TextRange, TextSize};
 
 use crate::Db;
@@ -106,6 +107,28 @@ pub fn definition_span<'db>(
 
 // ── display_ty ────────────────────────────────────────────────────────────────
 
+fn ty_needs_postfix_parens(ty: &Ty) -> bool {
+    matches!(ty, Ty::Union(..) | Ty::Function { .. })
+}
+
+fn display_ty_as_postfix_base(ty: &Ty) -> String {
+    let rendered = display_ty(ty);
+    if ty_needs_postfix_parens(ty) {
+        format!("({rendered})")
+    } else {
+        rendered
+    }
+}
+
+fn display_ty_as_function_result(ty: &Ty) -> String {
+    let rendered = display_ty(ty);
+    if matches!(ty, Ty::Function { .. }) {
+        format!("({rendered})")
+    } else {
+        rendered
+    }
+}
+
 /// Format a resolved `Ty` as a user-friendly string.
 ///
 /// Delegates to the `Display` impl on `Ty`. For user-visible output (hover,
@@ -113,7 +136,7 @@ pub fn definition_span<'db>(
 /// and `baml.PrimitiveClient` shows as `PrimitiveClient`.
 pub fn display_ty(ty: &Ty) -> String {
     use baml_compiler2_tir::ty::PrimitiveType;
-    match ty {
+    let rendered = match ty {
         Ty::Class(qn, type_args, _) => {
             if type_args.is_empty() {
                 qn.to_string()
@@ -136,13 +159,13 @@ pub fn display_ty(ty: &Ty) -> String {
             PrimitiveType::Pdf => "pdf".to_string(),
             PrimitiveType::Uint8Array => "uint8array".to_string(),
         },
-        Ty::List(inner, _) => format!("{}[]", display_ty(inner)),
+        Ty::List(inner, _) => format!("{}[]", display_ty_as_postfix_base(inner)),
         Ty::Map(k, v, _) => format!("map<{}, {}>", display_ty(k), display_ty(v)),
         Ty::EvolvingList(inner, _) => {
             if matches!(**inner, Ty::Never { .. }) {
                 "_[]".to_string()
             } else {
-                format!("{}[]", display_ty(inner))
+                format!("{}[]", display_ty_as_postfix_base(inner))
             }
         }
         Ty::EvolvingMap(k, v, _) => {
@@ -156,9 +179,14 @@ pub fn display_ty(ty: &Ty) -> String {
             let parts: Vec<_> = members.iter().map(display_ty).collect();
             parts.join(" | ")
         }
-        Ty::Optional(inner, _) => format!("{}?", display_ty(inner)),
+        Ty::Optional(inner, _) => format!("{}?", display_ty_as_postfix_base(inner)),
         Ty::Literal(lit, _freshness, _) => lit.to_string(),
-        Ty::Function { params, ret, .. } => {
+        Ty::Function {
+            params,
+            ret,
+            throws,
+            ..
+        } => {
             let ps: Vec<String> = params
                 .iter()
                 .map(|(name, ty)| {
@@ -167,7 +195,12 @@ pub fn display_ty(ty: &Ty) -> String {
                         .unwrap_or_else(|| display_ty(ty))
                 })
                 .collect();
-            format!("({}) -> {}", ps.join(", "), display_ty(ret))
+            format!(
+                "({}) -> {} throws {}",
+                ps.join(", "),
+                display_ty_as_function_result(ret),
+                display_ty(throws)
+            )
         }
         Ty::TypeVar(name, _) => name.to_string(),
         Ty::Never { .. } => "never".to_string(),
@@ -176,10 +209,33 @@ pub fn display_ty(ty: &Ty) -> String {
         Ty::RustType { .. } => "$rust_type".to_string(),
         Ty::Type { .. } => "type".to_string(),
         Ty::Error { .. } => "!error".to_string(),
-    }
+    };
+    humanize_type_string(&rendered)
 }
 
 // ── display_type_expr ─────────────────────────────────────────────────────────
+
+fn type_expr_needs_postfix_parens(te: &TypeExpr) -> bool {
+    matches!(te, TypeExpr::Union { .. } | TypeExpr::Function { .. })
+}
+
+fn display_type_expr_as_postfix_base(te: &TypeExpr) -> String {
+    let rendered = display_type_expr(te);
+    if type_expr_needs_postfix_parens(te) {
+        format!("({rendered})")
+    } else {
+        rendered
+    }
+}
+
+fn display_type_expr_as_function_result(te: &TypeExpr) -> String {
+    let rendered = display_type_expr(te);
+    if matches!(te, TypeExpr::Function { .. }) {
+        format!("({rendered})")
+    } else {
+        rendered
+    }
+}
 
 /// Format a raw (unresolved) `TypeExpr` as a source-level type string.
 ///
@@ -187,7 +243,7 @@ pub fn display_ty(ty: &Ty) -> String {
 /// output, where we have the AST type expression before resolution. This
 /// produces output that matches the user's source syntax.
 pub fn display_type_expr(te: &TypeExpr) -> String {
-    match te {
+    let rendered = match te {
         TypeExpr::Path { segments, .. } => {
             // Use only the last segment for brevity (e.g. `baml.Foo` → `Foo`).
             segments
@@ -203,21 +259,9 @@ pub fn display_type_expr(te: &TypeExpr) -> String {
         TypeExpr::Uint8Array { .. } => "uint8array".to_string(),
         TypeExpr::Media { kind, .. } => format!("{kind:?}").to_lowercase(),
         TypeExpr::Optional { inner, .. } => {
-            let s = display_type_expr(inner);
-            if matches!(**inner, TypeExpr::Union { .. }) {
-                format!("({s})?")
-            } else {
-                format!("{s}?")
-            }
+            format!("{}?", display_type_expr_as_postfix_base(inner))
         }
-        TypeExpr::List { inner, .. } => {
-            let s = display_type_expr(inner);
-            if matches!(**inner, TypeExpr::Union { .. }) {
-                format!("({s})[]")
-            } else {
-                format!("{s}[]")
-            }
-        }
+        TypeExpr::List { inner, .. } => format!("{}[]", display_type_expr_as_postfix_base(inner)),
         TypeExpr::Map { key, value, .. } => {
             format!(
                 "map<{}, {}>",
@@ -230,7 +274,12 @@ pub fn display_type_expr(te: &TypeExpr) -> String {
             parts.join(" | ")
         }
         TypeExpr::Literal { value, .. } => value.to_string(),
-        TypeExpr::Function { params, ret, .. } => {
+        TypeExpr::Function {
+            params,
+            ret,
+            throws,
+            ..
+        } => {
             let ps: Vec<String> = params
                 .iter()
                 .map(|p| {
@@ -240,7 +289,17 @@ pub fn display_type_expr(te: &TypeExpr) -> String {
                         .unwrap_or_else(|| display_type_expr(&p.ty))
                 })
                 .collect();
-            format!("({}) -> {}", ps.join(", "), display_type_expr(ret))
+            let throws = throws
+                .as_deref()
+                .map(display_type_expr)
+                .map(|throws| format!(" throws {throws}"))
+                .unwrap_or_default();
+            format!(
+                "({}) -> {}{}",
+                ps.join(", "),
+                display_type_expr_as_function_result(ret),
+                throws
+            )
         }
         TypeExpr::BuiltinUnknown { .. } => "unknown".to_string(),
         TypeExpr::Never { .. } => "never".to_string(),
@@ -248,5 +307,6 @@ pub fn display_type_expr(te: &TypeExpr) -> String {
         TypeExpr::Type { .. } => "type".to_string(),
         TypeExpr::Rust { .. } => "$rust_type".to_string(),
         TypeExpr::Error { .. } | TypeExpr::Unknown { .. } => "unknown".to_string(),
-    }
+    };
+    humanize_type_string(&rendered)
 }

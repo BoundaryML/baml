@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 35546
 ---
 === TIR2 ===
 function user.helper() -> null throws never {
@@ -17,12 +18,12 @@ function user.another() -> null throws never {
 function user.$init_test_24(registry: testing.TestCollector) -> ? throws never {
   { : null
     registry.register_test("top level is fine", () -> void { ... }, null) : void
-      () -> void { ... } : () -> void
+      () -> void { ... } : () -> void throws never
         {
           assert.is_true(true)
         }
     registry.register_test_set("top level set is ...", (testset: testing.TestCollector) -> void { ... }, null) : void
-      (testset: testing.TestCollector) -> void { ... } : (testset: testing.TestCollector) -> void
+      (testset: testing.TestCollector) -> void { ... } : (testset: testing.TestCollector) -> void throws never
         {
           testset.register_test("nested is fine", () -> { ... }, null)
           null

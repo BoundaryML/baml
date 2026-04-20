@@ -4478,3 +4478,35 @@ function main() -> int | string {
       File "test.baml", line 3, in user.divider
     "#);
 }
+
+#[tokio::test]
+async fn named_wrapper_value_catches_callback_throw() {
+    let output = baml_test!(
+        r#"
+function direct(cb: (value: int) -> int) -> int {
+  cb(1)
+}
+
+function forward(cb: (value: int) -> int) -> int {
+  direct(cb)
+}
+
+function risky(value: int) -> int throws string {
+  throw "boom"
+}
+
+function main() -> string {
+  let run = forward
+  run(risky) catch (e) {
+    "boom" => "caught",
+    _ => "other"
+  }
+}
+"#
+    );
+
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("caught".to_string()))
+    );
+}

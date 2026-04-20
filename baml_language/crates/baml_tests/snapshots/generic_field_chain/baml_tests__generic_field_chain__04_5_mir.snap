@@ -1,13 +1,14 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 14409
 ---
 === MIR2 ===
 fn user.test_generic_capture(box: Box) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: Box // box // param [captured]
-    let _2: () -> string // get_name
-    let _3: () -> string
+    let _2: () -> string throws never // get_name
+    let _3: () -> string throws never
 
     bb0: {
         _2 = make_closure lambda[0](copy _1);

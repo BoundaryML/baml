@@ -1109,11 +1109,19 @@ impl<'db> SemanticIndexBuilder<'db> {
                     Self::collect_unknown_type_attrs(v, diagnostics);
                 }
             }
-            ast::TypeExpr::Function { params, ret, .. } => {
+            ast::TypeExpr::Function {
+                params,
+                ret,
+                throws,
+                ..
+            } => {
                 for p in params {
                     Self::collect_unknown_type_attrs(&p.ty, diagnostics);
                 }
                 Self::collect_unknown_type_attrs(ret, diagnostics);
+                if let Some(throws) = throws {
+                    Self::collect_unknown_type_attrs(throws, diagnostics);
+                }
             }
             _ => {}
         }
@@ -1131,11 +1139,19 @@ impl<'db> SemanticIndexBuilder<'db> {
             ast::TypeExpr::Union { variants, .. } => {
                 variants.iter().any(Self::type_expr_contains_rust)
             }
-            ast::TypeExpr::Function { params, ret, .. } => {
+            ast::TypeExpr::Function {
+                params,
+                ret,
+                throws,
+                ..
+            } => {
                 params
                     .iter()
                     .any(|param| Self::type_expr_contains_rust(&param.ty))
                     || Self::type_expr_contains_rust(ret)
+                    || throws
+                        .as_ref()
+                        .is_some_and(|throws| Self::type_expr_contains_rust(throws))
             }
             _ => false,
         }
@@ -1189,18 +1205,33 @@ impl<'db> SemanticIndexBuilder<'db> {
                 .collect::<Vec<_>>()
                 .join(" | "),
             ast::TypeExpr::Literal { value, .. } => value.to_string(),
-            ast::TypeExpr::Function { params, ret, .. } => format!(
-                "({}) -> {}",
-                params
-                    .iter()
-                    .map(|param| match &param.name {
-                        Some(name) => format!("{}: {}", name, Self::render_type_expr(&param.ty)),
-                        None => Self::render_type_expr(&param.ty),
-                    })
-                    .collect::<Vec<_>>()
-                    .join(", "),
-                Self::render_type_expr(ret)
-            ),
+            ast::TypeExpr::Function {
+                params,
+                ret,
+                throws,
+                ..
+            } => {
+                let throws = throws
+                    .as_deref()
+                    .map(Self::render_type_expr)
+                    .map(|throws| format!(" throws {throws}"))
+                    .unwrap_or_default();
+                format!(
+                    "({}) -> {}{}",
+                    params
+                        .iter()
+                        .map(|param| match &param.name {
+                            Some(name) => {
+                                format!("{}: {}", name, Self::render_type_expr(&param.ty))
+                            }
+                            None => Self::render_type_expr(&param.ty),
+                        })
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                    Self::render_type_expr(ret),
+                    throws
+                )
+            }
             ast::TypeExpr::BuiltinUnknown { .. } => "unknown".to_string(),
             ast::TypeExpr::Type { .. } => "type".to_string(),
             ast::TypeExpr::Rust { .. } => "$rust_type".to_string(),

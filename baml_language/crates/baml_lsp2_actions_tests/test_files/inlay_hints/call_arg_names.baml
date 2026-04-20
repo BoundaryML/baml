@@ -82,7 +82,7 @@ function multiline_field(info: Info2) -> string {
 //- inlay_hints
 // call_arg_names.baml:6:9 (Parameter) "name: "
 // call_arg_names.baml:6:18 (Parameter) "age: "
-// call_arg_names.baml:10:8 (Type) ": (name: string, age: int) -> string"
+// call_arg_names.baml:10:8 (Type) ": (name: string, age: int) -> string throws never"
 // call_arg_names.baml:12:5 (Parameter) "name: "
 // call_arg_names.baml:12:12 (Parameter) "age: "
 // call_arg_names.baml:19:5 (Parameter) "name: "

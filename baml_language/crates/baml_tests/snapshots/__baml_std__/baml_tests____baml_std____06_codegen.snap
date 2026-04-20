@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 690
 ---
 function baml.Array.at(self: null, index: int) -> void? {
 }
@@ -13,7 +14,7 @@ function baml.Array.join(self: null, separator: string) -> string {
 function baml.Array.length(self: null) -> int {
 }
 
-function baml.Array.map(self: null, f: (void) -> void) -> void[] {
+function baml.Array.map(self: null, f: (void) -> void throws never) -> void[] {
 }
 
 function baml.Array.pop(self: null) -> void? {
@@ -1095,7 +1096,7 @@ function baml.llm.Client.execute_stream(self: null, context: void, inherited_del
     return
 }
 
-function baml.llm.Client.get_constructor(self: null) -> () -> void {
+function baml.llm.Client.get_constructor(self: null) -> () -> void throws baml.errors.InvalidArgument {
 }
 
 function baml.llm.Client.to_primitive_client(self: null) -> void {

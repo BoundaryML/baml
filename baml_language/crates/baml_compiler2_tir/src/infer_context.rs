@@ -18,7 +18,10 @@ use baml_compiler2_hir::{
 };
 use text_size::TextRange;
 
-use crate::ty::Ty;
+use crate::{
+    ty::Ty,
+    user_facing::{humanize_ty, humanize_type_names},
+};
 
 // ── Error kinds ──────────────────────────────────────────────────────────────
 
@@ -162,10 +165,19 @@ impl fmt::Display for TirTypeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             TirTypeError::TypeMismatch { expected, got } => {
-                write!(f, "type mismatch: expected {expected}, got {got}")
+                write!(
+                    f,
+                    "type mismatch: expected {}, got {}",
+                    humanize_ty(expected),
+                    humanize_ty(got)
+                )
             }
             TirTypeError::UnresolvedMember { base_type, member } => {
-                write!(f, "type `{base_type}` has no member `{member}`")
+                write!(
+                    f,
+                    "type `{}` has no member `{member}`",
+                    humanize_ty(base_type)
+                )
             }
             TirTypeError::UnresolvedName { name } => {
                 write!(f, "unresolved name: {name}")
@@ -188,22 +200,32 @@ impl fmt::Display for TirTypeError {
                 write!(f, "cannot use return value of a void function")
             }
             TirTypeError::NotCallable { ty } => {
-                write!(f, "`{ty}` is not a function — it cannot be called")
+                write!(
+                    f,
+                    "`{}` is not a function — it cannot be called",
+                    humanize_ty(ty)
+                )
             }
             TirTypeError::NotIterable { ty } => {
-                write!(f, "cannot iterate over type `{ty}`")
+                write!(f, "cannot iterate over type `{}`", humanize_ty(ty))
             }
             TirTypeError::NotIndexable { ty } => {
-                write!(f, "type `{ty}` is not indexable")
+                write!(f, "type `{}` is not indexable", humanize_ty(ty))
             }
             TirTypeError::InvalidBinaryOp { op, lhs, rhs } => {
                 write!(
                     f,
-                    "operator `{op:?}` cannot be applied to `{lhs}` and `{rhs}`"
+                    "operator `{op:?}` cannot be applied to `{}` and `{}`",
+                    humanize_ty(lhs),
+                    humanize_ty(rhs)
                 )
             }
             TirTypeError::InvalidUnaryOp { op, operand } => {
-                write!(f, "operator `{op:?}` cannot be applied to `{operand}`")
+                write!(
+                    f,
+                    "operator `{op:?}` cannot be applied to `{}`",
+                    humanize_ty(operand)
+                )
             }
             TirTypeError::UnresolvedType { name, suggestions } => {
                 if suggestions.is_empty() {
@@ -226,7 +248,7 @@ impl fmt::Display for TirTypeError {
                 write!(f, "expected {expected} argument(s), got {got}")
             }
             TirTypeError::MissingReturn { expected } => {
-                write!(f, "missing return: expected `{expected}`")
+                write!(f, "missing return: expected `{}`", humanize_ty(expected))
             }
             TirTypeError::AliasCycle { name } => {
                 write!(f, "recursive type alias cycle: {name}")
@@ -240,7 +262,8 @@ impl fmt::Display for TirTypeError {
             } => {
                 write!(
                     f,
-                    "non-exhaustive match on `{scrutinee_type}`; missing: {}",
+                    "non-exhaustive match on `{}`; missing: {}",
+                    humanize_ty(scrutinee_type),
                     missing_cases.join(", ")
                 )
             }
@@ -252,16 +275,23 @@ impl fmt::Display for TirTypeError {
             TirTypeError::ThrowsContractViolation {
                 declared,
                 extra_types,
-            } => write!(
-                f,
-                "throws contract violation: `{declared}` is missing {}",
-                extra_types.join(", ")
-            ),
-            TirTypeError::ExtraneousThrowsDeclaration { extra_types } => write!(
-                f,
-                "extraneous throws declaration: {}",
-                extra_types.join(", ")
-            ),
+            } => {
+                let extra_types = humanize_type_names(extra_types.iter().map(String::as_str));
+                write!(
+                    f,
+                    "throws contract violation: `{}` is missing {}",
+                    humanize_ty(declared),
+                    extra_types.join(", ")
+                )
+            }
+            TirTypeError::ExtraneousThrowsDeclaration { extra_types } => {
+                let extra_types = humanize_type_names(extra_types.iter().map(String::as_str));
+                write!(
+                    f,
+                    "extraneous throws declaration: {}",
+                    extra_types.join(", ")
+                )
+            }
             TirTypeError::CannotInferTypeParameter { name } => {
                 write!(f, "cannot infer type parameter `{name}`")
             }

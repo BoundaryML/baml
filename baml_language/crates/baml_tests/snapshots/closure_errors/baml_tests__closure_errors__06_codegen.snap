@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 6990
 ---
 function user.Counter.increment(self: null) -> int {
     load_var self
@@ -32,7 +33,7 @@ function user.Formatter.format(self: null, text: string) -> string {
     return
 }
 
-function user.takes_unbound(f: (Employee) -> string) -> string {
+function user.takes_unbound(f: (Employee) -> string throws never) -> string {
     alloc_instance Employee
     load_const "X"
     init_field .first

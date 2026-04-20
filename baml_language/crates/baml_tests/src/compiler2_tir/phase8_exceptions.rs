@@ -345,3 +345,141 @@ function f() -> int {
         "single-type catch binding should allow field access, got:\n{output}"
     );
 }
+
+#[test]
+fn function_type_throws_direct_callback_violation_is_humanized() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"function forward(cb: (value: int) -> int) -> int throws never {
+  return cb(1)
+}"#,
+    );
+
+    let output = render_tir(&db, file);
+    assert!(
+        output.contains("throws contract violation: `never` is missing callback"),
+        "expected direct callback violation to use callback-oriented wording, got:\n{output}"
+    );
+}
+
+#[test]
+fn function_type_throws_local_alias_wrapper_uses_typed_callee_surface() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"function outer(cb: (value: int) -> int) -> int {
+  return cb(1)
+}
+
+function f(cb: (value: int) -> int) -> int throws never {
+  let h = outer
+  return h(cb)
+}"#,
+    );
+
+    let output = render_tir(&db, file);
+    assert!(
+        output.contains("throws contract violation: `never` is missing callback"),
+        "expected typed call through local wrapper alias to propagate callback throws, got:\n{output}"
+    );
+    assert!(
+        !output.contains("missing unknown"),
+        "expected typed call path to avoid collapsing wrapper propagation to unknown, got:\n{output}"
+    );
+}
+
+#[test]
+fn function_type_throws_optional_call_propagates_callback_surface() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"function f(cb: ((value: int) -> int throws string)?) -> int throws never {
+  return cb?.(1) ?? 0
+}"#,
+    );
+
+    let output = render_tir(&db, file);
+    assert!(
+        output.contains("throws contract violation: `never` is missing string"),
+        "expected optional call to propagate the callee throws surface into the contract check, got:\n{output}"
+    );
+}
+
+#[test]
+fn function_type_throws_alias_hidden_callback_rejects_throwing_value() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"type HiddenHandler = (value: int) -> int
+
+function store(handler: HiddenHandler) -> int throws never {
+  return handler(1)
+}
+
+function risky(value: int) -> int throws string {
+  throw "boom"
+}
+
+function f() -> int {
+  return store(risky)
+}"#,
+    );
+
+    let output = render_tir(&db, file);
+    assert!(
+        output.contains("type mismatch")
+            && output.contains("HiddenHandler")
+            && output.contains("throws string"),
+        "expected alias-hidden callback surface to stay explicit-only, got:\n{output}"
+    );
+}
+
+#[test]
+fn function_type_throws_stored_callback_rejects_throwing_value() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"class Holder {
+  cb (value: int) -> int
+}
+
+function risky(value: int) -> int throws string {
+  throw "boom"
+}
+
+function store() -> Holder {
+  return Holder { cb: risky }
+}"#,
+    );
+
+    let output = render_tir(&db, file);
+    assert!(
+        output.contains("type mismatch")
+            && output.contains("(value: int) -> int")
+            && output.contains("throws string"),
+        "expected stored callback surfaces to stay explicit-only, got:\n{output}"
+    );
+}
+
+#[test]
+fn function_type_throws_returned_closure_rejects_throwing_value() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"function make() -> (value: int) -> int {
+  let risky = (value: int) -> int throws string {
+    throw "boom"
+  }
+  return risky
+}"#,
+    );
+
+    let output = render_tir(&db, file);
+    assert!(
+        output.contains("type mismatch")
+            && output.contains("(value: int) -> int")
+            && output.contains("throws string"),
+        "expected returned closure surface to stay explicit-only, got:\n{output}"
+    );
+}

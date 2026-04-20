@@ -1,22 +1,23 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 13716
 ---
 === TIR2 ===
-type user.IntToInt = (x: int) -> int
-type user.BinaryOp = (a: int, b: int) -> int
-type user.UnnamedParams = (int, int) -> int
-type user.MixedParams = (x: int, int, z: string) -> bool
-type user.Producer = () -> string
-type user.Curried = (x: int) -> (y: int) -> int
-type user.Complex = (items: int[], lookup: map<string, int>) -> string?
-function user.GetTransform() -> (x: int) -> int throws never {
+type user.IntToInt = (x: int) -> int throws never
+type user.BinaryOp = (a: int, b: int) -> int throws never
+type user.UnnamedParams = (int, int) -> int throws never
+type user.MixedParams = (x: int, int, z: string) -> bool throws never
+type user.Producer = () -> string throws never
+type user.Curried = (x: int) -> ((y: int) -> int throws never) throws never
+type user.Complex = (items: int[], lookup: map<string, int>) -> string? throws never
+function user.GetTransform() -> (x: int) -> int throws never throws never {
   { : 1
     1 : 1
   }
-  !! 787..788: type mismatch: expected (x: int) -> int, got 1
+  !! 787..788: type mismatch: expected (x: int) -> int throws never, got 1
 }
-type user.UnionParam = (value: int | string) -> bool
-type user.FunctionFactory = (config: string) -> (int) -> int
+type user.UnionParam = (value: int | string) -> bool throws never
+type user.FunctionFactory = (config: string) -> ((int) -> int throws never) throws never
 type user.IntToInt$stream = unknown
 type user.BinaryOp$stream = unknown
 type user.UnnamedParams$stream = unknown

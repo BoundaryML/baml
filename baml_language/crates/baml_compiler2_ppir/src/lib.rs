@@ -547,6 +547,56 @@ pub fn function_signature<'db>(
     })
 }
 
+fn enclosing_class_generic_params(
+    item_tree: &ItemTree,
+    function_id: baml_compiler2_hir::ids::LocalItemId<baml_compiler2_hir::ids::FunctionMarker>,
+) -> Vec<Name> {
+    item_tree
+        .classes
+        .values()
+        .find(|class_data| class_data.methods.contains(&function_id))
+        .map(|class_data| class_data.generic_params.clone())
+        .unwrap_or_default()
+}
+
+/// Canonical elaborated callable signature — uses PPIR's item tree.
+pub fn elaborated_function_signature<'db>(
+    db: &'db dyn Db,
+    function: baml_compiler2_hir::loc::FunctionLoc<'db>,
+) -> Arc<baml_compiler2_hir::signature::ElaboratedFunctionSignature> {
+    let file = function.file(db);
+    let item_tree = file_item_tree(db, file);
+    let func_data = &item_tree[function.id(db)];
+
+    let params: Vec<_> = func_data
+        .params
+        .iter()
+        .map(|p| {
+            let type_expr = p
+                .type_expr
+                .as_ref()
+                .map(|te| te.expr.clone())
+                .unwrap_or(ast::TypeExpr::Unknown { attrs: vec![] });
+            (p.name.clone(), type_expr)
+        })
+        .collect();
+
+    let return_type = func_data.return_type.as_ref().map(|te| te.expr.clone());
+    let throws = func_data.throws.as_ref().map(|te| te.expr.clone());
+    let reserved_effect_param_names = enclosing_class_generic_params(&item_tree, function.id(db));
+
+    Arc::new(
+        baml_compiler2_hir::signature::elaborate_function_signature_parts(
+            func_data.name.clone(),
+            func_data.generic_params.clone(),
+            &reserved_effect_param_names,
+            params,
+            return_type,
+            throws,
+        ),
+    )
+}
+
 /// Canonical function signature source map — uses PPIR's item tree.
 pub fn function_signature_source_map<'db>(
     db: &'db dyn Db,
@@ -566,6 +616,15 @@ pub fn function_signature_source_map<'db>(
         return_type_span: func_data.return_type.as_ref().map(|te| te.span),
         throws_type_span: func_data.throws.as_ref().map(|te| te.span),
     }
+}
+
+/// Canonical elaborated callable signature source map — spans are unchanged by
+/// bounded signature elaboration, so this mirrors `function_signature_source_map`.
+pub fn elaborated_function_signature_source_map<'db>(
+    db: &'db dyn Db,
+    function: baml_compiler2_hir::loc::FunctionLoc<'db>,
+) -> baml_compiler2_hir::signature::SignatureSourceMap {
+    function_signature_source_map(db, function)
 }
 
 /// Returns the `ScopeBindings` for a given scope (canonical index).

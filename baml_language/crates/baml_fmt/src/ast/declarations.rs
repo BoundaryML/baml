@@ -5,7 +5,7 @@ use crate::{
     EmittableTrivia,
     ast::{
         Attribute, BlockAttribute, BlockExpr, Expression, FromCST, KnownKind, PathExpr,
-        StrongAstError, SyntaxNodeIter, Token, Type, tokens as t,
+        StrongAstError, SyntaxNodeIter, ThrowsClause, Token, Type, tokens as t,
     },
     printer::{PrintInfo, PrintMultiLine, Printable, Printer, Shape},
     trivia_classifier::TriviaSliceExt as _,
@@ -130,6 +130,7 @@ pub struct FunctionDecl {
     pub params: FunctionParamList,
     pub arrow: t::Arrow,
     pub return_type: Type,
+    pub throws: Option<ThrowsClause>,
     pub body: FunctionDeclBody,
 }
 impl FromCST for FunctionDecl {
@@ -149,6 +150,13 @@ impl FromCST for FunctionDecl {
 
         let return_type: Type = it.expect_parse()?;
 
+        let throws = if it.peek().map(|e| e.kind()) == Some(SyntaxKind::THROWS_CLAUSE) {
+            let elem = it.next().expect("peeked");
+            Some(ThrowsClause::from_cst(elem)?)
+        } else {
+            None
+        };
+
         let body = it.expect_node("of kind LLM_FUNCTION_BODY or EXPR_FUNCTION_BODY")?;
         let body = FunctionDeclBody::from_cst(SyntaxElement::Node(body))?;
 
@@ -160,6 +168,7 @@ impl FromCST for FunctionDecl {
             params,
             arrow,
             return_type,
+            throws,
             body,
         })
     }
@@ -186,14 +195,26 @@ impl Printable for FunctionDecl {
             return_type_printer.print(&self.return_type, Shape::unlimited_single_line());
         let (_, return_type_line_comment) =
             return_type_printer.print_trivia_all_trailing_for(self.return_type.rightmost_token());
+        let mut throws_printer = Printer::new_empty(printer.input, printer.config, printer.trivia);
+        let throws_info = self
+            .throws
+            .as_ref()
+            .map(|throws| throws_printer.print(throws, Shape::unlimited_single_line()))
+            .unwrap_or_else(PrintInfo::default_single_line);
 
         let single_line_size = printer.current_line_len()
             + param_printer.output.len()
             + const { " -> ".len() + " {".len() }
-            + return_type_printer.output.len();
+            + return_type_printer.output.len()
+            + if self.throws.is_some() {
+                (const { " ".len() }) + throws_printer.output.len()
+            } else {
+                0
+            };
         if single_line_size <= printer.config.line_width
             && !param_info.multi_lined
             && !return_type_info.multi_lined
+            && !throws_info.multi_lined
             && !return_type_line_comment
         {
             // It fits in single line!
@@ -202,6 +223,10 @@ impl Printable for FunctionDecl {
             printer.print_raw_token(&self.arrow);
             printer.print_spaces(1);
             printer.append_from_printer(return_type_printer);
+            if self.throws.is_some() {
+                printer.print_spaces(1);
+                printer.append_from_printer(throws_printer);
+            }
             printer.print_spaces(1);
             printer.print(&self.body, shape)
         } else {
@@ -235,8 +260,15 @@ impl Printable for FunctionDecl {
             let return_info = self.return_type.print(return_type_shape, printer);
             let (_, return_type_line_comment) =
                 printer.print_trivia_all_trailing_for(self.return_type.rightmost_token());
+            let throws_info = if let Some(ref throws) = self.throws {
+                printer.print_str(" ");
+                printer.print(throws, shape.clone())
+            } else {
+                PrintInfo::default_single_line()
+            };
 
             if (return_info.multi_lined && self.return_type.multi_line_is_indented())
+                || throws_info.multi_lined
                 || return_type_line_comment
             {
                 // `{` goes on its own line after the type ends

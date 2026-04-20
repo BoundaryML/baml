@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 28455
 ---
 function user.ConditionalLogic(age: int) -> string {
     load_var age
@@ -168,7 +169,7 @@ function user.continue_with_locals() -> int {
     jump L0
 }
 
-function user.edge_call_then_index(foo: () -> int[]) -> int {
+function user.edge_call_then_index(foo: () -> int[] throws never) -> int {
     load_var foo
     call_indirect
     pop 1
@@ -176,7 +177,7 @@ function user.edge_call_then_index(foo: () -> int[]) -> int {
     return
 }
 
-function user.edge_call_then_parens(foo: () -> (int) -> int) -> int {
+function user.edge_call_then_parens(foo: () -> ((int) -> int throws never) throws never) -> int {
     load_var foo
     call_indirect
     store_var _3
@@ -188,7 +189,7 @@ function user.edge_call_then_parens(foo: () -> (int) -> int) -> int {
     return
 }
 
-function user.edge_let_call_then_index(bar: () -> int[]) -> int {
+function user.edge_let_call_then_index(bar: () -> int[] throws never) -> int {
     load_var bar
     call_indirect
     load_const 0
@@ -196,7 +197,7 @@ function user.edge_let_call_then_index(bar: () -> int[]) -> int {
     return
 }
 
-function user.edge_semicolon_forces_boundary(bar: () -> int[]) -> int {
+function user.edge_semicolon_forces_boundary(bar: () -> int[] throws never) -> int {
     load_var bar
     call_indirect
     pop 1

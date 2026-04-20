@@ -163,6 +163,7 @@ pub enum Ty {
     Function {
         params: Vec<(Option<Name>, Ty)>,
         ret: Box<Ty>,
+        throws: Box<Ty>,
         attr: TyAttr,
     },
     /// A type variable (generic parameter) — e.g. `T` in `Array<T>`.
@@ -445,9 +446,24 @@ impl Ty {
         matches!(self, Ty::Union(..) | Ty::Function { .. })
     }
 
+    /// Nested function returns need grouping so the outer `throws` clause is
+    /// visually associated with the outer callable rather than the returned one.
+    fn needs_function_result_parens(&self) -> bool {
+        matches!(self, Ty::Function { .. })
+    }
+
     /// Format with parentheses if needed for postfix context.
     fn fmt_as_postfix_base(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if self.needs_postfix_parens() {
+            write!(f, "({self})")
+        } else {
+            write!(f, "{self}")
+        }
+    }
+
+    /// Format with parentheses if needed in a function return position.
+    fn fmt_as_function_result(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.needs_function_result_parens() {
             write!(f, "({self})")
         } else {
             write!(f, "{self}")
@@ -519,7 +535,12 @@ impl fmt::Display for Ty {
                 write!(f, "?")
             }
             Ty::Literal(lit, _freshness, _) => write!(f, "{lit}"),
-            Ty::Function { params, ret, .. } => {
+            Ty::Function {
+                params,
+                ret,
+                throws,
+                ..
+            } => {
                 let ps: Vec<String> = params
                     .iter()
                     .map(|(name, ty)| {
@@ -528,7 +549,9 @@ impl fmt::Display for Ty {
                             .unwrap_or_else(|| ty.to_string())
                     })
                     .collect();
-                write!(f, "({}) -> {ret}", ps.join(", "))
+                write!(f, "({}) -> ", ps.join(", "))?;
+                ret.fmt_as_function_result(f)?;
+                write!(f, " throws {throws}")
             }
             Ty::TypeVar(name, _) => write!(f, "{name}"),
             Ty::Never { .. } => write!(f, "never"),

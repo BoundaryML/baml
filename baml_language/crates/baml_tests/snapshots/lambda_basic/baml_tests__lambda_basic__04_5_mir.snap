@@ -1,12 +1,13 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 16521
 ---
 === MIR2 ===
 fn user.test_annotated() -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: (int) -> int // double
-    let _2: (int) -> int
+    let _1: (int) -> int throws never // double
+    let _2: (int) -> int throws never
 
     bb0: {
         _1 = make_closure lambda[0]();
@@ -39,8 +40,8 @@ fn user.test_capture() -> int {
     // Locals:
     let _0: int // _0 // return
     let _1: int // offset [captured]
-    let _2: (int) -> int // add_offset
-    let _3: (int) -> int
+    let _2: (int) -> int throws never // add_offset
+    let _3: (int) -> int throws never
 
     bb0: {
         _1 = const 10_i64;
@@ -75,8 +76,8 @@ fn .<lambda(test_capture, 0)>(x: int) -> null {
 fn user.test_generic_lambda() -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: (void) -> void // identity
-    let _2: (void) -> void
+    let _1: (void) -> void throws never // identity
+    let _2: (void) -> void throws never
 
     bb0: {
         _1 = make_closure lambda[0]();
@@ -108,8 +109,8 @@ fn .<lambda(test_generic_lambda, 0)>(x: void) -> null {
 fn user.test_inferred_return() -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: (int) -> int // double
-    let _2: (int) -> int
+    let _1: (int) -> int throws never // double
+    let _2: (int) -> int throws never
 
     bb0: {
         _1 = make_closure lambda[0]();
@@ -142,7 +143,7 @@ fn user.test_map_inferred() -> int[] {
     // Locals:
     let _0: int[] // _0 // return
     let _1: int[] // items
-    let _2: (int) -> int
+    let _2: (int) -> int throws never
 
     bb0: {
         _1 = [const 1_i64, const 2_i64, const 3_i64];
@@ -174,8 +175,8 @@ fn .<lambda(test_map_inferred, 0)>(x: null) -> null {
 fn user.test_multi_param() -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: (int, int) -> int // add
-    let _2: (int, int) -> int
+    let _1: (int, int) -> int throws never // add
+    let _2: (int, int) -> int throws never
 
     bb0: {
         _1 = make_closure lambda[0]();
@@ -208,8 +209,8 @@ fn .<lambda(test_multi_param, 0)>(a: int, b: int) -> null {
 fn user.test_nested() -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: (int) -> int // outer
-    let _2: (int) -> int
+    let _1: (int) -> int throws never // outer
+    let _2: (int) -> int throws never
 
     bb0: {
         _1 = make_closure lambda[0]();
@@ -227,8 +228,8 @@ fn .<lambda(test_nested, 0)>(x: int) -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: int // x // param [captured]
-    let _2: (int) -> int // inner
-    let _3: (int) -> int
+    let _2: (int) -> int throws never // inner
+    let _3: (int) -> int throws never
 
     bb0: {
         _2 = make_closure lambda[0](copy _1);
@@ -262,8 +263,8 @@ fn .<lambda(<lambda(test_nested, 0)>, 1)>(y: int) -> null {
 fn user.test_throws() -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: (int) -> int // risky
-    let _2: (int) -> int
+    let _1: (int) -> int throws string // risky
+    let _2: (int) -> int throws string
 
     bb0: {
         _1 = make_closure lambda[0]();
@@ -305,8 +306,8 @@ fn .<lambda(test_throws, 0)>(x: int) -> null {
 fn user.test_zero_param() -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: () -> 42 // constant
-    let _2: () -> 42
+    let _1: () -> 42 throws never // constant
+    let _2: () -> 42 throws never
 
     bb0: {
         _1 = make_closure lambda[0]();

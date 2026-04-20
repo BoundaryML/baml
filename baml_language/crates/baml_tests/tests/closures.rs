@@ -227,3 +227,27 @@ async fn bound_in_lambda() {
         BexExternalValue::String("Hello, Alice".into())
     );
 }
+
+#[tokio::test]
+async fn bound_throwing_method_reference_catches_error() {
+    let output = baml_test!(
+        r#"
+        class Worker {
+          factor int
+          function risky(self, value: int) -> int throws string {
+            if (value < 0) { throw "negative" }
+            self.factor * value
+          }
+        }
+        function main() -> int {
+          let worker = Worker { factor: 2 };
+          let run = worker.risky;
+          run(-1) catch (e) {
+            "negative" => -1,
+            _ => -2
+          }
+        }
+    "#
+    );
+    assert_eq!(output.result.unwrap(), BexExternalValue::Int(-1));
+}

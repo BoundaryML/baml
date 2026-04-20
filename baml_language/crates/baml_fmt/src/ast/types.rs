@@ -457,6 +457,11 @@ impl UnionTypeMember {
                 if must_be_func_type {
                     let arrow = it.expect_parse()?;
                     let return_ty: Type = it.expect_parse()?;
+                    let throws = if it.peek().map(|e| e.kind()) == Some(SyntaxKind::THROWS_CLAUSE) {
+                        Some(Box::new(it.expect_parse()?))
+                    } else {
+                        None
+                    };
 
                     Ok(UnionTypeMember::Function(FunctionType {
                         open_paren,
@@ -464,10 +469,16 @@ impl UnionTypeMember {
                         close_paren,
                         arrow,
                         return_type: Box::new(return_ty),
+                        throws,
                     }))
                 } else if let Some(arrow) = it.next_if_kind(SyntaxKind::ARROW) {
                     let arrow = t::Arrow::from_cst(arrow)?;
                     let return_ty: Type = it.expect_parse()?;
+                    let throws = if it.peek().map(|e| e.kind()) == Some(SyntaxKind::THROWS_CLAUSE) {
+                        Some(Box::new(it.expect_parse()?))
+                    } else {
+                        None
+                    };
 
                     Ok(UnionTypeMember::Function(FunctionType {
                         open_paren,
@@ -475,6 +486,7 @@ impl UnionTypeMember {
                         close_paren,
                         arrow,
                         return_type: Box::new(return_ty),
+                        throws,
                     }))
                 } else {
                     // Really a paren type
@@ -907,6 +919,7 @@ pub struct FunctionType {
     pub close_paren: t::RParen,
     pub arrow: t::Arrow,
     pub return_type: Box<Type>,
+    pub throws: Option<Box<crate::ast::ThrowsClause>>,
 }
 
 impl PrintMultiLine for FunctionType {
@@ -954,7 +967,11 @@ impl PrintMultiLine for FunctionType {
         printer.print_str(" ");
         printer.print_raw_token(&self.arrow);
         printer.print_str(" ");
-        printer.print(&*self.return_type, shape);
+        printer.print(&*self.return_type, shape.clone());
+        if let Some(throws) = &self.throws {
+            printer.print_str(" ");
+            printer.print(&**throws, shape);
+        }
         PrintInfo::default_multi_lined()
     }
 }
@@ -1012,6 +1029,15 @@ impl FunctionType {
         {
             return None;
         }
+        if let Some(throws) = &self.throws {
+            printer.print_str(" ");
+            if printer
+                .print(&**throws, Shape::unlimited_single_line())
+                .multi_lined
+            {
+                return None;
+            }
+        }
 
         if printer.output.len() > shape.width {
             None
@@ -1031,7 +1057,10 @@ impl Printable for FunctionType {
         self.open_paren.span()
     }
     fn rightmost_token(&self) -> TextRange {
-        self.return_type.rightmost_token()
+        self.throws
+            .as_ref()
+            .map(|throws| throws.rightmost_token())
+            .unwrap_or_else(|| self.return_type.rightmost_token())
     }
 }
 

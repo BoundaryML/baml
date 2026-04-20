@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 38146
 ---
 === TIR2 ===
 function user.GPT4o$new() -> ? throws never {
@@ -63,7 +64,7 @@ function user.ClassifySentiment2$parse(json: string) -> string throws never {
 function user.$init_test_24(registry: testing.TestCollector) -> ? throws never {
   { : null
     registry.register_test_set("test", (testset: testing.TestCollector) -> void { ... }, null) : void
-      (testset: testing.TestCollector) -> void { ... } : (testset: testing.TestCollector) -> void
+      (testset: testing.TestCollector) -> void { ... } : (testset: testing.TestCollector) -> void throws never
         {
           let topics = ["happy", "sad"]
           for sentiments in topics

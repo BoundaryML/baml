@@ -166,9 +166,13 @@ fn lower_base_terminal(type_expr: &CstTypeExpr) -> TypeExpr {
             .function_return_type()
             .map(|t| lower_type_expr_inner(&t, false))
             .unwrap_or(TypeExpr::Unknown { attrs: vec![] });
+        let throws = type_expr
+            .function_throws_type()
+            .map(|t| Box::new(lower_type_expr_inner(&t, false)));
         return TypeExpr::Function {
             params,
             ret: Box::new(ret),
+            throws,
             attrs: vec![],
         };
     }
@@ -456,11 +460,19 @@ pub(crate) fn check_void_type(
                 check_void_type(v, "a union member".to_string(), span, false, diags);
             }
         }
-        TypeExpr::Function { params, ret: _, .. } => {
+        TypeExpr::Function {
+            params,
+            ret: _,
+            throws,
+            ..
+        } => {
             // ret is exempt — void IS allowed as function-type return type.
             // But void in param types is not allowed.
             for p in params {
                 check_void_type(&p.ty, context.clone(), span, false, diags);
+            }
+            if let Some(throws) = throws {
+                check_void_type(throws, "a throws type".to_string(), span, false, diags);
             }
         }
         // All other variants (primitives, path, etc.) cannot contain void.
