@@ -4,4 +4,4 @@ git_sha = ""
 
 [artifacts.bridge_wasm]
 file_bytes = 11156143
-gzip_bytes = 3205453
+gzip_bytes = 3211344
