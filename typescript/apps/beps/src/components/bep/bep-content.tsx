@@ -2,6 +2,7 @@
 
 import { MarkdownHooks } from "react-markdown";
 import remarkGfm from "remark-gfm";
+import rehypeRaw from "rehype-raw";
 import { ShikiCodeBlock } from "@/components/ui/shiki-code-block";
 import Link from "next/link";
 import { ReactNode, isValidElement, useMemo } from "react";
@@ -174,7 +175,11 @@ export function BepContent({ content, linkContext }: BepContentProps) {
       data-bep-content
       className="prose prose-sm sm:prose-base lg:prose-lg dark:prose-invert max-w-none prose-code:before:content-none prose-code:after:content-none"
     >
-      <MarkdownHooks remarkPlugins={[remarkGfm]} components={components}>
+      <MarkdownHooks 
+        remarkPlugins={[remarkGfm]} 
+        rehypePlugins={[rehypeRaw]}
+        components={components}
+      >
         {contentWithoutFrontmatter}
       </MarkdownHooks>
     </article>
