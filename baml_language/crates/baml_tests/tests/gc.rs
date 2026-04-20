@@ -10,7 +10,7 @@ use bex_engine::BexExternalValue;
 /// Test that a program with heavy allocation pressure runs correctly
 /// under generational GC.
 ///
-/// Allocates ~3000 short-lived array objects across 1000 iterations
+/// Allocates ~1000 short-lived 3-element array objects across 1000 iterations
 /// to exercise Gen0 collection and ensure that the accumulator `sum`
 /// is correctly preserved through every GC cycle.
 ///

@@ -222,16 +222,13 @@ unsafe impl Sync for BexHeap {}
 // Implement WeakHeapRef trait from bex_external_types
 impl WeakHeapRef for BexHeap {
     fn release_handle(&self, handle_key: usize) {
-        if let Ok(mut handles) = self.handles.write() {
-            handles.remove(&handle_key);
-        }
+        let mut handles = self.handles.write().expect("handles lock poisoned");
+        handles.remove(&handle_key);
     }
 
     fn resolve_handle_ptr(&self, slab_key: usize) -> Option<HeapPtr> {
-        self.handles
-            .read()
-            .ok()
-            .and_then(|handles| handles.get(&slab_key).copied())
+        let handles = self.handles.read().expect("handles lock poisoned");
+        handles.get(&slab_key).copied()
     }
 }
 
@@ -467,32 +464,49 @@ impl BexHeap {
 
     /// Determine which generation an object pointer belongs to.
     ///
-    /// Returns `Generation::CompileTime` for compile-time objects,
-    /// `Generation::Gen0` / `Gen1` for objects in those spaces,
-    /// and `Generation::Gen2` for everything else (Gen2 or inactive).
+    /// Only compile-time, Gen2, and Gen1 are checked directly; anything else is
+    /// classified as `Generation::Gen0` by fallback. Every valid `HeapPtr` lives
+    /// in exactly one of those four spaces, so the fallback is correct.
+    ///
+    /// # Concurrency
+    ///
+    /// This is called from the write-barrier hot path during mutator execution,
+    /// where it must be safe under concurrent Gen0 growth (another VM's TLAB
+    /// refill). Gen2 and Gen1 only grow at GC safepoints, so their chunk layout
+    /// is stable during mutator execution and safe to scan without
+    /// synchronization. Gen0 is the only space that grows concurrently, and we
+    /// deliberately never inspect it — a Gen0 pointer falls through to the
+    /// `Generation::Gen0` fallback.
     #[inline]
     pub fn generation_of(&self, ptr: HeapPtr) -> Generation {
         if self.is_compile_time_ptr(ptr) {
             return Generation::CompileTime;
         }
         let raw_ptr = ptr.as_ptr() as *const Object;
-        // SAFETY: Only reading lengths and chunk pointers at a safepoint.
+        // SAFETY: Gen2 and Gen1 chunk layouts only change at GC safepoints, so
+        // reading them here — even from a concurrent mutator write-barrier —
+        // cannot race with a chunk-Vec reallocation.
         unsafe {
-            if Self::ptr_in_chunked_vec(&*self.gen0.get(), raw_ptr) {
-                return Generation::Gen0;
+            if Self::ptr_in_chunked_vec(&*self.gen2.get(), raw_ptr) {
+                return Generation::Gen2;
             }
             if Self::ptr_in_chunked_vec(&*self.gen1.get(), raw_ptr) {
                 return Generation::Gen1;
             }
         }
-        Generation::Gen2
+        Generation::Gen0
     }
 
     /// Check whether a raw pointer falls within any chunk of a `ChunkedVec`.
     ///
     /// # Safety
     ///
-    /// Must only be called at GC safepoints or with appropriate external synchronization.
+    /// The caller must ensure `vec`'s chunk layout is not growing concurrently.
+    /// `ChunkedVec` never moves existing chunks, but its internal chunk
+    /// `Vec<Box<[UnsafeCell<T>]>>` can reallocate its buffer on growth, and
+    /// `num_chunks`/`chunk_start_ptr` are non-atomic reads of that buffer. Only
+    /// call this for spaces that grow exclusively at GC safepoints (Gen1/Gen2),
+    /// or while holding exclusive access to the space being scanned.
     #[inline]
     unsafe fn ptr_in_chunked_vec(vec: &ChunkedVec<Object>, raw_ptr: *const Object) -> bool {
         for chunk_idx in 0..vec.num_chunks() {
@@ -505,26 +519,28 @@ impl BexHeap {
         false
     }
 
-    /// Mark the card dirty for the card containing `container_ptr` in Gen1 or Gen2.
+    /// Mark the card dirty for the card containing `container_ptr` in Gen2.
     ///
-    /// Called from write barriers when an older-generation object receives a
-    /// reference to a younger-generation object.
+    /// Called from write barriers when a Gen2 object receives a reference to a
+    /// younger-generation object. Gen1 doesn't need card tracking because its
+    /// cross-generation references are discovered during Minor GC via the
+    /// promotion-time card-marking sweep in `collect_garbage_minor`.
     ///
-    /// # Safety
-    ///
-    /// Called from the VM during single-threaded execution (each VM runs on one
-    /// thread at a time). The `UnsafeCell` accesses are safe because no other
-    /// thread is mutating the card tables concurrently.
+    /// Safe to call concurrently from multiple VMs. Writes use a relaxed
+    /// atomic store; no `&mut` borrow on the card table is taken. Capacity
+    /// growth happens separately, at GC safepoints, since Gen2 can only grow
+    /// during GC.
     #[inline]
     pub fn mark_card_for_ptr(&self, container_ptr: HeapPtr) {
         let raw_ptr = container_ptr.as_ptr() as *const Object;
-        // SAFETY: Single-threaded VM execution; no concurrent card table mutations.
+        // SAFETY: Only reads `gen2` chunk layout and stores into the atomic
+        // card table. Gen2 grows only at GC safepoints, so no concurrent write
+        // can invalidate either access.
         unsafe {
             if let Some((chunk_idx, offset)) =
                 Self::locate_in_chunked_vec(&*self.gen2.get(), raw_ptr)
             {
-                let cards = &mut *self.gen2_cards.get();
-                cards.ensure_capacity_for_chunks((*self.gen2.get()).num_chunks());
+                let cards = &*self.gen2_cards.get();
                 cards.mark_dirty_by_offset(chunk_idx, offset);
             }
         }
@@ -736,7 +752,7 @@ impl BexHeap {
             total_objects: total,
             compile_time_objects: ct_len,
             runtime_objects: gen0_len,
-            active_handles: self.handles.read().map(|h| h.len()).unwrap_or(0),
+            active_handles: self.handles.read().expect("handles lock poisoned").len(),
             tlab_chunks,
         }
     }
@@ -831,7 +847,8 @@ impl BexHeap {
     /// Returns the number of handles invalidated.
     pub fn update_handles(&self, forwarding: &HashMap<HeapPtr, HeapPtr>) -> usize {
         let mut invalidated_count = 0;
-        if let Ok(mut handles) = self.handles.write() {
+        {
+            let mut handles = self.handles.write().expect("handles lock poisoned");
             handles.retain(|_, ptr| {
                 if let Some(&new_ptr) = forwarding.get(ptr) {
                     *ptr = new_ptr;
@@ -859,7 +876,8 @@ impl BexHeap {
         let handle_key = self.next_handle_key.fetch_add(1, Ordering::Relaxed);
 
         // Insert into the handle table
-        if let Ok(mut handles) = self.handles.write() {
+        {
+            let mut handles = self.handles.write().expect("handles lock poisoned");
             handles.insert(handle_key, ptr);
         }
 
@@ -875,8 +893,10 @@ impl BexHeap {
     pub fn collect_handle_roots(&self) -> Vec<HeapPtr> {
         self.handles
             .read()
-            .map(|handles| handles.values().copied().collect())
-            .unwrap_or_default()
+            .expect("handles lock poisoned")
+            .values()
+            .copied()
+            .collect()
     }
 }
 

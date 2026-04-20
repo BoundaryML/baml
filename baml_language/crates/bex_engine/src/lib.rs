@@ -23,33 +23,48 @@
 //!
 //! # Garbage Collection Coordination
 //!
-//! The engine coordinates GC using an epoch-based system:
+//! The engine coordinates GC through a [`HeapPermitManager`]. Every
+//! `call_function` invocation holds an [`ActiveHeapPermit`] for the duration
+//! of its VM's execution; the permit is released at async safepoints (e.g.
+//! during `Await`). GC is a "request-and-wait" operation:
 //!
-//! 1. **Epoch tracking**: Each `call_function` registers with the current epoch
-//! 2. **GC trigger**: `collect_garbage()` increments epoch, causing old-epoch VMs to park
-//! 3. **Safe collection**: Once all VMs park, GC collects roots from:
-//!    - Handle table (objects returned to external code)
-//!    - Parked VM stacks (via VM pointer registry)
-//! 4. **Stack update**: GC updates parked VM stacks with forwarding pointers
-//! 5. **TLAB invalidation**: Parked VMs get TLABs invalidated before resuming
-//! 6. **Resume**: `gc_complete.notify_waiters()` releases parked VMs
+//! 1. **Trigger**: [`BexEngine::collect_garbage`] calls
+//!    [`HeapPermitManager::request_park`], which drains all semaphore permits.
+//! 2. **Park**: running VMs release their permits at the next safepoint; new
+//!    `call_function` invocations block in `HeapPermitManager::new_permit`
+//!    because the manager's holders mutex is held by the GC.
+//! 3. **Collect roots**: [`HeapGuard`] iterates the live permit holders (via
+//!    weak references) and calls each `RootHaver::collect_roots`, unioned
+//!    with `BexHeap::collect_handle_roots` for FFI-held objects.
+//! 4. **GC**: `BexHeap::collect_garbage_generational` runs under the guard;
+//!    produces a forwarding map.
+//! 5. **Fixup**: `HeapGuard` calls each parked holder's
+//!    `RootHaver::forward_roots`. The `BexVm` impl of `forward_roots` also
+//!    invalidates the VM's TLAB so post-GC allocations refill from the new
+//!    Gen0 cursor.
+//! 6. **Resume**: dropping the `HeapGuard` releases the semaphore; parked
+//!    VMs re-acquire and continue.
 //!
 //! ## Safety Invariants
 //!
-//! - VMs register pointers before parking, unregister after waking
-//! - GC only accesses VM stacks while holding `parked_vms` lock
-//! - Handles always resolve through table (no cached indices)
-//! - New calls wait for in-progress GC before processing handle args
+//! - A VM can only mutate its own heap state while holding an
+//!   [`ActiveHeapPermit`]. GC cannot start until every active permit has
+//!   been released.
+//! - Handles are registered in `BexHeap::handles` before any GC could
+//!   observe them, and the write lock on that table serializes against
+//!   GC's `update_handles`.
+//! - New `call_function` invocations block on the holders mutex during
+//!   GC, so no fresh permit enters circulation mid-collection.
 //!
 //! # Unsafe Code
 //!
 //! This module uses unsafe code for:
-//! - `VmPtr` Send implementation: Raw VM pointers stored for GC root collection
-//! - Direct heap access: Reading objects during value conversion (index from valid handle)
-//! - GC coordination: Dereferencing parked VM pointers to collect/update roots
-//! - Epoch guards: Creating guards after registering with the epoch system
+//! - `PermitCell<T>` Send/Sync: single-threaded access is enforced by the
+//!   semaphore/holders-mutex pair.
+//! - Direct heap access during value conversion (always under an active
+//!   permit or a `with_gc_protection` read guard).
 //!
-//! Safety is ensured by the epoch-based GC coordination system described above.
+//! Safety is ensured by the permit/guard coordination system described above.
 
 #![allow(unsafe_code)]
 
@@ -1124,28 +1139,22 @@ impl BexEngine {
         Ok(registry)
     }
 
-    /// Run GC if conditions are met (called at safepoints).
+    /// Run GC if conditions are met (called at safepoints),
+    /// or yield if another thread is running GC.
     ///
     /// Uses the adaptive `should_collect()` policy to choose the appropriate
     /// collection level (Minor or Major) based on live object counts and
     /// allocation pressure.
-    ///
-    /// Note: This function is known to be incorrect for multi-VM workloads — it
-    /// runs GC without coordinating with other VMs. It is kept working here for
-    /// single-VM use but will be replaced by a proper coordinated path later.
     async fn gc_safepoint<T: RootHaver>(
         &self,
         mut permit: ActiveHeapPermit<T>,
     ) -> ActiveHeapPermit<T> {
-        let other_thread_checking = self
+        let i_am_checking = self
             .checking_gc
             .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
             .is_ok();
-        if other_thread_checking {
-            // Park if they have requested it.
-            permit.renew().await
-        } else {
-            // We set the flag, so we should check
+        if i_am_checking {
+            // We won the CAS, so we own the GC check.
             if let Some(level) = self.heap.should_collect() {
                 let inactive = permit.release();
                 self.collect_garbage(level).await;
@@ -1153,6 +1162,9 @@ impl BexEngine {
             }
             self.checking_gc.store(false, Ordering::Release);
             permit
+        } else {
+            // Another thread is checking; park if they've requested it.
+            permit.renew().await
         }
     }
 
@@ -1171,10 +1183,13 @@ impl BexEngine {
         Ok(())
     }
 
-    /// Run the VM event loop until completion, with epoch tracking.
+    /// Drive the VM to completion, dispatching sys-ops, awaits, span
+    /// notifications, and early-yield events.
     ///
-    /// The `my_epoch` parameter is used to check if GC has been requested
-    /// (epoch advanced). VMs from old epochs will park at yield points.
+    /// The `vm` parameter is the permit for this invocation; it is released
+    /// at async safepoints (via `gc_safepoint`) and re-acquired after any
+    /// concurrent GC finishes. Each re-acquisition invalidates the VM's TLAB
+    /// through the post-GC `forward_roots` hook.
     #[allow(clippy::too_many_arguments)]
     async fn run_event_loop(
         self: &Arc<Self>,

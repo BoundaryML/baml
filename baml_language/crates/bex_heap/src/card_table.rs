@@ -7,6 +7,20 @@
 //!
 //! During a partial (Gen0 or Gen1) collection, dirty cards are scanned to
 //! discover cross-generation references that would otherwise be missed.
+//!
+//! # Concurrency
+//!
+//! Concurrent VM tasks can each fire a write barrier at the same time, so
+//! `mark_dirty_by_offset` and `is_dirty` take `&self` and use atomic loads /
+//! stores on the underlying `AtomicU8` slots. Relaxed ordering is sufficient
+//! — writers only ever set the same value (`1`), and readers don't care
+//! about ordering relative to other writes, only about eventual visibility
+//! at the next GC safepoint (which is a strong synchronization point).
+//!
+//! Capacity growth (`ensure_capacity_for_chunks`, `clear`) takes `&mut self`
+//! and must be called at a GC safepoint where no VM is concurrently marking.
+
+use ::core::sync::atomic::{AtomicU8, Ordering};
 
 use crate::chunked_vec::DEFAULT_CHUNK_SIZE;
 
@@ -40,8 +54,9 @@ const _: () = assert!(
 /// card_index = chunk_idx * CARDS_PER_CHUNK + offset_in_chunk / CARD_SIZE
 /// ```
 pub struct CardTable {
-    /// One byte per card: 0 = clean, 1 = dirty.
-    cards: Vec<u8>,
+    /// One atomic byte per card: 0 = clean, 1 = dirty. Atomic so concurrent
+    /// VM write-barriers can mark the table without a data race.
+    cards: Vec<AtomicU8>,
 }
 
 impl CardTable {
@@ -52,54 +67,62 @@ impl CardTable {
 
     /// Ensure the table has at least enough capacity for `num_chunks` chunks.
     ///
-    /// Extends with clean (0) entries as needed.
+    /// Extends with clean (0) entries as needed. Must only be called at a GC
+    /// safepoint — concurrent `mark_dirty_by_offset` calls would race against
+    /// the underlying `Vec::resize` reallocation.
     pub fn ensure_capacity_for_chunks(&mut self, num_chunks: usize) {
         let needed = num_chunks * CARDS_PER_CHUNK;
         if self.cards.len() < needed {
-            self.cards.resize(needed, 0);
+            self.cards.resize_with(needed, || AtomicU8::new(0));
         }
     }
 
     /// Mark the card containing the object at `(chunk_idx, offset_in_chunk)` as dirty.
     ///
-    /// `offset_in_chunk` is the 0-based index of the object within its chunk.
+    /// Safe to call concurrently from multiple threads — writes go through a
+    /// relaxed atomic store, and all writers set the same value (`1`).
+    ///
+    /// If `card_index` is out of bounds, this is a no-op. Callers are
+    /// expected to ensure the table has been sized via
+    /// [`ensure_capacity_for_chunks`](Self::ensure_capacity_for_chunks)
+    /// at a GC safepoint before VMs start mutating Gen2 objects.
     #[inline(always)]
-    pub fn mark_dirty_by_offset(&mut self, chunk_idx: usize, offset_in_chunk: usize) {
+    pub fn mark_dirty_by_offset(&self, chunk_idx: usize, offset_in_chunk: usize) {
         let card_index = chunk_idx * CARDS_PER_CHUNK + offset_in_chunk / CARD_SIZE;
-        if card_index < self.cards.len() {
-            self.cards[card_index] = 1;
+        if let Some(slot) = self.cards.get(card_index) {
+            slot.store(1, Ordering::Relaxed);
         }
     }
 
     /// Check whether card `card_index` is dirty.
-    // Used in tests and will be used by partial GC in Phase 4.
-    #[allow(dead_code)]
+    #[cfg(test)]
     #[inline]
     pub fn is_dirty(&self, card_index: usize) -> bool {
-        self.cards.get(card_index).copied().unwrap_or(0) != 0
+        self.cards
+            .get(card_index)
+            .map(|slot| slot.load(Ordering::Relaxed) != 0)
+            .unwrap_or(false)
     }
 
-    /// Clear all cards (mark everything clean).
-    // Used in tests and will be called after each partial GC cycle in Phase 4.
-    #[allow(dead_code)]
+    /// Clear all cards (mark everything clean). Must only be called at a GC
+    /// safepoint.
     pub fn clear(&mut self) {
-        self.cards.fill(0);
+        for slot in &self.cards {
+            slot.store(0, Ordering::Relaxed);
+        }
     }
 
     /// Iterate over all dirty card indices.
-    // Used in tests and will be called during dirty card scanning in Phase 4.
-    #[allow(dead_code)]
     pub fn dirty_card_indices(&self) -> impl Iterator<Item = usize> + '_ {
         self.cards
             .iter()
             .enumerate()
-            .filter(|&(_, &v)| v != 0)
+            .filter(|(_, slot)| slot.load(Ordering::Relaxed) != 0)
             .map(|(i, _)| i)
     }
 
     /// Return the total number of cards (dirty or clean).
-    // Used in tests and will be used for diagnostics in Phase 4.
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub fn num_cards(&self) -> usize {
         self.cards.len()
     }
@@ -148,7 +171,7 @@ mod tests {
 
     #[test]
     fn test_mark_dirty_noop_out_of_bounds() {
-        let mut ct = CardTable::new();
+        let ct = CardTable::new();
         // No capacity allocated — should not panic
         ct.mark_dirty_by_offset(10, 0);
         assert_eq!(ct.dirty_card_indices().count(), 0);

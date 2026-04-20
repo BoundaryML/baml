@@ -15,7 +15,7 @@ use std::{
 
 use baml_tests::engine::compile_source;
 use bex_vm::BexVm;
-use bex_vm_types::RootHaver;
+use bex_vm_types::{HeapPtr, RootHaver, Value};
 
 fn make_vm() -> BexVm {
     // The program contents don't matter — we only need a VM with a live
@@ -33,5 +33,39 @@ fn forward_roots_invalidates_tlab() {
     assert!(
         !vm.tlab.is_valid(),
         "TLAB must be invalidated by forward_roots so the next alloc refills"
+    );
+}
+
+#[test]
+fn forward_roots_remaps_stack_object_pointers() {
+    let mut vm = make_vm();
+
+    let old_ptr = vm.tlab.alloc_string("before_gc".to_string());
+    let new_ptr = vm.tlab.alloc_string("after_gc".to_string());
+    let untouched_ptr = vm.tlab.alloc_string("stays_put".to_string());
+
+    vm.stack.0.push(Value::Object(old_ptr));
+    vm.stack.0.push(Value::Int(42));
+    vm.stack.0.push(Value::Object(untouched_ptr));
+
+    let mut forwarding: HashMap<HeapPtr, HeapPtr> = HashMap::new();
+    forwarding.insert(old_ptr, new_ptr);
+
+    vm.forward_roots(&forwarding);
+
+    assert_eq!(
+        vm.stack.0[0],
+        Value::Object(new_ptr),
+        "stack slot 0 should have been rewritten to the forwarded pointer"
+    );
+    assert_eq!(
+        vm.stack.0[1],
+        Value::Int(42),
+        "non-object stack values must be left alone"
+    );
+    assert_eq!(
+        vm.stack.0[2],
+        Value::Object(untouched_ptr),
+        "pointers without a forwarding entry must be left alone"
     );
 }

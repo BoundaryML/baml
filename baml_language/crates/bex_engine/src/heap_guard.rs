@@ -108,6 +108,9 @@ impl<T: RootHaver> InactiveHeapPermit<T> {
     /// They may access other data on the root holder, but not the heap or heap roots.
     pub unsafe fn holder(&self) -> &T {
         let ptr = self.holder.get();
+        // SAFETY: caller upholds the fn-level contract — the permit is active,
+        // so no other thread (GC or mutator) is concurrently reading/writing
+        // through this `PermitCell`.
         unsafe { &*ptr }
     }
 
@@ -117,6 +120,8 @@ impl<T: RootHaver> InactiveHeapPermit<T> {
     /// They may access other data on the root holder, but not the heap or heap roots.
     pub unsafe fn holder_mut(&mut self) -> &mut T {
         let ptr = self.holder.get();
+        // SAFETY: caller upholds the fn-level contract — the permit is active
+        // and `&mut self` proves exclusive access on this thread.
         unsafe { &mut *ptr }
     }
 }

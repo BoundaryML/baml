@@ -22,9 +22,8 @@ use crate::{
 
 /// Which generation level to collect.
 ///
-/// - `Gen0`: Minor GC — traces Gen0 only, promotes survivors to Gen1.
 /// - `Minor`: Traces Gen0 + Gen1; Gen0 survivors → new Gen1 (via inactive swap),
-///   Gen1 survivors → Gen2.
+///   Gen1 survivors → Gen2. There is no Gen0-only collection.
 /// - `Major`: Full GC — traces all generations, survivors → Gen2 via inactive swap.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CollectionLevel {
@@ -198,10 +197,14 @@ impl BexHeap {
         self.clear_tlab_canaries();
 
         // After a Major GC, Gen0 and Gen1 are empty, so no cross-gen references
-        // can exist. Clear both card tables.
-        // SAFETY: GC safepoint.
+        // can exist. Clear the Gen2 card table, then size it for the new Gen2
+        // so that subsequent VM write barriers can mark cards in bounds without
+        // needing to resize the table from a shared `&self` path.
+        // SAFETY: GC safepoint; no concurrent card-table access.
         unsafe {
-            (*self.gen2_cards.get()).clear();
+            let cards = &mut *self.gen2_cards.get();
+            cards.clear();
+            cards.ensure_capacity_for_chunks((*self.gen2.get()).num_chunks());
         }
 
         // Poison or clear the inactive space (now holds old-space debris).
@@ -218,6 +221,11 @@ impl BexHeap {
 
         // Update adaptive thresholds: all survivors are in Gen2 after a full GC.
         self.update_thresholds_after_major(live_count);
+
+        // Reset the Gen0 allocation counter — `should_collect` uses it to
+        // trigger pressure-based GC, and without the reset every subsequent
+        // check would re-trigger GC forever.
+        self.reset_gc_counter();
 
         let stats = GcStats {
             live_count,
@@ -717,6 +725,7 @@ impl BexHeap {
 
         // Build worklist: roots + cross-generation references from Gen2 dirty cards.
         let mut worklist: Vec<HeapPtr> = roots.to_vec();
+        // SAFETY: GC safepoint; we have exclusive access to the card table and Gen2.
         unsafe {
             self.scan_dirty_cards_for_young_roots(
                 &*self.gen2_cards.get(),
@@ -776,6 +785,34 @@ impl BexHeap {
             );
         }
 
+        // Promotion write-barrier: mark the card dirty for every newly-promoted
+        // Gen2 object. After promotion, its references may point to the freshly
+        // populated Gen1 (formerly Gen0). The regular write barrier path can't
+        // fire here — the reference was set while the object was still young, so
+        // the original mutation never marked a Gen2 card. Without this sweep,
+        // the next Minor GC would identity-map this Gen2 object without tracing
+        // its references, and any live Gen1 child reachable only via this path
+        // would be cleared alongside the old Gen1 space.
+        //
+        // Over-approximates (marks cards even when the promoted object has no
+        // young references), but a dirty card with no young references is a
+        // cheap no-op in the next Minor GC scan.
+        //
+        // Grow the card table first so the new marks land in bounds — Gen2
+        // has just expanded via promotion.
+        // SAFETY: GC safepoint — exclusive access to Gen2 and its card table;
+        // no mutator can race with the capacity resize or card-marking sweep.
+        unsafe {
+            let gen2 = self.gen2_ref();
+            let gen2_len_after = gen2.len();
+            (*self.gen2_cards.get()).ensure_capacity_for_chunks(gen2.num_chunks());
+            for i in gen2_len_before..gen2_len_after {
+                let raw_ptr = gen2.get_ptr(i);
+                let ptr = self.make_heap_ptr(raw_ptr);
+                self.mark_card_for_ptr(ptr);
+            }
+        }
+
         // Swap inactive ↔ Gen1; clear Gen0.
         // SAFETY: GC safepoint; exclusive access to all spaces.
         unsafe {
@@ -801,6 +838,11 @@ impl BexHeap {
         // Update adaptive thresholds based on post-collection Gen1 and Gen2 sizes.
         let current_gen2_live = unsafe { self.gen2_ref().len() };
         self.update_thresholds_after_minor(new_gen1_count, current_gen2_live);
+
+        // Reset the Gen0 allocation counter. Without this, `should_collect`
+        // would re-trigger Minor GC on every check after the first 10_000
+        // allocations, because the counter would never go below the threshold.
+        self.reset_gc_counter();
 
         let stats = GcStats {
             live_count: total_live,

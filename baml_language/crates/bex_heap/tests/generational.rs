@@ -785,3 +785,85 @@ fn test_handle_survives_minor_gc_and_points_to_gen1() {
     };
     assert_eq!(s, "gen1_via_handle");
 }
+
+/// A Gen1→Gen2 promotion must not leave a Gen2 object with untracked young
+/// references. If the container's outgoing references include pointers into
+/// the freshly-promoted-from-Gen0 new-Gen1, the container's card in the Gen2
+/// card table must be dirty after the GC completes — otherwise the next
+/// Minor GC will identity-map this Gen2 container without tracing its
+/// references, and the referenced young objects will be swept with old Gen1.
+///
+/// This scenario arises naturally whenever a Gen1 container acquires a
+/// young reference via mutation: the write barrier fires but `mark_card_for_ptr`
+/// only records cards for Gen2 containers, so no card survives to the next
+/// GC. The required recovery happens at promotion time, not at mutation
+/// time.
+///
+/// The test walks three Minor GCs to exercise the promotion-and-survival
+/// chain end-to-end and asserts the Gen1 child survives with its original
+/// value.
+#[test]
+fn test_gen1_container_acquires_young_ref_survives_minor_gc_chain() {
+    let heap = BexHeap::new(vec![]);
+    let mut tlab = Tlab::new(Arc::clone(&heap));
+
+    // T0: Allocate container A in Gen0 with a placeholder slot.
+    let a_g0 = tlab.alloc_array(vec![bex_vm_types::Value::Null]);
+    assert_eq!(heap.generation_of(a_g0), Generation::Gen0);
+
+    // GC1 Minor: A → Gen1.
+    let (_, roots1, _) =
+        unsafe { heap.collect_garbage_generational(&[a_g0], CollectionLevel::Minor) };
+    tlab.invalidate();
+    let a_g1 = roots1[0];
+    assert_eq!(heap.generation_of(a_g1), Generation::Gen1);
+
+    // T2: Allocate B in Gen0, then mutate A (Gen1) to reference B.
+    // The standard write barrier fires but is a no-op: mark_card_for_ptr is
+    // only implemented for Gen2 containers. So no card is dirty.
+    let b_g0 = tlab.alloc_string("B_contents".to_string());
+    assert_eq!(heap.generation_of(b_g0), Generation::Gen0);
+    unsafe {
+        let obj = a_g1.get_mut();
+        let Object::Array(arr) = obj else {
+            panic!("expected Array")
+        };
+        arr[0] = bex_vm_types::Value::Object(b_g0);
+    }
+
+    // GC2 Minor: only A is a root. B reached via A's references.
+    // A promotes to Gen2, B promotes to new Gen1.
+    // Post-fix: the newly-promoted Gen2 A's card is marked dirty.
+    let (stats_gc2, roots2, _) =
+        unsafe { heap.collect_garbage_generational(&[a_g1], CollectionLevel::Minor) };
+    tlab.invalidate();
+    let a_g2 = roots2[0];
+    assert_eq!(heap.generation_of(a_g2), Generation::Gen2);
+    assert_eq!(stats_gc2.promoted_to_gen2, 1);
+    assert_eq!(stats_gc2.promoted_to_gen1, 1);
+
+    // GC3 Minor: only A is a root. Without the post-promotion card mark, A
+    // would be identity-mapped and B would be lost (dropped with old Gen1).
+    // With the fix, A's dirty card is scanned, B is discovered, and B is
+    // promoted again (to new Gen1).
+    let (_, roots3, _) =
+        unsafe { heap.collect_garbage_generational(&[a_g2], CollectionLevel::Minor) };
+    tlab.invalidate();
+    let a_after = roots3[0];
+
+    // A must still resolve to a valid Array, and its slot 0 must still
+    // resolve to a valid String matching B's original contents.
+    let Object::Array(arr_after) = (unsafe { a_after.get() }) else {
+        panic!("expected Array in A after GC3")
+    };
+    let bex_vm_types::Value::Object(b_after) = arr_after[0] else {
+        panic!("expected Object reference in A.field after GC3")
+    };
+    let Object::String(s) = (unsafe { b_after.get() }) else {
+        panic!("expected String at B_after")
+    };
+    assert_eq!(
+        s, "B_contents",
+        "B must survive two minor GCs via the post-promotion card mark"
+    );
+}
