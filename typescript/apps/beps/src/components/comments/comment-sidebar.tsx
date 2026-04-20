@@ -11,6 +11,7 @@ import { Check, AlertCircle, HelpCircle, ChevronDown, ChevronUp, MessageSquare }
 import { cn } from "@/lib/utils";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import rehypeRaw from "rehype-raw";
 import {
   Sheet,
   SheetContent,
@@ -129,6 +130,7 @@ function CommentText({ content }: { content: string }) {
   return (
     <Markdown
       remarkPlugins={[remarkGfm]}
+      rehypePlugins={[rehypeRaw]}
       components={{
         p: ({ children }) => <p className="my-1 first:mt-0 last:mb-0">{children}</p>,
         a: ({ href, children }) => (
