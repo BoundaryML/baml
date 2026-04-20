@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Test BR Tags in Tables</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      max-width: 800px;
+      margin: 2rem auto;
+      padding: 0 1rem;
+      line-height: 1.6;
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 1rem 0;
+    }
+    th, td {
+      border: 1px solid #ccc;
+      padding: 0.5rem;
+      text-align: left;
+    }
+    th {
+      background: #f5f5f5;
+      font-weight: 600;
+    }
+    .test-section {
+      margin: 2rem 0;
+      padding: 1rem;
+      border: 1px solid #e0e0e0;
+      border-radius: 4px;
+    }
+    h2 {
+      margin-top: 0;
+    }
+  </style>
+</head>
+<body>
+  <h1>Test: &lt;br&gt; Tags in Markdown Tables</h1>
+  
+  <div class="test-section">
+    <h2>Test Case 1: Simple Table with BR Tags</h2>
+    <p>Markdown input:</p>
+    <pre><code>| Feature | Description |
+| --- | --- |
+| Line breaks | First line&lt;br&gt;Second line&lt;br&gt;Third line |
+| Single line | Just one line |</code></pre>
+    
+    <p>Expected output:</p>
+    <table>
+      <thead>
+        <tr>
+          <th>Feature</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Line breaks</td>
+          <td>First line<br>Second line<br>Third line</td>
+        </tr>
+        <tr>
+          <td>Single line</td>
+          <td>Just one line</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="test-section">
+    <h2>Test Case 2: Complex Table with Multiple BR Tags</h2>
+    <p>Markdown input:</p>
+    <pre><code>| API Method | Parameters | Example |
+| --- | --- | --- |
+| `createUser` | name: string&lt;br&gt;email: string&lt;br&gt;age: number | `createUser("John", "john@example.com", 30)` |
+| `deleteUser` | id: number | `deleteUser(123)` |</code></pre>
+    
+    <p>Expected output:</p>
+    <table>
+      <thead>
+        <tr>
+          <th>API Method</th>
+          <th>Parameters</th>
+          <th>Example</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>createUser</code></td>
+          <td>name: string<br>email: string<br>age: number</td>
+          <td><code>createUser("John", "john@example.com", 30)</code></td>
+        </tr>
+        <tr>
+          <td><code>deleteUser</code></td>
+          <td>id: number</td>
+          <td><code>deleteUser(123)</code></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p><strong>Note:</strong> This is a reference HTML file showing expected behavior. To test the actual implementation, you need to create a BEP with markdown tables containing &lt;br&gt; tags and view it in the BEPS app.</p>
+</body>
+</html>
