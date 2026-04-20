@@ -514,36 +514,62 @@ fn test_clean_card_does_not_root_gen0_objects() {
     assert!(stats.collected_count >= 1);
 }
 
+/// A dirty card on a Gen2 object that holds no young references must not
+/// spuriously keep a later Gen0 allocation alive on the next Minor GC.
+///
+/// Minor GC does **not** proactively clear the Gen2 card table — only Major
+/// GC does ([`gc.rs:206`]) — so a synthetically-marked card survives across
+/// Minor GCs. That is still correct as long as the card scan only promotes
+/// things that are actually referenced from the card's objects; this test
+/// pins that behaviour.
 #[test]
-fn test_card_tables_cleared_after_minor_gc() {
+fn test_stale_dirty_card_does_not_root_unrelated_gen0_object() {
     let heap = BexHeap::new(vec![]);
     let mut tlab = Tlab::new(Arc::clone(&heap));
 
-    // Promote an array to Gen2
+    // Promote an array with no object references into Gen2.
     let arr = tlab.alloc_array(vec![bex_vm_types::Value::Null]);
     let (_, roots1, _) =
         unsafe { heap.collect_garbage_generational(&[arr], CollectionLevel::Major) };
     tlab.invalidate();
 
-    // Mark card dirty
+    // Mark a dirty card on the promoted Gen2 object and sanity-check that the
+    // introspection helper reports it.
     heap.mark_card_for_ptr(roots1[0]);
+    assert_eq!(
+        heap.gen2_dirty_card_count(),
+        1,
+        "marking a Gen2 card should register exactly one dirty card",
+    );
 
-    // First minor GC — clears card tables as part of collection
+    // First minor GC — the dirty card is scanned but the Gen2 object has no
+    // young references, so nothing is promoted through it.
     let (_, roots2, _) =
         unsafe { heap.collect_garbage_generational(&[roots1[0]], CollectionLevel::Minor) };
     tlab.invalidate();
 
-    // Allocate a new Gen0 object (not referenced from Gen2)
+    // The synthetic dirty card persists (Minor GC doesn't clear the table),
+    // which is still correct: next Minor GC will re-scan it and find nothing.
+    assert_eq!(
+        heap.gen2_dirty_card_count(),
+        1,
+        "Minor GC does not clear the Gen2 card table — the mark persists",
+    );
+
+    // Allocate a brand-new Gen0 object that nothing references.
     let _orphan2 = tlab.alloc_string("orphan2".to_string());
 
-    // Second minor GC: the old dirty card should have been cleared by the first GC,
-    // so orphan2 should NOT survive via dirty card scan
+    // Second minor GC: the old dirty card's Gen2 object does NOT reference
+    // orphan2, so orphan2 must be collected despite the dirty card being
+    // scanned again.
     let (stats, _, _) =
         unsafe { heap.collect_garbage_generational(&[roots2[0]], CollectionLevel::Minor) };
     tlab.invalidate();
 
-    // orphan2 should be collected (plus TLAB pre-alloc padding)
-    assert!(stats.collected_count >= 1);
+    assert!(
+        stats.collected_count >= 1,
+        "orphan2 must be collected — a dirty card on an unrelated Gen2 object must not root it"
+    );
 }
 
 // ============================================================================
@@ -706,7 +732,6 @@ fn test_handle_roots_included_in_gc() {
 
     // `obj` should have survived (promoted to Gen1 from Gen0).
     assert!(stats.live_count >= 1);
-    assert_eq!(stats.handles_invalidated, 0);
 
     // Update roots from forwarding (simulate what the engine does).
     for r in &mut roots {
@@ -727,31 +752,20 @@ fn test_handle_roots_included_in_gc() {
     assert_eq!(s, "handle_only");
 }
 
-/// An object that is NOT reachable from any root (neither handle roots nor
-/// stack roots) must be collected, and its handle must be invalidated.
+/// Handles are GC roots by contract: passing an empty root set while a
+/// handle exists is a caller bug and must panic rather than silently leave
+/// the handle pointing at reclaimed memory.
 #[test]
-fn test_handle_to_dead_object_invalidated() {
+#[should_panic(expected = "handles must be passed as GC roots")]
+fn test_minor_gc_panics_when_handle_not_in_roots() {
     let heap = BexHeap::new(vec![]);
     let mut tlab = Tlab::new(Arc::clone(&heap));
 
     let dead = tlab.alloc_string("dead_object".to_string());
+    let _handle = heap.create_handle(dead);
 
-    // Create a handle but do NOT include it in GC roots.
-    let handle = heap.create_handle(dead);
-
-    // Run GC with empty roots — `dead` is unreachable.
-    let (stats, _, _) = unsafe { heap.collect_garbage_generational(&[], CollectionLevel::Minor) };
-    tlab.invalidate();
-
-    // The handle should have been invalidated.
-    assert_eq!(
-        stats.handles_invalidated, 1,
-        "handle to dead object should be invalidated"
-    );
-    assert!(
-        heap.resolve_handle_ptr(handle.slab_key()).is_none(),
-        "dead handle should not resolve"
-    );
+    // Caller forgot to include `collect_handle_roots()` — must panic.
+    let _ = unsafe { heap.collect_garbage_generational(&[], CollectionLevel::Minor) };
 }
 
 /// An object promoted to Gen1 via handle roots during a minor GC is
@@ -775,7 +789,6 @@ fn test_handle_survives_minor_gc_and_points_to_gen1() {
     tlab.invalidate();
 
     assert_eq!(stats.promoted_to_gen1, 1);
-    assert_eq!(stats.handles_invalidated, 0);
 
     let resolved = heap.resolve_handle_ptr(handle.slab_key()).unwrap();
     assert_eq!(heap.generation_of(resolved), Generation::Gen1);

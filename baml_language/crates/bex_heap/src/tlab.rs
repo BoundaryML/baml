@@ -253,10 +253,10 @@ impl Tlab {
     ///
     /// # Write Barrier
     ///
-    /// Callers must ensure a write barrier is fired for any `HeapPtr` references
-    /// in the new object if the target is in an older generation. During normal
-    /// execution this is called only for Gen0 objects (newly allocated), so no
-    /// barrier is needed.
+    /// If `ptr` points to an older-generation object, callers must fire the
+    /// generational write barrier for any `HeapPtr` references in `obj` that
+    /// point into a younger generation. During normal execution this is called
+    /// only for Gen0 objects (newly allocated), so no barrier is needed.
     pub unsafe fn set_object(&mut self, ptr: HeapPtr, obj: Object) {
         // SAFETY: Caller ensures exclusive access
         // Direct write to the object through the pointer

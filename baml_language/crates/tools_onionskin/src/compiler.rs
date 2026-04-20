@@ -3898,10 +3898,9 @@ impl CompilerRunner {
                     vm.stack.push(Value::Null);
                 }
                 Ok(VmExecState::EarlyYield) => {
-                    self.vm_runner_state.execution_result = Some(VmExecutionResult::Error(
-                        "Function yielded early (not supported in VM Runner)".to_string(),
-                    ));
-                    break;
+                    // No GC coordinator is wired into the VM runner, so an early
+                    // yield has no other task to run — just resume execution.
+                    continue;
                 }
                 Err(e) => {
                     self.vm_runner_state.execution_result =

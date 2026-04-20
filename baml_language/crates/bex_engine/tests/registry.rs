@@ -10,6 +10,7 @@ use std::sync::Arc;
 
 use ::bex_heap::CollectionLevel;
 use bex_engine::{BexEngine, BexExternalValue, FunctionCallContextBuilder};
+use bex_external_types::WeakHeapRef;
 use common::compile_for_engine;
 use sys_native::SysOpsExt;
 
@@ -96,15 +97,20 @@ async fn registry_new_copy_objects_false_returns_handle() {
         .await
         .expect("testing.TestCollector.new should succeed");
 
-    assert!(
-        matches!(result, BexExternalValue::Handle(_)),
-        "expected Handle for testing.TestCollector.new with copy_objects=false, got: {result:?}"
-    );
+    let BexExternalValue::Handle(handle) = &result else {
+        panic!(
+            "expected Handle for testing.TestCollector.new with copy_objects=false, got: {result:?}"
+        );
+    };
+    let slab_key = handle.slab_key();
 
-    // The handle should survive a GC cycle (GC-rooted).
+    // The handle should survive a GC cycle (GC-rooted). Verify by resolving the
+    // slab key through the heap's handle table after major GC — a simple
+    // variant match can't detect the real failure (invalidated handle) because
+    // the enum variant of `result` doesn't change.
     let _stats = engine.collect_garbage(CollectionLevel::Major).await;
     assert!(
-        matches!(result, BexExternalValue::Handle(_)),
-        "handle should still be valid after GC"
+        engine.heap().resolve_handle_ptr(slab_key).is_some(),
+        "handle slab key must still resolve to a live HeapPtr after GC"
     );
 }

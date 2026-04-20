@@ -62,6 +62,7 @@ pub struct EarlyYieldCheck {
 }
 impl EarlyYieldCheck {
     #[cfg(target_arch = "wasm32")]
+    #[expect(clippy::new_without_default)]
     pub const fn new() -> Self {
         Self { counter: 0 }
     }

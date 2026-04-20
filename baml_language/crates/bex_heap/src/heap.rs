@@ -509,8 +509,13 @@ impl BexHeap {
     /// or while holding exclusive access to the space being scanned.
     #[inline]
     unsafe fn ptr_in_chunked_vec(vec: &ChunkedVec<Object>, raw_ptr: *const Object) -> bool {
-        for chunk_idx in 0..vec.num_chunks() {
-            let chunk_start = vec.chunk_start_ptr(chunk_idx);
+        // SAFETY: `num_chunks` and `chunk_start_ptr` require the chunks `Vec`
+        // to not be growing concurrently; the caller of `ptr_in_chunked_vec`
+        // upholds that (only called for Gen1/Gen2, which grow at safepoints).
+        let num_chunks = unsafe { vec.num_chunks() };
+        for chunk_idx in 0..num_chunks {
+            // SAFETY: `chunk_idx < num_chunks` by loop bound.
+            let chunk_start = unsafe { vec.chunk_start_ptr(chunk_idx) };
             let chunk_end = unsafe { chunk_start.add(ChunkedVec::<Object>::CHUNK_SIZE) };
             if raw_ptr >= chunk_start && raw_ptr < chunk_end {
                 return true;
@@ -558,8 +563,12 @@ impl BexHeap {
         vec: &ChunkedVec<Object>,
         raw_ptr: *const Object,
     ) -> Option<(usize, usize)> {
-        for chunk_idx in 0..vec.num_chunks() {
-            let chunk_start = vec.chunk_start_ptr(chunk_idx);
+        // SAFETY: Caller of `locate_in_chunked_vec` ensures the chunks `Vec`
+        // is not being grown concurrently (safepoint-only / exclusive access).
+        let num_chunks = unsafe { vec.num_chunks() };
+        for chunk_idx in 0..num_chunks {
+            // SAFETY: `chunk_idx < num_chunks` by loop bound.
+            let chunk_start = unsafe { vec.chunk_start_ptr(chunk_idx) };
             let chunk_end = unsafe { chunk_start.add(ChunkedVec::<Object>::CHUNK_SIZE) };
             if raw_ptr >= chunk_start && raw_ptr < chunk_end {
                 // SAFETY: Both pointers are within the same allocated chunk.
@@ -639,10 +648,13 @@ impl BexHeap {
         unsafe { &mut *(*self.gen0.get()).get_ptr(runtime_idx) }
     }
 
-    /// Get the current number of objects in the heap (compile-time + Gen0).
+    /// Get the current number of objects in the heap (compile-time + all
+    /// runtime generations).
     pub fn len(&self) -> usize {
-        // SAFETY: Reading len is safe (AtomicUsize load)
-        let runtime_len = unsafe { (*self.gen0.get()).len() };
+        // SAFETY: Reading len is safe on each space (AtomicUsize loads).
+        let runtime_len = unsafe {
+            (*self.gen0.get()).len() + (*self.gen1.get()).len() + (*self.gen2.get()).len()
+        };
         self.compile_time.len() + runtime_len
     }
 
@@ -738,10 +750,17 @@ impl BexHeap {
 
     /// Get statistics about heap usage.
     pub fn stats(&self) -> HeapStats {
-        // SAFETY: Reading len is safe (AtomicUsize load)
-        let gen0_len = unsafe { (*self.gen0.get()).len() };
+        // SAFETY: Reading len is safe on each space (AtomicUsize loads).
+        let (gen0_len, gen1_len, gen2_len) = unsafe {
+            (
+                (*self.gen0.get()).len(),
+                (*self.gen1.get()).len(),
+                (*self.gen2.get()).len(),
+            )
+        };
         let ct_len = self.compile_time.len();
-        let total = ct_len + gen0_len;
+        let runtime = gen0_len + gen1_len + gen2_len;
+        let total = ct_len + runtime;
 
         let tlab_chunks = self
             .gen0_next_chunk
@@ -751,7 +770,7 @@ impl BexHeap {
         HeapStats {
             total_objects: total,
             compile_time_objects: ct_len,
-            runtime_objects: gen0_len,
+            runtime_objects: runtime,
             active_handles: self.handles.read().expect("handles lock poisoned").len(),
             tlab_chunks,
         }
@@ -841,29 +860,34 @@ impl BexHeap {
     /// Update handle entries after GC.
     ///
     /// Updates handles to point to new object locations. Invalidates handles
-    /// pointing to dead objects (runtime objects not found in forwarding map).
-    /// Preserves handles to compile-time objects even if not traced.
+    /// Rewrite every handle's `HeapPtr` through the forwarding map after GC.
     ///
-    /// Returns the number of handles invalidated.
-    pub fn update_handles(&self, forwarding: &HashMap<HeapPtr, HeapPtr>) -> usize {
-        let mut invalidated_count = 0;
+    /// Handles are GC roots by contract — the engine always feeds
+    /// [`collect_handle_roots`](Self::collect_handle_roots) into the GC root
+    /// set — so every handle target *must* appear in `forwarding` (either
+    /// relocated or identity-mapped). A missing entry means the caller broke
+    /// the contract; we panic rather than silently invalidate and expose the
+    /// caller to dangling pointers.
+    pub fn update_handles(&self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
+        // Validate every handle under a read lock first. A panic while the
+        // write guard is held would poison the `RwLock` and then cascade into
+        // a double-panic when the panicking `Handle`'s destructor tries to
+        // release its slab key through `self.handles.write()` during unwind.
         {
-            let mut handles = self.handles.write().expect("handles lock poisoned");
-            handles.retain(|_, ptr| {
-                if let Some(&new_ptr) = forwarding.get(ptr) {
-                    *ptr = new_ptr;
-                    true
-                } else if self.is_compile_time_ptr(*ptr) {
-                    // Compile-time objects are always valid
-                    true
-                } else {
-                    // Object dead (not forwarded and not compile-time)
-                    invalidated_count += 1;
-                    false
-                }
-            });
+            let handles = self.handles.read().expect("handles lock poisoned");
+            for (&key, ptr) in handles.iter() {
+                assert!(
+                    forwarding.contains_key(ptr),
+                    "handle {key} with ptr {ptr:?} was not in the GC forwarding map — \
+                     handles must be passed as GC roots via `collect_handle_roots`"
+                );
+            }
         }
-        invalidated_count
+        // Safe to mutate now; every entry is guaranteed to be in `forwarding`.
+        let mut handles = self.handles.write().expect("handles lock poisoned");
+        for ptr in handles.values_mut() {
+            *ptr = forwarding[ptr];
+        }
     }
 
     /// Create a handle to an object.
@@ -897,6 +921,17 @@ impl BexHeap {
             .values()
             .copied()
             .collect()
+    }
+
+    /// Count the number of dirty cards currently tracked for Gen2.
+    ///
+    /// Intended for tests and diagnostics — e.g., asserting that a minor GC
+    /// cleared the card table as part of collection.
+    pub fn gen2_dirty_card_count(&self) -> usize {
+        // SAFETY: Reading card-table state through the UnsafeCell. Callers are
+        // expected to observe this between GC cycles, where no concurrent
+        // marker can race.
+        unsafe { (*self.gen2_cards.get()).dirty_card_indices().count() }
     }
 }
 

@@ -40,8 +40,6 @@ pub struct GcStats {
     pub live_count: usize,
     /// Objects collected (not copied).
     pub collected_count: usize,
-    /// Handles invalidated.
-    pub handles_invalidated: usize,
     /// Which collection level was run.
     pub level: CollectionLevel,
     /// Objects promoted from Gen0 to Gen1 during this cycle.
@@ -217,7 +215,7 @@ impl BexHeap {
             .collect();
 
         // Update the handle table so external handles point to new locations.
-        let handles_invalidated = self.update_handles(&forwarding);
+        self.update_handles(&forwarding);
 
         // Update adaptive thresholds: all survivors are in Gen2 after a full GC.
         self.update_thresholds_after_major(live_count);
@@ -230,7 +228,6 @@ impl BexHeap {
         let stats = GcStats {
             live_count,
             collected_count,
-            handles_invalidated,
             level: CollectionLevel::Major,
             promoted_to_gen1: 0,
             promoted_to_gen2: live_count,
@@ -833,7 +830,7 @@ impl BexHeap {
             .map(|old_ptr| *forwarding.get(old_ptr).unwrap_or(old_ptr))
             .collect();
 
-        let handles_invalidated = self.update_handles(&forwarding);
+        self.update_handles(&forwarding);
 
         // Update adaptive thresholds based on post-collection Gen1 and Gen2 sizes.
         let current_gen2_live = unsafe { self.gen2_ref().len() };
@@ -847,7 +844,6 @@ impl BexHeap {
         let stats = GcStats {
             live_count: total_live,
             collected_count: total_before.saturating_sub(total_live),
-            handles_invalidated,
             level: CollectionLevel::Minor,
             promoted_to_gen1: new_gen1_count,
             promoted_to_gen2,
@@ -894,7 +890,6 @@ mod tests {
 
         assert_eq!(stats.live_count, 0);
         assert_eq!(stats.collected_count, 0);
-        assert_eq!(stats.handles_invalidated, 0);
         assert!(remapped.is_empty());
     }
 
@@ -1112,25 +1107,20 @@ mod tests {
         assert_eq!(gen2_len, 1, "Gen2 should contain the survivor");
     }
 
+    /// Passing no roots when a handle exists violates the contract that
+    /// handles are GC roots — `update_handles` must panic so the caller
+    /// notices the bug instead of silently working with dangling handles.
     #[test]
-    fn test_gc_invalidates_dead_handles() {
-        use bex_external_types::WeakHeapRef;
-
+    #[should_panic(expected = "handles must be passed as GC roots")]
+    fn test_gc_panics_when_handle_not_in_roots() {
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(Arc::clone(&heap));
 
-        // Allocate an object and create a handle
         let obj = tlab.alloc_string("test".to_string());
-        let handle = heap.create_handle(obj);
+        let _handle = heap.create_handle(obj);
 
-        // Verify handle is valid
-        assert!(heap.resolve_handle_ptr(handle.slab_key()).is_some());
-
-        // Run GC with no roots - object should be collected, handle invalidated
-        let (stats, _, _) = unsafe { heap.collect_garbage(&[]) };
-
-        assert_eq!(stats.handles_invalidated, 1);
-        assert!(heap.resolve_handle_ptr(handle.slab_key()).is_none());
+        // Intentionally pass no roots (caller forgot `collect_handle_roots`).
+        let _ = unsafe { heap.collect_garbage(&[]) };
     }
 
     #[test]

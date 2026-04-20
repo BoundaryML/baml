@@ -193,24 +193,28 @@ impl<T, const CHUNK_SIZE: usize> ChunkedVec<T, CHUNK_SIZE> {
 
     /// Get the number of allocated chunks.
     ///
-    /// Used for generation classification via pointer range checks.
-    /// Only called at safepoints or with appropriate synchronization.
+    /// # Safety
+    ///
+    /// Reads the chunks `Vec`'s non-atomic length through an `UnsafeCell`.
+    /// The caller must ensure the underlying chunks `Vec` is not being grown
+    /// concurrently — i.e., call at a GC safepoint or while holding exclusive
+    /// access to this `ChunkedVec`.
     #[inline]
-    pub fn num_chunks(&self) -> usize {
-        // SAFETY: Only called at safepoints or with appropriate synchronization
+    pub unsafe fn num_chunks(&self) -> usize {
+        // SAFETY: Caller upholds the no-concurrent-growth contract.
         unsafe { (*self.chunks.get()).len() }
     }
 
     /// Get a raw pointer to the start of a chunk.
     ///
-    /// Used for generation classification by pointer range checks.
-    ///
     /// # Safety
     ///
-    /// Only called at safepoints; `chunk_idx` must be < `num_chunks()`.
+    /// - The caller must ensure the chunks `Vec` is not being grown concurrently
+    ///   (see [`num_chunks`](Self::num_chunks)).
+    /// - `chunk_idx` must be `< num_chunks()`.
     #[inline]
-    pub fn chunk_start_ptr(&self, chunk_idx: usize) -> *const T {
-        // SAFETY: Caller ensures chunk_idx is in bounds and we're at a safepoint
+    pub unsafe fn chunk_start_ptr(&self, chunk_idx: usize) -> *const T {
+        // SAFETY: Caller upholds no-concurrent-growth and bounds preconditions.
         unsafe {
             let chunks = &*self.chunks.get();
             chunks[chunk_idx].as_ptr() as *const T

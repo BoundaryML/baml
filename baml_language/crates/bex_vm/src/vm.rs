@@ -17,7 +17,9 @@
 use std::{collections::HashMap, sync::Arc};
 
 use ::bex_vm_types::{EarlyYieldCheck, RootHaver, types::ErrorClass};
-use ::core::{any::TypeId, sync::atomic::AtomicBool};
+use ::core::any::TypeId;
+#[cfg(not(target_arch = "wasm32"))]
+use ::core::sync::atomic::AtomicBool;
 use bex_heap::{BexHeap, Generation, Tlab};
 use bex_vm_types::{
     BinOp, CmpOp, FunctionKind, GlobalPool, HeapPtr, Instruction, Object, ObjectIndex, ObjectPool,

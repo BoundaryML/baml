@@ -82,16 +82,24 @@ impl CardTable {
     /// Safe to call concurrently from multiple threads — writes go through a
     /// relaxed atomic store, and all writers set the same value (`1`).
     ///
-    /// If `card_index` is out of bounds, this is a no-op. Callers are
-    /// expected to ensure the table has been sized via
+    /// Callers must ensure the table has been sized via
     /// [`ensure_capacity_for_chunks`](Self::ensure_capacity_for_chunks)
-    /// at a GC safepoint before VMs start mutating Gen2 objects.
+    /// at a GC safepoint before VMs start mutating Gen2 objects. An
+    /// out-of-bounds `card_index` means that invariant has been violated —
+    /// silently dropping the mark could cause a later minor GC to miss a live
+    /// Gen0 reference from Gen2, so we panic instead.
     #[inline(always)]
     pub fn mark_dirty_by_offset(&self, chunk_idx: usize, offset_in_chunk: usize) {
         let card_index = chunk_idx * CARDS_PER_CHUNK + offset_in_chunk / CARD_SIZE;
-        if let Some(slot) = self.cards.get(card_index) {
-            slot.store(1, Ordering::Relaxed);
-        }
+        let slot = self.cards.get(card_index).unwrap_or_else(|| {
+            panic!(
+                "card table under-sized: chunk_idx={chunk_idx}, offset_in_chunk={offset_in_chunk}, \
+                 card_index={card_index}, capacity={}. Call `ensure_capacity_for_chunks` at the \
+                 GC safepoint before mutators can race.",
+                self.cards.len()
+            )
+        });
+        slot.store(1, Ordering::Relaxed);
     }
 
     /// Check whether card `card_index` is dirty.
@@ -167,14 +175,6 @@ mod tests {
         // Mark a card in the second "slot" within the chunk
         ct.mark_dirty_by_offset(0, CARD_SIZE);
         assert!(ct.is_dirty(1));
-    }
-
-    #[test]
-    fn test_mark_dirty_noop_out_of_bounds() {
-        let ct = CardTable::new();
-        // No capacity allocated — should not panic
-        ct.mark_dirty_by_offset(10, 0);
-        assert_eq!(ct.dirty_card_indices().count(), 0);
     }
 
     #[test]

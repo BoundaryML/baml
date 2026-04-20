@@ -9,6 +9,7 @@ use ::bex_external_types::EpochGuard;
 use ::bex_vm_types::{HeapPtr, RootHaver};
 use ::core::{
     cell::UnsafeCell,
+    marker::PhantomData,
     ops::{Deref, DerefMut},
 };
 use ::std::{
@@ -16,15 +17,46 @@ use ::std::{
     sync::{Arc, Weak},
 };
 
-const MAX_PERMITS: u32 = u32::MAX;
+/// The lesser of [`u32::MAX`] and [`tokio::sync::Semaphore::MAX_PERMITS`] (depends on compilation target pointer width).
+const MAX_PERMITS: u32 = {
+    #[cfg(target_pointer_width = "64")]
+    {
+        u32::MAX
+    }
+    #[cfg(any(target_pointer_width = "16", target_pointer_width = "32"))]
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "This is only on a 32-bit or less target"
+    )]
+    {
+        tokio::sync::Semaphore::MAX_PERMITS as u32
+    }
+};
 
 /// An active heap permit.
 ///
 /// Provides non-exclusive access to the heap for the contained [`RootHaver`].
-/// The holder should call [`ActiveHeapPermit::renew`] at safepoints to allow GC and other exclusive access operations to run.
+/// The holder should call [`ActiveHeapPermit::renew`] at safepoints to allow
+/// GC and other exclusive access operations to run.
+///
+/// `ActiveHeapPermit<T>: Send` iff `T: Send` (which is always true, since
+/// [`RootHaver: Send`](RootHaver)) and `ActiveHeapPermit<T>: Sync` iff
+/// `T: Sync` — so holders that are not `Sync` can still be parked here, but
+/// their `&T` views are never observable from more than one thread at a time.
 pub struct ActiveHeapPermit<T: RootHaver> {
     state: InactiveHeapPermit<T>,
     _permit: tokio::sync::OwnedSemaphorePermit,
+    /// Ties the auto `Send`/`Sync` of `ActiveHeapPermit` to `T`.
+    ///
+    /// Without this marker, every field of this struct is unconditionally
+    /// `Sync` (notably because [`PermitCell<T>`] has a manual unconditional
+    /// `unsafe impl Sync` — which is itself load-bearing, so that
+    /// `Weak<PermitCell<dyn RootHaver>>` can live in the manager's shared
+    /// `Mutex<Vec<…>>`). That would let the compiler auto-derive
+    /// `ActiveHeapPermit<T>: Sync` even when `T: !Sync`, and two threads
+    /// sharing `&ActiveHeapPermit<T>` could each call [`Self::holder`] to
+    /// observe `&T` at the same time — UB when `T: !Sync`.
+    _marker: PhantomData<T>,
 }
 impl<T: RootHaver> ActiveHeapPermit<T> {
     /// Releases the permit.
@@ -100,6 +132,7 @@ impl<T: RootHaver> InactiveHeapPermit<T> {
         ActiveHeapPermit {
             state: self,
             _permit: permit,
+            _marker: PhantomData,
         }
     }
     /// ## Safety
