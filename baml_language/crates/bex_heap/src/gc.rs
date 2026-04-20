@@ -1538,7 +1538,9 @@ mod tests {
         assert_eq!(gen0_len, 0, "Gen0 should be empty after full GC");
 
         // Invalidate the TLAB so it refills from the now-empty Gen0.
-        // (In the engine this is done automatically; in unit tests we do it manually.)
+        // In the engine this happens via `<BexVm as RootHaver>::forward_roots`,
+        // which the heap-permit GC coordinator calls on every parked VM after
+        // collection; here we don't have that coordinator, so we invalidate by hand.
         tlab.invalidate();
 
         // New allocations after GC still go to Gen0.

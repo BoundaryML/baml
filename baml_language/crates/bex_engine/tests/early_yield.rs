@@ -195,3 +195,74 @@ async fn major_gc_during_long_running_call_completes() {
         .expect("spin must succeed through a Major GC");
     assert_eq!(value, BexExternalValue::Int(LOOP_ITERATIONS));
 }
+
+/// Allocations *after* a mid-call GC must not corrupt allocations made
+/// *before* it, and vice versa. This catches the bug where the GC resets
+/// the heap-wide TLAB cursor but leaves individual VM TLABs holding stale
+/// `alloc_ptr`/`alloc_limit` values — subsequent allocations land in
+/// indices that may now be handed out as fresh chunks to other VMs.
+///
+/// The integer-only Layer C tests don't catch this because corrupted
+/// objects don't affect an `i64` return value; this test forces the
+/// engine to round-trip object contents through the result.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn objects_allocated_after_mid_call_gc_survive() {
+    // Each iteration's array escapes into `last`, preventing the compiler
+    // from dead-code-eliminating the loop allocations. This guarantees that
+    // both the pre-GC `pre` array and the post-GC allocations (`last` and
+    // `post` and the result) actually hit the TLAB.
+    let source = r#"
+        function alloc_around_gc(n: int) -> int[] {
+            let pre = [1, 2, 3, 4];
+            let last = [0, 0];
+            let i = 0;
+            while (i < n) {
+                last = [i, i + 1];
+                i += 1;
+            }
+            let post = [10, 20, 30, 40];
+            [pre[0], pre[3], post[0], post[3], last[0], last[1]]
+        }
+    "#;
+
+    let engine = make_engine(source);
+    let call_handle = {
+        let engine = Arc::clone(&engine);
+        tokio::spawn(async move {
+            engine
+                .call_function(
+                    "alloc_around_gc",
+                    vec![BexExternalValue::Int(50_000)],
+                    FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+                    true,
+                )
+                .await
+        })
+    };
+
+    // Give the call enough wall-clock time to actually allocate a meaningful
+    // chunk of its TLAB before GC fires. yield_now isn't sufficient: with a
+    // pre-fix VM, we need the call to be deep enough into the loop that the
+    // post-GC writes will land in stale TLAB indices (otherwise the call
+    // hasn't taken a permit yet and GC just runs on an empty heap).
+    tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+    engine.collect_garbage(CollectionLevel::Minor).await;
+
+    let value = call_handle
+        .await
+        .expect("task panicked")
+        .expect("alloc_around_gc must succeed");
+
+    let items = match value {
+        BexExternalValue::Array { items, .. } => items,
+        other => panic!("expected Array, got {other:?}"),
+    };
+    let expected: Vec<BexExternalValue> = [1i64, 4, 10, 40, 49_999, 50_000]
+        .into_iter()
+        .map(BexExternalValue::Int)
+        .collect();
+    assert_eq!(
+        items, expected,
+        "post-GC allocations must not corrupt pre-GC ones, and vice versa"
+    );
+}

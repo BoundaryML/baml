@@ -3921,6 +3921,13 @@ impl ::bex_vm_types::RootHaver for BexVm {
     }
 
     fn forward_roots(&mut self, roots: &HashMap<HeapPtr, HeapPtr>) {
+        // The GC has reset the heap's TLAB cursor (`gen0_next_chunk`) and
+        // swapped semispaces, so this VM's cached `alloc_ptr`/`alloc_limit`
+        // now point into a region the heap will hand out to other VMs as a
+        // fresh chunk. Drop them so the next allocation refills from the
+        // post-GC cursor.
+        self.tlab.invalidate();
+
         // Stack values
         for value in &mut self.stack {
             if let Value::Object(ptr) = value {
