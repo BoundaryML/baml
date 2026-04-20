@@ -85,12 +85,12 @@ function user.chain(cb: (value: int) -> int throws never) -> int throws never {
 }
 function user.builtin_map(cb: (value: int) -> int throws never, values: int[]) -> int[] throws never {
   { : int[]
-    values.map<U>(cb) : int[]
+    values.map<U, E>(cb) : int[]
   }
 }
 function user.member_map(worker: user.Worker, values: int[]) -> int[] throws never {
   { : int[]
-    values.map<U>(worker.scale) : int[]
+    values.map<U, E>(worker.scale) : int[]
   }
 }
 class user.Worker$stream {

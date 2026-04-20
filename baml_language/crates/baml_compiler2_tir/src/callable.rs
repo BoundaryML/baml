@@ -5,6 +5,7 @@ use baml_compiler2_ast::{Expr, ExprBody, Stmt};
 use baml_compiler2_hir::{
     body::FunctionBody, file_package, loc::FunctionLoc, package::PackageId, scope::ScopeKind,
 };
+use rustc_hash::FxHashMap;
 
 use crate::{
     inference::{MemberResolution, ScopeInference, infer_scope_types},
@@ -176,32 +177,81 @@ fn collect_value_throw_facts<'db>(
     out.extend(flatten_ty_to_facts(&thrown_ty));
 }
 
+fn callee_uses_method_call_convention<'db>(
+    inference: &ScopeInference<'db>,
+    callee_expr_id: baml_compiler2_ast::ExprId,
+) -> bool {
+    matches!(
+        inference.resolution(callee_expr_id),
+        Some(MemberResolution::BoundMethod { .. } | MemberResolution::UnboundMethod { .. })
+    ) || matches!(
+        inference
+            .path_member_resolution(callee_expr_id)
+            .and_then(|resolutions| resolutions.last()),
+        Some(MemberResolution::BoundMethod { .. } | MemberResolution::UnboundMethod { .. })
+    )
+}
+
+pub(crate) fn instantiated_callee_throws<'db>(
+    inference: &ScopeInference<'db>,
+    callee_expr_id: baml_compiler2_ast::ExprId,
+    args: &[baml_compiler2_ast::ExprId],
+    unwrap_optional_callee: bool,
+) -> Option<Ty> {
+    let callee_ty = inference.expression_type(callee_expr_id)?;
+    let typed_callee = if unwrap_optional_callee {
+        crate::narrowing::remove_null(callee_ty)
+    } else {
+        callee_ty.clone()
+    };
+
+    let Ty::Function { params, throws, .. } = typed_callee else {
+        return None;
+    };
+
+    let effective_params = if callee_uses_method_call_convention(inference, callee_expr_id) {
+        crate::generics::skip_self_param(&params)
+    } else {
+        params.as_slice()
+    };
+
+    let mut bindings: FxHashMap<Name, Ty> = FxHashMap::default();
+    for ((_, param_ty), arg_expr_id) in effective_params.iter().zip(args.iter()) {
+        let arg_ty = inference
+            .expression_type(*arg_expr_id)
+            .cloned()
+            .unwrap_or(Ty::Unknown {
+                attr: TyAttr::default(),
+            });
+        crate::generics::infer_bindings_allow_typevars(param_ty, &arg_ty, &mut bindings);
+    }
+
+    Some(crate::generics::substitute_ty(&throws, &bindings))
+}
+
 fn collect_callee_escaping_throws<'db>(
     db: &'db dyn crate::Db,
     pkg_id: PackageId<'db>,
     ns_context: &[Name],
     inference: &ScopeInference<'db>,
     callee_expr_id: baml_compiler2_ast::ExprId,
+    args: &[baml_compiler2_ast::ExprId],
     body: &ExprBody,
     unwrap_optional_callee: bool,
     out: &mut BTreeSet<Ty>,
 ) {
     let mut accounted = false;
 
-    if let Some(callee_ty) = inference.expression_type(callee_expr_id) {
-        let typed_callee = if unwrap_optional_callee {
-            crate::narrowing::remove_null(callee_ty)
-        } else {
-            callee_ty.clone()
-        };
-
-        if let Ty::Function { throws, .. } = typed_callee {
-            out.extend(flatten_ty_to_facts(&throws));
-            accounted = true;
-        }
+    if let Some(throws) =
+        instantiated_callee_throws(inference, callee_expr_id, args, unwrap_optional_callee)
+    {
+        out.extend(flatten_ty_to_facts(&throws));
+        accounted = true;
     }
 
-    if let Some(key) = named_callee_key(db, pkg_id, ns_context, inference, callee_expr_id, body) {
+    if !accounted
+        && let Some(key) = named_callee_key(db, pkg_id, ns_context, inference, callee_expr_id, body)
+    {
         if let Some(summary) = lookup_named_throw_summary(db, pkg_id, &key) {
             out.extend(summary);
             accounted = true;
@@ -328,7 +378,7 @@ fn collect_callable_throws_from_expr<'db>(
                 );
             }
             collect_callee_escaping_throws(
-                db, pkg_id, ns_context, inference, *callee, body, false, out,
+                db, pkg_id, ns_context, inference, *callee, args, body, false, out,
             );
         }
         Expr::OptionalCall { callee, args } => {
@@ -341,7 +391,7 @@ fn collect_callable_throws_from_expr<'db>(
                 );
             }
             collect_callee_escaping_throws(
-                db, pkg_id, ns_context, inference, *callee, body, true, out,
+                db, pkg_id, ns_context, inference, *callee, args, body, true, out,
             );
         }
 

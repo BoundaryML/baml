@@ -24,8 +24,7 @@ use baml_base::SourceFile;
 use baml_compiler_syntax::{SyntaxToken, TokenAtOffset};
 use baml_compiler2_ast::TypeExpr;
 use baml_compiler2_hir::contributions::Definition;
-use baml_compiler2_tir::ty::Ty;
-use baml_compiler2_tir::user_facing::humanize_type_string;
+use baml_compiler2_tir::{ty::Ty, user_facing::humanize_type_string};
 use text_size::{TextRange, TextSize};
 
 use crate::Db;

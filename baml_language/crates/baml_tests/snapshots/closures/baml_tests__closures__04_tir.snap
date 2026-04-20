@@ -81,20 +81,20 @@ function user.test_bound_mapper() -> string[] throws never {
   { : string[]
     let fmt = Formatter { prefix: ">> " } : user.Formatter
     let transform = fmt.format : (text: string) -> string throws never
-    ["hello", "world"].map<U>(transform) : string[]
+    ["hello", "world"].map<U, E>(transform) : string[]
   }
 }
 function user.test_unbound_in_map() -> string[] throws never {
   { : string[]
     let employees = [Employee { first: "Alice", last: "Smith" }, Employee { first: "Bob", last: "Jones" }] : user.Employee[]
-    employees.map<U>(Employee.full_name) : string[]
+    employees.map<U, E>(Employee.full_name) : string[]
   }
 }
 function user.test_bound_validator() -> bool[] throws never {
   { : bool[]
     let valid = RangeCheck { min: 10, max: 50 } : user.RangeCheck
     let check = valid.is_valid : (n: int) -> bool throws never
-    [5, 15, 25, 75].map<U>(check) : bool[]
+    [5, 15, 25, 75].map<U, E>(check) : bool[]
   }
 }
 function user.test_field_chain_bind(cfg: user.Config) -> string throws never {
@@ -119,7 +119,7 @@ function user.test_strategy() -> int[] throws never {
 }
 function user.apply_to_each(items: user.Employee[], f: (user.Employee) -> string throws never) -> string[] throws never {
   { : string[]
-    items.map<U>(f) : string[]
+    items.map<U, E>(f) : string[]
   }
 }
 function user.test_unbound_higher_order() -> string[] throws never {

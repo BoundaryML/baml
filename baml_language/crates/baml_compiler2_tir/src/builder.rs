@@ -3007,28 +3007,79 @@ impl<'db> TypeInferenceBuilder<'db> {
         None
     }
 
+    fn callee_uses_method_call_convention(&self, callee_expr_id: ExprId) -> bool {
+        matches!(
+            self.resolutions.get(&callee_expr_id),
+            Some(
+                crate::inference::MemberResolution::BoundMethod { .. }
+                    | crate::inference::MemberResolution::UnboundMethod { .. }
+            )
+        ) || matches!(
+            self.path_member_resolutions
+                .get(&callee_expr_id)
+                .and_then(|resolutions| resolutions.last()),
+            Some(
+                crate::inference::MemberResolution::BoundMethod { .. }
+                    | crate::inference::MemberResolution::UnboundMethod { .. }
+            )
+        )
+    }
+
+    fn instantiated_callee_throws(
+        &self,
+        callee_expr_id: ExprId,
+        args: &[ExprId],
+        unwrap_optional_callee: bool,
+    ) -> Option<Ty> {
+        let callee_ty = self.expressions.get(&callee_expr_id)?;
+        let typed_callee = if unwrap_optional_callee {
+            self.analyze_optional_base(callee_ty).inner
+        } else {
+            callee_ty.clone()
+        };
+        let Ty::Function { params, throws, .. } = typed_callee else {
+            return None;
+        };
+
+        let effective_params = if self.callee_uses_method_call_convention(callee_expr_id) {
+            crate::generics::skip_self_param(&params)
+        } else {
+            params.as_slice()
+        };
+
+        let mut bindings = FxHashMap::default();
+        for ((_, param_ty), arg_expr_id) in effective_params.iter().zip(args.iter()) {
+            let arg_ty = self
+                .expressions
+                .get(arg_expr_id)
+                .cloned()
+                .unwrap_or(Ty::Unknown {
+                    attr: TyAttr::default(),
+                });
+            crate::generics::infer_bindings_allow_typevars(param_ty, &arg_ty, &mut bindings);
+        }
+
+        Some(crate::generics::substitute_ty(&throws, &bindings))
+    }
+
     fn collect_call_escaping_throws(
         &self,
         callee_expr_id: ExprId,
+        args: &[ExprId],
         body: &ExprBody,
         unwrap_optional_callee: bool,
         out: &mut BTreeSet<Ty>,
     ) {
         let mut accounted = false;
 
-        if let Some(callee_ty) = self.expressions.get(&callee_expr_id) {
-            let typed_callee = if unwrap_optional_callee {
-                self.analyze_optional_base(callee_ty).inner
-            } else {
-                callee_ty.clone()
-            };
-            if let Ty::Function { throws, .. } = typed_callee {
-                out.extend(crate::throw_inference::flatten_ty_to_facts(&throws));
-                accounted = true;
-            }
+        if let Some(throws) =
+            self.instantiated_callee_throws(callee_expr_id, args, unwrap_optional_callee)
+        {
+            out.extend(crate::throw_inference::flatten_ty_to_facts(&throws));
+            accounted = true;
         }
 
-        if let Some(target) = self.call_target_name(callee_expr_id, body) {
+        if !accounted && let Some(target) = self.call_target_name(callee_expr_id, body) {
             if let Some(summary) = self.lookup_named_throw_summary(&target) {
                 out.extend(summary);
                 accounted = true;
@@ -3058,7 +3109,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 for arg in args {
                     self.collect_effective_throws_from_expr(*arg, body, out);
                 }
-                self.collect_call_escaping_throws(*callee, body, false, out);
+                self.collect_call_escaping_throws(*callee, args, body, false, out);
             }
             Expr::Catch { clauses, .. } => {
                 if let Some(residual) = self.catch_residual_throws.get(&expr_id) {
@@ -3142,7 +3193,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 for arg in args {
                     self.collect_effective_throws_from_expr(*arg, body, out);
                 }
-                self.collect_call_escaping_throws(*callee, body, true, out);
+                self.collect_call_escaping_throws(*callee, args, body, true, out);
             }
             Expr::OptionalChain { expr } => {
                 self.collect_effective_throws_from_expr(*expr, body, out);
@@ -3222,7 +3273,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 for arg in args {
                     self.collect_throw_facts_from_expr(*arg, body, out);
                 }
-                self.collect_call_escaping_throws(*callee, body, false, out);
+                self.collect_call_escaping_throws(*callee, args, body, false, out);
             }
             Expr::If {
                 condition,
@@ -3293,7 +3344,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 for arg in args {
                     self.collect_throw_facts_from_expr(*arg, body, out);
                 }
-                self.collect_call_escaping_throws(*callee, body, true, out);
+                self.collect_call_escaping_throws(*callee, args, body, true, out);
             }
             Expr::Catch { base, .. } => {
                 self.collect_throw_facts_from_expr(*base, body, out);

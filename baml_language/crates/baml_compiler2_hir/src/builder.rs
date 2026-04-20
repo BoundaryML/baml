@@ -885,12 +885,16 @@ impl<'db> SemanticIndexBuilder<'db> {
 
             if let Some(throws) = &function.throws {
                 let mut invalid = Vec::new();
-                Self::collect_invalid_builtin_throw_types(&throws.expr, &mut invalid);
+                Self::collect_invalid_builtin_throw_types(
+                    &throws.expr,
+                    &function.generic_params,
+                    &mut invalid,
+                );
                 if !invalid.is_empty() {
                     self.diagnostics.push(Hir2Diagnostic::DiagnosticMessage {
                         diagnostic_id: DiagnosticId::ThrowsContractViolation,
                         message: format!(
-                            "Host-bound builtin `{}` may only declare `throws` using `baml.errors.*` types; invalid entries: {}",
+                            "Host-bound builtin `{}` may only declare `throws` using builtin error types and function generic vars; invalid entries: {}",
                             function.name,
                             invalid.join(", ")
                         ),
@@ -1157,19 +1161,32 @@ impl<'db> SemanticIndexBuilder<'db> {
         }
     }
 
-    fn collect_invalid_builtin_throw_types(type_expr: &ast::TypeExpr, invalid: &mut Vec<String>) {
+    fn collect_invalid_builtin_throw_types(
+        type_expr: &ast::TypeExpr,
+        allowed_generic_params: &[Name],
+        invalid: &mut Vec<String>,
+    ) {
         match type_expr {
-            ast::TypeExpr::Path { segments, .. } => {
+            ast::TypeExpr::Path {
+                segments,
+                generic_args,
+                ..
+            } => {
                 let is_builtin_error = segments.len() >= 3
                     && (segments[0].as_str() == "baml" || segments[0].as_str() == "root")
                     && segments[1].as_str() == "errors";
-                if !is_builtin_error {
+                let is_allowed_generic = segments.len() == 1
+                    && generic_args.is_empty()
+                    && allowed_generic_params
+                        .iter()
+                        .any(|name| name == &segments[0]);
+                if !is_builtin_error && !is_allowed_generic {
                     invalid.push(Self::render_type_expr(type_expr));
                 }
             }
             ast::TypeExpr::Union { variants, .. } => {
                 for ty in variants {
-                    Self::collect_invalid_builtin_throw_types(ty, invalid);
+                    Self::collect_invalid_builtin_throw_types(ty, allowed_generic_params, invalid);
                 }
             }
             _ => invalid.push(Self::render_type_expr(type_expr)),

@@ -1,9 +1,10 @@
 //! Core type inference snapshot tests.
 
-use super::support::{expr_type_in_function, make_db, render_tir};
 use baml_base::Name;
 use baml_compiler2_hir::{package::PackageId, scope::ScopeKind};
 use baml_compiler2_tir::{inference::infer_scope_types, package_interface::package_interface};
+
+use super::support::{expr_type_in_function, make_db, render_tir};
 
 fn find_function_scope_id<'db>(
     db: &'db baml_project::ProjectDatabase,

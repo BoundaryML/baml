@@ -988,6 +988,48 @@ function f(file: baml.fs.File) -> null {
 }
 
 #[test]
+fn builtin_map_method_value_preserves_callback_surface() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function f(xs: int[]) -> null {
+    let m = xs.map
+    m
+    return null
+}
+"#,
+    );
+    assert_eq!(
+        expr_type_in_function(&db, file, "f", "m"),
+        "(self: int[], f: (int) -> U throws E) -> U[] throws E"
+    );
+}
+
+#[test]
+fn wrapper_value_around_builtin_map_preserves_callback_surface() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function builtin_map(cb: (value: int) -> int, values: int[]) -> int[] {
+    return values.map(cb)
+}
+
+function f() -> null {
+    let g = builtin_map
+    g
+    return null
+}
+"#,
+    );
+    assert_eq!(
+        expr_type_in_function(&db, file, "f", "g"),
+        "(cb: (value: int) -> int throws __effect_param_0, values: int[]) -> int[] throws __effect_param_0"
+    );
+}
+
+#[test]
 fn lambda_value_preserves_explicit_throws() {
     let mut db = make_db();
     let file = db.add_file(

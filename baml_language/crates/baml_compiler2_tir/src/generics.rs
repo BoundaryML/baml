@@ -334,13 +334,18 @@ pub fn contains_typevar(ty: &Ty) -> bool {
 /// When `formal` is `Ty::TypeVar("T", TyAttr::default())` and `actual` is `Ty::Primitive(Int, TyAttr::default())`,
 /// records `T → int` in `bindings`. For structural types, recurses into
 /// matching structures. Conflicting inferences are merged via `union_ty`.
-pub fn infer_bindings(formal: &Ty, actual: &Ty, bindings: &mut FxHashMap<Name, Ty>) {
+fn infer_bindings_inner(
+    formal: &Ty,
+    actual: &Ty,
+    bindings: &mut FxHashMap<Name, Ty>,
+    allow_typevar_actuals: bool,
+) {
     match (formal, actual) {
         (Ty::TypeVar(name, _), actual_ty) => {
-            // Skip TypeVar-to-TypeVar bindings — they provide no information.
-            // e.g. when execute<T> calls execute_once<T>, the expected type is
-            // TypeVar("T") from the caller, which doesn't help resolve the callee's T.
-            if matches!(actual_ty, Ty::TypeVar(_, _)) {
+            // Skip TypeVar-to-TypeVar bindings by default — they usually provide
+            // no information for ordinary call inference. Some higher-order
+            // callable-summary paths opt into preserving them explicitly.
+            if !allow_typevar_actuals && matches!(actual_ty, Ty::TypeVar(_, _)) {
                 return;
             }
             bindings
@@ -348,12 +353,16 @@ pub fn infer_bindings(formal: &Ty, actual: &Ty, bindings: &mut FxHashMap<Name, T
                 .and_modify(|existing| *existing = union_ty(existing, actual_ty))
                 .or_insert_with(|| actual_ty.clone());
         }
-        (Ty::List(f, _), Ty::List(a, _)) => infer_bindings(f, a, bindings),
-        (Ty::Map(fk, fv, _), Ty::Map(ak, av, _)) => {
-            infer_bindings(fk, ak, bindings);
-            infer_bindings(fv, av, bindings);
+        (Ty::List(f, _), Ty::List(a, _)) => {
+            infer_bindings_inner(f, a, bindings, allow_typevar_actuals)
         }
-        (Ty::Optional(f, _), Ty::Optional(a, _)) => infer_bindings(f, a, bindings),
+        (Ty::Map(fk, fv, _), Ty::Map(ak, av, _)) => {
+            infer_bindings_inner(fk, ak, bindings, allow_typevar_actuals);
+            infer_bindings_inner(fv, av, bindings, allow_typevar_actuals);
+        }
+        (Ty::Optional(f, _), Ty::Optional(a, _)) => {
+            infer_bindings_inner(f, a, bindings, allow_typevar_actuals)
+        }
         (
             Ty::Function {
                 params: fp,
@@ -369,14 +378,14 @@ pub fn infer_bindings(formal: &Ty, actual: &Ty, bindings: &mut FxHashMap<Name, T
             },
         ) => {
             for ((_, ft), (_, at)) in fp.iter().zip(ap.iter()) {
-                infer_bindings(ft, at, bindings);
+                infer_bindings_inner(ft, at, bindings, allow_typevar_actuals);
             }
-            infer_bindings(fr, ar, bindings);
-            infer_bindings(fth, ath, bindings);
+            infer_bindings_inner(fr, ar, bindings, allow_typevar_actuals);
+            infer_bindings_inner(fth, ath, bindings, allow_typevar_actuals);
         }
         (Ty::Class(fn_name, f_args, _), Ty::Class(an_name, a_args, _)) if fn_name == an_name => {
             for (ft, at) in f_args.iter().zip(a_args.iter()) {
-                infer_bindings(ft, at, bindings);
+                infer_bindings_inner(ft, at, bindings, allow_typevar_actuals);
             }
         }
         // Builtin container bridging: Array<T> ↔ List(T), Map<K,V> ↔ Map(K,V)
@@ -385,16 +394,24 @@ pub fn infer_bindings(formal: &Ty, actual: &Ty, bindings: &mut FxHashMap<Name, T
         (Ty::Class(class_name, f_args, _), Ty::List(actual_inner, _))
             if class_name.name().as_str() == "Array" && f_args.len() == 1 =>
         {
-            infer_bindings(&f_args[0], actual_inner, bindings);
+            infer_bindings_inner(&f_args[0], actual_inner, bindings, allow_typevar_actuals);
         }
         (Ty::Class(class_name, f_args, _), Ty::Map(actual_key, actual_val, _))
             if class_name.name().as_str() == "Map" && f_args.len() == 2 =>
         {
-            infer_bindings(&f_args[0], actual_key, bindings);
-            infer_bindings(&f_args[1], actual_val, bindings);
+            infer_bindings_inner(&f_args[0], actual_key, bindings, allow_typevar_actuals);
+            infer_bindings_inner(&f_args[1], actual_val, bindings, allow_typevar_actuals);
         }
         _ => {} // Concrete types: nothing to infer
     }
+}
+
+pub fn infer_bindings(formal: &Ty, actual: &Ty, bindings: &mut FxHashMap<Name, Ty>) {
+    infer_bindings_inner(formal, actual, bindings, false);
+}
+
+pub fn infer_bindings_allow_typevars(formal: &Ty, actual: &Ty, bindings: &mut FxHashMap<Name, Ty>) {
+    infer_bindings_inner(formal, actual, bindings, true);
 }
 
 /// Combine two types into a union, deduplicating members.

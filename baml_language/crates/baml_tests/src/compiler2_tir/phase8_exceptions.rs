@@ -407,6 +407,25 @@ fn function_type_throws_optional_call_propagates_callback_surface() {
 }
 
 #[test]
+fn function_type_throws_builtin_map_propagates_callback_surface() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"function f(values: int[]) -> int[] throws never {
+  return values.map((value: int) -> int throws string {
+    throw "boom"
+  })
+}"#,
+    );
+
+    let output = render_tir(&db, file);
+    assert!(
+        output.contains("throws contract violation: `never` is missing string"),
+        "expected builtin map to propagate callback throws into the enclosing contract check, got:\n{output}"
+    );
+}
+
+#[test]
 fn function_type_throws_alias_hidden_callback_rejects_throwing_value() {
     let mut db = make_db();
     let file = db.add_file(
