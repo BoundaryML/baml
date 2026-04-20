@@ -340,6 +340,9 @@ pub struct BexEngine {
     /// Used to prevent multiple threads from trying to run GC at the same time.
     /// Only one should run it, the rest should wait for it to complete.
     checking_gc: AtomicBool,
+    /// Used to notify long-running threads that they should park the VM even if they aren't at a typical yield point.
+    #[cfg(not(target_arch = "wasm32"))]
+    park_requested: Arc<AtomicBool>,
 
     /// Map of active function calls by ID.
     active_calls: Mutex<HashMap<CallId, CancellationToken>>,
@@ -460,6 +463,9 @@ impl BexEngine {
             .collect();
         let mut globals = GlobalPool::from_vec(globals_vec);
 
+        #[cfg(not(target_arch = "wasm32"))]
+        let park_requested = Arc::new(AtomicBool::new(false));
+
         // Run $init for each package in dependency order.
         // $init evaluates top-level let-binding initializers and stores their
         // results into the global slots via StoreGlobal instructions.
@@ -473,6 +479,8 @@ impl BexEngine {
                         .iter()
                         .map(|(k, v)| (k.clone(), *v))
                         .collect(),
+                    #[cfg(not(target_arch = "wasm32"))]
+                    Arc::clone(&park_requested),
                     Arc::clone(&argv),
                 );
                 vm.set_entry_point(*init_ptr, &[]);
@@ -550,6 +558,8 @@ impl BexEngine {
             argv,
             heap_permit_manager: Arc::new(HeapPermitManager::new()),
             checking_gc: AtomicBool::new(false),
+            #[cfg(not(target_arch = "wasm32"))]
+            park_requested,
             active_calls: Mutex::new(HashMap::new()),
         })
     }
@@ -686,7 +696,11 @@ impl BexEngine {
     ///
     /// Statistics about the collection (live count, collected count, etc.)
     pub async fn collect_garbage(&self, level: bex_heap::CollectionLevel) -> bex_heap::GcStats {
+        #[cfg(not(target_arch = "wasm32"))]
+        self.park_requested.store(true, Ordering::Relaxed);
         let mut heap_guard = self.heap_permit_manager.request_park().await;
+        #[cfg(not(target_arch = "wasm32"))]
+        self.park_requested.store(false, Ordering::Relaxed);
 
         // Collect roots from handles (objects returned to external code)
         let mut all_roots = self.heap.collect_handle_roots();
@@ -776,6 +790,8 @@ impl BexEngine {
                 .iter()
                 .map(|(k, v)| (k.clone(), *v))
                 .collect(),
+            #[cfg(not(target_arch = "wasm32"))]
+            Arc::clone(&self.park_requested),
             Arc::clone(&self.argv),
         );
         let vm = self.heap_permit_manager.new_permit(vm).await;
@@ -1561,6 +1577,10 @@ impl BexEngine {
                             }
                         }
                     }
+                }
+                VmExecState::EarlyYield => {
+                    Self::cancellation_safepoint(cancel, &abort_handles)?;
+                    vm = self.gc_safepoint(vm).await;
                 }
             }
         }

@@ -16,8 +16,8 @@
 
 use std::{collections::HashMap, sync::Arc};
 
-use ::bex_vm_types::{RootHaver, types::ErrorClass};
-use ::core::any::TypeId;
+use ::bex_vm_types::{EarlyYieldCheck, RootHaver, types::ErrorClass};
+use ::core::{any::TypeId, sync::atomic::AtomicBool};
 use bex_heap::{BexHeap, Generation, Tlab};
 use bex_vm_types::{
     BinOp, CmpOp, FunctionKind, GlobalPool, HeapPtr, Instruction, Object, ObjectIndex, ObjectPool,
@@ -237,6 +237,8 @@ pub struct BexVm {
     /// Reference to the shared heap (long-lived, shared across VMs).
     pub heap: Arc<BexHeap>,
 
+    pub early_yield: EarlyYieldCheck,
+
     /// Thread-local allocation buffer (exclusive to this VM).
     pub tlab: Tlab,
 
@@ -325,6 +327,9 @@ pub enum VmExecState {
         /// (`file_id`, line, column, `start_offset`, `end_offset`).
         source_location: Option<(u32, u32, u32, u32, u32)>,
     },
+
+    /// We are still executing, but we should yield to allow other threads or the GC to run.
+    EarlyYield,
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -503,6 +508,7 @@ impl BexVm {
         heap: Arc<BexHeap>,
         globals: GlobalPool,
         resolved_class_names: HashMap<String, HeapPtr>,
+        #[cfg(not(target_arch = "wasm32"))] park_requested: Arc<AtomicBool>,
         argv: Arc<[String]>,
     ) -> Self {
         let tlab = Tlab::new(Arc::clone(&heap));
@@ -527,10 +533,16 @@ impl BexVm {
             })
             .collect();
 
+        let early_yield = EarlyYieldCheck::new(
+            #[cfg(not(target_arch = "wasm32"))]
+            park_requested,
+        );
+
         Self {
             frames: Vec::new(),
             stack: EvalStack::new(),
             heap,
+            early_yield,
             tlab,
             globals,
             resolved_class_names,
@@ -801,8 +813,13 @@ impl BexVm {
     /// Creates a VM from a compiled [`bex_vm_types::Program`].
     ///
     /// This is primarily for testing. In production, use `BexEngine` which
-    /// manages the heap across multiple VM instances.
-    pub fn from_program(program: bex_vm_types::Program) -> Result<Self, VmInternalError> {
+    /// manages the heap across multiple VM instances. On native targets the
+    /// caller supplies the `park_requested` atomic so tests can simulate the
+    /// coordination signal that `BexEngine::collect_garbage` uses.
+    pub fn from_program(
+        program: bex_vm_types::Program,
+        #[cfg(not(target_arch = "wasm32"))] park_requested: Arc<AtomicBool>,
+    ) -> Result<Self, VmInternalError> {
         let bytecode = convert_program(program)?;
 
         // Extract compile-time objects for the heap
@@ -830,6 +847,8 @@ impl BexVm {
             heap,
             globals,
             resolved_class_names,
+            #[cfg(not(target_arch = "wasm32"))]
+            park_requested,
             Arc::from(Vec::<String>::new()),
         ))
     }
@@ -1686,6 +1705,9 @@ impl BexVm {
             }
         }
 
+        if self.early_yield.should_early_yield() {
+            return Ok(Some(VmExecState::EarlyYield));
+        }
         Ok(None)
     }
 
@@ -2025,6 +2047,15 @@ impl BexVm {
     /// Returns `Ok(Some(state))` when the VM must yield control flow to the
     /// embedder (await, schedule, complete, notify). Returns `Ok(None)` when
     /// execution should continue to the next instruction.
+    ///
+    /// All control flow instructions should include
+    /// ```rust,ignore
+    /// if self.early_yield.should_early_yield() {
+    ///     return Ok(Some(VmExecState::EarlyYield));
+    /// }
+    /// ```
+    /// at the end to allow early yielding in the event of a long-running
+    /// operation.
     fn step(
         &mut self,
         frame_idx: &mut usize,
@@ -2302,6 +2333,9 @@ impl BexVm {
                 bf.instruction_ptr = instruction_ptr
                     .checked_add_signed(offset)
                     .ok_or(VmInternalError::InvalidJump)?;
+                if self.early_yield.should_early_yield() {
+                    return Ok(Some(VmExecState::EarlyYield));
+                }
             }
 
             Instruction::PopJumpIfFalse(offset) => {
@@ -2331,6 +2365,9 @@ impl BexVm {
                         .into());
                     }
                 }
+                if self.early_yield.should_early_yield() {
+                    return Ok(Some(VmExecState::EarlyYield));
+                }
             }
 
             Instruction::JumpIfFalse(offset) => {
@@ -2357,11 +2394,17 @@ impl BexVm {
                         .into());
                     }
                 }
+                if self.early_yield.should_early_yield() {
+                    return Ok(Some(VmExecState::EarlyYield));
+                }
             }
 
             Instruction::Throw => {
                 let value = self.stack.ensure_pop()?;
                 self.try_unwind_exception(frame_idx, function, value)?;
+                if self.early_yield.should_early_yield() {
+                    return Ok(Some(VmExecState::EarlyYield));
+                }
             }
 
             Instruction::BinOp(op) => {
@@ -3153,6 +3196,9 @@ impl BexVm {
                 // Replace the future on the eval stack with the ready value
                 self.stack.pop();
                 self.stack.push(ready_value);
+                if self.early_yield.should_early_yield() {
+                    return Ok(Some(VmExecState::EarlyYield));
+                }
             }
 
             Instruction::Watch(index) => {
@@ -3215,6 +3261,9 @@ impl BexVm {
                         object_index,
                     );
                 }
+                if self.early_yield.should_early_yield() {
+                    return Ok(Some(VmExecState::EarlyYield));
+                }
             }
 
             Instruction::Unwatch(index) => {
@@ -3238,6 +3287,9 @@ impl BexVm {
                             NodeId::HeapObject(object_index),
                         );
                     }
+                }
+                if self.early_yield.should_early_yield() {
+                    return Ok(Some(VmExecState::EarlyYield));
                 }
             }
 
@@ -3358,6 +3410,9 @@ impl BexVm {
                         return Ok(Some(state));
                     }
                 }
+                if self.early_yield.should_early_yield() {
+                    return Ok(Some(VmExecState::EarlyYield));
+                }
             }
 
             Instruction::Return => {
@@ -3423,6 +3478,9 @@ impl BexVm {
                 // Native continuation frames (from CPS callbacks like
                 // array.map) are handled at the top of the exec loop.
                 // Just update frame_idx so the loop detects them.
+                if self.early_yield.should_early_yield() {
+                    return Ok(Some(VmExecState::EarlyYield));
+                }
             }
 
             Instruction::AllocMap(n) => {
@@ -3493,6 +3551,10 @@ impl BexVm {
                 bf.instruction_ptr = instruction_ptr
                     .checked_add_signed(offset)
                     .ok_or(VmInternalError::InvalidJump)?;
+
+                if self.early_yield.should_early_yield() {
+                    return Ok(Some(VmExecState::EarlyYield));
+                }
             }
 
             Instruction::Discriminant => {
@@ -3596,6 +3658,9 @@ impl BexVm {
                 };
                 if is_panic {
                     self.try_unwind_exception(frame_idx, function, value)?;
+                }
+                if self.early_yield.should_early_yield() {
+                    return Ok(Some(VmExecState::EarlyYield));
                 }
             }
 
