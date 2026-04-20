@@ -2618,8 +2618,10 @@ impl<'a> Parser<'a> {
             // Lambda params have optional type annotations (unlike function params)
             p.parse_lambda_parameter_list();
 
-            // Arrow is required
-            if !p.eat(TokenKind::Arrow) {
+            // Arrow is required. Accept `->` (canonical) or `=>` (formatter
+            // will normalize to `->`, matching the optional-colon pattern for
+            // function parameters).
+            if !p.eat(TokenKind::Arrow) && !p.eat(TokenKind::FatArrow) {
                 p.error_unexpected_token("'->' after lambda parameters".to_string());
             }
 
@@ -4039,9 +4041,12 @@ impl<'a> Parser<'a> {
             return false;
         }
 
-        // `( ) ->` → zero-param lambda
+        // `( ) ->` or `( ) =>` → zero-param lambda
         if self.peek(1).map(|t| t.kind) == Some(TokenKind::RParen)
-            && self.peek(2).map(|t| t.kind) == Some(TokenKind::Arrow)
+            && matches!(
+                self.peek(2).map(|t| t.kind),
+                Some(TokenKind::Arrow | TokenKind::FatArrow)
+            )
         {
             return true;
         }
@@ -4066,8 +4071,11 @@ impl<'a> Parser<'a> {
                 TokenKind::RParen => {
                     depth -= 1;
                     if depth == 0 {
-                        // Check if `->` follows the closing `)`
-                        return self.peek(offset + 1).map(|t| t.kind) == Some(TokenKind::Arrow);
+                        // Check if `->` or `=>` follows the closing `)`
+                        return matches!(
+                            self.peek(offset + 1).map(|t| t.kind),
+                            Some(TokenKind::Arrow | TokenKind::FatArrow)
+                        );
                     }
                 }
                 _ => {}
