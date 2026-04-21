@@ -242,13 +242,30 @@ fn elaborate_immediate_function_return_root(
                 TypeExpr::Function {
                     params,
                     ret,
-                    throws: None,
+                    throws,
                     attrs,
                 } => {
-                    let effect_param = fresh_effect_param_name(used_names);
-                    synthetic_effect_params.push(effect_param.clone());
-                    immediate_effects.push(type_expr_for_effect_param(effect_param.clone()));
-                    elaborate_immediate_callback_param(params, *ret, attrs, effect_param)
+                    let callback_throws = match throws {
+                        Some(throws) => fill_omitted_nested_throws_with_never(*throws),
+                        None => {
+                            let effect_param = fresh_effect_param_name(used_names);
+                            synthetic_effect_params.push(effect_param.clone());
+                            type_expr_for_effect_param(effect_param)
+                        }
+                    };
+                    immediate_effects.push(callback_throws.clone());
+                    TypeExpr::Function {
+                        params: params
+                            .into_iter()
+                            .map(|param| FunctionTypeParam {
+                                name: param.name,
+                                ty: fill_omitted_nested_throws_with_never(param.ty),
+                            })
+                            .collect(),
+                        ret: Box::new(fill_omitted_nested_throws_with_never(*ret)),
+                        throws: Some(Box::new(callback_throws)),
+                        attrs,
+                    }
                 }
                 other => fill_omitted_nested_throws_with_never(other),
             };

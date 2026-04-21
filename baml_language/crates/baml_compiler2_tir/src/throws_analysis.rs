@@ -164,9 +164,11 @@ fn collect_from_expr<C: ThrowsAnalysisContext>(
             }
             collect_callee_escaping_throws(context, *callee, args, body, true, out);
         }
-        Expr::Catch { clauses, .. } => {
+        Expr::Catch { base, clauses } => {
             if let Some(residual) = context.catch_residual_throws(expr_id) {
                 out.extend(residual);
+            } else {
+                collect_from_expr(context, *base, body, out);
             }
             for clause in clauses {
                 for arm_id in &clause.arms {

@@ -3232,18 +3232,12 @@ impl<'db> TypeInferenceBuilder<'db> {
     fn callee_uses_method_call_convention(&self, callee_expr_id: ExprId) -> bool {
         matches!(
             self.resolutions.get(&callee_expr_id),
-            Some(
-                crate::inference::MemberResolution::BoundMethod { .. }
-                    | crate::inference::MemberResolution::UnboundMethod { .. }
-            )
+            Some(crate::inference::MemberResolution::BoundMethod { .. })
         ) || matches!(
             self.path_member_resolutions
                 .get(&callee_expr_id)
                 .and_then(|resolutions| resolutions.last()),
-            Some(
-                crate::inference::MemberResolution::BoundMethod { .. }
-                    | crate::inference::MemberResolution::UnboundMethod { .. }
-            )
+            Some(crate::inference::MemberResolution::BoundMethod { .. })
         )
     }
 

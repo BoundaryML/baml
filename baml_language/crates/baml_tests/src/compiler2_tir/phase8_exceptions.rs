@@ -521,6 +521,41 @@ fn function_type_throws_optional_call_propagates_callback_surface() {
 }
 
 #[test]
+fn unbound_method_call_propagates_callback_surface() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"class Box {
+  function call<E>(self, cb: () -> int throws E) -> int throws E {
+    return cb()
+  }
+}
+
+function risky() -> int throws string {
+  throw "boom"
+}
+
+function f(box: Box) -> int throws never {
+  return Box.call(box, risky)
+}"#,
+    );
+
+    let output = render_tir(&db, file);
+    assert!(
+        output.contains("throws contract violation"),
+        "expected unbound method call to propagate callback throws into the contract check, got:\n{output}"
+    );
+    assert!(
+        output.contains("missing string"),
+        "expected unbound method call to report the concrete escaping throw, got:\n{output}"
+    );
+    assert!(
+        !output.contains("missing unknown"),
+        "expected unbound method call to avoid collapsing the propagated throw to unknown, got:\n{output}"
+    );
+}
+
+#[test]
 fn omitted_lambda_throws_inherits_builtin_map_callback_context() {
     let mut db = make_db();
     let file = db.add_file(

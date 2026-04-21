@@ -1066,6 +1066,26 @@ mod tests {
     }
 
     #[test]
+    fn function_type_throws_return_position_preserves_explicit_callback_throws() {
+        let mut db = make_db();
+        let file = db.add_file(
+            "returns_explicit_wrapper.baml",
+            "function returns_explicit_wrapper() -> ((value: int) -> string throws string) -> string { return \"ok\"; }",
+        );
+
+        let sig = elaborated_function_signature(
+            &db,
+            find_function_loc(&db, file, "returns_explicit_wrapper"),
+        );
+
+        assert!(sig.synthetic_effect_params.is_empty());
+        assert_eq!(
+            type_expr_to_string(sig.return_type.as_ref().expect("return type")),
+            "((value: int) -> string throws string) -> string throws string"
+        );
+    }
+
+    #[test]
     fn function_type_throws_method_immediate_callback_param_opens() {
         let mut db = make_db();
         let file = db.add_file(

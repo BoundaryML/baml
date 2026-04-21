@@ -57,6 +57,40 @@ fn lowered_declared_callable_throws<'db>(
     })
 }
 
+fn signature_cycle_initial_callable_throws<'db>(
+    db: &'db dyn crate::Db,
+    function: FunctionLoc<'db>,
+) -> Ty {
+    let file = function.file(db);
+    let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
+    let sig = baml_compiler2_ppir::elaborated_function_signature(db, function);
+    let pkg_info = file_package::file_package(db, file);
+    let pkg_id = PackageId::new(db, pkg_info.package.clone());
+    let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
+
+    let mut generic_params = enclosing_class_generic_params(&item_tree, function.id(db));
+    generic_params.extend(sig.user_generic_params.iter().cloned());
+    generic_params.extend(sig.synthetic_effect_params.iter().cloned());
+
+    let mut facts = BTreeSet::new();
+    for (_, param_ty) in &sig.params {
+        let mut diags = Vec::new();
+        let lowered = lower_type_expr_in_ns(
+            db,
+            param_ty,
+            pkg_items,
+            &pkg_info.namespace_path,
+            &generic_params,
+            &mut diags,
+        );
+        if let Ty::Function { throws, .. } = lowered {
+            facts.extend(crate::throw_inference::flatten_ty_to_facts(&throws));
+        }
+    }
+
+    join_throw_facts(&facts)
+}
+
 fn enclosing_class_generic_params(
     item_tree: &baml_compiler2_hir::item_tree::ItemTree,
     function_id: baml_compiler2_hir::ids::LocalItemId<baml_compiler2_hir::ids::FunctionMarker>,
@@ -214,12 +248,12 @@ fn callee_uses_method_call_convention(
 ) -> bool {
     matches!(
         inference.resolution(callee_expr_id),
-        Some(MemberResolution::BoundMethod { .. } | MemberResolution::UnboundMethod { .. })
+        Some(MemberResolution::BoundMethod { .. })
     ) || matches!(
         inference
             .path_member_resolution(callee_expr_id)
             .and_then(|resolutions| resolutions.last()),
-        Some(MemberResolution::BoundMethod { .. } | MemberResolution::UnboundMethod { .. })
+        Some(MemberResolution::BoundMethod { .. })
     )
 }
 
@@ -265,9 +299,8 @@ fn callable_throws_cycle_initial<'db>(
     _id: salsa::Id,
     function: FunctionLoc<'db>,
 ) -> Ty {
-    lowered_declared_callable_throws(db, function).unwrap_or(Ty::Never {
-        attr: TyAttr::default(),
-    })
+    lowered_declared_callable_throws(db, function)
+        .unwrap_or_else(|| signature_cycle_initial_callable_throws(db, function))
 }
 
 #[salsa::tracked(returns(ref), cycle_initial=callable_throws_cycle_initial)]

@@ -992,6 +992,58 @@ function f() -> null {
 }
 
 #[test]
+fn returned_wrapper_value_preserves_explicit_callback_throws() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function forward(cb: (x: int) -> int throws string) -> int {
+    return cb(1)
+}
+
+function make() -> ((cb: (x: int) -> int throws string) -> int) {
+    return forward
+}
+
+function f() -> null {
+    let g = make()
+    g
+    return null
+}
+"#,
+    );
+    assert_eq!(
+        expr_type_in_function(&db, file, "f", "g"),
+        "(cb: (x: int) -> int throws string) -> int throws string"
+    );
+}
+
+#[test]
+fn catch_wrapped_wrapper_value_preserves_callable_throws() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function wrap(cb: () -> int throws string) -> int {
+    return cb() catch (e) {
+        _ => wrap(cb)
+    }
+}
+
+function f() -> null {
+    let g = wrap
+    g
+    return null
+}
+"#,
+    );
+    assert_eq!(
+        expr_type_in_function(&db, file, "f", "g"),
+        "(cb: () -> int throws string) -> int throws string"
+    );
+}
+
+#[test]
 fn bound_method_value_preserves_declared_throws() {
     let mut db = make_db();
     let file = db.add_file(
