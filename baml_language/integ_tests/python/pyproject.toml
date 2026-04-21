@@ -5,7 +5,7 @@ description = "Integration tests for baml_language Python codegen"
 requires-python = ">=3.9"
 dependencies = [
     "baml-py",
-    "pydantic>=2.0",
+    "pydantic>=2.13.3",
     "pytest",
     "pytest-asyncio",
     "pytest-timeout",
