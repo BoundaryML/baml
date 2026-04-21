@@ -8,7 +8,7 @@ function user.test_chained_map() -> int[] throws never {
     let items = [1, 2, 3] : int[]
     let step1 = items.map<U, E>((x) -> { ... }) : int[]
     step1.map<U, E>((x) -> { ... }) : int[]
-      (x) -> { ... } : (x: int) -> int throws never
+      (x) -> { ... } : (x: int) -> int throws E
         {
           x + 1
         }
@@ -22,7 +22,7 @@ function user.test_map_string_to_int() -> int[] throws never {
   { : int[]
     let words = ["hello", "world"] : string[]
     words.map<U, E>((w: string) -> int { ... }) : int[]
-      (w: string) -> int { ... } : (w: string) -> int throws never
+      (w: string) -> int { ... } : (w: string) -> int throws E
         {
           w.length()
         }
@@ -104,21 +104,21 @@ function user.test_generic_multi_instantiation() -> int throws never {
 lambda user.test_generic_multi_instantiation {
 }
 function user.test_lambda_with_match() -> string throws never {
-  { : "zero" | "one" | "many"
-    let describe = : (n: int) -> "zero" | "one" | "many" throws never
-      (n: int) -> string { ... } : (n: int) -> "zero" | "one" | "many" throws never
+  { : string
+    let describe = : (n: int) -> string throws never
+      (n: int) -> string { ... } : (n: int) -> string throws never
         {
           match (n) { 0 => "zero", 1 => "one", _ => "many" }
         }
-    describe(1) : "zero" | "one" | "many"
+    describe(1) : string
   }
 }
 lambda user.test_lambda_with_match {
 }
 function user.test_lambda_with_if() -> string throws never {
-  { : "negative" | "zero" | "positive"
-    let classify = : (n: int) -> "negative" | "zero" | "positive" throws never
-      (n: int) -> string { ... } : (n: int) -> "negative" | "zero" | "positive" throws never
+  { : string
+    let classify = : (n: int) -> string throws never
+      (n: int) -> string { ... } : (n: int) -> string throws never
         {
           if (n < 0)
             {
@@ -134,7 +134,7 @@ function user.test_lambda_with_if() -> string throws never {
                 "positive"
               }
         }
-    classify(Neg 5) : "negative" | "zero" | "positive"
+    classify(Neg 5) : string
   }
 }
 lambda user.test_lambda_with_if {
@@ -144,7 +144,7 @@ function user.test_map_with_capture() -> int[] throws never {
     let items = [1, 2, 3] : int[]
     let factor = 10 : 10 -> int
     items.map<U, E>((x) -> { ... }) : int[]
-      (x) -> { ... } : (x: int) -> int throws never
+      (x) -> { ... } : (x: int) -> int throws E
         {
           x * factor
         }
@@ -156,7 +156,7 @@ function user.test_nested_map() -> int[][] throws never {
   { : int[][]
     let matrix = [[1, 2], [3, 4]] : int[][]
     matrix.map<U, E>((row: int[]) -> { ... }) : int[][]
-      (row: int[]) -> { ... } : (row: int[]) -> int[] throws never
+      (row: int[]) -> { ... } : (row: int[]) -> int[] throws E
         {
           row.map((x) -> { ... })
         }
@@ -170,7 +170,7 @@ function user.test_map_multi_statement() -> int[] throws never {
   { : int[]
     let items = [1, 2, 3] : int[]
     items.map<U, E>((x) -> { ... }) : int[]
-      (x) -> { ... } : (x: int) -> int throws never
+      (x) -> { ... } : (x: int) -> int throws E
         {
           let doubled = x * 2
           let offset = 100
@@ -221,9 +221,9 @@ function user.test_iife() -> int throws never {
 lambda user.test_iife {
 }
 function user.test_optional_return() -> int? throws never {
-  { : int | null
-    let maybe = : (x: int) -> int | null throws never
-      (x: int) -> int? { ... } : (x: int) -> int | null throws never
+  { : int?
+    let maybe = : (x: int) -> int? throws never
+      (x: int) -> int? { ... } : (x: int) -> int? throws never
         {
           if (x > 0)
             {
@@ -234,7 +234,7 @@ function user.test_optional_return() -> int? throws never {
               null
             }
         }
-    maybe(Neg 1) : int | null
+    maybe(Neg 1) : int?
   }
 }
 lambda user.test_optional_return {
@@ -243,7 +243,7 @@ function user.test_fully_inferred_map() -> int[] throws never {
   { : int[]
     let items = [1, 2, 3] : int[]
     items.map<U, E>((x) -> { ... }) : int[]
-      (x) -> { ... } : (x: int) -> int throws never
+      (x) -> { ... } : (x: int) -> int throws E
         {
           x * 2
         }
@@ -252,10 +252,10 @@ function user.test_fully_inferred_map() -> int[] throws never {
 lambda user.test_fully_inferred_map {
 }
 function user.test_map_type_change_inferred() -> string[] throws never {
-  { : (string | "one" | "two" | "other")[]
+  { : string[]
     let nums = [1, 2, 3] : int[]
-    nums.map<U, E>((n) -> { ... }) : (string | "one" | "two" | "other")[]
-      (n) -> { ... } : (n: int) -> "one" | "two" | "other" throws never
+    nums.map<U, E>((n) -> { ... }) : string[]
+      (n) -> { ... } : (n: int) -> string throws E
         {
           match (n) { 1 => "one", 2 => "two", _ => "other" }
         }
@@ -264,10 +264,10 @@ function user.test_map_type_change_inferred() -> string[] throws never {
 lambda user.test_map_type_change_inferred {
 }
 function user.test_literal_return_inference() -> int[] throws never {
-  { : (int | 0)[]
+  { : int[]
     let items = [1, 2, 3] : int[]
-    items.map<U, E>((x) -> { ... }) : (int | 0)[]
-      (x) -> { ... } : (x: int) -> 0 throws never
+    items.map<U, E>((x) -> { ... }) : int[]
+      (x) -> { ... } : (x: int) -> int throws E
         {
           0
         }
@@ -280,7 +280,7 @@ function user.test_compose_inferred() -> int[] throws never {
     let items = [1, 2, 3] : int[]
     let step1 = items.map<U, E>((x) -> { ... }) : int[]
     step1.map<U, E>((x) -> { ... }) : int[]
-      (x) -> { ... } : (x: int) -> int throws never
+      (x) -> { ... } : (x: int) -> int throws E
         {
           x + 1
         }
@@ -350,14 +350,14 @@ lambda user.test_deep_capture_inferred {
 lambda user.test_deep_capture_inferred {
 }
 function user.test_generic_apply_inferred() -> int throws never {
-  { : int | 42
+  { : int
     let apply = : (f: (T) -> U throws never, x: T) -> U throws never
       <T, U>(f: (T) -> U, x: T) -> U { ... } : (f: (T) -> U throws never, x: T) -> U throws never
         {
           f(x)
         }
-    apply<T, U>((x) -> { ... }, 21) : int | 42
-      (x) -> { ... } : (x: 21) -> 42 throws never
+    apply<T, U>((x) -> { ... }, 21) : int
+      (x) -> { ... } : (x: 21) -> int throws never
         {
           x * 2
         }
@@ -425,7 +425,7 @@ function user.test_capture_in_map_inferred() -> int[] throws never {
     let items = [1, 2, 3] : int[]
     let factor = 10 : 10 -> int
     items.map<U, E>((x) -> { ... }) : int[]
-      (x) -> { ... } : (x: int) -> int throws never
+      (x) -> { ... } : (x: int) -> int throws E
         {
           x * factor
         }
@@ -480,10 +480,10 @@ lambda user.test_capture_lambda_inferred {
 lambda user.test_capture_lambda_inferred {
 }
 function user.test_map_optional_inferred() -> int[] throws never {
-  { : (int | 0 | 1)[]
+  { : int[]
     let items = [1, null, 3] : int?[]
-    items.map<U, E>((x) -> { ... }) : (int | 0 | 1)[]
-      (x) -> { ... } : (x: int?) -> 0 | 1 throws never
+    items.map<U, E>((x) -> { ... }) : int[]
+      (x) -> { ... } : (x: int?) -> int throws E
         {
           match (x) { null => 0, _ => 1 }
         }
@@ -496,7 +496,7 @@ function user.test_shadowing_inferred() -> int[] throws never {
     let x = "not a number" : "not a number" -> string
     let items = [1, 2, 3] : int[]
     items.map<U, E>((x) -> { ... }) : int[]
-      (x) -> { ... } : (x: int) -> int throws never
+      (x) -> { ... } : (x: int) -> int throws E
         {
           x + 1
         }

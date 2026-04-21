@@ -1,22 +1,22 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 35221
+assertion_line: 35546
 ---
 === TIR2 ===
 function user.$init_test_24(registry: testing.TestCollector) -> ? throws never {
   { : null
     registry.register_test("wrong runner type", () -> void { ... }, 42) : void
-      () -> void { ... } : () -> void throws never
+      () -> void { ... } : () -> void throws unknown
         {
           assert.is_true(true)
         }
     registry.register_test("string as runner", () -> void { ... }, "not a runner") : void
-      () -> void { ... } : () -> void throws never
+      () -> void { ... } : () -> void throws unknown
         {
           assert.is_true(true)
         }
     registry.register_test_set("wrong testset runner", (testset: testing.TestCollector) -> void { ... }, 42) : void
-      (testset: testing.TestCollector) -> void { ... } : (testset: testing.TestCollector) -> void throws never
+      (testset: testing.TestCollector) -> void { ... } : (testset: testing.TestCollector) -> void throws unknown
         {
           testset.register_test("inner", () -> { ... }, null)
           null

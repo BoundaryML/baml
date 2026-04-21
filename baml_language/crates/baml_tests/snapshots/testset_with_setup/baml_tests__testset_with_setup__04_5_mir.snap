@@ -1,6 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 38512
+assertion_line: 38837
 ---
 === MIR2 ===
 fn user.$init_test_24(registry: testing.TestCollector) -> null {
@@ -8,7 +8,7 @@ fn user.$init_test_24(registry: testing.TestCollector) -> null {
     let _0: null // _0 // return
     let _1: testing.TestCollector // registry // param
     let _2: void
-    let _3: (testing.TestCollector) -> void throws never
+    let _3: (testing.TestCollector) -> void throws unknown
 
     bb0: {
         _3 = make_closure lambda[0]();
@@ -33,9 +33,9 @@ fn .<lambda($init_test_24, 0)>(testset: testing.TestCollector) -> null {
     let _2: string // base_url [captured]
     let _3: int // timeout [captured]
     let _4: void
-    let _5: () -> void throws never
+    let _5: () -> void throws unknown
     let _6: void
-    let _7: () -> void throws never
+    let _7: () -> void throws unknown
 
     bb0: {
         _2 = const "https://api.example.com";

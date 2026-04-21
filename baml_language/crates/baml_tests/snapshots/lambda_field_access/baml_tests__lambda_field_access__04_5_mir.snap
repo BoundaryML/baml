@@ -125,8 +125,8 @@ fn user.test_nested_lambda_capture(obj: Outer) -> string {
 fn .<lambda(test_nested_lambda_capture, 0)>() -> null {
     // Locals:
     let _0: null // _0 // return
-    let _1: () -> void throws never // inner_fn
-    let _2: () -> void throws never
+    let _1: () -> string throws never // inner_fn
+    let _2: () -> string throws never
 
     bb0: {
         _1 = make_closure lambda[0](copy capture[0]);

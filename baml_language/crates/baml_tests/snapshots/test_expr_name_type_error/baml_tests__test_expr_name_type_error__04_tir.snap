@@ -6,17 +6,17 @@ assertion_line: 34571
 function user.$init_test_24(registry: testing.TestCollector) -> ? throws never {
   { : null
     registry.register_test("a" + 1, () -> void { ... }, null) : void
-      () -> void { ... } : () -> void throws never
+      () -> void { ... } : () -> void throws unknown
         {
           null
         }
     registry.register_test(42, () -> void { ... }, null) : void
-      () -> void { ... } : () -> void throws never
+      () -> void { ... } : () -> void throws unknown
         {
           null
         }
     registry.register_test_set("int_name", (testset: testing.TestCollector) -> void { ... }, null) : void
-      (testset: testing.TestCollector) -> void { ... } : (testset: testing.TestCollector) -> void throws never
+      (testset: testing.TestCollector) -> void { ... } : (testset: testing.TestCollector) -> void throws unknown
         {
           for i in [1, 2, 3]
             {

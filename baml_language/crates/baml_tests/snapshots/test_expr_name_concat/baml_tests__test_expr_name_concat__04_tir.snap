@@ -6,7 +6,7 @@ assertion_line: 34246
 function user.$init_test_24(registry: testing.TestCollector) -> ? throws never {
   { : null
     registry.register_test_set("concat names", (testset: testing.TestCollector) -> void { ... }, null) : void
-      (testset: testing.TestCollector) -> void { ... } : (testset: testing.TestCollector) -> void throws never
+      (testset: testing.TestCollector) -> void { ... } : (testset: testing.TestCollector) -> void throws unknown
         {
           testset.register_test("prefix_" + "suffix", () -> { ... }, null)
           testset.register_test_set("nested_" + "group", (testset: testing.TestCollector) -> { ... }, null)

@@ -360,6 +360,110 @@ impl<'db> TypeInferenceBuilder<'db> {
         peel(self, expected.clone(), 64)
     }
 
+    fn lower_lambda_type_expr(
+        &mut self,
+        type_expr: &TypeExpr,
+        generic_params: &[Name],
+        span: TextRange,
+    ) -> Ty {
+        let mut diags = Vec::new();
+        let ty = crate::lower_type_expr::lower_type_expr_in_ns(
+            self.context.db(),
+            type_expr,
+            self.package_items,
+            &self.ns_context,
+            generic_params,
+            &mut diags,
+        );
+        for diag in diags {
+            self.context.report_at_span(diag, span);
+        }
+        ty
+    }
+
+    fn choose_lambda_throws_surface(
+        &mut self,
+        func_def: &baml_compiler2_ast::FunctionDef,
+        generic_params: &[Name],
+        contextual_throws: Option<&Ty>,
+    ) -> (Ty, TextRange, bool) {
+        if let Some(throws) = &func_def.throws {
+            let ty = self.lower_lambda_type_expr(&throws.expr, generic_params, throws.span);
+            (ty, throws.span, true)
+        } else if let Some(contextual) = contextual_throws {
+            (contextual.clone(), func_def.span, false)
+        } else {
+            (
+                Ty::Never {
+                    attr: TyAttr::default(),
+                },
+                func_def.span,
+                false,
+            )
+        }
+    }
+
+    fn throws_surface_has_open_slot(throws_facts: &BTreeSet<Ty>) -> bool {
+        throws_facts.iter().any(|fact| {
+            matches!(
+                fact,
+                Ty::TypeVar(_, _)
+                    | Ty::Unknown { .. }
+                    | Ty::BuiltinUnknown { .. }
+                    | Ty::Error { .. }
+            )
+        })
+    }
+
+    fn check_throws_surface(
+        &mut self,
+        body: &ExprBody,
+        throws_ty: &Ty,
+        span: TextRange,
+        warn_extraneous: bool,
+    ) {
+        let declared = crate::throw_inference::flatten_ty_to_facts(throws_ty);
+        let effective = self.collect_effective_throws(body);
+        let has_open_slot = Self::throws_surface_has_open_slot(&declared);
+
+        let mut extra: Vec<String> = if has_open_slot {
+            Vec::new()
+        } else {
+            effective
+                .difference(&declared)
+                .map(std::string::ToString::to_string)
+                .collect()
+        };
+        let mut extraneous: Vec<String> = if warn_extraneous && !has_open_slot {
+            declared
+                .difference(&effective)
+                .map(std::string::ToString::to_string)
+                .collect()
+        } else {
+            Vec::new()
+        };
+        extra.sort();
+        extraneous.sort();
+
+        if !extra.is_empty() {
+            self.context.report_at_span(
+                TirTypeError::ThrowsContractViolation {
+                    declared: throws_ty.clone(),
+                    extra_types: extra,
+                },
+                span,
+            );
+        }
+        if !extraneous.is_empty() {
+            self.context.report_warning_at_span(
+                TirTypeError::ExtraneousThrowsDeclaration {
+                    extra_types: extraneous,
+                },
+                span,
+            );
+        }
+    }
+
     fn argument_matches_expected(&self, got: &Ty, expected: &Ty) -> bool {
         if self.is_subtype(got, expected) {
             return true;
@@ -1124,19 +1228,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 for param in &func_def.params {
                     let param_ty = match &param.type_expr {
                         Some(te) => {
-                            let mut diags = Vec::new();
-                            let ty = crate::lower_type_expr::lower_type_expr_in_ns(
-                                self.context.db(),
-                                &te.expr,
-                                self.package_items,
-                                &self.ns_context,
-                                &all_generic_params,
-                                &mut diags,
-                            );
-                            for diag in diags {
-                                self.context.report_at_span(diag, te.span);
-                            }
-                            ty
+                            self.lower_lambda_type_expr(&te.expr, &all_generic_params, te.span)
                         }
                         None => {
                             // No annotation and no expected type → error
@@ -1155,54 +1247,28 @@ impl<'db> TypeInferenceBuilder<'db> {
                 }
 
                 // Lower optional return type annotation
-                let return_annotation = func_def.return_type.as_ref().map(|te| {
-                    let mut diags = Vec::new();
-                    let ty = crate::lower_type_expr::lower_type_expr_in_ns(
-                        self.context.db(),
-                        &te.expr,
-                        self.package_items,
-                        &self.ns_context,
-                        &all_generic_params,
-                        &mut diags,
-                    );
-                    for diag in diags {
-                        self.context.report_at_span(diag, te.span);
-                    }
-                    ty
-                });
+                let return_annotation = func_def
+                    .return_type
+                    .as_ref()
+                    .map(|te| self.lower_lambda_type_expr(&te.expr, &all_generic_params, te.span));
+                let (throws_ty, throws_span, warn_extraneous_throws) =
+                    self.choose_lambda_throws_surface(func_def, &all_generic_params, None);
 
                 // Infer the lambda body using save/restore approach
                 let (ret_ty, _lambda_expressions, lambda_fsi) = self.infer_lambda_body(
                     func_def,
                     &param_tys,
                     return_annotation.as_ref(),
+                    &throws_ty,
+                    throws_span,
+                    warn_extraneous_throws,
                     expr_id,
                 );
-                let throws_ty = func_def
-                    .throws
-                    .as_ref()
-                    .map(|te| {
-                        let mut diags = Vec::new();
-                        let ty = crate::lower_type_expr::lower_type_expr_in_ns(
-                            self.context.db(),
-                            &te.expr,
-                            self.package_items,
-                            &self.ns_context,
-                            &all_generic_params,
-                            &mut diags,
-                        );
-                        for diag in diags {
-                            self.context.report_at_span(diag, te.span);
-                        }
-                        ty
-                    })
-                    .unwrap_or(Ty::Never {
-                        attr: TyAttr::default(),
-                    });
+                let surface_ret_ty = return_annotation.unwrap_or(ret_ty.clone());
 
                 let result = Ty::Function {
                     params: param_tys,
-                    ret: Box::new(ret_ty),
+                    ret: Box::new(surface_ret_ty),
                     throws: Box::new(throws_ty),
                     attr: TyAttr::default(),
                 };
@@ -1504,11 +1570,14 @@ impl<'db> TypeInferenceBuilder<'db> {
             Expr::Lambda(func_def) => {
                 let expected_function = self.expected_lambda_function_ty(expected);
                 match expected_function.as_ref() {
-                    Some(Ty::Function {
-                        params: expected_params,
-                        ret: expected_ret,
-                        ..
-                    }) => {
+                    Some(
+                        expected_fn_ty @ Ty::Function {
+                            params: expected_params,
+                            ret: expected_ret,
+                            throws: expected_throws,
+                            ..
+                        },
+                    ) => {
                         // Checking mode: decompose expected function type.
                         // Arity check
                         if func_def.params.len() != expected_params.len() {
@@ -1520,6 +1589,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                                 expr_id,
                             );
                         }
+
+                        let mut all_generic_params = self.generic_params.clone();
+                        all_generic_params.extend(func_def.generic_params.iter().cloned());
 
                         // Determine param types: annotation takes precedence, else use expected
                         let mut param_tys: Vec<(Option<baml_base::Name>, Ty)> = Vec::new();
@@ -1533,18 +1605,11 @@ impl<'db> TypeInferenceBuilder<'db> {
 
                             let param_ty = match &param.type_expr {
                                 Some(te) => {
-                                    let mut diags = Vec::new();
-                                    let annotated = crate::lower_type_expr::lower_type_expr_in_ns(
-                                        self.context.db(),
+                                    let annotated = self.lower_lambda_type_expr(
                                         &te.expr,
-                                        self.package_items,
-                                        &self.ns_context,
-                                        &self.generic_params,
-                                        &mut diags,
+                                        &all_generic_params,
+                                        te.span,
                                     );
-                                    for diag in diags {
-                                        self.context.report_at_span(diag, te.span);
-                                    }
                                     // Check annotation is compatible with expected
                                     if !self.is_subtype(&expected_param_ty, &annotated) {
                                         self.context.report(
@@ -1568,58 +1633,56 @@ impl<'db> TypeInferenceBuilder<'db> {
 
                         // Determine return type: annotation > expected
                         let return_annotation = func_def.return_type.as_ref().map(|te| {
-                            let mut diags = Vec::new();
-                            let ty = crate::lower_type_expr::lower_type_expr_in_ns(
-                                self.context.db(),
-                                &te.expr,
-                                self.package_items,
-                                &self.ns_context,
-                                &self.generic_params,
-                                &mut diags,
-                            );
-                            for diag in diags {
-                                self.context.report_at_span(diag, te.span);
-                            }
-                            ty
+                            self.lower_lambda_type_expr(&te.expr, &all_generic_params, te.span)
                         });
                         let effective_ret =
                             return_annotation.as_ref().unwrap_or(expected_ret.as_ref());
+                        let (throws_ty, throws_span, warn_extraneous_throws) = self
+                            .choose_lambda_throws_surface(
+                                func_def,
+                                &all_generic_params,
+                                Some(expected_throws.as_ref()),
+                            );
 
                         // Infer/check the lambda body using save/restore approach
                         let (ret_ty, _lambda_expressions, lambda_fsi) = self.infer_lambda_body(
                             func_def,
                             &param_tys,
                             Some(effective_ret),
+                            &throws_ty,
+                            throws_span,
+                            warn_extraneous_throws,
                             expr_id,
                         );
-                        let throws_ty = func_def
-                            .throws
-                            .as_ref()
-                            .map(|te| {
-                                let mut diags = Vec::new();
-                                let ty = crate::lower_type_expr::lower_type_expr_in_ns(
-                                    self.context.db(),
-                                    &te.expr,
-                                    self.package_items,
-                                    &self.ns_context,
-                                    &self.generic_params,
-                                    &mut diags,
-                                );
-                                for diag in diags {
-                                    self.context.report_at_span(diag, te.span);
-                                }
-                                ty
-                            })
-                            .unwrap_or(Ty::Never {
-                                attr: TyAttr::default(),
-                            });
+                        let surface_ret_ty = return_annotation.unwrap_or_else(|| {
+                            if matches!(
+                                expected_ret.as_ref(),
+                                Ty::Unknown { .. } | Ty::TypeVar(_, _)
+                            ) {
+                                ret_ty.clone()
+                            } else {
+                                expected_ret.as_ref().clone()
+                            }
+                        });
 
                         let result = Ty::Function {
                             params: param_tys,
-                            ret: Box::new(ret_ty),
+                            ret: Box::new(surface_ret_ty),
                             throws: Box::new(throws_ty),
                             attr: TyAttr::default(),
                         };
+                        if !crate::generics::contains_typevar(expected_fn_ty)
+                            && !self.is_subtype(&result, expected_fn_ty)
+                        {
+                            self.context.report(
+                                TirTypeError::TypeMismatch {
+                                    expected: expected_fn_ty.clone(),
+                                    got: result.clone(),
+                                },
+                                expr_id,
+                                Vec::new(),
+                            );
+                        }
                         self.record_expr_type(expr_id, result.clone());
                         if let Some(fsi) = lambda_fsi {
                             self.nested_lambda_types.insert(fsi, result.clone());
@@ -2323,38 +2386,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         for diag in diags {
             self.context.report_at_span(diag, span);
         }
-
-        let declared = crate::throw_inference::flatten_ty_to_facts(&declared_ty);
-        let effective = self.collect_effective_throws(body);
-
-        let mut extra: Vec<String> = effective
-            .difference(&declared)
-            .map(std::string::ToString::to_string)
-            .collect();
-        let mut extraneous: Vec<String> = declared
-            .difference(&effective)
-            .map(std::string::ToString::to_string)
-            .collect();
-        extra.sort();
-        extraneous.sort();
-
-        if !extra.is_empty() {
-            self.context.report_at_span(
-                TirTypeError::ThrowsContractViolation {
-                    declared: declared_ty,
-                    extra_types: extra,
-                },
-                span,
-            );
-        }
-        if !extraneous.is_empty() {
-            self.context.report_warning_at_span(
-                TirTypeError::ExtraneousThrowsDeclaration {
-                    extra_types: extraneous,
-                },
-                span,
-            );
-        }
+        self.check_throws_surface(body, &declared_ty, span, true);
     }
 
     fn required_match_cases(&self, ty: &Ty) -> Option<BTreeSet<String>> {
@@ -5968,6 +6000,9 @@ impl<'db> TypeInferenceBuilder<'db> {
         func_def: &baml_compiler2_ast::FunctionDef,
         param_tys: &[(Option<baml_base::Name>, Ty)],
         expected_ret: Option<&Ty>,
+        chosen_throws: &Ty,
+        throws_report_span: TextRange,
+        warn_extraneous_throws: bool,
         _lambda_expr_id: ExprId,
     ) -> (Ty, FxHashMap<ExprId, Ty>, Option<FileScopeId>) {
         use baml_compiler2_ast::FunctionBodyDef;
@@ -6077,6 +6112,13 @@ impl<'db> TypeInferenceBuilder<'db> {
         } else {
             self.infer_expr(root_expr, lambda_body)
         };
+
+        self.check_throws_surface(
+            lambda_body,
+            chosen_throws,
+            throws_report_span,
+            warn_extraneous_throws,
+        );
 
         // Collect the lambda's expression types and restore parent state
         let lambda_expressions = std::mem::replace(&mut self.expressions, saved_expressions);

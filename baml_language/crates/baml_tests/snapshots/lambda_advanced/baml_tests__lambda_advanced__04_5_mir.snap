@@ -287,8 +287,8 @@ fn .<lambda(test_deep_capture, 0)>(b: int) -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: int // b // param [captured]
-    let _2: (int) -> void throws never // g
-    let _3: (int) -> void throws never
+    let _2: (int) -> int throws never // g
+    let _3: (int) -> int throws never
 
     bb0: {
         _2 = make_closure lambda[0](copy capture[0], copy _1);
@@ -421,7 +421,7 @@ fn user.test_generic_apply_inferred() -> int {
     let _0: int // _0 // return
     let _1: ((void) -> void throws never, void) -> void throws never // apply
     let _2: ((void) -> void throws never, void) -> void throws never
-    let _3: (21) -> 42 throws never
+    let _3: (21) -> int throws never
 
     bb0: {
         _1 = make_closure lambda[0]();
@@ -890,8 +890,8 @@ fn .<lambda(test_lambda_variable_then_pass, 0)>(x: int) -> null {
 fn user.test_lambda_with_if() -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: (int) -> "negative" | "zero" | "positive" throws never // classify
-    let _2: (int) -> "negative" | "zero" | "positive" throws never
+    let _1: (int) -> string throws never // classify
+    let _2: (int) -> string throws never
 
     bb0: {
         _1 = make_closure lambda[0]();
@@ -945,8 +945,8 @@ fn .<lambda(test_lambda_with_if, 0)>(n: int) -> null {
 fn user.test_lambda_with_match() -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: (int) -> "zero" | "one" | "many" throws never // describe
-    let _2: (int) -> "zero" | "one" | "many" throws never
+    let _1: (int) -> string throws never // describe
+    let _2: (int) -> string throws never
 
     bb0: {
         _1 = make_closure lambda[0]();
@@ -993,7 +993,7 @@ fn user.test_literal_return_inference() -> int[] {
     // Locals:
     let _0: int[] // _0 // return
     let _1: int[] // items
-    let _2: (int) -> 0 throws never
+    let _2: (int) -> int throws never
 
     bb0: {
         _1 = [const 1_i64, const 2_i64, const 3_i64];
@@ -1067,7 +1067,7 @@ fn user.test_map_optional_inferred() -> int[] {
     // Locals:
     let _0: int[] // _0 // return
     let _1: int?[] // items
-    let _2: (int?) -> 0 | 1 throws never
+    let _2: (int?) -> int throws never
 
     bb0: {
         _1 = [const 1_i64, const null, const 3_i64];
@@ -1143,7 +1143,7 @@ fn user.test_map_type_change_inferred() -> string[] {
     // Locals:
     let _0: string[] // _0 // return
     let _1: int[] // nums
-    let _2: (int) -> "one" | "two" | "other" throws never
+    let _2: (int) -> string throws never
 
     bb0: {
         _1 = [const 1_i64, const 2_i64, const 3_i64];
@@ -1280,8 +1280,8 @@ fn .<lambda(<lambda(test_nested_map, 0)>, 1)>(x: null) -> null {
 fn user.test_optional_return() -> int? {
     // Locals:
     let _0: int? // _0 // return
-    let _1: (int) -> int | null throws never // maybe
-    let _2: (int) -> int | null throws never
+    let _1: (int) -> int? throws never // maybe
+    let _2: (int) -> int? throws never
 
     bb0: {
         _1 = make_closure lambda[0]();

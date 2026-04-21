@@ -5,8 +5,8 @@ assertion_line: 16805
 === TIR2 ===
 function user.test_return_mismatch() -> int throws never {
   { : 0
-    let bad = : (x: int) -> int throws never
-      (x: int) -> string { ... } : (x: int) -> int throws never
+    let bad = : (x: int) -> string throws never
+      (x: int) -> string { ... } : (x: int) -> string throws never
         {
           x * 2
         }
@@ -33,7 +33,7 @@ function user.test_arity_mismatch() -> int[] throws never {
   { : int[]
     let items = [1, 2, 3] : int[]
     items.map<U, E>((x, y) -> { ... }) : int[]
-      (x, y) -> { ... } : (x: int, y: unknown) -> int throws never
+      (x, y) -> { ... } : (x: int, y: unknown) -> int throws E
         {
           x
         }
@@ -43,10 +43,10 @@ function user.test_arity_mismatch() -> int[] throws never {
 lambda user.test_arity_mismatch {
 }
 function user.test_param_type_mismatch() -> int[] throws never {
-  { : (int | string)[]
+  { : int[]
     let items = [1, 2, 3] : int[]
-    items.map<U, E>((x: string) -> { ... }) : (int | string)[]
-      (x: string) -> { ... } : (x: string) -> string throws never
+    items.map<U, E>((x: string) -> { ... }) : int[]
+      (x: string) -> { ... } : (x: string) -> int throws E
         {
           x
         }
@@ -71,8 +71,8 @@ lambda user.test_unknown_param_type {
 }
 function user.test_unknown_return_type() -> int throws never {
   { : 0
-    let f = : (x: int) -> int throws never
-      (x: int) -> NonExistentType { ... } : (x: int) -> int throws never
+    let f = : (x: int) -> unknown throws never
+      (x: int) -> NonExistentType { ... } : (x: int) -> unknown throws never
         {
           x
         }

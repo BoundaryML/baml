@@ -32,6 +32,7 @@ type ChildReport = TestReport | TestSetReport
 // Runner type aliases — lambda transformers.
 // TestRunner wraps "run test once" into a new execution lambda.
 type TestBody = () -> void throws unknown
+type TestSetBody = (TestCollector) -> void throws unknown
 type TestReportThunk = () -> TestReport throws never
 type TestSetReportThunk = () -> TestSetReport throws never
 type TestRunner = (TestReportThunk) -> TestReportThunk throws never

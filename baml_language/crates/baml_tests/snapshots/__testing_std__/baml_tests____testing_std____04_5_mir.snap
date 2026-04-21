@@ -1,13 +1,14 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 956
 ---
 === MIR2 ===
 
 === MIR2 (package testing) ===
-fn testing.$invoke_collector(collector: (testing.TestCollector) -> void throws never, c: testing.TestCollector) -> void {
+fn testing.$invoke_collector(collector: (testing.TestCollector) -> void throws unknown, c: testing.TestCollector) -> void {
     // Locals:
     let _0: void // _0 // return
-    let _1: (testing.TestCollector) -> void throws never // collector // param
+    let _1: (testing.TestCollector) -> void throws unknown // collector // param
     let _2: testing.TestCollector // c // param
 
     bb0: {
@@ -37,7 +38,7 @@ fn testing.TestRegistry.expand_set(self: testing.TestRegistry, name: string) -> 
     let _13: void[]
     let _14: void[]
     let _15: void
-    let _16: (testing.TestCollector) -> void throws never
+    let _16: (testing.TestCollector) -> void throws unknown
     let _17: testing.TestCollector
     let _18: int // elapsed
     let _19: int
@@ -410,12 +411,12 @@ fn testing.TestCollector.register_test(self: testing.TestCollector, name: string
     }
 }
 
-fn testing.TestCollector.register_test_set(self: testing.TestCollector, name: string, collector: (testing.TestCollector) -> void throws never, runner: ((() -> testing.TestSetReport throws never) -> (() -> testing.TestSetReport throws never) throws never)?) -> void {
+fn testing.TestCollector.register_test_set(self: testing.TestCollector, name: string, collector: (testing.TestCollector) -> void throws unknown, runner: ((() -> testing.TestSetReport throws never) -> (() -> testing.TestSetReport throws never) throws never)?) -> void {
     // Locals:
     let _0: void // _0 // return
     let _1: testing.TestCollector // self // param
     let _2: string // name // param
-    let _3: (testing.TestCollector) -> void throws never // collector // param
+    let _3: (testing.TestCollector) -> void throws unknown // collector // param
     let _4: ((() -> testing.TestSetReport throws never) -> (() -> testing.TestSetReport throws never) throws never)? // runner // param
     let _5: string // full_name
     let _6: bool

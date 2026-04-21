@@ -14,14 +14,14 @@ function user.accept_hidden(cb: user.HiddenHandler) -> int throws never {
 }
 function user.nested_position(cb: ((value: int) -> int throws never) -> int throws never) -> int throws never {
   { : int
-    let inner = : (value: int) -> never throws string
-      (value: int) -> int throws string { ... } : (value: int) -> never throws string
+    let inner = : (value: int) -> int throws string
+      (value: int) -> int throws string { ... } : (value: int) -> int throws string
         {
           throw "boom"
         }
     cb<__effect_param_0>(inner) : int
   }
-  !! 291..296: type mismatch: expected (value: int) -> int throws never, got (value: int) -> never throws string
+  !! 291..296: type mismatch: expected (value: int) -> int throws never, got (value: int) -> int throws string
 }
 lambda user.nested_position {
 }
@@ -43,15 +43,15 @@ function user.fail_stored() -> user.Holder throws never {
   !! 477..482: type mismatch: expected (value: int) -> int throws never, got (value: int) -> int throws string
 }
 function user.fail_returned() -> (value: int) -> int throws never throws never {
-  { : (value: int) -> never throws string
-    let local = : (value: int) -> never throws string
-      (value: int) -> int throws string { ... } : (value: int) -> never throws string
+  { : (value: int) -> int throws string
+    let local = : (value: int) -> int throws string
+      (value: int) -> int throws string { ... } : (value: int) -> int throws string
         {
           throw "boom"
         }
-    local : (value: int) -> never throws string
+    local : (value: int) -> int throws string
   }
-  !! 611..616: type mismatch: expected (value: int) -> int throws never, got (value: int) -> never throws string
+  !! 611..616: type mismatch: expected (value: int) -> int throws never, got (value: int) -> int throws string
 }
 lambda user.fail_returned {
 }

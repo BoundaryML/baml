@@ -10,7 +10,7 @@ class TestRegistration {
 
 class TestSetRegistration {
   name string
-  collector (TestCollector) -> void throws never
+  collector TestSetBody
   runner TestSetRunner?
 }
 
@@ -34,7 +34,7 @@ class TestCollector {
     let _ = self.tests.push(TestRegistration { name: final_name, body: body, runner: runner })
   }
 
-  function register_test_set(self, name: string, collector: (TestCollector) -> void throws never, runner: TestSetRunner?) -> void {
+  function register_test_set(self, name: string, collector: TestSetBody, runner: TestSetRunner?) -> void {
     let full_name = if (self.prefix == "") { name } else { self.prefix + "/" + name }
     let count = 0
     let hash_prefix = full_name + "#"
@@ -57,7 +57,7 @@ class TestCollector {
 
 // Bridge function for the runtime to invoke a testset collector closure.
 // call_function is name-based, so we need this thin wrapper to call closures.
-function $invoke_collector(collector: (TestCollector) -> void throws never, c: TestCollector) -> void {
+function $invoke_collector(collector: TestSetBody, c: TestCollector) -> void {
   collector(c)
 }
 

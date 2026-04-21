@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 893
 ---
 === TIR2 ===
 
@@ -13,7 +14,7 @@ class testing.TestRegistration {
 }
 class testing.TestSetRegistration {
   name: string
-  collector: (testing.TestCollector) -> void throws never
+  collector: testing.TestSetBody
   runner: testing.TestSetRunner?
 }
 class testing.TestCollector {
@@ -62,7 +63,7 @@ function testing.TestCollector.register_test(self: testing.TestCollector, name: 
     let _ = self.tests.push(TestRegistration { name: final_name, body: body, runner: runner }) : int
   }
 }
-function testing.TestCollector.register_test_set(self: testing.TestCollector, name: string, collector: (testing.TestCollector) -> void throws never, runner: testing.TestSetRunner?) -> void throws never {
+function testing.TestCollector.register_test_set(self: testing.TestCollector, name: string, collector: testing.TestSetBody, runner: testing.TestSetRunner?) -> void throws never {
   { : void
     let full_name = : string
       if (self.prefix == "" : bool) : string
@@ -110,7 +111,7 @@ function testing.TestCollector.find_testset(self: testing.TestCollector, name: s
     throw "TestSet not found: " + name : string
   }
 }
-function testing.$invoke_collector(collector: (testing.TestCollector) -> void throws never, c: testing.TestCollector) -> void throws never {
+function testing.$invoke_collector(collector: testing.TestSetBody, c: testing.TestCollector) -> void throws never {
   { : void
     collector(c) : void
   }
@@ -245,7 +246,7 @@ class testing.TestRegistration$stream {
 }
 class testing.TestSetRegistration$stream {
   name: null | string
-  collector: unknown
+  collector: null | testing.TestSetBody$stream
   runner: null | testing.TestSetRunner$stream
 }
 class testing.TestCollector$stream {
@@ -288,6 +289,7 @@ class testing.TestSetReport {
 }
 type testing.ChildReport = testing.TestReport | testing.TestSetReport
 type testing.TestBody = () -> void throws unknown
+type testing.TestSetBody = (testing.TestCollector) -> void throws unknown
 type testing.TestReportThunk = () -> testing.TestReport throws never
 type testing.TestSetReportThunk = () -> testing.TestSetReport throws never
 type testing.TestRunner = (testing.TestReportThunk) -> testing.TestReportThunk throws never
@@ -310,6 +312,7 @@ class testing.TestSetReport$stream {
 }
 type testing.ChildReport$stream = testing.TestReport$stream | testing.TestSetReport$stream
 type testing.TestBody$stream = unknown
+type testing.TestSetBody$stream = unknown
 type testing.TestReportThunk$stream = unknown
 type testing.TestSetReportThunk$stream = unknown
 type testing.TestRunner$stream = unknown

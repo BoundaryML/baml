@@ -1,6 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 35871
+assertion_line: 36196
 ---
 === TIR2 ===
 function user.Greet(name: string) -> string throws never {
@@ -11,7 +11,7 @@ function user.Greet(name: string) -> string throws never {
 function user.$init_test_24(registry: testing.TestCollector) -> ? throws never {
   { : null
     registry.register_test("new style", () -> void { ... }, null) : void
-      () -> void { ... } : () -> void throws never
+      () -> void { ... } : () -> void throws unknown
         {
           let result = "hello"
           assert.not_null(result)

@@ -1077,6 +1077,27 @@ function f() -> null {
 }
 
 #[test]
+fn stored_lambda_with_omitted_throws_stays_closed_in_expr_type() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function f() -> null {
+    let risky = (x: int) -> int {
+        throw "boom"
+    }
+    risky
+    return null
+}
+"#,
+    );
+    assert_eq!(
+        expr_type_in_function(&db, file, "f", "risky"),
+        "(x: int) -> int throws never"
+    );
+}
+
+#[test]
 fn returned_triple_nested_lambda_reads_cleanly() {
     let mut db = make_db();
     let file = db.add_file(

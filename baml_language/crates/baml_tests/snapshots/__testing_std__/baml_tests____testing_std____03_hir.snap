@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 855
 ---
 === HIR2 ===
 
@@ -32,11 +33,11 @@ class testing.TestRegistry {
 }
 class testing.TestSetRegistration {
   name: string
-  collector: (testing.TestCollector) -> void throws never
+  collector: testing.TestSetBody
   runner: testing.TestSetRunner?
 }
 type testing.SerializedTestDef = testing.SerializedTest | testing.SerializedTestSet
-function testing.$invoke_collector(collector: (testing.TestCollector) -> void throws never, c: testing.TestCollector) -> void  [expr] {
+function testing.$invoke_collector(collector: testing.TestSetBody, c: testing.TestCollector) -> void  [expr] {
   {  } collector(c)
 }
 function testing.expand_set(self: ?, name: string) -> testing.SerializedTestDef[]  [expr] {
@@ -54,7 +55,7 @@ function testing.new(prefix: string) -> testing.TestCollector  [expr] {
 function testing.register_test(self: ?, name: string, body: testing.TestBody, runner: testing.TestRunner?) -> void  [expr] {
   { let full_name = if (self.prefix Eq "") {  } name else {  } self.prefix Add "/" Add name; let count = 0; let hash_prefix = full_name Add "#"; for t in self.tests {  } if (t.name Eq full_name Or t.name.startsWith(hash_prefix)) { count Add= 1 } else {  } null; let final_name = if (count Gt 0) {  } full_name Add "#" Add baml.unstable.string(count Add 1) else {  } full_name; let _ = self.tests.push(testing.TestRegistration { name: final_name, body: body, runner: runner }) }
 }
-function testing.register_test_set(self: ?, name: string, collector: (testing.TestCollector) -> void throws never, runner: testing.TestSetRunner?) -> void  [expr] {
+function testing.register_test_set(self: ?, name: string, collector: testing.TestSetBody, runner: testing.TestSetRunner?) -> void  [expr] {
   { let full_name = if (self.prefix Eq "") {  } name else {  } self.prefix Add "/" Add name; let count = 0; let hash_prefix = full_name Add "#"; for ts in self.testsets {  } if (ts.name Eq full_name Or ts.name.startsWith(hash_prefix)) { count Add= 1 } else {  } null; let final_name = if (count Gt 0) {  } full_name Add "#" Add baml.unstable.string(count Add 1) else {  } full_name; let _ = self.testsets.push(testing.TestSetRegistration { name: final_name, collector: collector, runner: runner }) }
 }
 function testing.run_test(body: testing.TestBody, runner: testing.TestRunner?) -> testing.TestReport  [expr] {
@@ -94,5 +95,6 @@ type testing.Outcome = "pass" | "fail" | "error"
 type testing.TestBody = () -> void throws unknown
 type testing.TestReportThunk = () -> testing.TestReport throws never
 type testing.TestRunner = (testing.TestReportThunk) -> testing.TestReportThunk throws never
+type testing.TestSetBody = (testing.TestCollector) -> void throws unknown
 type testing.TestSetReportThunk = () -> testing.TestSetReport throws never
 type testing.TestSetRunner = (testing.TestSetReportThunk) -> testing.TestSetReportThunk throws never

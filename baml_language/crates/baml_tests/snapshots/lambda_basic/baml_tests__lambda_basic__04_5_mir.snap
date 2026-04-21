@@ -306,8 +306,8 @@ fn .<lambda(test_throws, 0)>(x: int) -> null {
 fn user.test_zero_param() -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: () -> 42 throws never // constant
-    let _2: () -> 42 throws never
+    let _1: () -> int throws never // constant
+    let _2: () -> int throws never
 
     bb0: {
         _1 = make_closure lambda[0]();

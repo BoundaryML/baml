@@ -3,12 +3,12 @@ source: crates/baml_tests/src/generated_tests.rs
 assertion_line: 13423
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] Error: type mismatch: expected (value: int) -> int throws never, got (value: int) -> never throws string
+  [type] Error: type mismatch: expected (value: int) -> int throws never, got (value: int) -> int throws string
     ╭─[ negative.baml:15:6 ]
     │
  15 │   cb(inner)
     │      ──┬──  
-    │        ╰──── type mismatch: expected (value: int) -> int throws never, got (value: int) -> never throws string
+    │        ╰──── type mismatch: expected (value: int) -> int throws never, got (value: int) -> int throws string
     │ 
     │ Note: Error code: E0001
 ────╯
@@ -33,12 +33,12 @@ assertion_line: 13423
     │ Note: Error code: E0001
 ────╯
 
-  [type] Error: type mismatch: expected (value: int) -> int throws never, got (value: int) -> never throws string
+  [type] Error: type mismatch: expected (value: int) -> int throws never, got (value: int) -> int throws string
     ╭─[ negative.baml:34:3 ]
     │
  34 │   local
     │   ──┬──  
-    │     ╰──── type mismatch: expected (value: int) -> int throws never, got (value: int) -> never throws string
+    │     ╰──── type mismatch: expected (value: int) -> int throws never, got (value: int) -> int throws string
     │ 
     │ Note: Error code: E0001
 ────╯
