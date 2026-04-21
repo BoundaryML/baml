@@ -133,11 +133,9 @@ impl Tlab {
         // Track allocation for GC heuristic
         self.heap.record_alloc();
 
-        // Get the pointer to the newly written object
-        // SAFETY: We just wrote to runtime_idx, so it's valid
-        let ptr = unsafe {
-            (*self.heap.spaces[self.heap.active_space_index()].get()).get_ptr(runtime_idx)
-        };
+        // Get the pointer to the newly written object in Gen0.
+        // SAFETY: We just wrote to runtime_idx in Gen0, so it's valid.
+        let ptr = unsafe { (*self.heap.gen0.get()).get_ptr(runtime_idx) };
 
         // SAFETY: The pointer is valid and points to a valid object we just wrote
         unsafe { self.heap.make_heap_ptr(ptr) }
@@ -252,6 +250,13 @@ impl Tlab {
     /// - The pointer must be valid (not collected by GC)
     /// - Caller must ensure exclusive access to this object
     /// - Only runtime objects can be written (compile-time objects are immutable)
+    ///
+    /// # Write Barrier
+    ///
+    /// If `ptr` points to an older-generation object, callers must fire the
+    /// generational write barrier for any `HeapPtr` references in `obj` that
+    /// point into a younger generation. During normal execution this is called
+    /// only for Gen0 objects (newly allocated), so no barrier is needed.
     pub unsafe fn set_object(&mut self, ptr: HeapPtr, obj: Object) {
         // SAFETY: Caller ensures exclusive access
         // Direct write to the object through the pointer
@@ -294,8 +299,8 @@ mod tests {
         let canary_idx = ct_len + heap.tlab_size();
         let runtime_idx = canary_idx - ct_len;
         unsafe {
-            let space = &*heap.spaces[heap.active_space_index()].get();
-            space.set(runtime_idx, Object::String("clobbered".to_string()));
+            let gen0 = &*heap.gen0.get();
+            gen0.set(runtime_idx, Object::String("clobbered".to_string()));
         }
 
         let result = catch_unwind(AssertUnwindSafe(|| {
@@ -454,7 +459,7 @@ mod tests {
         let mut tlab = Tlab::new(heap);
 
         // Simulate a class at index 0
-        let class_ptr = tlab.alloc(Object::Class(Class {
+        let class_ptr = tlab.alloc(Object::Class(Box::new(Class {
             name: baml_type::TypeName::local(baml_type::Name::new("TestClass")),
             fields: vec![
                 bex_vm_types::ClassField {
@@ -480,7 +485,7 @@ mod tests {
             alias: None,
             type_tag: 100,
             ty_attr: baml_type::TyAttr::default(),
-        }));
+        })));
 
         // Allocate an instance of that class
         let fields = vec![Value::Int(10), Value::Int(20)];
@@ -506,7 +511,7 @@ mod tests {
         let mut tlab = Tlab::new(heap);
 
         // Simulate an enum at index 0
-        let enum_ptr = tlab.alloc(Object::Enum(Enum {
+        let enum_ptr = tlab.alloc(Object::Enum(Box::new(Enum {
             name: baml_type::TypeName::local(baml_type::Name::new("Color")),
             variants: vec![
                 bex_vm_types::EnumVariant {
@@ -531,7 +536,7 @@ mod tests {
             description: None,
             alias: None,
             ty_attr: baml_type::TyAttr::default(),
-        }));
+        })));
 
         // Allocate a variant (Color::Green = index 1)
         let variant_ptr = tlab.alloc_variant(enum_ptr, 1);
@@ -564,9 +569,6 @@ mod tests {
     /// 2. GC runs, moves objects to new space, invalidates TLAB
     /// 3. VM continues allocating (TLAB refills from new space)
     ///
-    /// TODO: Re-enable once GC is updated to use HeapPtr instead of ObjectIndex.
-    /// The test needs `collect_garbage_with_forwarding` to return a
-    /// `HashMap<HeapPtr, HeapPtr>` forwarding table.
     #[test]
     fn test_miri_tlab_invalidation_and_refill() {
         let heap = BexHeap::with_tlab_size(vec![], 10);
@@ -578,8 +580,7 @@ mod tests {
 
         assert!(tlab.is_valid());
 
-        let (stats, _remapped, _forwarding) =
-            unsafe { heap.collect_garbage_with_forwarding(&[obj1, obj2]) };
+        let (stats, _remapped, _forwarding) = unsafe { heap.collect_garbage(&[obj1, obj2]) };
         assert_eq!(stats.live_count, 2);
 
         // Invalidate TLAB (what bex_engine does after GC)

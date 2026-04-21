@@ -16,9 +16,11 @@
 
 use std::{collections::HashMap, sync::Arc};
 
-use ::bex_vm_types::types::ErrorClass;
+use ::bex_vm_types::{EarlyYieldCheck, RootHaver, types::ErrorClass};
 use ::core::any::TypeId;
-use bex_heap::{BexHeap, Tlab};
+#[cfg(not(target_arch = "wasm32"))]
+use ::core::sync::atomic::AtomicBool;
+use bex_heap::{BexHeap, Generation, Tlab};
 use bex_vm_types::{
     BinOp, CmpOp, FunctionKind, GlobalPool, HeapPtr, Instruction, Object, ObjectIndex, ObjectPool,
     ObjectType, PanicClass, StackIndex, UnaryOp, Value, Variant,
@@ -53,6 +55,15 @@ pub(crate) struct BytecodeFrame {
     pub(crate) locals_offset: StackIndex,
 }
 
+impl RootHaver for BytecodeFrame {
+    fn collect_roots(&self, roots: &mut Vec<HeapPtr>) {
+        roots.push(self.function);
+    }
+    fn forward_roots(&mut self, roots: &HashMap<HeapPtr, HeapPtr>) {
+        self.function = roots.get(&self.function).copied().unwrap_or(self.function);
+    }
+}
+
 /// Native continuation frame — pushed when a native function yields via
 /// `NativeCallResult::YieldToCall`. Sits below the callback's bytecode
 /// frame on the call stack and is popped when the callback returns.
@@ -61,6 +72,17 @@ pub(crate) struct NativeFrame {
     pub(crate) function: HeapPtr,
     /// The continuation to invoke with the callback's return value.
     pub(crate) continuation: Box<dyn crate::package_baml::Continuation>,
+}
+
+impl RootHaver for NativeFrame {
+    fn collect_roots(&self, roots: &mut Vec<HeapPtr>) {
+        roots.push(self.function);
+        roots.extend_from_slice(&self.continuation.gc_roots());
+    }
+    fn forward_roots(&mut self, roots: &HashMap<HeapPtr, HeapPtr>) {
+        self.function = roots.get(&self.function).copied().unwrap_or(self.function);
+        self.continuation.apply_forwarding(roots);
+    }
 }
 
 /// Call frame — either a bytecode frame or a native continuation frame.
@@ -75,6 +97,21 @@ impl Frame {
         match self {
             Frame::Bytecode(f) => f.function,
             Frame::Native(f) => f.function,
+        }
+    }
+}
+
+impl RootHaver for Frame {
+    fn collect_roots(&self, roots: &mut Vec<HeapPtr>) {
+        match self {
+            Frame::Bytecode(f) => f.collect_roots(roots),
+            Frame::Native(f) => f.collect_roots(roots),
+        }
+    }
+    fn forward_roots(&mut self, roots: &HashMap<HeapPtr, HeapPtr>) {
+        match self {
+            Frame::Bytecode(f) => f.forward_roots(roots),
+            Frame::Native(f) => f.forward_roots(roots),
         }
     }
 }
@@ -202,6 +239,8 @@ pub struct BexVm {
     /// Reference to the shared heap (long-lived, shared across VMs).
     pub heap: Arc<BexHeap>,
 
+    pub early_yield: EarlyYieldCheck,
+
     /// Thread-local allocation buffer (exclusive to this VM).
     pub tlab: Tlab,
 
@@ -290,6 +329,9 @@ pub enum VmExecState {
         /// (`file_id`, line, column, `start_offset`, `end_offset`).
         source_location: Option<(u32, u32, u32, u32, u32)>,
     },
+
+    /// We are still executing, but we should yield to allow other threads or the GC to run.
+    EarlyYield,
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -468,6 +510,7 @@ impl BexVm {
         heap: Arc<BexHeap>,
         globals: GlobalPool,
         resolved_class_names: HashMap<String, HeapPtr>,
+        #[cfg(not(target_arch = "wasm32"))] park_requested: Arc<AtomicBool>,
         argv: Arc<[String]>,
     ) -> Self {
         let tlab = Tlab::new(Arc::clone(&heap));
@@ -492,10 +535,16 @@ impl BexVm {
             })
             .collect();
 
+        let early_yield = EarlyYieldCheck::new(
+            #[cfg(not(target_arch = "wasm32"))]
+            park_requested,
+        );
+
         Self {
             frames: Vec::new(),
             stack: EvalStack::new(),
             heap,
+            early_yield,
             tlab,
             globals,
             resolved_class_names,
@@ -541,6 +590,42 @@ impl BexVm {
         );
         // SAFETY: We have &mut self, ensuring exclusive access to this VM's objects
         unsafe { ptr.get_mut() }
+    }
+
+    /// Write barrier for field/element/cell writes.
+    ///
+    /// Called *before* the actual field write at each mutation site. If `container_ptr`
+    /// is in an older generation than the object being written (`written_value`), the
+    /// card containing `container_ptr` is marked dirty so partial GC can discover
+    /// the cross-generation reference.
+    ///
+    /// This is a no-op when either side is not a heap object, or when the container
+    /// is in Gen0 (no card table for Gen0).
+    #[inline]
+    pub fn write_barrier(&self, container_ptr: HeapPtr, written_value: Value) {
+        if let Value::Object(ref_ptr) = written_value {
+            let container_gen = self.heap.generation_of(container_ptr);
+            let ref_gen = self.heap.generation_of(ref_ptr);
+            if container_gen > ref_gen {
+                self.heap.mark_card_for_ptr(container_ptr);
+            }
+        }
+    }
+
+    /// Conservative write barrier for mutable accessor paths (builtin dispatch).
+    ///
+    /// Unconditionally marks the card dirty if `container_ptr` is in an older
+    /// generation. Used by `as_array_mut` / `as_map_mut` where the actual written
+    /// value is not yet known (it's supplied by the callee trait method).
+    ///
+    /// This over-marks (any mutable access to an older-gen object dirties the card),
+    /// but it is always safe and the cost is negligible since most objects are Gen0.
+    #[inline]
+    pub(crate) fn conservative_write_barrier(&self, container_ptr: HeapPtr) {
+        let container_gen = self.heap.generation_of(container_ptr);
+        if container_gen > Generation::Gen0 {
+            self.heap.mark_card_for_ptr(container_ptr);
+        }
     }
 
     /// Collect all `HeapPtr`s stored in call frames.
@@ -661,6 +746,11 @@ impl BexVm {
     /// Get mutable array from a Value.
     pub fn as_array_mut(&mut self, value: &Value) -> Result<&mut Vec<Value>, VmInternalError> {
         let ptr = self.as_object_ptr(value, ObjectType::Array)?;
+        // Conservative write barrier: any mutable access to an older-generation
+        // array may introduce cross-generation references. Used by builtin dispatch
+        // (Array.push, Array.pop, etc.) where the actual written values are not
+        // visible at this call site.
+        self.conservative_write_barrier(ptr);
         // Check type first to avoid borrow issues
         if !matches!(self.get_object(ptr), Object::Array(_)) {
             return Err(VmInternalError::TypeError {
@@ -693,6 +783,10 @@ impl BexVm {
         value: &Value,
     ) -> Result<&mut IndexMap<String, Value>, VmInternalError> {
         let index = self.as_object_ptr(value, ObjectType::Map)?;
+        // Conservative write barrier: any mutable access to an older-generation
+        // map may introduce cross-generation references. Used by builtin dispatch
+        // (Map.set, etc.) where the actual written values are not visible here.
+        self.conservative_write_barrier(index);
         // Check type first to avoid borrow issues
         if !matches!(self.get_object(index), Object::Map(_)) {
             return Err(VmInternalError::TypeError {
@@ -721,8 +815,13 @@ impl BexVm {
     /// Creates a VM from a compiled [`bex_vm_types::Program`].
     ///
     /// This is primarily for testing. In production, use `BexEngine` which
-    /// manages the heap across multiple VM instances.
-    pub fn from_program(program: bex_vm_types::Program) -> Result<Self, VmInternalError> {
+    /// manages the heap across multiple VM instances. On native targets the
+    /// caller supplies the `park_requested` atomic so tests can simulate the
+    /// coordination signal that `BexEngine::collect_garbage` uses.
+    pub fn from_program(
+        program: bex_vm_types::Program,
+        #[cfg(not(target_arch = "wasm32"))] park_requested: Arc<AtomicBool>,
+    ) -> Result<Self, VmInternalError> {
         let bytecode = convert_program(program)?;
 
         // Extract compile-time objects for the heap
@@ -750,6 +849,8 @@ impl BexVm {
             heap,
             globals,
             resolved_class_names,
+            #[cfg(not(target_arch = "wasm32"))]
+            park_requested,
             Arc::from(Vec::<String>::new()),
         ))
     }
@@ -809,6 +910,9 @@ impl BexVm {
         future_ptr: HeapPtr,
         value: Value,
     ) -> Result<(), VmInternalError> {
+        // Write barrier before mutating the future object.
+        self.write_barrier(future_ptr, value);
+
         let Object::Future(future) = self.get_object_mut(future_ptr) else {
             return Err(VmInternalError::TypeError {
                 expected: FutureType::Any.into(),
@@ -977,7 +1081,7 @@ impl BexVm {
 
     /// Allocate a type descriptor object on the heap.
     pub fn alloc_type(&mut self, ty: baml_type::Ty) -> Value {
-        Value::Object(self.tlab.alloc(Object::Type(ty)))
+        Value::Object(self.tlab.alloc(Object::Type(Box::new(ty))))
     }
 
     /// Stops the execution of the current bytecode in favor of the given
@@ -1603,6 +1707,9 @@ impl BexVm {
             }
         }
 
+        if self.early_yield.should_early_yield() {
+            return Ok(Some(VmExecState::EarlyYield));
+        }
         Ok(None)
     }
 
@@ -1942,6 +2049,15 @@ impl BexVm {
     /// Returns `Ok(Some(state))` when the VM must yield control flow to the
     /// embedder (await, schedule, complete, notify). Returns `Ok(None)` when
     /// execution should continue to the next instruction.
+    ///
+    /// All control flow instructions should include
+    /// ```rust,ignore
+    /// if self.early_yield.should_early_yield() {
+    ///     return Ok(Some(VmExecState::EarlyYield));
+    /// }
+    /// ```
+    /// at the end to allow early yielding in the event of a long-running
+    /// operation.
     fn step(
         &mut self,
         frame_idx: &mut usize,
@@ -2073,6 +2189,7 @@ impl BexVm {
                 // Consume the value. Read impl of Instruction::StoreVar.
                 let value = self.stack.ensure_pop()?;
 
+                // No write barrier: globals is a VM-owned root structure, not a heap object.
                 self.globals[index] = value;
             }
 
@@ -2128,6 +2245,9 @@ impl BexVm {
                     new_value,
                 );
 
+                // Write barrier: mark card if instance is in an older generation than the value.
+                self.write_barrier(instance_index, new_value);
+
                 // Set the new value.
                 if let Object::Instance(instance) = self.get_object_mut(instance_index) {
                     instance.fields[index] = new_value;
@@ -2174,6 +2294,9 @@ impl BexVm {
                     new_value,
                 );
 
+                // Write barrier: mark card if instance is in an older generation than the value.
+                self.write_barrier(instance_index, new_value);
+
                 // Set the new value.
                 if let Object::Instance(instance) = self.get_object_mut(instance_index) {
                     instance.fields[index] = new_value;
@@ -2212,6 +2335,9 @@ impl BexVm {
                 bf.instruction_ptr = instruction_ptr
                     .checked_add_signed(offset)
                     .ok_or(VmInternalError::InvalidJump)?;
+                if self.early_yield.should_early_yield() {
+                    return Ok(Some(VmExecState::EarlyYield));
+                }
             }
 
             Instruction::PopJumpIfFalse(offset) => {
@@ -2241,6 +2367,9 @@ impl BexVm {
                         .into());
                     }
                 }
+                if self.early_yield.should_early_yield() {
+                    return Ok(Some(VmExecState::EarlyYield));
+                }
             }
 
             Instruction::JumpIfFalse(offset) => {
@@ -2267,11 +2396,17 @@ impl BexVm {
                         .into());
                     }
                 }
+                if self.early_yield.should_early_yield() {
+                    return Ok(Some(VmExecState::EarlyYield));
+                }
             }
 
             Instruction::Throw => {
                 let value = self.stack.ensure_pop()?;
                 self.try_unwind_exception(frame_idx, function, value)?;
+                if self.early_yield.should_early_yield() {
+                    return Ok(Some(VmExecState::EarlyYield));
+                }
             }
 
             Instruction::BinOp(op) => {
@@ -2813,6 +2948,9 @@ impl BexVm {
                     new_value,
                 );
 
+                // Write barrier: mark card if array is in an older generation than the value.
+                self.write_barrier(array_object_index, new_value);
+
                 // Set the new value.
                 match self.get_object_mut(array_object_index) {
                     Object::Array(array) => {
@@ -2882,6 +3020,9 @@ impl BexVm {
                     old_value,
                     new_value,
                 );
+
+                // Write barrier: mark card if map is in an older generation than the value.
+                self.write_barrier(map_index, new_value);
 
                 // Set the new value.
                 if let Object::Map(map) = self.get_object_mut(map_index) {
@@ -3057,6 +3198,9 @@ impl BexVm {
                 // Replace the future on the eval stack with the ready value
                 self.stack.pop();
                 self.stack.push(ready_value);
+                if self.early_yield.should_early_yield() {
+                    return Ok(Some(VmExecState::EarlyYield));
+                }
             }
 
             Instruction::Watch(index) => {
@@ -3119,6 +3263,9 @@ impl BexVm {
                         object_index,
                     );
                 }
+                if self.early_yield.should_early_yield() {
+                    return Ok(Some(VmExecState::EarlyYield));
+                }
             }
 
             Instruction::Unwatch(index) => {
@@ -3142,6 +3289,9 @@ impl BexVm {
                             NodeId::HeapObject(object_index),
                         );
                     }
+                }
+                if self.early_yield.should_early_yield() {
+                    return Ok(Some(VmExecState::EarlyYield));
                 }
             }
 
@@ -3262,6 +3412,9 @@ impl BexVm {
                         return Ok(Some(state));
                     }
                 }
+                if self.early_yield.should_early_yield() {
+                    return Ok(Some(VmExecState::EarlyYield));
+                }
             }
 
             Instruction::Return => {
@@ -3327,6 +3480,9 @@ impl BexVm {
                 // Native continuation frames (from CPS callbacks like
                 // array.map) are handled at the top of the exec loop.
                 // Just update frame_idx so the loop detects them.
+                if self.early_yield.should_early_yield() {
+                    return Ok(Some(VmExecState::EarlyYield));
+                }
             }
 
             Instruction::AllocMap(n) => {
@@ -3397,6 +3553,10 @@ impl BexVm {
                 bf.instruction_ptr = instruction_ptr
                     .checked_add_signed(offset)
                     .ok_or(VmInternalError::InvalidJump)?;
+
+                if self.early_yield.should_early_yield() {
+                    return Ok(Some(VmExecState::EarlyYield));
+                }
             }
 
             Instruction::Discriminant => {
@@ -3501,6 +3661,9 @@ impl BexVm {
                 if is_panic {
                     self.try_unwind_exception(frame_idx, function, value)?;
                 }
+                if self.early_yield.should_early_yield() {
+                    return Ok(Some(VmExecState::EarlyYield));
+                }
             }
 
             Instruction::Unreachable => {
@@ -3589,6 +3752,8 @@ impl BexVm {
                     }
                     .into());
                 };
+                // Write barrier before the mutable borrow so we hold only &self.heap.
+                self.write_barrier(cell_ptr, value);
                 // SAFETY: cell_ptr is a VM-owned Cell object; single-threaded.
                 let obj = unsafe { cell_ptr.get_mut() };
                 let Object::Cell(cell) = obj else {
@@ -3653,6 +3818,7 @@ impl BexVm {
                     .into());
                 };
                 let cell_value = closure.captures[idx];
+                // `closure` (and `obj`) are no longer used past this point.
                 let Value::Object(cell_ptr) = cell_value else {
                     return Err(VmInternalError::TypeError {
                         expected: ObjectType::Cell.into(),
@@ -3660,6 +3826,10 @@ impl BexVm {
                     }
                     .into());
                 };
+                // Write barrier: mark card if cell is in an older generation than the value.
+                // The shared borrows of `obj`/`closure` have ended, so `write_barrier`
+                // (which borrows `self` immutably via `self.heap`) is safe here.
+                self.write_barrier(cell_ptr, value);
                 // SAFETY: cell_ptr is a VM-owned Cell object; single-threaded.
                 let cell_obj = unsafe { cell_ptr.get_mut() };
                 let Object::Cell(cell) = cell_obj else {
@@ -3731,5 +3901,50 @@ impl BexVm {
         }
 
         Ok(None)
+    }
+}
+
+impl ::bex_vm_types::RootHaver for BexVm {
+    fn collect_roots(&self, roots: &mut Vec<HeapPtr>) {
+        // Stack values
+        roots.extend(self.stack.iter().filter_map(|v| match v {
+            Value::Object(ptr) => Some(*ptr),
+            _ => None,
+        }));
+
+        // Watch state (last_assigned/last_notified values that aren't on the stack)
+        self.watch.collect_roots(roots);
+
+        // Frame function pointers (needed once closures are heap-allocated)
+        roots.extend(self.collect_frame_roots());
+
+        // Note: Frame locals are stored in the stack at the locals_offset position,
+        // so they're already included in the stack iteration above.
+    }
+
+    fn forward_roots(&mut self, roots: &HashMap<HeapPtr, HeapPtr>) {
+        // The GC has reset the heap's TLAB cursor (`gen0_next_chunk`) and
+        // swapped semispaces, so this VM's cached `alloc_ptr`/`alloc_limit`
+        // now point into a region the heap will hand out to other VMs as a
+        // fresh chunk. Drop them so the next allocation refills from the
+        // post-GC cursor.
+        self.tlab.invalidate();
+
+        // Stack values
+        for value in &mut self.stack {
+            if let Value::Object(ptr) = value {
+                if let Some(&new_ptr) = roots.get(ptr) {
+                    *ptr = new_ptr;
+                }
+            }
+        }
+
+        // Watch state (last_assigned/last_notified values that aren't on the stack)
+        self.watch.forward_roots(roots);
+
+        // Frame function pointers (needed once closures are heap-allocated)
+        for frame in &mut self.frames {
+            frame.forward_roots(roots);
+        }
     }
 }

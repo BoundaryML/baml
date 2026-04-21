@@ -500,7 +500,7 @@ impl<'a> BexValue<'a> {
                     actual: obj.to_string(),
                 });
             };
-            Ok(ty.clone())
+            Ok((**ty).clone())
         }
 
         match self {
@@ -690,7 +690,9 @@ impl<'a> BexValue<'a> {
                     Object::Collector(c) => {
                         Ok(BexExternalValue::Adt(BexExternalAdt::Collector(c.clone())))
                     }
-                    Object::Type(ty) => Ok(BexExternalValue::Adt(BexExternalAdt::Type(ty.clone()))),
+                    Object::Type(ty) => {
+                        Ok(BexExternalValue::Adt(BexExternalAdt::Type((**ty).clone())))
+                    }
                     Object::Uint8Array(bytes) => Ok(BexExternalValue::Uint8Array(bytes.clone())),
                     Object::RustData(data) => Ok(bex_external_types::try_convert_rust_data(data)
                         .unwrap_or_else(|| BexExternalValue::RustData(data.clone()))),

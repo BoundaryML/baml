@@ -3273,14 +3273,65 @@ impl Printable for ThrowsClause {
     }
 }
 
+/// Arrow token in a lambda expression. Accepts either `->` (canonical) or
+/// `=>` (accepted permissively for ergonomic parity with JS/TS arrow functions);
+/// the formatter always emits `->`.
+#[derive(Debug)]
+pub enum LambdaArrow {
+    Arrow(t::Arrow),
+    FatArrow(t::FatArrow),
+}
+
+impl LambdaArrow {
+    #[must_use]
+    pub fn span(&self) -> TextRange {
+        match self {
+            LambdaArrow::Arrow(t) => t.span(),
+            LambdaArrow::FatArrow(t) => t.span(),
+        }
+    }
+
+    /// Returns true if the source used `=>` instead of the canonical `->`.
+    #[must_use]
+    pub fn is_fat_arrow(&self) -> bool {
+        matches!(self, LambdaArrow::FatArrow(_))
+    }
+}
+
+impl FromCST for LambdaArrow {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        let token = StrongAstError::assert_is_token(elem)?;
+        match token.kind() {
+            SyntaxKind::ARROW => Ok(LambdaArrow::Arrow(t::Arrow::new_from_span(
+                token.text_range(),
+            ))),
+            SyntaxKind::FAT_ARROW => Ok(LambdaArrow::FatArrow(t::FatArrow::new_from_span(
+                token.text_range(),
+            ))),
+            _ => Err(StrongAstError::UnexpectedKindDesc {
+                expected_desc: "ARROW or FAT_ARROW".into(),
+                found: token.kind(),
+                at: token.text_range(),
+            }),
+        }
+    }
+}
+
+impl KnownKind for LambdaArrow {
+    fn kind() -> SyntaxKind {
+        // Primary/canonical kind; `from_cst` also accepts FAT_ARROW.
+        SyntaxKind::ARROW
+    }
+}
+
 /// Corresponds to a [`SyntaxKind::LAMBDA_EXPR`] node.
 ///
-/// Syntax: `[<T, U>] (params) -> [RetType] [throws E] { body }`
+/// Syntax: `[<T, U>] (params) (-> | =>) [RetType] [throws E] { body }`
 #[derive(Debug)]
 pub struct LambdaExpr {
     pub generic_params: Option<GenericParamList>,
     pub param_list: super::FunctionParamList,
-    pub arrow: t::Arrow,
+    pub arrow: LambdaArrow,
     pub return_type: Option<crate::ast::Type>,
     pub throws: Option<ThrowsClause>,
     pub block: BlockExpr,
@@ -3306,8 +3357,8 @@ impl FromCST for LambdaExpr {
         // Parameter list: (x: int, y: string) or ()
         let param_list: super::FunctionParamList = it.expect_parse()?;
 
-        // Arrow: ->
-        let arrow: t::Arrow = it.expect_parse()?;
+        // Arrow: `->` or `=>` (formatter normalizes to `->`)
+        let arrow: LambdaArrow = it.expect_parse()?;
 
         // Optional return type: TYPE_EXPR before THROWS_CLAUSE or BLOCK_EXPR
         let return_type = if it.peek().map(|e| e.kind()) == Some(SyntaxKind::TYPE_EXPR) {
@@ -3357,9 +3408,8 @@ impl Printable for LambdaExpr {
         // Parameter list
         printer.print(&self.param_list, shape.clone());
 
-        // Space + arrow
-        printer.print_str(" ");
-        printer.print_raw_token(&self.arrow);
+        // Space + arrow (always normalize to canonical `->`)
+        printer.print_str(" ->");
 
         // Optional return type
         if let Some(ref ret) = self.return_type {

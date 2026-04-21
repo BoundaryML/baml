@@ -11,7 +11,7 @@ use bex_heap::BexValue;
 use bex_vm::BexVm;
 use bex_vm_types::{HeapPtr, Object, Value};
 
-use crate::{BexEngine, EngineError};
+use crate::{BexEngine, EngineError, heap_guard::ActiveHeapPermit};
 
 // ============================================================================
 // VM Value to External Conversion
@@ -195,7 +195,7 @@ impl BexEngine {
                 type_name: "future".to_string(),
             }),
             Object::Collector(c) => Ok(BexExternalValue::Adt(BexExternalAdt::Collector(c.clone()))),
-            Object::Type(ty) => Ok(BexExternalValue::Adt(BexExternalAdt::Type(ty.clone()))),
+            Object::Type(ty) => Ok(BexExternalValue::Adt(BexExternalAdt::Type((**ty).clone()))),
             Object::Uint8Array(bytes) => Ok(BexExternalValue::Uint8Array(bytes.clone())),
             Object::RustData(arc) => {
                 bex_external_types::try_convert_rust_data(arc).ok_or_else(|| {
@@ -229,14 +229,13 @@ impl BexEngine {
     /// Convert a `BexExternalValue` result from sys ops back to a VM Value.
     pub(crate) fn convert_external_to_vm_value(
         &self,
-        vm: &mut BexVm,
+        vm: &mut ActiveHeapPermit<BexVm>,
         external: BexExternalValue,
-        guard: &EpochGuard<'_>,
     ) -> Value {
         match external {
             BexExternalValue::Handle(handle) => Value::Object(
                 handle
-                    .object_ptr(guard)
+                    .object_ptr(&vm.epoch_guard())
                     .expect("Handle should be valid - object was returned to external code"),
             ),
             BexExternalValue::Null => Value::Null,
@@ -247,14 +246,14 @@ impl BexEngine {
             BexExternalValue::Array { items, .. } => {
                 let values: Vec<Value> = items
                     .into_iter()
-                    .map(|v| self.convert_external_to_vm_value(vm, v, guard))
+                    .map(|v| self.convert_external_to_vm_value(vm, v))
                     .collect();
                 vm.alloc_array(values)
             }
             BexExternalValue::Map { entries, .. } => {
                 let values: indexmap::IndexMap<String, Value> = entries
                     .into_iter()
-                    .map(|(k, v)| (k, self.convert_external_to_vm_value(vm, v, guard)))
+                    .map(|(k, v)| (k, self.convert_external_to_vm_value(vm, v)))
                     .collect();
                 vm.alloc_map(values)
             }
@@ -281,7 +280,7 @@ impl BexEngine {
                     let ext = fields.get(&class_field.name).unwrap_or_else(|| {
                         panic!("missing field '{}' in Instance", class_field.name)
                     });
-                    values.push(self.convert_external_to_vm_value(vm, ext.clone(), guard));
+                    values.push(self.convert_external_to_vm_value(vm, ext.clone()));
                 }
                 vm.alloc_instance(*class_ptr, values)
             }
@@ -305,9 +304,7 @@ impl BexEngine {
                     });
                 vm.alloc_variant(*enum_ptr, index)
             }
-            BexExternalValue::Union { value, .. } => {
-                self.convert_external_to_vm_value(vm, *value, guard)
-            }
+            BexExternalValue::Union { value, .. } => self.convert_external_to_vm_value(vm, *value),
             BexExternalValue::Adt(BexExternalAdt::Collector(c)) => vm.alloc_collector(c),
             BexExternalValue::Adt(BexExternalAdt::Type(ty)) => vm.alloc_type(ty),
             BexExternalValue::Adt(BexExternalAdt::PromptAst(_)) => {

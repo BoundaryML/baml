@@ -23,51 +23,65 @@
 //!
 //! # Garbage Collection Coordination
 //!
-//! The engine coordinates GC using an epoch-based system:
+//! The engine coordinates GC through a [`HeapPermitManager`]. Every
+//! `call_function` invocation holds an [`ActiveHeapPermit`] for the duration
+//! of its VM's execution; the permit is released at async safepoints (e.g.
+//! during `Await`). GC is a "request-and-wait" operation:
 //!
-//! 1. **Epoch tracking**: Each `call_function` registers with the current epoch
-//! 2. **GC trigger**: `collect_garbage()` increments epoch, causing old-epoch VMs to park
-//! 3. **Safe collection**: Once all VMs park, GC collects roots from:
-//!    - Handle table (objects returned to external code)
-//!    - Parked VM stacks (via VM pointer registry)
-//! 4. **Stack update**: GC updates parked VM stacks with forwarding pointers
-//! 5. **TLAB invalidation**: Parked VMs get TLABs invalidated before resuming
-//! 6. **Resume**: `gc_complete.notify_waiters()` releases parked VMs
+//! 1. **Trigger**: [`BexEngine::collect_garbage`] calls
+//!    [`HeapPermitManager::request_park`], which drains all semaphore permits.
+//! 2. **Park**: running VMs release their permits at the next safepoint; new
+//!    `call_function` invocations block in `HeapPermitManager::new_permit`
+//!    because the manager's holders mutex is held by the GC.
+//! 3. **Collect roots**: [`HeapGuard`] iterates the live permit holders (via
+//!    weak references) and calls each `RootHaver::collect_roots`, unioned
+//!    with `BexHeap::collect_handle_roots` for FFI-held objects.
+//! 4. **GC**: `BexHeap::collect_garbage_generational` runs under the guard;
+//!    produces a forwarding map.
+//! 5. **Fixup**: `HeapGuard` calls each parked holder's
+//!    `RootHaver::forward_roots`. The `BexVm` impl of `forward_roots` also
+//!    invalidates the VM's TLAB so post-GC allocations refill from the new
+//!    Gen0 cursor.
+//! 6. **Resume**: dropping the `HeapGuard` releases the semaphore; parked
+//!    VMs re-acquire and continue.
 //!
 //! ## Safety Invariants
 //!
-//! - VMs register pointers before parking, unregister after waking
-//! - GC only accesses VM stacks while holding `parked_vms` lock
-//! - Handles always resolve through table (no cached indices)
-//! - New calls wait for in-progress GC before processing handle args
+//! - A VM can only mutate its own heap state while holding an
+//!   [`ActiveHeapPermit`]. GC cannot start until every active permit has
+//!   been released.
+//! - Handles are registered in `BexHeap::handles` before any GC could
+//!   observe them, and the write lock on that table serializes against
+//!   GC's `update_handles`.
+//! - New `call_function` invocations block on the holders mutex during
+//!   GC, so no fresh permit enters circulation mid-collection.
 //!
 //! # Unsafe Code
 //!
 //! This module uses unsafe code for:
-//! - `VmPtr` Send implementation: Raw VM pointers stored for GC root collection
-//! - Direct heap access: Reading objects during value conversion (index from valid handle)
-//! - GC coordination: Dereferencing parked VM pointers to collect/update roots
-//! - Epoch guards: Creating guards after registering with the epoch system
+//! - `PermitCell<T>` Send/Sync: single-threaded access is enforced by the
+//!   semaphore/holders-mutex pair.
+//! - Direct heap access during value conversion (always under an active
+//!   permit or a `with_gc_protection` read guard).
 //!
-//! Safety is ensured by the epoch-based GC coordination system described above.
+//! Safety is ensured by the permit/guard coordination system described above.
 
 #![allow(unsafe_code)]
 
 mod conversion;
 mod function_call_context;
+mod heap_guard;
 use std::{
     collections::HashMap,
-    sync::{
-        Arc, Mutex,
-        atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
-    },
+    sync::{Arc, Mutex, atomic::Ordering},
 };
 
-use async_trait::async_trait;
-pub use bex_events::HostSpanContext;
-use bex_events::{EventKind, FunctionEnd, FunctionEvent, FunctionStart, SpanContext};
 // Re-export event types for callers.
-pub use bex_events::{RuntimeEvent, SpanId};
+use ::bex_vm_types::RootHaver;
+use ::core::sync::atomic::AtomicBool;
+use async_trait::async_trait;
+use bex_events::{EventKind, FunctionEnd, FunctionEvent, FunctionStart, SpanContext};
+pub use bex_events::{HostSpanContext, RuntimeEvent, SpanId};
 pub use bex_external_types::{BexExternalValue, EpochGuard, Ty, TypeName, UnionMetadata};
 use bex_heap::BexHeap;
 // Re-export GcStats for users of the engine
@@ -80,9 +94,11 @@ pub use function_call_context::{FunctionCallContext, FunctionCallContextBuilder}
 pub use sys_types::CallId;
 use sys_types::{OpError, SysOpResult};
 use thiserror::Error;
-use tokio::sync::{Notify, mpsc};
+use tokio::sync::mpsc;
 pub use tokio_util::sync::CancellationToken;
 use web_time::{Instant, SystemTime};
+
+pub use crate::heap_guard::{ActiveHeapPermit, HeapGuard, HeapPermitManager, InactiveHeapPermit};
 
 // ============================================================================
 // Engine Types
@@ -133,80 +149,6 @@ impl AbortHandlesGuard {
 impl Drop for AbortHandlesGuard {
     fn drop(&mut self) {
         self.abort_all();
-    }
-}
-
-/// Wrapper for VM pointer that implements Send.
-///
-/// # Safety
-///
-/// This is safe because:
-/// - The pointer is only used while holding the `parked_vms` lock
-/// - We only dereference when all VMs are parked at safepoints
-/// - The VM lives on the async task's stack and won't move/drop while parked
-struct VmPtr(*const BexVm);
-
-// SAFETY: We control all access through the mutex and only use while VMs are parked
-unsafe impl Send for VmPtr {}
-
-/// State for a single epoch slot.
-/// Used to track VMs that started in a particular epoch.
-struct EpochState {
-    /// Number of VMs started in this epoch that haven't completed.
-    active: AtomicUsize,
-    /// Number of VMs parked waiting for GC.
-    parked: AtomicUsize,
-    /// Pointers to parked VMs for root collection during GC.
-    ///
-    /// # Safety
-    ///
-    /// These raw pointers are valid because:
-    /// - VM is borrowed from `call_function`'s stack frame
-    /// - `.await` on `gc_complete` suspends but doesn't drop the VM
-    /// - GC only reads/writes while all VMs are parked
-    /// - VM unregisters before resuming execution
-    parked_vms: Mutex<Vec<VmPtr>>,
-}
-
-impl EpochState {
-    fn new() -> Self {
-        Self {
-            active: AtomicUsize::new(0),
-            parked: AtomicUsize::new(0),
-            parked_vms: Mutex::new(Vec::new()),
-        }
-    }
-}
-
-/// RAII guard: inserts (`call_id`, cancel) on construction and removes `call_id` on drop,
-/// so `active_calls` is cleaned up on all exit paths (success, early return, or panic).
-struct ActiveCallGuard<'a> {
-    active_calls: &'a Mutex<HashMap<CallId, CancellationToken>>,
-    call_id: CallId,
-}
-
-impl<'a> ActiveCallGuard<'a> {
-    fn new(
-        active_calls: &'a Mutex<HashMap<CallId, CancellationToken>>,
-        call_id: CallId,
-        cancel: &CancellationToken,
-    ) -> Result<Self, EngineError> {
-        let mut map = active_calls.lock().unwrap();
-        if map.contains_key(&call_id) {
-            return Err(EngineError::DuplicateCallId { call_id });
-        }
-        map.insert(call_id, cancel.clone());
-        Ok(Self {
-            active_calls,
-            call_id,
-        })
-    }
-}
-
-impl Drop for ActiveCallGuard<'_> {
-    fn drop(&mut self) {
-        let mut active_calls = self.active_calls.lock().unwrap();
-        active_calls.remove(&self.call_id);
     }
 }
 
@@ -408,20 +350,14 @@ pub struct BexEngine {
     /// `baml.sys.argv()`. Shared (cheap to clone) with each spawned VM.
     argv: Arc<[String]>,
 
-    // --- Epoch-based GC coordination ---
-    /// Current epoch counter (monotonically increasing).
-    /// Incremented when GC is requested.
-    current_epoch: AtomicU64,
-    /// Epoch states - 2 slots indexed by epoch % 2.
-    /// (GC is synchronous, so max 2 active epochs at once)
-    epoch_states: [EpochState; 2],
-    /// Notified when an epoch's VMs have all parked or completed.
-    epoch_drained: Notify,
-    /// Notified when GC completes and parked VMs can resume.
-    gc_complete: Notify,
-    /// Flag indicating GC is currently in progress.
-    /// Used to prevent handle resolution races.
-    gc_in_progress: AtomicBool,
+    // --- GC coordination ---
+    heap_permit_manager: Arc<HeapPermitManager>,
+    /// Used to prevent multiple threads from trying to run GC at the same time.
+    /// Only one should run it, the rest should wait for it to complete.
+    checking_gc: AtomicBool,
+    /// Used to notify long-running threads that they should park the VM even if they aren't at a typical yield point.
+    #[cfg(not(target_arch = "wasm32"))]
+    park_requested: Arc<AtomicBool>,
 
     /// Map of active function calls by ID.
     active_calls: Mutex<HashMap<CallId, CancellationToken>>,
@@ -542,6 +478,9 @@ impl BexEngine {
             .collect();
         let mut globals = GlobalPool::from_vec(globals_vec);
 
+        #[cfg(not(target_arch = "wasm32"))]
+        let park_requested = Arc::new(AtomicBool::new(false));
+
         // Run $init for each package in dependency order.
         // $init evaluates top-level let-binding initializers and stores their
         // results into the global slots via StoreGlobal instructions.
@@ -555,6 +494,8 @@ impl BexEngine {
                         .iter()
                         .map(|(k, v)| (k.clone(), *v))
                         .collect(),
+                    #[cfg(not(target_arch = "wasm32"))]
+                    Arc::clone(&park_requested),
                     Arc::clone(&argv),
                 );
                 vm.set_entry_point(*init_ptr, &[]);
@@ -630,12 +571,10 @@ impl BexEngine {
             event_sink,
             test_cases,
             argv,
-            // Initialize epoch tracking
-            current_epoch: AtomicU64::new(0),
-            epoch_states: [EpochState::new(), EpochState::new()],
-            epoch_drained: Notify::new(),
-            gc_complete: Notify::new(),
-            gc_in_progress: AtomicBool::new(false),
+            heap_permit_manager: Arc::new(HeapPermitManager::new()),
+            checking_gc: AtomicBool::new(false),
+            #[cfg(not(target_arch = "wasm32"))]
+            park_requested,
             active_calls: Mutex::new(HashMap::new()),
         })
     }
@@ -765,110 +704,42 @@ impl BexEngine {
 
     /// Explicitly trigger garbage collection.
     ///
-    /// This method:
-    /// 1. Increments the epoch (causing old-epoch VMs to park at yield points)
-    /// 2. Waits for all old-epoch VMs to park or complete
-    /// 3. Runs semi-space copy collection
-    /// 4. Releases parked VMs (they will get updated indices on resume)
-    ///
-    /// # Concurrent Safety
-    ///
-    /// New calls (epoch N+1) proceed normally while GC waits for epoch N VMs.
-    /// This minimizes latency impact - GC doesn't block new work.
+    /// Requests and waits for all heap permit holders to park.
+    /// Once they are parked, runs the GC.
     ///
     /// # Returns
     ///
     /// Statistics about the collection (live count, collected count, etc.)
-    pub async fn collect_garbage(&self) -> bex_heap::GcStats {
-        // Signal GC starting - new calls will wait
-        self.gc_in_progress.store(true, Ordering::Release);
-
-        // Increment epoch - new calls get the new epoch
-        let gc_epoch = self.current_epoch.fetch_add(1, Ordering::SeqCst);
-        let slot = (gc_epoch % 2) as usize;
-
-        // Wait for all VMs from this epoch to park or complete
-        loop {
-            let active = self.epoch_states[slot].active.load(Ordering::Acquire);
-            let parked = self.epoch_states[slot].parked.load(Ordering::Acquire);
-
-            if active == 0 {
-                // All VMs completed, nothing to collect
-                break;
-            }
-            if parked >= active {
-                // All active VMs are parked, safe to collect
-                break;
-            }
-
-            // Wait for more VMs to park or complete
-            self.epoch_drained.notified().await;
-        }
+    pub async fn collect_garbage(&self, level: bex_heap::CollectionLevel) -> bex_heap::GcStats {
+        #[cfg(not(target_arch = "wasm32"))]
+        self.park_requested.store(true, Ordering::Relaxed);
+        let mut heap_guard = self.heap_permit_manager.request_park().await;
+        #[cfg(not(target_arch = "wasm32"))]
+        self.park_requested.store(false, Ordering::Relaxed);
 
         // Collect roots from handles (objects returned to external code)
         let mut all_roots = self.heap.collect_handle_roots();
 
-        // Acquire parked_vms lock - hold it through GC to update stacks
-        let parked_vms = self.epoch_states[slot].parked_vms.lock().unwrap();
-
-        // SAFETY: All VMs are parked (verified above), so we have exclusive read access
-        // to their stacks. The parked_vms vec contains valid pointers because VMs
-        // register before parking and unregister only after gc_complete is notified.
-        for vm_ptr in parked_vms.iter() {
-            let vm = unsafe { &*vm_ptr.0 };
-            all_roots.extend(Self::collect_vm_roots(vm));
-        }
+        heap_guard.collect_roots(&mut all_roots);
 
         tracing::debug!(
-            "GC: {} total roots from {} handles and {} parked VMs",
+            "GC: {} total roots from {} handles and {} parked heap permits",
             all_roots.len(),
             self.heap.stats().active_handles,
-            parked_vms.len()
+            heap_guard.num_permits(),
         );
 
-        // Run GC with forwarding map
+        // Run GC — always returns the forwarding map so we can update parked VM stacks.
         let (stats, _remapped_roots, forwarding) =
-            unsafe { self.heap.collect_garbage_with_forwarding(&all_roots) };
-
+            unsafe { self.heap.collect_garbage_generational(&all_roots, level) };
         // Update all parked VM stacks with forwarding pointers and invalidate TLABs
         // SAFETY: VMs are still parked (gc_complete not yet notified), we have
         // exclusive access via the parked_vms lock we're still holding
-        for vm_ptr in parked_vms.iter() {
-            let vm = unsafe { &mut *vm_ptr.0.cast_mut() };
-
-            // Update stack values
-            for value in &mut vm.stack.0 {
-                if let Value::Object(idx) = value {
-                    if let Some(&new_idx) = forwarding.get(idx) {
-                        *idx = new_idx;
-                    }
-                }
-            }
-
-            // Update watch state (graph NodeIds, RootState values)
-            vm.watch.apply_forwarding(&forwarding);
-
-            // Update frame function pointers (needed for closures)
-            vm.apply_frame_forwarding(&forwarding);
-
-            // Invalidate TLAB so next allocation gets chunk from new space
-            vm.tlab.invalidate();
-        }
-
-        // Release lock before notifying waiters
-        drop(parked_vms);
+        heap_guard.forward_roots(&forwarding);
 
         self.heap.verify_quick();
 
-        // Reset epoch state for reuse
-        self.epoch_states[slot].active.store(0, Ordering::Release);
-        self.epoch_states[slot].parked.store(0, Ordering::Release);
-
-        // Signal GC complete before releasing parked VMs
-        self.gc_in_progress.store(false, Ordering::Release);
-
-        // Release parked VMs
-        self.gc_complete.notify_waiters();
+        drop(heap_guard);
 
         tracing::debug!(
             "GC completed: {} live, {} collected",
@@ -926,12 +797,20 @@ impl BexEngine {
             return Err(EngineError::Cancelled);
         }
 
-        // Wait for any in-progress GC to complete.
-        while self.gc_in_progress.load(Ordering::Acquire) {
-            self.gc_complete.notified().await;
-        }
-
-        let _call_guard = ActiveCallGuard::new(&self.active_calls, call_id, &cancel)?;
+        // Create VM with shared heap (each VM gets its own TLAB)
+        let vm = BexVm::new(
+            Arc::clone(&self.heap),
+            self.globals.clone(),
+            self.resolved_class_names
+                .iter()
+                .map(|(k, v)| (k.clone(), *v))
+                .collect(),
+            #[cfg(not(target_arch = "wasm32"))]
+            Arc::clone(&self.park_requested),
+            Arc::clone(&self.argv),
+        );
+        let vm = self.heap_permit_manager.new_permit(vm).await;
+        let mut vm = vm.acquire().await;
 
         let function_index = self.lookup_function(function_name)?;
         let return_type = self
@@ -941,33 +820,12 @@ impl BexEngine {
             });
         let throws_type = self.function_throws_type(function_name);
 
-        // Register with current epoch
-        let my_epoch = self.current_epoch.load(Ordering::Acquire);
-        let slot = (my_epoch % 2) as usize;
-        self.epoch_states[slot]
-            .active
-            .fetch_add(1, Ordering::AcqRel);
-
-        // SAFETY: We just registered with the epoch above
-        let guard = unsafe { EpochGuard::new() };
-
-        // Create VM with shared heap (each VM gets its own TLAB)
-        let mut vm = BexVm::new(
-            Arc::clone(&self.heap),
-            self.globals.clone(),
-            self.resolved_class_names
-                .iter()
-                .map(|(k, v)| (k.clone(), *v))
-                .collect(),
-            Arc::clone(&self.argv),
-        );
-
         // Snapshot args for the root FunctionStart event before converting to VM values
         let args_snapshot = args.clone();
 
         let vm_args: Vec<Value> = args
             .into_iter()
-            .map(|arg| self.convert_external_to_vm_value(&mut vm, arg, &guard))
+            .map(|arg| self.convert_external_to_vm_value(&mut vm, arg))
             .collect();
 
         vm.set_entry_point(function_index, &vm_args);
@@ -1040,33 +898,21 @@ impl BexEngine {
         });
 
         // Run the event loop with span tracking
-        let result = self
-            .run_event_loop_with_epoch(
-                return_type,
-                throws_type,
-                &mut vm,
-                my_epoch,
-                call_id,
-                &mut span_state,
-                &cancel,
-                copy_objects,
-            )
-            .await;
-
-        // Unregister from epoch
-        if self.epoch_states[slot]
-            .active
-            .fetch_sub(1, Ordering::AcqRel)
-            == 1
-        {
-            self.epoch_drained.notify_one();
-        }
+        self.run_event_loop(
+            return_type,
+            throws_type,
+            vm,
+            call_id,
+            &mut span_state,
+            &cancel,
+            copy_objects,
+        )
+        .await
 
         // active_calls cleanup is done by ActiveCallGuard on drop.
         //
         // Keep genuine engine errors intact. Cancellation is surfaced directly
         // by engine safepoints as `EngineError::Cancelled`.
-        result
     }
 
     /// Cancel a function call by its ID.
@@ -1293,64 +1139,32 @@ impl BexEngine {
         Ok(registry)
     }
 
-    /// Collect roots from a yielded VM.
-    fn collect_vm_roots(vm: &BexVm) -> Vec<HeapPtr> {
-        let mut roots = Vec::new();
-
-        // Stack values
-        for value in &vm.stack.0 {
-            if let Value::Object(ptr) = value {
-                roots.push(*ptr);
+    /// Run GC if conditions are met (called at safepoints),
+    /// or yield if another thread is running GC.
+    ///
+    /// Uses the adaptive `should_collect()` policy to choose the appropriate
+    /// collection level (Minor or Major) based on live object counts and
+    /// allocation pressure.
+    async fn gc_safepoint<T: RootHaver>(
+        &self,
+        mut permit: ActiveHeapPermit<T>,
+    ) -> ActiveHeapPermit<T> {
+        let i_am_checking = self
+            .checking_gc
+            .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
+            .is_ok();
+        if i_am_checking {
+            // We won the CAS, so we own the GC check.
+            if let Some(level) = self.heap.should_collect() {
+                let inactive = permit.release();
+                self.collect_garbage(level).await;
+                permit = inactive.acquire().await;
             }
-        }
-
-        // Watch state (last_assigned/last_notified values that aren't on the stack)
-        vm.watch.collect_roots(&mut roots);
-
-        // Frame function pointers (needed once closures are heap-allocated)
-        roots.extend(vm.collect_frame_roots());
-
-        // Note: Frame locals are stored in the stack at the locals_offset position,
-        // so they're already included in the stack iteration above.
-
-        roots
-    }
-
-    /// Run GC if conditions are met (called at safepoints).
-    fn maybe_run_gc(&self, vm: &mut BexVm) {
-        self.heap.verify_quick();
-        if self.heap.should_gc() {
-            let roots = Self::collect_vm_roots(vm);
-            unsafe {
-                let (stats, _remapped_roots, forwarding) =
-                    self.heap.collect_garbage_with_forwarding(&roots);
-
-                // Update VM stack with forwarding pointers
-                for value in &mut vm.stack.0 {
-                    if let Value::Object(ptr) = value {
-                        if let Some(&new_ptr) = forwarding.get(ptr) {
-                            *ptr = new_ptr;
-                        }
-                    }
-                }
-
-                // Update watch state (graph NodeIds, RootState values)
-                vm.watch.apply_forwarding(&forwarding);
-
-                // Update frame function pointers (needed for closures)
-                vm.apply_frame_forwarding(&forwarding);
-
-                // Invalidate TLAB so next allocation gets chunk from new space
-                vm.tlab.invalidate();
-
-                self.heap.reset_gc_counter();
-                tracing::debug!(
-                    "GC completed: {} live, {} collected",
-                    stats.live_count,
-                    stats.collected_count
-                );
-            }
-            self.heap.verify_quick();
+            self.checking_gc.store(false, Ordering::Release);
+            permit
+        } else {
+            // Another thread is checking; park if they've requested it.
+            permit.renew().await
         }
     }
 
@@ -1369,17 +1183,19 @@ impl BexEngine {
         Ok(())
     }
 
-    /// Run the VM event loop until completion, with epoch tracking.
+    /// Drive the VM to completion, dispatching sys-ops, awaits, span
+    /// notifications, and early-yield events.
     ///
-    /// The `my_epoch` parameter is used to check if GC has been requested
-    /// (epoch advanced). VMs from old epochs will park at yield points.
+    /// The `vm` parameter is the permit for this invocation; it is released
+    /// at async safepoints (via `gc_safepoint`) and re-acquired after any
+    /// concurrent GC finishes. Each re-acquisition invalidates the VM's TLAB
+    /// through the post-GC `forward_roots` hook.
     #[allow(clippy::too_many_arguments)]
-    async fn run_event_loop_with_epoch(
+    async fn run_event_loop(
         self: &Arc<Self>,
         return_type: Ty,
         throws_type: Option<Ty>,
-        vm: &mut BexVm,
-        my_epoch: u64,
+        mut vm: ActiveHeapPermit<BexVm>,
         call_id: CallId,
         span_state: &mut Option<SpanState>,
         cancel: &CancellationToken,
@@ -1417,13 +1233,7 @@ impl BexEngine {
                 Ok(state) => state,
                 Err(bex_vm::errors::VmError::ThrownUnhandled { value, trace }) => {
                     let external = if let Some(ref ty) = throws_type {
-                        self.heap.with_gc_protection(|protected| {
-                            self.convert_vm_value_to_external_with_type(
-                                &value,
-                                ty,
-                                &protected.epoch_guard(),
-                            )
-                        })?
+                        self.convert_vm_value_to_external_with_type(&value, ty, &vm.epoch_guard())?
                     } else {
                         self.vm_value_to_owned(&value)
                     };
@@ -1540,13 +1350,7 @@ impl BexEngine {
                             // The VM will continue to the Await instruction which will
                             // extract the value from the Ready future.
                             let result = result.map_err(EngineError::from)?;
-                            let value = self.heap.with_gc_protection(|protected| {
-                                self.convert_external_to_vm_value(
-                                    vm,
-                                    result,
-                                    &protected.epoch_guard(),
-                                )
-                            });
+                            let value = self.convert_external_to_vm_value(&mut vm, result);
 
                             vm.set_future_ready(id, value)
                                 .map_err(EngineError::VmInternalError)?;
@@ -1584,60 +1388,12 @@ impl BexEngine {
 
                 VmExecState::Await(future_id) => {
                     Self::cancellation_safepoint(cancel, &abort_handles)?;
-
-                    // Check if GC is waiting for our epoch to drain
-                    let current = self.current_epoch.load(Ordering::Acquire);
-                    if current > my_epoch {
-                        // GC has been requested - we need to park
-                        let slot = (my_epoch % 2) as usize;
-
-                        // Register VM pointer before parking
-                        // SAFETY: VM lives on our async task's stack and won't be dropped
-                        // until after we unregister (after gc_complete.notified().await returns)
-                        {
-                            let mut parked_vms = self.epoch_states[slot].parked_vms.lock().unwrap();
-                            parked_vms.push(VmPtr(std::ptr::from_ref(vm)));
-                        }
-
-                        // Increment parked count and notify GC
-                        self.epoch_states[slot]
-                            .parked
-                            .fetch_add(1, Ordering::AcqRel);
-                        self.epoch_drained.notify_one();
-
-                        // Wait for GC to complete
-                        // Note: GC will update our VM's stack with new object indices
-                        self.gc_complete.notified().await;
-
-                        // Unregister VM pointer after waking
-                        {
-                            let mut parked_vms = self.epoch_states[slot].parked_vms.lock().unwrap();
-                            let vm_ptr = std::ptr::from_ref(vm);
-                            parked_vms.retain(|p| p.0 != vm_ptr);
-                        }
-
-                        // Decrement parked count
-                        self.epoch_states[slot]
-                            .parked
-                            .fetch_sub(1, Ordering::AcqRel);
-                    }
-
-                    // VM is at a safepoint (yielded) - check if GC should run
-                    // (Only the triggering call runs GC, not parked VMs)
-                    if self.current_epoch.load(Ordering::Acquire) == my_epoch {
-                        self.maybe_run_gc(vm);
-                    }
+                    vm = self.gc_safepoint(vm).await;
 
                     // First, drain any already-completed futures.
                     while let Ok(future) = processed_futures.try_recv() {
                         let external = future.result?;
-                        let value = self.heap.with_gc_protection(|protected| {
-                            self.convert_external_to_vm_value(
-                                vm,
-                                external,
-                                &protected.epoch_guard(),
-                            )
-                        });
+                        let value = self.convert_external_to_vm_value(&mut vm, external);
                         vm.fulfil_future(future.id, value)
                             .map_err(EngineError::VmInternalError)?;
 
@@ -1662,15 +1418,12 @@ impl BexEngine {
                                 let future = future
                                     .ok_or(EngineError::FutureChannelClosed)?;
                                 let external = future.result?;
-                                let value = self.heap.with_gc_protection(|protected| {
-                                    self.convert_external_to_vm_value(
-                                        vm,
-                                        external,
-                                        &protected.epoch_guard(),
-                                    )
-                                });
+                                let value = self.convert_external_to_vm_value(
+                                    &mut vm,
+                                    external,
+                                );
                                 vm.fulfil_future(future.id, value)
-                                                        .map_err(EngineError::VmInternalError)?;
+                                    .map_err(EngineError::VmInternalError)?;
 
                                 if future.id == future_id {
                                     break;
@@ -1839,6 +1592,10 @@ impl BexEngine {
                             }
                         }
                     }
+                }
+                VmExecState::EarlyYield => {
+                    Self::cancellation_safepoint(cancel, &abort_handles)?;
+                    vm = self.gc_safepoint(vm).await;
                 }
             }
         }
