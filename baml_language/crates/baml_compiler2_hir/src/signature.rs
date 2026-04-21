@@ -197,7 +197,7 @@ fn fill_omitted_nested_throws_with_never(type_expr: TypeExpr) -> TypeExpr {
 
 fn elaborate_immediate_callback_param(
     params: Vec<FunctionTypeParam>,
-    ret: Box<TypeExpr>,
+    ret: TypeExpr,
     attrs: Vec<baml_compiler2_ast::RawAttribute>,
     effect_param: Name,
 ) -> TypeExpr {
@@ -209,7 +209,7 @@ fn elaborate_immediate_callback_param(
                 ty: fill_omitted_nested_throws_with_never(param.ty),
             })
             .collect(),
-        ret: Box::new(fill_omitted_nested_throws_with_never(*ret)),
+        ret: Box::new(fill_omitted_nested_throws_with_never(ret)),
         throws: Some(Box::new(type_expr_for_effect_param(effect_param))),
         attrs,
     }
@@ -239,7 +239,7 @@ pub fn elaborate_function_signature_parts(
                 } => {
                     let effect_param = fresh_effect_param_name(&mut used_names);
                     synthetic_effect_params.push(effect_param.clone());
-                    elaborate_immediate_callback_param(params, ret, attrs, effect_param)
+                    elaborate_immediate_callback_param(params, *ret, attrs, effect_param)
                 }
                 other => fill_omitted_nested_throws_with_never(other),
             };
