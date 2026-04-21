@@ -1,7 +1,7 @@
 use std::collections::BTreeSet;
 
 use baml_base::Name;
-use baml_compiler2_ast::{Expr, ExprBody, Stmt};
+use baml_compiler2_ast::ExprBody;
 use baml_compiler2_hir::{
     body::FunctionBody, file_package, loc::FunctionLoc, package::PackageId, scope::ScopeKind,
 };
@@ -11,7 +11,8 @@ use crate::{
     inference::{MemberResolution, ScopeInference, infer_scope_types},
     lower_type_expr::lower_type_expr_in_ns,
     package_interface::package_resolution_context,
-    throw_inference::{flatten_ty_to_facts, function_throw_sets, throw_set_key},
+    throw_inference::{function_throw_sets, throw_set_key},
+    throws_analysis::ThrowsAnalysisContext,
     ty::{Ty, TyAttr},
 };
 
@@ -134,7 +135,7 @@ fn named_callee_key<'db>(
         return Some(callable_key(db, *func_loc));
     }
 
-    let segments = expr_to_path_segments(callee_expr_id, body)?;
+    let segments = crate::throws_analysis::expr_to_path_segments(callee_expr_id, body)?;
     let res_ctx = package_resolution_context(db, pkg_id);
     let (_, definition) = res_ctx.resolve_value(db, &segments, ns_context)?;
     let baml_compiler2_hir::contributions::Definition::Function(func_loc) = definition else {
@@ -163,18 +164,48 @@ fn lookup_named_throw_summary<'db>(
     None
 }
 
-fn collect_value_throw_facts(
-    inference: &ScopeInference<'_>,
-    value_expr_id: baml_compiler2_ast::ExprId,
-    out: &mut BTreeSet<Ty>,
-) {
-    let thrown_ty = inference
-        .expression_type(value_expr_id)
-        .cloned()
-        .unwrap_or(Ty::Unknown {
-            attr: TyAttr::default(),
-        });
-    out.extend(flatten_ty_to_facts(&thrown_ty));
+struct CallableThrowsAnalysis<'a, 'db> {
+    db: &'db dyn crate::Db,
+    pkg_id: PackageId<'db>,
+    ns_context: &'a [Name],
+    inference: &'a ScopeInference<'db>,
+}
+
+impl ThrowsAnalysisContext for CallableThrowsAnalysis<'_, '_> {
+    fn expression_type(&self, expr_id: baml_compiler2_ast::ExprId) -> Option<Ty> {
+        self.inference.expression_type(expr_id).cloned()
+    }
+
+    fn catch_residual_throws(&self, expr_id: baml_compiler2_ast::ExprId) -> Option<BTreeSet<Ty>> {
+        self.inference
+            .catch_residual_throws(expr_id)
+            .map(|residual| residual.iter().cloned().collect())
+    }
+
+    fn instantiated_callee_throws(
+        &self,
+        callee_expr_id: baml_compiler2_ast::ExprId,
+        args: &[baml_compiler2_ast::ExprId],
+        unwrap_optional_callee: bool,
+    ) -> Option<Ty> {
+        instantiated_callee_throws(self.inference, callee_expr_id, args, unwrap_optional_callee)
+    }
+
+    fn named_callee_summary(
+        &self,
+        callee_expr_id: baml_compiler2_ast::ExprId,
+        body: &ExprBody,
+    ) -> Option<BTreeSet<Ty>> {
+        let key = named_callee_key(
+            self.db,
+            self.pkg_id,
+            self.ns_context,
+            self.inference,
+            callee_expr_id,
+            body,
+        )?;
+        lookup_named_throw_summary(self.db, self.pkg_id, &key)
+    }
 }
 
 fn callee_uses_method_call_convention(
@@ -229,314 +260,6 @@ pub(crate) fn instantiated_callee_throws(
     Some(crate::generics::substitute_ty(&throws, &bindings))
 }
 
-#[allow(clippy::too_many_arguments)]
-fn collect_callee_escaping_throws<'db>(
-    db: &'db dyn crate::Db,
-    pkg_id: PackageId<'db>,
-    ns_context: &[Name],
-    inference: &ScopeInference<'db>,
-    callee_expr_id: baml_compiler2_ast::ExprId,
-    args: &[baml_compiler2_ast::ExprId],
-    body: &ExprBody,
-    unwrap_optional_callee: bool,
-    out: &mut BTreeSet<Ty>,
-) {
-    let mut accounted = false;
-
-    if let Some(throws) =
-        instantiated_callee_throws(inference, callee_expr_id, args, unwrap_optional_callee)
-    {
-        out.extend(flatten_ty_to_facts(&throws));
-        accounted = true;
-    }
-
-    if !accounted
-        && let Some(key) = named_callee_key(db, pkg_id, ns_context, inference, callee_expr_id, body)
-    {
-        if let Some(summary) = lookup_named_throw_summary(db, pkg_id, &key) {
-            out.extend(summary);
-            accounted = true;
-        }
-    }
-
-    if !accounted {
-        out.insert(Ty::Unknown {
-            attr: TyAttr::default(),
-        });
-    }
-}
-
-fn collect_callable_throws_from_stmt<'db>(
-    db: &'db dyn crate::Db,
-    pkg_id: PackageId<'db>,
-    ns_context: &[Name],
-    inference: &ScopeInference<'db>,
-    stmt_id: baml_compiler2_ast::StmtId,
-    body: &ExprBody,
-    out: &mut BTreeSet<Ty>,
-) {
-    match &body.stmts[stmt_id] {
-        Stmt::Expr(expr_id) => collect_callable_throws_from_expr(
-            db, pkg_id, ns_context, inference, *expr_id, body, out,
-        ),
-        Stmt::Let { initializer, .. } => {
-            if let Some(init) = initializer {
-                collect_callable_throws_from_expr(
-                    db, pkg_id, ns_context, inference, *init, body, out,
-                );
-            }
-        }
-        Stmt::While {
-            condition,
-            body: while_body,
-            after,
-            ..
-        } => {
-            collect_callable_throws_from_expr(
-                db, pkg_id, ns_context, inference, *condition, body, out,
-            );
-            collect_callable_throws_from_expr(
-                db,
-                pkg_id,
-                ns_context,
-                inference,
-                *while_body,
-                body,
-                out,
-            );
-            if let Some(after_stmt) = after {
-                collect_callable_throws_from_stmt(
-                    db,
-                    pkg_id,
-                    ns_context,
-                    inference,
-                    *after_stmt,
-                    body,
-                    out,
-                );
-            }
-        }
-        Stmt::For {
-            collection,
-            body: for_body,
-            ..
-        } => {
-            collect_callable_throws_from_expr(
-                db,
-                pkg_id,
-                ns_context,
-                inference,
-                *collection,
-                body,
-                out,
-            );
-            collect_callable_throws_from_expr(
-                db, pkg_id, ns_context, inference, *for_body, body, out,
-            );
-        }
-        Stmt::Return(expr) => {
-            if let Some(expr) = expr {
-                collect_callable_throws_from_expr(
-                    db, pkg_id, ns_context, inference, *expr, body, out,
-                );
-            }
-        }
-        Stmt::Assign { target, value } | Stmt::AssignOp { target, value, .. } => {
-            collect_callable_throws_from_expr(
-                db, pkg_id, ns_context, inference, *target, body, out,
-            );
-            collect_callable_throws_from_expr(db, pkg_id, ns_context, inference, *value, body, out);
-        }
-        Stmt::Throw { value } => {
-            collect_callable_throws_from_expr(db, pkg_id, ns_context, inference, *value, body, out);
-            collect_value_throw_facts(inference, *value, out);
-        }
-        Stmt::Break | Stmt::Continue | Stmt::Missing | Stmt::HeaderComment { .. } => {}
-    }
-}
-
-fn collect_callable_throws_from_expr<'db>(
-    db: &'db dyn crate::Db,
-    pkg_id: PackageId<'db>,
-    ns_context: &[Name],
-    inference: &ScopeInference<'db>,
-    expr_id: baml_compiler2_ast::ExprId,
-    body: &ExprBody,
-    out: &mut BTreeSet<Ty>,
-) {
-    match &body.exprs[expr_id] {
-        Expr::Throw { value } => {
-            collect_callable_throws_from_expr(db, pkg_id, ns_context, inference, *value, body, out);
-            collect_value_throw_facts(inference, *value, out);
-        }
-        Expr::Call { callee, args } => {
-            collect_callable_throws_from_expr(
-                db, pkg_id, ns_context, inference, *callee, body, out,
-            );
-            for arg in args {
-                collect_callable_throws_from_expr(
-                    db, pkg_id, ns_context, inference, *arg, body, out,
-                );
-            }
-            collect_callee_escaping_throws(
-                db, pkg_id, ns_context, inference, *callee, args, body, false, out,
-            );
-        }
-        Expr::OptionalCall { callee, args } => {
-            collect_callable_throws_from_expr(
-                db, pkg_id, ns_context, inference, *callee, body, out,
-            );
-            for arg in args {
-                collect_callable_throws_from_expr(
-                    db, pkg_id, ns_context, inference, *arg, body, out,
-                );
-            }
-            collect_callee_escaping_throws(
-                db, pkg_id, ns_context, inference, *callee, args, body, true, out,
-            );
-        }
-
-        Expr::Catch { base: _, clauses } => {
-            if let Some(residual) = inference.catch_residual_throws(expr_id) {
-                out.extend(residual.iter().cloned());
-            }
-            for clause in clauses {
-                for arm_id in &clause.arms {
-                    let arm = &body.catch_arms[*arm_id];
-                    collect_callable_throws_from_expr(
-                        db, pkg_id, ns_context, inference, arm.body, body, out,
-                    );
-                }
-            }
-        }
-        Expr::If {
-            condition,
-            then_branch,
-            else_branch,
-        } => {
-            collect_callable_throws_from_expr(
-                db, pkg_id, ns_context, inference, *condition, body, out,
-            );
-            collect_callable_throws_from_expr(
-                db,
-                pkg_id,
-                ns_context,
-                inference,
-                *then_branch,
-                body,
-                out,
-            );
-            if let Some(else_expr) = else_branch {
-                collect_callable_throws_from_expr(
-                    db, pkg_id, ns_context, inference, *else_expr, body, out,
-                );
-            }
-        }
-        Expr::Match {
-            scrutinee, arms, ..
-        } => {
-            collect_callable_throws_from_expr(
-                db, pkg_id, ns_context, inference, *scrutinee, body, out,
-            );
-            for arm_id in arms {
-                let arm = &body.match_arms[*arm_id];
-                if let Some(guard) = arm.guard {
-                    collect_callable_throws_from_expr(
-                        db, pkg_id, ns_context, inference, guard, body, out,
-                    );
-                }
-                collect_callable_throws_from_expr(
-                    db, pkg_id, ns_context, inference, arm.body, body, out,
-                );
-            }
-        }
-        Expr::Binary { lhs, rhs, .. } => {
-            collect_callable_throws_from_expr(db, pkg_id, ns_context, inference, *lhs, body, out);
-            collect_callable_throws_from_expr(db, pkg_id, ns_context, inference, *rhs, body, out);
-        }
-        Expr::Unary { expr, .. } | Expr::OptionalChain { expr } => {
-            collect_callable_throws_from_expr(db, pkg_id, ns_context, inference, *expr, body, out);
-        }
-        Expr::Object {
-            fields, spreads, ..
-        } => {
-            for (_, value) in fields {
-                collect_callable_throws_from_expr(
-                    db, pkg_id, ns_context, inference, *value, body, out,
-                );
-            }
-            for spread in spreads {
-                collect_callable_throws_from_expr(
-                    db,
-                    pkg_id,
-                    ns_context,
-                    inference,
-                    spread.expr,
-                    body,
-                    out,
-                );
-            }
-        }
-        Expr::Array { elements } => {
-            for elem in elements {
-                collect_callable_throws_from_expr(
-                    db, pkg_id, ns_context, inference, *elem, body, out,
-                );
-            }
-        }
-        Expr::Map { entries } => {
-            for (key, value) in entries {
-                collect_callable_throws_from_expr(
-                    db, pkg_id, ns_context, inference, *key, body, out,
-                );
-                collect_callable_throws_from_expr(
-                    db, pkg_id, ns_context, inference, *value, body, out,
-                );
-            }
-        }
-        Expr::Block { stmts, tail_expr } => {
-            for stmt_id in stmts {
-                collect_callable_throws_from_stmt(
-                    db, pkg_id, ns_context, inference, *stmt_id, body, out,
-                );
-            }
-            if let Some(tail) = tail_expr {
-                collect_callable_throws_from_expr(
-                    db, pkg_id, ns_context, inference, *tail, body, out,
-                );
-            }
-        }
-        Expr::MemberAccess { base, .. } | Expr::OptionalMemberAccess { base, .. } => {
-            collect_callable_throws_from_expr(db, pkg_id, ns_context, inference, *base, body, out);
-        }
-        Expr::Index { base, index } | Expr::OptionalIndex { base, index } => {
-            collect_callable_throws_from_expr(db, pkg_id, ns_context, inference, *base, body, out);
-            collect_callable_throws_from_expr(db, pkg_id, ns_context, inference, *index, body, out);
-        }
-        Expr::Lambda(_)
-        | Expr::Literal(_)
-        | Expr::ByteStringLiteral(_)
-        | Expr::Null
-        | Expr::Path(_)
-        | Expr::Missing => {}
-    }
-}
-
-fn expr_to_path_segments(
-    expr_id: baml_compiler2_ast::ExprId,
-    body: &ExprBody,
-) -> Option<Vec<Name>> {
-    match &body.exprs[expr_id] {
-        Expr::Path(segments) if !segments.is_empty() => Some(segments.clone()),
-        Expr::MemberAccess { base, member } => {
-            let mut base_segments = expr_to_path_segments(*base, body)?;
-            base_segments.push(member.clone());
-            Some(base_segments)
-        }
-        _ => None,
-    }
-}
-
 fn callable_throws_cycle_initial<'db>(
     db: &'db dyn crate::Db,
     _id: salsa::Id,
@@ -565,18 +288,15 @@ pub fn callable_throws<'db>(db: &'db dyn crate::Db, function: FunctionLoc<'db>) 
                 };
             };
             let inference = infer_scope_types(db, scope_id);
-            let mut facts = BTreeSet::new();
-            if let Some(root_expr) = body.root_expr {
-                collect_callable_throws_from_expr(
+            let facts = crate::throws_analysis::collect_escaping_throws(
+                &CallableThrowsAnalysis {
                     db,
                     pkg_id,
-                    &pkg_info.namespace_path,
+                    ns_context: &pkg_info.namespace_path,
                     inference,
-                    root_expr,
-                    body,
-                    &mut facts,
-                );
-            }
+                },
+                body,
+            );
             join_throw_facts(&facts)
         }
         FunctionBody::Builtin(_) => Ty::Never {

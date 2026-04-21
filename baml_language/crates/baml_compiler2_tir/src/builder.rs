@@ -30,6 +30,7 @@ use crate::{
         InferContext, RelatedLocation, RelatedNote, TirTypeError, TypeCheckDiagnostics,
     },
     package_interface::PackageResolutionContext,
+    throws_analysis::ThrowsAnalysisContext,
     ty::{Freshness, PrimitiveType, Ty, TyAttr},
 };
 
@@ -67,6 +68,39 @@ struct CallbackThrowProvenance {
     forwarding_call_expr: ExprId,
     callback_value_expr: Option<ExprId>,
     callback_concrete_throws: Option<Ty>,
+}
+
+struct BuilderThrowsAnalysis<'a, 'db> {
+    builder: &'a TypeInferenceBuilder<'db>,
+}
+
+impl ThrowsAnalysisContext for BuilderThrowsAnalysis<'_, '_> {
+    fn expression_type(&self, expr_id: ExprId) -> Option<Ty> {
+        self.builder.expressions.get(&expr_id).cloned()
+    }
+
+    fn catch_residual_throws(&self, expr_id: ExprId) -> Option<BTreeSet<Ty>> {
+        self.builder.catch_residual_throws.get(&expr_id).cloned()
+    }
+
+    fn instantiated_callee_throws(
+        &self,
+        callee_expr_id: ExprId,
+        args: &[ExprId],
+        unwrap_optional_callee: bool,
+    ) -> Option<Ty> {
+        self.builder
+            .instantiated_callee_throws(callee_expr_id, args, unwrap_optional_callee)
+    }
+
+    fn named_callee_summary(
+        &self,
+        callee_expr_id: ExprId,
+        body: &ExprBody,
+    ) -> Option<BTreeSet<Ty>> {
+        let target = self.builder.call_target_name(callee_expr_id, body)?;
+        self.builder.lookup_named_throw_summary(&target)
+    }
 }
 
 /// Result of resolving a member on a builtin class (Array, Map, String, media types).
@@ -3173,11 +3207,10 @@ impl<'db> TypeInferenceBuilder<'db> {
     }
 
     fn collect_effective_throws(&self, body: &ExprBody) -> BTreeSet<Ty> {
-        let mut out = BTreeSet::new();
-        if let Some(root) = body.root_expr {
-            self.collect_effective_throws_from_expr(root, body, &mut out);
-        }
-        out
+        crate::throws_analysis::collect_escaping_throws(
+            &BuilderThrowsAnalysis { builder: self },
+            body,
+        )
     }
 
     fn lookup_named_throw_summary(&self, target: &Name) -> Option<BTreeSet<Ty>> {
@@ -3251,201 +3284,6 @@ impl<'db> TypeInferenceBuilder<'db> {
         Some(crate::generics::substitute_ty(&throws, &bindings))
     }
 
-    fn collect_call_escaping_throws(
-        &self,
-        callee_expr_id: ExprId,
-        args: &[ExprId],
-        body: &ExprBody,
-        unwrap_optional_callee: bool,
-        out: &mut BTreeSet<Ty>,
-    ) {
-        let mut accounted = false;
-
-        if let Some(throws) =
-            self.instantiated_callee_throws(callee_expr_id, args, unwrap_optional_callee)
-        {
-            out.extend(crate::throw_inference::flatten_ty_to_facts(&throws));
-            accounted = true;
-        }
-
-        if !accounted && let Some(target) = self.call_target_name(callee_expr_id, body) {
-            if let Some(summary) = self.lookup_named_throw_summary(&target) {
-                out.extend(summary);
-                accounted = true;
-            }
-        }
-
-        if !accounted {
-            out.insert(Ty::Unknown {
-                attr: TyAttr::default(),
-            });
-        }
-    }
-
-    fn collect_effective_throws_from_expr(
-        &self,
-        expr_id: ExprId,
-        body: &ExprBody,
-        out: &mut BTreeSet<Ty>,
-    ) {
-        match &body.exprs[expr_id] {
-            Expr::Throw { value } => {
-                self.collect_effective_throws_from_expr(*value, body, out);
-                self.collect_throw_facts_from_value(*value, out);
-            }
-            Expr::Call { callee, args } => {
-                self.collect_effective_throws_from_expr(*callee, body, out);
-                for arg in args {
-                    self.collect_effective_throws_from_expr(*arg, body, out);
-                }
-                self.collect_call_escaping_throws(*callee, args, body, false, out);
-            }
-            Expr::Catch { clauses, .. } => {
-                if let Some(residual) = self.catch_residual_throws.get(&expr_id) {
-                    out.extend(residual.iter().cloned());
-                }
-                for clause in clauses {
-                    for arm_id in &clause.arms {
-                        let arm = &body.catch_arms[*arm_id];
-                        self.collect_effective_throws_from_expr(arm.body, body, out);
-                    }
-                }
-            }
-            Expr::If {
-                condition,
-                then_branch,
-                else_branch,
-            } => {
-                self.collect_effective_throws_from_expr(*condition, body, out);
-                self.collect_effective_throws_from_expr(*then_branch, body, out);
-                if let Some(else_expr) = else_branch {
-                    self.collect_effective_throws_from_expr(*else_expr, body, out);
-                }
-            }
-            Expr::Match {
-                scrutinee, arms, ..
-            } => {
-                self.collect_effective_throws_from_expr(*scrutinee, body, out);
-                for arm_id in arms {
-                    let arm = &body.match_arms[*arm_id];
-                    if let Some(guard) = arm.guard {
-                        self.collect_effective_throws_from_expr(guard, body, out);
-                    }
-                    self.collect_effective_throws_from_expr(arm.body, body, out);
-                }
-            }
-            Expr::Binary { lhs, rhs, .. } => {
-                self.collect_effective_throws_from_expr(*lhs, body, out);
-                self.collect_effective_throws_from_expr(*rhs, body, out);
-            }
-            Expr::Unary { expr, .. } => {
-                self.collect_effective_throws_from_expr(*expr, body, out);
-            }
-            Expr::Object {
-                fields, spreads, ..
-            } => {
-                for (_, value) in fields {
-                    self.collect_effective_throws_from_expr(*value, body, out);
-                }
-                for spread in spreads {
-                    self.collect_effective_throws_from_expr(spread.expr, body, out);
-                }
-            }
-            Expr::Array { elements } => {
-                for elem in elements {
-                    self.collect_effective_throws_from_expr(*elem, body, out);
-                }
-            }
-            Expr::Map { entries } => {
-                for (key, value) in entries {
-                    self.collect_effective_throws_from_expr(*key, body, out);
-                    self.collect_effective_throws_from_expr(*value, body, out);
-                }
-            }
-            Expr::Block { stmts, tail_expr } => {
-                for stmt_id in stmts {
-                    self.collect_effective_throws_from_stmt(*stmt_id, body, out);
-                }
-                if let Some(tail) = tail_expr {
-                    self.collect_effective_throws_from_expr(*tail, body, out);
-                }
-            }
-            Expr::MemberAccess { base, .. } | Expr::OptionalMemberAccess { base, .. } => {
-                self.collect_effective_throws_from_expr(*base, body, out);
-            }
-            Expr::Index { base, index } | Expr::OptionalIndex { base, index } => {
-                self.collect_effective_throws_from_expr(*base, body, out);
-                self.collect_effective_throws_from_expr(*index, body, out);
-            }
-            Expr::OptionalCall { callee, args } => {
-                self.collect_effective_throws_from_expr(*callee, body, out);
-                for arg in args {
-                    self.collect_effective_throws_from_expr(*arg, body, out);
-                }
-                self.collect_call_escaping_throws(*callee, args, body, true, out);
-            }
-            Expr::OptionalChain { expr } => {
-                self.collect_effective_throws_from_expr(*expr, body, out);
-            }
-            Expr::Lambda(_)
-            | Expr::Literal(_)
-            | Expr::ByteStringLiteral(_)
-            | Expr::Null
-            | Expr::Path(_)
-            | Expr::Missing => {}
-        }
-    }
-
-    fn collect_effective_throws_from_stmt(
-        &self,
-        stmt_id: StmtId,
-        body: &ExprBody,
-        out: &mut BTreeSet<Ty>,
-    ) {
-        match &body.stmts[stmt_id] {
-            Stmt::Expr(expr) => self.collect_effective_throws_from_expr(*expr, body, out),
-            Stmt::Let { initializer, .. } => {
-                if let Some(init) = initializer {
-                    self.collect_effective_throws_from_expr(*init, body, out);
-                }
-            }
-            Stmt::While {
-                condition,
-                body: while_body,
-                after,
-                ..
-            } => {
-                self.collect_effective_throws_from_expr(*condition, body, out);
-                self.collect_effective_throws_from_expr(*while_body, body, out);
-                if let Some(after_stmt) = after {
-                    self.collect_effective_throws_from_stmt(*after_stmt, body, out);
-                }
-            }
-            Stmt::For {
-                collection,
-                body: for_body,
-                ..
-            } => {
-                self.collect_effective_throws_from_expr(*collection, body, out);
-                self.collect_effective_throws_from_expr(*for_body, body, out);
-            }
-            Stmt::Return(expr) => {
-                if let Some(expr) = expr {
-                    self.collect_effective_throws_from_expr(*expr, body, out);
-                }
-            }
-            Stmt::Assign { target, value } | Stmt::AssignOp { target, value, .. } => {
-                self.collect_effective_throws_from_expr(*target, body, out);
-                self.collect_effective_throws_from_expr(*value, body, out);
-            }
-            Stmt::Throw { value } => {
-                self.collect_effective_throws_from_expr(*value, body, out);
-                self.collect_throw_facts_from_value(*value, out);
-            }
-            Stmt::Break | Stmt::Continue | Stmt::Missing | Stmt::HeaderComment { .. } => {}
-        }
-    }
-
     fn collect_throw_facts_from_expr(
         &self,
         expr_id: ExprId,
@@ -3462,7 +3300,14 @@ impl<'db> TypeInferenceBuilder<'db> {
                 for arg in args {
                     self.collect_throw_facts_from_expr(*arg, body, out);
                 }
-                self.collect_call_escaping_throws(*callee, args, body, false, out);
+                crate::throws_analysis::collect_callee_escaping_throws(
+                    &BuilderThrowsAnalysis { builder: self },
+                    *callee,
+                    args,
+                    body,
+                    false,
+                    out,
+                );
             }
             Expr::If {
                 condition,
@@ -3533,7 +3378,14 @@ impl<'db> TypeInferenceBuilder<'db> {
                 for arg in args {
                     self.collect_throw_facts_from_expr(*arg, body, out);
                 }
-                self.collect_call_escaping_throws(*callee, args, body, true, out);
+                crate::throws_analysis::collect_callee_escaping_throws(
+                    &BuilderThrowsAnalysis { builder: self },
+                    *callee,
+                    args,
+                    body,
+                    true,
+                    out,
+                );
             }
             Expr::Catch { base, .. } => {
                 self.collect_throw_facts_from_expr(*base, body, out);
@@ -3609,7 +3461,7 @@ impl<'db> TypeInferenceBuilder<'db> {
     }
 
     fn call_target_name(&self, callee_expr_id: ExprId, body: &ExprBody) -> Option<Name> {
-        let segments = Self::expr_to_path_segments(callee_expr_id, body)?;
+        let segments = crate::throws_analysis::expr_to_path_segments(callee_expr_id, body)?;
         if segments.len() < 2 {
             // Single-segment path (free function) — return as-is.
             return if segments.is_empty() {
@@ -3664,18 +3516,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                     .collect::<Vec<_>>()
                     .join("."),
             ))
-        }
-    }
-
-    fn expr_to_path_segments(expr_id: ExprId, body: &ExprBody) -> Option<Vec<Name>> {
-        match &body.exprs[expr_id] {
-            Expr::Path(segments) if !segments.is_empty() => Some(segments.clone()),
-            Expr::MemberAccess { base, member } => {
-                let mut base_segments = Self::expr_to_path_segments(*base, body)?;
-                base_segments.push(member.clone());
-                Some(base_segments)
-            }
-            _ => None,
         }
     }
 
