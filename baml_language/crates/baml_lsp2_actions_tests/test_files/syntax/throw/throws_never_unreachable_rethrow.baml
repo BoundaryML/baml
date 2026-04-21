@@ -24,7 +24,7 @@ function server(req: int) -> bool throws never {
 //     │ │         
 //     │ ╰───────── unreachable arm
 //     │     
-//     │     Note: Error code: E0001
+//     │     Note: Error code: E0063
 // ────╯
 // Error: throws contract violation: `never` is missing unknown
 //     ╭─[ throw_throws_never_unreachable_rethrow.baml:11:43 ]
@@ -33,5 +33,5 @@ function server(req: int) -> bool throws never {
 //     │                                           ───┬──  
 //     │                                              ╰──── throws contract violation: `never` is missing unknown
 //     │ 
-//     │ Note: Error code: E0001
+//     │ Note: Error code: E0096
 // ────╯

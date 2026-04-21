@@ -2011,6 +2011,12 @@ impl<'a> Parser<'a> {
             // Note: The tokens are already emitted, we just need to parse the return type
             self.bump(); // ->
             self.parse_type(); // return type
+            if self.at(TokenKind::Throws) {
+                self.with_node(SyntaxKind::THROWS_CLAUSE, |p| {
+                    p.bump(); // throws
+                    p.parse_type();
+                });
+            }
         // The caller's with_node(TYPE_EXPR) will wrap this appropriately
         } else {
             // Not a function type - should be a parenthesized type
@@ -5533,5 +5539,38 @@ function Demo() -> int {
         let child_kinds: Vec<_> = catch_expr.children().map(|n| n.kind()).collect();
         assert_eq!(child_kinds[0], SyntaxKind::THROW_EXPR);
         assert_eq!(child_kinds[1], SyntaxKind::CATCH_CLAUSE);
+    }
+
+    #[test]
+    fn parses_function_type_throws_clause() {
+        let source = r#"
+type Callback = (value: int) -> string throws Foo
+"#;
+
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let function_type =
+            root.descendants()
+                .find(|n| {
+                    n.kind() == SyntaxKind::TYPE_EXPR && n.children_with_tokens().any(|child| {
+                        matches!(
+                            child,
+                            rowan::NodeOrToken::Token(token) if token.kind() == SyntaxKind::ARROW
+                        )
+                    })
+                })
+                .expect("expected function TYPE_EXPR");
+
+        let throws = function_type
+            .children()
+            .find(|n| n.kind() == SyntaxKind::THROWS_CLAUSE)
+            .expect("expected THROWS_CLAUSE under function type");
+
+        assert!(
+            throws.text().to_string().contains("throws Foo"),
+            "expected function type throws clause text, got {:?}",
+            throws.text().to_string()
+        );
     }
 }

@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 11603
 ---
 === TIR2 ===
 function user.BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool) -> int throws never {
@@ -232,7 +233,7 @@ class user.LongAttrField {
 class user.LongFieldTypes {
   very_long_field_name_that_takes_up_space: int | string | bool | float | null | int[] | string[]
   another_long_field: map<string, map<string, map<string, int | string | bool | float | null>>>
-  callback_field: (first_param: int, second_param: string, third_param: bool) -> map<string, int>
+  callback_field: (first_param: int, second_param: string, third_param: bool) -> map<string, int> throws never
   deeply_nested: (int | string | bool | float | null)[]?
 }
 class user.TypeVariety {
@@ -246,7 +247,7 @@ class user.TypeVariety {
   generic: map<string, int>
   complex_generic: map<string, int | string | bool>
   deep_generic: map<string, map<string, int[]>>
-  fn_type: (x: int, y: int) -> string
+  fn_type: (x: int, y: int) -> string throws never
   paren_union_array: (int | string | bool)[]
   triple_nested: map<string, map<string, map<string, int>>>
 }
@@ -754,13 +755,13 @@ function user.NestedGenericReturn() -> map<string, map<string, map<string, int |
     map { "a": map { "b": map { "c": 1 } } } : map<string, map<string, map<string, int | string | bool | null | float>>>
   }
 }
-function user.DeepFnReturn() -> (x: int) -> (y: int) -> (z: int) -> (w: int) -> map<string, int | string | bool> throws never {
+function user.DeepFnReturn() -> (x: int) -> ((y: int) -> ((z: int) -> ((w: int) -> map<string, int | string | bool> throws never) throws never) throws never) throws never throws never {
   { : 1
     1 : 1
   }
-  !! 2354..2355: type mismatch: expected (x: int) -> (y: int) -> (z: int) -> (w: int) -> map<string, int | string | bool>, got 1
+  !! 2354..2355: type mismatch: expected (x: int) -> ((y: int) -> ((z: int) -> ((w: int) -> map<string, int | string | bool> throws never) throws never) throws never) throws never, got 1
 }
-function user.DeepParamTypes(nested: map<string, map<string, map<string, int[]>>>, callback: (x: int) -> (y: int) -> (z: int) -> string) -> string throws never {
+function user.DeepParamTypes(nested: map<string, map<string, map<string, int[]>>>, callback: (x: int) -> ((y: int) -> ((z: int) -> string throws never) throws never) throws never) -> string throws never {
   { : "done"
     "done" : "done"
   }
@@ -1838,21 +1839,21 @@ type user.NestedMap = map<string, map<string, int[]>>
 type user.ParenUnion = (int | string)[]
 type user.OptionalUnion = (int | string)?
 type user.Json = int | float | string | bool | null | user.Json[] | map<string, user.Json>
-type user.IntToInt = (x: int) -> int
-type user.BinaryOp = (a: int, b: int) -> int
-type user.UnnamedParams = (int, int) -> int
-type user.Producer = () -> string
-type user.Curried = (x: int) -> (y: int) -> int
-type user.ComplexFn = (items: int[], lookup: map<string, int>) -> string?
-type user.UnionParamFn = (value: int | string) -> bool
-type user.FnFactory = (config: string) -> (int) -> int
+type user.IntToInt = (x: int) -> int throws never
+type user.BinaryOp = (a: int, b: int) -> int throws never
+type user.UnnamedParams = (int, int) -> int throws never
+type user.Producer = () -> string throws never
+type user.Curried = (x: int) -> ((y: int) -> int throws never) throws never
+type user.ComplexFn = (items: int[], lookup: map<string, int>) -> string? throws never
+type user.UnionParamFn = (value: int | string) -> bool throws never
+type user.FnFactory = (config: string) -> ((int) -> int throws never) throws never
 type user.LongUnion = "alpha" | "bravo" | "charlie" | "delta" | "echo" | "foxtrot" | "golf" | "hotel" | "india" | "juliet" | "kilo" | "lima"
 type user.WideUnion = int | string | bool | float | null | int[] | string[] | bool[] | map<string, int> | map<string, string>
 type user.ThisIsAnExtremelyLongTypeAliasNameThatDefinitelyExceedsLimit = int | string | bool | float | null
 type user.VeryLongNamePlusLongUnion = "alpha" | "bravo" | "charlie" | "delta" | "echo" | "foxtrot" | "golf" | "hotel" | "india"
 type user.DeepGeneric = map<string, map<string, map<string, map<string, int | string | bool | float | null>>>>
-type user.DeepFnType = (x: int) -> (y: int) -> (z: int) -> (w: int) -> map<string, int | string | bool>
-type user.LongParamFn = (first_parameter: map<string, int>, second_parameter: (int | string)[], third_parameter: map<string, bool>) -> string
+type user.DeepFnType = (x: int) -> ((y: int) -> ((z: int) -> ((w: int) -> map<string, int | string | bool> throws never) throws never) throws never) throws never
+type user.LongParamFn = (first_parameter: map<string, int>, second_parameter: (int | string)[], third_parameter: map<string, bool>) -> string throws never
 type user.NestedParenUnion = (int | string | bool | float)[]
 type user.DeepParenUnion = (int | string | bool | float | null | int[])[]?
 type user.Tree = string | map<string, user.Tree> | user.Tree[] | map<string, map<string, user.Tree | string | int | null>>
@@ -1881,9 +1882,9 @@ type user.TriviaLongUnionBlock = "alpha" | "bravo" | "charlie" | "delta" | "echo
 type user.TriviaGeneric = map<string, int>
 type user.TriviaGenericBlock = map<string, int>
 type user.TriviaDeepGeneric = map<string, map<string, map<string, int | string>>>
-type user.TriviaFnType = (x: int) -> string
-type user.TriviaFnTypeBlock = (x: int) -> string
-type user.TriviaLongFnType = (first_parameter: map<string, int>, second_parameter: (int | string)[], third_parameter: map<string, bool>) -> string
+type user.TriviaFnType = (x: int) -> string throws never
+type user.TriviaFnTypeBlock = (x: int) -> string throws never
+type user.TriviaLongFnType = (first_parameter: map<string, int>, second_parameter: (int | string)[], third_parameter: map<string, bool>) -> string throws never
 type user.TriviaOptional = int?
 type user.TriviaArray = int[]
 type user.TriviaParen = (int | string)[]

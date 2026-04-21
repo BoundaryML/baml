@@ -57,6 +57,8 @@ pub enum TypeInfo {
         name: String,
         params: Vec<(String, String)>,
         return_type: Option<String>,
+        throws: Option<String>,
+        note: Option<String>,
     },
     /// A class definition: name, fields (name + type string).
     Class {
@@ -85,6 +87,8 @@ impl TypeInfo {
                 name,
                 params,
                 return_type,
+                throws,
+                note,
             } => {
                 let param_strs: Vec<String> =
                     params.iter().map(|(n, t)| format!("{n}: {t}")).collect();
@@ -92,12 +96,21 @@ impl TypeInfo {
                     .as_deref()
                     .map(|r| format!(" -> {r}"))
                     .unwrap_or_default();
-                format!(
-                    "```baml\nfunction {}({}){}\n```",
+                let throws = throws
+                    .as_deref()
+                    .map(|t| format!(" throws {t}"))
+                    .unwrap_or_default();
+                let mut out = format!(
+                    "```baml\nfunction {}({}){}{throws}\n```",
                     name,
                     param_strs.join(", "),
-                    ret
-                )
+                    ret,
+                );
+                if let Some(note) = note {
+                    out.push_str("\n\n");
+                    out.push_str(note);
+                }
+                out
             }
             TypeInfo::Class { name, fields } => {
                 let field_strs: Vec<String> = fields
@@ -192,22 +205,60 @@ pub fn type_at(db: &dyn Db, file: SourceFile, offset: TextSize) -> Option<TypeIn
 pub fn type_info_for_definition(db: &dyn Db, def: Definition<'_>) -> TypeInfo {
     match def {
         Definition::Function(func_loc) => {
+            let file = func_loc.file(db);
+            let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
+            let pkg_id = baml_compiler2_hir::package::PackageId::new(db, pkg_info.package.clone());
+            let iface = baml_compiler2_tir::package_interface::package_interface(db, pkg_id);
             let sig = baml_compiler2_hir::signature::function_signature(db, func_loc);
-            let params = sig
+            let function_name = sig.name.clone();
+
+            let fallback = || {
+                let params = sig
+                    .params
+                    .iter()
+                    .map(|(param_name, type_expr)| {
+                        (
+                            param_name.as_str().to_string(),
+                            utils::display_type_expr(type_expr),
+                        )
+                    })
+                    .collect();
+                let return_type = sig.return_type.as_ref().map(utils::display_type_expr);
+                TypeInfo::Function {
+                    name: sig.name.as_str().to_string(),
+                    params,
+                    return_type,
+                    throws: sig.throws.as_ref().map(utils::display_type_expr),
+                    note: None,
+                }
+            };
+
+            let Some(exported) = iface.lookup_function(&pkg_info.namespace_path, &function_name)
+            else {
+                return fallback();
+            };
+
+            let params = exported
                 .params
                 .iter()
-                .map(|(param_name, type_expr)| {
-                    (
-                        param_name.as_str().to_string(),
-                        utils::display_type_expr(type_expr),
-                    )
-                })
+                .map(|(param_name, ty)| (param_name.as_str().to_string(), display_surface_ty(ty)))
                 .collect();
-            let return_type = sig.return_type.as_ref().map(utils::display_type_expr);
+            let return_type = Some(display_surface_ty(&exported.return_type));
+            let throws = if exported.declared_throws.is_some()
+                || !matches!(
+                    exported.callable_throws,
+                    baml_compiler2_tir::ty::Ty::Never { .. }
+                ) {
+                Some(display_surface_ty(&exported.callable_throws))
+            } else {
+                None
+            };
             TypeInfo::Function {
-                name: sig.name.as_str().to_string(),
+                name: exported.name.as_str().to_string(),
                 params,
                 return_type,
+                throws,
+                note: callback_forwarding_note(exported),
             }
         }
 
@@ -318,6 +369,81 @@ pub fn type_info_for_definition(db: &dyn Db, def: Definition<'_>) -> TypeInfo {
                 kind,
             }
         }
+    }
+}
+
+fn display_surface_ty(ty: &baml_compiler2_tir::ty::Ty) -> String {
+    let rendered = utils::display_ty(ty);
+    rendered.replace("user.", "").replace("baml.", "")
+}
+
+fn is_synthetic_effect_param_name(name: &Name) -> bool {
+    name.as_str()
+        .strip_prefix("__effect_param_")
+        .is_some_and(|suffix| !suffix.is_empty() && suffix.bytes().all(|b| b.is_ascii_digit()))
+}
+
+fn function_param_matches_effect_slot(ty: &baml_compiler2_tir::ty::Ty, effect_name: &Name) -> bool {
+    use baml_compiler2_tir::ty::Ty;
+
+    match ty {
+        Ty::Function { throws, .. } => matches!(
+            throws.as_ref(),
+            Ty::TypeVar(name, _) if name == effect_name
+        ),
+        Ty::Optional(inner, _) => function_param_matches_effect_slot(inner, effect_name),
+        Ty::Union(members, _) => {
+            let mut matched = false;
+            for member in members {
+                if matches!(
+                    member,
+                    Ty::Primitive(baml_compiler2_tir::ty::PrimitiveType::Null, _)
+                ) {
+                    continue;
+                }
+                if !function_param_matches_effect_slot(member, effect_name) {
+                    return false;
+                }
+                matched = true;
+            }
+            matched
+        }
+        _ => false,
+    }
+}
+
+fn callback_forwarding_note(
+    exported: &baml_compiler2_tir::package_interface::ExportedFunction,
+) -> Option<String> {
+    use baml_compiler2_tir::ty::Ty;
+
+    let throws_facts =
+        baml_compiler2_tir::throw_inference::flatten_ty_to_facts(&exported.callable_throws);
+    let throw_fact_refs = throws_facts.iter().collect::<Vec<_>>();
+    let [only_fact] = throw_fact_refs.as_slice() else {
+        return None;
+    };
+    let Ty::TypeVar(effect_name, _) = only_fact else {
+        return None;
+    };
+    if !is_synthetic_effect_param_name(effect_name) {
+        return None;
+    }
+
+    let mut matching_params = exported
+        .params
+        .iter()
+        .filter(|(_, ty)| function_param_matches_effect_slot(ty, effect_name))
+        .map(|(name, _)| name)
+        .collect::<Vec<_>>();
+
+    if matching_params.len() == 1 {
+        let callback_name = matching_params.pop().expect("len checked");
+        Some(format!(
+            "Forwards whatever callback `{callback_name}` throws."
+        ))
+    } else {
+        None
     }
 }
 

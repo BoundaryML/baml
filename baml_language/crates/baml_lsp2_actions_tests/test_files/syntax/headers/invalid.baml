@@ -106,7 +106,7 @@ client<llm> GPT4 {
 //     │                        ───┬──  
 //     │                           ╰──── unresolved name: Inline
 //     │ 
-//     │ Note: Error code: E0001
+//     │ Note: Error code: E0003
 // ────╯
 // Error: unresolved name: Header
 //     ╭─[ headers_invalid.baml:12:31 ]
@@ -115,7 +115,7 @@ client<llm> GPT4 {
 //     │                               ───┬──  
 //     │                                  ╰──── unresolved name: Header
 //     │ 
-//     │ Note: Error code: E0001
+//     │ Note: Error code: E0003
 // ────╯
 // Error: unresolved name: Middle
 //     ╭─[ headers_invalid.baml:33:25 ]
@@ -124,7 +124,7 @@ client<llm> GPT4 {
 //     │                         ───┬──  
 //     │                            ╰──── unresolved name: Middle
 //     │ 
-//     │ Note: Error code: E0001
+//     │ Note: Error code: E0003
 // ────╯
 // Error: unresolved name: Header
 //     ╭─[ headers_invalid.baml:33:32 ]
@@ -133,5 +133,5 @@ client<llm> GPT4 {
 //     │                                ───┬──  
 //     │                                   ╰──── unresolved name: Header
 //     │ 
-//     │ Note: Error code: E0001
+//     │ Note: Error code: E0003
 // ────╯

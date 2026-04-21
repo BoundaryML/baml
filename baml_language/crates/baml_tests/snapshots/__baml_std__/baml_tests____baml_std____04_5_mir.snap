@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 585
 ---
 === MIR2 ===
 
@@ -403,7 +404,7 @@ fn baml.llm.PlannerState.rr_pick_index(self: baml.llm.PlannerState, client_name:
     let _4: int // sub_client_count // param
     let _5: int // local_offset
     let _6: int
-    let _7: (string[], string) -> int
+    let _7: (string[], string) -> int throws never
     let _8: int
     let _9: int
 
@@ -499,10 +500,10 @@ fn baml.llm.Client.build_attempt_with_state(self: baml.llm.Client, planner_state
     let _2: baml.llm.PlannerState // planner_state // param
     let _3: baml.llm.ClientType
     let _4: int
-    let _5: () -> baml.llm.PrimitiveClient // resolve_fn
-    let _6: future<() -> baml.llm.PrimitiveClient>
+    let _5: () -> baml.llm.PrimitiveClient throws baml.errors.InvalidArgument // resolve_fn
+    let _6: future<() -> baml.llm.PrimitiveClient throws baml.errors.InvalidArgument>
     let _7: baml.llm.PrimitiveClient // primitive
-    let _8: () -> baml.llm.PrimitiveClient
+    let _8: () -> baml.llm.PrimitiveClient throws baml.errors.InvalidArgument
     let _9: baml.llm.OrchestrationStep
     let _10: baml.llm.PrimitiveClient
     let _11: baml.llm.OrchestrationStep[] // steps
@@ -522,12 +523,12 @@ fn baml.llm.Client.build_attempt_with_state(self: baml.llm.Client, planner_state
     let _25: baml.llm.OrchestrationStep
     let _26: bool
     let _27: int
-    let _28: (baml.llm.Client[]) -> int
+    let _28: (baml.llm.Client[]) -> int throws never
     let _29: int // idx
     let _30: string
     let _31: int
     let _32: int
-    let _33: (baml.llm.Client[]) -> int
+    let _33: (baml.llm.Client[]) -> int throws never
     let _34: baml.llm.Client
     let _35: baml.llm.Client[]
     let _36: int
@@ -839,10 +840,10 @@ fn baml.llm.Client.execute_once_oneshot(self: baml.llm.Client, context: baml.llm
     let _3: int // active_delay_ms // param
     let _4: baml.llm.ClientType
     let _5: int
-    let _6: () -> baml.llm.PrimitiveClient // resolve_fn
-    let _7: future<() -> baml.llm.PrimitiveClient>
+    let _6: () -> baml.llm.PrimitiveClient throws baml.errors.InvalidArgument // resolve_fn
+    let _7: future<() -> baml.llm.PrimitiveClient throws baml.errors.InvalidArgument>
     let _8: baml.llm.PrimitiveClient // primitive
-    let _9: () -> baml.llm.PrimitiveClient
+    let _9: () -> baml.llm.PrimitiveClient throws baml.errors.InvalidArgument
     let _10: type // return_type
     let _11: string
     let _12: future<type>
@@ -892,12 +893,12 @@ fn baml.llm.Client.execute_once_oneshot(self: baml.llm.Client, context: baml.llm
     let _56: void
     let _57: bool
     let _58: int
-    let _59: (baml.llm.Client[]) -> int
+    let _59: (baml.llm.Client[]) -> int throws never
     let _60: void
     let _61: int // idx
     let _62: int
     let _63: int
-    let _64: (baml.llm.Client[]) -> int
+    let _64: (baml.llm.Client[]) -> int throws never
     let _65: void // result3
     let _66: baml.llm.Client
     let _67: baml.llm.Client[]
@@ -1159,10 +1160,10 @@ fn baml.llm.Client.execute_once_stream(self: baml.llm.Client, context: baml.llm.
     let _3: int // active_delay_ms // param
     let _4: baml.llm.ClientType
     let _5: int
-    let _6: () -> baml.llm.PrimitiveClient // resolve_fn
-    let _7: future<() -> baml.llm.PrimitiveClient>
+    let _6: () -> baml.llm.PrimitiveClient throws baml.errors.InvalidArgument // resolve_fn
+    let _7: future<() -> baml.llm.PrimitiveClient throws baml.errors.InvalidArgument>
     let _8: baml.llm.PrimitiveClient // primitive
-    let _9: () -> baml.llm.PrimitiveClient
+    let _9: () -> baml.llm.PrimitiveClient throws baml.errors.InvalidArgument
     let _10: type // return_type
     let _11: string
     let _12: future<type>
@@ -1205,12 +1206,12 @@ fn baml.llm.Client.execute_once_stream(self: baml.llm.Client, context: baml.llm.
     let _49: void
     let _50: bool
     let _51: int
-    let _52: (baml.llm.Client[]) -> int
+    let _52: (baml.llm.Client[]) -> int throws never
     let _53: void
     let _54: int // idx
     let _55: int
     let _56: int
-    let _57: (baml.llm.Client[]) -> int
+    let _57: (baml.llm.Client[]) -> int throws never
     let _58: baml.llm.Stream // result3
     let _59: baml.llm.Client
     let _60: baml.llm.Client[]
@@ -1701,37 +1702,37 @@ fn baml.llm.Stream.final(self: baml.llm.Stream) -> void {
     let _1: baml.llm.Stream // self // param
     let _2: bool
     let _3: bool
-    let _4: () -> bool
+    let _4: () -> bool throws baml.errors.LlmClient
     let _5: future<bool>
     let _6: string?
-    let _7: () -> string?
+    let _7: () -> string? throws baml.errors.Io
     let _8: future<string?>
     let _9: bool
     let _10: bool
     let _11: string // next
     let _12: null
-    let _13: (string) -> null
+    let _13: (string) -> null throws baml.errors.LlmClient
     let _14: string
     let _15: future<null>
     let _16: bool
-    let _17: () -> bool
+    let _17: () -> bool throws baml.errors.LlmClient
     let _18: future<bool>
     let _19: null
-    let _20: () -> null
+    let _20: () -> null throws never
     let _21: future<null>
     let _22: null
     let _23: string?
-    let _24: () -> string?
+    let _24: () -> string? throws baml.errors.LlmClient
     let _25: future<string?>
     let _26: bool
     let _27: void
     let _28: bool
     let _29: string // reason
-    let _30: (string) -> null
+    let _30: (string) -> null throws baml.errors.LlmClient
     let _31: string
     let _32: future<null>
     let _33: string // content
-    let _34: () -> string
+    let _34: () -> string throws baml.errors.LlmClient
     let _35: future<string>
     let _36: string
     let _37: baml.llm.StreamCache
@@ -1895,23 +1896,23 @@ fn baml.llm.Stream.next(self: baml.llm.Stream) -> void | baml.stream.StreamFinis
     let _0: void | baml.stream.StreamFinished // _0 // return
     let _1: baml.llm.Stream // self // param
     let _2: string?
-    let _3: () -> string?
+    let _3: () -> string? throws baml.errors.Io
     let _4: future<string?>
     let _5: bool
     let _6: bool
     let _7: string // next
     let _8: null
-    let _9: (string) -> null
+    let _9: (string) -> null throws baml.errors.LlmClient
     let _10: string
     let _11: future<null>
     let _12: bool
-    let _13: () -> bool
+    let _13: () -> bool throws baml.errors.LlmClient
     let _14: future<bool>
     let _15: null
-    let _16: () -> null
+    let _16: () -> null throws never
     let _17: future<null>
     let _18: string // content
-    let _19: () -> string
+    let _19: () -> string throws baml.errors.LlmClient
     let _20: future<string>
     let _21: void | baml.stream.StreamNoYield // parsed
     let _22: string
@@ -2052,12 +2053,12 @@ fn baml.llm.Client.to_primitive_client(self: baml.llm.Client) -> baml.llm.Primit
     let _0: baml.llm.PrimitiveClient // _0 // return
     let _1: baml.llm.Client // self // param
     let _2: bool
-    let _3: (baml.String, string) -> bool
+    let _3: (baml.String, string) -> bool throws never
     let _4: void
     let _5: string
     let _6: string
-    let _7: () -> baml.llm.PrimitiveClient
-    let _8: future<() -> baml.llm.PrimitiveClient>
+    let _7: () -> baml.llm.PrimitiveClient throws baml.errors.InvalidArgument
+    let _8: future<() -> baml.llm.PrimitiveClient throws baml.errors.InvalidArgument>
 
     bb0: {
         _3 = copy _1.0;

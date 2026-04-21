@@ -253,5 +253,5 @@ test IncompleteSyntax {
 //    │                                             ───┬───  
 //    │                                                ╰───── unresolved type: Resume
 //    │ 
-//    │ Note: Error code: E0001
+//    │ Note: Error code: E0002
 // ───╯

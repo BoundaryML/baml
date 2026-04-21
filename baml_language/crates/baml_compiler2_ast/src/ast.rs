@@ -107,6 +107,7 @@ pub enum TypeExpr {
     Function {
         params: Vec<FunctionTypeParam>,
         ret: Box<TypeExpr>,
+        throws: Option<Box<TypeExpr>>,
         attrs: Vec<RawAttribute>,
     },
     /// The `unknown` keyword type

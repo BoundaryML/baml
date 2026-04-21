@@ -1,13 +1,14 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 956
 ---
 === MIR2 ===
 
 === MIR2 (package testing) ===
-fn testing.$invoke_collector(collector: (testing.TestCollector) -> void, c: testing.TestCollector) -> void {
+fn testing.$invoke_collector(collector: (testing.TestCollector) -> void throws unknown, c: testing.TestCollector) -> void {
     // Locals:
     let _0: void // _0 // return
-    let _1: (testing.TestCollector) -> void // collector // param
+    let _1: (testing.TestCollector) -> void throws unknown // collector // param
     let _2: testing.TestCollector // c // param
 
     bb0: {
@@ -37,7 +38,7 @@ fn testing.TestRegistry.expand_set(self: testing.TestRegistry, name: string) -> 
     let _13: void[]
     let _14: void[]
     let _15: void
-    let _16: (testing.TestCollector) -> void
+    let _16: (testing.TestCollector) -> void throws unknown
     let _17: testing.TestCollector
     let _18: int // elapsed
     let _19: int
@@ -47,10 +48,10 @@ fn testing.TestRegistry.expand_set(self: testing.TestRegistry, name: string) -> 
     let _23: map<void, void>
     let _24: int
     let _25: null
-    let _26: (map<string, testing.TestRegistry>, string, testing.TestRegistry) -> null
+    let _26: (map<string, testing.TestRegistry>, string, testing.TestRegistry) -> null throws never
     let _27: testing.TestRegistry
     let _28: string[]
-    let _29: (map<string, testing.TestRegistry>) -> string[]
+    let _29: (map<string, testing.TestRegistry>) -> string[] throws never
     let _30: int // __for_idx_1
     let _31: int
     let _32: bool
@@ -266,13 +267,13 @@ fn testing.TestCollector.new(prefix: string) -> testing.TestCollector {
     }
 }
 
-fn testing.TestCollector.register_test(self: testing.TestCollector, name: string, body: () -> void, runner: (() -> testing.TestReport) -> () -> testing.TestReport?) -> void {
+fn testing.TestCollector.register_test(self: testing.TestCollector, name: string, body: () -> void throws unknown, runner: ((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never)?) -> void {
     // Locals:
     let _0: void // _0 // return
     let _1: testing.TestCollector // self // param
     let _2: string // name // param
-    let _3: () -> void // body // param
-    let _4: (() -> testing.TestReport) -> () -> testing.TestReport? // runner // param
+    let _3: () -> void throws unknown // body // param
+    let _4: ((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never)? // runner // param
     let _5: string // full_name
     let _6: bool
     let _7: string
@@ -291,7 +292,7 @@ fn testing.TestCollector.register_test(self: testing.TestCollector, name: string
     let _20: bool
     let _21: string
     let _22: string
-    let _23: (baml.String, string) -> bool
+    let _23: (baml.String, string) -> bool throws never
     let _24: string
     let _25: string // final_name
     let _26: bool
@@ -302,7 +303,7 @@ fn testing.TestCollector.register_test(self: testing.TestCollector, name: string
     let _31: int
     let _32: int
     let _33: int // _
-    let _34: (testing.TestRegistration[], testing.TestRegistration) -> int
+    let _34: (testing.TestRegistration[], testing.TestRegistration) -> int throws never
     let _35: testing.TestRegistration
     let _36: string
 
@@ -410,13 +411,13 @@ fn testing.TestCollector.register_test(self: testing.TestCollector, name: string
     }
 }
 
-fn testing.TestCollector.register_test_set(self: testing.TestCollector, name: string, collector: (testing.TestCollector) -> void, runner: (() -> testing.TestSetReport) -> () -> testing.TestSetReport?) -> void {
+fn testing.TestCollector.register_test_set(self: testing.TestCollector, name: string, collector: (testing.TestCollector) -> void throws unknown, runner: ((() -> testing.TestSetReport throws never) -> (() -> testing.TestSetReport throws never) throws never)?) -> void {
     // Locals:
     let _0: void // _0 // return
     let _1: testing.TestCollector // self // param
     let _2: string // name // param
-    let _3: (testing.TestCollector) -> void // collector // param
-    let _4: (() -> testing.TestSetReport) -> () -> testing.TestSetReport? // runner // param
+    let _3: (testing.TestCollector) -> void throws unknown // collector // param
+    let _4: ((() -> testing.TestSetReport throws never) -> (() -> testing.TestSetReport throws never) throws never)? // runner // param
     let _5: string // full_name
     let _6: bool
     let _7: string
@@ -435,7 +436,7 @@ fn testing.TestCollector.register_test_set(self: testing.TestCollector, name: st
     let _20: bool
     let _21: string
     let _22: string
-    let _23: (baml.String, string) -> bool
+    let _23: (baml.String, string) -> bool throws never
     let _24: string
     let _25: string // final_name
     let _26: bool
@@ -446,7 +447,7 @@ fn testing.TestCollector.register_test_set(self: testing.TestCollector, name: st
     let _31: int
     let _32: int
     let _33: int // _
-    let _34: (testing.TestSetRegistration[], testing.TestSetRegistration) -> int
+    let _34: (testing.TestSetRegistration[], testing.TestSetRegistration) -> int throws never
     let _35: testing.TestSetRegistration
     let _36: string
 
@@ -554,46 +555,47 @@ fn testing.TestCollector.register_test_set(self: testing.TestCollector, name: st
     }
 }
 
-fn testing.run_test(body: () -> void, runner: (() -> testing.TestReport) -> () -> testing.TestReport?) -> testing.TestReport {
+fn testing.run_test(body: () -> void throws unknown, runner: ((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never)?) -> testing.TestReport {
     // Locals:
     let _0: testing.TestReport // _0 // return
-    let _1: () -> void // body // param [captured]
-    let _2: (() -> testing.TestReport) -> () -> testing.TestReport? // runner // param
-    let _3: () -> testing.TestReport // base_run
-    let _4: () -> testing.TestReport // effective_run
-    let _5: bool
+    let _1: () -> void throws unknown // body // param [captured]
+    let _2: ((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never)? // runner // param
+    let _3: () -> testing.TestReport throws never // base_run
+    let _4: bool
+    let _5: () -> testing.TestReport throws never
     let _6: bool
-    let _7: (() -> testing.TestReport) -> () -> testing.TestReport // r
-    let _8: (() -> testing.TestReport) -> () -> testing.TestReport
-    let _9: () -> testing.TestReport
-    let _10: () -> testing.TestReport
+    let _7: (() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never // r
+    let _8: () -> testing.TestReport throws never // wrapped
+    let _9: (() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never
+    let _10: () -> testing.TestReport throws never
+    let _11: () -> testing.TestReport throws never
 
     bb0: {
         _3 = make_closure lambda[0](copy _1);
-        _5 = copy _2 == const null;
-        branch copy _5 -> [bb3, bb1];
+        _4 = copy _2 == const null;
+        branch copy _4 -> [bb4, bb1];
     }
 
     bb1: {
-        _6 = is_type(copy _2, Function { params: [Function { params: [], ret: Class(TypeName { name: "TestReport", module_path: ["testing"], display_name: "testing.TestReport" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }), attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }], ret: Function { params: [], ret: Class(TypeName { name: "TestReport", module_path: ["testing"], display_name: "testing.TestReport" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }), attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }, attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
-        branch copy _6 -> [bb2, bb4];
+        _6 = is_type(copy _2, Function { params: [Function { params: [], ret: Class(TypeName { name: "TestReport", module_path: ["testing"], display_name: "testing.TestReport" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }), throws: Void { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }, attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }], ret: Function { params: [], ret: Class(TypeName { name: "TestReport", module_path: ["testing"], display_name: "testing.TestReport" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }), throws: Void { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }, attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }, throws: Void { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }, attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _6 -> [bb2, bb5];
     }
 
     bb2: {
         _7 = copy _2;
-        _8 = copy _7;
-        _9 = copy _3;
-        _4 = call copy _8(copy _9) -> [bb4];
+        _9 = copy _7;
+        _10 = copy _3;
+        _8 = call copy _9(copy _10) -> [bb3];
     }
 
     bb3: {
-        _4 = copy _3;
-        goto -> bb4;
+        _11 = copy _8;
+        _0 = call copy _11() -> [bb5];
     }
 
     bb4: {
-        _10 = copy _4;
-        _0 = call copy _10() -> [bb5];
+        _5 = copy _3;
+        _0 = call copy _5() -> [bb5];
     }
 
     bb5: {
@@ -674,10 +676,10 @@ fn testing.TestRegistry.run_test(self: testing.TestRegistry, name: string) -> te
     let _8: testing.TestRegistration // t
     let _9: bool
     let _10: string
-    let _11: () -> void
-    let _12: (() -> testing.TestReport) -> () -> testing.TestReport?
+    let _11: () -> void throws unknown
+    let _12: ((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never)?
     let _13: string[]
-    let _14: (map<string, testing.TestRegistry>) -> string[]
+    let _14: (map<string, testing.TestRegistry>) -> string[] throws never
     let _15: int // __for_idx_1
     let _16: int
     let _17: bool
@@ -774,42 +776,41 @@ fn testing.TestRegistry.run_test(self: testing.TestRegistry, name: string) -> te
     }
 }
 
-fn testing.run_testset(run_children: () -> testing.TestSetReport, runner: (() -> testing.TestSetReport) -> () -> testing.TestSetReport?) -> testing.TestSetReport {
+fn testing.run_testset(run_children: () -> testing.TestSetReport throws never, runner: ((() -> testing.TestSetReport throws never) -> (() -> testing.TestSetReport throws never) throws never)?) -> testing.TestSetReport {
     // Locals:
     let _0: testing.TestSetReport // _0 // return
-    let _1: () -> testing.TestSetReport // run_children // param
-    let _2: (() -> testing.TestSetReport) -> () -> testing.TestSetReport? // runner // param
-    let _3: () -> testing.TestSetReport // effective_run
+    let _1: () -> testing.TestSetReport throws never // run_children // param
+    let _2: ((() -> testing.TestSetReport throws never) -> (() -> testing.TestSetReport throws never) throws never)? // runner // param
+    let _3: bool
     let _4: bool
-    let _5: bool
-    let _6: (() -> testing.TestSetReport) -> () -> testing.TestSetReport // r
-    let _7: (() -> testing.TestSetReport) -> () -> testing.TestSetReport
-    let _8: () -> testing.TestSetReport
+    let _5: (() -> testing.TestSetReport throws never) -> (() -> testing.TestSetReport throws never) throws never // r
+    let _6: () -> testing.TestSetReport throws never // wrapped
+    let _7: (() -> testing.TestSetReport throws never) -> (() -> testing.TestSetReport throws never) throws never
+    let _8: () -> testing.TestSetReport throws never
 
     bb0: {
-        _4 = copy _2 == const null;
-        branch copy _4 -> [bb3, bb1];
+        _3 = copy _2 == const null;
+        branch copy _3 -> [bb4, bb1];
     }
 
     bb1: {
-        _5 = is_type(copy _2, Function { params: [Function { params: [], ret: Class(TypeName { name: "TestSetReport", module_path: ["testing"], display_name: "testing.TestSetReport" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }), attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }], ret: Function { params: [], ret: Class(TypeName { name: "TestSetReport", module_path: ["testing"], display_name: "testing.TestSetReport" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }), attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }, attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
-        branch copy _5 -> [bb2, bb4];
+        _4 = is_type(copy _2, Function { params: [Function { params: [], ret: Class(TypeName { name: "TestSetReport", module_path: ["testing"], display_name: "testing.TestSetReport" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }), throws: Void { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }, attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }], ret: Function { params: [], ret: Class(TypeName { name: "TestSetReport", module_path: ["testing"], display_name: "testing.TestSetReport" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }), throws: Void { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }, attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }, throws: Void { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }, attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _4 -> [bb2, bb5];
     }
 
     bb2: {
-        _6 = copy _2;
-        _7 = copy _6;
-        _3 = call copy _7(copy _1) -> [bb4];
+        _5 = copy _2;
+        _7 = copy _5;
+        _6 = call copy _7(copy _1) -> [bb3];
     }
 
     bb3: {
-        _3 = copy _1;
-        goto -> bb4;
+        _8 = copy _6;
+        _0 = call copy _8() -> [bb5];
     }
 
     bb4: {
-        _8 = copy _3;
-        _0 = call copy _8() -> [bb5];
+        _0 = call copy _1() -> [bb5];
     }
 
     bb5: {
@@ -839,7 +840,7 @@ fn testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.Serial
     let _17: testing.TestSetRegistration // ts
     let _18: void
     let _19: testing.TestRegistry? // expanded
-    let _20: (map<string, testing.TestRegistry>, string) -> testing.TestRegistry?
+    let _20: (map<string, testing.TestRegistry>, string) -> testing.TestRegistry? throws never
     let _21: string
     let _22: bool
     let _23: testing.TestRegistry // sub

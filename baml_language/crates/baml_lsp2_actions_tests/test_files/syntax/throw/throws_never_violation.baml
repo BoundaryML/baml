@@ -16,5 +16,5 @@ function ThrowsNeverViolation(x: int) -> string throws never {
 //    │                                                         ───┬──  
 //    │                                                            ╰──── throws contract violation: `never` is missing string
 //    │ 
-//    │ Note: Error code: E0001
+//    │ Note: Error code: E0096
 // ───╯

@@ -10,7 +10,10 @@
 //! Per-item queries (`resolve_class_fields`, `resolve_type_alias`) provide
 //! Salsa-cached structural type resolution for class fields and type aliases.
 
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::{BTreeSet, HashMap},
+    sync::Arc,
+};
 
 use baml_base::Name;
 use baml_compiler2_ast::{
@@ -91,6 +94,10 @@ pub struct ScopeInference<'db> {
     /// structural path so MIR can emit the correct `QualifiedName` and LSP
     /// can navigate to the definition.
     resolutions: FxHashMap<ExprId, MemberResolution<'db>>,
+    /// Residual throw facts for each catch expression after its arms have been
+    /// applied. This lets downstream throw-surface queries reuse the same catch
+    /// semantics as the main type-checking builder instead of over-approximating.
+    catch_residual_throws: FxHashMap<ExprId, BTreeSet<Ty>>,
     /// Match expressions that the exhaustiveness checker determined cover all cases.
     exhaustive_matches: FxHashSet<ExprId>,
     /// TIR-inferred root segment type for each multi-segment `Path` expression.
@@ -183,6 +190,12 @@ impl<'db> ScopeInference<'db> {
     /// Look up the member resolution for an expression in this scope.
     pub fn resolution(&self, expr_id: ExprId) -> Option<&MemberResolution<'db>> {
         self.resolutions.get(&expr_id)
+    }
+
+    /// Look up residual throw facts for a catch expression after handled arms
+    /// have been removed.
+    pub fn catch_residual_throws(&self, expr_id: ExprId) -> Option<&BTreeSet<Ty>> {
+        self.catch_residual_throws.get(&expr_id)
     }
 
     /// Iterate over all (`ExprId`, `MemberResolution`) pairs for this scope.
@@ -296,7 +309,26 @@ fn find_lambda_by_span<'a>(
 /// Keyed by `ScopeId<'db>` (tracked: `File + FileScopeId`), so Salsa caches
 /// independently per scope. Editing lambda A does NOT invalidate the enclosing
 /// function's `ScopeInference`.
-#[salsa::tracked(returns(ref))]
+fn infer_scope_types_cycle_initial<'db>(
+    _db: &'db dyn crate::Db,
+    _id: salsa::Id,
+    _scope_id: ScopeId<'db>,
+) -> ScopeInference<'db> {
+    ScopeInference {
+        expressions: FxHashMap::default(),
+        bindings: FxHashMap::default(),
+        resolutions: FxHashMap::default(),
+        catch_residual_throws: FxHashMap::default(),
+        exhaustive_matches: FxHashSet::default(),
+        path_root_types: FxHashMap::default(),
+        path_member_resolutions: FxHashMap::default(),
+        nested_lambda_types: FxHashMap::default(),
+        param_types: Vec::new(),
+        extra: None,
+    }
+}
+
+#[salsa::tracked(returns(ref), cycle_initial=infer_scope_types_cycle_initial)]
 pub fn infer_scope_types<'db>(
     db: &'db dyn crate::Db,
     scope_id: ScopeId<'db>,
@@ -341,11 +373,12 @@ pub fn infer_scope_types<'db>(
                 if func_data.span == scope.range && scope.name.as_ref() == Some(&func_data.name) {
                     let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(db, file, *local_id);
                     let body = baml_compiler2_ppir::function_body(db, func_loc);
-                    let sig = baml_compiler2_ppir::function_signature(db, func_loc);
+                    let sig = baml_compiler2_ppir::elaborated_function_signature(db, func_loc);
 
                     // Compute the generic params for this function scope.
                     // If this is a method inside a class, also include the class's generic params.
-                    let mut generic_params = func_data.generic_params.clone();
+                    let mut generic_params = sig.user_generic_params.clone();
+                    generic_params.extend(sig.synthetic_effect_params.iter().cloned());
                     if let Some(parent_idx) = scope.parent {
                         let parent = &index.scopes[parent_idx.index() as usize];
                         if matches!(parent.kind, ScopeKind::Class) {
@@ -353,7 +386,7 @@ pub fn infer_scope_types<'db>(
                                 for class_data in item_tree.classes.values() {
                                     if class_data.name == *class_name {
                                         // Check for method-level type params that shadow class-level ones.
-                                        for mp in &func_data.generic_params {
+                                        for mp in &sig.user_generic_params {
                                             if class_data.generic_params.iter().any(|cp| cp == mp) {
                                                 builder.report_at_span(
                                                     crate::infer_context::TirTypeError::TypeParamShadowed {
@@ -398,7 +431,9 @@ pub fn infer_scope_types<'db>(
                         // Report unresolved type diagnostics for return type
                         if !diags.is_empty() {
                             let sig_sm =
-                                baml_compiler2_ppir::function_signature_source_map(db, func_loc);
+                                baml_compiler2_ppir::elaborated_function_signature_source_map(
+                                    db, func_loc,
+                                );
                             if let Some(ret_span) = sig_sm.return_type_span {
                                 for diag in diags.drain(..) {
                                     builder.report_at_span(diag, ret_span);
@@ -421,8 +456,9 @@ pub fn infer_scope_types<'db>(
                             });
 
                         // Add parameter bindings as locals
-                        let sig_sm =
-                            baml_compiler2_ppir::function_signature_source_map(db, func_loc);
+                        let sig_sm = baml_compiler2_ppir::elaborated_function_signature_source_map(
+                            db, func_loc,
+                        );
                         for (i, (param_name, param_te)) in sig.params.iter().enumerate() {
                             let param_ty = if param_name.as_str() == "self"
                                 && matches!(param_te, baml_compiler2_ast::TypeExpr::Unknown { .. })
@@ -849,6 +885,7 @@ pub fn infer_scope_types<'db>(
         expressions,
         bindings,
         resolutions,
+        catch_residual_throws,
         exhaustive_matches,
         diagnostics,
         path_root_types,
@@ -867,6 +904,7 @@ pub fn infer_scope_types<'db>(
         expressions,
         bindings,
         resolutions,
+        catch_residual_throws,
         exhaustive_matches,
         path_root_types,
         path_member_resolutions,
@@ -1204,7 +1242,7 @@ pub fn render_scope_diagnostics<'db>(
     diags
         .diagnostics
         .iter()
-        .map(|d| d.render(source_map.as_ref()))
+        .map(|d| d.render(db, file, source_map.as_ref()))
         .collect()
 }
 

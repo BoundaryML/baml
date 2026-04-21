@@ -138,11 +138,19 @@ fn validate_type_expr_tree(expr: &TypeExpr, diagnostics: &mut Vec<(String, text_
                 validate_type_expr_tree(v, diagnostics);
             }
         }
-        TypeExpr::Function { params, ret, .. } => {
+        TypeExpr::Function {
+            params,
+            ret,
+            throws,
+            ..
+        } => {
             for p in params {
                 validate_type_expr_tree(&p.ty, diagnostics);
             }
             validate_type_expr_tree(ret, diagnostics);
+            if let Some(throws) = throws {
+                validate_type_expr_tree(throws, diagnostics);
+            }
         }
         _ => {}
     }

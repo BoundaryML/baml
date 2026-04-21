@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/tests/bytecode_format/main.rs
+assertion_line: 43
 ---
 function assert.contains(haystack: string, needle: string) -> null {
   28   0    load_var 1             (haystack)
@@ -65,7 +66,7 @@ function assert.not_null(value: unknown?) -> null {
        9   return                 
 }
 
-function testing.$invoke_collector(collector: (testing.TestCollector) -> void, c: testing.TestCollector) -> void {
+function testing.$invoke_collector(collector: (testing.TestCollector) -> void throws unknown, c: testing.TestCollector) -> void {
   61   0   load_var 2      (c)
        1   load_var 1      (collector)
        2   call_indirect   
@@ -127,7 +128,7 @@ function testing.TestCollector.new(prefix: string) -> testing.TestCollector {
        9   return               
 }
 
-function testing.TestCollector.register_test(self: null, name: string, body: () -> void, runner: (() -> testing.TestReport) -> () -> testing.TestReport?) -> void {
+function testing.TestCollector.register_test(self: null, name: string, body: () -> void throws unknown, runner: ((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never)?) -> void {
   27   0    load_var 1             (self)
        1    load_field 0           (prefix)
        2    load_const 0           ("")
@@ -233,7 +234,7 @@ function testing.TestCollector.register_test(self: null, name: string, body: () 
        93   jump -66               (to 27)
 }
 
-function testing.TestCollector.register_test_set(self: null, name: string, collector: (testing.TestCollector) -> void, runner: (() -> testing.TestSetReport) -> () -> testing.TestSetReport?) -> void {
+function testing.TestCollector.register_test_set(self: null, name: string, collector: (testing.TestCollector) -> void throws unknown, runner: ((() -> testing.TestSetReport throws never) -> (() -> testing.TestSetReport throws never) throws never)?) -> void {
   38   0    load_var 1             (self)
        1    load_field 0           (prefix)
        2    load_const 0           ("")
@@ -692,7 +693,7 @@ function testing.TestRegistry.serialize(self: null) -> (testing.SerializedTest |
         99   jump -91                (to 8)
 }
 
-function testing.run_test(body: () -> void, runner: (() -> testing.TestReport) -> () -> testing.TestReport?) -> testing.TestReport {
+function testing.run_test(body: () -> void throws unknown, runner: ((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never)?) -> testing.TestReport {
         0    load_var 1              
         1    make_cell               
         2    store_var 1             
@@ -710,24 +711,22 @@ function testing.run_test(body: () -> void, runner: (() -> testing.TestReport) -
         12   is_type 1               
         13   pop_jump_if_false +10   (to 23)
         14   load_var 2              (runner)
-        15   store_var 5             (r)
+        15   store_var 4             (r)
 
-  190   16   load_var 3              (base_run)
-        17   load_var 5              (r)
+  191   16   load_var 3              (base_run)
+        17   load_var 4              (r)
         18   call_indirect           
-        19   store_var 4             (effective_run)
+
+  192   19   call_indirect           
         20   jump +3                 (to 23)
 
   189   21   load_var 3              (base_run)
-        22   store_var 4             (effective_run)
-
-  192   23   load_var 4              (effective_run)
-        24   call_indirect           
-        25   return                  
+        22   call_indirect           
+        23   return                  
 }
 
-function testing.run_testset(run_children: () -> testing.TestSetReport, runner: (() -> testing.TestSetReport) -> () -> testing.TestSetReport?) -> testing.TestSetReport {
-  197   0    load_var 2              (runner)
+function testing.run_testset(run_children: () -> testing.TestSetReport throws never, runner: ((() -> testing.TestSetReport throws never) -> (() -> testing.TestSetReport throws never) throws never)?) -> testing.TestSetReport {
+  199   0    load_var 2              (runner)
         1    load_const 0            (null)
         2    cmp_op ==               
         3    pop_jump_if_false +2    (to 5)
@@ -736,20 +735,18 @@ function testing.run_testset(run_children: () -> testing.TestSetReport, runner: 
         6    is_type 1               
         7    pop_jump_if_false +10   (to 17)
         8    load_var 2              (runner)
-        9    store_var 4             (r)
+        9    store_var 3             (r)
 
-  199   10   load_var 1              (run_children)
-        11   load_var 4              (r)
+  202   10   load_var 1              (run_children)
+        11   load_var 3              (r)
         12   call_indirect           
-        13   store_var 3             (effective_run)
+
+  203   13   call_indirect           
         14   jump +3                 (to 17)
 
-  198   15   load_var 1              (run_children)
-        16   store_var 3             (effective_run)
-
-  201   17   load_var 3              (effective_run)
-        18   call_indirect           
-        19   return                  
+  200   15   load_var 1              (run_children)
+        16   call_indirect           
+        17   return                  
 }
 
 function user.User.promote(self: null, bonus: int) -> Report {

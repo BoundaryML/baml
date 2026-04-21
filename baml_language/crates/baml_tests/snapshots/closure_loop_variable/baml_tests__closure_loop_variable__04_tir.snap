@@ -1,15 +1,16 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 7166
 ---
 === TIR2 ===
 function user.sum_array(arr: int[]) -> int throws never {
   { : int
     let sum = 0 : 0 -> int
-    let total = [] : never[] -> (() -> void)[] (evolving)
+    let total = [] : never[] -> (() -> void throws never)[] (evolving)
     for i in arr
       { : int
         total.push(() -> { ... }) : int
-          () -> { ... } : () -> void
+          () -> { ... } : () -> void throws never
             {
               sum Add= i
             }

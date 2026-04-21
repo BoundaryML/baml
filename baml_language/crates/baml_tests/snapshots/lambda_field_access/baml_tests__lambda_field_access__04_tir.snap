@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 17131
 ---
 === TIR2 ===
 class user.Inner {
@@ -11,8 +12,8 @@ class user.Outer {
 }
 function user.test_captured_field_access(obj: user.Outer) -> string throws never {
   { : string
-    let get_name = : () -> string
-      () -> string { ... } : () -> string
+    let get_name = : () -> string throws never
+      () -> string { ... } : () -> string throws never
         {
           obj.name
         }
@@ -23,8 +24,8 @@ lambda user.test_captured_field_access {
 }
 function user.test_captured_nested_field(obj: user.Outer) -> int throws never {
   { : int
-    let get_value = : () -> int
-      () -> int { ... } : () -> int
+    let get_value = : () -> int throws never
+      () -> int { ... } : () -> int throws never
         {
           obj.inner.value
         }
@@ -35,8 +36,8 @@ lambda user.test_captured_nested_field {
 }
 function user.test_no_leak_after_lambda(obj: user.Outer) -> string throws never {
   { : string
-    let get_value = : () -> int
-      () -> int { ... } : () -> int
+    let get_value = : () -> int throws never
+      () -> int { ... } : () -> int throws never
         {
           obj.inner.value
         }
@@ -49,8 +50,8 @@ lambda user.test_no_leak_after_lambda {
 }
 function user.test_nested_lambda_capture(obj: user.Outer) -> string throws never {
   { : string
-    let outer_fn = : () -> string
-      () -> { ... } : () -> string
+    let outer_fn = : () -> string throws never
+      () -> { ... } : () -> string throws never
         {
           let inner_fn = ...
             () -> string { ... }
@@ -68,13 +69,13 @@ lambda user.test_nested_lambda_capture {
 }
 function user.test_sequential_lambdas(obj: user.Outer) -> int throws never {
   { : int
-    let get_name = : () -> string
-      () -> string { ... } : () -> string
+    let get_name = : () -> string throws never
+      () -> string { ... } : () -> string throws never
         {
           obj.name
         }
-    let get_value = : () -> int
-      () -> int { ... } : () -> int
+    let get_value = : () -> int throws never
+      () -> int { ... } : () -> int throws never
         {
           obj.inner.value
         }
@@ -88,8 +89,8 @@ lambda user.test_sequential_lambdas {
 }
 function user.test_lambda_param_and_capture(obj: user.Outer) -> int throws never {
   { : int
-    let add_to_value = : (x: int) -> int
-      (x: int) -> int { ... } : (x: int) -> int
+    let add_to_value = : (x: int) -> int throws never
+      (x: int) -> int { ... } : (x: int) -> int throws never
         {
           x + obj.inner.value
         }

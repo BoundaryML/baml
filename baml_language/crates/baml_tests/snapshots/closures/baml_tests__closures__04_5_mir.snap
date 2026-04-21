@@ -1,11 +1,12 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 7532
 ---
 === MIR2 ===
-fn user.apply(f: (int, int) -> int, a: int, b: int) -> int {
+fn user.apply(f: (int, int) -> int throws never, a: int, b: int) -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: (int, int) -> int // f // param
+    let _1: (int, int) -> int throws never // f // param
     let _2: int // a // param
     let _3: int // b // param
 
@@ -18,11 +19,11 @@ fn user.apply(f: (int, int) -> int, a: int, b: int) -> int {
     }
 }
 
-fn user.apply_to_each(items: Employee[], f: (Employee) -> string) -> string[] {
+fn user.apply_to_each(items: Employee[], f: (Employee) -> string throws never) -> string[] {
     // Locals:
     let _0: string[] // _0 // return
     let _1: Employee[] // items // param
-    let _2: (Employee) -> string // f // param
+    let _2: (Employee) -> string throws never // f // param
 
     bb0: {
         _0 = call const fn baml.Array.map(copy _1, copy _2) -> [bb1];
@@ -190,10 +191,10 @@ fn user.test_bound_in_lambda() -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: Employee // emp [captured]
-    let _2: () -> (string) -> string // make_greeter
-    let _3: (string) -> string // greeter
-    let _4: () -> (string) -> string
-    let _5: (string) -> string
+    let _2: () -> ((string) -> string throws never) throws never // make_greeter
+    let _3: (string) -> string throws never // greeter
+    let _4: () -> ((string) -> string throws never) throws never
+    let _5: (string) -> string throws never
 
     bb0: {
         _1 = Employee { const "Alice", const "Smith" };
@@ -231,9 +232,9 @@ fn user.test_bound_mapper() -> string[] {
     // Locals:
     let _0: string[] // _0 // return
     let _1: Formatter // fmt
-    let _2: (string) -> string // transform
+    let _2: (string) -> string throws never // transform
     let _3: string[]
-    let _4: (string) -> string
+    let _4: (string) -> string throws never
 
     bb0: {
         _1 = Formatter { const ">> " };
@@ -252,9 +253,9 @@ fn user.test_bound_validator() -> bool[] {
     // Locals:
     let _0: bool[] // _0 // return
     let _1: RangeCheck // valid
-    let _2: (int) -> bool // check
+    let _2: (int) -> bool throws never // check
     let _3: int[]
-    let _4: (int) -> bool
+    let _4: (int) -> bool throws never
 
     bb0: {
         _1 = RangeCheck { const 10_i64, const 50_i64 };
@@ -273,9 +274,9 @@ fn user.test_field_chain_bind(cfg: Config) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: Config // cfg // param
-    let _2: (string) -> string // enc
-    let _3: (string) -> string
-    let _4: (string) -> string
+    let _2: (string) -> string throws never // enc
+    let _3: (string) -> string throws never
+    let _4: (string) -> string throws never
 
     bb0: {
         _3 = copy _1.0;
@@ -293,8 +294,8 @@ fn user.test_generic_bind() -> int {
     // Locals:
     let _0: int // _0 // return
     let _1: Box // b
-    let _2: () -> void // get
-    let _3: () -> void
+    let _2: () -> void throws never // get
+    let _3: () -> void throws never
 
     bb0: {
         _1 = Box { const 42_i64 };
@@ -312,8 +313,8 @@ fn user.test_mutation_after_bind() -> int {
     // Locals:
     let _0: int // _0 // return
     let _1: Counter // c
-    let _2: () -> int // inc
-    let _3: () -> int
+    let _2: () -> int throws never // inc
+    let _3: () -> int throws never
 
     bb0: {
         _1 = Counter { const 0_i64 };
@@ -332,12 +333,12 @@ fn user.test_repeated_bound_calls() -> int {
     // Locals:
     let _0: int // _0 // return
     let _1: Counter // c
-    let _2: () -> int // inc
+    let _2: () -> int throws never // inc
     let _3: int
-    let _4: () -> int
+    let _4: () -> int throws never
     let _5: int
-    let _6: () -> int
-    let _7: () -> int
+    let _6: () -> int throws never
+    let _7: () -> int throws never
 
     bb0: {
         _1 = Counter { const 0_i64 };
@@ -366,12 +367,12 @@ fn user.test_strategy() -> int[] {
     let _0: int[] // _0 // return
     let _1: Calculator // add_calc
     let _2: Calculator // mul_calc
-    let _3: (int, int) -> int // do_add
-    let _4: (int, int) -> int // do_mul
+    let _3: (int, int) -> int throws never // do_add
+    let _4: (int, int) -> int throws never // do_mul
     let _5: int
-    let _6: (int, int) -> int
+    let _6: (int, int) -> int throws never
     let _7: int
-    let _8: (int, int) -> int
+    let _8: (int, int) -> int throws never
 
     bb0: {
         _1 = Calculator { const "add" };

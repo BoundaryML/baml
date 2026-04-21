@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 7641
 ---
 function user.Box.unwrap(self: null) -> void {
     load_var self
@@ -99,7 +100,7 @@ function user.RangeCheck.is_valid(self: null, n: int) -> bool {
     return
 }
 
-function user.apply(f: (int, int) -> int, a: int, b: int) -> int {
+function user.apply(f: (int, int) -> int throws never, a: int, b: int) -> int {
     load_var a
     load_var b
     load_var f
@@ -107,7 +108,7 @@ function user.apply(f: (int, int) -> int, a: int, b: int) -> int {
     return
 }
 
-function user.apply_to_each(items: Employee[], f: (Employee) -> string) -> string[] {
+function user.apply_to_each(items: Employee[], f: (Employee) -> string throws never) -> string[] {
     load_var items
     load_var f
     call baml.Array.map

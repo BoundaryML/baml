@@ -11,5 +11,5 @@ function UseUnknown() -> int {
 //    │   ─────┬─────  
 //    │        ╰─────── unresolved name: unknown_var
 //    │ 
-//    │ Note: Error code: E0001
+//    │ Note: Error code: E0003
 // ───╯

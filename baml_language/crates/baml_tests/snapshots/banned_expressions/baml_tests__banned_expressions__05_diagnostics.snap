@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 2895
 ---
 === COMPILER2 DIAGNOSTICS ===
   [parse] Error: Expected expression, found let
@@ -19,7 +20,7 @@ source: crates/baml_tests/src/generated_tests.rs
    │               ┬  
    │               ╰── unresolved name: b
    │ 
-   │ Note: Error code: E0001
+   │ Note: Error code: E0003
 ───╯
 
   [type] Error: unresolved name: a
@@ -29,7 +30,7 @@ source: crates/baml_tests/src/generated_tests.rs
    │   ┬  
    │   ╰── unresolved name: a
    │ 
-   │ Note: Error code: E0001
+   │ Note: Error code: E0003
 ───╯
 
   [type] Error: missing return: expected `int`
@@ -41,5 +42,5 @@ source: crates/baml_tests/src/generated_tests.rs
     │ │       
     │ ╰─────── missing return: expected `int`
     │     
-    │     Note: Error code: E0001
+    │     Note: Error code: E0029
 ────╯

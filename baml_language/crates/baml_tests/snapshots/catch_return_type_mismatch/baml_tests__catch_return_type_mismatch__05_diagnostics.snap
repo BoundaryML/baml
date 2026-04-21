@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 5619
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] Warning: extraneous throws declaration: user.Errors
@@ -9,7 +10,7 @@ source: crates/baml_tests/src/generated_tests.rs
     │                                 ───┬───  
     │                                    ╰───── extraneous throws declaration: user.Errors
     │ 
-    │ Note: Error code: E0001
+    │ Note: Error code: E0097
 ────╯
 
   [type] Error: type mismatch: expected bool, got user.Errors

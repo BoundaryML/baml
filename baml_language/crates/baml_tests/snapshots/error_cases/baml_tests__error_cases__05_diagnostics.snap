@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 10185
 ---
 === COMPILER2 DIAGNOSTICS ===
   [parse] Error: Expected function name, found integer
@@ -31,7 +32,7 @@ source: crates/baml_tests/src/generated_tests.rs
     │ │           
     │ ╰─────────── unreachable arm
     │     
-    │     Note: Error code: E0001
+    │     Note: Error code: E0063
 ────╯
 
   [parse] Error: Expected '=>' after pattern, found ':'
@@ -61,7 +62,7 @@ source: crates/baml_tests/src/generated_tests.rs
     │                             ──┬──  
     │                               ╰──── unresolved type: b
     │ 
-    │ Note: Error code: E0001
+    │ Note: Error code: E0002
 ────╯
 
   [parse] Error: Expected '}', found EOF

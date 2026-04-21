@@ -165,6 +165,7 @@ pub enum Ty {
     Function {
         params: Vec<Ty>,
         ret: Box<Ty>,
+        throws: Box<Ty>,
         attr: TyAttr,
     },
     /// Void type — the type of effectful expressions (was VIR `Unit`).
@@ -233,7 +234,17 @@ impl Ty {
             Ty::Union(members, _) => Ty::Union(members, attr),
             Ty::Opaque(tn, _) => Ty::Opaque(tn, attr),
             Ty::TypeAlias(tn, _) => Ty::TypeAlias(tn, attr),
-            Ty::Function { params, ret, .. } => Ty::Function { params, ret, attr },
+            Ty::Function {
+                params,
+                ret,
+                throws,
+                ..
+            } => Ty::Function {
+                params,
+                ret,
+                throws,
+                attr,
+            },
             Ty::WatchAccessor(inner, _) => Ty::WatchAccessor(inner, attr),
             Ty::Future(inner, _) => Ty::Future(inner, attr),
         }
@@ -544,11 +555,21 @@ impl Ty {
                 Ok(())
             }
             // All other variants are fine at runtime
-            Ty::Function { params, ret, .. } => {
+            Ty::Function {
+                params,
+                ret,
+                throws,
+                ..
+            } => {
                 for p in params {
                     p.validate_runtime()?;
                 }
-                ret.validate_runtime()
+                ret.validate_runtime()?;
+                if matches!(throws.as_ref(), Ty::Void { .. }) {
+                    Ok(())
+                } else {
+                    throws.validate_runtime()
+                }
             }
             Ty::Future(_, _) => {
                 Err("Future type should not reach runtime (must be awaited)".to_string())
@@ -565,6 +586,30 @@ impl Ty {
             | Ty::Enum(..)
             | Ty::EnumVariant(..)
             | Ty::Opaque(..) => Ok(()),
+        }
+    }
+
+    fn needs_postfix_parens(&self) -> bool {
+        matches!(self, Ty::Union(..) | Ty::Function { .. })
+    }
+
+    fn needs_function_result_parens(&self) -> bool {
+        matches!(self, Ty::Function { .. })
+    }
+
+    fn fmt_as_postfix_base(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.needs_postfix_parens() {
+            write!(f, "({self})")
+        } else {
+            write!(f, "{self}")
+        }
+    }
+
+    fn fmt_as_function_result(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.needs_function_result_parens() {
+            write!(f, "({self})")
+        } else {
+            write!(f, "{self}")
         }
     }
 }
@@ -591,18 +636,12 @@ impl fmt::Display for Ty {
             Ty::Opaque(tn, _) => write!(f, "{tn}"),
             Ty::TypeAlias(tn, _) => write!(f, "{tn}"),
             Ty::Optional(inner, _) => {
-                if matches!(inner.as_ref(), Ty::Union(..)) {
-                    write!(f, "({inner})?")
-                } else {
-                    write!(f, "{inner}?")
-                }
+                inner.fmt_as_postfix_base(f)?;
+                write!(f, "?")
             }
             Ty::List(inner, _) => {
-                if matches!(inner.as_ref(), Ty::Union(..)) {
-                    write!(f, "({inner})[]")
-                } else {
-                    write!(f, "{inner}[]")
-                }
+                inner.fmt_as_postfix_base(f)?;
+                write!(f, "[]")
             }
             Ty::Map { key, value, .. } => write!(f, "map<{key}, {value}>"),
             Ty::Union(types, _) => {
@@ -610,12 +649,24 @@ impl fmt::Display for Ty {
                     types.iter().map(std::string::ToString::to_string).collect();
                 write!(f, "{}", parts.join(" | "))
             }
-            Ty::Function { params, ret, .. } => {
+            Ty::Function {
+                params,
+                ret,
+                throws,
+                ..
+            } => {
                 let param_strs: Vec<std::string::String> = params
                     .iter()
                     .map(std::string::ToString::to_string)
                     .collect();
-                write!(f, "({}) -> {}", param_strs.join(", "), ret)
+                let throws_display = if matches!(throws.as_ref(), Ty::Void { .. }) {
+                    "never".to_string()
+                } else {
+                    throws.to_string()
+                };
+                write!(f, "({}) -> ", param_strs.join(", "))?;
+                ret.fmt_as_function_result(f)?;
+                write!(f, " throws {}", throws_display)
             }
             Ty::Void { .. } => write!(f, "void"),
             Ty::WatchAccessor(inner, _) => write!(f, "{inner}.$watch"),
@@ -791,6 +842,66 @@ mod tests {
             Ty::TypeAlias(TypeName::local(Name::new("MyAlias")), TyAttr::default())
                 .validate_runtime()
                 .is_ok()
+        );
+    }
+
+    #[test]
+    fn test_function_display_uses_never_for_void_throws_sentinel() {
+        let ty = Ty::Function {
+            params: vec![ty_int()],
+            ret: Box::new(ty_string()),
+            throws: Box::new(Ty::Void {
+                attr: TyAttr::default(),
+            }),
+            attr: TyAttr::default(),
+        };
+
+        assert_eq!(ty.to_string(), "(int) -> string throws never");
+        assert!(ty.validate_runtime().is_ok());
+    }
+
+    #[test]
+    fn test_function_display_parenthesizes_nested_function_returns() {
+        let ty = Ty::Function {
+            params: vec![],
+            ret: Box::new(Ty::Function {
+                params: vec![ty_int()],
+                ret: Box::new(ty_string()),
+                throws: Box::new(Ty::Void {
+                    attr: TyAttr::default(),
+                }),
+                attr: TyAttr::default(),
+            }),
+            throws: Box::new(Ty::Void {
+                attr: TyAttr::default(),
+            }),
+            attr: TyAttr::default(),
+        };
+
+        assert_eq!(
+            ty.to_string(),
+            "() -> ((int) -> string throws never) throws never"
+        );
+    }
+
+    #[test]
+    fn test_function_display_parenthesizes_function_postfix_types() {
+        let callback = Ty::Function {
+            params: vec![ty_int()],
+            ret: Box::new(ty_string()),
+            throws: Box::new(Ty::Void {
+                attr: TyAttr::default(),
+            }),
+            attr: TyAttr::default(),
+        };
+
+        assert_eq!(
+            Ty::optional(callback.clone()).to_string(),
+            "((int) -> string throws never)?"
+        );
+        assert_eq!(
+            Ty::list(callback).to_string(),
+            "((int) -> string throws never)[]"
         );
     }
 }

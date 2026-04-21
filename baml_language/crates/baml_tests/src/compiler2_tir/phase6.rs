@@ -72,6 +72,31 @@ fn array_join_returns_string() {
     "#);
 }
 
+#[test]
+fn user_defined_array_does_not_bridge_like_builtin_array() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+class Array<T> {}
+
+function keep<T>(value: Array<T>, fallback: T) -> T {
+    fallback
+}
+
+function f(xs: int[]) -> int {
+    return keep(xs, 0)
+}
+"#,
+    );
+
+    let tir = render_tir(&db, file);
+    assert!(
+        tir.contains("type mismatch: expected user.Array<int>, got int[]"),
+        "expected nominal user.Array<T> to stay distinct from builtin int[], got:\n{tir}"
+    );
+}
+
 // ── Map method resolution ─────────────────────────────────────────────────────
 
 #[test]
@@ -511,7 +536,7 @@ function f(callback: ((x: int) -> int)?) -> int? {
 "#,
     );
     insta::assert_snapshot!(render_tir(&db, file), @r#"
-    function user.f(callback: ((x: int) -> int)?) -> int? throws never {
+    function user.f(callback: ((x: int) -> int throws never)?) -> int? throws never {
       { : never
         return callback?.(42) : int?
       }
@@ -533,9 +558,8 @@ function f(arr: int[]?) -> int[]? {
     insta::assert_snapshot!(render_tir(&db, file), @r"
     function user.f(arr: int[]?) -> int[]? throws never {
       { : never
-        return arr?.map?.((x: int) -> int { ... }) : U[]?
+        return arr?.map?.((x: int) -> int { ... }) : int[]?
       }
-      !! 47..85: type mismatch: expected int[]?, got U[]?
     }
     lambda user.f {
     }
@@ -576,10 +600,43 @@ function f(callback: ((x: int) -> int)?) -> int? {
 "#,
     );
     insta::assert_snapshot!(render_tir(&db, file), @r#"
-    function user.f(callback: ((x: int) -> int)?) -> int? throws never {
+    function user.f(callback: ((x: int) -> int throws never)?) -> int? throws never {
       { : never
         return callback?.("wrong") : int?
       }
+      !! 74..81: type mismatch: expected int, got "wrong"
+    }
+    "#);
+}
+
+#[test]
+fn optional_call_checks_higher_order_function_arguments() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function demo(cb: (((x: int) -> int) -> int)?) -> int? throws never {
+  let risky = (x: int) -> int throws string {
+    throw "boom"
+  }
+
+  cb?.(risky)
+}
+"#,
+    );
+    insta::assert_snapshot!(render_tir(&db, file), @r#"
+    function user.demo(cb: (((x: int) -> int throws never) -> int throws never)?) -> int? throws never {
+      { : int?
+        let risky = : (x: int) -> int throws string
+          (x: int) -> int throws string { ... } : (x: int) -> int throws string
+            {
+              throw "boom"
+            }
+        cb?.(risky) : int?
+      }
+      !! 146..151: type mismatch: expected (x: int) -> int throws never, got (x: int) -> int throws string
+    }
+    lambda user.demo {
     }
     "#);
 }
@@ -597,13 +654,11 @@ function f(callback: MaybeFn) -> int? {
 "#,
     );
     insta::assert_snapshot!(render_tir(&db, file), @r"
-    type user.MaybeFn = ((x: int) -> int)?
+    type user.MaybeFn = ((x: int) -> int throws never)?
     function user.f(callback: user.MaybeFn) -> int? throws never {
       { : never
-        return callback?.(42) : unknown?
+        return callback?.(42) : int?
       }
-      !! 86..100: did you mean `callback(42)`? `callback?.(42)` is unnecessary, because `callback` cannot be null
-      !! 86..100: `user.MaybeFn` is not a function — it cannot be called
     }
     type user.MaybeFn$stream = null | unknown
     ");
@@ -674,7 +729,7 @@ function f(cb: ((x: int) -> int)?) -> int {
 "#,
     );
     insta::assert_snapshot!(render_tir(&db, file), @r#"
-    function user.f(cb: ((x: int) -> int)?) -> int throws never {
+    function user.f(cb: ((x: int) -> int throws never)?) -> int throws never {
       { : never
         return cb?.(1) : int?
       }
@@ -695,7 +750,7 @@ function f(cb: ((x: int) -> string?)?) -> string? {
 "#,
     );
     insta::assert_snapshot!(render_tir(&db, file), @r#"
-    function user.f(cb: ((x: int) -> string?)?) -> string? throws never {
+    function user.f(cb: ((x: int) -> string? throws never)?) -> string? throws never {
       { : never
         return cb?.(1) : string?
       }
@@ -786,6 +841,7 @@ function f() -> null {
         xs.push("a") : int
         return null : null
       }
+      !! 44..52: did you mean `xs.push`? `xs?.push` is unnecessary, because `xs` cannot be null
       !! 70..73: type mismatch: expected int, got string
     }
     "#);
@@ -864,7 +920,7 @@ function f() -> null {
     }
     function user.f() -> null throws never {
       { : never
-        let callbacks = [] : never[] -> (() -> int)[] (evolving)
+        let callbacks = [] : never[] -> (() -> int throws never)[] (evolving)
         callbacks.push(cb) : int
         return null : null
       }
@@ -885,8 +941,361 @@ function f(xs: int[]?) -> int? {
     );
     assert_eq!(
         expr_type_in_function(&db, file, "f", "xs?.push"),
-        "((self: int[], item: int) -> int)?"
+        "((self: int[], item: int) -> int throws never)?"
     );
+}
+
+#[test]
+fn named_wrapper_value_preserves_effect_param() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function wrap(cb: (x: int) -> string) -> string {
+    return cb(1)
+}
+
+function f() -> null {
+    let g = wrap
+    g
+    return null
+}
+"#,
+    );
+    assert_eq!(
+        expr_type_in_function(&db, file, "f", "g"),
+        "(cb: (x: int) -> string throws __effect_param_0) -> string throws __effect_param_0"
+    );
+}
+
+#[test]
+fn named_wrapper_value_that_catches_callback_has_never_callable_throws() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function wrap(cb: (x: int) -> string) -> string {
+    cb(1) catch (e) { _ => "fallback" }
+}
+
+function f() -> null {
+    let g = wrap
+    g
+    return null
+}
+"#,
+    );
+    assert_eq!(
+        expr_type_in_function(&db, file, "f", "g"),
+        "(cb: (x: int) -> string throws __effect_param_0) -> string throws never"
+    );
+}
+
+#[test]
+fn returned_wrapper_value_preserves_explicit_callback_throws() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function forward(cb: (x: int) -> int throws string) -> int {
+    return cb(1)
+}
+
+function make() -> ((cb: (x: int) -> int throws string) -> int) {
+    return forward
+}
+
+function f() -> null {
+    let g = make()
+    g
+    return null
+}
+"#,
+    );
+    assert_eq!(
+        expr_type_in_function(&db, file, "f", "g"),
+        "(cb: (x: int) -> int throws string) -> int throws string"
+    );
+}
+
+#[test]
+fn catch_wrapped_wrapper_value_preserves_callable_throws() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function wrap(cb: () -> int throws string) -> int {
+    return cb() catch (e) {
+        _ => wrap(cb)
+    }
+}
+
+function f() -> null {
+    let g = wrap
+    g
+    return null
+}
+"#,
+    );
+    assert_eq!(
+        expr_type_in_function(&db, file, "f", "g"),
+        "(cb: () -> int throws string) -> int throws string"
+    );
+}
+
+#[test]
+fn bound_method_value_preserves_declared_throws() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+class Worker {
+    factor int
+
+    function risky(self, value: int) -> int throws string {
+        if (value < 0) { throw "negative" }
+        self.factor * value
+    }
+}
+
+function f(worker: Worker) -> null {
+    let cb = worker.risky
+    cb
+    return null
+}
+"#,
+    );
+    assert_eq!(
+        expr_type_in_function(&db, file, "f", "cb"),
+        "(value: int) -> int throws string"
+    );
+}
+
+#[test]
+fn builtin_member_value_preserves_declared_throws() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function f(file: baml.fs.File) -> null {
+    let read = file.read
+    read
+    return null
+}
+"#,
+    );
+    let ty = expr_type_in_function(&db, file, "f", "read");
+    assert!(
+        ty.starts_with("(n: int) -> string throws "),
+        "expected builtin member value to preserve declared throws, got `{ty}`"
+    );
+    assert!(
+        ty.contains("Io"),
+        "expected builtin member value throws surface to reference Io, got `{ty}`"
+    );
+}
+
+#[test]
+fn builtin_map_method_value_preserves_callback_surface() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function f(xs: int[]) -> null {
+    let m = xs.map
+    m
+    return null
+}
+"#,
+    );
+    assert_eq!(
+        expr_type_in_function(&db, file, "f", "m"),
+        "(self: int[], f: (int) -> U throws E) -> U[] throws E"
+    );
+}
+
+#[test]
+fn wrapper_value_around_builtin_map_preserves_callback_surface() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function builtin_map(cb: (value: int) -> int, values: int[]) -> int[] {
+    return values.map(cb)
+}
+
+function f() -> null {
+    let g = builtin_map
+    g
+    return null
+}
+"#,
+    );
+    assert_eq!(
+        expr_type_in_function(&db, file, "f", "g"),
+        "(cb: (value: int) -> int throws __effect_param_0, values: int[]) -> int[] throws __effect_param_0"
+    );
+}
+
+#[test]
+fn lambda_value_preserves_explicit_throws() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function f() -> null {
+    let risky = (x: int) -> int throws string {
+        if (x < 0) { throw "negative" }
+        x
+    }
+    risky
+    return null
+}
+"#,
+    );
+    assert_eq!(
+        expr_type_in_function(&db, file, "f", "risky"),
+        "(x: int) -> int throws string"
+    );
+}
+
+#[test]
+fn stored_lambda_with_omitted_throws_stays_closed_in_expr_type() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function f() -> null {
+    let risky = (x: int) -> int {
+        throw "boom"
+    }
+    risky
+    return null
+}
+"#,
+    );
+    assert_eq!(
+        expr_type_in_function(&db, file, "f", "risky"),
+        "(x: int) -> int throws never"
+    );
+}
+
+#[test]
+fn returned_triple_nested_lambda_reads_cleanly() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function f() -> null {
+    let triple = () -> {
+        let middle = () -> {
+            let inner = (n: int) -> int { n }
+            inner
+        }
+        middle
+    }
+    triple
+    return null
+}
+"#,
+    );
+    assert_eq!(
+        expr_type_in_function(&db, file, "f", "triple"),
+        "() -> (() -> ((n: int) -> int throws never) throws never) throws never"
+    );
+    insta::assert_snapshot!(render_tir(&db, file), @r#"
+    function user.f() -> null throws never {
+      { : never
+        let triple = : () -> (() -> ((n: int) -> int throws never) throws never) throws never
+          () -> { ... } : () -> (() -> ((n: int) -> int throws never) throws never) throws never
+            {
+              let middle = ...
+                () -> { ... }
+                  {
+                    let inner = ...
+                      (n: int) -> int { ... }
+                        {
+                          n
+                        }
+                    inner
+                  }
+              middle
+            }
+        triple : () -> (() -> ((n: int) -> int throws never) throws never) throws never
+        return null : null
+      }
+    }
+    lambda user.f {
+    }
+    lambda user.f {
+    }
+    lambda user.f {
+    }
+    "#);
+}
+
+#[test]
+fn returned_quadruple_nested_lambda_reads_cleanly() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function f() -> null {
+    let quadruple = () -> {
+        let third = () -> {
+            let second = () -> {
+                let first = (n: int) -> int { n }
+                first
+            }
+            second
+        }
+        third
+    }
+    quadruple
+    return null
+}
+"#,
+    );
+    assert_eq!(
+        expr_type_in_function(&db, file, "f", "quadruple"),
+        "() -> (() -> (() -> ((n: int) -> int throws never) throws never) throws never) throws never"
+    );
+    insta::assert_snapshot!(render_tir(&db, file), @r#"
+    function user.f() -> null throws never {
+      { : never
+        let quadruple = : () -> (() -> (() -> ((n: int) -> int throws never) throws never) throws never) throws never
+          () -> { ... } : () -> (() -> (() -> ((n: int) -> int throws never) throws never) throws never) throws never
+            {
+              let third = ...
+                () -> { ... }
+                  {
+                    let second = ...
+                      () -> { ... }
+                        {
+                          let first = ...
+                            (n: int) -> int { ... }
+                              {
+                                n
+                              }
+                          first
+                        }
+                    second
+                  }
+              third
+            }
+        quadruple : () -> (() -> (() -> ((n: int) -> int throws never) throws never) throws never) throws never
+        return null : null
+      }
+    }
+    lambda user.f {
+    }
+    lambda user.f {
+    }
+    lambda user.f {
+    }
+    lambda user.f {
+    }
+    "#);
 }
 
 #[test]
@@ -945,10 +1354,8 @@ function f(arr: int[]?) -> int[]? {
     insta::assert_snapshot!(render_tir(&db, file), @r"
     function user.f(arr: int[]?) -> int[]? throws never {
       { : never
-        return arr?.map?.((x) -> { ... }) : U[]?
+        return arr?.map?.((x) -> { ... }) : int[]?
       }
-      !! 59..75: cannot infer type of lambda parameter `x` — add a type annotation or provide context
-      !! 47..76: type mismatch: expected int[]?, got U[]?
     }
     lambda user.f {
     }
@@ -969,9 +1376,8 @@ function f(arr: int[]?) -> int[]? {
     insta::assert_snapshot!(render_tir(&db, file), @r"
     function user.f(arr: int[]?) -> int[]? throws never {
       { : never
-        return arr?.map?.((x: int) -> int { ... }) : U[]?
+        return arr?.map?.((x: int) -> int { ... }) : int[]?
       }
-      !! 47..85: type mismatch: expected int[]?, got U[]?
     }
     lambda user.f {
     }
@@ -1030,7 +1436,7 @@ function f(callback: (x: int) -> int) -> int? {
 "#,
     );
     insta::assert_snapshot!(render_tir(&db, file), @r#"
-    function user.f(callback: (x: int) -> int) -> int? throws never {
+    function user.f(callback: (x: int) -> int throws never) -> int? throws never {
       { : never
         return callback?.(42) : int?
       }
@@ -1078,7 +1484,7 @@ function f(callback: ((x: int) -> int)?) -> int? {
 "#,
     );
     insta::assert_snapshot!(render_tir(&db, file), @r#"
-    function user.f(callback: ((x: int) -> int)?) -> int? throws never {
+    function user.f(callback: ((x: int) -> int throws never)?) -> int? throws never {
       { : never
         return callback?.(1, 2) : int?
       }

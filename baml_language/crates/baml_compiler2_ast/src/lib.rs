@@ -187,7 +187,12 @@ mod tests {
                 value: value.clone(),
                 attrs: strip_attrs(attrs),
             },
-            TypeExpr::Function { params, ret, attrs } => TypeExpr::Function {
+            TypeExpr::Function {
+                params,
+                ret,
+                throws,
+                attrs,
+            } => TypeExpr::Function {
                 params: params
                     .iter()
                     .map(|p| crate::ast::FunctionTypeParam {
@@ -196,6 +201,7 @@ mod tests {
                     })
                     .collect(),
                 ret: Box::new(strip_spans(ret)),
+                throws: throws.as_ref().map(|throws| Box::new(strip_spans(throws))),
                 attrs: strip_attrs(attrs),
             },
             TypeExpr::Media { kind, attrs } => TypeExpr::Media {
@@ -900,6 +906,40 @@ function f() -> int {
         assert_eq!(
             ta.type_expr.unwrap().expr,
             type_expr!(List(List(List(Int))))
+        );
+    }
+
+    #[test]
+    fn function_type_throws_preserves_omission_vs_explicit_never() {
+        let omitted = first_type_alias(parse_and_lower(
+            "type Omitted = (cb: (value: int) -> string) -> void\n",
+        ));
+        let explicit = first_type_alias(parse_and_lower(
+            "type Explicit = (cb: (value: int) -> string throws never) -> void\n",
+        ));
+
+        let omitted_outer = omitted.type_expr.expect("expected type alias body");
+        let TypeExpr::Function { params, .. } = &omitted_outer.expr else {
+            panic!("expected outer function type for omitted case");
+        };
+        let TypeExpr::Function { throws, .. } = &params[0].ty else {
+            panic!("expected inner function type for omitted case");
+        };
+        assert!(
+            throws.is_none(),
+            "expected omitted nested throws to stay None in raw AST, got {throws:?}"
+        );
+
+        let explicit_outer = explicit.type_expr.expect("expected type alias body");
+        let TypeExpr::Function { params, .. } = &explicit_outer.expr else {
+            panic!("expected outer function type for explicit case");
+        };
+        let TypeExpr::Function { throws, .. } = &params[0].ty else {
+            panic!("expected inner function type for explicit case");
+        };
+        assert!(
+            matches!(throws.as_deref(), Some(TypeExpr::Never { .. })),
+            "expected explicit nested throws never to be preserved, got {throws:?}"
         );
     }
 

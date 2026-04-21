@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 28271
 ---
 === MIR2 ===
 fn user.add_assign() -> int {
@@ -81,10 +82,10 @@ fn user.block_with_tail() -> int {
     }
 }
 
-fn user.edge_call_then_index(foo: () -> int[]) -> int {
+fn user.edge_call_then_index(foo: () -> int[] throws never) -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: () -> int[] // foo // param
+    let _1: () -> int[] throws never // foo // param
     let _2: int[]
     let _3: 0
 
@@ -103,12 +104,12 @@ fn user.edge_call_then_index(foo: () -> int[]) -> int {
     }
 }
 
-fn user.edge_call_then_parens(foo: () -> (int) -> int) -> int {
+fn user.edge_call_then_parens(foo: () -> ((int) -> int throws never) throws never) -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: () -> (int) -> int // foo // param
+    let _1: () -> ((int) -> int throws never) throws never // foo // param
     let _2: int
-    let _3: (int) -> int
+    let _3: (int) -> int throws never
 
     bb0: {
         _3 = call copy _1() -> [bb1];
@@ -128,10 +129,10 @@ fn user.edge_call_then_parens(foo: () -> (int) -> int) -> int {
     }
 }
 
-fn user.edge_let_call_then_index(bar: () -> int[]) -> int {
+fn user.edge_let_call_then_index(bar: () -> int[] throws never) -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: () -> int[] // bar // param
+    let _1: () -> int[] throws never // bar // param
     let _2: int // x
     let _3: int[]
     let _4: 0
@@ -152,10 +153,10 @@ fn user.edge_let_call_then_index(bar: () -> int[]) -> int {
     }
 }
 
-fn user.edge_semicolon_forces_boundary(bar: () -> int[]) -> int {
+fn user.edge_semicolon_forces_boundary(bar: () -> int[] throws never) -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: () -> int[] // bar // param
+    let _1: () -> int[] throws never // bar // param
     let _2: int[]
 
     bb0: {

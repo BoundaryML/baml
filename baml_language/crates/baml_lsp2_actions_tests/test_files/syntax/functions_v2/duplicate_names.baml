@@ -78,7 +78,7 @@ function Bar(a: string, b: int | bool) -> int {
 //    │   ──┬──  
 //    │     ╰──── unresolved name: input
 //    │ 
-//    │ Note: Error code: E0001
+//    │ Note: Error code: E0003
 // ───╯
 // Error: unresolved name: string
 //    ╭─[ functions_v2_duplicate_names.baml:2:9 ]
@@ -87,7 +87,7 @@ function Bar(a: string, b: int | bool) -> int {
 //    │         ───┬──  
 //    │            ╰──── unresolved name: string
 //    │ 
-//    │ Note: Error code: E0001
+//    │ Note: Error code: E0003
 // ───╯
 // Error: unresolved name: output
 //    ╭─[ functions_v2_duplicate_names.baml:3:3 ]
@@ -96,7 +96,7 @@ function Bar(a: string, b: int | bool) -> int {
 //    │   ───┬──  
 //    │      ╰──── unresolved name: output
 //    │ 
-//    │ Note: Error code: E0001
+//    │ Note: Error code: E0003
 // ───╯
 // Error: unresolved name: string
 //    ╭─[ functions_v2_duplicate_names.baml:3:10 ]
@@ -105,27 +105,27 @@ function Bar(a: string, b: int | bool) -> int {
 //    │          ───┬──  
 //    │             ╰──── unresolved name: string
 //    │ 
-//    │ Note: Error code: E0001
+//    │ Note: Error code: E0003
 // ───╯
-// Error: type mismatch: expected baml.llm.Client, got () -> unknown
+// Error: type mismatch: expected baml.llm.Client, got () -> unknown throws never
 //    ╭─[ functions_v2_duplicate_names.baml:6:46 ]
 //    │
 //  6 │ ╭─▶ function Bar(a: string, b: int | bool) -> int {
 //    ┆ ┆   
 //  9 │ ├─▶ }
 //    │ │       
-//    │ ╰─────── type mismatch: expected baml.llm.Client, got () -> unknown
+//    │ ╰─────── type mismatch: expected baml.llm.Client, got () -> unknown throws never
 //    │     
 //    │     Note: Error code: E0001
 // ───╯
-// Error: type mismatch: expected baml.llm.Client, got () -> unknown
+// Error: type mismatch: expected baml.llm.Client, got () -> unknown throws never
 //    ╭─[ functions_v2_duplicate_names.baml:4:2 ]
 //    │
 //  4 │ ╭─▶ }
 //    ┆ ┆   
 //  9 │ ├─▶ }
 //    │ │       
-//    │ ╰─────── type mismatch: expected baml.llm.Client, got () -> unknown
+//    │ ╰─────── type mismatch: expected baml.llm.Client, got () -> unknown throws never
 //    │     
 //    │     Note: Error code: E0001
 // ───╯

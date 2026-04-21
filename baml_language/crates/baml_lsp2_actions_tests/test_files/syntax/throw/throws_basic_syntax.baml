@@ -34,5 +34,5 @@ function MayThrowMultiple(x: int) -> string throws string | int {
 //     │                                                   ──────┬──────  
 //     │                                                         ╰──────── extraneous throws declaration: int
 //     │ 
-//     │ Note: Error code: E0001
+//     │ Note: Error code: E0097
 // ────╯

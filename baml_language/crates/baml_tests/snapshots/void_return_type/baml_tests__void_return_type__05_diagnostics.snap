@@ -1,7 +1,18 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 43143
 ---
 === COMPILER2 DIAGNOSTICS ===
+  [type] Error: this body may throw through callback `handler`, but declared throws is `never`. Add an explicit `throws` to the callback, catch the call, or make the callback non-throwing.
+    ╭─[ function_type_throws.baml:28:9 ]
+    │
+ 28 │   return (value: int) -> string { handler(value) }
+    │         ─────────────────────┬────────────────────  
+    │                              ╰────────────────────── this body may throw through callback `handler`, but declared throws is `never`. Add an explicit `throws` to the callback, catch the call, or make the callback non-throwing.
+    │ 
+    │ Note: Error code: E0096
+────╯
+
   [type] Error: cannot use return value of a void function
     ╭─[ void_function_type.baml:12:16 ]
     │

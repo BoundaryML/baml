@@ -25,6 +25,29 @@ use salsa::{Event, EventKind, Setter};
 /// Format compiler2 AST `TypeExpr` for HIR2 display.
 fn hir2_type_expr_to_string(ty: &baml_compiler2_ast::TypeExpr) -> String {
     use baml_compiler2_ast::TypeExpr;
+
+    fn type_expr_needs_postfix_parens(ty: &TypeExpr) -> bool {
+        matches!(ty, TypeExpr::Union { .. } | TypeExpr::Function { .. })
+    }
+
+    fn type_expr_as_postfix_base(ty: &TypeExpr) -> String {
+        let rendered = hir2_type_expr_to_string(ty);
+        if type_expr_needs_postfix_parens(ty) {
+            format!("({rendered})")
+        } else {
+            rendered
+        }
+    }
+
+    fn type_expr_as_function_result(ty: &TypeExpr) -> String {
+        let rendered = hir2_type_expr_to_string(ty);
+        if matches!(ty, TypeExpr::Function { .. }) {
+            format!("({rendered})")
+        } else {
+            rendered
+        }
+    }
+
     match ty {
         TypeExpr::Path { segments, .. } => segments
             .iter()
@@ -40,8 +63,8 @@ fn hir2_type_expr_to_string(ty: &baml_compiler2_ast::TypeExpr) -> String {
         TypeExpr::Void { .. } => "void".into(),
         TypeExpr::Uint8Array { .. } => "uint8array".into(),
         TypeExpr::Media { kind, .. } => format!("{:?}", kind).to_lowercase(),
-        TypeExpr::Optional { inner, .. } => format!("{}?", hir2_type_expr_to_string(inner)),
-        TypeExpr::List { inner, .. } => format!("{}[]", hir2_type_expr_to_string(inner)),
+        TypeExpr::Optional { inner, .. } => format!("{}?", type_expr_as_postfix_base(inner)),
+        TypeExpr::List { inner, .. } => format!("{}[]", type_expr_as_postfix_base(inner)),
         TypeExpr::Map { key, value, .. } => format!(
             "map<{}, {}>",
             hir2_type_expr_to_string(key),
@@ -53,7 +76,12 @@ fn hir2_type_expr_to_string(ty: &baml_compiler2_ast::TypeExpr) -> String {
             .collect::<Vec<_>>()
             .join(" | "),
         TypeExpr::Literal { value, .. } => value.to_string(),
-        TypeExpr::Function { params, ret, .. } => {
+        TypeExpr::Function {
+            params,
+            ret,
+            throws,
+            ..
+        } => {
             let ps: Vec<String> = params
                 .iter()
                 .map(|p| {
@@ -63,7 +91,17 @@ fn hir2_type_expr_to_string(ty: &baml_compiler2_ast::TypeExpr) -> String {
                         .unwrap_or_else(|| hir2_type_expr_to_string(&p.ty))
                 })
                 .collect();
-            format!("({}) -> {}", ps.join(", "), hir2_type_expr_to_string(ret))
+            let throws = throws
+                .as_deref()
+                .map(hir2_type_expr_to_string)
+                .map(|throws| format!(" throws {throws}"))
+                .unwrap_or_default();
+            format!(
+                "({}) -> {}{}",
+                ps.join(", "),
+                type_expr_as_function_result(ret),
+                throws
+            )
         }
         TypeExpr::BuiltinUnknown { .. } => "unknown".into(),
         TypeExpr::Type { .. } => "type".into(),

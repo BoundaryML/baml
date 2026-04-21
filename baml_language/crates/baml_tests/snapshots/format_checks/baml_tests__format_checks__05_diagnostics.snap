@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 11870
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] Error: type `string` has no member `len`
@@ -11,7 +12,7 @@ source: crates/baml_tests/src/generated_tests.rs
     │ │                          
     │ ╰────────────────────────── type `string` has no member `len`
     │     
-    │     Note: Error code: E0001
+    │     Note: Error code: E0007
 ────╯
 
   [type] Error: type `user.ChainItem[]` has no member `len`
@@ -22,7 +23,7 @@ source: crates/baml_tests/src/generated_tests.rs
     │ │                      
     │ ╰────────────────────── type `user.ChainItem[]` has no member `len`
     │     
-    │     Note: Error code: E0001
+    │     Note: Error code: E0007
 ────╯
 
   [type] Error: type `user.ChainItem[]` has no member `get`
@@ -34,7 +35,7 @@ source: crates/baml_tests/src/generated_tests.rs
     │ │                                    
     │ ╰──────────────────────────────────── type `user.ChainItem[]` has no member `get`
     │     
-    │     Note: Error code: E0001
+    │     Note: Error code: E0007
 ────╯
 
   [type] Error: type `user.ChainItem[]` has no member `get`
@@ -46,7 +47,7 @@ source: crates/baml_tests/src/generated_tests.rs
     │ │                                  
     │ ╰────────────────────────────────── type `user.ChainItem[]` has no member `get`
     │     
-    │     Note: Error code: E0001
+    │     Note: Error code: E0007
 ────╯
 
   [type] Error: type `user.ChainItem[]` has no member `get`
@@ -58,7 +59,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │ │                                     
      │ ╰───────────────────────────────────── type `user.ChainItem[]` has no member `get`
      │     
-     │     Note: Error code: E0001
+     │     Note: Error code: E0007
 ─────╯
 
   [type] Error: type `string` has no member `len`
@@ -70,7 +71,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │ │                                      
      │ ╰────────────────────────────────────── type `string` has no member `len`
      │     
-     │     Note: Error code: E0001
+     │     Note: Error code: E0007
 ─────╯
 
   [type] Error: type `string` has no member `len`
@@ -82,7 +83,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │ │                                                                                                                          
      │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── type `string` has no member `len`
      │     
-     │     Note: Error code: E0001
+     │     Note: Error code: E0007
 ─────╯
 
   [type] Error: type `string` has no member `len`
@@ -92,7 +93,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │                                            ─┬─  
      │                                             ╰─── type `string` has no member `len`
      │ 
-     │ Note: Error code: E0001
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: type `user.ChainItem[]` has no member `get`
@@ -104,7 +105,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │ │                                                                                                                                   
      │ ╰─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── type `user.ChainItem[]` has no member `get`
      │     
-     │     Note: Error code: E0001
+     │     Note: Error code: E0007
 ─────╯
 
   [type] Error: type `user.ChainItem[]` has no member `len`
@@ -114,7 +115,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │                            ───────────┬──────────  
      │                                       ╰──────────── type `user.ChainItem[]` has no member `len`
      │ 
-     │ Note: Error code: E0001
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: type `user.ChainItem[]` has no member `len`
@@ -124,7 +125,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │                                                          ───────────┬───────────  
      │                                                                     ╰───────────── type `user.ChainItem[]` has no member `len`
      │ 
-     │ Note: Error code: E0001
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: type `user.ChainItem[]` has no member `len`
@@ -134,7 +135,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │                                                                                         ───────────┬───────────  
      │                                                                                                    ╰───────────── type `user.ChainItem[]` has no member `len`
      │ 
-     │ Note: Error code: E0001
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: expected 2 argument(s), got 3
@@ -146,7 +147,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │ │                                                                                                            
      │ ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────── expected 2 argument(s), got 3
      │     
-     │     Note: Error code: E0001
+     │     Note: Error code: E0005
 ─────╯
 
   [type] Error: type `user.ChainItem[]` has no member `len`
@@ -156,7 +157,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │                                ───────────┬───────────  
      │                                           ╰───────────── type `user.ChainItem[]` has no member `len`
      │ 
-     │ Note: Error code: E0001
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: type `string` has no member `len`
@@ -168,7 +169,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │ │                            
      │ ╰──────────────────────────── type `string` has no member `len`
      │     
-     │     Note: Error code: E0001
+     │     Note: Error code: E0007
 ─────╯
 
   [type] Error: type `string` has no member `len`
@@ -180,7 +181,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │ │                               
      │ ╰─────────────────────────────── type `string` has no member `len`
      │     
-     │     Note: Error code: E0001
+     │     Note: Error code: E0007
 ─────╯
 
   [type] Error: type `user.ChainItem[]` has no member `get`
@@ -192,7 +193,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │ │                            
      │ ╰──────────────────────────── type `user.ChainItem[]` has no member `get`
      │     
-     │     Note: Error code: E0001
+     │     Note: Error code: E0007
 ─────╯
 
   [type] Error: type `user.ChainItem[]` has no member `len`
@@ -204,7 +205,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │ │                                                                                    
      │ ╰──────────────────────────────────────────────────────────────────────────────────── type `user.ChainItem[]` has no member `len`
      │     
-     │     Note: Error code: E0001
+     │     Note: Error code: E0007
 ─────╯
 
   [type] Error: type `user.ChainItem[]` has no member `len`
@@ -214,7 +215,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │                                   ───────────┬───────────  
      │                                              ╰───────────── type `user.ChainItem[]` has no member `len`
      │ 
-     │ Note: Error code: E0001
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: type `int[][]` has no member `len`
@@ -224,7 +225,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │                 ───────┬───────  
      │                        ╰───────── type `int[][]` has no member `len`
      │ 
-     │ Note: Error code: E0001
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: type `int[]` has no member `len`
@@ -234,7 +235,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │                                                       ─┬─  
      │                                                        ╰─── type `int[]` has no member `len`
      │ 
-     │ Note: Error code: E0001
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: type `user.ChainItem[]` has no member `get`
@@ -245,7 +246,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │ │                                 
      │ ╰───────────────────────────────── type `user.ChainItem[]` has no member `get`
      │     
-     │     Note: Error code: E0001
+     │     Note: Error code: E0007
 ─────╯
 
   [type] Error: type `string` has no member `len`
@@ -255,7 +256,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │                  ─┬─  
      │                   ╰─── type `string` has no member `len`
      │ 
-     │ Note: Error code: E0001
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: type `string` has no member `len`
@@ -265,7 +266,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │                    ─┬─  
      │                     ╰─── type `string` has no member `len`
      │ 
-     │ Note: Error code: E0001
+     │ Note: Error code: E0007
 ─────╯
 
   [hir] Error: Unknown attribute `@stream.not_null`
@@ -297,7 +298,7 @@ source: crates/baml_tests/src/generated_tests.rs
     │ │       
     │ ╰─────── unresolved name: MyRetryPolicy
     │     
-    │     Note: Error code: E0001
+    │     Note: Error code: E0003
 ────╯
 
   [validation] Error: Name `ExtraWhitespace` defined 3 times as: class, enum, type
@@ -322,12 +323,12 @@ source: crates/baml_tests/src/generated_tests.rs
      │ Note: Error code: E0011
 ─────╯
 
-  [type] Error: type mismatch: expected (x: int) -> (y: int) -> (z: int) -> (w: int) -> map<string, int | string | bool>, got 1
+  [type] Error: type mismatch: expected (x: int) -> ((y: int) -> ((z: int) -> ((w: int) -> map<string, int | string | bool> throws never) throws never) throws never) throws never, got 1
     ╭─[ function_decls.baml:73:5 ]
     │
  73 │     1
     │     ┬  
-    │     ╰── type mismatch: expected (x: int) -> (y: int) -> (z: int) -> (w: int) -> map<string, int | string | bool>, got 1
+    │     ╰── type mismatch: expected (x: int) -> ((y: int) -> ((z: int) -> ((w: int) -> map<string, int | string | bool> throws never) throws never) throws never) throws never, got 1
     │ 
     │ Note: Error code: E0001
 ────╯
@@ -341,7 +342,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │ │       
      │ ╰─────── unresolved name: GPT4
      │     
-     │     Note: Error code: E0001
+     │     Note: Error code: E0003
 ─────╯
 
   [type] Error: unresolved name: GPT4
@@ -353,7 +354,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │ │       
      │ ╰─────── unresolved name: GPT4
      │     
-     │     Note: Error code: E0001
+     │     Note: Error code: E0003
 ─────╯
 
   [type] Error: unresolved name: GPT4
@@ -365,7 +366,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │ │       
      │ ╰─────── unresolved name: GPT4
      │     
-     │     Note: Error code: E0001
+     │     Note: Error code: E0003
 ─────╯
 
   [type] Error: unresolved name: GPT4
@@ -377,7 +378,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │ │       
      │ ╰─────── unresolved name: GPT4
      │     
-     │     Note: Error code: E0001
+     │     Note: Error code: E0003
 ─────╯
 
   [type] Error: unresolved name: GPT4
@@ -389,7 +390,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │ │       
      │ ╰─────── unresolved name: GPT4
      │     
-     │     Note: Error code: E0001
+     │     Note: Error code: E0003
 ─────╯
 
   [type] Error: unresolved name: GPT4
@@ -401,7 +402,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │ │       
      │ ╰─────── unresolved name: GPT4
      │     
-     │     Note: Error code: E0001
+     │     Note: Error code: E0003
 ─────╯
 
   [type] Error: unresolved name: GPT4
@@ -413,7 +414,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │ │       
      │ ╰─────── unresolved name: GPT4
      │     
-     │     Note: Error code: E0001
+     │     Note: Error code: E0003
 ─────╯
 
   [type] Error: unresolved name: GPT4
@@ -425,7 +426,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │ │       
      │ ╰─────── unresolved name: GPT4
      │     
-     │     Note: Error code: E0001
+     │     Note: Error code: E0003
 ─────╯
 
   [hir] Error: Duplicate binding `i` in `LoopStmts`
@@ -659,7 +660,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │                  ─────┬────  
      │                       ╰────── unreachable arm
      │ 
-     │ Note: Error code: E0001
+     │ Note: Error code: E0063
 ─────╯
 
   [type] Error: unreachable arm
@@ -669,7 +670,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │              ───┬───  
      │                 ╰───── unreachable arm
      │ 
-     │ Note: Error code: E0001
+     │ Note: Error code: E0063
 ─────╯
 
   [type] Error: operator `Mul` cannot be applied to `bool` and `bool`
@@ -679,7 +680,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │                    ──┬──  
      │                      ╰──── operator `Mul` cannot be applied to `bool` and `bool`
      │ 
-     │ Note: Error code: E0001
+     │ Note: Error code: E0004
 ─────╯
 
   [type] Error: operator `Mul` cannot be applied to `int` and `bool`
@@ -689,7 +690,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │                            ──┬──  
      │                              ╰──── operator `Mul` cannot be applied to `int` and `bool`
      │ 
-     │ Note: Error code: E0001
+     │ Note: Error code: E0004
 ─────╯
 
   [type] Error: operator `Mul` cannot be applied to `bool` and `bool`
@@ -699,7 +700,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │                                                        ──┬──  
      │                                                          ╰──── operator `Mul` cannot be applied to `bool` and `bool`
      │ 
-     │ Note: Error code: E0001
+     │ Note: Error code: E0004
 ─────╯
 
   [type] Error: operator `Mul` cannot be applied to `int` and `bool`
@@ -709,7 +710,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │                                                                    ──┬──  
      │                                                                      ╰──── operator `Mul` cannot be applied to `int` and `bool`
      │ 
-     │ Note: Error code: E0001
+     │ Note: Error code: E0004
 ─────╯
 
   [type] Error: operator `Mul` cannot be applied to `bool` and `int`
@@ -719,7 +720,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │                                                                                ──┬──  
      │                                                                                  ╰──── operator `Mul` cannot be applied to `bool` and `int`
      │ 
-     │ Note: Error code: E0001
+     │ Note: Error code: E0004
 ─────╯
 
   [hir] Error: Duplicate binding `x` in `OtherExprs`

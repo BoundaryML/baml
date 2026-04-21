@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 42438
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] Error: unresolved type: blah
@@ -9,7 +10,7 @@ source: crates/baml_tests/src/generated_tests.rs
    │                  ──┬──  
    │                    ╰──── unresolved type: blah
    │ 
-   │ Note: Error code: E0001
+   │ Note: Error code: E0002
 ───╯
 
   [type] Error: unresolved type: unknown_param_type
@@ -19,7 +20,7 @@ source: crates/baml_tests/src/generated_tests.rs
    │                ─────────┬─────────  
    │                         ╰─────────── unresolved type: unknown_param_type
    │ 
-   │ Note: Error code: E0001
+   │ Note: Error code: E0002
 ───╯
 
   [type] Error: unresolved type: unknown_optional
@@ -29,5 +30,5 @@ source: crates/baml_tests/src/generated_tests.rs
     │                  ─────────┬────────  
     │                           ╰────────── unresolved type: unknown_optional
     │ 
-    │ Note: Error code: E0001
+    │ Note: Error code: E0002
 ────╯

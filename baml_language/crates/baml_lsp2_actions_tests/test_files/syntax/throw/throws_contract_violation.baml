@@ -17,5 +17,5 @@ function ThrowsViolation(x: int) -> string throws string {
 //    │                                                    ───┬───  
 //    │                                                       ╰───── throws contract violation: `string` is missing int
 //    │ 
-//    │ Note: Error code: E0001
+//    │ Note: Error code: E0096
 // ───╯

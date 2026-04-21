@@ -423,7 +423,7 @@ async fn function_as_value() {
         return
     }
 
-    function call_twice(f: (int, int) -> int, x: int, y: int) -> int {
+    function call_twice(f: (int, int) -> int throws never, x: int, y: int) -> int {
         load_var x
         load_var y
         load_var f

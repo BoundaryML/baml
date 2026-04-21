@@ -1,8 +1,32 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 37415
+assertion_line: 42281
 ---
 === HIR2 ===
+type user.ExplicitHandler = (value: int) -> string throws never
+type user.HiddenHandler = (value: int) -> string
+type user.ImplicitHandler = (value: int) -> string
+function user.forward_direct(handler: (value: int) -> string, value: int) -> string  [expr] {
+  {  } handler(value)
+}
+function user.forward_optional(handler: (value: int) -> string?, value: int) -> string?  [expr] {
+  {  } handler?.(value)
+}
+function user.return_closure(handler: (value: int) -> string) -> (value: int) -> string  [expr] {
+  { return (value: int) -> string { {  } handler(value) } }
+}
+function user.run_explicit(handler: user.ExplicitHandler, value: int) -> string  [expr] {
+  {  } handler(value)
+}
+function user.run_hidden(handler: user.HiddenHandler, value: int) -> string  [expr] {
+  {  } handler(value)
+}
+function user.run_implicit(handler: user.ImplicitHandler, value: int) -> string  [expr] {
+  {  } handler(value)
+}
+
+--- captures ---
+lambda (value) in return_closure: captures [handler]
 type user.Callback = (int) -> void
 function user.bad_callback_use(cb: user.Callback) -> int  [expr] {
   { let result = cb(1) } 1

@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 12006
 ---
 function $init() -> null {
     call $init_let_0
@@ -908,7 +909,7 @@ function user.ConstrainedParams(name: string, score: int) -> string {
     return
 }
 
-function user.DeepFnReturn() -> (int) -> (int) -> (int) -> (int) -> map<string, int | string | bool> {
+function user.DeepFnReturn() -> (int) -> ((int) -> ((int) -> ((int) -> map<string, int | string | bool> throws never) throws never) throws never) throws never {
     load_const 1
     return
 }
@@ -991,7 +992,7 @@ function user.DeepNestLongExpr(a: int, b: int, c: int, d: int) -> int {
     return
 }
 
-function user.DeepParamTypes(nested: map<string, map<string, map<string, int[]>>>, callback: (int) -> (int) -> (int) -> string) -> string {
+function user.DeepParamTypes(nested: map<string, map<string, map<string, int[]>>>, callback: (int) -> ((int) -> ((int) -> string throws never) throws never) throws never) -> string {
     load_const "done"
     return
 }

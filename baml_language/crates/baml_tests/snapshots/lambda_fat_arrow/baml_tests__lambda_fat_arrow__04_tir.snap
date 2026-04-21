@@ -1,11 +1,12 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 17131
 ---
 === TIR2 ===
 function user.test_annotated() -> int throws never {
   { : int
-    let double = : (x: int) -> int
-      (x: int) -> int { ... } : (x: int) -> int
+    let double = : (x: int) -> int throws never
+      (x: int) -> int { ... } : (x: int) -> int throws never
         {
           x * 2
         }
@@ -15,21 +16,21 @@ function user.test_annotated() -> int throws never {
 lambda user.test_annotated {
 }
 function user.test_zero_param() -> int throws never {
-  { : 42
-    let constant = : () -> 42
-      () -> int { ... } : () -> 42
+  { : int
+    let constant = : () -> int throws never
+      () -> int { ... } : () -> int throws never
         {
           42
         }
-    constant() : 42
+    constant() : int
   }
 }
 lambda user.test_zero_param {
 }
 function user.test_inferred() -> int throws never {
   { : int
-    let double = : (x: int) -> int
-      (x: int) -> { ... } : (x: int) -> int
+    let double = : (x: int) -> int throws never
+      (x: int) -> { ... } : (x: int) -> int throws never
         {
           x * 2
         }
@@ -40,8 +41,8 @@ lambda user.test_inferred {
 }
 function user.test_multi_param() -> int throws never {
   { : int
-    let add = : (a: int, b: int) -> int
-      (a: int, b: int) -> int { ... } : (a: int, b: int) -> int
+    let add = : (a: int, b: int) -> int throws never
+      (a: int, b: int) -> int { ... } : (a: int, b: int) -> int throws never
         {
           a + b
         }
@@ -52,8 +53,8 @@ lambda user.test_multi_param {
 }
 function user.test_generic() -> int throws never {
   { : int | 42
-    let identity = : (x: T) -> T
-      <T>(x: T) -> T { ... } : (x: T) -> T
+    let identity = : (x: T) -> T throws never
+      <T>(x: T) -> T { ... } : (x: T) -> T throws never
         {
           x
         }
@@ -67,8 +68,8 @@ function user.test_in_match(x: int) -> int throws never {
     match (x : int) : int | 0
       0 =>
         { : int
-          let inc = : (y: int) -> int
-            (y: int) -> int { ... } : (y: int) -> int
+          let inc = : (y: int) -> int throws never
+            (y: int) -> int { ... } : (y: int) -> int throws never
               {
                 y + 1
               }
@@ -82,13 +83,13 @@ lambda user.test_in_match {
 }
 function user.test_mixed() -> int throws never {
   { : int
-    let a = : (x: int) -> int
-      (x: int) -> int { ... } : (x: int) -> int
+    let a = : (x: int) -> int throws never
+      (x: int) -> int { ... } : (x: int) -> int throws never
         {
           x + 1
         }
-    let b = : (x: int) -> int
-      (x: int) -> int { ... } : (x: int) -> int
+    let b = : (x: int) -> int throws never
+      (x: int) -> int { ... } : (x: int) -> int throws never
         {
           x + 2
         }

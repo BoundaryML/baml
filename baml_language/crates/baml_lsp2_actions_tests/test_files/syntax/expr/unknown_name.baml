@@ -71,7 +71,7 @@ function Go3(x:int) -> int {
 //    │             ┬  
 //    │             ╰── unresolved name: a
 //    │ 
-//    │ Note: Error code: E0001
+//    │ Note: Error code: E0003
 // ───╯
 // Error: expected 1 argument(s), got 3
 //    ╭─[ expr_unknown_name.baml:9:5 ]
@@ -80,7 +80,7 @@ function Go3(x:int) -> int {
 //    │     ────┬────  
 //    │         ╰────── expected 1 argument(s), got 3
 //    │ 
-//    │ Note: Error code: E0001
+//    │ Note: Error code: E0005
 // ───╯
 // Error: unresolved name: b
 //    ╭─[ expr_unknown_name.baml:9:12 ]
@@ -89,7 +89,7 @@ function Go3(x:int) -> int {
 //    │            ┬  
 //    │            ╰── unresolved name: b
 //    │ 
-//    │ Note: Error code: E0001
+//    │ Note: Error code: E0003
 // ───╯
 // Error: unresolved name: Unknown
 //     ╭─[ expr_unknown_name.baml:13:5 ]
@@ -98,5 +98,5 @@ function Go3(x:int) -> int {
 //     │     ───┬───  
 //     │        ╰───── unresolved name: Unknown
 //     │ 
-//     │ Note: Error code: E0001
+//     │ Note: Error code: E0003
 // ────╯

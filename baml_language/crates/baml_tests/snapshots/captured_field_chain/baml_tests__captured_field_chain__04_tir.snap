@@ -11,7 +11,7 @@ class user.Outer {
 }
 function user.test_captured_chain(outer: user.Outer) -> int throws never {
   { : int
-    let result = [1].map<U>((x) -> { ... }) : int[]
+    let result = [1].map<U, E>((x) -> { ... }) : int[]
     result[0] : int
   }
 }
@@ -19,7 +19,7 @@ lambda user.test_captured_chain {
 }
 function user.test_captured_method(outer: user.Outer) -> string throws never {
   { : string
-    let result = [1].map<U>((x) -> { ... }) : string[]
+    let result = [1].map<U, E>((x) -> { ... }) : string[]
     result[0] : string
   }
 }

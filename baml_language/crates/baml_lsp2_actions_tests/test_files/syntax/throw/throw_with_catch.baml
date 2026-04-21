@@ -52,7 +52,7 @@ function CatchOuter(x: int) -> string {
 //     │         ────────┬───────  
 //     │                 ╰───────── unreachable arm
 //     │ 
-//     │ Note: Error code: E0001
+//     │ Note: Error code: E0063
 // ────╯
 // Warning: unreachable arm
 //     ╭─[ throw_throw_with_catch.baml:29:10 ]
@@ -61,7 +61,7 @@ function CatchOuter(x: int) -> string {
 //     │          ─────────┬─────────  
 //     │                   ╰─────────── unreachable arm
 //     │ 
-//     │ Note: Error code: E0001
+//     │ Note: Error code: E0063
 // ────╯
 // Warning: unreachable arm
 //     ╭─[ throw_throw_with_catch.baml:42:10 ]
@@ -70,5 +70,5 @@ function CatchOuter(x: int) -> string {
 //     │          ───────┬──────  
 //     │                 ╰──────── unreachable arm
 //     │ 
-//     │ Note: Error code: E0001
+//     │ Note: Error code: E0063
 // ────╯

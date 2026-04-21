@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 893
 ---
 === TIR2 ===
 
@@ -8,12 +9,12 @@ source: crates/baml_tests/src/generated_tests.rs
 --- <builtin>/testing/registry.baml ---
 class testing.TestRegistration {
   name: string
-  body: () -> void
+  body: testing.TestBody
   runner: testing.TestRunner?
 }
 class testing.TestSetRegistration {
   name: string
-  collector: (testing.TestCollector) -> void
+  collector: testing.TestSetBody
   runner: testing.TestSetRunner?
 }
 class testing.TestCollector {
@@ -26,7 +27,7 @@ function testing.TestCollector.new(prefix: string) -> testing.TestCollector thro
     TestCollector { prefix: prefix, tests: [], testsets: [] } : testing.TestCollector
   }
 }
-function testing.TestCollector.register_test(self: testing.TestCollector, name: string, body: () -> void, runner: testing.TestRunner?) -> void throws never {
+function testing.TestCollector.register_test(self: testing.TestCollector, name: string, body: testing.TestBody, runner: testing.TestRunner?) -> void throws never {
   { : void
     let full_name = : string
       if (self.prefix == "" : bool) : string
@@ -62,7 +63,7 @@ function testing.TestCollector.register_test(self: testing.TestCollector, name: 
     let _ = self.tests.push(TestRegistration { name: final_name, body: body, runner: runner }) : int
   }
 }
-function testing.TestCollector.register_test_set(self: testing.TestCollector, name: string, collector: (testing.TestCollector) -> void, runner: testing.TestSetRunner?) -> void throws never {
+function testing.TestCollector.register_test_set(self: testing.TestCollector, name: string, collector: testing.TestSetBody, runner: testing.TestSetRunner?) -> void throws never {
   { : void
     let full_name = : string
       if (self.prefix == "" : bool) : string
@@ -110,7 +111,7 @@ function testing.TestCollector.find_testset(self: testing.TestCollector, name: s
     throw "TestSet not found: " + name : string
   }
 }
-function testing.$invoke_collector(collector: (testing.TestCollector) -> void, c: testing.TestCollector) -> void throws never {
+function testing.$invoke_collector(collector: testing.TestSetBody, c: testing.TestCollector) -> void throws never {
   { : void
     collector(c) : void
   }
@@ -204,46 +205,48 @@ function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: strin
     throw "TestSet not found..." + name : string
   }
 }
-function testing.run_test(body: () -> void, runner: testing.TestRunner?) -> testing.TestReport throws never {
+function testing.run_test(body: testing.TestBody, runner: testing.TestRunner?) -> testing.TestReport throws never {
   { : testing.TestReport
-    let base_run = : () -> testing.TestReport
-      () -> TestReport { ... } : () -> testing.TestReport
+    let base_run = : () -> testing.TestReport throws never
+      () -> TestReport { ... } : () -> testing.TestReport throws never
         {
           let start = baml.sys.now_ms()
           let result = ...
             { 1 stmts + tail } catch_all (e) { _ => { 0 stmts + tail } }
           TestReport { outcome: result.outcome, runs: [RunReport { outcome: result.outcome, duration_ms: baml.sys.now_ms() - start }] }
         }
-    let effective_run = : () -> testing.TestReport
-      match (runner : testing.TestRunner?) : () -> testing.TestReport
-        null =>
-          base_run : () -> testing.TestReport
-        r: TestRunner =>
-          r(base_run) : () -> testing.TestReport
-    effective_run() : testing.TestReport
+    match (runner : testing.TestRunner?) : testing.TestReport
+      null =>
+        base_run() : testing.TestReport
+      r: TestRunner =>
+        { : testing.TestReport
+          let wrapped = r(base_run) : testing.TestReportThunk
+          wrapped() : testing.TestReport
+        }
   }
 }
 lambda testing.run_test {
 }
-function testing.run_testset(run_children: () -> testing.TestSetReport, runner: testing.TestSetRunner?) -> testing.TestSetReport throws never {
+function testing.run_testset(run_children: testing.TestSetReportThunk, runner: testing.TestSetRunner?) -> testing.TestSetReport throws never {
   { : testing.TestSetReport
-    let effective_run = : () -> testing.TestSetReport
-      match (runner : testing.TestSetRunner?) : () -> testing.TestSetReport
-        null =>
-          run_children : () -> testing.TestSetReport
-        r: TestSetRunner =>
-          r(run_children) : () -> testing.TestSetReport
-    effective_run() : testing.TestSetReport
+    match (runner : testing.TestSetRunner?) : testing.TestSetReport
+      null =>
+        run_children() : testing.TestSetReport
+      r: TestSetRunner =>
+        { : testing.TestSetReport
+          let wrapped = r(run_children) : testing.TestSetReportThunk
+          wrapped() : testing.TestSetReport
+        }
   }
 }
 class testing.TestRegistration$stream {
   name: null | string
-  body: unknown
+  body: null | testing.TestBody$stream
   runner: null | testing.TestRunner$stream
 }
 class testing.TestSetRegistration$stream {
   name: null | string
-  collector: unknown
+  collector: null | testing.TestSetBody$stream
   runner: null | testing.TestSetRunner$stream
 }
 class testing.TestCollector$stream {
@@ -285,8 +288,12 @@ class testing.TestSetReport {
   results: testing.ChildReport[]
 }
 type testing.ChildReport = testing.TestReport | testing.TestSetReport
-type testing.TestRunner = (() -> testing.TestReport) -> () -> testing.TestReport
-type testing.TestSetRunner = (() -> testing.TestSetReport) -> () -> testing.TestSetReport
+type testing.TestBody = () -> void throws unknown
+type testing.TestSetBody = (testing.TestCollector) -> void throws unknown
+type testing.TestReportThunk = () -> testing.TestReport throws never
+type testing.TestSetReportThunk = () -> testing.TestSetReport throws never
+type testing.TestRunner = (testing.TestReportThunk) -> testing.TestReportThunk throws never
+type testing.TestSetRunner = (testing.TestSetReportThunk) -> testing.TestSetReportThunk throws never
 type testing.Outcome$stream = "pass" | "fail" | "error"
 class testing.RunReport$stream {
   outcome: null | testing.Outcome$stream
@@ -304,5 +311,9 @@ class testing.TestSetReport$stream {
   results: testing.ChildReport$stream[]
 }
 type testing.ChildReport$stream = testing.TestReport$stream | testing.TestSetReport$stream
+type testing.TestBody$stream = unknown
+type testing.TestSetBody$stream = unknown
+type testing.TestReportThunk$stream = unknown
+type testing.TestSetReportThunk$stream = unknown
 type testing.TestRunner$stream = unknown
 type testing.TestSetRunner$stream = unknown

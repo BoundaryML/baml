@@ -86,7 +86,7 @@ function test_multiple_classes(x: Foo | Bar | Baz) -> string {
 //     │                  ──┬──  
 //     │                    ╰──── type `user.Bar` has no member `field`
 //     │ 
-//     │ Note: Error code: E0001
+//     │ Note: Error code: E0007
 // ────╯
 // Error: did you mean `x?.field`? `x.field` does not handle the case when `x` is null
 //     ╭─[ expr_instanceof_narrowing.baml:23:15 ]
@@ -113,7 +113,7 @@ function test_multiple_classes(x: Foo | Bar | Baz) -> string {
 //     │                  ──┬──  
 //     │                    ╰──── type `user.Bar` has no member `field`
 //     │ 
-//     │ Note: Error code: E0001
+//     │ Note: Error code: E0007
 // ────╯
 // Error: type `user.Bar` has no member `field`
 //     ╭─[ expr_instanceof_narrowing.baml:38:18 ]
@@ -122,5 +122,5 @@ function test_multiple_classes(x: Foo | Bar | Baz) -> string {
 //     │                  ──┬──  
 //     │                    ╰──── type `user.Bar` has no member `field`
 //     │ 
-//     │ Note: Error code: E0001
+//     │ Note: Error code: E0007
 // ────╯

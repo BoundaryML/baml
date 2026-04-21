@@ -52,7 +52,7 @@ function BadFunction2(i: string) -> bool {
 //    │ │                                                                  
 //    │ ╰────────────────────────────────────────────────────────────────── type `int` has no member `$watch`
 //    │     
-//    │     Note: Error code: E0001
+//    │     Note: Error code: E0007
 // ───╯
 // Error: type `int` has no member `$watch`
 //    ╭─[ expr_watch_when.baml:3:61 ]
@@ -62,7 +62,7 @@ function BadFunction2(i: string) -> bool {
 //    │ │                                                                  
 //    │ ╰────────────────────────────────────────────────────────────────── type `int` has no member `$watch`
 //    │     
-//    │     Note: Error code: E0001
+//    │     Note: Error code: E0007
 // ───╯
 // Error: type `int` has no member `$watch`
 //    ╭─[ expr_watch_when.baml:4:61 ]
@@ -72,5 +72,5 @@ function BadFunction2(i: string) -> bool {
 //    │ │                                                                  
 //    │ ╰────────────────────────────────────────────────────────────────── type `int` has no member `$watch`
 //    │     
-//    │     Note: Error code: E0001
+//    │     Note: Error code: E0007
 // ───╯

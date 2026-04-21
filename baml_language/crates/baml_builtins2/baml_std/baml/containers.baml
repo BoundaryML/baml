@@ -36,7 +36,7 @@ class Array<T> {
 
   //baml:mut_vm
   //baml:may_yield
-  function map<U>(self, f: (T) -> U) -> U[] {
+  function map<U, E>(self, f: (T) -> U throws E) -> U[] throws E {
     $rust_function
   }
 }

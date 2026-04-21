@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 7207
 ---
 === MIR2 ===
 fn user.sum_array(arr: int[]) -> int {
@@ -7,7 +8,7 @@ fn user.sum_array(arr: int[]) -> int {
     let _0: int // _0 // return
     let _1: int[] // arr // param
     let _2: int // sum [captured]
-    let _3: () -> void[] // total
+    let _3: (() -> void throws never)[] // total
     let _4: int[]
     let _5: int // __for_idx
     let _6: int
@@ -15,15 +16,15 @@ fn user.sum_array(arr: int[]) -> int {
     let _8: int
     let _9: int // i [captured]
     let _10: void
-    let _11: () -> void
-    let _12: () -> void[]
+    let _11: () -> void throws never
+    let _12: (() -> void throws never)[]
     let _13: int // __for_idx_1
     let _14: int
     let _15: bool
-    let _16: () -> void
-    let _17: () -> void // cb
+    let _16: () -> void throws never
+    let _17: () -> void throws never // cb
     let _18: void
-    let _19: () -> void
+    let _19: () -> void throws never
 
     bb0: {
         _2 = const 0_i64;

@@ -67,7 +67,7 @@ function FooBar(arg) -> bar {
 //    │ │       
 //    │ ╰─────── unresolved name: Bar
 //    │     
-//    │     Note: Error code: E0001
+//    │     Note: Error code: E0003
 // ───╯
 // Error: unresolved name: Bar
 //    ╭─[ functions_v2_invalid.baml:1:1 ]
@@ -78,7 +78,7 @@ function FooBar(arg) -> bar {
 //    │ │       
 //    │ ╰─────── unresolved name: Bar
 //    │     
-//    │     Note: Error code: E0001
+//    │     Note: Error code: E0003
 // ───╯
 // Error: unresolved type: bar
 //    ╭─[ functions_v2_invalid.baml:6:24 ]
@@ -87,5 +87,5 @@ function FooBar(arg) -> bar {
 //    │                        ──┬─  
 //    │                          ╰─── unresolved type: bar
 //    │ 
-//    │ Note: Error code: E0001
+//    │ Note: Error code: E0002
 // ───╯

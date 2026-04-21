@@ -36,7 +36,7 @@ function InvalidArmSyntax(x: int) -> string {
 //    │                  ──┬─  
 //    │                    ╰─── unreachable arm
 //    │ 
-//    │ Note: Error code: E0001
+//    │ Note: Error code: E0063
 // ───╯
 // Warning: unreachable arm
 //    ╭─[ catch_invalid_arm_syntax.baml:7:23 ]
@@ -46,5 +46,5 @@ function InvalidArmSyntax(x: int) -> string {
 //    │ │                       
 //    │ ╰─────────────────────── unreachable arm
 //    │     
-//    │     Note: Error code: E0001
+//    │     Note: Error code: E0063
 // ───╯

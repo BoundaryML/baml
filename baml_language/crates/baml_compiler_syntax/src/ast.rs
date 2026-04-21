@@ -648,6 +648,20 @@ impl TypeExpr {
             .last() // The return type is typically the last TYPE_EXPR
     }
 
+    /// Get the throws clause of a function type, if present.
+    pub fn function_throws_clause(&self) -> Option<ThrowsClause> {
+        if !self.is_function_type() {
+            return None;
+        }
+        self.syntax.children().find_map(ThrowsClause::cast)
+    }
+
+    /// Get the throws type of a function type, if present.
+    pub fn function_throws_type(&self) -> Option<TypeExpr> {
+        self.function_throws_clause()
+            .and_then(|clause| clause.type_expr())
+    }
+
     /// Get all attributes attached to this type expression.
     ///
     /// These are ATTRIBUTE nodes that are direct children of the `TYPE_EXPR` node.

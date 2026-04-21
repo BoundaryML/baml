@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 18527
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] Error: unreachable arm
@@ -9,7 +10,7 @@ source: crates/baml_tests/src/generated_tests.rs
     │                   ───────┬───────  
     │                          ╰───────── unreachable arm
     │ 
-    │ Note: Error code: E0001
+    │ Note: Error code: E0063
 ────╯
 
   [type] Error: unreachable arm
@@ -19,7 +20,7 @@ source: crates/baml_tests/src/generated_tests.rs
     │                   ───────┬───────  
     │                          ╰───────── unreachable arm
     │ 
-    │ Note: Error code: E0001
+    │ Note: Error code: E0063
 ────╯
 
   [type] Error: unreachable arm
@@ -29,7 +30,7 @@ source: crates/baml_tests/src/generated_tests.rs
     │                   ───────┬───────  
     │                          ╰───────── unreachable arm
     │ 
-    │ Note: Error code: E0001
+    │ Note: Error code: E0063
 ────╯
 
   [type] Error: non-exhaustive match on `bool`; missing: false
@@ -41,7 +42,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │ │           
      │ ╰─────────── non-exhaustive match on `bool`; missing: false
      │     
-     │     Note: Error code: E0001
+     │     Note: Error code: E0062
 ─────╯
 
   [type] Error: non-exhaustive match on `bool`; missing: true
@@ -53,7 +54,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │ │           
      │ ╰─────────── non-exhaustive match on `bool`; missing: true
      │     
-     │     Note: Error code: E0001
+     │     Note: Error code: E0062
 ─────╯
 
   [type] Error: non-exhaustive match on `user.Status`; missing: user.Status.Pending
@@ -65,7 +66,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │ │           
      │ ╰─────────── non-exhaustive match on `user.Status`; missing: user.Status.Pending
      │     
-     │     Note: Error code: E0001
+     │     Note: Error code: E0062
 ─────╯
 
   [type] Error: non-exhaustive match on `user.Status`; missing: user.Status.Inactive, user.Status.Pending
@@ -77,7 +78,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │ │           
      │ ╰─────────── non-exhaustive match on `user.Status`; missing: user.Status.Inactive, user.Status.Pending
      │     
-     │     Note: Error code: E0001
+     │     Note: Error code: E0062
 ─────╯
 
   [type] Error: unreachable arm
@@ -87,7 +88,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │                          ────┬───  
      │                              ╰───── unreachable arm
      │ 
-     │ Note: Error code: E0001
+     │ Note: Error code: E0063
 ─────╯
 
   [type] Error: unreachable arm
@@ -97,7 +98,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │                 ──────┬──────  
      │                       ╰──────── unreachable arm
      │ 
-     │ Note: Error code: E0001
+     │ Note: Error code: E0063
 ─────╯
 
   [type] Error: unreachable arm
@@ -107,7 +108,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │                    ──────┬──────  
      │                          ╰──────── unreachable arm
      │ 
-     │ Note: Error code: E0001
+     │ Note: Error code: E0063
 ─────╯
 
   [type] Error: non-exhaustive match on `user.Status?`; missing: user.Status.Active, user.Status.Inactive, user.Status.Pending
@@ -119,7 +120,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │ │           
      │ ╰─────────── non-exhaustive match on `user.Status?`; missing: user.Status.Active, user.Status.Inactive, user.Status.Pending
      │     
-     │     Note: Error code: E0001
+     │     Note: Error code: E0062
 ─────╯
 
   [type] Error: unreachable arm
@@ -129,7 +130,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │                          ────┬───  
      │                              ╰───── unreachable arm
      │ 
-     │ Note: Error code: E0001
+     │ Note: Error code: E0063
 ─────╯
 
   [type] Error: unreachable arm
@@ -139,7 +140,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │                            ─────┬────  
      │                                 ╰────── unreachable arm
      │ 
-     │ Note: Error code: E0001
+     │ Note: Error code: E0063
 ─────╯
 
   [type] Error: unreachable arm
@@ -149,7 +150,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │                           ────┬────  
      │                               ╰────── unreachable arm
      │ 
-     │ Note: Error code: E0001
+     │ Note: Error code: E0063
 ─────╯
 
   [type] Error: non-exhaustive match on `user.Status?`; missing: null, user.Status.Active, user.Status.Inactive, user.Status.Pending
@@ -161,7 +162,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │ │           
      │ ╰─────────── non-exhaustive match on `user.Status?`; missing: null, user.Status.Active, user.Status.Inactive, user.Status.Pending
      │     
-     │     Note: Error code: E0001
+     │     Note: Error code: E0062
 ─────╯
 
   [type] Error: unreachable arm
@@ -171,7 +172,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │                          ────┬───  
      │                              ╰───── unreachable arm
      │ 
-     │ Note: Error code: E0001
+     │ Note: Error code: E0063
 ─────╯
 
   [type] Error: unreachable arm
@@ -181,7 +182,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │                            ─────┬────  
      │                                 ╰────── unreachable arm
      │ 
-     │ Note: Error code: E0001
+     │ Note: Error code: E0063
 ─────╯
 
   [type] Error: unreachable arm
@@ -191,7 +192,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │                           ────┬────  
      │                               ╰────── unreachable arm
      │ 
-     │ Note: Error code: E0001
+     │ Note: Error code: E0063
 ─────╯
 
   [type] Error: non-exhaustive match on `user.Status?`; missing: user.Status.Active, user.Status.Inactive, user.Status.Pending
@@ -203,7 +204,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │ │           
      │ ╰─────────── non-exhaustive match on `user.Status?`; missing: user.Status.Active, user.Status.Inactive, user.Status.Pending
      │     
-     │     Note: Error code: E0001
+     │     Note: Error code: E0062
 ─────╯
 
   [type] Error: unreachable arm
@@ -213,7 +214,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │                          ────┬───  
      │                              ╰───── unreachable arm
      │ 
-     │ Note: Error code: E0001
+     │ Note: Error code: E0063
 ─────╯
 
   [type] Error: unreachable arm
@@ -223,7 +224,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │                            ─────┬────  
      │                                 ╰────── unreachable arm
      │ 
-     │ Note: Error code: E0001
+     │ Note: Error code: E0063
 ─────╯
 
   [type] Error: unreachable arm
@@ -233,7 +234,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │                          ──────┬──────  
      │                                ╰──────── unreachable arm
      │ 
-     │ Note: Error code: E0001
+     │ Note: Error code: E0063
 ─────╯
 
   [type] Error: non-exhaustive match on `bool`; missing: false, true
@@ -245,7 +246,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │ │           
      │ ╰─────────── non-exhaustive match on `bool`; missing: false, true
      │     
-     │     Note: Error code: E0001
+     │     Note: Error code: E0062
 ─────╯
 
   [type] Error: unreachable arm
@@ -255,7 +256,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │               ──────┬─────  
      │                     ╰─────── unreachable arm
      │ 
-     │ Note: Error code: E0001
+     │ Note: Error code: E0063
 ─────╯
 
   [type] Error: unreachable arm
@@ -265,7 +266,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │               ──────┬──────  
      │                     ╰──────── unreachable arm
      │ 
-     │ Note: Error code: E0001
+     │ Note: Error code: E0063
 ─────╯
 
   [type] Error: unreachable arm
@@ -275,7 +276,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │                 ──────┬──────  
      │                       ╰──────── unreachable arm
      │ 
-     │ Note: Error code: E0001
+     │ Note: Error code: E0063
 ─────╯
 
   [type] Error: unreachable arm
@@ -285,7 +286,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │                       ┬  
      │                       ╰── unreachable arm
      │ 
-     │ Note: Error code: E0001
+     │ Note: Error code: E0063
 ─────╯
 
   [type] Error: unreachable arm
@@ -295,7 +296,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │                     ──────────┬─────────  
      │                               ╰─────────── unreachable arm
      │ 
-     │ Note: Error code: E0001
+     │ Note: Error code: E0063
 ─────╯
 
   [type] Error: unreachable arm
@@ -305,7 +306,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │                          ──────┬──────  
      │                                ╰──────── unreachable arm
      │ 
-     │ Note: Error code: E0001
+     │ Note: Error code: E0063
 ─────╯
 
   [type] Error: unreachable arm
@@ -315,7 +316,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │                          ──────┬──────  
      │                                ╰──────── unreachable arm
      │ 
-     │ Note: Error code: E0001
+     │ Note: Error code: E0063
 ─────╯
 
   [type] Error: non-exhaustive match on `user.Status`; missing: user.Status.Inactive, user.Status.Pending
@@ -327,5 +328,5 @@ source: crates/baml_tests/src/generated_tests.rs
      │ │           
      │ ╰─────────── non-exhaustive match on `user.Status`; missing: user.Status.Inactive, user.Status.Pending
      │     
-     │     Note: Error code: E0001
+     │     Note: Error code: E0062
 ─────╯

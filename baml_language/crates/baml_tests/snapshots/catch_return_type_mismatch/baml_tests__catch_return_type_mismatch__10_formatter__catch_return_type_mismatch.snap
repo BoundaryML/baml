@@ -1,5 +1,24 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 5714
 ---
-=== STRONG AST ERROR ===
-Expected token/node of kind LLM_FUNCTION_BODY or EXPR_FUNCTION_BODY, but found THROWS_CLAUSE at catch_return_type_mismatch.baml:10:26
+// Regression: return inside catch arm must be validated against function return type.
+
+enum Errors {
+    AuthenticationError,
+    AuthorizationError,
+    NotFoundError,
+    InternalServerError,
+}
+
+function callee() -> bool throws Errors {
+    return true;
+}
+
+// BUG: `return e` returns an Errors enum but function declares `-> bool`.
+// The type checker must report a mismatch.
+function caller() -> bool {
+    callee() catch (e) {
+    Errors.AuthenticationError => { return e }
+  }
+}

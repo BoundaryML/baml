@@ -8,10 +8,13 @@
 #[cfg(test)]
 mod tests {
     use baml_base::Name;
+    use baml_compiler2_ast::{FunctionTypeParam, TypeExpr};
     use baml_compiler2_hir::{
         file_semantic_index,
+        loc::FunctionLoc,
         namespace::NamespaceId,
         package::{PackageId, package_items},
+        signature::elaborated_function_signature,
     };
     use baml_project::ProjectDatabase;
     use salsa::Setter;
@@ -23,6 +26,147 @@ mod tests {
         let mut db = ProjectDatabase::new();
         db.set_project_root(std::path::Path::new("."));
         db
+    }
+
+    fn type_expr_to_string(ty: &TypeExpr) -> String {
+        fn type_expr_needs_postfix_parens(ty: &TypeExpr) -> bool {
+            matches!(ty, TypeExpr::Union { .. } | TypeExpr::Function { .. })
+        }
+
+        fn type_expr_as_postfix_base(ty: &TypeExpr) -> String {
+            let rendered = type_expr_to_string(ty);
+            if type_expr_needs_postfix_parens(ty) {
+                format!("({rendered})")
+            } else {
+                rendered
+            }
+        }
+
+        fn type_expr_as_function_result(ty: &TypeExpr) -> String {
+            let rendered = type_expr_to_string(ty);
+            if matches!(ty, TypeExpr::Function { .. }) {
+                format!("({rendered})")
+            } else {
+                rendered
+            }
+        }
+
+        match ty {
+            TypeExpr::Path {
+                segments,
+                generic_args,
+                ..
+            } => {
+                let path = segments
+                    .iter()
+                    .map(|n| n.as_str())
+                    .collect::<Vec<_>>()
+                    .join(".");
+                if generic_args.is_empty() {
+                    path
+                } else {
+                    format!(
+                        "{}<{}>",
+                        path,
+                        generic_args
+                            .iter()
+                            .map(type_expr_to_string)
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    )
+                }
+            }
+            TypeExpr::Int { .. } => "int".into(),
+            TypeExpr::Float { .. } => "float".into(),
+            TypeExpr::String { .. } => "string".into(),
+            TypeExpr::Bool { .. } => "bool".into(),
+            TypeExpr::Null { .. } => "null".into(),
+            TypeExpr::Never { .. } => "never".into(),
+            TypeExpr::Void { .. } => "void".into(),
+            TypeExpr::Uint8Array { .. } => "uint8array".into(),
+            TypeExpr::Media { kind, .. } => format!("{kind:?}").to_lowercase(),
+            TypeExpr::Optional { inner, .. } => format!("{}?", type_expr_as_postfix_base(inner)),
+            TypeExpr::List { inner, .. } => format!("{}[]", type_expr_as_postfix_base(inner)),
+            TypeExpr::Map { key, value, .. } => {
+                format!(
+                    "map<{}, {}>",
+                    type_expr_to_string(key),
+                    type_expr_to_string(value)
+                )
+            }
+            TypeExpr::Union { variants, .. } => variants
+                .iter()
+                .map(type_expr_to_string)
+                .collect::<Vec<_>>()
+                .join(" | "),
+            TypeExpr::Literal { value, .. } => value.to_string(),
+            TypeExpr::Function {
+                params,
+                ret,
+                throws,
+                ..
+            } => {
+                let params = params
+                    .iter()
+                    .map(|FunctionTypeParam { name, ty }| {
+                        name.as_ref()
+                            .map(|name| format!("{name}: {}", type_expr_to_string(ty)))
+                            .unwrap_or_else(|| type_expr_to_string(ty))
+                    })
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                let throws = throws
+                    .as_deref()
+                    .map(type_expr_to_string)
+                    .map(|throws| format!(" throws {throws}"))
+                    .unwrap_or_default();
+                format!(
+                    "({params}) -> {}{throws}",
+                    type_expr_as_function_result(ret)
+                )
+            }
+            TypeExpr::BuiltinUnknown { .. } => "unknown".into(),
+            TypeExpr::Type { .. } => "type".into(),
+            TypeExpr::Rust { .. } => "$rust_type".into(),
+            TypeExpr::Error { .. } => "error".into(),
+            TypeExpr::Unknown { .. } => "unknown".into(),
+        }
+    }
+
+    fn find_function_loc<'db>(
+        db: &'db ProjectDatabase,
+        file: baml_base::SourceFile,
+        name: &str,
+    ) -> FunctionLoc<'db> {
+        let item_tree = baml_compiler2_hir::file_item_tree(db, file);
+        let local_id = item_tree
+            .functions
+            .iter()
+            .find(|(_, func)| func.name.as_str() == name)
+            .map(|(local_id, _)| *local_id)
+            .unwrap_or_else(|| panic!("missing function {name}"));
+        FunctionLoc::new(db, file, local_id)
+    }
+
+    fn find_method_loc<'db>(
+        db: &'db ProjectDatabase,
+        file: baml_base::SourceFile,
+        class_name: &str,
+        method_name: &str,
+    ) -> FunctionLoc<'db> {
+        let item_tree = baml_compiler2_hir::file_item_tree(db, file);
+        let class = item_tree
+            .classes
+            .values()
+            .find(|class| class.name.as_str() == class_name)
+            .unwrap_or_else(|| panic!("missing class {class_name}"));
+        let method_id = class
+            .methods
+            .iter()
+            .find(|method_id| item_tree[**method_id].name.as_str() == method_name)
+            .copied()
+            .unwrap_or_else(|| panic!("missing method {class_name}.{method_name}"));
+        FunctionLoc::new(db, file, method_id)
     }
 
     // ── 1. Targeted unit test: multi-file package_items ──────────────────────
@@ -825,7 +969,144 @@ mod tests {
         );
     }
 
-    // ── 9. Early-cutoff: comment-only change ──────────────────────────────────
+    // ── 9. Elaborated function signatures ───────────────────────────────────
+
+    #[test]
+    fn function_type_throws_immediate_callback_param_opens() {
+        let mut db = make_db();
+        let file = db.add_file(
+            "callback.baml",
+            "function direct(cb: (value: int) -> string) -> string { return \"ok\"; }",
+        );
+
+        let sig = elaborated_function_signature(&db, find_function_loc(&db, file, "direct"));
+
+        assert!(sig.user_generic_params.is_empty());
+        assert_eq!(
+            sig.synthetic_effect_params,
+            vec![Name::new("__effect_param_0")]
+        );
+        assert_eq!(
+            type_expr_to_string(&sig.params[0].1),
+            "(value: int) -> string throws __effect_param_0"
+        );
+    }
+
+    #[test]
+    fn function_type_throws_alias_hidden_callback_stays_closed() {
+        let mut db = make_db();
+        let file = db.add_file(
+            "alias_hidden.baml",
+            "type Handler = (value: int) -> string\nfunction use_alias(cb: Handler) -> string { return \"ok\"; }",
+        );
+
+        let sig = elaborated_function_signature(&db, find_function_loc(&db, file, "use_alias"));
+
+        assert!(sig.synthetic_effect_params.is_empty());
+        assert_eq!(type_expr_to_string(&sig.params[0].1), "Handler");
+    }
+
+    #[test]
+    fn function_type_throws_nested_callback_position_stays_closed() {
+        let mut db = make_db();
+        let file = db.add_file(
+            "nested.baml",
+            "function nested(cb: ((value: int) -> string) -> string) -> string { return \"ok\"; }",
+        );
+
+        let sig = elaborated_function_signature(&db, find_function_loc(&db, file, "nested"));
+
+        assert_eq!(
+            sig.synthetic_effect_params,
+            vec![Name::new("__effect_param_0")]
+        );
+        assert_eq!(
+            type_expr_to_string(&sig.params[0].1),
+            "((value: int) -> string throws never) -> string throws __effect_param_0"
+        );
+    }
+
+    #[test]
+    fn function_type_throws_return_position_stays_closed() {
+        let mut db = make_db();
+        let file = db.add_file(
+            "returns_fn.baml",
+            "function returns_handler() -> (value: int) -> string { return \"ok\"; }",
+        );
+
+        let sig =
+            elaborated_function_signature(&db, find_function_loc(&db, file, "returns_handler"));
+
+        assert!(sig.synthetic_effect_params.is_empty());
+        assert_eq!(
+            type_expr_to_string(sig.return_type.as_ref().expect("return type")),
+            "(value: int) -> string throws never"
+        );
+    }
+
+    #[test]
+    fn function_type_throws_return_position_opens_immediate_callback_surface() {
+        let mut db = make_db();
+        let file = db.add_file(
+            "returns_wrapper.baml",
+            "function returns_wrapper() -> ((value: int) -> string) -> string { return \"ok\"; }",
+        );
+
+        let sig =
+            elaborated_function_signature(&db, find_function_loc(&db, file, "returns_wrapper"));
+
+        assert_eq!(
+            sig.synthetic_effect_params,
+            vec![Name::new("__effect_param_0")]
+        );
+        assert_eq!(
+            type_expr_to_string(sig.return_type.as_ref().expect("return type")),
+            "((value: int) -> string throws __effect_param_0) -> string throws __effect_param_0"
+        );
+    }
+
+    #[test]
+    fn function_type_throws_return_position_preserves_explicit_callback_throws() {
+        let mut db = make_db();
+        let file = db.add_file(
+            "returns_explicit_wrapper.baml",
+            "function returns_explicit_wrapper() -> ((value: int) -> string throws string) -> string { return \"ok\"; }",
+        );
+
+        let sig = elaborated_function_signature(
+            &db,
+            find_function_loc(&db, file, "returns_explicit_wrapper"),
+        );
+
+        assert!(sig.synthetic_effect_params.is_empty());
+        assert_eq!(
+            type_expr_to_string(sig.return_type.as_ref().expect("return type")),
+            "((value: int) -> string throws string) -> string throws string"
+        );
+    }
+
+    #[test]
+    fn function_type_throws_method_immediate_callback_param_opens() {
+        let mut db = make_db();
+        let file = db.add_file(
+            "method_callback.baml",
+            "class Box<T> {\n  value T\n  function run(cb: (value: T) -> string) -> string { return \"ok\"; }\n}",
+        );
+
+        let sig = elaborated_function_signature(&db, find_method_loc(&db, file, "Box", "run"));
+
+        assert!(sig.user_generic_params.is_empty());
+        assert_eq!(
+            sig.synthetic_effect_params,
+            vec![Name::new("__effect_param_0")]
+        );
+        assert_eq!(
+            type_expr_to_string(&sig.params[0].1),
+            "(value: T) -> string throws __effect_param_0"
+        );
+    }
+
+    // ── 10. Early-cutoff: comment-only change ─────────────────────────────────
 
     /// Changing a comment in a file re-runs `file_semantic_index` (no_eq) and
     /// `namespace_items` (since it depends on file data), but because
