@@ -1242,7 +1242,7 @@ pub fn render_scope_diagnostics<'db>(
     diags
         .diagnostics
         .iter()
-        .map(|d| d.render(source_map.as_ref()))
+        .map(|d| d.render(db, file, source_map.as_ref()))
         .collect()
 }
 

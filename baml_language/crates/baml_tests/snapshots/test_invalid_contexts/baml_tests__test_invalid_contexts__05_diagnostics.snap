@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 36288
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] Error: missing return: expected `null`
@@ -11,7 +12,7 @@ source: crates/baml_tests/src/generated_tests.rs
    │ │       
    │ ╰─────── missing return: expected `null`
    │     
-   │     Note: Error code: E0001
+   │     Note: Error code: E0029
 ───╯
 
   [parse] Error: test blocks are only allowed at the top level or inside a testset
@@ -33,7 +34,7 @@ source: crates/baml_tests/src/generated_tests.rs
     │ │       
     │ ╰─────── missing return: expected `null`
     │     
-    │     Note: Error code: E0001
+    │     Note: Error code: E0029
 ────╯
 
   [parse] Error: testset blocks are only allowed at the top level or inside a testset

@@ -35,7 +35,7 @@ function ThrowNewInCatch(x: int) -> string {
 //     │ │         
 //     │ ╰───────── unreachable arm
 //     │     
-//     │     Note: Error code: E0001
+//     │     Note: Error code: E0063
 // ────╯
 // Warning: unreachable arm
 //     ╭─[ throw_throw_in_catch.baml:16:20 ]
@@ -44,7 +44,7 @@ function ThrowNewInCatch(x: int) -> string {
 //     │                    ────────┬───────  
 //     │                            ╰───────── unreachable arm
 //     │ 
-//     │ Note: Error code: E0001
+//     │ Note: Error code: E0063
 // ────╯
 // Warning: unreachable arm
 //     ╭─[ throw_throw_in_catch.baml:17:15 ]
@@ -54,7 +54,7 @@ function ThrowNewInCatch(x: int) -> string {
 //     │ │         
 //     │ ╰───────── unreachable arm
 //     │     
-//     │     Note: Error code: E0001
+//     │     Note: Error code: E0063
 // ────╯
 // Warning: unreachable arm
 //     ╭─[ throw_throw_in_catch.baml:24:11 ]
@@ -64,5 +64,5 @@ function ThrowNewInCatch(x: int) -> string {
 //     │ │         
 //     │ ╰───────── unreachable arm
 //     │     
-//     │     Note: Error code: E0001
+//     │     Note: Error code: E0063
 // ────╯

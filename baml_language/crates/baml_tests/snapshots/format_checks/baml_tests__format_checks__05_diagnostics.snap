@@ -12,7 +12,7 @@ assertion_line: 11870
     │ │                          
     │ ╰────────────────────────── type `string` has no member `len`
     │     
-    │     Note: Error code: E0001
+    │     Note: Error code: E0007
 ────╯
 
   [type] Error: type `user.ChainItem[]` has no member `len`
@@ -23,7 +23,7 @@ assertion_line: 11870
     │ │                      
     │ ╰────────────────────── type `user.ChainItem[]` has no member `len`
     │     
-    │     Note: Error code: E0001
+    │     Note: Error code: E0007
 ────╯
 
   [type] Error: type `user.ChainItem[]` has no member `get`
@@ -35,7 +35,7 @@ assertion_line: 11870
     │ │                                    
     │ ╰──────────────────────────────────── type `user.ChainItem[]` has no member `get`
     │     
-    │     Note: Error code: E0001
+    │     Note: Error code: E0007
 ────╯
 
   [type] Error: type `user.ChainItem[]` has no member `get`
@@ -47,7 +47,7 @@ assertion_line: 11870
     │ │                                  
     │ ╰────────────────────────────────── type `user.ChainItem[]` has no member `get`
     │     
-    │     Note: Error code: E0001
+    │     Note: Error code: E0007
 ────╯
 
   [type] Error: type `user.ChainItem[]` has no member `get`
@@ -59,7 +59,7 @@ assertion_line: 11870
      │ │                                     
      │ ╰───────────────────────────────────── type `user.ChainItem[]` has no member `get`
      │     
-     │     Note: Error code: E0001
+     │     Note: Error code: E0007
 ─────╯
 
   [type] Error: type `string` has no member `len`
@@ -71,7 +71,7 @@ assertion_line: 11870
      │ │                                      
      │ ╰────────────────────────────────────── type `string` has no member `len`
      │     
-     │     Note: Error code: E0001
+     │     Note: Error code: E0007
 ─────╯
 
   [type] Error: type `string` has no member `len`
@@ -83,7 +83,7 @@ assertion_line: 11870
      │ │                                                                                                                          
      │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── type `string` has no member `len`
      │     
-     │     Note: Error code: E0001
+     │     Note: Error code: E0007
 ─────╯
 
   [type] Error: type `string` has no member `len`
@@ -93,7 +93,7 @@ assertion_line: 11870
      │                                            ─┬─  
      │                                             ╰─── type `string` has no member `len`
      │ 
-     │ Note: Error code: E0001
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: type `user.ChainItem[]` has no member `get`
@@ -105,7 +105,7 @@ assertion_line: 11870
      │ │                                                                                                                                   
      │ ╰─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── type `user.ChainItem[]` has no member `get`
      │     
-     │     Note: Error code: E0001
+     │     Note: Error code: E0007
 ─────╯
 
   [type] Error: type `user.ChainItem[]` has no member `len`
@@ -115,7 +115,7 @@ assertion_line: 11870
      │                            ───────────┬──────────  
      │                                       ╰──────────── type `user.ChainItem[]` has no member `len`
      │ 
-     │ Note: Error code: E0001
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: type `user.ChainItem[]` has no member `len`
@@ -125,7 +125,7 @@ assertion_line: 11870
      │                                                          ───────────┬───────────  
      │                                                                     ╰───────────── type `user.ChainItem[]` has no member `len`
      │ 
-     │ Note: Error code: E0001
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: type `user.ChainItem[]` has no member `len`
@@ -135,7 +135,7 @@ assertion_line: 11870
      │                                                                                         ───────────┬───────────  
      │                                                                                                    ╰───────────── type `user.ChainItem[]` has no member `len`
      │ 
-     │ Note: Error code: E0001
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: expected 2 argument(s), got 3
@@ -147,7 +147,7 @@ assertion_line: 11870
      │ │                                                                                                            
      │ ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────── expected 2 argument(s), got 3
      │     
-     │     Note: Error code: E0001
+     │     Note: Error code: E0005
 ─────╯
 
   [type] Error: type `user.ChainItem[]` has no member `len`
@@ -157,7 +157,7 @@ assertion_line: 11870
      │                                ───────────┬───────────  
      │                                           ╰───────────── type `user.ChainItem[]` has no member `len`
      │ 
-     │ Note: Error code: E0001
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: type `string` has no member `len`
@@ -169,7 +169,7 @@ assertion_line: 11870
      │ │                            
      │ ╰──────────────────────────── type `string` has no member `len`
      │     
-     │     Note: Error code: E0001
+     │     Note: Error code: E0007
 ─────╯
 
   [type] Error: type `string` has no member `len`
@@ -181,7 +181,7 @@ assertion_line: 11870
      │ │                               
      │ ╰─────────────────────────────── type `string` has no member `len`
      │     
-     │     Note: Error code: E0001
+     │     Note: Error code: E0007
 ─────╯
 
   [type] Error: type `user.ChainItem[]` has no member `get`
@@ -193,7 +193,7 @@ assertion_line: 11870
      │ │                            
      │ ╰──────────────────────────── type `user.ChainItem[]` has no member `get`
      │     
-     │     Note: Error code: E0001
+     │     Note: Error code: E0007
 ─────╯
 
   [type] Error: type `user.ChainItem[]` has no member `len`
@@ -205,7 +205,7 @@ assertion_line: 11870
      │ │                                                                                    
      │ ╰──────────────────────────────────────────────────────────────────────────────────── type `user.ChainItem[]` has no member `len`
      │     
-     │     Note: Error code: E0001
+     │     Note: Error code: E0007
 ─────╯
 
   [type] Error: type `user.ChainItem[]` has no member `len`
@@ -215,7 +215,7 @@ assertion_line: 11870
      │                                   ───────────┬───────────  
      │                                              ╰───────────── type `user.ChainItem[]` has no member `len`
      │ 
-     │ Note: Error code: E0001
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: type `int[][]` has no member `len`
@@ -225,7 +225,7 @@ assertion_line: 11870
      │                 ───────┬───────  
      │                        ╰───────── type `int[][]` has no member `len`
      │ 
-     │ Note: Error code: E0001
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: type `int[]` has no member `len`
@@ -235,7 +235,7 @@ assertion_line: 11870
      │                                                       ─┬─  
      │                                                        ╰─── type `int[]` has no member `len`
      │ 
-     │ Note: Error code: E0001
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: type `user.ChainItem[]` has no member `get`
@@ -246,7 +246,7 @@ assertion_line: 11870
      │ │                                 
      │ ╰───────────────────────────────── type `user.ChainItem[]` has no member `get`
      │     
-     │     Note: Error code: E0001
+     │     Note: Error code: E0007
 ─────╯
 
   [type] Error: type `string` has no member `len`
@@ -256,7 +256,7 @@ assertion_line: 11870
      │                  ─┬─  
      │                   ╰─── type `string` has no member `len`
      │ 
-     │ Note: Error code: E0001
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: type `string` has no member `len`
@@ -266,7 +266,7 @@ assertion_line: 11870
      │                    ─┬─  
      │                     ╰─── type `string` has no member `len`
      │ 
-     │ Note: Error code: E0001
+     │ Note: Error code: E0007
 ─────╯
 
   [hir] Error: Unknown attribute `@stream.not_null`
@@ -298,7 +298,7 @@ assertion_line: 11870
     │ │       
     │ ╰─────── unresolved name: MyRetryPolicy
     │     
-    │     Note: Error code: E0001
+    │     Note: Error code: E0003
 ────╯
 
   [validation] Error: Name `ExtraWhitespace` defined 3 times as: class, enum, type
@@ -342,7 +342,7 @@ assertion_line: 11870
      │ │       
      │ ╰─────── unresolved name: GPT4
      │     
-     │     Note: Error code: E0001
+     │     Note: Error code: E0003
 ─────╯
 
   [type] Error: unresolved name: GPT4
@@ -354,7 +354,7 @@ assertion_line: 11870
      │ │       
      │ ╰─────── unresolved name: GPT4
      │     
-     │     Note: Error code: E0001
+     │     Note: Error code: E0003
 ─────╯
 
   [type] Error: unresolved name: GPT4
@@ -366,7 +366,7 @@ assertion_line: 11870
      │ │       
      │ ╰─────── unresolved name: GPT4
      │     
-     │     Note: Error code: E0001
+     │     Note: Error code: E0003
 ─────╯
 
   [type] Error: unresolved name: GPT4
@@ -378,7 +378,7 @@ assertion_line: 11870
      │ │       
      │ ╰─────── unresolved name: GPT4
      │     
-     │     Note: Error code: E0001
+     │     Note: Error code: E0003
 ─────╯
 
   [type] Error: unresolved name: GPT4
@@ -390,7 +390,7 @@ assertion_line: 11870
      │ │       
      │ ╰─────── unresolved name: GPT4
      │     
-     │     Note: Error code: E0001
+     │     Note: Error code: E0003
 ─────╯
 
   [type] Error: unresolved name: GPT4
@@ -402,7 +402,7 @@ assertion_line: 11870
      │ │       
      │ ╰─────── unresolved name: GPT4
      │     
-     │     Note: Error code: E0001
+     │     Note: Error code: E0003
 ─────╯
 
   [type] Error: unresolved name: GPT4
@@ -414,7 +414,7 @@ assertion_line: 11870
      │ │       
      │ ╰─────── unresolved name: GPT4
      │     
-     │     Note: Error code: E0001
+     │     Note: Error code: E0003
 ─────╯
 
   [type] Error: unresolved name: GPT4
@@ -426,7 +426,7 @@ assertion_line: 11870
      │ │       
      │ ╰─────── unresolved name: GPT4
      │     
-     │     Note: Error code: E0001
+     │     Note: Error code: E0003
 ─────╯
 
   [hir] Error: Duplicate binding `i` in `LoopStmts`
@@ -660,7 +660,7 @@ assertion_line: 11870
      │                  ─────┬────  
      │                       ╰────── unreachable arm
      │ 
-     │ Note: Error code: E0001
+     │ Note: Error code: E0063
 ─────╯
 
   [type] Error: unreachable arm
@@ -670,7 +670,7 @@ assertion_line: 11870
      │              ───┬───  
      │                 ╰───── unreachable arm
      │ 
-     │ Note: Error code: E0001
+     │ Note: Error code: E0063
 ─────╯
 
   [type] Error: operator `Mul` cannot be applied to `bool` and `bool`
@@ -680,7 +680,7 @@ assertion_line: 11870
      │                    ──┬──  
      │                      ╰──── operator `Mul` cannot be applied to `bool` and `bool`
      │ 
-     │ Note: Error code: E0001
+     │ Note: Error code: E0004
 ─────╯
 
   [type] Error: operator `Mul` cannot be applied to `int` and `bool`
@@ -690,7 +690,7 @@ assertion_line: 11870
      │                            ──┬──  
      │                              ╰──── operator `Mul` cannot be applied to `int` and `bool`
      │ 
-     │ Note: Error code: E0001
+     │ Note: Error code: E0004
 ─────╯
 
   [type] Error: operator `Mul` cannot be applied to `bool` and `bool`
@@ -700,7 +700,7 @@ assertion_line: 11870
      │                                                        ──┬──  
      │                                                          ╰──── operator `Mul` cannot be applied to `bool` and `bool`
      │ 
-     │ Note: Error code: E0001
+     │ Note: Error code: E0004
 ─────╯
 
   [type] Error: operator `Mul` cannot be applied to `int` and `bool`
@@ -710,7 +710,7 @@ assertion_line: 11870
      │                                                                    ──┬──  
      │                                                                      ╰──── operator `Mul` cannot be applied to `int` and `bool`
      │ 
-     │ Note: Error code: E0001
+     │ Note: Error code: E0004
 ─────╯
 
   [type] Error: operator `Mul` cannot be applied to `bool` and `int`
@@ -720,7 +720,7 @@ assertion_line: 11870
      │                                                                                ──┬──  
      │                                                                                  ╰──── operator `Mul` cannot be applied to `bool` and `int`
      │ 
-     │ Note: Error code: E0001
+     │ Note: Error code: E0004
 ─────╯
 
   [hir] Error: Duplicate binding `x` in `OtherExprs`

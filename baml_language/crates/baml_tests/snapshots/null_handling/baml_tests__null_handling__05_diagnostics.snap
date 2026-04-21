@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 23633
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] Error: did you mean `user?.profile?.name`? `user?.profile.name` does not handle the case when `user?.profile` is null
@@ -23,7 +24,7 @@ source: crates/baml_tests/src/generated_tests.rs
     │ │                                                         
     │ ╰───────────────────────────────────────────────────────── did you mean `nonNullUser.id`? `nonNullUser?.id` is unnecessary, because `nonNullUser` cannot be null
     │     
-    │     Note: Error code: E0001
+    │     Note: Error code: E0004
 ────╯
 
   [type] Error: `unknown?` is not a function — it cannot be called
@@ -33,7 +34,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │ ────────────┬────────────  
      │             ╰────────────── `unknown?` is not a function — it cannot be called
      │ 
-     │ Note: Error code: E0001
+     │ Note: Error code: E0006
 ─────╯
 
   [type] Error: did you mean `items?.[0]?.to_string`? `items?.[0].to_string` does not handle the case when `items?.[0]` is null
@@ -53,7 +54,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │               ────┬────  
      │                   ╰────── type `int` has no member `to_string`
      │ 
-     │ Note: Error code: E0001
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: did you mean `nonNullItems[0]`? `nonNullItems?.[0]` is unnecessary, because `nonNullItems` cannot be null
@@ -63,7 +64,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │           ────────┬────────  
      │                   ╰────────── did you mean `nonNullItems[0]`? `nonNullItems?.[0]` is unnecessary, because `nonNullItems` cannot be null
      │ 
-     │ Note: Error code: E0001
+     │ Note: Error code: E0004
 ─────╯
 
   [type] Error: did you mean `callback(42)`? `callback?.(42)` is unnecessary, because `callback` cannot be null
@@ -73,7 +74,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │              ───────┬──────  
      │                     ╰──────── did you mean `callback(42)`? `callback?.(42)` is unnecessary, because `callback` cannot be null
      │ 
-     │ Note: Error code: E0001
+     │ Note: Error code: E0004
 ─────╯
 
   [type] Error: did you mean `callback(42)`? `callback?.(42)` is unnecessary, because `callback` cannot be null
@@ -83,7 +84,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │         ───────┬──────  
      │                ╰──────── did you mean `callback(42)`? `callback?.(42)` is unnecessary, because `callback` cannot be null
      │ 
-     │ Note: Error code: E0001
+     │ Note: Error code: E0004
 ─────╯
 
   [type] Error: did you mean `callback?.(42)?.length`? `callback?.(42).length` does not handle the case when `callback?.(42)` is null
@@ -103,7 +104,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │                 ───────┬──────  
      │                        ╰──────── did you mean `callback(42)`? `callback?.(42)` is unnecessary, because `callback` cannot be null
      │ 
-     │ Note: Error code: E0001
+     │ Note: Error code: E0004
 ─────╯
 
   [type] Error: `string` is not a function — it cannot be called
@@ -113,7 +114,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │                               ─────┬────  
      │                                    ╰────── `string` is not a function — it cannot be called
      │ 
-     │ Note: Error code: E0001
+     │ Note: Error code: E0006
 ─────╯
 
   [type] Error: did you mean `nonNullCb(42)`? `nonNullCb?.(42)` is unnecessary, because `nonNullCb` cannot be null
@@ -123,7 +124,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │                          ───────┬───────  
      │                                 ╰───────── did you mean `nonNullCb(42)`? `nonNullCb?.(42)` is unnecessary, because `nonNullCb` cannot be null
      │ 
-     │ Note: Error code: E0001
+     │ Note: Error code: E0004
 ─────╯
 
   [type] Error: did you mean `count`? `count ?? 0` is unnecessary, because `count` cannot be null
@@ -133,7 +134,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │                                       ─────┬────  
      │                                            ╰────── did you mean `count`? `count ?? 0` is unnecessary, because `count` cannot be null
      │ 
-     │ Note: Error code: E0001
+     │ Note: Error code: E0004
 ─────╯
 
   [type] Warning: did you mean `user?.profile?.name`? `... ?? null` is unnecessary because `user?.profile?.name` is already nullable
@@ -143,7 +144,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │                       ──────────────┬─────────────  
      │                                     ╰─────────────── did you mean `user?.profile?.name`? `... ?? null` is unnecessary because `user?.profile?.name` is already nullable
      │ 
-     │ Note: Error code: E0001
+     │ Note: Error code: E0004
 ─────╯
 
   [type] Warning: did you mean `user?.profile?.name ?? "Anonymous"`? BAML uses `??` instead of `||` for null coalescing
@@ -154,7 +155,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │ │                                                                                     
      │ ╰───────────────────────────────────────────────────────────────────────────────────── did you mean `user?.profile?.name ?? "Anonymous"`? BAML uses `??` instead of `||` for null coalescing
      │     
-     │     Note: Error code: E0001
+     │     Note: Error code: E0004
 ─────╯
 
   [type] Error: did you mean `user?.profile?.name ?? node?.labels?.["name"]?.value.to_string()`? `user?.profile?.name ?? node?.labels?.["name"]?.value.to_string() ?? "fallback"` is unnecessary, because `user?.profile?.name ?? node?.labels?.["name"]?.value.to_string()` cannot be null
@@ -166,7 +167,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │ │                                                            
      │ ╰──────────────────────────────────────────────────────────── did you mean `user?.profile?.name ?? node?.labels?.["name"]?.value.to_string()`? `user?.profile?.name ?? node?.labels?.["name"]?.value.to_string() ?? "fallback"` is unnecessary, because `user?.profile?.name ?? node?.labels?.["name"]?.value.to_string()` cannot be null
      │     
-     │     Note: Error code: E0001
+     │     Note: Error code: E0004
 ─────╯
 
   [type] Error: `unknown?` is not a function — it cannot be called
@@ -178,7 +179,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │ │                                                            
      │ ╰──────────────────────────────────────────────────────────── `unknown?` is not a function — it cannot be called
      │     
-     │     Note: Error code: E0001
+     │     Note: Error code: E0006
 ─────╯
 
   [type] Error: type `int` has no member `to_string`
@@ -188,5 +189,5 @@ source: crates/baml_tests/src/generated_tests.rs
      │                      ────┬────  
      │                          ╰────── type `int` has no member `to_string`
      │ 
-     │ Note: Error code: E0001
+     │ Note: Error code: E0007
 ─────╯

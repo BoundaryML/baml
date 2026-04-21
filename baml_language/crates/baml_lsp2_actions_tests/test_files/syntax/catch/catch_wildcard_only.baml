@@ -26,7 +26,7 @@ function CatchNamedWildcard(x: int) -> string {
 //    │ │         
 //    │ ╰───────── unreachable arm
 //    │     
-//    │     Note: Error code: E0001
+//    │     Note: Error code: E0063
 // ───╯
 // Warning: unreachable arm
 //     ╭─[ catch_catch_wildcard_only.baml:15:15 ]
@@ -36,5 +36,5 @@ function CatchNamedWildcard(x: int) -> string {
 //     │ │         
 //     │ ╰───────── unreachable arm
 //     │     
-//     │     Note: Error code: E0001
+//     │     Note: Error code: E0063
 // ────╯

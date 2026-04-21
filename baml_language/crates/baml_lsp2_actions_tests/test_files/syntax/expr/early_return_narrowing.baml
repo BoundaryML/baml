@@ -116,7 +116,7 @@ function test_diverging_if_with_plain_else(x: int?) -> int {
 //     │              ──┬──  
 //     │                ╰──── type `user.NarrowBar` has no member `field`
 //     │ 
-//     │ Note: Error code: E0001
+//     │ Note: Error code: E0007
 // ────╯
 // Error: type `user.NarrowBar` has no member `field`
 //     ╭─[ expr_early_return_narrowing.baml:66:14 ]
@@ -125,7 +125,7 @@ function test_diverging_if_with_plain_else(x: int?) -> int {
 //     │              ──┬──  
 //     │                ╰──── type `user.NarrowBar` has no member `field`
 //     │ 
-//     │ Note: Error code: E0001
+//     │ Note: Error code: E0007
 // ────╯
 // Error: type `user.NarrowBar` has no member `field`
 //     ╭─[ expr_early_return_narrowing.baml:72:14 ]
@@ -134,7 +134,7 @@ function test_diverging_if_with_plain_else(x: int?) -> int {
 //     │              ──┬──  
 //     │                ╰──── type `user.NarrowBar` has no member `field`
 //     │ 
-//     │ Note: Error code: E0001
+//     │ Note: Error code: E0007
 // ────╯
 // Error: type `user.NarrowFoo` has no member `other`
 //     ╭─[ expr_early_return_narrowing.baml:74:5 ]
@@ -143,5 +143,5 @@ function test_diverging_if_with_plain_else(x: int?) -> int {
 //     │     ──┬──  
 //     │       ╰──── type `user.NarrowFoo` has no member `other`
 //     │ 
-//     │ Note: Error code: E0001
+//     │ Note: Error code: E0007
 // ────╯

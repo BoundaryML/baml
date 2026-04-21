@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 40282
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] Error: type mismatch: expected user.foo, got true
@@ -29,7 +30,7 @@ source: crates/baml_tests/src/generated_tests.rs
    │        ──┬──  
    │          ╰──── unresolved type: name
    │ 
-   │ Note: Error code: E0001
+   │ Note: Error code: E0002
 ───╯
 
   [type] Error: unresolved type: name

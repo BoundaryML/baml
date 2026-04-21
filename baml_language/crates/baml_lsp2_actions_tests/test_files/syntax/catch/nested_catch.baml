@@ -34,7 +34,7 @@ function CatchInLet(x: int) -> string {
 //     │ │         
 //     │ ╰───────── unreachable arm
 //     │     
-//     │     Note: Error code: E0001
+//     │     Note: Error code: E0063
 // ────╯
 // Warning: unreachable arm
 //     ╭─[ catch_nested_catch.baml:13:14 ]
@@ -44,7 +44,7 @@ function CatchInLet(x: int) -> string {
 //     │ │           
 //     │ ╰─────────── unreachable arm
 //     │     
-//     │     Note: Error code: E0001
+//     │     Note: Error code: E0063
 // ────╯
 // Warning: unreachable arm
 //     ╭─[ catch_nested_catch.baml:21:12 ]
@@ -54,5 +54,5 @@ function CatchInLet(x: int) -> string {
 //     │ │          
 //     │ ╰────────── unreachable arm
 //     │     
-//     │     Note: Error code: E0001
+//     │     Note: Error code: E0063
 // ────╯

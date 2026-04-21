@@ -36,6 +36,8 @@ pub struct FunctionSignature {
 /// every nested function-type throws surface explicit:
 /// - immediate callback parameter roots with omitted throws are opened to a
 ///   fresh synthetic effect parameter
+/// - immediate function-valued return roots derive their omitted throws from
+///   any immediate callback parameters they expose
 /// - every other omitted nested function-type throws becomes `never`
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ElaboratedFunctionSignature {
@@ -215,6 +217,60 @@ fn elaborate_immediate_callback_param(
     }
 }
 
+fn union_type_expr(members: Vec<TypeExpr>) -> TypeExpr {
+    match members.as_slice() {
+        [single] => single.clone(),
+        _ => TypeExpr::Union {
+            variants: members,
+            attrs: Vec::new(),
+        },
+    }
+}
+
+fn elaborate_immediate_function_return_root(
+    params: Vec<FunctionTypeParam>,
+    ret: TypeExpr,
+    attrs: Vec<baml_compiler2_ast::RawAttribute>,
+    used_names: &mut FxHashSet<Name>,
+    synthetic_effect_params: &mut Vec<Name>,
+) -> TypeExpr {
+    let mut immediate_effects = Vec::new();
+    let params = params
+        .into_iter()
+        .map(|param| {
+            let ty = match param.ty {
+                TypeExpr::Function {
+                    params,
+                    ret,
+                    throws: None,
+                    attrs,
+                } => {
+                    let effect_param = fresh_effect_param_name(used_names);
+                    synthetic_effect_params.push(effect_param.clone());
+                    immediate_effects.push(type_expr_for_effect_param(effect_param.clone()));
+                    elaborate_immediate_callback_param(params, *ret, attrs, effect_param)
+                }
+                other => fill_omitted_nested_throws_with_never(other),
+            };
+            FunctionTypeParam {
+                name: param.name,
+                ty,
+            }
+        })
+        .collect();
+
+    TypeExpr::Function {
+        params,
+        ret: Box::new(fill_omitted_nested_throws_with_never(ret)),
+        throws: Some(Box::new(if immediate_effects.is_empty() {
+            never_type_expr()
+        } else {
+            union_type_expr(immediate_effects)
+        })),
+        attrs,
+    }
+}
+
 pub fn elaborate_function_signature_parts(
     name: Name,
     user_generic_params: Vec<Name>,
@@ -246,13 +302,28 @@ pub fn elaborate_function_signature_parts(
             (param_name, elaborated)
         })
         .collect();
+    let return_type = return_type.map(|return_type| match return_type {
+        TypeExpr::Function {
+            params,
+            ret,
+            throws: None,
+            attrs,
+        } => elaborate_immediate_function_return_root(
+            params,
+            *ret,
+            attrs,
+            &mut used_names,
+            &mut synthetic_effect_params,
+        ),
+        other => fill_omitted_nested_throws_with_never(other),
+    });
 
     ElaboratedFunctionSignature {
         name,
         user_generic_params,
         synthetic_effect_params,
         params,
-        return_type: return_type.map(fill_omitted_nested_throws_with_never),
+        return_type,
         throws: throws.map(fill_omitted_nested_throws_with_never),
     }
 }

@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 27546
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] Error: unresolved name: GPT4
@@ -11,7 +12,7 @@ source: crates/baml_tests/src/generated_tests.rs
    │ │       
    │ ╰─────── unresolved name: GPT4
    │     
-   │     Note: Error code: E0001
+   │     Note: Error code: E0003
 ───╯
 
   [type] Error: unresolved name: GPT4
@@ -23,7 +24,7 @@ source: crates/baml_tests/src/generated_tests.rs
    │ │       
    │ ╰─────── unresolved name: GPT4
    │     
-   │     Note: Error code: E0001
+   │     Note: Error code: E0003
 ───╯
 
   [parse] Error: Expected LLM function missing 'prompt' field, found '}'
@@ -99,7 +100,7 @@ source: crates/baml_tests/src/generated_tests.rs
    │ │       
    │ ╰─────── unresolved name: GPT4
    │     
-   │     Note: Error code: E0001
+   │     Note: Error code: E0003
 ───╯
 
   [type] Error: unresolved name: GPT4
@@ -111,7 +112,7 @@ source: crates/baml_tests/src/generated_tests.rs
    │ │       
    │ ╰─────── unresolved name: GPT4
    │     
-   │     Note: Error code: E0001
+   │     Note: Error code: E0003
 ───╯
 
   [type] Error: unresolved name: GPT4
@@ -123,7 +124,7 @@ source: crates/baml_tests/src/generated_tests.rs
     │ │       
     │ ╰─────── unresolved name: GPT4
     │     
-    │     Note: Error code: E0001
+    │     Note: Error code: E0003
 ────╯
 
   [type] Error: unresolved name: GPT4
@@ -135,7 +136,7 @@ source: crates/baml_tests/src/generated_tests.rs
     │ │       
     │ ╰─────── unresolved name: GPT4
     │     
-    │     Note: Error code: E0001
+    │     Note: Error code: E0003
 ────╯
 
   [type] Error: unresolved name: GPT4
@@ -147,7 +148,7 @@ source: crates/baml_tests/src/generated_tests.rs
     │ │       
     │ ╰─────── unresolved name: GPT4
     │     
-    │     Note: Error code: E0001
+    │     Note: Error code: E0003
 ────╯
 
   [type] Error: unresolved name: GPT4
@@ -159,5 +160,5 @@ source: crates/baml_tests/src/generated_tests.rs
     │ │       
     │ ╰─────── unresolved name: GPT4
     │     
-    │     Note: Error code: E0001
+    │     Note: Error code: E0003
 ────╯

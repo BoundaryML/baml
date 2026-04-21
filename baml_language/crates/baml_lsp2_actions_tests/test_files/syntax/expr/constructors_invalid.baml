@@ -78,7 +78,7 @@ function Foo() -> Bar {
 //     │                     ┬  
 //     │                     ╰── unresolved name: a
 //     │ 
-//     │ Note: Error code: E0001
+//     │ Note: Error code: E0003
 // ────╯
 // Error: unresolved name: Authorization
 //     ╭─[ expr_constructors_invalid.baml:15:16 ]
@@ -87,7 +87,7 @@ function Foo() -> Bar {
 //     │                ──────┬──────  
 //     │                      ╰──────── unresolved name: Authorization
 //     │ 
-//     │ Note: Error code: E0001
+//     │ Note: Error code: E0003
 // ────╯
 // Error: unresolved name: foo
 //     ╭─[ expr_constructors_invalid.baml:16:21 ]
@@ -96,5 +96,5 @@ function Foo() -> Bar {
 //     │                     ─┬─  
 //     │                      ╰─── unresolved name: foo
 //     │ 
-//     │ Note: Error code: E0001
+//     │ Note: Error code: E0003
 // ────╯

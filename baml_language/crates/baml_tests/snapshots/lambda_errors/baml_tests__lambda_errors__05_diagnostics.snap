@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 16896
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] Error: type mismatch: expected string, got int
@@ -21,7 +22,7 @@ source: crates/baml_tests/src/generated_tests.rs
    │              ────────┬────────  
    │                      ╰────────── cannot infer type of lambda parameter `x` — add a type annotation or provide context
    │ 
-   │ Note: Error code: E0001
+   │ Note: Error code: E0002
 ───╯
 
   [type] Error: expected 1 argument(s), got 2
@@ -31,7 +32,7 @@ source: crates/baml_tests/src/generated_tests.rs
     │               ───────┬───────  
     │                      ╰───────── expected 1 argument(s), got 2
     │ 
-    │ Note: Error code: E0001
+    │ Note: Error code: E0005
 ────╯
 
   [type] Error: type mismatch: expected int, got string
@@ -61,7 +62,7 @@ source: crates/baml_tests/src/generated_tests.rs
     │                ────────┬───────  
     │                        ╰───────── unresolved type: NonExistentType
     │ 
-    │ Note: Error code: E0001
+    │ Note: Error code: E0002
 ────╯
 
   [type] Error: unresolved type: NonExistentType
@@ -71,5 +72,5 @@ source: crates/baml_tests/src/generated_tests.rs
     │                        ────────┬───────  
     │                                ╰───────── unresolved type: NonExistentType
     │ 
-    │ Note: Error code: E0001
+    │ Note: Error code: E0002
 ────╯

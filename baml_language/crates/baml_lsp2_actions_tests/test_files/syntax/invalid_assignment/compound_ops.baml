@@ -42,7 +42,7 @@ function CompoundAssignments() -> int {
 //     │     ┬  
 //     │     ╰── operator `Add` cannot be applied to `int` and `true`
 //     │ 
-//     │ Note: Error code: E0001
+//     │ Note: Error code: E0004
 // ────╯
 // Error: operator `Add` cannot be applied to `bool` and `1`
 //     ╭─[ invalid_assignment_compound_ops.baml:27:2 ]
@@ -51,5 +51,5 @@ function CompoundAssignments() -> int {
 //     │     ┬  
 //     │     ╰── operator `Add` cannot be applied to `bool` and `1`
 //     │ 
-//     │ Note: Error code: E0001
+//     │ Note: Error code: E0004
 // ────╯

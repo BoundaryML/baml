@@ -60,7 +60,7 @@ function fo() -> int {
 //     │                             ───┬──  
 //     │                                ╰──── type `user.Color` has no member `get_re`
 //     │ 
-//     │ Note: Error code: E0001
+//     │ Note: Error code: E0007
 // ────╯
 // Error: type `user.Color` has no member `gree`
 //     ╭─[ class.baml:45:32 ]
@@ -69,7 +69,7 @@ function fo() -> int {
 //     │                                ──┬─  
 //     │                                  ╰─── type `user.Color` has no member `gree`
 //     │ 
-//     │ Note: Error code: E0001
+//     │ Note: Error code: E0007
 // ────╯
 // Error: type `user.Color` has no member `re`
 //     ╭─[ class.baml:47:23 ]
@@ -78,7 +78,7 @@ function fo() -> int {
 //     │                       ─┬  
 //     │                        ╰── type `user.Color` has no member `re`
 //     │ 
-//     │ Note: Error code: E0001
+//     │ Note: Error code: E0007
 // ────╯
 // Error: type `user.Color` has no member `gree`
 //     ╭─[ class.baml:47:38 ]
@@ -87,7 +87,7 @@ function fo() -> int {
 //     │                                      ──┬─  
 //     │                                        ╰─── type `user.Color` has no member `gree`
 //     │ 
-//     │ Note: Error code: E0001
+//     │ Note: Error code: E0007
 // ────╯
 // Error: type `user.Color` has no member `blu`
 //     ╭─[ class.baml:47:55 ]
@@ -96,7 +96,7 @@ function fo() -> int {
 //     │                                                       ─┬─  
 //     │                                                        ╰─── type `user.Color` has no member `blu`
 //     │ 
-//     │ Note: Error code: E0001
+//     │ Note: Error code: E0007
 // ────╯
 // Error: type `user.Color` has no member `get_re`
 //     ╭─[ class.baml:49:27 ]
@@ -105,7 +105,7 @@ function fo() -> int {
 //     │                           ───┬──  
 //     │                              ╰──── type `user.Color` has no member `get_re`
 //     │ 
-//     │ Note: Error code: E0001
+//     │ Note: Error code: E0007
 // ────╯
 // Error: type `user.Color` has no member `get_gree`
 //     ╭─[ class.baml:49:47 ]
@@ -114,7 +114,7 @@ function fo() -> int {
 //     │                                               ────┬───  
 //     │                                                   ╰───── type `user.Color` has no member `get_gree`
 //     │ 
-//     │ Note: Error code: E0001
+//     │ Note: Error code: E0007
 // ────╯
 // Error: type `user.Color` has no member `get_blu`
 //     ╭─[ class.baml:49:69 ]
@@ -123,7 +123,7 @@ function fo() -> int {
 //     │                                                                     ───┬───  
 //     │                                                                        ╰───── type `user.Color` has no member `get_blu`
 //     │ 
-//     │ Note: Error code: E0001
+//     │ Note: Error code: E0007
 // ────╯
 //
 //- semantic_tokens

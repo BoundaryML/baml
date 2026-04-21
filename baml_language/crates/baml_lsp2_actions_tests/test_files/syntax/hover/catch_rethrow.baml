@@ -25,7 +25,7 @@ function getProfile(req: int) -> bool throws Errors {
 //     │                           ──────┬─────  
 //     │                                 ╰─────── unreachable arm
 //     │ 
-//     │ Note: Error code: E0001
+//     │ Note: Error code: E0063
 // ────╯
 // Warning: extraneous throws declaration: user.Errors
 //     ╭─[ hover_catch_rethrow.baml:15:45 ]
@@ -34,7 +34,7 @@ function getProfile(req: int) -> bool throws Errors {
 //     │                                             ───┬───  
 //     │                                                ╰───── extraneous throws declaration: user.Errors
 //     │ 
-//     │ Note: Error code: E0001
+//     │ Note: Error code: E0097
 // ────╯
 //
 //- on_hover expressions

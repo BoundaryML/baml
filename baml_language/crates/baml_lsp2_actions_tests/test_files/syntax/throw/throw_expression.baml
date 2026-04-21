@@ -37,5 +37,5 @@ function ThrowExpressionInCatch(x: int) -> string {
 //     │ │         
 //     │ ╰───────── unreachable arm
 //     │     
-//     │     Note: Error code: E0001
+//     │     Note: Error code: E0063
 // ────╯

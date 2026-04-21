@@ -558,9 +558,8 @@ function f(arr: int[]?) -> int[]? {
     insta::assert_snapshot!(render_tir(&db, file), @r"
     function user.f(arr: int[]?) -> int[]? throws never {
       { : never
-        return arr?.map?.((x: int) -> int { ... }) : U[]?
+        return arr?.map?.((x: int) -> int { ... }) : int[]?
       }
-      !! 47..85: type mismatch: expected int[]?, got U[]?
     }
     lambda user.f {
     }
@@ -605,6 +604,39 @@ function f(callback: ((x: int) -> int)?) -> int? {
       { : never
         return callback?.("wrong") : int?
       }
+      !! 74..81: type mismatch: expected int, got "wrong"
+    }
+    "#);
+}
+
+#[test]
+fn optional_call_checks_higher_order_function_arguments() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function demo(cb: (((x: int) -> int) -> int)?) -> int? throws never {
+  let risky = (x: int) -> int throws string {
+    throw "boom"
+  }
+
+  cb?.(risky)
+}
+"#,
+    );
+    insta::assert_snapshot!(render_tir(&db, file), @r#"
+    function user.demo(cb: (((x: int) -> int throws never) -> int throws never)?) -> int? throws never {
+      { : int?
+        let risky = : (x: int) -> int throws string
+          (x: int) -> int throws string { ... } : (x: int) -> int throws string
+            {
+              throw "boom"
+            }
+        cb?.(risky) : int?
+      }
+      !! 146..151: type mismatch: expected (x: int) -> int throws never, got (x: int) -> int throws string
+    }
+    lambda user.demo {
     }
     "#);
 }
@@ -625,10 +657,8 @@ function f(callback: MaybeFn) -> int? {
     type user.MaybeFn = ((x: int) -> int throws never)?
     function user.f(callback: user.MaybeFn) -> int? throws never {
       { : never
-        return callback?.(42) : unknown?
+        return callback?.(42) : int?
       }
-      !! 86..100: did you mean `callback(42)`? `callback?.(42)` is unnecessary, because `callback` cannot be null
-      !! 86..100: `user.MaybeFn` is not a function — it cannot be called
     }
     type user.MaybeFn$stream = null | unknown
     ");
@@ -811,6 +841,7 @@ function f() -> null {
         xs.push("a") : int
         return null : null
       }
+      !! 44..52: did you mean `xs.push`? `xs?.push` is unnecessary, because `xs` cannot be null
       !! 70..73: type mismatch: expected int, got string
     }
     "#);
@@ -1271,10 +1302,8 @@ function f(arr: int[]?) -> int[]? {
     insta::assert_snapshot!(render_tir(&db, file), @r"
     function user.f(arr: int[]?) -> int[]? throws never {
       { : never
-        return arr?.map?.((x) -> { ... }) : U[]?
+        return arr?.map?.((x) -> { ... }) : int[]?
       }
-      !! 59..75: cannot infer type of lambda parameter `x` — add a type annotation or provide context
-      !! 47..76: type mismatch: expected int[]?, got U[]?
     }
     lambda user.f {
     }
@@ -1295,9 +1324,8 @@ function f(arr: int[]?) -> int[]? {
     insta::assert_snapshot!(render_tir(&db, file), @r"
     function user.f(arr: int[]?) -> int[]? throws never {
       { : never
-        return arr?.map?.((x: int) -> int { ... }) : U[]?
+        return arr?.map?.((x: int) -> int { ... }) : int[]?
       }
-      !! 47..85: type mismatch: expected int[]?, got U[]?
     }
     lambda user.f {
     }

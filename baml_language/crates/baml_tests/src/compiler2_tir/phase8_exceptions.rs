@@ -358,7 +358,14 @@ fn function_type_throws_direct_callback_violation_is_humanized() {
 
     let output = render_tir(&db, file);
     assert!(
-        output.contains("throws contract violation: `never` is missing callback"),
+        output
+            .contains("this body may throw through callback `cb`, but declared throws is `never`."),
+        "expected direct callback violation to mention the callback explicitly, got:\n{output}"
+    );
+    assert!(
+        output.contains(
+            "Add an explicit `throws` to the callback, catch the call, or make the callback non-throwing."
+        ),
         "expected direct callback violation to use callback-oriented wording, got:\n{output}"
     );
 }
@@ -381,12 +388,44 @@ function f() -> int throws never {
 
     let output = render_tir(&db, file);
     assert!(
-        output.contains("throws contract violation: `never` is missing callback"),
+        output
+            .contains("this body may throw through callback `cb`, but declared throws is `never`."),
         "expected omitted inline lambda to inherit callback throws context, got:\n{output}"
     );
     assert!(
-        !output.contains("missing string"),
-        "expected contextual callback typing rather than a closed local-lambda violation, got:\n{output}"
+        output.contains(
+            "Add `throws string` to the callback, catch the call, or make the callback non-throwing."
+        ),
+        "expected actionable callback-specific fix text, got:\n{output}"
+    );
+}
+
+#[test]
+fn omitted_inline_lambda_current_limitation_gets_callback_aware_primary_message() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"function forward(cb: (x: int) -> int) -> int {
+  return cb(1)
+}
+
+function demo() -> int throws string {
+  return forward((x: int) -> int {
+    throw "boom"
+  })
+}"#,
+    );
+
+    let output = render_tir(&db, file);
+    assert!(
+        output.contains(
+            "this body may throw through callback `cb`, but declared throws is `string`."
+        ),
+        "expected callback-aware primary message for current limitation, got:\n{output}"
+    );
+    assert!(
+        output.contains("Add `throws string` to the callback, catch the call, or make the callback non-throwing."),
+        "expected callback-specific fix text for current limitation, got:\n{output}"
     );
 }
 
@@ -431,8 +470,9 @@ function f(cb: (value: int) -> int) -> int throws never {
 
     let output = render_tir(&db, file);
     assert!(
-        output.contains("throws contract violation: `never` is missing callback"),
-        "expected typed call through local wrapper alias to propagate callback throws, got:\n{output}"
+        output
+            .contains("this body may throw through callback `cb`, but declared throws is `never`."),
+        "expected typed call through local wrapper alias to propagate callback throws with callback-aware wording, got:\n{output}"
     );
     assert!(
         !output.contains("missing unknown"),

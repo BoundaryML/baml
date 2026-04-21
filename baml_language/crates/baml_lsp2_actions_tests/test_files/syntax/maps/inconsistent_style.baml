@@ -37,5 +37,5 @@ function InconsistentStyleUse() -> int{
 //    │         ──┬─  
 //    │           ╰─── unresolved name: name
 //    │ 
-//    │ Note: Error code: E0001
+//    │ Note: Error code: E0003
 // ───╯

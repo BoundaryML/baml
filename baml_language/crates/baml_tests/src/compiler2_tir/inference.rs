@@ -339,3 +339,24 @@ fn function_type_throws_package_interface_exports_effect_params() {
         "(value: int) -> string throws __effect_param_0"
     );
 }
+
+#[test]
+fn returning_callback_forwarder_matches_omitted_function_type_return_annotation() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "callback_return.baml",
+        r#"function wrap(cb: (x: int) -> int) -> int {
+  return cb(1)
+}
+
+function demo() -> ((x: int) -> int) -> int {
+  return wrap
+}"#,
+    );
+
+    let output = render_tir(&db, file);
+    assert!(
+        !output.contains("type mismatch"),
+        "expected function-valued return annotation to preserve callback forwarding surface, got:\n{output}"
+    );
+}

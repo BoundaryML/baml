@@ -66,6 +66,8 @@ mod grep_tests;
 #[cfg(test)]
 mod testing;
 #[cfg(test)]
+mod type_info_tests;
+#[cfg(test)]
 mod usages_at_tests;
 
 // ── Db trait ──────────────────────────────────────────────────────────────────

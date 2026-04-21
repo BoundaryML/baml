@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 29834
 ---
 === COMPILER2 DIAGNOSTICS ===
   [hir] Error: `@alias` expects exactly one string argument
@@ -161,7 +162,7 @@ source: crates/baml_tests/src/generated_tests.rs
     │ │       
     │ ╰─────── unresolved name: GPT4
     │     
-    │     Note: Error code: E0001
+    │     Note: Error code: E0003
 ────╯
 
   [type] Error: unresolved name: GPT4
@@ -173,7 +174,7 @@ source: crates/baml_tests/src/generated_tests.rs
     │ │       
     │ ╰─────── unresolved name: GPT4
     │     
-    │     Note: Error code: E0001
+    │     Note: Error code: E0003
 ────╯
 
   [type] Error: unresolved name: GPT4
@@ -185,7 +186,7 @@ source: crates/baml_tests/src/generated_tests.rs
     │ │       
     │ ╰─────── unresolved name: GPT4
     │     
-    │     Note: Error code: E0001
+    │     Note: Error code: E0003
 ────╯
 
   [type] Error: unresolved name: GPT4
@@ -197,7 +198,7 @@ source: crates/baml_tests/src/generated_tests.rs
     │ │       
     │ ╰─────── unresolved name: GPT4
     │     
-    │     Note: Error code: E0001
+    │     Note: Error code: E0003
 ────╯
 
   [hir] Error: function is missing a name

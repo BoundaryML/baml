@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 4964
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] Error: type `map<string, map<string, int>>` has no member `a`
@@ -10,7 +11,7 @@ source: crates/baml_tests/src/generated_tests.rs
     │ │                
     │ ╰──────────────── type `map<string, map<string, int>>` has no member `a`
     │     
-    │     Note: Error code: E0001
+    │     Note: Error code: E0007
 ────╯
 
   [type] Error: type `map<string, map<string, map<string, int>>>` has no member `a`
@@ -21,5 +22,5 @@ source: crates/baml_tests/src/generated_tests.rs
     │ │                  
     │ ╰────────────────── type `map<string, map<string, map<string, int>>>` has no member `a`
     │     
-    │     Note: Error code: E0001
+    │     Note: Error code: E0007
 ────╯

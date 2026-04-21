@@ -37,7 +37,7 @@ function getProfile(req: Request) -> bool throws Errors {
 //     │                                  ──────┬─────  
 //     │                                        ╰─────── unreachable arm
 //     │ 
-//     │ Note: Error code: E0001
+//     │ Note: Error code: E0063
 // ────╯
 // Warning: extraneous throws declaration: user.Errors
 //     ╭─[ throw_throws_type_alias_repro.baml:27:49 ]
@@ -46,5 +46,5 @@ function getProfile(req: Request) -> bool throws Errors {
 //     │                                                 ───┬───  
 //     │                                                    ╰───── extraneous throws declaration: user.Errors
 //     │ 
-//     │ Note: Error code: E0001
+//     │ Note: Error code: E0097
 // ────╯

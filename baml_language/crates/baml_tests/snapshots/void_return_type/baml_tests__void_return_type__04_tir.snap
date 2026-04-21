@@ -1,6 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 42662
+assertion_line: 42988
 ---
 === TIR2 ===
 type user.ExplicitHandler = (value: int) -> string throws never
@@ -39,7 +39,7 @@ function user.return_closure(handler: (value: int) -> string throws never) -> (v
           handler(value)
         }
   }
-  !! 727..769: throws contract violation: `never` is missing callback
+  !! 727..769: this body may throw through callback `handler`, but declared throws is `never`. Add an explicit `throws` to the callback, catch the call, or make the callback non-throwing.
 }
 lambda user.return_closure {
 }

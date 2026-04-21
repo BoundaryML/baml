@@ -9,7 +9,7 @@
 
 use std::{cell::RefCell, fmt};
 
-use baml_base::Name;
+use baml_base::{FileId, Name, SourceFile};
 use baml_compiler2_ast::{AstSourceMap, ExprId, StmtId, TypeAnnotId};
 use baml_compiler2_hir::{
     contributions::Definition,
@@ -104,6 +104,12 @@ pub enum TirTypeError {
     ThrowsContractViolation {
         declared: Ty,
         extra_types: Vec<String>,
+    },
+    /// Inferred escaping throws are explainable through a single callback path.
+    CallbackThrowsContractViolation {
+        callback_name: Name,
+        declared: Ty,
+        concrete_throws: Option<Ty>,
     },
     /// Declared throws contains extra types that never escape.
     ExtraneousThrowsDeclaration { extra_types: Vec<String> },
@@ -284,6 +290,29 @@ impl fmt::Display for TirTypeError {
                     extra_types.join(", ")
                 )
             }
+            TirTypeError::CallbackThrowsContractViolation {
+                callback_name,
+                declared,
+                concrete_throws,
+            } => {
+                write!(
+                    f,
+                    "this body may throw through callback `{callback_name}`, but declared throws is `{}`. ",
+                    humanize_ty(declared)
+                )?;
+                if let Some(concrete_throws) = concrete_throws {
+                    write!(
+                        f,
+                        "Add `throws {}` to the callback, catch the call, or make the callback non-throwing.",
+                        humanize_ty(concrete_throws)
+                    )
+                } else {
+                    write!(
+                        f,
+                        "Add an explicit `throws` to the callback, catch the call, or make the callback non-throwing."
+                    )
+                }
+            }
             TirTypeError::ExtraneousThrowsDeclaration { extra_types } => {
                 let extra_types = humanize_type_names(extra_types.iter().map(String::as_str));
                 write!(
@@ -414,6 +443,21 @@ pub enum RelatedLocation<'db> {
     Item(Definition<'db>),
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RelatedNote<'db> {
+    pub location: RelatedLocation<'db>,
+    pub message: String,
+}
+
+impl<'db> RelatedNote<'db> {
+    pub fn new(location: RelatedLocation<'db>, message: impl Into<String>) -> Self {
+        Self {
+            location,
+            message: message.into(),
+        }
+    }
+}
+
 /// Primary location for a diagnostic — either an expression, a statement,
 /// or a raw source span (for type annotations that lack an `ExprId`).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -439,16 +483,21 @@ pub struct TirDiagnostic<'db> {
     /// Primary location — where the error was detected.
     pub primary: DiagnosticLocation,
     /// Related locations — secondary spans with explanatory messages.
-    pub related: Vec<(RelatedLocation<'db>, &'static str)>,
+    pub related: Vec<RelatedNote<'db>>,
 }
 
-impl TirDiagnostic<'_> {
+impl<'db> TirDiagnostic<'db> {
     /// Resolve this diagnostic's arena IDs to source ranges and produce a
     /// rendered diagnostic with a human-readable message and `TextRange`.
     ///
     /// `source_map` is the `AstSourceMap` for the function body that owns
     /// the expressions/statements referenced by `self.primary`.
-    pub fn render(&self, source_map: Option<&AstSourceMap>) -> RenderedTirDiagnostic {
+    pub fn render(
+        &self,
+        db: &'db dyn crate::Db,
+        scope_file: SourceFile,
+        source_map: Option<&AstSourceMap>,
+    ) -> RenderedTirDiagnostic {
         let primary_range = match &self.primary {
             DiagnosticLocation::Expr(id) => {
                 source_map.map(|sm| sm.expr_span(*id)).unwrap_or_default()
@@ -468,10 +517,78 @@ impl TirDiagnostic<'_> {
             DiagnosticLocation::Span(range) => *range,
         };
 
+        let related = self
+            .related
+            .iter()
+            .filter_map(|note| {
+                resolve_related_location(db, scope_file, source_map, &note.location).map(
+                    |(file_id, range)| RenderedRelatedInformation {
+                        file_id,
+                        range,
+                        message: note.message.clone(),
+                    },
+                )
+            })
+            .collect();
+
         RenderedTirDiagnostic {
+            error: self.error.clone(),
             message: self.error.to_string(),
             range: primary_range,
             severity: self.severity,
+            related,
+        }
+    }
+}
+
+fn resolve_related_location<'db>(
+    db: &'db dyn crate::Db,
+    scope_file: SourceFile,
+    source_map: Option<&AstSourceMap>,
+    location: &RelatedLocation<'db>,
+) -> Option<(FileId, TextRange)> {
+    match location {
+        RelatedLocation::Expr(id) => {
+            source_map.map(|sm| (scope_file.file_id(db), sm.expr_span(*id)))
+        }
+        RelatedLocation::Stmt(id) => {
+            source_map.map(|sm| (scope_file.file_id(db), sm.stmt_span(*id)))
+        }
+        RelatedLocation::Param(func_loc, idx) => {
+            let signature_source_map =
+                baml_compiler2_hir::signature::function_signature_source_map(db, *func_loc);
+            signature_source_map
+                .param_spans
+                .get(*idx)
+                .copied()
+                .map(|range| (func_loc.file(db).file_id(db), range))
+        }
+        RelatedLocation::ClassField(class_loc, field_name) => {
+            let item_tree = baml_compiler2_hir::file_item_tree(db, class_loc.file(db));
+            let source_map = baml_compiler2_hir::file_item_tree_source_map(db, class_loc.file(db));
+            let class_data = &item_tree[class_loc.id(db)];
+            let field_index = class_data
+                .fields
+                .iter()
+                .position(|field| &field.name == field_name)?;
+            let range = source_map
+                .class_field_spans
+                .get(&class_loc.id(db))?
+                .get(field_index)
+                .copied()?;
+            Some((class_loc.file(db).file_id(db), range))
+        }
+        RelatedLocation::Item(def) => {
+            let file = def.file(db);
+            let contributions = baml_compiler2_hir::file_symbol_contributions(db, file);
+            contributions
+                .types
+                .iter()
+                .chain(contributions.values.iter())
+                .find_map(|(_, contribution)| {
+                    (contribution.definition == *def)
+                        .then_some((file.file_id(db), contribution.name_span))
+                })
         }
     }
 }
@@ -481,12 +598,23 @@ impl TirDiagnostic<'_> {
 /// Contains the human-readable message and the resolved source `TextRange`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RenderedTirDiagnostic {
+    /// Original typed error for downstream ID mapping.
+    pub error: TirTypeError,
     /// Human-readable error message (e.g. "type mismatch: expected int, got string").
     pub message: String,
     /// Source range within the file (resolved from `ExprId`/`StmtId`).
     pub range: TextRange,
     /// Severity level for rendering.
     pub severity: DiagnosticSeverity,
+    /// Resolved related spans/messages for LSP consumers.
+    pub related: Vec<RenderedRelatedInformation>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RenderedRelatedInformation {
+    pub file_id: FileId,
+    pub range: TextRange,
+    pub message: String,
 }
 
 impl fmt::Display for RenderedTirDiagnostic {
@@ -543,12 +671,7 @@ impl<'db> InferContext<'db> {
     }
 
     /// Report a type error at a specific expression, with optional related locations.
-    pub fn report(
-        &self,
-        error: TirTypeError,
-        at: ExprId,
-        related: Vec<(RelatedLocation<'db>, &'static str)>,
-    ) {
+    pub fn report(&self, error: TirTypeError, at: ExprId, related: Vec<RelatedNote<'db>>) {
         self.diagnostics
             .borrow_mut()
             .diagnostics
@@ -570,7 +693,7 @@ impl<'db> InferContext<'db> {
         &self,
         error: TirTypeError,
         at: ExprId,
-        related: Vec<(RelatedLocation<'db>, &'static str)>,
+        related: Vec<RelatedNote<'db>>,
     ) {
         self.diagnostics
             .borrow_mut()
@@ -595,7 +718,7 @@ impl<'db> InferContext<'db> {
         error: TirTypeError,
         at: ExprId,
         segment_idx: usize,
-        related: Vec<(RelatedLocation<'db>, &'static str)>,
+        related: Vec<RelatedNote<'db>>,
     ) {
         self.diagnostics
             .borrow_mut()
@@ -623,6 +746,16 @@ impl<'db> InferContext<'db> {
 
     /// Report a type error at a raw source span (for type annotations).
     pub fn report_at_span(&self, error: TirTypeError, span: TextRange) {
+        self.report_at_span_with_related(error, span, Vec::new());
+    }
+
+    /// Report a type error at a raw source span with related notes.
+    pub fn report_at_span_with_related(
+        &self,
+        error: TirTypeError,
+        span: TextRange,
+        related: Vec<RelatedNote<'db>>,
+    ) {
         self.diagnostics
             .borrow_mut()
             .diagnostics
@@ -630,7 +763,7 @@ impl<'db> InferContext<'db> {
                 error,
                 severity: DiagnosticSeverity::Error,
                 primary: DiagnosticLocation::Span(span),
-                related: Vec::new(),
+                related,
             });
     }
 

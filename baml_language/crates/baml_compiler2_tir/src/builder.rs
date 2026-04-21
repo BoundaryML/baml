@@ -26,7 +26,9 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use text_size::TextRange;
 
 use crate::{
-    infer_context::{InferContext, RelatedLocation, TirTypeError, TypeCheckDiagnostics},
+    infer_context::{
+        InferContext, RelatedLocation, RelatedNote, TirTypeError, TypeCheckDiagnostics,
+    },
     package_interface::PackageResolutionContext,
     ty::{Freshness, PrimitiveType, Ty, TyAttr},
 };
@@ -58,6 +60,13 @@ enum PatternMatchStrength {
 struct ThrowPatternMatches {
     may_match: BTreeSet<Ty>,
     definitely_handled: BTreeSet<Ty>,
+}
+
+struct CallbackThrowProvenance {
+    callback_name: Name,
+    forwarding_call_expr: ExprId,
+    callback_value_expr: Option<ExprId>,
+    callback_concrete_throws: Option<Ty>,
 }
 
 /// Result of resolving a member on a builtin class (Array, Map, String, media types).
@@ -205,6 +214,10 @@ pub struct TypeInferenceBuilder<'db> {
     /// NOT saved/restored by `infer_lambda_body`, so types from arbitrarily
     /// nested lambdas are visible in the outermost (Function/Let) scope.
     pub nested_lambda_types: FxHashMap<FileScopeId, Ty>,
+    /// Diagnostic-only concrete escaping throws for lambda expressions in the
+    /// current scope. Used to explain callback forwarding without affecting
+    /// call instantiation or throws checking semantics.
+    lambda_effective_throws: FxHashMap<ExprId, Ty>,
 }
 
 impl<'db> TypeInferenceBuilder<'db> {
@@ -242,6 +255,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             path_member_resolutions: FxHashMap::default(),
             param_types: Vec::new(),
             nested_lambda_types: FxHashMap::default(),
+            lambda_effective_throws: FxHashMap::default(),
         }
     }
 
@@ -415,6 +429,157 @@ impl<'db> TypeInferenceBuilder<'db> {
         })
     }
 
+    fn is_synthetic_effect_param_name(name: &Name) -> bool {
+        name.as_str()
+            .strip_prefix("__effect_param_")
+            .is_some_and(|suffix| !suffix.is_empty() && suffix.bytes().all(|b| b.is_ascii_digit()))
+    }
+
+    fn synthetic_effect_param_name(fact: &Ty) -> Option<&Name> {
+        match fact {
+            Ty::TypeVar(name, _) if Self::is_synthetic_effect_param_name(name) => Some(name),
+            _ => None,
+        }
+    }
+
+    fn ty_from_concrete_facts(facts: &BTreeSet<Ty>) -> Option<Ty> {
+        if facts.is_empty() || Self::throws_surface_has_open_slot(facts) {
+            return None;
+        }
+
+        let mut iter = facts.iter();
+        let first = iter.next()?.clone();
+        Some(iter.fold(first, |acc, fact| crate::generics::union_ty(&acc, fact)))
+    }
+
+    fn callback_concrete_throws_from_expr(&self, expr_id: ExprId) -> Option<Ty> {
+        if let Some(throws) = self.lambda_effective_throws.get(&expr_id) {
+            let facts = crate::throw_inference::flatten_ty_to_facts(throws);
+            if let Some(concrete) = Self::ty_from_concrete_facts(&facts) {
+                return Some(concrete);
+            }
+        }
+
+        let expr_ty = self.expressions.get(&expr_id)?;
+        let function_ty = self.expected_lambda_function_ty(expr_ty)?;
+        let Ty::Function { throws, .. } = function_ty else {
+            return None;
+        };
+        let facts = crate::throw_inference::flatten_ty_to_facts(&throws);
+        Self::ty_from_concrete_facts(&facts)
+    }
+
+    fn function_throws_exactly_missing_effect(&self, ty: &Ty, missing_effect_fact: &Ty) -> bool {
+        let Some(function_ty) = self.expected_lambda_function_ty(ty) else {
+            return false;
+        };
+        let Ty::Function { throws, .. } = function_ty else {
+            return false;
+        };
+        let facts = crate::throw_inference::flatten_ty_to_facts(&throws);
+        facts.len() == 1 && facts.contains(missing_effect_fact)
+    }
+
+    fn direct_callback_name(expr_id: ExprId, body: &ExprBody) -> Option<Name> {
+        match &body.exprs[expr_id] {
+            Expr::Path(segments) => segments.last().cloned(),
+            Expr::MemberAccess { member, .. } | Expr::OptionalMemberAccess { member, .. } => {
+                Some(member.clone())
+            }
+            _ => None,
+        }
+    }
+
+    fn find_callback_throw_provenance(
+        &self,
+        body: &ExprBody,
+        missing_effect_fact: &Ty,
+    ) -> Option<CallbackThrowProvenance> {
+        let mut matches = Vec::new();
+
+        for (expr_id, expr) in body.exprs.iter() {
+            let (callee_expr_id, args, unwrap_optional_callee) = match expr {
+                Expr::Call { callee, args } => (*callee, args.as_slice(), false),
+                Expr::OptionalCall { callee, args } => (*callee, args.as_slice(), true),
+                _ => continue,
+            };
+
+            let Some(call_throws) =
+                self.instantiated_callee_throws(callee_expr_id, args, unwrap_optional_callee)
+            else {
+                continue;
+            };
+            let call_facts = crate::throw_inference::flatten_ty_to_facts(&call_throws);
+            if !call_facts.contains(missing_effect_fact) {
+                continue;
+            }
+
+            let callee_ty = self
+                .expressions
+                .get(&callee_expr_id)
+                .cloned()
+                .unwrap_or(Ty::Unknown {
+                    attr: TyAttr::default(),
+                });
+            let typed_callee = if unwrap_optional_callee {
+                self.analyze_optional_base(&callee_ty).inner
+            } else {
+                callee_ty.clone()
+            };
+
+            let mut higher_order_matches = Vec::new();
+            if let Ty::Function { params, .. } = typed_callee {
+                let effective_params = if self.callee_uses_method_call_convention(callee_expr_id) {
+                    crate::generics::skip_self_param(&params)
+                } else {
+                    params.as_slice()
+                };
+
+                for (index, (param_name, param_ty)) in effective_params.iter().enumerate() {
+                    if !self.function_throws_exactly_missing_effect(param_ty, missing_effect_fact) {
+                        continue;
+                    }
+                    let Some(callback_name) = param_name.clone() else {
+                        continue;
+                    };
+                    let callback_value_expr = args.get(index).copied();
+                    higher_order_matches.push(CallbackThrowProvenance {
+                        callback_name,
+                        forwarding_call_expr: expr_id,
+                        callback_value_expr,
+                        callback_concrete_throws: callback_value_expr.and_then(|value_expr| {
+                            self.callback_concrete_throws_from_expr(value_expr)
+                        }),
+                    });
+                }
+            }
+
+            if higher_order_matches.len() == 1 {
+                matches.push(higher_order_matches.pop().expect("len checked"));
+                continue;
+            }
+
+            let callee_fn_throws_missing =
+                self.function_throws_exactly_missing_effect(&callee_ty, missing_effect_fact);
+            if callee_fn_throws_missing
+                && let Some(callback_name) = Self::direct_callback_name(callee_expr_id, body)
+            {
+                matches.push(CallbackThrowProvenance {
+                    callback_name,
+                    forwarding_call_expr: expr_id,
+                    callback_value_expr: None,
+                    callback_concrete_throws: None,
+                });
+            }
+        }
+
+        if matches.len() == 1 {
+            matches.pop()
+        } else {
+            None
+        }
+    }
+
     fn check_throws_surface(
         &mut self,
         body: &ExprBody,
@@ -426,14 +591,15 @@ impl<'db> TypeInferenceBuilder<'db> {
         let effective = self.collect_effective_throws(body);
         let has_open_slot = Self::throws_surface_has_open_slot(&declared);
 
-        let mut extra: Vec<String> = if has_open_slot {
-            Vec::new()
+        let extra_facts: BTreeSet<Ty> = if has_open_slot {
+            BTreeSet::new()
         } else {
-            effective
-                .difference(&declared)
-                .map(std::string::ToString::to_string)
-                .collect()
+            effective.difference(&declared).cloned().collect()
         };
+        let mut extra: Vec<String> = extra_facts
+            .iter()
+            .map(std::string::ToString::to_string)
+            .collect();
         let mut extraneous: Vec<String> = if warn_extraneous && !has_open_slot {
             declared
                 .difference(&effective)
@@ -446,13 +612,56 @@ impl<'db> TypeInferenceBuilder<'db> {
         extraneous.sort();
 
         if !extra.is_empty() {
-            self.context.report_at_span(
-                TirTypeError::ThrowsContractViolation {
-                    declared: throws_ty.clone(),
-                    extra_types: extra,
-                },
-                span,
-            );
+            let missing_effect_fact = extra_facts.iter().next();
+            if extra_facts.len() == 1
+                && let Some(missing_effect_fact) = missing_effect_fact
+                && Self::synthetic_effect_param_name(missing_effect_fact).is_some()
+                && let Some(provenance) =
+                    self.find_callback_throw_provenance(body, missing_effect_fact)
+            {
+                let mut related = vec![RelatedNote::new(
+                    RelatedLocation::Expr(provenance.forwarding_call_expr),
+                    format!(
+                        "this call forwards whatever callback `{}` throws",
+                        provenance.callback_name
+                    ),
+                )];
+
+                if let Some(callback_value_expr) = provenance.callback_value_expr {
+                    let message = if let Some(concrete_throws) =
+                        provenance.callback_concrete_throws.clone()
+                    {
+                        format!(
+                            "this callback throws `{}`",
+                            crate::user_facing::humanize_ty(&concrete_throws)
+                        )
+                    } else {
+                        "this callback may throw".to_string()
+                    };
+                    related.push(RelatedNote::new(
+                        RelatedLocation::Expr(callback_value_expr),
+                        message,
+                    ));
+                }
+
+                self.context.report_at_span_with_related(
+                    TirTypeError::CallbackThrowsContractViolation {
+                        callback_name: provenance.callback_name,
+                        declared: throws_ty.clone(),
+                        concrete_throws: provenance.callback_concrete_throws,
+                    },
+                    span,
+                    related,
+                );
+            } else {
+                self.context.report_at_span(
+                    TirTypeError::ThrowsContractViolation {
+                        declared: throws_ty.clone(),
+                        extra_types: extra,
+                    },
+                    span,
+                );
+            }
         }
         if !extraneous.is_empty() {
             self.context.report_warning_at_span(
@@ -1136,74 +1345,18 @@ impl<'db> TypeInferenceBuilder<'db> {
                     Self::make_optional(elem_ty)
                 }
             }
-            Expr::OptionalCall { callee, args } => {
-                // Optional chaining: func?.(args) — short-circuits to null if callee is null.
-                // Container mutation fast path (e.g. xs?.push?.(val) on EvolvingList).
-                if let Some(result_ty) = self.try_container_method_call(*callee, args, body) {
-                    return Self::make_optional(result_ty);
-                }
-
-                let is_method_call = matches!(
-                    &body.exprs[*callee],
-                    Expr::MemberAccess { .. } | Expr::OptionalMemberAccess { .. }
-                );
-                let callee_ty = self.infer_expr(*callee, body);
-                for arg in args {
-                    self.infer_expr(*arg, body);
-                }
-                let inner_ty = crate::narrowing::remove_null(&callee_ty);
-                // E2: warn if callee is not nullable
-                if inner_ty == callee_ty
-                    && !matches!(callee_ty, Ty::Unknown { .. } | Ty::Error { .. })
-                {
-                    let callee_text = body.display_expr(*callee);
-                    let expr_text = body.display_expr(expr_id);
-                    self.context.report_simple(
-                        TirTypeError::UnnecessaryOptionalChaining {
-                            expr: expr_text,
-                            base: callee_text,
-                        },
-                        expr_id,
-                    );
-                }
-                if matches!(inner_ty, Ty::Never { .. }) {
-                    Ty::Primitive(PrimitiveType::Null, TyAttr::default())
-                } else {
-                    let result_ty = match &inner_ty {
-                        Ty::Function { params, ret, .. } => {
-                            let effective_params = if is_method_call {
-                                crate::generics::skip_self_param(params)
-                            } else {
-                                params.as_slice()
-                            };
-                            if effective_params.len() != args.len() {
-                                self.context.report_simple(
-                                    TirTypeError::ArgumentCountMismatch {
-                                        expected: effective_params.len(),
-                                        got: args.len(),
-                                    },
-                                    expr_id,
-                                );
-                            }
-                            ret.as_ref().clone()
-                        }
-                        Ty::Unknown { .. } | Ty::Error { .. } => Ty::Unknown {
-                            attr: TyAttr::default(),
-                        },
-                        _ => {
-                            self.context.report_simple(
-                                TirTypeError::NotCallable {
-                                    ty: inner_ty.clone(),
-                                },
-                                expr_id,
-                            );
-                            Ty::Unknown {
-                                attr: TyAttr::default(),
-                            }
-                        }
-                    };
-                    Self::make_optional(result_ty)
-                }
+            Expr::OptionalCall { .. } => {
+                // Keep synthesis mode aligned with `check_expr`: optional calls
+                // should still run the shared call checker so argument type
+                // validation, generic inference, and higher-order callable
+                // checks happen even when no contextual expected type exists.
+                self.check_expr(
+                    expr_id,
+                    body,
+                    &Ty::Unknown {
+                        attr: TyAttr::default(),
+                    },
+                )
             }
             Expr::OptionalChain { expr } => {
                 // Transparent wrapper — type is the same as the inner expression's type.
@@ -1255,14 +1408,15 @@ impl<'db> TypeInferenceBuilder<'db> {
                     self.choose_lambda_throws_surface(func_def, &all_generic_params, None);
 
                 // Infer the lambda body using save/restore approach
-                let (ret_ty, _lambda_expressions, lambda_fsi) = self.infer_lambda_body(
-                    func_def,
-                    &param_tys,
-                    return_annotation.as_ref(),
-                    &throws_ty,
-                    throws_span,
-                    warn_extraneous_throws,
-                );
+                let (ret_ty, _lambda_expressions, lambda_fsi, lambda_effective_throws) = self
+                    .infer_lambda_body(
+                        func_def,
+                        &param_tys,
+                        return_annotation.as_ref(),
+                        &throws_ty,
+                        throws_span,
+                        warn_extraneous_throws,
+                    );
                 let surface_ret_ty = return_annotation.unwrap_or(ret_ty);
 
                 let result = Ty::Function {
@@ -1271,6 +1425,8 @@ impl<'db> TypeInferenceBuilder<'db> {
                     throws: Box::new(throws_ty),
                     attr: TyAttr::default(),
                 };
+                self.lambda_effective_throws
+                    .insert(expr_id, lambda_effective_throws);
                 if let Some(fsi) = lambda_fsi {
                     self.nested_lambda_types.insert(fsi, result.clone());
                 }
@@ -1644,14 +1800,15 @@ impl<'db> TypeInferenceBuilder<'db> {
                             );
 
                         // Infer/check the lambda body using save/restore approach
-                        let (ret_ty, _lambda_expressions, lambda_fsi) = self.infer_lambda_body(
-                            func_def,
-                            &param_tys,
-                            Some(effective_ret),
-                            &throws_ty,
-                            throws_span,
-                            warn_extraneous_throws,
-                        );
+                        let (ret_ty, _lambda_expressions, lambda_fsi, lambda_effective_throws) =
+                            self.infer_lambda_body(
+                                func_def,
+                                &param_tys,
+                                Some(effective_ret),
+                                &throws_ty,
+                                throws_span,
+                                warn_extraneous_throws,
+                            );
                         let surface_ret_ty = return_annotation.unwrap_or_else(|| {
                             if matches!(
                                 expected_ret.as_ref(),
@@ -1669,6 +1826,8 @@ impl<'db> TypeInferenceBuilder<'db> {
                             throws: Box::new(throws_ty),
                             attr: TyAttr::default(),
                         };
+                        self.lambda_effective_throws
+                            .insert(expr_id, lambda_effective_throws);
                         if !crate::generics::contains_typevar(expected_fn_ty)
                             && !self.is_subtype(&result, expected_fn_ty)
                         {
@@ -4214,7 +4373,12 @@ impl<'db> TypeInferenceBuilder<'db> {
                     .package_items
                     .lookup_type(class_name.namespace(), class_name.name());
                 let related = class_def
-                    .map(|def| vec![(RelatedLocation::Item(def), "class defined here")])
+                    .map(|def| {
+                        vec![RelatedNote::new(
+                            RelatedLocation::Item(def),
+                            "class defined here",
+                        )]
+                    })
                     .unwrap_or_default();
                 self.context.report_at_member(
                     TirTypeError::UnresolvedMember {
@@ -4250,7 +4414,12 @@ impl<'db> TypeInferenceBuilder<'db> {
                     .package_items
                     .lookup_type(enum_name.namespace(), enum_name.name());
                 let related = enum_def
-                    .map(|def| vec![(RelatedLocation::Item(def), "enum defined here")])
+                    .map(|def| {
+                        vec![RelatedNote::new(
+                            RelatedLocation::Item(def),
+                            "enum defined here",
+                        )]
+                    })
                     .unwrap_or_default();
                 self.context.report_at_member(
                     TirTypeError::UnresolvedMember {
@@ -4442,7 +4611,12 @@ impl<'db> TypeInferenceBuilder<'db> {
                     .package_items
                     .lookup_type(class_name.namespace(), class_name.name());
                 let related = class_def
-                    .map(|def| vec![(RelatedLocation::Item(def), "class defined here")])
+                    .map(|def| {
+                        vec![RelatedNote::new(
+                            RelatedLocation::Item(def),
+                            "class defined here",
+                        )]
+                    })
                     .unwrap_or_default();
                 self.context.report_at_segment(
                     TirTypeError::UnresolvedMember {
@@ -4467,7 +4641,12 @@ impl<'db> TypeInferenceBuilder<'db> {
                     .package_items
                     .lookup_type(enum_name.namespace(), enum_name.name());
                 let related = enum_def
-                    .map(|def| vec![(RelatedLocation::Item(def), "enum defined here")])
+                    .map(|def| {
+                        vec![RelatedNote::new(
+                            RelatedLocation::Item(def),
+                            "enum defined here",
+                        )]
+                    })
                     .unwrap_or_default();
                 self.context.report_at_segment(
                     TirTypeError::UnresolvedMember {
@@ -6001,7 +6180,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         chosen_throws: &Ty,
         throws_report_span: TextRange,
         warn_extraneous_throws: bool,
-    ) -> (Ty, FxHashMap<ExprId, Ty>, Option<FileScopeId>) {
+    ) -> (Ty, FxHashMap<ExprId, Ty>, Option<FileScopeId>, Ty) {
         use baml_compiler2_ast::FunctionBodyDef;
 
         // Get the lambda's ExprBody
@@ -6012,6 +6191,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                 },
                 FxHashMap::default(),
                 None,
+                Ty::Never {
+                    attr: TyAttr::default(),
+                },
             );
         };
 
@@ -6022,6 +6204,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                 },
                 FxHashMap::default(),
                 None,
+                Ty::Never {
+                    attr: TyAttr::default(),
+                },
             );
         };
 
@@ -6037,6 +6222,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         let saved_catch_residual_throws = std::mem::take(&mut self.catch_residual_throws);
         let saved_path_root_types = std::mem::take(&mut self.path_root_types);
         let saved_path_member_resolutions = std::mem::take(&mut self.path_member_resolutions);
+        let saved_lambda_effective_throws = std::mem::take(&mut self.lambda_effective_throws);
 
         // Extend generic params with the lambda's own generic params
         let mut new_generic_params = self.generic_params.clone();
@@ -6116,6 +6302,12 @@ impl<'db> TypeInferenceBuilder<'db> {
             throws_report_span,
             warn_extraneous_throws,
         );
+        let lambda_effective_throws = Self::ty_from_concrete_facts(
+            &self.collect_effective_throws(lambda_body),
+        )
+        .unwrap_or(Ty::Never {
+            attr: TyAttr::default(),
+        });
 
         // Collect the lambda's expression types and restore parent state
         let lambda_expressions = std::mem::replace(&mut self.expressions, saved_expressions);
@@ -6125,12 +6317,18 @@ impl<'db> TypeInferenceBuilder<'db> {
         self.catch_residual_throws = saved_catch_residual_throws;
         self.path_root_types = saved_path_root_types;
         self.path_member_resolutions = saved_path_member_resolutions;
+        self.lambda_effective_throws = saved_lambda_effective_throws;
         self.locals = saved_locals;
         self.declared_types = saved_declared;
         self.declared_return_ty = saved_return_ty;
         self.generic_params = saved_generic_params;
 
-        (ret_ty, lambda_expressions, lambda_file_scope_id)
+        (
+            ret_ty,
+            lambda_expressions,
+            lambda_file_scope_id,
+            lambda_effective_throws,
+        )
     }
 }
 

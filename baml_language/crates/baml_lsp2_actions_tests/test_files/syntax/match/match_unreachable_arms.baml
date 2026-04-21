@@ -39,7 +39,7 @@ function DuplicateLiteral(x: int) -> string {
 //     │               ──────┬──────  
 //     │                     ╰──────── unreachable arm
 //     │ 
-//     │ Note: Error code: E0001
+//     │ Note: Error code: E0063
 // ────╯
 // Error: unreachable arm
 //     ╭─[ match_match_unreachable_arms.baml:19:22 ]
@@ -48,5 +48,5 @@ function DuplicateLiteral(x: int) -> string {
 //     │                      ─────┬─────  
 //     │                           ╰─────── unreachable arm
 //     │ 
-//     │ Note: Error code: E0001
+//     │ Note: Error code: E0063
 // ────╯

@@ -69,7 +69,7 @@ function AIContentPipeline(video_id: string, zoom_meeting_id: string, transcript
 //    │                  ────┬────  
 //    │                      ╰────── unresolved name: GetEmails
 //    │ 
-//    │ Note: Error code: E0001
+//    │ Note: Error code: E0003
 // ───╯
 // Error: unresolved name: GetPosts
 //    ╭─[ headers_ai_content_pipeline.baml:7:17 ]
@@ -78,7 +78,7 @@ function AIContentPipeline(video_id: string, zoom_meeting_id: string, transcript
 //    │                 ────┬───  
 //    │                     ╰───── unresolved name: GetPosts
 //    │ 
-//    │ Note: Error code: E0001
+//    │ Note: Error code: E0003
 // ───╯
 // Error: unresolved name: ProcessVideo
 //     ╭─[ headers_ai_content_pipeline.baml:10:21 ]
@@ -87,7 +87,7 @@ function AIContentPipeline(video_id: string, zoom_meeting_id: string, transcript
 //     │                     ──────┬─────  
 //     │                           ╰─────── unresolved name: ProcessVideo
 //     │ 
-//     │ Note: Error code: E0001
+//     │ Note: Error code: E0003
 // ────╯
 // Error: unresolved name: GetVideo
 //     ╭─[ headers_ai_content_pipeline.baml:11:17 ]
@@ -96,7 +96,7 @@ function AIContentPipeline(video_id: string, zoom_meeting_id: string, transcript
 //     │                 ────┬───  
 //     │                     ╰───── unresolved name: GetVideo
 //     │ 
-//     │ Note: Error code: E0001
+//     │ Note: Error code: E0003
 // ────╯
 // Error: unresolved name: SummarizeVideo
 //     ╭─[ headers_ai_content_pipeline.baml:21:17 ]
@@ -105,7 +105,7 @@ function AIContentPipeline(video_id: string, zoom_meeting_id: string, transcript
 //     │                 ───────┬──────  
 //     │                        ╰──────── unresolved name: SummarizeVideo
 //     │ 
-//     │ Note: Error code: E0001
+//     │ Note: Error code: E0003
 // ────╯
 // Error: unresolved name: LabelSummaryCategory
 //     ╭─[ headers_ai_content_pipeline.baml:24:24 ]
@@ -114,7 +114,7 @@ function AIContentPipeline(video_id: string, zoom_meeting_id: string, transcript
 //     │                        ──────────┬─────────  
 //     │                                  ╰─────────── unresolved name: LabelSummaryCategory
 //     │ 
-//     │ Note: Error code: E0001
+//     │ Note: Error code: E0003
 // ────╯
 // Error: unresolved name: SaveSummary
 //     ╭─[ headers_ai_content_pipeline.baml:27:29 ]
@@ -123,7 +123,7 @@ function AIContentPipeline(video_id: string, zoom_meeting_id: string, transcript
 //     │                             ─────┬─────  
 //     │                                  ╰─────── unresolved name: SaveSummary
 //     │ 
-//     │ Note: Error code: E0001
+//     │ Note: Error code: E0003
 // ────╯
 // Error: unresolved name: GetStructure
 //     ╭─[ headers_ai_content_pipeline.baml:40:25 ]
@@ -132,7 +132,7 @@ function AIContentPipeline(video_id: string, zoom_meeting_id: string, transcript
 //     │                         ──────┬─────  
 //     │                               ╰─────── unresolved name: GetStructure
 //     │ 
-//     │ Note: Error code: E0001
+//     │ Note: Error code: E0003
 // ────╯
 // Error: unresolved name: GenerateContent
 //     ╭─[ headers_ai_content_pipeline.baml:41:21 ]
@@ -141,7 +141,7 @@ function AIContentPipeline(video_id: string, zoom_meeting_id: string, transcript
 //     │                     ───────┬───────  
 //     │                            ╰───────── unresolved name: GenerateContent
 //     │ 
-//     │ Note: Error code: E0001
+//     │ Note: Error code: E0003
 // ────╯
 // Error: unresolved name: SaveDraft
 //     ╭─[ headers_ai_content_pipeline.baml:44:27 ]
@@ -150,7 +150,7 @@ function AIContentPipeline(video_id: string, zoom_meeting_id: string, transcript
 //     │                           ────┬────  
 //     │                               ╰────── unresolved name: SaveDraft
 //     │ 
-//     │ Note: Error code: E0001
+//     │ Note: Error code: E0003
 // ────╯
 // Error: unresolved name: CreatePR
 //     ╭─[ headers_ai_content_pipeline.baml:52:18 ]
@@ -159,7 +159,7 @@ function AIContentPipeline(video_id: string, zoom_meeting_id: string, transcript
 //     │                  ────┬───  
 //     │                      ╰───── unresolved name: CreatePR
 //     │ 
-//     │ Note: Error code: E0001
+//     │ Note: Error code: E0003
 // ────╯
 // Error: unresolved name: pr_status
 //     ╭─[ headers_ai_content_pipeline.baml:53:9 ]
@@ -168,5 +168,5 @@ function AIContentPipeline(video_id: string, zoom_meeting_id: string, transcript
 //     │         ────┬────  
 //     │             ╰────── unresolved name: pr_status
 //     │ 
-//     │ Note: Error code: E0001
+//     │ Note: Error code: E0003
 // ────╯

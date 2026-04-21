@@ -10,7 +10,7 @@ assertion_line: 6931
     │   ───────────┬───────────  
     │              ╰───────────── expected 1 argument(s), got 2
     │ 
-    │ Note: Error code: E0001
+    │ Note: Error code: E0005
 ────╯
 
   [type] Error: type mismatch: expected string, got user.Formatter
@@ -30,7 +30,7 @@ assertion_line: 6931
     │   ─┬─  
     │    ╰─── expected 1 argument(s), got 0
     │ 
-    │ Note: Error code: E0001
+    │ Note: Error code: E0005
 ────╯
 
   [type] Error: type mismatch: expected (user.Counter) -> int throws never, got () -> int throws never

@@ -20,7 +20,7 @@ function CatchOnVariable(x: int) -> string {
 //    │          ────┬───  
 //    │              ╰───── unreachable arm
 //    │ 
-//    │ Note: Error code: E0001
+//    │ Note: Error code: E0063
 // ───╯
 // Warning: unreachable arm
 //     ╭─[ catch_catch_on_non_call.baml:10:10 ]
@@ -29,5 +29,5 @@ function CatchOnVariable(x: int) -> string {
 //     │          ────┬───  
 //     │              ╰───── unreachable arm
 //     │ 
-//     │ Note: Error code: E0001
+//     │ Note: Error code: E0063
 // ────╯
