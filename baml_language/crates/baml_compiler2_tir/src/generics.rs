@@ -354,14 +354,14 @@ fn infer_bindings_inner(
                 .or_insert_with(|| actual_ty.clone());
         }
         (Ty::List(f, _), Ty::List(a, _)) => {
-            infer_bindings_inner(f, a, bindings, allow_typevar_actuals)
+            infer_bindings_inner(f, a, bindings, allow_typevar_actuals);
         }
         (Ty::Map(fk, fv, _), Ty::Map(ak, av, _)) => {
             infer_bindings_inner(fk, ak, bindings, allow_typevar_actuals);
             infer_bindings_inner(fv, av, bindings, allow_typevar_actuals);
         }
         (Ty::Optional(f, _), Ty::Optional(a, _)) => {
-            infer_bindings_inner(f, a, bindings, allow_typevar_actuals)
+            infer_bindings_inner(f, a, bindings, allow_typevar_actuals);
         }
         (
             Ty::Function {

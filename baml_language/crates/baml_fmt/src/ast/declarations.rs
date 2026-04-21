@@ -150,7 +150,7 @@ impl FromCST for FunctionDecl {
 
         let return_type: Type = it.expect_parse()?;
 
-        let throws = if it.peek().map(|e| e.kind()) == Some(SyntaxKind::THROWS_CLAUSE) {
+        let throws = if it.peek().map(SyntaxElement::kind) == Some(SyntaxKind::THROWS_CLAUSE) {
             let elem = it.next().expect("peeked");
             Some(ThrowsClause::from_cst(elem)?)
         } else {

@@ -1262,9 +1262,8 @@ impl<'db> TypeInferenceBuilder<'db> {
                     &throws_ty,
                     throws_span,
                     warn_extraneous_throws,
-                    expr_id,
                 );
-                let surface_ret_ty = return_annotation.unwrap_or(ret_ty.clone());
+                let surface_ret_ty = return_annotation.unwrap_or(ret_ty);
 
                 let result = Ty::Function {
                     params: param_tys,
@@ -1652,7 +1651,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                             &throws_ty,
                             throws_span,
                             warn_extraneous_throws,
-                            expr_id,
                         );
                         let surface_ret_ty = return_annotation.unwrap_or_else(|| {
                             if matches!(
@@ -6003,7 +6001,6 @@ impl<'db> TypeInferenceBuilder<'db> {
         chosen_throws: &Ty,
         throws_report_span: TextRange,
         warn_extraneous_throws: bool,
-        _lambda_expr_id: ExprId,
     ) -> (Ty, FxHashMap<ExprId, Ty>, Option<FileScopeId>) {
         use baml_compiler2_ast::FunctionBodyDef;
 

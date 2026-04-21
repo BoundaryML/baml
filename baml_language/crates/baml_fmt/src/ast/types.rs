@@ -457,11 +457,12 @@ impl UnionTypeMember {
                 if must_be_func_type {
                     let arrow = it.expect_parse()?;
                     let return_ty: Type = it.expect_parse()?;
-                    let throws = if it.peek().map(|e| e.kind()) == Some(SyntaxKind::THROWS_CLAUSE) {
-                        Some(Box::new(it.expect_parse()?))
-                    } else {
-                        None
-                    };
+                    let throws =
+                        if it.peek().map(SyntaxElement::kind) == Some(SyntaxKind::THROWS_CLAUSE) {
+                            Some(Box::new(it.expect_parse()?))
+                        } else {
+                            None
+                        };
 
                     Ok(UnionTypeMember::Function(FunctionType {
                         open_paren,
@@ -474,11 +475,12 @@ impl UnionTypeMember {
                 } else if let Some(arrow) = it.next_if_kind(SyntaxKind::ARROW) {
                     let arrow = t::Arrow::from_cst(arrow)?;
                     let return_ty: Type = it.expect_parse()?;
-                    let throws = if it.peek().map(|e| e.kind()) == Some(SyntaxKind::THROWS_CLAUSE) {
-                        Some(Box::new(it.expect_parse()?))
-                    } else {
-                        None
-                    };
+                    let throws =
+                        if it.peek().map(SyntaxElement::kind) == Some(SyntaxKind::THROWS_CLAUSE) {
+                            Some(Box::new(it.expect_parse()?))
+                        } else {
+                            None
+                        };
 
                     Ok(UnionTypeMember::Function(FunctionType {
                         open_paren,

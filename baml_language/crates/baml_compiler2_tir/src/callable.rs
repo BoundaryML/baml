@@ -163,8 +163,8 @@ fn lookup_named_throw_summary<'db>(
     None
 }
 
-fn collect_value_throw_facts<'db>(
-    inference: &ScopeInference<'db>,
+fn collect_value_throw_facts(
+    inference: &ScopeInference<'_>,
     value_expr_id: baml_compiler2_ast::ExprId,
     out: &mut BTreeSet<Ty>,
 ) {
@@ -177,8 +177,8 @@ fn collect_value_throw_facts<'db>(
     out.extend(flatten_ty_to_facts(&thrown_ty));
 }
 
-fn callee_uses_method_call_convention<'db>(
-    inference: &ScopeInference<'db>,
+fn callee_uses_method_call_convention(
+    inference: &ScopeInference<'_>,
     callee_expr_id: baml_compiler2_ast::ExprId,
 ) -> bool {
     matches!(
@@ -192,8 +192,8 @@ fn callee_uses_method_call_convention<'db>(
     )
 }
 
-pub(crate) fn instantiated_callee_throws<'db>(
-    inference: &ScopeInference<'db>,
+pub(crate) fn instantiated_callee_throws(
+    inference: &ScopeInference<'_>,
     callee_expr_id: baml_compiler2_ast::ExprId,
     args: &[baml_compiler2_ast::ExprId],
     unwrap_optional_callee: bool,
@@ -229,6 +229,7 @@ pub(crate) fn instantiated_callee_throws<'db>(
     Some(crate::generics::substitute_ty(&throws, &bindings))
 }
 
+#[allow(clippy::too_many_arguments)]
 fn collect_callee_escaping_throws<'db>(
     db: &'db dyn crate::Db,
     pkg_id: PackageId<'db>,
@@ -570,7 +571,7 @@ pub fn callable_throws<'db>(db: &'db dyn crate::Db, function: FunctionLoc<'db>) 
                     db,
                     pkg_id,
                     &pkg_info.namespace_path,
-                    &inference,
+                    inference,
                     root_expr,
                     body,
                     &mut facts,
