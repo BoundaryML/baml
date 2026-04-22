@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/compiler2_tir/phase5.rs
+assertion_line: 389
 expression: output
 ---
 namespace baml:
@@ -67,6 +68,7 @@ namespace baml.llm:
   function __sap_parse_partial<T, S>
   function build_request
   function call_llm_function<T>
+  function from_shorthand
   function get_jinja_template
   function get_return_type
   function get_stream_return_type
