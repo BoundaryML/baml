@@ -543,6 +543,10 @@ impl TypeCtx {
             return Ok((AttrLiteral::Never, AttrLiteral::Never));
         }
 
+        if self.field_type_is_nullable(field_type, recursion_depth)? {
+            return Ok((AttrLiteral::Null, AttrLiteral::Null));
+        }
+
         let field_attrs = match field_type {
             ::baml_type::Ty::Int { .. }
             | ::baml_type::Ty::Float { .. }
@@ -555,7 +559,7 @@ impl TypeCtx {
             | ::baml_type::Ty::Enum(..)
             | ::baml_type::Ty::EnumVariant(..) => (AttrLiteral::Never, AttrLiteral::Never),
             ::baml_type::Ty::Null { .. } | ::baml_type::Ty::Optional(..) => {
-                (AttrLiteral::Null, AttrLiteral::Null)
+                unreachable!("nullable fields should be returned before field attr derivation")
             }
             ::baml_type::Ty::List(..) => (
                 AttrLiteral::Array(Vec::new()),
@@ -586,6 +590,39 @@ impl TypeCtx {
             }
         };
         Ok(field_attrs)
+    }
+
+    fn field_type_is_nullable(
+        &self,
+        field_type: &::baml_type::Ty,
+        recursion_depth: usize,
+    ) -> Result<bool, ConvertError> {
+        if recursion_depth > 16 {
+            return Err(ConvertError::RecursionDepthExceeded(
+                "class field nullability derivation",
+            ));
+        }
+
+        Ok(match field_type {
+            ::baml_type::Ty::Null { .. } | ::baml_type::Ty::Optional(..) => true,
+            ::baml_type::Ty::Union(members, ..) => {
+                let mut is_nullable = false;
+                for member in members {
+                    if self.field_type_is_nullable(member, recursion_depth + 1)? {
+                        is_nullable = true;
+                        break;
+                    }
+                }
+                is_nullable
+            }
+            ::baml_type::Ty::TypeAlias(name, ..) => {
+                let Some(alias_ty) = self.type_alias_definitions.get(name) else {
+                    return Err(ConvertError::UnknownTypeAlias(name.clone()));
+                };
+                self.field_type_is_nullable(alias_ty, recursion_depth + 1)?
+            }
+            _ => false,
+        })
     }
 }
 
