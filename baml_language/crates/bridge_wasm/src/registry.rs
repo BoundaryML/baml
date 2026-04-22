@@ -21,7 +21,6 @@ use std::{
 
 use futures::stream::Stream;
 use js_sys::Promise;
-use sys_types::sse::SseParser;
 
 use crate::send_wrapper::SendWrapper;
 
@@ -112,22 +111,21 @@ impl Drop for WasmResponseBody {
 /// On WASM, this wraps a browser `ReadableStream` via reqwest's WASM backend.
 pub(crate) type ByteStream = Pin<Box<dyn Stream<Item = Result<bytes::Bytes, reqwest::Error>>>>;
 
-/// Mutable state for an active SSE stream.
-struct SseStreamInner {
-    stream: Option<ByteStream>,
-    parser: SseParser,
-    done: bool,
-}
+/// Channel receiver type for SSE events.
+pub(crate) type SseEventReceiver =
+    futures::channel::mpsc::UnboundedReceiver<Result<sys_types::sse::SseEvent, String>>;
 
 /// Opaque handle stored in `owned::http::SseStream._handle`.
 ///
-/// Contains the reqwest byte stream and SSE parser. The entire struct is
-/// wrapped in `SendWrapper` so it satisfies `Send + Sync` on the
-/// single-threaded WASM target.
+/// A background task (spawned via `wasm_bindgen_futures::spawn_local`) reads
+/// from the byte stream, parses SSE events, and sends them through an mpsc
+/// channel. `next()` drains available events from the receiver.
+///
+/// Dropping the receiver (via `close()` / `mark_done()`) signals the
+/// background task to exit on its next send attempt.
 pub(crate) struct WasmSseStreamHandle {
-    /// Interior-mutable state. `SendWrapper` provides the required
-    /// `Send + Sync` impls for WASM's single-threaded runtime.
-    inner: SendWrapper<RefCell<SseStreamInner>>,
+    /// Channel receiver for parsed SSE events. `None` after `close()`.
+    receiver: SendWrapper<RefCell<Option<SseEventReceiver>>>,
 }
 
 // SAFETY: wasm32-unknown-unknown is single-threaded.
@@ -135,55 +133,27 @@ unsafe impl Send for WasmSseStreamHandle {}
 unsafe impl Sync for WasmSseStreamHandle {}
 
 impl WasmSseStreamHandle {
-    pub(crate) fn new(stream: ByteStream) -> Self {
+    pub(crate) fn new(receiver: SseEventReceiver) -> Self {
         Self {
-            inner: SendWrapper::new(RefCell::new(SseStreamInner {
-                stream: Some(stream),
-                parser: SseParser::new(),
-                done: false,
-            })),
+            receiver: SendWrapper::new(RefCell::new(Some(receiver))),
         }
     }
 
-    /// Take the byte stream and parser out for async use by `next()`.
-    ///
-    /// Returns `None` if already done or if the stream was already taken.
-    pub(crate) fn take_stream(&self) -> Option<(ByteStream, SseParser)> {
-        let mut inner = self.inner.borrow_mut();
-        if inner.done {
-            return None;
-        }
-        let stream = inner.stream.take()?;
-        let parser = std::mem::replace(&mut inner.parser, SseParser::new());
-        Some((stream, parser))
-    }
-
-    /// Return the byte stream and parser after `next()` is done.
-    ///
-    /// If the stream was marked done while checked out (e.g., by concurrent
-    /// `close()` / `mark_done()`), drop the resources instead of reviving them —
-    /// once done, the stream stays done.
-    pub(crate) fn return_stream(&self, stream: ByteStream, parser: SseParser) {
-        let mut inner = self.inner.borrow_mut();
-        if inner.done {
-            drop(stream);
-            drop(parser);
-            return;
-        }
-        inner.stream = Some(stream);
-        inner.parser = parser;
-    }
-
-    /// Mark the stream as done (no more events will be produced).
-    pub(crate) fn mark_done(&self) {
-        let mut inner = self.inner.borrow_mut();
-        inner.done = true;
-        // Drop the stream to abort any in-flight fetch.
-        inner.stream.take();
-    }
-
-    /// Returns true if the stream has been marked done.
+    /// Returns true if the stream has been closed (receiver dropped).
     pub(crate) fn is_done(&self) -> bool {
-        self.inner.borrow().done
+        self.receiver.borrow().is_none()
+    }
+
+    /// Close the stream by dropping the receiver.
+    ///
+    /// The background task will detect the closed channel on its next send
+    /// and exit.
+    pub(crate) fn mark_done(&self) {
+        self.receiver.borrow_mut().take();
+    }
+
+    /// Borrow the inner `RefCell` for synchronous drain and poll operations.
+    pub(crate) fn receiver_ref(&self) -> &RefCell<Option<SseEventReceiver>> {
+        self.receiver.inner()
     }
 }
