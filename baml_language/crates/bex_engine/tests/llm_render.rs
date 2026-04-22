@@ -273,6 +273,48 @@ function test_render() -> int {
     }
 }
 
+#[tokio::test]
+async fn test_render_prompt_with_inline_client_shorthand() {
+    use bex_engine::BexEngine;
+    use sys_native::SysOpsExt;
+
+    let source = r##"
+function Greet(name: string) -> string {
+    client "openai/gpt-4o-mini"
+    prompt #"
+        Hello, {{ name }}!
+    "#
+}
+
+function get_prompt() -> baml.llm.PromptAst {
+    Greet$render_prompt("World")
+}
+"##;
+
+    let snapshot = common::compile_for_engine(source);
+    let engine = std::sync::Arc::new(
+        BexEngine::new(
+            snapshot,
+            sys_native::SysOps::native().into(),
+            None,
+            Vec::new(),
+        )
+        .expect("Failed to create engine"),
+    );
+
+    let result = engine
+        .call_function(
+            "get_prompt",
+            vec![],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await
+        .expect("failed to render prompt for inline client shorthand");
+
+    assert_eq!(result, prompt_ast_message("system", "Hello, World!"));
+}
+
 /// Test that `render_prompt` returns a `PromptAst` value.
 ///
 /// This test calls `render_prompt` and verifies the result is a `PromptAst`
@@ -463,6 +505,48 @@ function test_call_llm() -> unknown {
     // - Get a network error (synthetic response with status_code=0)
     // Either way, all steps fail and we hit `assert false`.
     assert!(result.is_err(), "Expected error without valid API key");
+}
+
+#[tokio::test]
+async fn test_call_llm_function_inline_client_shorthand_gets_past_constructor_lookup() {
+    use bex_engine::BexEngine;
+    use sys_native::SysOpsExt;
+
+    let source = r##"
+function Greet(name: string) -> string {
+    client "openai/gpt-4o-mini"
+    prompt #"
+        Hello, {{ name }}!
+    "#
+}
+"##;
+
+    let snapshot = common::compile_for_engine(source);
+    let engine = std::sync::Arc::new(
+        BexEngine::new(
+            snapshot,
+            sys_native::SysOps::native().into(),
+            None,
+            Vec::new(),
+        )
+        .expect("Failed to create engine"),
+    );
+
+    let result = engine
+        .call_function(
+            "Greet",
+            vec![BexExternalValue::String("World".to_string())],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await;
+
+    let err = result.expect_err("inline shorthand LLM call should still fail in tests");
+    assert!(
+        !err.to_string()
+            .contains("Client resolve function not found: openai/gpt-4o-mini$new"),
+        "inline shorthand should resolve to a primitive client before any network error: {err}"
+    );
 }
 
 #[tokio::test]

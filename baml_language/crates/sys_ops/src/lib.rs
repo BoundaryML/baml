@@ -115,6 +115,32 @@ impl<T> io::IoClassLlmClient for T {
     }
 }
 
+fn shorthand_to_primitive_client(
+    shorthand: &str,
+) -> Result<io::owned::llm::PrimitiveClient, OpErrorKind> {
+    let shorthand = shorthand.trim();
+    let Some((provider, model)) = shorthand.split_once('/') else {
+        return Err(OpErrorKind::Other(format!(
+            "Invalid short hand name: {shorthand}"
+        )));
+    };
+    if provider.is_empty() || model.is_empty() {
+        return Err(OpErrorKind::Other(format!(
+            "Invalid short hand name: {shorthand}"
+        )));
+    }
+
+    Ok(io::owned::llm::PrimitiveClient {
+        name: shorthand.to_string(),
+        provider: provider.to_string(),
+        options: io::owned::llm::PrimitiveClientOptions {
+            model: Some(model.to_string()),
+            provider_options: BexExternalValue::Null,
+            ..Default::default()
+        },
+    })
+}
+
 /// Blanket impl — all types get real LLM behavior via `sys_llm` delegation.
 /// Uses new IO traits from the `io` module.
 impl<T> io::IoClassLlmPrimitiveClient for T {
@@ -518,6 +544,19 @@ impl<T> io::IoNamespaceLlm for T {
             )));
         };
         SysOpOutput::ok(info.stream_return_type.clone())
+    }
+
+    fn from_shorthand(
+        &self,
+        _heap: &std::sync::Arc<BexHeap>,
+        _call_id: CallId,
+        shorthand: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::llm::PrimitiveClient> {
+        match shorthand_to_primitive_client(&shorthand) {
+            Ok(client) => SysOpOutput::ok(client),
+            Err(e) => SysOpOutput::err(e),
+        }
     }
 
     fn __sap_parse_final(
@@ -1318,5 +1357,26 @@ mod tests {
         let fn_ptr = ops.get(SysOp::BamlFsOpen);
         let result = fn_ptr(&heap, vec![], &ctx, CallId::next());
         assert!(matches!(result, SysOpResult::Ready(Err(_))));
+    }
+
+    #[test]
+    fn test_shorthand_to_primitive_client_uses_first_slash_only() {
+        let client = shorthand_to_primitive_client("openrouter/meta-llama/llama-3.1").unwrap();
+
+        assert_eq!(client.name, "openrouter/meta-llama/llama-3.1");
+        assert_eq!(client.provider, "openrouter");
+        assert_eq!(
+            client.options.model.as_deref(),
+            Some("meta-llama/llama-3.1")
+        );
+    }
+
+    #[test]
+    fn test_shorthand_to_primitive_client_rejects_invalid_values() {
+        let err = shorthand_to_primitive_client("openai").unwrap_err();
+        assert_eq!(
+            err,
+            OpErrorKind::Other("Invalid short hand name: openai".to_string())
+        );
     }
 }
