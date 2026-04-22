@@ -806,7 +806,7 @@ mod tests {
                 ]),
             ),
             (
-                text_ref.clone(),
+                text_ref,
                 Ty::TypeAlias(maybe_text.clone(), alias_attr.clone()),
             ),
         ]);
