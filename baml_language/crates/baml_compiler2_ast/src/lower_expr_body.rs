@@ -2247,6 +2247,7 @@ impl LoweringContext {
             throws,
             body,
             declarative_meta: None,
+            origin: crate::ast::FunctionOrigin::Internal,
             attributes: Vec::new(),
             span: node.text_range(),
             name_span: node.text_range(), // synthetic: use the lambda span
@@ -2795,6 +2796,7 @@ impl LoweringContext {
             throws: None,
             body: Some(FunctionBodyDef::Expr(lambda_body, lambda_source_map)),
             declarative_meta: None,
+            origin: crate::ast::FunctionOrigin::Internal,
             attributes: vec![],
             span,
             name_span: span,
@@ -2880,6 +2882,7 @@ impl LoweringContext {
             throws: None,
             body: Some(FunctionBodyDef::Expr(sub_body, sub_source_map)),
             declarative_meta: None,
+            origin: crate::ast::FunctionOrigin::Internal,
             attributes: vec![],
             span,
             name_span: span,
@@ -2994,13 +2997,48 @@ fn is_expr_node_kind(kind: SyntaxKind) -> bool {
     )
 }
 
-/// Strip string delimiters from a raw token text, returning the content as an owned `String`.
+/// Decode common escape sequences in a quoted string literal body.
+fn unescape_string_literal(input: &str) -> String {
+    let mut result = String::with_capacity(input.len());
+    let mut chars = input.chars();
+    while let Some(c) = chars.next() {
+        if c == '\\' {
+            match chars.next() {
+                Some('n') => result.push('\n'),
+                Some('t') => result.push('\t'),
+                Some('r') => result.push('\r'),
+                Some('0') => result.push('\0'),
+                Some('\\') => result.push('\\'),
+                Some('"') => result.push('"'),
+                Some(other) => {
+                    result.push('\\');
+                    result.push(other);
+                }
+                None => result.push('\\'),
+            }
+        } else {
+            result.push(c);
+        }
+    }
+    result
+}
+
+/// Strip string delimiters from raw token text, decoding escape sequences for
+/// regular quoted strings and preserving raw string contents verbatim.
 fn strip_string_delimiters(text: &str) -> String {
     let text = text.trim();
-    if text.starts_with("#\"") && text.ends_with("\"#") {
-        text[2..text.len() - 2].to_string()
-    } else if text.starts_with('"') && text.ends_with('"') && text.len() >= 2 {
-        text[1..text.len() - 1].to_string()
+
+    let hash_count = text.bytes().take_while(|&b| b == b'#').count();
+    if hash_count > 0 {
+        let rest = &text[hash_count..];
+        let closing = format!("\"{}", &text[..hash_count]);
+        if rest.len() >= hash_count + 2 && rest.starts_with('"') && rest.ends_with(&closing) {
+            return rest[1..rest.len() - 1 - hash_count].to_string();
+        }
+    }
+
+    if text.starts_with('"') && text.ends_with('"') && text.len() >= 2 {
+        unescape_string_literal(&text[1..text.len() - 1])
     } else {
         text.to_string()
     }

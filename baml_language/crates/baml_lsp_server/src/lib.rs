@@ -139,10 +139,14 @@ pub fn run_server(playground_via_browser: bool) -> anyhow::Result<()> {
         playground_via_browser,
     ));
 
-    // Start the native event sink if BAML_TRACE_FILE is set.
-    let event_sink = std::env::var("BAML_TRACE_FILE")
-        .ok()
-        .map(|trace_file| bex_events_native::start(trace_file.into()));
+    // Mirror runtime log.* events to stderr by default, and also persist full
+    // event traces when BAML_TRACE_FILE is configured.
+    let event_sink = Some(
+        std::env::var("BAML_TRACE_FILE")
+            .ok()
+            .map(|trace_file| bex_events_native::start(trace_file.into()))
+            .unwrap_or_else(bex_events_native::start_stderr),
+    );
     let event_sink_for_flush = event_sink.clone();
 
     // Create the BexLsp (multi-project LSP)

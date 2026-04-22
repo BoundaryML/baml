@@ -261,6 +261,20 @@ pub enum FunctionMeta {
     },
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FunctionOrigin {
+    UserDefined,
+    Companion,
+    Internal,
+    Builtin,
+}
+
+impl FunctionOrigin {
+    pub const fn is_user_callable(self) -> bool {
+        matches!(self, Self::UserDefined | Self::Companion)
+    }
+}
+
 /// Represents any Baml function.
 #[derive(Clone, Debug)]
 pub struct Function {
@@ -334,6 +348,9 @@ pub struct Function {
     /// may throw. `None` if the function never throws. Used by the engine to convert
     /// uncaught throw values to `BexExternalValue`.
     pub throws_type: Option<Ty>,
+
+    /// Provenance of this function in the compiler/runtime pipeline.
+    pub origin: FunctionOrigin,
 
     /// LLM-specific metadata (prompt template, client name). `None` for non-LLM functions.
     pub body_meta: Option<FunctionMeta>,

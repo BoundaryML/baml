@@ -72,6 +72,7 @@ pub struct Function {
     pub body: Option<ast::FunctionBodyDef>,
     /// Declarative metadata, if this function was declared with declarative syntax.
     pub declarative_meta: Option<ast::DeclarativeMeta>,
+    pub origin: ast::FunctionOrigin,
     /// Full source span of the function.
     pub span: TextRange,
 }
@@ -322,6 +323,7 @@ impl ItemTree {
                 throws: f.throws.clone(),
                 body: f.body.clone(),
                 declarative_meta: f.declarative_meta.clone(),
+                origin: f.origin,
                 span: f.span,
             },
         );

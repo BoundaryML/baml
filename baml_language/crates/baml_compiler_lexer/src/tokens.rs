@@ -30,7 +30,9 @@ use text_size::{TextRange, TextSize};
 /// ```baml
 /// "hello world"  → Quote, Word("hello"), Word("world"), Quote
 /// ```
-/// The parser collects all tokens between quotes and handles escape sequences.
+/// The parser collects all tokens between quotes, preserving enough raw text
+/// for later stages to decode escape sequences. A backslash immediately before
+/// a quote keeps that quote inside the string literal instead of terminating it.
 ///
 /// This keeps the lexer simple, context-free, and fast.
 #[derive(Logos, Debug, PartialEq, Eq, Clone, Copy)]

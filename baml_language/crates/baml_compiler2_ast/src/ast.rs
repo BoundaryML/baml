@@ -633,6 +633,13 @@ pub enum LetOrigin {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FunctionOrigin {
+    UserDefined,
+    Companion,
+    Internal,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LoopOrigin {
     While,
     For,
@@ -748,6 +755,7 @@ pub struct FunctionDef {
     pub throws: Option<SpannedTypeExpr>,
     pub body: Option<FunctionBodyDef>,
     pub declarative_meta: Option<DeclarativeMeta>,
+    pub origin: FunctionOrigin,
     pub attributes: Vec<RawAttribute>,
     pub span: TextRange,
     pub name_span: TextRange,

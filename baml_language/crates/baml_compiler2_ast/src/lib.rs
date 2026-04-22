@@ -1088,6 +1088,31 @@ retry_policy Simple {
         assert!(let_def.initializer.is_some(), "expected an initializer");
     }
 
+    #[test]
+    fn quoted_string_literals_decode_escape_sequences() {
+        let source = r#"
+function main() -> string {
+  "\n"
+}
+"#;
+
+        let function = first_function(parse_and_lower(source));
+        let Some(FunctionBodyDef::Expr(body, _)) = &function.body else {
+            panic!("expected expression body");
+        };
+
+        let root = body.root_expr.expect("expected root expr");
+        let Expr::Block { tail_expr, .. } = &body.exprs[root] else {
+            panic!("expected block root expression");
+        };
+        let tail = tail_expr.expect("expected tail expression");
+
+        assert_eq!(
+            &body.exprs[tail],
+            &Expr::Literal(crate::ast::Literal::String("\n".to_string()))
+        );
+    }
+
     // ── Type attribute tests ─────────────────────────────────────────────────
 
     fn first_class(items: Vec<Item>) -> crate::ast::ClassDef {

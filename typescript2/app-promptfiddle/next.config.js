@@ -1,6 +1,7 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
+import { PHASE_DEVELOPMENT_SERVER } from 'next/constants.js';
 
 const projectDir = path.dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -29,28 +30,31 @@ try {
 }
 
 /** @type {import('next').NextConfig} */
-const nextConfig = {
-  reactStrictMode: true,
-  experimental: {
-    typedRoutes: true
-  },
-  transpilePackages: ['pkg-playground', 'pkg-proto'],
-  webpack: (config, { isServer }) => {
-    config.resolve = config.resolve || {};
-    config.resolve.alias = {
-      ...config.resolve.alias,
-      'pkg-playground': path.resolve(projectDir, '../pkg-playground/src'),
-      'pkg-proto': path.resolve(projectDir, '../pkg-proto/src')
-    };
+export default function nextConfig(phase) {
+  return {
+    // Keep dev and production builds isolated so a running dev server
+    // can't corrupt the manifests that `next build` needs to finalize.
+    distDir: phase === PHASE_DEVELOPMENT_SERVER ? '.next-dev' : '.next-build',
+    reactStrictMode: true,
+    experimental: {
+      typedRoutes: true
+    },
+    transpilePackages: ['pkg-playground', 'pkg-proto'],
+    webpack: (config) => {
+      config.resolve = config.resolve || {};
+      config.resolve.alias = {
+        ...config.resolve.alias,
+        'pkg-playground': path.resolve(projectDir, '../pkg-playground/src'),
+        'pkg-proto': path.resolve(projectDir, '../pkg-proto/src')
+      };
 
-    // Enable WASM support for bridge_wasm
-    config.experiments = {
-      ...config.experiments,
-      asyncWebAssembly: true,
-    };
+      // Enable WASM support for bridge_wasm
+      config.experiments = {
+        ...config.experiments,
+        asyncWebAssembly: true,
+      };
 
-    return config;
-  }
-};
-
-export default nextConfig;
+      return config;
+    }
+  };
+}

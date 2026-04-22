@@ -16,7 +16,8 @@ use baml_compiler2_mir::{
 };
 use baml_type::Ty;
 use bex_vm_types::{
-    BinOp as VmBinOp, Bytecode, CmpOp, ConstValue, Function, FunctionKind, GlobalIndex,
+    BinOp as VmBinOp, Bytecode, CmpOp, ConstValue, Function, FunctionKind, FunctionOrigin,
+    GlobalIndex,
     Instruction, Object, ObjectIndex, ObjectPool, UnaryOp as VmUnaryOp,
     bytecode::{
         BlockNotification, BlockNotificationType, DebugLocalScope, InstructionMeta, JumpTableData,
@@ -594,6 +595,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             param_names: Vec::new(),
             param_types: Vec::new(),
             throws_type: None,
+            origin: FunctionOrigin::Internal,
             body_meta: None,
             trace: false,
         }

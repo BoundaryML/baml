@@ -29,7 +29,7 @@ use baml_compiler2_ppir::file_item_tree;
 use baml_type::TyAttr;
 use bex_vm_types::{
     Bytecode, Class, ClassField, ConstValue, Enum, EnumVariant, Function, FunctionKind,
-    FunctionMeta, Instruction, Object, ObjectIndex, ObjectPool, Program,
+    FunctionMeta, FunctionOrigin, Instruction, Object, ObjectIndex, ObjectPool, Program,
 };
 
 /// Build a per-package `ResolvedAliases` cache, keyed by package name.
@@ -48,6 +48,28 @@ fn build_alias_caches(
     caches
 }
 pub(crate) use emit::compile_mir_function;
+
+fn is_builtin_function_name(name: &str) -> bool {
+    matches!(
+        name.split('.').next(),
+        Some("baml" | "assert" | "testing" | "log" | "env")
+    )
+}
+
+fn emitted_function_origin(
+    fq_name: &str,
+    origin: baml_compiler2_ast::FunctionOrigin,
+) -> FunctionOrigin {
+    if is_builtin_function_name(fq_name) {
+        FunctionOrigin::Builtin
+    } else {
+        match origin {
+            baml_compiler2_ast::FunctionOrigin::UserDefined => FunctionOrigin::UserDefined,
+            baml_compiler2_ast::FunctionOrigin::Companion => FunctionOrigin::Companion,
+            baml_compiler2_ast::FunctionOrigin::Internal => FunctionOrigin::Internal,
+        }
+    }
+}
 
 /// Context for MIR codegen.
 pub(crate) struct MirCodegenContext<'ctx, 'obj> {
@@ -90,7 +112,7 @@ impl std::fmt::Display for LoweringError {
 
 impl std::error::Error for LoweringError {}
 
-/// Unescape common escape sequences in a string literal body (without surrounding quotes).
+/// Decode common escape sequences in a quoted string literal body.
 fn unescape_string_literal(s: &str) -> String {
     let mut result = String::with_capacity(s.len());
     let mut chars = s.chars();
@@ -100,6 +122,7 @@ fn unescape_string_literal(s: &str) -> String {
                 Some('n') => result.push('\n'),
                 Some('t') => result.push('\t'),
                 Some('r') => result.push('\r'),
+                Some('0') => result.push('\0'),
                 Some('\\') => result.push('\\'),
                 Some('"') => result.push('"'),
                 Some(other) => {
@@ -480,6 +503,7 @@ pub fn generate_project_bytecode_with_opt(
                         param_names: Vec::new(),
                         param_types: Vec::new(),
                         throws_type: None,
+                        origin: FunctionOrigin::Builtin,
                         body_meta: None,
                         trace: false,
                     }
@@ -505,6 +529,7 @@ pub fn generate_project_bytecode_with_opt(
                     param_names: Vec::new(),
                     param_types: Vec::new(),
                     throws_type: None,
+                    origin: FunctionOrigin::Builtin,
                     body_meta: None,
                     trace: false,
                 },
@@ -519,6 +544,7 @@ pub fn generate_project_bytecode_with_opt(
 
             // Set inferred throws type from TIR throw inference
             compiled_fn.throws_type = compute_throws_type(db, *file, &func_data.name, cache_pass4);
+            compiled_fn.origin = emitted_function_origin(&fq_name, func_data.origin);
 
             // Set LLM-specific body_meta if this is an LLM function
             if let Some(baml_compiler2_ast::DeclarativeMeta::Llm(llm_meta)) =
@@ -728,6 +754,7 @@ pub fn generate_project_bytecode_with_opt(
                 param_names: vec!["registry".to_string()],
                 param_types: Vec::new(), // type not needed for chainer dispatch
                 throws_type: None,
+                origin: FunctionOrigin::Internal,
                 body_meta: None,
                 trace: false,
             };
@@ -1290,6 +1317,7 @@ fn compile_init_function<'db>(
                     param_names: Vec::new(),
                     param_types: Vec::new(),
                     throws_type: None,
+                    origin: FunctionOrigin::Internal,
                     body_meta: None,
                     trace: false,
                 }
@@ -1361,6 +1389,7 @@ fn compile_init_function<'db>(
         param_names: Vec::new(),
         param_types: Vec::new(),
         throws_type: None,
+        origin: FunctionOrigin::Internal,
         body_meta: None,
         trace: false,
     })
@@ -1371,38 +1400,6 @@ mod tests {
     use baml_compiler2_hir::item_tree::{Attribute, AttributeArg};
 
     use super::*;
-
-    // ── unescape_string_literal ─────────────────────────────────────────
-
-    #[test]
-    fn unescape_common_sequences() {
-        assert_eq!(unescape_string_literal(r"hello\nworld"), "hello\nworld");
-        assert_eq!(unescape_string_literal(r"tab\there"), "tab\there");
-        assert_eq!(unescape_string_literal(r"cr\rhere"), "cr\rhere");
-        assert_eq!(unescape_string_literal(r"back\\slash"), "back\\slash");
-        assert_eq!(unescape_string_literal(r#"a\"b"#), "a\"b");
-    }
-
-    #[test]
-    fn unescape_unknown_sequence_preserved() {
-        assert_eq!(unescape_string_literal(r"\x41"), "\\x41");
-        assert_eq!(unescape_string_literal(r"\u0041"), "\\u0041");
-    }
-
-    #[test]
-    fn unescape_trailing_backslash() {
-        assert_eq!(unescape_string_literal("trailing\\"), "trailing\\");
-    }
-
-    #[test]
-    fn unescape_empty() {
-        assert_eq!(unescape_string_literal(""), "");
-    }
-
-    #[test]
-    fn unescape_no_escapes() {
-        assert_eq!(unescape_string_literal("plain text"), "plain text");
-    }
 
     // ── parse_string_attr_value ─────────────────────────────────────────
 
@@ -1419,6 +1416,18 @@ mod tests {
         assert_eq!(
             parse_string_attr_value(r#""line\nbreak""#),
             Some("line\nbreak".to_string())
+        );
+        assert_eq!(
+            parse_string_attr_value(r#""tab\tstop""#),
+            Some("tab\tstop".to_string())
+        );
+        assert_eq!(
+            parse_string_attr_value(r#""a\\b""#),
+            Some(r"a\b".to_string())
+        );
+        assert_eq!(
+            parse_string_attr_value(r#""a\"b""#),
+            Some(r#"a"b"#.to_string())
         );
     }
 
@@ -1558,6 +1567,13 @@ mod tests {
         let attrs = vec![mk_attr("description", &["#\"raw desc\"#"])];
         let (desc, _, _) = extract_schema_attrs(&attrs);
         assert_eq!(desc, Some("raw desc".to_string()));
+    }
+
+    #[test]
+    fn extract_regular_string_attr_decodes_escapes() {
+        let attrs = vec![mk_attr("description", &[r#""a\nb\tc\\d\"e""#])];
+        let (desc, _, _) = extract_schema_attrs(&attrs);
+        assert_eq!(desc, Some("a\nb\tc\\d\"e".to_string()));
     }
 
     #[test]

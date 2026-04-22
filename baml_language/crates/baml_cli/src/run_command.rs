@@ -243,9 +243,11 @@ impl RunArgs {
         }
 
         let event_sink: Option<Arc<dyn bex_events::EventSink>> =
-            self.log_file.as_ref().map(|path| {
+            Some(if let Some(path) = self.log_file.as_ref() {
                 self.vlog(format_args!("Writing logs to {}", path.display()));
                 bex_events_native::start(path.clone())
+            } else {
+                bex_events_native::start_stderr()
             });
 
         if self.help && (self.function.is_none() && self.target.is_none()) {
@@ -286,7 +288,7 @@ impl RunArgs {
             ResolvedTarget::Function(name) => (name, self.target_args.clone()),
             ResolvedTarget::Script(expansion) => {
                 let func = expansion.function.unwrap_or_else(|| "main".to_string());
-                if !engine.function_exists(&func) {
+                if find_user_function(&engine, &func).is_none() {
                     return Err(Self::target_not_found_error(&scripts, &engine, &func));
                 }
                 let mut merged_args = expansion.extra_args;
@@ -295,16 +297,7 @@ impl RunArgs {
             }
         };
 
-        let func_info = engine
-            .user_functions()
-            .into_iter()
-            .find(|f| {
-                f.qualified_name == function_name
-                    || f.display_name
-                        == function_name
-                            .strip_prefix("user.")
-                            .unwrap_or(&function_name)
-            })
+        let func_info = find_user_function(&engine, &function_name)
             .ok_or_else(|| anyhow!("Function `{function_name}` not found"))?;
 
         if self.help || (effective_target_args.len() == 1 && effective_target_args[0] == "--help") {
@@ -576,7 +569,7 @@ impl RunArgs {
         scripts: &HashMap<String, Vec<String>>,
     ) -> Result<ResolvedTarget> {
         if let Some(func) = &self.function {
-            if engine.function_exists(func) {
+            if find_user_function(engine, func).is_some() {
                 return Ok(ResolvedTarget::function(func.clone()));
             }
             return Err(Self::target_not_found_error(scripts, engine, func));
@@ -718,7 +711,7 @@ impl RunArgs {
             match parse_script_body(tokens) {
                 Ok(expansion) => {
                     let target_func = if let Some(func) = &expansion.function {
-                        if !engine.function_exists(func) {
+                        if find_user_function(engine, func).is_none() {
                             errors.push(Self::script_error(
                                 &toml_path,
                                 toml_content,
@@ -1158,6 +1151,14 @@ fn collect_namespaces(engine: &BexEngine) -> HashSet<String> {
                 .map(|i| f.display_name[..i].to_string())
         })
         .collect()
+}
+
+fn find_user_function(engine: &BexEngine, name: &str) -> Option<UserFunctionInfo> {
+    let display_name = name.strip_prefix("user.").unwrap_or(name);
+    engine
+        .user_functions()
+        .into_iter()
+        .find(|f| f.qualified_name == name || f.display_name == display_name)
 }
 
 // ============================================================================
@@ -2870,6 +2871,112 @@ mod tests {
         );
     }
 
+    #[test]
+    fn test_user_functions_exclude_internal_init_test_wrappers() {
+        let engine = engine_from_source(
+            r#"
+                test "smoke" {
+                    assert.is_true(true)
+                }
+            "#,
+        );
+
+        let names: Vec<String> = engine
+            .user_functions()
+            .into_iter()
+            .map(|f| f.display_name)
+            .collect();
+
+        assert!(
+            names.is_empty(),
+            "internal synthesized helpers should not be exposed as runnable functions: {names:?}"
+        );
+    }
+
+    #[test]
+    fn test_user_functions_include_llm_companions() {
+        let engine = engine_from_source(
+            r##"
+                client TestClient {
+                    provider openai
+                    options {
+                        model "gpt-4"
+                    }
+                }
+
+                function Summarize(text: string) -> string {
+                    client TestClient
+                    prompt #"hi"#
+                }
+            "##,
+        );
+
+        let names: Vec<String> = engine
+            .user_functions()
+            .into_iter()
+            .map(|f| f.display_name)
+            .collect();
+
+        assert!(names.contains(&"Summarize".to_string()), "got: {names:?}");
+        assert!(
+            names.contains(&"Summarize$render_prompt".to_string()),
+            "got: {names:?}"
+        );
+        assert!(
+            names.contains(&"Summarize$build_request".to_string()),
+            "got: {names:?}"
+        );
+        assert!(names.contains(&"Summarize$parse".to_string()), "got: {names:?}");
+    }
+
+    #[test]
+    fn test_bep_resolve_function_flag_internal_init_test_errors() {
+        let engine = engine_from_source(
+            r#"
+                test "smoke" {
+                    assert.is_true(true)
+                }
+            "#,
+        );
+        let tmp = tempfile::tempdir().unwrap();
+        let mut args = run_args_with_clean_from(tmp.path());
+        args.function = Some(s("$init_test"));
+
+        let err = args.resolve_target(&engine, &no_scripts()).unwrap_err();
+        let msg = format!("{err}");
+        assert!(
+            msg.contains("No runnable target"),
+            "internal synthesized functions should not resolve via --function: {msg}"
+        );
+    }
+
+    #[test]
+    fn test_bep_resolve_function_flag_companion_succeeds() {
+        let engine = engine_from_source(
+            r##"
+                client TestClient {
+                    provider openai
+                    options {
+                        model "gpt-4"
+                    }
+                }
+
+                function Summarize(text: string) -> string {
+                    client TestClient
+                    prompt #"hi"#
+                }
+            "##,
+        );
+        let tmp = tempfile::tempdir().unwrap();
+        let mut args = run_args_with_clean_from(tmp.path());
+        args.function = Some(s("Summarize$render_prompt"));
+
+        match args.resolve_target(&engine, &no_scripts()).unwrap() {
+            ResolvedTarget::Function(name) => assert_eq!(name, "Summarize$render_prompt"),
+            other => panic!("expected Function(Summarize$render_prompt), got {other:?}"),
+        }
+    }
+
     /// BEP-027 §"Hermetic single-file mode": a `.baml` target runs `main`
     /// from the loaded file (the caller is responsible for having loaded
     /// the engine in standalone mode).
@@ -3048,6 +3155,36 @@ greet = ["--function", "g.Hello", "--", "--name", "Ada Lovelace"]
     #[test]
     fn test_parse_scripts_no_scripts_table() {
         assert!(RunArgs::parse_scripts("[project]\nname = \"x\"\n").is_empty());
+    }
+
+    #[test]
+    fn test_validate_scripts_rejects_internal_function_targets() {
+        let engine = engine_from_source(
+            r#"
+                test "smoke" {
+                    assert.is_true(true)
+                }
+            "#,
+        );
+        let tmp = tempfile::tempdir().unwrap();
+        let toml = r#"
+[scripts]
+hidden = "--function $init_test"
+"#;
+        std::fs::write(tmp.path().join("baml.toml"), toml).unwrap();
+
+        let mut args = run_args();
+        args.from = tmp.path().to_path_buf();
+
+        let scripts = RunArgs::parse_scripts(toml);
+        let err = args
+            .validate_scripts(&engine, &scripts, &collect_namespaces(&engine), toml)
+            .unwrap_err();
+        let msg = format!("{err}");
+        assert!(
+            msg.contains("--function target `$init_test` not found"),
+            "scripts should not be allowed to target internal synthesized helpers: {msg}"
+        );
     }
 
     /// BEP-027 §"Target resolution" step 4: a positional target that matches

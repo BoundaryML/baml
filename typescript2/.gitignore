@@ -4,6 +4,8 @@ node_modules/
 # Build outputs
 dist/
 .next/
+.next-build/
+.next-dev/
 .turbo/
 
 # WASM output (built by wasm-pack)
