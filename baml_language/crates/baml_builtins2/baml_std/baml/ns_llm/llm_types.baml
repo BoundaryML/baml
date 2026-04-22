@@ -26,7 +26,7 @@ class Client {
 
   function to_primitive_client(self) -> PrimitiveClient {
     if (self.name.includes("/")) {
-      throw root.errors.InvalidArgument { message: "Invalid short hand name: " + self.name };
+      from_shorthand(self.name)
     } else {
       self.get_constructor()()
     }
@@ -49,8 +49,7 @@ class Client {
   ) -> OrchestrationStep[] {
     match (self.client_type) {
       ClientType.Primitive => {
-        let resolve_fn = self.get_constructor();
-        let primitive = resolve_fn();
+        let primitive = self.to_primitive_client();
         [OrchestrationStep { primitive_client: primitive, delay_ms: 0 }]
       }
 
@@ -174,8 +173,7 @@ class Client {
   ) -> Stream<T, S> {
     match (self.client_type) {
       ClientType.Primitive => {
-        let resolve_fn = self.get_constructor();
-        let primitive = resolve_fn();
+        let primitive = self.to_primitive_client();
         let return_type = get_return_type(context.function_name);
         let stream_return_type = get_stream_return_type(context.function_name);
 
@@ -272,8 +270,7 @@ class Client {
   ) -> T {
     match (self.client_type) {
       ClientType.Primitive => {
-        let resolve_fn = self.get_constructor()
-        let primitive = resolve_fn()
+        let primitive = self.to_primitive_client()
         let return_type = get_return_type(context.function_name)
 
         let prompt = primitive.render_prompt(context.jinja_string, context.args, return_type)
@@ -585,6 +582,12 @@ class PrimitiveClient {
   ) -> T throws root.errors.LlmClient {
     $rust_io_function
   }
+}
+
+function from_shorthand(
+  shorthand: string,
+) -> PrimitiveClient throws root.errors.InvalidArgument {
+  $rust_io_function
 }
 
 function get_jinja_template(function_name: string) -> string throws root.errors.InvalidArgument {

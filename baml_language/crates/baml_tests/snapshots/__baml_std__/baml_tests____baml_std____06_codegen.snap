@@ -292,18 +292,18 @@ function baml.llm.Client.build_attempt_with_state(self: null, planner_state: voi
   L2:
     load_var self
     load_field .name
-    store_var _30
+    store_var _27
     load_var self
     load_field .counter
-    store_var _31
+    store_var _28
     load_var self
     load_field .sub_clients
     call baml.Array.length
-    store_var _32
+    store_var _29
     load_var planner_state
-    load_var _30
-    load_var _31
-    load_var _32
+    load_var _27
+    load_var _28
+    load_var _29
     call baml.llm.PlannerState.rr_pick_index
     store_var idx
     load_var self
@@ -323,13 +323,13 @@ function baml.llm.Client.build_attempt_with_state(self: null, planner_state: voi
     store_var steps
     load_var self
     load_field .sub_clients
-    store_var _12
+    store_var _9
     load_const 0
     store_var __for_idx
 
   L5:
     load_var __for_idx
-    load_var _12
+    load_var _9
     call baml.Array.length
     cmp_op <
     pop_jump_if_false L6
@@ -340,18 +340,18 @@ function baml.llm.Client.build_attempt_with_state(self: null, planner_state: voi
     jump L12
 
   L7:
-    load_var _12
+    load_var _9
     load_var __for_idx
     load_array_element
     load_var planner_state
     call baml.llm.Client.build_plan_with_state
-    store_var _18
+    store_var _15
     load_const 0
     store_var __for_idx_1
 
   L8:
     load_var __for_idx_1
-    load_var _18
+    load_var _15
     call baml.Array.length
     cmp_op <
     pop_jump_if_false L9
@@ -366,7 +366,7 @@ function baml.llm.Client.build_attempt_with_state(self: null, planner_state: voi
 
   L10:
     load_var steps
-    load_var _18
+    load_var _15
     load_var __for_idx_1
     load_array_element
     call baml.Array.push
@@ -379,9 +379,7 @@ function baml.llm.Client.build_attempt_with_state(self: null, planner_state: voi
 
   L11:
     load_var self
-    dispatch_future baml.llm.Client.get_constructor
-    await
-    call_indirect
+    call baml.llm.Client.to_primitive_client
     store_var primitive
     alloc_instance OrchestrationStep
     load_var primitive
@@ -557,11 +555,11 @@ function baml.llm.Client.execute_once_oneshot(self: null, context: void, active_
   L2:
     load_var self
     load_field .counter
-    store_var _62
+    store_var _59
     load_var self
     load_field .sub_clients
     call baml.Array.length
-    store_var _63
+    store_var _60
     load_var self
     load_var self
     load_field .counter
@@ -570,8 +568,8 @@ function baml.llm.Client.execute_once_oneshot(self: null, context: void, active_
     store_field .counter
     load_var self
     load_field .sub_clients
-    load_var _62
-    load_var _63
+    load_var _59
+    load_var _60
     bin_op %
     load_array_element
     load_var context
@@ -588,13 +586,13 @@ function baml.llm.Client.execute_once_oneshot(self: null, context: void, active_
   L4:
     load_var self
     load_field .sub_clients
-    store_var _48
+    store_var _45
     load_const 0
     store_var __for_idx
 
   L5:
     load_var __for_idx
-    load_var _48
+    load_var _45
     call baml.Array.length
     cmp_op <
     pop_jump_if_false L6
@@ -607,7 +605,7 @@ function baml.llm.Client.execute_once_oneshot(self: null, context: void, active_
     throw
 
   L7:
-    load_var _48
+    load_var _45
     load_var __for_idx
     load_array_element
     load_var context
@@ -627,9 +625,7 @@ function baml.llm.Client.execute_once_oneshot(self: null, context: void, active_
 
   L9:
     load_var self
-    dispatch_future baml.llm.Client.get_constructor
-    await
-    call_indirect
+    call baml.llm.Client.to_primitive_client
     store_var primitive
     load_var context
     load_field .function_name
@@ -751,11 +747,11 @@ function baml.llm.Client.execute_once_stream(self: null, context: void, active_d
   L2:
     load_var self
     load_field .counter
-    store_var _55
+    store_var _52
     load_var self
     load_field .sub_clients
     call baml.Array.length
-    store_var _56
+    store_var _53
     load_var self
     load_var self
     load_field .counter
@@ -764,8 +760,8 @@ function baml.llm.Client.execute_once_stream(self: null, context: void, active_d
     store_field .counter
     load_var self
     load_field .sub_clients
-    load_var _55
-    load_var _56
+    load_var _52
+    load_var _53
     bin_op %
     load_array_element
     load_var context
@@ -782,13 +778,13 @@ function baml.llm.Client.execute_once_stream(self: null, context: void, active_d
   L4:
     load_var self
     load_field .sub_clients
-    store_var _41
+    store_var _38
     load_const 0
     store_var __for_idx
 
   L5:
     load_var __for_idx
-    load_var _41
+    load_var _38
     call baml.Array.length
     cmp_op <
     pop_jump_if_false L6
@@ -801,7 +797,7 @@ function baml.llm.Client.execute_once_stream(self: null, context: void, active_d
     throw
 
   L7:
-    load_var _41
+    load_var _38
     load_var __for_idx
     load_array_element
     load_var context
@@ -821,9 +817,7 @@ function baml.llm.Client.execute_once_stream(self: null, context: void, active_d
 
   L9:
     load_var self
-    dispatch_future baml.llm.Client.get_constructor
-    await
-    call_indirect
+    call baml.llm.Client.to_primitive_client
     store_var primitive
     load_var context
     load_field .function_name
@@ -1112,16 +1106,16 @@ function baml.llm.Client.to_primitive_client(self: null) -> void {
     dispatch_future baml.llm.Client.get_constructor
     await
     call_indirect
-    return
+    jump L2
 
   L1:
-    alloc_instance InvalidArgument
-    load_const "Invalid short hand name: "
     load_var self
     load_field .name
-    bin_op +
-    init_field .message
-    throw
+    dispatch_future baml.llm.from_shorthand
+    await
+
+  L2:
+    return
 }
 
 function baml.llm.PlannerState.rr_local_offset(self: null, client_name: string) -> int {
@@ -1432,6 +1426,9 @@ function baml.llm.call_llm_function(client: void, function_name: string, args: m
     load_const 0
     call baml.llm.Client.execute_oneshot
     return
+}
+
+function baml.llm.from_shorthand(shorthand: string) -> void {
 }
 
 function baml.llm.get_jinja_template(function_name: string) -> string {
