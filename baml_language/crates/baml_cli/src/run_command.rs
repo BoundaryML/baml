@@ -187,11 +187,8 @@ impl RunArgs {
             .filter(|d| d.severity == Severity::Warning)
             .collect();
 
-        for w in &warnings {
-            self.vlog(format_args!("warning: {}", w.message));
-        }
-
-        if !errors.is_empty() {
+        let needs_sources = !errors.is_empty() || (self.verbose && !warnings.is_empty());
+        let (sources, file_paths) = if needs_sources {
             let mut sources = HashMap::new();
             let mut file_paths = HashMap::new();
             for sf in &source_files {
@@ -199,6 +196,22 @@ impl RunArgs {
                 sources.insert(file_id, sf.text(db).to_string());
                 file_paths.insert(file_id, sf.path(db));
             }
+            (sources, file_paths)
+        } else {
+            (HashMap::new(), HashMap::new())
+        };
+
+        if self.verbose && !warnings.is_empty() {
+            let rendered = render::render_diagnostics(
+                &warnings.iter().copied().cloned().collect::<Vec<_>>(),
+                &sources,
+                &file_paths,
+                &render::RenderConfig::cli(),
+            );
+            eprintln!("{rendered}");
+        }
+
+        if !errors.is_empty() {
             let rendered = render::render_diagnostics(
                 &errors.iter().copied().cloned().collect::<Vec<_>>(),
                 &sources,
@@ -3846,6 +3859,75 @@ greet = ["--function", "g.Hello", "--", "--name", "Ada Lovelace"]
         assert!(
             msg.contains("not_a_param") && msg.contains("unknown parameter"),
             "expected unknown-parameter error for default main, got: {msg}"
+        );
+    }
+
+    /// Warnings emitted by the compiler (e.g. an unreachable catch arm) must
+    /// carry file + line information when rendered for the CLI. The previous
+    /// implementation printed only the message ("warning: unreachable arm")
+    /// which made it impossible to locate in a real project.
+    #[test]
+    fn warnings_are_rendered_with_file_and_line() {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::write(tmp.path().join("baml.toml"), "").unwrap();
+        let src = tmp.path().join("baml_src");
+        std::fs::create_dir_all(&src).unwrap();
+        // `MayFail` can't throw, so the catch's `_` arm is unreachable —
+        // this is surfaced as a Warning-severity diagnostic.
+        std::fs::write(
+            src.join("main.baml"),
+            "function MayFail() -> int { 1 }\n\
+             function main() -> int { MayFail() catch (e) { _ => 0 } }\n",
+        )
+        .unwrap();
+
+        let (db, _from, _files) = crate::project_load::load_project_from(tmp.path()).unwrap();
+        let project = db.get_project().expect("project must be set");
+        let source_files = db.get_source_files();
+        let diagnostics = baml_project::collect_diagnostics(&db, project, &source_files);
+
+        let warnings: Vec<_> = diagnostics
+            .iter()
+            .filter(|d| d.severity == Severity::Warning)
+            .cloned()
+            .collect();
+        assert!(
+            warnings.iter().any(|d| d.message.contains("unreachable")),
+            "expected an `unreachable arm` warning, got: {:?}",
+            warnings.iter().map(|d| &d.message).collect::<Vec<_>>()
+        );
+
+        let mut sources = HashMap::new();
+        let mut file_paths = HashMap::new();
+        for sf in &source_files {
+            let file_id = sf.file_id(&db);
+            sources.insert(file_id, sf.text(&db).to_string());
+            file_paths.insert(file_id, sf.path(&db));
+        }
+        let rendered = render::render_diagnostics(
+            &warnings,
+            &sources,
+            &file_paths,
+            &render::RenderConfig::cli(),
+        );
+
+        assert!(
+            rendered.contains("unreachable"),
+            "rendered warning is missing the message, got:\n{rendered}"
+        );
+        assert!(
+            rendered.contains("main.baml"),
+            "rendered warning is missing the file name, got:\n{rendered}"
+        );
+        // Ariadne renders the source span as `file:line:col`, so a digit must
+        // appear after `main.baml:` for the location to be present.
+        assert!(
+            rendered
+                .split("main.baml:")
+                .nth(1)
+                .and_then(|s| s.chars().next())
+                .is_some_and(|c| c.is_ascii_digit()),
+            "rendered warning is missing a line number after the file name, got:\n{rendered}"
         );
     }
 }
