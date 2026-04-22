@@ -11,9 +11,13 @@ use baml_db::{
     baml_compiler_diagnostics::{Severity, render},
     baml_compiler2_emit,
 };
+use baml_exec::{
+    OutputFormat, build_args_from_signature, extract_flag_keys, load_json_source,
+    print_target_help as baml_exec_print_target_help, write_output,
+};
 use baml_project::ProjectDatabase;
 use baml_workspace::discover_baml_files;
-use bex_engine::{BexEngine, BexExternalValue, FunctionCallContextBuilder, Ty, UserFunctionInfo};
+use bex_engine::{BexEngine, BexExternalValue, FunctionCallContextBuilder, UserFunctionInfo};
 // For --log-file event sink.
 use clap::Args;
 use sys_native::{CallId, SysOpsExt};
@@ -149,12 +153,6 @@ pub struct RunArgs {
     /// These are parsed as auto-CLI flags derived from the function signature.
     #[arg(last = true)]
     pub target_args: Vec<String>,
-}
-
-#[derive(Clone, Debug, clap::ValueEnum)]
-pub enum OutputFormat {
-    Debug,
-    Json,
 }
 
 // ============================================================================
@@ -314,7 +312,11 @@ impl RunArgs {
             .ok_or_else(|| anyhow!("Function `{function_name}` not found"))?;
 
         if self.help || (effective_target_args.len() == 1 && effective_target_args[0] == "--help") {
-            Self::print_target_help(&function_name, &func_info);
+            let display = function_name
+                .strip_prefix("user.")
+                .unwrap_or(&function_name);
+            let example_prefix = format!("baml run --function {display} -- ");
+            baml_exec_print_target_help(&function_name, &func_info, &example_prefix);
             return Ok(crate::ExitCode::Success);
         }
 
@@ -347,7 +349,7 @@ impl RunArgs {
 
         match result {
             Ok(value) => {
-                self.format_output(&value);
+                write_output(&value, self.output);
                 Ok(crate::ExitCode::Success)
             }
             Err(e) => {
@@ -553,7 +555,7 @@ impl RunArgs {
 
         match result {
             Ok(value) => {
-                self.format_output(&value);
+                write_output(&value, self.output);
                 Ok(crate::ExitCode::Success)
             }
             Err(e) => {
@@ -841,73 +843,6 @@ impl RunArgs {
     }
 
     // ========================================================================
-    // Argument parsing
-    // ========================================================================
-
-    /// Build the ordered argument vector by merging JSON args and auto-CLI flags.
-    fn build_args_from(
-        &self,
-        target_args: &[String],
-        param_names: &[String],
-        param_types: &[Ty],
-    ) -> Result<Vec<BexExternalValue>> {
-        let json_map = match &self.json_args {
-            Some(source) => {
-                let json = load_json_source(source)?;
-                let obj = json
-                    .as_object()
-                    .ok_or_else(|| anyhow!("--json-args must be a JSON object, got: {json}"))?;
-                let mut map = HashMap::new();
-                for (key, value) in obj {
-                    // Known keys coerce with their declared type so enums/classes/
-                    // lists/maps marshal correctly. Unknown keys fall through to
-                    // untyped conversion and are reported as "unknown argument".
-                    let converted = match param_names.iter().position(|n| n == key) {
-                        Some(idx) => json_to_external_with_ty(value, &param_types[idx])
-                            .with_context(|| format!("--json-args: parameter `{key}`"))?,
-                        None => json_to_external(value),
-                    };
-                    map.insert(key.clone(), converted);
-                }
-                map
-            }
-            None => HashMap::new(),
-        };
-
-        let cli_map = parse_auto_cli_args(target_args, param_names, param_types)?;
-
-        // CLI args override --json-args values.
-        let mut merged = json_map;
-        for (key, value) in cli_map {
-            merged.insert(key, value);
-        }
-
-        let mut ordered = Vec::with_capacity(param_names.len());
-        for (i, name) in param_names.iter().enumerate() {
-            match merged.remove(name.as_str()) {
-                Some(value) => ordered.push(value),
-                None => {
-                    let ty = &param_types[i];
-                    anyhow::bail!(
-                        "Missing required argument `--{name}` (type: {ty}).\n\
-                         Pass it after `--`: baml run ... -- --{name} <value>"
-                    );
-                }
-            }
-        }
-
-        if !merged.is_empty() {
-            let unknown: Vec<&str> = merged.keys().map(String::as_str).collect();
-            eprintln!(
-                "Warning: unknown argument(s) ignored: {}",
-                unknown.join(", ")
-            );
-        }
-
-        Ok(ordered)
-    }
-
-    // ========================================================================
     // --list
     // ========================================================================
 
@@ -1062,71 +997,6 @@ impl RunArgs {
         );
     }
 
-    // ========================================================================
-    // Per-target --help
-    // ========================================================================
-
-    fn print_target_help(function_name: &str, func_info: &UserFunctionInfo) {
-        let display = function_name.strip_prefix("user.").unwrap_or(function_name);
-        let param_names = &func_info.param_names;
-        let param_types = &func_info.param_types;
-        let ret_str = func_info.return_type.to_string();
-
-        let params_str: Vec<String> = param_names
-            .iter()
-            .zip(param_types.iter())
-            .map(|(n, t)| format!("{n}: {t}"))
-            .collect();
-
-        println!("function {display}({}) -> {ret_str}", params_str.join(", "));
-        println!();
-
-        if param_names.is_empty() {
-            println!("  This function takes no arguments.");
-        } else {
-            println!("  Arguments (pass after `--`):\n");
-            for (name, ty) in param_names.iter().zip(param_types.iter()) {
-                let type_hint = match ty {
-                    Ty::Bool { .. } => " (use --name=true or --name=false)".to_string(),
-                    Ty::Enum(tn, _) => format!(" (enum {tn})"),
-                    Ty::Class(..) | Ty::Map { .. } | Ty::List(..) => {
-                        " (use --json-args for complex types)".to_string()
-                    }
-                    _ => String::new(),
-                };
-                println!("    --{name} <{ty}>{type_hint}");
-            }
-        }
-
-        println!();
-        println!(
-            "  Example: baml run --function {display} -- {}",
-            param_names
-                .iter()
-                .zip(param_types.iter())
-                .map(|(n, t)| format!("--{n} {}", example_value(t)))
-                .collect::<Vec<_>>()
-                .join(" ")
-        );
-    }
-
-    // ========================================================================
-    // Output formatting
-    // ========================================================================
-
-    fn format_output(&self, value: &BexExternalValue) {
-        match self.output {
-            OutputFormat::Debug => println!("{}", format_value(value)),
-            OutputFormat::Json => {
-                let json = external_to_json(value);
-                println!(
-                    "{}",
-                    serde_json::to_string_pretty(&json).unwrap_or_else(|_| "null".to_string())
-                );
-            }
-        }
-    }
-
     fn print_run_help() {
         use clap::CommandFactory;
         let mut cmd = crate::commands::RuntimeCli::command();
@@ -1136,6 +1006,22 @@ impl RunArgs {
                 return;
             }
         }
+    }
+
+    /// Build the ordered argument vector: thin wrapper around
+    /// `baml_exec::build_args_from_signature` that resolves `--json-args`
+    /// against this invocation's CLI state before delegating.
+    fn build_args_from(
+        &self,
+        target_args: &[String],
+        param_names: &[String],
+        param_types: &[bex_engine::Ty],
+    ) -> Result<Vec<BexExternalValue>> {
+        let json = match &self.json_args {
+            Some(source) => Some(load_json_source(source)?),
+            None => None,
+        };
+        build_args_from_signature(target_args, json.as_ref(), param_names, param_types)
     }
 }
 
@@ -1174,438 +1060,6 @@ fn find_user_function(engine: &BexEngine, name: &str) -> Option<UserFunctionInfo
         .find(|f| f.qualified_name == name || f.display_name == display_name)
 }
 
-// ============================================================================
-// Auto-CLI parser
-// ============================================================================
-
-/// Parse tokens after `--` into a map of parameter name → value.
-///
-/// Supports:
-/// - `--name value` (two tokens)
-/// - `--name=value` (single token with `=`, including `--name=` for empty string)
-/// - Positional sugar: single bare token when function has exactly one parameter
-///
-/// Bare tokens that don't match a `--flag` are skipped — they remain
-/// accessible via `baml.argv` but don't bind to parameters.
-fn parse_auto_cli_args(
-    tokens: &[String],
-    param_names: &[String],
-    param_types: &[Ty],
-) -> Result<HashMap<String, BexExternalValue>> {
-    if tokens.is_empty() || param_names.is_empty() {
-        return Ok(HashMap::new());
-    }
-
-    // Positional sugar: single non-flag token + exactly one param.
-    if tokens.len() == 1 && !tokens[0].starts_with("--") && param_names.len() == 1 {
-        let value = parse_cli_value(&tokens[0], &param_types[0])
-            .with_context(|| format!("Invalid value for `{}`: {}", param_names[0], tokens[0]))?;
-        let mut map = HashMap::new();
-        map.insert(param_names[0].clone(), value);
-        return Ok(map);
-    }
-
-    let mut args = HashMap::new();
-    let mut i = 0;
-    while i < tokens.len() {
-        let token = &tokens[i];
-        if !token.starts_with("--") {
-            // Bare token — not a flag. Skipped here; still in baml.argv.
-            i += 1;
-            continue;
-        }
-        let raw = &token[2..];
-
-        let (key, val_str) = if let Some(eq_pos) = raw.find('=') {
-            (&raw[..eq_pos], &raw[eq_pos + 1..])
-        } else {
-            i += 1;
-            if i >= tokens.len() {
-                anyhow::bail!("Missing value for `--{raw}`");
-            }
-            (raw, tokens[i].as_str())
-        };
-
-        let param_idx = find_param_index(key, param_names)?;
-        let value = parse_cli_value(val_str, &param_types[param_idx])
-            .with_context(|| format!("Invalid value for `--{key}`: {val_str}"))?;
-        args.insert(key.to_string(), value);
-        i += 1;
-    }
-
-    Ok(args)
-}
-
-/// Find parameter index by name, returning a helpful error if not found.
-fn find_param_index(key: &str, param_names: &[String]) -> Result<usize> {
-    param_names.iter().position(|n| n == key).ok_or_else(|| {
-        let available: Vec<&str> = param_names.iter().map(String::as_str).collect();
-        anyhow!(
-            "Unknown parameter `--{key}`.\nAvailable parameters: {}",
-            available.join(", ")
-        )
-    })
-}
-
-/// Extract flag names (`--key value` or `--key=value`) from a token list,
-/// skipping bare (non-flag) tokens. Shared by `parse_auto_cli_args` and
-/// script validation.
-fn extract_flag_keys(tokens: &[String]) -> Vec<String> {
-    let mut keys = Vec::new();
-    let mut i = 0;
-    while i < tokens.len() {
-        let token = &tokens[i];
-        if let Some(raw) = token.strip_prefix("--") {
-            let key = raw.split('=').next().unwrap_or(raw);
-            if !key.is_empty() {
-                keys.push(key.to_string());
-            }
-            if !raw.contains('=') {
-                i += 1; // skip the value token
-            }
-        }
-        i += 1;
-    }
-    keys
-}
-
-/// Convert a CLI string value to a `BexExternalValue` based on the target type.
-fn parse_cli_value(raw: &str, ty: &Ty) -> Result<BexExternalValue> {
-    match ty {
-        Ty::String { .. } => Ok(BexExternalValue::String(raw.to_string())),
-
-        Ty::Int { .. } => {
-            let v: i64 = raw
-                .parse()
-                .with_context(|| format!("Expected integer, got `{raw}`"))?;
-            Ok(BexExternalValue::Int(v))
-        }
-
-        Ty::Float { .. } => {
-            let v: f64 = raw
-                .parse()
-                .with_context(|| format!("Expected float, got `{raw}`"))?;
-            Ok(BexExternalValue::Float(v))
-        }
-
-        Ty::Bool { .. } => match raw {
-            "true" => Ok(BexExternalValue::Bool(true)),
-            "false" => Ok(BexExternalValue::Bool(false)),
-            _ => anyhow::bail!("Expected `true` or `false`, got `{raw}`"),
-        },
-
-        Ty::Null { .. } => {
-            if raw == "null" {
-                Ok(BexExternalValue::Null)
-            } else {
-                anyhow::bail!("Expected `null`, got `{raw}`")
-            }
-        }
-
-        Ty::Optional(inner, _) => {
-            if raw == "null" {
-                Ok(BexExternalValue::Null)
-            } else {
-                parse_cli_value(raw, inner)
-            }
-        }
-
-        Ty::Enum(type_name, _) => Ok(BexExternalValue::Variant {
-            enum_name: type_name.display_name.to_string(),
-            variant_name: raw.to_string(),
-        }),
-
-        // Complex types accept inline JSON as a convenience; anything else must
-        // go through `--json-args`.
-        Ty::Class(..) | Ty::Map { .. } | Ty::List(..) | Ty::Union(..) => {
-            match serde_json::from_str::<serde_json::Value>(raw) {
-                Ok(json) => json_to_external_with_ty(&json, ty),
-                Err(_) => anyhow::bail!(
-                    "Parameter type `{ty}` requires JSON.\n\
-                     Use `--json-args '{{...}}'` or pass a JSON string for this parameter."
-                ),
-            }
-        }
-
-        _ => Ok(BexExternalValue::String(raw.to_string())),
-    }
-}
-
-// ============================================================================
-// JSON argument loading
-// ============================================================================
-
-/// Load JSON from the `--json-args` source: inline string, @file, or - for stdin.
-fn load_json_source(source: &str) -> Result<serde_json::Value> {
-    if source == "-" {
-        let input =
-            std::io::read_to_string(std::io::stdin()).context("Failed to read JSON from stdin")?;
-        serde_json::from_str(&input).context("Invalid JSON from stdin")
-    } else if let Some(path) = source.strip_prefix('@') {
-        let content = std::fs::read_to_string(path)
-            .with_context(|| format!("Failed to read file: {path}"))?;
-        serde_json::from_str(&content).with_context(|| format!("Invalid JSON in file: {path}"))
-    } else {
-        serde_json::from_str(source).context("Invalid inline JSON for --json-args")
-    }
-}
-
-/// Recursively convert a `serde_json::Value` to `BexExternalValue` with no
-/// type information. Used as a fallback when the target type is unknown
-/// (e.g., unknown `--json-args` keys, or nested class fields whose schema
-/// we don't have at this layer). Prefer [`json_to_external_with_ty`] whenever
-/// the target `Ty` is available.
-fn json_to_external(value: &serde_json::Value) -> BexExternalValue {
-    match value {
-        serde_json::Value::Null => BexExternalValue::Null,
-        serde_json::Value::Bool(b) => BexExternalValue::Bool(*b),
-        serde_json::Value::Number(n) => {
-            if let Some(i) = n.as_i64() {
-                BexExternalValue::Int(i)
-            } else {
-                BexExternalValue::Float(n.as_f64().unwrap_or(0.0))
-            }
-        }
-        serde_json::Value::String(s) => BexExternalValue::String(s.clone()),
-        serde_json::Value::Array(items) => BexExternalValue::Array {
-            element_type: Ty::String {
-                attr: Default::default(),
-            },
-            items: items.iter().map(json_to_external).collect(),
-        },
-        serde_json::Value::Object(map) => BexExternalValue::Instance {
-            class_name: String::new(),
-            fields: map
-                .iter()
-                .map(|(k, v)| (k.clone(), json_to_external(v)))
-                .collect(),
-        },
-    }
-}
-
-/// Convert a `serde_json::Value` to a `BexExternalValue` using the target
-/// `Ty` to drive coercion. This is what makes enum JSON become `Variant`,
-/// object JSON become `Instance { class_name }` with the correct name, and
-/// lists/maps carry the declared element/value types.
-///
-/// Class field types are not resolved here (we don't have the class schema
-/// at this layer), so nested class fields fall back to [`json_to_external`].
-fn json_to_external_with_ty(value: &serde_json::Value, ty: &Ty) -> Result<BexExternalValue> {
-    use serde_json::Value as J;
-    match ty {
-        Ty::Optional(inner, _) => {
-            if matches!(value, J::Null) {
-                Ok(BexExternalValue::Null)
-            } else {
-                json_to_external_with_ty(value, inner)
-            }
-        }
-
-        Ty::Null { .. } => match value {
-            J::Null => Ok(BexExternalValue::Null),
-            _ => anyhow::bail!("Expected null, got `{value}`"),
-        },
-
-        Ty::Bool { .. } => match value {
-            J::Bool(b) => Ok(BexExternalValue::Bool(*b)),
-            _ => anyhow::bail!("Expected bool, got `{value}`"),
-        },
-
-        Ty::Int { .. } => match value {
-            J::Number(n) => {
-                if let Some(i) = n.as_i64() {
-                    Ok(BexExternalValue::Int(i))
-                } else if let Some(u) = n.as_u64() {
-                    i64::try_from(u)
-                        .map(BexExternalValue::Int)
-                        .map_err(|_| anyhow!("Integer out of range for int: {u}"))
-                } else {
-                    anyhow::bail!("Expected integer, got `{value}`")
-                }
-            }
-            _ => anyhow::bail!("Expected integer, got `{value}`"),
-        },
-
-        Ty::Float { .. } => match value {
-            J::Number(n) => n
-                .as_f64()
-                .map(BexExternalValue::Float)
-                .ok_or_else(|| anyhow!("Expected float, got `{value}`")),
-            _ => anyhow::bail!("Expected float, got `{value}`"),
-        },
-
-        Ty::String { .. } => match value {
-            J::String(s) => Ok(BexExternalValue::String(s.clone())),
-            _ => anyhow::bail!("Expected string, got `{value}`"),
-        },
-
-        Ty::Enum(type_name, _) => match value {
-            J::String(s) => Ok(BexExternalValue::Variant {
-                enum_name: type_name.display_name.to_string(),
-                variant_name: s.clone(),
-            }),
-            _ => anyhow::bail!(
-                "Expected enum variant name (string) for `{}`, got `{value}`",
-                type_name.display_name
-            ),
-        },
-
-        Ty::Class(type_name, _) => match value {
-            J::Object(map) => Ok(BexExternalValue::Instance {
-                class_name: type_name.display_name.to_string(),
-                fields: map
-                    .iter()
-                    .map(|(k, v)| (k.clone(), json_to_external(v)))
-                    .collect(),
-            }),
-            _ => anyhow::bail!(
-                "Expected object for class `{}`, got `{value}`",
-                type_name.display_name
-            ),
-        },
-
-        Ty::List(inner, _) => match value {
-            J::Array(items) => {
-                let mut converted = Vec::with_capacity(items.len());
-                for item in items {
-                    converted.push(json_to_external_with_ty(item, inner)?);
-                }
-                Ok(BexExternalValue::Array {
-                    element_type: (**inner).clone(),
-                    items: converted,
-                })
-            }
-            _ => anyhow::bail!("Expected array for `{ty}`, got `{value}`"),
-        },
-
-        Ty::Map {
-            key,
-            value: value_ty,
-            ..
-        } => match value {
-            J::Object(map) => {
-                let mut pairs = Vec::with_capacity(map.len());
-                for (k, v) in map {
-                    pairs.push((k.clone(), json_to_external_with_ty(v, value_ty)?));
-                }
-                Ok(BexExternalValue::Map {
-                    key_type: (**key).clone(),
-                    value_type: (**value_ty).clone(),
-                    entries: pairs.into_iter().collect(),
-                })
-            }
-            _ => anyhow::bail!("Expected object for map `{ty}`, got `{value}`"),
-        },
-
-        Ty::Union(variants, _) => coerce_json_union(value, variants),
-
-        // Types we don't specifically coerce: fall back to untyped conversion.
-        _ => Ok(json_to_external(value)),
-    }
-}
-
-/// Best-effort coercion into a union: try each variant and return the first
-/// that succeeds. On failure, surface the last variant's error.
-fn coerce_json_union(value: &serde_json::Value, variants: &[Ty]) -> Result<BexExternalValue> {
-    let mut last_err: Option<anyhow::Error> = None;
-    for variant in variants {
-        match json_to_external_with_ty(value, variant) {
-            Ok(v) => return Ok(v),
-            Err(e) => last_err = Some(e),
-        }
-    }
-    Err(last_err.unwrap_or_else(|| anyhow!("No union variant matched value `{value}`")))
-}
-
-// ============================================================================
-// Output conversion
-// ============================================================================
-
-/// Convert a `BexExternalValue` to a `serde_json::Value` for JSON output.
-fn external_to_json(value: &BexExternalValue) -> serde_json::Value {
-    match value {
-        BexExternalValue::Null => serde_json::Value::Null,
-        BexExternalValue::Int(i) => serde_json::json!(i),
-        BexExternalValue::Float(f) => serde_json::json!(f),
-        BexExternalValue::Bool(b) => serde_json::json!(b),
-        BexExternalValue::String(s) => serde_json::json!(s),
-        BexExternalValue::Array { items, .. } => {
-            serde_json::Value::Array(items.iter().map(external_to_json).collect())
-        }
-        BexExternalValue::Map { entries, .. } => serde_json::Value::Object(
-            entries
-                .iter()
-                .map(|(k, v)| (k.clone(), external_to_json(v)))
-                .collect(),
-        ),
-        BexExternalValue::Instance {
-            class_name, fields, ..
-        } => {
-            let mut map: serde_json::Map<String, serde_json::Value> = fields
-                .iter()
-                .map(|(k, v)| (k.clone(), external_to_json(v)))
-                .collect();
-            if !class_name.is_empty() {
-                map.insert("__type".to_string(), serde_json::json!(class_name));
-            }
-            serde_json::Value::Object(map)
-        }
-        BexExternalValue::Variant {
-            enum_name,
-            variant_name,
-        } => serde_json::json!({ "__type": enum_name, "value": variant_name }),
-        BexExternalValue::Union { value, .. } => external_to_json(value),
-        BexExternalValue::Uint8Array(bytes) => {
-            serde_json::json!(format!("<bytes:{}>", bytes.len()))
-        }
-        _ => serde_json::json!(format!("{value:?}")),
-    }
-}
-
-/// Human-readable formatting for `BexExternalValue`.
-fn format_value(value: &BexExternalValue) -> String {
-    match value {
-        BexExternalValue::Null => "null".to_string(),
-        BexExternalValue::Int(i) => i.to_string(),
-        BexExternalValue::Float(f) => {
-            let s = f.to_string();
-            if s.contains('.') || !f.is_finite() {
-                s
-            } else {
-                format!("{s}.0")
-            }
-        }
-        BexExternalValue::Bool(b) => b.to_string(),
-        BexExternalValue::String(s) => format!("{s:?}"),
-        BexExternalValue::Array { items, .. } => {
-            let inner: Vec<String> = items.iter().map(format_value).collect();
-            format!("[{}]", inner.join(", "))
-        }
-        BexExternalValue::Map { entries, .. } => {
-            let inner: Vec<String> = entries
-                .iter()
-                .map(|(k, v)| format!("{k:?}: {}", format_value(v)))
-                .collect();
-            format!("{{{}}}", inner.join(", "))
-        }
-        BexExternalValue::Instance { class_name, fields } => {
-            let inner: Vec<String> = fields
-                .iter()
-                .map(|(k, v)| format!("{k}: {}", format_value(v)))
-                .collect();
-            if class_name.is_empty() {
-                format!("{{{}}}", inner.join(", "))
-            } else {
-                format!("{class_name} {{{}}}", inner.join(", "))
-            }
-        }
-        BexExternalValue::Variant { variant_name, .. } => variant_name.clone(),
-        BexExternalValue::Union { value, .. } => format_value(value),
-        BexExternalValue::Uint8Array(bytes) => format!("<bytes:{}>", bytes.len()),
-        _ => format!("{value:?}"),
-    }
-}
-
 /// Load expression source from -e argument: inline string, @file, or - for stdin.
 fn load_expression_source(source: &str) -> Result<String> {
     if source == "-" {
@@ -1618,25 +1072,16 @@ fn load_expression_source(source: &str) -> Result<String> {
     }
 }
 
-/// Generate a placeholder example value for a type (used in --help output).
-fn example_value(ty: &Ty) -> &'static str {
-    match ty {
-        Ty::String { .. } => "\"value\"",
-        Ty::Int { .. } => "42",
-        Ty::Float { .. } => "3.14",
-        Ty::Bool { .. } => "true",
-        Ty::Null { .. } => "null",
-        Ty::Enum(..) => "VariantName",
-        _ => "...",
-    }
-}
-
 // ============================================================================
 // Tests
 // ============================================================================
 
 #[cfg(test)]
 mod tests {
+    use baml_exec::{
+        example_value, external_to_json, format_value, json_to_external, json_to_external_with_ty,
+        parse_auto_cli_args, parse_cli_value,
+    };
     use bex_engine::{Ty, TypeName};
 
     use super::*;

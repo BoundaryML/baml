@@ -1,0 +1,26 @@
+// Shared execution helpers for `baml run` and `baml pack`.
+//
+// The run verb (in baml_cli) and the packaged-binary host (baml_pkg_host)
+// share a target-dispatch contract: given a `BexEngine` holding a compiled
+// program, a target function name, and a token stream derived from the
+// user's command line, parse those tokens against the target's typed
+// signature (auto-CLI from BEP-027), invoke the function, and serialize
+// the return value to stdout in the configured `OutputFormat`.
+//
+// This crate owns that contract so run and pack behave identically at the
+// dispatch boundary. Target resolution (scripts, namespace shorthand,
+// hermetic file loading) stays in the caller — pack deliberately doesn't
+// support `[scripts]`, so keeping resolution out of here avoids paying
+// for it in the host binary.
+
+pub mod auto_cli;
+pub mod dispatch;
+pub mod envelope;
+pub mod json_coerce;
+pub mod output;
+
+pub use auto_cli::{extract_flag_keys, parse_auto_cli_args, parse_cli_value, print_target_help};
+pub use dispatch::{DispatchResult, build_args_from_signature, dispatch_target};
+pub use envelope::PackEnvelope;
+pub use json_coerce::{json_to_external, json_to_external_with_ty, load_json_source};
+pub use output::{OutputFormat, example_value, external_to_json, format_value, write_output};

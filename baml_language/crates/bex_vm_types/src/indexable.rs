@@ -13,25 +13,39 @@
 
 use std::marker::PhantomData;
 
+use serde::{Deserialize, Serialize};
+
 use crate::{Object, Value};
 
 // Marker types for different pool kinds
 
 /// Evaluation stack index type.
-#[derive(Copy, Clone, Debug, Default)]
+#[derive(Copy, Clone, Debug, Default, Serialize, Deserialize)]
 pub struct StackKind;
 
 /// Global pool index type.
-#[derive(Copy, Clone, Debug, Default)]
+#[derive(Copy, Clone, Debug, Default, Serialize, Deserialize)]
 pub struct GlobalKind;
 
 /// Object pool index type.
-#[derive(Copy, Clone, Debug, Default)]
+#[derive(Copy, Clone, Debug, Default, Serialize, Deserialize)]
 pub struct ObjectKind;
 
 /// Generic index type that forces a subtype during compilation.
 #[derive(Clone, Copy)]
 pub struct Index<K>(pub(crate) usize, PhantomData<K>);
+
+impl<K> Serialize for Index<K> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        self.0.serialize(serializer)
+    }
+}
+
+impl<'de, K> Deserialize<'de> for Index<K> {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        usize::deserialize(deserializer).map(|v| Self(v, PhantomData))
+    }
+}
 
 impl<K> Index<K> {
     pub fn into_raw(self) -> usize {
@@ -127,6 +141,18 @@ impl<K> std::fmt::Display for Index<K> {
 #[derive(Clone)]
 #[repr(transparent)]
 pub struct Pool<T, K>(pub Vec<T>, PhantomData<K>);
+
+impl<T: Serialize, K> Serialize for Pool<T, K> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        self.0.serialize(serializer)
+    }
+}
+
+impl<'de, T: Deserialize<'de>, K> Deserialize<'de> for Pool<T, K> {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        Vec::<T>::deserialize(deserializer).map(|v| Self(v, PhantomData))
+    }
+}
 
 impl<T, K> Default for Pool<T, K> {
     fn default() -> Self {
@@ -246,7 +272,7 @@ pub type StackIndex = Index<StackKind>;
 pub type GlobalIndex = Index<GlobalKind>;
 
 #[cfg(feature = "heap_debug")]
-#[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash)]
+#[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
 pub struct ObjectIndex {
     raw: usize,
     epoch: u32,

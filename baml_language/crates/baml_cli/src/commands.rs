@@ -72,6 +72,9 @@ pub(crate) enum Commands {
     #[command(about = "Run a BAML function or script", disable_help_flag = true)]
     Run(crate::run_command::RunArgs),
 
+    #[command(about = "Package a BAML program into a standalone executable")]
+    Pack(crate::pack_command::PackArgs),
+
     #[command(about = "Starts a language server", name = "lsp")]
     LanguageServer(crate::lsp::LanguageServerArgs),
     // #[command(about = "Start an interactive REPL for BAML expressions", hide = true)]
@@ -140,6 +143,7 @@ impl RuntimeCli {
                 }
             },
             Commands::Format(args) => args.run(),
+            Commands::Pack(args) => args.run(),
         }
     }
 }

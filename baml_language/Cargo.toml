@@ -43,6 +43,7 @@ baml_compiler_lexer = { path = "crates/baml_compiler_lexer" }
 baml_compiler_parser = { path = "crates/baml_compiler_parser" }
 baml_compiler_syntax = { path = "crates/baml_compiler_syntax" }
 bex_project = { path = "crates/bex_project" }
+baml_exec = { path = "crates/baml_exec" }
 bex_engine = { path = "crates/bex_engine" }
 sys_llm = { path = "crates/sys_llm" }
 sys_ops = { path = "crates/sys_ops" }
@@ -139,6 +140,8 @@ quote = { version = "1" }
 ratatui = "0.29"
 regex = { version = "1.10.2" }
 base64 = "0.22"
+bitcode = { version = "0.6", features = [ "serde" ] }
+libsui = { version = "0.14" }
 reqwest = { version = "0.13.1", default-features = false, features = [
   "json",
   "stream",
@@ -154,13 +157,13 @@ salsa = { git = "https://github.com/salsa-rs/salsa.git", rev = "cdd0b85516a52c18
 serde = { version = "1.0.197", features = [ "derive" ] }
 serde_json = { version = "1.0.113", features = [ "preserve_order" ] }
 similar = { version = "2.4.0", features = [ "inline" ] }
-smol_str = { version = "0.3" }
+smol_str = { version = "0.3", features = [ "serde" ] }
 strsim = { version = "0.11.1" }
 syn = { version = "2", features = [ "full" ] }
 taplo = { version = "0.13" }
 tempfile = { version = "3" }
 time = { version = "0.3", features = [ "formatting", "macros" ] }
-text-size = { version = "1.1" }
+text-size = { version = "1.1", features = [ "serde" ] }
 thiserror = { version = "2.0.0" }
 toml = { version = "0.8" }
 toml_edit = { version = "0.22" }

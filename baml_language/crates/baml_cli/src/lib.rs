@@ -15,6 +15,7 @@ pub(crate) mod format;
 pub(crate) mod generate;
 pub(crate) mod grep_command;
 pub(crate) mod lsp;
+pub(crate) mod pack_command;
 pub(crate) mod project_load;
 pub(crate) mod run_command;
 pub(crate) mod test_command;
