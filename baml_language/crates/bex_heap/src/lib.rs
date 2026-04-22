@@ -64,6 +64,7 @@ mod chunked_vec;
 mod gc;
 mod heap;
 mod heap_debugger;
+mod heap_guard;
 mod tlab;
 
 // Re-export types from bex_external_types for convenience
@@ -72,4 +73,5 @@ pub use bex_external_types::{BexExternalValue, Handle};
 pub use gc::{CollectionLevel, GcStats};
 pub use heap::{BexHeap, DEFAULT_TLAB_SIZE, Generation, HeapStats};
 pub(crate) use heap_debugger::{HeapDebuggerConfig, HeapDebuggerState};
+pub use heap_guard::{ActiveHeapPermit, HeapGuard, HeapPermitManager, InactiveHeapPermit};
 pub use tlab::Tlab;

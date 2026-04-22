@@ -1607,6 +1607,7 @@ dependencies = [
  "bex_vm_types",
  "indexmap 2.13.0",
  "thiserror 2.0.18",
+ "tokio",
 ]
 
 [[package]]

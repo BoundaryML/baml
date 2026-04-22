@@ -70,7 +70,6 @@
 
 mod conversion;
 mod function_call_context;
-mod heap_guard;
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex, atomic::Ordering},
@@ -86,6 +85,7 @@ pub use bex_external_types::{BexExternalValue, EpochGuard, Ty, TypeName, UnionMe
 use bex_heap::BexHeap;
 // Re-export GcStats for users of the engine
 pub use bex_heap::GcStats;
+pub use bex_heap::{ActiveHeapPermit, HeapGuard, HeapPermitManager, InactiveHeapPermit};
 use bex_vm::{BexVm, SpanNotification, VmExecState};
 use bex_vm_types::{FunctionMeta, FunctionOrigin, GlobalPool, HeapPtr, Object, SysOp, Value};
 pub use conversion::test_arg_to_external;
@@ -97,8 +97,6 @@ use thiserror::Error;
 use tokio::sync::mpsc;
 pub use tokio_util::sync::CancellationToken;
 use web_time::{Instant, SystemTime};
-
-pub use crate::heap_guard::{ActiveHeapPermit, HeapGuard, HeapPermitManager, InactiveHeapPermit};
 
 // ============================================================================
 // Engine Types

@@ -7,11 +7,11 @@
 use ::bex_vm_types::ObjectType;
 use baml_type::Literal;
 use bex_external_types::{BexExternalAdt, BexExternalValue, EpochGuard, Ty, UnionMetadata};
-use bex_heap::BexValue;
+use bex_heap::{ActiveHeapPermit, BexValue};
 use bex_vm::BexVm;
 use bex_vm_types::{HeapPtr, Object, Value};
 
-use crate::{BexEngine, EngineError, heap_guard::ActiveHeapPermit};
+use crate::{BexEngine, EngineError};
 
 // ============================================================================
 // VM Value to External Conversion
