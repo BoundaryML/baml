@@ -11,6 +11,9 @@ function user.TypeBuilderFn$render_prompt(from_text: string) -> baml.llm.PromptA
 function user.TypeBuilderFn$build_request(from_text: string) -> baml.http.Request throws never {
   baml.llm.build_request(baml.llm.Client { name: "openai/gpt-4o-mini", client_type: baml.llm.ClientType.Primitive, sub_clients: [], retry: null, counter: 0 }, "TypeBuilderFn", map { "from_text": from_text }) : baml.http.Request
 }
+function user.TypeBuilderFn$build_request_stream(from_text: string) -> baml.http.Request throws never {
+  baml.llm.build_request_stream(baml.llm.Client { name: "openai/gpt-4o-mini", client_type: baml.llm.ClientType.Primitive, sub_clients: [], retry: null, counter: 0 }, "TypeBuilderFn", map { "from_text": from_text }) : baml.http.Request
+}
 function user.TypeBuilderFn$parse(json: string) -> user.Resume throws never {
   baml.llm.parse<T>("TypeBuilderFn", json) : user.Resume
 }
@@ -18,7 +21,7 @@ class user.Resume {
   name: string
 }
 function user.TypeBuilderFn$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<user.Resume, null | user.Resume$stream> throws never {
-  baml.llm.__make_stream(sse, "TypeBuilderFn", baml.llm.Client { name: "openai/gpt-4o-mini", client_type: baml.llm.ClientType.Primitive, sub_clients: [], retry: null, counter: 0 }) : unknown
+  baml.llm.Client { name: "openai/gpt-4o-mini", client_type: baml.llm.ClientType.Primitive, sub_clients: [], retry: null, counter: 0 }.__make_stream(sse, "TypeBuilderFn") : unknown
 }
 class user.Resume$stream {
   name: null | string

@@ -18,13 +18,14 @@ function user.GetUser$build_request() -> baml.http.Request throws never {
   baml.llm.build_request(null, "GetUser", map {  }) : baml.http.Request
   !! 316..397: type mismatch: expected baml.llm.Client, got null
 }
+function user.GetUser$build_request_stream() -> baml.http.Request throws never {
+  baml.llm.build_request_stream(null, "GetUser", map {  }) : baml.http.Request
+  !! 316..397: type mismatch: expected baml.llm.Client, got null
+}
 function user.GetUser$parse(json: string) -> user.MyClass throws never {
   baml.llm.parse<T>("GetUser", json) : user.MyClass
 }
 class user.MyClass$stream {
   name: null | string
   age: null | int
-}
-function user.GetUser$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<user.MyClass, null | user.MyClass$stream> throws never {
-  baml.llm.__make_stream(sse, "GetUser", null) : unknown
 }

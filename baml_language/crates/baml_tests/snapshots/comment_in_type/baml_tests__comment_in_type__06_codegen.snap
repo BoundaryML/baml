@@ -24,6 +24,14 @@ function user.CommentAfterArrow$build_request() -> baml.http.Request {
     return
 }
 
+function user.CommentAfterArrow$build_request_stream() -> baml.http.Request {
+    load_global user.TestClient
+    load_const "CommentAfterArrow"
+    alloc_map 0
+    call baml.llm.build_request_stream
+    return
+}
+
 function user.CommentAfterArrow$parse(json: string) -> string {
     load_const "CommentAfterArrow"
     load_var json
@@ -35,7 +43,9 @@ function user.CommentAfterArrow$parse_stream(sse: baml.http.SseStream) -> baml.l
     load_var sse
     load_const "CommentAfterArrow"
     load_global user.TestClient
-    call baml.llm.parse
+    load_const "__make_stream"
+    load_map_element
+    call_indirect
     return
 }
 
@@ -71,6 +81,18 @@ function user.FunctionWithComments$build_request(a: string, b: int) -> baml.http
     return
 }
 
+function user.FunctionWithComments$build_request_stream(a: string, b: int) -> baml.http.Request {
+    load_global user.TestClient
+    load_const "FunctionWithComments"
+    load_var a
+    load_var b
+    load_const "a"
+    load_const "b"
+    alloc_map 2
+    call baml.llm.build_request_stream
+    return
+}
+
 function user.FunctionWithComments$parse(json: string) -> string {
     load_const "FunctionWithComments"
     load_var json
@@ -82,7 +104,9 @@ function user.FunctionWithComments$parse_stream(sse: baml.http.SseStream) -> bam
     load_var sse
     load_const "FunctionWithComments"
     load_global user.TestClient
-    call baml.llm.parse
+    load_const "__make_stream"
+    load_map_element
+    call_indirect
     return
 }
 

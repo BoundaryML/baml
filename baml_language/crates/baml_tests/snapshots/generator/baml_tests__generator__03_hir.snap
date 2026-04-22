@@ -12,6 +12,9 @@ function user.GetUser() -> user.MyClass  [llm] {
 function user.GetUser$build_request() -> baml.http.Request  [expr] {
   baml.llm.build_request(null, "GetUser", map {  })
 }
+function user.GetUser$build_request_stream() -> baml.http.Request  [expr] {
+  baml.llm.build_request_stream(null, "GetUser", map {  })
+}
 function user.GetUser$parse(json: string) -> user.MyClass  [expr] {
   baml.llm.parse("GetUser", json)
 }

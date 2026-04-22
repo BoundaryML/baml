@@ -23,6 +23,10 @@ function user.BadParam$build_request(x: map<string, int>) -> baml.http.Request t
   baml.llm.build_request(GPT4, "BadParam", map { "x": x }) : baml.http.Request
   !! 655..777: unresolved name: GPT4
 }
+function user.BadParam$build_request_stream(x: map<string, int>) -> baml.http.Request throws never {
+  baml.llm.build_request_stream(GPT4, "BadParam", map { "x": x }) : baml.http.Request
+  !! 655..777: unresolved name: GPT4
+}
 function user.BadParam$parse(json: string) -> string throws never {
   baml.llm.parse<T>("BadParam", json) : string
 }
@@ -36,6 +40,10 @@ function user.BadReturnType$render_prompt() -> baml.llm.PromptAst throws never {
 }
 function user.BadReturnType$build_request() -> baml.http.Request throws never {
   baml.llm.build_request(GPT4, "BadReturnType", map {  }) : baml.http.Request
+  !! 777..897: unresolved name: GPT4
+}
+function user.BadReturnType$build_request_stream() -> baml.http.Request throws never {
+  baml.llm.build_request_stream(GPT4, "BadReturnType", map {  }) : baml.http.Request
   !! 777..897: unresolved name: GPT4
 }
 function user.BadReturnType$parse(json: string) -> map<string, int> throws never {
@@ -52,11 +60,11 @@ class user.NestedGenerics$stream {
   simple: map<string, int>
 }
 function user.BadParam$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<string, null | string> throws never {
-  baml.llm.__make_stream(sse, "BadParam", GPT4) : unknown
+  GPT4.__make_stream(sse, "BadParam") : unknown
   !! 655..777: unresolved name: GPT4
 }
 function user.BadReturnType$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<map<string, int>, map<string, int>> throws never {
-  baml.llm.__make_stream(sse, "BadReturnType", GPT4) : unknown
+  GPT4.__make_stream(sse, "BadReturnType") : unknown
   !! 777..897: unresolved name: GPT4
 }
 type user.BadAlias$stream = map<string, int>

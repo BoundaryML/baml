@@ -370,11 +370,16 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
                 stream_return_types.push((qualified_name, stream_type_expr.clone()));
 
                 // Extract client name from parent's LLM metadata.
+                // $parse_stream requires a client (it calls CLIENT.__make_stream),
+                // so skip generation when no client is specified.
                 let client_name = match &func.declarative_meta {
                     Some(ast::DeclarativeMeta::Llm(llm)) => {
-                        llm.client.as_ref().map(|n| n.as_str().to_string())
+                        match llm.client.as_ref().map(|n| n.as_str().to_string()) {
+                            Some(name) => name,
+                            None => continue,
+                        }
                     }
-                    _ => None,
+                    _ => continue,
                 };
 
                 // Build the companion function.
@@ -414,12 +419,9 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
                     span,
                 };
 
-                // Body: baml.llm.__make_stream(sse, "FuncName", CLIENT)
-                let (body, source_map) = ast::synthesize_llm_make_stream_call(
-                    func.name.as_str(),
-                    client_name.as_deref(),
-                    span,
-                );
+                // Body: CLIENT.__make_stream(sse, "FuncName")
+                let (body, source_map) =
+                    ast::synthesize_llm_make_stream_call(func.name.as_str(), &client_name, span);
 
                 let companion = ast::FunctionDef {
                     name: companion_name,

@@ -21,6 +21,16 @@ function user.HelloWorld$build_request(name: string) -> baml.http.Request {
     return
 }
 
+function user.HelloWorld$build_request_stream(name: string) -> baml.http.Request {
+    load_const null
+    load_const "HelloWorld"
+    load_var name
+    load_const "name"
+    alloc_map 1
+    call baml.llm.build_request_stream
+    return
+}
+
 function user.HelloWorld$parse(json: string) -> string {
     load_const "HelloWorld"
     load_var json
@@ -32,7 +42,9 @@ function user.HelloWorld$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stre
     load_var sse
     load_const "HelloWorld"
     load_const null
-    call baml.llm.parse
+    load_const "__make_stream"
+    load_map_element
+    call_indirect
     return
 }
 

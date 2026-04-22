@@ -17,6 +17,9 @@ function user.LlmFunction(input: string) -> string  [llm] {
 function user.LlmFunction$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(TestClient, "LlmFunction", map { "input": input })
 }
+function user.LlmFunction$build_request_stream(input: string) -> baml.http.Request  [expr] {
+  baml.llm.build_request_stream(TestClient, "LlmFunction", map { "input": input })
+}
 function user.LlmFunction$parse(json: string) -> string  [expr] {
   baml.llm.parse("LlmFunction", json)
 }

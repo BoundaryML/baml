@@ -21,6 +21,16 @@ function user.Ambiguous$build_request(input: string) -> baml.http.Request {
     return
 }
 
+function user.Ambiguous$build_request_stream(input: string) -> baml.http.Request {
+    load_const null
+    load_const "Ambiguous"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request_stream
+    return
+}
+
 function user.Ambiguous$parse(json: string) -> string {
     load_const "Ambiguous"
     load_var json
@@ -32,7 +42,9 @@ function user.Ambiguous$parse_stream(sse: baml.http.SseStream) -> baml.llm.Strea
     load_var sse
     load_const "Ambiguous"
     load_const null
-    call baml.llm.parse
+    load_const "__make_stream"
+    load_map_element
+    call_indirect
     return
 }
 
@@ -66,17 +78,19 @@ function user.AnotherLLM$build_request(input: string) -> baml.http.Request {
     return
 }
 
-function user.AnotherLLM$parse(json: string) -> string {
+function user.AnotherLLM$build_request_stream(input: string) -> baml.http.Request {
+    load_const null
     load_const "AnotherLLM"
-    load_var json
-    call baml.llm.parse
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request_stream
     return
 }
 
-function user.AnotherLLM$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream {
-    load_var sse
+function user.AnotherLLM$parse(json: string) -> string {
     load_const "AnotherLLM"
-    load_const null
+    load_var json
     call baml.llm.parse
     return
 }
@@ -111,6 +125,16 @@ function user.ChainedProcess$build_request(input: string) -> baml.http.Request {
     return
 }
 
+function user.ChainedProcess$build_request_stream(input: string) -> baml.http.Request {
+    load_const null
+    load_const "ChainedProcess"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request_stream
+    return
+}
+
 function user.ChainedProcess$parse(json: string) -> string {
     load_const "ChainedProcess"
     load_var json
@@ -122,7 +146,9 @@ function user.ChainedProcess$parse_stream(sse: baml.http.SseStream) -> baml.llm.
     load_var sse
     load_const "ChainedProcess"
     load_const null
-    call baml.llm.parse
+    load_const "__make_stream"
+    load_map_element
+    call_indirect
     return
 }
 
@@ -156,6 +182,16 @@ function user.ExtractData$build_request(text: string) -> baml.http.Request {
     return
 }
 
+function user.ExtractData$build_request_stream(text: string) -> baml.http.Request {
+    load_const null
+    load_const "ExtractData"
+    load_var text
+    load_const "text"
+    alloc_map 1
+    call baml.llm.build_request_stream
+    return
+}
+
 function user.ExtractData$parse(json: string) -> JsonData {
     load_const "ExtractData"
     load_var json
@@ -167,7 +203,9 @@ function user.ExtractData$parse_stream(sse: baml.http.SseStream) -> baml.llm.Str
     load_var sse
     load_const "ExtractData"
     load_const null
-    call baml.llm.parse
+    load_const "__make_stream"
+    load_map_element
+    call_indirect
     return
 }
 
@@ -201,6 +239,16 @@ function user.LLMAnalyze$build_request(text: string) -> baml.http.Request {
     return
 }
 
+function user.LLMAnalyze$build_request_stream(text: string) -> baml.http.Request {
+    load_const null
+    load_const "LLMAnalyze"
+    load_var text
+    load_const "text"
+    alloc_map 1
+    call baml.llm.build_request_stream
+    return
+}
+
 function user.LLMAnalyze$parse(json: string) -> Analysis {
     load_const "LLMAnalyze"
     load_var json
@@ -212,7 +260,9 @@ function user.LLMAnalyze$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stre
     load_var sse
     load_const "LLMAnalyze"
     load_const null
-    call baml.llm.parse
+    load_const "__make_stream"
+    load_map_element
+    call_indirect
     return
 }
 

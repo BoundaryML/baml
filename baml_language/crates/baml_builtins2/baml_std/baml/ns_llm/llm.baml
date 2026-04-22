@@ -45,6 +45,15 @@ function build_request(client: Client, function_name: string, args: map<string, 
   primitive_client.build_request(specialized_prompt)
 }
 
+function build_request_stream(client: Client, function_name: string, args: map<string, unknown>) -> root.http.Request {
+  let primitive_client = client.to_primitive_client();
+  let specialized_prompt = render_prompt(client, function_name, args);
+
+  primitive_client.build_request_stream(specialized_prompt)
+}
+
+/// UNSAFE: do not call from user code
+///
 /// Used by LLM function companion functions.
 /// Only parses full responses, not partials.
 function parse<T, S>(function_name: string, json: string) -> T {
@@ -54,6 +63,8 @@ function parse<T, S>(function_name: string, json: string) -> T {
   __sap_parse_final(json, cache)
 }
 
+/// UNSAFE: do not call from user code
+///
 /// Call an LLM function and return its full result.
 function call_llm_function<T>(client: Client, function_name: string, args: map<string, unknown>) -> T {
   let jinja_string = get_jinja_template(function_name);
@@ -68,6 +79,8 @@ function call_llm_function<T>(client: Client, function_name: string, args: map<s
   result
 }
 
+/// UNSAFE: do not call from user code
+///
 /// The streaming counterpart of `call_llm_function`.
 ///
 /// Sends the request and returns a `Stream<T, S>` which can be used to consume the data as it arrives.

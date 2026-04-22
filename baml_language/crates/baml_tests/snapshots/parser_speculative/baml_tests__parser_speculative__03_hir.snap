@@ -8,6 +8,9 @@ function user.Ambiguous(input: string) -> string  [llm] {
 function user.Ambiguous$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Ambiguous", map { "input": input })
 }
+function user.Ambiguous$build_request_stream(input: string) -> baml.http.Request  [expr] {
+  baml.llm.build_request_stream(GPT4, "Ambiguous", map { "input": input })
+}
 function user.Ambiguous$parse(json: string) -> string  [expr] {
   baml.llm.parse("Ambiguous", json)
 }
@@ -19,6 +22,9 @@ function user.AnotherLLM(input: string) -> string  [llm] {
 }
 function user.AnotherLLM$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(null, "AnotherLLM", map { "input": input })
+}
+function user.AnotherLLM$build_request_stream(input: string) -> baml.http.Request  [expr] {
+  baml.llm.build_request_stream(null, "AnotherLLM", map { "input": input })
 }
 function user.AnotherLLM$parse(json: string) -> string  [expr] {
   baml.llm.parse("AnotherLLM", json)
@@ -39,6 +45,9 @@ function user.ExtractData(text: string) -> user.JsonData  [llm] {
 function user.ExtractData$build_request(text: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "ExtractData", map { "text": text })
 }
+function user.ExtractData$build_request_stream(text: string) -> baml.http.Request  [expr] {
+  baml.llm.build_request_stream(GPT4, "ExtractData", map { "text": text })
+}
 function user.ExtractData$parse(json: string) -> user.JsonData  [expr] {
   baml.llm.parse("ExtractData", json)
 }
@@ -56,6 +65,9 @@ function user.ChainedProcess(input: string) -> string  [llm] {
 function user.ChainedProcess$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "ChainedProcess", map { "input": input })
 }
+function user.ChainedProcess$build_request_stream(input: string) -> baml.http.Request  [expr] {
+  baml.llm.build_request_stream(GPT4, "ChainedProcess", map { "input": input })
+}
 function user.ChainedProcess$parse(json: string) -> string  [expr] {
   baml.llm.parse("ChainedProcess", json)
 }
@@ -67,6 +79,9 @@ function user.LLMAnalyze(text: string) -> user.Analysis  [llm] {
 }
 function user.LLMAnalyze$build_request(text: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "LLMAnalyze", map { "text": text })
+}
+function user.LLMAnalyze$build_request_stream(text: string) -> baml.http.Request  [expr] {
+  baml.llm.build_request_stream(GPT4, "LLMAnalyze", map { "text": text })
 }
 function user.LLMAnalyze$parse(json: string) -> user.Analysis  [expr] {
   baml.llm.parse("LLMAnalyze", json)
