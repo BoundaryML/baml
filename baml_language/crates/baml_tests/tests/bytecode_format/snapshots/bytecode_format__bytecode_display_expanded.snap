@@ -393,7 +393,7 @@ function testing.TestRegistry.expand_set(self: null, name: string) -> (testing.S
 
   164   49    load_var 12            (sub)
         50    load_var 2             (name)
-        51    call 154               (testing.TestRegistry.expand_set)
+        51    call 155               (testing.TestRegistry.expand_set)
         52    jump +49               (to 101)
 
   144   53    load_var 3             (_3)
@@ -455,7 +455,7 @@ function testing.TestRegistry.expand_set(self: null, name: string) -> (testing.S
         98    pop 1                  
 
   157   99    load_var 1             (self)
-        100   call 162               (testing.TestRegistry.serialize)
+        100   call 163               (testing.TestRegistry.serialize)
         101   return                 
 }
 
@@ -533,7 +533,7 @@ function testing.TestRegistry.run_test(self: null, name: string) -> testing.Test
 
   135   49   load_var 9             (sub)
         50   load_var 2             (name)
-        51   call 164               (testing.TestRegistry.run_test)
+        51   call 165               (testing.TestRegistry.run_test)
         52   jump +21               (to 73)
 
   124   53   load_var 3             (_3)
@@ -558,7 +558,7 @@ function testing.TestRegistry.run_test(self: null, name: string) -> testing.Test
         69   load_field 1           (body)
         70   load_var 5             (t)
         71   load_field 2           (runner)
-        72   call 163               (testing.run_test)
+        72   call 164               (testing.run_test)
         73   return                 
 }
 
@@ -635,7 +635,7 @@ function testing.TestRegistry.serialize(self: null) -> (testing.SerializedTest |
         60   store_var 10            (_25)
 
   110   61   load_var 9              (sub)
-        62   call 162                (testing.TestRegistry.serialize)
+        62   call 163                (testing.TestRegistry.serialize)
         63   store_var 11            (_26)
 
   108   64   load_var 2              (items)
