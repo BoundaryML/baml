@@ -10,6 +10,12 @@ fn main() -> Result<()> {
 
     let argv: Vec<String> = std::env::args().collect();
 
+    // `run_cli` returns an `ExitCode` variant describing how the verb
+    // finished. The real process exit is deferred here so `run_cli` and
+    // its callees stay testable (no inline `std::process::exit`).
     let exit_code = baml_cli::run_cli(argv)?;
-    std::process::exit(exit_code.into());
+    match exit_code {
+        baml_cli::ExitCode::Success => Ok(()),
+        other => std::process::exit(other.into()),
+    }
 }

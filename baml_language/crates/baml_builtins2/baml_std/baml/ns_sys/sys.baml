@@ -10,6 +10,10 @@ function panic(message: string) -> never {
   $rust_function
 }
 
+function exit(code: int) -> never {
+  $rust_function
+}
+
 function now_ms() -> int {
   $rust_function
 }

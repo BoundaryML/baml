@@ -2128,6 +2128,8 @@ fn baml.net.Socket.read = builtin(io)
 
 fn baml.sys.argv = builtin(vm)
 
+fn baml.sys.exit = builtin(vm)
+
 fn baml.sys.now_ms = builtin(vm)
 
 fn baml.sys.panic = builtin(vm)

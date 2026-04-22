@@ -26,6 +26,7 @@ fn is_fallible(path: &str) -> bool {
         || matches!(
             path,
             "baml.sys.panic"
+                | "baml.sys.exit"
                 | "baml.Uint8Array.zeroes"
                 | "baml.Uint8Array.from_array"
                 | "baml.Uint8Array.from_hex"

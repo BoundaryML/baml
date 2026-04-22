@@ -374,6 +374,9 @@ class baml.panics.AssertionFailed {
 class baml.panics.DivisionByZero {
   dividend: int
 }
+class baml.panics.Exit {
+  code: int
+}
 class baml.panics.IndexOutOfBounds {
   index: int
   length: int
@@ -390,7 +393,7 @@ class baml.panics.Unreachable {
 class baml.panics.UserPanic {
   message: string
 }
-type baml.panics.Panic = baml.panics.DivisionByZero | baml.panics.IndexOutOfBounds | baml.panics.MapKeyNotFound | baml.panics.StackOverflow | baml.panics.AssertionFailed | baml.panics.Unreachable | baml.panics.UserPanic | baml.panics.AllocFailure
+type baml.panics.Panic = baml.panics.DivisionByZero | baml.panics.IndexOutOfBounds | baml.panics.MapKeyNotFound | baml.panics.StackOverflow | baml.panics.AssertionFailed | baml.panics.Unreachable | baml.panics.UserPanic | baml.panics.Exit | baml.panics.AllocFailure
 
 --- <builtin>/baml/ns_stream/stream.baml ---
 class baml.stream.StreamFinished {
@@ -400,6 +403,7 @@ class baml.stream.StreamNoYield {
 
 --- <builtin>/baml/ns_sys/sys.baml ---
 function baml.sys.argv() -> string[]  [builtin]
+function baml.sys.exit(code: int) -> never  [builtin]
 function baml.sys.now_ms() -> int  [builtin]
 function baml.sys.panic(message: string) -> never  [builtin]
 function baml.sys.shell(command: string) -> string  [builtin]

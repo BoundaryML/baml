@@ -32,6 +32,19 @@ pub enum DispatchResult {
     Ok,
     /// Target raised an error (already printed to stderr).
     TargetError,
+    /// Target called `baml.sys.exit(code)`. The caller is responsible for
+    /// terminating the process with this code (clamped to the shell's
+    /// range as appropriate — typically 0..=255 on Unix).
+    Exit(i64),
+}
+
+/// Narrow a `baml.sys.exit(code)` value (BAML `int` = `i64`) to the `i32`
+/// that `std::process::exit` and C's `exit(int)` take. Out-of-range values
+/// saturate at `i32::MAX` / `i32::MIN` rather than wrapping — the shell
+/// will narrow further (typically to 8 bits on Unix), matching the C
+/// contract users already know.
+pub fn clamp_exit_code(code: i64) -> i32 {
+    i32::try_from(code).unwrap_or(if code < 0 { i32::MIN } else { i32::MAX })
 }
 
 /// Invoke `target_name` with parameters drawn from `cli_tokens` (and
@@ -79,6 +92,7 @@ pub async fn dispatch_target(
             write_output(&value, output_format);
             Ok(DispatchResult::Ok)
         }
+        Err(bex_engine::EngineError::Exit { code }) => Ok(DispatchResult::Exit(code)),
         Err(e) => {
             eprintln!("Error: {e}");
             Ok(DispatchResult::TargetError)

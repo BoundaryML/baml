@@ -89,6 +89,7 @@ namespace baml.panics:
   class AllocFailure { methods: [] }
   class AssertionFailed { methods: [] }
   class DivisionByZero { methods: [] }
+  class Exit { methods: [] }
   class IndexOutOfBounds { methods: [] }
   class MapKeyNotFound { methods: [] }
   type Panic
@@ -100,6 +101,7 @@ namespace baml.stream:
   class StreamNoYield { methods: [] }
 namespace baml.sys:
   function argv
+  function exit
   function now_ms
   function panic
   function shell

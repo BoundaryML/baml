@@ -1280,6 +1280,7 @@ impl BexVm {
                 let msg = self.alloc_string(message);
                 (PanicClass::UserPanic, vec![msg])
             }
+            VmPanic::Exit { code } => (PanicClass::Exit, vec![Value::Int(code)]),
             VmPanic::AllocFailure { message } => {
                 let msg = self.alloc_string(message);
                 (PanicClass::AllocFailure, vec![msg])

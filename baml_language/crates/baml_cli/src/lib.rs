@@ -40,6 +40,9 @@ pub enum ExitCode {
     TestFailure,
     TestCancelled,
     NoTestsRun,
+    /// User code requested a specific exit code via `baml.sys.exit(n)`.
+    /// Already narrowed to i32 (the `std::process::exit` contract).
+    Exit(i32),
 }
 
 impl From<ExitCode> for i32 {
@@ -57,25 +60,8 @@ impl From<ExitCode> for i32 {
             ExitCode::Other | ExitCode::InvalidArgs => 4,
             // No tests were found
             ExitCode::NoTestsRun => 5,
-        }
-    }
-}
-
-impl From<ExitCode> for u32 {
-    fn from(exit_code: ExitCode) -> Self {
-        match exit_code {
-            // All tests passed
-            ExitCode::Success => 0,
-            // All tests completed, but some required human evaluation
-            ExitCode::HumanEvalRequired => 1,
-            // Some tests failed
-            ExitCode::TestFailure => 2,
-            // Execution was interrupted
-            ExitCode::TestCancelled => 3,
-            // Some internal error occurred
-            ExitCode::Other | ExitCode::InvalidArgs => 4,
-            // No tests were found
-            ExitCode::NoTestsRun => 5,
+            // `baml.sys.exit(n)` — the user's exact code, already narrowed.
+            ExitCode::Exit(n) => n,
         }
     }
 }

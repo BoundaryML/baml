@@ -20,7 +20,7 @@ pub mod json_coerce;
 pub mod output;
 
 pub use auto_cli::{extract_flag_keys, parse_auto_cli_args, parse_cli_value, print_target_help};
-pub use dispatch::{DispatchResult, build_args_from_signature, dispatch_target};
+pub use dispatch::{DispatchResult, build_args_from_signature, clamp_exit_code, dispatch_target};
 pub use envelope::PackEnvelope;
 pub use json_coerce::{json_to_external, json_to_external_with_ty, load_json_source};
 pub use output::{OutputFormat, example_value, external_to_json, format_value, write_output};

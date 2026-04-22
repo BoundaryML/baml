@@ -12,7 +12,7 @@ use baml_db::{
     baml_compiler2_emit,
 };
 use baml_exec::{
-    OutputFormat, build_args_from_signature, extract_flag_keys, load_json_source,
+    OutputFormat, build_args_from_signature, clamp_exit_code, extract_flag_keys, load_json_source,
     print_target_help as baml_exec_print_target_help, write_output,
 };
 use baml_project::ProjectDatabase;
@@ -352,6 +352,14 @@ impl RunArgs {
                 write_output(&value, self.output);
                 Ok(crate::ExitCode::Success)
             }
+            Err(bex_engine::EngineError::Exit { code }) => {
+                // `baml.sys.exit(code)` from user code — narrow to i32
+                // (the C `exit(int)` contract) and let `main` terminate.
+                // Returning rather than `std::process::exit`-ing inline
+                // keeps this path testable (tests can match on the
+                // `ExitCode::Exit(n)` without killing their process).
+                Ok(crate::ExitCode::Exit(clamp_exit_code(code)))
+            }
             Err(e) => {
                 eprintln!("Error: {e}");
                 Ok(crate::ExitCode::Other)
@@ -557,6 +565,9 @@ impl RunArgs {
             Ok(value) => {
                 write_output(&value, self.output);
                 Ok(crate::ExitCode::Success)
+            }
+            Err(bex_engine::EngineError::Exit { code }) => {
+                Ok(crate::ExitCode::Exit(clamp_exit_code(code)))
             }
             Err(e) => {
                 eprintln!("Error: {e}");
@@ -3514,5 +3525,132 @@ hidden = "--function $init_test"
                 .is_some_and(|c| c.is_ascii_digit()),
             "rendered warning is missing a line number after the file name, got:\n{rendered}"
         );
+    }
+
+    // ========================================================================
+    // baml.sys.exit(code)
+    //
+    // An uncaught `baml.sys.exit(n)` surfaces at the engine boundary as
+    // `EngineError::Exit { code: n }`; `RunArgs::run()` maps that to
+    // `ExitCode::Exit(n)` (clamped to `i32`) so `main` can propagate it
+    // via `std::process::exit`. Caught via `_: baml.panics.Exit`, it
+    // behaves like any other catchable panic.
+    //
+    // These tests drive `args.run()` directly — they never spawn a child
+    // or call `std::process::exit`, so the test process stays alive.
+    // ========================================================================
+
+    /// Uncaught `baml.sys.exit(7)` → `ExitCode::Exit(7)`.
+    #[test]
+    fn test_sys_exit_uncaught_propagates_code_e2e() {
+        let (_tmp, args) = e2e_project(
+            r#"
+function main() -> string {
+  baml.sys.exit(7)
+  "never"
+}
+"#,
+        );
+        match args.run().unwrap() {
+            crate::ExitCode::Exit(n) => assert_eq!(n, 7),
+            other => panic!("expected ExitCode::Exit(7), got {other:?}"),
+        }
+    }
+
+    /// `baml.sys.exit(0)` is distinct from normal `Success` — the user
+    /// asked for exit specifically, so the Exit variant carries it even
+    /// though the numeric code happens to match `Success`. Keeps the
+    /// "ran cleanly" vs "user-requested zero" cases distinguishable.
+    #[test]
+    fn test_sys_exit_zero_is_still_exit_variant_e2e() {
+        let (_tmp, args) = e2e_project(
+            r#"
+function main() -> string {
+  baml.sys.exit(0)
+  "never"
+}
+"#,
+        );
+        match args.run().unwrap() {
+            crate::ExitCode::Exit(0) => {}
+            other => panic!("expected ExitCode::Exit(0), got {other:?}"),
+        }
+    }
+
+    /// Negative codes propagate unchanged (they fit in i32).
+    #[test]
+    fn test_sys_exit_negative_code_propagates_e2e() {
+        let (_tmp, args) = e2e_project(
+            r#"
+function main() -> string {
+  baml.sys.exit(-1)
+  "never"
+}
+"#,
+        );
+        match args.run().unwrap() {
+            crate::ExitCode::Exit(-1) => {}
+            other => panic!("expected ExitCode::Exit(-1), got {other:?}"),
+        }
+    }
+
+    /// Values outside `i32` saturate rather than wrapping — matches the
+    /// C `exit(int)` contract users already expect.
+    #[test]
+    fn test_sys_exit_out_of_range_saturates_e2e() {
+        let (_tmp, args) = e2e_project(
+            r#"
+function main() -> string {
+  baml.sys.exit(9999999999)
+  "never"
+}
+"#,
+        );
+        match args.run().unwrap() {
+            crate::ExitCode::Exit(n) => assert_eq!(n, i32::MAX),
+            other => panic!("expected ExitCode::Exit(i32::MAX), got {other:?}"),
+        }
+    }
+
+    /// Catching `baml.panics.Exit` stops termination: program completes
+    /// normally, `ExitCode::Success`. This is the escape hatch that lets
+    /// test wrappers and cleanup handlers intercept an exit.
+    #[test]
+    fn test_sys_exit_is_catchable_via_baml_panics_exit_e2e() {
+        let (_tmp, args) = e2e_project(
+            r#"
+function DoExit() -> string {
+  baml.sys.exit(7)
+  "never"
+}
+
+function main() -> string {
+  DoExit() catch (e) {
+    _: baml.panics.Exit => "intercepted"
+  }
+}
+"#,
+        );
+        assert!(matches!(args.run().unwrap(), crate::ExitCode::Success));
+    }
+
+    /// Exit from a nested callee propagates all the way out through the
+    /// call stack — not just from top-level main.
+    #[test]
+    fn test_sys_exit_from_nested_call_propagates_e2e() {
+        let (_tmp, args) = e2e_project(
+            r#"
+function Inner() -> int {
+  baml.sys.exit(3)
+  0
+}
+function Outer() -> int { Inner() }
+function main() -> int { Outer() }
+"#,
+        );
+        match args.run().unwrap() {
+            crate::ExitCode::Exit(3) => {}
+            other => panic!("expected ExitCode::Exit(3), got {other:?}"),
+        }
     }
 }

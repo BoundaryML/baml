@@ -22,7 +22,9 @@
 
 use std::{process::ExitCode, sync::Arc};
 
-use baml_exec::{DispatchResult, PackEnvelope, dispatch_target, print_target_help};
+use baml_exec::{
+    DispatchResult, PackEnvelope, clamp_exit_code, dispatch_target, print_target_help,
+};
 use bex_engine::BexEngine;
 use sys_native::SysOpsExt;
 
@@ -130,6 +132,10 @@ fn main() -> ExitCode {
     match result {
         Ok(DispatchResult::Ok) => ExitCode::SUCCESS,
         Ok(DispatchResult::TargetError) => ExitCode::FAILURE,
+        // `baml.sys.exit(code)`: narrow to `i32` (the `std::process::exit`
+        // contract) and terminate. Further OS-specific narrowing — the
+        // low 8 bits on Unix — is the shell's problem.
+        Ok(DispatchResult::Exit(code)) => std::process::exit(clamp_exit_code(code)),
         Err(e) => {
             eprintln!("error: {e}");
             ExitCode::FAILURE

@@ -211,6 +211,13 @@ pub enum EngineError {
         trace: Vec<bex_vm::StackFrame>,
     },
 
+    /// Clean process-termination request from `baml.sys.exit(code)`.
+    /// The caller is expected to honor this as the process exit code.
+    /// BAML `int` is `i64`, so the signal carries the full value; the
+    /// caller clamps into its shell's range (typically 0..=255 on Unix).
+    #[error("baml.sys.exit({code})")]
+    Exit { code: i64 },
+
     #[error("Cannot convert object of type {type_name}")]
     CannotConvert { type_name: String },
 
@@ -246,6 +253,29 @@ fn format_vm_internal_error(
     );
     write!(out, "VM internal error: {err}").unwrap();
     out
+}
+
+/// Recognize an uncaught `baml.panics.Exit { code }` and pull its `code`
+/// field out. Returns `None` for any other value — the caller should fall
+/// back to the normal unhandled-throw path.
+///
+/// Exit lives in the regular panic class hierarchy so BAML code can catch
+/// it (like Python's `SystemExit`); at the engine boundary we recognize it
+/// by class tag rather than routing it through a separate `VmError`
+/// variant, so the VM's unwinder stays ignorant of which panic classes
+/// are "special" and the special-casing lives in exactly one place —
+/// here. The class FQN comes from `PanicClass` itself so this stays in
+/// sync with `panics.baml` without a hardcoded string literal.
+fn extract_exit_code(value: &BexExternalValue) -> Option<i64> {
+    match value {
+        BexExternalValue::Instance {
+            class_name, fields, ..
+        } if class_name == bex_vm_types::PanicClass::Exit.fqn() => match fields.get("code")? {
+            BexExternalValue::Int(code) => Some(*code),
+            _ => None,
+        },
+        _ => None,
+    }
 }
 
 fn format_unhandled_throw(value: &BexExternalValue, trace: &[bex_vm::StackFrame]) -> String {
@@ -1239,6 +1269,13 @@ impl BexEngine {
                     } else {
                         self.vm_value_to_owned(&value)
                     };
+                    // `baml.panics.Exit { code }` escaping all handlers is
+                    // the clean-termination path — surface it as an Exit
+                    // rather than a generic unhandled throw so the host
+                    // maps it to a process exit code.
+                    if let Some(code) = extract_exit_code(&external) {
+                        return Err(EngineError::Exit { code });
+                    }
                     return Err(EngineError::UnhandledThrow {
                         value: Box::new(external),
                         trace,
@@ -1248,6 +1285,9 @@ impl BexEngine {
                     // Internal throw that escaped without unwinding — treat as
                     // unhandled with no trace.
                     let external = self.vm_value_to_owned(&value);
+                    if let Some(code) = extract_exit_code(&external) {
+                        return Err(EngineError::Exit { code });
+                    }
                     return Err(EngineError::UnhandledThrow {
                         value: Box::new(external),
                         trace: Vec::new(),

@@ -30,6 +30,24 @@ pub enum VmPanic {
     #[error("baml.sys.panic: {message}")]
     UserPanic { message: String },
 
+    /// A clean process-termination request from `baml.sys.exit(code)`.
+    ///
+    /// Catchable in user code as `baml.panics.Exit` — patterned after
+    /// Python's `SystemExit`: code can intercept it for cleanup or
+    /// testing, and if nothing catches it the engine surfaces the code
+    /// as `EngineError::Exit` and the host terminates with it.
+    ///
+    /// BAML `int` is `i64`, so the signal carries the full value the
+    /// user wrote; the host narrows to `i32` for `std::process::exit`.
+    /// Silent narrowing from `i64` to `i32` (and then to whatever the
+    /// shell actually observes — typically only the low 8 bits on Unix)
+    /// is annoying, but it is exactly what C's `exit(int)` does: the
+    /// portable, OS-defined truth is that the shell only sees a small
+    /// integer, so we defer to the platform's convention rather than
+    /// surfacing our own errors for out-of-range codes.
+    #[error("baml.sys.exit({code})")]
+    Exit { code: i64 },
+
     /// The graceful-ish way to handle potential OOM errors, instead of hard-crashing.
     #[error("memory allocation failed: {message}")]
     AllocFailure { message: String },
