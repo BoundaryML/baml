@@ -423,7 +423,7 @@ fn bex_value_to_json_impl(value: &BexExternalValue, depth: usize) -> serde_json:
 /// - Class: `Person { name: "Alice", age: 30 }`
 /// - Array: `[1, 2, 3]`
 /// - Map: `{key: "value"}`
-/// - Enum: `Active`
+/// - Enum: `Status.Ready` (`EnumName.Variant`)
 /// - Union: shows the inner value
 pub fn bex_value_to_debug_string(value: &BexExternalValue) -> String {
     bex_value_to_debug_impl(value, 0)
@@ -445,7 +445,7 @@ fn bex_value_to_debug_impl(value: &BexExternalValue, depth: usize) -> String {
                 f.to_string()
             }
         }
-        BexExternalValue::String(s) => format!("\"{s}\""),
+        BexExternalValue::String(s) => format!("{s:?}"),
         BexExternalValue::Array { items, .. } => {
             if items.is_empty() {
                 "[]".to_string()
@@ -555,6 +555,37 @@ mod tests {
         assert_eq!(
             bex_value_to_debug_string(&value),
             "Person { name: \"Alice\\nBob\", metadata: {age: 30} }"
+        );
+    }
+
+    #[test]
+    fn test_string_debug_escapes_special_characters() {
+        // Strings must escape newlines, tabs, carriage returns, and backslashes
+        // so that single-line consumers (stderr logs, playground output) do not
+        // break across lines or silently drop characters.
+        assert_eq!(
+            bex_value_to_debug_string(&bex_external_types::BexExternalValue::String(
+                "line1\nline2".into()
+            )),
+            "\"line1\\nline2\""
+        );
+        assert_eq!(
+            bex_value_to_debug_string(&bex_external_types::BexExternalValue::String(
+                "tab\there".into()
+            )),
+            "\"tab\\there\""
+        );
+        assert_eq!(
+            bex_value_to_debug_string(&bex_external_types::BexExternalValue::String(
+                "back\\slash".into()
+            )),
+            "\"back\\\\slash\""
+        );
+        assert_eq!(
+            bex_value_to_debug_string(&bex_external_types::BexExternalValue::String(
+                "quote\"inside".into()
+            )),
+            "\"quote\\\"inside\""
         );
     }
 

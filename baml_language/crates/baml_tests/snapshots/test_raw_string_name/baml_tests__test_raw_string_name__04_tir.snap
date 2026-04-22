@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 36521
 ---
 === TIR2 ===
 function user.$init_test_24(registry: testing.TestCollector) -> ? throws never {
@@ -10,7 +9,7 @@ function user.$init_test_24(registry: testing.TestCollector) -> ? throws never {
         {
           assert.is_true(true)
         }
-    registry.register_test("has "quotes" inside", () -> void { ... }, null) : void
+    registry.register_test("has \"quotes\" inside", () -> void { ... }, null) : void
       () -> void { ... } : () -> void throws unknown
         {
           assert.is_true(true)

@@ -31,8 +31,10 @@ use text_size::{TextRange, TextSize};
 /// "hello world"  → Quote, Word("hello"), Word("world"), Quote
 /// ```
 /// The parser collects all tokens between quotes, preserving enough raw text
-/// for later stages to decode escape sequences. A backslash immediately before
-/// a quote keeps that quote inside the string literal instead of terminating it.
+/// for later stages to decode escape sequences. An unescaped quote terminates
+/// the string; a quote preceded by an odd number of consecutive backslashes
+/// stays inside the literal (so `"a\""` is one token, but `"a\\"` terminates
+/// at the second quote because the backslash is itself escaped).
 ///
 /// This keeps the lexer simple, context-free, and fast.
 #[derive(Logos, Debug, PartialEq, Eq, Clone, Copy)]

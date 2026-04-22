@@ -319,4 +319,36 @@ mod tests {
             "[1970-01-01T00:00:01.234Z] INFO {status: State.Ready, user: Person { name: \"Alice\" }}"
         );
     }
+
+    #[test]
+    fn test_format_log_event_for_stderr_escapes_newlines() {
+        // Log payloads that contain literal newlines/tabs must render on a
+        // single line, otherwise stderr log readers see the payload split
+        // across multiple lines.
+        let span_id = SpanId::new();
+        let event = RuntimeEvent {
+            ctx: SpanContext {
+                span_id: span_id.clone(),
+                parent_span_id: None,
+                root_span_id: span_id,
+            },
+            call_stack: vec![],
+            timestamp: web_time::UNIX_EPOCH + Duration::from_millis(0),
+            event: EventKind::Log(bex_events::LogEvent {
+                level: "info".into(),
+                data: bex_external_types::BexExternalValue::String("first\nsecond\tthird".into()),
+                source: None,
+            }),
+        };
+
+        let line = format_log_event_for_stderr(&event).expect("log events should render");
+        assert!(
+            !line.contains('\n'),
+            "stderr log line must not contain raw newlines: {line:?}"
+        );
+        assert!(
+            line.contains("\\n") && line.contains("\\t"),
+            "newline/tab should be escaped in output: {line:?}"
+        );
+    }
 }

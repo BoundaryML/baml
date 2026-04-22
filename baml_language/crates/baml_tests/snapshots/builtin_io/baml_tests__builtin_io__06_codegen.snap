@@ -1,12 +1,13 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 4217
 ---
 function user.Append() -> int {
     load_const "log.txt"
     load_const "a"
     dispatch_future baml.fs.open
     await
-    load_const "line\\n"
+    load_const "line\n"
     dispatch_future baml.fs.File.write
     await
     return
@@ -19,7 +20,7 @@ function user.AppendAndRead() -> string {
     await
     store_var f
     load_var f
-    load_const "line\\n"
+    load_const "line\n"
     dispatch_future baml.fs.File.write
     await
     pop 1

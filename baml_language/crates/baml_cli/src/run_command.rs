@@ -2926,7 +2926,10 @@ mod tests {
             names.contains(&"Summarize$build_request".to_string()),
             "got: {names:?}"
         );
-        assert!(names.contains(&"Summarize$parse".to_string()), "got: {names:?}");
+        assert!(
+            names.contains(&"Summarize$parse".to_string()),
+            "got: {names:?}"
+        );
     }
 
     #[test]

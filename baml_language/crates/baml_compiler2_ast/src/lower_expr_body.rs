@@ -2997,32 +2997,6 @@ fn is_expr_node_kind(kind: SyntaxKind) -> bool {
     )
 }
 
-/// Decode common escape sequences in a quoted string literal body.
-fn unescape_string_literal(input: &str) -> String {
-    let mut result = String::with_capacity(input.len());
-    let mut chars = input.chars();
-    while let Some(c) = chars.next() {
-        if c == '\\' {
-            match chars.next() {
-                Some('n') => result.push('\n'),
-                Some('t') => result.push('\t'),
-                Some('r') => result.push('\r'),
-                Some('0') => result.push('\0'),
-                Some('\\') => result.push('\\'),
-                Some('"') => result.push('"'),
-                Some(other) => {
-                    result.push('\\');
-                    result.push(other);
-                }
-                None => result.push('\\'),
-            }
-        } else {
-            result.push(c);
-        }
-    }
-    result
-}
-
 /// Strip string delimiters from raw token text, decoding escape sequences for
 /// regular quoted strings and preserving raw string contents verbatim.
 fn strip_string_delimiters(text: &str) -> String {
@@ -3038,7 +3012,7 @@ fn strip_string_delimiters(text: &str) -> String {
     }
 
     if text.starts_with('"') && text.ends_with('"') && text.len() >= 2 {
-        unescape_string_literal(&text[1..text.len() - 1])
+        crate::unescape_string_literal(&text[1..text.len() - 1])
     } else {
         text.to_string()
     }

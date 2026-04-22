@@ -112,32 +112,6 @@ impl std::fmt::Display for LoweringError {
 
 impl std::error::Error for LoweringError {}
 
-/// Decode common escape sequences in a quoted string literal body.
-fn unescape_string_literal(s: &str) -> String {
-    let mut result = String::with_capacity(s.len());
-    let mut chars = s.chars();
-    while let Some(c) = chars.next() {
-        if c == '\\' {
-            match chars.next() {
-                Some('n') => result.push('\n'),
-                Some('t') => result.push('\t'),
-                Some('r') => result.push('\r'),
-                Some('0') => result.push('\0'),
-                Some('\\') => result.push('\\'),
-                Some('"') => result.push('"'),
-                Some(other) => {
-                    result.push('\\');
-                    result.push(other);
-                }
-                None => result.push('\\'),
-            }
-        } else {
-            result.push(c);
-        }
-    }
-    result
-}
-
 /// Parse a string attribute value, handling both regular strings (`"text"`)
 /// and raw strings (`#"text"#`, `##"text"##`, etc.).
 ///
@@ -145,11 +119,15 @@ fn unescape_string_literal(s: &str) -> String {
 fn parse_string_attr_value(raw: &str) -> Option<String> {
     // Double-quoted string: "text"
     if raw.starts_with('"') && raw.ends_with('"') && raw.len() >= 2 {
-        return Some(unescape_string_literal(&raw[1..raw.len() - 1]));
+        return Some(baml_compiler2_ast::unescape_string_literal(
+            &raw[1..raw.len() - 1],
+        ));
     }
     // Single-quoted string: 'text'
     if raw.starts_with('\'') && raw.ends_with('\'') && raw.len() >= 2 {
-        return Some(unescape_string_literal(&raw[1..raw.len() - 1]));
+        return Some(baml_compiler2_ast::unescape_string_literal(
+            &raw[1..raw.len() - 1],
+        ));
     }
 
     // Raw string: #"text"#, ##"text"##, etc.
