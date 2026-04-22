@@ -543,7 +543,7 @@ impl TypeCtx {
             return Ok((AttrLiteral::Never, AttrLiteral::Never));
         }
 
-        if self.field_type_is_nullable(field_type, recursion_depth)? {
+        if self.field_type_is_nullable(field_type)? {
             return Ok((AttrLiteral::Null, AttrLiteral::Null));
         }
 
@@ -592,23 +592,21 @@ impl TypeCtx {
         Ok(field_attrs)
     }
 
-    fn field_type_is_nullable(
+    fn field_type_is_nullable(&self, field_type: &::baml_type::Ty) -> Result<bool, ConvertError> {
+        self.field_type_is_nullable_inner(field_type, &mut HashSet::new())
+    }
+
+    fn field_type_is_nullable_inner(
         &self,
         field_type: &::baml_type::Ty,
-        recursion_depth: usize,
+        aliases_in_progress: &mut HashSet<TypeName>,
     ) -> Result<bool, ConvertError> {
-        if recursion_depth > 16 {
-            return Err(ConvertError::RecursionDepthExceeded(
-                "class field nullability derivation",
-            ));
-        }
-
         Ok(match field_type {
             ::baml_type::Ty::Null { .. } | ::baml_type::Ty::Optional(..) => true,
             ::baml_type::Ty::Union(members, ..) => {
                 let mut is_nullable = false;
                 for member in members {
-                    if self.field_type_is_nullable(member, recursion_depth + 1)? {
+                    if self.field_type_is_nullable_inner(member, aliases_in_progress)? {
                         is_nullable = true;
                         break;
                     }
@@ -616,10 +614,19 @@ impl TypeCtx {
                 is_nullable
             }
             ::baml_type::Ty::TypeAlias(name, ..) => {
-                let Some(alias_ty) = self.type_alias_definitions.get(name) else {
-                    return Err(ConvertError::UnknownTypeAlias(name.clone()));
-                };
-                self.field_type_is_nullable(alias_ty, recursion_depth + 1)?
+                if !aliases_in_progress.insert(name.clone()) {
+                    // A cycle by itself does not prove nullability for this branch.
+                    false
+                } else {
+                    let Some(alias_ty) = self.type_alias_definitions.get(name) else {
+                        aliases_in_progress.remove(name);
+                        return Err(ConvertError::UnknownTypeAlias(name.clone()));
+                    };
+                    let is_nullable =
+                        self.field_type_is_nullable_inner(alias_ty, aliases_in_progress)?;
+                    aliases_in_progress.remove(name);
+                    is_nullable
+                }
             }
             _ => false,
         })
@@ -755,5 +762,47 @@ fn is_sap_parseable(ty: &baml_type::Ty) -> Result<Vec<TypeName>, ()> {
         | baml_type::Ty::WatchAccessor(..)
         | baml_type::Ty::BuiltinUnknown { .. }
         | baml_type::Ty::Future(..) => Err(()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use baml_type::{Ty, TyAttr};
+
+    fn local_type(name: &str) -> TypeName {
+        TypeName::local(name.into())
+    }
+
+    #[test]
+    fn field_type_is_nullable_handles_recursive_alias_cycle_with_null_branch() {
+        let maybe_text = local_type("MaybeText");
+        let text_ref = local_type("TextRef");
+        let alias_attr = TyAttr::default();
+
+        let type_alias_definitions = HashMap::from([
+            (
+                maybe_text.clone(),
+                Ty::union([
+                    Ty::TypeAlias(text_ref.clone(), alias_attr.clone()),
+                    Ty::null(),
+                ]),
+            ),
+            (
+                text_ref.clone(),
+                Ty::TypeAlias(maybe_text.clone(), alias_attr.clone()),
+            ),
+        ]);
+
+        let ctx = TypeCtx::new(
+            &IndexMap::new(),
+            Arc::new(IndexMap::new()),
+            &type_alias_definitions,
+        );
+
+        assert!(
+            ctx.field_type_is_nullable(&Ty::TypeAlias(maybe_text, alias_attr))
+                .unwrap()
+        );
     }
 }
