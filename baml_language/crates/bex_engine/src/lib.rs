@@ -87,7 +87,7 @@ use bex_heap::BexHeap;
 // Re-export GcStats for users of the engine
 pub use bex_heap::GcStats;
 use bex_vm::{BexVm, SpanNotification, VmExecState};
-use bex_vm_types::{FunctionMeta, GlobalPool, HeapPtr, Object, SysOp, Value};
+use bex_vm_types::{FunctionMeta, FunctionOrigin, GlobalPool, HeapPtr, Object, SysOp, Value};
 pub use conversion::test_arg_to_external;
 // Re-export CancellationToken for callers.
 pub use function_call_context::{FunctionCallContext, FunctionCallContextBuilder};
@@ -109,6 +109,7 @@ pub use crate::heap_guard::{ActiveHeapPermit, HeapGuard, HeapPermitManager, Inac
 pub struct UserFunctionInfo {
     pub qualified_name: String,
     pub display_name: String,
+    pub origin: FunctionOrigin,
     pub param_names: Vec<String>,
     pub param_types: Vec<Ty>,
     pub return_type: Ty,
@@ -1036,11 +1037,12 @@ impl BexEngine {
                 }
                 let obj = unsafe { ptr.get() };
                 match obj {
-                    Object::Function(func) => {
+                    Object::Function(func) if func.origin.is_user_callable() => {
                         let display_name = name.strip_prefix("user.").unwrap_or(name).to_string();
                         Some(UserFunctionInfo {
                             qualified_name: name.clone(),
                             display_name,
+                            origin: func.origin,
                             param_names: func.param_names.clone(),
                             param_types: func.param_types.clone(),
                             return_type: func.return_type.clone(),

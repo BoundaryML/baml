@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 4063
 ---
 === MIR2 ===
 fn user.Append() -> int {
@@ -18,7 +19,7 @@ fn user.Append() -> int {
     }
 
     bb2: {
-        _3 = dispatch_future const fn baml.fs.File.write(copy _1, const "line\\n") -> bb3;
+        _3 = dispatch_future const fn baml.fs.File.write(copy _1, const "line\n") -> bb3;
     }
 
     bb3: {
@@ -50,7 +51,7 @@ fn user.AppendAndRead() -> string {
     }
 
     bb2: {
-        _4 = dispatch_future const fn baml.fs.File.write(copy _1, const "line\\n") -> bb3;
+        _4 = dispatch_future const fn baml.fs.File.write(copy _1, const "line\n") -> bb3;
     }
 
     bb3: {

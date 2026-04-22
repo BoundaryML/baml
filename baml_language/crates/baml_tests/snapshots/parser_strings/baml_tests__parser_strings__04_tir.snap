@@ -1,13 +1,13 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 29695
 ---
 === TIR2 ===
 class user.NestedQuotes {
   single_in_double: string @alias("He said 'hello'")
   double_in_single: string @alias
   She: unknown
-  hello: "')
-  escaped_in_escaped string @alias("
+  hello: "')\n  escaped_in_escaped string @alias("
   The: unknown
   quote: unknown
   is: unknown
@@ -33,8 +33,7 @@ class user.NestedQuotes$stream {
   single_in_double: null | string @alias("He said 'hello'")
   double_in_single: null | string @alias
   She: null | unknown
-  hello: "')
-  escaped_in_escaped string @alias("
+  hello: "')\n  escaped_in_escaped string @alias("
   The: unknown
   quote: unknown
   is: null | unknown

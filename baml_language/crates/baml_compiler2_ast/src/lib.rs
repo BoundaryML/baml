@@ -21,6 +21,32 @@ pub use disambiguate::is_field_attr;
 pub use lower_cst::{lower_file, lower_file_with_file_id, synthesize_llm_make_stream_call};
 pub use lowering_diagnostic::LoweringDiagnostic;
 
+/// Decode common escape sequences in a quoted string literal body.
+pub fn unescape_string_literal(input: &str) -> String {
+    let mut result = String::with_capacity(input.len());
+    let mut chars = input.chars();
+    while let Some(c) = chars.next() {
+        if c == '\\' {
+            match chars.next() {
+                Some('n') => result.push('\n'),
+                Some('t') => result.push('\t'),
+                Some('r') => result.push('\r'),
+                Some('0') => result.push('\0'),
+                Some('\\') => result.push('\\'),
+                Some('"') => result.push('"'),
+                Some(other) => {
+                    result.push('\\');
+                    result.push(other);
+                }
+                None => result.push('\\'),
+            }
+        } else {
+            result.push(c);
+        }
+    }
+    result
+}
+
 #[cfg(test)]
 mod tests {
     use baml_base::FileId;
@@ -31,7 +57,35 @@ mod tests {
     use crate::{
         ast::{BuiltinKind, Expr, FunctionBodyDef, Item, Stmt, TypeExpr},
         lower_cst::lower_file,
+        unescape_string_literal,
     };
+
+    #[test]
+    fn unescape_string_literal_decodes_supported_escapes() {
+        assert_eq!(unescape_string_literal(r"line\nbreak"), "line\nbreak");
+        assert_eq!(unescape_string_literal(r"tab\there"), "tab\there");
+        assert_eq!(unescape_string_literal(r"cr\rhere"), "cr\rhere");
+        assert_eq!(unescape_string_literal(r"nul\0here"), "nul\0here");
+        assert_eq!(unescape_string_literal(r"back\\slash"), "back\\slash");
+        assert_eq!(unescape_string_literal(r#"a\"b"#), "a\"b");
+    }
+
+    #[test]
+    fn unescape_string_literal_preserves_unknown_sequences() {
+        assert_eq!(unescape_string_literal(r"\x41"), "\\x41");
+        assert_eq!(unescape_string_literal(r"\u0041"), "\\u0041");
+    }
+
+    #[test]
+    fn unescape_string_literal_preserves_trailing_backslash() {
+        assert_eq!(unescape_string_literal("trailing\\"), "trailing\\");
+    }
+
+    #[test]
+    fn unescape_string_literal_handles_empty_and_plain_text() {
+        assert_eq!(unescape_string_literal(""), "");
+        assert_eq!(unescape_string_literal("plain text"), "plain text");
+    }
 
     /// Build a `TypeExpr` value for use in `assert_eq!` comparisons.
     /// All spans are zeroed. Attrs go inside the variant constructor:
@@ -1086,6 +1140,31 @@ retry_policy Simple {
         assert_eq!(let_def.name.as_str(), "Simple");
         assert_eq!(let_def.origin, LetOrigin::RetryPolicy);
         assert!(let_def.initializer.is_some(), "expected an initializer");
+    }
+
+    #[test]
+    fn quoted_string_literals_decode_escape_sequences() {
+        let source = r#"
+function main() -> string {
+  "\n"
+}
+"#;
+
+        let function = first_function(parse_and_lower(source));
+        let Some(FunctionBodyDef::Expr(body, _)) = &function.body else {
+            panic!("expected expression body");
+        };
+
+        let root = body.root_expr.expect("expected root expr");
+        let Expr::Block { tail_expr, .. } = &body.exprs[root] else {
+            panic!("expected block root expression");
+        };
+        let tail = tail_expr.expect("expected tail expression");
+
+        assert_eq!(
+            &body.exprs[tail],
+            &Expr::Literal(crate::ast::Literal::String("\n".to_string()))
+        );
     }
 
     // ── Type attribute tests ─────────────────────────────────────────────────

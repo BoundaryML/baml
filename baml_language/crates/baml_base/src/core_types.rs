@@ -174,7 +174,7 @@ pub enum Literal {
 impl fmt::Display for Literal {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Literal::String(s) => write!(f, "\"{s}\""),
+            Literal::String(s) => write!(f, "{s:?}"),
             Literal::Int(i) => write!(f, "{i}"),
             Literal::Float(s) => write!(f, "{s}"),
             Literal::Bool(b) => write!(f, "{b}"),

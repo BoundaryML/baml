@@ -17,7 +17,7 @@ import './views-workbench.css';
 import { type IFileWriteOptions } from '@codingame/monaco-vscode-files-service-override';
 import { blobUrlsAtom } from './PlaygroundProvider';
 import type { Dimension } from '@codingame/monaco-vscode-api/vscode/vs/base/browser/dom';
-import type { DecorationOptions } from 'vscode';
+import type { DecorationOptions, TextEditor } from 'vscode';
 
 // ---------------------------------------------------------------------------
 // Media file helpers
@@ -967,7 +967,7 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, heig
 
         // ── Log decorations (inline display like ErrorLens) ───────────────
         // Create decoration types for each log level with inline after-text
-        let lastDecoratedEditor: vscode.TextEditor | null = null;
+        let lastDecoratedEditor: TextEditor | undefined;
         const logDecorationTypes = {
           debug: vscode.window.createTextEditorDecorationType({
             after: { color: '#888888', margin: '0 0 0 1em' },
@@ -1001,7 +1001,7 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, heig
 
             if (!editor) {
               // Find a BAML editor from visible editors
-              editor = vscode.window.visibleTextEditors.find(e => e.document.uri.path.endsWith('.baml')) ?? null;
+              editor = vscode.window.visibleTextEditors.find(e => e.document.uri.path.endsWith('.baml'));
             }
 
             if (!editor) {
@@ -1051,7 +1051,7 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, heig
           lastDecoratedEditor.setDecorations(logDecorationTypes.info, []);
           lastDecoratedEditor.setDecorations(logDecorationTypes.warn, []);
           lastDecoratedEditor.setDecorations(logDecorationTypes.error, []);
-          lastDecoratedEditor = null;
+          lastDecoratedEditor = undefined;
         };
 
         // Listen for log decoration messages from the worker

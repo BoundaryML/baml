@@ -13,7 +13,23 @@ import type { FC } from 'react';
 import { useState, useRef, useEffect } from 'react';
 import { usePlayground } from './PlaygroundProvider';
 import { MonacoEditor } from './MonacoEditor';
-import { RotateCcw } from 'lucide-react';
+
+const ResetIcon: FC<{ size?: number }> = ({ size = 14 }) => (
+  <svg
+    aria-hidden="true"
+    fill="none"
+    height={size}
+    stroke="currentColor"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    strokeWidth="2"
+    viewBox="0 0 24 24"
+    width={size}
+  >
+    <path d="M3 2v6h6" />
+    <path d="M3 8a9 9 0 1 0 2.6-4.9L3 6" />
+  </svg>
+);
 
 export const SplitPreview: FC = () => {
   const { files, setFiles, resetFiles } = usePlayground();
@@ -58,7 +74,7 @@ export const SplitPreview: FC = () => {
         className="absolute bottom-4 left-4 z-50 flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded bg-vsc-bg-secondary hover:bg-vsc-bg-tertiary border border-vsc-border text-vsc-text-muted hover:text-vsc-text transition-colors"
         title="Reset to default code"
       >
-        <RotateCcw size={14} />
+        <ResetIcon size={14} />
         {showConfirm ? 'Click again to confirm' : 'Reset'}
       </button>
     </div>

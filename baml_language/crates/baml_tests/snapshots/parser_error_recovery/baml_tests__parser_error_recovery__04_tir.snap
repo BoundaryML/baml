@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 25509
 ---
 === TIR2 ===
 enum user.Status
@@ -49,14 +50,12 @@ class user.Test {
   field2: string @alias("unclosed string
   field3 string @alias(")
   another: unknown
-  string: ")  // Should still parse this
-}"
+  string: ")  // Should still parse this\n}"
 }
 class user.Test$stream {
   field1: null | string @alias("closed string")
   field2: null | string @alias("unclosed string
   field3 string @alias(")
   another: null | unknown
-  string: ")  // Should still parse this
-}"
+  string: ")  // Should still parse this\n}"
 }

@@ -159,6 +159,7 @@ strsim = { version = "0.11.1" }
 syn = { version = "2", features = [ "full" ] }
 taplo = { version = "0.13" }
 tempfile = { version = "3" }
+time = { version = "0.3", features = [ "formatting", "macros" ] }
 text-size = { version = "1.1" }
 thiserror = { version = "2.0.0" }
 toml = { version = "0.8" }

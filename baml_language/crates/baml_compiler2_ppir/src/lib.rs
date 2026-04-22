@@ -429,6 +429,7 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
                     throws: None,
                     body: Some(ast::FunctionBodyDef::Expr(body, source_map)),
                     declarative_meta: None,
+                    origin: ast::FunctionOrigin::Companion,
                     attributes: vec![],
                     span,
                     name_span,

@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 11603
 ---
 === TIR2 ===
 function user.BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool) -> int throws never {
@@ -1714,13 +1713,8 @@ function user.OtherExprs(a: int, b: int) -> int throws never {
     false : false
     null : null
     "raw string" : "raw string"
-    "raw string with "..." : "raw string with "quotes" inside"
-    "
-        multi-li..." : "
-        multi-line raw string
-        with several lines
-        of content
-    "
+    "raw string with \"..." : "raw string with \"quotes\" inside"
+    "\n        multi-li..." : "\n        multi-line raw string\n        with several lines\n        of content\n    "
     a : int
     a + b : int
     a : int

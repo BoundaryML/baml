@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 25461
 ---
 === HIR2 ===
 enum user.Status {ACTIVE, INACTIVE, PENDING}
@@ -29,6 +30,5 @@ class user.Test {
   field1: string
   field2: string
   another: user.closed
-  string: ")  // Should still parse this
-}"
+  string: ")  // Should still parse this\n}"
 }
