@@ -783,8 +783,9 @@ fn is_sap_parseable(ty: &baml_type::Ty) -> Result<Vec<TypeName>, ()> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use baml_type::{Ty, TyAttr};
+
+    use super::*;
 
     fn local_type(name: &str) -> TypeName {
         TypeName::local(name.into())
