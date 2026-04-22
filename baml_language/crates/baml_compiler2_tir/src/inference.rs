@@ -56,7 +56,7 @@ pub enum MemberResolution<'db> {
         variant_name: Name,
     },
     /// A free item accessed via a package/namespace path.
-    /// e.g. `env.get` → package="env", namespace=[], name="get"
+    /// e.g. `baml.env.get` → package=`baml`, namespace=[`env`], name=`get`
     Free { func_loc: FunctionLoc<'db> },
     /// A bound method reference: root is a value (local variable or field chain).
     /// e.g. `p.get_name` where `p` is a local — type has `self` stripped.

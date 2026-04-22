@@ -708,7 +708,7 @@ pub enum Constant {
 /// No string-path encoding or display-logic special-casing.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ItemRef {
-    /// A free function or top-level item: `env.get`, `Foo`, `baml.sys.panic`
+    /// A free function or top-level item: `baml.env.get`, `Foo`, `baml.sys.panic`
     Free {
         package: Name,
         namespace: Vec<Name>,

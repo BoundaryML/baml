@@ -661,7 +661,7 @@ fn build_resolution_map(
                         }
                     }
                 } else {
-                    // Multi-segment path (e.g. `Status.Active`, `obj.field`, `env.get`).
+                    // Multi-segment path (e.g. `Status.Active`, `obj.field`, `baml.env.get`).
                     // Intermediate segments (between root and last) are Property.
                     // The final segment gets a type-aware classification from the
                     // expression type (e.g. EnumMember for `Status.Active`).

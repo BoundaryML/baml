@@ -11,7 +11,7 @@ async fn env_get_or_panic_existing_var() {
     let output = baml_test!(
         r#"
             function main() -> string {
-                env.get_or_panic("BAML_TEST_ENV_PANIC")
+                baml.env.get_or_panic("BAML_TEST_ENV_PANIC")
             }
         "#
     );
@@ -35,7 +35,7 @@ async fn env_get_or_panic_missing_var() {
     let output = baml_test!(
         r#"
             function main() -> string {
-                env.get_or_panic("BAML_TEST_MISSING_PANIC")
+                baml.env.get_or_panic("BAML_TEST_MISSING_PANIC")
             }
         "#
     );
@@ -61,7 +61,7 @@ async fn env_get_existing_var() {
     let output = baml_test!(
         r#"
             function main() -> string? {
-                env.get("BAML_TEST_ENV_GET")
+                baml.env.get("BAML_TEST_ENV_GET")
             }
         "#
     );
@@ -86,7 +86,7 @@ async fn env_get_missing_var_returns_null() {
     let output = baml_test!(
         r#"
             function main() -> string? {
-                env.get("BAML_TEST_NONEXISTENT_VAR")
+                baml.env.get("BAML_TEST_NONEXISTENT_VAR")
             }
         "#
     );
