@@ -877,6 +877,7 @@ impl BexEngine {
         };
 
         self.emit(RuntimeEvent {
+            call_id,
             ctx: root_ctx,
             call_stack,
             timestamp: SystemTime::now(),
@@ -1281,6 +1282,7 @@ impl BexEngine {
                             full_call_stack.extend(state.stack.iter().map(|s| s.span_id.clone()));
                             full_call_stack.push(root_span.span_id.clone());
                             let end_event = RuntimeEvent {
+                                call_id,
                                 ctx: SpanContext {
                                     span_id: root_span.span_id,
                                     parent_span_id: root_span.parent_span_id,
@@ -1500,6 +1502,7 @@ impl BexEngine {
                         };
 
                         self.emit(RuntimeEvent {
+                            call_id,
                             ctx,
                             call_stack,
                             timestamp: SystemTime::now(),
@@ -1538,6 +1541,7 @@ impl BexEngine {
                                     args.iter().map(|v| self.vm_value_to_owned(v)).collect();
 
                                 let enter_event = RuntimeEvent {
+                                    call_id,
                                     ctx: SpanContext {
                                         span_id: span_id.clone(),
                                         parent_span_id: parent_span_id.clone(),
@@ -1574,6 +1578,7 @@ impl BexEngine {
                                         .extend(state.stack.iter().map(|s| s.span_id.clone()));
                                     call_stack.push(span.span_id.clone());
                                     let exit_event = RuntimeEvent {
+                                        call_id,
                                         ctx: SpanContext {
                                             span_id: span.span_id,
                                             parent_span_id: span.parent_span_id,

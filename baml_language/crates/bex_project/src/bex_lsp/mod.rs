@@ -140,6 +140,7 @@ pub enum PlaygroundNotification {
     RuntimeEvent {
         /// Protobuf-encoded `RuntimeEvent` bytes (decode with `RuntimeEvent.decode()`)
         data: Vec<u8>,
+        call_id: u64,
     },
 }
 

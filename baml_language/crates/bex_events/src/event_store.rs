@@ -120,11 +120,12 @@ mod tests {
     use web_time::SystemTime;
 
     use super::*;
-    use crate::{EventKind, FunctionEvent, FunctionStart, SpanContext};
+    use crate::{CallId, EventKind, FunctionEvent, FunctionStart, SpanContext};
 
     /// Create an event whose `span_id` matches the given ID (function's own event).
     fn make_event(span_id: SpanId) -> RuntimeEvent {
         RuntimeEvent {
+            call_id: CallId(0),
             ctx: SpanContext {
                 span_id: span_id.clone(),
                 parent_span_id: None,
@@ -143,6 +144,7 @@ mod tests {
     /// Create a child event whose `parent_span_id` matches the given parent.
     fn make_child_event(parent_span_id: SpanId, root_span_id: SpanId) -> RuntimeEvent {
         RuntimeEvent {
+            call_id: CallId(0),
             ctx: SpanContext {
                 span_id: SpanId::new(),
                 parent_span_id: Some(parent_span_id),

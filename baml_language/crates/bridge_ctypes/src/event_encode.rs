@@ -35,6 +35,7 @@ pub fn runtime_event_to_proto(
         timestamp_ms,
         call_stack,
         event: Some(event_kind),
+        call_id: event.call_id.0,
     })
 }
 
@@ -135,8 +136,11 @@ mod tests {
 
     #[test]
     fn test_function_start_to_proto() {
+        use bex_events::CallId;
+
         let span_id = SpanId::new();
         let event = RuntimeEvent {
+            call_id: CallId(0),
             ctx: SpanContext {
                 span_id: span_id.clone(),
                 parent_span_id: None,
@@ -178,8 +182,11 @@ mod tests {
 
     #[test]
     fn test_log_event_to_proto() {
+        use bex_events::CallId;
+
         let span_id = SpanId::new();
         let event = RuntimeEvent {
+            call_id: CallId(0),
             ctx: SpanContext {
                 span_id: span_id.clone(),
                 parent_span_id: None,
@@ -220,8 +227,11 @@ mod tests {
 
     #[test]
     fn test_function_end_to_proto() {
+        use bex_events::CallId;
+
         let span_id = SpanId::new();
         let event = RuntimeEvent {
+            call_id: CallId(0),
             ctx: SpanContext {
                 span_id: span_id.clone(),
                 parent_span_id: None,
@@ -253,10 +263,12 @@ mod tests {
 
     #[test]
     fn test_event_to_bytes_roundtrip() {
+        use bex_events::CallId;
         use prost::Message;
 
         let span_id = SpanId::new();
         let event = RuntimeEvent {
+            call_id: CallId(0),
             ctx: SpanContext {
                 span_id: span_id.clone(),
                 parent_span_id: None,

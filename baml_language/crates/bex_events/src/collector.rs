@@ -327,7 +327,7 @@ mod tests {
     use web_time::SystemTime;
 
     use super::*;
-    use crate::{FunctionEnd, FunctionStart, SpanContext};
+    use crate::{CallId, FunctionEnd, FunctionStart, SpanContext};
 
     fn make_start_event(
         span_id: SpanId,
@@ -338,6 +338,7 @@ mod tests {
         tags: Vec<(String, String)>,
     ) -> RuntimeEvent {
         RuntimeEvent {
+            call_id: CallId(0),
             ctx: SpanContext {
                 span_id,
                 parent_span_id: parent,
@@ -362,6 +363,7 @@ mod tests {
         duration: Duration,
     ) -> RuntimeEvent {
         RuntimeEvent {
+            call_id: CallId(0),
             ctx: SpanContext {
                 span_id,
                 parent_span_id: parent,
@@ -480,6 +482,7 @@ mod tests {
                 vec![("env".into(), "test".into())],
             ),
             RuntimeEvent {
+                call_id: CallId(0),
                 ctx: SpanContext {
                     span_id: root.clone(),
                     parent_span_id: None,
