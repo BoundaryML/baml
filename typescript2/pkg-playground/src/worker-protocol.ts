@@ -174,7 +174,7 @@ export interface RunEntry {
   fetchLogs: FetchLogEntry[];
   /** Runtime events (log.info, baml.events.send, etc.) emitted during this run. */
   runtimeEvents: DeserializedRuntimeEvent[];
-  result: string | null;
+  result: BamlJsValue | null;
   error: string | null;
   status: 'running' | 'success' | 'error' | 'cancelled';
   startTime: number;
@@ -189,7 +189,7 @@ export type WorkerOutMessage =
   | { type: 'ready' }
   | { type: 'playgroundNotification'; notification: PlaygroundNotification }
   | { type: 'diagnostics'; entries: DiagnosticEntry[] }
-  | { type: 'callFunctionResult'; id: number; result: string }
+  | { type: 'callFunctionResult'; id: number; result: BamlJsValue }
   | { type: 'callFunctionError'; id: number; error: string; cancelled?: boolean }
   | { type: 'fetchLogNew'; entry: FetchLogEntry }
   | { type: 'fetchLogUpdate'; logId: number; patch: Partial<FetchLogEntry> }

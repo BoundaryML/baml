@@ -326,10 +326,7 @@ export class WebSocketRuntimePort implements RuntimePort {
           return {
             type: 'callFunctionResult',
             id: raw.id,
-            result: JSON.stringify(decoded, (_, v) =>
-              typeof v === 'bigint' ? v.toString() : v,
-              2,
-            ),
+            result: decoded,
           };
         } catch (e) {
           return {

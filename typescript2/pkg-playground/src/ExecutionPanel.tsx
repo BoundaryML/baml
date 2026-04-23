@@ -12,6 +12,7 @@
 import type { ChangeEvent, FC, ReactNode, RefObject } from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { encodeCallArgs } from '@b/pkg-proto';
+import type { BamlJsValue } from '@b/pkg-proto';
 import { KeyRound, PanelLeft, Square } from 'lucide-react';
 import { Button } from './components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs';
@@ -58,6 +59,10 @@ function tryFormatJson(str: string): string {
     /* not valid JSON */
     return str;
   }
+}
+
+function stringifyResult(value: BamlJsValue): string {
+  return JSON.stringify(value, (_, v) => (typeof v === 'bigint' ? v.toString() : v), 2);
 }
 
 function formatBuildTime(epochSecs: number): { absolute: string; relative: string } {
@@ -246,7 +251,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
   const [testTree, setTestTree] = useState<any>(null);
   const [collectionCallId, setCollectionCallId] = useState<number | null>(null);
   const [generation, setGeneration] = useState<number>(0);
-  const [testRunResults, setTestRunResults] = useState<Map<string, Record<string, unknown>>>(new Map());
+  const [testRunResults, setTestRunResults] = useState<Map<string, unknown>>(new Map());
   const [failedExpands, setFailedExpands] = useState<Set<string>>(new Set());
   // Synthetic RunEntry that accumulates fetch logs from test collection/expansion operations
   const [collectionRun, setCollectionRun] = useState<RunEntry | null>(null);
@@ -276,8 +281,8 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
     functionName: string;
     workflows: string[];
   } | null>(null);
-  const [promptPreviewResult, setPromptPreviewResult] = useState<string | null>(null);
-  const [curlPreviewResult, setCurlPreviewResult] = useState<string | null>(null);
+  const [promptPreviewResult, setPromptPreviewResult] = useState<BamlJsValue | null>(null);
+  const [curlPreviewResult, setCurlPreviewResult] = useState<BamlJsValue | null>(null);
   const [promptPreviewError, setPromptPreviewError] = useState<string | null>(null);
   const [curlPreviewError, setCurlPreviewError] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -310,7 +315,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
   useEffect(() => { controlFlowGraphRef.current = controlFlowGraph; }, [controlFlowGraph]);
 
   const nextCallIdRef = useRef(0);
-  const pendingCallsRef = useRef<Map<number, { resolve: (v: string) => void; reject: (e: Error) => void }>>(new Map());
+  const pendingCallsRef = useRef<Map<number, { resolve: (v: BamlJsValue) => void; reject: (e: Error) => void }>>(new Map());
   // Buffer fetch logs by callId so logs that arrive before testCollectionResult are not lost.
   const pendingLogsRef = useRef<Map<number, FetchLogEntry[]>>(new Map());
 
@@ -710,7 +715,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
       try {
         const argsProto = encodeCallArgs(parsed as Record<string, unknown>);
         const callId = nextCallIdRef.current++;
-        const resultStr = await new Promise<string>((resolve, reject) => {
+        const resultValue = await new Promise<BamlJsValue>((resolve, reject) => {
           pendingCallsRef.current.set(callId, { resolve, reject });
           port.postMessage({
             type: 'callFunction',
@@ -720,7 +725,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
             project: selectedProject,
           });
         });
-        setResult(resultStr);
+        setResult(resultValue);
         setError(null);
         setPreviewLoading(false);
       } catch (e) {
@@ -824,7 +829,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
       }
       const argsProto = encodeCallArgs(parsed as Record<string, unknown>);
 
-      const resultStr = await new Promise<string>((resolve, reject) => {
+      const resultValue = await new Promise<BamlJsValue>((resolve, reject) => {
         pendingCallsRef.current.set(runId, { resolve, reject });
         port.postMessage(
           { type: 'callFunction', id: runId, name: selectedFn, argsProto: new Uint8Array(argsProto), project: selectedProject },
@@ -832,7 +837,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
       });
 
       const dur = Math.round(performance.now() - startTime);
-      setRuns((prev) => prev.map((r) => r.id === runId ? { ...r, result: resultStr, status: 'success', durationMs: dur } : r));
+      setRuns((prev) => prev.map((r) => r.id === runId ? { ...r, result: resultValue, status: 'success', durationMs: dur } : r));
     } catch (e) {
       const isCancelled = e instanceof Error && (e as any).cancelled === true;
       const errMsg = e instanceof Error ? e.message : String(e);
@@ -873,7 +878,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
     setRuns((prev) => [...prev, newRun]);
 
     try {
-      const resultStr = await new Promise<string>((resolve, reject) => {
+      const resultValue = await new Promise<BamlJsValue>((resolve, reject) => {
         pendingCallsRef.current.set(runId, { resolve, reject });
         port.postMessage({
           type: 'callTestFunction',
@@ -888,15 +893,12 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
       setRuns((prev) =>
         prev.map((r) =>
           r.id === runId
-            ? { ...r, result: resultStr, status: 'success', durationMs: dur }
+            ? { ...r, result: resultValue, status: 'success', durationMs: dur }
             : r,
         ),
       );
 
-      try {
-        const report = JSON.parse(resultStr);
-        setTestRunResults((prev) => new Map(prev).set(name, report));
-      } catch {}
+      setTestRunResults((prev) => new Map(prev).set(name, resultValue));
     } catch (e: any) {
       const dur = Math.round(performance.now() - newRun.startTime);
       const cancelled = e instanceof Error && (e as any).cancelled === true;
@@ -1398,7 +1400,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
                     {run.result != null && (
                       <div className="py-1.5 pr-2.5 pl-[22px]">
                         <div className="text-[10px] font-semibold text-vsc-green mb-0.5 uppercase tracking-wide">Result</div>
-                        <ResultDisplay resultJson={run.result} customRenderers={resultRenderers} />
+                        <ResultDisplay result={run.result} customRenderers={resultRenderers} />
                       </div>
                     )}
                   </div>
@@ -1495,7 +1497,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
                     )}
                     <div ref={promptContentRef}>
                       {promptPreviewResult != null ? (
-                        <ResultDisplay resultJson={promptPreviewResult} customRenderers={resultRenderers} />
+                        <ResultDisplay result={promptPreviewResult} customRenderers={resultRenderers} />
                       ) : (
                         <div className="flex items-center justify-center text-vsc-text-faint text-xs h-full">
                           {previewLoading ? 'Loading prompt preview...' : 'Enter args to preview prompt'}
@@ -1503,7 +1505,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
                       )}
                     </div>
                   </div>
-                  {promptPreviewResult && <PromptStats text={promptPreviewResult} />}
+                  {promptPreviewResult && <PromptStats text={stringifyResult(promptPreviewResult)} />}
                 </TabsContent>
               )}
 
@@ -1511,7 +1513,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
               {canPreviewCurl && (
                 <TabsContent value="curl" className="flex-1 overflow-auto font-vsc-mono text-xs bg-vsc-bg p-2.5 mt-0">
                   {curlPreviewResult != null ? (
-                    <ResultDisplay resultJson={curlPreviewResult} customRenderers={resultRenderers} />
+                    <ResultDisplay result={curlPreviewResult} customRenderers={resultRenderers} />
                   ) : curlPreviewError ? (
                     <div className="flex items-center justify-center text-vsc-error text-xs h-full">
                       {curlPreviewError}
@@ -1751,13 +1753,13 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
                                   ]}
                                   size="sm"
                                 />
-                                <CopyButton text={run.result} iconSize={11} />
+                                <CopyButton text={stringifyResult(run.result)} iconSize={11} />
                               </div>
                               {(resultModes[run.id] ?? 'parsed') === 'parsed' ? (
-                                <ResultDisplay resultJson={run.result} customRenderers={resultRenderers} />
+                                <ResultDisplay result={run.result} customRenderers={resultRenderers} />
                               ) : (
                                 <pre className="whitespace-pre-wrap break-all font-vsc-mono text-[11px] text-vsc-text bg-vsc-bg-secondary p-2 rounded border border-vsc-border max-h-[400px] overflow-auto">
-                                  {run.result}
+                                  {stringifyResult(run.result)}
                                 </pre>
                               )}
                             </div>
