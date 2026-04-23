@@ -24,7 +24,7 @@
 pub mod io {
     use std::sync::Arc;
 
-    pub use bex_heap::{AccessError, BexClass, BexValue, BuiltinClass, GcProtectedHeap};
+    pub use bex_heap::{AccessError, BexClass, BexValue, BuiltinClass, PermitProof};
     pub use bex_vm_types::SysOp;
     // Owned structs are generated once in sys_types and re-exported here
     // so that `io::owned::llm::*` paths continue to work.
@@ -72,7 +72,7 @@ mod io_adapter {
 
     #[allow(unused_imports)]
     pub use bex_external_types::BexExternalAdt;
-    pub use bex_heap::BexValue;
+    pub use bex_heap::{BexValue, HeapPermitManager};
     pub use sys_types::{
         AsBexExternalValue, BexExternalValue, BexHeap, CallId, SysOpContext, SysOpFn, SysOpResult,
         runtime_io::*,
@@ -1006,8 +1006,8 @@ impl IoSysOpsBuilder {
     ) -> Self {
         self.inner.baml_env_get = {
             let t = instance;
-            Arc::new(move |heap, args, ctx, call_id| {
-                t.__glue_baml_env_get(heap, args, ctx, call_id)
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_env_get(heap, permit, args, ctx, call_id)
             })
         };
         self
@@ -1027,8 +1027,8 @@ impl IoSysOpsBuilder {
     ) -> Self {
         self.inner.baml_io_input = {
             let t = instance;
-            Arc::new(move |heap, args, ctx, call_id| {
-                t.__glue_baml_io_input(heap, args, ctx, call_id)
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_io_input(heap, permit, args, ctx, call_id)
             })
         };
         self
@@ -1048,92 +1048,92 @@ impl IoSysOpsBuilder {
     ) -> Self {
         self.inner.baml_fs_open = {
             let t = instance.clone();
-            Arc::new(move |heap, args, ctx, call_id| {
-                t.__glue_baml_fs_open(heap, args, ctx, call_id)
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_fs_open(heap, permit, args, ctx, call_id)
             })
         };
         self.inner.baml_fs_exists = {
             let t = instance.clone();
-            Arc::new(move |heap, args, ctx, call_id| {
-                t.__glue_baml_fs_exists(heap, args, ctx, call_id)
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_fs_exists(heap, permit, args, ctx, call_id)
             })
         };
         self.inner.baml_fs_remove = {
             let t = instance.clone();
-            Arc::new(move |heap, args, ctx, call_id| {
-                t.__glue_baml_fs_remove(heap, args, ctx, call_id)
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_fs_remove(heap, permit, args, ctx, call_id)
             })
         };
         self.inner.baml_fs_size = {
             let t = instance.clone();
-            Arc::new(move |heap, args, ctx, call_id| {
-                t.__glue_baml_fs_size(heap, args, ctx, call_id)
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_fs_size(heap, permit, args, ctx, call_id)
             })
         };
         self.inner.baml_fs_read = {
             let t = instance.clone();
-            Arc::new(move |heap, args, ctx, call_id| {
-                t.__glue_baml_fs_read(heap, args, ctx, call_id)
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_fs_read(heap, permit, args, ctx, call_id)
             })
         };
         self.inner.baml_fs_write = {
             let t = instance.clone();
-            Arc::new(move |heap, args, ctx, call_id| {
-                t.__glue_baml_fs_write(heap, args, ctx, call_id)
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_fs_write(heap, permit, args, ctx, call_id)
             })
         };
         self.inner.baml_fs_write_bytes = {
             let t = instance.clone();
-            Arc::new(move |heap, args, ctx, call_id| {
-                t.__glue_baml_fs_write_bytes(heap, args, ctx, call_id)
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_fs_write_bytes(heap, permit, args, ctx, call_id)
             })
         };
         self.inner.baml_fs_file_text = {
             let t = instance.clone();
-            Arc::new(move |heap, args, ctx, call_id| {
-                t.__glue_baml_fs_file_text(heap, args, ctx, call_id)
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_fs_file_text(heap, permit, args, ctx, call_id)
             })
         };
         self.inner.baml_fs_file_bytes = {
             let t = instance.clone();
-            Arc::new(move |heap, args, ctx, call_id| {
-                t.__glue_baml_fs_file_bytes(heap, args, ctx, call_id)
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_fs_file_bytes(heap, permit, args, ctx, call_id)
             })
         };
         self.inner.baml_fs_file_read = {
             let t = instance.clone();
-            Arc::new(move |heap, args, ctx, call_id| {
-                t.__glue_baml_fs_file_read(heap, args, ctx, call_id)
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_fs_file_read(heap, permit, args, ctx, call_id)
             })
         };
         self.inner.baml_fs_file_read_bytes = {
             let t = instance.clone();
-            Arc::new(move |heap, args, ctx, call_id| {
-                t.__glue_baml_fs_file_read_bytes(heap, args, ctx, call_id)
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_fs_file_read_bytes(heap, permit, args, ctx, call_id)
             })
         };
         self.inner.baml_fs_file_close = {
             let t = instance.clone();
-            Arc::new(move |heap, args, ctx, call_id| {
-                t.__glue_baml_fs_file_close(heap, args, ctx, call_id)
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_fs_file_close(heap, permit, args, ctx, call_id)
             })
         };
         self.inner.baml_fs_file_seek_from = {
             let t = instance.clone();
-            Arc::new(move |heap, args, ctx, call_id| {
-                t.__glue_baml_fs_file_seek_from(heap, args, ctx, call_id)
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_fs_file_seek_from(heap, permit, args, ctx, call_id)
             })
         };
         self.inner.baml_fs_file_write = {
             let t = instance.clone();
-            Arc::new(move |heap, args, ctx, call_id| {
-                t.__glue_baml_fs_file_write(heap, args, ctx, call_id)
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_fs_file_write(heap, permit, args, ctx, call_id)
             })
         };
         self.inner.baml_fs_file_write_bytes = {
             let t = instance;
-            Arc::new(move |heap, args, ctx, call_id| {
-                t.__glue_baml_fs_file_write_bytes(heap, args, ctx, call_id)
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_fs_file_write_bytes(heap, permit, args, ctx, call_id)
             })
         };
         self
@@ -1153,44 +1153,44 @@ impl IoSysOpsBuilder {
     ) -> Self {
         self.inner.baml_http_fetch = {
             let t = instance.clone();
-            Arc::new(move |heap, args, ctx, call_id| {
-                t.__glue_baml_http_fetch(heap, args, ctx, call_id)
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_http_fetch(heap, permit, args, ctx, call_id)
             })
         };
         self.inner.baml_http_send = {
             let t = instance.clone();
-            Arc::new(move |heap, args, ctx, call_id| {
-                t.__glue_baml_http_send(heap, args, ctx, call_id)
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_http_send(heap, permit, args, ctx, call_id)
             })
         };
         self.inner.baml_http_response_text = {
             let t = instance.clone();
-            Arc::new(move |heap, args, ctx, call_id| {
-                t.__glue_baml_http_response_text(heap, args, ctx, call_id)
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_http_response_text(heap, permit, args, ctx, call_id)
             })
         };
         self.inner.baml_http_response_bytes = {
             let t = instance.clone();
-            Arc::new(move |heap, args, ctx, call_id| {
-                t.__glue_baml_http_response_bytes(heap, args, ctx, call_id)
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_http_response_bytes(heap, permit, args, ctx, call_id)
             })
         };
         self.inner.baml_http_fetch_sse = {
             let t = instance.clone();
-            Arc::new(move |heap, args, ctx, call_id| {
-                t.__glue_baml_http_fetch_sse(heap, args, ctx, call_id)
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_http_fetch_sse(heap, permit, args, ctx, call_id)
             })
         };
         self.inner.baml_http_ssestream_next = {
             let t = instance.clone();
-            Arc::new(move |heap, args, ctx, call_id| {
-                t.__glue_baml_http_ssestream_next(heap, args, ctx, call_id)
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_http_ssestream_next(heap, permit, args, ctx, call_id)
             })
         };
         self.inner.baml_http_ssestream_close = {
             let t = instance;
-            Arc::new(move |heap, args, ctx, call_id| {
-                t.__glue_baml_http_ssestream_close(heap, args, ctx, call_id)
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_http_ssestream_close(heap, permit, args, ctx, call_id)
             })
         };
         self
@@ -1210,20 +1210,20 @@ impl IoSysOpsBuilder {
     ) -> Self {
         self.inner.baml_net_connect = {
             let t = instance.clone();
-            Arc::new(move |heap, args, ctx, call_id| {
-                t.__glue_baml_net_connect(heap, args, ctx, call_id)
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_net_connect(heap, permit, args, ctx, call_id)
             })
         };
         self.inner.baml_net_socket_read = {
             let t = instance.clone();
-            Arc::new(move |heap, args, ctx, call_id| {
-                t.__glue_baml_net_socket_read(heap, args, ctx, call_id)
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_net_socket_read(heap, permit, args, ctx, call_id)
             })
         };
         self.inner.baml_net_socket_close = {
             let t = instance;
-            Arc::new(move |heap, args, ctx, call_id| {
-                t.__glue_baml_net_socket_close(heap, args, ctx, call_id)
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_net_socket_close(heap, permit, args, ctx, call_id)
             })
         };
         self
@@ -1244,14 +1244,14 @@ impl IoSysOpsBuilder {
     ) -> Self {
         self.inner.baml_sys_shell = {
             let t = instance.clone();
-            Arc::new(move |heap, args, ctx, call_id| {
-                t.__glue_baml_sys_shell(heap, args, ctx, call_id)
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_sys_shell(heap, permit, args, ctx, call_id)
             })
         };
         self.inner.baml_sys_sleep = {
             let t = instance.clone();
-            Arc::new(move |heap, args, ctx, call_id| {
-                t.__glue_baml_sys_sleep(heap, args, ctx, call_id)
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_sys_sleep(heap, permit, args, ctx, call_id)
             })
         };
         self
@@ -1299,14 +1299,23 @@ mod tests {
         SysOpContext::empty()
     }
 
-    #[test]
-    fn test_unsupported_returns_error() {
+    async fn test_permit() -> bex_heap::ActiveHeapPermit<()> {
+        bex_heap::HeapPermitManager::new()
+            .new_permit(())
+            .await
+            .acquire()
+            .await
+    }
+
+    #[tokio::test]
+    async fn test_unsupported_returns_error() {
         use sys_types::{OpErrorKind, SysOpResult};
 
         let heap = test_heap();
         let ctx = test_ctx();
         let op = SysOps::unsupported(SysOp::BamlSysShell);
-        let result = op(&heap, vec![], &ctx, CallId::next());
+        let permit = test_permit().await;
+        let result = op(&heap, permit.proof(), vec![], &ctx, CallId::next());
         match result {
             SysOpResult::Ready(Err(e)) => {
                 assert!(matches!(e.kind, OpErrorKind::Unsupported));
@@ -1316,16 +1325,17 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_all_unsupported() {
+    #[tokio::test]
+    async fn test_all_unsupported() {
         use sys_types::{OpError, OpErrorKind, SysOpResult};
 
         let heap = test_heap();
         let ctx = test_ctx();
         let ops = SysOps::all_unsupported();
+        let permit = test_permit().await;
 
         // Test fs_open returns Unsupported
-        let result = (ops.baml_fs_open)(&heap, vec![], &ctx, CallId::next());
+        let result = (ops.baml_fs_open)(&heap, permit.proof(), vec![], &ctx, CallId::next());
         assert!(matches!(
             result,
             SysOpResult::Ready(Err(OpError {
@@ -1335,7 +1345,7 @@ mod tests {
         ));
 
         // Test shell returns Unsupported
-        let result = (ops.baml_sys_shell)(&heap, vec![], &ctx, CallId::next());
+        let result = (ops.baml_sys_shell)(&heap, permit.proof(), vec![], &ctx, CallId::next());
         assert!(matches!(
             result,
             SysOpResult::Ready(Err(OpError {
@@ -1345,17 +1355,18 @@ mod tests {
         ));
     }
 
-    #[test]
-    fn test_sys_ops_get() {
+    #[tokio::test]
+    async fn test_sys_ops_get() {
         use sys_types::SysOpResult;
 
         let ops = SysOps::all_unsupported();
         let heap = test_heap();
         let ctx = test_ctx();
+        let permit = test_permit().await;
 
         // Test that get() returns the correct function pointer
         let fn_ptr = ops.get(SysOp::BamlFsOpen);
-        let result = fn_ptr(&heap, vec![], &ctx, CallId::next());
+        let result = fn_ptr(&heap, permit.proof(), vec![], &ctx, CallId::next());
         assert!(matches!(result, SysOpResult::Ready(Err(_))));
     }
 

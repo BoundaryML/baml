@@ -246,9 +246,9 @@ fn view_accessor_body(field_name: &str, ty: &BamlType) -> TokenStream {
         BamlType::Int => quote! { self.cls.field(#field_lit)?.as_int() },
         BamlType::Float => quote! { self.cls.field(#field_lit)?.as_float() },
         BamlType::Bool => quote! { self.cls.field(#field_lit)?.as_bool() },
-        BamlType::String => quote! { self.cls.field(#field_lit)?.as_string(heap) },
-        BamlType::RustType => quote! { self.cls.field(#field_lit)?.as_rust_data(heap) },
-        _ => quote! { self.cls.field(#field_lit)?.as_owned_but_very_slow(heap) },
+        BamlType::String => quote! { self.cls.field(#field_lit)?.as_string(heap, permit) },
+        BamlType::RustType => quote! { self.cls.field(#field_lit)?.as_rust_data(heap, permit) },
+        _ => quote! { self.cls.field(#field_lit)?.as_owned_but_very_slow(heap, permit) },
     }
 }
 
@@ -379,19 +379,19 @@ fn into_owned_expr(
         BamlType::Int | BamlType::Float | BamlType::Bool => {
             quote! { self.#field_ident()? }
         }
-        BamlType::String => quote! { self.#field_ident(heap)?.clone() },
-        BamlType::RustType => quote! { self.#field_ident(heap)? },
+        BamlType::String => quote! { self.#field_ident(heap, permit)?.clone() },
+        BamlType::RustType => quote! { self.#field_ident(heap, permit)? },
         BamlType::List(_) | BamlType::Map(_, _) | BamlType::Optional(_) => {
-            let val = quote! { self.#field_ident(heap)? };
+            let val = quote! { self.#field_ident(heap, permit)? };
             let conv = external_to_typed_expr(&val, ty, class_ns_map, paths);
             quote! { (#conv)? }
         }
         BamlType::Named(name) if class_ns_map.contains_key(name.as_str()) => {
-            let val = quote! { self.#field_ident(heap)? };
+            let val = quote! { self.#field_ident(heap, permit)? };
             let conv = external_to_typed_expr(&val, ty, class_ns_map, paths);
             quote! { (#conv)? }
         }
-        _ => quote! { self.#field_ident(heap)? },
+        _ => quote! { self.#field_ident(heap, permit)? },
     }
 }
 
@@ -497,7 +497,7 @@ fn glue_extract_expr(
         return quote! { /* receiver extracted below */ };
     }
     match ty {
-        BamlType::String => quote! { #arg_ident.as_string(&__p)?.to_string() },
+        BamlType::String => quote! { #arg_ident.as_string(heap.as_ref(), permit)?.to_string() },
         BamlType::Int => quote! { #arg_ident.as_int()? },
         BamlType::Float => quote! { #arg_ident.as_float()? },
         BamlType::Bool => quote! { #arg_ident.as_bool()? },
@@ -507,22 +507,22 @@ fn glue_extract_expr(
                 let ns_ident = format_ident!("{}", ns);
                 let name_ident = format_ident!("{}", name);
                 quote! {
-                    #arg_ident.as_builtin_class::<#view::#ns_ident::#name_ident>(&__p)?.into_owned(&__p)?
+                    #arg_ident.as_builtin_class::<#view::#ns_ident::#name_ident>(heap.as_ref(), permit)?.into_owned(heap.as_ref(), permit)?
                 }
             } else {
                 match name.as_str() {
-                    "type" => quote! { #arg_ident.as_baml_type_owned(&__p)? },
-                    _ => quote! { #arg_ident.as_owned_but_very_slow(&__p)? },
+                    "type" => quote! { #arg_ident.as_baml_type_owned(heap.as_ref(), permit)? },
+                    _ => quote! { #arg_ident.as_owned_but_very_slow(heap.as_ref(), permit)? },
                 }
             }
         }
-        BamlType::RustType => quote! { #arg_ident.as_rust_data(&__p)? },
+        BamlType::RustType => quote! { #arg_ident.as_rust_data(heap.as_ref(), permit)? },
         BamlType::Uint8Array | BamlType::List(_) | BamlType::Map(_, _) | BamlType::Optional(_) => {
-            let val = quote! { #arg_ident.as_owned_but_very_slow(&__p)? };
+            let val = quote! { #arg_ident.as_owned_but_very_slow(heap.as_ref(), permit)? };
             let conv = external_to_typed_expr(&val, ty, class_ns_map, paths);
             quote! { (#conv)? }
         }
-        _ => quote! { #arg_ident.as_owned_but_very_slow(&__p)? },
+        _ => quote! { #arg_ident.as_owned_but_very_slow(heap.as_ref(), permit)? },
     }
 }
 
@@ -764,7 +764,11 @@ fn emit_view_struct(
 
             if needs_heap {
                 quote! {
-                    pub fn #field_ident(&self, heap: &'a GcProtectedHeap<'a>) -> #ret_type {
+                    pub fn #field_ident(
+                        &self,
+                        heap: &'a BexHeap,
+                        permit: PermitProof<'a>,
+                    ) -> #ret_type {
                         #body
                     }
                 }
@@ -814,7 +818,11 @@ fn emit_view_struct(
         impl<'a> #name_ident<'a> {
             #(#accessors)*
 
-            pub fn into_owned(self, heap: &'a GcProtectedHeap<'a>) -> Result<#owned_path, AccessError> {
+            pub fn into_owned(
+                self,
+                heap: &'a BexHeap,
+                permit: PermitProof<'a>,
+            ) -> Result<#owned_path, AccessError> {
                 Ok(#owned_path {
                     #(#into_owned_fields,)*
                 })
@@ -1124,7 +1132,7 @@ fn emit_one_class_trait(
             let method_name_str = io_method_name(m);
             let glue_ident = format_ident!("__glue_{}", m.fn_name);
             quote! {
-                #method_name_str => Some(self.#glue_ident(heap, args, ctx, call_id))
+                #method_name_str => Some(self.#glue_ident(heap, permit, args, ctx, call_id))
             }
         })
         .collect();
@@ -1136,11 +1144,12 @@ fn emit_one_class_trait(
 
             #(#glue_methods)*
 
-            fn #dispatch_fn_ident(
+            fn #dispatch_fn_ident<'a>(
                 &self,
                 method: &str,
                 heap: &std::sync::Arc<BexHeap>,
-                args: Vec<BexValue<'_>>,
+                permit: PermitProof<'a>,
+                args: Vec<BexValue<'a>>,
                 ctx: &SysOpContext,
                 call_id: CallId,
             ) -> Option<SysOpResult> {
@@ -1193,8 +1202,8 @@ fn emit_glue_method(
     } else {
         Some(quote! {
             let __receiver = __arg_self
-                .as_builtin_class::<#view::#ns_ident::#class_ident>(&__p)?
-                .into_owned(&__p)?;
+                .as_builtin_class::<#view::#ns_ident::#class_ident>(heap.as_ref(), permit)?
+                .into_owned(heap.as_ref(), permit)?;
         })
     };
 
@@ -1231,10 +1240,11 @@ fn emit_glue_method(
         .collect();
 
     quote! {
-        fn #glue_ident(
+        fn #glue_ident<'a>(
             &self,
             heap: &std::sync::Arc<BexHeap>,
-            args: Vec<BexValue<'_>>,
+            permit: PermitProof<'a>,
+            args: Vec<BexValue<'a>>,
             ctx: &SysOpContext,
             call_id: CallId,
         ) -> SysOpResult {
@@ -1242,11 +1252,11 @@ fn emit_glue_method(
             #arg_self
             #(#arg_lets)*
 
-            let __extraction = heap.with_gc_protection(move |__p| {
+            let __extraction = (|| {
                 #receiver_extraction
                 #(#param_extractions)*
                 Ok::<_, AccessError>((#receiver_ident #(#tuple_idents),*))
-            });
+            })();
 
             match __extraction {
                 Ok((#receiver_ident #(#tuple_idents),*)) => {
@@ -1347,7 +1357,7 @@ fn emit_one_namespace_trait(
             .map(|f| {
                 let fn_name_str = io_method_name(f);
                 let glue_ident = format_ident!("__glue_{}", f.fn_name);
-                quote! { #fn_name_str => Some(self.#glue_ident(heap, args, ctx, call_id)) }
+                quote! { #fn_name_str => Some(self.#glue_ident(heap, permit, args, ctx, call_id)) }
             })
             .collect();
 
@@ -1365,7 +1375,7 @@ fn emit_one_namespace_trait(
             .map(|cn| {
                 let cn_str = cn.as_str();
                 let dispatch = format_ident!("__dispatch_{}_{}", ns, cn.to_lowercase());
-                quote! { Some((#cn_str, method)) => self.#dispatch(method, heap, args, ctx, call_id) }
+                quote! { Some((#cn_str, method)) => self.#dispatch(method, heap, permit, args, ctx, call_id) }
             })
             .collect();
 
@@ -1375,7 +1385,7 @@ fn emit_one_namespace_trait(
             .map(|f| {
                 let fn_name_str = io_method_name(f);
                 let glue_ident = format_ident!("__glue_{}", f.fn_name);
-                quote! { #fn_name_str => Some(self.#glue_ident(heap, args, ctx, call_id)) }
+                quote! { #fn_name_str => Some(self.#glue_ident(heap, permit, args, ctx, call_id)) }
             })
             .collect();
 
@@ -1397,11 +1407,12 @@ fn emit_one_namespace_trait(
 
             #(#free_fn_glues)*
 
-            fn #dispatch_fn_ident(
+            fn #dispatch_fn_ident<'a>(
                 &self,
                 rest: &str,
                 heap: &std::sync::Arc<BexHeap>,
-                args: Vec<BexValue<'_>>,
+                permit: PermitProof<'a>,
+                args: Vec<BexValue<'a>>,
                 ctx: &SysOpContext,
                 call_id: CallId,
             ) -> Option<SysOpResult> {
@@ -1423,10 +1434,11 @@ fn emit_free_fn_glue(
 
     if builtin.params.is_empty() {
         return quote! {
-            fn #glue_ident(
+            fn #glue_ident<'a>(
                 &self,
                 heap: &std::sync::Arc<BexHeap>,
-                args: Vec<BexValue<'_>>,
+                _permit: PermitProof<'a>,
+                args: Vec<BexValue<'a>>,
                 ctx: &SysOpContext,
                 call_id: CallId,
             ) -> SysOpResult {
@@ -1476,20 +1488,21 @@ fn emit_free_fn_glue(
     };
 
     quote! {
-        fn #glue_ident(
+        fn #glue_ident<'a>(
             &self,
             heap: &std::sync::Arc<BexHeap>,
-            args: Vec<BexValue<'_>>,
+            permit: PermitProof<'a>,
+            args: Vec<BexValue<'a>>,
             ctx: &SysOpContext,
             call_id: CallId,
         ) -> SysOpResult {
             let mut __args = args.into_iter();
             #(#arg_lets)*
 
-            let __extraction = heap.with_gc_protection(move |__p| {
+            let __extraction = (|| {
                 #(#param_extractions)*
                 #extraction_return
-            });
+            })();
 
             match __extraction {
                 Ok(#ok_pattern) => {
@@ -1518,18 +1531,19 @@ fn emit_root_trait(tree: &BTreeMap<String, IoNamespaceNode>) -> TokenStream {
             let ns_str = ns.as_str();
             let dispatch_fn_ident = format_ident!("__dispatch_{}", ns);
             quote! {
-                Some((#ns_str, rest)) => self.#dispatch_fn_ident(rest, heap, args, ctx, call_id)
+                Some((#ns_str, rest)) => self.#dispatch_fn_ident(rest, heap, permit, args, ctx, call_id)
             }
         })
         .collect();
 
     quote! {
         pub trait IoPackageBaml: #(#ns_trait_idents)+* {
-            fn get_sys_op_fn(
+            fn get_sys_op_fn<'a>(
                 &self,
                 path: &str,
                 heap: &std::sync::Arc<BexHeap>,
-                args: Vec<BexValue<'_>>,
+                permit: PermitProof<'a>,
+                args: Vec<BexValue<'a>>,
                 ctx: &SysOpContext,
                 call_id: CallId,
             ) -> Option<SysOpResult> {
@@ -1570,8 +1584,8 @@ fn emit_sys_ops_struct(io_builtins: &[NativeBuiltin]) -> TokenStream {
             quote! {
                 #field_ident: {
                     let t = t.clone();
-                    std::sync::Arc::new(move |heap, args, ctx, call_id| {
-                        t.get_sys_op_fn(#path_str, heap, args, ctx, call_id)
+                    std::sync::Arc::new(move |heap, permit, args, ctx, call_id| {
+                        t.get_sys_op_fn(#path_str, heap, permit, args, ctx, call_id)
                             .unwrap_or_else(|| SysOpResult::Ready(Err(OpError::new(
                                 SysOp::#variant_ident,
                                 OpErrorKind::Unsupported,
@@ -1596,7 +1610,7 @@ fn emit_sys_ops_struct(io_builtins: &[NativeBuiltin]) -> TokenStream {
             }
 
             pub fn unsupported(operation: SysOp) -> SysOpFn {
-                std::sync::Arc::new(move |_, _, _, _| {
+                std::sync::Arc::new(move |_, _, _, _, _| {
                     SysOpResult::Ready(Err(OpError::new(
                         operation,
                         OpErrorKind::Unsupported,
@@ -1903,6 +1917,7 @@ fn emit_adapter_struct(io_builtins: &[NativeBuiltin]) -> TokenStream {
     quote! {
         pub struct RuntimeIoAdapter {
             heap: Arc<BexHeap>,
+            permit_manager: Arc<HeapPermitManager>,
             ctx: SysOpContext,
             #(#fields,)*
         }
@@ -1958,10 +1973,22 @@ fn emit_adapter_impl(
         let body = quote! {
             let fn_ptr = self.#method_ident.clone();
             let heap = self.heap.clone();
+            let permit_manager = self.permit_manager.clone();
             let ctx = self.ctx.clone();
             #(#ext_bindings)*
             Box::pin(async move {
-                let result = fn_ptr(&heap, vec![#(#arg_exprs),*], &ctx, CallId::next());
+                // Acquire a `()`-backed permit so the SysOpFn has a valid GC-exclusion
+                // proof for arg extraction. RuntimeIoAdapter callers run outside the VM
+                // event loop, so no other permit is in scope here.
+                let permit = permit_manager.new_permit(()).await.acquire().await;
+                let result = fn_ptr(
+                    &heap,
+                    permit.proof(),
+                    vec![#(#arg_exprs),*],
+                    &ctx,
+                    CallId::next(),
+                );
+                drop(permit);
                 let __val = __resolve_sys_op_result(result).await?;
                 #result_conversion
             })
@@ -2144,10 +2171,12 @@ fn emit_build_runtime_io(io_builtins: &[NativeBuiltin]) -> TokenStream {
         pub fn build_runtime_io(
             sys_ops: &SysOps,
             heap: &Arc<BexHeap>,
+            permit_manager: &Arc<HeapPermitManager>,
             ctx: &SysOpContext,
         ) -> Arc<dyn RuntimeIo> {
             Arc::new(RuntimeIoAdapter {
                 heap: heap.clone(),
+                permit_manager: permit_manager.clone(),
                 ctx: ctx.clone(),
                 #(#field_inits,)*
             })
