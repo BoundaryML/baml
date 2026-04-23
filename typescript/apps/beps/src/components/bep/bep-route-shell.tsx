@@ -17,6 +17,7 @@ import { BepContent } from "@/components/bep/bep-content";
 import { BepNav } from "@/components/bep/bep-nav";
 import { BepTableOfContents } from "@/components/bep/bep-table-of-contents";
 import { BepStatusSelect } from "@/components/bep/bep-status-select";
+import { BepUserStance } from "@/components/bep/bep-user-stance";
 import { BepGoodReferenceToggle } from "@/components/bep/bep-good-reference-toggle";
 import { BepVersionSelect } from "@/components/bep/bep-version-select";
 import { BepExportDialog } from "@/components/bep/bep-export-dialog";
@@ -874,14 +875,33 @@ const [copied, setCopied] = useState(false);
                     bepId={bep._id}
                     isGoodReference={bep.isGoodReference ?? false}
                   />
-                  <BepStatusSelect bepId={bep._id} currentStatus={bep.status} />
+                  <BepStatusSelect
+                    bepId={bep._id}
+                    currentStatus={bep.status}
+                    existingImplementers={bep.implementedBy}
+                  />
                 </>
               )}
             </div>
           </div>
-          <p className="text-muted-foreground">
-            Shepherds: {bep.shepherdNames.join(", ") || "None assigned"}
-          </p>
+          <div className="flex items-center justify-between">
+            <p className="text-muted-foreground">
+              Shepherds: {bep.shepherdNames.join(", ") || "None assigned"}
+              {bep.status === "implemented" && bep.implementedByNames && bep.implementedByNames.length > 0 && (
+                <span className="ml-4">
+                  Implemented by: {bep.implementedByNames.join(", ")}
+                </span>
+              )}
+            </p>
+            {currentVersionId && (
+              <BepUserStance
+                bepId={bep._id}
+                versionId={currentVersionId}
+                versionNumber={latestVersionNumber ?? 1}
+                readOnly={isViewingHistorical}
+              />
+            )}
+          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
