@@ -174,7 +174,7 @@ impl<'a> BexValue<'a> {
         self,
         expected: &'static str,
         heap: &BexHeap,
-        _permit: PermitProof<'_>,
+        _permit: PermitProof<'a>,
         f: impl FnOnce(&HeapPtr) -> Result<R, AccessError>,
     ) -> Result<R, AccessError> {
         match self {
@@ -198,7 +198,7 @@ impl<'a> BexValue<'a> {
     pub fn as_rust_data(
         self,
         heap: &BexHeap,
-        permit: PermitProof<'_>,
+        permit: PermitProof<'a>,
     ) -> Result<std::sync::Arc<dyn std::any::Any + Send + Sync>, AccessError> {
         match self {
             BexValue::ExternalValue(BexExternalValue::RustData(data)) => {
@@ -220,7 +220,7 @@ impl<'a> BexValue<'a> {
     pub fn as_string(
         self,
         heap: &BexHeap,
-        permit: PermitProof<'_>,
+        permit: PermitProof<'a>,
     ) -> Result<&'a String, AccessError> {
         match self {
             BexValue::ExternalValue(BexExternalValue::String(s)) => Ok(s),
@@ -240,7 +240,7 @@ impl<'a> BexValue<'a> {
     pub fn as_array(
         self,
         heap: &BexHeap,
-        permit: PermitProof<'_>,
+        permit: PermitProof<'a>,
     ) -> Result<Vec<BexValue<'a>>, AccessError> {
         match self {
             BexValue::ExternalValue(BexExternalValue::Array { items, .. }) => {
@@ -262,7 +262,7 @@ impl<'a> BexValue<'a> {
     pub fn as_map(
         self,
         heap: &BexHeap,
-        permit: PermitProof<'_>,
+        permit: PermitProof<'a>,
     ) -> Result<indexmap::IndexMap<String, BexValue<'a>>, AccessError> {
         match self {
             BexValue::ExternalValue(BexExternalValue::Map { entries, .. }) => Ok(entries
@@ -289,7 +289,7 @@ impl<'a> BexValue<'a> {
     fn as_class(
         self,
         heap: &BexHeap,
-        permit: PermitProof<'_>,
+        permit: PermitProof<'a>,
         expected_class_name: &'static str,
     ) -> Result<BexClass<'a>, AccessError> {
         match self {
@@ -335,7 +335,7 @@ impl<'a> BexValue<'a> {
     pub fn as_enum<T>(
         self,
         heap: &BexHeap,
-        permit: PermitProof<'_>,
+        permit: PermitProof<'a>,
         expected_enum_name: &'static str,
         map_fn: impl FnOnce(BexVariant<'_>) -> T,
     ) -> Result<T, AccessError> {
@@ -394,7 +394,7 @@ impl<'a> BexValue<'a> {
     pub fn as_builtin_class<T: BuiltinClass<'a>>(
         self,
         heap: &BexHeap,
-        permit: PermitProof<'_>,
+        permit: PermitProof<'a>,
     ) -> Result<T, AccessError> {
         self.as_class(heap, permit, T::name())
             .map(|cls| T::from(cls))

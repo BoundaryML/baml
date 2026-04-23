@@ -767,7 +767,7 @@ fn emit_view_struct(
                     pub fn #field_ident(
                         &self,
                         heap: &'a BexHeap,
-                        permit: PermitProof<'_>,
+                        permit: PermitProof<'a>,
                     ) -> #ret_type {
                         #body
                     }
@@ -821,7 +821,7 @@ fn emit_view_struct(
             pub fn into_owned(
                 self,
                 heap: &'a BexHeap,
-                permit: PermitProof<'_>,
+                permit: PermitProof<'a>,
             ) -> Result<#owned_path, AccessError> {
                 Ok(#owned_path {
                     #(#into_owned_fields,)*
@@ -1144,12 +1144,12 @@ fn emit_one_class_trait(
 
             #(#glue_methods)*
 
-            fn #dispatch_fn_ident(
+            fn #dispatch_fn_ident<'a>(
                 &self,
                 method: &str,
                 heap: &std::sync::Arc<BexHeap>,
-                permit: PermitProof<'_>,
-                args: Vec<BexValue<'_>>,
+                permit: PermitProof<'a>,
+                args: Vec<BexValue<'a>>,
                 ctx: &SysOpContext,
                 call_id: CallId,
             ) -> Option<SysOpResult> {
@@ -1240,11 +1240,11 @@ fn emit_glue_method(
         .collect();
 
     quote! {
-        fn #glue_ident(
+        fn #glue_ident<'a>(
             &self,
             heap: &std::sync::Arc<BexHeap>,
-            permit: PermitProof<'_>,
-            args: Vec<BexValue<'_>>,
+            permit: PermitProof<'a>,
+            args: Vec<BexValue<'a>>,
             ctx: &SysOpContext,
             call_id: CallId,
         ) -> SysOpResult {
@@ -1407,12 +1407,12 @@ fn emit_one_namespace_trait(
 
             #(#free_fn_glues)*
 
-            fn #dispatch_fn_ident(
+            fn #dispatch_fn_ident<'a>(
                 &self,
                 rest: &str,
                 heap: &std::sync::Arc<BexHeap>,
-                permit: PermitProof<'_>,
-                args: Vec<BexValue<'_>>,
+                permit: PermitProof<'a>,
+                args: Vec<BexValue<'a>>,
                 ctx: &SysOpContext,
                 call_id: CallId,
             ) -> Option<SysOpResult> {
@@ -1434,11 +1434,11 @@ fn emit_free_fn_glue(
 
     if builtin.params.is_empty() {
         return quote! {
-            fn #glue_ident(
+            fn #glue_ident<'a>(
                 &self,
                 heap: &std::sync::Arc<BexHeap>,
-                _permit: PermitProof<'_>,
-                args: Vec<BexValue<'_>>,
+                _permit: PermitProof<'a>,
+                args: Vec<BexValue<'a>>,
                 ctx: &SysOpContext,
                 call_id: CallId,
             ) -> SysOpResult {
@@ -1488,11 +1488,11 @@ fn emit_free_fn_glue(
     };
 
     quote! {
-        fn #glue_ident(
+        fn #glue_ident<'a>(
             &self,
             heap: &std::sync::Arc<BexHeap>,
-            permit: PermitProof<'_>,
-            args: Vec<BexValue<'_>>,
+            permit: PermitProof<'a>,
+            args: Vec<BexValue<'a>>,
             ctx: &SysOpContext,
             call_id: CallId,
         ) -> SysOpResult {
@@ -1538,12 +1538,12 @@ fn emit_root_trait(tree: &BTreeMap<String, IoNamespaceNode>) -> TokenStream {
 
     quote! {
         pub trait IoPackageBaml: #(#ns_trait_idents)+* {
-            fn get_sys_op_fn(
+            fn get_sys_op_fn<'a>(
                 &self,
                 path: &str,
                 heap: &std::sync::Arc<BexHeap>,
-                permit: PermitProof<'_>,
-                args: Vec<BexValue<'_>>,
+                permit: PermitProof<'a>,
+                args: Vec<BexValue<'a>>,
                 ctx: &SysOpContext,
                 call_id: CallId,
             ) -> Option<SysOpResult> {

@@ -286,7 +286,7 @@ fn gen_accessor_body(field: &AccessorFieldDef) -> TokenStream2 {
         FieldTypeKind::String => quote! {
             self.cls
                 .field(#name_str)
-                .and_then(|value| value.as_string(heap))
+                .and_then(|value| value.as_string(heap, permit))
         },
         FieldTypeKind::Int => quote! {
             self.cls
@@ -306,29 +306,29 @@ fn gen_accessor_body(field: &AccessorFieldDef) -> TokenStream2 {
         FieldTypeKind::ResourceHandle => quote! {
             self.cls
                 .field(#name_str)
-                .and_then(|value| value.as_resource_handle(heap))
+                .and_then(|value| value.as_resource_handle(heap, permit))
         },
         FieldTypeKind::MapStringString => quote! {
             self.cls
                 .field(#name_str)
-                .and_then(|value| value.as_map(heap))
+                .and_then(|value| value.as_map(heap, permit))
                 .and_then(|map| {
                     map.into_iter()
-                        .map(|(k, v)| v.as_string(heap).map(|s| (k, s)))
+                        .map(|(k, v)| v.as_string(heap, permit).map(|s| (k, s)))
                         .collect::<Result<_, _>>()
                 })
         },
         FieldTypeKind::MapStringUnknown => quote! {
             self.cls
                 .field(#name_str)
-                .and_then(|value| value.as_map(heap))
+                .and_then(|value| value.as_map(heap, permit))
         },
         FieldTypeKind::ArrayString => quote! {
             self.cls.field(#name_str).and_then(|value| {
-                value.as_array(heap).and_then(|items| {
+                value.as_array(heap, permit).and_then(|items| {
                     items
                         .into_iter()
-                        .map(|item| item.as_string(heap))
+                        .map(|item| item.as_string(heap, permit))
                         .collect::<Result<Vec<_>, AccessError>>()
                 })
             })
@@ -347,25 +347,25 @@ fn gen_accessor_body(field: &AccessorFieldDef) -> TokenStream2 {
 fn gen_into_owned_field(field: &AccessorFieldDef) -> TokenStream2 {
     let name = &field.name;
     match field.kind {
-        FieldTypeKind::String => quote!(#name: self.#name(heap)?.clone()),
+        FieldTypeKind::String => quote!(#name: self.#name(heap, permit)?.clone()),
         FieldTypeKind::Int | FieldTypeKind::Float | FieldTypeKind::Bool => {
             quote!(#name: self.#name()?)
         }
-        FieldTypeKind::ResourceHandle => quote!(#name: self.#name(heap)?),
+        FieldTypeKind::ResourceHandle => quote!(#name: self.#name(heap, permit)?),
         FieldTypeKind::MapStringString => {
-            quote!(#name: self.#name(heap)?
+            quote!(#name: self.#name(heap, permit)?
                 .into_iter()
                 .map(|(k, v)| (k, v.clone()))
                 .collect())
         }
         FieldTypeKind::MapStringUnknown => {
-            quote!(#name: self.#name(heap)?
+            quote!(#name: self.#name(heap, permit)?
                 .into_iter()
-                .map(|(k, v)| Ok((k, v.as_owned_but_very_slow(heap)?)))
+                .map(|(k, v)| Ok((k, v.as_owned_but_very_slow(heap, permit)?)))
                 .collect::<Result<_, _>>()?)
         }
         FieldTypeKind::ArrayString => {
-            quote!(#name: self.#name(heap)?.into_iter().cloned().collect())
+            quote!(#name: self.#name(heap, permit)?.into_iter().cloned().collect())
         }
         // Complex types: into_owned from heap reads not yet implemented
         FieldTypeKind::BuiltinEnum(_)
@@ -394,7 +394,7 @@ fn gen_accessor_struct(td: &AccessorTypeDef) -> TokenStream2 {
                     pub fn #fname(
                         &self,
                         heap: &'a BexHeap,
-                        permit: PermitProof<'_>,
+                        permit: PermitProof<'a>,
                     ) -> Result<#ret, AccessError> {
                         #body
                     }

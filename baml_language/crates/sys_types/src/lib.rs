@@ -343,7 +343,7 @@ impl<T: AsBexExternalValue + Send + 'static> SysOpOutput<T> {
 /// Each operation takes a heap reference, arguments, and a context reference,
 /// returning a `SysOpResult` which is either an immediate result or a future to await.
 ///
-/// The heap reference plus a [`PermitProof`] (proving GC-exclusion) lets ops
+/// The heap reference plus a [`PermitProof`](bex_heap::PermitProof) (proving GC-exclusion) lets ops
 /// safely access instance fields via the heap accessor APIs.
 /// Arguments are `BexValue` which can be either:
 /// - `BexValue::External(...)` for primitives/strings copied from VM

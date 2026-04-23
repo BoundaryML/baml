@@ -324,10 +324,14 @@ mod tests {
             Object::String("builtin2".to_string()),
         ];
         let heap = BexHeap::with_tlab_size(compile_time, 100);
-        let mut tlab = Tlab::new(heap);
+        let mut tlab = Tlab::new(Arc::clone(&heap));
 
-        // First runtime allocation starts after compile-time objects
-        let _ptr = tlab.alloc(Object::String("runtime".to_string()));
+        // First runtime allocation must land outside the compile-time region.
+        let ptr = tlab.alloc(Object::String("runtime".to_string()));
+        assert!(
+            !heap.is_compile_time_ptr(ptr),
+            "runtime allocation must not overlap compile-time objects"
+        );
     }
 
     #[test]
