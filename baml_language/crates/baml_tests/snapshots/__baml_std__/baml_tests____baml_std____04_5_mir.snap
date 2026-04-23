@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 585
 ---
 === MIR2 ===
 
@@ -84,6 +83,8 @@ fn baml.fs.File.close = builtin(io)
 
 fn baml.fs.exists = builtin(io)
 
+fn baml.fs.mkdir = builtin(io)
+
 fn baml.fs.open = builtin(io)
 
 fn baml.fs.read = builtin(io)
@@ -91,6 +92,8 @@ fn baml.fs.read = builtin(io)
 fn baml.fs.File.read = builtin(io)
 
 fn baml.fs.File.read_bytes = builtin(io)
+
+fn baml.fs.read_dir = builtin(io)
 
 fn baml.fs.remove = builtin(io)
 
@@ -107,6 +110,12 @@ fn baml.fs.write = builtin(io)
 fn baml.fs.File.write_bytes = builtin(io)
 
 fn baml.fs.write_bytes = builtin(io)
+
+fn baml.glob.Glob.matches = builtin(io)
+
+fn baml.glob.new = builtin(io)
+
+fn baml.glob.Glob.scan = builtin(io)
 
 fn baml.http.Response.bytes = builtin(io)
 

@@ -1002,6 +1002,41 @@ SOURCE_FILE
               QUOTE """
             R_PAREN ")"
         R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "ReadDir"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "baml.fs.DirEntry[]"
+      WORD "baml"
+      DOT "."
+      WORD "fs"
+      DOT "."
+      WORD "DirEntry"
+      L_BRACKET "["
+      R_BRACKET "]"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        CALL_EXPR
+          PATH_EXPR "baml.fs.read_dir"
+            WORD "baml"
+            DOT "."
+            WORD "fs"
+            DOT "."
+            WORD "read_dir"
+          CALL_ARGS
+            L_PAREN "("
+            STRING_LITERAL "some/path"
+              QUOTE """
+              WORD "some"
+              SLASH "/"
+              WORD "path"
+              QUOTE """
+            R_PAREN ")"
+        R_BRACE "}"
 
 === ERRORS ===
 None

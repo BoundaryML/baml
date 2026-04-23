@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 522
 ---
 === TIR2 ===
 
@@ -113,7 +112,49 @@ class baml.errors.StackTrace$stream {
 class baml.fs.File {
   _handle: $rust_type
 }
+class baml.fs.DirEntry {
+  name: string
+  is_dir: bool
+  is_file: bool
+  is_symlink: bool
+}
+class baml.fs.MkdirOptions {
+  recursive: bool
+}
 class baml.fs.File$stream {
+  _handle: $rust_type
+}
+class baml.fs.DirEntry$stream {
+  name: null | string
+  is_dir: null | bool
+  is_file: null | bool
+  is_symlink: null | bool
+}
+class baml.fs.MkdirOptions$stream {
+  recursive: null | bool
+}
+
+--- <builtin>/baml/ns_glob/glob.baml ---
+class baml.glob.ScanOptions {
+  cwd: string?
+  dot: bool?
+  absolute: bool?
+  follow_symlinks: bool?
+  throw_error_on_broken_symlink: bool?
+  only_files: bool?
+}
+class baml.glob.Glob {
+  _handle: $rust_type
+}
+class baml.glob.ScanOptions$stream {
+  cwd: null | string
+  dot: null | bool
+  absolute: null | bool
+  follow_symlinks: null | bool
+  throw_error_on_broken_symlink: null | bool
+  only_files: null | bool
+}
+class baml.glob.Glob$stream {
   _handle: $rust_type
 }
 

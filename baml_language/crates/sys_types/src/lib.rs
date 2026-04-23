@@ -334,6 +334,28 @@ impl<T: AsBexExternalValue + Send + 'static> SysOpOutput<T> {
     }
 }
 
+impl<T: Send + 'static> SysOpOutput<T> {
+    /// Convert to [`SysOpResult`] using a custom value mapping function.
+    ///
+    /// Used by generated glue code for return types that don't implement
+    /// [`AsBexExternalValue`] directly (e.g. `Vec<ClassName>`).
+    pub fn into_result_mapped(
+        self,
+        op: SysOp,
+        f: impl Fn(T) -> BexExternalValue + Send + 'static,
+    ) -> SysOpResult {
+        match self {
+            Self::Ready(Ok(v)) => SysOpResult::Ready(Ok(f(v))),
+            Self::Ready(Err(kind)) => SysOpResult::Ready(Err(OpError::new(op, kind))),
+            Self::Async(fut) => SysOpResult::Async(Box::pin(async move {
+                fut.await
+                    .map(f)
+                    .map_err(|kind| OpError::new(op, kind))
+            })),
+        }
+    }
+}
+
 // ============================================================================
 // System Operations Table
 // ============================================================================

@@ -27,6 +27,7 @@ js-sys = { workspace = true }
 log = { workspace = true }
 lsp-server = { workspace = true }
 prost = { workspace = true }
+regex = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true, features = [ "derive" ] }
 serde_json = { workspace = true }

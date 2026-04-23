@@ -31,6 +31,8 @@ tokio = { workspace = true, features = [
   "io-std",
   "time",
 ] }
+regex = { workspace = true }
+walkdir = { workspace = true }
 
 [lints]
 workspace = true

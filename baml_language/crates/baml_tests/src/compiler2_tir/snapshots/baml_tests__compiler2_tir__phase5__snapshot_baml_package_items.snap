@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/compiler2_tir/phase5.rs
-assertion_line: 389
 expression: output
 ---
 namespace baml:
@@ -29,14 +28,22 @@ namespace baml.errors:
 namespace baml.events:
   function send
 namespace baml.fs:
+  class DirEntry { methods: [] }
   class File { methods: [text, bytes, read, read_bytes, close, seek_from, write, write_bytes] }
+  class MkdirOptions { methods: [] }
   function exists
+  function mkdir
   function open
   function read
+  function read_dir
   function remove
   function size
   function write
   function write_bytes
+namespace baml.glob:
+  class Glob { methods: [scan, matches] }
+  class ScanOptions { methods: [] }
+  function new
 namespace baml.http:
   class Request { methods: [] }
   class Response { methods: [text, bytes, ok] }

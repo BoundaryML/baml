@@ -100,3 +100,7 @@ function Remove() -> null {
 function Size() -> int {
     baml.fs.size("data.bin")
 }
+
+function ReadDir() -> baml.fs.DirEntry[] {
+    baml.fs.read_dir("some/path")
+}

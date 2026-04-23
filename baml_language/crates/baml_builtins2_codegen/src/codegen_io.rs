@@ -1411,6 +1411,44 @@ fn emit_one_namespace_trait(
     }
 }
 
+/// Generate the `.into_result(...)` call for a given return type.
+///
+/// - Scalar types implementing `AsBexExternalValue` use `.into_result(op)`.
+/// - `List(Named(...))` uses `.into_result_mapped(op, |v| ...)` because
+///   `Vec<ClassName>` does not implement `AsBexExternalValue` (orphan rules
+///   prevent it in the generated crate).
+fn emit_into_result_call(
+    return_type: &BamlType,
+    variant_ident: &syn::Ident,
+    call_expr: &TokenStream,
+    class_ns_map: &BTreeMap<String, String>,
+    paths: &CodegenPaths,
+) -> TokenStream {
+    if let BamlType::List(inner) = return_type {
+        if let BamlType::Named(name) = inner.as_ref() {
+            if let Some(ns) = class_ns_map.get(name.as_str()) {
+                let owned = &paths.owned;
+                let ns_ident = format_ident!("{}", ns);
+                let name_ident = format_ident!("{}", name);
+                return quote! {
+                    #call_expr
+                        .into_result_mapped(SysOp::#variant_ident, |v| {
+                            BexExternalValue::Array {
+                                element_type: baml_type::Ty::unknown(),
+                                items: v.into_iter()
+                                    .map(|item| <#owned::#ns_ident::#name_ident as AsBexExternalValue>::into_bex_external_value(item))
+                                    .collect(),
+                            }
+                        })
+                };
+            }
+        }
+    }
+    quote! {
+        #call_expr.into_result(SysOp::#variant_ident)
+    }
+}
+
 fn emit_free_fn_glue(
     builtin: &NativeBuiltin,
     ns_trait_ident: &syn::Ident,
@@ -1422,6 +1460,16 @@ fn emit_free_fn_glue(
     let clean_ident = format_ident!("{}", io_method_name(builtin));
 
     if builtin.params.is_empty() {
+        let call_expr = quote! {
+            #ns_trait_ident::#clean_ident(self, heap, call_id, ctx)
+        };
+        let into_result = emit_into_result_call(
+            &builtin.return_type,
+            &variant_ident,
+            &call_expr,
+            class_ns_map,
+            paths,
+        );
         return quote! {
             fn #glue_ident(
                 &self,
@@ -1430,7 +1478,7 @@ fn emit_free_fn_glue(
                 ctx: &SysOpContext,
                 call_id: CallId,
             ) -> SysOpResult {
-                #ns_trait_ident::#clean_ident(self, heap, call_id, ctx).into_result(SysOp::#variant_ident)
+                #into_result
             }
         };
     }
@@ -1475,6 +1523,17 @@ fn emit_free_fn_glue(
         quote! { Ok::<_, AccessError>((#(#param_idents),*)) }
     };
 
+    let call_expr = quote! {
+        #ns_trait_ident::#clean_ident(self, heap, call_id, #(#param_idents,)* ctx)
+    };
+    let into_result = emit_into_result_call(
+        &builtin.return_type,
+        &variant_ident,
+        &call_expr,
+        class_ns_map,
+        paths,
+    );
+
     quote! {
         fn #glue_ident(
             &self,
@@ -1493,8 +1552,7 @@ fn emit_free_fn_glue(
 
             match __extraction {
                 Ok(#ok_pattern) => {
-                    #ns_trait_ident::#clean_ident(self, heap, call_id, #(#param_idents,)* ctx)
-                        .into_result(SysOp::#variant_ident)
+                    #into_result
                 }
                 Err(e) => SysOpResult::Ready(Err(OpError::new(
                     SysOp::#variant_ident,
@@ -2083,6 +2141,70 @@ fn emit_result_conversion(
                 }
             }
         },
+        BamlType::List(inner) => {
+            let inner_conv = emit_result_conversion_inner(inner, class_ns_map, paths);
+            quote! {
+                match __val {
+                    BexExternalValue::Array { items, .. } => {
+                        items.into_iter()
+                            .map(|__val| { #inner_conv })
+                            .collect::<Result<Vec<_>, _>>()
+                    }
+                    other => Err(RuntimeIoError::Other(
+                        format!("expected array, got {}", other.type_name()),
+                    )),
+                }
+            }
+        }
+        _ => quote! { Ok(__val) },
+    }
+}
+
+/// Per-element result conversion for list inner types.
+/// Used by the `BamlType::List` arm of `emit_result_conversion`.
+fn emit_result_conversion_inner(
+    ty: &BamlType,
+    class_ns_map: &BTreeMap<String, String>,
+    paths: &CodegenPaths,
+) -> TokenStream {
+    match ty {
+        BamlType::String => quote! {
+            match __val {
+                BexExternalValue::String(s) => Ok(s),
+                other => Err(RuntimeIoError::Other(
+                    format!("expected string in list, got {}", other.type_name()),
+                )),
+            }
+        },
+        BamlType::Int => quote! {
+            match __val {
+                BexExternalValue::Int(v) => Ok(v),
+                other => Err(RuntimeIoError::Other(
+                    format!("expected int in list, got {}", other.type_name()),
+                )),
+            }
+        },
+        BamlType::Bool => quote! {
+            match __val {
+                BexExternalValue::Bool(v) => Ok(v),
+                other => Err(RuntimeIoError::Other(
+                    format!("expected bool in list, got {}", other.type_name()),
+                )),
+            }
+        },
+        BamlType::Named(name) => {
+            if let Some(ns) = class_ns_map.get(name.as_str()) {
+                let owned = &paths.owned;
+                let ns_ident = format_ident!("{}", ns);
+                let name_ident = format_ident!("{}", name);
+                quote! {
+                    #owned::#ns_ident::#name_ident::from_external(__val)
+                        .map_err(|e| RuntimeIoError::Other(format!("{e:?}")))
+                }
+            } else {
+                quote! { Ok(__val) }
+            }
+        }
         _ => quote! { Ok(__val) },
     }
 }

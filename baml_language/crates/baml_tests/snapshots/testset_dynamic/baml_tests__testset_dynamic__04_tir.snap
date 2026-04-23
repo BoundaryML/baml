@@ -1,9 +1,8 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 37821
 ---
 === TIR2 ===
-function user.$init_test_24(registry: testing.TestCollector) -> ? throws never {
+function user.$init_test_25(registry: testing.TestCollector) -> ? throws never {
   { : null
     registry.register_test_set("dynamic tests", (testset: testing.TestCollector) -> void { ... }, null) : void
       (testset: testing.TestCollector) -> void { ... } : (testset: testing.TestCollector) -> void throws unknown
@@ -31,13 +30,13 @@ function user.$init_test_24(registry: testing.TestCollector) -> ? throws never {
     null : null
   }
 }
-lambda user.$init_test_24 {
+lambda user.$init_test_25 {
 }
-lambda user.$init_test_24 {
+lambda user.$init_test_25 {
 }
-lambda user.$init_test_24 {
+lambda user.$init_test_25 {
 }
-lambda user.$init_test_24 {
+lambda user.$init_test_25 {
 }
-lambda user.$init_test_24 {
+lambda user.$init_test_25 {
 }

@@ -932,3 +932,193 @@ async fn fs_open_w_creates_parent_dirs() {
         "nested"
     );
 }
+
+// ============================================================================
+// read_dir tests
+// ============================================================================
+
+#[tokio::test]
+async fn fs_read_dir_returns_entries() {
+    let (_tmp, root) = tmp(indexmap! {
+        "a.txt" => "aaa",
+        "b.txt" => "bbb",
+    });
+    std::fs::create_dir(format!("{root}/subdir")).unwrap();
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> baml.fs.DirEntry[] {{
+                baml.fs.read_dir("{root}")
+            }}
+        "#
+    ));
+
+    let Ok(BexExternalValue::Array { items, .. }) = &output.result else {
+        panic!("expected array, got: {:?}", output.result);
+    };
+    assert_eq!(items.len(), 3);
+    let mut names: Vec<String> = items
+        .iter()
+        .map(|item| {
+            let BexExternalValue::Instance { fields, .. } = item else {
+                panic!("expected instance, got: {item:?}");
+            };
+            let BexExternalValue::String(name) = &fields["name"] else {
+                panic!("expected string name");
+            };
+            name.clone()
+        })
+        .collect();
+    names.sort();
+    assert_eq!(names, vec!["a.txt", "b.txt", "subdir"]);
+}
+
+#[tokio::test]
+async fn fs_read_dir_type_flags() {
+    let (_tmp, root) = tmp(indexmap! { "file.txt" => "content" });
+    std::fs::create_dir(format!("{root}/dir")).unwrap();
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> baml.fs.DirEntry[] {{
+                baml.fs.read_dir("{root}")
+            }}
+        "#
+    ));
+
+    let Ok(BexExternalValue::Array { items, .. }) = &output.result else {
+        panic!("expected array, got: {:?}", output.result);
+    };
+    for item in items {
+        let BexExternalValue::Instance { fields, .. } = item else {
+            panic!("expected instance");
+        };
+        let BexExternalValue::String(name) = &fields["name"] else {
+            panic!("expected string name");
+        };
+        let BexExternalValue::Bool(is_dir) = &fields["is_dir"] else {
+            panic!("expected bool is_dir");
+        };
+        let BexExternalValue::Bool(is_file) = &fields["is_file"] else {
+            panic!("expected bool is_file");
+        };
+        match name.as_str() {
+            "file.txt" => {
+                assert!(!is_dir, "file.txt should not be a dir");
+                assert!(is_file, "file.txt should be a file");
+            }
+            "dir" => {
+                assert!(is_dir, "dir should be a dir");
+                assert!(!is_file, "dir should not be a file");
+            }
+            _ => panic!("unexpected entry: {name}"),
+        }
+    }
+}
+
+#[tokio::test]
+async fn fs_read_dir_nonexistent_errors() {
+    let (_tmp, root) = tmp(indexmap! {});
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> baml.fs.DirEntry[] {{
+                baml.fs.read_dir("{root}/no_such_dir")
+            }}
+        "#
+    ));
+
+    assert!(output.result.is_err());
+}
+
+#[tokio::test]
+async fn fs_read_dir_empty_dir() {
+    let (_tmp, root) = tmp(indexmap! {});
+    std::fs::create_dir(format!("{root}/empty")).unwrap();
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> baml.fs.DirEntry[] {{
+                baml.fs.read_dir("{root}/empty")
+            }}
+        "#
+    ));
+
+    let Ok(BexExternalValue::Array { items, .. }) = &output.result else {
+        panic!("expected array, got: {:?}", output.result);
+    };
+    assert_eq!(items.len(), 0);
+}
+
+// ============================================================================
+// mkdir tests
+// ============================================================================
+
+#[tokio::test]
+async fn fs_mkdir_creates_directory() {
+    let (_tmp, root) = tmp(indexmap! {});
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> null {{
+                baml.fs.mkdir("{root}/newdir", baml.fs.MkdirOptions {{ recursive: false }})
+            }}
+        "#
+    ));
+
+    assert_eq!(output.result, Ok(BexExternalValue::Null));
+    assert!(
+        std::path::Path::new(&format!("{root}/newdir")).is_dir(),
+        "expected {root}/newdir to be a directory"
+    );
+}
+
+#[tokio::test]
+async fn fs_mkdir_recursive_creates_parents() {
+    let (_tmp, root) = tmp(indexmap! {});
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> null {{
+                baml.fs.mkdir("{root}/a/b/c", baml.fs.MkdirOptions {{ recursive: true }})
+            }}
+        "#
+    ));
+
+    assert_eq!(output.result, Ok(BexExternalValue::Null));
+    assert!(
+        std::path::Path::new(&format!("{root}/a/b/c")).is_dir(),
+        "expected {root}/a/b/c to be a directory"
+    );
+}
+
+#[tokio::test]
+async fn fs_mkdir_non_recursive_errors_when_parent_missing() {
+    let (_tmp, root) = tmp(indexmap! {});
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> null {{
+                baml.fs.mkdir("{root}/no/parent", baml.fs.MkdirOptions {{ recursive: false }})
+            }}
+        "#
+    ));
+
+    assert!(output.result.is_err());
+}
+
+#[tokio::test]
+async fn fs_mkdir_recursive_is_idempotent() {
+    let (_tmp, root) = tmp(indexmap! {});
+    std::fs::create_dir(format!("{root}/existing")).unwrap();
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> null {{
+                baml.fs.mkdir("{root}/existing", baml.fs.MkdirOptions {{ recursive: true }})
+            }}
+        "#
+    ));
+
+    assert_eq!(output.result, Ok(BexExternalValue::Null));
+}

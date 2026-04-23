@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 690
 ---
 function baml.Array.at(self: null, index: int) -> void? {
 }
@@ -195,10 +194,16 @@ function baml.fs.File.write_bytes(self: null, data: uint8array) -> int {
 function baml.fs.exists(path: string) -> bool {
 }
 
+function baml.fs.mkdir(path: string, options: void) -> null {
+}
+
 function baml.fs.open(path: string, mode: "r" | "r+" | "w" | "w+" | "a" | "a+") -> void {
 }
 
 function baml.fs.read(path: string) -> string {
+}
+
+function baml.fs.read_dir(path: string) -> void[] {
 }
 
 function baml.fs.remove(path: string) -> null {
@@ -211,6 +216,15 @@ function baml.fs.write(path: string, content: string) -> int {
 }
 
 function baml.fs.write_bytes(path: string, content: uint8array) -> int {
+}
+
+function baml.glob.Glob.matches(self: null, path: string) -> bool {
+}
+
+function baml.glob.Glob.scan(self: null, root: string | void) -> string[] {
+}
+
+function baml.glob.new(pattern: string) -> void {
 }
 
 function baml.http.Response.bytes(self: null) -> uint8array {

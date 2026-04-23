@@ -298,6 +298,10 @@ impl<'a> Parser<'a> {
         self.current().is_none()
     }
 
+    fn at_end_raw(&self) -> bool {
+        self.current_raw().is_none()
+    }
+
     /// Check if current token matches the given kind
     fn at(&self, kind: TokenKind) -> bool {
         self.current().map(|t| t.kind == kind).unwrap_or(false)
@@ -1351,9 +1355,12 @@ impl<'a> Parser<'a> {
         self.with_node(SyntaxKind::STRING_LITERAL, |p| {
             p.bump(); // Opening quote
 
-            // Collect all tokens until closing quote
+            // Collect all tokens until closing quote.
+            // Use at_end_raw / at_raw / bump_raw throughout so that `*/`
+            // and `//` inside the string are kept as literal content instead
+            // of being mis-recognised as comment delimiters.
             let mut loop_counter = 0;
-            while !p.at_end() {
+            while !p.at_end_raw() {
                 loop_counter += 1;
                 if loop_counter > 100_000 {
                     p.error_unexpected_token("String parsing exceeded iteration limit".to_string());
@@ -1370,19 +1377,13 @@ impl<'a> Parser<'a> {
                     continue;
                 }
 
-                // Check if next token is the closing quote
-                // Use at_raw to avoid skipping // as comments - we want the actual next token
                 if p.at_raw(TokenKind::Quote) {
                     p.bump_raw(); // Consume closing quote
                     return;
                 }
-                // Not a quote - consume as string content
-                // Use bump_raw() to avoid treating // as comments inside strings
                 p.bump_raw();
             }
 
-            // If we get here, we reached EOF without finding closing quote
-            // eprintln!("[PARSE_STRING] Reached EOF without closing quote");
             p.error_unexpected_token("Unclosed string literal".to_string());
         });
 
@@ -1417,7 +1418,7 @@ impl<'a> Parser<'a> {
 
             // Collect all tokens until closing quote (same logic as parse_string).
             let mut loop_counter = 0;
-            while !p.at_end() {
+            while !p.at_end_raw() {
                 loop_counter += 1;
                 if loop_counter > 100_000 {
                     p.error_unexpected_token(
@@ -1502,7 +1503,7 @@ impl<'a> Parser<'a> {
                 break;
             }
 
-            if self.at_end() {
+            if self.at_end_raw() {
                 self.error_unexpected_token(format!(
                     "Unclosed raw string (expected \"{}\")",
                     "#".repeat(opening_hashes)

@@ -448,6 +448,60 @@ impl io::IoNamespaceFs for NativeSysOps {
     ) -> SysOpOutput<i64> {
         SysOpOutput::async_op(async move { write_path(&path, &content).await })
     }
+
+    fn read_dir(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        path: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Vec<owned::fs::DirEntry>> {
+        SysOpOutput::async_op(async move {
+            let mut rd = tokio::fs::read_dir(&path).await.map_err(|e| {
+                OpErrorKind::Other(format!("Failed to read directory '{path}': {e}"))
+            })?;
+            let mut entries = Vec::new();
+            while let Some(entry) = rd.next_entry().await.map_err(|e| {
+                OpErrorKind::Other(format!(
+                    "Failed to read directory entry in '{path}': {e}"
+                ))
+            })? {
+                let ft = entry.file_type().await.map_err(|e| {
+                    OpErrorKind::Other(format!(
+                        "Failed to get file type for '{}': {e}",
+                        entry.file_name().to_string_lossy()
+                    ))
+                })?;
+                entries.push(owned::fs::DirEntry {
+                    name: entry.file_name().to_string_lossy().into_owned(),
+                    is_dir: ft.is_dir(),
+                    is_file: ft.is_file(),
+                    is_symlink: ft.is_symlink(),
+                });
+            }
+            Ok(entries)
+        })
+    }
+
+    fn mkdir(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        path: String,
+        options: owned::fs::MkdirOptions,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::async_op(async move {
+            if options.recursive {
+                tokio::fs::create_dir_all(&path).await
+            } else {
+                tokio::fs::create_dir(&path).await
+            }
+            .map_err(|e| {
+                OpErrorKind::Other(format!("Failed to create directory '{path}': {e}"))
+            })
+        })
+    }
 }
 
 // Auto-creates missing parent dirs, matching Bun's `Bun.write` behavior.
@@ -466,6 +520,199 @@ async fn write_path(path: &str, data: &[u8]) -> Result<i64, OpErrorKind> {
         .map_err(|e| OpErrorKind::Other(format!("Failed to write file '{path}': {e}")))?;
     i64::try_from(data.len())
         .map_err(|_| OpErrorKind::Other(format!("Write size {} exceeds i64::MAX", data.len())))
+}
+
+// ============================================================================
+// Glob
+// ============================================================================
+
+use crate::glob_utils::GlobPattern;
+
+type GlobHandle = GlobPattern;
+
+fn downcast_glob_handle(glob: &owned::glob::Glob) -> Result<Arc<GlobHandle>, OpErrorKind> {
+    glob._handle
+        .clone()
+        .downcast::<GlobHandle>()
+        .map_err(|_| OpErrorKind::Other("Invalid glob handle type".into()))
+}
+
+impl io::IoNamespaceGlob for NativeSysOps {
+    fn new(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        pattern: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<owned::glob::Glob> {
+        match GlobPattern::new(&pattern) {
+            Ok(gp) => {
+                let handle: Arc<dyn std::any::Any + Send + Sync> = Arc::new(gp);
+                SysOpOutput::ok(owned::glob::Glob { _handle: handle })
+            }
+            Err(e) => SysOpOutput::err(OpErrorKind::Other(e)),
+        }
+    }
+}
+
+impl io::IoClassGlobGlob for NativeSysOps {
+    fn scan(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        glob: owned::glob::Glob,
+        root: BexExternalValue,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Vec<String>> {
+        SysOpOutput::async_op(async move {
+            let handle = downcast_glob_handle(&glob)?;
+
+            // Parse root: either a string or a ScanOptions instance
+            let (cwd, dot, absolute, follow_symlinks, throw_on_broken, only_files) = match &root {
+                BexExternalValue::String(s) => (s.clone(), false, false, false, false, true),
+                BexExternalValue::Instance { fields, .. } => {
+                    let cwd = fields
+                        .get("cwd")
+                        .and_then(|v| {
+                            if let BexExternalValue::String(s) = v {
+                                Some(s.clone())
+                            } else {
+                                None
+                            }
+                        })
+                        .unwrap_or_else(|| ".".to_string());
+                    let dot = fields
+                        .get("dot")
+                        .and_then(|v| {
+                            if let BexExternalValue::Bool(b) = v {
+                                Some(*b)
+                            } else {
+                                None
+                            }
+                        })
+                        .unwrap_or(false);
+                    let absolute = fields
+                        .get("absolute")
+                        .and_then(|v| {
+                            if let BexExternalValue::Bool(b) = v {
+                                Some(*b)
+                            } else {
+                                None
+                            }
+                        })
+                        .unwrap_or(false);
+                    let follow_symlinks = fields
+                        .get("follow_symlinks")
+                        .and_then(|v| {
+                            if let BexExternalValue::Bool(b) = v {
+                                Some(*b)
+                            } else {
+                                None
+                            }
+                        })
+                        .unwrap_or(false);
+                    let throw_on_broken = fields
+                        .get("throw_error_on_broken_symlink")
+                        .and_then(|v| {
+                            if let BexExternalValue::Bool(b) = v {
+                                Some(*b)
+                            } else {
+                                None
+                            }
+                        })
+                        .unwrap_or(false);
+                    let only_files = fields
+                        .get("only_files")
+                        .and_then(|v| {
+                            if let BexExternalValue::Bool(b) = v {
+                                Some(*b)
+                            } else {
+                                None
+                            }
+                        })
+                        .unwrap_or(true);
+                    (cwd, dot, absolute, follow_symlinks, throw_on_broken, only_files)
+                }
+                _ => {
+                    return Err(OpErrorKind::Other(
+                        "scan argument must be a string or ScanOptions".into(),
+                    ))
+                }
+            };
+
+            let cwd_path = std::path::Path::new(&cwd);
+            let abs_cwd = if cwd_path.is_absolute() {
+                cwd_path.to_path_buf()
+            } else {
+                std::env::current_dir()
+                    .map_err(|e| OpErrorKind::Other(format!("Failed to get cwd: {e}")))?
+                    .join(cwd_path)
+            };
+
+            let walker = walkdir::WalkDir::new(&abs_cwd)
+                .follow_links(follow_symlinks)
+                .into_iter();
+
+            let mut results = Vec::new();
+            for entry in walker {
+                let entry = match entry {
+                    Ok(e) => e,
+                    Err(e) => {
+                        if throw_on_broken {
+                            return Err(OpErrorKind::Other(format!("Walk error: {e}")));
+                        }
+                        continue;
+                    }
+                };
+
+                // Skip the root itself
+                if entry.depth() == 0 {
+                    continue;
+                }
+
+                let ft = entry.file_type();
+                if only_files && !ft.is_file() {
+                    continue;
+                }
+
+                let rel = entry
+                    .path()
+                    .strip_prefix(&abs_cwd)
+                    .unwrap_or(entry.path());
+                let rel_str = rel.to_string_lossy().replace('\\', "/");
+
+                // Skip dot files/dirs unless dot=true
+                if !dot && rel_str.split('/').any(|seg| seg.starts_with('.')) {
+                    continue;
+                }
+
+                if !handle.is_match(&rel_str) {
+                    continue;
+                }
+
+                if absolute {
+                    results.push(entry.path().to_string_lossy().replace('\\', "/"));
+                } else {
+                    results.push(rel_str);
+                }
+            }
+            Ok(results)
+        })
+    }
+
+    fn matches(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        glob: owned::glob::Glob,
+        path: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<bool> {
+        match downcast_glob_handle(&glob) {
+            Ok(handle) => SysOpOutput::ok(handle.is_match(&path)),
+            Err(e) => SysOpOutput::err(e),
+        }
+    }
 }
 
 // ============================================================================

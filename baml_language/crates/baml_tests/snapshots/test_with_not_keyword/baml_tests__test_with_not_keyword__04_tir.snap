@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 36846
 ---
 === TIR2 ===
 class user.Foo {
@@ -20,7 +19,7 @@ function user.use_with_as_var() -> int throws never {
 class user.HasWith {
   with: int
 }
-function user.$init_test_24(registry: testing.TestCollector) -> ? throws never {
+function user.$init_test_25(registry: testing.TestCollector) -> ? throws never {
   { : null
     registry.register_test("with as field", () -> void { ... }, null) : void
       () -> void { ... } : () -> void throws unknown
@@ -31,7 +30,7 @@ function user.$init_test_24(registry: testing.TestCollector) -> ? throws never {
     null : null
   }
 }
-lambda user.$init_test_24 {
+lambda user.$init_test_25 {
 }
 class user.Foo$stream {
   x: null | int

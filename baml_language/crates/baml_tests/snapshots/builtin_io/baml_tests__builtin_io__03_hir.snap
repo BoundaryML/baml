@@ -26,6 +26,9 @@ function user.ReadChunk() -> string  [expr] {
 function user.ReadChunkBytes() -> uint8array  [expr] {
   { let f = baml.fs.open("data.bin", "r") } f.read_bytes(4096)
 }
+function user.ReadDir() -> baml.fs.DirEntry[]  [expr] {
+  {  } baml.fs.read_dir("some/path")
+}
 function user.ReadFile() -> string  [expr] {
   { let f = baml.fs.open("example.txt", "r") } f.text()
 }
