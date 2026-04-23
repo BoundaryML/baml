@@ -16,8 +16,8 @@ use baml_compiler2_mir::{
 };
 use baml_type::Ty;
 use bex_vm_types::{
-    BinOp as VmBinOp, Bytecode, CmpOp, ConstValue, Function, FunctionKind, GlobalIndex,
-    Instruction, Object, ObjectIndex, ObjectPool, UnaryOp as VmUnaryOp,
+    BinOp as VmBinOp, Bytecode, CmpOp, ConstValue, Function, FunctionKind, FunctionOrigin,
+    GlobalIndex, Instruction, Object, ObjectIndex, ObjectPool, UnaryOp as VmUnaryOp,
     bytecode::{
         BlockNotification, BlockNotificationType, DebugLocalScope, InstructionMeta, JumpTableData,
         LineTableEntry, MatchHashEntry, MatchHashTable, OperandMeta,
@@ -337,6 +337,10 @@ struct StackifyCodegen<'ctx, 'obj> {
 }
 
 impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
+    fn display_string_operand(value: &str) -> String {
+        format!("{value:?}")
+    }
+
     /// Create a new stackification codegen instance.
     #[allow(clippy::needless_pass_by_value)] // ctx is destructured into self fields
     fn new(
@@ -594,6 +598,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             param_names: Vec::new(),
             param_types: Vec::new(),
             throws_type: None,
+            origin: FunctionOrigin::Internal,
             body_meta: None,
             trace: false,
         }
@@ -999,7 +1004,10 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                         let log_const_idx = self
                             .add_constant(ConstValue::Object(ObjectIndex::from_raw(log_str_idx)));
                         let inst = self.emit(Instruction::LoadConst(log_const_idx));
-                        self.set_operand(inst, OperandMeta::Const("\"$baml_log\"".to_string()));
+                        self.set_operand(
+                            inst,
+                            OperandMeta::Const(Self::display_string_operand("$baml_log")),
+                        );
 
                         // 2. Push level value string
                         let level_str = match level {
@@ -1013,7 +1021,10 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                         let level_val_const_idx = self
                             .add_constant(ConstValue::Object(ObjectIndex::from_raw(level_val_idx)));
                         let inst = self.emit(Instruction::LoadConst(level_val_const_idx));
-                        self.set_operand(inst, OperandMeta::Const(format!("\"{level_str}\"")));
+                        self.set_operand(
+                            inst,
+                            OperandMeta::Const(Self::display_string_operand(level_str)),
+                        );
 
                         // 3. Push user data argument
                         unwrap_infallible(pull_semantics::walk_call_direct_args(self, args));
@@ -1024,7 +1035,10 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                         let level_key_const_idx = self
                             .add_constant(ConstValue::Object(ObjectIndex::from_raw(level_key_idx)));
                         let inst = self.emit(Instruction::LoadConst(level_key_const_idx));
-                        self.set_operand(inst, OperandMeta::Const("\"level\"".to_string()));
+                        self.set_operand(
+                            inst,
+                            OperandMeta::Const(Self::display_string_operand("level")),
+                        );
 
                         // 5. Push key "data"
                         let data_key_idx = self.objects.len();
@@ -1032,7 +1046,10 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                         let data_key_const_idx = self
                             .add_constant(ConstValue::Object(ObjectIndex::from_raw(data_key_idx)));
                         let inst = self.emit(Instruction::LoadConst(data_key_const_idx));
-                        self.set_operand(inst, OperandMeta::Const("\"data\"".to_string()));
+                        self.set_operand(
+                            inst,
+                            OperandMeta::Const(Self::display_string_operand("data")),
+                        );
 
                         // 6. AllocMap(2) -> { level: "info", data: <user_data> }
                         self.emit(Instruction::AllocMap(2));
@@ -1119,12 +1136,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 self.set_operand(inst, OperandMeta::Const(display));
             }
             Constant::String(s) => {
-                let escaped = s
-                    .replace('\\', "\\\\")
-                    .replace('\n', "\\n")
-                    .replace('\r', "\\r")
-                    .replace('\t', "\\t");
-                let display = format!("\"{escaped}\"");
+                let display = Self::display_string_operand(s);
                 let obj_idx = self.objects.len();
                 self.objects.push(Object::String(s.clone()));
                 let idx = self.add_constant(ConstValue::Object(ObjectIndex::from_raw(obj_idx)));
@@ -2358,7 +2370,10 @@ impl StackEffectSink for StackifyCodegen<'_, '_> {
         let channel_const_idx =
             self.add_constant(ConstValue::Object(ObjectIndex::from_raw(channel_obj_idx)));
         let inst = self.emit(Instruction::LoadConst(channel_const_idx));
-        self.set_operand(inst, OperandMeta::Const(format!("\"{channel}\"")));
+        self.set_operand(
+            inst,
+            OperandMeta::Const(Self::display_string_operand(&channel)),
+        );
         Ok(())
     }
 

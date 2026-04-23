@@ -1,6 +1,7 @@
 //! JSONL serialization for `RuntimeEvent`.
 
-use bex_external_types::{BexExternalAdt, BexExternalValue};
+use baml_builtins2::MediaContent;
+use bex_external_types::{BexExternalAdt, BexExternalValue, MediaKind};
 use serde::Serialize;
 
 use crate::{CustomEvent, EventKind, FunctionEvent, LogEvent, RuntimeEvent};
@@ -415,13 +416,14 @@ fn bex_value_to_json_impl(value: &BexExternalValue, depth: usize) -> serde_json:
     }
 }
 
-/// Render a `BexExternalValue` as a Rust Debug-style string.
+/// Render a `BexExternalValue` using the same debug formatting shown in the
+/// `typescript2` playground execution panel.
 ///
 /// Examples:
 /// - Class: `Person { name: "Alice", age: 30 }`
 /// - Array: `[1, 2, 3]`
-/// - Map: `{"key": "value"}`
-/// - Enum: `Status::Active`
+/// - Map: `{key: "value"}`
+/// - Enum: `Status.Ready` (`EnumName.Variant`)
 /// - Union: shows the inner value
 pub fn bex_value_to_debug_string(value: &BexExternalValue) -> String {
     bex_value_to_debug_impl(value, 0)
@@ -443,7 +445,7 @@ fn bex_value_to_debug_impl(value: &BexExternalValue, depth: usize) -> String {
                 f.to_string()
             }
         }
-        BexExternalValue::String(s) => format!("\"{s}\""),
+        BexExternalValue::String(s) => format!("{s:?}"),
         BexExternalValue::Array { items, .. } => {
             if items.is_empty() {
                 "[]".to_string()
@@ -461,7 +463,7 @@ fn bex_value_to_debug_impl(value: &BexExternalValue, depth: usize) -> String {
             } else {
                 let inner: Vec<_> = entries
                     .iter()
-                    .map(|(k, v)| format!("\"{k}\": {}", bex_value_to_debug_impl(v, depth + 1)))
+                    .map(|(k, v)| format!("{k}: {}", bex_value_to_debug_impl(v, depth + 1)))
                     .collect();
                 format!("{{{}}}", inner.join(", "))
             }
@@ -469,28 +471,158 @@ fn bex_value_to_debug_impl(value: &BexExternalValue, depth: usize) -> String {
         BexExternalValue::Instance {
             class_name, fields, ..
         } => {
-            if fields.is_empty() {
-                format!("{class_name} {{}}")
-            } else {
-                let inner: Vec<_> = fields
-                    .iter()
-                    .map(|(k, v)| format!("{k}: {}", bex_value_to_debug_impl(v, depth + 1)))
-                    .collect();
-                format!("{class_name} {{ {} }}", inner.join(", "))
-            }
+            let inner: Vec<_> = fields
+                .iter()
+                .map(|(k, v)| format!("{k}: {}", bex_value_to_debug_impl(v, depth + 1)))
+                .collect();
+            format!("{class_name} {{ {} }}", inner.join(", "))
         }
         BexExternalValue::Variant {
             enum_name,
             variant_name,
-        } => format!("{enum_name}::{variant_name}"),
+        } => format!("{enum_name}.{variant_name}"),
         BexExternalValue::Union { value, .. } => bex_value_to_debug_impl(value, depth + 1),
-        BexExternalValue::Handle(_) => "<handle>".to_string(),
-        BexExternalValue::Uint8Array(bytes) => format!("<bytes[{}]>", bytes.len()),
+        BexExternalValue::Handle(handle) => format!("<handle #{}>", handle.slab_key()),
+        BexExternalValue::Uint8Array(bytes) => format!("<bytes: {}>", bytes.len()),
         BexExternalValue::RustData(_) => "<rust_data>".to_string(),
-        BexExternalValue::FunctionRef { global_index } => format!("<fn@{global_index}>"),
-        BexExternalValue::Adt(BexExternalAdt::Collector(_)) => "<Collector>".to_string(),
-        BexExternalValue::Adt(BexExternalAdt::Type(ty)) => format!("<Type({ty})>"),
-        BexExternalValue::Adt(BexExternalAdt::PromptAst(_)) => "<PromptAst>".to_string(),
-        BexExternalValue::Adt(BexExternalAdt::Media(_)) => "<Media>".to_string(),
+        BexExternalValue::FunctionRef { global_index } => format!("<fn #{global_index}>"),
+        BexExternalValue::Adt(BexExternalAdt::Collector(_)) => "<collector>".to_string(),
+        BexExternalValue::Adt(BexExternalAdt::Type(ty)) => format!("<type: {ty}>"),
+        BexExternalValue::Adt(BexExternalAdt::PromptAst(_)) => "<prompt_ast>".to_string(),
+        BexExternalValue::Adt(BexExternalAdt::Media(media)) => media_to_debug_string(media),
+    }
+}
+
+fn media_to_debug_string(media: &baml_builtins2::MediaValue) -> String {
+    let media_type = match media.kind {
+        MediaKind::Image => "image",
+        MediaKind::Audio => "audio",
+        MediaKind::Pdf => "pdf",
+        MediaKind::Video => "video",
+        MediaKind::Generic => "other",
+    };
+
+    media.read_content(|content| match content {
+        MediaContent::Url { url, .. } => format!("<{media_type}: {url}>"),
+        MediaContent::File { file, .. } => format!("<{media_type}: file://{file}>"),
+        MediaContent::Base64 { .. } => format!("<{media_type}: base64...>"),
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use baml_builtins2::{MediaContent, MediaValue};
+    use bex_external_types::{Handle, MediaKind, Ty, WeakHeapRef};
+    use indexmap::IndexMap;
+
+    use super::bex_value_to_debug_string;
+
+    struct NoopHeap;
+
+    impl WeakHeapRef for NoopHeap {
+        fn release_handle(&self, _slab_key: usize) {}
+
+        fn resolve_handle_ptr(&self, _slab_key: usize) -> Option<bex_vm_types::HeapPtr> {
+            None
+        }
+    }
+
+    #[test]
+    fn test_playground_debug_format_matches_core_shapes() {
+        let value = bex_external_types::BexExternalValue::Instance {
+            class_name: "Person".into(),
+            fields: IndexMap::from([
+                (
+                    "name".into(),
+                    bex_external_types::BexExternalValue::String("Alice\nBob".into()),
+                ),
+                (
+                    "metadata".into(),
+                    bex_external_types::BexExternalValue::Map {
+                        key_type: Ty::string(),
+                        value_type: Ty::int(),
+                        entries: IndexMap::from([(
+                            "age".into(),
+                            bex_external_types::BexExternalValue::Int(30),
+                        )]),
+                    },
+                ),
+            ]),
+        };
+
+        assert_eq!(
+            bex_value_to_debug_string(&value),
+            "Person { name: \"Alice\\nBob\", metadata: {age: 30} }"
+        );
+    }
+
+    #[test]
+    fn test_string_debug_escapes_special_characters() {
+        // Strings must escape newlines, tabs, carriage returns, and backslashes
+        // so that single-line consumers (stderr logs, playground output) do not
+        // break across lines or silently drop characters.
+        assert_eq!(
+            bex_value_to_debug_string(&bex_external_types::BexExternalValue::String(
+                "line1\nline2".into()
+            )),
+            "\"line1\\nline2\""
+        );
+        assert_eq!(
+            bex_value_to_debug_string(&bex_external_types::BexExternalValue::String(
+                "tab\there".into()
+            )),
+            "\"tab\\there\""
+        );
+        assert_eq!(
+            bex_value_to_debug_string(&bex_external_types::BexExternalValue::String(
+                "back\\slash".into()
+            )),
+            "\"back\\\\slash\""
+        );
+        assert_eq!(
+            bex_value_to_debug_string(&bex_external_types::BexExternalValue::String(
+                "quote\"inside".into()
+            )),
+            "\"quote\\\"inside\""
+        );
+    }
+
+    #[test]
+    fn test_playground_debug_format_handles_special_values() {
+        let media = MediaValue::new(
+            MediaKind::Image,
+            MediaContent::Url {
+                url: "https://example.com/cat.png".into(),
+                base64_data: None,
+            },
+            None,
+        );
+        let handle = Handle::new(42, Arc::new(NoopHeap));
+
+        assert_eq!(
+            bex_value_to_debug_string(&bex_external_types::BexExternalValue::Variant {
+                enum_name: "Status".into(),
+                variant_name: "Ready".into(),
+            }),
+            "Status.Ready"
+        );
+        assert_eq!(
+            bex_value_to_debug_string(&bex_external_types::BexExternalValue::Handle(handle,)),
+            "<handle #42>"
+        );
+        assert_eq!(
+            bex_value_to_debug_string(&bex_external_types::BexExternalValue::Uint8Array(vec![
+                1, 2, 3
+            ])),
+            "<bytes: 3>"
+        );
+        assert_eq!(
+            bex_value_to_debug_string(&bex_external_types::BexExternalValue::Adt(
+                bex_external_types::BexExternalAdt::Media(Arc::new(media)),
+            )),
+            "<image: https://example.com/cat.png>"
+        );
     }
 }

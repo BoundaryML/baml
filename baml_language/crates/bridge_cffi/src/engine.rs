@@ -59,9 +59,12 @@ pub fn initialize_runtime(
         .map(|(k, v)| (bex_project::FsPath::from_str(k), v))
         .collect();
 
-    let event_sink = std::env::var("BAML_TRACE_FILE")
-        .ok()
-        .map(|trace_file| bex_events_native::start(trace_file.into()));
+    let event_sink = Some(
+        std::env::var("BAML_TRACE_FILE")
+            .ok()
+            .map(|trace_file| bex_events_native::start(trace_file.into()))
+            .unwrap_or_else(bex_events_native::start_stderr),
+    );
 
     let rt = bex_project::new(vfs_path, bex_project::SysOps::native(), files, event_sink)?;
 

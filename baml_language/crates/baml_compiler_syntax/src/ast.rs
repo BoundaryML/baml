@@ -36,6 +36,56 @@ fn extract_dotted_name<'a>(tokens: impl Iterator<Item = &'a SyntaxToken>) -> Opt
     Some(parts.join("."))
 }
 
+fn unescape_string_literal(text: &str) -> String {
+    let mut result = String::with_capacity(text.len());
+    let mut chars = text.chars();
+    while let Some(c) = chars.next() {
+        if c == '\\' {
+            match chars.next() {
+                Some('n') => result.push('\n'),
+                Some('t') => result.push('\t'),
+                Some('r') => result.push('\r'),
+                Some('0') => result.push('\0'),
+                Some('\\') => result.push('\\'),
+                Some('"') => result.push('"'),
+                Some(other) => {
+                    result.push('\\');
+                    result.push(other);
+                }
+                None => result.push('\\'),
+            }
+        } else {
+            result.push(c);
+        }
+    }
+    result
+}
+
+fn decode_regular_string_literal_text(text: &str) -> String {
+    let trimmed = text.trim();
+    if trimmed.starts_with('"') && trimmed.ends_with('"') && trimmed.len() >= 2 {
+        unescape_string_literal(&trimmed[1..trimmed.len() - 1])
+    } else {
+        trimmed.trim_start_matches('"').to_string()
+    }
+}
+
+fn decode_raw_string_literal_text(text: &str) -> Option<String> {
+    let trimmed = text.trim();
+    let hash_count = trimmed.chars().take_while(|&c| c == '#').count();
+    if hash_count == 0 {
+        return None;
+    }
+
+    let rest = &trimmed[hash_count..];
+    let closing = format!("\"{}", &trimmed[..hash_count]);
+    if rest.len() < hash_count + 2 || !rest.starts_with('"') || !rest.ends_with(&closing) {
+        return None;
+    }
+
+    Some(rest[1..rest.len() - 1 - hash_count].to_string())
+}
+
 /// Trait for all AST nodes.
 pub trait BamlAstNode: AstNode<Language = crate::BamlLanguage> {
     /// Get the syntax kind of this node.
@@ -197,15 +247,7 @@ impl UnionMemberParts {
         self.child_nodes
             .iter()
             .find(|n| n.kind() == SyntaxKind::STRING_LITERAL)
-            .map(|n| {
-                let text = n.text().to_string();
-                let trimmed = text.trim();
-                if trimmed.starts_with('"') && trimmed.ends_with('"') && trimmed.len() >= 2 {
-                    trimmed[1..trimmed.len() - 1].to_string()
-                } else {
-                    trimmed.trim_start_matches('"').to_string()
-                }
-            })
+            .map(|n| decode_regular_string_literal_text(&n.text().to_string()))
     }
 
     /// Check if this member contains a `TYPE_EXPR` child node (parenthesized type).
@@ -505,18 +547,7 @@ impl TypeExpr {
         self.syntax
             .children()
             .find(|n| n.kind() == SyntaxKind::STRING_LITERAL)
-            .map(|n| {
-                // Get text and trim leading/trailing whitespace (trivia)
-                let text = n.text().to_string();
-                let trimmed = text.trim();
-                // Well-formed: starts AND ends with quote
-                if trimmed.starts_with('"') && trimmed.ends_with('"') && trimmed.len() >= 2 {
-                    trimmed[1..trimmed.len() - 1].to_string()
-                } else {
-                    // Malformed (error recovery): preserve full text, just strip leading quote
-                    trimmed.trim_start_matches('"').to_string()
-                }
-            })
+            .map(|n| decode_regular_string_literal_text(&n.text().to_string()))
     }
 
     /// Check if this is an integer literal type like `200`.
@@ -940,13 +971,7 @@ impl StringLiteral {
     /// For `"hello world"`, returns `hello world`.
     pub fn value(&self) -> String {
         let text = self.syntax.text().to_string();
-        // String literals are of the form: "..." (tokens: Quote, words/spaces, Quote)
-        // Strip leading and trailing quote characters
-        if text.starts_with('"') && text.ends_with('"') && text.len() > 2 {
-            text[1..text.len() - 1].to_string()
-        } else {
-            text
-        }
+        decode_regular_string_literal_text(&text)
     }
 }
 
@@ -1684,29 +1709,13 @@ impl BlockAttribute {
         for child in args.children() {
             match child.kind() {
                 SyntaxKind::STRING_LITERAL => {
-                    // Get full text and strip quotes: "content" -> content
-                    let text = child.text().to_string();
-                    let trimmed = text.trim();
-                    if trimmed.starts_with('"') && trimmed.ends_with('"') && trimmed.len() >= 2 {
-                        return Some(trimmed[1..trimmed.len() - 1].to_string());
-                    }
+                    return Some(decode_regular_string_literal_text(
+                        &child.text().to_string(),
+                    ));
                 }
                 SyntaxKind::RAW_STRING_LITERAL => {
-                    // Get full text and strip raw string delimiters: #"content"# -> content
-                    let text = child.text().to_string();
-                    let trimmed = text.trim();
-                    // Count leading hashes
-                    let hash_count = trimmed.chars().take_while(|&c| c == '#').count();
-                    if hash_count > 0 {
-                        // Strip #..."..."#
-                        let inner = &trimmed[hash_count..];
-                        if inner.starts_with('"') {
-                            if let Some(end_pos) = inner.rfind('"') {
-                                if end_pos > 0 {
-                                    return Some(inner[1..end_pos].to_string());
-                                }
-                            }
-                        }
+                    if let Some(value) = decode_raw_string_literal_text(&child.text().to_string()) {
+                        return Some(value);
                     }
                 }
                 _ => {}
@@ -1897,29 +1906,13 @@ impl Attribute {
         for child in args.children() {
             match child.kind() {
                 SyntaxKind::STRING_LITERAL => {
-                    // Get full text and strip quotes: "content" -> content
-                    let text = child.text().to_string();
-                    let trimmed = text.trim();
-                    if trimmed.starts_with('"') && trimmed.ends_with('"') && trimmed.len() >= 2 {
-                        return Some(trimmed[1..trimmed.len() - 1].to_string());
-                    }
+                    return Some(decode_regular_string_literal_text(
+                        &child.text().to_string(),
+                    ));
                 }
                 SyntaxKind::RAW_STRING_LITERAL => {
-                    // Get full text and strip raw string delimiters: #"content"# -> content
-                    let text = child.text().to_string();
-                    let trimmed = text.trim();
-                    // Count leading hashes
-                    let hash_count = trimmed.chars().take_while(|&c| c == '#').count();
-                    if hash_count > 0 {
-                        // Strip #..."..."#
-                        let inner = &trimmed[hash_count..];
-                        if inner.starts_with('"') {
-                            if let Some(end_pos) = inner.rfind('"') {
-                                if end_pos > 0 {
-                                    return Some(inner[1..end_pos].to_string());
-                                }
-                            }
-                        }
+                    if let Some(value) = decode_raw_string_literal_text(&child.text().to_string()) {
+                        return Some(value);
                     }
                 }
                 _ => {}

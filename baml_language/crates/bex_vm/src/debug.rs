@@ -82,6 +82,20 @@ fn display_source_line_cell(function: &Function, pc: usize, last_line: &mut usiz
     }
 }
 
+fn sanitize_operand_text(text: &str) -> String {
+    let mut sanitized = String::with_capacity(text.len());
+    for ch in text.chars() {
+        match ch {
+            '\n' => sanitized.push_str("\\n"),
+            '\r' => sanitized.push_str("\\r"),
+            '\t' => sanitized.push_str("\\t"),
+            '\0' => sanitized.push_str("\\0"),
+            other => sanitized.push(other),
+        }
+    }
+    sanitized
+}
+
 /// Context aware instruction display.
 ///
 /// Instructions themselves are kinda "bare". For example, `LOAD_VAR 1`
@@ -248,14 +262,7 @@ fn display_const_value(value: &bex_vm_types::ConstValue, objects: Option<&Object
 fn display_object_from_pool(index: usize, objects: &ObjectPool) -> String {
     if let Some(obj) = objects.get(index) {
         match obj {
-            Object::String(s) => {
-                let escaped = s
-                    .replace('\\', "\\\\")
-                    .replace('\n', "\\n")
-                    .replace('\r', "\\r")
-                    .replace('\t', "\\t");
-                format!("\"{escaped}\"")
-            }
+            Object::String(s) => format!("{s:?}"),
             Object::Function(f) => format!("<fn {}>", f.name),
             Object::Class(c) => format!("<class {}>", c.name),
             Object::Enum(e) => format!("<enum {}>", e.name),
@@ -270,6 +277,7 @@ fn display_object_ptr(ptr: HeapPtr) -> String {
     // SAFETY: During debug display, we assume the pointer is valid
     let object = unsafe { ptr.get() };
     match object {
+        Object::String(string) => format!("{string:?}"),
         // This one's a bit tricky to print.
         Object::Instance(instance) => {
             // SAFETY: During debug display, we assume the pointer is valid
@@ -623,13 +631,14 @@ fn display_instruction_textual(
 ) -> String {
     // Helper: get the operand string from metadata, with a fallback.
     let meta_str = |fallback: &dyn std::fmt::Display| -> String {
-        function
+        let raw = function
             .bytecode
             .meta
             .get(ip)
             .and_then(|m| m.operand.as_ref())
             .map(|o| o.as_str().to_string())
-            .unwrap_or_else(|| format!("?{fallback}"))
+            .unwrap_or_else(|| format!("?{fallback}"));
+        sanitize_operand_text(&raw)
     };
 
     match instruction {
@@ -982,7 +991,7 @@ fn display_expanded_metadata(ip: usize, instruction: &Instruction, function: &Fu
         | Instruction::Watch(_)
         | Instruction::Unwatch(_)
         | Instruction::Notify(_) => meta
-            .map(|m| format!("({})", m.as_str()))
+            .map(|m| format!("({})", sanitize_operand_text(m.as_str())))
             .unwrap_or_default(),
 
         // Jumps: show absolute target address.

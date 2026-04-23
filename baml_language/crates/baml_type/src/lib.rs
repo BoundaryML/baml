@@ -627,7 +627,7 @@ impl fmt::Display for Ty {
             Ty::Literal(lit, _) => match lit {
                 Literal::Int(i) => write!(f, "{i}"),
                 Literal::Float(s) => write!(f, "{s}"),
-                Literal::String(s) => write!(f, "\"{s}\""),
+                Literal::String(s) => write!(f, "{s:?}"),
                 Literal::Bool(b) => write!(f, "{b}"),
             },
             Ty::Class(tn, _) => write!(f, "{tn}"),

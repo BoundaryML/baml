@@ -1760,7 +1760,7 @@ impl<'db> LoweringContext<'db> {
             }
 
             // Check flat resolutions (set by infer_multi_segment_path for package-rooted paths
-            // like baml.fs.open, env.get, etc.).
+            // like baml.fs.open, baml.env.get, etc.).
             if let Some(resolution) = self
                 .resolutions
                 .get(&(self.current_scope, expr_id))

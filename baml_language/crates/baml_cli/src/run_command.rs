@@ -187,11 +187,8 @@ impl RunArgs {
             .filter(|d| d.severity == Severity::Warning)
             .collect();
 
-        for w in &warnings {
-            self.vlog(format_args!("warning: {}", w.message));
-        }
-
-        if !errors.is_empty() {
+        let needs_sources = !errors.is_empty() || (self.verbose && !warnings.is_empty());
+        let (sources, file_paths) = if needs_sources {
             let mut sources = HashMap::new();
             let mut file_paths = HashMap::new();
             for sf in &source_files {
@@ -199,6 +196,22 @@ impl RunArgs {
                 sources.insert(file_id, sf.text(db).to_string());
                 file_paths.insert(file_id, sf.path(db));
             }
+            (sources, file_paths)
+        } else {
+            (HashMap::new(), HashMap::new())
+        };
+
+        if self.verbose && !warnings.is_empty() {
+            let rendered = render::render_diagnostics(
+                &warnings.iter().copied().cloned().collect::<Vec<_>>(),
+                &sources,
+                &file_paths,
+                &render::RenderConfig::cli(),
+            );
+            eprintln!("{rendered}");
+        }
+
+        if !errors.is_empty() {
             let rendered = render::render_diagnostics(
                 &errors.iter().copied().cloned().collect::<Vec<_>>(),
                 &sources,
@@ -243,9 +256,11 @@ impl RunArgs {
         }
 
         let event_sink: Option<Arc<dyn bex_events::EventSink>> =
-            self.log_file.as_ref().map(|path| {
+            Some(if let Some(path) = self.log_file.as_ref() {
                 self.vlog(format_args!("Writing logs to {}", path.display()));
                 bex_events_native::start(path.clone())
+            } else {
+                bex_events_native::start_stderr()
             });
 
         if self.help && (self.function.is_none() && self.target.is_none()) {
@@ -286,7 +301,7 @@ impl RunArgs {
             ResolvedTarget::Function(name) => (name, self.target_args.clone()),
             ResolvedTarget::Script(expansion) => {
                 let func = expansion.function.unwrap_or_else(|| "main".to_string());
-                if !engine.function_exists(&func) {
+                if find_user_function(&engine, &func).is_none() {
                     return Err(Self::target_not_found_error(&scripts, &engine, &func));
                 }
                 let mut merged_args = expansion.extra_args;
@@ -295,16 +310,7 @@ impl RunArgs {
             }
         };
 
-        let func_info = engine
-            .user_functions()
-            .into_iter()
-            .find(|f| {
-                f.qualified_name == function_name
-                    || f.display_name
-                        == function_name
-                            .strip_prefix("user.")
-                            .unwrap_or(&function_name)
-            })
+        let func_info = find_user_function(&engine, &function_name)
             .ok_or_else(|| anyhow!("Function `{function_name}` not found"))?;
 
         if self.help || (effective_target_args.len() == 1 && effective_target_args[0] == "--help") {
@@ -576,7 +582,7 @@ impl RunArgs {
         scripts: &HashMap<String, Vec<String>>,
     ) -> Result<ResolvedTarget> {
         if let Some(func) = &self.function {
-            if engine.function_exists(func) {
+            if find_user_function(engine, func).is_some() {
                 return Ok(ResolvedTarget::function(func.clone()));
             }
             return Err(Self::target_not_found_error(scripts, engine, func));
@@ -718,7 +724,7 @@ impl RunArgs {
             match parse_script_body(tokens) {
                 Ok(expansion) => {
                     let target_func = if let Some(func) = &expansion.function {
-                        if !engine.function_exists(func) {
+                        if find_user_function(engine, func).is_none() {
                             errors.push(Self::script_error(
                                 &toml_path,
                                 toml_content,
@@ -1158,6 +1164,14 @@ fn collect_namespaces(engine: &BexEngine) -> HashSet<String> {
                 .map(|i| f.display_name[..i].to_string())
         })
         .collect()
+}
+
+fn find_user_function(engine: &BexEngine, name: &str) -> Option<UserFunctionInfo> {
+    let display_name = name.strip_prefix("user.").unwrap_or(name);
+    engine
+        .user_functions()
+        .into_iter()
+        .find(|f| f.qualified_name == name || f.display_name == display_name)
 }
 
 // ============================================================================
@@ -2870,6 +2884,115 @@ mod tests {
         );
     }
 
+    #[test]
+    fn test_user_functions_exclude_internal_init_test_wrappers() {
+        let engine = engine_from_source(
+            r#"
+                test "smoke" {
+                    assert.is_true(true)
+                }
+            "#,
+        );
+
+        let names: Vec<String> = engine
+            .user_functions()
+            .into_iter()
+            .map(|f| f.display_name)
+            .collect();
+
+        assert!(
+            names.is_empty(),
+            "internal synthesized helpers should not be exposed as runnable functions: {names:?}"
+        );
+    }
+
+    #[test]
+    fn test_user_functions_include_llm_companions() {
+        let engine = engine_from_source(
+            r##"
+                client TestClient {
+                    provider openai
+                    options {
+                        model "gpt-4"
+                    }
+                }
+
+                function Summarize(text: string) -> string {
+                    client TestClient
+                    prompt #"hi"#
+                }
+            "##,
+        );
+
+        let names: Vec<String> = engine
+            .user_functions()
+            .into_iter()
+            .map(|f| f.display_name)
+            .collect();
+
+        assert!(names.contains(&"Summarize".to_string()), "got: {names:?}");
+        assert!(
+            names.contains(&"Summarize$render_prompt".to_string()),
+            "got: {names:?}"
+        );
+        assert!(
+            names.contains(&"Summarize$build_request".to_string()),
+            "got: {names:?}"
+        );
+        assert!(
+            names.contains(&"Summarize$parse".to_string()),
+            "got: {names:?}"
+        );
+    }
+
+    #[test]
+    fn test_bep_resolve_function_flag_internal_init_test_errors() {
+        let engine = engine_from_source(
+            r#"
+                test "smoke" {
+                    assert.is_true(true)
+                }
+            "#,
+        );
+        let tmp = tempfile::tempdir().unwrap();
+        let mut args = run_args_with_clean_from(tmp.path());
+        args.function = Some(s("$init_test"));
+
+        let err = args.resolve_target(&engine, &no_scripts()).unwrap_err();
+        let msg = format!("{err}");
+        assert!(
+            msg.contains("No runnable target"),
+            "internal synthesized functions should not resolve via --function: {msg}"
+        );
+    }
+
+    #[test]
+    fn test_bep_resolve_function_flag_companion_succeeds() {
+        let engine = engine_from_source(
+            r##"
+                client TestClient {
+                    provider openai
+                    options {
+                        model "gpt-4"
+                    }
+                }
+
+                function Summarize(text: string) -> string {
+                    client TestClient
+                    prompt #"hi"#
+                }
+            "##,
+        );
+        let tmp = tempfile::tempdir().unwrap();
+        let mut args = run_args_with_clean_from(tmp.path());
+        args.function = Some(s("Summarize$render_prompt"));
+
+        match args.resolve_target(&engine, &no_scripts()).unwrap() {
+            ResolvedTarget::Function(name) => assert_eq!(name, "Summarize$render_prompt"),
+            other => panic!("expected Function(Summarize$render_prompt), got {other:?}"),
+        }
+    }
+
     /// BEP-027 §"Hermetic single-file mode": a `.baml` target runs `main`
     /// from the loaded file (the caller is responsible for having loaded
     /// the engine in standalone mode).
@@ -3048,6 +3171,36 @@ greet = ["--function", "g.Hello", "--", "--name", "Ada Lovelace"]
     #[test]
     fn test_parse_scripts_no_scripts_table() {
         assert!(RunArgs::parse_scripts("[project]\nname = \"x\"\n").is_empty());
+    }
+
+    #[test]
+    fn test_validate_scripts_rejects_internal_function_targets() {
+        let engine = engine_from_source(
+            r#"
+                test "smoke" {
+                    assert.is_true(true)
+                }
+            "#,
+        );
+        let tmp = tempfile::tempdir().unwrap();
+        let toml = r#"
+[scripts]
+hidden = "--function $init_test"
+"#;
+        std::fs::write(tmp.path().join("baml.toml"), toml).unwrap();
+
+        let mut args = run_args();
+        args.from = tmp.path().to_path_buf();
+
+        let scripts = RunArgs::parse_scripts(toml);
+        let err = args
+            .validate_scripts(&engine, &scripts, &collect_namespaces(&engine), toml)
+            .unwrap_err();
+        let msg = format!("{err}");
+        assert!(
+            msg.contains("--function target `$init_test` not found"),
+            "scripts should not be allowed to target internal synthesized helpers: {msg}"
+        );
     }
 
     /// BEP-027 §"Target resolution" step 4: a positional target that matches
@@ -3846,6 +3999,75 @@ greet = ["--function", "g.Hello", "--", "--name", "Ada Lovelace"]
         assert!(
             msg.contains("not_a_param") && msg.contains("unknown parameter"),
             "expected unknown-parameter error for default main, got: {msg}"
+        );
+    }
+
+    /// Warnings emitted by the compiler (e.g. an unreachable catch arm) must
+    /// carry file + line information when rendered for the CLI. The previous
+    /// implementation printed only the message ("warning: unreachable arm")
+    /// which made it impossible to locate in a real project.
+    #[test]
+    fn warnings_are_rendered_with_file_and_line() {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::write(tmp.path().join("baml.toml"), "").unwrap();
+        let src = tmp.path().join("baml_src");
+        std::fs::create_dir_all(&src).unwrap();
+        // `MayFail` can't throw, so the catch's `_` arm is unreachable —
+        // this is surfaced as a Warning-severity diagnostic.
+        std::fs::write(
+            src.join("main.baml"),
+            "function MayFail() -> int { 1 }\n\
+             function main() -> int { MayFail() catch (e) { _ => 0 } }\n",
+        )
+        .unwrap();
+
+        let (db, _from, _files) = crate::project_load::load_project_from(tmp.path()).unwrap();
+        let project = db.get_project().expect("project must be set");
+        let source_files = db.get_source_files();
+        let diagnostics = baml_project::collect_diagnostics(&db, project, &source_files);
+
+        let warnings: Vec<_> = diagnostics
+            .iter()
+            .filter(|d| d.severity == Severity::Warning)
+            .cloned()
+            .collect();
+        assert!(
+            warnings.iter().any(|d| d.message.contains("unreachable")),
+            "expected an `unreachable arm` warning, got: {:?}",
+            warnings.iter().map(|d| &d.message).collect::<Vec<_>>()
+        );
+
+        let mut sources = HashMap::new();
+        let mut file_paths = HashMap::new();
+        for sf in &source_files {
+            let file_id = sf.file_id(&db);
+            sources.insert(file_id, sf.text(&db).to_string());
+            file_paths.insert(file_id, sf.path(&db));
+        }
+        let rendered = render::render_diagnostics(
+            &warnings,
+            &sources,
+            &file_paths,
+            &render::RenderConfig::cli(),
+        );
+
+        assert!(
+            rendered.contains("unreachable"),
+            "rendered warning is missing the message, got:\n{rendered}"
+        );
+        assert!(
+            rendered.contains("main.baml"),
+            "rendered warning is missing the file name, got:\n{rendered}"
+        );
+        // Ariadne renders the source span as `file:line:col`, so a digit must
+        // appear after `main.baml:` for the location to be present.
+        assert!(
+            rendered
+                .split("main.baml:")
+                .nth(1)
+                .and_then(|s| s.chars().next())
+                .is_some_and(|c| c.is_ascii_digit()),
+            "rendered warning is missing a line number after the file name, got:\n{rendered}"
         );
     }
 }

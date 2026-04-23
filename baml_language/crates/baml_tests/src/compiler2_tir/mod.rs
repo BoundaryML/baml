@@ -152,12 +152,12 @@ pub(crate) mod support {
         match expr {
             Expr::Literal(lit) => match lit {
                 Literal::String(s) => {
-                    let truncated = if s.len() > 20 {
-                        format!("{}...", &s[..17])
+                    let truncated: String = if s.chars().count() > 20 {
+                        format!("{}...", s.chars().take(17).collect::<String>())
                     } else {
                         s.clone()
                     };
-                    format!("\"{}\"", truncated)
+                    format!("{truncated:?}")
                 }
                 Literal::Int(i) => i.to_string(),
                 Literal::Float(f) => f.clone(),
@@ -1317,12 +1317,12 @@ pub(crate) mod support {
             match expr {
                 Expr::Literal(lit) => match lit {
                     Literal::String(s) => {
-                        let truncated = if s.len() > 20 {
-                            format!("{}...", &s[..17])
+                        let truncated: String = if s.chars().count() > 20 {
+                            format!("{}...", s.chars().take(17).collect::<String>())
                         } else {
                             s.clone()
                         };
-                        format!("\"{}\"", truncated)
+                        format!("{truncated:?}")
                     }
                     Literal::Int(i) => i.to_string(),
                     Literal::Float(f) => f.clone(),
