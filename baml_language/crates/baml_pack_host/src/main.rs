@@ -41,7 +41,9 @@ fn extract_envelope() -> Result<PackEnvelope, String> {
 /// Build `baml.argv` per BEP-027 §"baml.argv in packaged binaries".
 fn build_argv(target_identifier: &str) -> Vec<String> {
     let mut os_args = std::env::args();
-    let exe = os_args.next().unwrap_or_else(|| "baml-host".to_string());
+    let exe = os_args
+        .next()
+        .unwrap_or_else(|| "baml-pack-host".to_string());
     let mut argv = Vec::with_capacity(2 + os_args.len());
     argv.push(exe);
     argv.push(target_identifier.to_string());

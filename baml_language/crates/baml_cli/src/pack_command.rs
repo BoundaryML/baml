@@ -6,7 +6,7 @@
 //   - `[scripts]` are not packageable — scripts are a dev-time dispatch
 //     mechanism, not an entry-point concept.
 //
-// The output is the host binary (baml-host) with a `PackEnvelope`
+// The output is the host binary (baml-pack-host) with a `PackEnvelope`
 // (bitcode-serialized) appended in an OS-native section. At runtime the
 // host extracts the envelope, initializes the engine, and invokes the
 // baked-in target with an auto-CLI parser driven by its signature.
@@ -14,16 +14,12 @@
 #![allow(clippy::print_stdout, clippy::print_stderr)]
 
 use std::{
-    collections::HashMap,
     path::{Path, PathBuf},
     sync::Arc,
 };
 
 use anyhow::{Context, Result, anyhow};
-use baml_db::{
-    baml_compiler_diagnostics::{Severity, render},
-    baml_compiler2_emit,
-};
+use baml_db::baml_compiler2_emit;
 use baml_exec::{OutputFormat, PackEnvelope};
 use baml_project::ProjectDatabase;
 use bex_engine::BexEngine;
@@ -31,7 +27,7 @@ use bex_vm_types::types::Program;
 use clap::Args;
 use sys_native::SysOpsExt;
 
-use crate::project_load::load_project_from;
+use crate::project_load::{check_project_diagnostics, load_project_from};
 
 /// Section name where the packed envelope lives inside the host binary.
 /// Kept in sync with `baml_pack_host::SECTION_NAME`.
@@ -292,46 +288,15 @@ fn canonicalize_function_name(engine: &BexEngine, name: &str) -> String {
     name.to_string()
 }
 
-fn check_project_diagnostics(db: &ProjectDatabase, bail_context: &str) -> Result<()> {
-    let project = db
-        .get_project()
-        .ok_or_else(|| anyhow!("No project context"))?;
-    let source_files = db.get_source_files();
-    let diagnostics = baml_project::collect_diagnostics(db, project, &source_files);
-
-    let errors: Vec<_> = diagnostics
-        .iter()
-        .filter(|d| d.severity == Severity::Error)
-        .collect();
-    if errors.is_empty() {
-        return Ok(());
-    }
-    let mut sources = HashMap::new();
-    let mut file_paths = HashMap::new();
-    for sf in &source_files {
-        let file_id = sf.file_id(db);
-        sources.insert(file_id, sf.text(db).to_string());
-        file_paths.insert(file_id, sf.path(db));
-    }
-    let rendered = render::render_diagnostics(
-        &errors.iter().copied().cloned().collect::<Vec<_>>(),
-        &sources,
-        &file_paths,
-        &render::RenderConfig::cli(),
-    );
-    eprintln!("{rendered}");
-    anyhow::bail!("{bail_context}")
-}
-
 fn read_host_binary() -> Result<Vec<u8>> {
     let exe = std::env::current_exe().context("Failed to locate current executable")?;
     let dir = exe
         .parent()
         .ok_or_else(|| anyhow!("Cannot determine directory of current executable"))?;
     let host_name = if cfg!(windows) {
-        "baml-host.exe"
+        "baml-pack-host.exe"
     } else {
-        "baml-host"
+        "baml-pack-host"
     };
     let host_path = dir.join(host_name);
     if !host_path.exists() {
@@ -568,5 +533,66 @@ mod tests {
         assert_eq!(decoded.target_name, "user.main");
         assert_eq!(decoded.target_identifier, "main");
         assert!(matches!(decoded.output_format, OutputFormat::Json));
+    }
+
+    // ── canonicalize_function_name ────────────────────────────────────
+
+    /// Bare name resolves to whatever qualified form the engine stores.
+    /// The engine uses the `user.` prefix for user functions, so lookup
+    /// by either form should produce the same canonical qualified name.
+    #[test]
+    fn test_canonicalize_function_name_resolves_bare_and_qualified() {
+        let engine = engine_from_source("function Greet(x: string) -> string { x }");
+        let canonical_bare = canonicalize_function_name(&engine, "Greet");
+        let canonical_qualified = canonicalize_function_name(&engine, "user.Greet");
+        assert_eq!(
+            canonical_bare, canonical_qualified,
+            "both spellings must canonicalize to the same name",
+        );
+    }
+
+    /// Unknown names pass through unchanged; callers surface the error
+    /// elsewhere (`function_exists` check in `resolve_target`).
+    #[test]
+    fn test_canonicalize_function_name_unknown_passes_through() {
+        let engine = engine_from_source("function main() -> int { 1 }");
+        let name = canonicalize_function_name(&engine, "DoesNotExist");
+        assert_eq!(name, "DoesNotExist");
+    }
+
+    // ── load_project / load_standalone error paths ────────────────────
+
+    /// An empty directory has no `.baml` files → `load_project` errors
+    /// before ever reaching compilation.
+    #[test]
+    fn test_load_project_empty_dir_errors() {
+        let tmp = tempfile::tempdir().unwrap();
+        // Write a `baml.toml` so the project root is recognized, but
+        // no `.baml` files in `baml_src/`.
+        std::fs::write(tmp.path().join("baml.toml"), "").unwrap();
+        std::fs::create_dir(tmp.path().join("baml_src")).unwrap();
+
+        let mut args = pack_args();
+        args.from = tmp.path().to_path_buf();
+        let err = args.load_project().unwrap_err();
+        assert!(
+            format!("{err}").contains("No .baml files"),
+            "expected no-files error; got: {err}",
+        );
+    }
+
+    /// A nonexistent `.baml` file surfaces the filesystem error rather
+    /// than silently returning an empty project.
+    #[test]
+    fn test_load_standalone_missing_file_errors() {
+        let args = pack_args();
+        let err = args
+            .load_standalone("/nonexistent/ghost/path.baml")
+            .unwrap_err();
+        let msg = format!("{err:?}"); // use debug to capture the full context chain
+        assert!(
+            msg.contains("File not found") || msg.contains("nonexistent"),
+            "expected file-not-found error; got: {msg}",
+        );
     }
 }

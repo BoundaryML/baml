@@ -7,10 +7,7 @@ use std::{
 };
 
 use anyhow::{Context, Result, anyhow};
-use baml_db::{
-    baml_compiler_diagnostics::{Severity, render},
-    baml_compiler2_emit,
-};
+use baml_db::baml_compiler2_emit;
 use baml_exec::{
     OutputFormat, build_args_from_signature, clamp_exit_code, extract_flag_keys, load_json_source,
     print_target_help as baml_exec_print_target_help, write_output,
@@ -170,54 +167,9 @@ impl RunArgs {
     /// Collect diagnostics on `db` and bail with `bail_context` if any are errors.
     /// Warnings are surfaced only in verbose mode.
     fn check_project_diagnostics(&self, db: &ProjectDatabase, bail_context: &str) -> Result<()> {
-        let project = db
-            .get_project()
-            .ok_or_else(|| anyhow!("No project context"))?;
-        let source_files = db.get_source_files();
-        let diagnostics = baml_project::collect_diagnostics(db, project, &source_files);
-
-        let errors: Vec<_> = diagnostics
-            .iter()
-            .filter(|d| d.severity == Severity::Error)
-            .collect();
-        let warnings: Vec<_> = diagnostics
-            .iter()
-            .filter(|d| d.severity == Severity::Warning)
-            .collect();
-
-        let needs_sources = !errors.is_empty() || (self.verbose && !warnings.is_empty());
-        let (sources, file_paths) = if needs_sources {
-            let mut sources = HashMap::new();
-            let mut file_paths = HashMap::new();
-            for sf in &source_files {
-                let file_id = sf.file_id(db);
-                sources.insert(file_id, sf.text(db).to_string());
-                file_paths.insert(file_id, sf.path(db));
-            }
-            (sources, file_paths)
-        } else {
-            (HashMap::new(), HashMap::new())
-        };
-
-        if self.verbose && !warnings.is_empty() {
-            let rendered = render::render_diagnostics(
-                &warnings.iter().copied().cloned().collect::<Vec<_>>(),
-                &sources,
-                &file_paths,
-                &render::RenderConfig::cli(),
-            );
-            eprintln!("{rendered}");
-        }
-
-        if !errors.is_empty() {
-            let rendered = render::render_diagnostics(
-                &errors.iter().copied().cloned().collect::<Vec<_>>(),
-                &sources,
-                &file_paths,
-                &render::RenderConfig::cli(),
-            );
-            eprintln!("{rendered}");
-            anyhow::bail!("{bail_context}");
+        let warnings = crate::project_load::check_project_diagnostics(db, bail_context)?;
+        for w in &warnings {
+            self.vlog(format_args!("warning: {}", w.message));
         }
         Ok(())
     }
@@ -1089,6 +1041,7 @@ fn load_expression_source(source: &str) -> Result<String> {
 
 #[cfg(test)]
 mod tests {
+    use baml_db::baml_compiler_diagnostics::{Severity, render};
     use baml_exec::{
         example_value, external_to_json, format_value, json_to_external, json_to_external_with_ty,
         parse_auto_cli_args, parse_cli_value,
@@ -3652,5 +3605,68 @@ function main() -> int { Outer() }
             crate::ExitCode::Exit(3) => {}
             other => panic!("expected ExitCode::Exit(3), got {other:?}"),
         }
+    }
+
+    // ========================================================================
+    // Helpers — collect_namespaces, script_error
+    // ========================================================================
+
+    /// `collect_namespaces` extracts the leading `foo.` prefix from
+    /// each user function and dedupes. `main` (no dot) contributes
+    /// nothing.
+    #[test]
+    fn test_collect_namespaces_builds_unique_prefix_set() {
+        let engine = engine_from_source(
+            r#"
+                function main() -> int { 1 }
+                function Summarize(text: string) -> string { text }
+            "#,
+        );
+        let namespaces = collect_namespaces(&engine);
+        // This project has no dotted names, so the set is empty —
+        // BAML namespaces require a folder layout that inline source
+        // can't produce. The point of the test is that `main` doesn't
+        // contribute a spurious "main" namespace from its own name.
+        assert!(
+            !namespaces.contains("main"),
+            "`main` should not count as a namespace"
+        );
+        assert!(
+            !namespaces.contains("Summarize"),
+            "bare function names should not count as namespaces"
+        );
+    }
+
+    /// `script_error` produces `file:line: [scripts] ...` when the
+    /// script name is findable in the TOML source.
+    #[test]
+    fn test_script_error_includes_line_when_found() {
+        let toml = "[scripts]\ndev = \"--function Foo\"\n";
+        let path = std::path::PathBuf::from("baml.toml");
+        let err = RunArgs::script_error(&path, toml, "dev", "broken body");
+        assert!(err.contains("baml.toml:2"), "got: {err}");
+        assert!(err.contains("[scripts] `dev`"), "got: {err}");
+        assert!(err.contains("broken body"), "got: {err}");
+    }
+
+    /// When the script name isn't findable in the raw TOML (e.g. a
+    /// key built via computation), fall back to `file: [scripts] ...`
+    /// without a line reference.
+    #[test]
+    fn test_script_error_omits_line_when_not_found() {
+        let toml = "[scripts]\n# nothing here\n";
+        let path = std::path::PathBuf::from("baml.toml");
+        let err = RunArgs::script_error(&path, toml, "missing", "broken body");
+        // Shape is `baml.toml: [scripts] ...` — no `:<line>` between
+        // the file and `[scripts]`.
+        assert!(err.contains("baml.toml: [scripts] `missing`"), "got: {err}");
+        assert!(
+            !err.contains("baml.toml:1"),
+            "should not have a line number; got: {err}"
+        );
+        assert!(
+            !err.contains("baml.toml:2"),
+            "should not have a line number; got: {err}"
+        );
     }
 }

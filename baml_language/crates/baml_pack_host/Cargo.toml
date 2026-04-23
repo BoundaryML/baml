@@ -31,5 +31,5 @@ default = [ "native-tls" ]
 native-tls = [ "sys_native/native-tls" ]
 
 [[bin]]
-name = "baml-host"
+name = "baml-pack-host"
 path = "src/main.rs"
