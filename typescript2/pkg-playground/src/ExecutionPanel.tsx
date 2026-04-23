@@ -9,11 +9,9 @@
  * VS Code webview without an embedded Monaco editor).
  */
 
-import type { ChangeEvent, FC, RefObject } from 'react';
+import type { ChangeEvent, FC, ReactNode, RefObject } from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { encodeCallArgs } from '@b/pkg-proto';
-import type { BamlJsValue } from '@b/pkg-proto';
-import { getBamlType } from './result-renderers';
 import { KeyRound, PanelLeft, Square } from 'lucide-react';
 import { Button } from './components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs';
@@ -45,48 +43,9 @@ import { registerBuiltinResultRenderers } from './renderers/registerBuiltins';
 import { HttpRequestCurlRenderer, isHttpRequest } from './renderers/HttpRequestCurl';
 import { GraphView } from './graph/GraphView';
 import { FunctionSidebar } from './FunctionSidebar';
+import { EventValueDisplay } from './EventValueDisplay';
 
 registerBuiltinResultRenderers();
-// Format a BamlJsValue to a Rust-like debug string (transitional — replaced in Phase 3)
-function formatValueDebug(value: BamlJsValue | null | undefined): string {
-  if (value == null) return 'null';
-  if (typeof value === 'string') return JSON.stringify(value);
-  if (typeof value === 'number') return String(value);
-  if (typeof value === 'boolean') return String(value);
-  if (typeof value === 'bigint') return String(value);
-  if (Array.isArray(value)) {
-    return `[${value.map(formatValueDebug).join(', ')}]`;
-  }
-  if (typeof value === 'object') {
-    const bamlType = getBamlType(value);
-    if (bamlType === '$media') {
-      const m = value as Record<string, unknown>;
-      const mt = (m.media_type as string) ?? 'media';
-      if (m.content_type === 'url') return `<${mt}: ${m.url}>`;
-      if (m.content_type === 'file') return `<${mt}: file://${m.file}>`;
-      if (m.content_type === 'base64') return `<${mt}: base64...>`;
-      return `<${mt}>`;
-    }
-    if (bamlType === '$handle') {
-      return `<handle #${(value as Record<string, unknown>).handle_key}>`;
-    }
-    if (bamlType === '$prompt_ast') return '<prompt_ast>';
-    if (bamlType) {
-      // Class instance
-      const entries = Object.entries(value)
-        .filter(([k]) => k !== '$baml')
-        .map(([k, v]) => `${k}: ${formatValueDebug(v as BamlJsValue)}`)
-        .join(', ');
-      return `${bamlType} { ${entries} }`;
-    }
-    // Plain map
-    const entries = Object.entries(value)
-      .map(([k, v]) => `${k}: ${formatValueDebug(v as BamlJsValue)}`)
-      .join(', ');
-    return `{${entries}}`;
-  }
-  return '?';
-}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -142,9 +101,10 @@ interface CollectionRunViewProps {
   run: RunEntry;
   expandedLogId: number | null;
   setExpandedLogId: (id: number | null) => void;
+  resultRenderers?: Record<string, FC<ResultRendererProps>>;
 }
 
-const CollectionRunView: FC<CollectionRunViewProps> = ({ run, expandedLogId, setExpandedLogId }) => {
+const CollectionRunView: FC<CollectionRunViewProps> = ({ run, expandedLogId, setExpandedLogId, resultRenderers }) => {
   const hasError = run.status === 'error';
   const errorMessage = run.error || 'Unknown expansion error';
   return (
@@ -223,7 +183,7 @@ const CollectionRunView: FC<CollectionRunViewProps> = ({ run, expandedLogId, set
                 if (!kind) return null;
 
                 let label: string;
-                let payload: string;
+                let payload: ReactNode;
                 let colorCls: string;
 
                 switch (kind.$case) {
@@ -240,7 +200,7 @@ const CollectionRunView: FC<CollectionRunViewProps> = ({ run, expandedLogId, set
                   case 'log': {
                     const lvl = kind.log.level;
                     label = lvl;
-                    payload = formatValueDebug(kind.log.data);
+                    payload = <EventValueDisplay value={kind.log.data} customRenderers={resultRenderers} />;
                     colorCls = lvl === 'error' ? 'text-vsc-red'
                       : lvl === 'warn' ? 'text-vsc-yellow'
                       : lvl === 'debug' ? 'text-vsc-text-muted'
@@ -249,7 +209,7 @@ const CollectionRunView: FC<CollectionRunViewProps> = ({ run, expandedLogId, set
                   }
                   case 'custom':
                     label = 'EVENT';
-                    payload = `${kind.custom.name}: ${formatValueDebug(kind.custom.data)}`;
+                    payload = <><span>{kind.custom.name}: </span><EventValueDisplay value={kind.custom.data} customRenderers={resultRenderers} /></>;
                     colorCls = 'text-vsc-purple';
                     break;
                   case 'setTags':
@@ -1252,6 +1212,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
               run={collectionRun}
               expandedLogId={expandedLogId}
               setExpandedLogId={setExpandedLogId}
+              resultRenderers={resultRenderers}
             />
           ) : viewingTestRun ? (
             <div ref={outputRef} className="flex-1 overflow-auto font-vsc-mono text-xs bg-vsc-bg">
@@ -1347,7 +1308,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
                             if (!kind) return null;
 
                             let label: string;
-                            let payload: string;
+                            let payload: ReactNode;
                             let colorCls: string;
 
                             switch (kind.$case) {
@@ -1364,7 +1325,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
                               case 'log': {
                                 const lvl = kind.log.level;
                                 label = lvl;
-                                payload = formatValueDebug(kind.log.data);
+                                payload = <EventValueDisplay value={kind.log.data} customRenderers={resultRenderers} />;
                                 colorCls = lvl === 'error' ? 'text-vsc-red'
                                   : lvl === 'warn' ? 'text-vsc-yellow'
                                   : lvl === 'debug' ? 'text-vsc-text-muted'
@@ -1373,7 +1334,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
                               }
                               case 'custom':
                                 label = 'EVENT';
-                                payload = `${kind.custom.name}: ${formatValueDebug(kind.custom.data)}`;
+                                payload = <><span>{kind.custom.name}: </span><EventValueDisplay value={kind.custom.data} customRenderers={resultRenderers} /></>;
                                 colorCls = 'text-vsc-purple';
                                 break;
                               case 'setTags':
@@ -1682,7 +1643,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
                                 if (!kind) return null;
 
                                 let label: string;
-                                let payload: string;
+                                let payload: ReactNode;
                                 let colorCls: string;
 
                                 switch (kind.$case) {
@@ -1699,7 +1660,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
                                   case 'log': {
                                     const lvl = kind.log.level;
                                     label = lvl;
-                                    payload = formatValueDebug(kind.log.data);
+                                    payload = <EventValueDisplay value={kind.log.data} customRenderers={resultRenderers} />;
                                     colorCls = lvl === 'error' ? 'text-vsc-red'
                                       : lvl === 'warn' ? 'text-vsc-yellow'
                                       : lvl === 'debug' ? 'text-vsc-text-muted'
@@ -1708,7 +1669,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
                                   }
                                   case 'custom':
                                     label = 'EVENT';
-                                    payload = `${kind.custom.name}: ${formatValueDebug(kind.custom.data)}`;
+                                    payload = <><span>{kind.custom.name}: </span><EventValueDisplay value={kind.custom.data} customRenderers={resultRenderers} /></>;
                                     colorCls = 'text-vsc-purple';
                                     break;
                                   case 'setTags':

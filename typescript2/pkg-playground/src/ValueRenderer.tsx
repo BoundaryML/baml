@@ -27,9 +27,10 @@ export const ValueRenderer: FC<{
   path?: string;
   displayMode?: DisplayMode;
 }> = ({ value, customRenderers, depth = 0, path = '$', displayMode = 'auto' }) => {
-  const [collapsed, setCollapsed] = useState(depth >= 2);
+  const isInline = displayMode === 'inline';
+  const [collapsed, setCollapsed] = useState(isInline || depth >= 2);
 
-  // Primitives with type coloring
+  // Primitives with type coloring (same for all modes)
   if (value == null) return <span className="font-vsc-mono text-xs text-vsc-text-faint">null</span>;
   if (typeof value === 'string') return <span className="font-vsc-mono text-xs text-green-400">"{value}"</span>;
   if (typeof value === 'number') return <span className="font-vsc-mono text-xs text-cyan-400">{value}</span>;
@@ -41,6 +42,7 @@ export const ValueRenderer: FC<{
   if (type) {
     const Renderer = resolve(type, customRenderers);
     if (Renderer) return <Renderer value={value} displayMode={displayMode} />;
+    if (isInline) return <span className="font-vsc-mono text-xs text-vsc-text-faint">{type}</span>;
     return <CodeBlock>{JSON.stringify(value, null, 2)}</CodeBlock>;
   }
 
@@ -54,6 +56,23 @@ export const ValueRenderer: FC<{
   // Array
   if (Array.isArray(value)) {
     if (value.length === 0) return <span className="font-vsc-mono text-xs text-vsc-text-faint">[]</span>;
+
+    // Inline mode: render items on a single line
+    if (isInline) {
+      return (
+        <span className="font-vsc-mono text-xs text-vsc-text-faint">
+          {'['}
+          {value.map((item, i) => (
+            <span key={i}>
+              {i > 0 && ', '}
+              <ValueRenderer value={item} customRenderers={customRenderers} depth={depth + 1} displayMode="inline" />
+            </span>
+          ))}
+          {']'}
+        </span>
+      );
+    }
+
     const showToggle = value.length > 3;
     return (
       <div className="group/node">
@@ -80,6 +99,29 @@ export const ValueRenderer: FC<{
   // Plain object
   const entries = Object.entries(value as Record<string, unknown>).filter(([k]) => k !== BAML_TYPE_KEY);
   if (entries.length === 0) return <span className="font-vsc-mono text-xs text-vsc-text-faint">{'{}'}</span>;
+
+  // Inline mode: render as a single-line summary
+  if (isInline) {
+    const className = (value as Record<string, unknown>).$baml != null
+      ? getBamlType(value) ?? undefined
+      : undefined;
+    const prefix = className ? `${className} ` : '';
+    return (
+      <span className="font-vsc-mono text-xs text-vsc-text">
+        {prefix}{'{ '}
+        {entries.map(([key, val], i) => (
+          <span key={key}>
+            {i > 0 && ', '}
+            <span className="text-vsc-text-muted">{key}</span>
+            {': '}
+            <ValueRenderer value={val} customRenderers={customRenderers} depth={depth + 1} displayMode="inline" />
+          </span>
+        ))}
+        {' }'}
+      </span>
+    );
+  }
+
   const showToggle = entries.length > 3;
   return (
     <div className="group/node">
