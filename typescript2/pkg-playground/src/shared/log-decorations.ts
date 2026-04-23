@@ -1,70 +1,39 @@
-import type { BamlOutboundValue } from '@b/pkg-proto';
+import type { BamlJsValue } from '@b/pkg-proto';
+import { getBamlType } from '../result-renderers';
 import type { LogLevel } from '../worker-protocol';
 
-/** Format a BamlOutboundValue to a short string for inline display. */
-export function formatValueShort(holder: BamlOutboundValue | null | undefined): string {
-  if (!holder?.value) return 'null';
-
-  switch (holder.value.$case) {
-    case 'nullValue':
-      return 'null';
-    case 'stringValue':
-      return JSON.stringify(holder.value.stringValue);
-    case 'intValue':
-      return String(holder.value.intValue);
-    case 'floatValue':
-      return String(holder.value.floatValue);
-    case 'boolValue':
-      return String(holder.value.boolValue);
-    case 'classValue': {
-      const cls = holder.value.classValue;
-      const name = cls.name?.name ?? 'Class';
-      const fields = cls.fields
-        .map((f) => `${f.key}: ${formatValueShort(f.value)}`)
-        .join(', ');
-      return `${name} { ${fields} }`;
-    }
-    case 'enumValue':
-      return holder.value.enumValue.value;
-    case 'listValue':
-      return `[${holder.value.listValue.items.map(formatValueShort).join(', ')}]`;
-    case 'mapValue': {
-      const entries = holder.value.mapValue.entries
-        .map((e) => `${e.key}: ${formatValueShort(e.value)}`)
-        .join(', ');
-      return `{${entries}}`;
-    }
-    case 'literalValue': {
-      const lit = holder.value.literalValue;
-      if (!lit.literal) return 'null';
-      switch (lit.literal.$case) {
-        case 'stringLiteral':
-          return JSON.stringify(lit.literal.stringLiteral.value);
-        case 'intLiteral':
-          return String(lit.literal.intLiteral.value);
-        case 'boolLiteral':
-          return String(lit.literal.boolLiteral.value);
-        default:
-          return 'null';
-      }
-    }
-    case 'unionVariantValue':
-      return formatValueShort(holder.value.unionVariantValue.value);
-    case 'checkedValue':
-      return formatValueShort(holder.value.checkedValue.value);
-    case 'streamingStateValue':
-      return formatValueShort(holder.value.streamingStateValue.value);
-    case 'handleValue': {
-      const h = holder.value.handleValue;
-      return `<handle #${h.key}>`;
-    }
-    case 'mediaValue': {
-      const m = holder.value.mediaValue;
-      return `<${m.mimeType ?? 'media'}>`;
-    }
-    default:
-      return '?';
+/** Format a BamlJsValue to a short string for inline display. */
+export function formatValueShort(value: BamlJsValue | null | undefined): string {
+  if (value == null) return 'null';
+  if (typeof value === 'string') return JSON.stringify(value);
+  if (typeof value === 'number') return String(value);
+  if (typeof value === 'boolean') return String(value);
+  if (typeof value === 'bigint') return String(value);
+  if (Array.isArray(value)) {
+    return `[${value.map(formatValueShort).join(', ')}]`;
   }
+  if (typeof value === 'object') {
+    const bamlType = getBamlType(value);
+    if (bamlType === '$media') {
+      return `<${(value as Record<string, unknown>).mime_type ?? (value as Record<string, unknown>).media_type ?? 'media'}>`;
+    }
+    if (bamlType === '$handle') {
+      return `<handle #${(value as Record<string, unknown>).handle_key}>`;
+    }
+    if (bamlType === '$prompt_ast') return '<prompt_ast>';
+    if (bamlType) {
+      const entries = Object.entries(value)
+        .filter(([k]) => k !== '$baml')
+        .map(([k, v]) => `${k}: ${formatValueShort(v as BamlJsValue)}`)
+        .join(', ');
+      return `${bamlType} { ${entries} }`;
+    }
+    const entries = Object.entries(value)
+      .map(([k, v]) => `${k}: ${formatValueShort(v as BamlJsValue)}`)
+      .join(', ');
+    return `{${entries}}`;
+  }
+  return '?';
 }
 
 /** Truncate a message to max length with ellipsis. */

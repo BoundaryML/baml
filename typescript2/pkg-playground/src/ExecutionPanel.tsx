@@ -11,7 +11,9 @@
 
 import type { ChangeEvent, FC, RefObject } from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { encodeCallArgs, type BamlOutboundValue } from '@b/pkg-proto';
+import { encodeCallArgs } from '@b/pkg-proto';
+import type { BamlJsValue } from '@b/pkg-proto';
+import { getBamlType } from './result-renderers';
 import { KeyRound, PanelLeft, Square } from 'lucide-react';
 import { Button } from './components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs';
@@ -37,7 +39,6 @@ import type {
   RunEntry,
   WorkerOutMessage,
 } from './worker-protocol';
-import { decodeCallResult } from '@b/pkg-proto';
 import type { ResultRendererProps } from './result-renderers';
 import { ResultDisplay } from './ResultDisplay';
 import { registerBuiltinResultRenderers } from './renderers/registerBuiltins';
@@ -46,78 +47,45 @@ import { GraphView } from './graph/GraphView';
 import { FunctionSidebar } from './FunctionSidebar';
 
 registerBuiltinResultRenderers();
-// Format a BamlOutboundValue (proto) to a Rust-like debug string
-function formatValueDebug(holder: BamlOutboundValue | null | undefined): string {
-  if (!holder?.value) return 'null';
-
-  switch (holder.value.$case) {
-    case 'nullValue':
-      return 'null';
-    case 'stringValue':
-      return JSON.stringify(holder.value.stringValue);
-    case 'intValue':
-      return String(holder.value.intValue);
-    case 'floatValue':
-      return String(holder.value.floatValue);
-    case 'boolValue':
-      return String(holder.value.boolValue);
-    case 'classValue': {
-      const cls = holder.value.classValue;
-      const name = cls.name?.name ?? 'Class';
-      const fields = cls.fields
-        .map((f) => `${f.key}: ${formatValueDebug(f.value)}`)
-        .join(', ');
-      return `${name} { ${fields} }`;
-    }
-    case 'enumValue':
-      return holder.value.enumValue.value;
-    case 'listValue':
-      return `[${holder.value.listValue.items.map(formatValueDebug).join(', ')}]`;
-    case 'mapValue': {
-      const entries = holder.value.mapValue.entries
-        .map((e) => `${e.key}: ${formatValueDebug(e.value)}`)
-        .join(', ');
-      return `{${entries}}`;
-    }
-    case 'literalValue': {
-      const lit = holder.value.literalValue;
-      if (!lit.literal) return 'null';
-      switch (lit.literal.$case) {
-        case 'stringLiteral':
-          return JSON.stringify(lit.literal.stringLiteral.value);
-        case 'intLiteral':
-          return String(lit.literal.intLiteral.value);
-        case 'boolLiteral':
-          return String(lit.literal.boolLiteral.value);
-        default:
-          return 'null';
-      }
-    }
-    case 'unionVariantValue':
-      return formatValueDebug(holder.value.unionVariantValue.value);
-    case 'checkedValue':
-      return formatValueDebug(holder.value.checkedValue.value);
-    case 'streamingStateValue':
-      return formatValueDebug(holder.value.streamingStateValue.value);
-    case 'handleValue': {
-      const h = holder.value.handleValue;
-      return `<handle #${h.key}>`;
-    }
-    case 'mediaValue': {
-      const m = holder.value.mediaValue;
-      const mt = ['unspecified', 'image', 'audio', 'pdf', 'video', 'other'][m.media] ?? 'media';
-      if (m.value?.$case === 'url') return `<${mt}: ${m.value.url}>`;
-      if (m.value?.$case === 'file') return `<${mt}: file://${m.value.file}>`;
-      if (m.value?.$case === 'base64') return `<${mt}: base64...>`;
+// Format a BamlJsValue to a Rust-like debug string (transitional — replaced in Phase 3)
+function formatValueDebug(value: BamlJsValue | null | undefined): string {
+  if (value == null) return 'null';
+  if (typeof value === 'string') return JSON.stringify(value);
+  if (typeof value === 'number') return String(value);
+  if (typeof value === 'boolean') return String(value);
+  if (typeof value === 'bigint') return String(value);
+  if (Array.isArray(value)) {
+    return `[${value.map(formatValueDebug).join(', ')}]`;
+  }
+  if (typeof value === 'object') {
+    const bamlType = getBamlType(value);
+    if (bamlType === '$media') {
+      const m = value as Record<string, unknown>;
+      const mt = (m.media_type as string) ?? 'media';
+      if (m.content_type === 'url') return `<${mt}: ${m.url}>`;
+      if (m.content_type === 'file') return `<${mt}: file://${m.file}>`;
+      if (m.content_type === 'base64') return `<${mt}: base64...>`;
       return `<${mt}>`;
     }
-    case 'promptAstValue':
-      return '<prompt_ast>';
-    case 'uint8arrayValue':
-      return `<bytes: ${holder.value.uint8arrayValue.length}>`;
-    default:
-      return '?';
+    if (bamlType === '$handle') {
+      return `<handle #${(value as Record<string, unknown>).handle_key}>`;
+    }
+    if (bamlType === '$prompt_ast') return '<prompt_ast>';
+    if (bamlType) {
+      // Class instance
+      const entries = Object.entries(value)
+        .filter(([k]) => k !== '$baml')
+        .map(([k, v]) => `${k}: ${formatValueDebug(v as BamlJsValue)}`)
+        .join(', ');
+      return `${bamlType} { ${entries} }`;
+    }
+    // Plain map
+    const entries = Object.entries(value)
+      .map(([k, v]) => `${k}: ${formatValueDebug(v as BamlJsValue)}`)
+      .join(', ');
+    return `{${entries}}`;
   }
+  return '?';
 }
 
 // ---------------------------------------------------------------------------
@@ -251,7 +219,7 @@ const CollectionRunView: FC<CollectionRunViewProps> = ({ run, expandedLogId, set
             </div>
             <div className="flex flex-col gap-0.5">
               {run.runtimeEvents.map((evt, evtIdx) => {
-                const kind = evt.event?.kind;
+                const kind = evt.event;
                 if (!kind) return null;
 
                 let label: string;
@@ -1375,8 +1343,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
                         </div>
                         <div className="flex flex-col gap-0.5">
                           {run.runtimeEvents.map((evt, evtIdx) => {
-                            const kind = evt.event?.kind;
-                            console.log('[DEBUG] Event:', evtIdx, kind?.$case, kind);
+                            const kind = evt.event;
                             if (!kind) return null;
 
                             let label: string;
@@ -1420,9 +1387,6 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
 
                             // Check if cursor is within this event's source span
                             const source = kind.$case === 'log' ? kind.log.source : undefined;
-                            if (kind.$case === 'log') {
-                              console.log('[DEBUG] LogEvent source:', source, 'cursorOffset:', cursorOffset);
-                            }
                             const isCursorMatch = cursorOffset != null && source != null &&
                               cursorOffset > source.startOffset && cursorOffset <= source.endOffset;
 
@@ -1714,8 +1678,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
                             </div>
                             <div className="flex flex-col gap-0.5">
                               {run.runtimeEvents.map((evt, evtIdx) => {
-                                const kind = evt.event?.kind;
-                                console.log('[DEBUG] Event (history):', evtIdx, kind?.$case, kind);
+                                const kind = evt.event;
                                 if (!kind) return null;
 
                                 let label: string;
@@ -1759,9 +1722,6 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
 
                                 // Check if cursor is within this event's source span
                                 const source = kind.$case === 'log' ? kind.log.source : undefined;
-                                if (kind.$case === 'log') {
-                                  console.log('[DEBUG] LogEvent source (history):', source, 'cursorOffset:', cursorOffset);
-                                }
                                 const isCursorMatch = cursorOffset != null && source != null &&
                                   cursorOffset > source.startOffset && cursorOffset <= source.endOffset;
 

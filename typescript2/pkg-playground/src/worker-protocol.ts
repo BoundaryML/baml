@@ -6,7 +6,24 @@
  * gives exhaustive switch narrowing.
  */
 
-import type { RuntimeEvent } from '@b/pkg-proto';
+import type { BamlJsValue, SourceLocation, TagEntry } from '@b/pkg-proto';
+
+/** Runtime event with BamlOutboundValue fields deserialized to BamlJsValue. */
+export interface DeserializedRuntimeEvent {
+  spanId: string;
+  parentSpanId?: string;
+  rootSpanId: string;
+  timestampMs: number;
+  callStack: string[];
+  event: DeserializedEventKind | undefined;
+}
+
+export type DeserializedEventKind =
+  | { $case: 'functionStart'; functionStart: { name: string; args: BamlJsValue[] } }
+  | { $case: 'functionEnd'; functionEnd: { name: string; durationMs: number; result: BamlJsValue } }
+  | { $case: 'log'; log: { data: BamlJsValue; level: string; source?: SourceLocation } }
+  | { $case: 'custom'; custom: { name: string; data: BamlJsValue } }
+  | { $case: 'setTags'; setTags: { tags: TagEntry[] } };
 
 // ---------------------------------------------------------------------------
 // Log decoration types (inline log display like ErrorLens)
@@ -156,7 +173,7 @@ export interface RunEntry {
   testName?: string;
   fetchLogs: FetchLogEntry[];
   /** Runtime events (log.info, baml.events.send, etc.) emitted during this run. */
-  runtimeEvents: RuntimeEvent[];
+  runtimeEvents: DeserializedRuntimeEvent[];
   result: string | null;
   error: string | null;
   status: 'running' | 'success' | 'error' | 'cancelled';
@@ -176,7 +193,7 @@ export type WorkerOutMessage =
   | { type: 'callFunctionError'; id: number; error: string; cancelled?: boolean }
   | { type: 'fetchLogNew'; entry: FetchLogEntry }
   | { type: 'fetchLogUpdate'; logId: number; patch: Partial<FetchLogEntry> }
-  | { type: 'runtimeEventNew'; event: RuntimeEvent; callId: number | null }
+  | { type: 'runtimeEventNew'; event: DeserializedRuntimeEvent; callId: number | null }
   | { type: 'runtimeEventError'; error: string }
   | { type: 'envVarRequest'; id: number; variable: string }
   | { type: 'inputRequest'; id: number; prompt: string | undefined; callId: number }

@@ -12,8 +12,8 @@
  */
 
 import type { RuntimePort } from '../runtime-port';
-import type { WorkerOutMessage, WorkerInMessage, PlaygroundNotification, LogLevel, LogDecoration } from '../worker-protocol';
-import { decodeCallResult, RuntimeEvent } from '@b/pkg-proto';
+import type { WorkerOutMessage, WorkerInMessage, PlaygroundNotification, LogLevel, LogDecoration, DeserializedRuntimeEvent, DeserializedEventKind } from '../worker-protocol';
+import { decodeCallResult, deserializeValue, RuntimeEvent } from '@b/pkg-proto';
 import { formatValueShort, truncateMessage, normalizeLogLevel } from '../shared/log-decorations';
 
 /** Server → Client message shapes (must match playground_ws.rs WsOutMessage) */
@@ -44,6 +44,74 @@ type WsInMessage =
   | { type: 'cursorPosition'; file: string; line: number; column: number };
 
 const MAX_RECONNECT_DELAY = 5000;
+
+function wrapHandle(key: bigint, handleType: number, typeName: string) {
+  return { handle_key: key, handle_type: handleType, type_name: typeName };
+}
+
+function deserializeRuntimeEvent(event: RuntimeEvent): DeserializedRuntimeEvent {
+  let deserializedKind: DeserializedEventKind | undefined;
+  const kind = event.event?.kind;
+  if (kind) {
+    switch (kind.$case) {
+      case 'functionStart':
+        deserializedKind = {
+          $case: 'functionStart',
+          functionStart: {
+            name: kind.functionStart.name,
+            args: kind.functionStart.args.map((arg) => deserializeValue(arg, wrapHandle)),
+          },
+        };
+        break;
+      case 'functionEnd':
+        deserializedKind = {
+          $case: 'functionEnd',
+          functionEnd: {
+            name: kind.functionEnd.name,
+            durationMs: kind.functionEnd.durationMs,
+            result: kind.functionEnd.result
+              ? deserializeValue(kind.functionEnd.result, wrapHandle)
+              : null,
+          },
+        };
+        break;
+      case 'log':
+        deserializedKind = {
+          $case: 'log',
+          log: {
+            data: kind.log.data ? deserializeValue(kind.log.data, wrapHandle) : null,
+            level: kind.log.level,
+            source: kind.log.source,
+          },
+        };
+        break;
+      case 'custom':
+        deserializedKind = {
+          $case: 'custom',
+          custom: {
+            name: kind.custom.name,
+            data: kind.custom.data ? deserializeValue(kind.custom.data, wrapHandle) : null,
+          },
+        };
+        break;
+      case 'setTags':
+        deserializedKind = {
+          $case: 'setTags',
+          setTags: { tags: kind.setTags.tags },
+        };
+        break;
+    }
+  }
+
+  return {
+    spanId: event.spanId,
+    parentSpanId: event.parentSpanId,
+    rootSpanId: event.rootSpanId,
+    timestampMs: event.timestampMs,
+    callStack: event.callStack,
+    event: deserializedKind,
+  };
+}
 
 export class WebSocketRuntimePort implements RuntimePort {
   private url: string;
@@ -321,12 +389,13 @@ export class WebSocketRuntimePort implements RuntimePort {
         try {
           const bytes = base64ToUint8Array(raw.data);
           const event = RuntimeEvent.decode(bytes);
+          const deserialized = deserializeRuntimeEvent(event);
           // Forward the decoded event immediately via handlers
-          const runtimeMsg: WorkerOutMessage = { type: 'runtimeEventNew', event, callId: raw.callId ?? null };
+          const runtimeMsg: WorkerOutMessage = { type: 'runtimeEventNew', event: deserialized, callId: raw.callId ?? null };
           for (const h of this.handlers) h(runtimeMsg);
 
           // Extract log decorations (same logic as baml-lsp-worker.ts)
-          const kind = event.event?.kind;
+          const kind = deserialized.event;
           if (kind?.$case === 'log' && kind.log.source) {
             const source = kind.log.source;
             const line = source.line;
