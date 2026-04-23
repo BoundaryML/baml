@@ -236,13 +236,16 @@ fn write_jsonl_to_file(events: &[RuntimeEvent], trace_file: &Path) {
 mod tests {
     use std::time::Duration;
 
-    use bex_events::{EventKind, FunctionEvent, FunctionStart, RuntimeEvent, SpanContext, SpanId};
+    use bex_events::{
+        CallId, EventKind, FunctionEvent, FunctionStart, RuntimeEvent, SpanContext, SpanId,
+    };
     use web_time::SystemTime;
 
     use super::*;
 
     fn make_event(span_id: SpanId) -> RuntimeEvent {
         RuntimeEvent {
+            call_id: CallId(0),
             ctx: SpanContext {
                 span_id: span_id.clone(),
                 parent_span_id: None,
@@ -277,6 +280,7 @@ mod tests {
     fn test_format_log_event_for_stderr() {
         let span_id = SpanId::new();
         let event = RuntimeEvent {
+            call_id: CallId(0),
             ctx: SpanContext {
                 span_id: span_id.clone(),
                 parent_span_id: None,
@@ -327,6 +331,7 @@ mod tests {
         // across multiple lines.
         let span_id = SpanId::new();
         let event = RuntimeEvent {
+            call_id: CallId(0),
             ctx: SpanContext {
                 span_id: span_id.clone(),
                 parent_span_id: None,

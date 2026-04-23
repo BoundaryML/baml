@@ -1347,6 +1347,7 @@ dependencies = [
  "baml_compiler2_visualization",
  "baml_type",
  "base64",
+ "bex_events",
  "bex_events_native",
  "bex_heap",
  "bex_project",
@@ -1564,6 +1565,7 @@ dependencies = [
  "indexmap 2.13.0",
  "serde",
  "serde_json",
+ "sys_types",
  "uuid",
  "web-time",
 ]

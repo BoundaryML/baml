@@ -10,10 +10,15 @@ import type { FC } from 'react';
 export const BAML_TYPE_KEY = '$baml' as const;
 export const BAML_TYPE_FIELD = 'type' as const;
 
+/** Display context for value renderers. */
+export type DisplayMode = 'inline' | 'expanded' | 'auto' | 'inline-hint';
+
 /** Props passed to a custom result renderer. */
 export interface ResultRendererProps {
   /** The parsed result value (object with $baml.type when from BAML). */
   value: unknown;
+  /** Rendering context — defaults to 'auto' if omitted. */
+  displayMode?: DisplayMode;
 }
 
 /** Extract BAML type from a result value, e.g. "baml.http.Request". */

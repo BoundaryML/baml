@@ -35,6 +35,7 @@
 mod native_lsp_sender;
 mod native_vfs;
 pub mod playground_env;
+pub mod playground_event_sink;
 pub mod playground_http;
 pub mod playground_sender;
 pub mod playground_server;
@@ -139,15 +140,25 @@ pub fn run_server(playground_via_browser: bool) -> anyhow::Result<()> {
         playground_via_browser,
     ));
 
-    // Mirror runtime log.* events to stderr by default, and also persist full
-    // event traces when BAML_TRACE_FILE is configured.
-    let event_sink = Some(
+    // Start the native event sink if BAML_TRACE_FILE is set.
+    let file_event_sink: Option<std::sync::Arc<dyn bex_events::EventSink>> =
         std::env::var("BAML_TRACE_FILE")
             .ok()
-            .map(|trace_file| bex_events_native::start(trace_file.into()))
-            .unwrap_or_else(bex_events_native::start_stderr),
+            .map(|trace_file| bex_events_native::start(trace_file.into()));
+    // Playground event sink — always active so runtime events flow to the WebSocket UI.
+    let playground_event_sink: std::sync::Arc<dyn bex_events::EventSink> = std::sync::Arc::new(
+        playground_event_sink::PlaygroundEventSink::new(broadcast_tx.clone()),
     );
-    let event_sink_for_flush = event_sink.clone();
+
+    // Compose sinks: playground is always present; file sink is optional.
+    let composed_sink: std::sync::Arc<dyn bex_events::EventSink> = {
+        let mut sinks: Vec<std::sync::Arc<dyn bex_events::EventSink>> = vec![playground_event_sink];
+        if let Some(file_sink) = file_event_sink {
+            sinks.push(file_sink);
+        }
+        std::sync::Arc::new(bex_events::FanOutEventSink::new(sinks))
+    };
+    let event_sink = Some(composed_sink.clone());
 
     // Create the BexLsp (multi-project LSP)
     let bex = bex_project::new_lsp(
@@ -228,8 +239,6 @@ pub fn run_server(playground_via_browser: bool) -> anyhow::Result<()> {
     }
 
     tracing::info!("LSP server shutting down");
-    if let Some(sink) = event_sink_for_flush {
-        sink.flush();
-    }
+    composed_sink.flush();
     Ok(())
 }
