@@ -44,6 +44,6 @@ function user.GetUser$stream() -> baml.llm.Stream {
     load_const null
     load_const "GetUser"
     alloc_map 0
-    call baml.llm.parse
+    call baml.llm.stream_llm_function
     return
 }

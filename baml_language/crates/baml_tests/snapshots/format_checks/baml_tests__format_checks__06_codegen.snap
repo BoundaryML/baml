@@ -1327,8 +1327,6 @@ function user.LlmBasic$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream
     load_var sse
     load_const "LlmBasic"
     load_const null
-    load_const "__make_stream"
-    load_map_element
     call_indirect
     return
 }
@@ -1344,13 +1342,13 @@ function user.LlmBasic$render_prompt(name: string) -> baml.llm.PromptAst {
 }
 
 function user.LlmBasic$stream(name: string) -> baml.llm.Stream {
-    load_const "unresolved name: GPT4"
-    call baml.sys.panic
-    pop 1
-    jump L0
-
-  L0:
-    unreachable
+    load_const null
+    load_const "LlmBasic"
+    load_var name
+    load_const "name"
+    alloc_map 1
+    call baml.llm.stream_llm_function
+    return
 }
 
 function user.LlmMultiLine(text: string) -> string {
@@ -1394,8 +1392,6 @@ function user.LlmMultiLine$parse_stream(sse: baml.http.SseStream) -> baml.llm.St
     load_var sse
     load_const "LlmMultiLine"
     load_const null
-    load_const "__make_stream"
-    load_map_element
     call_indirect
     return
 }
@@ -1411,13 +1407,13 @@ function user.LlmMultiLine$render_prompt(text: string) -> baml.llm.PromptAst {
 }
 
 function user.LlmMultiLine$stream(text: string) -> baml.llm.Stream {
-    load_const "unresolved name: GPT4"
-    call baml.sys.panic
-    pop 1
-    jump L0
-
-  L0:
-    unreachable
+    load_const null
+    load_const "LlmMultiLine"
+    load_var text
+    load_const "text"
+    alloc_map 1
+    call baml.llm.stream_llm_function
+    return
 }
 
 function user.LlmReversedOrder(text: string) -> string {
@@ -1461,8 +1457,6 @@ function user.LlmReversedOrder$parse_stream(sse: baml.http.SseStream) -> baml.ll
     load_var sse
     load_const "LlmReversedOrder"
     load_const null
-    load_const "__make_stream"
-    load_map_element
     call_indirect
     return
 }
@@ -1478,13 +1472,13 @@ function user.LlmReversedOrder$render_prompt(text: string) -> baml.llm.PromptAst
 }
 
 function user.LlmReversedOrder$stream(text: string) -> baml.llm.Stream {
-    load_const "unresolved name: GPT4"
-    call baml.sys.panic
-    pop 1
-    jump L0
-
-  L0:
-    unreachable
+    load_const null
+    load_const "LlmReversedOrder"
+    load_var text
+    load_const "text"
+    alloc_map 1
+    call baml.llm.stream_llm_function
+    return
 }
 
 function user.LlmStringClient(text: string) -> string {
@@ -1560,21 +1554,7 @@ function user.LlmStringClient$parse(json: string) -> string {
 function user.LlmStringClient$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream {
     load_var sse
     load_const "LlmStringClient"
-    alloc_instance baml.llm.Client
-    load_const "openai/gpt-4o"
-    init_field .name
     load_const null
-    load_const "Primitive"
-    load_map_element
-    init_field .client_type
-    alloc_array 0
-    init_field .sub_clients
-    load_const null
-    init_field .retry
-    load_const 0
-    init_field .counter
-    load_const "__make_stream"
-    load_map_element
     call_indirect
     return
 }
@@ -1604,7 +1584,8 @@ function user.LlmStringClient$stream(text: string) -> baml.llm.Stream {
     alloc_instance baml.llm.Client
     load_const "openai/gpt-4o"
     init_field .name
-    load_const null
+    load_const baml.llm.ClientType.Primitive
+    alloc_variant baml.llm.ClientType
     init_field .client_type
     alloc_array 0
     init_field .sub_clients
@@ -1616,8 +1597,7 @@ function user.LlmStringClient$stream(text: string) -> baml.llm.Stream {
     load_var text
     load_const "text"
     alloc_map 1
-    load_const null
-    call_indirect
+    call baml.llm.stream_llm_function
     return
 }
 
@@ -1680,8 +1660,6 @@ function user.LlmWithLongSignature$parse_stream(sse: baml.http.SseStream) -> bam
     load_var sse
     load_const "LlmWithLongSignature"
     load_const null
-    load_const "__make_stream"
-    load_map_element
     call_indirect
     return
 }
@@ -1703,13 +1681,19 @@ function user.LlmWithLongSignature$render_prompt(first_context: string, second_c
 }
 
 function user.LlmWithLongSignature$stream(first_context: string, second_context: string, third_context: string, user_query: string) -> baml.llm.Stream {
-    load_const "unresolved name: GPT4"
-    call baml.sys.panic
-    pop 1
-    jump L0
-
-  L0:
-    unreachable
+    load_const null
+    load_const "LlmWithLongSignature"
+    load_var first_context
+    load_var second_context
+    load_var third_context
+    load_var user_query
+    load_const "first_context"
+    load_const "second_context"
+    load_const "third_context"
+    load_const "user_query"
+    alloc_map 4
+    call baml.llm.stream_llm_function
+    return
 }
 
 function user.LongArrayClient$new() -> null {
@@ -4641,9 +4625,7 @@ function user.TestTarget$parse(json: string) -> string {
 function user.TestTarget$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream {
     load_var sse
     load_const "TestTarget"
-    load_global user.BasicClient
-    load_const "__make_stream"
-    load_map_element
+    load_const null
     call_indirect
     return
 }
@@ -4660,7 +4642,7 @@ function user.TestTarget$stream() -> baml.llm.Stream {
     load_global user.BasicClient
     load_const "TestTarget"
     alloc_map 0
-    call baml.llm.parse
+    call baml.llm.stream_llm_function
     return
 }
 

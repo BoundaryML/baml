@@ -36,8 +36,6 @@ function user.GetMixedList$parse_stream(sse: baml.http.SseStream) -> baml.llm.St
     load_var sse
     load_const "GetMixedList"
     load_const null
-    load_const "__make_stream"
-    load_map_element
     call_indirect
     return
 }
@@ -54,7 +52,7 @@ function user.GetMixedList$stream() -> baml.llm.Stream {
     load_const null
     load_const "GetMixedList"
     alloc_map 0
-    call baml.llm.parse
+    call baml.llm.stream_llm_function
     return
 }
 
@@ -93,8 +91,6 @@ function user.GetMixedMap$parse_stream(sse: baml.http.SseStream) -> baml.llm.Str
     load_var sse
     load_const "GetMixedMap"
     load_const null
-    load_const "__make_stream"
-    load_map_element
     call_indirect
     return
 }
@@ -111,7 +107,7 @@ function user.GetMixedMap$stream() -> baml.llm.Stream {
     load_const null
     load_const "GetMixedMap"
     alloc_map 0
-    call baml.llm.parse
+    call baml.llm.stream_llm_function
     return
 }
 
@@ -150,8 +146,6 @@ function user.GetStatus$parse_stream(sse: baml.http.SseStream) -> baml.llm.Strea
     load_var sse
     load_const "GetStatus"
     load_const null
-    load_const "__make_stream"
-    load_map_element
     call_indirect
     return
 }
@@ -168,7 +162,7 @@ function user.GetStatus$stream() -> baml.llm.Stream {
     load_const null
     load_const "GetStatus"
     alloc_map 0
-    call baml.llm.parse
+    call baml.llm.stream_llm_function
     return
 }
 
@@ -243,13 +237,11 @@ function user.GetUser$parse(json: string) -> User {
 }
 
 function user.GetUser$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream {
-    load_const "internal compiler error: MIR failed to resolve field access .Primitive against class definition 'User' (module_path: [\"user\"]). This class should be in class_fields but isn't."
-    call baml.sys.panic
-    pop 1
-    jump L0
-
-  L0:
-    unreachable
+    load_var sse
+    load_const "GetUser"
+    load_const null
+    call_indirect
+    return
 }
 
 function user.GetUser$render_prompt(id: int) -> baml.llm.PromptAst {
@@ -277,7 +269,8 @@ function user.GetUser$stream(id: int) -> baml.llm.Stream {
     alloc_instance baml.llm.Client
     load_const "openai/gpt-4o"
     init_field .name
-    load_const null
+    load_const baml.llm.ClientType.Primitive
+    alloc_variant baml.llm.ClientType
     init_field .client_type
     alloc_array 0
     init_field .sub_clients
@@ -289,7 +282,6 @@ function user.GetUser$stream(id: int) -> baml.llm.Stream {
     load_var id
     load_const "id"
     alloc_map 1
-    load_const null
-    call_indirect
+    call baml.llm.stream_llm_function
     return
 }

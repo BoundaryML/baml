@@ -42,8 +42,6 @@ function user.FormatMessage$parse_stream(sse: baml.http.SseStream) -> baml.llm.S
     load_var sse
     load_const "FormatMessage"
     load_const null
-    load_const "__make_stream"
-    load_map_element
     call_indirect
     return
 }
@@ -59,13 +57,13 @@ function user.FormatMessage$render_prompt(name: string) -> baml.llm.PromptAst {
 }
 
 function user.FormatMessage$stream(name: string) -> baml.llm.Stream {
-    load_const "unresolved name: GPT4"
-    call baml.sys.panic
-    pop 1
-    jump L0
-
-  L0:
-    unreachable
+    load_const null
+    load_const "FormatMessage"
+    load_var name
+    load_const "name"
+    alloc_map 1
+    call baml.llm.stream_llm_function
+    return
 }
 
 function user.GetRole() -> "admin" | "user" | "guest" {
@@ -114,8 +112,6 @@ function user.ProcessText$parse_stream(sse: baml.http.SseStream) -> baml.llm.Str
     load_var sse
     load_const "ProcessText"
     load_const null
-    load_const "__make_stream"
-    load_map_element
     call_indirect
     return
 }
@@ -131,11 +127,11 @@ function user.ProcessText$render_prompt(input: string) -> baml.llm.PromptAst {
 }
 
 function user.ProcessText$stream(input: string) -> baml.llm.Stream {
-    load_const "unresolved name: GPT4"
-    call baml.sys.panic
-    pop 1
-    jump L0
-
-  L0:
-    unreachable
+    load_const null
+    load_const "ProcessText"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.stream_llm_function
+    return
 }

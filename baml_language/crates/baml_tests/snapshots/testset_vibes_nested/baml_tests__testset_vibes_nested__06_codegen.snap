@@ -67,9 +67,7 @@ function user.ClassifySentiment$parse(json: string) -> Sentiment {
 function user.ClassifySentiment$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream {
     load_var sse
     load_const "ClassifySentiment"
-    load_global user.GPT4o
-    load_const "__make_stream"
-    load_map_element
+    load_const null
     call_indirect
     return
 }
@@ -90,8 +88,7 @@ function user.ClassifySentiment$stream(text: string) -> baml.llm.Stream {
     load_var text
     load_const "text"
     alloc_map 1
-    load_const null
-    call_indirect
+    call baml.llm.stream_llm_function
     return
 }
 
@@ -135,9 +132,7 @@ function user.ClassifySentiment2$parse(json: string) -> string {
 function user.ClassifySentiment2$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream {
     load_var sse
     load_const "ClassifySentiment2"
-    load_global user.GPT4o
-    load_const "__make_stream"
-    load_map_element
+    load_const null
     call_indirect
     return
 }
@@ -158,8 +153,7 @@ function user.ClassifySentiment2$stream(text: string) -> baml.llm.Stream {
     load_var text
     load_const "text"
     alloc_map 1
-    load_const null
-    call_indirect
+    call baml.llm.stream_llm_function
     return
 }
 
@@ -282,9 +276,7 @@ function user.GenerateTests$parse(json: string) -> string[] {
 function user.GenerateTests$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream {
     load_var sse
     load_const "GenerateTests"
-    load_global user.GPT4o
-    load_const "__make_stream"
-    load_map_element
+    load_const null
     call_indirect
     return
 }
@@ -309,7 +301,6 @@ function user.GenerateTests$stream(count: int, topic: string) -> baml.llm.Stream
     load_const "count"
     load_const "topic"
     alloc_map 2
-    load_const null
-    call_indirect
+    call baml.llm.stream_llm_function
     return
 }

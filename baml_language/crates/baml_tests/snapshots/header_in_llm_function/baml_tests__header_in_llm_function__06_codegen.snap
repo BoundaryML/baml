@@ -48,9 +48,7 @@ function user.FetchDatax$parse(json: string) -> Hi {
 function user.FetchDatax$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream {
     load_var sse
     load_const "FetchDatax"
-    load_global user.VertexGCP
-    load_const "__make_stream"
-    load_map_element
+    load_const null
     call_indirect
     return
 }
@@ -71,8 +69,7 @@ function user.FetchDatax$stream(user_id: string) -> baml.llm.Stream {
     load_var user_id
     load_const "user_id"
     alloc_map 1
-    load_const null
-    call_indirect
+    call baml.llm.stream_llm_function
     return
 }
 

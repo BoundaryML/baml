@@ -120,9 +120,7 @@ function user.LlmFunction$parse(json: string) -> string {
 function user.LlmFunction$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream {
     load_var sse
     load_const "LlmFunction"
-    load_global user.TestClient
-    load_const "__make_stream"
-    load_map_element
+    load_const null
     call_indirect
     return
 }
@@ -143,8 +141,7 @@ function user.LlmFunction$stream(input: string) -> baml.llm.Stream {
     load_var input
     load_const "input"
     alloc_map 1
-    load_const null
-    call_indirect
+    call baml.llm.stream_llm_function
     return
 }
 

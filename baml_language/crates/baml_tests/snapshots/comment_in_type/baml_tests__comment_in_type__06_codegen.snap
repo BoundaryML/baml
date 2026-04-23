@@ -42,9 +42,7 @@ function user.CommentAfterArrow$parse(json: string) -> string {
 function user.CommentAfterArrow$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream {
     load_var sse
     load_const "CommentAfterArrow"
-    load_global user.TestClient
-    load_const "__make_stream"
-    load_map_element
+    load_const null
     call_indirect
     return
 }
@@ -61,7 +59,7 @@ function user.CommentAfterArrow$stream() -> baml.llm.Stream {
     load_global user.TestClient
     load_const "CommentAfterArrow"
     alloc_map 0
-    call baml.llm.parse
+    call baml.llm.stream_llm_function
     return
 }
 
@@ -111,9 +109,7 @@ function user.FunctionWithComments$parse(json: string) -> string {
 function user.FunctionWithComments$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream {
     load_var sse
     load_const "FunctionWithComments"
-    load_global user.TestClient
-    load_const "__make_stream"
-    load_map_element
+    load_const null
     call_indirect
     return
 }
@@ -138,8 +134,7 @@ function user.FunctionWithComments$stream(a: string, b: int) -> baml.llm.Stream 
     load_const "a"
     load_const "b"
     alloc_map 2
-    load_const null
-    call_indirect
+    call baml.llm.stream_llm_function
     return
 }
 

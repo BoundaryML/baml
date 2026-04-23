@@ -42,8 +42,6 @@ function user.HelloWorld$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stre
     load_var sse
     load_const "HelloWorld"
     load_const null
-    load_const "__make_stream"
-    load_map_element
     call_indirect
     return
 }
@@ -59,11 +57,11 @@ function user.HelloWorld$render_prompt(name: string) -> baml.llm.PromptAst {
 }
 
 function user.HelloWorld$stream(name: string) -> baml.llm.Stream {
-    load_const "unresolved name: GPT4"
-    call baml.sys.panic
-    pop 1
-    jump L0
-
-  L0:
-    unreachable
+    load_const null
+    load_const "HelloWorld"
+    load_var name
+    load_const "name"
+    alloc_map 1
+    call baml.llm.stream_llm_function
+    return
 }

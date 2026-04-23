@@ -42,8 +42,6 @@ function user.BadParam$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream
     load_var sse
     load_const "BadParam"
     load_const null
-    load_const "__make_stream"
-    load_map_element
     call_indirect
     return
 }
@@ -59,13 +57,13 @@ function user.BadParam$render_prompt(x: map<string, int>) -> baml.llm.PromptAst 
 }
 
 function user.BadParam$stream(x: map<string, int>) -> baml.llm.Stream {
-    load_const "unresolved name: GPT4"
-    call baml.sys.panic
-    pop 1
-    jump L0
-
-  L0:
-    unreachable
+    load_const null
+    load_const "BadParam"
+    load_var x
+    load_const "x"
+    alloc_map 1
+    call baml.llm.stream_llm_function
+    return
 }
 
 function user.BadReturnType() -> map<string, int> {
@@ -103,8 +101,6 @@ function user.BadReturnType$parse_stream(sse: baml.http.SseStream) -> baml.llm.S
     load_var sse
     load_const "BadReturnType"
     load_const null
-    load_const "__make_stream"
-    load_map_element
     call_indirect
     return
 }
@@ -121,6 +117,6 @@ function user.BadReturnType$stream() -> baml.llm.Stream {
     load_const null
     load_const "BadReturnType"
     alloc_map 0
-    call baml.llm.parse
+    call baml.llm.stream_llm_function
     return
 }

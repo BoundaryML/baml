@@ -42,8 +42,6 @@ function user.Ambiguous$parse_stream(sse: baml.http.SseStream) -> baml.llm.Strea
     load_var sse
     load_const "Ambiguous"
     load_const null
-    load_const "__make_stream"
-    load_map_element
     call_indirect
     return
 }
@@ -59,13 +57,13 @@ function user.Ambiguous$render_prompt(input: string) -> baml.llm.PromptAst {
 }
 
 function user.Ambiguous$stream(input: string) -> baml.llm.Stream {
-    load_const "unresolved name: GPT4"
-    call baml.sys.panic
-    pop 1
-    jump L0
-
-  L0:
-    unreachable
+    load_const null
+    load_const "Ambiguous"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.stream_llm_function
+    return
 }
 
 function user.AnotherLLM(input: string) -> string {
@@ -121,8 +119,7 @@ function user.AnotherLLM$stream(input: string) -> baml.llm.Stream {
     load_var input
     load_const "input"
     alloc_map 1
-    load_const null
-    call_indirect
+    call baml.llm.stream_llm_function
     return
 }
 
@@ -167,8 +164,6 @@ function user.ChainedProcess$parse_stream(sse: baml.http.SseStream) -> baml.llm.
     load_var sse
     load_const "ChainedProcess"
     load_const null
-    load_const "__make_stream"
-    load_map_element
     call_indirect
     return
 }
@@ -184,13 +179,13 @@ function user.ChainedProcess$render_prompt(input: string) -> baml.llm.PromptAst 
 }
 
 function user.ChainedProcess$stream(input: string) -> baml.llm.Stream {
-    load_const "unresolved name: GPT4"
-    call baml.sys.panic
-    pop 1
-    jump L0
-
-  L0:
-    unreachable
+    load_const null
+    load_const "ChainedProcess"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.stream_llm_function
+    return
 }
 
 function user.ExtractData(text: string) -> JsonData {
@@ -234,8 +229,6 @@ function user.ExtractData$parse_stream(sse: baml.http.SseStream) -> baml.llm.Str
     load_var sse
     load_const "ExtractData"
     load_const null
-    load_const "__make_stream"
-    load_map_element
     call_indirect
     return
 }
@@ -251,13 +244,13 @@ function user.ExtractData$render_prompt(text: string) -> baml.llm.PromptAst {
 }
 
 function user.ExtractData$stream(text: string) -> baml.llm.Stream {
-    load_const "unresolved name: GPT4"
-    call baml.sys.panic
-    pop 1
-    jump L0
-
-  L0:
-    unreachable
+    load_const null
+    load_const "ExtractData"
+    load_var text
+    load_const "text"
+    alloc_map 1
+    call baml.llm.stream_llm_function
+    return
 }
 
 function user.LLMAnalyze(text: string) -> Analysis {
@@ -301,8 +294,6 @@ function user.LLMAnalyze$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stre
     load_var sse
     load_const "LLMAnalyze"
     load_const null
-    load_const "__make_stream"
-    load_map_element
     call_indirect
     return
 }
@@ -318,13 +309,13 @@ function user.LLMAnalyze$render_prompt(text: string) -> baml.llm.PromptAst {
 }
 
 function user.LLMAnalyze$stream(text: string) -> baml.llm.Stream {
-    load_const "unresolved name: GPT4"
-    call baml.sys.panic
-    pop 1
-    jump L0
-
-  L0:
-    unreachable
+    load_const null
+    load_const "LLMAnalyze"
+    load_var text
+    load_const "text"
+    alloc_map 1
+    call baml.llm.stream_llm_function
+    return
 }
 
 function user.ProcessAnalysis(analysis: Analysis) -> string {
