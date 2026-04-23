@@ -84,6 +84,17 @@ function user.ClassifySentiment$render_prompt(text: string) -> baml.llm.PromptAs
     return
 }
 
+function user.ClassifySentiment$stream(text: string) -> baml.llm.Stream {
+    load_global user.GPT4o
+    load_const "ClassifySentiment"
+    load_var text
+    load_const "text"
+    alloc_map 1
+    load_const null
+    call_indirect
+    return
+}
+
 function user.ClassifySentiment2(text: string) -> string {
     load_global user.GPT4o
     load_const "ClassifySentiment2"
@@ -138,6 +149,17 @@ function user.ClassifySentiment2$render_prompt(text: string) -> baml.llm.PromptA
     load_const "text"
     alloc_map 1
     call baml.llm.render_prompt
+    return
+}
+
+function user.ClassifySentiment2$stream(text: string) -> baml.llm.Stream {
+    load_global user.GPT4o
+    load_const "ClassifySentiment2"
+    load_var text
+    load_const "text"
+    alloc_map 1
+    load_const null
+    call_indirect
     return
 }
 
@@ -276,5 +298,18 @@ function user.GenerateTests$render_prompt(count: int, topic: string) -> baml.llm
     load_const "topic"
     alloc_map 2
     call baml.llm.render_prompt
+    return
+}
+
+function user.GenerateTests$stream(count: int, topic: string) -> baml.llm.Stream {
+    load_global user.GPT4o
+    load_const "GenerateTests"
+    load_var count
+    load_var topic
+    load_const "count"
+    load_const "topic"
+    alloc_map 2
+    load_const null
+    call_indirect
     return
 }

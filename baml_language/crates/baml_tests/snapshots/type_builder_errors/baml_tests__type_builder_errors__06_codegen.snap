@@ -72,7 +72,7 @@ function user.TypeBuilderFn$parse(json: string) -> Resume {
 }
 
 function user.TypeBuilderFn$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream {
-    load_const "internal compiler error: MIR failed to resolve field access .Primitive against class definition 'Resume' (module_path: ["user"]). This class should be in class_fields but isn't."
+    load_const "internal compiler error: MIR failed to resolve field access .Primitive against class definition 'Resume' (module_path: [\"user\"]). This class should be in class_fields but isn't."
     call baml.sys.panic
     pop 1
     jump L0
@@ -99,5 +99,26 @@ function user.TypeBuilderFn$render_prompt(from_text: string) -> baml.llm.PromptA
     load_const "from_text"
     alloc_map 1
     call baml.llm.render_prompt
+    return
+}
+
+function user.TypeBuilderFn$stream(from_text: string) -> baml.llm.Stream {
+    alloc_instance baml.llm.Client
+    load_const "openai/gpt-4o-mini"
+    init_field .name
+    load_const null
+    init_field .client_type
+    alloc_array 0
+    init_field .sub_clients
+    load_const null
+    init_field .retry
+    load_const 0
+    init_field .counter
+    load_const "TypeBuilderFn"
+    load_var from_text
+    load_const "from_text"
+    alloc_map 1
+    load_const null
+    call_indirect
     return
 }

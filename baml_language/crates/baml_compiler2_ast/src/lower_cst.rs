@@ -373,7 +373,7 @@ fn lower_llm_body(llm_body: &ast::LlmFunctionBody) -> LlmBodyDef {
 /// use `client_name = None` and keep their existing 2-argument signature.
 ///
 /// All synthetic spans point to `span`.
-pub(crate) fn synthesize_llm_builtin_call(
+pub fn synthesize_llm_builtin_call(
     builtin_name: &str,
     function_name: &str,
     param_names: &[Name],

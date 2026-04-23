@@ -29,3 +29,7 @@ class user.MyClass$stream {
   name: null | string
   age: null | int
 }
+function user.GetUser$stream() -> baml.llm.Stream<user.MyClass, null | user.MyClass$stream> throws never {
+  baml.llm.stream_llm_function(null, "GetUser", map {  }) : baml.llm.Stream<user.MyClass, null | user.MyClass$stream>
+  !! 316..397: type mismatch: expected baml.llm.Client, got null
+}

@@ -137,6 +137,17 @@ function user.LlmFunction$render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
+function user.LlmFunction$stream(input: string) -> baml.llm.Stream {
+    load_global user.TestClient
+    load_const "LlmFunction"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    load_const null
+    call_indirect
+    return
+}
+
 function user.MatchExpression(x: int) -> string {
     load_var x
     load_const 1

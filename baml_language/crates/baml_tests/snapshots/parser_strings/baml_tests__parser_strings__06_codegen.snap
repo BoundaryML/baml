@@ -58,6 +58,16 @@ function user.FormatMessage$render_prompt(name: string) -> baml.llm.PromptAst {
     return
 }
 
+function user.FormatMessage$stream(name: string) -> baml.llm.Stream {
+    load_const "unresolved name: GPT4"
+    call baml.sys.panic
+    pop 1
+    jump L0
+
+  L0:
+    unreachable
+}
+
 function user.GetRole() -> "admin" | "user" | "guest" {
     load_const "user"
     return
@@ -118,4 +128,14 @@ function user.ProcessText$render_prompt(input: string) -> baml.llm.PromptAst {
     alloc_map 1
     call baml.llm.render_prompt
     return
+}
+
+function user.ProcessText$stream(input: string) -> baml.llm.Stream {
+    load_const "unresolved name: GPT4"
+    call baml.sys.panic
+    pop 1
+    jump L0
+
+  L0:
+    unreachable
 }

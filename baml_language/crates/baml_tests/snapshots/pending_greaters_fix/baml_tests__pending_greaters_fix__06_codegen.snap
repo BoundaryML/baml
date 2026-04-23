@@ -58,6 +58,16 @@ function user.BadParam$render_prompt(x: map<string, int>) -> baml.llm.PromptAst 
     return
 }
 
+function user.BadParam$stream(x: map<string, int>) -> baml.llm.Stream {
+    load_const "unresolved name: GPT4"
+    call baml.sys.panic
+    pop 1
+    jump L0
+
+  L0:
+    unreachable
+}
+
 function user.BadReturnType() -> map<string, int> {
     load_const null
     load_const "BadReturnType"
@@ -104,5 +114,13 @@ function user.BadReturnType$render_prompt() -> baml.llm.PromptAst {
     load_const "BadReturnType"
     alloc_map 0
     call baml.llm.render_prompt
+    return
+}
+
+function user.BadReturnType$stream() -> baml.llm.Stream {
+    load_const null
+    load_const "BadReturnType"
+    alloc_map 0
+    call baml.llm.parse
     return
 }

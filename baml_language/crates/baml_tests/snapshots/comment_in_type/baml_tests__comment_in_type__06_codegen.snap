@@ -57,6 +57,14 @@ function user.CommentAfterArrow$render_prompt() -> baml.llm.PromptAst {
     return
 }
 
+function user.CommentAfterArrow$stream() -> baml.llm.Stream {
+    load_global user.TestClient
+    load_const "CommentAfterArrow"
+    alloc_map 0
+    call baml.llm.parse
+    return
+}
+
 function user.FunctionWithComments(a: string, b: int) -> string {
     load_global user.TestClient
     load_const "FunctionWithComments"
@@ -119,6 +127,19 @@ function user.FunctionWithComments$render_prompt(a: string, b: int) -> baml.llm.
     load_const "b"
     alloc_map 2
     call baml.llm.render_prompt
+    return
+}
+
+function user.FunctionWithComments$stream(a: string, b: int) -> baml.llm.Stream {
+    load_global user.TestClient
+    load_const "FunctionWithComments"
+    load_var a
+    load_var b
+    load_const "a"
+    load_const "b"
+    alloc_map 2
+    load_const null
+    call_indirect
     return
 }
 

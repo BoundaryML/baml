@@ -59,9 +59,17 @@ class user.NestedGenerics$stream {
   nested: map<string, map<string, int>>
   simple: map<string, int>
 }
+function user.BadParam$stream(x: map<string, int>) -> baml.llm.Stream<string, null | string> throws never {
+  baml.llm.stream_llm_function(GPT4, "BadParam", map { "x": x }) : baml.llm.Stream<string, null | string>
+  !! 655..777: unresolved name: GPT4
+}
 function user.BadParam$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<string, null | string> throws never {
   GPT4.__make_stream(sse, "BadParam") : unknown
   !! 655..777: unresolved name: GPT4
+}
+function user.BadReturnType$stream() -> baml.llm.Stream<map<string, int>, map<string, int>> throws never {
+  baml.llm.stream_llm_function(GPT4, "BadReturnType", map {  }) : baml.llm.Stream<map<string, int>, map<string, int>>
+  !! 777..897: unresolved name: GPT4
 }
 function user.BadReturnType$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<map<string, int>, map<string, int>> throws never {
   GPT4.__make_stream(sse, "BadReturnType") : unknown

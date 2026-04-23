@@ -672,6 +672,9 @@ function user.CommaClient$new() -> ? throws never {
 function user.SameLineClient$new() -> ? throws never {
   baml.llm.PrimitiveClient { name: "SameLineClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } } : unknown
 }
+function user.TestTarget$stream() -> baml.llm.Stream<string, null | string> throws never {
+  baml.llm.stream_llm_function(BasicClient, "TestTarget", map {  }) : baml.llm.Stream<string, null | string>
+}
 function user.TestTarget$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<string, null | string> throws never {
   BasicClient.__make_stream(sse, "TestTarget") : unknown
 }
@@ -1083,20 +1086,39 @@ function user.NoColonComplexTypes(items: int[], mapping: map<string, int>) -> st
     "done" : "done"
   }
 }
+function user.LlmBasic$stream(name: string) -> baml.llm.Stream<string, null | string> throws never {
+  baml.llm.stream_llm_function(GPT4, "LlmBasic", map { "name": name }) : baml.llm.Stream<string, null | string>
+  !! 11234..11368: unresolved name: GPT4
+}
 function user.LlmBasic$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<string, null | string> throws never {
   GPT4.__make_stream(sse, "LlmBasic") : unknown
   !! 11234..11368: unresolved name: GPT4
+}
+function user.LlmMultiLine$stream(text: string) -> baml.llm.Stream<string, null | string> throws never {
+  baml.llm.stream_llm_function(GPT4, "LlmMultiLine", map { "text": text }) : baml.llm.Stream<string, null | string>
+  !! 11368..11593: unresolved name: GPT4
 }
 function user.LlmMultiLine$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<string, null | string> throws never {
   GPT4.__make_stream(sse, "LlmMultiLine") : unknown
   !! 11368..11593: unresolved name: GPT4
 }
+function user.LlmStringClient$stream(text: string) -> baml.llm.Stream<string, null | string> throws never {
+  baml.llm.stream_llm_function(baml.llm.Client { name: "openai/gpt-4o", client_type: baml.llm.ClientType.Primitive, sub_clients: [], retry: null, counter: 0 }, "LlmStringClient", map { "text": text }) : baml.llm.Stream<string, null | string>
+}
 function user.LlmStringClient$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<string, null | string> throws never {
   baml.llm.Client { name: "openai/gpt-4o", client_type: baml.llm.ClientType.Primitive, sub_clients: [], retry: null, counter: 0 }.__make_stream(sse, "LlmStringClient") : unknown
+}
+function user.LlmReversedOrder$stream(text: string) -> baml.llm.Stream<string, null | string> throws never {
+  baml.llm.stream_llm_function(GPT4, "LlmReversedOrder", map { "text": text }) : baml.llm.Stream<string, null | string>
+  !! 11758..11928: unresolved name: GPT4
 }
 function user.LlmReversedOrder$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<string, null | string> throws never {
   GPT4.__make_stream(sse, "LlmReversedOrder") : unknown
   !! 11758..11928: unresolved name: GPT4
+}
+function user.LlmWithLongSignature$stream(first_context: string, second_context: string, third_context: string, user_query: string) -> baml.llm.Stream<string, null | string> throws never {
+  baml.llm.stream_llm_function(GPT4, "LlmWithLongSignature", map { "first_context": first_context, "second_context": second_context, "third_context": third_context, "user_query": user_query }) : baml.llm.Stream<string, null | string>
+  !! 11928..12264: unresolved name: GPT4
 }
 function user.LlmWithLongSignature$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<string, null | string> throws never {
   GPT4.__make_stream(sse, "LlmWithLongSignature") : unknown

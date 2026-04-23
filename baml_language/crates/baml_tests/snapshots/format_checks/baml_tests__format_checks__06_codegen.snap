@@ -1343,6 +1343,16 @@ function user.LlmBasic$render_prompt(name: string) -> baml.llm.PromptAst {
     return
 }
 
+function user.LlmBasic$stream(name: string) -> baml.llm.Stream {
+    load_const "unresolved name: GPT4"
+    call baml.sys.panic
+    pop 1
+    jump L0
+
+  L0:
+    unreachable
+}
+
 function user.LlmMultiLine(text: string) -> string {
     load_const null
     load_const "LlmMultiLine"
@@ -1400,6 +1410,16 @@ function user.LlmMultiLine$render_prompt(text: string) -> baml.llm.PromptAst {
     return
 }
 
+function user.LlmMultiLine$stream(text: string) -> baml.llm.Stream {
+    load_const "unresolved name: GPT4"
+    call baml.sys.panic
+    pop 1
+    jump L0
+
+  L0:
+    unreachable
+}
+
 function user.LlmReversedOrder(text: string) -> string {
     load_const null
     load_const "LlmReversedOrder"
@@ -1455,6 +1475,16 @@ function user.LlmReversedOrder$render_prompt(text: string) -> baml.llm.PromptAst
     alloc_map 1
     call baml.llm.render_prompt
     return
+}
+
+function user.LlmReversedOrder$stream(text: string) -> baml.llm.Stream {
+    load_const "unresolved name: GPT4"
+    call baml.sys.panic
+    pop 1
+    jump L0
+
+  L0:
+    unreachable
 }
 
 function user.LlmStringClient(text: string) -> string {
@@ -1570,6 +1600,27 @@ function user.LlmStringClient$render_prompt(text: string) -> baml.llm.PromptAst 
     return
 }
 
+function user.LlmStringClient$stream(text: string) -> baml.llm.Stream {
+    alloc_instance baml.llm.Client
+    load_const "openai/gpt-4o"
+    init_field .name
+    load_const null
+    init_field .client_type
+    alloc_array 0
+    init_field .sub_clients
+    load_const null
+    init_field .retry
+    load_const 0
+    init_field .counter
+    load_const "LlmStringClient"
+    load_var text
+    load_const "text"
+    alloc_map 1
+    load_const null
+    call_indirect
+    return
+}
+
 function user.LlmWithLongSignature(first_context: string, second_context: string, third_context: string, user_query: string) -> string {
     load_const null
     load_const "LlmWithLongSignature"
@@ -1649,6 +1700,16 @@ function user.LlmWithLongSignature$render_prompt(first_context: string, second_c
     alloc_map 4
     call baml.llm.render_prompt
     return
+}
+
+function user.LlmWithLongSignature$stream(first_context: string, second_context: string, third_context: string, user_query: string) -> baml.llm.Stream {
+    load_const "unresolved name: GPT4"
+    call baml.sys.panic
+    pop 1
+    jump L0
+
+  L0:
+    unreachable
 }
 
 function user.LongArrayClient$new() -> null {
@@ -4592,6 +4653,14 @@ function user.TestTarget$render_prompt() -> baml.llm.PromptAst {
     load_const "TestTarget"
     alloc_map 0
     call baml.llm.render_prompt
+    return
+}
+
+function user.TestTarget$stream() -> baml.llm.Stream {
+    load_global user.BasicClient
+    load_const "TestTarget"
+    alloc_map 0
+    call baml.llm.parse
     return
 }
 

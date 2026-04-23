@@ -57,3 +57,13 @@ function user.HelloWorld$render_prompt(name: string) -> baml.llm.PromptAst {
     call baml.llm.render_prompt
     return
 }
+
+function user.HelloWorld$stream(name: string) -> baml.llm.Stream {
+    load_const "unresolved name: GPT4"
+    call baml.sys.panic
+    pop 1
+    jump L0
+
+  L0:
+    unreachable
+}

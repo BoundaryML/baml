@@ -462,7 +462,8 @@ mod tests {
 
         // Five conflicts: greet, greet$render_prompt, greet$build_request,
         // greet$build_request_stream, greet$parse
-        // Each LLM function expands to companions, all duplicated across 3 files.
+        // Each LLM function expands to AST-level companions, all duplicated across 3 files.
+        // ($stream and $parse_stream are PPIR-level and don't appear here.)
         assert_eq!(ns.conflicts().len(), 5);
         for conflict in ns.conflicts() {
             assert_eq!(conflict.entries.len(), 3);

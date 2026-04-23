@@ -58,6 +58,16 @@ function user.Ambiguous$render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
+function user.Ambiguous$stream(input: string) -> baml.llm.Stream {
+    load_const "unresolved name: GPT4"
+    call baml.sys.panic
+    pop 1
+    jump L0
+
+  L0:
+    unreachable
+}
+
 function user.AnotherLLM(input: string) -> string {
     load_const null
     load_const "AnotherLLM"
@@ -102,6 +112,17 @@ function user.AnotherLLM$render_prompt(input: string) -> baml.llm.PromptAst {
     load_const "input"
     alloc_map 1
     call baml.llm.render_prompt
+    return
+}
+
+function user.AnotherLLM$stream(input: string) -> baml.llm.Stream {
+    load_const null
+    load_const "AnotherLLM"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    load_const null
+    call_indirect
     return
 }
 
@@ -162,6 +183,16 @@ function user.ChainedProcess$render_prompt(input: string) -> baml.llm.PromptAst 
     return
 }
 
+function user.ChainedProcess$stream(input: string) -> baml.llm.Stream {
+    load_const "unresolved name: GPT4"
+    call baml.sys.panic
+    pop 1
+    jump L0
+
+  L0:
+    unreachable
+}
+
 function user.ExtractData(text: string) -> JsonData {
     load_const null
     load_const "ExtractData"
@@ -219,6 +250,16 @@ function user.ExtractData$render_prompt(text: string) -> baml.llm.PromptAst {
     return
 }
 
+function user.ExtractData$stream(text: string) -> baml.llm.Stream {
+    load_const "unresolved name: GPT4"
+    call baml.sys.panic
+    pop 1
+    jump L0
+
+  L0:
+    unreachable
+}
+
 function user.LLMAnalyze(text: string) -> Analysis {
     load_const null
     load_const "LLMAnalyze"
@@ -274,6 +315,16 @@ function user.LLMAnalyze$render_prompt(text: string) -> baml.llm.PromptAst {
     alloc_map 1
     call baml.llm.render_prompt
     return
+}
+
+function user.LLMAnalyze$stream(text: string) -> baml.llm.Stream {
+    load_const "unresolved name: GPT4"
+    call baml.sys.panic
+    pop 1
+    jump L0
+
+  L0:
+    unreachable
 }
 
 function user.ProcessAnalysis(analysis: Analysis) -> string {

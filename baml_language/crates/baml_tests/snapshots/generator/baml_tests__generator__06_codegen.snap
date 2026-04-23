@@ -39,3 +39,11 @@ function user.GetUser$render_prompt() -> baml.llm.PromptAst {
     call baml.llm.render_prompt
     return
 }
+
+function user.GetUser$stream() -> baml.llm.Stream {
+    load_const null
+    load_const "GetUser"
+    alloc_map 0
+    call baml.llm.parse
+    return
+}

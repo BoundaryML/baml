@@ -65,6 +65,17 @@ function user.FetchDatax$render_prompt(user_id: string) -> baml.llm.PromptAst {
     return
 }
 
+function user.FetchDatax$stream(user_id: string) -> baml.llm.Stream {
+    load_global user.VertexGCP
+    load_const "FetchDatax"
+    load_var user_id
+    load_const "user_id"
+    alloc_map 1
+    load_const null
+    call_indirect
+    return
+}
+
 function user.VertexGCP$new() -> null {
     alloc_instance baml.llm.PrimitiveClient
     load_const "VertexGCP"

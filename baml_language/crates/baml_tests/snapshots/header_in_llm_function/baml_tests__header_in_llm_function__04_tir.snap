@@ -26,6 +26,9 @@ function user.FetchDatax$parse(json: string) -> user.Hi throws never {
 class user.Hi$stream {
   name: null | string
 }
+function user.FetchDatax$stream(user_id: string) -> baml.llm.Stream<user.Hi, null | user.Hi$stream> throws never {
+  baml.llm.stream_llm_function(VertexGCP, "FetchDatax", map { "user_id": user_id }) : baml.llm.Stream<user.Hi, null | user.Hi$stream>
+}
 function user.FetchDatax$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<user.Hi, null | user.Hi$stream> throws never {
   VertexGCP.__make_stream(sse, "FetchDatax") : unknown
 }

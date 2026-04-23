@@ -35,8 +35,14 @@ function user.CommentAfterArrow$build_request_stream() -> baml.http.Request thro
 function user.CommentAfterArrow$parse(json: string) -> string throws never {
   baml.llm.parse<T>("CommentAfterArrow", json) : string
 }
+function user.FunctionWithComments$stream(a: string, b: int) -> baml.llm.Stream<string, null | string> throws never {
+  baml.llm.stream_llm_function(TestClient, "FunctionWithComments", map { "a": a, "b": b }) : baml.llm.Stream<string, null | string>
+}
 function user.FunctionWithComments$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<string, null | string> throws never {
   TestClient.__make_stream(sse, "FunctionWithComments") : unknown
+}
+function user.CommentAfterArrow$stream() -> baml.llm.Stream<string, null | string> throws never {
+  baml.llm.stream_llm_function(TestClient, "CommentAfterArrow", map {  }) : baml.llm.Stream<string, null | string>
 }
 function user.CommentAfterArrow$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<string, null | string> throws never {
   TestClient.__make_stream(sse, "CommentAfterArrow") : unknown
