@@ -28,6 +28,31 @@ pub trait EventSink: Send + Sync {
     fn flush(&self);
 }
 
+/// Composite `EventSink` that forwards events to multiple inner sinks.
+pub struct FanOutEventSink {
+    sinks: Vec<std::sync::Arc<dyn EventSink>>,
+}
+
+impl FanOutEventSink {
+    pub fn new(sinks: Vec<std::sync::Arc<dyn EventSink>>) -> Self {
+        Self { sinks }
+    }
+}
+
+impl EventSink for FanOutEventSink {
+    fn send(&self, event: RuntimeEvent) {
+        for sink in &self.sinks {
+            sink.send(event.clone());
+        }
+    }
+
+    fn flush(&self) {
+        for sink in &self.sinks {
+            sink.flush();
+        }
+    }
+}
+
 // ─────────────────────────── Collector Store ─────────────────────────────
 
 /// In-memory storage for tracked engine span IDs (collector use case).
