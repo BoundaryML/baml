@@ -14,7 +14,8 @@
 import type { RuntimePort } from '../runtime-port';
 import type { WorkerOutMessage, WorkerInMessage, PlaygroundNotification, LogLevel, LogDecoration, DeserializedRuntimeEvent, DeserializedEventKind } from '../worker-protocol';
 import { decodeCallResult, deserializeValue, RuntimeEvent } from '@b/pkg-proto';
-import { formatValueShort, truncateMessage, normalizeLogLevel } from '../shared/log-decorations';
+import { truncateMessage, normalizeLogLevel } from '../shared/log-decorations';
+import { formatValue } from '../shared/format-value';
 
 /** Server → Client message shapes (must match playground_ws.rs WsOutMessage) */
 type WsOutMessage =
@@ -400,7 +401,7 @@ export class WebSocketRuntimePort implements RuntimePort {
             const source = kind.log.source;
             const line = source.line;
             const level = normalizeLogLevel(kind.log.level);
-            const message = formatValueShort(kind.log.data);
+            const message = formatValue(kind.log.data, 'inline-hint');
             const sourceSpanLength = source.endOffset - source.startOffset;
             const isLikelyVariable = message.length > sourceSpanLength + 5;
             if (isLikelyVariable) {
