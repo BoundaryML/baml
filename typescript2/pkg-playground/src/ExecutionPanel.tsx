@@ -243,6 +243,66 @@ const CollectionRunView: FC<CollectionRunViewProps> = ({ run, expandedLogId, set
             </div>
           );
         })}
+        {/* Runtime events */}
+        {run.runtimeEvents.length > 0 && (
+          <div className="py-1.5 pr-2.5 pl-[22px] border-b border-vsc-border-subtle">
+            <div className="text-[10px] font-semibold text-vsc-text-muted mb-1 uppercase tracking-wide">
+              Events ({run.runtimeEvents.length})
+            </div>
+            <div className="flex flex-col gap-0.5">
+              {run.runtimeEvents.map((evt, evtIdx) => {
+                const kind = evt.event?.kind;
+                if (!kind) return null;
+
+                let label: string;
+                let payload: string;
+                let colorCls: string;
+
+                switch (kind.$case) {
+                  case 'functionStart':
+                    label = 'START';
+                    payload = kind.functionStart.name;
+                    colorCls = 'text-vsc-green';
+                    break;
+                  case 'functionEnd':
+                    label = 'END';
+                    payload = `${kind.functionEnd.name} (${kind.functionEnd.durationMs}ms)`;
+                    colorCls = 'text-vsc-text-muted';
+                    break;
+                  case 'log': {
+                    const lvl = kind.log.level;
+                    label = lvl;
+                    payload = formatValueDebug(kind.log.data);
+                    colorCls = lvl === 'error' ? 'text-vsc-red'
+                      : lvl === 'warn' ? 'text-vsc-yellow'
+                      : lvl === 'debug' ? 'text-vsc-text-muted'
+                      : 'text-vsc-blue';
+                    break;
+                  }
+                  case 'custom':
+                    label = 'EVENT';
+                    payload = `${kind.custom.name}: ${formatValueDebug(kind.custom.data)}`;
+                    colorCls = 'text-vsc-purple';
+                    break;
+                  case 'setTags':
+                    label = 'TAGS';
+                    payload = kind.setTags.tags.map(t => `${t.key}=${t.value}`).join(', ');
+                    colorCls = 'text-vsc-text-muted';
+                    break;
+                  default:
+                    return null;
+                }
+
+                return (
+                  <div key={evtIdx} className="flex items-start gap-1.5 text-[11px]">
+                    <span className={`${colorCls} font-semibold uppercase shrink-0`}>{label}</span>
+                    <span className="text-vsc-text break-all">{payload}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -570,6 +630,11 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
                   : r
               )
             );
+            // Also route to collection run if this event belongs to it
+            setCollectionRun((prev) => {
+              if (!prev || prev.id !== data.callId) return prev;
+              return { ...prev, runtimeEvents: [...prev.runtimeEvents, eventEntry] };
+            });
           }
           break;
         }
