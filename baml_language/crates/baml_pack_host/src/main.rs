@@ -68,14 +68,12 @@ fn handle_help(engine: &BexEngine, target_name: &str) -> bool {
     });
     let Some(info) = info else { return false };
 
-    let display = target_name.strip_prefix("user.").unwrap_or(target_name);
     // Reconstruct the invocation prefix from argv[0] so the help output
     // matches how the user actually invoked the binary (e.g. `./summarize`).
     let exe = std::env::args()
         .next()
         .unwrap_or_else(|| "./binary".to_string());
     let prefix = format!("{exe} ");
-    let _ = display; // display currently unused; retained for future log lines
     print_target_help(target_name, &info, &prefix);
     true
 }

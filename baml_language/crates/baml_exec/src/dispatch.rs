@@ -38,6 +38,27 @@ pub enum DispatchResult {
     Exit(i64),
 }
 
+/// Reject targets whose signature declares a parameter named `help`.
+///
+/// Per BEP-027 §"Auto-CLI conventions": `help` is the one reserved
+/// parameter name. Both `baml run` and `baml pack` must fail at entry-
+/// point resolution when a target declares it, because `--help` is
+/// reserved for auto-derived help output. This is an entry-point check,
+/// not a function-declaration check — the same function remains
+/// callable from library code.
+pub fn validate_help_param(engine: &BexEngine, function_name: &str) -> Result<()> {
+    if let Ok(params) = engine.function_params(function_name) {
+        if params.iter().any(|(name, _)| *name == "help") {
+            anyhow::bail!(
+                "Target `{function_name}` declares a parameter named `help`, \
+                 which collides with the auto-derived `--help` flag. \
+                 Rename this parameter to be used as an entry point."
+            );
+        }
+    }
+    Ok(())
+}
+
 /// Narrow a `baml.sys.exit(code)` value (BAML `int` = `i64`) to the `i32`
 /// that `std::process::exit` and C's `exit(int)` take. Out-of-range values
 /// saturate at `i32::MAX` / `i32::MIN` rather than wrapping — the shell
@@ -89,7 +110,13 @@ pub async fn dispatch_target(
 
     match result {
         Ok(value) => {
-            write_output(&value, output_format);
+            // Per BEP-027 §"Output routing": "A target with no return value
+            // produces no stdout." BAML's `void` is that "no value"; a
+            // value-carrying type like `int?` emits its serialization even
+            // when null.
+            if !matches!(func_info.return_type, Ty::Void { .. }) {
+                write_output(&value, output_format);
+            }
             Ok(DispatchResult::Ok)
         }
         Err(bex_engine::EngineError::Exit { code }) => Ok(DispatchResult::Exit(code)),

@@ -10,7 +10,7 @@ use anyhow::{Context, Result, anyhow};
 use baml_db::baml_compiler2_emit;
 use baml_exec::{
     OutputFormat, build_args_from_signature, clamp_exit_code, extract_flag_keys, load_json_source,
-    print_target_help as baml_exec_print_target_help, write_output,
+    print_target_help as baml_exec_print_target_help, validate_help_param, write_output,
 };
 use baml_project::ProjectDatabase;
 use baml_workspace::discover_baml_files;
@@ -260,6 +260,11 @@ impl RunArgs {
             }
         };
 
+        // Reserved `help` parameter — auto-CLI claims `--help` for
+        // per-target help output, so a function with a `help` param
+        // can't be used as an entry point. Same check as `baml pack`.
+        validate_help_param(&engine, &function_name)?;
+
         let func_info = find_user_function(&engine, &function_name)
             .ok_or_else(|| anyhow!("Function `{function_name}` not found"))?;
 
@@ -299,17 +304,37 @@ impl RunArgs {
             sink.flush();
         }
 
+        self.finalize_call_result(result, Some(&func_info.return_type))
+    }
+
+    /// Translate an engine `call_function` outcome into a `RunArgs::run()`
+    /// return value. Used by both the main dispatch path and expression
+    /// mode — they share the same exit / error / success semantics:
+    ///   - success → print the return value (unless the target returns
+    ///     `void`, per BEP-027 §"Output routing"), exit 0
+    ///   - `baml.sys.exit(n)` → propagate `n` (narrowed to i32) as an
+    ///     `ExitCode::Exit` for `main` to honor
+    ///   - any other error → print to stderr, exit non-zero
+    ///
+    /// `return_type` is `Some` when the caller knows the target's
+    /// declared return type (main dispatch looks it up from
+    /// `engine.user_functions()`). Expression mode passes `None` —
+    /// its synthetic wrapper is `-> unknown` by construction, so the
+    /// void check can't apply.
+    fn finalize_call_result(
+        &self,
+        result: Result<BexExternalValue, bex_engine::EngineError>,
+        return_type: Option<&bex_engine::Ty>,
+    ) -> Result<crate::ExitCode> {
         match result {
             Ok(value) => {
-                write_output(&value, self.output);
+                let is_void = matches!(return_type, Some(bex_engine::Ty::Void { .. }));
+                if !is_void {
+                    write_output(&value, self.output);
+                }
                 Ok(crate::ExitCode::Success)
             }
             Err(bex_engine::EngineError::Exit { code }) => {
-                // `baml.sys.exit(code)` from user code — narrow to i32
-                // (the C `exit(int)` contract) and let `main` terminate.
-                // Returning rather than `std::process::exit`-ing inline
-                // keeps this path testable (tests can match on the
-                // `ExitCode::Exit(n)` without killing their process).
                 Ok(crate::ExitCode::Exit(clamp_exit_code(code)))
             }
             Err(e) => {
@@ -513,19 +538,10 @@ impl RunArgs {
             sink.flush();
         }
 
-        match result {
-            Ok(value) => {
-                write_output(&value, self.output);
-                Ok(crate::ExitCode::Success)
-            }
-            Err(bex_engine::EngineError::Exit { code }) => {
-                Ok(crate::ExitCode::Exit(clamp_exit_code(code)))
-            }
-            Err(e) => {
-                eprintln!("Error: {e}");
-                Ok(crate::ExitCode::Other)
-            }
-        }
+        // Expression mode's synthetic wrapper is `-> unknown` by
+        // construction, so the void-suppression check doesn't apply —
+        // pass `None` to skip it.
+        self.finalize_call_result(result, None)
     }
 
     // ========================================================================
@@ -3668,5 +3684,31 @@ function main() -> int { Outer() }
             !err.contains("baml.toml:2"),
             "should not have a line number; got: {err}"
         );
+    }
+
+    /// BEP: reserved `help` parameter name is rejected at resolution
+    /// time in both verbs. Pack has its own test for this — the run
+    /// path must behave the same.
+    #[test]
+    fn test_help_param_rejected_at_resolution_e2e() {
+        let (_tmp, args) = e2e_project("function main(help: string) -> string { help }\n");
+        let err = args.run().unwrap_err();
+        let msg = format!("{err}");
+        assert!(msg.contains("`help`"), "got: {msg}");
+        assert!(msg.to_lowercase().contains("rename"), "got: {msg}");
+    }
+
+    /// BEP §"Output routing": "A target with no return value produces
+    /// no stdout." `-> void` is that "no value"; `-> null` still
+    /// prints `null`, and value-carrying types still print their JSON.
+    #[test]
+    fn test_void_return_produces_no_stdout_e2e() {
+        let (_tmp, args) = e2e_project("function main() -> void {\n  let x = 1\n}\n");
+        // The fact that this completes without panic, writing nothing to
+        // stdout, is the assertion. We can't capture stdout mid-process
+        // easily here — the subprocess test in `tests/pack_e2e.rs` would
+        // be a stronger check, but the unit-level test confirms the code
+        // path doesn't error and returns Success.
+        assert!(matches!(args.run().unwrap(), crate::ExitCode::Success));
     }
 }

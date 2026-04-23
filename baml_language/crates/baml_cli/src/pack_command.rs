@@ -20,7 +20,7 @@ use std::{
 
 use anyhow::{Context, Result, anyhow};
 use baml_db::baml_compiler2_emit;
-use baml_exec::{OutputFormat, PackEnvelope};
+use baml_exec::{OutputFormat, PackEnvelope, validate_help_param};
 use baml_project::ProjectDatabase;
 use bex_engine::BexEngine;
 use bex_vm_types::types::Program;
@@ -82,7 +82,7 @@ impl PackArgs {
     pub fn run(&self) -> Result<crate::ExitCode> {
         // Compile the target's enclosing project (or hermetic file).
         let (db, program) = self.load_and_compile()?;
-        let _ = db;
+        let _ = db; // keep db alive for the duration of `run`
 
         // We need signature info for target resolution and the reserved
         // `help` check; an engine is the only surface exposing that.
@@ -256,24 +256,6 @@ impl PackArgs {
             }
         }
     }
-}
-
-/// Reject targets whose signature declares a parameter named `help`
-/// (BEP-027 §"Auto-CLI conventions" — "One reserved parameter name: help").
-///
-/// The restriction is an entry-point check, not a function-declaration
-/// check: the same function remains callable from library code.
-fn validate_help_param(engine: &BexEngine, function_name: &str) -> Result<()> {
-    if let Ok(params) = engine.function_params(function_name) {
-        if params.iter().any(|(name, _)| *name == "help") {
-            anyhow::bail!(
-                "Target `{function_name}` declares a parameter named `help`, \
-                 which collides with the packaged binary's `--help` flag. \
-                 Rename this parameter to be used as an entry point."
-            );
-        }
-    }
-    Ok(())
 }
 
 /// Return the qualified name the engine prefers when both `foo` and

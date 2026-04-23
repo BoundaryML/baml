@@ -19,8 +19,16 @@ pub mod envelope;
 pub mod json_coerce;
 pub mod output;
 
+// Public API surface, intended for any caller that wants to embed the BAML
+// dispatcher (CLI, packaged host, future bridges). Some of these items
+// currently have only one in-tree caller apiece; that's expected —
+// they're tools a host assembles to its own taste, not a library of
+// batteries-included conveniences.
 pub use auto_cli::{extract_flag_keys, parse_auto_cli_args, parse_cli_value, print_target_help};
-pub use dispatch::{DispatchResult, build_args_from_signature, clamp_exit_code, dispatch_target};
+pub use dispatch::{
+    DispatchResult, build_args_from_signature, clamp_exit_code, dispatch_target,
+    validate_help_param,
+};
 pub use envelope::PackEnvelope;
 pub use json_coerce::{json_to_external, json_to_external_with_ty, load_json_source};
 pub use output::{OutputFormat, example_value, external_to_json, format_value, write_output};
