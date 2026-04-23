@@ -3521,26 +3521,6 @@ impl<'db> TypeInferenceBuilder<'db> {
         if segments.len() == 1 {
             let name = &segments[0];
             let ty = self.infer_single_name(name);
-            // Namespace shorthands like `env`, `sys`, `http` etc. can appear as
-            // the base of a FieldAccess expression (e.g. `env.get("KEY")`), where
-            // the parent will route them to the `"baml"` package.  Don't emit
-            // `UnresolvedName` for these bare identifiers — the parent expression
-            // is responsible for resolution and will emit an error if the member
-            // doesn't exist.
-            let is_baml_ns_shorthand = matches!(
-                name.as_str(),
-                "env"
-                    | "io"
-                    | "sys"
-                    | "http"
-                    | "math"
-                    | "fs"
-                    | "net"
-                    | "media"
-                    | "llm"
-                    | "errors"
-                    | "unstable"
-            );
             // Don't report "unresolved name" for dependency package names —
             // they'll be resolved by the parent FieldAccess expression.
             let is_dep_package = self.res_ctx.dep_interfaces.iter().any(|(n, _)| n == name);
@@ -3554,7 +3534,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                     .package_items
                     .lookup_type(&self.ns_context, name)
                     .is_none()
-                && !is_baml_ns_shorthand
                 && !is_dep_package
             {
                 self.context
@@ -3572,7 +3551,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 self.infer_local_rooted_path(segments, expr_id, true)
             } else {
                 // Root is not a known local. Try full package/namespace resolution:
-                // 1. Package path (e.g. baml.llm.ClientType.Primitive, env.get)
+                // 1. Package path (e.g. baml.llm.ClientType.Primitive, baml.env.get)
                 let pkg_ty = self.infer_multi_segment_path(segments, expr_id);
                 if !matches!(pkg_ty, Ty::Unknown { .. }) {
                     return pkg_ty;
@@ -3606,29 +3585,12 @@ impl<'db> TypeInferenceBuilder<'db> {
                     return self.infer_local_rooted_path(segments, expr_id, false);
                 }
                 // 4. Truly unresolved — report error if not a known namespace/package name.
-                let is_baml_ns_shorthand = matches!(
-                    segments[0].as_str(),
-                    "env"
-                        | "io"
-                        | "sys"
-                        | "http"
-                        | "math"
-                        | "fs"
-                        | "net"
-                        | "media"
-                        | "llm"
-                        | "errors"
-                        | "unstable"
-                );
                 let is_dep_package = self
                     .res_ctx
                     .dep_interfaces
                     .iter()
                     .any(|(n, _)| n == &segments[0]);
-                if !is_baml_ns_shorthand
-                    && !is_dep_package
-                    && !self.locals.contains_key(&segments[0])
-                {
+                if !is_dep_package && !self.locals.contains_key(&segments[0]) {
                     self.context.report_simple(
                         TirTypeError::UnresolvedName {
                             name: segments[0].clone(),
@@ -3753,8 +3715,8 @@ impl<'db> TypeInferenceBuilder<'db> {
 
     /// Resolve a multi-segment path like `baml.llm.render_prompt` or `root.sys.panic`.
     ///
-    /// The first segment is either a literal package name, `root` (maps to the current
-    /// file's package), or a namespace shorthand (e.g. `env` → `baml.env`).
+    /// The first segment is either a literal package name or `root` (maps to the
+    /// current file's package).
     fn infer_multi_segment_path(&mut self, segments: &[Name], expr_id: ExprId) -> Ty {
         let first = &segments[0];
         if self.locals.contains_key(first) {
@@ -3771,25 +3733,9 @@ impl<'db> TypeInferenceBuilder<'db> {
             first.clone()
         };
 
-        let baml_ns_shorthands: &[&str] = &[
-            "env", "io", "sys", "http", "math", "fs", "net", "media", "llm", "errors", "unstable",
-        ];
-
         let (pkg_items, item_path): (&baml_compiler2_hir::package::PackageItems<'db>, Vec<Name>) =
             if let Some(items) = self.res_ctx.items_for_package(db, &pkg_name) {
                 (items, segments[1..].to_vec())
-            } else if baml_ns_shorthands.contains(&first.as_str()) {
-                // e.g. `env.get` → look up in the `"baml"` package as `baml.env.get`
-                let baml_name = Name::new("baml");
-                let Some(baml_items) = self.res_ctx.items_for_package(db, &baml_name) else {
-                    return Ty::Unknown {
-                        attr: TyAttr::default(),
-                    };
-                };
-                // Prepend the namespace shorthand as the first item path segment
-                let mut ip = vec![first.clone()];
-                ip.extend_from_slice(&segments[1..]);
-                (baml_items, ip)
             } else {
                 return Ty::Unknown {
                     attr: TyAttr::default(),

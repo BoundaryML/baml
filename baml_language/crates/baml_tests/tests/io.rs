@@ -7,7 +7,7 @@ async fn io_input_with_prompt_bytecode() {
     let output = baml_test!(
         r#"
             function main() -> string {
-                io.input("Enter your name: ")
+                baml.io.input("Enter your name: ")
             }
         "#
     );
@@ -28,7 +28,7 @@ async fn io_input_no_prompt_bytecode() {
     let output = baml_test!(
         r#"
             function main() -> string {
-                io.input(null)
+                baml.io.input(null)
             }
         "#
     );

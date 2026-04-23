@@ -548,3 +548,81 @@ async fn for_loop_over_let_variable_no_parens() {
 
     assert_eq!(output.result, Ok(BexExternalValue::Int(60)));
 }
+
+#[tokio::test]
+async fn for_loop_final_if_without_semicolon_can_return() {
+    let output = baml_test!(
+        r#"
+        function first_even(xs: int[]) -> int {
+            for (let x in xs) {
+                if (x % 2 == 0) {
+                    return x;
+                }
+            }
+
+            -1
+        }
+
+        function main() -> int {
+            first_even([1, 3, 4, 7])
+        }
+    "#
+    );
+
+    assert_eq!(output.result, Ok(BexExternalValue::Int(4)));
+}
+
+#[tokio::test]
+async fn for_loop_final_if_else_without_semicolon_can_mutate() {
+    let output = baml_test!(
+        r#"
+        function render(xs: string[]) -> string {
+            let result = "";
+
+            for (let x in xs) {
+                if (x == "") {
+                    result += ".";
+                } else {
+                    result += x;
+                }
+            }
+
+            result
+        }
+
+        function main() -> string {
+            render(["x", "", "o"])
+        }
+    "#
+    );
+
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("x.o".to_string()))
+    );
+}
+
+#[tokio::test]
+async fn nested_for_loop_final_if_without_semicolon_can_return() {
+    let output = baml_test!(
+        r#"
+        function has_empty_cell(grid: string[][]) -> bool {
+            for (let row in grid) {
+                for (let cell in row) {
+                    if (cell == "") {
+                        return true;
+                    }
+                }
+            }
+
+            false
+        }
+
+        function main() -> bool {
+            has_empty_cell([["x", "o"], ["", "x"]])
+        }
+    "#
+    );
+
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
