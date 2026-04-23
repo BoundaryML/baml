@@ -393,7 +393,8 @@ fn gen_accessor_struct(td: &AccessorTypeDef) -> TokenStream2 {
                 quote! {
                     pub fn #fname(
                         &self,
-                        heap: &'a GcProtectedHeap<'a>,
+                        heap: &'a BexHeap,
+                        permit: PermitProof<'_>,
                     ) -> Result<#ret, AccessError> {
                         #body
                     }
@@ -433,7 +434,8 @@ fn gen_accessor_struct(td: &AccessorTypeDef) -> TokenStream2 {
 
             pub fn into_owned(
                 self,
-                heap: &'a GcProtectedHeap<'a>,
+                heap: &'a BexHeap,
+                permit: PermitProof<'_>,
             ) -> Result<owned::#owned_name, AccessError> {
                 Ok(owned::#owned_name {
                     #(#owned_fields,)*

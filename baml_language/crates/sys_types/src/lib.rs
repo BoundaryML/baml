@@ -32,7 +32,7 @@ pub mod sse;
 pub mod generated {
 
     pub use bex_external_types::{AsBexExternalValue, BexExternalValue};
-    pub use bex_heap::{AccessError, BexClass, BexValue, BuiltinClass, GcProtectedHeap};
+    pub use bex_heap::{AccessError, BexClass, BexValue, BuiltinClass, PermitProof};
     pub use bex_vm_types::SysOp;
 
     pub use crate::{
@@ -343,7 +343,8 @@ impl<T: AsBexExternalValue + Send + 'static> SysOpOutput<T> {
 /// Each operation takes a heap reference, arguments, and a context reference,
 /// returning a `SysOpResult` which is either an immediate result or a future to await.
 ///
-/// The heap reference allows ops to access instance fields via `with_gc_protection`.
+/// The heap reference plus a [`PermitProof`] (proving GC-exclusion) lets ops
+/// safely access instance fields via the heap accessor APIs.
 /// Arguments are `BexValue` which can be either:
 /// - `BexValue::External(...)` for primitives/strings copied from VM
 /// - `BexValue::Opaque(Handle)` for heap objects (instances, arrays, maps)
@@ -351,7 +352,13 @@ impl<T: AsBexExternalValue + Send + 'static> SysOpOutput<T> {
 /// The context reference provides engine-level information (e.g., function metadata)
 /// that some `sys_ops` need. Ops that don't need it simply ignore the parameter.
 pub type SysOpFn = Arc<
-    dyn for<'a> Fn(&Arc<BexHeap>, Vec<bex_heap::BexValue<'a>>, &SysOpContext, CallId) -> SysOpResult
+    dyn for<'a> Fn(
+            &Arc<BexHeap>,
+            bex_heap::PermitProof<'a>,
+            Vec<bex_heap::BexValue<'a>>,
+            &SysOpContext,
+            CallId,
+        ) -> SysOpResult
         + Send
         + Sync,
 >;

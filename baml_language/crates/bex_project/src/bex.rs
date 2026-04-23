@@ -80,9 +80,14 @@ impl Bex for BexEngine {
         let result =
             BexEngine::call_function(&self, function_name, ordered_args, call_ctx, true).await?;
 
-        let owned_result = self
-            .heap()
-            .with_gc_protection(|p| BexValue::from(&result).as_owned_but_very_slow(&p))?;
+        let permit = self
+            .heap_permit_manager()
+            .new_permit(())
+            .await
+            .acquire()
+            .await;
+        let owned_result =
+            BexValue::from(&result).as_owned_but_very_slow(self.heap(), permit.proof())?;
 
         Ok(owned_result)
     }

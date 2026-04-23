@@ -1,83 +1,14 @@
 //! Safe accessor API for external code to read heap objects.
 //!
-//! External code (`baml_sys`) runs outside the epoch system and cannot
-//! safely hold bare `HeapPtr` values. This module provides an API
-//! that holds the handle table lock during access, preventing GC races.
-//!
-//! # Example
-//!
-//! ```ignore
-//! // In baml_sys code (no EpochGuard available)
-//! let content = heap.read_string(&handle)?;
-//!
-//! // Or for complex access with GC protection:
-//! let result = heap.with_gc_protection(|protected| {
-//!     let ptr = protected.resolve_handle(handle.slab_key())?;
-//!     // ptr is safe to use - GC cannot run while we hold the guard
-//!     Some(recursive_snapshot(protected, ptr))
-//! });
-//! ```
-
-use std::sync::RwLockReadGuard;
+//! External code cannot safely hold bare `HeapPtr` values across GC. This
+//! module provides an API that takes a `PermitProof<'_>` (obtained from any
+//! held `ActiveHeapPermit<T>`) to witness GC-exclusion at the type level.
 
 use baml_type::Ty;
-use bex_external_types::{BexExternalAdt, BexExternalValue};
+use bex_external_types::{BexExternalAdt, BexExternalValue, WeakHeapRef};
 use bex_vm_types::{HeapPtr, Object, Value};
 
-use crate::BexHeap;
-
-/// Guard type proving the handles read lock is held.
-///
-/// This type can only be obtained from `BexHeap::with_gc_protection`.
-/// Methods that return `HeapPtr` require this guard to ensure
-/// the pointer remains valid (GC cannot run while the lock is held).
-pub struct GcProtectedHeap<'a> {
-    // Hold the read lock - prevents GC from updating handles
-    _guard: RwLockReadGuard<'a, std::collections::HashMap<usize, HeapPtr>>,
-}
-
-impl GcProtectedHeap<'_> {
-    /// Resolve a handle's slab key to a HeapPtr.
-    ///
-    /// Safe because we hold the handles read lock, preventing GC from
-    /// moving objects and invalidating pointers.
-    pub fn resolve_handle(&self, slab_key: usize) -> Option<HeapPtr> {
-        self._guard.get(&slab_key).copied()
-    }
-
-    pub fn epoch_guard(&self) -> bex_external_types::EpochGuard<'_> {
-        unsafe { bex_external_types::EpochGuard::new() }
-    }
-}
-
-/// Safe object access API for external code.
-///
-/// All methods hold the handle table read lock during access,
-/// ensuring GC cannot run and invalidate pointers mid-operation.
-impl BexHeap {
-    /// Execute a closure while holding the handles read lock.
-    ///
-    /// This prevents GC from updating handle pointers during the operation.
-    /// The closure receives a `GcProtectedHeap` which provides safe access
-    /// to `resolve_handle` - you can't accidentally call it without the lock.
-    ///
-    /// # Example
-    ///
-    /// ```ignore
-    /// // Resolve a handle while protected from GC
-    /// let snapshot = heap.with_gc_protection(|protected| {
-    ///     let ptr = protected.resolve_handle(handle.slab_key())?;
-    ///     // ... use ptr to read objects
-    /// });
-    /// ```
-    pub fn with_gc_protection<R>(
-        self: &std::sync::Arc<Self>,
-        f: impl FnOnce(GcProtectedHeap<'_>) -> R,
-    ) -> R {
-        let guard = self.handles.read().expect("handles lock poisoned");
-        f(GcProtectedHeap { _guard: guard })
-    }
-}
+use crate::{BexHeap, heap_guard::PermitProof};
 
 #[derive(Debug, PartialEq, thiserror::Error)]
 pub enum AccessError {
@@ -239,16 +170,17 @@ impl<'a> BexValue<'a> {
     }
 
     #[allow(clippy::wrong_self_convention)]
-    fn as_object<T>(
+    fn as_object<R>(
         self,
         expected: &'static str,
-        heap: &GcProtectedHeap<'_>,
-        f: impl FnOnce(&HeapPtr) -> Result<T, AccessError>,
-    ) -> Result<T, AccessError> {
+        heap: &BexHeap,
+        _permit: PermitProof<'_>,
+        f: impl FnOnce(&HeapPtr) -> Result<R, AccessError>,
+    ) -> Result<R, AccessError> {
         match self {
             BexValue::ExternalValue(BexExternalValue::Handle(ptr)) => {
                 let ptr = heap
-                    .resolve_handle(ptr.slab_key())
+                    .resolve_handle_ptr(ptr.slab_key())
                     .ok_or(AccessError::InvalidHandle { expected })?;
                 f(&ptr)
             }
@@ -265,13 +197,14 @@ impl<'a> BexValue<'a> {
     /// heap values (`Object::RustData`).
     pub fn as_rust_data(
         self,
-        heap: &GcProtectedHeap<'_>,
+        heap: &BexHeap,
+        permit: PermitProof<'_>,
     ) -> Result<std::sync::Arc<dyn std::any::Any + Send + Sync>, AccessError> {
         match self {
             BexValue::ExternalValue(BexExternalValue::RustData(data)) => {
                 Ok(std::sync::Arc::clone(data))
             }
-            other => other.as_object("rust_data", heap, |ptr| {
+            other => other.as_object("rust_data", heap, permit, |ptr| {
                 let obj = unsafe { ptr.get() };
                 let Object::RustData(arc) = obj else {
                     return Err(AccessError::TypeMismatch {
@@ -284,10 +217,14 @@ impl<'a> BexValue<'a> {
         }
     }
 
-    pub fn as_string(self, heap: &GcProtectedHeap<'_>) -> Result<&'a String, AccessError> {
+    pub fn as_string(
+        self,
+        heap: &BexHeap,
+        permit: PermitProof<'_>,
+    ) -> Result<&'a String, AccessError> {
         match self {
             BexValue::ExternalValue(BexExternalValue::String(s)) => Ok(s),
-            other => other.as_object("string", heap, |ptr| {
+            other => other.as_object("string", heap, permit, |ptr| {
                 let obj = unsafe { ptr.get() };
                 let Object::String(s) = obj else {
                     return Err(AccessError::TypeMismatch {
@@ -300,12 +237,16 @@ impl<'a> BexValue<'a> {
         }
     }
 
-    pub fn as_array(self, heap: &GcProtectedHeap<'_>) -> Result<Vec<BexValue<'a>>, AccessError> {
+    pub fn as_array(
+        self,
+        heap: &BexHeap,
+        permit: PermitProof<'_>,
+    ) -> Result<Vec<BexValue<'a>>, AccessError> {
         match self {
             BexValue::ExternalValue(BexExternalValue::Array { items, .. }) => {
                 Ok(items.iter().map(BexValue::ExternalValue).collect())
             }
-            other => other.as_object("array", heap, |ptr| {
+            other => other.as_object("array", heap, permit, |ptr| {
                 let obj = unsafe { ptr.get() };
                 let Object::Array(array) = obj else {
                     return Err(AccessError::TypeMismatch {
@@ -320,14 +261,15 @@ impl<'a> BexValue<'a> {
 
     pub fn as_map(
         self,
-        heap: &GcProtectedHeap<'_>,
+        heap: &BexHeap,
+        permit: PermitProof<'_>,
     ) -> Result<indexmap::IndexMap<String, BexValue<'a>>, AccessError> {
         match self {
             BexValue::ExternalValue(BexExternalValue::Map { entries, .. }) => Ok(entries
                 .iter()
                 .map(|(k, v)| (k.clone(), BexValue::ExternalValue(v)))
                 .collect()),
-            other => other.as_object("map", heap, |ptr| {
+            other => other.as_object("map", heap, permit, |ptr| {
                 let obj = unsafe { ptr.get() };
                 let Object::Map(map) = obj else {
                     return Err(AccessError::TypeMismatch {
@@ -346,7 +288,8 @@ impl<'a> BexValue<'a> {
     #[allow(clippy::wrong_self_convention)]
     fn as_class(
         self,
-        heap: &GcProtectedHeap<'_>,
+        heap: &BexHeap,
+        permit: PermitProof<'_>,
         expected_class_name: &'static str,
     ) -> Result<BexClass<'a>, AccessError> {
         match self {
@@ -362,7 +305,7 @@ impl<'a> BexValue<'a> {
                     fields,
                 })
             }
-            other => other.as_object("instance", heap, |ptr| {
+            other => other.as_object("instance", heap, permit, |ptr| {
                 let obj = unsafe { ptr.get() };
                 let Object::Instance(instance) = obj else {
                     return Err(AccessError::TypeMismatch {
@@ -388,9 +331,11 @@ impl<'a> BexValue<'a> {
         }
     }
 
+    #[allow(clippy::only_used_in_recursion)]
     pub fn as_enum<T>(
         self,
-        heap: &GcProtectedHeap<'_>,
+        heap: &BexHeap,
+        permit: PermitProof<'_>,
         expected_enum_name: &'static str,
         map_fn: impl FnOnce(BexVariant<'_>) -> T,
     ) -> Result<T, AccessError> {
@@ -412,9 +357,9 @@ impl<'a> BexValue<'a> {
             }
             BexValue::ExternalValue(BexExternalValue::Handle(ptr)) => {
                 let ptr = heap
-                    .resolve_handle(ptr.slab_key())
+                    .resolve_handle_ptr(ptr.slab_key())
                     .ok_or(AccessError::InvalidHandle { expected: "enum" })?;
-                BexValue::HeapPtr(&ptr).as_enum(heap, expected_enum_name, map_fn)
+                BexValue::HeapPtr(&ptr).as_enum(heap, permit, expected_enum_name, map_fn)
             }
             BexValue::Value(Value::Object(ptr)) | BexValue::HeapPtr(ptr) => {
                 let obj = unsafe { ptr.get() };
@@ -448,14 +393,17 @@ impl<'a> BexValue<'a> {
 
     pub fn as_builtin_class<T: BuiltinClass<'a>>(
         self,
-        heap: &GcProtectedHeap<'_>,
+        heap: &BexHeap,
+        permit: PermitProof<'_>,
     ) -> Result<T, AccessError> {
-        self.as_class(heap, T::name()).map(|cls| T::from(cls))
+        self.as_class(heap, permit, T::name())
+            .map(|cls| T::from(cls))
     }
 
     pub fn as_collector_owned(
         self,
-        heap: &GcProtectedHeap<'_>,
+        heap: &BexHeap,
+        _permit: PermitProof<'_>,
     ) -> Result<bex_vm_types::CollectorRef, AccessError> {
         fn from_ptr(ptr: &HeapPtr) -> Result<bex_vm_types::CollectorRef, AccessError> {
             let obj = unsafe { ptr.get() };
@@ -473,11 +421,11 @@ impl<'a> BexValue<'a> {
                 Ok(c.clone())
             }
             BexValue::ExternalValue(BexExternalValue::Handle(handle)) => {
-                let ptr =
-                    heap.resolve_handle(handle.slab_key())
-                        .ok_or(AccessError::InvalidHandle {
-                            expected: "collector",
-                        })?;
+                let ptr = heap.resolve_handle_ptr(handle.slab_key()).ok_or(
+                    AccessError::InvalidHandle {
+                        expected: "collector",
+                    },
+                )?;
                 from_ptr(&ptr)
             }
             BexValue::Value(Value::Object(ptr)) | BexValue::HeapPtr(ptr) => from_ptr(ptr),
@@ -490,7 +438,8 @@ impl<'a> BexValue<'a> {
 
     pub fn as_baml_type_owned(
         self,
-        heap: &GcProtectedHeap<'_>,
+        heap: &BexHeap,
+        _permit: PermitProof<'_>,
     ) -> Result<baml_type::Ty, AccessError> {
         fn from_ptr(ptr: &HeapPtr) -> Result<baml_type::Ty, AccessError> {
             let obj = unsafe { ptr.get() };
@@ -509,7 +458,7 @@ impl<'a> BexValue<'a> {
             }
             BexValue::ExternalValue(BexExternalValue::Handle(handle)) => {
                 let ptr = heap
-                    .resolve_handle(handle.slab_key())
+                    .resolve_handle_ptr(handle.slab_key())
                     .ok_or(AccessError::InvalidHandle { expected: "type" })?;
                 from_ptr(&ptr)
             }
@@ -523,17 +472,19 @@ impl<'a> BexValue<'a> {
 
     /// Attempts to own as much as possible.
     /// If it can't be owned, it fails.
+    #[allow(clippy::only_used_in_recursion)]
     pub fn as_owned_but_very_slow(
         self,
-        heap: &GcProtectedHeap<'_>,
+        heap: &BexHeap,
+        permit: PermitProof<'_>,
     ) -> Result<BexExternalValue, AccessError> {
         match self {
             BexValue::ExternalValue(bex_external_value) => match bex_external_value {
                 BexExternalValue::Handle(handle) => {
                     let heap_ptr = heap
-                        .resolve_handle(handle.slab_key())
+                        .resolve_handle_ptr(handle.slab_key())
                         .ok_or(AccessError::InvalidHandle { expected: "handle" })?;
-                    BexValue::HeapPtr(&heap_ptr).as_owned_but_very_slow(heap)
+                    BexValue::HeapPtr(&heap_ptr).as_owned_but_very_slow(heap, permit)
                 }
                 BexExternalValue::FunctionRef { .. } => Err(AccessError::CannotConvertToOwned {
                     reason: "function definition".to_string(),
@@ -550,7 +501,9 @@ impl<'a> BexValue<'a> {
                     element_type: element_type.clone(),
                     items: items
                         .iter()
-                        .map(|item| BexValue::ExternalValue(item).as_owned_but_very_slow(heap))
+                        .map(|item| {
+                            BexValue::ExternalValue(item).as_owned_but_very_slow(heap, permit)
+                        })
                         .collect::<Result<_, _>>()?,
                 }),
                 BexExternalValue::Map {
@@ -565,7 +518,7 @@ impl<'a> BexValue<'a> {
                         .map(|(k, v)| {
                             Ok((
                                 k.clone(),
-                                BexValue::ExternalValue(v).as_owned_but_very_slow(heap)?,
+                                BexValue::ExternalValue(v).as_owned_but_very_slow(heap, permit)?,
                             ))
                         })
                         .collect::<Result<_, _>>()?,
@@ -578,7 +531,8 @@ impl<'a> BexValue<'a> {
                             .map(|(k, v)| {
                                 Ok((
                                     k.clone(),
-                                    BexValue::ExternalValue(v).as_owned_but_very_slow(heap)?,
+                                    BexValue::ExternalValue(v)
+                                        .as_owned_but_very_slow(heap, permit)?,
                                 ))
                             })
                             .collect::<Result<_, _>>()?,
@@ -592,7 +546,9 @@ impl<'a> BexValue<'a> {
                     variant_name: variant_name.clone(),
                 }),
                 BexExternalValue::Union { value, metadata } => Ok(BexExternalValue::Union {
-                    value: Box::new(BexValue::ExternalValue(value).as_owned_but_very_slow(heap)?),
+                    value: Box::new(
+                        BexValue::ExternalValue(value).as_owned_but_very_slow(heap, permit)?,
+                    ),
                     metadata: metadata.clone(),
                 }),
                 BexExternalValue::Uint8Array(bytes) => {
@@ -628,7 +584,7 @@ impl<'a> BexValue<'a> {
                         },
                         items: array
                             .iter()
-                            .map(|item| BexValue::Value(item).as_owned_but_very_slow(heap))
+                            .map(|item| BexValue::Value(item).as_owned_but_very_slow(heap, permit))
                             .collect::<Result<_, _>>()?,
                     }),
                     Object::Map(map) => Ok(BexExternalValue::Map {
@@ -641,7 +597,10 @@ impl<'a> BexValue<'a> {
                         entries: map
                             .iter()
                             .map(|(k, v)| {
-                                Ok((k.clone(), BexValue::Value(v).as_owned_but_very_slow(heap)?))
+                                Ok((
+                                    k.clone(),
+                                    BexValue::Value(v).as_owned_but_very_slow(heap, permit)?,
+                                ))
                             })
                             .collect::<Result<_, _>>()?,
                     }),
@@ -660,7 +619,7 @@ impl<'a> BexValue<'a> {
                             .map(|(field, value)| {
                                 Ok((
                                     field.name.clone(),
-                                    BexValue::Value(value).as_owned_but_very_slow(heap)?,
+                                    BexValue::Value(value).as_owned_but_very_slow(heap, permit)?,
                                 ))
                             })
                             .collect::<Result<_, _>>()?;

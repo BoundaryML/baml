@@ -62,7 +62,7 @@
 //! - `PermitCell<T>` Send/Sync: single-threaded access is enforced by the
 //!   semaphore/holders-mutex pair.
 //! - Direct heap access during value conversion (always under an active
-//!   permit or a `with_gc_protection` read guard).
+//!   permit, witnessed by a `PermitProof` parameter).
 //!
 //! Safety is ensured by the permit/guard coordination system described above.
 
@@ -81,7 +81,7 @@ use ::core::sync::atomic::AtomicBool;
 use async_trait::async_trait;
 use bex_events::{EventKind, FunctionEnd, FunctionEvent, FunctionStart, SpanContext};
 pub use bex_events::{HostSpanContext, RuntimeEvent, SpanId};
-pub use bex_external_types::{BexExternalValue, EpochGuard, Ty, TypeName, UnionMetadata};
+pub use bex_external_types::{BexExternalValue, Ty, TypeName, UnionMetadata};
 use bex_heap::BexHeap;
 // Re-export GcStats for users of the engine
 pub use bex_heap::GcStats;
@@ -543,11 +543,17 @@ impl BexEngine {
         let class_definitions = Self::extract_class_definitions(&resolved_class_names);
         let enum_definitions = Self::extract_enum_definitions(&resolved_enum_names);
 
+        let heap_permit_manager = Arc::new(HeapPermitManager::new());
+
         // Build a default RuntimeIo from the SysOps table with an empty context.
         // This is replaced per-call in execute_sys_op with a live context that
         // carries the correct cancellation token and spawner.
-        let runtime_io =
-            sys_ops::build_runtime_io(&sys_ops, &heap, &sys_types::SysOpContext::empty());
+        let runtime_io = sys_ops::build_runtime_io(
+            &sys_ops,
+            &heap,
+            &heap_permit_manager,
+            &sys_types::SysOpContext::empty(),
+        );
 
         let sys_op_ctx = sys_types::EngineSysOpContext {
             llm_functions: Arc::new(llm_functions),
@@ -570,7 +576,7 @@ impl BexEngine {
             event_sink,
             test_cases,
             argv,
-            heap_permit_manager: Arc::new(HeapPermitManager::new()),
+            heap_permit_manager,
             checking_gc: AtomicBool::new(false),
             #[cfg(not(target_arch = "wasm32"))]
             park_requested,
@@ -699,6 +705,27 @@ impl BexEngine {
     /// Useful for monitoring concurrent execution and debugging.
     pub fn heap_stats(&self) -> bex_heap::HeapStats {
         self.heap.stats()
+    }
+
+    /// Get a reference to the heap permit manager.
+    pub fn heap_permit_manager(&self) -> &Arc<HeapPermitManager> {
+        &self.heap_permit_manager
+    }
+
+    /// Resolve a [`bex_external_types::Handle`] to its current [`HeapPtr`].
+    ///
+    /// The permit parameter proves GC cannot run while the caller is using the
+    /// returned pointer — holding any `ActiveHeapPermit<T>` keeps one of the
+    /// manager's semaphore tokens in scope, so `request_park` cannot proceed.
+    ///
+    /// Returns `None` if the handle has been invalidated.
+    pub fn resolve_handle(
+        &self,
+        _permit: bex_heap::PermitProof<'_>,
+        handle: &bex_external_types::Handle,
+    ) -> Option<HeapPtr> {
+        use bex_external_types::WeakHeapRef;
+        self.heap.resolve_handle_ptr(handle.slab_key())
     }
 
     /// Explicitly trigger garbage collection.
@@ -1234,9 +1261,9 @@ impl BexEngine {
                 Ok(state) => state,
                 Err(bex_vm::errors::VmError::ThrownUnhandled { value, trace }) => {
                     let external = if let Some(ref ty) = throws_type {
-                        self.convert_vm_value_to_external_with_type(&value, ty, &vm.epoch_guard())?
+                        self.convert_vm_value_to_external_with_type(&value, ty, vm.proof())?
                     } else {
-                        self.vm_value_to_owned(&value)
+                        self.vm_value_to_owned(vm.proof(), &value)
                     };
                     return Err(EngineError::UnhandledThrow {
                         value: Box::new(external),
@@ -1246,7 +1273,7 @@ impl BexEngine {
                 Err(bex_vm::errors::VmError::Thrown(value)) => {
                     // Internal throw that escaped without unwinding — treat as
                     // unhandled with no trace.
-                    let external = self.vm_value_to_owned(&value);
+                    let external = self.vm_value_to_owned(vm.proof(), &value);
                     return Err(EngineError::UnhandledThrow {
                         value: Box::new(external),
                         trace: Vec::new(),
@@ -1275,7 +1302,7 @@ impl BexEngine {
                     // Emit FunctionEnd for the root entry-point span if tracing
                     if let Some(state) = span_state.as_mut() {
                         if let Some(root_span) = state.stack.pop() {
-                            let external_result = self.vm_value_to_owned(&value);
+                            let external_result = self.vm_value_to_owned(vm.proof(), &value);
                             let mut full_call_stack = state.host_call_stack.clone();
                             full_call_stack.extend(state.stack.iter().map(|s| s.span_id.clone()));
                             full_call_stack.push(root_span.span_id.clone());
@@ -1305,9 +1332,8 @@ impl BexEngine {
                     }
 
                     // When copy_objects: false and the result is a heap object,
-                    // create a Handle without holding with_gc_protection (which
-                    // takes a read lock on handles). create_handle takes a write
-                    // lock — the two cannot nest without deadlocking.
+                    // create a Handle. The `vm` permit is still live here and
+                    // proves GC-exclusion for the duration of this operation.
                     if !copy_objects {
                         if let Value::Object(ptr) = value {
                             let handle = self.heap.create_handle(ptr);
@@ -1316,14 +1342,13 @@ impl BexEngine {
                         // Non-object primitives fall through to normal conversion below.
                     }
 
-                    return self.heap.with_gc_protection(|protected| {
-                        // Normal deep-extraction: convert VM value to fully owned BexExternalValue.
-                        self.convert_vm_value_to_external_with_type(
-                            &value,
-                            &return_type,
-                            &protected.epoch_guard(),
-                        )
-                    });
+                    // Normal deep-extraction: convert VM value to fully owned BexExternalValue.
+                    // `vm` is still live here and holds the permit that proves GC-exclusion.
+                    return self.convert_vm_value_to_external_with_type(
+                        &value,
+                        &return_type,
+                        vm.proof(),
+                    );
                 }
 
                 VmExecState::ScheduleFuture(id) => {
@@ -1340,7 +1365,7 @@ impl BexEngine {
 
                     Self::cancellation_safepoint(cancel, &abort_handles)?;
                     let sys_op_result =
-                        self.execute_sys_op(pending.operation, &args, call_id, cancel);
+                        self.execute_sys_op(pending.operation, &args, call_id, cancel, vm.proof());
                     Self::cancellation_safepoint(cancel, &abort_handles)?;
 
                     match sys_op_result {
@@ -1446,7 +1471,7 @@ impl BexEngine {
                         let mut call_stack = state.host_call_stack.clone();
                         call_stack.extend(state.stack.iter().map(|s| s.span_id.clone()));
 
-                        let external_data = self.vm_value_to_owned(&data);
+                        let external_data = self.vm_value_to_owned(vm.proof(), &data);
 
                         // Convert source location tuple to SourceLocation struct.
                         let source = source_location.map(
@@ -1535,8 +1560,10 @@ impl BexEngine {
                                 call_stack.push(span_id.clone());
 
                                 // Convert VM args to fully owned values for the event
-                                let external_args: Vec<BexExternalValue> =
-                                    args.iter().map(|v| self.vm_value_to_owned(v)).collect();
+                                let external_args: Vec<BexExternalValue> = args
+                                    .iter()
+                                    .map(|v| self.vm_value_to_owned(vm.proof(), v))
+                                    .collect();
 
                                 let enter_event = RuntimeEvent {
                                     call_id,
@@ -1569,7 +1596,8 @@ impl BexEngine {
                                 result,
                             } => {
                                 if let Some(span) = state.stack.pop() {
-                                    let external_result = self.vm_value_to_owned(&result);
+                                    let external_result =
+                                        self.vm_value_to_owned(vm.proof(), &result);
                                     // call_stack: host prefix + remaining engine spans + exiting span
                                     let mut call_stack = state.host_call_stack.clone();
                                     call_stack
@@ -1642,14 +1670,16 @@ impl BexEngine {
         args: &[BexExternalValue],
         call_id: CallId,
         cancel: &CancellationToken,
+        permit: bex_heap::PermitProof<'_>,
     ) -> SysOpResult {
         let args = args.iter().map(std::convert::Into::into).collect();
         let fn_ptr = self.sys_ops.get(op);
         let mut ctx = self.sys_op_ctx.to_op_context(cancel.clone(), self.clone());
         // Rebuild RuntimeIo with the live per-call context so IO calls
         // (media resolution, auth) use the correct cancellation token.
-        ctx.runtime_io = sys_ops::build_runtime_io(&self.sys_ops, &self.heap, &ctx);
-        let result = fn_ptr(&self.heap, args, &ctx, call_id);
+        ctx.runtime_io =
+            sys_ops::build_runtime_io(&self.sys_ops, &self.heap, &self.heap_permit_manager, &ctx);
+        let result = fn_ptr(&self.heap, permit, args, &ctx, call_id);
 
         match result {
             SysOpResult::Ready(Ok(v)) => SysOpResult::Ready(Ok(v)),
