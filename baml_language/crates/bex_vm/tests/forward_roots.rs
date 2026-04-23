@@ -13,7 +13,7 @@ use std::{
     sync::{Arc, atomic::AtomicBool},
 };
 
-use baml_tests::engine::compile_source;
+use baml_project::testing::compile_source;
 use bex_vm::BexVm;
 use bex_vm_types::{HeapPtr, RootHaver, Value};
 
