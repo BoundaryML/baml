@@ -266,3 +266,34 @@ async fn objects_allocated_after_mid_call_gc_survive() {
         "post-GC allocations must not corrupt pre-GC ones, and vice versa"
     );
 }
+
+/// Regression test for async future completion across a GC triggered at the
+/// `Await` safepoint. The loop creates enough allocation pressure to force a
+/// minor collection right before the engine blocks on `sleep()`.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn sleep_future_survives_gc_safepoint() {
+    let source = r#"
+        function alloc_then_sleep(n: int) -> int {
+            let i = 0;
+            while (i < n) {
+                let _ = [i, i + 1, i + 2];
+                i += 1;
+            }
+            baml.sys.sleep(1);
+            42
+        }
+    "#;
+
+    let engine = make_engine(source);
+    let value = engine
+        .call_function(
+            "alloc_then_sleep",
+            vec![BexExternalValue::Int(12_000)],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await
+        .expect("sleep future must survive the GC safepoint");
+
+    assert_eq!(value, BexExternalValue::Int(42));
+}
