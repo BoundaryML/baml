@@ -13,7 +13,7 @@
 
 import type { RuntimePort } from '../runtime-port';
 import type { WorkerOutMessage, WorkerInMessage, PlaygroundNotification } from '../worker-protocol';
-import { decodeCallResult } from '@b/pkg-proto';
+import { decodeCallResult, RuntimeEvent } from '@b/pkg-proto';
 
 /** Server → Client message shapes (must match playground_ws.rs WsOutMessage) */
 type WsOutMessage =
@@ -26,7 +26,8 @@ type WsOutMessage =
   | { type: 'fetchLogNew'; callId: number; id: number; method: string; url: string; requestHeaders: Record<string, string>; requestBody: string }
   | { type: 'fetchLogUpdate'; callId: number; logId: number; status?: number; durationMs?: number; responseBody?: string; error?: string; responseHeaders?: Record<string, string> }
   | { type: 'controlFlowGraphResult'; functionName: string; graph: unknown | null }
-  | { type: 'cursorContext'; context: unknown };
+  | { type: 'cursorContext'; context: unknown }
+  | { type: 'runtimeEvent'; data: string; callId: number };
 
 /** Client → Server message shapes (must match playground_ws.rs WsInMessage) */
 type WsInMessage =
@@ -312,6 +313,18 @@ export class WebSocketRuntimePort implements RuntimePort {
           type: 'cursorContext',
           context: raw.context as import('../worker-protocol').CursorContext,
         };
+      case 'runtimeEvent': {
+        try {
+          const bytes = base64ToUint8Array(raw.data);
+          const event = RuntimeEvent.decode(bytes);
+          return { type: 'runtimeEventNew', event, callId: raw.callId ?? null };
+        } catch (e) {
+          return {
+            type: 'runtimeEventError' as const,
+            error: `Failed to decode runtime event: ${e instanceof Error ? e.message : String(e)}`,
+          } as WorkerOutMessage;
+        }
+      }
       default:
         return null;
     }

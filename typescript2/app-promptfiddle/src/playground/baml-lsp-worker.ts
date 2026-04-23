@@ -405,7 +405,7 @@ function onPlaygroundNotification(notification: PlaygroundNotification): void {
         // Decode and pass the raw proto through
         const bytes = new Uint8Array(notification.data);
         const event = RuntimeEvent.decode(bytes);
-        const callId = activeCallIds.size === 1 ? [...activeCallIds][0] : null;
+        const callId = notification.callId ?? (activeCallIds.size === 1 ? [...activeCallIds][0] : null);
         postOut({ type: "runtimeEventNew", event, callId });
 
         // Extract log events and update decorations
