@@ -53,7 +53,9 @@ import type {
 } from "@b/pkg-playground";
 
 import { decodeCallResult, RuntimeEvent } from "@b/pkg-proto";
-import { formatValueShort, truncateMessage, normalizeLogLevel } from "@b/pkg-playground/shared/log-decorations";
+import { truncateMessage, normalizeLogLevel } from "@b/pkg-playground/shared/log-decorations";
+import { formatValue } from "@b/pkg-playground/shared/format-value";
+import { deserializeRuntimeEvent } from "@b/pkg-playground/shared/deserialize-event";
 
 import { BamlVfs } from "./vfs";
 
@@ -324,23 +326,29 @@ function onPlaygroundNotification(notification: PlaygroundNotification): void {
         // Decode and pass the raw proto through
         const bytes = new Uint8Array(notification.data);
         const event = RuntimeEvent.decode(bytes);
-        const callId = notification.callId ?? (activeCallIds.size === 1 ? [...activeCallIds][0] : null);
-        postOut({ type: "runtimeEventNew", event, callId });
+        let callId = notification.callId ?? null;
+        if (callId == null) {
+          if (activeCallIds.size === 1) {
+            callId = [...activeCallIds][0] ?? null;
+          } else if (activeCallIds.size > 1) {
+            console.warn('[Worker] runtimeEvent missing callId from server with', activeCallIds.size, 'concurrent calls — event will not be associated with a run');
+          }
+        }
+        const deserialized = deserializeRuntimeEvent(event);
+        postOut({ type: "runtimeEventNew", event: deserialized, callId });
 
         // Extract log events and update decorations
-        const kind = event.event?.kind;
-        console.log('[Worker] runtimeEvent kind:', kind?.$case, 'source:', kind?.$case === 'log' ? kind.log.source : null);
+        const kind = deserialized.event;
         if (kind?.$case === 'log' && kind.log.source) {
           const source = kind.log.source;
           const line = source.line;
           const level = normalizeLogLevel(kind.log.level);
-          const message = formatValueShort(kind.log.data);
+          const message = formatValue(kind.log.data, 'inline-hint');
 
           // Heuristic: only show decoration if the formatted output is longer than the source span.
           // This filters out constant literals (where output ≈ source) and shows expanded variables.
           const sourceSpanLength = source.endOffset - source.startOffset;
           const isLikelyVariable = message.length > sourceSpanLength + 5;
-          console.log('[Worker] Log decoration - line:', line, 'level:', level, 'message:', message, 'spanLen:', sourceSpanLength, 'show:', isLikelyVariable);
 
           if (isLikelyVariable) {
             const existing = decorationsByLine.get(line);

@@ -20,9 +20,9 @@ export interface DeserializedRuntimeEvent {
 
 export type DeserializedEventKind =
   | { $case: 'functionStart'; functionStart: { name: string; args: BamlJsValue[] } }
-  | { $case: 'functionEnd'; functionEnd: { name: string; durationMs: number; result: BamlJsValue } }
-  | { $case: 'log'; log: { data: BamlJsValue; level: string; source?: SourceLocation } }
-  | { $case: 'custom'; custom: { name: string; data: BamlJsValue } }
+  | { $case: 'functionEnd'; functionEnd: { name: string; durationMs: number; result: BamlJsValue | null } }
+  | { $case: 'log'; log: { data: BamlJsValue | null; level: string; source?: SourceLocation } }
+  | { $case: 'custom'; custom: { name: string; data: BamlJsValue | null } }
   | { $case: 'setTags'; setTags: { tags: TagEntry[] } };
 
 // ---------------------------------------------------------------------------

@@ -145,21 +145,20 @@ pub fn run_server(playground_via_browser: bool) -> anyhow::Result<()> {
         std::env::var("BAML_TRACE_FILE")
             .ok()
             .map(|trace_file| bex_events_native::start(trace_file.into()));
-    let file_event_sink_for_flush = file_event_sink.clone();
-
     // Playground event sink — always active so runtime events flow to the WebSocket UI.
     let playground_event_sink: std::sync::Arc<dyn bex_events::EventSink> = std::sync::Arc::new(
         playground_event_sink::PlaygroundEventSink::new(broadcast_tx.clone()),
     );
 
     // Compose sinks: playground is always present; file sink is optional.
-    let event_sink: Option<std::sync::Arc<dyn bex_events::EventSink>> = {
+    let composed_sink: std::sync::Arc<dyn bex_events::EventSink> = {
         let mut sinks: Vec<std::sync::Arc<dyn bex_events::EventSink>> = vec![playground_event_sink];
         if let Some(file_sink) = file_event_sink {
             sinks.push(file_sink);
         }
-        Some(std::sync::Arc::new(bex_events::FanOutEventSink::new(sinks)))
+        std::sync::Arc::new(bex_events::FanOutEventSink::new(sinks))
     };
+    let event_sink = Some(composed_sink.clone());
 
     // Create the BexLsp (multi-project LSP)
     let bex = bex_project::new_lsp(
@@ -240,8 +239,6 @@ pub fn run_server(playground_via_browser: bool) -> anyhow::Result<()> {
     }
 
     tracing::info!("LSP server shutting down");
-    if let Some(sink) = file_event_sink_for_flush {
-        sink.flush();
-    }
+    composed_sink.flush();
     Ok(())
 }
