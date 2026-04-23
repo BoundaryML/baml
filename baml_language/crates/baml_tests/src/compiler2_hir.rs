@@ -672,6 +672,105 @@ mod tests {
         assert!(sites.iter().all(|s| s.kind == DefinitionKind::Binding));
     }
 
+    #[test]
+    fn discard_let_bindings_do_not_duplicate_or_bind() {
+        use baml_compiler2_hir::{diagnostic::Hir2Diagnostic, scope::ScopeKind};
+
+        let mut db = make_db();
+        let file = db.add_file(
+            "discard_let.baml",
+            "function foo() -> int {\n  let _ = 1;\n  let _ = 2;\n  return 3;\n}",
+        );
+
+        let index = file_semantic_index(&db, file);
+        assert!(!index.diagnostics().iter().any(|d| {
+            matches!(d, Hir2Diagnostic::DuplicateDefinition { name, .. } if name == &Name::new("_"))
+        }));
+
+        let (scope_idx, _) = index
+            .scopes
+            .iter()
+            .enumerate()
+            .find(|(_, scope)| {
+                matches!(scope.kind, ScopeKind::Function)
+                    && scope.name.as_ref() == Some(&Name::new("foo"))
+            })
+            .expect("function scope exists");
+        assert!(
+            index.scope_bindings[scope_idx]
+                .bindings
+                .iter()
+                .all(|(name, _, _)| name != &Name::new("_")),
+            "discard binding should not be visible in HIR scope bindings"
+        );
+    }
+
+    #[test]
+    fn typed_discard_let_bindings_do_not_duplicate_or_bind() {
+        use baml_compiler2_hir::{diagnostic::Hir2Diagnostic, scope::ScopeKind};
+
+        let mut db = make_db();
+        let file = db.add_file(
+            "typed_discard_let.baml",
+            "function foo() -> int {\n  let _: int = 1;\n  let _: int = 2;\n  return 3;\n}",
+        );
+
+        let index = file_semantic_index(&db, file);
+        assert!(!index.diagnostics().iter().any(|d| {
+            matches!(d, Hir2Diagnostic::DuplicateDefinition { name, .. } if name == &Name::new("_"))
+        }));
+
+        let (scope_idx, _) = index
+            .scopes
+            .iter()
+            .enumerate()
+            .find(|(_, scope)| {
+                matches!(scope.kind, ScopeKind::Function)
+                    && scope.name.as_ref() == Some(&Name::new("foo"))
+            })
+            .expect("function scope exists");
+        assert!(
+            index.scope_bindings[scope_idx]
+                .bindings
+                .iter()
+                .all(|(name, _, _)| name != &Name::new("_")),
+            "typed discard binding should not be visible in HIR scope bindings"
+        );
+    }
+
+    #[test]
+    fn discard_for_bindings_do_not_duplicate_or_bind() {
+        use baml_compiler2_hir::{diagnostic::Hir2Diagnostic, scope::ScopeKind};
+
+        let mut db = make_db();
+        let file = db.add_file(
+            "discard_for.baml",
+            "function foo(xs: int[]) -> int {\n  for _ in xs {\n    let y = 1;\n  }\n  for _ in xs {\n    let z = 2;\n  }\n  return 3;\n}",
+        );
+
+        let index = file_semantic_index(&db, file);
+        assert!(!index.diagnostics().iter().any(|d| {
+            matches!(d, Hir2Diagnostic::DuplicateDefinition { name, .. } if name == &Name::new("_"))
+        }));
+
+        let (scope_idx, _) = index
+            .scopes
+            .iter()
+            .enumerate()
+            .find(|(_, scope)| {
+                matches!(scope.kind, ScopeKind::Function)
+                    && scope.name.as_ref() == Some(&Name::new("foo"))
+            })
+            .expect("function scope exists");
+        assert!(
+            index.scope_bindings[scope_idx]
+                .bindings
+                .iter()
+                .all(|(name, _, _)| name != &Name::new("_")),
+            "for discard binding should not be visible in HIR scope bindings"
+        );
+    }
+
     /// A field and a method with the same name in a class produce a cross-kind diagnostic.
     #[test]
     fn field_method_same_name_produces_cross_kind_diagnostic() {

@@ -578,12 +578,28 @@ pub enum Stmt {
 /// Patterns — modeled after `Pattern` in `body.rs`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Pattern {
+    Discard,
+    TypedDiscard { ty: TypeExpr },
     Binding(Name),
     TypedBinding { name: Name, ty: TypeExpr },
     Literal(Literal),
     Null,
     EnumVariant { enum_name: Name, variant: Name },
     Union(Vec<PatId>),
+}
+
+impl Pattern {
+    pub fn binding_name(&self) -> Option<&Name> {
+        match self {
+            Self::Binding(name) => Some(name),
+            Self::TypedBinding { name, .. } => Some(name),
+            _ => None,
+        }
+    }
+
+    pub fn is_discard(&self) -> bool {
+        matches!(self, Self::Discard | Self::TypedDiscard { .. })
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

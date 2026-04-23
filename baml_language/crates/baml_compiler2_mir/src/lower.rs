@@ -3472,11 +3472,19 @@ impl LoweringContext<'_> {
             } => {
                 // Extract binding name from pattern
                 let pat = self.body.patterns[pattern].clone();
-                let name = match &pat {
-                    AstPattern::Binding(n) => n.clone(),
-                    AstPattern::TypedBinding { name, .. } => name.clone(),
-                    _ => Name::new("_"),
-                };
+                if pat.is_discard() {
+                    if let Some(init) = initializer {
+                        let temp = self.builder.temp(self.expr_ty(init));
+                        self.lower_expr(init, Place::local(temp));
+                    }
+                    self.builder.current_source_span = prev_span;
+                    return;
+                }
+
+                let name = pat
+                    .binding_name()
+                    .cloned()
+                    .unwrap_or_else(|| Name::new("_"));
 
                 let local_ty = self.pat_ty(pattern);
                 let local =
@@ -3658,7 +3666,7 @@ impl LoweringContext<'_> {
                 {
                     let pat = self.body.patterns[binding].clone();
                     match pat {
-                        AstPattern::Binding(name) if name.as_str() != "_" => {
+                        AstPattern::Binding(name) => {
                             let ty = self
                                 .pat_types
                                 .get(&(self.current_scope, binding))
@@ -3674,7 +3682,7 @@ impl LoweringContext<'_> {
                             );
                             self.locals.insert(name, local);
                         }
-                        AstPattern::TypedBinding { name, ty, .. } if name.as_str() != "_" => {
+                        AstPattern::TypedBinding { name, ty, .. } => {
                             let resolved_ty = self.resolve_type_annotation(&ty);
                             let local = self.builder.declare_local(
                                 Some(name.clone()),
@@ -3689,6 +3697,7 @@ impl LoweringContext<'_> {
                             );
                             self.locals.insert(name, local);
                         }
+                        AstPattern::Discard | AstPattern::TypedDiscard { .. } => {}
                         _ => {}
                     }
                 }
@@ -4303,7 +4312,9 @@ impl LoweringContext<'_> {
                                     int_arms.push((disc, i));
                                 }
                             }
-                            AstPattern::Binding(_) | AstPattern::TypedBinding { .. } => {
+                            AstPattern::Binding(_)
+                            | AstPattern::TypedBinding { .. }
+                            | AstPattern::TypedDiscard { .. } => {
                                 // Type-pattern sub-arm: look up type tag via TIR.
                                 match &switch_kind {
                                     None => switch_kind = Some(SwitchKind::TypeTag),
@@ -4325,7 +4336,7 @@ impl LoweringContext<'_> {
                         }
                     }
                 }
-                AstPattern::TypedBinding { .. } => {
+                AstPattern::TypedBinding { .. } | AstPattern::TypedDiscard { .. } => {
                     // Type-annotated binding → classify as TypeTag
                     match &switch_kind {
                         None => switch_kind = Some(SwitchKind::TypeTag),
@@ -4343,7 +4354,7 @@ impl LoweringContext<'_> {
                         None => return false,
                     }
                 }
-                AstPattern::Binding(name) if name.as_str() != "_" => {
+                AstPattern::Binding(_) => {
                     // Bare name resolved to a type by TIR (e.g. `DivisionByZero =>`)
                     if self.pat_types.contains_key(&(self.current_scope, pattern)) {
                         match &switch_kind {
@@ -4369,7 +4380,7 @@ impl LoweringContext<'_> {
                         otherwise_idx = Some(i);
                     }
                 }
-                AstPattern::Binding(_) => {
+                AstPattern::Discard => {
                     // Wildcard `_` — must be last arm
                     if i != arms.len() - 1 {
                         return false;
@@ -4710,22 +4721,22 @@ impl LoweringContext<'_> {
     ) {
         let pat = self.body.patterns[pat_id].clone();
         match pat {
-            AstPattern::Binding(ref name) => {
+            AstPattern::Discard => {
+                self.builder.goto(success);
+            }
+            AstPattern::Binding(_) => {
                 // Bare type sugar: the TIR resolved this binding name to a
                 // type (e.g. `DivisionByZero =>` resolves to a class).
                 // Generate an IsType test instead of an unconditional match.
-                if name.as_str() != "_" {
-                    if let Some(tir_ty) = self.pat_types.get(&(self.current_scope, pat_id)).cloned()
-                    {
-                        let resolved = self.resolved_aliases.convert(&tir_ty);
-                        self.emit_is_type_branch(scrutinee, resolved, success, failure);
-                        return;
-                    }
+                if let Some(tir_ty) = self.pat_types.get(&(self.current_scope, pat_id)).cloned() {
+                    let resolved = self.resolved_aliases.convert(&tir_ty);
+                    self.emit_is_type_branch(scrutinee, resolved, success, failure);
+                    return;
                 }
                 // Regular binding — always matches
                 self.builder.goto(success);
             }
-            AstPattern::TypedBinding { .. } => {
+            AstPattern::TypedBinding { .. } | AstPattern::TypedDiscard { .. } => {
                 // TIR always resolves TypedBinding patterns via record_pattern_test_types.
                 let annotation_ty = self
                     .pat_types
@@ -4816,7 +4827,7 @@ impl LoweringContext<'_> {
     fn bind_pattern(&mut self, scrutinee: Local, pat_id: AstPatId) {
         let pat = self.body.patterns[pat_id].clone();
         match pat {
-            AstPattern::Binding(name) if name.as_str() != "_" => {
+            AstPattern::Binding(name) => {
                 // Prefer TIR-inferred type; fall back to the scrutinee's declared type
                 // rather than Null, so catch bindings get the error's type (unknown) not null.
                 let ty = self
@@ -4833,7 +4844,7 @@ impl LoweringContext<'_> {
                 );
                 self.locals.insert(name, local);
             }
-            AstPattern::TypedBinding { name, ty, .. } if name.as_str() != "_" => {
+            AstPattern::TypedBinding { name, ty, .. } => {
                 let resolved_ty = self.resolve_type_annotation(&ty);
                 let local =
                     self.builder
@@ -4845,7 +4856,7 @@ impl LoweringContext<'_> {
                 self.locals.insert(name, local);
             }
             _ => {
-                // Wildcard `_`, Literal, Null, EnumVariant, Union — no binding needed
+                // Discard, typed discard, Literal, Null, EnumVariant, Union — no binding needed
             }
         }
     }
@@ -4865,7 +4876,7 @@ impl LoweringContext<'_> {
     fn classify_pattern_type_tag(&self, pat_id: AstPatId) -> Option<Vec<i64>> {
         let pat = &self.body.patterns[pat_id];
         match pat {
-            AstPattern::Binding(name) if name.as_str() == "_" => {
+            AstPattern::Discard => {
                 // Pure wildcard — handled separately, not a type test
                 None
             }
@@ -4875,7 +4886,7 @@ impl LoweringContext<'_> {
                 let resolved = self.resolved_aliases.convert(tir_ty);
                 self.ty_to_type_tags(&resolved)
             }
-            AstPattern::TypedBinding { .. } => {
+            AstPattern::TypedBinding { .. } | AstPattern::TypedDiscard { .. } => {
                 // Type-annotated binding — always resolved by TIR
                 let tir_ty = self.pat_types.get(&(self.current_scope, pat_id))?;
                 let resolved = self.resolved_aliases.convert(tir_ty);
@@ -4949,10 +4960,7 @@ impl LoweringContext<'_> {
         // shows up in bytecode instead of an anonymous `_N` temp.
         let binding_name = clauses
             .first()
-            .and_then(|c| match &self.body.patterns[c.binding] {
-                AstPattern::Binding(name) if name.as_str() != "_" => Some(name.clone()),
-                _ => None,
-            });
+            .and_then(|c| self.body.patterns[c.binding].binding_name().cloned());
         let error_local = self.builder.declare_local(
             binding_name.clone(),
             Ty::BuiltinUnknown {
@@ -4968,10 +4976,7 @@ impl LoweringContext<'_> {
         // Declare stack trace local if the catch clause has a second binding.
         let stack_trace_local = clauses.first().and_then(|c| {
             c.stack_trace_binding.map(|st_pat| {
-                let st_name = match &self.body.patterns[st_pat] {
-                    AstPattern::Binding(name) if name.as_str() != "_" => Some(name.clone()),
-                    _ => None,
-                };
+                let st_name = self.body.patterns[st_pat].binding_name().cloned();
                 let local = self.builder.declare_local(
                     st_name.clone(),
                     Ty::BuiltinUnknown {
@@ -4992,10 +4997,7 @@ impl LoweringContext<'_> {
         for clause in clauses {
             for &arm_id in &clause.arms {
                 let arm = self.body.catch_arms[arm_id].clone();
-                let is_wildcard = matches!(
-                    self.body.patterns[arm.pattern],
-                    AstPattern::Binding(ref name) if name.as_str() == "_"
-                );
+                let is_wildcard = matches!(self.body.patterns[arm.pattern], AstPattern::Discard);
                 arms.push((arm, is_wildcard));
             }
         }

@@ -251,7 +251,7 @@ impl<'db> SemanticIndexBuilder<'db> {
             };
             if let Some(pattern) = binding_pattern {
                 let scope_id = self.current_scope_id();
-                if let ast::Pattern::Binding(name) = &body.patterns[pattern] {
+                if let Some(name) = body.patterns[pattern].binding_name() {
                     let name_range = source_map.pattern_span(pattern);
 
                     seen.entry(name.clone()).or_default().push(MemberSite {
@@ -503,11 +503,7 @@ impl<'db> SemanticIndexBuilder<'db> {
         patterns: &la_arena::Arena<ast::Pattern>,
         pat_id: ast::PatId,
     ) -> Option<&Name> {
-        match &patterns[pat_id] {
-            ast::Pattern::Binding(name) if name.as_str() != "_" => Some(name),
-            ast::Pattern::TypedBinding { name, .. } if name.as_str() != "_" => Some(name),
-            _ => None,
-        }
+        patterns[pat_id].binding_name()
     }
 
     /// Collect all single-segment `Expr::Path` names from an `ExprBody`.

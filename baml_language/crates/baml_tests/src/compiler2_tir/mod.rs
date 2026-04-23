@@ -132,6 +132,10 @@ pub(crate) mod support {
     fn pat_desc(pat_id: PatId, body: &ExprBody) -> String {
         let pat = &body.patterns[pat_id];
         match pat {
+            Pattern::Discard => "_".into(),
+            Pattern::TypedDiscard { ty } => {
+                format!("_: {}", type_expr_to_string(ty))
+            }
             Pattern::Binding(n) => n.to_string(),
             Pattern::TypedBinding { name, ty } => {
                 format!("{name}: {}", type_expr_to_string(ty))
@@ -738,6 +742,10 @@ pub(crate) mod support {
                 ..
             } => {
                 let pat_name = match &body.patterns[*pattern] {
+                    Pattern::Discard => "_".to_string(),
+                    Pattern::TypedDiscard { ty } => {
+                        format!("_: {}", type_expr_to_string(ty))
+                    }
                     Pattern::Binding(n) => n.to_string(),
                     Pattern::TypedBinding { name, ty } => {
                         format!("{name}: {}", type_expr_to_string(ty))
@@ -803,6 +811,10 @@ pub(crate) mod support {
                 body: for_body,
             } => {
                 let bind_name = match &body.patterns[*binding] {
+                    Pattern::Discard => "_".to_string(),
+                    Pattern::TypedDiscard { ty } => {
+                        format!("_: {}", type_expr_to_string(ty))
+                    }
                     Pattern::Binding(n) => n.to_string(),
                     Pattern::TypedBinding { name, .. } => name.to_string(),
                     other => format!("{other:?}"),
@@ -1287,6 +1299,10 @@ pub(crate) mod support {
         ) -> String {
             let pat = &body.patterns[pat_id];
             match pat {
+                Pattern::Discard => "_".into(),
+                Pattern::TypedDiscard { ty } => {
+                    format!("_: {}", type_expr_to_string_hir(ty, prefix))
+                }
                 Pattern::Binding(n) => n.to_string(),
                 Pattern::TypedBinding { name, ty } => {
                     format!("{name}: {}", type_expr_to_string_hir(ty, prefix))

@@ -2005,12 +2005,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 if let Some(ty) = init_ty {
                     self.bindings.insert(*pattern, ty.clone());
                     let pat = &body.patterns[*pattern];
-                    let name = match pat {
-                        baml_compiler2_ast::Pattern::Binding(name) => Some(name),
-                        baml_compiler2_ast::Pattern::TypedBinding { name, .. } => Some(name),
-                        _ => None,
-                    };
-                    if let Some(name) = name {
+                    if let Some(name) = pat.binding_name() {
                         self.let_binding_patterns.insert(name.clone(), *pattern);
                         self.locals.insert(name.clone(), ty);
                         // Record declared type only for annotated let-bindings.
@@ -2072,13 +2067,8 @@ impl<'db> TypeInferenceBuilder<'db> {
 
                 // 3. Bind the loop variable to the element type
                 let pat = &body.patterns[*binding];
-                let name = match pat {
-                    baml_compiler2_ast::Pattern::Binding(name) => Some(name.clone()),
-                    baml_compiler2_ast::Pattern::TypedBinding { name, .. } => Some(name.clone()),
-                    _ => None,
-                };
                 self.bindings.insert(*binding, elem_ty.clone());
-                if let Some(name) = name {
+                if let Some(name) = pat.binding_name().cloned() {
                     self.locals.insert(name, elem_ty);
                 }
 
@@ -2438,9 +2428,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 self.bindings.insert(st_binding, st_ty.clone());
                 // Also insert into locals so name resolution finds it.
                 let st_name = match &body.patterns[st_binding] {
-                    baml_compiler2_ast::Pattern::Binding(name) => Some(name.clone()),
-                    baml_compiler2_ast::Pattern::TypedBinding { name, .. } => Some(name.clone()),
-                    _ => None,
+                    pat => pat.binding_name().cloned(),
                 };
                 if let Some(name) = st_name {
                     self.locals.insert(name, st_ty);
@@ -2448,7 +2436,6 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
 
             let binding_name = match &body.patterns[clause.binding] {
-                baml_compiler2_ast::Pattern::Binding(name) => Some(name.clone()),
                 baml_compiler2_ast::Pattern::TypedBinding { name, ty } => {
                     if let Some(banned) = crate::throw_inference::is_banned_catch_binding_type(ty) {
                         self.context.report_simple(
@@ -2460,7 +2447,18 @@ impl<'db> TypeInferenceBuilder<'db> {
                     }
                     Some(name.clone())
                 }
-                _ => None,
+                baml_compiler2_ast::Pattern::TypedDiscard { ty } => {
+                    if let Some(banned) = crate::throw_inference::is_banned_catch_binding_type(ty) {
+                        self.context.report_simple(
+                            TirTypeError::InvalidCatchBindingType {
+                                type_name: banned.to_string(),
+                            },
+                            base_expr_id,
+                        );
+                    }
+                    None
+                }
+                pat => pat.binding_name().cloned(),
             };
 
             for &arm_id in &clause.arms {
@@ -2620,10 +2618,11 @@ impl<'db> TypeInferenceBuilder<'db> {
     ) -> BTreeSet<String> {
         let pattern = &body.patterns[pattern_id];
         match pattern {
+            baml_compiler2_ast::Pattern::Discard => {
+                self.required_match_cases(scrutinee_ty).unwrap_or_default()
+            }
             baml_compiler2_ast::Pattern::Binding(name) => {
-                if name.as_str() == "_" {
-                    self.required_match_cases(scrutinee_ty).unwrap_or_default()
-                } else if self.is_bare_type_sugar_binding(name) {
+                if self.is_bare_type_sugar_binding(name) {
                     let narrowed =
                         self.pattern_narrowed_type(pattern_id, scrutinee_ty, body, at_expr);
                     self.required_match_cases(&narrowed).unwrap_or_default()
@@ -2631,7 +2630,8 @@ impl<'db> TypeInferenceBuilder<'db> {
                     self.required_match_cases(scrutinee_ty).unwrap_or_default()
                 }
             }
-            baml_compiler2_ast::Pattern::TypedBinding { .. } => {
+            baml_compiler2_ast::Pattern::TypedBinding { .. }
+            | baml_compiler2_ast::Pattern::TypedDiscard { .. } => {
                 let narrowed = self.pattern_narrowed_type(pattern_id, scrutinee_ty, body, at_expr);
                 if self.is_subtype(scrutinee_ty, &narrowed) {
                     self.required_match_cases(scrutinee_ty).unwrap_or_default()
@@ -2672,10 +2672,10 @@ impl<'db> TypeInferenceBuilder<'db> {
         at_expr: ExprId,
     ) -> bool {
         match &body.patterns[pattern_id] {
-            baml_compiler2_ast::Pattern::Binding(name) => {
-                !self.is_bare_type_sugar_binding(name) || name.as_str() == "_"
-            }
-            baml_compiler2_ast::Pattern::TypedBinding { .. } => {
+            baml_compiler2_ast::Pattern::Discard => true,
+            baml_compiler2_ast::Pattern::Binding(name) => !self.is_bare_type_sugar_binding(name),
+            baml_compiler2_ast::Pattern::TypedBinding { .. }
+            | baml_compiler2_ast::Pattern::TypedDiscard { .. } => {
                 let narrowed = self.pattern_narrowed_type(pattern_id, scrutinee_ty, body, at_expr);
                 self.is_subtype(scrutinee_ty, &narrowed)
             }
@@ -2715,12 +2715,14 @@ impl<'db> TypeInferenceBuilder<'db> {
     ) -> Option<(Name, Ty)> {
         match &body.patterns[pattern_id] {
             baml_compiler2_ast::Pattern::Binding(name) => {
-                if name.as_str() == "_" || self.is_bare_type_sugar_binding(name) {
+                if self.is_bare_type_sugar_binding(name) {
                     None
                 } else {
                     Some((name.clone(), scrutinee_ty.clone()))
                 }
             }
+            baml_compiler2_ast::Pattern::Discard
+            | baml_compiler2_ast::Pattern::TypedDiscard { .. } => None,
             baml_compiler2_ast::Pattern::TypedBinding { name, ty } => {
                 Some((name.clone(), self.resolve_type_expr(ty, at_expr)))
             }
@@ -2736,13 +2738,15 @@ impl<'db> TypeInferenceBuilder<'db> {
         at_expr: ExprId,
     ) {
         match &body.patterns[pattern_id] {
-            baml_compiler2_ast::Pattern::Binding(name)
-                if name.as_str() != "_" && self.is_bare_type_sugar_binding(name) =>
-            {
+            baml_compiler2_ast::Pattern::Binding(name) if self.is_bare_type_sugar_binding(name) => {
                 let ty = self.pattern_narrowed_type(pattern_id, scrutinee_ty, body, at_expr);
                 self.bindings.insert(pattern_id, ty);
             }
             baml_compiler2_ast::Pattern::TypedBinding { ty, .. } => {
+                let resolved = self.resolve_type_expr(ty, at_expr);
+                self.bindings.insert(pattern_id, resolved);
+            }
+            baml_compiler2_ast::Pattern::TypedDiscard { ty } => {
                 let resolved = self.resolve_type_expr(ty, at_expr);
                 self.bindings.insert(pattern_id, resolved);
             }
@@ -2777,6 +2781,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         at_expr: ExprId,
     ) -> Ty {
         match &body.patterns[pattern_id] {
+            baml_compiler2_ast::Pattern::Discard => scrutinee_ty.clone(),
             baml_compiler2_ast::Pattern::Binding(name) => {
                 if let Some(prim_ty) = bare_type_sugar_to_ty(name) {
                     prim_ty
@@ -2796,6 +2801,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             baml_compiler2_ast::Pattern::TypedBinding { ty, .. } => {
                 self.resolve_type_expr(ty, at_expr)
             }
+            baml_compiler2_ast::Pattern::TypedDiscard { ty } => self.resolve_type_expr(ty, at_expr),
             baml_compiler2_ast::Pattern::Literal(lit) => Ty::Literal(
                 lit.clone(),
                 crate::ty::Freshness::Regular,
@@ -2867,8 +2873,9 @@ impl<'db> TypeInferenceBuilder<'db> {
         at_expr: ExprId,
     ) -> Option<Ty> {
         match &body.patterns[pattern_id] {
+            baml_compiler2_ast::Pattern::Discard => None,
             baml_compiler2_ast::Pattern::Binding(name) => {
-                if name.as_str() == "_" || !self.is_bare_type_sugar_binding(name) {
+                if !self.is_bare_type_sugar_binding(name) {
                     return None;
                 }
 
@@ -2887,6 +2894,10 @@ impl<'db> TypeInferenceBuilder<'db> {
                 self.ty_panic_subset(&narrowed)
             }
             baml_compiler2_ast::Pattern::TypedBinding { ty, .. } => {
+                let narrowed = self.resolve_type_expr(ty, at_expr);
+                self.ty_panic_subset(&narrowed)
+            }
+            baml_compiler2_ast::Pattern::TypedDiscard { ty } => {
                 let narrowed = self.resolve_type_expr(ty, at_expr);
                 self.ty_panic_subset(&narrowed)
             }
@@ -3079,6 +3090,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         );
         let pattern = &body.patterns[pattern_id];
         match pattern {
+            baml_compiler2_ast::Pattern::Discard => PatternMatchStrength::DefiniteMatch,
             baml_compiler2_ast::Pattern::Binding(name) => {
                 if self.is_bare_type_sugar_binding(name) {
                     let lowered = if let Some(prim_ty) = bare_type_sugar_to_ty(name) {
@@ -3105,6 +3117,16 @@ impl<'db> TypeInferenceBuilder<'db> {
                 }
             }
             baml_compiler2_ast::Pattern::TypedBinding { ty, .. } => {
+                let lowered = self.lower_pattern_type_expr(ty, at_expr);
+                if Self::ty_covers_fact(&lowered, throw_fact) {
+                    PatternMatchStrength::DefiniteMatch
+                } else if is_unknown {
+                    PatternMatchStrength::MayMatch
+                } else {
+                    PatternMatchStrength::NoMatch
+                }
+            }
+            baml_compiler2_ast::Pattern::TypedDiscard { ty } => {
                 let lowered = self.lower_pattern_type_expr(ty, at_expr);
                 if Self::ty_covers_fact(&lowered, throw_fact) {
                     PatternMatchStrength::DefiniteMatch

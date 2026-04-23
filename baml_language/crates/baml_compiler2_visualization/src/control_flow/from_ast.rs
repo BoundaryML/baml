@@ -654,6 +654,8 @@ impl<'a> AstGraphBuilder<'a> {
     fn format_pattern(&self, pat_id: ast::PatId) -> String {
         let pat = &self.body.patterns[pat_id];
         match pat {
+            ast::Pattern::Discard => "_".to_string(),
+            ast::Pattern::TypedDiscard { .. } => "_".to_string(),
             ast::Pattern::Binding(name) => name.to_string(),
             ast::Pattern::TypedBinding { name, .. } => name.to_string(),
             ast::Pattern::Literal(lit) => format_literal_ast(lit),
