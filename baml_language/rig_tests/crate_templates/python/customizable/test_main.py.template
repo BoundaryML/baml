@@ -2,16 +2,16 @@
 
 
 def test_top_level_package_imports():
-    import baml_client  # noqa: F401
+    import baml_sdk  # noqa: F401
 
 
 def test_baml_types_imports():
-    import baml_client.baml_types  # noqa: F401
+    import baml_sdk.baml_types  # noqa: F401
 
 
 def test_baml_sync_imports():
-    import baml_client.baml_sync  # noqa: F401
+    import baml_sdk.baml_sync  # noqa: F401
 
 
 def test_baml_async_imports():
-    import baml_client.baml_async  # noqa: F401
+    import baml_sdk.baml_async  # noqa: F401

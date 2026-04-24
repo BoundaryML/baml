@@ -184,7 +184,7 @@ impl Object {
     /// Each distinct path (from `Namespace::Types { path }`) becomes a `NamespaceGroup`.
     /// Objects with empty paths go into a `Root` group.
     pub(crate) fn load_type_groups(
-        objects: &baml_codegen_types::ObjectPool,
+        objects: &baml_codegen_types::SymbolPool,
         is_stream: bool,
     ) -> Vec<NamespaceGroup> {
         use std::collections::BTreeMap;
@@ -198,14 +198,14 @@ impl Object {
 
         for (name, object) in iter {
             let converted = match object {
-                baml_codegen_types::Object::Function(_) => continue,
-                baml_codegen_types::Object::Class(class) => {
+                baml_codegen_types::Symbol::Function(_) => continue,
+                baml_codegen_types::Symbol::Class(class) => {
                     Object::Class(Class::from_codegen_types(class))
                 }
-                baml_codegen_types::Object::Enum(enum_) => {
+                baml_codegen_types::Symbol::Enum(enum_) => {
                     Object::Enum(Enum::from_codegen_types(enum_))
                 }
-                baml_codegen_types::Object::TypeAlias(type_alias) => {
+                baml_codegen_types::Symbol::TypeAlias(type_alias) => {
                     Object::TypeAlias(TypeAlias::from_codegen_types(type_alias))
                 }
             };
@@ -284,7 +284,7 @@ impl Function {
     /// paths go into per-path groups. Companion functions are NOT inserted as
     /// top-level entries — they live on their parent `Function.companions`.
     pub(crate) fn load_function_groups(
-        objects: &baml_codegen_types::ObjectPool,
+        objects: &baml_codegen_types::SymbolPool,
     ) -> Vec<FunctionGroup> {
         use std::collections::BTreeMap;
 
@@ -294,7 +294,7 @@ impl Function {
             .iter()
             .filter(|(name, _)| !name.is_stream())
             .filter_map(|(name, object)| match object {
-                baml_codegen_types::Object::Function(function) => {
+                baml_codegen_types::Symbol::Function(function) => {
                     let path: Vec<String> = name
                         .namespace_path
                         .iter()
@@ -323,12 +323,12 @@ impl Function {
             .collect()
     }
 
-    pub(crate) fn load_functions(objects: &baml_codegen_types::ObjectPool) -> Vec<Function> {
+    pub(crate) fn load_functions(objects: &baml_codegen_types::SymbolPool) -> Vec<Function> {
         let mut objects = objects
             .iter()
             .filter(|(name, _)| !name.is_stream())
             .filter_map(|(_, object)| match object {
-                baml_codegen_types::Object::Function(function) => {
+                baml_codegen_types::Symbol::Function(function) => {
                     Some(Function::from_codegen_types(
                         function,
                         Ty::from_codegen_types(&function.return_type),
@@ -343,12 +343,12 @@ impl Function {
         objects
     }
 
-    pub(crate) fn load_stream_functions(objects: &baml_codegen_types::ObjectPool) -> Vec<Function> {
+    pub(crate) fn load_stream_functions(objects: &baml_codegen_types::SymbolPool) -> Vec<Function> {
         let mut objects = objects
             .iter()
             .filter(|(name, _)| name.is_stream())
             .filter_map(|(_, object)| match object {
-                baml_codegen_types::Object::Function(function) => {
+                baml_codegen_types::Symbol::Function(function) => {
                     function.stream_return_type.as_ref().map(|return_type| {
                         Function::from_codegen_types(
                             function,

@@ -3,11 +3,28 @@ use std::{
     path::{Path, PathBuf},
 };
 
+/// Names of the rig-test fixtures.
+///
+/// This list was previously exported from `baml_codegen_tests::FIXTURE_NAMES`.
+/// The crate has been deleted in Phase G0; the names now live here because
+/// `tools_rig` is the authoritative source of which rig crates to regenerate.
+const FIXTURE_NAMES: &[&str] = &[
+    "empty",
+    "mixed_complex_types",
+    "semantic_streaming",
+    "union_types_extended",
+    "map_types",
+    "literal_types",
+    "packages_and_namespaces",
+    "companion_functions",
+    "full_type_coverage",
+];
+
 fn main() {
     let check_mode = std::env::args().any(|arg| arg == "--check");
 
     let languages = discover_languages();
-    let fixtures = baml_codegen_tests::FIXTURE_NAMES;
+    let fixtures = FIXTURE_NAMES;
 
     let mut has_diff = false;
 

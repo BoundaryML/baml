@@ -8,4 +8,3 @@ name = "tools_rig"
 path = "src/main.rs"
 
 [dependencies]
-baml_codegen_tests = { workspace = true }

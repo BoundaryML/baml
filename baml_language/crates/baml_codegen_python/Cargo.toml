@@ -22,6 +22,5 @@ doctest = false
 workspace = true
 
 [dev-dependencies]
-baml_codegen_tests = { workspace = true }
 baml_codegen_types = { workspace = true }
 pretty_assertions = { workspace = true }

@@ -5,23 +5,26 @@ fn main() {
     // Write to generated/ in the crate directory (not OUT_DIR)
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
     let generated_dir = manifest_dir.join("generated");
-    let baml_client_dir = generated_dir.join("baml_client");
+    let baml_sdk_dir = generated_dir.join("baml_sdk");
 
     // Clean and recreate directories
     if generated_dir.exists() {
         fs::remove_dir_all(&generated_dir).unwrap();
     }
-    fs::create_dir_all(&baml_client_dir).unwrap();
+    fs::create_dir_all(&baml_sdk_dir).unwrap();
 
-    // Get fixture
-    let fixture = baml_codegen_tests::fixtures::full_type_coverage();
+    // Phase G0: `baml_codegen_tests` has been deleted and the rig tests
+    // are not validated again until G6. Feed the legacy emitter an empty
+    // `SymbolPool` so `cargo check` stays green without wiring a new
+    // fixture source.
+    let fixture: baml_codegen_types::SymbolPool = std::collections::HashMap::new();
 
     // Generate Python code
     let output = baml_codegen_python::to_source_code(&fixture, &PathBuf::from("."));
 
-    // Write baml_client files
+    // Write baml_sdk files
     for (path, content) in output {
-        let file_path = baml_client_dir.join(&path);
+        let file_path = baml_sdk_dir.join(&path);
         if let Some(parent) = file_path.parent() {
             fs::create_dir_all(parent).unwrap();
         }
@@ -121,7 +124,7 @@ else
 fi
 
 echo "==> Running ruff lint..."
-uv run --with ruff ruff check --config pyproject.toml baml_client
+uv run --with ruff ruff check --config pyproject.toml baml_sdk
 
 echo "==> Running pytest..."
 uv run --with pytest --with pydantic --with typing-extensions pytest -v
@@ -168,7 +171,7 @@ if ($pythonFiles) {
 }
 
 Write-Host "==> Running ruff lint..."
-uv run --with ruff ruff check --config pyproject.toml baml_client
+uv run --with ruff ruff check --config pyproject.toml baml_sdk
 
 Write-Host "==> Running pytest..."
 uv run --with pytest --with pydantic --with typing-extensions pytest -v

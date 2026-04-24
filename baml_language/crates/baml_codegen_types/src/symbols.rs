@@ -2,13 +2,26 @@ use std::collections::HashSet;
 
 use crate::{CodegenTypeError, Ty};
 
-pub type ObjectPool = std::collections::HashMap<super::Name, Object>;
+pub type SymbolPool = std::collections::HashMap<super::Name, Symbol>;
 
-pub enum Object {
+pub enum Symbol {
     Function(Function),
     Class(Class),
     Enum(Enum),
     TypeAlias(TypeAlias),
+}
+
+/// Where the symbol was defined in user BAML source.
+#[derive(Clone, Debug)]
+pub struct Origin {
+    /// Path of the defining `.baml` file, relative to the
+    /// `baml_src/` root. Same string form as keys in
+    /// `_inlinedbaml.py`'s FILES dict.
+    pub source_file_path: String,
+    /// Byte offset of the symbol's definition start within that
+    /// file. Used as the secondary sort key when ordering symbols
+    /// inside an emitter leaf.
+    pub span_start: u32,
 }
 
 pub struct Function {
@@ -25,6 +38,10 @@ pub struct Function {
 
     /// Companion functions attached to this function (e.g. `build_request`, `parse`).
     pub companions: Vec<(String, Function)>,
+
+    /// Source-origin info: the defining `.baml` file and byte span start.
+    /// Used by the emitter to order symbols deterministically within a leaf.
+    pub origin: Origin,
 }
 
 pub struct FunctionArgument {
@@ -37,6 +54,7 @@ pub struct Class {
     pub name: super::Name,
     pub docstring: Option<String>,
     pub properties: Vec<ClassProperty>,
+    pub origin: Origin,
 }
 
 pub struct ClassProperty {
@@ -49,6 +67,7 @@ pub struct Enum {
     pub name: super::Name,
     pub docstring: Option<String>,
     pub variants: Vec<EnumVariant>,
+    pub origin: Origin,
 }
 
 pub struct EnumVariant {
@@ -62,24 +81,25 @@ pub struct TypeAlias {
     pub resolves_to: super::Ty,
     /// Whether this type alias is recursive (i.e., references itself).
     pub recursive: bool,
+    pub origin: Origin,
 }
 
-impl Object {
+impl Symbol {
     pub fn validate(&self) -> Result<(), CodegenTypeError> {
         match self {
-            Object::Function(function) => function.validate(),
-            Object::Class(class) => class.validate(),
-            Object::Enum(_) => Ok(()),
-            Object::TypeAlias(type_alias) => type_alias.validate(),
+            Symbol::Function(function) => function.validate(),
+            Symbol::Class(class) => class.validate(),
+            Symbol::Enum(_) => Ok(()),
+            Symbol::TypeAlias(type_alias) => type_alias.validate(),
         }
     }
 
     pub fn walk_all_unions(&self) -> HashSet<super::Ty> {
         match self {
-            Object::Function(function) => function.walk_all_unions(),
-            Object::Class(class) => class.walk_all_unions(),
-            Object::Enum(_) => HashSet::default(),
-            Object::TypeAlias(type_alias) => type_alias.walk_all_unions(),
+            Symbol::Function(function) => function.walk_all_unions(),
+            Symbol::Class(class) => class.walk_all_unions(),
+            Symbol::Enum(_) => HashSet::default(),
+            Symbol::TypeAlias(type_alias) => type_alias.walk_all_unions(),
         }
     }
 }

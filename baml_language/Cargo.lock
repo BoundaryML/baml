@@ -1096,20 +1096,8 @@ version = "0.0.0-beta"
 dependencies = [
  "askama",
  "baml_base",
- "baml_codegen_tests",
  "baml_codegen_types",
  "pretty_assertions",
-]
-
-[[package]]
-name = "baml_codegen_tests"
-version = "0.0.0-beta"
-dependencies = [
- "baml_base",
- "baml_codegen_types",
- "insta",
- "paste",
- "smol_str 0.3.6",
 ]
 
 [[package]]
@@ -6482,7 +6470,6 @@ name = "rig_python_companion_functions"
 version = "0.1.0"
 dependencies = [
  "baml_codegen_python",
- "baml_codegen_tests",
  "baml_codegen_types",
 ]
 
@@ -6491,7 +6478,6 @@ name = "rig_python_empty"
 version = "0.1.0"
 dependencies = [
  "baml_codegen_python",
- "baml_codegen_tests",
  "baml_codegen_types",
 ]
 
@@ -6500,7 +6486,6 @@ name = "rig_python_full_type_coverage"
 version = "0.1.0"
 dependencies = [
  "baml_codegen_python",
- "baml_codegen_tests",
  "baml_codegen_types",
 ]
 
@@ -6509,7 +6494,6 @@ name = "rig_python_literal_types"
 version = "0.1.0"
 dependencies = [
  "baml_codegen_python",
- "baml_codegen_tests",
  "baml_codegen_types",
 ]
 
@@ -6518,7 +6502,6 @@ name = "rig_python_map_types"
 version = "0.1.0"
 dependencies = [
  "baml_codegen_python",
- "baml_codegen_tests",
  "baml_codegen_types",
 ]
 
@@ -6527,7 +6510,6 @@ name = "rig_python_mixed_complex_types"
 version = "0.1.0"
 dependencies = [
  "baml_codegen_python",
- "baml_codegen_tests",
  "baml_codegen_types",
 ]
 
@@ -6536,7 +6518,6 @@ name = "rig_python_packages_and_namespaces"
 version = "0.1.0"
 dependencies = [
  "baml_codegen_python",
- "baml_codegen_tests",
  "baml_codegen_types",
 ]
 
@@ -6545,7 +6526,6 @@ name = "rig_python_semantic_streaming"
 version = "0.1.0"
 dependencies = [
  "baml_codegen_python",
- "baml_codegen_tests",
  "baml_codegen_types",
 ]
 
@@ -6554,7 +6534,6 @@ name = "rig_python_union_types_extended"
 version = "0.1.0"
 dependencies = [
  "baml_codegen_python",
- "baml_codegen_tests",
  "baml_codegen_types",
 ]
 
@@ -7893,9 +7872,6 @@ dependencies = [
 [[package]]
 name = "tools_rig"
 version = "0.0.0-beta"
-dependencies = [
- "baml_codegen_tests",
-]
 
 [[package]]
 name = "tools_sap_visualizer"

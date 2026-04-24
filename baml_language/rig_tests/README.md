@@ -212,8 +212,8 @@ For Python (`test_main.py.template`):
 
 
 def test_imports():
-    """Test that baml_client can be imported."""
-    import baml_client  # noqa: F401
+    """Test that baml_sdk can be imported."""
+    import baml_sdk  # noqa: F401
 
 
 def test_fixture_specific():

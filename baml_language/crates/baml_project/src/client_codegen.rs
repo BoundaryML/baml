@@ -1,12 +1,12 @@
-//! Conversion from the compiler2 HIR/TIR to `ObjectPool`.
+//! Conversion from the compiler2 HIR/TIR to `SymbolPool`.
 //!
 //! Walks the HIR item trees for user-defined files, resolves types via TIR,
-//! and populates a codegen-ready `ObjectPool` suitable for language-specific
+//! and populates a codegen-ready `SymbolPool` suitable for language-specific
 //! code generators (e.g. `baml_codegen_python`).
 
 use std::collections::HashMap;
 
-use baml_codegen_types::{self as cg, ObjectPool};
+use baml_codegen_types::{self as cg, Origin, SymbolPool};
 use baml_compiler2_ast::DeclarativeMeta;
 use baml_compiler2_hir::{file_package, package::PackageId};
 use baml_compiler2_tir::{
@@ -41,15 +41,15 @@ fn split_companion(name: &str) -> Option<(&str, &str)> {
 }
 
 // ---------------------------------------------------------------------------
-// Build ObjectPool
+// Build SymbolPool
 // ---------------------------------------------------------------------------
 
-/// Build a codegen `ObjectPool` from the compiler database.
+/// Build a codegen `SymbolPool` from the compiler database.
 ///
 /// Walks all user-package source files, extracts classes/enums/type aliases/
 /// declarative functions, resolves their types, and converts to codegen types.
-pub fn build_object_pool(db: &ProjectDatabase) -> ObjectPool {
-    let mut pool = ObjectPool::new();
+pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
+    let mut pool = SymbolPool::new();
 
     let user_pkg_id = PackageId::new(db, Name::new("user"));
     let user_pkg_items = baml_compiler2_ppir::package_items(db, user_pkg_id);
@@ -85,6 +85,7 @@ pub fn build_object_pool(db: &ProjectDatabase) -> ObjectPool {
         let item_tree = baml_compiler2_ppir::file_item_tree(db, source_file);
         let pkg: Name = pkg_info.package.clone();
         let ns_path: Vec<Name> = pkg_info.namespace_path.clone();
+        let source_file_path: String = source_file.path(db).to_string_lossy().into_owned();
 
         // Classes
         for class in item_tree.classes.values() {
@@ -118,10 +119,14 @@ pub fn build_object_pool(db: &ProjectDatabase) -> ObjectPool {
                 .collect();
             pool.insert(
                 cg_name.clone(),
-                cg::Object::Class(cg::Class {
+                cg::Symbol::Class(cg::Class {
                     name: cg_name,
                     docstring: None,
                     properties,
+                    origin: Origin {
+                        source_file_path: source_file_path.clone(),
+                        span_start: u32::from(class.span.start()),
+                    },
                 }),
             );
         }
@@ -144,10 +149,14 @@ pub fn build_object_pool(db: &ProjectDatabase) -> ObjectPool {
                 .collect();
             pool.insert(
                 cg_name.clone(),
-                cg::Object::Enum(cg::Enum {
+                cg::Symbol::Enum(cg::Enum {
                     name: cg_name,
                     docstring: None,
                     variants,
+                    origin: Origin {
+                        source_file_path: source_file_path.clone(),
+                        span_start: u32::from(enum_def.span.start()),
+                    },
                 }),
             );
         }
@@ -178,10 +187,14 @@ pub fn build_object_pool(db: &ProjectDatabase) -> ObjectPool {
 
                 pool.insert(
                     cg_name.clone(),
-                    cg::Object::TypeAlias(cg::TypeAlias {
+                    cg::Symbol::TypeAlias(cg::TypeAlias {
                         name: cg_name,
                         resolves_to: resolved,
                         recursive: is_recursive,
+                        origin: Origin {
+                            source_file_path: source_file_path.clone(),
+                            span_start: u32::from(alias.span.start()),
+                        },
                     }),
                 );
             }
@@ -249,6 +262,10 @@ pub fn build_object_pool(db: &ProjectDatabase) -> ObjectPool {
                 stream_return_type: None, // TODO: streaming support
                 watchers: Vec::new(),
                 companions: Vec::new(),
+                origin: Origin {
+                    source_file_path: source_file_path.clone(),
+                    span_start: u32::from(func.span.start()),
+                },
             };
 
             pending_functions.push(PendingFunction {
@@ -308,7 +325,7 @@ pub fn build_object_pool(db: &ProjectDatabase) -> ObjectPool {
             namespace_path: parent.ns_path,
             name: parent.bare_name,
         };
-        pool.insert(cg_name, cg::Object::Function(parent.func));
+        pool.insert(cg_name, cg::Symbol::Function(parent.func));
     }
 
     pool
@@ -589,11 +606,7 @@ mod tests {
 
     #[test]
     fn test_name_from_qtn_stream_suffix() {
-        let qtn = QualifiedTypeName::new(
-            Name::new("user"),
-            vec![],
-            Name::new("Resume$stream"),
-        );
+        let qtn = QualifiedTypeName::new(Name::new("user"), vec![], Name::new("Resume$stream"));
         let cg_name = name_from_qtn(&qtn);
         assert!(cg_name.is_stream());
         assert_eq!(cg_name.bare_name(), "Resume");
@@ -604,7 +617,7 @@ mod tests {
     /// Verifies that companions are attached to their parent function.
     /// A BAML declarative function causes `$build_request`, `$render_prompt`, and `$parse`
     /// companion functions to be synthesized by the companion expander.
-    /// `build_object_pool` should collect them as `companions` on the parent function.
+    /// `build_symbol_pool` should collect them as `companions` on the parent function.
     #[test]
     fn test_companions_attached_to_parent() {
         let root = Path::new("/tmp/bep030_companions");
@@ -615,14 +628,14 @@ mod tests {
             "class Resume { name string }\nfunction ExtractResume(resume: string) -> Resume {\n    client \"openai/gpt-4o\"\n    prompt #\"Extract resume from {{resume}}\"#\n}\n",
         );
 
-        let pool = build_object_pool(&db);
+        let pool = build_symbol_pool(&db);
 
         // Find ExtractResume in the pool.
         let extract_key = pool.keys().find(|k| k.name.as_str() == "ExtractResume");
         assert!(extract_key.is_some(), "ExtractResume must be in the pool");
 
         let maybe_func = extract_key.and_then(|k| pool.get(k)).and_then(|obj| {
-            if let cg::Object::Function(f) = obj {
+            if let cg::Symbol::Function(f) = obj {
                 Some(f)
             } else {
                 None
@@ -667,7 +680,7 @@ mod tests {
             "class Sentiment { label string }\n",
         );
 
-        let pool = build_object_pool(&db);
+        let pool = build_symbol_pool(&db);
 
         let sentiment_key = pool.keys().find(|k| k.name.as_str() == "Sentiment");
         assert!(sentiment_key.is_some(), "Sentiment must be in the pool");

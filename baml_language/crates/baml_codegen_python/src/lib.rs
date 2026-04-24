@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use crate::objects::{Function, Object};
 
 pub fn to_source_code(
-    generators: &baml_codegen_types::ObjectPool,
+    generators: &baml_codegen_types::SymbolPool,
     _baml_client_path: &std::path::Path,
 ) -> std::collections::HashMap<PathBuf, String> {
     let mut out = std::collections::HashMap::new();

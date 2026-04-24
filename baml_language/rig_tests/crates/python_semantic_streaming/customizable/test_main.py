@@ -3,16 +3,16 @@
 
 
 def test_imports():
-    """Test that baml_client can be imported."""
+    """Test that baml_sdk can be imported."""
     # This will fail if generated code has issues
-    import baml_client  # noqa: F401
+    import baml_sdk  # noqa: F401
 
 
 def test_fixture_specific():
     """Fixture-specific tests for semantic_streaming."""
     # TODO: Add fixture-specific tests here
     # For example:
-    # from baml_client import types
+    # from baml_sdk import types
     # result = types.SomeClass(...)
     # assert result.field == expected_value
     pass

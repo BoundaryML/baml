@@ -82,8 +82,8 @@ impl GenerateArgs {
             return Ok(crate::ExitCode::Other);
         }
 
-        // Build the codegen ObjectPool from the compiler database.
-        let pool = baml_project::build_object_pool(&db);
+        // Build the codegen SymbolPool from the compiler database.
+        let pool = baml_project::build_symbol_pool(&db);
 
         let mut total_files = 0;
 
