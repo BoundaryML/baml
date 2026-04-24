@@ -1,14 +1,21 @@
-//! `PyEnum` — stub for a Python enum.
+//! `PyEnum` — Python enum definition.
 
 use baml_codegen_types::Name;
 
-/// Stub for a Python enum. Renders as `class Foo(str, enum.Enum): pass`.
-/// The `str` mixin stays even in G2 because it's cheap and getting the
-/// base-class tuple wrong here would mask bugs later.
+/// Python enum definition. Renders as `class Foo(str, enum.Enum): …`
+/// with `<VARIANT> = "<value>"` lines in IR order.
 pub(crate) struct PyEnum {
     pub(crate) py_name: String,
     #[allow(dead_code)]
     pub(crate) source: Name,
-    // deferred to G4: variants: Vec<PyEnumVariant>,
-    // deferred to G4: docstring: Option<String>,
+    /// Enum variants in IR declaration order.
+    pub(crate) variants: Vec<PyEnumVariant>,
+    // deferred to G4+: docstring: Option<String>,
+}
+
+pub(crate) struct PyEnumVariant {
+    /// LHS identifier.
+    pub(crate) ident: String,
+    /// RHS string literal (IR's `EnumVariant.value`, verbatim).
+    pub(crate) value: String,
 }

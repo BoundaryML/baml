@@ -11,7 +11,6 @@
 mod emit;
 mod leaf;
 mod routing;
-#[allow(dead_code)]
 mod translate_ty;
 
 use std::{
@@ -90,16 +89,16 @@ pub fn to_source_code(
     let triples = build_emitted(pool);
     let bodies: BTreeMap<LeafPath, LeafBody> = group_and_sort(triples);
 
-    let empty_body = LeafBody {
-        symbols: Vec::new(),
-    };
-
     // Emit every directory's `__init__.py`.
     for dir in &all_dirs {
         let kids = children.get(dir).cloned().unwrap_or_default();
         let path = init_py_path(dir);
         let leaf_path = LeafPath {
             segments: dir.clone(),
+        };
+        let empty_body = LeafBody {
+            leaf: leaf_path.clone(),
+            symbols: Vec::new(),
         };
         let body = bodies.get(&leaf_path).unwrap_or(&empty_body);
 
@@ -250,7 +249,7 @@ mod tests {
 
     fn class_at(name: Name, file: &str, span: u32) -> Symbol {
         Symbol::Class(Class {
-            name: name.clone(),
+            name,
             docstring: None,
             properties: vec![ClassProperty {
                 name: BaseName::new("a"),
@@ -334,7 +333,7 @@ mod tests {
     }
 
     #[test]
-    fn class_placeholder_renders() {
+    fn class_body_renders() {
         let mut pool: SymbolPool = HashMap::new();
         let n = cg_name("user", &["lorem"], "Resume");
         pool.insert(n.clone(), class(n));
@@ -343,34 +342,38 @@ mod tests {
 
         let leaf = &out[&PathBuf::from("lorem/__init__.py")];
         assert!(leaf.starts_with(HEADER));
-        assert!(leaf.contains("class Resume: pass\n"));
+        assert!(leaf.contains("import typing\n"));
+        assert!(leaf.contains("import pydantic\n"));
+        assert!(leaf.contains("class Resume(pydantic.BaseModel):\n"));
+        assert!(
+            leaf.contains("    model_config = pydantic.ConfigDict(extra=\"forbid\")\n    a: int\n")
+        );
         assert!(leaf.contains("__all__ = [\n    \"Resume\",\n]\n"));
         assert!(!leaf.contains("import enum"));
-        assert!(!leaf.contains("import typing"));
     }
 
     #[test]
-    fn enum_placeholder_adds_enum_import() {
+    fn enum_body_renders() {
         let mut pool: SymbolPool = HashMap::new();
         let n = cg_name("user", &["lorem"], "Sentiment");
         pool.insert(n.clone(), enum_(n, "x.baml", 0));
 
         let out = to_source_code(&pool, &[]);
         let leaf = &out[&PathBuf::from("lorem/__init__.py")];
-        assert!(leaf.contains("import enum"));
-        assert!(leaf.contains("class Sentiment(str, enum.Enum): pass"));
+        assert!(leaf.contains("import enum\n"));
+        assert!(leaf.contains("class Sentiment(str, enum.Enum):\n    A = \"A\"\n"));
     }
 
     #[test]
-    fn type_alias_placeholder_adds_typing_import() {
+    fn type_alias_body_renders() {
         let mut pool: SymbolPool = HashMap::new();
         let n = cg_name("user", &["lorem"], "Foo");
         pool.insert(n.clone(), alias(n, "x.baml", 0));
 
         let out = to_source_code(&pool, &[]);
         let leaf = &out[&PathBuf::from("lorem/__init__.py")];
-        assert!(leaf.contains("import typing"));
-        assert!(leaf.contains("Foo: typing.TypeAlias = typing.Any"));
+        assert!(leaf.contains("import typing\n"));
+        assert!(leaf.contains("Foo: typing.TypeAlias = int\n"));
     }
 
     #[test]
@@ -437,7 +440,7 @@ mod tests {
 
         let out = to_source_code(&pool, &[]);
         let leaf = &out[&PathBuf::from("stream_types/lorem/__init__.py")];
-        assert!(leaf.contains("class Resume: pass\n"));
+        assert!(leaf.contains("class Resume(pydantic.BaseModel):\n"));
         assert!(!leaf.contains("Resume$stream"));
 
         // The non-stream `lorem/` dir isn't emitted — no non-stream
@@ -457,8 +460,8 @@ mod tests {
 
         let out = to_source_code(&pool, &[]);
         let leaf = &out[&PathBuf::from("lorem/__init__.py")];
-        let idx_foo = leaf.find("class Foo: pass").unwrap();
-        let idx_bar = leaf.find("class Bar: pass").unwrap();
+        let idx_foo = leaf.find("class Foo(pydantic.BaseModel):").unwrap();
+        let idx_bar = leaf.find("class Bar(pydantic.BaseModel):").unwrap();
         assert!(idx_foo < idx_bar);
     }
 
@@ -475,8 +478,8 @@ mod tests {
         let out = to_source_code(&pool, &[]);
         let leaf = &out[&PathBuf::from("lorem/__init__.py")];
         // B (a.baml) sorts before A (b.baml).
-        let idx_a = leaf.find("class A: pass").unwrap();
-        let idx_b = leaf.find("class B: pass").unwrap();
+        let idx_a = leaf.find("class A(pydantic.BaseModel):").unwrap();
+        let idx_b = leaf.find("class B(pydantic.BaseModel):").unwrap();
         assert!(idx_b < idx_a);
     }
 
@@ -514,7 +517,7 @@ mod tests {
 
         // Leaf carries the symbol.
         let s3_leaf = &out[&PathBuf::from("vendor/aws/s3/__init__.py")];
-        assert!(s3_leaf.contains("class Bucket: pass"));
+        assert!(s3_leaf.contains("class Bucket(pydantic.BaseModel):"));
     }
 
     #[test]
@@ -526,13 +529,16 @@ mod tests {
         let out = to_source_code(&pool, &[]);
         let root = &out[&PathBuf::from("__init__.py")];
         assert!(root.contains("BamlRuntime.initialize_runtime("));
-        // Stub appended after the runtime init + re-exports.
-        assert!(root.contains("class Foo: pass\n"));
+        // Body appended after the runtime init + re-exports.
+        assert!(root.contains("class Foo(pydantic.BaseModel):\n"));
         assert!(root.contains("__all__ = [\n    \"Foo\",\n]"));
     }
 
     #[test]
-    fn no_pydantic_or_factory_imports_in_leaves() {
+    fn no_factory_imports_in_leaves() {
+        // G4 introduces `import pydantic` in leaves that carry class
+        // bodies; G5's `from baml.baml_core import define_function …`
+        // is still absent. This test guards that deferred boundary.
         let mut pool: SymbolPool = HashMap::new();
         let c = cg_name("user", &["lorem"], "Resume");
         pool.insert(c.clone(), class(c));
@@ -549,12 +555,6 @@ mod tests {
             // is G1 scaffolding, not a G5 factory import — skip root +
             // inlinedbaml file when checking for G5-era leakage.
             let is_scaffold = s == "__init__.py" || s.ends_with("_inlinedbaml.py");
-            assert!(
-                !content.contains("pydantic"),
-                "leaf {} contains pydantic: {}",
-                path.display(),
-                content
-            );
             if !is_scaffold {
                 assert!(
                     !content.contains("baml_core"),
@@ -599,8 +599,8 @@ mod tests {
         let stream_root = &out[&PathBuf::from("stream_types/__init__.py")];
         assert!(stream_root.starts_with(HEADER));
         assert!(stream_root.contains("from . import lorem"));
-        // And the Foo$stream stub at the top-level stream leaf.
-        assert!(stream_root.contains("class Foo: pass\n"));
+        // And the Foo$stream body at the top-level stream leaf.
+        assert!(stream_root.contains("class Foo(pydantic.BaseModel):\n"));
         assert!(stream_root.contains("__all__ = [\n    \"Foo\",\n]"));
     }
 
@@ -631,6 +631,277 @@ mod tests {
         assert_eq!(py_string("a\\b"), "\"a\\\\b\"");
         assert_eq!(py_string("a\"b"), "\"a\\\"b\"");
         assert_eq!(py_string("a\nb"), "\"a\\nb\"");
+    }
+
+    fn class_with_props(name: Name, props: Vec<(&str, Ty)>, file: &str, span: u32) -> Symbol {
+        Symbol::Class(Class {
+            name,
+            docstring: None,
+            properties: props
+                .into_iter()
+                .map(|(n, ty)| ClassProperty {
+                    name: BaseName::new(n),
+                    docstring: None,
+                    ty,
+                })
+                .collect(),
+            origin: origin(file, span),
+        })
+    }
+
+    fn alias_full(name: Name, resolves_to: Ty, recursive: bool, file: &str, span: u32) -> Symbol {
+        Symbol::TypeAlias(TypeAlias {
+            name,
+            resolves_to,
+            recursive,
+            origin: origin(file, span),
+        })
+    }
+
+    #[test]
+    fn class_renders_mixed_property_types() {
+        let mut pool: SymbolPool = HashMap::new();
+        let n = cg_name("user", &["lorem"], "Resume");
+        pool.insert(
+            n.clone(),
+            class_with_props(
+                n,
+                vec![
+                    ("name", Ty::String),
+                    ("email", Ty::Optional(Box::new(Ty::String))),
+                    ("tags", Ty::List(Box::new(Ty::String))),
+                ],
+                "x.baml",
+                0,
+            ),
+        );
+        let out = to_source_code(&pool, &[]);
+        let leaf = &out[&PathBuf::from("lorem/__init__.py")];
+        let expected = "class Resume(pydantic.BaseModel):\n\
+                        \x20   model_config = pydantic.ConfigDict(extra=\"forbid\")\n\
+                        \x20   name: str\n\
+                        \x20   email: typing.Optional[str]\n\
+                        \x20   tags: typing.List[str]\n";
+        assert!(leaf.contains(expected), "leaf missing class body:\n{leaf}");
+    }
+
+    #[test]
+    fn zero_property_class_emits_only_model_config() {
+        let mut pool: SymbolPool = HashMap::new();
+        let n = cg_name("user", &["lorem"], "Empty");
+        pool.insert(n.clone(), class_with_props(n, vec![], "x.baml", 0));
+        let out = to_source_code(&pool, &[]);
+        let leaf = &out[&PathBuf::from("lorem/__init__.py")];
+        let expected = "class Empty(pydantic.BaseModel):\n\
+                        \x20   model_config = pydantic.ConfigDict(extra=\"forbid\")\n";
+        assert!(leaf.contains(expected));
+    }
+
+    #[test]
+    fn multi_variant_enum_renders_each_variant() {
+        let mut pool: SymbolPool = HashMap::new();
+        let n = cg_name("user", &["ipsum"], "Sentiment");
+        pool.insert(
+            n.clone(),
+            Symbol::Enum(Enum {
+                name: n,
+                docstring: None,
+                variants: vec![
+                    EnumVariant {
+                        name: BaseName::new("POSITIVE"),
+                        docstring: None,
+                        value: "POSITIVE".to_string(),
+                    },
+                    EnumVariant {
+                        name: BaseName::new("NEGATIVE"),
+                        docstring: None,
+                        value: "NEGATIVE".to_string(),
+                    },
+                    EnumVariant {
+                        name: BaseName::new("NEUTRAL"),
+                        docstring: None,
+                        value: "NEUTRAL".to_string(),
+                    },
+                ],
+                origin: origin("x.baml", 0),
+            }),
+        );
+        let out = to_source_code(&pool, &[]);
+        let leaf = &out[&PathBuf::from("ipsum/__init__.py")];
+        let expected = "class Sentiment(str, enum.Enum):\n\
+                        \x20   POSITIVE = \"POSITIVE\"\n\
+                        \x20   NEGATIVE = \"NEGATIVE\"\n\
+                        \x20   NEUTRAL = \"NEUTRAL\"\n";
+        assert!(leaf.contains(expected), "leaf missing enum body:\n{leaf}");
+    }
+
+    #[test]
+    fn empty_enum_emits_defensive_pass() {
+        let mut pool: SymbolPool = HashMap::new();
+        let n = cg_name("user", &["lorem"], "Nothing");
+        pool.insert(
+            n.clone(),
+            Symbol::Enum(Enum {
+                name: n,
+                docstring: None,
+                variants: vec![],
+                origin: origin("x.baml", 0),
+            }),
+        );
+        let out = to_source_code(&pool, &[]);
+        let leaf = &out[&PathBuf::from("lorem/__init__.py")];
+        assert!(leaf.contains("class Nothing(str, enum.Enum):\n    pass\n"));
+    }
+
+    #[test]
+    fn recursive_type_alias_single_quotes_rhs() {
+        // type JsonValue = int | str | List<JsonValue>  (recursive)
+        let mut pool: SymbolPool = HashMap::new();
+        let n = cg_name("user", &["tree"], "JsonValue");
+        let rhs = Ty::Union(vec![
+            Ty::Int,
+            Ty::String,
+            Ty::List(Box::new(Ty::TypeAlias(n.clone()))),
+        ]);
+        pool.insert(n.clone(), alias_full(n, rhs, true, "tree.baml", 0));
+        let out = to_source_code(&pool, &[]);
+        let leaf = &out[&PathBuf::from("tree/__init__.py")];
+        assert!(leaf.contains(
+            "JsonValue: typing.TypeAlias = 'typing.Union[int, str, typing.List[JsonValue]]'\n"
+        ));
+    }
+
+    #[test]
+    fn non_recursive_alias_referencing_recursive_one_is_unquoted() {
+        // type Bar = List<JsonValue>  (non-recursive).
+        let mut pool: SymbolPool = HashMap::new();
+        let json = cg_name("user", &["tree"], "JsonValue");
+        let bar = cg_name("user", &["tree"], "Bar");
+        pool.insert(
+            json.clone(),
+            alias_full(
+                json.clone(),
+                Ty::Union(vec![Ty::Int, Ty::TypeAlias(json.clone())]),
+                true,
+                "tree.baml",
+                0,
+            ),
+        );
+        pool.insert(
+            bar.clone(),
+            alias_full(
+                bar,
+                Ty::List(Box::new(Ty::TypeAlias(json))),
+                false,
+                "tree.baml",
+                100,
+            ),
+        );
+        let out = to_source_code(&pool, &[]);
+        let leaf = &out[&PathBuf::from("tree/__init__.py")];
+        assert!(leaf.contains("Bar: typing.TypeAlias = typing.List[JsonValue]\n"));
+    }
+
+    #[test]
+    fn stream_companion_resolves_non_stream_sibling_by_fqn() {
+        // $stream companion with a field typed as the non-stream sibling.
+        let mut pool: SymbolPool = HashMap::new();
+        let non_stream = cg_name("user", &["lorem"], "Resume");
+        let stream = cg_name("user", &["lorem"], "Resume$stream");
+        pool.insert(
+            non_stream.clone(),
+            class_with_props(non_stream.clone(), vec![("name", Ty::String)], "x.baml", 0),
+        );
+        pool.insert(
+            stream.clone(),
+            class_with_props(
+                stream,
+                vec![
+                    ("summary", Ty::Optional(Box::new(Ty::String))),
+                    // Non-stream FQN -> resolves to baml_sdk.lorem.Resume
+                    ("origin", Ty::Class(non_stream)),
+                ],
+                "x.baml",
+                0,
+            ),
+        );
+        let out = to_source_code(&pool, &[]);
+
+        // Non-stream leaf has the sibling.
+        let non_stream_leaf = &out[&PathBuf::from("lorem/__init__.py")];
+        assert!(non_stream_leaf.contains("class Resume(pydantic.BaseModel):\n"));
+
+        // Stream leaf has the companion; the cross-stream reference to
+        // the non-stream sibling should render as `lorem.Resume` (G3's
+        // cross-leaf FQN form).
+        let stream_leaf = &out[&PathBuf::from("stream_types/lorem/__init__.py")];
+        let expected = "class Resume(pydantic.BaseModel):\n\
+                        \x20   model_config = pydantic.ConfigDict(extra=\"forbid\")\n\
+                        \x20   summary: typing.Optional[str]\n\
+                        \x20   origin: lorem.Resume\n";
+        assert!(
+            stream_leaf.contains(expected),
+            "stream leaf missing body:\n{stream_leaf}"
+        );
+    }
+
+    #[test]
+    fn cross_leaf_class_reference_uses_routed_fqn() {
+        // class Envelope { sentiment: Sentiment }  across leaves.
+        let mut pool: SymbolPool = HashMap::new();
+        let sentiment = cg_name("user", &["ipsum"], "Sentiment");
+        let envelope = cg_name("user", &["lorem"], "Envelope");
+        pool.insert(
+            sentiment.clone(),
+            Symbol::Enum(Enum {
+                name: sentiment.clone(),
+                docstring: None,
+                variants: vec![EnumVariant {
+                    name: BaseName::new("POSITIVE"),
+                    docstring: None,
+                    value: "POSITIVE".to_string(),
+                }],
+                origin: origin("ipsum.baml", 0),
+            }),
+        );
+        pool.insert(
+            envelope.clone(),
+            class_with_props(
+                envelope,
+                vec![("sentiment", Ty::Enum(sentiment))],
+                "lorem.baml",
+                0,
+            ),
+        );
+        let out = to_source_code(&pool, &[]);
+        let lorem_leaf = &out[&PathBuf::from("lorem/__init__.py")];
+        assert!(lorem_leaf.contains("    sentiment: ipsum.Sentiment\n"));
+    }
+
+    #[test]
+    fn determinism_repeated_runs_produce_identical_output() {
+        let mut pool: SymbolPool = HashMap::new();
+        let a = cg_name("user", &["lorem"], "Alpha");
+        let b = cg_name("user", &["lorem"], "Beta");
+        pool.insert(
+            a.clone(),
+            class_with_props(a, vec![("x", Ty::Int)], "a.baml", 0),
+        );
+        pool.insert(
+            b.clone(),
+            class_with_props(b, vec![("y", Ty::String)], "b.baml", 0),
+        );
+        let out1 = to_source_code(&pool, &[]);
+        let out2 = to_source_code(&pool, &[]);
+        // Same keys + same contents on every path.
+        let mut k1: Vec<_> = out1.keys().collect();
+        let mut k2: Vec<_> = out2.keys().collect();
+        k1.sort();
+        k2.sort();
+        assert_eq!(k1, k2);
+        for (p, c) in &out1 {
+            assert_eq!(&out2[p], c, "mismatch at {}", p.display());
+        }
     }
 
     #[test]

@@ -122,7 +122,7 @@ mod tests {
 
     fn leaf(segments: &[&str]) -> LeafPath {
         LeafPath {
-            segments: segments.iter().map(|segment| segment.to_string()).collect(),
+            segments: segments.iter().map(ToString::to_string).collect(),
         }
     }
 
@@ -158,7 +158,7 @@ mod tests {
         )
     }
 
-    fn assert_ty(case: Case) {
+    fn assert_ty(case: &Case) {
         check_exhaustive(&case.ty);
         assert_eq!(
             translate_ty(&case.ty, &case.ctx),
@@ -602,7 +602,7 @@ mod tests {
             },
         ];
 
-        for case in cases {
+        for case in &cases {
             assert_ty(case);
         }
     }

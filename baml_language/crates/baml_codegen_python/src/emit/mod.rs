@@ -16,8 +16,8 @@ use baml_codegen_types::{Name, Symbol, SymbolPool};
 
 use crate::{
     emit::{
-        class::PyClass,
-        enum_::PyEnum,
+        class::{PyClass, PyClassProperty},
+        enum_::{PyEnum, PyEnumVariant},
         function::{PyFunction, SyncAsync},
         instance_method::PyInstanceMethod,
         static_method::PyStaticMethod,
@@ -79,22 +79,40 @@ pub(crate) fn build_emitted(pool: &SymbolPool) -> Vec<(LeafPath, EmittedSymbol, 
         match symbol {
             Symbol::Class(c) => {
                 let sort_key = origin_key(&c.origin);
+                let properties = c
+                    .properties
+                    .iter()
+                    .map(|p| PyClassProperty {
+                        name: p.name.as_str().to_string(),
+                        ty: p.ty.clone(),
+                    })
+                    .collect();
                 out.push((
                     leaf,
                     EmittedSymbol::Class(PyClass {
                         py_name: bare,
                         source: key.clone(),
+                        properties,
                     }),
                     sort_key,
                 ));
             }
             Symbol::Enum(e) => {
                 let sort_key = origin_key(&e.origin);
+                let variants = e
+                    .variants
+                    .iter()
+                    .map(|v| PyEnumVariant {
+                        ident: v.name.as_str().to_string(),
+                        value: v.value.clone(),
+                    })
+                    .collect();
                 out.push((
                     leaf,
                     EmittedSymbol::Enum(PyEnum {
                         py_name: bare,
                         source: key.clone(),
+                        variants,
                     }),
                     sort_key,
                 ));
@@ -106,6 +124,8 @@ pub(crate) fn build_emitted(pool: &SymbolPool) -> Vec<(LeafPath, EmittedSymbol, 
                     EmittedSymbol::TypeAlias(PyTypeAlias {
                         py_name: bare,
                         source: key.clone(),
+                        resolves_to: t.resolves_to.clone(),
+                        recursive: t.recursive,
                     }),
                     sort_key,
                 ));

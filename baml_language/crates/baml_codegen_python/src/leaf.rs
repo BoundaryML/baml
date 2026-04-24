@@ -7,7 +7,9 @@ use std::{collections::BTreeMap, fmt::Write as _};
 
 use crate::{
     emit::{EmittedSymbol, SortKey},
+    py_string,
     routing::LeafPath,
+    translate_ty::{TranslateCtx, translate_ty},
 };
 
 /// All symbols that land in one leaf's body, in final render order.
@@ -16,6 +18,7 @@ use crate::{
 /// while separating unrelated top-level definitions with the usual
 /// PEP-8 two-blank-line gap.
 pub(crate) struct LeafBody {
+    pub(crate) leaf: LeafPath,
     pub(crate) symbols: Vec<(EmittedSymbol, SortKey)>,
 }
 
@@ -42,14 +45,25 @@ impl LeafBody {
         {
             out.push("enum");
         }
+        // Any class body has `typing.Optional` / `typing.List` / etc.
+        // candidates in its field types, and type aliases always need
+        // `typing.TypeAlias`. Be generous: if any class or alias is
+        // present, import `typing`.
         if self
             .symbols
             .iter()
-            .any(|(s, _)| matches!(s, EmittedSymbol::TypeAlias(_)))
+            .any(|(s, _)| matches!(s, EmittedSymbol::Class(_) | EmittedSymbol::TypeAlias(_)))
         {
             out.push("typing");
         }
         out
+    }
+
+    /// Whether this leaf needs `import pydantic`.
+    pub(crate) fn needs_pydantic(&self) -> bool {
+        self.symbols
+            .iter()
+            .any(|(s, _)| matches!(s, EmittedSymbol::Class(_)))
     }
 
     pub(crate) fn is_empty(&self) -> bool {
@@ -73,41 +87,88 @@ pub(crate) fn group_and_sort(
     let mut out: BTreeMap<LeafPath, LeafBody> = BTreeMap::new();
     for (leaf, mut pairs) in buckets {
         pairs.sort_by(|a, b| a.1.cmp(&b.1));
-        out.insert(leaf, LeafBody { symbols: pairs });
+        out.insert(
+            leaf.clone(),
+            LeafBody {
+                leaf,
+                symbols: pairs,
+            },
+        );
     }
     out
 }
 
-fn render_symbol(s: &EmittedSymbol) -> String {
+/// Render a single symbol into one or more Python source lines.
+/// Empty `Vec` means "nothing to emit" (used for the unreachable
+/// static/instance method variants G2–G4 don't produce).
+fn render_symbol(s: &EmittedSymbol, leaf: &LeafPath) -> Vec<String> {
+    let ctx = TranslateCtx {
+        current_leaf: leaf.clone(),
+        self_ref: None,
+    };
+
     match s {
-        EmittedSymbol::Class(c) => format!("class {}: pass", c.py_name),
-        EmittedSymbol::Enum(e) => format!("class {}(str, enum.Enum): pass", e.py_name),
-        EmittedSymbol::TypeAlias(a) => {
-            format!("{}: typing.TypeAlias = typing.Any", a.py_name)
+        EmittedSymbol::Class(c) => {
+            let mut lines = Vec::with_capacity(2 + c.properties.len());
+            lines.push(format!("class {}(pydantic.BaseModel):", c.py_name));
+            lines.push("    model_config = pydantic.ConfigDict(extra=\"forbid\")".to_string());
+            for prop in &c.properties {
+                lines.push(format!(
+                    "    {}: {}",
+                    prop.name,
+                    translate_ty(&prop.ty, &ctx)
+                ));
+            }
+            lines
         }
-        EmittedSymbol::Function(f) => format!("{} = None", f.py_name),
-        // G2 produces no StaticMethod / InstanceMethod instances;
-        // render blank so the match stays exhaustive without
-        // introducing Python syntax. If one slips through, the empty
-        // line is a visible anomaly.
-        EmittedSymbol::StaticMethod(_) | EmittedSymbol::InstanceMethod(_) => String::new(),
+        EmittedSymbol::Enum(e) => {
+            let mut lines = Vec::with_capacity(1 + e.variants.len().max(1));
+            lines.push(format!("class {}(str, enum.Enum):", e.py_name));
+            if e.variants.is_empty() {
+                // BAML forbids empty enums at parse time; emit a
+                // defensive `pass` if the IR somehow produces one.
+                lines.push("    pass".to_string());
+            } else {
+                for v in &e.variants {
+                    lines.push(format!("    {} = {}", v.ident, py_string(&v.value)));
+                }
+            }
+            lines
+        }
+        EmittedSymbol::TypeAlias(a) => {
+            let rhs = translate_ty(&a.resolves_to, &ctx);
+            let rhs = if a.recursive {
+                // Wrap the entire RHS in single quotes so Pydantic
+                // defers resolution to `model_rebuild` time.
+                format!("'{rhs}'")
+            } else {
+                rhs
+            };
+            vec![format!("{}: typing.TypeAlias = {}", a.py_name, rhs)]
+        }
+        EmittedSymbol::Function(f) => vec![format!("{} = None", f.py_name)],
+        // G4 produces no StaticMethod / InstanceMethod instances; the
+        // unreachable arm returns empty so downstream separator logic
+        // treats them as no-ops.
+        EmittedSymbol::StaticMethod(_) | EmittedSymbol::InstanceMethod(_) => Vec::new(),
     }
 }
 
-/// Render a leaf's body section (stdlib imports + symbol lines +
-/// `__all__`). Returns empty string if the leaf has no symbols.
+/// Render a leaf's body section (imports + symbol bodies + `__all__`).
+/// Returns empty string if the leaf has no symbols.
 ///
 /// Shape (non-empty):
 ///
 /// ```text
 /// [blank]
-/// import enum       (only if the leaf has a PyEnum)
-/// import typing     (only if the leaf has a PyTypeAlias)
+/// import enum          (if the leaf has a PyEnum)
+/// import typing        (if the leaf has a PyClass or PyTypeAlias)
+/// import pydantic      (if the leaf has a PyClass)
 /// [blank]
 /// [blank]
-/// <symbol line>
+/// <symbol body>
 /// [blank × 2 between top-level groups; 0 between function fan-out siblings]
-/// <symbol line>
+/// <symbol body>
 /// [blank]
 /// [blank]
 /// __all__ = [
@@ -127,10 +188,14 @@ pub(crate) fn render_leaf_body(body: &LeafBody) -> String {
     let mut out = String::new();
 
     let stdlibs = body.stdlib_imports();
-    if !stdlibs.is_empty() {
+    let needs_pydantic = body.needs_pydantic();
+    if !stdlibs.is_empty() || needs_pydantic {
         out.push('\n');
         for lib in &stdlibs {
             writeln!(out, "import {lib}").unwrap();
+        }
+        if needs_pydantic {
+            out.push_str("import pydantic\n");
         }
     }
 
@@ -139,8 +204,8 @@ pub(crate) fn render_leaf_body(body: &LeafBody) -> String {
 
     let mut prev: Option<(&SortKey, &EmittedSymbol)> = None;
     for (sym, key) in &body.symbols {
-        let line = render_symbol(sym);
-        if line.is_empty() {
+        let lines = render_symbol(sym, &body.leaf);
+        if lines.is_empty() {
             continue;
         }
         match prev {
@@ -158,8 +223,10 @@ pub(crate) fn render_leaf_body(body: &LeafBody) -> String {
                 out.push_str("\n\n");
             }
         }
-        out.push_str(&line);
-        out.push('\n');
+        for line in &lines {
+            out.push_str(line);
+            out.push('\n');
+        }
         prev = Some((key, sym));
     }
 
