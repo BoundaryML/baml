@@ -6,7 +6,7 @@
 use std::{collections::BTreeMap, fmt::Write as _};
 
 use crate::{
-    emit::{EmittedSymbol, SortKey},
+    emit::{EmittedSymbol, SortKey, function::SyncAsync},
     py_string,
     routing::LeafPath,
     translate_ty::{TranslateCtx, translate_ty},
@@ -64,6 +64,15 @@ impl LeafBody {
         self.symbols
             .iter()
             .any(|(s, _)| matches!(s, EmittedSymbol::Class(_)))
+    }
+
+    /// Whether this leaf needs `from baml.baml_core import
+    /// define_function as __define_function`. True when any factory
+    /// binding (free function or companion) routes here.
+    pub(crate) fn needs_define_function(&self) -> bool {
+        self.symbols
+            .iter()
+            .any(|(s, _)| matches!(s, EmittedSymbol::Function(_)))
     }
 
     pub(crate) fn is_empty(&self) -> bool {
@@ -146,12 +155,60 @@ fn render_symbol(s: &EmittedSymbol, leaf: &LeafPath) -> Vec<String> {
             };
             vec![format!("{}: typing.TypeAlias = {}", a.py_name, rhs)]
         }
-        EmittedSymbol::Function(f) => vec![format!("{} = None", f.py_name)],
-        // G4 produces no StaticMethod / InstanceMethod instances; the
-        // unreachable arm returns empty so downstream separator logic
-        // treats them as no-ops.
+        EmittedSymbol::Function(f) => vec![render_factory_binding(f)],
+        // G5 produces no StaticMethod / InstanceMethod instances —
+        // the IR doesn't carry method-kind metadata yet (see G5 §7);
+        // the unreachable arms return empty so downstream separator
+        // logic treats them as no-ops.
         EmittedSymbol::StaticMethod(_) | EmittedSymbol::InstanceMethod(_) => Vec::new(),
     }
+}
+
+/// Render one factory-binding line per `PyFunction`. Sync and async
+/// stubs share the same FQN and `param_names`; only the LHS name
+/// padding and the mode literal differ.
+///
+/// Layout matches 09b §3 / G5 §5.1:
+///
+/// ```text
+/// foo       = __define_function("<fqn>", "sync",  [<params>])
+/// foo_async = __define_function("<fqn>", "async", [<params>])
+/// ```
+///
+/// The sync LHS is right-padded with `len("_async")` spaces so its
+/// `=` aligns with the async sibling's. The mode literal is right-
+/// padded so the `[<params>]` argument starts at the same column for
+/// both modes.
+fn render_factory_binding(f: &crate::emit::function::PyFunction) -> String {
+    // 6 = len("_async"); makes the sync LHS column-equal to its async
+    // sibling without inspecting the sibling at render time.
+    let (lhs_pad, mode_str) = match f.mode {
+        SyncAsync::Sync => ("      ", "\"sync\", "),
+        SyncAsync::Async => ("", "\"async\","),
+    };
+    let params = render_param_list(&f.param_names);
+    format!(
+        "{name}{lhs_pad} = __define_function({fqn}, {mode_str} {params})",
+        name = f.py_name,
+        fqn = py_string(&f.baml_fqn),
+    )
+}
+
+/// Render a parameter-name list as a Python list literal.
+/// `[]` for empty, `["a", "b", ...]` otherwise.
+fn render_param_list(names: &[String]) -> String {
+    if names.is_empty() {
+        return "[]".to_string();
+    }
+    let mut s = String::from("[");
+    for (i, n) in names.iter().enumerate() {
+        if i > 0 {
+            s.push_str(", ");
+        }
+        s.push_str(&py_string(n));
+    }
+    s.push(']');
+    s
 }
 
 /// Render a leaf's body section (imports + symbol bodies + `__all__`).
@@ -189,7 +246,9 @@ pub(crate) fn render_leaf_body(body: &LeafBody) -> String {
 
     let stdlibs = body.stdlib_imports();
     let needs_pydantic = body.needs_pydantic();
-    if !stdlibs.is_empty() || needs_pydantic {
+    let needs_factory = body.needs_define_function();
+    let has_stdlib_block = !stdlibs.is_empty() || needs_pydantic;
+    if has_stdlib_block {
         out.push('\n');
         for lib in &stdlibs {
             writeln!(out, "import {lib}").unwrap();
@@ -197,6 +256,15 @@ pub(crate) fn render_leaf_body(body: &LeafBody) -> String {
         if needs_pydantic {
             out.push_str("import pydantic\n");
         }
+    }
+    // Factory imports come after stdlib/pydantic, before the body —
+    // per 09b §9 / 09b2 §3 they're absolute (not relative) and aliased
+    // with double underscores so they're private to the module.
+    if needs_factory {
+        // One blank line above (either separating from stdlib block,
+        // or forming the leading blank when there is no stdlib block).
+        out.push('\n');
+        out.push_str("from baml.baml_core import define_function as __define_function\n");
     }
 
     // Two blank lines before the first symbol group.

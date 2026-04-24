@@ -1,31 +1,34 @@
-//! `PyFunction` — stub for a top-level factory binding.
+//! `PyFunction` — top-level factory binding.
 
-/// Async/sync marker carried by factory-binding stubs. Each BAML
+/// Async/sync marker carried by factory bindings. Each BAML
 /// `Function` (and each of its companions) fans out into one sync
-/// and one async stub.
+/// and one async binding.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum SyncAsync {
     Sync,
     Async,
 }
 
-/// Stub for a top-level factory binding. Renders as `foo = None` in
-/// G2 — no factory call yet. G5 swaps the RHS for the
-/// `__define_function(...)` three-arg call.
+/// Top-level factory binding. Renders as a `__define_function(...)`
+/// three-arg call per 09b §3 / 09b2 §2. One `PyFunction` per emitted
+/// line — sync and async are distinct stubs that share their FQN and
+/// `param_names` (the call-time positional parameter names, sourced
+/// from `Function.arguments` for free functions and from each
+/// companion's own `arguments` for companions).
 pub(crate) struct PyFunction {
     /// Python identifier. Sync form = BAML bare name verbatim;
     /// async form = `<bare>_async`. Companion forms (`foo_stream`,
     /// `foo__build_request`, …) are also `PyFunction` stubs.
     pub(crate) py_name: String,
-    /// The FQN string that G5 will pass as the factory's first arg
-    /// (e.g. `"root.lorem.extract_resume$build_request"`). Captured
-    /// now so the mapping from `SymbolPool` key → BAML FQN is a
-    /// build-time concern, not a render-time one.
-    #[allow(dead_code)]
+    /// FQN passed as the first arg to `__define_function`. For free
+    /// functions this is `"<pkg>.<ns>.<bare>"`; for companions it
+    /// carries the `$<suffix>` tail (`"…$stream"`, `"…$build_request"`).
     pub(crate) baml_fqn: String,
-    /// `Sync` or `Async`.
-    #[allow(dead_code)]
+    /// `Sync` or `Async` — selects the mode literal in the call.
     pub(crate) mode: SyncAsync,
-    // deferred to G5: param_names: Vec<String>,
-    // deferred to G5: the __define_function call RHS.
+    /// Inline parameter-name list passed as the third arg. Sourced
+    /// from `Function.arguments[i].name` for free functions and from
+    /// the inner companion's `arguments` for companions; never from
+    /// the parent for companion bindings.
+    pub(crate) param_names: Vec<String>,
 }

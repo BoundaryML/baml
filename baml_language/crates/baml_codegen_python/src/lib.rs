@@ -384,14 +384,18 @@ mod tests {
 
         let out = to_source_code(&pool, &[]);
         let leaf = &out[&PathBuf::from("lorem/__init__.py")];
-        assert!(leaf.contains("extract_resume = None"));
-        assert!(leaf.contains("extract_resume_async = None"));
+        let sync_line =
+            "extract_resume       = __define_function(\"root.lorem.extract_resume\", \"sync\",  [\"x\"])\n";
+        let async_line =
+            "extract_resume_async = __define_function(\"root.lorem.extract_resume\", \"async\", [\"x\"])\n";
+        assert!(leaf.contains(sync_line), "missing sync line in:\n{leaf}");
+        assert!(leaf.contains(async_line), "missing async line in:\n{leaf}");
         assert!(!leaf.contains("extract_resume_stream"));
 
         // Fan-out siblings should be adjacent (no blank between).
-        let idx_sync = leaf.find("extract_resume = None\n").unwrap();
-        let idx_async = leaf.find("extract_resume_async = None\n").unwrap();
-        let between = &leaf[idx_sync + "extract_resume = None\n".len()..idx_async];
+        let idx_sync = leaf.find(sync_line).unwrap();
+        let idx_async = leaf.find(async_line).unwrap();
+        let between = &leaf[idx_sync + sync_line.len()..idx_async];
         assert_eq!(between, "");
     }
 
@@ -407,8 +411,18 @@ mod tests {
 
         let out = to_source_code(&pool, &[]);
         let leaf = &out[&PathBuf::from("lorem/__init__.py")];
-        assert!(leaf.contains("extract_resume_stream = None"));
-        assert!(leaf.contains("extract_resume_stream_async = None"));
+        assert!(
+            leaf.contains(
+                "extract_resume_stream       = __define_function(\"root.lorem.extract_resume$stream\", \"sync\",  [\"x\"])\n",
+            ),
+            "missing stream sync companion in:\n{leaf}"
+        );
+        assert!(
+            leaf.contains(
+                "extract_resume_stream_async = __define_function(\"root.lorem.extract_resume$stream\", \"async\", [\"x\"])\n",
+            ),
+            "missing stream async companion in:\n{leaf}"
+        );
     }
 
     #[test]
@@ -428,8 +442,18 @@ mod tests {
 
         let out = to_source_code(&pool, &[]);
         let leaf = &out[&PathBuf::from("lorem/__init__.py")];
-        assert!(leaf.contains("extract_resume__build_request = None"));
-        assert!(leaf.contains("extract_resume__build_request_async = None"));
+        assert!(
+            leaf.contains(
+                "extract_resume__build_request       = __define_function(\"root.lorem.extract_resume$build_request\", \"sync\",  [\"x\"])\n",
+            ),
+            "missing build_request sync companion in:\n{leaf}"
+        );
+        assert!(
+            leaf.contains(
+                "extract_resume__build_request_async = __define_function(\"root.lorem.extract_resume$build_request\", \"async\", [\"x\"])\n",
+            ),
+            "missing build_request async companion in:\n{leaf}"
+        );
     }
 
     #[test]
@@ -535,39 +559,57 @@ mod tests {
     }
 
     #[test]
-    fn no_factory_imports_in_leaves() {
-        // G4 introduces `import pydantic` in leaves that carry class
-        // bodies; G5's `from baml.baml_core import define_function …`
-        // is still absent. This test guards that deferred boundary.
+    fn factory_import_present_only_in_leaves_with_functions() {
+        // G5 emits `from baml.baml_core import define_function as
+        // __define_function` exactly once per leaf that carries any
+        // function/companion binding, and never in leaves that don't.
         let mut pool: SymbolPool = HashMap::new();
+        // lorem leaf: class + function → factory import expected.
         let c = cg_name("user", &["lorem"], "Resume");
         pool.insert(c.clone(), class(c));
         let f = cg_name("user", &["lorem"], "extract_resume");
         pool.insert(f, func_sym("extract_resume", "x.baml", 100, vec![]));
+        // ipsum leaf: class only → no factory import.
+        let c2 = cg_name("user", &["ipsum"], "Tag");
+        pool.insert(c2.clone(), class(c2));
 
         let out = to_source_code(&pool, &[]);
+
+        let lorem = &out[&PathBuf::from("lorem/__init__.py")];
+        assert!(
+            lorem.contains("from baml.baml_core import define_function as __define_function\n"),
+            "lorem missing factory import:\n{lorem}"
+        );
+        assert_eq!(
+            lorem
+                .matches("from baml.baml_core import define_function as __define_function")
+                .count(),
+            1,
+            "factory import should appear exactly once"
+        );
+
+        let ipsum = &out[&PathBuf::from("ipsum/__init__.py")];
+        assert!(
+            !ipsum.contains("baml.baml_core"),
+            "ipsum leaf has no functions and must not import factories:\n{ipsum}"
+        );
+        assert!(
+            !ipsum.contains("__define_function"),
+            "ipsum leaf must not reference __define_function:\n{ipsum}"
+        );
+
+        // Stream-types leaves carry only stream-companion classes — no
+        // factories — so they must not import baml_core.
         for (path, content) in &out {
             let s = path.to_string_lossy();
-            if !s.ends_with(".py") {
-                continue;
-            }
-            // The root init's `from baml.baml_core import BamlRuntime`
-            // is G1 scaffolding, not a G5 factory import — skip root +
-            // inlinedbaml file when checking for G5-era leakage.
-            let is_scaffold = s == "__init__.py" || s.ends_with("_inlinedbaml.py");
-            if !is_scaffold {
+            if s.starts_with("stream_types/") && s.ends_with("__init__.py") {
                 assert!(
-                    !content.contains("baml_core"),
-                    "leaf {} contains baml_core: {}",
+                    !content.contains("baml.baml_core"),
+                    "stream_types leaf {} must not import baml_core:\n{}",
                     path.display(),
                     content
                 );
             }
-            assert!(
-                !content.contains("__define_function"),
-                "leaf {} contains __define_function",
-                path.display()
-            );
         }
     }
 
@@ -876,6 +918,224 @@ mod tests {
         let out = to_source_code(&pool, &[]);
         let lorem_leaf = &out[&PathBuf::from("lorem/__init__.py")];
         assert!(lorem_leaf.contains("    sentiment: ipsum.Sentiment\n"));
+    }
+
+    fn func_with_args(
+        bare: &str,
+        args: &[&str],
+        file: &str,
+        span: u32,
+        companions: Vec<(&str, Function)>,
+    ) -> Symbol {
+        Symbol::Function(Function {
+            name: BaseName::new(bare),
+            docstring: None,
+            arguments: args
+                .iter()
+                .map(|n| FunctionArgument {
+                    name: BaseName::new(*n),
+                    docstring: None,
+                    ty: Ty::String,
+                })
+                .collect(),
+            return_type: Ty::Int,
+            stream_return_type: None,
+            watchers: vec![],
+            companions: companions
+                .into_iter()
+                .map(|(s, f)| (s.to_string(), f))
+                .collect(),
+            origin: origin(file, span),
+        })
+    }
+
+    fn companion_func(args: &[&str]) -> Function {
+        Function {
+            name: BaseName::new("inner"),
+            docstring: None,
+            arguments: args
+                .iter()
+                .map(|n| FunctionArgument {
+                    name: BaseName::new(*n),
+                    docstring: None,
+                    ty: Ty::String,
+                })
+                .collect(),
+            return_type: Ty::Int,
+            stream_return_type: None,
+            watchers: vec![],
+            companions: vec![],
+            origin: origin("x.baml", 0),
+        }
+    }
+
+    #[test]
+    fn function_zero_args_renders_empty_param_list() {
+        let mut pool: SymbolPool = HashMap::new();
+        let n = cg_name("user", &["lorem"], "ping");
+        pool.insert(n, func_with_args("ping", &[], "x.baml", 0, vec![]));
+        let out = to_source_code(&pool, &[]);
+        let leaf = &out[&PathBuf::from("lorem/__init__.py")];
+        assert!(leaf.contains(
+            "ping       = __define_function(\"root.lorem.ping\", \"sync\",  [])\n"
+        ));
+        assert!(leaf.contains(
+            "ping_async = __define_function(\"root.lorem.ping\", \"async\", [])\n"
+        ));
+    }
+
+    #[test]
+    fn function_multi_arg_param_names_in_order() {
+        let mut pool: SymbolPool = HashMap::new();
+        let n = cg_name("user", &["lorem"], "make");
+        pool.insert(
+            n,
+            func_with_args("make", &["a", "b", "c"], "x.baml", 0, vec![]),
+        );
+        let out = to_source_code(&pool, &[]);
+        let leaf = &out[&PathBuf::from("lorem/__init__.py")];
+        assert!(leaf.contains(
+            "make       = __define_function(\"root.lorem.make\", \"sync\",  [\"a\", \"b\", \"c\"])\n"
+        ));
+        assert!(leaf.contains(
+            "make_async = __define_function(\"root.lorem.make\", \"async\", [\"a\", \"b\", \"c\"])\n"
+        ));
+    }
+
+    #[test]
+    fn companion_param_names_come_from_inner_not_parent() {
+        // Parent has args [a, b]; companion has its own [text].
+        let mut pool: SymbolPool = HashMap::new();
+        let n = cg_name("user", &["lorem"], "extract");
+        pool.insert(
+            n,
+            func_with_args(
+                "extract",
+                &["a", "b"],
+                "x.baml",
+                0,
+                vec![("build_request", companion_func(&["text"]))],
+            ),
+        );
+        let out = to_source_code(&pool, &[]);
+        let leaf = &out[&PathBuf::from("lorem/__init__.py")];
+        // Parent uses parent params.
+        assert!(leaf.contains(
+            "extract       = __define_function(\"root.lorem.extract\", \"sync\",  [\"a\", \"b\"])\n"
+        ));
+        // Companion uses inner params, not parent's.
+        assert!(leaf.contains(
+            "extract__build_request       = __define_function(\"root.lorem.extract$build_request\", \"sync\",  [\"text\"])\n"
+        ));
+        assert!(leaf.contains(
+            "extract__build_request_async = __define_function(\"root.lorem.extract$build_request\", \"async\", [\"text\"])\n"
+        ));
+    }
+
+    #[test]
+    fn multiple_companions_render_in_declaration_order() {
+        let mut pool: SymbolPool = HashMap::new();
+        let n = cg_name("user", &["lorem"], "extract");
+        pool.insert(
+            n,
+            func_with_args(
+                "extract",
+                &["t"],
+                "x.baml",
+                0,
+                vec![
+                    ("stream", companion_func(&["t"])),
+                    ("build_request", companion_func(&["t"])),
+                    ("parse", companion_func(&["raw"])),
+                ],
+            ),
+        );
+        let out = to_source_code(&pool, &[]);
+        let leaf = &out[&PathBuf::from("lorem/__init__.py")];
+        // Each companion pair appears.
+        for needle in [
+            "extract       = ", // parent, sync, padded
+            "extract_async = ",
+            "extract_stream       = ",
+            "extract__build_request       = ",
+            "extract__parse       = ",
+        ] {
+            assert!(leaf.contains(needle), "missing {needle} in:\n{leaf}");
+        }
+        // Declaration order in a single fan-out block: parent → stream
+        // → build_request → parse, with sync before async at each.
+        let order = [
+            "extract       = __define_function",
+            "extract_async = __define_function",
+            "extract_stream       = __define_function",
+            "extract_stream_async = __define_function",
+            "extract__build_request       = __define_function",
+            "extract__build_request_async = __define_function",
+            "extract__parse       = __define_function",
+            "extract__parse_async = __define_function",
+        ];
+        let mut last = 0usize;
+        for needle in order {
+            let i = leaf
+                .find(needle)
+                .unwrap_or_else(|| panic!("missing {needle} in:\n{leaf}"));
+            assert!(
+                i >= last,
+                "out-of-order binding: {needle} appears before previous"
+            );
+            last = i;
+        }
+        // No blank line between fan-out siblings.
+        let s = leaf.find("extract       = __define_function").unwrap();
+        let e = leaf.find("extract__parse_async").unwrap();
+        let block = &leaf[s..e];
+        assert!(
+            !block.contains("\n\n"),
+            "fan-out siblings should be tightly packed:\n{block}"
+        );
+    }
+
+    #[test]
+    fn vendor_function_fqn_uses_vendor_pkg() {
+        let mut pool: SymbolPool = HashMap::new();
+        let n = cg_name("aws", &["s3"], "create_bucket");
+        pool.insert(
+            n,
+            func_with_args("create_bucket", &[], "x.baml", 0, vec![]),
+        );
+        let out = to_source_code(&pool, &[]);
+        let leaf = &out[&PathBuf::from("vendor/aws/s3/__init__.py")];
+        assert!(leaf.contains(
+            "create_bucket       = __define_function(\"aws.s3.create_bucket\", \"sync\",  [])\n"
+        ));
+    }
+
+    #[test]
+    fn baml_pkg_function_fqn_keeps_baml_prefix() {
+        let mut pool: SymbolPool = HashMap::new();
+        let n = cg_name("baml", &["http"], "fetch");
+        pool.insert(
+            n,
+            func_with_args("fetch", &["url"], "x.baml", 0, vec![]),
+        );
+        let out = to_source_code(&pool, &[]);
+        let leaf = &out[&PathBuf::from("baml/http/__init__.py")];
+        assert!(leaf.contains(
+            "fetch       = __define_function(\"baml.http.fetch\", \"sync\",  [\"url\"])\n"
+        ));
+    }
+
+    #[test]
+    fn root_no_namespace_function_fqn_drops_segment() {
+        let mut pool: SymbolPool = HashMap::new();
+        let n = cg_name("user", &[], "ping");
+        pool.insert(n, func_with_args("ping", &[], "x.baml", 0, vec![]));
+        let out = to_source_code(&pool, &[]);
+        let root = &out[&PathBuf::from("__init__.py")];
+        assert!(
+            root.contains("ping       = __define_function(\"root.ping\", \"sync\",  [])\n"),
+            "missing root binding in:\n{root}"
+        );
     }
 
     #[test]

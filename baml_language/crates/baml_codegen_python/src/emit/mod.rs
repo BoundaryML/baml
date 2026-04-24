@@ -141,11 +141,11 @@ pub(crate) fn build_emitted(pool: &SymbolPool) -> Vec<(LeafPath, EmittedSymbol, 
     out
 }
 
-/// Fan out a `Symbol::Function` into its base sync/async stubs plus
-/// two stubs per companion (sync + async). Per §5 the ≤6 emitted
-/// stubs share the parent's sort key and are pushed contiguously in
-/// the fixed intra-parent order: base sync → base async → companions
-/// in declaration order, each sync then async.
+/// Fan out a `Symbol::Function` into its base sync/async bindings
+/// plus two bindings per companion (sync + async). Per §5 the ≤6
+/// emitted bindings share the parent's sort key and are pushed
+/// contiguously in the fixed intra-parent order: base sync → base
+/// async → companions in declaration order, each sync then async.
 fn expand_function(
     leaf: &LeafPath,
     bare: &str,
@@ -156,12 +156,18 @@ fn expand_function(
 ) {
     // Base sync + async.
     let base_fqn = format!("{fqn_prefix}.{bare}");
+    let base_params: Vec<String> = f
+        .arguments
+        .iter()
+        .map(|a| a.name.as_str().to_string())
+        .collect();
     out.push((
         leaf.clone(),
         EmittedSymbol::Function(PyFunction {
             py_name: bare.to_string(),
             baml_fqn: base_fqn.clone(),
             mode: SyncAsync::Sync,
+            param_names: base_params.clone(),
         }),
         sort_key.clone(),
     ));
@@ -171,12 +177,13 @@ fn expand_function(
             py_name: format!("{bare}_async"),
             baml_fqn: base_fqn,
             mode: SyncAsync::Async,
+            param_names: base_params,
         }),
         sort_key.clone(),
     ));
 
     // Companions, in declaration order.
-    for (suffix, _inner) in &f.companions {
+    for (suffix, inner) in &f.companions {
         let (py_sync, py_async) = if suffix == "stream" {
             (format!("{bare}_stream"), format!("{bare}_stream_async"))
         } else {
@@ -186,6 +193,13 @@ fn expand_function(
             )
         };
         let companion_fqn = format!("{fqn_prefix}.{bare}${suffix}");
+        // §6: companion `param_names` come from the companion's own
+        // arguments, not the parent's.
+        let companion_params: Vec<String> = inner
+            .arguments
+            .iter()
+            .map(|a| a.name.as_str().to_string())
+            .collect();
 
         out.push((
             leaf.clone(),
@@ -193,6 +207,7 @@ fn expand_function(
                 py_name: py_sync,
                 baml_fqn: companion_fqn.clone(),
                 mode: SyncAsync::Sync,
+                param_names: companion_params.clone(),
             }),
             sort_key.clone(),
         ));
@@ -202,6 +217,7 @@ fn expand_function(
                 py_name: py_async,
                 baml_fqn: companion_fqn,
                 mode: SyncAsync::Async,
+                param_names: companion_params,
             }),
             sort_key.clone(),
         ));
