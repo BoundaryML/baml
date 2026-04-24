@@ -29,8 +29,6 @@ bex_resource_types = { workspace = true }
 indexmap = { workspace = true }
 
 [dev-dependencies]
-baml_compiler2_emit = { workspace = true }
-baml_tests = { workspace = true }
 anyhow = { workspace = true }
 divan = { workspace = true }
 indexmap = { workspace = true }

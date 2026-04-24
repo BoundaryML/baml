@@ -20,59 +20,14 @@
 //! }
 //! ```
 
-use std::{path::Path, sync::Arc};
+use std::sync::Arc;
 
-pub use baml_compiler2_emit::OptLevel;
-use baml_project::ProjectDatabase;
+pub use baml_project::testing::{OptLevel, compile_source, compile_source_with_opt};
 use bex_engine::{BexEngine, BexExternalValue, FunctionCallContextBuilder};
 use bex_vm::debug::{BytecodeFormat, display_program};
 use bex_vm_types::{Function, Object, Program};
 pub use indexmap::IndexMap;
 use sys_native::SysOpsExt;
-
-/// Set up a test database from BAML source code.
-fn setup_test_db(source: &str) -> ProjectDatabase {
-    let mut db = ProjectDatabase::new();
-    db.set_project_root(Path::new("."));
-    db.add_file("test.baml", source);
-    db
-}
-
-/// Assert that a `ProjectDatabase` has no diagnostic errors in user files.
-///
-/// Builtin stdlib files (paths starting with `<builtin>/`) may have known
-/// pre-existing errors that don't affect user code correctness. Only errors
-/// in user-provided source files are checked here.
-#[track_caller]
-fn assert_no_diagnostic_errors(db: &ProjectDatabase) {
-    use baml_compiler_diagnostics::Severity;
-
-    let project = db.get_project().expect("project must be set");
-    let all_files = db.get_source_files();
-    let diagnostics = baml_project::collect_diagnostics(db, project, &all_files);
-
-    // Build a set of file IDs that belong to user files (not builtins).
-    let user_file_ids: std::collections::HashSet<_> =
-        all_files.iter().map(|f| f.file_id(db)).collect();
-
-    let errors: Vec<_> = diagnostics
-        .iter()
-        .filter(|d| matches!(d.severity, Severity::Error))
-        .filter(|d| {
-            // Only include errors from user files; skip builtin stdlib errors.
-            d.primary_span()
-                .map(|span| user_file_ids.contains(&span.file_id))
-                .unwrap_or(false)
-        })
-        .collect();
-    if !errors.is_empty() {
-        let mut msg = String::from("Compilation produced diagnostic errors:\n");
-        for (i, err) in errors.iter().enumerate() {
-            msg.push_str(&format!("  {}. [{}] {}\n", i + 1, err.code(), err.message));
-        }
-        panic!("{msg}");
-    }
-}
 
 /// Output of a unified test: bytecode display + execution result.
 pub struct TestOutput {
@@ -80,23 +35,6 @@ pub struct TestOutput {
     pub bytecode: String,
     /// VM execution result (may be an error for error-testing scenarios).
     pub result: Result<BexExternalValue, bex_engine::EngineError>,
-}
-
-/// Compile BAML source with default optimization (OptLevel::One).
-pub fn compile_source(source: &str) -> Program {
-    compile_source_with_opt(source, OptLevel::One)
-}
-
-/// Compile BAML source with a specific optimization level.
-pub fn compile_source_with_opt(source: &str, opt: OptLevel) -> Program {
-    let db = setup_test_db(source);
-    assert_no_diagnostic_errors(&db);
-
-    let opts = baml_compiler2_emit::CompileOptions {
-        emit_test_cases: false,
-    };
-    baml_compiler2_emit::generate_project_bytecode_with_opt(&db, &opts, opt)
-        .expect("generate_project_bytecode should succeed for valid test source")
 }
 
 /// Extract user-defined functions from a program and display them in textual format.
