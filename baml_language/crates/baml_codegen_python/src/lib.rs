@@ -384,10 +384,8 @@ mod tests {
 
         let out = to_source_code(&pool, &[]);
         let leaf = &out[&PathBuf::from("lorem/__init__.py")];
-        let sync_line =
-            "extract_resume       = __define_function(\"root.lorem.extract_resume\", \"sync\",  [\"x\"])\n";
-        let async_line =
-            "extract_resume_async = __define_function(\"root.lorem.extract_resume\", \"async\", [\"x\"])\n";
+        let sync_line = "extract_resume       = __define_function(\"root.lorem.extract_resume\", \"sync\",  [\"x\"])\n";
+        let async_line = "extract_resume_async = __define_function(\"root.lorem.extract_resume\", \"async\", [\"x\"])\n";
         assert!(leaf.contains(sync_line), "missing sync line in:\n{leaf}");
         assert!(leaf.contains(async_line), "missing async line in:\n{leaf}");
         assert!(!leaf.contains("extract_resume_stream"));
@@ -976,12 +974,12 @@ mod tests {
         pool.insert(n, func_with_args("ping", &[], "x.baml", 0, vec![]));
         let out = to_source_code(&pool, &[]);
         let leaf = &out[&PathBuf::from("lorem/__init__.py")];
-        assert!(leaf.contains(
-            "ping       = __define_function(\"root.lorem.ping\", \"sync\",  [])\n"
-        ));
-        assert!(leaf.contains(
-            "ping_async = __define_function(\"root.lorem.ping\", \"async\", [])\n"
-        ));
+        assert!(
+            leaf.contains("ping       = __define_function(\"root.lorem.ping\", \"sync\",  [])\n")
+        );
+        assert!(
+            leaf.contains("ping_async = __define_function(\"root.lorem.ping\", \"async\", [])\n")
+        );
     }
 
     #[test]
@@ -1099,10 +1097,7 @@ mod tests {
     fn vendor_function_fqn_uses_vendor_pkg() {
         let mut pool: SymbolPool = HashMap::new();
         let n = cg_name("aws", &["s3"], "create_bucket");
-        pool.insert(
-            n,
-            func_with_args("create_bucket", &[], "x.baml", 0, vec![]),
-        );
+        pool.insert(n, func_with_args("create_bucket", &[], "x.baml", 0, vec![]));
         let out = to_source_code(&pool, &[]);
         let leaf = &out[&PathBuf::from("vendor/aws/s3/__init__.py")];
         assert!(leaf.contains(
@@ -1114,10 +1109,7 @@ mod tests {
     fn baml_pkg_function_fqn_keeps_baml_prefix() {
         let mut pool: SymbolPool = HashMap::new();
         let n = cg_name("baml", &["http"], "fetch");
-        pool.insert(
-            n,
-            func_with_args("fetch", &["url"], "x.baml", 0, vec![]),
-        );
+        pool.insert(n, func_with_args("fetch", &["url"], "x.baml", 0, vec![]));
         let out = to_source_code(&pool, &[]);
         let leaf = &out[&PathBuf::from("baml/http/__init__.py")];
         assert!(leaf.contains(

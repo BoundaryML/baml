@@ -7,6 +7,7 @@ publish = false
 [build-dependencies]
 baml_codegen_python = { path = "../../../crates/baml_codegen_python" }
 baml_codegen_types = { path = "../../../crates/baml_codegen_types" }
+rig_fixtures = { path = "../../fixtures" }
 
 [package.metadata.ci]
 wasm_support = false

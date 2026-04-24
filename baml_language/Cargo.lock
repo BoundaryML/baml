@@ -6402,11 +6402,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "rig_fixtures"
+version = "0.0.0-beta"
+dependencies = [
+ "baml_base",
+ "baml_codegen_types",
+]
+
+[[package]]
 name = "rig_python_companion_functions"
 version = "0.1.0"
 dependencies = [
  "baml_codegen_python",
  "baml_codegen_types",
+ "rig_fixtures",
 ]
 
 [[package]]
@@ -6415,6 +6424,18 @@ version = "0.1.0"
 dependencies = [
  "baml_codegen_python",
  "baml_codegen_types",
+ "rig_fixtures",
+]
+
+[[package]]
+name = "rig_python_example_09a"
+version = "0.1.0"
+dependencies = [
+ "baml_codegen_python",
+ "baml_codegen_types",
+ "baml_db",
+ "baml_project",
+ "baml_workspace",
 ]
 
 [[package]]
@@ -6423,6 +6444,7 @@ version = "0.1.0"
 dependencies = [
  "baml_codegen_python",
  "baml_codegen_types",
+ "rig_fixtures",
 ]
 
 [[package]]
@@ -6431,6 +6453,7 @@ version = "0.1.0"
 dependencies = [
  "baml_codegen_python",
  "baml_codegen_types",
+ "rig_fixtures",
 ]
 
 [[package]]
@@ -6439,6 +6462,7 @@ version = "0.1.0"
 dependencies = [
  "baml_codegen_python",
  "baml_codegen_types",
+ "rig_fixtures",
 ]
 
 [[package]]
@@ -6447,6 +6471,7 @@ version = "0.1.0"
 dependencies = [
  "baml_codegen_python",
  "baml_codegen_types",
+ "rig_fixtures",
 ]
 
 [[package]]
@@ -6455,6 +6480,7 @@ version = "0.1.0"
 dependencies = [
  "baml_codegen_python",
  "baml_codegen_types",
+ "rig_fixtures",
 ]
 
 [[package]]
@@ -6463,6 +6489,7 @@ version = "0.1.0"
 dependencies = [
  "baml_codegen_python",
  "baml_codegen_types",
+ "rig_fixtures",
 ]
 
 [[package]]
@@ -6471,6 +6498,7 @@ version = "0.1.0"
 dependencies = [
  "baml_codegen_python",
  "baml_codegen_types",
+ "rig_fixtures",
 ]
 
 [[package]]

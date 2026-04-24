@@ -1,0 +1,16 @@
+[package]
+name = "rig_fixtures"
+version = { workspace = true }
+publish = false
+edition = { workspace = true }
+rust-version = { workspace = true }
+
+[dependencies]
+baml_base = { workspace = true }
+baml_codegen_types = { workspace = true }
+
+[lib]
+doctest = false
+
+[lints]
+workspace = true
