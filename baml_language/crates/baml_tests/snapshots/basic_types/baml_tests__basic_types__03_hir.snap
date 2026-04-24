@@ -20,6 +20,9 @@ function user.GetMixedList() -> int | string[]  [llm] {
 function user.GetMixedList$build_request() -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "GetMixedList", map {  })
 }
+function user.GetMixedList$build_request_stream() -> baml.http.Request  [expr] {
+  baml.llm.build_request_stream(GPT4, "GetMixedList", map {  })
+}
 function user.GetMixedList$parse(json: string) -> int | string[]  [expr] {
   baml.llm.parse("GetMixedList", json)
 }
@@ -31,6 +34,9 @@ function user.GetMixedMap() -> map<string, int | string>  [llm] {
 }
 function user.GetMixedMap$build_request() -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "GetMixedMap", map {  })
+}
+function user.GetMixedMap$build_request_stream() -> baml.http.Request  [expr] {
+  baml.llm.build_request_stream(GPT4, "GetMixedMap", map {  })
 }
 function user.GetMixedMap$parse(json: string) -> map<string, int | string>  [expr] {
   baml.llm.parse("GetMixedMap", json)
@@ -44,6 +50,9 @@ function user.GetStatus() -> user.Status  [llm] {
 function user.GetStatus$build_request() -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "GetStatus", map {  })
 }
+function user.GetStatus$build_request_stream() -> baml.http.Request  [expr] {
+  baml.llm.build_request_stream(GPT4, "GetStatus", map {  })
+}
 function user.GetStatus$parse(json: string) -> user.Status  [expr] {
   baml.llm.parse("GetStatus", json)
 }
@@ -55,6 +64,9 @@ function user.GetUser(id: int) -> user.User  [llm] {
 }
 function user.GetUser$build_request(id: int) -> baml.http.Request  [expr] {
   baml.llm.build_request(baml.llm.Client { name: "openai/gpt-4o", client_type: baml.llm.ClientType.Primitive, sub_clients: [], retry: null, counter: 0 }, "GetUser", map { "id": id })
+}
+function user.GetUser$build_request_stream(id: int) -> baml.http.Request  [expr] {
+  baml.llm.build_request_stream(baml.llm.Client { name: "openai/gpt-4o", client_type: baml.llm.ClientType.Primitive, sub_clients: [], retry: null, counter: 0 }, "GetUser", map { "id": id })
 }
 function user.GetUser$parse(json: string) -> user.User  [expr] {
   baml.llm.parse("GetUser", json)

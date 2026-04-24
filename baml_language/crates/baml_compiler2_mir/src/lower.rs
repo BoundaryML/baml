@@ -332,11 +332,11 @@ use baml_compiler2_ast::{
 };
 use baml_compiler2_hir::{
     body::{FunctionBody, LetBody, let_body, let_body_source_map},
-    file_semantic_index,
     loc::{FunctionLoc, LetLoc},
     package::{PackageId, package_dependencies, package_items},
     scope::FileScopeId,
 };
+use baml_compiler2_ppir::file_semantic_index;
 use baml_compiler2_tir::{
     inference::infer_scope_types,
     resolve::{ResolvedName, resolve_name_at_in_scope},

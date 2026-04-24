@@ -24,6 +24,14 @@ function user.CommentAfterArrow$build_request() -> baml.http.Request {
     return
 }
 
+function user.CommentAfterArrow$build_request_stream() -> baml.http.Request {
+    load_global user.TestClient
+    load_const "CommentAfterArrow"
+    alloc_map 0
+    call baml.llm.build_request_stream
+    return
+}
+
 function user.CommentAfterArrow$parse(json: string) -> string {
     load_const "CommentAfterArrow"
     load_var json
@@ -34,8 +42,8 @@ function user.CommentAfterArrow$parse(json: string) -> string {
 function user.CommentAfterArrow$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream {
     load_var sse
     load_const "CommentAfterArrow"
-    load_global user.TestClient
-    call baml.llm.parse
+    load_const null
+    call_indirect
     return
 }
 
@@ -44,6 +52,14 @@ function user.CommentAfterArrow$render_prompt() -> baml.llm.PromptAst {
     load_const "CommentAfterArrow"
     alloc_map 0
     call baml.llm.render_prompt
+    return
+}
+
+function user.CommentAfterArrow$stream() -> baml.llm.Stream {
+    load_global user.TestClient
+    load_const "CommentAfterArrow"
+    alloc_map 0
+    call baml.llm.stream_llm_function
     return
 }
 
@@ -71,6 +87,18 @@ function user.FunctionWithComments$build_request(a: string, b: int) -> baml.http
     return
 }
 
+function user.FunctionWithComments$build_request_stream(a: string, b: int) -> baml.http.Request {
+    load_global user.TestClient
+    load_const "FunctionWithComments"
+    load_var a
+    load_var b
+    load_const "a"
+    load_const "b"
+    alloc_map 2
+    call baml.llm.build_request_stream
+    return
+}
+
 function user.FunctionWithComments$parse(json: string) -> string {
     load_const "FunctionWithComments"
     load_var json
@@ -81,8 +109,8 @@ function user.FunctionWithComments$parse(json: string) -> string {
 function user.FunctionWithComments$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream {
     load_var sse
     load_const "FunctionWithComments"
-    load_global user.TestClient
-    call baml.llm.parse
+    load_const null
+    call_indirect
     return
 }
 
@@ -95,6 +123,18 @@ function user.FunctionWithComments$render_prompt(a: string, b: int) -> baml.llm.
     load_const "b"
     alloc_map 2
     call baml.llm.render_prompt
+    return
+}
+
+function user.FunctionWithComments$stream(a: string, b: int) -> baml.llm.Stream {
+    load_global user.TestClient
+    load_const "FunctionWithComments"
+    load_var a
+    load_var b
+    load_const "a"
+    load_const "b"
+    alloc_map 2
+    call baml.llm.stream_llm_function
     return
 }
 

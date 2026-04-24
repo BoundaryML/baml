@@ -3792,16 +3792,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                         }
                     }
 
-                    // Don't report errors for synthesized PPIR functions like __make_stream.
-                    // These are generated at the PPIR layer for $parse_stream companions.
-                    if unresolved_segment.is_some()
-                        && item_path.len() == 2
-                        && item_path[0].as_str() == "llm"
-                        && item_path[1].as_str() == "__make_stream"
-                    {
-                        unresolved_segment = None;
-                    }
-
                     if let Some(seg) = unresolved_segment {
                         self.context.report_simple(
                             TirTypeError::UnresolvedName { name: seg.clone() },

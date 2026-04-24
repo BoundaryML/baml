@@ -130,9 +130,15 @@ function user.LlmFunction$render_prompt(input: string) -> baml.llm.PromptAst thr
 function user.LlmFunction$build_request(input: string) -> baml.http.Request throws never {
   baml.llm.build_request(TestClient, "LlmFunction", map { "input": input }) : baml.http.Request
 }
+function user.LlmFunction$build_request_stream(input: string) -> baml.http.Request throws never {
+  baml.llm.build_request_stream(TestClient, "LlmFunction", map { "input": input }) : baml.http.Request
+}
 function user.LlmFunction$parse(json: string) -> string throws never {
   baml.llm.parse<T>("LlmFunction", json) : string
 }
+function user.LlmFunction$stream(input: string) -> baml.llm.Stream<string, null | string> throws never {
+  baml.llm.stream_llm_function(TestClient, "LlmFunction", map { "input": input }) : baml.llm.Stream<string, null | string>
+}
 function user.LlmFunction$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<string, null | string> throws never {
-  baml.llm.__make_stream(sse, "LlmFunction", TestClient) : unknown
+  TestClient.__make_stream(sse, "LlmFunction") : unknown
 }

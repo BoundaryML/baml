@@ -17,12 +17,18 @@ function user.FetchDatax$render_prompt(user_id: string) -> baml.llm.PromptAst th
 function user.FetchDatax$build_request(user_id: string) -> baml.http.Request throws never {
   baml.llm.build_request(VertexGCP, "FetchDatax", map { "user_id": user_id }) : baml.http.Request
 }
+function user.FetchDatax$build_request_stream(user_id: string) -> baml.http.Request throws never {
+  baml.llm.build_request_stream(VertexGCP, "FetchDatax", map { "user_id": user_id }) : baml.http.Request
+}
 function user.FetchDatax$parse(json: string) -> user.Hi throws never {
   baml.llm.parse<T>("FetchDatax", json) : user.Hi
 }
 class user.Hi$stream {
   name: null | string
 }
+function user.FetchDatax$stream(user_id: string) -> baml.llm.Stream<user.Hi, null | user.Hi$stream> throws never {
+  baml.llm.stream_llm_function(VertexGCP, "FetchDatax", map { "user_id": user_id }) : baml.llm.Stream<user.Hi, null | user.Hi$stream>
+}
 function user.FetchDatax$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<user.Hi, null | user.Hi$stream> throws never {
-  baml.llm.__make_stream(sse, "FetchDatax", VertexGCP) : unknown
+  VertexGCP.__make_stream(sse, "FetchDatax") : unknown
 }

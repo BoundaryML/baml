@@ -377,31 +377,9 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
                     _ => None,
                 };
 
-                // Build the companion function.
-                let companion_name = SmolStr::new(format!("{}$parse_stream", func.name));
-
                 // Share the parent function's span — same as AST-level companions.
                 let span = func.span;
                 let name_span = func.name_span;
-
-                // Parameter: sse: baml.http.SseStream
-                let sse_param = ast::Param {
-                    name: Name::new("sse"),
-                    type_expr: Some(ast::SpannedTypeExpr {
-                        expr: ast::TypeExpr::Path {
-                            segments: vec![
-                                Name::new("baml"),
-                                Name::new("http"),
-                                Name::new("SseStream"),
-                            ],
-                            generic_args: vec![],
-                            attrs: vec![],
-                        },
-                        span,
-                    }),
-                    span,
-                    name_span,
-                };
 
                 // Return type: baml.llm.Stream<ORIGINAL_RETURN_TYPE, STREAM_EXPANDED_TYPE>
                 let original_return_type_expr = return_type_spanned.expr.clone();
@@ -414,28 +392,73 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
                     span,
                 };
 
-                // Body: baml.llm.__make_stream(sse, "FuncName", CLIENT)
-                let (body, source_map) = ast::synthesize_llm_make_stream_call(
-                    func.name.as_str(),
-                    client_name.as_deref(),
-                    span,
-                );
+                // --- $stream companion ---
+                // Calls baml.llm.stream_llm_function(CLIENT, "FuncName", map { args })
+                {
+                    let param_names: Vec<Name> =
+                        func.params.iter().map(|p| p.name.clone()).collect();
+                    let (body, source_map) = ast::synthesize_llm_builtin_call(
+                        "stream_llm_function",
+                        func.name.as_str(),
+                        &param_names,
+                        client_name.as_deref(),
+                        span,
+                    );
+                    let companion = ast::FunctionDef {
+                        name: SmolStr::new(format!("{}$stream", func.name)),
+                        generic_params: func.generic_params.clone(),
+                        params: func.params.clone(),
+                        return_type: Some(stream_return_type.clone()),
+                        throws: None,
+                        body: Some(ast::FunctionBodyDef::Expr(body, source_map)),
+                        declarative_meta: None,
+                        origin: ast::FunctionOrigin::Companion,
+                        attributes: vec![],
+                        span,
+                        name_span,
+                    };
+                    synthetic_items.push(ast::Item::Function(companion));
+                }
 
-                let companion = ast::FunctionDef {
-                    name: companion_name,
-                    generic_params: func.generic_params.clone(),
-                    params: vec![sse_param],
-                    return_type: Some(stream_return_type),
-                    throws: None,
-                    body: Some(ast::FunctionBodyDef::Expr(body, source_map)),
-                    declarative_meta: None,
-                    origin: ast::FunctionOrigin::Companion,
-                    attributes: vec![],
-                    span,
-                    name_span,
-                };
+                // --- $parse_stream companion ---
+                // Requires a client (calls CLIENT.__make_stream).
+                if let Some(ref client_name) = client_name {
+                    let sse_param = ast::Param {
+                        name: Name::new("sse"),
+                        type_expr: Some(ast::SpannedTypeExpr {
+                            expr: ast::TypeExpr::Path {
+                                segments: vec![
+                                    Name::new("baml"),
+                                    Name::new("http"),
+                                    Name::new("SseStream"),
+                                ],
+                                generic_args: vec![],
+                                attrs: vec![],
+                            },
+                            span,
+                        }),
+                        span,
+                        name_span,
+                    };
 
-                synthetic_items.push(ast::Item::Function(companion));
+                    let (body, source_map) =
+                        ast::synthesize_llm_make_stream_call(func.name.as_str(), client_name, span);
+
+                    let companion = ast::FunctionDef {
+                        name: SmolStr::new(format!("{}$parse_stream", func.name)),
+                        generic_params: func.generic_params.clone(),
+                        params: vec![sse_param],
+                        return_type: Some(stream_return_type),
+                        throws: None,
+                        body: Some(ast::FunctionBodyDef::Expr(body, source_map)),
+                        declarative_meta: None,
+                        origin: ast::FunctionOrigin::Companion,
+                        attributes: vec![],
+                        span,
+                        name_span,
+                    };
+                    synthetic_items.push(ast::Item::Function(companion));
+                }
             }
             _ => {}
         }

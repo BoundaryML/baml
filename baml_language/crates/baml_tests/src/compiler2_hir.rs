@@ -460,9 +460,11 @@ mod tests {
         // First wins
         assert!(ns.values.contains_key(&Name::new("greet")));
 
-        // Four conflicts: greet, greet$render_prompt, greet$build_request, greet$parse
-        // Each LLM function expands to companions, all duplicated across 3 files.
-        assert_eq!(ns.conflicts().len(), 4);
+        // Five conflicts: greet, greet$render_prompt, greet$build_request,
+        // greet$build_request_stream, greet$parse
+        // Each LLM function expands to AST-level companions, all duplicated across 3 files.
+        // ($stream and $parse_stream are PPIR-level and don't appear here.)
+        assert_eq!(ns.conflicts().len(), 5);
         for conflict in ns.conflicts() {
             assert_eq!(conflict.entries.len(), 3);
         }

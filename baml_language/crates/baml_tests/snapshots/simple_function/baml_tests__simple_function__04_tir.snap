@@ -14,6 +14,10 @@ function user.HelloWorld$build_request(name: string) -> baml.http.Request throws
   baml.llm.build_request(GPT4, "HelloWorld", map { "name": name }) : baml.http.Request
   !! 0..104: unresolved name: GPT4
 }
+function user.HelloWorld$build_request_stream(name: string) -> baml.http.Request throws never {
+  baml.llm.build_request_stream(GPT4, "HelloWorld", map { "name": name }) : baml.http.Request
+  !! 0..104: unresolved name: GPT4
+}
 function user.HelloWorld$parse(json: string) -> string throws never {
   baml.llm.parse<T>("HelloWorld", json) : string
 }
@@ -21,8 +25,12 @@ class user.User {
   name: string
   age: int
 }
+function user.HelloWorld$stream(name: string) -> baml.llm.Stream<string, null | string> throws never {
+  baml.llm.stream_llm_function(GPT4, "HelloWorld", map { "name": name }) : baml.llm.Stream<string, null | string>
+  !! 0..104: unresolved name: GPT4
+}
 function user.HelloWorld$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<string, null | string> throws never {
-  baml.llm.__make_stream(sse, "HelloWorld", GPT4) : unknown
+  GPT4.__make_stream(sse, "HelloWorld") : unknown
   !! 0..104: unresolved name: GPT4
 }
 class user.User$stream {

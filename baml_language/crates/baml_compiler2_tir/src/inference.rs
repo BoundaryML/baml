@@ -523,7 +523,20 @@ pub fn infer_scope_types<'db>(
                     break;
                 }
             }
-            let _ = found;
+            if !found {
+                // Template strings create ScopeKind::Function scopes but are
+                // stored in item_tree.template_strings, not item_tree.functions.
+                // They have no expression body to type-check, so skip silently.
+                let is_template_string = item_tree
+                    .template_strings
+                    .values()
+                    .any(|ts| scope.name.as_ref() == Some(&ts.name));
+                debug_assert!(
+                    is_template_string,
+                    "TIR: no item_tree function matched scope (name={:?}, range={:?})",
+                    scope.name, scope.range
+                );
+            }
         }
         ScopeKind::Lambda => {
             // Find the enclosing Function (or Let) scope by walking ancestors.
