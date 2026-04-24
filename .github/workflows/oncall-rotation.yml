@@ -1,0 +1,224 @@
+name: On-Call Rotation Notification
+
+on:
+  schedule:
+    # Runs every Friday at 12:00 AM Pacific Time
+    # During PST (Nov-Mar): UTC-8, so 00:00 PST = 08:00 UTC
+    # During PDT (Mar-Nov): UTC-7, so 00:00 PDT = 07:00 UTC
+    # We use 08:00 UTC to cover PST. For PDT it will be 1:00 AM PDT.
+    - cron: "0 8 * * 5"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run (don't send Slack message)"
+        required: false
+        default: "false"
+        type: boolean
+
+jobs:
+  notify-oncall:
+    name: Notify On-Call Rotation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Determine on-call person
+        id: oncall
+        run: |
+          # Read OWNERS file and extract usernames (skip comments and empty lines)
+          OWNERS_FILE=".github/OWNERS"
+          
+          if [ ! -f "$OWNERS_FILE" ]; then
+            echo "Error: OWNERS file not found at $OWNERS_FILE"
+            exit 1
+          fi
+          
+          # Parse OWNERS file: extract non-comment, non-empty lines
+          # Format can be "username" or "username:slack_id"
+          mapfile -t ENTRIES < <(grep -v '^#' "$OWNERS_FILE" | grep -v '^[[:space:]]*$' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+          
+          if [ ${#ENTRIES[@]} -eq 0 ]; then
+            echo "Error: No team members found in OWNERS file"
+            exit 1
+          fi
+          
+          echo "Found ${#ENTRIES[@]} team members in rotation"
+          
+          # Calculate which person should be on call based on week number
+          # Using ISO week number for consistency
+          WEEK_NUMBER=$(date +%V)
+          YEAR=$(date +%Y)
+          
+          # Create a unique week identifier (handles year boundaries)
+          TOTAL_WEEKS=$((YEAR * 52 + 10#$WEEK_NUMBER))
+          
+          # Calculate index (0-based)
+          INDEX=$((TOTAL_WEEKS % ${#ENTRIES[@]}))
+          
+          CURRENT_ENTRY="${ENTRIES[$INDEX]}"
+          
+          # Parse username and optional slack_id
+          if [[ "$CURRENT_ENTRY" == *":"* ]]; then
+            CURRENT_USER="${CURRENT_ENTRY%%:*}"
+            SLACK_USER_ID="${CURRENT_ENTRY#*:}"
+          else
+            CURRENT_USER="$CURRENT_ENTRY"
+            SLACK_USER_ID=""
+          fi
+          
+          # Calculate next week's on-call
+          NEXT_INDEX=$(((INDEX + 1) % ${#ENTRIES[@]}))
+          NEXT_ENTRY="${ENTRIES[$NEXT_INDEX]}"
+          
+          if [[ "$NEXT_ENTRY" == *":"* ]]; then
+            NEXT_USER="${NEXT_ENTRY%%:*}"
+          else
+            NEXT_USER="$NEXT_ENTRY"
+          fi
+          
+          echo "Week $WEEK_NUMBER of $YEAR"
+          echo "Current on-call: $CURRENT_USER (index: $INDEX)"
+          echo "Next on-call: $NEXT_USER (index: $NEXT_INDEX)"
+          
+          # Set outputs
+          echo "current_user=$CURRENT_USER" >> $GITHUB_OUTPUT
+          echo "slack_user_id=$SLACK_USER_ID" >> $GITHUB_OUTPUT
+          echo "next_user=$NEXT_USER" >> $GITHUB_OUTPUT
+          echo "week_number=$WEEK_NUMBER" >> $GITHUB_OUTPUT
+          echo "year=$YEAR" >> $GITHUB_OUTPUT
+          echo "team_size=${#ENTRIES[@]}" >> $GITHUB_OUTPUT
+
+      - name: Send Slack notification
+        if: ${{ github.event.inputs.dry_run != 'true' }}
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_ONCALL_WEBHOOK_URL }}
+          CURRENT_USER: ${{ steps.oncall.outputs.current_user }}
+          SLACK_USER_ID: ${{ steps.oncall.outputs.slack_user_id }}
+          NEXT_USER: ${{ steps.oncall.outputs.next_user }}
+          WEEK_NUMBER: ${{ steps.oncall.outputs.week_number }}
+          YEAR: ${{ steps.oncall.outputs.year }}
+        run: |
+          if [ -z "$SLACK_WEBHOOK_URL" ]; then
+            echo "Error: SLACK_ONCALL_WEBHOOK_URL secret is not set"
+            exit 1
+          fi
+          
+          # Format the mention - use Slack user ID if available, otherwise GitHub username
+          if [ -n "$SLACK_USER_ID" ]; then
+            MENTION="<@$SLACK_USER_ID>"
+          else
+            MENTION="@$CURRENT_USER"
+          fi
+          
+          # Calculate week end date (next Thursday)
+          WEEK_END=$(date -d "next thursday" +"%B %d, %Y")
+          WEEK_START=$(date +"%B %d, %Y")
+          
+          # Create Slack message payload
+          PAYLOAD=$(cat <<EOF
+          {
+            "blocks": [
+              {
+                "type": "header",
+                "text": {
+                  "type": "plain_text",
+                  "text": ":rotating_light: On-Call Rotation Update",
+                  "emoji": true
+                }
+              },
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": "Hey team! It's time for the weekly on-call rotation update."
+                }
+              },
+              {
+                "type": "divider"
+              },
+              {
+                "type": "section",
+                "fields": [
+                  {
+                    "type": "mrkdwn",
+                    "text": "*:calendar: Week:*\n$WEEK_NUMBER of $YEAR"
+                  },
+                  {
+                    "type": "mrkdwn",
+                    "text": "*:clock1: Period:*\n$WEEK_START - $WEEK_END"
+                  }
+                ]
+              },
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": ":point_right: *This week's on-call:* $MENTION"
+                }
+              },
+              {
+                "type": "context",
+                "elements": [
+                  {
+                    "type": "mrkdwn",
+                    "text": ":crystal_ball: Next week: @$NEXT_USER"
+                  }
+                ]
+              },
+              {
+                "type": "divider"
+              },
+              {
+                "type": "context",
+                "elements": [
+                  {
+                    "type": "mrkdwn",
+                    "text": "Rotation managed via <https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/.github/OWNERS|OWNERS file> | <https://github.com/${{ github.repository }}/actions/workflows/oncall-rotation.yml|View workflow>"
+                  }
+                ]
+              }
+            ]
+          }
+          EOF
+          )
+          
+          # Send to Slack
+          HTTP_STATUS=$(curl -s -o /tmp/slack_response.txt -w "%{http_code}" \
+            -X POST \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD" \
+            "$SLACK_WEBHOOK_URL")
+          
+          if [ "$HTTP_STATUS" -eq 200 ]; then
+            echo "✅ Slack notification sent successfully"
+          else
+            echo "❌ Failed to send Slack notification (HTTP $HTTP_STATUS)"
+            cat /tmp/slack_response.txt
+            exit 1
+          fi
+
+      - name: Dry run summary
+        if: ${{ github.event.inputs.dry_run == 'true' }}
+        run: |
+          echo "## 🧪 Dry Run Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Week | ${{ steps.oncall.outputs.week_number }} of ${{ steps.oncall.outputs.year }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Current On-Call | @${{ steps.oncall.outputs.current_user }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Next On-Call | @${{ steps.oncall.outputs.next_user }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Team Size | ${{ steps.oncall.outputs.team_size }} members |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "No Slack message was sent (dry run mode)" >> $GITHUB_STEP_SUMMARY
+
+      - name: Job summary
+        run: |
+          echo "## 📋 On-Call Rotation Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Week | ${{ steps.oncall.outputs.week_number }} of ${{ steps.oncall.outputs.year }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Current On-Call | @${{ steps.oncall.outputs.current_user }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Next On-Call | @${{ steps.oncall.outputs.next_user }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Team Size | ${{ steps.oncall.outputs.team_size }} members |" >> $GITHUB_STEP_SUMMARY

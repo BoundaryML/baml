@@ -1,0 +1,24 @@
+# On-Call Rotation Owners
+#
+# This file contains the list of team members who participate in the on-call rotation.
+# The rotation occurs every Friday at 12:00 AM PST (08:00 UTC).
+#
+# Format: One GitHub username per line
+# Lines starting with # are comments and are ignored
+# Empty lines are ignored
+#
+# The rotation order is determined by the position in this file.
+# To add a new team member, add their GitHub username on a new line.
+# To remove someone, delete or comment out their line.
+#
+# Optional: Add Slack user ID after the username with a colon separator
+# Example: username:U0123456789
+# This enables direct @mentions in Slack. Find your Slack user ID by
+# clicking your profile > More > Copy member ID
+#
+
+# Add your team members below (one per line):
+# Example entries:
+# alice
+# bob:U0123456789
+# charlie
