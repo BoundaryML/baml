@@ -37,7 +37,7 @@ from typing import Any, Dict, List, Optional
 
 import pytest
 
-from baml import BamlRuntime, BamlCtxManager, FunctionResult, HostSpanManager, call_function, call_function_sync
+from baml.baml_core import BamlRuntime, BamlCtxManager, FunctionResult, HostSpanManager, call_function, call_function_sync
 from conftest import MockLLMHandler
 
 
@@ -354,14 +354,16 @@ class TraceFileReader:
 
 def make_runtime() -> BamlRuntime:
     """Create a BamlRuntime from test BAML source."""
-    return BamlRuntime.from_files(".", {"main.baml": BAML_SOURCE})
+    return BamlRuntime.initialize_runtime(
+        ".", {"main.baml": BAML_SOURCE}, sdk_root="__bridge_python_tests__"
+    )
 
 
 def make_ctx(rt: BamlRuntime) -> BamlCtxManager:
     """Create a BamlCtxManager wrapping a runtime.
 
     This is the same pattern the codegen uses:
-        rt = BamlRuntime.from_files(...)
+        rt = BamlRuntime.initialize_runtime(..., sdk_root=...)
         ctx = BamlCtxManager(rt)
         trace = ctx.trace_fn
         set_tags = ctx.upsert_tags
@@ -395,8 +397,15 @@ def trace_file(tmp_path):
 
 
 @pytest.fixture
-def rt():
-    """Fresh BamlRuntime for each test."""
+def rt(trace_file):
+    """Fresh BamlRuntime for each test.
+
+    Depends on ``trace_file`` so that ``BAML_TRACE_FILE`` is set before
+    ``BamlRuntime.initialize_runtime`` reads it to wire up the event sink.
+    Without this dependency, pytest evaluates ``rt`` before ``trace_file``
+    when both appear in a test signature, and the sink falls back to stderr
+    — so trace-event assertions against the JSONL file find zero events.
+    """
     return make_runtime()
 
 
@@ -407,7 +416,7 @@ def ctx(rt):
     NOTE: BamlCtxManager uses a module-level singleton (prev_ctx_manager).
     We need to reset it between tests to avoid cross-test contamination.
     """
-    import baml.ctx_manager as cm
+    import baml.baml_core.ctx_manager as cm
 
     cm.prev_ctx_manager = None
     return make_ctx(rt)
@@ -1739,17 +1748,25 @@ class TestCrossBoundaryLLMTracing:
         thread.join(timeout=5)
 
     @pytest.fixture
-    def llm_rt(self, mock_server):
-        """BamlRuntime with LLM functions pointing to the mock server."""
+    def llm_rt(self, mock_server, trace_file):
+        """BamlRuntime with LLM functions pointing to the mock server.
+
+        Depends on ``trace_file`` for the same reason as ``rt`` above —
+        ``BAML_TRACE_FILE`` must already point at the per-test JSONL when
+        ``initialize_runtime`` wires up the event sink, otherwise the sink
+        silently falls back to stderr and the trace assertions read nothing.
+        """
         source = LLM_BAML_TEMPLATE.replace(
             "__MOCK_URL__", f"http://127.0.0.1:{mock_server}"
         )
-        return BamlRuntime.from_files(".", {"main.baml": source})
+        return BamlRuntime.initialize_runtime(
+            ".", {"main.baml": source}, sdk_root="__bridge_python_tests__"
+        )
 
     @pytest.fixture
     def llm_ctx(self, llm_rt):
         """BamlCtxManager for the LLM runtime."""
-        import baml.ctx_manager as cm
+        import baml.baml_core.ctx_manager as cm
 
         cm.prev_ctx_manager = None
         return BamlCtxManager(llm_rt)
@@ -1807,12 +1824,12 @@ class TestCrossBoundaryLLMTracing:
         reader.verify_parent_child(child_event, outer_event)
 
         # ExtractInfo and SummarizeInfo are children of OuterPipeline
-        extract_events = reader.find_children(outer_event.call_id, "ExtractInfo")
+        extract_events = reader.find_children(outer_event.call_id, "user.ExtractInfo")
         assert len(extract_events) == 1
         assert extract_events[0].depth == 4
         reader.verify_parent_child(outer_event, extract_events[0])
 
-        summarize_events = reader.find_children(outer_event.call_id, "SummarizeInfo")
+        summarize_events = reader.find_children(outer_event.call_id, "user.SummarizeInfo")
         assert len(summarize_events) == 1
         assert summarize_events[0].depth == 4
         reader.verify_parent_child(outer_event, summarize_events[0])
@@ -1873,11 +1890,11 @@ class TestCrossBoundaryLLMTracing:
         reader.verify_parent_child(child_event, outer_event)
 
         # LLM functions as children of OuterPipeline
-        extract_events = reader.find_children(outer_event.call_id, "ExtractInfo")
+        extract_events = reader.find_children(outer_event.call_id, "user.ExtractInfo")
         assert len(extract_events) == 1
         reader.verify_parent_child(outer_event, extract_events[0])
 
-        summarize_events = reader.find_children(outer_event.call_id, "SummarizeInfo")
+        summarize_events = reader.find_children(outer_event.call_id, "user.SummarizeInfo")
         assert len(summarize_events) == 1
         reader.verify_parent_child(outer_event, summarize_events[0])
 

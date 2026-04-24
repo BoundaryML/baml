@@ -20,7 +20,7 @@ import threading
 
 import pytest
 
-from baml import BamlRuntime, BamlCtxManager, Collector, FunctionLog, call_function, call_function_sync
+from baml.baml_core import BamlRuntime, BamlCtxManager, Collector, FunctionLog, call_function, call_function_sync
 from conftest import MockLLMHandler
 
 
@@ -118,13 +118,15 @@ function OuterPipeline(input: string) -> string {{
 @pytest.fixture
 def rt():
     """Fresh BamlRuntime with expression functions for each test."""
-    return BamlRuntime.from_files(".", {"main.baml": BAML_SOURCE})
+    return BamlRuntime.initialize_runtime(
+        ".", {"main.baml": BAML_SOURCE}, sdk_root="__bridge_python_tests__"
+    )
 
 
 @pytest.fixture
 def ctx(rt):
     """Fresh BamlCtxManager for each test."""
-    import baml.ctx_manager as cm
+    import baml.baml_core.ctx_manager as cm
 
     cm.prev_ctx_manager = None
     return BamlCtxManager(rt)
@@ -148,13 +150,15 @@ def mock_server():
 def llm_rt(mock_server):
     """BamlRuntime with a single LLM function (TestLLM) pointing to mock server."""
     source = SINGLE_LLM_TEMPLATE.format(mock_url=mock_server)
-    return BamlRuntime.from_files(".", {"main.baml": source})
+    return BamlRuntime.initialize_runtime(
+        ".", {"main.baml": source}, sdk_root="__bridge_python_tests__"
+    )
 
 
 @pytest.fixture
 def llm_ctx(llm_rt):
     """BamlCtxManager for the single-LLM runtime."""
-    import baml.ctx_manager as cm
+    import baml.baml_core.ctx_manager as cm
 
     cm.prev_ctx_manager = None
     return BamlCtxManager(llm_rt)
@@ -164,13 +168,15 @@ def llm_ctx(llm_rt):
 def pipeline_rt(mock_server):
     """BamlRuntime with pipeline LLM functions pointing to mock server."""
     source = PIPELINE_LLM_TEMPLATE.format(mock_url=mock_server)
-    return BamlRuntime.from_files(".", {"main.baml": source})
+    return BamlRuntime.initialize_runtime(
+        ".", {"main.baml": source}, sdk_root="__bridge_python_tests__"
+    )
 
 
 @pytest.fixture
 def pipeline_ctx(pipeline_rt):
     """BamlCtxManager for the pipeline LLM runtime."""
-    import baml.ctx_manager as cm
+    import baml.baml_core.ctx_manager as cm
 
     cm.prev_ctx_manager = None
     return BamlCtxManager(pipeline_rt)
@@ -624,14 +630,18 @@ class TestLLMCallDetails:
 
     @pytest.mark.asyncio
     async def test_collector_llm_call_function_names(self, pipeline_rt):
-        """LLM call.function_name matches the LLM function names."""
+        """LLM call.function_name matches the LLM function names.
+
+        The engine tags collector entries with the resolved FQN (``user.<name>``
+        for user-defined functions), so strip that prefix before comparing.
+        """
         collector = Collector("test")
         await call_function(pipeline_rt,
             "OuterPipeline", {"input": "hello"}, collectors=[collector]
         )
 
         log = collector.last
-        call_names = {c.function_name for c in log.calls}
+        call_names = {c.function_name.removeprefix("user.") for c in log.calls}
         assert "ExtractInfo" in call_names
         assert "SummarizeInfo" in call_names
 
@@ -1019,7 +1029,7 @@ class TestCrossBoundaryTracing:
         assert log.function_name == "OuterPipeline"
         assert len(log.calls) >= 2
 
-        call_names = {c.function_name for c in log.calls}
+        call_names = {c.function_name.removeprefix("user.") for c in log.calls}
         assert "ExtractInfo" in call_names
         assert "SummarizeInfo" in call_names
 

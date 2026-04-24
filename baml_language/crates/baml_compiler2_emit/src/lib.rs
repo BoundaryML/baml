@@ -922,10 +922,18 @@ fn compute_function_metadata_from_item_tree(
 
     let resolve = |te: &TypeExpr| -> baml_type::Ty {
         let mut diags = Vec::new();
-        let tir_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr(
+        // Use `lower_type_expr_in_ns` so unqualified references (e.g. `MyLorem`
+        // in a function signature under `ns_lorem/`) resolve against the
+        // defining file's namespace before falling back to the package root.
+        // `lower_type_expr` passes `&[]` as the ns context, which would lose
+        // parameter types to `Ty::Unknown` → `Ty::Void` for any non-root-ns
+        // class — surfacing as "expected instance, got map" in the runtime
+        // because the coercion layer can't see the declared type.
+        let tir_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
             db,
             te,
             pkg_items,
+            &pkg_info.namespace_path,
             &[],
             &mut diags,
         );

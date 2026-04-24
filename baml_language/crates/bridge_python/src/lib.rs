@@ -28,7 +28,7 @@ fn flush_events() {
 }
 
 #[pymodule]
-fn baml(m: &Bound<'_, PyModule>) -> PyResult<()> {
+fn baml_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<abort_controller::AbortController>()?;
     m.add_class::<handle::BamlHandle>()?;
     m.add_class::<runtime::BamlRuntime>()?;
@@ -41,6 +41,7 @@ fn baml(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<types::collector::LLMCall>()?;
     m.add_wrapped(wrap_pyfunction!(get_version))?;
     m.add_wrapped(wrap_pyfunction!(flush_events))?;
+    m.add_wrapped(wrap_pyfunction!(runtime::get_runtime))?;
     errors::register_errors(m)?;
     Ok(())
 }

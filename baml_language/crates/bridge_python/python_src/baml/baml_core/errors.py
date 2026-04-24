@@ -2,7 +2,7 @@
 #
 # These re-export the native exceptions defined in the Rust baml module.
 
-from .baml import (
+from .baml_core import (
     BamlError,
     BamlCancelledError,
     BamlClientError,

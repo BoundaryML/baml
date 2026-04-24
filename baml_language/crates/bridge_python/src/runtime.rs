@@ -1,45 +1,90 @@
 //! BamlRuntime PyO3 class - wraps `Arc<dyn Bex>`.
 
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
 use bex_project::Bex;
 use bridge_ctypes::{HANDLE_TABLE, external_to_baml_value, kwargs_to_bex_values};
 use prost::Message;
 use pyo3::{
     PyObject, Python,
-    prelude::{PyResult, pymethods},
+    prelude::{PyResult, pyfunction, pymethods},
     pyclass,
 };
 
 use crate::{
     abort_controller::AbortController,
-    errors::{BamlInvalidArgumentError, bridge_error_to_py, runtime_error_to_py},
+    errors::{BamlError, BamlInvalidArgumentError, bridge_error_to_py, runtime_error_to_py},
     types::collector::Collector,
 };
+
+/// Process-global `sdk_root` paired with the singleton runtime in
+/// `bridge_cffi::engine`. Written by `BamlRuntime::initialize_runtime`
+/// and read by the module-level `get_runtime()` pyfunction so that every
+/// Python-side `BamlRuntime` view agrees on routing for the outbound
+/// decoder.
+static SDK_ROOT: RwLock<Option<String>> = RwLock::new(None);
+
+fn store_sdk_root(sdk_root: String) -> PyResult<()> {
+    let mut guard = SDK_ROOT
+        .write()
+        .map_err(|_| pyo3::PyErr::new::<BamlError, _>("sdk_root lock poisoned"))?;
+    *guard = Some(sdk_root);
+    Ok(())
+}
+
+fn load_sdk_root() -> PyResult<String> {
+    SDK_ROOT
+        .read()
+        .map_err(|_| pyo3::PyErr::new::<BamlError, _>("sdk_root lock poisoned"))?
+        .clone()
+        .ok_or_else(|| {
+            pyo3::PyErr::new::<BamlError, _>(
+                "BAML runtime has not been initialized — did baml_sdk/__init__.py fail to import?",
+            )
+        })
+}
 
 /// The main BAML runtime, wrapping a `dyn Bex` instance.
 #[pyclass]
 pub struct BamlRuntime {
     bex: Arc<dyn Bex>,
+    sdk_root: String,
 }
 
 #[pymethods]
 impl BamlRuntime {
-    /// Create a runtime from in-memory BAML source files.
+    /// Initialize the process-global runtime from in-memory BAML source files.
+    ///
+    /// Mirrors `bridge_cffi::engine::initialize_runtime`: the same
+    /// single-slot singleton is used, so a second call replaces the prior
+    /// runtime.
     ///
     /// # Arguments
     /// * `root_path` - Root path for BAML files
     /// * `files` - Map of filename to file content
+    /// * `sdk_root` - Python package path of the generated `baml_sdk`
+    ///   (typically `__name__` from the generated root `__init__.py`).
+    ///   Stored on the returned runtime so the outbound decoder can route
+    ///   class references via `importlib`.
     #[staticmethod]
-    #[pyo3(name = "from_files")]
-    fn initialize(
+    #[pyo3(signature = (root_path, files, *, sdk_root))]
+    fn initialize_runtime(
         root_path: String,
         files: std::collections::HashMap<String, String>,
+        sdk_root: String,
     ) -> PyResult<Self> {
         match bridge_cffi::engine::initialize_runtime(&root_path, files) {
-            Ok(bex) => Ok(BamlRuntime { bex }),
+            Ok(bex) => {
+                store_sdk_root(sdk_root.clone())?;
+                Ok(BamlRuntime { bex, sdk_root })
+            }
             Err(e) => Err(bridge_error_to_py(e)),
         }
+    }
+
+    #[getter]
+    fn _sdk_root(&self) -> &str {
+        &self.sdk_root
     }
 
     /// Call a BAML function asynchronously.
@@ -170,4 +215,22 @@ fn decode_args(args_proto: &[u8], function_name: &str) -> PyResult<bex_project::
     })?;
 
     Ok(kwargs.into())
+}
+
+/// Return the process-global `BamlRuntime`, or raise `BamlError` if
+/// `BamlRuntime.initialize_runtime(...)` has not been called yet.
+///
+/// Used by the pure-Python factories in `baml.baml_core` so generated
+/// leaves don't have to thread a runtime reference through every call
+/// site.
+#[pyfunction]
+pub fn get_runtime() -> PyResult<BamlRuntime> {
+    let bex = bridge_cffi::engine::get_runtime().map_err(|e| match e {
+        bridge_cffi::BridgeError::NotInitialized => pyo3::PyErr::new::<BamlError, _>(
+            "BAML runtime has not been initialized — did baml_sdk/__init__.py fail to import?",
+        ),
+        other => bridge_error_to_py(other),
+    })?;
+    let sdk_root = load_sdk_root()?;
+    Ok(BamlRuntime { bex, sdk_root })
 }

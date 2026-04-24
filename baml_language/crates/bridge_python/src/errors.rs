@@ -6,10 +6,10 @@ use pyo3::{
     types::PyModuleMethods,
 };
 
-create_exception!(baml_py, BamlError, pyo3::exceptions::PyException);
-create_exception!(baml_py, BamlInvalidArgumentError, BamlError);
-create_exception!(baml_py, BamlClientError, BamlError);
-create_exception!(baml_py, BamlCancelledError, BamlError);
+create_exception!(baml_core, BamlError, pyo3::exceptions::PyException);
+create_exception!(baml_core, BamlInvalidArgumentError, BamlError);
+create_exception!(baml_core, BamlClientError, BamlError);
+create_exception!(baml_core, BamlCancelledError, BamlError);
 
 /// Register error types on the module.
 pub fn register_errors(m: &Bound<'_, PyModule>) -> PyResult<()> {

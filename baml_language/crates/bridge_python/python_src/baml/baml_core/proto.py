@@ -9,8 +9,8 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
-from baml.cffi.v1 import baml_inbound_pb2, baml_outbound_pb2
-from baml_py.baml import BamlHandle
+from .cffi.v1 import baml_inbound_pb2, baml_outbound_pb2
+from .baml_core import BamlHandle
 
 
 # ---------------------------------------------------------------------------

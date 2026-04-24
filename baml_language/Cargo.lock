@@ -1627,6 +1627,7 @@ dependencies = [
  "baml_fmt",
  "baml_lsp2_actions",
  "baml_project",
+ "baml_type",
  "baml_workspace",
  "bex_engine",
  "bex_events",
