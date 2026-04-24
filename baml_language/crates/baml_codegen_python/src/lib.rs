@@ -11,6 +11,8 @@
 mod emit;
 mod leaf;
 mod routing;
+#[allow(dead_code)]
+mod translate_ty;
 
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
@@ -183,7 +185,7 @@ fn render_inlinedbaml(files: &[UserBamlFile]) -> String {
 /// Render `s` as a Python string literal. Uses a regular double-quoted
 /// form with the usual `\\`, `\"`, `\n`, `\r`, `\t` escapes so the result
 /// round-trips through `ast.literal_eval` and is byte-identical.
-fn py_string(s: &str) -> String {
+pub(crate) fn py_string(s: &str) -> String {
     let mut out = String::with_capacity(s.len() + 2);
     out.push('"');
     for ch in s.chars() {
