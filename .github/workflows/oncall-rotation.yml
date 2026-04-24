@@ -1,0 +1,192 @@
+name: On-Call Rotation
+
+on:
+  schedule:
+    # Runs every Friday at 12:00 AM Pacific Time
+    # During PST (Nov-Mar): UTC-8, so 00:00 PST = 08:00 UTC
+    # During PDT (Mar-Nov): UTC-7, so 00:00 PDT = 07:00 UTC
+    # We use 08:00 UTC to cover PST. For PDT it will be 1:00 AM PDT.
+    - cron: "0 8 * * 5"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run (don't update rotation or send Slack message)"
+        required: false
+        default: "false"
+        type: boolean
+
+env:
+  BEPS_API_URL: https://beps.boundaryml.com
+
+jobs:
+  rotate-oncall:
+    name: Rotate On-Call
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Fetch team members from BEPs
+        id: team
+        env:
+          ONCALL_API_SECRET: ${{ secrets.ONCALL_API_SECRET }}
+        run: |
+          if [ -z "$ONCALL_API_SECRET" ]; then
+            echo "Error: ONCALL_API_SECRET secret is not set"
+            exit 1
+          fi
+          
+          # Fetch team members from BEPs API
+          RESPONSE=$(curl -s -w "\n%{http_code}" \
+            -H "Authorization: Bearer $ONCALL_API_SECRET" \
+            "${BEPS_API_URL}/api/oncall/team")
+          
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+          
+          if [ "$HTTP_CODE" -ne 200 ]; then
+            echo "Error: Failed to fetch team members (HTTP $HTTP_CODE)"
+            echo "$BODY"
+            exit 1
+          fi
+          
+          # Extract team member names (sorted alphabetically for consistent rotation)
+          TEAM_MEMBERS=$(echo "$BODY" | jq -r '.teamMembers | sort_by(.name) | .[].name' | tr '\n' ',' | sed 's/,$//')
+          
+          if [ -z "$TEAM_MEMBERS" ]; then
+            echo "Error: No team members found"
+            exit 1
+          fi
+          
+          TEAM_COUNT=$(echo "$BODY" | jq '.teamMembers | length')
+          
+          echo "Found $TEAM_COUNT team members: $TEAM_MEMBERS"
+          
+          # Convert to array format for later use
+          echo "team_members=$TEAM_MEMBERS" >> $GITHUB_OUTPUT
+          echo "team_count=$TEAM_COUNT" >> $GITHUB_OUTPUT
+          echo "team_json=$(echo "$BODY" | jq -c '.teamMembers')" >> $GITHUB_OUTPUT
+
+      - name: Determine on-call person
+        id: oncall
+        run: |
+          # Parse team members from previous step
+          IFS=',' read -ra MEMBERS <<< "${{ steps.team.outputs.team_members }}"
+          TEAM_SIZE=${{ steps.team.outputs.team_count }}
+          
+          if [ "$TEAM_SIZE" -eq 0 ]; then
+            echo "Error: No team members in rotation"
+            exit 1
+          fi
+          
+          # Calculate which person should be on call based on week number
+          # Using ISO week number for consistency
+          WEEK_NUMBER=$(date +%V)
+          YEAR=$(date +%Y)
+          
+          # Create a unique week identifier (handles year boundaries)
+          # Remove leading zeros to avoid octal interpretation
+          WEEK_NUM_INT=$((10#$WEEK_NUMBER))
+          TOTAL_WEEKS=$((YEAR * 52 + WEEK_NUM_INT))
+          
+          # Calculate index (0-based)
+          INDEX=$((TOTAL_WEEKS % TEAM_SIZE))
+          
+          CURRENT_USER="${MEMBERS[$INDEX]}"
+          
+          # Calculate next week's on-call
+          NEXT_INDEX=$(((INDEX + 1) % TEAM_SIZE))
+          NEXT_USER="${MEMBERS[$NEXT_INDEX]}"
+          
+          echo "Week $WEEK_NUMBER of $YEAR"
+          echo "Current on-call: $CURRENT_USER (index: $INDEX)"
+          echo "Next on-call: $NEXT_USER (index: $NEXT_INDEX)"
+          
+          # Build rotation order as JSON array
+          ROTATION_JSON=$(printf '%s\n' "${MEMBERS[@]}" | jq -R . | jq -s .)
+          
+          # Set outputs
+          echo "current_user=$CURRENT_USER" >> $GITHUB_OUTPUT
+          echo "next_user=$NEXT_USER" >> $GITHUB_OUTPUT
+          echo "week_number=$WEEK_NUM_INT" >> $GITHUB_OUTPUT
+          echo "year=$YEAR" >> $GITHUB_OUTPUT
+          echo "team_size=$TEAM_SIZE" >> $GITHUB_OUTPUT
+          echo "current_index=$INDEX" >> $GITHUB_OUTPUT
+          echo "rotation_order=$ROTATION_JSON" >> $GITHUB_OUTPUT
+
+      - name: Update on-call rotation in BEPs
+        if: ${{ github.event.inputs.dry_run != 'true' }}
+        env:
+          ONCALL_API_SECRET: ${{ secrets.ONCALL_API_SECRET }}
+          CURRENT_USER: ${{ steps.oncall.outputs.current_user }}
+          NEXT_USER: ${{ steps.oncall.outputs.next_user }}
+          WEEK_NUMBER: ${{ steps.oncall.outputs.week_number }}
+          YEAR: ${{ steps.oncall.outputs.year }}
+          CURRENT_INDEX: ${{ steps.oncall.outputs.current_index }}
+          ROTATION_ORDER: ${{ steps.oncall.outputs.rotation_order }}
+        run: |
+          # Build request payload
+          PAYLOAD=$(jq -n \
+            --arg currentUserName "$CURRENT_USER" \
+            --arg nextUserName "$NEXT_USER" \
+            --argjson weekNumber "$WEEK_NUMBER" \
+            --argjson year "$YEAR" \
+            --argjson rotationOrder "$ROTATION_ORDER" \
+            --argjson currentIndex "$CURRENT_INDEX" \
+            '{
+              currentUserName: $currentUserName,
+              nextUserName: $nextUserName,
+              weekNumber: $weekNumber,
+              year: $year,
+              rotationOrder: $rotationOrder,
+              currentIndex: $currentIndex
+            }')
+          
+          echo "Updating on-call rotation..."
+          
+          HTTP_STATUS=$(curl -s -o /tmp/response.txt -w "%{http_code}" \
+            -X POST \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer $ONCALL_API_SECRET" \
+            -d "$PAYLOAD" \
+            "${BEPS_API_URL}/api/oncall/rotate")
+          
+          if [ "$HTTP_STATUS" -eq 200 ]; then
+            echo "✅ On-call rotation updated successfully"
+            cat /tmp/response.txt
+          else
+            echo "❌ Failed to update on-call rotation (HTTP $HTTP_STATUS)"
+            cat /tmp/response.txt
+            exit 1
+          fi
+
+      - name: Dry run summary
+        if: ${{ github.event.inputs.dry_run == 'true' }}
+        run: |
+          echo "## 🧪 Dry Run Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Week | ${{ steps.oncall.outputs.week_number }} of ${{ steps.oncall.outputs.year }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Current On-Call | @${{ steps.oncall.outputs.current_user }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Next On-Call | @${{ steps.oncall.outputs.next_user }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Team Size | ${{ steps.oncall.outputs.team_size }} members |" >> $GITHUB_STEP_SUMMARY
+          echo "| Team Members | ${{ steps.team.outputs.team_members }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "No updates were made (dry run mode)" >> $GITHUB_STEP_SUMMARY
+
+      - name: Job summary
+        run: |
+          echo "## 📋 On-Call Rotation Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Week | ${{ steps.oncall.outputs.week_number }} of ${{ steps.oncall.outputs.year }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Current On-Call | @${{ steps.oncall.outputs.current_user }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Next On-Call | @${{ steps.oncall.outputs.next_user }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Team Size | ${{ steps.oncall.outputs.team_size }} members |" >> $GITHUB_STEP_SUMMARY
+          echo "| Team Members | ${{ steps.team.outputs.team_members }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ github.event.inputs.dry_run }}" != "true" ]; then
+            echo "✅ Rotation updated and Slack notification sent" >> $GITHUB_STEP_SUMMARY
+          fi

@@ -5,6 +5,7 @@ import "./globals.css";
 import { ConvexClientProvider } from "@/components/providers/convex-provider";
 import { UserProvider } from "@/components/providers/user-provider";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
+import { OnCallBanner } from "@/components/oncall/oncall-banner";
 import { THEME_STORAGE_KEY } from "@/lib/theme";
 
 const geistSans = Geist({
@@ -62,6 +63,7 @@ export default function RootLayout({
         </Script>
         <ConvexClientProvider>
           <UserProvider>
+            <OnCallBanner />
             {children}
             <ThemeToggle />
           </UserProvider>

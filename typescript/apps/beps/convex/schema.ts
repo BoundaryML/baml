@@ -320,6 +320,27 @@ export default defineSchema({
     .index("by_status", ["status"]),
 
   // ─────────────────────────────────────────────────────────────────────────
+  // ON-CALL ROTATION (weekly team rotation)
+  // ─────────────────────────────────────────────────────────────────────────
+  onCallRotation: defineTable({
+    // Current on-call user
+    currentUserId: v.id("users"),
+    // Next on-call user (for preview)
+    nextUserId: v.optional(v.id("users")),
+    // Week info
+    weekNumber: v.number(),
+    year: v.number(),
+    // Rotation metadata
+    rotationOrder: v.array(v.id("users")),
+    currentIndex: v.number(),
+    // Timestamps
+    startedAt: v.number(),
+    endsAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_year_week", ["year", "weekNumber"]),
+
+  // ─────────────────────────────────────────────────────────────────────────
   // SUMMARIES (AI-generated)
   // ─────────────────────────────────────────────────────────────────────────
   summaries: defineTable({

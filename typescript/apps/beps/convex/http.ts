@@ -293,4 +293,258 @@ http.route({
   }),
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// On-Call Rotation API Endpoints
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Update the on-call rotation.
+ * Called by the GitHub Actions workflow every Friday at midnight PST.
+ * Requires ONCALL_API_SECRET for authentication.
+ */
+http.route({
+  path: "/api/oncall/rotate",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    try {
+      // Verify API secret
+      const authHeader = request.headers.get("Authorization");
+      const expectedSecret = process.env.ONCALL_API_SECRET;
+
+      if (!expectedSecret) {
+        console.error("ONCALL_API_SECRET not configured");
+        return new Response(
+          JSON.stringify({ error: "Server configuration error" }),
+          { status: 500, headers: { "Content-Type": "application/json" } }
+        );
+      }
+
+      if (!authHeader || authHeader !== `Bearer ${expectedSecret}`) {
+        return new Response(
+          JSON.stringify({ error: "Unauthorized" }),
+          { status: 401, headers: { "Content-Type": "application/json" } }
+        );
+      }
+
+      const body = await request.json();
+      const {
+        currentUserName,
+        nextUserName,
+        weekNumber,
+        year,
+        rotationOrder,
+        currentIndex,
+      } = body as {
+        currentUserName: string;
+        nextUserName?: string;
+        weekNumber: number;
+        year: number;
+        rotationOrder: string[];
+        currentIndex: number;
+      };
+
+      // Validate required fields
+      if (!currentUserName || !weekNumber || !year || !rotationOrder || currentIndex === undefined) {
+        return new Response(
+          JSON.stringify({ error: "Missing required fields" }),
+          { status: 400, headers: { "Content-Type": "application/json" } }
+        );
+      }
+
+      // Update the rotation via mutation
+      const result = await ctx.runMutation(internal.onCall.updateRotationByName, {
+        currentUserName,
+        nextUserName,
+        weekNumber,
+        year,
+        rotationOrder,
+        currentIndex,
+      });
+
+      // Also post to Slack #general channel
+      await ctx.runAction(internal.onCall.notifySlackOnCallChange, {
+        currentUserName,
+        nextUserName,
+        weekNumber,
+        year,
+      });
+
+      return new Response(
+        JSON.stringify({ success: true, ...result }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    } catch (error) {
+      console.error("On-call rotation update error:", error);
+      return new Response(
+        JSON.stringify({
+          error: error instanceof Error ? error.message : "Internal error",
+        }),
+        { status: 500, headers: { "Content-Type": "application/json" } }
+      );
+    }
+  }),
+});
+
+/**
+ * Get current on-call info (public endpoint).
+ */
+http.route({
+  path: "/api/oncall/current",
+  method: "GET",
+  handler: httpAction(async (ctx) => {
+    try {
+      const current = await ctx.runQuery(internal.onCall.getCurrentInternal);
+
+      if (!current) {
+        return new Response(
+          JSON.stringify({ onCall: null }),
+          {
+            status: 200,
+            headers: {
+              "Content-Type": "application/json",
+              "Access-Control-Allow-Origin": "*",
+            },
+          }
+        );
+      }
+
+      // Get user details
+      const currentUser = await ctx.runQuery(internal.users.getById, {
+        id: current.currentUserId,
+      });
+
+      let nextUser = null;
+      if (current.nextUserId) {
+        nextUser = await ctx.runQuery(internal.users.getById, {
+          id: current.nextUserId,
+        });
+      }
+
+      return new Response(
+        JSON.stringify({
+          onCall: {
+            currentUser: currentUser
+              ? {
+                  name: currentUser.name,
+                  avatarUrl: currentUser.avatarUrl,
+                }
+              : null,
+            nextUser: nextUser
+              ? {
+                  name: nextUser.name,
+                  avatarUrl: nextUser.avatarUrl,
+                }
+              : null,
+            weekNumber: current.weekNumber,
+            year: current.year,
+            startedAt: current.startedAt,
+            endsAt: current.endsAt,
+          },
+        }),
+        {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "*",
+          },
+        }
+      );
+    } catch (error) {
+      console.error("Get on-call error:", error);
+      return new Response(
+        JSON.stringify({ error: "Internal error" }),
+        { status: 500, headers: { "Content-Type": "application/json" } }
+      );
+    }
+  }),
+});
+
+// Handle CORS preflight for on-call endpoints
+http.route({
+  path: "/api/oncall/rotate",
+  method: "OPTIONS",
+  handler: httpAction(async () => {
+    return new Response(null, {
+      status: 204,
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization",
+        "Access-Control-Max-Age": "86400",
+      },
+    });
+  }),
+});
+
+http.route({
+  path: "/api/oncall/current",
+  method: "OPTIONS",
+  handler: httpAction(async () => {
+    return new Response(null, {
+      status: 204,
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type",
+        "Access-Control-Max-Age": "86400",
+      },
+    });
+  }),
+});
+
+/**
+ * Get team members eligible for on-call rotation.
+ * Used by GitHub Actions to determine the rotation list.
+ */
+http.route({
+  path: "/api/oncall/team",
+  method: "GET",
+  handler: httpAction(async (ctx, request) => {
+    try {
+      // Verify API secret
+      const authHeader = request.headers.get("Authorization");
+      const expectedSecret = process.env.ONCALL_API_SECRET;
+
+      if (!expectedSecret) {
+        console.error("ONCALL_API_SECRET not configured");
+        return new Response(
+          JSON.stringify({ error: "Server configuration error" }),
+          { status: 500, headers: { "Content-Type": "application/json" } }
+        );
+      }
+
+      if (!authHeader || authHeader !== `Bearer ${expectedSecret}`) {
+        return new Response(
+          JSON.stringify({ error: "Unauthorized" }),
+          { status: 401, headers: { "Content-Type": "application/json" } }
+        );
+      }
+
+      const teamMembers = await ctx.runQuery(internal.onCall.getRotationEligibleUsersInternal) as Array<{
+        name: string;
+        slackUserId?: string;
+      }>;
+
+      return new Response(
+        JSON.stringify({
+          teamMembers: teamMembers.map((u: { name: string; slackUserId?: string }) => ({
+            name: u.name,
+            slackUserId: u.slackUserId,
+          })),
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }
+      );
+    } catch (error) {
+      console.error("Get team members error:", error);
+      return new Response(
+        JSON.stringify({ error: "Internal error" }),
+        { status: 500, headers: { "Content-Type": "application/json" } }
+      );
+    }
+  }),
+});
+
 export default http;

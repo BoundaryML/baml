@@ -80,6 +80,17 @@ export const getById = internalQuery({
   },
 });
 
+// Internal query for getting user by name (for use in actions)
+export const getByNameInternal = internalQuery({
+  args: { name: v.string() },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("users")
+      .withIndex("by_name", (q) => q.eq("name", args.name))
+      .unique();
+  },
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // MUTATIONS
 // ─────────────────────────────────────────────────────────────────────────────
