@@ -272,18 +272,41 @@ def _build_kwargs(
 
 
 def _baml_fqn_to_engine_fqn(baml_fqn: str) -> str:
-    """Translate the Python-facing BAML FQN (09b §1) to the string the
-    engine's `lookup_function` registers.
+    """Translate the Python-facing BAML FQN (09b §1) to the bare name the
+    engine resolves.
 
-    Codegen emits `root.<ns>.<name>` (per 09b §1 package placement).
-    The engine compiles user-defined functions under the `user.` package
-    (see `baml_compiler2_hir::file_package`), so the wire-level name is
-    `user.<ns>.<name>`. `baml.*` (stdlib) and `vendor.*` / `<pkg>.*`
-    (third-party) pass through unchanged.
+    `root.*` is a BAML source-language affordance meaning "top of the
+    current package" — it is never part of the engine-registered name.
+    Strip it before sending; the engine's `lookup_function` fallback
+    (`bex_engine/src/lib.rs:965`) then finds the function. `baml.*`
+    (stdlib) and third-party `<pkg>.*` pass through unchanged.
     """
     if baml_fqn.startswith("root."):
-        return "user." + baml_fqn[len("root."):]
+        return baml_fqn[len("root."):]
     return baml_fqn
+
+
+def _engine_fqn_to_baml_fqn(engine_fqn: str) -> str:
+    """Inverse of `_baml_fqn_to_engine_fqn` — translate an engine-level FQN
+    back into the `root.*` form that 09b §1 routing expects. Applied to
+    class/enum FQNs read off the outbound proto before `_resolve_type`.
+
+    Engine-side `TypeName.display_name` strips the internal package
+    prefix for user types (see `baml_compiler2_emit/src/lib.rs:191`), so
+    a user class `MyLorem` in namespace `lorem` arrives on the wire as
+    bare `lorem.MyLorem`. Stdlib types keep their `baml.*` prefix;
+    third-party `<pkg>.*` is similarly untouched.
+
+    Rule: `baml.*` / `root.*` pass-through; anything else is user code →
+    prepend `root.`. Preserves a trailing `$stream` suffix."""
+    stream_suffix = ""
+    core = engine_fqn
+    if core.endswith("$stream"):
+        core = core[: -len("$stream")]
+        stream_suffix = "$stream"
+    if not core.startswith("baml.") and not core.startswith("root."):
+        core = "root." + core
+    return core + stream_suffix
 
 
 def _make_call(

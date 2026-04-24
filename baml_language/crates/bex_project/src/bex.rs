@@ -18,6 +18,14 @@ use crate::{BexArgs, RuntimeError, project::BexProject};
 /// as "type error: expected instance, got map" the first time the function
 /// body reads a field.
 ///
+/// The class / enum name on an incoming `Instance` / `Variant` is also
+/// diagnostic metadata from the host encoder (Python codegen 09d §2: the
+/// name on `InboundClassValue` / `InboundEnumValue` is informational —
+/// Rust rederives the expected name from the function signature). Override
+/// it here so `resolved_class_names` / `resolved_enum_names` lookups use
+/// the engine-registered FQN instead of whatever the host side derived
+/// (e.g. a `root.lorem.MyLorem` vs. engine `user.lorem.MyLorem` mismatch).
+///
 /// Coercing at the project boundary — rather than inside each bridge —
 /// keeps host encoders simple and fixes this uniformly across Python, Node,
 /// and future bridges. Optional/list/map wrappers and unions are not
@@ -29,6 +37,18 @@ fn coerce_arg_to_declared_type(value: BexExternalValue, ty: &Ty) -> BexExternalV
             BexExternalValue::Instance {
                 class_name: type_name.to_string(),
                 fields: entries,
+            }
+        }
+        (BexExternalValue::Instance { fields, .. }, Ty::Class(type_name, _)) => {
+            BexExternalValue::Instance {
+                class_name: type_name.to_string(),
+                fields,
+            }
+        }
+        (BexExternalValue::Variant { variant_name, .. }, Ty::Enum(type_name, _)) => {
+            BexExternalValue::Variant {
+                enum_name: type_name.to_string(),
+                variant_name,
             }
         }
         (v, _) => v,
