@@ -3,6 +3,7 @@ import { Badge } from "@/components/ui/badge";
 type BepStatus =
   | "draft"
   | "proposed"
+  | "pending"
   | "accepted"
   | "implemented"
   | "rejected"

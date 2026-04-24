@@ -9,6 +9,7 @@ import { MessageSquare, AlertCircle } from "lucide-react";
 type BepStatus =
   | "draft"
   | "proposed"
+  | "pending"
   | "accepted"
   | "implemented"
   | "rejected"

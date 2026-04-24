@@ -14,6 +14,7 @@ import { ArrowUpDown, Search, LayoutList, Columns3 } from "lucide-react";
 type BepStatus =
   | "draft"
   | "proposed"
+  | "pending"
   | "accepted"
   | "implemented"
   | "rejected"
@@ -25,6 +26,7 @@ const STATUS_OPTIONS: { value: BepStatus | "all"; label: string }[] = [
   { value: "all", label: "All" },
   { value: "draft", label: "Draft" },
   { value: "proposed", label: "Proposed" },
+  { value: "pending", label: "Pending" },
   { value: "accepted", label: "Accepted" },
   { value: "implemented", label: "Implemented" },
   { value: "rejected", label: "Rejected" },
@@ -34,6 +36,7 @@ const STATUS_OPTIONS: { value: BepStatus | "all"; label: string }[] = [
 const KANBAN_COLUMNS: { status: BepStatus; label: string; color: string }[] = [
   { status: "draft", label: "Draft", color: "bg-slate-500" },
   { status: "proposed", label: "Proposed", color: "bg-blue-500" },
+  { status: "pending", label: "Pending", color: "bg-yellow-500" },
   { status: "accepted", label: "Accepted", color: "bg-green-500" },
   { status: "implemented", label: "Implemented", color: "bg-purple-500" },
   { status: "rejected", label: "Rejected", color: "bg-red-500" },
