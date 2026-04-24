@@ -21,7 +21,7 @@ fn main() {
     let fixture: baml_codegen_types::SymbolPool = std::collections::HashMap::new();
 
     // Generate Python code
-    let output = baml_codegen_python::to_source_code(&fixture, &PathBuf::from("."));
+    let output = baml_codegen_python::to_source_code(&fixture, &[]);
 
     // Write baml_sdk files
     for (path, content) in output {
