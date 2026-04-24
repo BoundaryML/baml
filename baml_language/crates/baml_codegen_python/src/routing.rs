@@ -76,8 +76,9 @@ pub(crate) fn route(name: &Name) -> LeafPath {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use baml_base::Name as BaseName;
+
+    use super::*;
 
     fn name(pkg: &str, ns: &[&str], n: &str) -> Name {
         Name::new(

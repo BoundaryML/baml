@@ -1,9 +1,15 @@
-//! Phase G1 Python SDK emitter: produces a structurally correct
-//! `baml_sdk/` tree from a `SymbolPool`. Leaves are symbol-empty in
-//! G1 — content fills in across G2–G5.
+//! Phase G2 Python SDK emitter.
 //!
-//! See `.humanlayer/tasks/clientpython/11c-phaseg1-scaffolding.md`.
+//! Produces a structurally correct `baml_sdk/` tree from a
+//! `SymbolPool`, with placeholder bodies at every routed leaf. The
+//! tree shape is unchanged from G1; each leaf that routes at least one
+//! symbol now carries stub Python definitions plus an `__all__`
+//! trailer.
+//!
+//! See `.humanlayer/tasks/clientpython/11d-phaseg2-stub-types.md`.
 
+mod emit;
+mod leaf;
 mod routing;
 
 use std::{
@@ -14,7 +20,11 @@ use std::{
 
 use baml_codegen_types::{Name, Symbol, SymbolPool};
 
-use crate::routing::{LeafPath, route};
+use crate::{
+    emit::build_emitted,
+    leaf::{LeafBody, group_and_sort, render_leaf_body},
+    routing::{LeafPath, route},
+};
 
 const HEADER: &str = "from __future__ import annotations\n";
 
@@ -72,19 +82,31 @@ pub fn to_source_code(
         }
     }
 
-    // Emit every directory's `__init__.py`. Root gets the runtime-init
-    // shape; every other dir gets `<header> + optional re-export`.
-    // Both leaves and pure interiors end up with the same rendering
-    // in G1 (leaves are symbol-empty here).
+    // Build the populated-leaf bodies. Every directory that gets
+    // at least one routed symbol ends up with a `LeafBody` here; all
+    // others render with G1-identical content.
+    let triples = build_emitted(pool);
+    let bodies: BTreeMap<LeafPath, LeafBody> = group_and_sort(triples);
+
+    let empty_body = LeafBody {
+        symbols: Vec::new(),
+    };
+
+    // Emit every directory's `__init__.py`.
     for dir in &all_dirs {
         let kids = children.get(dir).cloned().unwrap_or_default();
         let path = init_py_path(dir);
+        let leaf_path = LeafPath {
+            segments: dir.clone(),
+        };
+        let body = bodies.get(&leaf_path).unwrap_or(&empty_body);
 
-        let content = if dir.is_empty() {
+        let mut content = if dir.is_empty() {
             render_root_init(&kids)
         } else {
             render_package_init(&kids)
         };
+        content.push_str(&render_leaf_body(body));
         out.insert(path, content);
     }
 
@@ -111,7 +133,8 @@ fn init_py_path(dir: &[String]) -> PathBuf {
 
 /// Render a non-root package `__init__.py`. Contains the uniform
 /// `from __future__ …` header and, if the directory has subdirectory
-/// children, a single re-export line. G1 never emits symbol content.
+/// children, a single re-export line. Symbol content is appended
+/// separately by the caller via `render_leaf_body`.
 fn render_package_init(children: &BTreeSet<String>) -> String {
     let mut s = String::from(HEADER);
     if !children.is_empty() {
@@ -123,9 +146,6 @@ fn render_package_init(children: &BTreeSet<String>) -> String {
 }
 
 fn render_root_init(top_children: &BTreeSet<String>) -> String {
-    // Exclude `_inlinedbaml` if somehow it leaked into the top-level
-    // children (it's a file under baml/, not a top-level dir — belt and
-    // suspenders).
     let mut s = String::new();
     s.push_str(HEADER);
     s.push('\n');
@@ -184,7 +204,7 @@ fn py_string(s: &str) -> String {
 }
 
 /// Return the `cg::Name` that keys a given symbol in the pool. Useful
-/// for future phases; not load-bearing in G1 (we iterate `pool.keys()`
+/// for future phases; not load-bearing in G2 (we iterate `pool.keys()`
 /// directly), but kept near the emitter for symmetry with `SymbolPool`.
 #[allow(dead_code)]
 fn symbol_name(sym: &Symbol) -> Option<&Name> {
@@ -200,9 +220,12 @@ fn symbol_name(sym: &Symbol) -> Option<&Name> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use baml_base::Name as BaseName;
-    use baml_codegen_types::{Class, ClassProperty, Origin, Ty};
+    use baml_codegen_types::{
+        Class, ClassProperty, Enum, EnumVariant, Function, FunctionArgument, Origin, Ty, TypeAlias,
+    };
+
+    use super::*;
 
     fn cg_name(pkg: &str, ns: &[&str], n: &str) -> Name {
         Name::new(
@@ -212,7 +235,18 @@ mod tests {
         )
     }
 
+    fn origin(file: &str, span: u32) -> Origin {
+        Origin {
+            source_file_path: file.to_string(),
+            span_start: span,
+        }
+    }
+
     fn class(name: Name) -> Symbol {
+        class_at(name, "x.baml", 0)
+    }
+
+    fn class_at(name: Name, file: &str, span: u32) -> Symbol {
         Symbol::Class(Class {
             name: name.clone(),
             docstring: None,
@@ -221,11 +255,56 @@ mod tests {
                 docstring: None,
                 ty: Ty::Int,
             }],
-            origin: Origin {
-                source_file_path: "x.baml".to_string(),
-                span_start: 0,
-            },
+            origin: origin(file, span),
         })
+    }
+
+    fn enum_(name: Name, file: &str, span: u32) -> Symbol {
+        Symbol::Enum(Enum {
+            name,
+            docstring: None,
+            variants: vec![EnumVariant {
+                name: BaseName::new("A"),
+                docstring: None,
+                value: "A".to_string(),
+            }],
+            origin: origin(file, span),
+        })
+    }
+
+    fn alias(name: Name, file: &str, span: u32) -> Symbol {
+        Symbol::TypeAlias(TypeAlias {
+            name,
+            resolves_to: Ty::Int,
+            recursive: false,
+            origin: origin(file, span),
+        })
+    }
+
+    fn bare_func(bare: &str, file: &str, span: u32) -> Function {
+        Function {
+            name: BaseName::new(bare),
+            docstring: None,
+            arguments: vec![FunctionArgument {
+                name: BaseName::new("x"),
+                docstring: None,
+                ty: Ty::Int,
+            }],
+            return_type: Ty::Int,
+            stream_return_type: None,
+            watchers: vec![],
+            companions: vec![],
+            origin: origin(file, span),
+        }
+    }
+
+    fn func_sym(bare: &str, file: &str, span: u32, companions: Vec<(&str, Function)>) -> Symbol {
+        let mut f = bare_func(bare, file, span);
+        f.companions = companions
+            .into_iter()
+            .map(|(s, f)| (s.to_string(), f))
+            .collect();
+        Symbol::Function(f)
     }
 
     #[test]
@@ -233,7 +312,6 @@ mod tests {
         let pool: SymbolPool = HashMap::new();
         let out = to_source_code(&pool, &[]);
 
-        // Root init, baml/ interior, baml/_inlinedbaml.py, py.typed.
         assert!(out.contains_key(&PathBuf::from("__init__.py")));
         assert!(out.contains_key(&PathBuf::from("baml/__init__.py")));
         assert!(out.contains_key(&PathBuf::from("baml/_inlinedbaml.py")));
@@ -241,33 +319,176 @@ mod tests {
 
         let root = &out[&PathBuf::from("__init__.py")];
         assert!(root.contains("from baml.baml_core import BamlRuntime"));
-        assert!(root.contains(
-            "BamlRuntime.initialize_runtime(\n    \"baml_src\", _inlinedbaml.FILES, sdk_root=__name__\n)"
-        ));
-        // Root must reference `baml` (always a top-level child).
         assert!(root.contains("from . import baml"));
+        // No symbols → no __all__ emitted (preserves G1 byte shape).
+        assert!(!root.contains("__all__"));
 
         // `baml/__init__.py` must NOT re-export `_inlinedbaml`.
         let baml_init = &out[&PathBuf::from("baml/__init__.py")];
         assert!(!baml_init.contains("_inlinedbaml"));
+        assert_eq!(baml_init, HEADER);
 
         assert_eq!(out[&PathBuf::from("py.typed")], "");
     }
 
     #[test]
-    fn user_with_ns_emits_leaf() {
+    fn class_placeholder_renders() {
         let mut pool: SymbolPool = HashMap::new();
         let n = cg_name("user", &["lorem"], "Resume");
         pool.insert(n.clone(), class(n));
 
         let out = to_source_code(&pool, &[]);
 
-        let leaf = out.get(&PathBuf::from("lorem/__init__.py")).unwrap();
-        assert_eq!(leaf, HEADER);
+        let leaf = &out[&PathBuf::from("lorem/__init__.py")];
+        assert!(leaf.starts_with(HEADER));
+        assert!(leaf.contains("class Resume: pass\n"));
+        assert!(leaf.contains("__all__ = [\n    \"Resume\",\n]\n"));
+        assert!(!leaf.contains("import enum"));
+        assert!(!leaf.contains("import typing"));
+    }
 
-        // Root init should re-export `lorem` and `baml`.
-        let root = &out[&PathBuf::from("__init__.py")];
-        assert!(root.contains("from . import baml, lorem"));
+    #[test]
+    fn enum_placeholder_adds_enum_import() {
+        let mut pool: SymbolPool = HashMap::new();
+        let n = cg_name("user", &["lorem"], "Sentiment");
+        pool.insert(n.clone(), enum_(n, "x.baml", 0));
+
+        let out = to_source_code(&pool, &[]);
+        let leaf = &out[&PathBuf::from("lorem/__init__.py")];
+        assert!(leaf.contains("import enum"));
+        assert!(leaf.contains("class Sentiment(str, enum.Enum): pass"));
+    }
+
+    #[test]
+    fn type_alias_placeholder_adds_typing_import() {
+        let mut pool: SymbolPool = HashMap::new();
+        let n = cg_name("user", &["lorem"], "Foo");
+        pool.insert(n.clone(), alias(n, "x.baml", 0));
+
+        let out = to_source_code(&pool, &[]);
+        let leaf = &out[&PathBuf::from("lorem/__init__.py")];
+        assert!(leaf.contains("import typing"));
+        assert!(leaf.contains("Foo: typing.TypeAlias = typing.Any"));
+    }
+
+    #[test]
+    fn function_fans_out_sync_and_async() {
+        let mut pool: SymbolPool = HashMap::new();
+        let n = cg_name("user", &["lorem"], "extract_resume");
+        pool.insert(n, func_sym("extract_resume", "x.baml", 0, vec![]));
+
+        let out = to_source_code(&pool, &[]);
+        let leaf = &out[&PathBuf::from("lorem/__init__.py")];
+        assert!(leaf.contains("extract_resume = None"));
+        assert!(leaf.contains("extract_resume_async = None"));
+        assert!(!leaf.contains("extract_resume_stream"));
+
+        // Fan-out siblings should be adjacent (no blank between).
+        let idx_sync = leaf.find("extract_resume = None\n").unwrap();
+        let idx_async = leaf.find("extract_resume_async = None\n").unwrap();
+        let between = &leaf[idx_sync + "extract_resume = None\n".len()..idx_async];
+        assert_eq!(between, "");
+    }
+
+    #[test]
+    fn function_with_stream_companion() {
+        let mut pool: SymbolPool = HashMap::new();
+        let n = cg_name("user", &["lorem"], "extract_resume");
+        let companion = bare_func("extract_resume", "x.baml", 0);
+        pool.insert(
+            n,
+            func_sym("extract_resume", "x.baml", 0, vec![("stream", companion)]),
+        );
+
+        let out = to_source_code(&pool, &[]);
+        let leaf = &out[&PathBuf::from("lorem/__init__.py")];
+        assert!(leaf.contains("extract_resume_stream = None"));
+        assert!(leaf.contains("extract_resume_stream_async = None"));
+    }
+
+    #[test]
+    fn function_with_build_request_companion_uses_double_underscore() {
+        let mut pool: SymbolPool = HashMap::new();
+        let n = cg_name("user", &["lorem"], "extract_resume");
+        let companion = bare_func("extract_resume", "x.baml", 0);
+        pool.insert(
+            n,
+            func_sym(
+                "extract_resume",
+                "x.baml",
+                0,
+                vec![("build_request", companion)],
+            ),
+        );
+
+        let out = to_source_code(&pool, &[]);
+        let leaf = &out[&PathBuf::from("lorem/__init__.py")];
+        assert!(leaf.contains("extract_resume__build_request = None"));
+        assert!(leaf.contains("extract_resume__build_request_async = None"));
+    }
+
+    #[test]
+    fn stream_class_routes_to_stream_types() {
+        let mut pool: SymbolPool = HashMap::new();
+        let n = cg_name("user", &["lorem"], "Resume$stream");
+        pool.insert(n.clone(), class(n));
+
+        let out = to_source_code(&pool, &[]);
+        let leaf = &out[&PathBuf::from("stream_types/lorem/__init__.py")];
+        assert!(leaf.contains("class Resume: pass\n"));
+        assert!(!leaf.contains("Resume$stream"));
+
+        // The non-stream `lorem/` dir isn't emitted — no non-stream
+        // user.lorem symbols routed here.
+        assert!(!out.contains_key(&PathBuf::from("lorem/__init__.py")));
+    }
+
+    #[test]
+    fn source_order_sorting() {
+        // Two classes in the same file at different spans should render
+        // in span order, regardless of insertion order into the pool.
+        let mut pool: SymbolPool = HashMap::new();
+        let late = cg_name("user", &["lorem"], "Bar");
+        let early = cg_name("user", &["lorem"], "Foo");
+        pool.insert(late.clone(), class_at(late, "x.baml", 200));
+        pool.insert(early.clone(), class_at(early, "x.baml", 100));
+
+        let out = to_source_code(&pool, &[]);
+        let leaf = &out[&PathBuf::from("lorem/__init__.py")];
+        let idx_foo = leaf.find("class Foo: pass").unwrap();
+        let idx_bar = leaf.find("class Bar: pass").unwrap();
+        assert!(idx_foo < idx_bar);
+    }
+
+    #[test]
+    fn multi_file_interleave() {
+        // Two classes from different files land in the same leaf and
+        // interleave lexicographically by file path.
+        let mut pool: SymbolPool = HashMap::new();
+        let a = cg_name("user", &["lorem"], "A");
+        let b = cg_name("user", &["lorem"], "B");
+        pool.insert(a.clone(), class_at(a, "b.baml", 0));
+        pool.insert(b.clone(), class_at(b, "a.baml", 0));
+
+        let out = to_source_code(&pool, &[]);
+        let leaf = &out[&PathBuf::from("lorem/__init__.py")];
+        // B (a.baml) sorts before A (b.baml).
+        let idx_a = leaf.find("class A: pass").unwrap();
+        let idx_b = leaf.find("class B: pass").unwrap();
+        assert!(idx_b < idx_a);
+    }
+
+    #[test]
+    fn all_lists_public_names_only() {
+        let mut pool: SymbolPool = HashMap::new();
+        let c = cg_name("user", &["lorem"], "Resume");
+        let e = cg_name("user", &["lorem"], "Sentiment");
+        pool.insert(c.clone(), class_at(c, "x.baml", 0));
+        pool.insert(e.clone(), enum_(e, "x.baml", 50));
+
+        let out = to_source_code(&pool, &[]);
+        let leaf = &out[&PathBuf::from("lorem/__init__.py")];
+        assert!(leaf.contains("__all__ = [\n    \"Resume\",\n    \"Sentiment\",\n]"));
     }
 
     #[test]
@@ -282,14 +503,70 @@ mod tests {
         assert!(out.contains_key(&PathBuf::from("vendor/aws/__init__.py")));
         assert!(out.contains_key(&PathBuf::from("vendor/aws/s3/__init__.py")));
 
+        // Pure interior dirs: byte-identical to G1 (no body).
         let vendor_init = &out[&PathBuf::from("vendor/__init__.py")];
-        assert!(vendor_init.contains("from . import aws"));
-        let aws_init = &out[&PathBuf::from("vendor/aws/__init__.py")];
-        assert!(aws_init.contains("from . import s3"));
+        assert_eq!(
+            vendor_init,
+            "from __future__ import annotations\n\nfrom . import aws\n"
+        );
 
-        // s3 is a leaf, not an interior → symbol-empty body.
+        // Leaf carries the symbol.
         let s3_leaf = &out[&PathBuf::from("vendor/aws/s3/__init__.py")];
-        assert_eq!(s3_leaf, HEADER);
+        assert!(s3_leaf.contains("class Bucket: pass"));
+    }
+
+    #[test]
+    fn root_stub_populates_root_init() {
+        let mut pool: SymbolPool = HashMap::new();
+        let n = cg_name("user", &[], "Foo");
+        pool.insert(n.clone(), class(n));
+
+        let out = to_source_code(&pool, &[]);
+        let root = &out[&PathBuf::from("__init__.py")];
+        assert!(root.contains("BamlRuntime.initialize_runtime("));
+        // Stub appended after the runtime init + re-exports.
+        assert!(root.contains("class Foo: pass\n"));
+        assert!(root.contains("__all__ = [\n    \"Foo\",\n]"));
+    }
+
+    #[test]
+    fn no_pydantic_or_factory_imports_in_leaves() {
+        let mut pool: SymbolPool = HashMap::new();
+        let c = cg_name("user", &["lorem"], "Resume");
+        pool.insert(c.clone(), class(c));
+        let f = cg_name("user", &["lorem"], "extract_resume");
+        pool.insert(f, func_sym("extract_resume", "x.baml", 100, vec![]));
+
+        let out = to_source_code(&pool, &[]);
+        for (path, content) in &out {
+            let s = path.to_string_lossy();
+            if !s.ends_with(".py") {
+                continue;
+            }
+            // The root init's `from baml.baml_core import BamlRuntime`
+            // is G1 scaffolding, not a G5 factory import — skip root +
+            // inlinedbaml file when checking for G5-era leakage.
+            let is_scaffold = s == "__init__.py" || s.ends_with("_inlinedbaml.py");
+            assert!(
+                !content.contains("pydantic"),
+                "leaf {} contains pydantic: {}",
+                path.display(),
+                content
+            );
+            if !is_scaffold {
+                assert!(
+                    !content.contains("baml_core"),
+                    "leaf {} contains baml_core: {}",
+                    path.display(),
+                    content
+                );
+            }
+            assert!(
+                !content.contains("__define_function"),
+                "leaf {} contains __define_function",
+                path.display()
+            );
+        }
     }
 
     #[test]
@@ -309,10 +586,6 @@ mod tests {
 
     #[test]
     fn dir_that_is_both_leaf_and_interior_reexports_children() {
-        // `user..Foo$stream` routes to the root stream leaf; also a
-        // `user.lorem.Resume$stream` gives `stream_types/` a subdirectory
-        // child `lorem`. `stream_types/__init__.py` must re-export
-        // `lorem` even though it's also a leaf itself.
         let mut pool: SymbolPool = HashMap::new();
         let no_ns = cg_name("user", &[], "Foo$stream");
         let with_ns = cg_name("user", &["lorem"], "Resume$stream");
@@ -324,6 +597,9 @@ mod tests {
         let stream_root = &out[&PathBuf::from("stream_types/__init__.py")];
         assert!(stream_root.starts_with(HEADER));
         assert!(stream_root.contains("from . import lorem"));
+        // And the Foo$stream stub at the top-level stream leaf.
+        assert!(stream_root.contains("class Foo: pass\n"));
+        assert!(stream_root.contains("__all__ = [\n    \"Foo\",\n]"));
     }
 
     #[test]
@@ -341,11 +617,9 @@ mod tests {
         let inl = &out[&PathBuf::from("baml/_inlinedbaml.py")];
         assert!(inl.starts_with("from __future__ import annotations\n"));
         assert!(inl.contains("FILES: dict[str, str] = {"));
-        // Alphabetical: lorem/bar.baml comes before main.baml.
         let lo = inl.find("lorem/bar.baml").unwrap();
         let mo = inl.find("main.baml").unwrap();
         assert!(lo < mo);
-        // Quoted values.
         assert!(inl.contains("\"class Foo {}\\n\""));
     }
 
