@@ -6,7 +6,7 @@
 
 use std::collections::HashMap;
 
-use baml_codegen_types::{self as cg, Namespace, ObjectPool};
+use baml_codegen_types::{self as cg, ObjectPool};
 use baml_compiler2_ast::DeclarativeMeta;
 use baml_compiler2_hir::{file_package, package::PackageId};
 use baml_compiler2_tir::{
@@ -22,10 +22,14 @@ use crate::ProjectDatabase;
 // Helpers
 // ---------------------------------------------------------------------------
 
-/// Extract the namespace path segments from a `QualifiedTypeName`.
-/// Returns the namespace as `Vec<Name>` (= `Vec<Name>`) for use in `Namespace`.
-fn qtn_path(qtn: &QualifiedTypeName) -> Vec<Name> {
-    qtn.namespace().iter().cloned().collect()
+/// Build a `cg::Name` from a `QualifiedTypeName`. Preserves `pkg`, the full
+/// namespace path, and the bare name (including any `$stream` suffix).
+fn name_from_qtn(qtn: &QualifiedTypeName) -> cg::Name {
+    cg::Name {
+        pkg: qtn.package().clone(),
+        namespace_path: qtn.namespace().clone(),
+        name: qtn.name().clone(),
+    }
 }
 
 /// If `name` contains a `$`, return `(parent_part, suffix_after_dollar)`.
@@ -34,18 +38,6 @@ fn qtn_path(qtn: &QualifiedTypeName) -> Vec<Name> {
 fn split_companion(name: &str) -> Option<(&str, &str)> {
     let pos = name.find('$')?;
     Some((&name[..pos], &name[pos + 1..]))
-}
-
-/// Build the `Namespace` for a type given its `QualifiedTypeName`.
-/// Names with a `$stream` suffix (or whose base name ends in `$stream`)
-/// belong to `StreamTypes`; everything else belongs to `Types`.
-fn namespace_for_type(qtn: &QualifiedTypeName) -> Namespace {
-    let path = qtn_path(qtn);
-    if qtn.name().ends_with("$stream") {
-        Namespace::StreamTypes { path }
-    } else {
-        Namespace::Types { path }
-    }
 }
 
 // ---------------------------------------------------------------------------
@@ -68,12 +60,10 @@ pub fn build_object_pool(db: &ProjectDatabase) -> ObjectPool {
 
     // First pass: collect parent functions keyed by (namespace_path, bare_name) so
     // the second pass can attach companions.
-    // We use `(Vec<Name>, String)` → index-in-a-vec approach via a side map.
-    //
-    // We collect all function entries into `pending_functions` first so we can
-    // do two passes.
 
     struct PendingFunction {
+        /// Package this function lives in (always `"user"` here, kept for symmetry).
+        pkg: Name,
         /// Namespace path segments (empty for root-level functions).
         ns_path: Vec<Name>,
         /// Bare function name (without `$…` suffix).
@@ -93,6 +83,7 @@ pub fn build_object_pool(db: &ProjectDatabase) -> ObjectPool {
         }
 
         let item_tree = baml_compiler2_ppir::file_item_tree(db, source_file);
+        let pkg: Name = pkg_info.package.clone();
         let ns_path: Vec<Name> = pkg_info.namespace_path.clone();
 
         // Classes
@@ -100,49 +91,10 @@ pub fn build_object_pool(db: &ProjectDatabase) -> ObjectPool {
             if !class.generic_params.is_empty() {
                 continue;
             }
-            // Skip $stream-suffixed classes (they're synthetic companions managed by PPIR).
-            if class.name.ends_with("$stream") {
-                let stream_path = ns_path.clone();
-                let cg_name = cg::Name {
-                    name: class.name.clone(),
-                    namespace: Namespace::StreamTypes { path: stream_path },
-                };
-                let properties = class
-                    .fields
-                    .iter()
-                    .filter_map(|field| {
-                        let ty = resolve_type_expr(
-                            db,
-                            field.type_expr.as_ref(),
-                            user_pkg_items,
-                            &pkg_info.namespace_path,
-                            &[],
-                            &alias_map,
-                            &recursive_aliases,
-                        )?;
-                        Some(cg::ClassProperty {
-                            name: field.name.clone(),
-                            docstring: None,
-                            ty,
-                        })
-                    })
-                    .collect();
-                pool.insert(
-                    cg_name.clone(),
-                    cg::Object::Class(cg::Class {
-                        name: cg_name,
-                        docstring: None,
-                        properties,
-                    }),
-                );
-                continue;
-            }
-
             let cg_name = cg::Name {
+                pkg: pkg.clone(),
+                namespace_path: ns_path.clone(),
                 name: class.name.clone(),
-                namespace: Namespace::Types {
-                    path: ns_path.clone(),
-                },
             };
             let properties = class
                 .fields
@@ -177,10 +129,9 @@ pub fn build_object_pool(db: &ProjectDatabase) -> ObjectPool {
         // Enums
         for enum_def in item_tree.enums.values() {
             let cg_name = cg::Name {
+                pkg: pkg.clone(),
+                namespace_path: ns_path.clone(),
                 name: enum_def.name.clone(),
-                namespace: Namespace::Types {
-                    path: ns_path.clone(),
-                },
             };
             let variants = enum_def
                 .variants
@@ -203,15 +154,6 @@ pub fn build_object_pool(db: &ProjectDatabase) -> ObjectPool {
 
         // Type aliases
         for alias in item_tree.type_aliases.values() {
-            // Skip $stream-suffixed aliases.
-            let (bare_alias_name, is_stream) = if alias.name.ends_with("$stream") {
-                let base = alias.name.trim_end_matches("$stream");
-                (Name::new(base), true)
-            } else {
-                (alias.name.clone(), false)
-            };
-            let _ = bare_alias_name; // used below
-
             if let Some(resolved) = resolve_type_expr(
                 db,
                 alias.type_expr.as_ref(),
@@ -221,23 +163,12 @@ pub fn build_object_pool(db: &ProjectDatabase) -> ObjectPool {
                 &alias_map,
                 &recursive_aliases,
             ) {
-                let alias_ns = if is_stream {
-                    Namespace::StreamTypes {
-                        path: ns_path.clone(),
-                    }
-                } else {
-                    Namespace::Types {
-                        path: ns_path.clone(),
-                    }
-                };
                 let cg_name = cg::Name {
+                    pkg: pkg.clone(),
+                    namespace_path: ns_path.clone(),
                     name: alias.name.clone(),
-                    namespace: alias_ns,
                 };
 
-                // Determine if this alias is recursive.
-                // We need to build the QualifiedTypeName to look it up.
-                // Use the pkg_info + ns_path + alias.name as the key.
                 let qtn = QualifiedTypeName::new(
                     pkg_info.package.clone(),
                     pkg_info.namespace_path.clone(),
@@ -266,11 +197,7 @@ pub fn build_object_pool(db: &ProjectDatabase) -> ObjectPool {
 
             // Determine if this is a companion (has `$` in name).
             let (bare_name, companion_suffix) = match split_companion(func_name_str) {
-                Some((parent, suffix)) => {
-                    // Only attach companions whose parent is a declarative LLM function.
-                    // But we accept any `$`-named function here and filter later when attaching.
-                    (Name::new(parent), Some(suffix.to_string()))
-                }
+                Some((parent, suffix)) => (Name::new(parent), Some(suffix.to_string())),
                 None => (func.name.clone(), None),
             };
 
@@ -325,6 +252,7 @@ pub fn build_object_pool(db: &ProjectDatabase) -> ObjectPool {
             };
 
             pending_functions.push(PendingFunction {
+                pkg: pkg.clone(),
                 ns_path: ns_path.clone(),
                 bare_name,
                 companion_suffix,
@@ -334,8 +262,8 @@ pub fn build_object_pool(db: &ProjectDatabase) -> ObjectPool {
     }
 
     // Second pass: build a map of parent functions, then attach companions.
-    // Key: (ns_path, bare_parent_name) → index into parents vec.
     struct ParentEntry {
+        pkg: Name,
         ns_path: Vec<Name>,
         bare_name: Name,
         func: cg::Function,
@@ -347,6 +275,7 @@ pub fn build_object_pool(db: &ProjectDatabase) -> ObjectPool {
     for pf in pending_functions {
         if pf.companion_suffix.is_none() {
             parents.push(ParentEntry {
+                pkg: pf.pkg,
                 ns_path: pf.ns_path,
                 bare_name: pf.bare_name,
                 func: pf.func,
@@ -359,11 +288,11 @@ pub fn build_object_pool(db: &ProjectDatabase) -> ObjectPool {
     // Attach companions to parents.
     for companion in companions {
         let suffix = companion.companion_suffix.as_deref().unwrap();
-        // Find the parent by matching ns_path + bare_name.
-        if let Some(parent_entry) = parents
-            .iter_mut()
-            .find(|p| p.ns_path == companion.ns_path && p.bare_name == companion.bare_name)
-        {
+        if let Some(parent_entry) = parents.iter_mut().find(|p| {
+            p.pkg == companion.pkg
+                && p.ns_path == companion.ns_path
+                && p.bare_name == companion.bare_name
+        }) {
             parent_entry
                 .func
                 .companions
@@ -375,10 +304,9 @@ pub fn build_object_pool(db: &ProjectDatabase) -> ObjectPool {
     // Insert parent functions (with companions attached) into the pool.
     for parent in parents {
         let cg_name = cg::Name {
-            name: parent.bare_name.clone(),
-            namespace: Namespace::Types {
-                path: parent.ns_path,
-            },
+            pkg: parent.pkg,
+            namespace_path: parent.ns_path,
+            name: parent.bare_name,
         };
         pool.insert(cg_name, cg::Object::Function(parent.func));
     }
@@ -456,36 +384,21 @@ fn convert_tir_leaf(
         TirTy::Primitive(PrimitiveType::Video, _) => cg::Ty::Media(baml_db::MediaKind::Video),
         TirTy::Primitive(PrimitiveType::Pdf, _) => cg::Ty::Media(baml_db::MediaKind::Pdf),
 
-        // Named types — use qtn to build path-carrying namespace.
-        TirTy::Class(qtn, _, _) => cg::Ty::Class(cg::Name {
-            name: qtn.name().clone(),
-            namespace: namespace_for_type(qtn),
-        }),
-        TirTy::Enum(qtn, _) => cg::Ty::Enum(cg::Name {
-            name: qtn.name().clone(),
-            namespace: namespace_for_type(qtn),
-        }),
-        TirTy::EnumVariant(qtn, _variant, _) => cg::Ty::Enum(cg::Name {
-            name: qtn.name().clone(),
-            namespace: namespace_for_type(qtn),
-        }),
+        // Named types — preserve full QualifiedTypeName via name_from_qtn.
+        TirTy::Class(qtn, _, _) => cg::Ty::Class(name_from_qtn(qtn)),
+        TirTy::Enum(qtn, _) => cg::Ty::Enum(name_from_qtn(qtn)),
+        TirTy::EnumVariant(qtn, _variant, _) => cg::Ty::Enum(name_from_qtn(qtn)),
 
         // Type aliases: if recursive, keep as TypeAlias (opaque); otherwise inline.
         TirTy::TypeAlias(qtn, _) => {
             if recursive_aliases.contains(qtn) {
-                cg::Ty::TypeAlias(cg::Name {
-                    name: qtn.name().clone(),
-                    namespace: namespace_for_type(qtn),
-                })
+                cg::Ty::TypeAlias(name_from_qtn(qtn))
             } else if let Some(target) = alias_map.get(qtn) {
                 // Inline non-recursive aliases.
                 convert_tir_to_codegen_ty(target, alias_map, recursive_aliases)
             } else {
                 // Unknown alias (e.g. from another package) — keep opaque as TypeAlias.
-                cg::Ty::TypeAlias(cg::Name {
-                    name: qtn.name().clone(),
-                    namespace: namespace_for_type(qtn),
-                })
+                cg::Ty::TypeAlias(name_from_qtn(qtn))
             }
         }
 
@@ -624,8 +537,6 @@ fn null_to_end(variants: Vec<cg::Ty>) -> Vec<cg::Ty> {
 mod tests {
     use std::path::Path;
 
-    use baml_codegen_types::Namespace;
-
     use super::*;
     use crate::ProjectDatabase;
 
@@ -658,51 +569,34 @@ mod tests {
     }
 
     #[test]
-    fn test_qtn_path_empty() {
-        let qtn = baml_compiler2_tir::ty::QualifiedTypeName::new(
-            Name::new("user"),
-            vec![],
-            Name::new("Resume"),
-        );
-        assert_eq!(qtn_path(&qtn), Vec::<Name>::new());
-    }
-
-    #[test]
-    fn test_qtn_path_with_segments() {
-        let qtn = baml_compiler2_tir::ty::QualifiedTypeName::new(
+    fn test_name_from_qtn_preserves_full_path() {
+        let qtn = QualifiedTypeName::new(
             Name::new("user"),
             vec![Name::new("foo")],
             Name::new("Sentiment"),
         );
-        assert_eq!(qtn_path(&qtn), vec![Name::new("foo")]);
-    }
-
-    #[test]
-    fn test_namespace_for_type_no_stream() {
-        let qtn = baml_compiler2_tir::ty::QualifiedTypeName::new(
-            Name::new("user"),
-            vec![Name::new("foo")],
-            Name::new("Sentiment"),
-        );
+        let cg_name = name_from_qtn(&qtn);
+        assert_eq!(cg_name.pkg.as_str(), "user");
         assert_eq!(
-            namespace_for_type(&qtn),
-            Namespace::Types {
-                path: vec![Name::new("foo")]
-            }
+            cg_name.namespace_path,
+            vec![Name::new("foo")],
+            "namespace_path mismatch: {:?}",
+            cg_name.namespace_path,
         );
+        assert_eq!(cg_name.name.as_str(), "Sentiment");
+        assert!(!cg_name.is_stream());
     }
 
     #[test]
-    fn test_namespace_for_type_stream_suffix() {
-        let qtn = baml_compiler2_tir::ty::QualifiedTypeName::new(
+    fn test_name_from_qtn_stream_suffix() {
+        let qtn = QualifiedTypeName::new(
             Name::new("user"),
             vec![],
             Name::new("Resume$stream"),
         );
-        assert_eq!(
-            namespace_for_type(&qtn),
-            Namespace::StreamTypes { path: vec![] }
-        );
+        let cg_name = name_from_qtn(&qtn);
+        assert!(cg_name.is_stream());
+        assert_eq!(cg_name.bare_name(), "Resume");
     }
 
     // ── Integration tests using ProjectDatabase ─────────────────────────────
@@ -760,9 +654,9 @@ mod tests {
         );
     }
 
-    /// Verifies that a class in a namespaced folder gets `path` populated.
+    /// Verifies that a class in a namespaced folder gets `namespace_path` populated.
     /// A file in the `ns_foo` subdirectory should produce a class with
-    /// `namespace == Types { path: ["foo"] }`.
+    /// `namespace_path == ["foo"]` and `pkg == "user"`.
     #[test]
     fn test_namespaced_class_has_path() {
         let root = Path::new("/tmp/bep030_ns_path");
@@ -779,13 +673,13 @@ mod tests {
         assert!(sentiment_key.is_some(), "Sentiment must be in the pool");
 
         let key = sentiment_key.unwrap();
+        assert_eq!(key.pkg.as_str(), "user", "pkg mismatch: {:?}", key.pkg);
         assert_eq!(
-            key.namespace,
-            Namespace::Types {
-                path: vec![Name::new("foo")]
-            },
-            "Sentiment namespace path mismatch: {:?}",
-            key.namespace
+            key.namespace_path,
+            vec![Name::new("foo")],
+            "namespace_path mismatch: {:?}",
+            key.namespace_path,
         );
+        assert!(!key.is_stream(), "Sentiment must not be marked as stream");
     }
 }

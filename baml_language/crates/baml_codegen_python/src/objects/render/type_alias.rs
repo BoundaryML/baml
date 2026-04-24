@@ -161,12 +161,13 @@ mod tests {
         // Note: the test builder parses "int | RecursiveAlias[]" as List(Union(int, RecursiveAlias))
         // due to suffix-first parsing, so the generated form is List[Union[int, "RecursiveAlias"]].
         use baml_codegen_tests::ty;
-        use baml_codegen_types::{Namespace, TypeAlias as CgTypeAlias};
+        use baml_codegen_types::TypeAlias as CgTypeAlias;
 
         let type_alias = TypeAlias::from_codegen_types(&CgTypeAlias {
             name: baml_codegen_types::Name {
+                pkg: "user".into(),
+                namespace_path: vec![],
                 name: "RecursiveAlias".into(),
-                namespace: Namespace::Types { path: vec![] },
             },
             resolves_to: ty("int | RecursiveAlias[]"),
             recursive: true,

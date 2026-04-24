@@ -15,8 +15,8 @@
 //! ```
 
 pub use baml_codegen_types::{
-    Class, ClassProperty, Enum, EnumVariant, Function, FunctionArgument, Name, Namespace, Object,
-    ObjectPool, Ty, TypeAlias,
+    Class, ClassProperty, Enum, EnumVariant, Function, FunctionArgument, Name, Object, ObjectPool,
+    Ty, TypeAlias,
 };
 
 /// Test helpers and DSL macros.

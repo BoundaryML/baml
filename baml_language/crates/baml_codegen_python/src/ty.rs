@@ -94,24 +94,24 @@ impl Name {
     pub(crate) fn from_codegen_types(name: &baml_codegen_types::Name) -> Self {
         // Strip the `$stream` suffix — stream types live in their own module
         // so they can keep the original user-defined name.
-        let bare_name = name
-            .name
-            .as_str()
-            .strip_suffix("$stream")
-            .map(baml_base::Name::new)
-            .unwrap_or_else(|| name.name.clone());
+        let bare_name = baml_base::Name::new(name.bare_name());
         Name {
             name: bare_name,
-            namespace: Namespace::from_codegen_types(&name.namespace),
+            namespace: Namespace::for_codegen_name(name),
         }
     }
 }
 
 impl Namespace {
-    pub(crate) fn from_codegen_types(namespace: &baml_codegen_types::Namespace) -> Self {
-        match namespace {
-            baml_codegen_types::Namespace::Types { .. } => Self::Types,
-            baml_codegen_types::Namespace::StreamTypes { .. } => Self::StreamTypes,
+    /// Pick `Types` vs `StreamTypes` based on whether the codegen `Name`
+    /// carries a `$stream` suffix. Phase 5 only changes the IR shape we
+    /// consume — the emitter still routes objects to the legacy
+    /// `baml_types/` vs `baml_stream_types/` trees.
+    pub(crate) fn for_codegen_name(name: &baml_codegen_types::Name) -> Self {
+        if name.is_stream() {
+            Self::StreamTypes
+        } else {
+            Self::Types
         }
     }
 }

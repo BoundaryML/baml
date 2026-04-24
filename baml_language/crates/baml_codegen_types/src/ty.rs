@@ -5,58 +5,57 @@
 
 use std::fmt;
 
-use smol_str::SmolStr;
-
+/// Fully qualified type name carried by `Ty::Class`, `Ty::Enum`, and
+/// `Ty::TypeAlias`.
+///
+/// The triple `(pkg, namespace_path, name)` mirrors `baml_compiler2_tir::QualifiedTypeName`
+/// and is preserved end-to-end so language-specific code generators can route
+/// each type to the correct module path (e.g. `vendor.<pkg>.…`, `baml.…`,
+/// or the user package's root layout).
+///
+/// `$stream` companions live on the `name` field as a `…$stream` suffix —
+/// there is no separate stream-types namespace.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub enum Namespace {
-    Types { path: Vec<SmolStr> },
-    StreamTypes { path: Vec<SmolStr> },
+pub struct Name {
+    pub pkg: baml_base::Name,
+    pub namespace_path: Vec<baml_base::Name>,
+    pub name: baml_base::Name,
 }
 
-impl Namespace {
-    /// Convenience constructor for a Types namespace with no path.
-    pub fn types() -> Self {
-        Namespace::Types { path: Vec::new() }
-    }
-
-    /// Convenience constructor for a StreamTypes namespace with no path.
-    pub fn stream_types() -> Self {
-        Namespace::StreamTypes { path: Vec::new() }
-    }
-}
-
-impl std::fmt::Display for Namespace {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Namespace::Types { path } if path.is_empty() => write!(f, "types"),
-            Namespace::StreamTypes { path } if path.is_empty() => write!(f, "stream_types"),
-            Namespace::Types { path } => {
-                write!(f, "types")?;
-                for seg in path {
-                    write!(f, ".{seg}")?;
-                }
-                Ok(())
-            }
-            Namespace::StreamTypes { path } => {
-                write!(f, "stream_types")?;
-                for seg in path {
-                    write!(f, ".{seg}")?;
-                }
-                Ok(())
-            }
+impl Name {
+    pub fn new(
+        pkg: baml_base::Name,
+        namespace_path: Vec<baml_base::Name>,
+        name: baml_base::Name,
+    ) -> Self {
+        Self {
+            pkg,
+            namespace_path,
+            name,
         }
     }
+
+    /// `true` if the bare name carries the `$stream` suffix.
+    pub fn is_stream(&self) -> bool {
+        self.name.as_str().ends_with("$stream")
+    }
+
+    /// The bare name without any `$stream` suffix.
+    pub fn bare_name(&self) -> &str {
+        self.name
+            .as_str()
+            .strip_suffix("$stream")
+            .unwrap_or_else(|| self.name.as_str())
+    }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Name {
-    pub name: baml_base::Name,
-    pub namespace: Namespace,
-}
-
-impl std::fmt::Display for Name {
+impl fmt::Display for Name {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}.{}", self.namespace, self.name)
+        write!(f, "{}", self.pkg)?;
+        for seg in &self.namespace_path {
+            write!(f, ".{seg}")?;
+        }
+        write!(f, ".{}", self.name)
     }
 }
 
@@ -122,41 +121,6 @@ pub enum Ty {
 }
 
 impl Ty {
-    pub fn namespace(&self) -> Option<Namespace> {
-        match self {
-            Ty::Unit
-            | Ty::Int
-            | Ty::Float
-            | Ty::String
-            | Ty::Bool
-            | Ty::Null
-            | Ty::Uint8Array
-            | Ty::Media(_)
-            | Ty::Literal(_)
-            | Ty::BuiltinUnknown => None,
-            Ty::Class(name) | Ty::Enum(name) | Ty::TypeAlias(name) => Some(name.namespace.clone()),
-            Ty::Optional(ty) => ty.namespace(),
-            Ty::List(ty) => ty.namespace(),
-            Ty::Map { key: _, value } => value.namespace(),
-            Ty::Union(items) => items.iter().fold(None, |acc, ty| match &acc {
-                Some(Namespace::StreamTypes { .. }) => acc,
-                other => match (other, ty.namespace()) {
-                    (None, ns) => ns,
-                    (_, None) => acc,
-                    (Some(_), Some(ns @ Namespace::StreamTypes { .. })) => Some(ns),
-                    (_, other) => other,
-                },
-            }),
-            Ty::Callable { params, ret } => {
-                params.iter().fold(ret.namespace(), |acc, ty| match acc {
-                    Some(ns @ Namespace::StreamTypes { .. }) => Some(ns),
-                    other => ty.namespace().or(other),
-                })
-            }
-            Ty::BamlOptions => None,
-        }
-    }
-
     pub fn default_value(&self) -> Option<DefaultValue> {
         match self {
             Ty::BamlOptions => None,

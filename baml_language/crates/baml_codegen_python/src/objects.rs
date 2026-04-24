@@ -192,18 +192,11 @@ impl Object {
         // Collect objects into per-path buckets.
         let mut buckets: BTreeMap<Vec<String>, Vec<Object>> = BTreeMap::new();
 
-        let iter = objects.iter().filter(|(name, _)| {
-            if is_stream {
-                matches!(
-                    name.namespace,
-                    baml_codegen_types::Namespace::StreamTypes { .. }
-                )
-            } else {
-                matches!(name.namespace, baml_codegen_types::Namespace::Types { .. })
-            }
-        });
+        let iter = objects
+            .iter()
+            .filter(|(name, _)| name.is_stream() == is_stream);
 
-        for (_, object) in iter {
+        for (name, object) in iter {
             let converted = match object {
                 baml_codegen_types::Object::Function(_) => continue,
                 baml_codegen_types::Object::Class(class) => {
@@ -217,34 +210,12 @@ impl Object {
                 }
             };
 
-            // Extract the path from the namespace.
-            let path: Vec<String> = match object {
-                baml_codegen_types::Object::Class(c) => match &c.name.namespace {
-                    baml_codegen_types::Namespace::Types { path } => {
-                        path.iter().map(|s| s.to_string()).collect()
-                    }
-                    baml_codegen_types::Namespace::StreamTypes { path } => {
-                        path.iter().map(|s| s.to_string()).collect()
-                    }
-                },
-                baml_codegen_types::Object::Enum(e) => match &e.name.namespace {
-                    baml_codegen_types::Namespace::Types { path } => {
-                        path.iter().map(|s| s.to_string()).collect()
-                    }
-                    baml_codegen_types::Namespace::StreamTypes { path } => {
-                        path.iter().map(|s| s.to_string()).collect()
-                    }
-                },
-                baml_codegen_types::Object::TypeAlias(ta) => match &ta.name.namespace {
-                    baml_codegen_types::Namespace::Types { path } => {
-                        path.iter().map(|s| s.to_string()).collect()
-                    }
-                    baml_codegen_types::Namespace::StreamTypes { path } => {
-                        path.iter().map(|s| s.to_string()).collect()
-                    }
-                },
-                baml_codegen_types::Object::Function(_) => unreachable!(),
-            };
+            // Path comes straight from the namespace path on the qualified name.
+            let path: Vec<String> = name
+                .namespace_path
+                .iter()
+                .map(std::string::ToString::to_string)
+                .collect();
 
             buckets.entry(path).or_default().push(converted);
         }
@@ -321,17 +292,14 @@ impl Function {
 
         let iter = objects
             .iter()
-            .filter(|(name, _)| {
-                matches!(name.namespace, baml_codegen_types::Namespace::Types { .. })
-            })
+            .filter(|(name, _)| !name.is_stream())
             .filter_map(|(name, object)| match object {
                 baml_codegen_types::Object::Function(function) => {
-                    let path: Vec<String> = match &name.namespace {
-                        baml_codegen_types::Namespace::Types { path } => {
-                            path.iter().map(|s| s.to_string()).collect()
-                        }
-                        _ => vec![],
-                    };
+                    let path: Vec<String> = name
+                        .namespace_path
+                        .iter()
+                        .map(std::string::ToString::to_string)
+                        .collect();
                     let f = Function::from_codegen_types(
                         function,
                         Ty::from_codegen_types(&function.return_type),
@@ -358,9 +326,7 @@ impl Function {
     pub(crate) fn load_functions(objects: &baml_codegen_types::ObjectPool) -> Vec<Function> {
         let mut objects = objects
             .iter()
-            .filter(|(name, _)| {
-                matches!(name.namespace, baml_codegen_types::Namespace::Types { .. })
-            })
+            .filter(|(name, _)| !name.is_stream())
             .filter_map(|(_, object)| match object {
                 baml_codegen_types::Object::Function(function) => {
                     Some(Function::from_codegen_types(
@@ -380,12 +346,7 @@ impl Function {
     pub(crate) fn load_stream_functions(objects: &baml_codegen_types::ObjectPool) -> Vec<Function> {
         let mut objects = objects
             .iter()
-            .filter(|(name, _)| {
-                matches!(
-                    name.namespace,
-                    baml_codegen_types::Namespace::StreamTypes { .. }
-                )
-            })
+            .filter(|(name, _)| name.is_stream())
             .filter_map(|(_, object)| match object {
                 baml_codegen_types::Object::Function(function) => {
                     function.stream_return_type.as_ref().map(|return_type| {
