@@ -49,18 +49,6 @@ fn split_companion(name: &str) -> Option<(&str, &str)> {
 /// Walks all user-package source files, extracts classes/enums/type aliases/
 /// declarative functions, resolves their types, and converts to codegen types.
 pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
-    let mut pool = SymbolPool::new();
-
-    let user_pkg_id = PackageId::new(db, Name::new("user"));
-    let user_pkg_items = baml_compiler2_ppir::package_items(db, user_pkg_id);
-
-    // Build the alias map for recursive-alias detection.
-    let alias_map = baml_compiler2_tir::inference::collect_type_aliases(db, user_pkg_items);
-    let recursive_aliases = find_recursive_aliases(&alias_map);
-
-    // First pass: collect parent functions keyed by (namespace_path, bare_name) so
-    // the second pass can attach companions.
-
     struct PendingFunction {
         /// Package this function lives in (always `"user"` here, kept for symmetry).
         pkg: Name,
@@ -73,6 +61,25 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
         /// The codegen function object.
         func: cg::Function,
     }
+
+    struct ParentEntry {
+        pkg: Name,
+        ns_path: Vec<Name>,
+        bare_name: Name,
+        func: cg::Function,
+    }
+
+    let mut pool = SymbolPool::new();
+
+    let user_pkg_id = PackageId::new(db, Name::new("user"));
+    let user_pkg_items = baml_compiler2_ppir::package_items(db, user_pkg_id);
+
+    // Build the alias map for recursive-alias detection.
+    let alias_map = baml_compiler2_tir::inference::collect_type_aliases(db, user_pkg_items);
+    let recursive_aliases = find_recursive_aliases(&alias_map);
+
+    // First pass: collect parent functions keyed by (namespace_path, bare_name) so
+    // the second pass can attach companions.
 
     let mut pending_functions: Vec<PendingFunction> = Vec::new();
 
@@ -279,13 +286,6 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
     }
 
     // Second pass: build a map of parent functions, then attach companions.
-    struct ParentEntry {
-        pkg: Name,
-        ns_path: Vec<Name>,
-        bare_name: Name,
-        func: cg::Function,
-    }
-
     let mut parents: Vec<ParentEntry> = Vec::new();
     let mut companions: Vec<PendingFunction> = Vec::new();
 
@@ -652,18 +652,15 @@ mod tests {
         // Should have build_request, render_prompt, parse companions.
         assert!(
             companion_names.contains(&"build_request"),
-            "build_request companion expected; got: {:?}",
-            companion_names
+            "build_request companion expected; got: {companion_names:?}"
         );
         assert!(
             companion_names.contains(&"render_prompt"),
-            "render_prompt companion expected; got: {:?}",
-            companion_names
+            "render_prompt companion expected; got: {companion_names:?}"
         );
         assert!(
             companion_names.contains(&"parse"),
-            "parse companion expected; got: {:?}",
-            companion_names
+            "parse companion expected; got: {companion_names:?}"
         );
     }
 

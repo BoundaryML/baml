@@ -1,9 +1,8 @@
 // Hand-written; drives codegen from real `.baml` source rather than an
 // in-memory `SymbolPool`. Mirrors the pipeline `baml-cli generate`
 // uses: discover files → ProjectDatabase → diagnostics gate →
-// `build_symbol_pool` → `to_source_code`. All other infrastructure
-// (conftest.py, pyproject.toml, test.sh, customizable/ symlinks)
-// matches `crate_templates/python/build.rs.template`.
+// `build_symbol_pool` → `to_source_code`. Reference template for the
+// other rig crates' build.rs / conftest.py / pyproject.toml shape.
 use std::{
     env, fs,
     path::{Path, PathBuf},
@@ -112,9 +111,8 @@ fn main() {
     }
 
     // 6. conftest.py — stubs `baml.baml_core` so `baml_sdk/__init__.py`
-    //    imports succeed without the runtime package installed (kept
-    //    in sync with `crate_templates/python/build.rs.template`).
-    let conftest_py = r#"# Hand-written; mirrors crate_templates/python/build.rs.template
+    //    imports succeed without the runtime package installed.
+    let conftest_py = r#"# Hand-written; stubs baml.baml_core for import-only tests.
 """Stub `baml.baml_core` so baml_sdk imports work without the runtime."""
 import sys
 import types

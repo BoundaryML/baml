@@ -2,7 +2,6 @@
 members = [
   "crates/*",
   "rig_tests/crates/*",
-  "rig_tests/fixtures",
 ]
 exclude = [ "crates/bridge_go" ]
 resolver = "2"

@@ -1,5 +1,0 @@
-"""Pytest tests for {{fixture_name}} fixture."""
-
-
-def test_top_level_package_imports():
-    import baml_sdk  # noqa: F401
