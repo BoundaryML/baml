@@ -17,8 +17,9 @@ const BamlPlayground = dynamic(
 );
 import { ScriptCopyBtn } from '../magicui/script-copy-btn';
 import Marquee from '../magicui/marquee';
-import { AgentModeToggle } from '../agent-mode-toggle';
-import { siteConfig } from '@/app/_lib/config';
+import { Navbar } from '../navbar';
+import { PlaygroundTerminal } from './playground-terminal';
+import { EditorTerminalSplit } from './editor-terminal-split';
 
 const TRUST_LOGOS: { alt: string; src: string; heightPx: number }[] = [
   { alt: 'SAP', src: '/testimonials/logos/sapLogo.png', heightPx: 36 },
@@ -127,7 +128,7 @@ const RotatingWord = () => {
 
 const customStyles = {
   root: {
-    '--bg': '#F5F1E8',
+    '--bg': '#ffffff',
     '--fg': '#1A1612',
     '--border': '#D9D3C4',
     '--accent': '#6D28D9',
@@ -148,7 +149,7 @@ const customStyles = {
     minHeight: '100vh',
     display: 'flex',
     flexDirection: 'column',
-    backgroundColor: '#F5F1E8',
+    backgroundColor: '#ffffff',
     color: '#1A1612',
     fontSize: '14px',
     lineHeight: '1.5',
@@ -183,11 +184,11 @@ const customStyles = {
   hero: {
     display: 'grid',
     gridTemplateColumns: '496px 1fr',
-    minHeight: '640px',
+    minHeight: '720px',
     borderBottom: '1px solid #D9D3C4',
   } as React.CSSProperties,
   heroLeft: {
-    padding: '48px 48px 64px',
+    padding: '48px 48px 0',
     display: 'flex',
     flexDirection: 'column' as const,
     justifyContent: 'space-between',
@@ -259,8 +260,6 @@ const customStyles = {
   heroRight: {
     padding: 0,
     backgroundColor: 'rgba(255,255,255,0.3)',
-    backgroundImage:
-      "url(\"data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M20 5c0 0-5 5-5 10s5 10 5 10 5-5 5-10-5-10-5-10zm0 2c2 2 3 6 3 8s-1 6-3 8-3-6-3-8 1-6 3-8z' fill='%237C3AED' fill-opacity='0.05'/%3E%3C/svg%3E\")",
     display: 'flex',
     alignItems: 'stretch',
     justifyContent: 'center',
@@ -462,78 +461,6 @@ const WindowDots = () => (
   </div>
 );
 
-const NavStars = () => {
-  const [stars, setStars] = useState<number | undefined>(undefined);
-  const [hovered, setHovered] = useState(false);
-  useEffect(() => {
-    fetch('https://api.github.com/repos/boundaryml/baml')
-      .then((r) => r.json())
-      .then((d) => setStars(d.stargazers_count as number))
-      .catch(() => { });
-  }, []);
-
-  const display = stars !== undefined
-    ? (hovered ? stars + 1 : stars).toLocaleString()
-    : 'GitHub';
-
-  return (
-    <Link
-      href="https://github.com/boundaryml/baml"
-      target="_blank"
-      style={customStyles.navItem}
-      className="flex items-center gap-1.5 hover:text-[#6D28D9] transition-colors"
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-    >
-      <img
-        src="/github-mark.svg"
-        alt="GitHub"
-        className="size-3.5 transition-all duration-150"
-        style={{ opacity: hovered ? 1 : 0.6, filter: hovered ? 'invert(27%) sepia(80%) saturate(800%) hue-rotate(240deg) brightness(90%)' : 'none' }}
-      />
-      <span className="tabular-nums">{display}</span><span style={customStyles.refMark}>)</span>
-    </Link>
-  );
-};
-
-const Nav = () => (
-  <nav
-    className="nav-responsive"
-    style={customStyles.nav}
-  >
-    <div style={customStyles.logo}>
-      Boundary
-    </div>
-    <div style={customStyles.navDiv}>
-      {siteConfig.nav.links.map((link) => (
-        <Link
-          key={link.id}
-          href={link.href}
-          className="mr-6 text-[13px] tracking-[0.15em] uppercase text-muted-foreground hover:text-[#6D28D9] transition-colors"
-        >
-          {link.name}
-        </Link>
-      ))}
-      <Link
-        href="https://docs.boundaryml.com/?utm_source=marketing-site&utm_medium=navbar-docs"
-        target="_blank"
-        className="mr-6 text-[13px] tracking-[0.15em] uppercase text-muted-foreground hover:text-[#6D28D9] transition-colors"
-      >
-        Docs
-      </Link>
-    </div>
-    <NavStars />
-    <AgentModeToggle />
-    <Link
-      href="/try"
-      style={{ ...customStyles.navItem, color: '#e8d5ff', backgroundColor: '#6d28d9', border: '2px solid #a78bfa', borderRadius: '8px', padding: '6px 14px' }}
-      className="hover:opacity-90 transition-opacity"
-    >
-      Learn BAML
-    </Link>
-  </nav>
-);
-
 const HeroCodeWindow = () => (
   <div style={customStyles.codeWindow}>
     <div style={customStyles.windowChrome}>
@@ -592,50 +519,6 @@ const installOptions: { id: InstallPath; label: string; icon?: string; command: 
   { id: 'codex', label: 'Codex', icon: '/Codex Color.svg', command: 'curl -fsSL http://baml.dev/agent | codex' },
   { id: 'human', label: 'Human', command: humanCommand },
 ];
-
-const playgroundExamples = [
-  { id: 'classification', label: 'Classification' },
-  { id: 'agentic', label: 'Agentic Workflows' },
-  { id: 'extraction', label: 'Data Extraction' },
-] as const;
-
-const PlaygroundExampleTabs = () => {
-  const [active, setActive] = useState<(typeof playgroundExamples)[number]['id']>(
-    'classification',
-  );
-
-  return (
-    <div className="flex gap-1 border-b border-[#D9D3C4] bg-[#F5F0E6] px-2 pt-2">
-      {playgroundExamples.map((ex) => {
-        const isActive = active === ex.id;
-        return (
-          <button
-            key={ex.id}
-            type="button"
-            onClick={() => setActive(ex.id)}
-            className="text-[12px] tracking-[0.08em] uppercase px-3 py-1.5 rounded-t-md transition-colors"
-            style={
-              isActive
-                ? {
-                  background: '#1A1612',
-                  color: '#fff',
-                  border: '1px solid #1A1612',
-                  borderBottom: 'none',
-                }
-                : {
-                  background: 'transparent',
-                  color: '#5C5852',
-                  border: '1px solid transparent',
-                }
-            }
-          >
-            {ex.label}
-          </button>
-        );
-      })}
-    </div>
-  );
-};
 
 const HeroSection = () => {
   const [installPath, setInstallPath] = useState<InstallPath>('claude');
@@ -699,10 +582,25 @@ const HeroSection = () => {
         style={customStyles.heroRight}
       >
         <div className="absolute inset-0 flex flex-col">
-          <PlaygroundExampleTabs />
-          <div className="flex-1 min-h-0">
-            <BamlPlayground compact />
-          </div>
+          <EditorTerminalSplit
+            editor={<BamlPlayground compact />}
+            terminal={<PlaygroundTerminal />}
+          />
+          <Link
+            href="/how-the-playground-works"
+            className="hover:text-[#6D28D9] transition-colors"
+            style={{
+              padding: '12px 24px',
+              fontSize: '13px',
+              color: '#5C5852',
+              borderTop: '1px solid #D9D3C4',
+              backgroundColor: '#ffffff',
+              textDecoration: 'none',
+              flexShrink: 0,
+            }}
+          >
+            Wondering how you&apos;re running BAML in your browser? →
+          </Link>
         </div>
       </div>
     </section>
@@ -892,6 +790,7 @@ export function VariantHome() {
       @media (max-width: 600px) {
         .nav-responsive { grid-template-columns: 1fr auto !important; gap: 12px; padding: 16px !important; }
         .index-row-responsive { grid-template-columns: 40px 1fr !important; }
+        .hero-right-responsive { display: none !important; }
       }
     `;
     document.head.appendChild(style);
@@ -903,10 +802,11 @@ export function VariantHome() {
   return (
     <div style={customStyles.root as React.CSSProperties}>
       <div style={customStyles.container}>
-        <Nav />
+        <Navbar />
         <HeroSection />
       </div>
     </div>
   );
 }
+
 

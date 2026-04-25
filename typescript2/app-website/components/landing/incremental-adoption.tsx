@@ -7,27 +7,25 @@ import {
   useReducedMotion,
   useScroll,
 } from 'motion/react';
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 // Tokens
-const BG = '#F5F1E8';
+const BG = '#ffffff';
 const BORDER = '#D9D3C4';
 const ACCENT = '#7C3AED';
 const INK = '#1A1612';
 const MUTED = '#5C5852';
 const MONO =
   '"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
-const HAND = 'var(--font-caveat), "Caveat", cursive';
+const HAND = '"Helvetica Neue", Helvetica, Arial, sans-serif';
 
 // Code geometry — must match CodeBlock styles below.
 const TAB_HEIGHT = 30;
 const CODE_PAD_TOP = 12;
 const CODE_PAD_LEFT = 16;
 const LINE_HEIGHT = 20;
-const CHAR_WIDTH = 7.2;
 const lineCenterY = (n: number) =>
   TAB_HEIGHT + 1 + CODE_PAD_TOP + (n - 0.5) * LINE_HEIGHT;
-const colCenterX = (c: number) => CODE_PAD_LEFT + (c - 1) * CHAR_WIDTH;
 
 // Code sources — rendered verbatim
 const STEP_1_PY = `from openai import OpenAI
@@ -343,6 +341,7 @@ function CodeBlock({
         background: '#FBF8F1',
         boxShadow: '0 1px 0 rgba(0,0,0,0.02), 0 6px 24px -16px rgba(0,0,0,0.18)',
         overflow: 'hidden',
+        width: '100%',
       }}
     >
       <div
@@ -389,19 +388,6 @@ function CodeBlock({
 // ── Annotated block: code on the left, caption gutter on the right ───────────
 
 function AnnotatedBlock({ html, block }: { html: string; block: BlockSpec }) {
-  const codeRef = useRef<HTMLDivElement>(null);
-  const [codeWidth, setCodeWidth] = useState(0);
-
-  useLayoutEffect(() => {
-    const el = codeRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver(([entry]) => {
-      setCodeWidth(entry.contentRect.width);
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-
   const GAP = 16;
   const transform = block.scale ? `scale(${block.scale})` : undefined;
 
@@ -412,12 +398,33 @@ function AnnotatedBlock({ html, block }: { html: string; block: BlockSpec }) {
         display: 'grid',
         gridTemplateColumns: '1.6fr 1fr',
         columnGap: GAP,
+        width: '100%',
         transform,
         transformOrigin: 'top left',
       }}
     >
-      <div ref={codeRef}>
+      <div style={{ position: 'relative', minWidth: 0, width: '100%' }}>
         <CodeBlock html={html} filename={block.filename} />
+        {/* Line highlights — one per annotation */}
+        {block.annotations.map((a, i) => (
+          <motion.div
+            key={`${block.key}-hl-${i}`}
+            initial={{ opacity: 0, scaleX: 0.98 }}
+            animate={{ opacity: 1, scaleX: 1 }}
+            transition={{ duration: 0.35, delay: 0.15 + i * 0.08 }}
+            style={{
+              position: 'absolute',
+              left: 1,
+              right: 1,
+              top: lineCenterY(a.lineNumber) - LINE_HEIGHT / 2,
+              height: LINE_HEIGHT,
+              background: 'rgba(124, 58, 237, 0.14)',
+              borderLeft: `2px solid ${ACCENT}`,
+              transformOrigin: 'left center',
+              pointerEvents: 'none',
+            }}
+          />
+        ))}
       </div>
       <div style={{ position: 'relative' }}>
         {block.annotations.map((a, i) => (
@@ -433,11 +440,13 @@ function AnnotatedBlock({ html, block }: { html: string; block: BlockSpec }) {
               right: 0,
               transform: 'translateY(-50%)',
               fontFamily: HAND,
-              fontStyle: 'italic',
-              fontSize: 19,
-              lineHeight: 1.2,
+              fontStyle: 'normal',
+              fontSize: 14,
+              fontWeight: 400,
+              lineHeight: 1.4,
+              letterSpacing: '0.01em',
               color: ACCENT,
-              opacity: 0.78,
+              opacity: 0.85,
               whiteSpace: 'pre-line',
               pointerEvents: 'none',
             }}
@@ -446,59 +455,6 @@ function AnnotatedBlock({ html, block }: { html: string; block: BlockSpec }) {
           </motion.div>
         ))}
       </div>
-
-      {codeWidth > 0 && (
-        <svg
-          width="100%"
-          height="100%"
-          style={{
-            position: 'absolute',
-            inset: 0,
-            pointerEvents: 'none',
-            overflow: 'visible',
-          }}
-        >
-          <title>annotation arrows</title>
-          {block.annotations.map((a, i) => {
-            const tx = colCenterX(a.column);
-            const ty = lineCenterY(a.lineNumber);
-            const sx = codeWidth + GAP;
-            const sy = ty;
-            const dx = sx - tx;
-            const c1x = sx - dx * 0.35;
-            const c1y = sy - 22;
-            const c2x = tx + dx * 0.35;
-            const c2y = ty - 22;
-            const headSize = 5;
-            return (
-              <g
-                key={`${block.key}-arrow-${i}`}
-                stroke={ACCENT}
-                strokeOpacity={0.55}
-                fill="none"
-              >
-                <motion.path
-                  initial={{ pathLength: 0, opacity: 0 }}
-                  animate={{ pathLength: 1, opacity: 1 }}
-                  transition={{ duration: 0.5, delay: 0.15 + i * 0.08 }}
-                  d={`M ${sx} ${sy} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${tx + headSize} ${ty}`}
-                  strokeWidth={1.4}
-                  strokeLinecap="round"
-                />
-                <motion.path
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ duration: 0.2, delay: 0.6 + i * 0.08 }}
-                  d={`M ${tx + headSize + 1} ${ty - 3} L ${tx} ${ty} L ${tx + headSize + 1} ${ty + 3}`}
-                  strokeWidth={1.4}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </g>
-            );
-          })}
-        </svg>
-      )}
     </div>
   );
 }
@@ -550,7 +506,17 @@ function StickyPanel({ activeStep }: { activeStep: number }) {
           }}
         >
           {STEPS[activeStep].blocks.map((b) => (
-            <AnnotatedBlock key={b.key} block={b} html={blockHtmlByKey[b.key]} />
+            <div
+              key={b.key}
+              style={{
+                flex:
+                  STEPS[activeStep].blocks.length > 1 ? '1 1 0' : '0 0 auto',
+                minHeight: 0,
+                display: 'flex',
+              }}
+            >
+              <AnnotatedBlock block={b} html={blockHtmlByKey[b.key]} />
+            </div>
           ))}
           {activeStep === 3 && (
             <div

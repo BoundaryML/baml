@@ -25,6 +25,8 @@ export interface ParticleImageProps {
   hoverRepel?: number;
   /** Spring acceleration toward target. Lower = slower drift. Default 0.055 */
   spring?: number;
+  /** Override all sampled pixel colors with this hex color (#RRGGBB). Keeps source alpha. */
+  color?: string;
   className?: string;
   style?: CSSProperties;
 }
@@ -64,6 +66,7 @@ export default function ParticleImage({
   jitter = 0.5,
   hoverRepel = 80,
   spring = 0.055,
+  color,
   className,
   style,
 }: ParticleImageProps) {
@@ -144,6 +147,18 @@ export default function ParticleImage({
         return;
       }
 
+      // Optional color override — parse once, reuse per particle
+      let overrideR = 0;
+      let overrideG = 0;
+      let overrideB = 0;
+      const hasOverride = typeof color === 'string' && /^#?[0-9a-fA-F]{6}$/.test(color);
+      if (hasOverride) {
+        const hex = color!.replace('#', '');
+        overrideR = parseInt(hex.slice(0, 2), 16);
+        overrideG = parseInt(hex.slice(2, 4), 16);
+        overrideB = parseInt(hex.slice(4, 6), 16);
+      }
+
       // ── 2. Build raw particle list (skip transparent pixels) ─────────────
       type RawP = { tx: number; ty: number; color: number };
       const raw: RawP[] = [];
@@ -153,16 +168,16 @@ export default function ParticleImage({
           const i = (sy * sW + sx) * 4;
           const a = data[i + 3]!;
           if (a < 10) continue;
-          const r = data[i]!;
-          const g = data[i + 1]!;
-          const b = data[i + 2]!;
+          const r = hasOverride ? overrideR : data[i]!;
+          const g = hasOverride ? overrideG : data[i + 1]!;
+          const b = hasOverride ? overrideB : data[i + 2]!;
           // Pack as little-endian Uint32: in memory bytes are [R, G, B, A]
           // which as a 32-bit LE word is: A<<24 | B<<16 | G<<8 | R
-          const color = ((a << 24) | (b << 16) | (g << 8) | r) >>> 0;
+          const packed = ((a << 24) | (b << 16) | (g << 8) | r) >>> 0;
           raw.push({
             tx: (sx / sW) * width,
             ty: (sy / sH) * height,
-            color,
+            color: packed,
           });
         }
       }
@@ -329,7 +344,7 @@ export default function ParticleImage({
       particlesRef.current = [];
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [src, width, height, density, particleSize, streamDuration, streamStyle, jitter, hoverRepel, spring]);
+  }, [src, width, height, density, particleSize, streamDuration, streamStyle, jitter, hoverRepel, spring, color]);
 
   return (
     <canvas

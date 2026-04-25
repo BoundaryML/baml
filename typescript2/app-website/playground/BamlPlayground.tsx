@@ -592,56 +592,72 @@ export function BamlPlayground({ compact }: BamlPlaygroundProps = {}) {
     }
   }, [selectedFn, argsJson]);
 
+  const handleRunRef = useRef(handleRun);
+  handleRunRef.current = handleRun;
+
+  useEffect(() => {
+    const onExternalRun = () => {
+      handleRunRef.current?.();
+    };
+    window.addEventListener('baml-playground-run', onExternalRun);
+    return () =>
+      window.removeEventListener('baml-playground-run', onExternalRun);
+  }, []);
+
   const hasErrors = diagnostics.some((d) => d.severity === 'error');
 
   return (
-    <div className={`flex flex-col gap-3 w-full ${compact ? 'h-full overflow-hidden' : ''}`}>
-      {/* Settings bar */}
-      <div className="flex items-center gap-3 flex-wrap">
-        <StatusBadge status={status} message={statusMsg} />
+    <div className={`flex flex-col w-full ${compact ? 'h-full overflow-hidden' : 'gap-3'}`}>
+      {/* Settings bar — hidden in compact landing embed */}
+      {!compact && (
+        <>
+          <div className="flex items-center gap-3 flex-wrap">
+            <StatusBadge status={status} message={statusMsg} />
 
-        <button
-          className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
-          onClick={() => setSettingsOpen(!settingsOpen)}
-        >
-          <Settings className="h-3 w-3" />
-          Settings
-          {settingsOpen ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-        </button>
+            <button
+              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+              onClick={() => setSettingsOpen(!settingsOpen)}
+            >
+              <Settings className="h-3 w-3" />
+              Settings
+              {settingsOpen ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+            </button>
 
-        {/* Functions inline */}
-        {functions.length > 0 && (
-          <div className="flex items-center gap-1.5 ml-auto">
-            <span className="text-xs text-muted-foreground">Function:</span>
-            {functions.map((fn) => (
-              <button
-                key={fn.name}
-                className={`px-2 py-0.5 text-xs rounded transition-colors ${
-                  selectedFn === fn.name
-                    ? 'bg-primary/10 text-primary font-medium'
-                    : 'bg-muted hover:bg-muted/80 text-muted-foreground'
-                }`}
-                onClick={() => {
-                  setSelectedFn(fn.name);
-                  const test = tests.find((t) => t.functionName === fn.name);
-                  if (test) {
-                    try {
-                      setArgsJson(JSON.stringify(JSON.parse(test.argsJson), null, 2));
-                    } catch {
-                      setArgsJson(test.argsJson);
-                    }
-                  }
-                }}
-              >
-                {fn.name}
-              </button>
-            ))}
+            {/* Functions inline */}
+            {functions.length > 0 && (
+              <div className="flex items-center gap-1.5 ml-auto">
+                <span className="text-xs text-muted-foreground">Function:</span>
+                {functions.map((fn) => (
+                  <button
+                    key={fn.name}
+                    className={`px-2 py-0.5 text-xs rounded transition-colors ${
+                      selectedFn === fn.name
+                        ? 'bg-primary/10 text-primary font-medium'
+                        : 'bg-muted hover:bg-muted/80 text-muted-foreground'
+                    }`}
+                    onClick={() => {
+                      setSelectedFn(fn.name);
+                      const test = tests.find((t) => t.functionName === fn.name);
+                      if (test) {
+                        try {
+                          setArgsJson(JSON.stringify(JSON.parse(test.argsJson), null, 2));
+                        } catch {
+                          setArgsJson(test.argsJson);
+                        }
+                      }
+                    }}
+                  >
+                    {fn.name}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
-        )}
-      </div>
+        </>
+      )}
 
       {/* Collapsible settings */}
-      {settingsOpen && (
+      {!compact && settingsOpen && (
         <Card className="p-3 flex flex-col sm:flex-row gap-3">
           <div className="flex-1">
             <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5 mb-1.5">
@@ -681,14 +697,21 @@ export function BamlPlayground({ compact }: BamlPlaygroundProps = {}) {
       )}
 
       {/* Main content: Editor + Right panel */}
-      <div className={`flex flex-col lg:flex-row gap-4 ${compact ? 'flex-1 min-h-0' : 'min-h-[700px]'}`}>
+      <div className={`flex flex-col lg:flex-row ${compact ? 'flex-1 min-h-0 gap-0' : 'gap-4 min-h-[700px]'}`}>
         {/* Editor */}
-        <div className="flex-1 min-w-0 flex flex-col gap-3">
-          <Card className={`flex-1 flex flex-col overflow-hidden ${compact ? 'min-h-0' : 'min-h-[500px]'}`}>
+        <div className={`flex-1 min-w-0 flex flex-col ${compact ? 'gap-0' : 'gap-3'}`}>
+          <Card
+            className={`flex-1 flex flex-col overflow-hidden ${
+              compact
+                ? 'min-h-0 bg-[#0d1117] border-0 rounded-none shadow-none'
+                : 'min-h-[500px]'
+            }`}
+          >
             <BamlEditor
               value={code}
               onChange={handleCodeChange}
               disabled={status !== 'ready'}
+              chromeless={compact}
             />
           </Card>
 

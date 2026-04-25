@@ -16,16 +16,16 @@ interface BoxConfig {
 
 const boxConfigs: BoxConfig[] = [
   {
-    className: 'bg-secondary text-white',
+    className: 'bg-primary text-white',
     title: 'ClassifyText (gpt-4o-mini)',
   },
   {
-    className: 'bg-secondary/40 text-white',
+    className: 'bg-primary/40 text-white',
     title: 'ClassifyText (claude-3-5-sonnet)',
   },
   {
     className:
-      'bg-secondary/20 border border-secondary border-dashed text-secondary',
+      'bg-primary/20 border border-primary border-dashed text-primary',
     title: 'ClassifyText (gemini-1.5-pro)',
   },
 ];

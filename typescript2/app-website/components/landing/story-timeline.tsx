@@ -12,11 +12,26 @@ const ERAS = timeline.length;
 
 const ERA_IMAGES: Record<string, string> = {
   'C, Unix': '/Sphinx Icon.png',
-  'Java, JavaScript': '/Satellite Icon.png',
+  'Java, JavaScript': '/java-icon.png',
   'TypeScript': '/Bridge Icon.png',
-  'Python': '/Telescope Icon.png',
-  'BAML': '/Constellation Icon.png',
+  'Python': '/python-icon.png',
+  'BAML': '/baml-sheep.png',
 };
+
+const ERA_SIZES: Record<string, number> = {
+  Python: 280,
+};
+const DEFAULT_ERA_SIZE = 420;
+const LOGO_COLOR = '#1A1612';
+
+// Per-era density overrides. Lower density = more particles (denser). Higher = sparser.
+// Java icon has thin strokes/text → drop density so it doesn't look anemic.
+// Python icon is on a smaller canvas → bump density so particles aren't visually packed.
+const ERA_DENSITY: Record<string, number> = {
+  'Java, JavaScript': 4,
+  Python: 8,
+};
+const DEFAULT_DENSITY = 6;
 
 const DASH_MASK =
   'repeating-linear-gradient(to bottom, black 0px, black 4px, transparent 4px, transparent 18px)';
@@ -118,15 +133,16 @@ function EraCard({
           >
             <LazyParticleImage
               src={image}
-              width={350}
-              height={350}
+              width={ERA_SIZES[node.label] ?? DEFAULT_ERA_SIZE}
+              height={ERA_SIZES[node.label] ?? DEFAULT_ERA_SIZE}
               jitter={0.15}
               hoverRepel={5}
-              density={6}
+              density={ERA_DENSITY[node.label] ?? DEFAULT_DENSITY}
               particleSize={3}
               streamDuration={2.0}
               streamStyle={isBaml ? 'radial' : 'cascade'}
               spring={0.02}
+              color={LOGO_COLOR}
               sectionActive={isActive}
             />
           </div>

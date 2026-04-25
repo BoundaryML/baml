@@ -11,7 +11,7 @@ export const metadata = {
 const MONO =
   'ui-monospace, SFMono-Regular, "JetBrains Mono", Menlo, Consolas, monospace';
 const ACCENT = '#7C3AED';
-const BG = '#F5F0E6';
+const BG = '#ffffff';
 const INK = '#1A1612';
 
 export default async function AgentPage() {
