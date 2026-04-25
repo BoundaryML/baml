@@ -64,29 +64,36 @@ export function SocialProofTestimonials({
 }: {
   testimonials: Testimonial[];
 }) {
+  const COLS = 3;
+  const perCol = Math.max(1, Math.ceil(testimonials.length / COLS));
+  const columns = Array.from({ length: COLS }, (_, i) =>
+    Array.from(
+      { length: perCol },
+      (_unused, j) => testimonials[(i * perCol + j) % testimonials.length],
+    ),
+  );
+
   return (
     <div className="h-full">
       <div className="px-10">
         <div className="relative max-h-[750px] overflow-hidden">
           <div className="gap-0 md:columns-2 xl:columns-3">
-            {Array(Math.ceil(testimonials.length / 3))
-              .fill(0)
-              .map((_, i) => (
-                <Marquee
-                  className={cn({
-                    '[--duration:8s]': i === 1,
-                    '[--duration:10s]': i === 0,
-                    '[--duration:12s]': i === 2,
-                  })}
-                  // biome-ignore lint/suspicious/noArrayIndexKey: Array index is stable here since we're mapping over a fixed slice of children
-                  key={i}
-                  vertical
-                >
-                  {testimonials.slice(i * 3, (i + 1) * 3).map((card) => (
-                    <TestimonialCard {...card} key={card.id} />
-                  ))}
-                </Marquee>
-              ))}
+            {columns.map((col, i) => (
+              <Marquee
+                className={cn({
+                  '[--duration:8s]': i === 1,
+                  '[--duration:10s]': i === 0,
+                  '[--duration:12s]': i === 2,
+                })}
+                // biome-ignore lint/suspicious/noArrayIndexKey: column index is stable for the lifetime of the component
+                key={i}
+                vertical
+              >
+                {col.map((card, j) => (
+                  <TestimonialCard {...card} key={`${i}-${card.id}-${j}`} />
+                ))}
+              </Marquee>
+            ))}
           </div>
           <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1/6 md:h-1/5 w-full bg-gradient-to-t from-background from-20%" />
           <div className="pointer-events-none absolute inset-x-0 top-0 h-1/6 md:h-1/5 w-full bg-gradient-to-b from-background from-20%" />

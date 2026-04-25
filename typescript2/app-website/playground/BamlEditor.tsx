@@ -20,6 +20,8 @@ interface BamlEditorProps {
   value: string;
   onChange: (value: string) => void;
   disabled?: boolean;
+  /** Hide the "main.baml / Training Wheels" top strip. */
+  chromeless?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -109,7 +111,7 @@ function scopeToColor(scopes: string[]): string {
 // Component
 // ---------------------------------------------------------------------------
 
-export function BamlEditor({ value, onChange, disabled }: BamlEditorProps) {
+export function BamlEditor({ value, onChange, disabled, chromeless }: BamlEditorProps) {
   const [trainingWheels, setTrainingWheels] = useState(true);
   const [tokens, setTokens] = useState<ThemedToken[][] | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -161,16 +163,18 @@ export function BamlEditor({ value, onChange, disabled }: BamlEditorProps) {
   // ---------------------------------------------------------------------------
   if (trainingWheels) {
     return (
-      <div className="flex flex-col h-full">
-        <div className="flex items-center justify-between border-b border-border bg-muted/50 px-4 py-2">
-          <span className="text-sm font-medium">main.baml</span>
-          <button
-            className="text-xs px-2 py-1 rounded bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 transition-colors border border-purple-500/20"
-            onClick={() => setTrainingWheels(false)}
-          >
-            Disable Training Wheels
-          </button>
-        </div>
+      <div className="flex flex-col h-full bg-[#0d1117]">
+        {!chromeless && (
+          <div className="flex items-center justify-between border-b border-border bg-muted/50 px-4 py-2">
+            <span className="text-sm font-medium">main.baml</span>
+            <button
+              className="text-xs px-2 py-1 rounded bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 transition-colors border border-purple-500/20"
+              onClick={() => setTrainingWheels(false)}
+            >
+              Disable Training Wheels
+            </button>
+          </div>
+        )}
         <div className="flex-1 overflow-auto p-4 font-mono text-sm leading-6 bg-[#0d1117] whitespace-pre-wrap">
           <TrainingWheelsView
             code={value}
@@ -188,16 +192,18 @@ export function BamlEditor({ value, onChange, disabled }: BamlEditorProps) {
   // Full edit mode: transparent textarea over syntax-highlighted code
   // ---------------------------------------------------------------------------
   return (
-    <div className="flex flex-col h-full">
-      <div className="flex items-center justify-between border-b border-border bg-muted/50 px-4 py-2">
-        <span className="text-sm font-medium">main.baml</span>
-        <button
-          className="text-xs px-2 py-1 rounded bg-green-500/10 text-green-400 hover:bg-green-500/20 transition-colors border border-green-500/20"
-          onClick={() => setTrainingWheels(true)}
-        >
-          Enable Training Wheels
-        </button>
-      </div>
+    <div className="flex flex-col h-full bg-[#0d1117]">
+      {!chromeless && (
+        <div className="flex items-center justify-between border-b border-border bg-muted/50 px-4 py-2">
+          <span className="text-sm font-medium">main.baml</span>
+          <button
+            className="text-xs px-2 py-1 rounded bg-green-500/10 text-green-400 hover:bg-green-500/20 transition-colors border border-green-500/20"
+            onClick={() => setTrainingWheels(true)}
+          >
+            Enable Training Wheels
+          </button>
+        </div>
+      )}
       <div className="flex-1 relative overflow-hidden bg-[#0d1117]">
         {/* Highlighted layer */}
         <div

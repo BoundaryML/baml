@@ -12,7 +12,7 @@ export function FooterSection() {
   const fontSize = mobile ? 70 : tablet ? 90 : 160;
 
   return (
-    <footer className="w-full pb-0 min-h-screen flex flex-col" id="footer">
+    <footer className="w-full pb-0" id="footer">
       <div className="grid grid-cols-1 md:grid-cols-[minmax(0,320px)_1fr] gap-y-10 md:gap-x-16 p-10 items-start">
         <div className="flex flex-col items-start gap-y-5 max-w-xs mx-0">
           <Link className="flex items-center gap-2" href="/">
@@ -33,16 +33,16 @@ export function FooterSection() {
             {/* <Icons.gdprDark className="size-12" /> */}
           </div>
         </div>
-        <div className="w-full">
-          <div className="grid grid-cols-2 xl:grid-cols-4 gap-y-6 gap-x-8">
+        <div className="w-full md:flex md:justify-end">
+          <div className="grid grid-cols-[repeat(2,minmax(0,180px))] sm:grid-cols-[repeat(3,minmax(0,180px))] items-start gap-y-6 gap-x-16 md:gap-x-24">
             {siteConfig.footerLinks.map((column) => (
-              <ul className="flex flex-col gap-y-2" key={column.title}>
-                <li className="mb-2 text-sm font-semibold text-primary">
+              <ul className="flex flex-col gap-y-3" key={column.title}>
+                <li className="text-sm font-semibold text-primary leading-none">
                   {column.title}
                 </li>
                 {column.links.map((link) => (
                   <li
-                    className="group inline-flex cursor-pointer items-center justify-start gap-1 text-[15px]/snug text-muted-foreground"
+                    className="group inline-flex cursor-pointer items-center justify-start gap-1 text-[15px] leading-none text-muted-foreground"
                     key={link.id}
                   >
                     <Link href={link.url}>{link.title}</Link>
@@ -56,7 +56,7 @@ export function FooterSection() {
           </div>
         </div>
       </div>
-      <div className="w-full flex-1 min-h-48 md:min-h-64 relative z-0">
+      <div className="w-full h-48 md:h-64 relative z-0">
         <div className="absolute inset-0 bg-gradient-to-t from-transparent to-background z-10 from-40%" />
         <div className="absolute inset-0 mx-6">
           <FlickeringGrid

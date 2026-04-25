@@ -1,4 +1,4 @@
-const BG = '#F5F1E8';
+const BG = '#ffffff';
 const INK = '#1A1612';
 const MUTED = '#5C5852';
 const KICKER = '#8A8580';
@@ -56,7 +56,7 @@ export function WhyALanguage() {
               margin: '0 0 20px',
             }}
           >
-            / Why a language
+            Why a language
           </p>
 
           <div
@@ -91,8 +91,9 @@ export function WhyALanguage() {
               columnGap: '48px',
               width: '100%',
               maxWidth: '800px',
-              textAlign: 'left',
+              textAlign: 'center',
               alignItems: 'stretch',
+              justifyItems: 'center',
             }}
           >
             <Column items={LEFT} />

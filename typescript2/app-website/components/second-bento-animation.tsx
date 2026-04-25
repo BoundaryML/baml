@@ -55,7 +55,7 @@ Job Title: "Senior Software Engineer`;
         <div className="flex items-end justify-end gap-3">
           <motion.div
             animate={{ opacity: 1, x: 0 }}
-            className="max-w-[280px] bg-secondary text-white p-4 rounded-2xl ml-auto shadow-[0_0_10px_rgba(0,0,0,0.05)]"
+            className="max-w-[280px] bg-primary text-white p-4 rounded-2xl ml-auto shadow-[0_0_10px_rgba(0,0,0,0.05)]"
             initial={{ opacity: 0, x: 20 }}
             transition={{
               duration: 0.3,
@@ -143,7 +143,7 @@ Job Title: "Senior Software Engineer`;
                       opacity: 1,
                       x: 0,
                     }}
-                    className="md:min-w-[300px] min-w-[220px] p-4 bg-green-50 border border-green-200 rounded-xl shadow-[0_0_10px_rgba(0,0,0,0.05)]"
+                    className="md:min-w-[300px] min-w-[220px] p-4 bg-purple-50 border border-purple-200 rounded-xl shadow-[0_0_10px_rgba(0,0,0,0.05)]"
                     exit={{ opacity: 0, x: 20 }}
                     initial={{ opacity: 0, x: 10 }}
                     key="returned-object"
