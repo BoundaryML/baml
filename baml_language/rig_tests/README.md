@@ -8,10 +8,10 @@ end-to-end.
 
 ```bash
 # Run tests for a specific crate
-cargo test -p rig_python_empty
+cargo test -p rig_empty
 
 # Run all rig tests
-cargo test -p 'rig_python_*'
+cargo test -p 'rig_*'
 ```
 
 ## Directory Structure
@@ -19,7 +19,7 @@ cargo test -p 'rig_python_*'
 ```text
 rig_tests/
 └── crates/
-    └── python_<fixture>/
+    └── <fixture>/
         ├── Cargo.toml
         ├── build.rs
         ├── baml_src/        # real BAML source the crate exercises
@@ -30,9 +30,9 @@ rig_tests/
 ```
 
 Crates are hand-maintained. The reference template is
-`crates/python_example_09a/`; new crates are added by copying its
-shape (build.rs, Cargo.toml, src/lib.rs, customizable/) and authoring
-a new `baml_src/`.
+`crates/llm_functions/`; new crates are added by copying its shape
+(build.rs, Cargo.toml, src/lib.rs, customizable/) and authoring a new
+`baml_src/`.
 
 ## How It Works
 
@@ -53,12 +53,12 @@ a new `baml_src/`.
 
 ## Adding a New Fixture
 
-1. `cp -r crates/python_example_09a crates/python_<name>` (or copy
-   from any existing rig crate).
+1. `cp -r crates/llm_functions crates/<name>` (or copy from any
+   existing rig crate).
 2. Adjust the `[package] name` in `Cargo.toml` and the
    `pyproject.toml` `name = ...` in `build.rs` to match.
 3. Replace `baml_src/` contents with the BAML source for the new
    fixture.
 4. Replace `customizable/test_main.py` with assertions over the
    generated SDK.
-5. `cargo test -p rig_python_<name>`.
+5. `cargo test -p rig_<name>`.

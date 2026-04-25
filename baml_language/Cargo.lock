@@ -6402,7 +6402,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "rig_python_empty"
+name = "rig_basic_type_shapes"
 version = "0.1.0"
 dependencies = [
  "baml_codegen_python",
@@ -6413,7 +6413,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "rig_python_example_09a"
+name = "rig_empty"
 version = "0.1.0"
 dependencies = [
  "baml_codegen_python",
@@ -6424,62 +6424,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "rig_python_full_type_coverage"
-version = "0.1.0"
-dependencies = [
- "baml_codegen_python",
- "baml_codegen_types",
- "baml_db",
- "baml_project",
- "baml_workspace",
-]
-
-[[package]]
-name = "rig_python_literal_types"
-version = "0.1.0"
-dependencies = [
- "baml_codegen_python",
- "baml_codegen_types",
- "baml_db",
- "baml_project",
- "baml_workspace",
-]
-
-[[package]]
-name = "rig_python_llm_functions"
-version = "0.1.0"
-dependencies = [
- "baml_codegen_python",
- "baml_codegen_types",
- "baml_db",
- "baml_project",
- "baml_workspace",
-]
-
-[[package]]
-name = "rig_python_map_types"
-version = "0.1.0"
-dependencies = [
- "baml_codegen_python",
- "baml_codegen_types",
- "baml_db",
- "baml_project",
- "baml_workspace",
-]
-
-[[package]]
-name = "rig_python_mixed_complex_types"
-version = "0.1.0"
-dependencies = [
- "baml_codegen_python",
- "baml_codegen_types",
- "baml_db",
- "baml_project",
- "baml_workspace",
-]
-
-[[package]]
-name = "rig_python_union_types_extended"
+name = "rig_llm_functions"
 version = "0.1.0"
 dependencies = [
  "baml_codegen_python",
