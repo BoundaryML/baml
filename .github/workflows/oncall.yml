@@ -39,19 +39,24 @@ jobs:
 
       # The intent of auto-merge here is to allow both automated schedule
       # filling to work and to allow team members to do shift swaps using
-      # just github.dev.
-      - name: Enable auto-merge
+      # just github.dev. Repo-level auto-merge is disabled and the canary
+      # branch uses a merge queue, so `gh pr merge --auto` is rejected;
+      # enqueue directly via the GraphQL `enqueuePullRequest` mutation.
+      - name: Enqueue to merge queue
         if: steps.scope.outputs.only_schedule == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh pr merge ${{ github.event.pull_request.number }} --auto --squash
+          PR_NODE_ID: ${{ github.event.pull_request.node_id }}
+        run: |
+          gh api graphql -f query='
+            mutation($prId: ID!) {
+              enqueuePullRequest(input: {pullRequestId: $prId}) {
+                mergeQueueEntry { position }
+              }
+            }' -F prId="$PR_NODE_ID"
 
   notify:
-    # TODO: remove `pull_request` from this condition once the notify job is
-    # validated end-to-end. While we're still iterating on it, we want PRs
-    # that touch this workflow / the oncall tool to actually exercise the
-    # Slack-posting path.
-    if: github.event_name == 'pull_request' || github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.action == 'notify')
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.action == 'notify')
     runs-on: ubuntu-latest
     environment: boundary-tools-prod
     env:
