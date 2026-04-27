@@ -701,7 +701,11 @@ fn pat_desc(pat_id: baml_compiler2_ast::PatId, body: &baml_compiler2_ast::ExprBo
     let pat = &body.patterns[pat_id];
     let base = match &pat.kind {
         PatternKind::Wildcard => "_".to_string(),
-        PatternKind::Bind { name, .. } => name.to_string(),
+        // TODO: render inner pattern when bind-with-pattern syntax lands
+        PatternKind::Bind {
+            name,
+            inner: _inner,
+        } => name.to_string(),
         PatternKind::Literal(lit) => lit.to_string(),
         PatternKind::Null => "null".into(),
         PatternKind::EnumVariant { enum_name, variant } => {
@@ -2012,7 +2016,11 @@ impl CompilerRunner {
             let pat = &body.patterns[pat_id];
             let base = match &pat.kind {
                 PatternKind::Wildcard => "_".to_string(),
-                PatternKind::Bind { name, .. } => name.to_string(),
+                // TODO: render inner pattern when bind-with-pattern syntax lands
+                PatternKind::Bind {
+                    name,
+                    inner: _inner,
+                } => name.to_string(),
                 PatternKind::Literal(lit) => lit.to_string(),
                 PatternKind::Null => "null".into(),
                 PatternKind::EnumVariant { enum_name, variant } => {

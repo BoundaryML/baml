@@ -2628,7 +2628,11 @@ impl<'db> TypeInferenceBuilder<'db> {
                 covers_all: true,
             },
 
-            PatternKind::Bind { name, .. } => {
+            // TODO: handle inner pattern when bind-with-pattern syntax lands
+            PatternKind::Bind {
+                name,
+                inner: _inner,
+            } => {
                 if self.is_bare_type_sugar_binding(name) {
                     let resolved = self.resolve_type_expr(
                         &TypeExpr::Path {

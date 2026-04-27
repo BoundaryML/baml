@@ -754,21 +754,6 @@ pub(crate) mod support {
         }
     }
 
-    fn pat_desc_short(pat: &baml_compiler2_ast::Pattern) -> String {
-        use baml_compiler2_ast::PatternKind;
-        let base = match &pat.kind {
-            PatternKind::Wildcard => "_".to_string(),
-            PatternKind::Bind { name, .. } => name.to_string(),
-            PatternKind::Type(ty) => format!("{ty:?}"),
-            other => format!("{other:?}"),
-        };
-        if let Some(narrow) = &pat.narrow {
-            format!("{base}: {}", type_expr_to_string(narrow))
-        } else {
-            base
-        }
-    }
-
     fn render_stmt(
         stmt_id: StmtId,
         body: &ExprBody,
@@ -784,7 +769,7 @@ pub(crate) mod support {
                 initializer,
                 ..
             } => {
-                let pat_name = pat_desc_short(&body.patterns[*pattern]);
+                let pat_name = pat_desc(*pattern, body);
                 if let Some(init) = initializer {
                     let init_ty = expr_ty(inference, *init);
                     let binding_ty = inference.binding_type(*pattern).map(|t| t.to_string());
@@ -843,7 +828,7 @@ pub(crate) mod support {
                 collection,
                 body: for_body,
             } => {
-                let bind_name = pat_desc_short(&body.patterns[*binding]);
+                let bind_name = pat_desc(*binding, body);
                 let coll_desc = expr_desc(*collection, body);
                 writeln!(output, "{pad}for {bind_name} in {coll_desc}").ok();
                 render_expr(*for_body, body, inference, indent + 2, output);
@@ -1326,7 +1311,11 @@ pub(crate) mod support {
             let pat = &body.patterns[pat_id];
             let base = match &pat.kind {
                 PatternKind::Wildcard => "_".to_string(),
-                PatternKind::Bind { name, .. } => name.to_string(),
+                // TODO: render inner pattern when bind-with-pattern syntax lands
+                PatternKind::Bind {
+                    name,
+                    inner: _inner,
+                } => name.to_string(),
                 PatternKind::Literal(lit) => lit.to_string(),
                 PatternKind::Null => "null".into(),
                 PatternKind::EnumVariant { enum_name, variant } => {

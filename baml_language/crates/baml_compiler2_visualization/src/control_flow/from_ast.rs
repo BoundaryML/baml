@@ -655,7 +655,11 @@ impl<'a> AstGraphBuilder<'a> {
         let pat = &self.body.patterns[pat_id];
         let base = match &pat.kind {
             ast::PatternKind::Wildcard => "_".to_string(),
-            ast::PatternKind::Bind { name, .. } => name.to_string(),
+            // TODO: render inner pattern when bind-with-pattern syntax lands
+            ast::PatternKind::Bind {
+                name,
+                inner: _inner,
+            } => name.to_string(),
             ast::PatternKind::Literal(lit) => format_literal_ast(lit),
             ast::PatternKind::Null => "null".to_string(),
             ast::PatternKind::EnumVariant { enum_name, variant } => {
