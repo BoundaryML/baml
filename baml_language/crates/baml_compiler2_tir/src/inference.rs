@@ -580,45 +580,53 @@ pub fn infer_scope_types<'db>(
                     // the captures we still need (avoids unnecessary Salsa calls).
                     // For efficiency, check if any capture is declared in this scope.
                     let has_relevant_capture =
-                        captures.iter().any(|(name, def_site)| match def_site {
-                            DefinitionSite::Parameter(idx) => anc_bindings
-                                .params
-                                .iter()
-                                .any(|(n, i)| n == name && i == idx),
-                            DefinitionSite::Statement(_) | DefinitionSite::PatternBinding(_) => {
-                                anc_bindings
-                                    .bindings
-                                    .iter()
-                                    .any(|(n, def, _)| n == name && def == def_site)
-                            }
-                        });
+                        captures
+                            .iter()
+                            .any(|(name, binding_id)| match binding_id.site {
+                                DefinitionSite::Parameter(idx) => {
+                                    binding_id.scope == ancestor_fsi
+                                        && anc_bindings
+                                            .params
+                                            .iter()
+                                            .any(|(n, i)| n == name && *i == idx)
+                                }
+                                DefinitionSite::Statement(_)
+                                | DefinitionSite::PatternBinding(_) => {
+                                    binding_id.scope == ancestor_fsi
+                                        && anc_bindings.bindings.iter().any(|binding| {
+                                            &binding.name == name && binding.site == binding_id.site
+                                        })
+                                }
+                            });
                     if !has_relevant_capture {
                         continue;
                     }
                     let anc_inference = infer_scope_types(db, anc_scope_id);
-                    for (capture_name, def_site) in captures {
+                    for (capture_name, binding_id) in captures {
+                        let def_site = binding_id.site;
                         // Check if this ancestor declares this capture.
-                        let is_declared_here = match def_site {
-                            DefinitionSite::Parameter(idx) => anc_bindings
-                                .params
-                                .iter()
-                                .any(|(n, i)| n == capture_name && i == idx),
-                            DefinitionSite::Statement(_) | DefinitionSite::PatternBinding(_) => {
-                                anc_bindings
-                                    .bindings
+                        let is_declared_here = binding_id.scope == ancestor_fsi
+                            && match def_site {
+                                DefinitionSite::Parameter(idx) => anc_bindings
+                                    .params
                                     .iter()
-                                    .any(|(n, def, _)| n == capture_name && def == def_site)
-                            }
-                        };
+                                    .any(|(n, i)| n == capture_name && *i == idx),
+                                DefinitionSite::Statement(_)
+                                | DefinitionSite::PatternBinding(_) => {
+                                    anc_bindings.bindings.iter().any(|binding| {
+                                        &binding.name == capture_name && binding.site == def_site
+                                    })
+                                }
+                            };
                         if !is_declared_here {
                             continue;
                         }
                         let actual_ty = match def_site {
                             DefinitionSite::Parameter(idx) => {
-                                anc_inference.param_type(*idx).cloned()
+                                anc_inference.param_type(idx).cloned()
                             }
                             DefinitionSite::PatternBinding(pat_id) => {
-                                anc_inference.binding_type(*pat_id).cloned()
+                                anc_inference.binding_type(pat_id).cloned()
                             }
                             DefinitionSite::Statement(stmt_id) => {
                                 // Get the ancestor's body to look up the Pat for this stmt.
@@ -654,13 +662,14 @@ pub fn infer_scope_types<'db>(
                                         _ => None,              // Lambda bodies not accessible here
                                     };
                                 if let Some(body) = body_opt {
-                                    let raw: u32 = (*stmt_id).into_raw().into_u32();
+                                    let raw: u32 = stmt_id.into_raw().into_u32();
                                     if (raw as usize) < body.stmts.len() {
-                                        if let AstStmt::Let { pattern, .. } = &body.stmts[*stmt_id]
-                                        {
-                                            anc_inference.binding_type(*pattern).cloned()
-                                        } else {
-                                            None
+                                        match &body.stmts[stmt_id] {
+                                            AstStmt::Let { pattern, .. }
+                                            | AstStmt::For {
+                                                binding: pattern, ..
+                                            } => anc_inference.binding_type(*pattern).cloned(),
+                                            _ => None,
                                         }
                                     } else {
                                         None
@@ -679,16 +688,16 @@ pub fn infer_scope_types<'db>(
                                             let body =
                                                 baml_compiler2_hir::body::let_body(db, let_loc);
                                             if let LetBody::Expr(let_body) = body.as_ref() {
-                                                let raw: u32 = (*stmt_id).into_raw().into_u32();
+                                                let raw: u32 = stmt_id.into_raw().into_u32();
                                                 if (raw as usize) < let_body.stmts.len() {
-                                                    if let AstStmt::Let { pattern, .. } =
-                                                        &let_body.stmts[*stmt_id]
-                                                    {
-                                                        anc_inference
+                                                    match &let_body.stmts[stmt_id] {
+                                                        AstStmt::Let { pattern, .. }
+                                                        | AstStmt::For {
+                                                            binding: pattern, ..
+                                                        } => anc_inference
                                                             .binding_type(*pattern)
-                                                            .cloned()
-                                                    } else {
-                                                        None
+                                                            .cloned(),
+                                                        _ => None,
                                                     }
                                                 } else {
                                                     None

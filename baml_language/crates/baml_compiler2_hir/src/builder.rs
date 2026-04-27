@@ -12,7 +12,7 @@ use baml_base::{Name, SourceFile};
 use baml_compiler_diagnostics::diagnostic::DiagnosticId;
 use baml_compiler2_ast::{self as ast, LoweringDiagnostic};
 use rustc_hash::FxHashMap;
-use text_size::TextRange;
+use text_size::{TextRange, TextSize};
 
 use crate::{
     contributions::{Contribution, Definition, DefinitionKind, FileSymbolContributions},
@@ -26,7 +26,8 @@ use crate::{
     },
     scope::{FileScopeId, Scope, ScopeId, ScopeKind},
     semantic_index::{
-        DefinitionSite, FileSemanticIndex, PathResolution, ScopeBindings, SemanticIndexExtra,
+        BindingId, DefinitionSite, FileSemanticIndex, LocalBinding, PathResolution, ScopeBindings,
+        SemanticIndexExtra,
     },
 };
 
@@ -311,6 +312,7 @@ impl<'db> SemanticIndexBuilder<'db> {
                     DefinitionSite::Statement(stmt_id),
                     body,
                     source_map,
+                    source_map.stmt_span(stmt_id).end(),
                 );
             }
             ast::Stmt::For {
@@ -325,6 +327,7 @@ impl<'db> SemanticIndexBuilder<'db> {
                     DefinitionSite::Statement(stmt_id),
                     body,
                     source_map,
+                    source_map.pattern_span(*binding).start(),
                 );
                 self.walk_expr(*loop_body, body, source_map, WalkContext::Nested);
                 self.pop_scope();
@@ -446,14 +449,9 @@ impl<'db> SemanticIndexBuilder<'db> {
             }
             ast::Expr::Path(segments) => {
                 if segments.len() >= 2 {
-                    let visible_names = self.collect_visible_names();
-                    let root = &segments[0];
-                    let resolution = if visible_names.contains(root) {
-                        PathResolution::Local { name: root.clone() }
-                    } else {
-                        PathResolution::Unknown
-                    };
-                    self.path_resolutions.push((expr_id, resolution));
+                    let use_scope = self.current_scope_id();
+                    let use_offset = source_map.expr_span(expr_id).start();
+                    self.classify_path_expr(expr_id, segments, use_scope, use_offset);
                 }
             }
             ast::Expr::Literal(_)
@@ -471,13 +469,19 @@ impl<'db> SemanticIndexBuilder<'db> {
         site: DefinitionSite,
         body: &ast::ExprBody,
         source_map: &ast::AstSourceMap,
+        visible_from: TextSize,
     ) {
         if let Some(name) = Self::local_binding_name(&body.patterns, pat_id) {
             let name_range = source_map.pattern_span(pat_id);
             let scope_id = self.current_scope_id();
             self.scope_bindings[scope_id.index() as usize]
                 .bindings
-                .push((name.clone(), site, name_range));
+                .push(LocalBinding {
+                    name: name.clone(),
+                    site,
+                    name_range,
+                    visible_from,
+                });
         }
     }
 
@@ -494,11 +498,12 @@ impl<'db> SemanticIndexBuilder<'db> {
             let scope_id = self.current_scope_id();
             self.scope_bindings[scope_id.index() as usize]
                 .bindings
-                .push((
-                    name.clone(),
-                    DefinitionSite::PatternBinding(arm.pattern),
+                .push(LocalBinding {
+                    name: name.clone(),
+                    site: DefinitionSite::PatternBinding(arm.pattern),
                     name_range,
-                ));
+                    visible_from: name_range.start(),
+                });
         }
         if let Some(guard) = arm.guard {
             self.walk_expr(guard, body, source_map, WalkContext::Nested);
@@ -520,11 +525,12 @@ impl<'db> SemanticIndexBuilder<'db> {
             let scope_id = self.current_scope_id();
             self.scope_bindings[scope_id.index() as usize]
                 .bindings
-                .push((
-                    name.clone(),
-                    DefinitionSite::PatternBinding(clause.binding),
+                .push(LocalBinding {
+                    name: name.clone(),
+                    site: DefinitionSite::PatternBinding(clause.binding),
                     name_range,
-                ));
+                    visible_from: name_range.start(),
+                });
         }
         if let Some(st_pat) = clause.stack_trace_binding {
             if let Some(name) = Self::match_or_catch_binding_name(&body.patterns, st_pat) {
@@ -532,11 +538,12 @@ impl<'db> SemanticIndexBuilder<'db> {
                 let scope_id = self.current_scope_id();
                 self.scope_bindings[scope_id.index() as usize]
                     .bindings
-                    .push((
-                        name.clone(),
-                        DefinitionSite::PatternBinding(st_pat),
+                    .push(LocalBinding {
+                        name: name.clone(),
+                        site: DefinitionSite::PatternBinding(st_pat),
                         name_range,
-                    ));
+                        visible_from: name_range.start(),
+                    });
             }
         }
         for &arm_id in &clause.arms {
@@ -558,11 +565,12 @@ impl<'db> SemanticIndexBuilder<'db> {
             let scope_id = self.current_scope_id();
             self.scope_bindings[scope_id.index() as usize]
                 .bindings
-                .push((
-                    name.clone(),
-                    DefinitionSite::PatternBinding(arm.pattern),
+                .push(LocalBinding {
+                    name: name.clone(),
+                    site: DefinitionSite::PatternBinding(arm.pattern),
                     name_range,
-                ));
+                    visible_from: name_range.start(),
+                });
         }
         self.walk_expr(arm.body, body, source_map, WalkContext::Nested);
         self.pop_scope();
@@ -583,86 +591,105 @@ impl<'db> SemanticIndexBuilder<'db> {
         }
         if let Some(ast::FunctionBodyDef::Expr(lambda_body, lambda_source_map)) = &func_def.body {
             self.walk_expr_body(lambda_body, lambda_source_map);
-            self.analyze_lambda_captures(scope_id, lambda_body);
+            self.analyze_lambda_captures(scope_id, lambda_body, lambda_source_map);
         }
         self.pop_scope();
     }
 
-    fn analyze_lambda_captures(&mut self, lambda_scope: FileScopeId, lambda_body: &ast::ExprBody) {
-        let referenced_names = Self::collect_name_references(lambda_body);
+    fn analyze_lambda_captures(
+        &mut self,
+        lambda_scope: FileScopeId,
+        lambda_body: &ast::ExprBody,
+        lambda_source_map: &ast::AstSourceMap,
+    ) {
+        let references = self.collect_path_root_references(lambda_body, lambda_source_map);
         let lambda_idx = lambda_scope.index() as usize;
-        let mut captures: Vec<(Name, DefinitionSite)> = Vec::new();
-        let mut seen: std::collections::HashSet<Name> = std::collections::HashSet::new();
+        let mut captures: Vec<(Name, BindingId)> = Vec::new();
+        let mut seen = std::collections::HashSet::new();
 
-        for name in &referenced_names {
-            if seen.contains(name)
-                || Self::scope_defines_name(&self.scope_bindings[lambda_idx], name)
-            {
-                continue;
-            }
-            let mut current = self.scopes[lambda_idx].parent;
-            while let Some(ancestor_id) = current {
-                let ancestor_idx = ancestor_id.index() as usize;
-                let ancestor_kind = self.scopes[ancestor_idx].kind.clone();
-                let ancestor_parent = self.scopes[ancestor_idx].parent;
-
-                if let Some(def_site) =
-                    Self::scope_definition_site(&self.scope_bindings[ancestor_idx], name)
+        for (name, use_scope, at_offset) in references {
+            if let Some(binding_id) = self.visible_binding_at(use_scope, at_offset, &name) {
+                if !self.scope_is_descendant_or_self(binding_id.scope, lambda_scope)
+                    && seen.insert(binding_id)
                 {
-                    captures.push((name.clone(), def_site));
-                    seen.insert(name.clone());
-                    self.scope_bindings[ancestor_idx]
-                        .captured_names
-                        .insert(name.clone());
-                    break;
+                    captures.push((name, binding_id));
+                    self.scope_bindings[binding_id.scope.index() as usize]
+                        .captured_bindings
+                        .insert(binding_id);
                 }
-
-                if let Some((_, def_site)) = self.scope_bindings[ancestor_idx]
-                    .captures
-                    .iter()
-                    .find(|(n, _)| n == name)
-                {
-                    captures.push((name.clone(), *def_site));
-                    seen.insert(name.clone());
-                    break;
-                }
-
-                if matches!(ancestor_kind, ScopeKind::Function) {
-                    break;
-                }
-                current = ancestor_parent;
             }
         }
 
         self.scope_bindings[lambda_idx].captures = captures;
     }
 
-    /// Collect all names visible in the current scope chain (params and
-    /// let-bindings), stopping at function/lambda boundaries.
-    ///
-    /// This is a conservative best-effort check: names found here are
-    /// definitely locals; names not found may be package names (resolved by TIR).
-    fn collect_visible_names(&self) -> std::collections::HashSet<Name> {
-        let mut names = std::collections::HashSet::new();
-        for &scope_id in self.scope_stack.iter().rev() {
-            let idx = scope_id.index() as usize;
-            let bindings = &self.scope_bindings[idx];
-            for (name, _) in &bindings.params {
-                names.insert(name.clone());
+    fn visible_binding_at(
+        &self,
+        scope_id: FileScopeId,
+        at_offset: TextSize,
+        name: &Name,
+    ) -> Option<BindingId> {
+        let mut current = Some(scope_id);
+        while let Some(ancestor_id) = current {
+            let scope = &self.scopes[ancestor_id.index() as usize];
+            if matches!(scope.kind, ScopeKind::Class) && ancestor_id != scope_id {
+                current = scope.parent;
+                continue;
             }
-            for (name, _, _) in &bindings.bindings {
-                names.insert(name.clone());
+
+            let bindings = &self.scope_bindings[ancestor_id.index() as usize];
+            for binding in bindings.bindings.iter().rev() {
+                if &binding.name == name && binding.visible_from <= at_offset {
+                    return Some(BindingId {
+                        scope: ancestor_id,
+                        site: binding.site,
+                    });
+                }
             }
-            for (name, _) in &bindings.captures {
-                names.insert(name.clone());
+            for (param_name, param_idx) in &bindings.params {
+                if param_name == name {
+                    return Some(BindingId {
+                        scope: ancestor_id,
+                        site: DefinitionSite::Parameter(*param_idx),
+                    });
+                }
             }
-            // Stop at function/lambda boundary — don't look through function scopes.
-            let scope_kind = &self.scopes[idx].kind;
-            if matches!(scope_kind, ScopeKind::Function | ScopeKind::Lambda) {
-                break;
-            }
+            current = scope.parent;
         }
-        names
+        None
+    }
+
+    fn scope_is_descendant_or_self(&self, scope_id: FileScopeId, ancestor_id: FileScopeId) -> bool {
+        let mut current = Some(scope_id);
+        while let Some(id) = current {
+            if id == ancestor_id {
+                return true;
+            }
+            current = self.scopes[id.index() as usize].parent;
+        }
+        false
+    }
+
+    fn classify_path_expr(
+        &mut self,
+        expr_id: ast::ExprId,
+        segments: &[Name],
+        use_scope: FileScopeId,
+        use_offset: TextSize,
+    ) {
+        if segments.len() < 2 {
+            return;
+        }
+        let root = &segments[0];
+        let resolution = if self
+            .visible_binding_at(use_scope, use_offset, root)
+            .is_some()
+        {
+            PathResolution::Local { name: root.clone() }
+        } else {
+            PathResolution::Unknown
+        };
+        self.path_resolutions.push((expr_id, resolution));
     }
 
     /// Extract the binding name from a local declaration pattern, if it has one.
@@ -691,37 +718,32 @@ impl<'db> SemanticIndexBuilder<'db> {
         Self::local_binding_name(patterns, pat_id).filter(|name| name.as_str() != "_")
     }
 
-    /// Collect all single-segment `Expr::Path` names from an `ExprBody`.
-    /// These represent potential variable references — both bare identifiers
-    /// (`x`) and the root segment of multi-segment paths (`obj` in `obj.field`).
-    fn collect_name_references(body: &ast::ExprBody) -> Vec<Name> {
+    /// Collect path root references with their recorded use scope and source offset.
+    fn collect_path_root_references(
+        &self,
+        body: &ast::ExprBody,
+        source_map: &ast::AstSourceMap,
+    ) -> Vec<(Name, FileScopeId, TextSize)> {
         let mut names = Vec::new();
-        for (_expr_id, expr) in body.exprs.iter() {
+        for (expr_id, expr) in body.exprs.iter() {
             if let ast::Expr::Path(segments) = expr {
-                if !segments.is_empty() {
-                    names.push(segments[0].clone());
+                if let Some(root) = segments.first() {
+                    if let Some(scope_id) = self
+                        .expr_scopes
+                        .iter()
+                        .rev()
+                        .find_map(|(id, scope)| (*id == expr_id).then_some(*scope))
+                    {
+                        names.push((
+                            root.clone(),
+                            scope_id,
+                            source_map.expr_span(expr_id).start(),
+                        ));
+                    }
                 }
             }
         }
         names
-    }
-
-    /// Check if a name is defined in a scope's bindings (params or let-bindings).
-    fn scope_defines_name(bindings: &ScopeBindings, name: &Name) -> bool {
-        bindings.params.iter().any(|(n, _)| n == name)
-            || bindings.bindings.iter().any(|(n, _, _)| n == name)
-    }
-
-    /// Find the `DefinitionSite` for a name in a scope's bindings.
-    /// Returns the first matching definition (params checked first, then bindings).
-    fn scope_definition_site(bindings: &ScopeBindings, name: &Name) -> Option<DefinitionSite> {
-        if let Some((_, idx)) = bindings.params.iter().find(|(n, _)| n == name) {
-            return Some(DefinitionSite::Parameter(*idx));
-        }
-        if let Some((_, def, _)) = bindings.bindings.iter().find(|(n, _, _)| n == name) {
-            return Some(*def);
-        }
-        None
     }
 
     // ── Item lowering ────────────────────────────────────────────────────────

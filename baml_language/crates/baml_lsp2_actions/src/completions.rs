@@ -1098,15 +1098,12 @@ fn completions_for_value_position(
         let bindings: &ScopeBindings = &index.scope_bindings[ancestor_id.index() as usize];
 
         // Let bindings (reverse source order so most-recent is first).
-        for (name, _site, binding_range) in bindings.bindings.iter().rev() {
+        for binding in bindings.bindings.iter().rev() {
             // Only show bindings that are visible at the cursor position.
-            if binding_range.start() <= offset {
+            if index.binding_visible_at(binding, offset) {
                 items.push(
-                    Completion::new(name.as_str(), CompletionKind::Variable).with_sort(format!(
-                        "{:03}_{}",
-                        sort_prefix,
-                        name.as_str()
-                    )),
+                    Completion::new(binding.name.as_str(), CompletionKind::Variable)
+                        .with_sort(format!("{:03}_{}", sort_prefix, binding.name.as_str())),
                 );
                 sort_prefix += 1;
             }

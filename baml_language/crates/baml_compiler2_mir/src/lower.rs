@@ -1124,7 +1124,12 @@ impl LoweringContext<'_> {
             let func_scope_id = self.current_scope;
             let index = file_semantic_index(self.db, self.file);
             if let Some(sb) = index.scope_bindings.get(func_scope_id.index() as usize) {
-                for captured_name in &sb.captured_names {
+                for binding_id in &sb.captured_bindings {
+                    let Some(captured_name) = sb.bindings.iter().find_map(|binding| {
+                        (binding.site == binding_id.site).then_some(&binding.name)
+                    }) else {
+                        continue;
+                    };
                     if let Some(&local) = self.locals.get(captured_name) {
                         self.builder.local_decl_mut(local).is_captured = true;
                     }
@@ -1378,7 +1383,12 @@ impl LoweringContext<'_> {
         {
             let index = file_semantic_index(self.db, self.file);
             if let Some(sb) = index.scope_bindings.get(lambda_scope_id.index() as usize) {
-                for captured_name in &sb.captured_names {
+                for binding_id in &sb.captured_bindings {
+                    let Some(captured_name) = sb.bindings.iter().find_map(|binding| {
+                        (binding.site == binding_id.site).then_some(&binding.name)
+                    }) else {
+                        continue;
+                    };
                     if let Some(&local) = self.locals.get(captured_name) {
                         self.builder.local_decl_mut(local).is_captured = true;
                     }

@@ -559,6 +559,73 @@ mod tests {
         ));
     }
 
+    #[test]
+    fn shadowing_initializer_resolves_previous_binding() {
+        use baml_compiler2_hir::scope::ScopeKind;
+        use text_size::TextSize;
+
+        let mut db = make_db();
+        let file = db.add_file(
+            "initializer_shadow.baml",
+            "function foo() -> int {\n  let x = 1;\n  let x = x + 1;\n  x\n}",
+        );
+
+        let index = file_semantic_index(&db, file);
+        let function_scope = index
+            .scopes
+            .iter()
+            .enumerate()
+            .find_map(|(idx, scope)| {
+                matches!(scope.kind, ScopeKind::Function)
+                    .then_some(baml_compiler2_hir::scope::FileScopeId::new(idx as u32))
+            })
+            .expect("function scope");
+        let x_bindings = index.scope_bindings[function_scope.index() as usize]
+            .bindings
+            .iter()
+            .filter(|binding| binding.name == Name::new("x"))
+            .collect::<Vec<_>>();
+        assert_eq!(x_bindings.len(), 2);
+
+        let text = file.text(&db);
+        let init_x_offset = TextSize::from(text.find("x + 1").expect("initializer x") as u32);
+        let use_scope = index.scope_at_offset(init_x_offset, Some(&Name::new("foo")));
+        let resolved = index
+            .visible_binding_at(use_scope, init_x_offset, &Name::new("x"))
+            .expect("initializer x should resolve");
+
+        assert_eq!(resolved.site, x_bindings[0].site);
+    }
+
+    #[test]
+    fn lambda_does_not_capture_its_own_nested_block_binding() {
+        use baml_compiler2_hir::scope::ScopeKind;
+
+        let mut db = make_db();
+        let file = db.add_file(
+            "lambda_local_block.baml",
+            "function foo() -> int {\n  let f = () -> int {\n    { let x = 1; x }\n  };\n  f()\n}",
+        );
+
+        let index = file_semantic_index(&db, file);
+        let lambda_scope = index
+            .scopes
+            .iter()
+            .enumerate()
+            .find_map(|(idx, scope)| {
+                matches!(scope.kind, ScopeKind::Lambda)
+                    .then_some(baml_compiler2_hir::scope::FileScopeId::new(idx as u32))
+            })
+            .expect("lambda scope");
+
+        assert!(
+            index.scope_bindings[lambda_scope.index() as usize]
+                .captures
+                .is_empty(),
+            "lambda-local block binding should not be recorded as a capture"
+        );
+    }
+
     /// A field and a method with the same name in a class produce a cross-kind diagnostic.
     #[test]
     fn field_method_same_name_produces_cross_kind_diagnostic() {

@@ -2,7 +2,12 @@
 
 use baml_base::Name;
 use baml_compiler2_hir::{package::PackageId, scope::ScopeKind};
-use baml_compiler2_tir::{inference::infer_scope_types, package_interface::package_interface};
+use baml_compiler2_tir::{
+    inference::infer_scope_types,
+    package_interface::package_interface,
+    resolve::{ResolvedName, resolve_name_at_in_scope},
+};
+use text_size::TextSize;
 
 use super::support::{expr_type_in_function, make_db, render_tir};
 
@@ -52,6 +57,45 @@ fn let_binding_widens() {
       }
     }
     ");
+}
+
+#[test]
+fn resolver_initializer_shadowing_uses_previous_binding() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        "function f() -> int { let x = 1; let x = x + 1; x }",
+    );
+
+    let index = baml_compiler2_ppir::file_semantic_index(&db, file);
+    let function_scope = index
+        .scopes
+        .iter()
+        .enumerate()
+        .find_map(|(idx, scope)| {
+            (matches!(scope.kind, ScopeKind::Function)
+                && scope.name.as_ref().is_some_and(|name| name.as_str() == "f"))
+            .then_some(baml_compiler2_hir::scope::FileScopeId::new(idx as u32))
+        })
+        .expect("function scope");
+    let x_bindings = index.scope_bindings[function_scope.index() as usize]
+        .bindings
+        .iter()
+        .filter(|binding| binding.name == Name::new("x"))
+        .collect::<Vec<_>>();
+    assert_eq!(x_bindings.len(), 2);
+
+    let offset = TextSize::from(file.text(&db).find("x + 1").expect("initializer x") as u32);
+    let resolved =
+        resolve_name_at_in_scope(&db, file, offset, &Name::new("x"), Some(&Name::new("f")));
+
+    assert_eq!(
+        resolved,
+        ResolvedName::Local {
+            name: Name::new("x"),
+            definition_site: Some(x_bindings[0].site),
+        }
+    );
 }
 
 #[test]

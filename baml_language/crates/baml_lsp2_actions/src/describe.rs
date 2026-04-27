@@ -353,14 +353,16 @@ fn describe_locals(db: &dyn Db, files: &[SourceFile], name: &str) -> Vec<SymbolD
             for scope_idx in scope_indices {
                 let bindings = &index.scope_bindings[scope_idx];
 
-                for (binding_name, def_site, binding_span) in &bindings.bindings {
-                    if binding_name.as_str() != name {
+                for binding in &bindings.bindings {
+                    if binding.name.as_str() != name {
                         continue;
                     }
 
                     // Use the binding's own scope for type inference — this
                     // handles lambdas that get separate inference, while
                     // block-scoped lets fall back to the function's inference.
+                    let def_site = binding.site;
+                    let binding_span = binding.name_range;
                     let scope_id = index.scope_ids[scope_idx];
                     let inference = baml_compiler2_tir::inference::infer_scope_types(db, scope_id);
 
@@ -380,7 +382,7 @@ fn describe_locals(db: &dyn Db, files: &[SourceFile], name: &str) -> Vec<SymbolD
                                 body.as_ref()
                             {
                                 if let baml_compiler2_ast::Stmt::Let { pattern, .. } =
-                                    &expr_body.stmts[*stmt_id]
+                                    &expr_body.stmts[stmt_id]
                                 {
                                     inference
                                         .binding_type(*pattern)
@@ -396,7 +398,7 @@ fn describe_locals(db: &dyn Db, files: &[SourceFile], name: &str) -> Vec<SymbolD
                         baml_compiler2_hir::semantic_index::DefinitionSite::PatternBinding(
                             pat_id,
                         ) => inference
-                            .binding_type(*pat_id)
+                            .binding_type(pat_id)
                             .map(crate::utils::display_ty)
                             .unwrap_or_else(|| "unknown".to_string()),
                         baml_compiler2_hir::semantic_index::DefinitionSite::Parameter(_) => {
@@ -408,7 +410,7 @@ fn describe_locals(db: &dyn Db, files: &[SourceFile], name: &str) -> Vec<SymbolD
 
                     let binding_refs = usages_at(db, file, binding_span.start())
                         .into_iter()
-                        .filter(|loc| !(loc.file == file && loc.range == *binding_span))
+                        .filter(|loc| !(loc.file == file && loc.range == binding_span))
                         .map(|loc| {
                             let text = loc.file.text(db);
                             let (line_number, line_text) = line_at_offset(text, loc.range.start());
@@ -433,7 +435,7 @@ fn describe_locals(db: &dyn Db, files: &[SourceFile], name: &str) -> Vec<SymbolD
                         kind: DefinitionKind::Binding,
                         file_path: file_path_string(db, file),
                         file,
-                        name_span: *binding_span,
+                        name_span: binding_span,
                         item_range: func.span,
                         shape: format!("let {name}: {type_str}"),
                         full_body: func_body,
