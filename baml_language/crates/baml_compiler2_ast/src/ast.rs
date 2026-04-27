@@ -249,7 +249,11 @@ impl std::fmt::Display for TypeExpr {
                     if i > 0 {
                         write!(f, " | ")?;
                     }
-                    write!(f, "{v}")?;
+                    if matches!(v, TypeExpr::Function { .. }) {
+                        write!(f, "({v})")?;
+                    } else {
+                        write!(f, "{v}")?;
+                    }
                 }
                 Ok(())
             }
