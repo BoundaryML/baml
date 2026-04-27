@@ -27,7 +27,7 @@ use crate::{
     scope::{FileScopeId, Scope, ScopeId, ScopeKind},
     semantic_index::{
         BindingId, DefinitionSite, FileSemanticIndex, LocalBinding, PathResolution, ScopeBindings,
-        SemanticIndexExtra,
+        SemanticIndexExtra, visible_binding_at_in_scopes,
     },
 };
 
@@ -459,16 +459,12 @@ impl<'db> SemanticIndexBuilder<'db> {
                     self.walk_expr(value, body, source_map, WalkContext::Nested);
                 }
             }
-            ast::Expr::MemberAccess { base, .. }
-            | ast::Expr::OptionalMemberAccess { base, .. }
-            | ast::Expr::Index { base, index: _ }
-            | ast::Expr::OptionalIndex { base, index: _ } => {
+            ast::Expr::MemberAccess { base, .. } | ast::Expr::OptionalMemberAccess { base, .. } => {
                 self.walk_expr(*base, body, source_map, WalkContext::Nested);
-                if let ast::Expr::Index { index, .. } | ast::Expr::OptionalIndex { index, .. } =
-                    &body.exprs[expr_id]
-                {
-                    self.walk_expr(*index, body, source_map, WalkContext::Nested);
-                }
+            }
+            ast::Expr::Index { base, index } | ast::Expr::OptionalIndex { base, index } => {
+                self.walk_expr(*base, body, source_map, WalkContext::Nested);
+                self.walk_expr(*index, body, source_map, WalkContext::Nested);
             }
             ast::Expr::Path(segments) => {
                 if let Some(root) = segments.first() {
@@ -690,34 +686,13 @@ impl<'db> SemanticIndexBuilder<'db> {
         at_offset: TextSize,
         name: &Name,
     ) -> Option<BindingId> {
-        let mut current = Some(scope_id);
-        while let Some(ancestor_id) = current {
-            let scope = &self.scopes[ancestor_id.index() as usize];
-            if matches!(scope.kind, ScopeKind::Class) && ancestor_id != scope_id {
-                current = scope.parent;
-                continue;
-            }
-
-            let bindings = &self.scope_bindings[ancestor_id.index() as usize];
-            for binding in bindings.bindings.iter().rev() {
-                if &binding.name == name && binding.visible_from <= at_offset {
-                    return Some(BindingId {
-                        scope: ancestor_id,
-                        site: binding.site,
-                    });
-                }
-            }
-            for (param_name, param_idx) in &bindings.params {
-                if param_name == name {
-                    return Some(BindingId {
-                        scope: ancestor_id,
-                        site: DefinitionSite::Parameter(*param_idx),
-                    });
-                }
-            }
-            current = scope.parent;
-        }
-        None
+        visible_binding_at_in_scopes(
+            &self.scopes,
+            &self.scope_bindings,
+            scope_id,
+            at_offset,
+            name,
+        )
     }
 
     fn scope_is_descendant_or_self(&self, scope_id: FileScopeId, ancestor_id: FileScopeId) -> bool {

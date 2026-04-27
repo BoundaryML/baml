@@ -116,6 +116,18 @@ function user.initializer_uses_previous() -> int {
     return
 }
 
+function user.nested_lambda_capture() -> int {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_const 7
+    store_deref ?1
+    load_var x
+    make_closure .<lambda(nested_lambda_capture, 0)>, 1
+    call_indirect
+    return
+}
+
 function user.nested_outer_restored() -> int {
     load_const 2
     store_var x

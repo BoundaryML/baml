@@ -82,6 +82,15 @@ struct ScopedLocalsSnapshot {
     locals: FxHashMap<Name, Ty>,
     declared_types: FxHashMap<Name, Ty>,
     let_binding_patterns: FxHashMap<Name, PatId>,
+    scoped_local_declarations_len: usize,
+    scoped_local_assignments_len: usize,
+}
+
+struct ScopedLocalDeclaration {
+    name: Name,
+    previous_local: Option<Ty>,
+    previous_declared_type: Option<Ty>,
+    previous_let_binding_pattern: Option<PatId>,
 }
 
 struct BuilderThrowsAnalysis<'a, 'db> {
@@ -199,6 +208,17 @@ pub struct TypeInferenceBuilder<'db> {
     /// establishment can keep declaration-side binding types in sync with the
     /// flow-sensitive local type seen by MIR lowering.
     let_binding_patterns: FxHashMap<Name, PatId>,
+    /// Per-declaration restore points for active name-keyed lookup maps.
+    ///
+    /// A lexical scope exit must remove declarations introduced inside that
+    /// scope, but it must restore a shadowed name to the state immediately
+    /// before the shadowing declaration rather than to scope entry. That keeps
+    /// earlier outer assignments in the same scope visible after the block.
+    scoped_local_declarations: Vec<ScopedLocalDeclaration>,
+    /// Names whose active local type was updated by assignment or container
+    /// establishment. Scope restore uses this to distinguish real local updates
+    /// from transient narrowing facts.
+    scoped_local_assignments: Vec<Name>,
     /// Member resolutions: for field-access expressions that resolved to a
     /// class field, enum variant, method, or free function — records the
     /// structural path so MIR can emit the correct `QualifiedName` and LSP
@@ -274,37 +294,104 @@ impl<'db> TypeInferenceBuilder<'db> {
             locals: self.locals.clone(),
             declared_types: self.declared_types.clone(),
             let_binding_patterns: self.let_binding_patterns.clone(),
+            scoped_local_declarations_len: self.scoped_local_declarations.len(),
+            scoped_local_assignments_len: self.scoped_local_assignments.len(),
         }
     }
 
     fn restore_scoped_locals(&mut self, snapshot: ScopedLocalsSnapshot) {
-        let declared_names = self
-            .let_binding_patterns
+        let assigned_names = self.scoped_local_assignments[snapshot.scoped_local_assignments_len..]
             .iter()
-            .filter_map(|(name, pattern)| {
-                (snapshot.let_binding_patterns.get(name) != Some(pattern)).then_some(name.clone())
-            })
-            .collect::<Vec<_>>();
+            .cloned()
+            .collect::<FxHashSet<_>>();
 
-        for name in declared_names {
-            if let Some(previous) = snapshot.locals.get(&name) {
-                self.locals.insert(name.clone(), previous.clone());
-            } else {
-                self.locals.remove(&name);
-            }
-
-            if let Some(previous) = snapshot.declared_types.get(&name) {
-                self.declared_types.insert(name.clone(), previous.clone());
-            } else {
-                self.declared_types.remove(&name);
-            }
-
-            if let Some(previous) = snapshot.let_binding_patterns.get(&name) {
-                self.let_binding_patterns.insert(name, *previous);
-            } else {
-                self.let_binding_patterns.remove(&name);
-            }
+        let scoped_declarations = self
+            .scoped_local_declarations
+            .split_off(snapshot.scoped_local_declarations_len);
+        let declared_names = scoped_declarations
+            .iter()
+            .map(|declaration| declaration.name.clone())
+            .collect::<FxHashSet<_>>();
+        for declaration in scoped_declarations.into_iter().rev() {
+            Self::restore_map_entry(
+                &mut self.locals,
+                declaration.name.clone(),
+                declaration.previous_local,
+            );
+            Self::restore_map_entry(
+                &mut self.declared_types,
+                declaration.name.clone(),
+                declaration.previous_declared_type,
+            );
+            Self::restore_map_entry(
+                &mut self.let_binding_patterns,
+                declaration.name,
+                declaration.previous_let_binding_pattern,
+            );
         }
+
+        let local_names = self
+            .locals
+            .keys()
+            .chain(snapshot.locals.keys())
+            .cloned()
+            .collect::<FxHashSet<_>>();
+        for name in local_names {
+            if assigned_names.contains(&name) {
+                continue;
+            }
+            Self::restore_map_entry(
+                &mut self.locals,
+                name.clone(),
+                snapshot.locals.get(&name).cloned(),
+            );
+        }
+
+        self.declared_types = snapshot.declared_types;
+        self.let_binding_patterns = snapshot.let_binding_patterns;
+        self.scoped_local_assignments
+            .truncate(snapshot.scoped_local_assignments_len);
+        self.scoped_local_assignments.extend(
+            assigned_names
+                .into_iter()
+                .filter(|name| !declared_names.contains(name)),
+        );
+    }
+
+    fn restore_map_entry<T>(map: &mut FxHashMap<Name, T>, name: Name, previous: Option<T>) {
+        if let Some(previous) = previous {
+            map.insert(name, previous);
+        } else {
+            map.remove(&name);
+        }
+    }
+
+    fn declare_scoped_local(
+        &mut self,
+        name: Name,
+        pattern: PatId,
+        ty: Ty,
+        declared_ty: Option<Ty>,
+    ) {
+        self.scoped_local_declarations.push(ScopedLocalDeclaration {
+            previous_local: self.locals.get(&name).cloned(),
+            previous_declared_type: self.declared_types.get(&name).cloned(),
+            previous_let_binding_pattern: self.let_binding_patterns.get(&name).copied(),
+            name: name.clone(),
+        });
+
+        self.let_binding_patterns.insert(name.clone(), pattern);
+        self.locals.insert(name.clone(), ty);
+        if let Some(declared_ty) = declared_ty {
+            self.declared_types.insert(name, declared_ty);
+        } else {
+            self.declared_types.remove(&name);
+        }
+    }
+
+    fn assign_local(&mut self, name: Name, ty: Ty) {
+        self.locals.insert(name.clone(), ty);
+        self.scoped_local_assignments.push(name);
     }
 
     pub fn new(
@@ -323,6 +410,8 @@ impl<'db> TypeInferenceBuilder<'db> {
             expressions: FxHashMap::default(),
             bindings: FxHashMap::default(),
             let_binding_patterns: FxHashMap::default(),
+            scoped_local_declarations: Vec::new(),
+            scoped_local_assignments: Vec::new(),
             resolutions: FxHashMap::default(),
             res_ctx,
             package_items,
@@ -2062,12 +2151,8 @@ impl<'db> TypeInferenceBuilder<'db> {
                 if let Some(ty) = init_ty {
                     self.bindings.insert(*pattern, ty.clone());
                     if let Some(name) = body.patterns[*pattern].binding_name() {
-                        self.let_binding_patterns.insert(name.clone(), *pattern);
-                        self.locals.insert(name.clone(), ty);
                         // Record declared type only for annotated let-bindings.
-                        if let Some(decl_ty) = ann_ty_for_decl {
-                            self.declared_types.insert(name.clone(), decl_ty);
-                        }
+                        self.declare_scoped_local(name.clone(), *pattern, ty, ann_ty_for_decl);
                     }
                 }
                 diverges
@@ -2126,8 +2211,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 let snapshot = self.snapshot_scoped_locals();
                 self.bindings.insert(*binding, elem_ty.clone());
                 if let Some(name) = name {
-                    self.let_binding_patterns.insert(name.clone(), *binding);
-                    self.locals.insert(name, elem_ty);
+                    self.declare_scoped_local(name, *binding, elem_ty, None);
                 }
 
                 // 4. Check the body
@@ -2170,7 +2254,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     // Update the local to the assigned value's type (invalidates narrowing)
                     if let Expr::Path(segments) = &body.exprs[*target] {
                         if segments.len() == 1 {
-                            self.locals.insert(segments[0].clone(), value_ty);
+                            self.assign_local(segments[0].clone(), value_ty);
                         }
                     }
                 } else {
@@ -5086,7 +5170,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     } else {
                         Ty::List(Box::new(widened_arg), container_attr)
                     };
-                    self.locals.insert(local_name.clone(), new_ty.clone());
+                    self.assign_local(local_name.clone(), new_ty.clone());
                     self.sync_let_binding_type(&local_name, new_ty.clone());
                     new_ty
                 } else if !self.is_subtype(&widened_arg, elem_ty) {
@@ -5174,7 +5258,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     } else {
                         Ty::List(Box::new(widened_val.clone()), container_attr)
                     };
-                    self.locals.insert(local_name, new_ty);
+                    self.assign_local(local_name, new_ty);
                 } else if !self.is_subtype(&widened_val, elem_ty) {
                     self.context.report(
                         TirTypeError::TypeMismatch {
@@ -5215,7 +5299,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                             container_attr,
                         )
                     };
-                    self.locals.insert(local_name, new_ty);
+                    self.assign_local(local_name, new_ty);
                 } else {
                     if !self.is_subtype(&widened_key, key_ty) {
                         self.context.report(

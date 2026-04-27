@@ -92,3 +92,12 @@ function capture_before_after_shadow() -> int {
   let f = () -> int { x };
   g() * 10 + f()
 }
+
+function nested_lambda_capture() -> int {
+  let x = 7;
+  let outer = () -> int {
+    let inner = () -> int { x };
+    inner()
+  };
+  outer()
+}

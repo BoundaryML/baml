@@ -976,6 +976,27 @@ impl<'db> LoweringContext<'db> {
         self.binding_id_for_pattern_site(pattern, DefinitionSite::Statement(stmt_id))
     }
 
+    fn record_pattern_binding_local(&mut self, pattern: AstPatId, local: Local) {
+        if let Some(binding_id) =
+            self.binding_id_for_pattern_site(pattern, DefinitionSite::PatternBinding(pattern))
+        {
+            self.binding_locals.insert(binding_id, local);
+        }
+    }
+
+    fn pattern_binding_is_captured(&self, pattern: AstPatId) -> bool {
+        let Some(binding_id) =
+            self.binding_id_for_pattern_site(pattern, DefinitionSite::PatternBinding(pattern))
+        else {
+            return false;
+        };
+        let index = file_semantic_index(self.db, self.file);
+        index
+            .scope_bindings
+            .get(binding_id.scope.index() as usize)
+            .is_some_and(|bindings| bindings.captured_bindings.contains(&binding_id))
+    }
+
     fn binding_id_for_name_at(&self, expr_id: AstExprId, name: &Name) -> Option<BindingId> {
         let source_map = self.source_map.as_ref()?;
         let offset = source_map.expr_span(expr_id).start();
@@ -1004,6 +1025,10 @@ impl<'db> LoweringContext<'db> {
         watched_depth: usize,
     ) {
         self.watched_locals_stack.truncate(watched_depth);
+        self.locals = saved_locals;
+    }
+
+    fn restore_active_locals(&mut self, saved_locals: HashMap<Name, Local>) {
         self.locals = saved_locals;
     }
 
@@ -4569,11 +4594,13 @@ impl LoweringContext<'_> {
 
                 self.builder.set_current_block(bb_body);
                 let (pattern, body, _) = arms[arm_idx];
+                let saved_locals = self.locals.clone();
                 self.bind_pattern(scrutinee, pattern);
                 self.lower_expr(body, dest.clone());
                 if !self.builder.is_current_terminated() {
                     self.builder.goto(join);
                 }
+                self.restore_active_locals(saved_locals);
             }
         }
 
@@ -4639,11 +4666,13 @@ impl LoweringContext<'_> {
                 self.builder.set_current_block(bb_wildcard_body);
             }
             let (pattern, body, _) = arms[idx];
+            let saved_locals = self.locals.clone();
             self.bind_pattern(scrutinee, pattern);
             self.lower_expr(body, dest);
             if !self.builder.is_current_terminated() {
                 self.builder.goto(join);
             }
+            self.restore_active_locals(saved_locals);
         } else {
             // No wildcard — decide what the otherwise block does.
             // Use `is_switch_exhaustive` (which may be inferred for TypeTag)
@@ -4727,11 +4756,13 @@ impl LoweringContext<'_> {
 
         // Exhaustive last arm: skip the pattern test — it must match.
         if exhaustive && rest.is_empty() && arm.guard.is_none() {
+            let saved_locals = self.locals.clone();
             self.bind_pattern(scrutinee, arm.pattern);
             self.lower_expr(arm.body, dest);
             if !self.builder.is_current_terminated() {
                 self.builder.goto(join);
             }
+            self.restore_active_locals(saved_locals);
             return;
         }
 
@@ -4741,6 +4772,7 @@ impl LoweringContext<'_> {
         self.lower_pattern_test(scrutinee, arm.pattern, bb_body, bb_next);
 
         self.builder.set_current_block(bb_body);
+        let saved_locals = self.locals.clone();
         self.bind_pattern(scrutinee, arm.pattern);
         if let Some(guard) = arm.guard {
             let guard_op = self.lower_to_operand(guard);
@@ -4752,6 +4784,7 @@ impl LoweringContext<'_> {
         if !self.builder.is_current_terminated() {
             self.builder.goto(join);
         }
+        self.restore_active_locals(saved_locals);
 
         self.builder.set_current_block(bb_next);
         self.lower_match_chain(scrutinee, rest, dest, join, exhaustive);
@@ -4955,6 +4988,7 @@ impl LoweringContext<'_> {
                 Rvalue::Use(Operand::Copy(Place::Local(scrutinee))),
             );
             self.locals.insert(name, local);
+            self.record_pattern_binding_local(pat_id, local);
         }
     }
 }
@@ -5049,44 +5083,86 @@ impl LoweringContext<'_> {
     ) {
         use baml_compiler2_ast::CatchClauseKind;
 
+        let saved_catch_outer_locals = self.locals.clone();
         let bb_join = self.builder.create_block();
         let bb_handler = self.builder.create_block();
 
+        let first_clause = clauses.first();
         // Use the user-provided binding name (e.g. `e` from `catch (e)`) so it
         // shows up in bytecode instead of an anonymous `_N` temp.
-        let binding_name = clauses
-            .first()
+        let binding_name = first_clause
             .and_then(|c| self.body.patterns[c.binding].binding_name().cloned());
+        let binding_is_captured =
+            first_clause.is_some_and(|c| self.pattern_binding_is_captured(c.binding));
         let error_local = self.builder.declare_local(
-            binding_name.clone(),
+            if binding_is_captured {
+                None
+            } else {
+                binding_name.clone()
+            },
             Ty::BuiltinUnknown {
                 attr: TyAttr::default(),
             },
             None,
             false,
         );
-        if let Some(name) = binding_name {
-            self.locals.insert(name, error_local);
-        }
-
-        // Declare stack trace local if the catch clause has a second binding.
-        let stack_trace_local = clauses.first().and_then(|c| {
-            c.stack_trace_binding.map(|st_pat| {
-                let st_name = self.body.patterns[st_pat].binding_name().cloned();
+        let error_binding_local = first_clause.and_then(|clause| match binding_name.clone() {
+            Some(name) if binding_is_captured => {
                 let local = self.builder.declare_local(
-                    st_name.clone(),
+                    Some(name.clone()),
                     Ty::BuiltinUnknown {
                         attr: TyAttr::default(),
                     },
                     None,
                     false,
                 );
-                if let Some(name) = st_name {
-                    self.locals.insert(name, local);
-                }
-                local
+                self.record_pattern_binding_local(clause.binding, local);
+                Some(local)
+            }
+            Some(_) => {
+                self.record_pattern_binding_local(clause.binding, error_local);
+                None
+            }
+            None => None,
+        });
+
+        // Declare stack trace payload and user binding locals if the catch clause
+        // has a second binding.
+        let stack_trace = first_clause.and_then(|c| {
+            c.stack_trace_binding.map(|st_pat| {
+                let is_captured = self.pattern_binding_is_captured(st_pat);
+                let binding = self.body.patterns[st_pat].binding_name().cloned();
+                let payload = self.builder.declare_local(
+                    if is_captured { None } else { binding.clone() },
+                    Ty::BuiltinUnknown {
+                        attr: TyAttr::default(),
+                    },
+                    None,
+                    false,
+                );
+                let binding = match binding {
+                    Some(name) if is_captured => {
+                        let local = self.builder.declare_local(
+                            Some(name.clone()),
+                            Ty::BuiltinUnknown {
+                                attr: TyAttr::default(),
+                            },
+                            None,
+                            false,
+                        );
+                        self.record_pattern_binding_local(st_pat, local);
+                        Some(local)
+                    }
+                    Some(_) => {
+                        self.record_pattern_binding_local(st_pat, payload);
+                        None
+                    }
+                    None => None,
+                };
+                (payload, binding)
             })
         });
+        let stack_trace_local = stack_trace.map(|(payload, _)| payload);
 
         // Flatten all arms from all clauses (blocks created lazily below).
         let mut arms: Vec<(baml_compiler2_ast::CatchArm, bool)> = Vec::new();
@@ -5141,6 +5217,31 @@ impl LoweringContext<'_> {
             .map(|(arm, _)| (arm.pattern, arm.body, None))
             .collect();
         self.builder.set_current_block(bb_handler);
+        if let Some(name) = binding_name {
+            self.locals
+                .insert(name, error_binding_local.unwrap_or(error_local));
+        }
+        if let Some(clause) = first_clause {
+            if let Some(st_pat) = clause.stack_trace_binding {
+                if let Some(name) = self.body.patterns[st_pat].binding_name() {
+                    if let Some((payload, binding)) = stack_trace {
+                        self.locals.insert(name.clone(), binding.unwrap_or(payload));
+                    }
+                }
+            }
+        }
+        if let Some(binding_local) = error_binding_local {
+            self.builder.assign(
+                Place::local(binding_local),
+                Rvalue::Use(Operand::Copy(Place::Local(error_local))),
+            );
+        }
+        if let Some((payload, Some(binding))) = stack_trace {
+            self.builder.assign(
+                Place::local(binding),
+                Rvalue::Use(Operand::Copy(Place::Local(payload))),
+            );
+        }
         if self.try_lower_as_switch(
             error_local,
             &switch_arms,
@@ -5153,6 +5254,7 @@ impl LoweringContext<'_> {
             None,
         ) {
             self.builder.set_current_block(bb_join);
+            self.restore_active_locals(saved_catch_outer_locals);
             return;
         }
 
@@ -5185,14 +5287,17 @@ impl LoweringContext<'_> {
         // Lower each arm body.
         for &(ref arm, body_block, _) in &arms_with_blocks {
             self.builder.set_current_block(body_block);
+            let saved_locals = self.locals.clone();
             self.bind_pattern(error_local, arm.pattern);
             self.lower_expr(arm.body, dest.clone());
             if !self.builder.is_current_terminated() {
                 self.builder.goto(bb_join);
             }
+            self.restore_active_locals(saved_locals);
         }
 
         self.builder.set_current_block(bb_join);
+        self.restore_active_locals(saved_catch_outer_locals);
     }
 }
 

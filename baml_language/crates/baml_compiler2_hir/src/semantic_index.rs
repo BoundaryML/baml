@@ -111,6 +111,48 @@ impl Default for ScopeBindings {
     }
 }
 
+/// Shared local-binding lookup used while building and after indexing.
+///
+/// Keep this as the single source for parent-scope visibility semantics:
+/// skip ancestor class scopes, scan local bindings in reverse source order,
+/// check `visible_from`, then fall back to parameters.
+pub(crate) fn visible_binding_at_in_scopes(
+    scopes: &[Scope],
+    scope_bindings: &[ScopeBindings],
+    scope_id: FileScopeId,
+    at_offset: TextSize,
+    name: &Name,
+) -> Option<BindingId> {
+    let mut current = Some(scope_id);
+    while let Some(ancestor_id) = current {
+        let scope = &scopes[ancestor_id.index() as usize];
+        if matches!(scope.kind, ScopeKind::Class) && ancestor_id != scope_id {
+            current = scope.parent;
+            continue;
+        }
+
+        let bindings = &scope_bindings[ancestor_id.index() as usize];
+        for binding in bindings.bindings.iter().rev() {
+            if &binding.name == name && binding.visible_from <= at_offset {
+                return Some(BindingId {
+                    scope: ancestor_id,
+                    site: binding.site,
+                });
+            }
+        }
+        for (param_name, param_idx) in &bindings.params {
+            if param_name == name {
+                return Some(BindingId {
+                    scope: ancestor_id,
+                    site: DefinitionSite::Parameter(*param_idx),
+                });
+            }
+        }
+        current = scope.parent;
+    }
+    None
+}
+
 // ── SemanticIndexExtra ───────────────────────────────────────────────────────
 
 /// Rare/optional data for `FileSemanticIndex`. Heap-allocated only when
@@ -284,31 +326,13 @@ impl FileSemanticIndex<'_> {
         at_offset: TextSize,
         name: &Name,
     ) -> Option<BindingId> {
-        for ancestor_id in self.ancestor_scopes(scope_id) {
-            let scope = &self.scopes[ancestor_id.index() as usize];
-            if matches!(scope.kind, ScopeKind::Class) && ancestor_id != scope_id {
-                continue;
-            }
-
-            let bindings = &self.scope_bindings[ancestor_id.index() as usize];
-            for binding in bindings.bindings.iter().rev() {
-                if &binding.name == name && self.binding_visible_at(binding, at_offset) {
-                    return Some(BindingId {
-                        scope: ancestor_id,
-                        site: binding.site,
-                    });
-                }
-            }
-            for (param_name, param_idx) in &bindings.params {
-                if param_name == name {
-                    return Some(BindingId {
-                        scope: ancestor_id,
-                        site: DefinitionSite::Parameter(*param_idx),
-                    });
-                }
-            }
-        }
-        None
+        visible_binding_at_in_scopes(
+            &self.scopes,
+            &self.scope_bindings,
+            scope_id,
+            at_offset,
+            name,
+        )
     }
 
     pub fn diagnostics(&self) -> &[Hir2Diagnostic] {

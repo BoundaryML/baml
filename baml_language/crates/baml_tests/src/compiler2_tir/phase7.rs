@@ -351,6 +351,99 @@ fn assign_method_result_in_null_branch_works() {
     "#);
 }
 
+#[test]
+fn assignment_before_shadow_survives_scope_restore() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"function f(x: int?) -> int {
+  {
+    x = 1;
+    let x: string = "shadow";
+    x;
+  };
+  return x;
+}"#,
+    );
+    let output = render_tir(&db, file);
+    assert!(
+        output.contains("return x : 1"),
+        "outer assignment before inner shadow should remain visible after block:\n{output}"
+    );
+    assert!(
+        !output.contains("type mismatch"),
+        "assignment before shadow should satisfy the int return type:\n{output}"
+    );
+}
+
+#[test]
+fn inner_declared_type_does_not_leak_after_shadow() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"function f() -> int {
+  let x: int = 1;
+  {
+    let x: string = "shadow";
+    x;
+  };
+  x = 2;
+  return x;
+}"#,
+    );
+    let output = render_tir(&db, file);
+    assert!(
+        output.contains("x = 2 : 2"),
+        "outer declared type should be restored after inner typed shadow:\n{output}"
+    );
+    assert!(
+        !output.contains("type mismatch"),
+        "inner declared type metadata should not constrain outer assignment:\n{output}"
+    );
+}
+
+#[test]
+fn unannotated_inner_shadow_masks_outer_declared_type() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"function f() -> int {
+  let x: int = 1;
+  {
+    let x = "shadow";
+    x = "updated";
+  };
+  return x;
+}"#,
+    );
+    let output = render_tir(&db, file);
+    assert!(
+        !output.contains("type mismatch"),
+        "unannotated inner shadow should not be checked against outer annotation:\n{output}"
+    );
+}
+
+#[test]
+fn early_return_narrowing_inside_nested_block_does_not_leak() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"function f(x: int?) -> int? {
+  {
+    if (x == null) {
+      return 0;
+    }
+  };
+  return x;
+}"#,
+    );
+    let output = render_tir(&db, file);
+    assert!(
+        output.contains("return x : int?"),
+        "early-return narrowing should be scoped to the nested block:\n{output}"
+    );
+}
+
 // ── String type narrowing ─────────────────────────────────────────────────────
 
 #[test]

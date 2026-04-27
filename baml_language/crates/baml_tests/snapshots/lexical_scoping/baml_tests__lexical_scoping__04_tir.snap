@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 17786
 ---
 === TIR2 ===
 function user.branch_locals(b: bool) -> int throws never {
@@ -126,4 +125,24 @@ function user.capture_before_after_shadow() -> int throws never {
 lambda user.capture_before_after_shadow {
 }
 lambda user.capture_before_after_shadow {
+}
+function user.nested_lambda_capture() -> int throws never {
+  { : int
+    let x = 7 : 7 -> int
+    let outer = : () -> int throws never
+      () -> int { ... } : () -> int throws never
+        {
+          let inner = ...
+            () -> int { ... }
+              {
+                x
+              }
+          inner()
+        }
+    outer() : int
+  }
+}
+lambda user.nested_lambda_capture {
+}
+lambda user.nested_lambda_capture {
 }

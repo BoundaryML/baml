@@ -23,7 +23,7 @@ use baml_compiler2_hir::{
     loc::{ClassLoc, EnumLoc, FunctionLoc, LetLoc, TypeAliasLoc},
     package::{PackageId, PackageItems},
     scope::{FileScopeId, ScopeId, ScopeKind},
-    semantic_index::DefinitionSite,
+    semantic_index::{BindingId, DefinitionSite},
 };
 use rustc_hash::{FxHashMap, FxHashSet};
 use text_size::TextRange;
@@ -567,7 +567,7 @@ pub fn infer_scope_types<'db>(
             // can resolve references to captures without reporting "unresolved name"
             // diagnostics. The loop below will override these with proper types.
             let captures = &index.scope_bindings[file_scope.index() as usize].captures;
-            for (capture_name, _def_site) in captures {
+            for (capture_name, _binding_id) in captures {
                 builder.add_local(
                     capture_name.clone(),
                     Ty::Unknown {
@@ -589,52 +589,51 @@ pub fn infer_scope_types<'db>(
             // (not just the enclosing Function/Let) are also resolved correctly.
             {
                 let captures = &index.scope_bindings[file_scope.index() as usize].captures;
+                let mut inferred_owner_scopes = Vec::new();
                 for ancestor_fsi in index.ancestor_scopes(file_scope) {
                     let anc_bindings = &index.scope_bindings[ancestor_fsi.index() as usize];
                     let inference_fsi = inference_owner_scope(&index, ancestor_fsi);
                     let inference_scope_id = index.scope_ids[inference_fsi.index() as usize];
+                    let capture_declared_in_ancestor =
+                        |capture_name: &Name, binding_id: &BindingId| -> bool {
+                            binding_id.scope == ancestor_fsi
+                                && match binding_id.site {
+                                    DefinitionSite::Parameter(idx) => anc_bindings
+                                        .params
+                                        .iter()
+                                        .any(|(n, i)| n == capture_name && *i == idx),
+                                    DefinitionSite::Statement(_)
+                                    | DefinitionSite::PatternBinding(_) => {
+                                        anc_bindings.bindings.iter().any(|binding| {
+                                            &binding.name == capture_name
+                                                && binding.site == binding_id.site
+                                        })
+                                    }
+                                }
+                        };
                     // Only call infer_scope_types if this ancestor has any of
                     // the captures we still need (avoids unnecessary Salsa calls).
                     // For efficiency, check if any capture is declared in this scope.
-                    let has_relevant_capture =
-                        captures
-                            .iter()
-                            .any(|(name, binding_id)| match binding_id.site {
-                                DefinitionSite::Parameter(idx) => {
-                                    binding_id.scope == ancestor_fsi
-                                        && anc_bindings
-                                            .params
-                                            .iter()
-                                            .any(|(n, i)| n == name && *i == idx)
-                                }
-                                DefinitionSite::Statement(_)
-                                | DefinitionSite::PatternBinding(_) => {
-                                    binding_id.scope == ancestor_fsi
-                                        && anc_bindings.bindings.iter().any(|binding| {
-                                            &binding.name == name && binding.site == binding_id.site
-                                        })
-                                }
-                            });
+                    let has_relevant_capture = captures
+                        .iter()
+                        .any(|(name, binding_id)| capture_declared_in_ancestor(name, binding_id));
                     if !has_relevant_capture {
                         continue;
                     }
-                    let anc_inference = infer_scope_types(db, inference_scope_id);
+                    let anc_inference = if let Some(idx) = inferred_owner_scopes
+                        .iter()
+                        .position(|(scope_id, _)| scope_id == &inference_scope_id)
+                    {
+                        inferred_owner_scopes[idx].1
+                    } else {
+                        let inference = infer_scope_types(db, inference_scope_id);
+                        inferred_owner_scopes.push((inference_scope_id, inference));
+                        inference
+                    };
                     for (capture_name, binding_id) in captures {
                         let def_site = binding_id.site;
-                        // Check if this ancestor declares this capture.
-                        let is_declared_here = binding_id.scope == ancestor_fsi
-                            && match def_site {
-                                DefinitionSite::Parameter(idx) => anc_bindings
-                                    .params
-                                    .iter()
-                                    .any(|(n, i)| n == capture_name && *i == idx),
-                                DefinitionSite::Statement(_)
-                                | DefinitionSite::PatternBinding(_) => {
-                                    anc_bindings.bindings.iter().any(|binding| {
-                                        &binding.name == capture_name && binding.site == def_site
-                                    })
-                                }
-                            };
+                        let is_declared_here =
+                            capture_declared_in_ancestor(capture_name, binding_id);
                         if !is_declared_here {
                             continue;
                         }
