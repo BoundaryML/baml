@@ -71,7 +71,7 @@ fn user.CatchThenCatchAll(x: int) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: int // x // param
-    let _2: unknown // e
+    let _2: unknown
     let _3: bool
 
     bb0: {

@@ -176,6 +176,13 @@ pub fn type_at(db: &dyn Db, file: SourceFile, offset: TextSize) -> Option<TypeIn
     let name_text = token.text();
     let name = Name::new(name_text);
 
+    // A let/for binding is not visible to expression resolution until after its
+    // declaration statement. Hovers on the declaration token itself still need
+    // to describe that binding.
+    if let Some((site, lookup_offset)) = declaration_site_at(db, file, offset, &name) {
+        return local_type_info(db, file, lookup_offset, &name, site);
+    }
+
     // ── Step 2: resolve the name in scope ─────────────────────────────────────
     let resolved = baml_compiler2_tir::resolve::resolve_name_at(db, file, offset, &name);
 
@@ -197,6 +204,29 @@ pub fn type_at(db: &dyn Db, file: SourceFile, offset: TextSize) -> Option<TypeIn
         }
         | baml_compiler2_tir::resolve::ResolvedName::Unknown => None,
     }
+}
+
+fn declaration_site_at(
+    db: &dyn Db,
+    file: SourceFile,
+    offset: TextSize,
+    name: &Name,
+) -> Option<(DefinitionSite, TextSize)> {
+    let index = baml_compiler2_hir::file_semantic_index(db, file);
+    let scope_id = index.scope_at_offset(offset, None);
+
+    for ancestor_id in index.ancestor_scopes(scope_id) {
+        let bindings = &index.scope_bindings[ancestor_id.index() as usize];
+        for binding in bindings.bindings.iter().rev() {
+            if &binding.name == name
+                && (binding.name_range.contains(offset) || binding.name_range.end() == offset)
+            {
+                return Some((binding.site, binding.name_range.end()));
+            }
+        }
+    }
+
+    None
 }
 
 // ── type_info_for_definition ──────────────────────────────────────────────────

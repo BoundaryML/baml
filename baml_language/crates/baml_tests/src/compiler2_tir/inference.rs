@@ -464,6 +464,34 @@ fn lambda_scope_retypes_capture_from_function_parameter() {
 }
 
 #[test]
+fn lambda_parameter_shadowing_uses_parameter_declared_type() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "lambda_param_shadow.baml",
+        r#"
+function main() -> int {
+    let x: string = "";
+    let f = (x: int) -> int {
+        x = 1;
+        x
+    };
+    f(0)
+}
+"#,
+    );
+
+    let output = render_tir(&db, file);
+    assert!(
+        !output.contains("type mismatch: expected string, got int"),
+        "lambda parameter assignment should use the parameter annotation, got:\n{output}"
+    );
+    assert!(
+        output.contains("(x: int) -> int"),
+        "expected lambda parameter to keep its int type, got:\n{output}"
+    );
+}
+
+#[test]
 fn returning_callback_forwarder_matches_omitted_function_type_return_annotation() {
     let mut db = make_db();
     let file = db.add_file(

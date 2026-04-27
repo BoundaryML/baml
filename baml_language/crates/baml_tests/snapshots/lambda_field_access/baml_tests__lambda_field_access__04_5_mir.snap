@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 17172
 ---
 === MIR2 ===
 fn user.test_captured_field_access(obj: Outer) -> string {
@@ -27,7 +26,7 @@ fn .<lambda(test_captured_field_access, 0)>() -> null {
     let _0: null // _0 // return
 
     bb0: {
-        _0 = const null;
+        _0 = copy capture[0].1;
         goto -> bb1;
     }
 
@@ -60,7 +59,7 @@ fn .<lambda(test_captured_nested_field, 0)>() -> null {
     let _0: null // _0 // return
 
     bb0: {
-        _0 = const null;
+        _0 = copy capture[0].0.0;
         goto -> bb1;
     }
 
@@ -92,9 +91,11 @@ fn .<lambda(test_lambda_param_and_capture, 0)>(x: int) -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: int // x // param
+    let _2: int
 
     bb0: {
-        _0 = copy _1 + const null;
+        _2 = copy capture[0].0.0;
+        _0 = copy _1 + copy _2;
         goto -> bb1;
     }
 
@@ -145,7 +146,7 @@ fn .<lambda(<lambda(test_nested_lambda_capture, 0)>, 1)>() -> null {
     let _0: null // _0 // return
 
     bb0: {
-        _0 = const null;
+        _0 = copy capture[0].1;
         goto -> bb1;
     }
 
@@ -186,7 +187,7 @@ fn .<lambda(test_no_leak_after_lambda, 0)>() -> null {
     let _0: null // _0 // return
 
     bb0: {
-        _0 = const null;
+        _0 = copy capture[0].0.0;
         goto -> bb1;
     }
 
@@ -228,7 +229,7 @@ fn .<lambda(test_sequential_lambdas, 0)>() -> null {
     let _0: null // _0 // return
 
     bb0: {
-        _0 = const null;
+        _0 = copy capture[0].1;
         goto -> bb1;
     }
 
@@ -243,7 +244,7 @@ fn .<lambda(test_sequential_lambdas, 1)>() -> null {
     let _0: null // _0 // return
 
     bb0: {
-        _0 = const null;
+        _0 = copy capture[0].0.0;
         goto -> bb1;
     }
 

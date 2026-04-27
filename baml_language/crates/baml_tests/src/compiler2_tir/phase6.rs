@@ -1549,7 +1549,7 @@ function f() -> int {
 }
 
 #[test]
-fn for_body_container_assignment_does_not_escape_loop() {
+fn for_body_container_assignment_establishes_outer_type() {
     let mut db = make_db();
     let file = db.add_file(
         "test.baml",
@@ -1567,11 +1567,11 @@ function f() -> int {
     let output = render_tir(&db, file);
 
     assert!(
-        output.contains("let xs = [] : never[] -> int[] (evolving)"),
-        "expected xs to be established after the loop by xs.push(1), got:\n{output}"
+        output.contains("let xs = [] : never[] -> string[] (evolving)"),
+        "expected xs to be established by the first push in the loop body, got:\n{output}"
     );
     assert!(
-        !output.contains("type mismatch"),
-        "for-loop body assignment should not be preserved after the loop, got:\n{output}"
+        output.contains("type mismatch: expected string, got int"),
+        "post-loop push should be checked against the loop-established element type, got:\n{output}"
     );
 }

@@ -47,13 +47,13 @@ function user.CatchThenCatchAll(x: int) -> string {
     load_var x
     call user.MayFailIntOrString
     jump L2
-    load_var e
+    load_var _2
     is_type string
     pop_jump_if_false L0
     jump L1
 
   L0:
-    load_var e
+    load_var _2
     throw_if_panic
     load_const "caught rest"
     jump L2

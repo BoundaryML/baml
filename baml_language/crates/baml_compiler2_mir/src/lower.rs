@@ -1000,10 +1000,18 @@ impl<'db> LoweringContext<'db> {
     }
 
     fn binding_id_for_name_at(&self, expr_id: AstExprId, name: &Name) -> Option<BindingId> {
-        let source_map = self.source_map.as_ref()?;
-        let offset = source_map.expr_span(expr_id).start();
         let index = file_semantic_index(self.db, self.file);
-        let scope_id = index.scope_at_offset(offset, self.scope_func_name.as_ref());
+        let (scope_id, offset) = if let Some(source_map) = self.source_map.as_ref() {
+            let offset = source_map.expr_span(expr_id).start();
+            (
+                index.scope_at_offset(offset, self.scope_func_name.as_ref()),
+                offset,
+            )
+        } else {
+            let scope_id = self.current_scope;
+            let offset = index.scopes[scope_id.index() as usize].range.end();
+            (scope_id, offset)
+        };
         index.visible_binding_at(scope_id, offset, name)
     }
 

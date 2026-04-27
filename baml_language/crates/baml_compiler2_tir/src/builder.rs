@@ -314,10 +314,6 @@ impl<'db> TypeInferenceBuilder<'db> {
         self.restore_scoped_locals_inner(snapshot, true);
     }
 
-    fn restore_scoped_locals_without_assignments(&mut self, snapshot: ScopedLocalsSnapshot) {
-        self.restore_scoped_locals_inner(snapshot, false);
-    }
-
     fn restore_scoped_locals_inner(
         &mut self,
         snapshot: ScopedLocalsSnapshot,
@@ -333,6 +329,14 @@ impl<'db> TypeInferenceBuilder<'db> {
             .split_off(snapshot.scoped_local_declarations_len);
         let declared_names = scoped_declarations
             .iter()
+            .map(|declaration| declaration.name.clone())
+            .collect::<FxHashSet<_>>();
+        let shadowed_outer_names = scoped_declarations
+            .iter()
+            .filter(|declaration| {
+                declaration.previous_local.is_some()
+                    || declaration.previous_let_binding_pattern.is_some()
+            })
             .map(|declaration| declaration.name.clone())
             .collect::<FxHashSet<_>>();
         for declaration in scoped_declarations.into_iter().rev() {
@@ -387,11 +391,10 @@ impl<'db> TypeInferenceBuilder<'db> {
         self.scoped_local_assignments
             .truncate(snapshot.scoped_local_assignments_len);
         if preserve_assignments {
-            self.scoped_local_assignments.extend(
-                assigned_names
-                    .into_iter()
-                    .filter(|name| !declared_names.contains(name)),
-            );
+            self.scoped_local_assignments
+                .extend(assigned_names.into_iter().filter(|name| {
+                    !declared_names.contains(name) || shadowed_outer_names.contains(name)
+                }));
         }
     }
 
@@ -2253,7 +2256,7 @@ impl<'db> TypeInferenceBuilder<'db> {
 
                 // 4. Check the body
                 self.infer_expr(*for_body, body);
-                self.restore_scoped_locals_without_assignments(snapshot);
+                self.restore_scoped_locals(snapshot);
                 false
             }
             Stmt::Assign { target, value } => {
@@ -5981,7 +5984,9 @@ impl<'db> TypeInferenceBuilder<'db> {
         // Seed lambda params (captures remain accessible via parent locals)
         for (name_opt, ty) in param_tys {
             if let Some(name) = name_opt {
-                self.add_local(name.clone(), ty.clone());
+                self.locals.insert(name.clone(), ty.clone());
+                self.declared_types.insert(name.clone(), ty.clone());
+                self.let_binding_patterns.remove(name);
             }
         }
 
