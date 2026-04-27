@@ -540,32 +540,23 @@ mod tests {
         assert!(sites.iter().all(|s| s.kind == DefinitionKind::Variant));
     }
 
-    /// Duplicate let-bindings in the same function produce a DuplicateDefinition diagnostic.
+    /// Same-scope let shadowing is legal and does not produce duplicate diagnostics.
     #[test]
-    fn duplicate_let_binding_produces_diagnostic() {
-        use baml_compiler2_hir::{contributions::DefinitionKind, diagnostic::Hir2Diagnostic};
+    fn same_scope_let_shadowing_has_no_duplicate_diagnostic() {
+        use baml_compiler2_hir::diagnostic::Hir2Diagnostic;
 
         let mut db = make_db();
         let file = db.add_file(
-            "dup_let.baml",
+            "shadow_let.baml",
             "function foo() -> int {\n  let x = 1;\n  let x = 2;\n  return x;\n}",
         );
 
         let index = file_semantic_index(&db, file);
         let diags = index.diagnostics();
 
-        let dups: Vec<_> = diags
-            .iter()
-            .filter(|d| matches!(d, Hir2Diagnostic::DuplicateDefinition { name, .. } if name == &Name::new("x")))
-            .collect();
-        assert_eq!(dups.len(), 1);
-
-        let Hir2Diagnostic::DuplicateDefinition { scope, sites, .. } = dups[0] else {
-            panic!("expected DuplicateDefinition diagnostic");
-        };
-        assert_eq!(scope.as_ref().unwrap(), &Name::new("foo"));
-        assert_eq!(sites.len(), 2);
-        assert!(sites.iter().all(|s| s.kind == DefinitionKind::Binding));
+        assert!(!diags.iter().any(
+            |d| matches!(d, Hir2Diagnostic::DuplicateDefinition { name, .. } if name == &Name::new("x"))
+        ));
     }
 
     /// A field and a method with the same name in a class produce a cross-kind diagnostic.

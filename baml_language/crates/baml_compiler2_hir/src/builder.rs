@@ -30,6 +30,12 @@ use crate::{
     },
 };
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum WalkContext {
+    RootBody,
+    Nested,
+}
+
 pub struct SemanticIndexBuilder<'db> {
     db: &'db dyn crate::Db,
     file: SourceFile,
@@ -234,230 +240,213 @@ impl<'db> SemanticIndexBuilder<'db> {
         }
     }
 
-    /// Walk an `ExprBody` arena, recording each expression in the current scope.
-    /// Block expressions with let-bindings push a Block scope.
+    /// Walk an `ExprBody` arena in source order, recording expression ownership
+    /// and local bindings in the lexical scope that owns each expression.
     fn walk_expr_body(&mut self, body: &ast::ExprBody, source_map: &ast::AstSourceMap) {
-        for (expr_id, expr) in body.exprs.iter() {
-            self.record_expr_scope(expr_id);
-            let _ = expr;
+        if let Some(root_expr) = body.root_expr {
+            self.walk_expr(root_expr, body, source_map, WalkContext::RootBody);
         }
-        // Collect let-bindings and for-loop bindings, detecting duplicates within the scope.
-        let mut seen: FxHashMap<Name, Vec<MemberSite>> = FxHashMap::default();
-        for (stmt_id, stmt) in body.stmts.iter() {
-            let binding_pattern = match stmt {
-                ast::Stmt::Let { pattern, .. } => Some(*pattern),
-                ast::Stmt::For { binding, .. } => Some(*binding),
-                _ => None,
-            };
-            if let Some(pattern) = binding_pattern {
-                let scope_id = self.current_scope_id();
-                if let Some(name) = body.patterns[pattern].binding_name() {
-                    let name_range = source_map.pattern_span(pattern);
+    }
 
-                    seen.entry(name.clone()).or_default().push(MemberSite {
-                        range: name_range,
-                        kind: DefinitionKind::Binding,
-                    });
-
-                    self.scope_bindings[scope_id.index() as usize]
-                        .bindings
-                        .push((name.clone(), DefinitionSite::Statement(stmt_id), name_range));
+    fn walk_expr(
+        &mut self,
+        expr_id: ast::ExprId,
+        body: &ast::ExprBody,
+        source_map: &ast::AstSourceMap,
+        ctx: WalkContext,
+    ) {
+        match &body.exprs[expr_id] {
+            ast::Expr::Block { stmts, tail_expr } => {
+                let pushed = !matches!(ctx, WalkContext::RootBody);
+                if pushed {
+                    self.push_scope(ScopeKind::Block, None, source_map.expr_span(expr_id));
+                }
+                self.record_expr_scope(expr_id);
+                self.walk_block_contents(stmts, *tail_expr, body, source_map);
+                if pushed {
+                    self.pop_scope();
                 }
             }
-        }
-
-        self.emit_duplicate_diagnostics(seen);
-
-        // Register match-arm pattern bindings in child scopes.
-        // The MatchArm scope's TextRange covers the arm span, so
-        // scope_at_offset will find it for names used inside the arm body.
-        for (arm_id, arm) in body.match_arms.iter() {
-            let arm_span = source_map.match_arm_span(arm_id);
-            self.push_scope(ScopeKind::MatchArm, None, arm_span);
-
-            if let Some(name) = Self::pattern_binding_name(&body.patterns, arm.pattern) {
-                let name_range = source_map.pattern_span(arm.pattern);
-                let scope_id = self.current_scope_id();
-                self.scope_bindings[scope_id.index() as usize]
-                    .bindings
-                    .push((
-                        name.clone(),
-                        DefinitionSite::PatternBinding(arm.pattern),
-                        name_range,
-                    ));
-            }
-
-            self.pop_scope();
-        }
-
-        // Register catch clause and catch arm pattern bindings in child scopes.
-        // Two-level scoping: CatchClause (holds clause binding) → CatchArm (holds arm pattern).
-        for (expr_id, expr) in body.exprs.iter() {
-            let ast::Expr::Catch { clauses, .. } = expr else {
-                continue;
-            };
-            let catch_span = source_map.expr_span(expr_id);
-
-            for clause in clauses {
-                // Push CatchClause scope — clause binding visible to all arms.
-                self.push_scope(ScopeKind::CatchClause, None, catch_span);
-
-                if let Some(name) = Self::pattern_binding_name(&body.patterns, clause.binding) {
-                    let name_range = source_map.pattern_span(clause.binding);
-                    let scope_id = self.current_scope_id();
-                    self.scope_bindings[scope_id.index() as usize]
-                        .bindings
-                        .push((
-                            name.clone(),
-                            DefinitionSite::PatternBinding(clause.binding),
-                            name_range,
-                        ));
-                }
-
-                // Register optional stack trace binding in the same CatchClause scope.
-                if let Some(st_pat) = clause.stack_trace_binding {
-                    if let Some(name) = Self::pattern_binding_name(&body.patterns, st_pat) {
-                        let name_range = source_map.pattern_span(st_pat);
-                        let scope_id = self.current_scope_id();
-                        self.scope_bindings[scope_id.index() as usize]
-                            .bindings
-                            .push((
-                                name.clone(),
-                                DefinitionSite::PatternBinding(st_pat),
-                                name_range,
-                            ));
-                    }
-                }
-
-                // Push CatchArm child scopes — arm pattern visible only in arm body.
-                for &arm_id in &clause.arms {
-                    let arm = &body.catch_arms[arm_id];
-                    let arm_span = source_map.catch_arm_span(arm_id);
-                    self.push_scope(ScopeKind::CatchArm, None, arm_span);
-
-                    if let Some(name) = Self::pattern_binding_name(&body.patterns, arm.pattern) {
-                        let name_range = source_map.pattern_span(arm.pattern);
-                        let scope_id = self.current_scope_id();
-                        self.scope_bindings[scope_id.index() as usize]
-                            .bindings
-                            .push((
-                                name.clone(),
-                                DefinitionSite::PatternBinding(arm.pattern),
-                                name_range,
-                            ));
-                    }
-
-                    self.pop_scope(); // CatchArm
-                }
-
-                self.pop_scope(); // CatchClause
+            ast::Expr::Lambda(func_def) => self.walk_lambda_expr(expr_id, func_def, source_map),
+            _ => {
+                self.record_expr_scope(expr_id);
+                self.walk_expr_children(expr_id, body, source_map);
             }
         }
+    }
 
-        // Pass 5 — Lambda scopes: register lambda params in child scopes.
-        for (expr_id, expr) in body.exprs.iter() {
-            let ast::Expr::Lambda(ref func_def) = *expr else {
-                continue;
-            };
-            let lambda_span = source_map.expr_span(expr_id);
-
-            self.push_scope(ScopeKind::Lambda, None, lambda_span);
-            let scope_id = self.current_scope_id();
-
-            // Seed params into the lambda scope's bindings
-            for (idx, param) in func_def.params.iter().enumerate() {
-                self.scope_bindings[scope_id.index() as usize]
-                    .params
-                    .push((param.name.clone(), idx));
-            }
-
-            // Recursively walk the lambda's own ExprBody
-            if let Some(ast::FunctionBodyDef::Expr(ref lambda_body, ref lambda_source_map)) =
-                func_def.body
-            {
-                self.walk_expr_body(lambda_body, lambda_source_map);
-
-                // ── Capture analysis ──────────────────────────────────────────
-                // Identify names referenced in the lambda body that are
-                // defined in ancestor scopes (up to Function boundary).
-                let referenced_names = Self::collect_name_references(lambda_body);
-                let lambda_idx = scope_id.index() as usize;
-
-                let mut captures: Vec<(Name, DefinitionSite)> = Vec::new();
-                let mut seen: std::collections::HashSet<Name> = std::collections::HashSet::new();
-
-                for name in &referenced_names {
-                    // Skip if already recorded as a capture
-                    if seen.contains(name) {
-                        continue;
-                    }
-                    // Skip if defined locally in the lambda scope (param or let-binding)
-                    if Self::scope_defines_name(&self.scope_bindings[lambda_idx], name) {
-                        continue;
-                    }
-
-                    // Walk ancestor scopes to find the defining scope
-                    let mut current = self.scopes[lambda_idx].parent;
-                    while let Some(ancestor_id) = current {
-                        let ancestor_idx = ancestor_id.index() as usize;
-
-                        // Read scope metadata before any mutation to avoid
-                        // simultaneous borrow conflicts on self.scopes and
-                        // self.scope_bindings.
-                        let ancestor_kind = self.scopes[ancestor_idx].kind.clone();
-                        let ancestor_parent = self.scopes[ancestor_idx].parent;
-
-                        // Check if this ancestor defines the name — record the
-                        // DefinitionSite so captures are tied to the specific
-                        // declaration, not just the name (future-proofs for shadowing).
-                        if let Some(def_site) =
-                            Self::scope_definition_site(&self.scope_bindings[ancestor_idx], name)
-                        {
-                            captures.push((name.clone(), def_site));
-                            seen.insert(name.clone());
-                            // Mark the name as captured in the defining scope
-                            self.scope_bindings[ancestor_idx]
-                                .captured_names
-                                .insert(name.clone());
-                            break;
-                        }
-
-                        // Also check if it's already a capture of an intermediate
-                        // lambda (for nested capture chains: inner lambda captures
-                        // from an intermediate lambda that itself captures from the
-                        // parent).
-                        if let Some((_, def_site)) = self.scope_bindings[ancestor_idx]
-                            .captures
-                            .iter()
-                            .find(|(n, _)| n == name)
-                        {
-                            captures.push((name.clone(), *def_site));
-                            seen.insert(name.clone());
-                            break;
-                        }
-
-                        // Stop at Function boundary — don't capture across function defs
-                        if matches!(ancestor_kind, ScopeKind::Function) {
-                            break;
-                        }
-
-                        current = ancestor_parent;
-                    }
-                }
-
-                self.scope_bindings[lambda_idx].captures = captures;
-            }
-
-            self.pop_scope();
+    fn walk_block_contents(
+        &mut self,
+        stmts: &[ast::StmtId],
+        tail_expr: Option<ast::ExprId>,
+        body: &ast::ExprBody,
+        source_map: &ast::AstSourceMap,
+    ) {
+        for &stmt_id in stmts {
+            self.walk_stmt(stmt_id, body, source_map);
         }
+        if let Some(tail_expr) = tail_expr {
+            self.walk_expr(tail_expr, body, source_map, WalkContext::Nested);
+        }
+    }
 
-        // Pass 6 — Path resolution: classify multi-segment Path root segments.
-        // After all binding collection passes, check if the root of each
-        // multi-segment Path is a locally-declared variable or parameter.
-        let visible_names = self.collect_visible_names();
-        for (expr_id, expr) in body.exprs.iter() {
-            if let ast::Expr::Path(segments) = expr {
+    fn walk_stmt(
+        &mut self,
+        stmt_id: ast::StmtId,
+        body: &ast::ExprBody,
+        source_map: &ast::AstSourceMap,
+    ) {
+        match &body.stmts[stmt_id] {
+            ast::Stmt::Expr(expr) => self.walk_expr(*expr, body, source_map, WalkContext::Nested),
+            ast::Stmt::Let {
+                pattern,
+                initializer,
+                ..
+            } => {
+                if let Some(initializer) = initializer {
+                    self.walk_expr(*initializer, body, source_map, WalkContext::Nested);
+                }
+                self.register_local_pattern(
+                    *pattern,
+                    DefinitionSite::Statement(stmt_id),
+                    body,
+                    source_map,
+                );
+            }
+            ast::Stmt::For {
+                binding,
+                collection,
+                body: loop_body,
+            } => {
+                self.walk_expr(*collection, body, source_map, WalkContext::Nested);
+                self.push_scope(ScopeKind::Block, None, source_map.stmt_span(stmt_id));
+                self.register_local_pattern(
+                    *binding,
+                    DefinitionSite::Statement(stmt_id),
+                    body,
+                    source_map,
+                );
+                self.walk_expr(*loop_body, body, source_map, WalkContext::Nested);
+                self.pop_scope();
+            }
+            ast::Stmt::While {
+                condition,
+                body: loop_body,
+                after,
+                ..
+            } => {
+                self.walk_expr(*condition, body, source_map, WalkContext::Nested);
+                self.walk_expr(*loop_body, body, source_map, WalkContext::Nested);
+                if let Some(after) = after {
+                    self.walk_stmt(*after, body, source_map);
+                }
+            }
+            ast::Stmt::Return(expr) => {
+                if let Some(expr) = expr {
+                    self.walk_expr(*expr, body, source_map, WalkContext::Nested);
+                }
+            }
+            ast::Stmt::Throw { value } => {
+                self.walk_expr(*value, body, source_map, WalkContext::Nested)
+            }
+            ast::Stmt::Assign { target, value } => {
+                self.walk_expr(*target, body, source_map, WalkContext::Nested);
+                self.walk_expr(*value, body, source_map, WalkContext::Nested);
+            }
+            ast::Stmt::AssignOp { target, value, .. } => {
+                self.walk_expr(*target, body, source_map, WalkContext::Nested);
+                self.walk_expr(*value, body, source_map, WalkContext::Nested);
+            }
+            ast::Stmt::Break
+            | ast::Stmt::Continue
+            | ast::Stmt::Missing
+            | ast::Stmt::HeaderComment { .. } => {}
+        }
+    }
+
+    fn walk_expr_children(
+        &mut self,
+        expr_id: ast::ExprId,
+        body: &ast::ExprBody,
+        source_map: &ast::AstSourceMap,
+    ) {
+        match &body.exprs[expr_id] {
+            ast::Expr::If {
+                condition,
+                then_branch,
+                else_branch,
+            } => {
+                self.walk_expr(*condition, body, source_map, WalkContext::Nested);
+                self.walk_expr(*then_branch, body, source_map, WalkContext::Nested);
+                if let Some(else_branch) = else_branch {
+                    self.walk_expr(*else_branch, body, source_map, WalkContext::Nested);
+                }
+            }
+            ast::Expr::Match {
+                scrutinee, arms, ..
+            } => {
+                self.walk_expr(*scrutinee, body, source_map, WalkContext::Nested);
+                for &arm_id in arms {
+                    self.walk_match_arm(arm_id, body, source_map);
+                }
+            }
+            ast::Expr::Catch { base, clauses } => {
+                self.walk_expr(*base, body, source_map, WalkContext::Nested);
+                for clause in clauses {
+                    self.walk_catch_clause(clause, body, source_map, source_map.expr_span(expr_id));
+                }
+            }
+            ast::Expr::Throw { value } => {
+                self.walk_expr(*value, body, source_map, WalkContext::Nested)
+            }
+            ast::Expr::Binary { lhs, rhs, .. } => {
+                self.walk_expr(*lhs, body, source_map, WalkContext::Nested);
+                self.walk_expr(*rhs, body, source_map, WalkContext::Nested);
+            }
+            ast::Expr::Unary { expr, .. } | ast::Expr::OptionalChain { expr } => {
+                self.walk_expr(*expr, body, source_map, WalkContext::Nested);
+            }
+            ast::Expr::Call { callee, args } | ast::Expr::OptionalCall { callee, args } => {
+                self.walk_expr(*callee, body, source_map, WalkContext::Nested);
+                for &arg in args {
+                    self.walk_expr(arg, body, source_map, WalkContext::Nested);
+                }
+            }
+            ast::Expr::Object {
+                fields, spreads, ..
+            } => {
+                for (_, field_expr) in fields {
+                    self.walk_expr(*field_expr, body, source_map, WalkContext::Nested);
+                }
+                for spread in spreads {
+                    self.walk_expr(spread.expr, body, source_map, WalkContext::Nested);
+                }
+            }
+            ast::Expr::Array { elements } => {
+                for &element in elements {
+                    self.walk_expr(element, body, source_map, WalkContext::Nested);
+                }
+            }
+            ast::Expr::Map { entries } => {
+                for &(key, value) in entries {
+                    self.walk_expr(key, body, source_map, WalkContext::Nested);
+                    self.walk_expr(value, body, source_map, WalkContext::Nested);
+                }
+            }
+            ast::Expr::MemberAccess { base, .. }
+            | ast::Expr::OptionalMemberAccess { base, .. }
+            | ast::Expr::Index { base, index: _ }
+            | ast::Expr::OptionalIndex { base, index: _ } => {
+                self.walk_expr(*base, body, source_map, WalkContext::Nested);
+                if let ast::Expr::Index { index, .. } | ast::Expr::OptionalIndex { index, .. } =
+                    &body.exprs[expr_id]
+                {
+                    self.walk_expr(*index, body, source_map, WalkContext::Nested);
+                }
+            }
+            ast::Expr::Path(segments) => {
                 if segments.len() >= 2 {
+                    let visible_names = self.collect_visible_names();
                     let root = &segments[0];
                     let resolution = if visible_names.contains(root) {
                         PathResolution::Local { name: root.clone() }
@@ -467,7 +456,185 @@ impl<'db> SemanticIndexBuilder<'db> {
                     self.path_resolutions.push((expr_id, resolution));
                 }
             }
+            ast::Expr::Literal(_)
+            | ast::Expr::ByteStringLiteral(_)
+            | ast::Expr::Null
+            | ast::Expr::Block { .. }
+            | ast::Expr::Lambda(_)
+            | ast::Expr::Missing => {}
         }
+    }
+
+    fn register_local_pattern(
+        &mut self,
+        pat_id: ast::PatId,
+        site: DefinitionSite,
+        body: &ast::ExprBody,
+        source_map: &ast::AstSourceMap,
+    ) {
+        if let Some(name) = Self::local_binding_name(&body.patterns, pat_id) {
+            let name_range = source_map.pattern_span(pat_id);
+            let scope_id = self.current_scope_id();
+            self.scope_bindings[scope_id.index() as usize]
+                .bindings
+                .push((name.clone(), site, name_range));
+        }
+    }
+
+    fn walk_match_arm(
+        &mut self,
+        arm_id: ast::MatchArmId,
+        body: &ast::ExprBody,
+        source_map: &ast::AstSourceMap,
+    ) {
+        let arm = &body.match_arms[arm_id];
+        self.push_scope(ScopeKind::MatchArm, None, source_map.match_arm_span(arm_id));
+        if let Some(name) = Self::match_or_catch_binding_name(&body.patterns, arm.pattern) {
+            let name_range = source_map.pattern_span(arm.pattern);
+            let scope_id = self.current_scope_id();
+            self.scope_bindings[scope_id.index() as usize]
+                .bindings
+                .push((
+                    name.clone(),
+                    DefinitionSite::PatternBinding(arm.pattern),
+                    name_range,
+                ));
+        }
+        if let Some(guard) = arm.guard {
+            self.walk_expr(guard, body, source_map, WalkContext::Nested);
+        }
+        self.walk_expr(arm.body, body, source_map, WalkContext::Nested);
+        self.pop_scope();
+    }
+
+    fn walk_catch_clause(
+        &mut self,
+        clause: &ast::CatchClause,
+        body: &ast::ExprBody,
+        source_map: &ast::AstSourceMap,
+        catch_span: TextRange,
+    ) {
+        self.push_scope(ScopeKind::CatchClause, None, catch_span);
+        if let Some(name) = Self::match_or_catch_binding_name(&body.patterns, clause.binding) {
+            let name_range = source_map.pattern_span(clause.binding);
+            let scope_id = self.current_scope_id();
+            self.scope_bindings[scope_id.index() as usize]
+                .bindings
+                .push((
+                    name.clone(),
+                    DefinitionSite::PatternBinding(clause.binding),
+                    name_range,
+                ));
+        }
+        if let Some(st_pat) = clause.stack_trace_binding {
+            if let Some(name) = Self::match_or_catch_binding_name(&body.patterns, st_pat) {
+                let name_range = source_map.pattern_span(st_pat);
+                let scope_id = self.current_scope_id();
+                self.scope_bindings[scope_id.index() as usize]
+                    .bindings
+                    .push((
+                        name.clone(),
+                        DefinitionSite::PatternBinding(st_pat),
+                        name_range,
+                    ));
+            }
+        }
+        for &arm_id in &clause.arms {
+            self.walk_catch_arm(arm_id, body, source_map);
+        }
+        self.pop_scope();
+    }
+
+    fn walk_catch_arm(
+        &mut self,
+        arm_id: ast::CatchArmId,
+        body: &ast::ExprBody,
+        source_map: &ast::AstSourceMap,
+    ) {
+        let arm = &body.catch_arms[arm_id];
+        self.push_scope(ScopeKind::CatchArm, None, source_map.catch_arm_span(arm_id));
+        if let Some(name) = Self::match_or_catch_binding_name(&body.patterns, arm.pattern) {
+            let name_range = source_map.pattern_span(arm.pattern);
+            let scope_id = self.current_scope_id();
+            self.scope_bindings[scope_id.index() as usize]
+                .bindings
+                .push((
+                    name.clone(),
+                    DefinitionSite::PatternBinding(arm.pattern),
+                    name_range,
+                ));
+        }
+        self.walk_expr(arm.body, body, source_map, WalkContext::Nested);
+        self.pop_scope();
+    }
+
+    fn walk_lambda_expr(
+        &mut self,
+        expr_id: ast::ExprId,
+        func_def: &ast::FunctionDef,
+        source_map: &ast::AstSourceMap,
+    ) {
+        self.push_scope(ScopeKind::Lambda, None, source_map.expr_span(expr_id));
+        let scope_id = self.current_scope_id();
+        for (idx, param) in func_def.params.iter().enumerate() {
+            self.scope_bindings[scope_id.index() as usize]
+                .params
+                .push((param.name.clone(), idx));
+        }
+        if let Some(ast::FunctionBodyDef::Expr(lambda_body, lambda_source_map)) = &func_def.body {
+            self.walk_expr_body(lambda_body, lambda_source_map);
+            self.analyze_lambda_captures(scope_id, lambda_body);
+        }
+        self.pop_scope();
+    }
+
+    fn analyze_lambda_captures(&mut self, lambda_scope: FileScopeId, lambda_body: &ast::ExprBody) {
+        let referenced_names = Self::collect_name_references(lambda_body);
+        let lambda_idx = lambda_scope.index() as usize;
+        let mut captures: Vec<(Name, DefinitionSite)> = Vec::new();
+        let mut seen: std::collections::HashSet<Name> = std::collections::HashSet::new();
+
+        for name in &referenced_names {
+            if seen.contains(name)
+                || Self::scope_defines_name(&self.scope_bindings[lambda_idx], name)
+            {
+                continue;
+            }
+            let mut current = self.scopes[lambda_idx].parent;
+            while let Some(ancestor_id) = current {
+                let ancestor_idx = ancestor_id.index() as usize;
+                let ancestor_kind = self.scopes[ancestor_idx].kind.clone();
+                let ancestor_parent = self.scopes[ancestor_idx].parent;
+
+                if let Some(def_site) =
+                    Self::scope_definition_site(&self.scope_bindings[ancestor_idx], name)
+                {
+                    captures.push((name.clone(), def_site));
+                    seen.insert(name.clone());
+                    self.scope_bindings[ancestor_idx]
+                        .captured_names
+                        .insert(name.clone());
+                    break;
+                }
+
+                if let Some((_, def_site)) = self.scope_bindings[ancestor_idx]
+                    .captures
+                    .iter()
+                    .find(|(n, _)| n == name)
+                {
+                    captures.push((name.clone(), *def_site));
+                    seen.insert(name.clone());
+                    break;
+                }
+
+                if matches!(ancestor_kind, ScopeKind::Function) {
+                    break;
+                }
+                current = ancestor_parent;
+            }
+        }
+
+        self.scope_bindings[lambda_idx].captures = captures;
     }
 
     /// Collect all names visible in the current scope chain (params and
@@ -498,13 +665,30 @@ impl<'db> SemanticIndexBuilder<'db> {
         names
     }
 
-    /// Extract the binding name from a pattern, if it has one.
-    /// Wildcards (`_`) are not bindings and return `None`.
-    fn pattern_binding_name(
+    /// Extract the binding name from a local declaration pattern, if it has one.
+    ///
+    /// The AST canonicalizes `let _` to `Wildcard` at construction time
+    /// (`Pattern::binding`), so `_` never reaches us as a `Bind` regardless of
+    /// the surface form. Both `let`/`for` and `match`/`catch` therefore see
+    /// `_` as "no binding." The distinction between `local_binding_name` and
+    /// `match_or_catch_binding_name` is preserved as a structural marker —
+    /// they are call-site-correct today even though their bodies are
+    /// equivalent under the current AST invariant. If future work reintroduces
+    /// a `_`-as-name path for let/for at the AST layer, only `local_binding_name`
+    /// needs to change.
+    fn local_binding_name(
         patterns: &la_arena::Arena<ast::Pattern>,
         pat_id: ast::PatId,
     ) -> Option<&Name> {
         patterns[pat_id].binding_name()
+    }
+
+    /// Extract match/catch binding names, preserving existing wildcard-like `_` behavior.
+    fn match_or_catch_binding_name(
+        patterns: &la_arena::Arena<ast::Pattern>,
+        pat_id: ast::PatId,
+    ) -> Option<&Name> {
+        Self::local_binding_name(patterns, pat_id).filter(|name| name.as_str() != "_")
     }
 
     /// Collect all single-segment `Expr::Path` names from an `ExprBody`.
