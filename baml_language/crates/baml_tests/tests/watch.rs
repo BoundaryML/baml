@@ -35,6 +35,7 @@ async fn watch_primitive() {
         load_const 1
         store_var value
         load_var value
+        unwatch value
         return
     }
     "#);
@@ -71,6 +72,7 @@ async fn watch_primitive_nested_scope() {
 
       L0:
         load_var value
+        unwatch value
         return
     }
     "#);
@@ -105,6 +107,7 @@ async fn watch_default_filter() {
         load_const 6
         store_var value
         load_var value
+        unwatch value
         return
     }
     "#);
@@ -245,6 +248,7 @@ async fn watch_alias() {
         store_field .x
         load_var point
         load_field .x
+        unwatch point
         return
     }
     "#);
@@ -290,6 +294,7 @@ async fn watch_alias_nested_scope() {
       L0:
         load_var point
         load_field .x
+        unwatch point
         return
     }
     "#);
@@ -333,6 +338,7 @@ async fn watch_scope_exit() {
         store_field .x
         load_var point
         store_var outter_point
+        unwatch point
         load_var outter_point
         load_const 2
         store_field .x
@@ -406,6 +412,7 @@ async fn watch_function_call_modifications() {
         load_var point
         load_field .y
         bin_op +
+        unwatch point
         return
     }
     "#);
@@ -484,6 +491,7 @@ async fn watch_nested_object_added() {
         load_field .p
         load_field .x
         load_field .value
+        unwatch vec
         return
     }
     "#);
@@ -564,6 +572,7 @@ async fn watch_nested_object_removed() {
         load_field .p
         load_field .x
         load_field .value
+        unwatch vec
         return
     }
     "#);
@@ -668,6 +677,8 @@ async fn watch_cyclic_graph() {
         load_var v3
         load_const 30
         store_field .value
+        unwatch v4
+        unwatch v2
         load_const 0
         return
     }

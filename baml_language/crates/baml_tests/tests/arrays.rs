@@ -230,6 +230,35 @@ async fn array_map_callback_throws() {
     assert_eq!(output.result, Ok(BexExternalValue::String("caught".into())));
 }
 
+/// array.map callback inside a catch base still resolves its own parameter,
+/// even though the catch handler introduces a later lexical scope.
+#[tokio::test]
+async fn array_map_callback_in_catch_base_keeps_parameter_scope() {
+    let output = baml_test!(
+        r#"
+        function main() -> int[] {
+            let items: int[] = [1, 2, 3]
+            items.map((x: int) -> int {
+                if (x == 2) { x + 10 } else { x }
+            }) catch (e) {
+                _ => [0]
+            }
+        }
+    "#
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::Array {
+            element_type: Ty::int(),
+            items: vec![
+                BexExternalValue::Int(1),
+                BexExternalValue::Int(12),
+                BexExternalValue::Int(3),
+            ],
+        })
+    );
+}
+
 /// array.map over string[] — exercises heap-object paths in MapContinuation
 /// (gc_roots, apply_forwarding) that int[] tests don't cover.
 #[tokio::test]

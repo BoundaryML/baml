@@ -414,7 +414,12 @@ impl<'db> SemanticIndexBuilder<'db> {
             ast::Expr::Catch { base, clauses } => {
                 self.walk_expr(*base, body, source_map, WalkContext::Nested);
                 for clause in clauses {
-                    self.walk_catch_clause(clause, body, source_map, source_map.expr_span(expr_id));
+                    self.walk_catch_clause(
+                        clause,
+                        body,
+                        source_map,
+                        Self::catch_clause_scope_span(clause, source_map),
+                    );
                 }
             }
             ast::Expr::Throw { value } => {
@@ -600,6 +605,29 @@ impl<'db> SemanticIndexBuilder<'db> {
         }
         self.walk_expr(arm.body, body, source_map, WalkContext::Nested);
         self.pop_scope();
+    }
+
+    fn catch_clause_scope_span(
+        clause: &ast::CatchClause,
+        source_map: &ast::AstSourceMap,
+    ) -> TextRange {
+        let binding_span = source_map.pattern_span(clause.binding);
+        let mut start = binding_span.start();
+        let mut end = binding_span.end();
+
+        if let Some(stack_trace_binding) = clause.stack_trace_binding {
+            let span = source_map.pattern_span(stack_trace_binding);
+            start = start.min(span.start());
+            end = end.max(span.end());
+        }
+
+        for &arm_id in &clause.arms {
+            let span = source_map.catch_arm_span(arm_id);
+            start = start.min(span.start());
+            end = end.max(span.end());
+        }
+
+        TextRange::new(start, end)
     }
 
     fn walk_lambda_expr(

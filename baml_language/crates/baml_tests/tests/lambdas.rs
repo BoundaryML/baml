@@ -287,6 +287,25 @@ async fn explicit_throwing_lambda_catches_error() {
     assert_eq!(output.result, Ok(BexExternalValue::Int(-1)));
 }
 
+#[tokio::test]
+async fn lambda_inside_catch_base_keeps_parameter_scope() {
+    let output = baml_test!(
+        r#"
+        function main() -> int {
+            {
+                let f = (x: int) -> int {
+                    if (x == 7) { x } else { 0 }
+                }
+                f(7)
+            } catch (x) {
+                _ => x
+            }
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(7)));
+}
+
 /// Deep nesting (3 levels) with transitive captures at each level.
 /// a in main, b param of f, c param of g, d param of h.
 /// a + b + c + d = 1 + 10 + 100 + 1000 = 1111
