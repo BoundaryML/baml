@@ -520,7 +520,8 @@ pub fn infer_scope_types<'db>(
                                 }
                                 ty
                             };
-                            builder.add_local(param_name.clone(), param_ty);
+                            builder.add_local(param_name.clone(), param_ty.clone());
+                            builder.param_types.push((param_name.clone(), param_ty));
                         }
 
                         // Check root expression against declared return type

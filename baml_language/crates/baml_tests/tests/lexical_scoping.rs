@@ -224,3 +224,24 @@ async fn match_and_catch_pattern_bindings_restore_outer_locals() {
 
     assert_eq!(output.result, Ok(BexExternalValue::Int(32_010)));
 }
+
+#[tokio::test]
+async fn multi_clause_catch_uses_clause_local_binding() {
+    let output = baml_test!(
+        r#"
+        function fail() -> int {
+            throw 7
+        }
+
+        function main() -> int {
+            fail() catch (first) {
+                _: string => 1
+            } catch (second) {
+                _: int => second
+            }
+        }
+    "#
+    );
+
+    assert_eq!(output.result, Ok(BexExternalValue::Int(7)));
+}

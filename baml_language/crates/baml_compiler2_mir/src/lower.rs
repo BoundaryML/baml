@@ -957,9 +957,12 @@ impl<'db> LoweringContext<'db> {
                 continue;
             }
             for binding in &bindings.bindings {
-                if binding.site == site
-                    && binding.pattern == pattern
-                    && pattern_span.is_none_or(|span| span == binding.name_range)
+                let pattern_matches_name_range = pattern_span.is_none_or(|span| {
+                    span == binding.name_range
+                        || (span.start() <= binding.name_range.start()
+                            && binding.name_range.end() <= span.end())
+                });
+                if binding.site == site && binding.pattern == pattern && pattern_matches_name_range
                 {
                     return Some(BindingId {
                         scope: scope_id,
@@ -5082,67 +5085,116 @@ impl LoweringContext<'_> {
     ) {
         use baml_compiler2_ast::CatchClauseKind;
 
+        #[derive(Clone)]
+        struct ClauseLocals {
+            binding_name: Option<Name>,
+            binding_local: Option<Local>,
+            binding_copy_local: Option<Local>,
+            stack_trace_name: Option<Name>,
+            stack_trace_payload: Option<Local>,
+            stack_trace_copy_local: Option<Local>,
+        }
+
+        fn install_clause_locals(
+            ctx: &mut LoweringContext<'_>,
+            error_local: Local,
+            clause: &ClauseLocals,
+        ) {
+            if let (Some(name), Some(local)) = (&clause.binding_name, clause.binding_local) {
+                ctx.locals.insert(name.clone(), local);
+            }
+            if let Some(binding_copy_local) = clause.binding_copy_local {
+                ctx.builder.assign(
+                    Place::local(binding_copy_local),
+                    Rvalue::Use(Operand::Copy(Place::Local(error_local))),
+                );
+            }
+            if let (Some(name), Some(local)) =
+                (&clause.stack_trace_name, clause.stack_trace_copy_local)
+            {
+                ctx.locals.insert(name.clone(), local);
+            }
+            if let (Some(payload), Some(copy_local)) =
+                (clause.stack_trace_payload, clause.stack_trace_copy_local)
+                && payload != copy_local
+            {
+                ctx.builder.assign(
+                    Place::local(copy_local),
+                    Rvalue::Use(Operand::Copy(Place::Local(payload))),
+                );
+            }
+        }
+
         let saved_catch_outer_locals = self.locals.clone();
         let bb_join = self.builder.create_block();
         let bb_handler = self.builder.create_block();
 
-        let first_clause = clauses.first();
         // Use the user-provided binding name (e.g. `e` from `catch (e)`) so it
-        // shows up in bytecode instead of an anonymous `_N` temp.
-        let binding_name = first_clause
-            .and_then(|c| self.body.patterns[c.binding].binding_name().cloned());
-        let binding_is_captured =
-            first_clause.is_some_and(|c| self.pattern_binding_is_captured(c.binding));
-        let error_local = self.builder.declare_local(
-            if binding_is_captured {
-                None
+        // shows up in bytecode instead of an anonymous `_N` temp. Only do this
+        // for single-clause catches with a non-captured binding.
+        let single_clause_binding_name = clauses.first().and_then(|c| {
+            if clauses.len() == 1 && !self.pattern_binding_is_captured(c.binding) {
+                self.body.patterns[c.binding].binding_name().cloned()
             } else {
-                binding_name.clone()
-            },
+                None
+            }
+        });
+        let error_local = self.builder.declare_local(
+            single_clause_binding_name,
             Ty::BuiltinUnknown {
                 attr: TyAttr::default(),
             },
             None,
             false,
         );
-        let error_binding_local = first_clause.and_then(|clause| match binding_name.clone() {
-            Some(name) if binding_is_captured => {
-                let local = self.builder.declare_local(
-                    Some(name),
-                    Ty::BuiltinUnknown {
-                        attr: TyAttr::default(),
-                    },
-                    None,
-                    false,
-                );
-                self.record_pattern_binding_local(clause.binding, local);
-                Some(local)
-            }
-            Some(_) => {
-                self.record_pattern_binding_local(clause.binding, error_local);
-                None
-            }
-            None => None,
-        });
 
-        // Declare stack trace payload and user binding locals if the catch clause
-        // has a second binding.
-        let stack_trace = first_clause.and_then(|c| {
-            c.stack_trace_binding.map(|st_pat| {
-                let is_captured = self.pattern_binding_is_captured(st_pat);
-                let binding = self.body.patterns[st_pat].binding_name().cloned();
-                let payload = self.builder.declare_local(
-                    if is_captured { None } else { binding.clone() },
+        let stack_trace_local = clauses
+            .iter()
+            .any(|c| c.stack_trace_binding.is_some())
+            .then(|| {
+                self.builder.declare_local(
+                    None,
                     Ty::BuiltinUnknown {
                         attr: TyAttr::default(),
                     },
                     None,
                     false,
-                );
-                let binding = match binding {
+                )
+            });
+
+        let mut clause_locals = Vec::with_capacity(clauses.len());
+        for clause in clauses {
+            let binding_name = self.body.patterns[clause.binding].binding_name().cloned();
+            let binding_is_captured = self.pattern_binding_is_captured(clause.binding);
+            let (binding_local, binding_copy_local) = match binding_name.clone() {
+                Some(name) if binding_is_captured => {
+                    let local = self.builder.declare_local(
+                        Some(name),
+                        Ty::BuiltinUnknown {
+                            attr: TyAttr::default(),
+                        },
+                        None,
+                        false,
+                    );
+                    self.record_pattern_binding_local(clause.binding, local);
+                    (Some(local), Some(local))
+                }
+                Some(_) => {
+                    self.record_pattern_binding_local(clause.binding, error_local);
+                    (Some(error_local), None)
+                }
+                None => (None, None),
+            };
+
+            let (stack_trace_name, stack_trace_copy_local) = if let (Some(st_pat), Some(payload)) =
+                (clause.stack_trace_binding, stack_trace_local)
+            {
+                let name = self.body.patterns[st_pat].binding_name().cloned();
+                let is_captured = self.pattern_binding_is_captured(st_pat);
+                match name.clone() {
                     Some(name) if is_captured => {
                         let local = self.builder.declare_local(
-                            Some(name),
+                            Some(name.clone()),
                             Ty::BuiltinUnknown {
                                 attr: TyAttr::default(),
                             },
@@ -5150,32 +5202,41 @@ impl LoweringContext<'_> {
                             false,
                         );
                         self.record_pattern_binding_local(st_pat, local);
-                        Some(local)
+                        (Some(name), Some(local))
                     }
-                    Some(_) => {
+                    Some(name) => {
                         self.record_pattern_binding_local(st_pat, payload);
-                        None
+                        (Some(name), Some(payload))
                     }
-                    None => None,
-                };
-                (payload, binding)
-            })
-        });
-        let stack_trace_local = stack_trace.map(|(payload, _)| payload);
+                    None => (None, None),
+                }
+            } else {
+                (None, None)
+            };
+
+            clause_locals.push(ClauseLocals {
+                binding_name,
+                binding_local,
+                binding_copy_local,
+                stack_trace_name,
+                stack_trace_payload: stack_trace_local,
+                stack_trace_copy_local,
+            });
+        }
 
         // Flatten all arms from all clauses (blocks created lazily below).
-        let mut arms: Vec<(baml_compiler2_ast::CatchArm, bool)> = Vec::new();
-        for clause in clauses {
+        let mut arms: Vec<(baml_compiler2_ast::CatchArm, bool, usize)> = Vec::new();
+        for (clause_idx, clause) in clauses.iter().enumerate() {
             for &arm_id in &clause.arms {
                 let arm = self.body.catch_arms[arm_id].clone();
                 let pat = &self.body.patterns[arm.pattern];
                 let is_wildcard =
                     matches!(pat.kind, AstPatternKind::Wildcard) && pat.narrow.is_none();
-                arms.push((arm, is_wildcard));
+                arms.push((arm, is_wildcard, clause_idx));
             }
         }
 
-        let has_wildcard = arms.iter().any(|(_, is_wc)| *is_wc);
+        let has_wildcard = arms.iter().any(|(_, is_wc, _)| *is_wc);
         let is_catch_all_panics = clauses
             .iter()
             .any(|clause| matches!(clause.kind, CatchClauseKind::CatchAllPanics));
@@ -5213,45 +5274,25 @@ impl LoweringContext<'_> {
         // Switch on Rvalue::TypeTag instead of a sequential is_type chain.
         let switch_arms: Vec<(AstPatId, AstExprId, Option<AstExprId>)> = arms
             .iter()
-            .map(|(arm, _)| (arm.pattern, arm.body, None))
+            .map(|(arm, _, _)| (arm.pattern, arm.body, None))
             .collect();
         self.builder.set_current_block(bb_handler);
-        if let Some(name) = binding_name {
-            self.locals
-                .insert(name, error_binding_local.unwrap_or(error_local));
+        if clauses.len() == 1 {
+            install_clause_locals(self, error_local, &clause_locals[0]);
         }
-        if let Some(clause) = first_clause {
-            if let Some(st_pat) = clause.stack_trace_binding {
-                if let Some(name) = self.body.patterns[st_pat].binding_name() {
-                    if let Some((payload, binding)) = stack_trace {
-                        self.locals.insert(name.clone(), binding.unwrap_or(payload));
-                    }
-                }
-            }
-        }
-        if let Some(binding_local) = error_binding_local {
-            self.builder.assign(
-                Place::local(binding_local),
-                Rvalue::Use(Operand::Copy(Place::Local(error_local))),
-            );
-        }
-        if let Some((payload, Some(binding))) = stack_trace {
-            self.builder.assign(
-                Place::local(binding),
-                Rvalue::Use(Operand::Copy(Place::Local(payload))),
-            );
-        }
-        if self.try_lower_as_switch(
-            error_local,
-            &switch_arms,
-            dest.clone(),
-            bb_join,
-            SwitchOtherwise::Catch {
+        if clauses.len() == 1
+            && self.try_lower_as_switch(
                 error_local,
-                needs_throw_if_panic,
-            },
-            None,
-        ) {
+                &switch_arms,
+                dest.clone(),
+                bb_join,
+                SwitchOtherwise::Catch {
+                    error_local,
+                    needs_throw_if_panic,
+                },
+                None,
+            )
+        {
             self.builder.set_current_block(bb_join);
             self.restore_active_locals(saved_catch_outer_locals);
             return;
@@ -5262,10 +5303,17 @@ impl LoweringContext<'_> {
         // doesn't leave orphaned unterminated blocks).
         let arms_with_blocks: Vec<_> = arms
             .iter()
-            .map(|(arm, is_wc)| (arm.clone(), self.builder.create_block(), *is_wc))
+            .map(|(arm, is_wc, clause_idx)| {
+                (
+                    arm.clone(),
+                    self.builder.create_block(),
+                    *is_wc,
+                    *clause_idx,
+                )
+            })
             .collect();
 
-        for &(ref arm, body_block, is_wildcard) in &arms_with_blocks {
+        for &(ref arm, body_block, is_wildcard, _) in &arms_with_blocks {
             if is_wildcard && needs_throw_if_panic {
                 let bb_wildcard = self.builder.create_block();
                 self.builder
@@ -5284,9 +5332,11 @@ impl LoweringContext<'_> {
         }
 
         // Lower each arm body.
-        for &(ref arm, body_block, _) in &arms_with_blocks {
+        for &(ref arm, body_block, _, clause_idx) in &arms_with_blocks {
             self.builder.set_current_block(body_block);
             let saved_locals = self.locals.clone();
+            let clause = clause_locals[clause_idx].clone();
+            install_clause_locals(self, error_local, &clause);
             self.bind_pattern(error_local, arm.pattern);
             self.lower_expr(arm.body, dest.clone());
             if !self.builder.is_current_terminated() {

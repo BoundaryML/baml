@@ -409,6 +409,61 @@ fn function_type_throws_package_interface_exports_effect_params() {
 }
 
 #[test]
+fn lambda_scope_retypes_capture_from_function_parameter() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "capture_param.baml",
+        "function main(x: int) -> int { let f = () -> int { x }; return f(); }",
+    );
+
+    let index = baml_compiler2_ppir::file_semantic_index(&db, file);
+    let lambda_scope_id = index
+        .scope_ids
+        .iter()
+        .copied()
+        .find(|scope_id| {
+            let scope = &index.scopes[scope_id.file_scope_id(&db).index() as usize];
+            matches!(scope.kind, ScopeKind::Lambda)
+        })
+        .expect("lambda scope");
+    let lambda_inference = infer_scope_types(&db, lambda_scope_id);
+
+    let item_tree = baml_compiler2_ppir::file_item_tree(&db, file);
+    let (main_id, _) = item_tree
+        .functions
+        .iter()
+        .find(|(_, func)| func.name.as_str() == "main")
+        .expect("main function");
+    let main_loc = baml_compiler2_hir::loc::FunctionLoc::new(&db, file, main_id);
+    let main_body = baml_compiler2_ppir::function_body(&db, main_loc);
+    let baml_compiler2_hir::body::FunctionBody::Expr(main_expr_body) = main_body.as_ref() else {
+        panic!("main expression body");
+    };
+    let lambda_body = main_expr_body
+        .exprs
+        .iter()
+        .find_map(|(_, expr)| {
+            if let baml_compiler2_ast::Expr::Lambda(func_def) = expr
+                && let Some(baml_compiler2_ast::FunctionBodyDef::Expr(lambda_body, _)) =
+                    &func_def.body
+            {
+                Some(lambda_body)
+            } else {
+                None
+            }
+        })
+        .expect("lambda body");
+    let root_expr = lambda_body.root_expr.expect("lambda root expr");
+
+    assert_eq!(
+        lambda_inference
+            .expression_type(root_expr)
+            .map(ToString::to_string),
+        Some("int".to_string())
+    );
+}
+
+#[test]
 fn returning_callback_forwarder_matches_omitted_function_type_return_annotation() {
     let mut db = make_db();
     let file = db.add_file(

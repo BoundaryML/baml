@@ -10,8 +10,10 @@
 
 use baml_base::SourceFile;
 use baml_compiler_syntax::SyntaxKind;
-use baml_compiler2_hir::contributions::DefinitionKind;
-use baml_compiler2_hir::scope::{FileScopeId, ScopeKind};
+use baml_compiler2_hir::{
+    contributions::DefinitionKind,
+    scope::{FileScopeId, ScopeKind},
+};
 use serde::Serialize;
 use text_size::TextRange;
 

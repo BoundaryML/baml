@@ -1492,3 +1492,86 @@ function f(callback: ((x: int) -> int)?) -> int? {
     }
     "#);
 }
+
+#[test]
+fn index_assignment_establishment_updates_let_binding_type() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function f() -> int {
+    let xs = []
+    xs[0] = 1
+    return xs[0]
+}
+"#,
+    );
+    let output = render_tir(&db, file);
+
+    assert!(
+        output.contains("let xs = [] : never[] -> int[] (evolving)"),
+        "expected indexed assignment to sync the let binding type, got:\n{output}"
+    );
+    assert!(
+        !output.contains("type mismatch"),
+        "did not expect indexed assignment establishment to produce a mismatch, got:\n{output}"
+    );
+}
+
+#[test]
+fn lambda_body_container_establishment_does_not_leak_to_parent_scope() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function f() -> int {
+    let xs = []
+    let _f = () -> int {
+        let xs = []
+        xs.push("inner")
+        0
+    }
+    xs.push(1)
+    return xs[0]
+}
+"#,
+    );
+    let output = render_tir(&db, file);
+
+    assert!(
+        output.contains("let xs = [] : never[] -> int[] (evolving)"),
+        "expected parent xs binding to be established by parent push, got:\n{output}"
+    );
+    assert!(
+        !output.contains("type mismatch"),
+        "lambda-local container establishment should not affect parent xs, got:\n{output}"
+    );
+}
+
+#[test]
+fn for_body_container_assignment_does_not_escape_loop() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function f() -> int {
+    let xs = []
+    for (let n in []) {
+        xs.push("not guaranteed")
+    }
+    xs.push(1)
+    return xs[0]
+}
+"#,
+    );
+    let output = render_tir(&db, file);
+
+    assert!(
+        output.contains("let xs = [] : never[] -> int[] (evolving)"),
+        "expected xs to be established after the loop by xs.push(1), got:\n{output}"
+    );
+    assert!(
+        !output.contains("type mismatch"),
+        "for-loop body assignment should not be preserved after the loop, got:\n{output}"
+    );
+}

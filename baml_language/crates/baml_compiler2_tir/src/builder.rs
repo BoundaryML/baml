@@ -82,6 +82,7 @@ struct ScopedLocalsSnapshot {
     locals: FxHashMap<Name, Ty>,
     declared_types: FxHashMap<Name, Ty>,
     let_binding_patterns: FxHashMap<Name, PatId>,
+    let_binding_types: FxHashMap<PatId, Ty>,
     scoped_local_declarations_len: usize,
     scoped_local_assignments_len: usize,
 }
@@ -294,12 +295,34 @@ impl<'db> TypeInferenceBuilder<'db> {
             locals: self.locals.clone(),
             declared_types: self.declared_types.clone(),
             let_binding_patterns: self.let_binding_patterns.clone(),
+            let_binding_types: self
+                .let_binding_patterns
+                .values()
+                .filter_map(|pattern_id| {
+                    self.bindings
+                        .get(pattern_id)
+                        .cloned()
+                        .map(|ty| (*pattern_id, ty))
+                })
+                .collect(),
             scoped_local_declarations_len: self.scoped_local_declarations.len(),
             scoped_local_assignments_len: self.scoped_local_assignments.len(),
         }
     }
 
     fn restore_scoped_locals(&mut self, snapshot: ScopedLocalsSnapshot) {
+        self.restore_scoped_locals_inner(snapshot, true);
+    }
+
+    fn restore_scoped_locals_without_assignments(&mut self, snapshot: ScopedLocalsSnapshot) {
+        self.restore_scoped_locals_inner(snapshot, false);
+    }
+
+    fn restore_scoped_locals_inner(
+        &mut self,
+        snapshot: ScopedLocalsSnapshot,
+        preserve_assignments: bool,
+    ) {
         let assigned_names = self.scoped_local_assignments[snapshot.scoped_local_assignments_len..]
             .iter()
             .cloned()
@@ -337,7 +360,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             .cloned()
             .collect::<FxHashSet<_>>();
         for name in local_names {
-            if assigned_names.contains(&name) {
+            if preserve_assignments && assigned_names.contains(&name) {
                 continue;
             }
             Self::restore_map_entry(
@@ -347,15 +370,29 @@ impl<'db> TypeInferenceBuilder<'db> {
             );
         }
 
+        if !preserve_assignments {
+            for name in &assigned_names {
+                if let Some(pattern_id) = snapshot.let_binding_patterns.get(name) {
+                    if let Some(ty) = snapshot.let_binding_types.get(pattern_id).cloned() {
+                        self.bindings.insert(*pattern_id, ty);
+                    } else {
+                        self.bindings.remove(pattern_id);
+                    }
+                }
+            }
+        }
+
         self.declared_types = snapshot.declared_types;
         self.let_binding_patterns = snapshot.let_binding_patterns;
         self.scoped_local_assignments
             .truncate(snapshot.scoped_local_assignments_len);
-        self.scoped_local_assignments.extend(
-            assigned_names
-                .into_iter()
-                .filter(|name| !declared_names.contains(name)),
-        );
+        if preserve_assignments {
+            self.scoped_local_assignments.extend(
+                assigned_names
+                    .into_iter()
+                    .filter(|name| !declared_names.contains(name)),
+            );
+        }
     }
 
     fn restore_map_entry<T>(map: &mut FxHashMap<Name, T>, name: Name, previous: Option<T>) {
@@ -2216,7 +2253,7 @@ impl<'db> TypeInferenceBuilder<'db> {
 
                 // 4. Check the body
                 self.infer_expr(*for_body, body);
-                self.restore_scoped_locals(snapshot);
+                self.restore_scoped_locals_without_assignments(snapshot);
                 false
             }
             Stmt::Assign { target, value } => {
@@ -5258,7 +5295,8 @@ impl<'db> TypeInferenceBuilder<'db> {
                     } else {
                         Ty::List(Box::new(widened_val.clone()), container_attr)
                     };
-                    self.assign_local(local_name, new_ty);
+                    self.assign_local(local_name.clone(), new_ty.clone());
+                    self.sync_let_binding_type(&local_name, new_ty);
                 } else if !self.is_subtype(&widened_val, elem_ty) {
                     self.context.report(
                         TirTypeError::TypeMismatch {
@@ -5299,7 +5337,8 @@ impl<'db> TypeInferenceBuilder<'db> {
                             container_attr,
                         )
                     };
-                    self.assign_local(local_name, new_ty);
+                    self.assign_local(local_name.clone(), new_ty.clone());
+                    self.sync_let_binding_type(&local_name, new_ty);
                 } else {
                     if !self.is_subtype(&widened_key, key_ty) {
                         self.context.report(
@@ -5920,6 +5959,9 @@ impl<'db> TypeInferenceBuilder<'db> {
         // Save current state (including expressions to prevent ExprId collisions)
         let saved_locals = self.locals.clone();
         let saved_declared = self.declared_types.clone();
+        let saved_let_binding_patterns = std::mem::take(&mut self.let_binding_patterns);
+        let saved_scoped_local_declarations = std::mem::take(&mut self.scoped_local_declarations);
+        let saved_scoped_local_assignments = std::mem::take(&mut self.scoped_local_assignments);
         let saved_return_ty = self.declared_return_ty.clone();
         let saved_generic_params = self.generic_params.clone();
         let saved_expressions = std::mem::take(&mut self.expressions);
@@ -6027,6 +6069,9 @@ impl<'db> TypeInferenceBuilder<'db> {
         self.lambda_effective_throws = saved_lambda_effective_throws;
         self.locals = saved_locals;
         self.declared_types = saved_declared;
+        self.let_binding_patterns = saved_let_binding_patterns;
+        self.scoped_local_declarations = saved_scoped_local_declarations;
+        self.scoped_local_assignments = saved_scoped_local_assignments;
         self.declared_return_ty = saved_return_ty;
         self.generic_params = saved_generic_params;
 

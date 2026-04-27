@@ -30,6 +30,8 @@
 //! - `resolve_class_fields(class_loc)` — fields for field-access completions.
 //! - `file_item_tree(file)[enum_loc.id]` — variants for field-access on enums.
 
+use std::collections::HashSet;
+
 use baml_base::{Name, SourceFile, attr::TyAttr};
 use baml_compiler_syntax::{SyntaxKind, SyntaxNode};
 use baml_compiler2_hir::{
@@ -42,7 +44,6 @@ use baml_compiler2_hir::{
 };
 use baml_compiler2_tir::ty::Ty;
 use rowan::NodeOrToken;
-use std::collections::HashSet;
 use text_size::TextSize;
 
 use crate::{Db, utils};
