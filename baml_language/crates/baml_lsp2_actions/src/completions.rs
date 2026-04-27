@@ -1036,10 +1036,12 @@ fn extract_pat_from_stmt(
     stmt_id: baml_compiler2_ast::StmtId,
 ) -> Option<baml_compiler2_ast::PatId> {
     let stmt = &expr_body.stmts[stmt_id];
-    if let baml_compiler2_ast::Stmt::Let { pattern, .. } = stmt {
-        Some(*pattern)
-    } else {
-        None
+    match stmt {
+        baml_compiler2_ast::Stmt::Let { pattern, .. }
+        | baml_compiler2_ast::Stmt::For {
+            binding: pattern, ..
+        } => Some(*pattern),
+        _ => None,
     }
 }
 

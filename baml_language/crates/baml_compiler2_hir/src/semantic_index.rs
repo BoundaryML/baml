@@ -68,6 +68,7 @@ pub struct BindingId {
 pub struct LocalBinding {
     pub name: Name,
     pub site: DefinitionSite,
+    pub pattern: PatId,
     pub name_range: TextRange,
     pub visible_from: TextSize,
 }

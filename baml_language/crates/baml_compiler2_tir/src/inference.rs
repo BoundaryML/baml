@@ -16,9 +16,7 @@ use std::{
 };
 
 use baml_base::Name;
-use baml_compiler2_ast::{
-    AstSourceMap, Expr as AstExpr, ExprBody, ExprId, FunctionDef, PatId, Stmt as AstStmt,
-};
+use baml_compiler2_ast::{AstSourceMap, Expr as AstExpr, ExprBody, ExprId, FunctionDef, PatId};
 use baml_compiler2_hir::{
     body::{FunctionBody, LetBody},
     contributions::Definition,
@@ -35,6 +33,25 @@ use crate::{
     infer_context::{InferContext, TypeCheckDiagnostics},
     ty::{Ty, TyAttr},
 };
+
+fn inference_owner_scope(
+    index: &baml_compiler2_hir::semantic_index::FileSemanticIndex<'_>,
+    mut scope_id: FileScopeId,
+) -> FileScopeId {
+    loop {
+        let scope = &index.scopes[scope_id.index() as usize];
+        if matches!(
+            scope.kind,
+            ScopeKind::Function | ScopeKind::Let | ScopeKind::Lambda
+        ) {
+            return scope_id;
+        }
+        let Some(parent) = scope.parent else {
+            return scope_id;
+        };
+        scope_id = parent;
+    }
+}
 
 // ── Member Resolution ─────────────────────────────────────────────────────
 
@@ -574,8 +591,8 @@ pub fn infer_scope_types<'db>(
                 let captures = &index.scope_bindings[file_scope.index() as usize].captures;
                 for ancestor_fsi in index.ancestor_scopes(file_scope) {
                     let anc_bindings = &index.scope_bindings[ancestor_fsi.index() as usize];
-                    let anc_scope = &index.scopes[ancestor_fsi.index() as usize];
-                    let anc_scope_id = index.scope_ids[ancestor_fsi.index() as usize];
+                    let inference_fsi = inference_owner_scope(&index, ancestor_fsi);
+                    let inference_scope_id = index.scope_ids[inference_fsi.index() as usize];
                     // Only call infer_scope_types if this ancestor has any of
                     // the captures we still need (avoids unnecessary Salsa calls).
                     // For efficiency, check if any capture is declared in this scope.
@@ -601,7 +618,7 @@ pub fn infer_scope_types<'db>(
                     if !has_relevant_capture {
                         continue;
                     }
-                    let anc_inference = infer_scope_types(db, anc_scope_id);
+                    let anc_inference = infer_scope_types(db, inference_scope_id);
                     for (capture_name, binding_id) in captures {
                         let def_site = binding_id.site;
                         // Check if this ancestor declares this capture.
@@ -625,90 +642,16 @@ pub fn infer_scope_types<'db>(
                             DefinitionSite::Parameter(idx) => {
                                 anc_inference.param_type(idx).cloned()
                             }
-                            DefinitionSite::PatternBinding(pat_id) => {
-                                anc_inference.binding_type(pat_id).cloned()
-                            }
-                            DefinitionSite::Statement(stmt_id) => {
-                                // Get the ancestor's body to look up the Pat for this stmt.
-                                // We must use the SAME body that the stmt_id was allocated in.
-                                let body_opt: Option<&baml_compiler2_ast::ExprBody> =
-                                    match &anc_scope.kind {
-                                        ScopeKind::Function => {
-                                            // Find the function body in item_tree.
-                                            item_tree
-                                                .functions
-                                                .values()
-                                                .find(|fd| {
-                                                    fd.span == anc_scope.range
-                                                        && anc_scope.name.as_ref() == Some(&fd.name)
-                                                })
-                                                .and_then(|fd| {
-                                                    if let Some(
-                                                        baml_compiler2_ast::FunctionBodyDef::Expr(
-                                                            ref b,
-                                                            _,
-                                                        ),
-                                                    ) = fd.body
-                                                    {
-                                                        // SAFETY: body is stored in item_tree which
-                                                        // lives for the duration of this query.
-                                                        Some(b)
-                                                    } else {
-                                                        None
-                                                    }
-                                                })
-                                        }
-                                        ScopeKind::Let => None, // handled below
-                                        _ => None,              // Lambda bodies not accessible here
-                                    };
-                                if let Some(body) = body_opt {
-                                    let raw: u32 = stmt_id.into_raw().into_u32();
-                                    if (raw as usize) < body.stmts.len() {
-                                        match &body.stmts[stmt_id] {
-                                            AstStmt::Let { pattern, .. }
-                                            | AstStmt::For {
-                                                binding: pattern, ..
-                                            } => anc_inference.binding_type(*pattern).cloned(),
-                                            _ => None,
-                                        }
-                                    } else {
-                                        None
-                                    }
-                                } else if matches!(anc_scope.kind, ScopeKind::Let) {
-                                    // Let scope: look up the let body.
-                                    item_tree
-                                        .lets
-                                        .iter()
-                                        .find(|(_, ld)| {
-                                            ld.span == anc_scope.range
-                                                && anc_scope.name.as_ref() == Some(&ld.name)
-                                        })
-                                        .and_then(|(local_id, _)| {
-                                            let let_loc = LetLoc::new(db, file, *local_id);
-                                            let body =
-                                                baml_compiler2_hir::body::let_body(db, let_loc);
-                                            if let LetBody::Expr(let_body) = body.as_ref() {
-                                                let raw: u32 = stmt_id.into_raw().into_u32();
-                                                if (raw as usize) < let_body.stmts.len() {
-                                                    match &let_body.stmts[stmt_id] {
-                                                        AstStmt::Let { pattern, .. }
-                                                        | AstStmt::For {
-                                                            binding: pattern, ..
-                                                        } => anc_inference
-                                                            .binding_type(*pattern)
-                                                            .cloned(),
-                                                        _ => None,
-                                                    }
-                                                } else {
-                                                    None
-                                                }
-                                            } else {
-                                                None
-                                            }
-                                        })
-                                } else {
-                                    None
-                                }
+                            DefinitionSite::Statement(_) | DefinitionSite::PatternBinding(_) => {
+                                anc_bindings
+                                    .bindings
+                                    .iter()
+                                    .find(|binding| {
+                                        &binding.name == capture_name && binding.site == def_site
+                                    })
+                                    .and_then(|binding| {
+                                        anc_inference.binding_type(binding.pattern).cloned()
+                                    })
                             }
                         };
                         if let Some(ty) = actual_ty {

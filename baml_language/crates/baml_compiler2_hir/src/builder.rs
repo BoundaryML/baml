@@ -37,6 +37,14 @@ enum WalkContext {
     Nested,
 }
 
+#[derive(Debug, Clone)]
+struct PathRootReference {
+    name: Name,
+    use_scope: FileScopeId,
+    use_offset: TextSize,
+    owner_lambda: Option<FileScopeId>,
+}
+
 pub struct SemanticIndexBuilder<'db> {
     db: &'db dyn crate::Db,
     file: SourceFile,
@@ -55,6 +63,11 @@ pub struct SemanticIndexBuilder<'db> {
     /// Path root resolutions for multi-segment `Path` expressions.
     /// Collected during `walk_expr_body`, sorted by `ExprId` at the end.
     path_resolutions: Vec<(ast::ExprId, PathResolution)>,
+    /// Path-root references collected while walking source order. Unlike
+    /// `expr_scopes`, this carries the scope and innermost lambda context at
+    /// collection time so capture analysis does not rely on arena-local ExprIds.
+    path_root_references: Vec<PathRootReference>,
+    lambda_stack: Vec<FileScopeId>,
 
     item_tree: ItemTree,
     item_tree_source_map: crate::item_tree::ItemTreeSourceMap,
@@ -75,6 +88,8 @@ impl<'db> SemanticIndexBuilder<'db> {
             class_depth: 0,
             expr_scopes: Vec::new(),
             path_resolutions: Vec::new(),
+            path_root_references: Vec::new(),
+            lambda_stack: Vec::new(),
             item_tree: ItemTree::new(),
             item_tree_source_map: crate::item_tree::ItemTreeSourceMap::default(),
             type_contributions: Vec::new(),
@@ -268,7 +283,10 @@ impl<'db> SemanticIndexBuilder<'db> {
                     self.pop_scope();
                 }
             }
-            ast::Expr::Lambda(func_def) => self.walk_lambda_expr(expr_id, func_def, source_map),
+            ast::Expr::Lambda(func_def) => {
+                self.record_expr_scope(expr_id);
+                self.walk_lambda_expr(expr_id, func_def, source_map);
+            }
             _ => {
                 self.record_expr_scope(expr_id);
                 self.walk_expr_children(expr_id, body, source_map);
@@ -448,10 +466,13 @@ impl<'db> SemanticIndexBuilder<'db> {
                 }
             }
             ast::Expr::Path(segments) => {
-                if segments.len() >= 2 {
+                if let Some(root) = segments.first() {
                     let use_scope = self.current_scope_id();
                     let use_offset = source_map.expr_span(expr_id).start();
-                    self.classify_path_expr(expr_id, segments, use_scope, use_offset);
+                    self.record_path_root_reference(root, use_scope, use_offset);
+                    if segments.len() >= 2 {
+                        self.classify_path_expr(expr_id, segments, use_scope, use_offset);
+                    }
                 }
             }
             ast::Expr::Literal(_)
@@ -479,6 +500,7 @@ impl<'db> SemanticIndexBuilder<'db> {
                 .push(LocalBinding {
                     name: name.clone(),
                     site,
+                    pattern: pat_id,
                     name_range,
                     visible_from,
                 });
@@ -501,6 +523,7 @@ impl<'db> SemanticIndexBuilder<'db> {
                 .push(LocalBinding {
                     name: name.clone(),
                     site: DefinitionSite::PatternBinding(arm.pattern),
+                    pattern: arm.pattern,
                     name_range,
                     visible_from: name_range.start(),
                 });
@@ -528,6 +551,7 @@ impl<'db> SemanticIndexBuilder<'db> {
                 .push(LocalBinding {
                     name: name.clone(),
                     site: DefinitionSite::PatternBinding(clause.binding),
+                    pattern: clause.binding,
                     name_range,
                     visible_from: name_range.start(),
                 });
@@ -541,6 +565,7 @@ impl<'db> SemanticIndexBuilder<'db> {
                     .push(LocalBinding {
                         name: name.clone(),
                         site: DefinitionSite::PatternBinding(st_pat),
+                        pattern: st_pat,
                         name_range,
                         visible_from: name_range.start(),
                     });
@@ -568,6 +593,7 @@ impl<'db> SemanticIndexBuilder<'db> {
                 .push(LocalBinding {
                     name: name.clone(),
                     site: DefinitionSite::PatternBinding(arm.pattern),
+                    pattern: arm.pattern,
                     name_range,
                     visible_from: name_range.start(),
                 });
@@ -590,8 +616,10 @@ impl<'db> SemanticIndexBuilder<'db> {
                 .push((param.name.clone(), idx));
         }
         if let Some(ast::FunctionBodyDef::Expr(lambda_body, lambda_source_map)) = &func_def.body {
+            self.lambda_stack.push(scope_id);
             self.walk_expr_body(lambda_body, lambda_source_map);
             self.analyze_lambda_captures(scope_id, lambda_body, lambda_source_map);
+            self.lambda_stack.pop();
         }
         self.pop_scope();
     }
@@ -599,20 +627,25 @@ impl<'db> SemanticIndexBuilder<'db> {
     fn analyze_lambda_captures(
         &mut self,
         lambda_scope: FileScopeId,
-        lambda_body: &ast::ExprBody,
-        lambda_source_map: &ast::AstSourceMap,
+        _lambda_body: &ast::ExprBody,
+        _lambda_source_map: &ast::AstSourceMap,
     ) {
-        let references = self.collect_path_root_references(lambda_body, lambda_source_map);
         let lambda_idx = lambda_scope.index() as usize;
         let mut captures: Vec<(Name, BindingId)> = Vec::new();
         let mut seen = std::collections::HashSet::new();
 
-        for (name, use_scope, at_offset) in references {
-            if let Some(binding_id) = self.visible_binding_at(use_scope, at_offset, &name) {
+        for reference in self
+            .path_root_references
+            .iter()
+            .filter(|reference| reference.owner_lambda == Some(lambda_scope))
+        {
+            if let Some(binding_id) =
+                self.visible_binding_at(reference.use_scope, reference.use_offset, &reference.name)
+            {
                 if !self.scope_is_descendant_or_self(binding_id.scope, lambda_scope)
                     && seen.insert(binding_id)
                 {
-                    captures.push((name, binding_id));
+                    captures.push((reference.name.clone(), binding_id));
                     self.scope_bindings[binding_id.scope.index() as usize]
                         .captured_bindings
                         .insert(binding_id);
@@ -692,6 +725,20 @@ impl<'db> SemanticIndexBuilder<'db> {
         self.path_resolutions.push((expr_id, resolution));
     }
 
+    fn record_path_root_reference(
+        &mut self,
+        root: &Name,
+        use_scope: FileScopeId,
+        use_offset: TextSize,
+    ) {
+        self.path_root_references.push(PathRootReference {
+            name: root.clone(),
+            use_scope,
+            use_offset,
+            owner_lambda: self.lambda_stack.last().copied(),
+        });
+    }
+
     /// Extract the binding name from a local declaration pattern, if it has one.
     ///
     /// The AST canonicalizes `let _` to `Wildcard` at construction time
@@ -716,34 +763,6 @@ impl<'db> SemanticIndexBuilder<'db> {
         pat_id: ast::PatId,
     ) -> Option<&Name> {
         Self::local_binding_name(patterns, pat_id).filter(|name| name.as_str() != "_")
-    }
-
-    /// Collect path root references with their recorded use scope and source offset.
-    fn collect_path_root_references(
-        &self,
-        body: &ast::ExprBody,
-        source_map: &ast::AstSourceMap,
-    ) -> Vec<(Name, FileScopeId, TextSize)> {
-        let mut names = Vec::new();
-        for (expr_id, expr) in body.exprs.iter() {
-            if let ast::Expr::Path(segments) = expr {
-                if let Some(root) = segments.first() {
-                    if let Some(scope_id) = self
-                        .expr_scopes
-                        .iter()
-                        .rev()
-                        .find_map(|(id, scope)| (*id == expr_id).then_some(*scope))
-                    {
-                        names.push((
-                            root.clone(),
-                            scope_id,
-                            source_map.expr_span(expr_id).start(),
-                        ));
-                    }
-                }
-            }
-        }
-        names
     }
 
     // ── Item lowering ────────────────────────────────────────────────────────

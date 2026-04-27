@@ -538,7 +538,7 @@ fn local_type_info(
 
 /// Extract the `PatId` for the binding introduced by `stmt_id`.
 ///
-/// For `Stmt::Let { pattern, .. }` statements, returns the pattern ID.
+/// For local declaration statements, returns the pattern ID.
 /// Returns `None` for other statement kinds.
 fn body_stmt_to_pat_id(
     body: &baml_compiler2_hir::body::FunctionBody,
@@ -551,7 +551,10 @@ fn body_stmt_to_pat_id(
 
     let stmt = &expr_body.stmts[stmt_id];
     match stmt {
-        baml_compiler2_ast::Stmt::Let { pattern, .. } => Some(*pattern),
+        baml_compiler2_ast::Stmt::Let { pattern, .. }
+        | baml_compiler2_ast::Stmt::For {
+            binding: pattern, ..
+        } => Some(*pattern),
         _ => None,
     }
 }

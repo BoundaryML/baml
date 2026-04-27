@@ -381,15 +381,15 @@ fn describe_locals(db: &dyn Db, files: &[SourceFile], name: &str) -> Vec<SymbolD
                             if let baml_compiler2_hir::body::FunctionBody::Expr(expr_body) =
                                 body.as_ref()
                             {
-                                if let baml_compiler2_ast::Stmt::Let { pattern, .. } =
-                                    &expr_body.stmts[stmt_id]
-                                {
-                                    inference
+                                match &expr_body.stmts[stmt_id] {
+                                    baml_compiler2_ast::Stmt::Let { pattern, .. }
+                                    | baml_compiler2_ast::Stmt::For {
+                                        binding: pattern, ..
+                                    } => inference
                                         .binding_type(*pattern)
                                         .map(crate::utils::display_ty)
-                                        .unwrap_or_else(|| "unknown".to_string())
-                                } else {
-                                    "unknown".to_string()
+                                        .unwrap_or_else(|| "unknown".to_string()),
+                                    _ => "unknown".to_string(),
                                 }
                             } else {
                                 "unknown".to_string()

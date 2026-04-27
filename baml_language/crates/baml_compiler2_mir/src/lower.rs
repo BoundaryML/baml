@@ -335,6 +335,7 @@ use baml_compiler2_hir::{
     loc::{FunctionLoc, LetLoc},
     package::{PackageId, package_dependencies, package_items},
     scope::FileScopeId,
+    semantic_index::{BindingId, DefinitionSite},
 };
 use baml_compiler2_ppir::file_semantic_index;
 use baml_compiler2_tir::{
@@ -347,6 +348,7 @@ struct LoweringContext<'db> {
     db: &'db dyn crate::Db,
     builder: MirBuilder,
     locals: HashMap<Name, Local>,
+    binding_locals: HashMap<BindingId, Local>,
     loop_context: Option<LoopContext>,
     catch_context: Option<CatchContext>,
     exit_block: BlockId,
@@ -417,18 +419,16 @@ struct LoweringContext<'db> {
 
     // Capture map for the current lambda body.
     // `Some(map)` when lowering inside a lambda body; `None` for top-level functions.
-    // Maps captured variable name -> index into the closure's captures array.
+    // Maps captured binding identity -> index into the closure's captures array.
     // Used by `lower_path_expr` to resolve references to captured variables as
     // `Place::Capture(idx)` instead of `Place::Local(_)`.
-    capture_indices: Option<HashMap<Name, usize>>,
+    capture_indices: Option<HashMap<BindingId, usize>>,
 
-    // Names that were added to the current lambda's capture list transitively
-    // (i.e. because an inner lambda needed them but they weren't in the HIR
-    // capture list for this lambda).  Populated by `lower_lambda` when building
-    // an inner closure's capture operands.  Collected by the *parent*
-    // `lower_lambda` call after the body is lowered so it can extend the outer
-    // MakeClosure with extra captures.
-    transitive_captures_needed: Vec<Name>,
+    // Bindings that were added to the current lambda's capture list transitively
+    // because an inner lambda needed them but they were not in the HIR capture
+    // list for this lambda. Collected by the parent `lower_lambda` call after
+    // the body is lowered so it can extend the outer MakeClosure with extra captures.
+    transitive_captures_needed: Vec<BindingId>,
 
     /// Stack of null-exit blocks for active `OptionalChain` scopes.
     /// When an `OptionalFieldAccess`/`OptionalIndex`/`OptionalCall` encounters null,
@@ -710,6 +710,7 @@ impl<'db> LoweringContext<'db> {
             db,
             builder: MirBuilder::new(func_name, arity),
             locals: HashMap::new(),
+            binding_locals: HashMap::new(),
             loop_context: None,
             catch_context: None,
             exit_block: BlockId(0), // placeholder; overwritten in lower_function_body
@@ -879,6 +880,7 @@ impl<'db> LoweringContext<'db> {
             db,
             builder: MirBuilder::new(let_name.clone(), 0),
             locals: HashMap::new(),
+            binding_locals: HashMap::new(),
             loop_context: None,
             catch_context: None,
             exit_block: BlockId(0), // placeholder; overwritten in lower_let_body_inner
@@ -921,6 +923,107 @@ impl<'db> LoweringContext<'db> {
         };
         *count += 1;
         Name::new(&name)
+    }
+
+    fn scope_is_descendant_or_self(
+        &self,
+        index: &baml_compiler2_hir::semantic_index::FileSemanticIndex<'_>,
+        scope_id: FileScopeId,
+        ancestor_id: FileScopeId,
+    ) -> bool {
+        let mut current = Some(scope_id);
+        while let Some(id) = current {
+            if id == ancestor_id {
+                return true;
+            }
+            current = index.scopes[id.index() as usize].parent;
+        }
+        false
+    }
+
+    fn binding_id_for_pattern_site(
+        &self,
+        pattern: AstPatId,
+        site: DefinitionSite,
+    ) -> Option<BindingId> {
+        let index = file_semantic_index(self.db, self.file);
+        let pattern_span = self
+            .source_map
+            .as_ref()
+            .map(|source_map| source_map.pattern_span(pattern));
+
+        for (scope_idx, bindings) in index.scope_bindings.iter().enumerate() {
+            let scope_id = FileScopeId::new(scope_idx as u32);
+            if !self.scope_is_descendant_or_self(&index, scope_id, self.current_scope) {
+                continue;
+            }
+            for binding in &bindings.bindings {
+                if binding.site == site
+                    && binding.pattern == pattern
+                    && pattern_span.is_none_or(|span| span == binding.name_range)
+                {
+                    return Some(BindingId {
+                        scope: scope_id,
+                        site,
+                    });
+                }
+            }
+        }
+        None
+    }
+
+    fn binding_id_for_statement(&self, stmt_id: AstStmtId, pattern: AstPatId) -> Option<BindingId> {
+        self.binding_id_for_pattern_site(pattern, DefinitionSite::Statement(stmt_id))
+    }
+
+    fn binding_id_for_name_at(&self, expr_id: AstExprId, name: &Name) -> Option<BindingId> {
+        let source_map = self.source_map.as_ref()?;
+        let offset = source_map.expr_span(expr_id).start();
+        let index = file_semantic_index(self.db, self.file);
+        let scope_id = index.scope_at_offset(offset, self.scope_func_name.as_ref());
+        index.visible_binding_at(scope_id, offset, name)
+    }
+
+    fn capture_index_for_name_at(&self, expr_id: AstExprId, name: &Name) -> Option<usize> {
+        let binding_id = self.binding_id_for_name_at(expr_id, name)?;
+        self.capture_indices
+            .as_ref()
+            .and_then(|captures| captures.get(&binding_id).copied())
+    }
+
+    fn emit_unwatch_since(&mut self, watched_depth: usize) {
+        let watched = self.watched_locals_stack[watched_depth..].to_vec();
+        for local in watched.into_iter().rev() {
+            self.builder.unwatch(local);
+        }
+    }
+
+    fn restore_locals_after_scope(
+        &mut self,
+        saved_locals: HashMap<Name, Local>,
+        watched_depth: usize,
+    ) {
+        self.watched_locals_stack.truncate(watched_depth);
+        self.locals = saved_locals;
+    }
+
+    fn mark_captured_locals_in_scope_tree(&mut self, root_scope: FileScopeId) {
+        let index = file_semantic_index(self.db, self.file);
+        let root = &index.scopes[root_scope.index() as usize];
+        let start = root_scope.index();
+        let end = root.descendants.end.index();
+
+        for raw_idx in start..end {
+            let scope_id = FileScopeId::new(raw_idx);
+            let Some(scope_bindings) = index.scope_bindings.get(scope_id.index() as usize) else {
+                continue;
+            };
+            for binding_id in &scope_bindings.captured_bindings {
+                if let Some(&local) = self.binding_locals.get(binding_id) {
+                    self.builder.local_decl_mut(local).is_captured = true;
+                }
+            }
+        }
     }
 
     /// Get the `baml_type::Ty` for an expression by looking up in the aggregated map
@@ -1050,7 +1153,7 @@ impl LoweringContext<'_> {
         // Parameter locals _1..=_n
         // For `self` with no annotation, look up the TIR-inferred parameter type
         // which correctly resolves to the enclosing class type.
-        for (param_name, param_te) in &sig.params {
+        for (param_idx, (param_name, param_te)) in sig.params.iter().enumerate() {
             let param_ty = if param_name.as_str() == "self"
                 && matches!(param_te, baml_compiler2_ast::TypeExpr::Unknown { .. })
             {
@@ -1091,6 +1194,13 @@ impl LoweringContext<'_> {
                 .builder
                 .declare_local(Some(param_name.clone()), param_ty, None, false);
             self.locals.insert(param_name.clone(), local);
+            self.binding_locals.insert(
+                BindingId {
+                    scope: self.current_scope,
+                    site: DefinitionSite::Parameter(param_idx),
+                },
+                local,
+            );
         }
 
         // Entry and exit blocks
@@ -1117,25 +1227,9 @@ impl LoweringContext<'_> {
         self.builder.set_current_block(self.exit_block);
         self.builder.return_();
 
-        // Mark locals that are captured by nested lambdas with `is_captured = true`.
-        // The HIR `ScopeBindings.captured_names` for the function scope records which
-        // names are captured by any descendant lambda. These locals need cell wrapping.
-        {
-            let func_scope_id = self.current_scope;
-            let index = file_semantic_index(self.db, self.file);
-            if let Some(sb) = index.scope_bindings.get(func_scope_id.index() as usize) {
-                for binding_id in &sb.captured_bindings {
-                    let Some(captured_name) = sb.bindings.iter().find_map(|binding| {
-                        (binding.site == binding_id.site).then_some(&binding.name)
-                    }) else {
-                        continue;
-                    };
-                    if let Some(&local) = self.locals.get(captured_name) {
-                        self.builder.local_decl_mut(local).is_captured = true;
-                    }
-                }
-            }
-        }
+        // Mark locals captured by nested lambdas. HIR stores this by binding
+        // identity, including block-owned bindings.
+        self.mark_captured_locals_in_scope_tree(self.current_scope);
 
         // Take the builder out of self to call `build()` which consumes it
         let dummy = MirBuilder::new(Name::new("_dummy"), 0);
@@ -1261,23 +1355,21 @@ impl LoweringContext<'_> {
         };
 
         // Read HIR captures for this lambda scope.
-        // `captures` lists (name, DefinitionSite) pairs that the lambda reads from
-        // enclosing scopes. The DefinitionSite uniquely identifies the declaration
-        // even with shadowing.
-        // We build `capture_indices` (name → index in closure.captures[]) so that
-        // `lower_path_expr` and `lower_lvalue` can emit Place::Capture(idx).
-        let hir_captures: Vec<Name> = {
+        // `captures` lists the exact binding identities that the lambda reads
+        // from enclosing scopes. We build `capture_indices` so path/lvalue
+        // lowering can emit `Place::Capture(idx)` without collapsing shadows by name.
+        let hir_captures: Vec<(Name, BindingId)> = {
             let index = file_semantic_index(self.db, self.file);
             index
                 .scope_bindings
                 .get(lambda_scope_id.index() as usize)
-                .map(|sb| sb.captures.iter().map(|(name, _)| name.clone()).collect())
+                .map(|sb| sb.captures.clone())
                 .unwrap_or_default()
         };
-        let lambda_capture_indices: HashMap<Name, usize> = hir_captures
+        let lambda_capture_indices: HashMap<BindingId, usize> = hir_captures
             .iter()
             .enumerate()
-            .map(|(i, name)| (name.clone(), i))
+            .map(|(i, (_, binding_id))| (*binding_id, i))
             .collect();
 
         // Save parent state.
@@ -1288,6 +1380,7 @@ impl LoweringContext<'_> {
         let saved_body = std::mem::replace(&mut self.body, lambda_body);
         let saved_source_map = std::mem::replace(&mut self.source_map, lambda_source_map);
         let saved_locals = std::mem::take(&mut self.locals);
+        let saved_binding_locals = std::mem::take(&mut self.binding_locals);
         let saved_exit_block = self.exit_block;
         let saved_loop_context = self.loop_context.take();
         let saved_catch_context = self.catch_context.take();
@@ -1330,7 +1423,7 @@ impl LoweringContext<'_> {
         );
 
         // Declare parameter locals _1..=_n.
-        for param in &func_def.params {
+        for (param_idx, param) in func_def.params.iter().enumerate() {
             let param_ty = match &param.type_expr {
                 Some(spanned_te) => {
                     let mut diags = Vec::new();
@@ -1352,6 +1445,13 @@ impl LoweringContext<'_> {
                 .builder
                 .declare_local(Some(param.name.clone()), param_ty, None, false);
             self.locals.insert(param.name.clone(), local);
+            self.binding_locals.insert(
+                BindingId {
+                    scope: self.current_scope,
+                    site: DefinitionSite::Parameter(param_idx),
+                },
+                local,
+            );
         }
 
         // Create entry and exit blocks.
@@ -1377,24 +1477,9 @@ impl LoweringContext<'_> {
         self.builder.set_current_block(self.exit_block);
         self.builder.return_();
 
-        // Mark locals that are captured by nested lambdas with `is_captured = true`.
-        // This mirrors the same step in `lower_function_body` but for lambdas.
-        // Uses the lambda's own scope id (lambda_scope_id) to look up HIR captured_names.
-        {
-            let index = file_semantic_index(self.db, self.file);
-            if let Some(sb) = index.scope_bindings.get(lambda_scope_id.index() as usize) {
-                for binding_id in &sb.captured_bindings {
-                    let Some(captured_name) = sb.bindings.iter().find_map(|binding| {
-                        (binding.site == binding_id.site).then_some(&binding.name)
-                    }) else {
-                        continue;
-                    };
-                    if let Some(&local) = self.locals.get(captured_name) {
-                        self.builder.local_decl_mut(local).is_captured = true;
-                    }
-                }
-            }
-        }
+        // Mark locals captured by nested lambdas. HIR stores this by binding
+        // identity, including block-owned bindings.
+        self.mark_captured_locals_in_scope_tree(lambda_scope_id);
 
         // Build the lambda MirFunction.
         // First, collect any nested lambdas that were encountered while lowering
@@ -1426,6 +1511,7 @@ impl LoweringContext<'_> {
         self.body = saved_body;
         self.source_map = saved_source_map;
         self.locals = saved_locals;
+        self.binding_locals = saved_binding_locals;
         self.exit_block = saved_exit_block;
         self.loop_context = saved_loop_context;
         self.catch_context = saved_catch_context;
@@ -1443,9 +1529,12 @@ impl LoweringContext<'_> {
         // handle propagation by pushing to `transitive_captures_needed` when a
         // name is not found in the current scope's locals or captures.
         let mut extended_hir_captures = hir_captures;
-        for name in &newly_needed_transitive {
-            if !extended_hir_captures.contains(name) {
-                extended_hir_captures.push(name.clone());
+        for binding_id in newly_needed_transitive {
+            if !extended_hir_captures
+                .iter()
+                .any(|(_, existing)| *existing == binding_id)
+            {
+                extended_hir_captures.push((Name::new("_capture"), binding_id));
             }
         }
 
@@ -1459,17 +1548,17 @@ impl LoweringContext<'_> {
         // lambda — i.e. the current lambda (f) will need to capture it from ITS
         // parent, and g will receive it via f's capture slot.
         let mut capture_operands: Vec<Operand> = Vec::with_capacity(extended_hir_captures.len());
-        for name in &extended_hir_captures {
-            if let Some(&local) = self.locals.get(name) {
+        for (_, binding_id) in &extended_hir_captures {
+            if let Some(&local) = self.binding_locals.get(binding_id) {
                 // Mark the local as captured at the capture site — this is the
                 // definitive place where we know the exact Local being captured,
-                // even in the presence of shadowing (future-proofing).
+                // even in the presence of shadowing.
                 self.builder.local_decl_mut(local).is_captured = true;
                 capture_operands.push(Operand::Copy(Place::Local(local)));
             } else if let Some(cap_idx) = self
                 .capture_indices
                 .as_ref()
-                .and_then(|m| m.get(name))
+                .and_then(|m| m.get(binding_id))
                 .copied()
             {
                 // The variable is itself a capture in the current scope.
@@ -1482,11 +1571,11 @@ impl LoweringContext<'_> {
                 let new_idx = {
                     let ci = self.capture_indices.get_or_insert_with(HashMap::new);
                     let idx = ci.len();
-                    ci.insert(name.clone(), idx);
+                    ci.insert(*binding_id, idx);
                     idx
                 };
                 // Signal to our parent lambda that it needs to capture this name.
-                self.transitive_captures_needed.push(name.clone());
+                self.transitive_captures_needed.push(*binding_id);
                 capture_operands.push(Operand::Copy(Place::Capture(new_idx)));
             }
         }
@@ -1508,6 +1597,38 @@ impl LoweringContext<'_> {
 // ─── 3.2: Core lower_expr dispatch ───────────────────────────────────────────
 
 impl LoweringContext<'_> {
+    fn lower_scoped_block(
+        &mut self,
+        stmts: &[AstStmtId],
+        tail_expr: Option<AstExprId>,
+        dest: Place,
+    ) {
+        let saved_locals = self.locals.clone();
+        let watched_depth = self.watched_locals_stack.len();
+
+        for &stmt_id in stmts {
+            self.lower_stmt(stmt_id);
+            if self.builder.is_current_terminated() {
+                break;
+            }
+        }
+
+        if !self.builder.is_current_terminated() {
+            match tail_expr {
+                Some(tail) => self.lower_expr(tail, dest),
+                None => {
+                    self.builder
+                        .assign(dest, Rvalue::Use(Operand::Constant(Constant::Null)));
+                }
+            }
+        }
+
+        if !self.builder.is_current_terminated() {
+            self.emit_unwatch_since(watched_depth);
+        }
+        self.restore_locals_after_scope(saved_locals, watched_depth);
+    }
+
     fn lower_expr(&mut self, expr_id: AstExprId, dest: Place) {
         let prev_span = self.builder.current_source_span;
         if let Some(span) = self.span_for_expr(expr_id) {
@@ -1599,21 +1720,7 @@ impl LoweringContext<'_> {
             }
 
             AstExpr::Block { stmts, tail_expr } => {
-                for &stmt_id in &stmts {
-                    self.lower_stmt(stmt_id);
-                    if self.builder.is_current_terminated() {
-                        break; // Remaining stmts are dead code (after return/throw/break/continue)
-                    }
-                }
-                if !self.builder.is_current_terminated() {
-                    match tail_expr {
-                        Some(tail) => self.lower_expr(tail, dest),
-                        None => {
-                            self.builder
-                                .assign(dest, Rvalue::Use(Operand::Constant(Constant::Null)));
-                        }
-                    }
-                }
+                self.lower_scoped_block(&stmts, tail_expr, dest);
             }
 
             AstExpr::Match {
@@ -1712,11 +1819,8 @@ impl<'db> LoweringContext<'db> {
                             let receiver_op = if receiver_segments.len() == 1 {
                                 if let Some(&recv_local) = self.locals.get(&receiver_segments[0]) {
                                     Operand::Copy(Place::Local(recv_local))
-                                } else if let Some(cap_idx) = self
-                                    .capture_indices
-                                    .as_ref()
-                                    .and_then(|m| m.get(&receiver_segments[0]))
-                                    .copied()
+                                } else if let Some(cap_idx) =
+                                    self.capture_index_for_name_at(expr_id, &receiver_segments[0])
                                 {
                                     // Receiver is a captured variable — use capture slot.
                                     Operand::Copy(Place::Capture(cap_idx))
@@ -1785,11 +1889,8 @@ impl<'db> LoweringContext<'db> {
                             let receiver_op = if receiver_segments.len() == 1 {
                                 if let Some(&recv_local) = self.locals.get(&receiver_segments[0]) {
                                     Operand::Copy(Place::Local(recv_local))
-                                } else if let Some(cap_idx) = self
-                                    .capture_indices
-                                    .as_ref()
-                                    .and_then(|m| m.get(&receiver_segments[0]))
-                                    .copied()
+                                } else if let Some(cap_idx) =
+                                    self.capture_index_for_name_at(expr_id, &receiver_segments[0])
                                 {
                                     // Receiver is a captured variable — use capture slot.
                                     Operand::Copy(Place::Capture(cap_idx))
@@ -1885,12 +1986,7 @@ impl<'db> LoweringContext<'db> {
                 if let Some(&local) = self.locals.get(&local_name) {
                     self.builder
                         .assign(dest, Rvalue::Use(Operand::Copy(Place::Local(local))));
-                } else if let Some(cap_idx) = self
-                    .capture_indices
-                    .as_ref()
-                    .and_then(|m| m.get(&local_name))
-                    .copied()
-                {
+                } else if let Some(cap_idx) = self.capture_index_for_name_at(expr_id, &local_name) {
                     // This variable is captured from an enclosing scope.
                     // Emit a LoadCapture via Place::Capture.
                     self.builder
@@ -1952,12 +2048,7 @@ impl<'db> LoweringContext<'db> {
                     self.builder.local_ty(root_local)
                 };
                 (place, ty)
-            } else if let Some(cap_idx) = self
-                .capture_indices
-                .as_ref()
-                .and_then(|m| m.get(&segments[0]))
-                .copied()
-            {
+            } else if let Some(cap_idx) = self.capture_index_for_name_at(expr_id, &segments[0]) {
                 let place = Place::Capture(cap_idx);
                 let ty = self
                     .path_root_ty(expr_id)
@@ -2694,6 +2785,10 @@ impl LoweringContext<'_> {
                     // Simple local variable receiver (e.g. `self`).
                     if let Some(&recv_local) = self.locals.get(&receiver_segments[0]) {
                         Operand::Copy(Place::Local(recv_local))
+                    } else if let Some(cap_idx) =
+                        self.capture_index_for_name_at(callee, &receiver_segments[0])
+                    {
+                        Operand::Copy(Place::Capture(cap_idx))
                     } else {
                         Operand::Constant(Constant::Null)
                     }
@@ -2724,9 +2819,13 @@ impl LoweringContext<'_> {
                     None => self.lower_to_operand(callee),
                 };
                 let first_seg = &segments[0];
-                let receiver_local = self.locals.get(first_seg).copied();
-                if let Some(receiver_local) = receiver_local {
-                    let receiver_op = Operand::Copy(Place::Local(receiver_local));
+                let receiver_op = if let Some(&receiver_local) = self.locals.get(first_seg) {
+                    Some(Operand::Copy(Place::Local(receiver_local)))
+                } else {
+                    self.capture_index_for_name_at(callee, first_seg)
+                        .map(|cap_idx| Operand::Copy(Place::Capture(cap_idx)))
+                };
+                if let Some(receiver_op) = receiver_op {
                     let mut all_args = vec![receiver_op];
                     all_args.extend(args.iter().map(|&a| self.lower_to_operand(a)));
                     (callee_op, all_args)
@@ -3491,11 +3590,6 @@ impl LoweringContext<'_> {
                 let local =
                     self.builder
                         .declare_local(Some(name.clone()), local_ty, None, is_watched);
-                self.locals.insert(name, local);
-
-                if is_watched {
-                    self.watched_locals_stack.push(local);
-                }
 
                 if let Some(init) = initializer {
                     self.lower_expr(init, Place::local(local));
@@ -3504,6 +3598,15 @@ impl LoweringContext<'_> {
                         Place::local(local),
                         Rvalue::Use(Operand::Constant(Constant::Null)),
                     );
+                }
+
+                self.locals.insert(name.clone(), local);
+                if let Some(binding_id) = self.binding_id_for_statement(stmt_id, pattern) {
+                    self.binding_locals.insert(binding_id, local);
+                }
+
+                if is_watched {
+                    self.watched_locals_stack.push(local);
                 }
             }
 
@@ -3582,6 +3685,9 @@ impl LoweringContext<'_> {
                 collection,
                 body,
             } => {
+                let saved_locals = self.locals.clone();
+                let watched_depth = self.watched_locals_stack.len();
+
                 // 1. Evaluate collection into a temp local
                 let coll_ty = self.expr_ty(collection);
                 let coll_local = self.builder.temp(coll_ty.clone());
@@ -3616,7 +3722,6 @@ impl LoweringContext<'_> {
 
                 // Register loop context so break/continue work inside for-loops
                 let prev_loop = self.loop_context.take();
-                let watched_depth = self.watched_locals_stack.len();
                 self.loop_context = Some(LoopContext {
                     break_target: bb_exit,
                     continue_target: bb_after,
@@ -3684,6 +3789,11 @@ impl LoweringContext<'_> {
                             Rvalue::Use(Operand::Copy(Place::Local(elem_local))),
                         );
                         self.locals.insert(name.clone(), local);
+                        if let Some(binding_id) =
+                            self.binding_id_for_statement(stmt_id, binding)
+                        {
+                            self.binding_locals.insert(binding_id, local);
+                        }
                     }
                 }
 
@@ -3694,8 +3804,10 @@ impl LoweringContext<'_> {
                 self.lower_expr(body, Place::local(body_temp));
 
                 if !self.builder.is_current_terminated() {
+                    self.emit_unwatch_since(watched_depth);
                     self.builder.goto(bb_after);
                 }
+                self.restore_locals_after_scope(saved_locals, watched_depth);
 
                 // 7. After: __idx += 1
                 self.builder.set_current_block(bb_after);
@@ -3855,11 +3967,7 @@ impl LoweringContext<'_> {
             AstExpr::Path(segments) if segments.len() == 1 => {
                 if let Some(&local) = self.locals.get(&segments[0]) {
                     Place::Local(local)
-                } else if let Some(cap_idx) = self
-                    .capture_indices
-                    .as_ref()
-                    .and_then(|m| m.get(&segments[0]))
-                    .copied()
+                } else if let Some(cap_idx) = self.capture_index_for_name_at(expr_id, &segments[0])
                 {
                     // Assignment to a captured variable in a closure body.
                     Place::Capture(cap_idx)
@@ -3873,35 +3981,32 @@ impl LoweringContext<'_> {
             AstExpr::Path(segments) if segments.len() >= 2 => {
                 // Multi-segment path lvalue: `a.b` or `a.b.c`.
                 // Chain field projections from the root local or capture.
-                let (mut current_place, mut current_ty) =
-                    if let Some(&l) = self.locals.get(&segments[0]) {
-                        let ty = self
-                            .path_root_ty(expr_id)
-                            .unwrap_or_else(|| self.builder.local_ty(l));
-                        (Place::Local(l), ty)
-                    } else if let Some(cap_idx) = self
-                        .capture_indices
-                        .as_ref()
-                        .and_then(|m| m.get(&segments[0]))
-                        .copied()
-                    {
-                        let ty = self
-                            .path_root_ty(expr_id)
-                            .unwrap_or_else(|| Ty::BuiltinUnknown {
-                                attr: TyAttr::default(),
-                            });
-                        (Place::Capture(cap_idx), ty)
-                    } else {
-                        let tmp = self.builder.temp(Ty::Null {
+                let (mut current_place, mut current_ty) = if let Some(&l) =
+                    self.locals.get(&segments[0])
+                {
+                    let ty = self
+                        .path_root_ty(expr_id)
+                        .unwrap_or_else(|| self.builder.local_ty(l));
+                    (Place::Local(l), ty)
+                } else if let Some(cap_idx) = self.capture_index_for_name_at(expr_id, &segments[0])
+                {
+                    let ty = self
+                        .path_root_ty(expr_id)
+                        .unwrap_or_else(|| Ty::BuiltinUnknown {
                             attr: TyAttr::default(),
                         });
-                        (
-                            Place::Local(tmp),
-                            Ty::Null {
-                                attr: TyAttr::default(),
-                            },
-                        )
-                    };
+                    (Place::Capture(cap_idx), ty)
+                } else {
+                    let tmp = self.builder.temp(Ty::Null {
+                        attr: TyAttr::default(),
+                    });
+                    (
+                        Place::Local(tmp),
+                        Ty::Null {
+                            attr: TyAttr::default(),
+                        },
+                    )
+                };
 
                 for seg in &segments[1..] {
                     if let Ty::Class(ref tn, _) = current_ty.clone() {
