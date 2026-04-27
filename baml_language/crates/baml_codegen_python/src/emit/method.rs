@@ -4,6 +4,8 @@
 //! emitter-internal `MethodKind` that drives the `staticmethod(...)`
 //! wrap in `render_method_binding`.
 
+use baml_codegen_types::Ty;
+
 use crate::emit::function::SyncAsync;
 
 pub(crate) struct PyMethodBinding {
@@ -22,6 +24,13 @@ pub(crate) struct PyMethodBinding {
     /// Drives the `staticmethod(...)` wrap and the choice of factory
     /// alias (`__define_static_method` vs. `__define_instance_method`).
     pub(crate) kind: MethodKind,
+    /// Parameter types matching the IR's `arguments` (no `self`). Used
+    /// only by `.pyi` rendering. For instance methods the `.pyi`
+    /// renderer prepends `self` (no annotation) before zipping the
+    /// remaining `param_names` with `arg_tys`.
+    pub(crate) arg_tys: Vec<Ty>,
+    /// Return type, used only by `.pyi` rendering.
+    pub(crate) return_ty: Ty,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

@@ -11,7 +11,7 @@ pub(crate) mod function;
 pub(crate) mod method;
 pub(crate) mod type_alias;
 
-use baml_codegen_types::{Name, Symbol, SymbolPool};
+use baml_codegen_types::{Name, Symbol, SymbolPool, Ty};
 
 use crate::{
     emit::{
@@ -166,8 +166,9 @@ fn expand_function(
         bare,
         &fqn_root,
         &f.arguments,
+        &f.return_type,
         &f.companions,
-        |py_name, fqn, mode, params| {
+        |py_name, fqn, mode, params, arg_tys, return_ty| {
             out.push((
                 leaf.clone(),
                 EmittedSymbol::Function(PyFunction {
@@ -175,6 +176,8 @@ fn expand_function(
                     baml_fqn: fqn,
                     mode,
                     param_names: params,
+                    arg_tys,
+                    return_ty,
                 }),
                 sort_key.clone(),
             ));
@@ -202,8 +205,9 @@ fn expand_methods(
             bare,
             &fqn_root,
             &m.arguments,
+            &m.return_type,
             &m.companions,
-            |py_name, fqn, mode, params| {
+            |py_name, fqn, mode, params, arg_tys, return_ty| {
                 let param_names = match kind {
                     MethodKind::Static => params,
                     MethodKind::Instance => {
@@ -219,6 +223,8 @@ fn expand_methods(
                     mode,
                     param_names,
                     kind,
+                    arg_tys,
+                    return_ty,
                 });
             },
         );
@@ -229,32 +235,39 @@ fn expand_methods(
 /// Shared fan-out for free functions and methods. Calls `emit` once
 /// for each of: base sync, base async, then for each companion sync
 /// and async (in declaration order). The `emit` closure receives the
-/// per-line py-name, FQN, mode, and parameter names; the caller
-/// adapts those into the appropriate emitted-symbol struct.
+/// per-line py-name, FQN, mode, parameter names, parameter types, and
+/// return type; the caller adapts those into the appropriate emitted-
+/// symbol struct.
 fn expand_callable<F>(
     bare: &str,
     fqn_root: &str,
     arguments: &[baml_codegen_types::FunctionArgument],
+    return_type: &Ty,
     companions: &[(String, baml_codegen_types::Function)],
     mut emit: F,
 ) where
-    F: FnMut(String, String, SyncAsync, Vec<String>),
+    F: FnMut(String, String, SyncAsync, Vec<String>, Vec<Ty>, Ty),
 {
     let base_params: Vec<String> = arguments
         .iter()
         .map(|a| a.name.as_str().to_string())
         .collect();
+    let base_tys: Vec<Ty> = arguments.iter().map(|a| a.ty.clone()).collect();
     emit(
         bare.to_string(),
         fqn_root.to_string(),
         SyncAsync::Sync,
         base_params.clone(),
+        base_tys.clone(),
+        return_type.clone(),
     );
     emit(
         format!("{bare}_async"),
         fqn_root.to_string(),
         SyncAsync::Async,
         base_params,
+        base_tys,
+        return_type.clone(),
     );
 
     for (suffix, inner) in companions {
@@ -272,13 +285,23 @@ fn expand_callable<F>(
             .iter()
             .map(|a| a.name.as_str().to_string())
             .collect();
+        let companion_tys: Vec<Ty> = inner.arguments.iter().map(|a| a.ty.clone()).collect();
         emit(
             py_sync,
             companion_fqn.clone(),
             SyncAsync::Sync,
             companion_params.clone(),
+            companion_tys.clone(),
+            inner.return_type.clone(),
         );
-        emit(py_async, companion_fqn, SyncAsync::Async, companion_params);
+        emit(
+            py_async,
+            companion_fqn,
+            SyncAsync::Async,
+            companion_params,
+            companion_tys,
+            inner.return_type.clone(),
+        );
     }
 }
 

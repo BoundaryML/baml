@@ -23,7 +23,7 @@ use baml_codegen_types::{Name, Symbol, SymbolPool};
 
 use crate::{
     emit::build_emitted,
-    leaf::{LeafBody, group_and_sort, render_leaf_body},
+    leaf::{LeafBody, group_and_sort, render_leaf_body, render_leaf_body_pyi},
     routing::{LeafPath, route},
 };
 
@@ -89,10 +89,13 @@ pub fn to_source_code(
     let triples = build_emitted(pool);
     let bodies: BTreeMap<LeafPath, LeafBody> = group_and_sort(triples);
 
-    // Emit every directory's `__init__.py`.
+    // Emit every directory's `__init__.py` and a sibling `__init__.pyi`.
+    // The `.pyi` is the typed surface a type checker reads (12d §2 /
+    // PEP 561); when both exist for the same module the `.pyi` is
+    // authoritative, so every emitted `.py` gets a `.pyi` companion
+    // even when the module is a pure-interior dir with only re-exports.
     for dir in &all_dirs {
         let kids = children.get(dir).cloned().unwrap_or_default();
-        let path = init_py_path(dir);
         let leaf_path = LeafPath {
             segments: dir.clone(),
         };
@@ -108,10 +111,18 @@ pub fn to_source_code(
             render_package_init(&kids)
         };
         content.push_str(&render_leaf_body(body));
-        out.insert(path, content);
+        out.insert(init_py_path(dir), content);
+
+        // `.pyi` sibling — same re-export shape, different body family,
+        // no runtime init / factory imports (12d §3.6 / §7).
+        let mut pyi_content = render_package_init_pyi(&kids);
+        pyi_content.push_str(&render_leaf_body_pyi(body));
+        out.insert(init_pyi_path(dir), pyi_content);
     }
 
-    // Emit `baml/_inlinedbaml.py`.
+    // Emit `baml/_inlinedbaml.py`. No `.pyi` mirror — type checkers
+    // consume `FILES: dict[str, str] = {…}` directly from the `.py`
+    // (12d §6).
     out.insert(
         PathBuf::from("baml/_inlinedbaml.py"),
         render_inlinedbaml(user_baml_files),
@@ -132,11 +143,35 @@ fn init_py_path(dir: &[String]) -> PathBuf {
     path
 }
 
+fn init_pyi_path(dir: &[String]) -> PathBuf {
+    let mut path = PathBuf::new();
+    for seg in dir {
+        path.push(seg);
+    }
+    path.push("__init__.pyi");
+    path
+}
+
 /// Render a non-root package `__init__.py`. Contains the uniform
 /// `from __future__ …` header and, if the directory has subdirectory
 /// children, a single re-export line. Symbol content is appended
 /// separately by the caller via `render_leaf_body`.
 fn render_package_init(children: &BTreeSet<String>) -> String {
+    let mut s = String::from(HEADER);
+    if !children.is_empty() {
+        s.push('\n');
+        let list: Vec<&str> = children.iter().map(String::as_str).collect();
+        writeln!(s, "from . import {}", list.join(", ")).unwrap();
+    }
+    s
+}
+
+/// Render the header section of any `__init__.pyi` (root or non-root).
+/// Per 12d §4.3 the two templates converge: there is no `BamlRuntime`
+/// init in the `.pyi`, and no factory imports anywhere in the file.
+/// Symbol content is appended separately by the caller via
+/// `render_leaf_body_pyi`.
+fn render_package_init_pyi(children: &BTreeSet<String>) -> String {
     let mut s = String::from(HEADER);
     if !children.is_empty() {
         s.push('\n');
@@ -1350,5 +1385,422 @@ mod tests {
             assert_ne!(s, "globals.py");
             assert_ne!(s, "tracing.py");
         }
+    }
+
+    // ----- 12d `.pyi` stub generation -----
+
+    #[test]
+    fn pyi_emitted_for_every_init_py() {
+        // Every emitted `__init__.py` (and only those) gets a sibling
+        // `__init__.pyi`. `baml/_inlinedbaml.py` is the documented
+        // exception (12d §6).
+        let mut pool: SymbolPool = HashMap::new();
+        let resume = cg_name("user", &["lorem"], "Resume");
+        pool.insert(resume.clone(), class(resume));
+        let stream = cg_name("user", &["lorem"], "Resume$stream");
+        pool.insert(stream.clone(), class(stream));
+        let bucket = cg_name("aws", &["s3"], "Bucket");
+        pool.insert(bucket.clone(), class(bucket));
+
+        let out = to_source_code(&pool, &[]);
+
+        for path in out.keys() {
+            let s = path.to_string_lossy();
+            if s.ends_with("__init__.py") {
+                let pyi: String = s.replace("__init__.py", "__init__.pyi");
+                assert!(
+                    out.contains_key(&PathBuf::from(&pyi)),
+                    "missing .pyi sibling for {s}"
+                );
+            }
+        }
+        assert!(!out.contains_key(&PathBuf::from("baml/_inlinedbaml.pyi")));
+    }
+
+    #[test]
+    fn pyi_root_init_omits_runtime_init_and_factory_imports() {
+        let pool: SymbolPool = HashMap::new();
+        let out = to_source_code(&pool, &[]);
+
+        let root = &out[&PathBuf::from("__init__.pyi")];
+        assert!(root.contains("from __future__ import annotations"));
+        assert!(root.contains("from . import baml"));
+        // 12d §3.6: runtime init / factory imports / BamlRuntime
+        // must not appear in `.pyi`.
+        assert!(!root.contains("BamlRuntime"));
+        assert!(!root.contains("initialize_runtime"));
+        assert!(!root.contains("baml.baml_core"));
+    }
+
+    #[test]
+    fn pyi_class_renders_name_only_with_ellipsis() {
+        let mut pool: SymbolPool = HashMap::new();
+        let n = cg_name("user", &["lorem"], "Resume");
+        pool.insert(
+            n.clone(),
+            class_with_props(
+                n,
+                vec![("name", Ty::String), ("email", Ty::Optional(Box::new(Ty::String)))],
+                "x.baml",
+                0,
+            ),
+        );
+
+        let out = to_source_code(&pool, &[]);
+        let leaf = &out[&PathBuf::from("lorem/__init__.pyi")];
+
+        // Class is name-only with ellipsis (12d §3.1).
+        assert!(leaf.contains("class Resume(pydantic.BaseModel): ...\n"));
+        // Field declarations and pydantic config are NOT mirrored.
+        assert!(!leaf.contains("model_config"));
+        assert!(!leaf.contains("name: str"));
+        assert!(!leaf.contains("email:"));
+        // pydantic is still imported (for the class base).
+        assert!(leaf.contains("import pydantic"));
+    }
+
+    #[test]
+    fn pyi_enum_renders_name_only_with_ellipsis() {
+        let mut pool: SymbolPool = HashMap::new();
+        let n = cg_name("user", &["ipsum"], "Sentiment");
+        pool.insert(
+            n.clone(),
+            Symbol::Enum(Enum {
+                name: n,
+                docstring: None,
+                variants: vec![
+                    EnumVariant {
+                        name: BaseName::new("POSITIVE"),
+                        docstring: None,
+                        value: "POSITIVE".to_string(),
+                    },
+                    EnumVariant {
+                        name: BaseName::new("NEGATIVE"),
+                        docstring: None,
+                        value: "NEGATIVE".to_string(),
+                    },
+                ],
+                origin: origin("x.baml", 0),
+            }),
+        );
+
+        let out = to_source_code(&pool, &[]);
+        let leaf = &out[&PathBuf::from("ipsum/__init__.pyi")];
+
+        // Enum is name-only with ellipsis (12d §3.2).
+        assert!(leaf.contains("class Sentiment(str, enum.Enum): ...\n"));
+        // Variants are NOT mirrored.
+        assert!(!leaf.contains("POSITIVE = "));
+        assert!(!leaf.contains("NEGATIVE = "));
+        assert!(leaf.contains("import enum"));
+    }
+
+    #[test]
+    fn pyi_function_signature_typed_sync_and_async() {
+        let mut pool: SymbolPool = HashMap::new();
+        let n = cg_name("user", &["lorem"], "extract_resume");
+        // Single-arg function returning a class; signature must reflect
+        // both ends of the typed surface (12d §3.4).
+        let resume = cg_name("user", &["lorem"], "Resume");
+        pool.insert(resume.clone(), class(resume.clone()));
+        pool.insert(
+            n,
+            Symbol::Function(Function {
+                name: BaseName::new("extract_resume"),
+                docstring: None,
+                arguments: vec![FunctionArgument {
+                    name: BaseName::new("text"),
+                    docstring: None,
+                    ty: Ty::String,
+                }],
+                return_type: Ty::Class(resume),
+                stream_return_type: None,
+                watchers: vec![],
+                companions: vec![],
+                origin: origin("x.baml", 100),
+            }),
+        );
+
+        let out = to_source_code(&pool, &[]);
+        let leaf = &out[&PathBuf::from("lorem/__init__.pyi")];
+
+        assert!(
+            leaf.contains("def extract_resume(text: str) -> Resume: ...\n"),
+            "missing sync sig in:\n{leaf}"
+        );
+        assert!(
+            leaf.contains("async def extract_resume_async(text: str) -> Resume: ...\n"),
+            "missing async sig in:\n{leaf}"
+        );
+        // No factory call, no `_define_function`.
+        assert!(!leaf.contains("_define_function"));
+        assert!(!leaf.contains("baml.baml_core"));
+    }
+
+    #[test]
+    fn pyi_function_companion_uses_companion_signature() {
+        // Per 12d §3.4: companion bindings source their `arguments` /
+        // `return_type` from the companion's own `Function`, not the
+        // parent. Verify with a `$parse`-shaped companion that takes
+        // a different argument and returns a different type than the
+        // parent.
+        let mut pool: SymbolPool = HashMap::new();
+        let n = cg_name("user", &["lorem"], "extract_resume");
+        let resume = cg_name("user", &["lorem"], "Resume");
+        pool.insert(resume.clone(), class(resume.clone()));
+        let companion = Function {
+            name: BaseName::new("inner"),
+            docstring: None,
+            arguments: vec![FunctionArgument {
+                name: BaseName::new("json"),
+                docstring: None,
+                ty: Ty::String,
+            }],
+            return_type: Ty::Class(resume.clone()),
+            stream_return_type: None,
+            watchers: vec![],
+            companions: vec![],
+            origin: origin("x.baml", 0),
+        };
+        pool.insert(
+            n,
+            Symbol::Function(Function {
+                name: BaseName::new("extract_resume"),
+                docstring: None,
+                arguments: vec![FunctionArgument {
+                    name: BaseName::new("text"),
+                    docstring: None,
+                    ty: Ty::String,
+                }],
+                return_type: Ty::Class(resume),
+                stream_return_type: None,
+                watchers: vec![],
+                companions: vec![("parse".to_string(), companion)],
+                origin: origin("x.baml", 100),
+            }),
+        );
+
+        let out = to_source_code(&pool, &[]);
+        let leaf = &out[&PathBuf::from("lorem/__init__.pyi")];
+
+        // Parent uses parent params/return.
+        assert!(leaf.contains("def extract_resume(text: str) -> Resume: ...\n"));
+        // Companion uses companion params/return — `json: str`, not `text`.
+        assert!(
+            leaf.contains("def extract_resume__parse(json: str) -> Resume: ...\n"),
+            "missing companion sync sig in:\n{leaf}"
+        );
+        assert!(
+            leaf.contains("async def extract_resume__parse_async(json: str) -> Resume: ...\n"),
+            "missing companion async sig in:\n{leaf}"
+        );
+    }
+
+    #[test]
+    fn pyi_type_alias_mirrors_py_shape() {
+        let mut pool: SymbolPool = HashMap::new();
+        let n = cg_name("user", &["util"], "Foo");
+        pool.insert(n.clone(), alias(n, "x.baml", 0));
+
+        let out = to_source_code(&pool, &[]);
+        let leaf = &out[&PathBuf::from("util/__init__.pyi")];
+        // 12d §3.3: type-alias body is identical between `.py` and `.pyi`.
+        assert!(leaf.contains("Foo: typing.TypeAlias = int\n"));
+    }
+
+    #[test]
+    fn pyi_recursive_type_alias_keeps_single_quoting() {
+        let mut pool: SymbolPool = HashMap::new();
+        let n = cg_name("user", &["tree"], "JsonValue");
+        let rhs = Ty::Union(vec![
+            Ty::Int,
+            Ty::String,
+            Ty::List(Box::new(Ty::TypeAlias(n.clone()))),
+        ]);
+        pool.insert(n.clone(), alias_full(n, rhs, true, "tree.baml", 0));
+
+        let out = to_source_code(&pool, &[]);
+        let leaf = &out[&PathBuf::from("tree/__init__.pyi")];
+        assert!(leaf.contains(
+            "JsonValue: typing.TypeAlias = 'typing.Union[int, str, typing.List[JsonValue]]'\n"
+        ));
+    }
+
+    #[test]
+    fn pyi_static_method_includes_decorator_and_typed_signature() {
+        let mut pool: SymbolPool = HashMap::new();
+        let n = cg_name("user", &["lorem"], "Counter");
+        pool.insert(
+            n.clone(),
+            class_with_methods(
+                n,
+                vec![method_func("zero", &[], "x.baml", 100)],
+                vec![],
+                "x.baml",
+                0,
+            ),
+        );
+
+        let out = to_source_code(&pool, &[]);
+        let leaf = &out[&PathBuf::from("lorem/__init__.pyi")];
+
+        // 12b method-bearing class: body is the method block, not `...`.
+        assert!(leaf.contains("class Counter(pydantic.BaseModel):\n"));
+        assert!(!leaf.contains("class Counter(pydantic.BaseModel): ..."));
+        // Each fan-out gets its own @staticmethod decorator.
+        assert!(
+            leaf.contains("    @staticmethod\n    def zero() -> int: ...\n"),
+            "missing static sync sig in:\n{leaf}"
+        );
+        assert!(
+            leaf.contains("    @staticmethod\n    async def zero_async() -> int: ...\n"),
+            "missing static async sig in:\n{leaf}"
+        );
+    }
+
+    #[test]
+    fn pyi_instance_method_prepends_self_no_annotation() {
+        let mut pool: SymbolPool = HashMap::new();
+        let n = cg_name("user", &["lorem"], "Counter");
+        pool.insert(
+            n.clone(),
+            class_with_methods(
+                n,
+                vec![],
+                vec![method_func("bump", &["by"], "x.baml", 100)],
+                "x.baml",
+                0,
+            ),
+        );
+
+        let out = to_source_code(&pool, &[]);
+        let leaf = &out[&PathBuf::from("lorem/__init__.pyi")];
+
+        // Instance methods: `self` (no annotation) + typed remaining params.
+        assert!(
+            leaf.contains("    def bump(self, by: int) -> int: ...\n"),
+            "missing instance sync sig in:\n{leaf}"
+        );
+        assert!(
+            leaf.contains("    async def bump_async(self, by: int) -> int: ...\n"),
+            "missing instance async sig in:\n{leaf}"
+        );
+        // No `@staticmethod` decorator on instance methods.
+        assert!(!leaf.contains("@staticmethod\n    def bump"));
+    }
+
+    #[test]
+    fn pyi_property_only_class_has_no_method_block() {
+        let mut pool: SymbolPool = HashMap::new();
+        let n = cg_name("user", &["lorem"], "Resume");
+        pool.insert(n.clone(), class(n));
+
+        let out = to_source_code(&pool, &[]);
+        let leaf = &out[&PathBuf::from("lorem/__init__.pyi")];
+
+        // No methods → name-only stub, even when the `.py` carries
+        // properties.
+        assert!(leaf.contains("class Resume(pydantic.BaseModel): ...\n"));
+        assert!(!leaf.contains("def "));
+    }
+
+    #[test]
+    fn pyi_all_mirrors_py_all() {
+        let mut pool: SymbolPool = HashMap::new();
+        let c = cg_name("user", &["lorem"], "Resume");
+        let e = cg_name("user", &["lorem"], "Sentiment");
+        pool.insert(c.clone(), class_at(c, "x.baml", 0));
+        pool.insert(e.clone(), enum_(e, "x.baml", 50));
+
+        let out = to_source_code(&pool, &[]);
+        let py = &out[&PathBuf::from("lorem/__init__.py")];
+        let pyi = &out[&PathBuf::from("lorem/__init__.pyi")];
+        assert!(py.contains("__all__ = [\n    \"Resume\",\n    \"Sentiment\",\n]"));
+        assert!(pyi.contains("__all__ = [\n    \"Resume\",\n    \"Sentiment\",\n]"));
+    }
+
+    #[test]
+    fn pyi_typing_imported_when_signatures_present() {
+        // Pure-class leaf with no methods does not need typing in
+        // its `.pyi` (no signatures, no field declarations mirrored).
+        let mut pool: SymbolPool = HashMap::new();
+        let n = cg_name("user", &["lorem"], "Resume");
+        pool.insert(n.clone(), class(n));
+
+        let out = to_source_code(&pool, &[]);
+        let leaf = &out[&PathBuf::from("lorem/__init__.pyi")];
+        assert!(!leaf.contains("import typing"), "no typing expected in:\n{leaf}");
+
+        // Add a function — typing now required (signatures may use
+        // `typing.Optional` / `typing.List` / etc., per 12d §7).
+        let f = cg_name("user", &["lorem"], "ping");
+        pool.insert(f, func_sym("ping", "x.baml", 100, vec![]));
+        let out = to_source_code(&pool, &[]);
+        let leaf = &out[&PathBuf::from("lorem/__init__.pyi")];
+        assert!(leaf.contains("import typing"));
+    }
+
+    #[test]
+    fn pyi_no_factory_imports_anywhere() {
+        let mut pool: SymbolPool = HashMap::new();
+        let n = cg_name("user", &["lorem"], "extract_resume");
+        pool.insert(n, func_sym("extract_resume", "x.baml", 100, vec![]));
+
+        let out = to_source_code(&pool, &[]);
+        for (path, content) in &out {
+            if !path.to_string_lossy().ends_with(".pyi") {
+                continue;
+            }
+            assert!(
+                !content.contains("baml.baml_core"),
+                "{} must not import baml.baml_core",
+                path.display()
+            );
+            assert!(
+                !content.contains("_define_function"),
+                "{} must not reference _define_function",
+                path.display()
+            );
+        }
+    }
+
+    #[test]
+    fn pyi_function_fan_out_siblings_tightly_packed() {
+        let mut pool: SymbolPool = HashMap::new();
+        let n = cg_name("user", &["lorem"], "extract");
+        pool.insert(
+            n,
+            func_with_args(
+                "extract",
+                &["t"],
+                "x.baml",
+                0,
+                vec![("stream", companion_func(&["t"]))],
+            ),
+        );
+
+        let out = to_source_code(&pool, &[]);
+        let leaf = &out[&PathBuf::from("lorem/__init__.pyi")];
+        // Sync→async→companion sync→companion async should appear
+        // contiguously without blank-line separators.
+        let needles = [
+            "def extract(",
+            "async def extract_async(",
+            "def extract_stream(",
+            "async def extract_stream_async(",
+        ];
+        let mut last = 0usize;
+        for needle in needles {
+            let i = leaf.find(needle).unwrap_or_else(|| panic!("missing {needle} in:\n{leaf}"));
+            assert!(i >= last, "out-of-order signature: {needle}");
+            last = i;
+        }
+        let s = leaf.find("def extract(").unwrap();
+        let e = leaf.find("async def extract_stream_async(").unwrap();
+        let block = &leaf[s..e];
+        assert!(
+            !block.contains("\n\n"),
+            "fan-out signatures should be tightly packed:\n{block}"
+        );
     }
 }

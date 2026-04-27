@@ -5,10 +5,12 @@
 
 use std::{collections::BTreeMap, fmt::Write as _};
 
+use baml_codegen_types::Ty;
+
 use crate::{
     emit::{
         EmittedSymbol, SortKey,
-        function::SyncAsync,
+        function::{PyFunction, SyncAsync},
         method::{MethodKind, PyMethodBinding},
     },
     py_string,
@@ -99,6 +101,22 @@ impl LeafBody {
 
     pub(crate) fn is_empty(&self) -> bool {
         self.symbols.is_empty()
+    }
+
+    /// Whether this leaf's `.pyi` needs `import typing`. Per 12d §7,
+    /// any rendered signature (function, method, or type alias) pulls
+    /// in `typing` — type aliases declare `typing.TypeAlias` and
+    /// signatures may use `typing.Optional` / `typing.List` / etc.
+    /// Class field types are not mirrored into the `.pyi` (12d §3.1),
+    /// so a property-only class on its own does not require `typing`.
+    pub(crate) fn needs_typing_pyi(&self) -> bool {
+        self.symbols.iter().any(|(s, _)| match s {
+            EmittedSymbol::Function(_) | EmittedSymbol::TypeAlias(_) => true,
+            EmittedSymbol::Class(c) => {
+                !c.static_methods.is_empty() || !c.instance_methods.is_empty()
+            }
+            EmittedSymbol::Enum(_) => false,
+        })
     }
 }
 
@@ -428,6 +446,220 @@ pub(crate) fn render_leaf_body(body: &LeafBody) -> String {
             }
             Some(_) => {
                 // New top-level definition — PEP-8 two blanks.
+                out.push_str("\n\n");
+            }
+        }
+        for line in &lines {
+            out.push_str(line);
+            out.push('\n');
+        }
+        prev = Some((key, sym));
+    }
+
+    let names = body.all_names();
+    if !names.is_empty() {
+        out.push_str("\n\n");
+        out.push_str("__all__ = [\n");
+        for n in names {
+            writeln!(out, "    \"{n}\",").unwrap();
+        }
+        out.push_str("]\n");
+    }
+
+    out
+}
+
+/// Render a single symbol into one or more `.pyi` source lines. Per
+/// 12d §3 the body of class and enum stubs is name-only with `...`;
+/// type aliases mirror the `.py` shape; functions render as typed
+/// `def`/`async def` signatures with `...` bodies.
+fn render_symbol_pyi(s: &EmittedSymbol, leaf: &LeafPath) -> Vec<String> {
+    let ctx = TranslateCtx {
+        current_leaf: leaf.clone(),
+        self_ref: None,
+    };
+
+    match s {
+        EmittedSymbol::Class(c) => {
+            let total = c.static_methods.len() + c.instance_methods.len();
+            if total == 0 {
+                vec![format!("class {}(pydantic.BaseModel): ...", c.py_name)]
+            } else {
+                let mut lines = Vec::with_capacity(1 + total * 2);
+                lines.push(format!("class {}(pydantic.BaseModel):", c.py_name));
+                push_method_signatures_pyi(&mut lines, &c.static_methods, &ctx);
+                if !c.static_methods.is_empty() && !c.instance_methods.is_empty() {
+                    lines.push(String::new());
+                }
+                push_method_signatures_pyi(&mut lines, &c.instance_methods, &ctx);
+                lines
+            }
+        }
+        EmittedSymbol::Enum(e) => {
+            vec![format!("class {}(str, enum.Enum): ...", e.py_name)]
+        }
+        EmittedSymbol::TypeAlias(a) => {
+            // Type-alias body is identical to the `.py` form per
+            // 12d §3.3 — same `translate_ty` call and the same whole-
+            // RHS single-quote wrap for recursive aliases.
+            let rhs = translate_ty(&a.resolves_to, &ctx);
+            let rhs = if a.recursive {
+                format!("'{rhs}'")
+            } else {
+                rhs
+            };
+            vec![format!("{}: typing.TypeAlias = {}", a.py_name, rhs)]
+        }
+        EmittedSymbol::Function(f) => vec![render_function_signature_pyi(f, &ctx)],
+    }
+}
+
+/// Render one method signature line (or two: decorator + signature for
+/// statics) inside a class body. Each `PyMethodBinding` corresponds to
+/// one fan-out entry — sync, async, companion sync, and companion
+/// async are each rendered as their own typed signature.
+fn push_method_signatures_pyi(
+    lines: &mut Vec<String>,
+    methods: &[PyMethodBinding],
+    ctx: &TranslateCtx,
+) {
+    let mut prev_root: Option<&str> = None;
+    for m in methods {
+        let root = source_method_root(&m.baml_fqn);
+        if let Some(prev) = prev_root {
+            // Distinct source method → blank separator. Sync/async pair
+            // and parent+companion siblings share `source_method_root`,
+            // so they stay tight.
+            if prev != root {
+                lines.push(String::new());
+            }
+        }
+        if matches!(m.kind, MethodKind::Static) {
+            lines.push("    @staticmethod".to_string());
+        }
+        let async_kw = if matches!(m.mode, SyncAsync::Async) {
+            "async "
+        } else {
+            ""
+        };
+        let typed_params = render_method_params_pyi(m, ctx);
+        let ret_py = translate_ty(&m.return_ty, ctx);
+        lines.push(format!(
+            "    {async_kw}def {name}({typed_params}) -> {ret_py}: ...",
+            name = m.py_name
+        ));
+        prev_root = Some(root);
+    }
+}
+
+/// Render the parameter list of a method as `name: ty, …`. For
+/// instance methods the leading `self` (no annotation) is taken from
+/// `param_names[0]` and the remaining names are zipped with `arg_tys`;
+/// for static methods names and types are zipped 1:1.
+fn render_method_params_pyi(m: &PyMethodBinding, ctx: &TranslateCtx) -> String {
+    match m.kind {
+        MethodKind::Static => render_typed_params(&m.param_names, &m.arg_tys, ctx),
+        MethodKind::Instance => {
+            let mut s = String::from("self");
+            for (n, t) in m.param_names.iter().skip(1).zip(m.arg_tys.iter()) {
+                s.push_str(", ");
+                s.push_str(n);
+                s.push_str(": ");
+                s.push_str(&translate_ty(t, ctx));
+            }
+            s
+        }
+    }
+}
+
+/// Render a free-function signature line. The async-ness lives in the
+/// `def` keyword (per 12d §3.4); the return annotation is the same
+/// for sync and async fan-out siblings.
+fn render_function_signature_pyi(f: &PyFunction, ctx: &TranslateCtx) -> String {
+    let async_kw = if matches!(f.mode, SyncAsync::Async) {
+        "async "
+    } else {
+        ""
+    };
+    let typed_params = render_typed_params(&f.param_names, &f.arg_tys, ctx);
+    let ret_py = translate_ty(&f.return_ty, ctx);
+    format!(
+        "{async_kw}def {name}({typed_params}) -> {ret_py}: ...",
+        name = f.py_name
+    )
+}
+
+/// Zip parameter names with their translated Python type expressions
+/// into a comma-separated `name: ty, …` list. Empty when both slices
+/// are empty.
+fn render_typed_params(names: &[String], tys: &[Ty], ctx: &TranslateCtx) -> String {
+    let mut s = String::new();
+    for (i, (n, t)) in names.iter().zip(tys.iter()).enumerate() {
+        if i > 0 {
+            s.push_str(", ");
+        }
+        s.push_str(n);
+        s.push_str(": ");
+        s.push_str(&translate_ty(t, ctx));
+    }
+    s
+}
+
+/// Render a leaf's `.pyi` body section (imports + symbol bodies +
+/// `__all__`). Returns empty string if the leaf has no symbols.
+///
+/// Layout mirrors `render_leaf_body` modulo the differences spelled out
+/// in 12d §7:
+/// - `from baml.baml_core import …` factory imports are omitted
+/// - `import typing` is needed if any signature is present (function,
+///   method, or type alias) — see `LeafBody::needs_typing_pyi`
+/// - `import enum` and `import pydantic` follow the same rule as `.py`
+pub(crate) fn render_leaf_body_pyi(body: &LeafBody) -> String {
+    if body.is_empty() {
+        return String::new();
+    }
+
+    let mut out = String::new();
+
+    let needs_enum = body
+        .symbols
+        .iter()
+        .any(|(s, _)| matches!(s, EmittedSymbol::Enum(_)));
+    let needs_typing = body.needs_typing_pyi();
+    let needs_pydantic = body.needs_pydantic();
+    let has_stdlib_block = needs_enum || needs_typing || needs_pydantic;
+    if has_stdlib_block {
+        out.push('\n');
+        if needs_enum {
+            out.push_str("import enum\n");
+        }
+        if needs_typing {
+            out.push_str("import typing\n");
+        }
+        if needs_pydantic {
+            out.push_str("import pydantic\n");
+        }
+    }
+
+    out.push_str("\n\n");
+
+    let mut prev: Option<(&SortKey, &EmittedSymbol)> = None;
+    for (sym, key) in &body.symbols {
+        let lines = render_symbol_pyi(sym, &body.leaf);
+        if lines.is_empty() {
+            continue;
+        }
+        match prev {
+            None => {}
+            Some((p, prev_sym))
+                if p == key
+                    && matches!(prev_sym, EmittedSymbol::Function(_))
+                    && matches!(sym, EmittedSymbol::Function(_)) =>
+            {
+                // Function fan-out: siblings share their parent's
+                // sort key and render contiguously.
+            }
+            Some(_) => {
                 out.push_str("\n\n");
             }
         }

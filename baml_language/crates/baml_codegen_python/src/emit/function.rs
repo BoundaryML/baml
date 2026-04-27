@@ -1,5 +1,7 @@
 //! `PyFunction` — top-level factory binding.
 
+use baml_codegen_types::Ty;
+
 /// Async/sync marker carried by factory bindings. Each BAML
 /// `Function` (and each of its companions) fans out into one sync
 /// and one async binding.
@@ -31,4 +33,13 @@ pub(crate) struct PyFunction {
     /// the inner companion's `arguments` for companions; never from
     /// the parent for companion bindings.
     pub(crate) param_names: Vec<String>,
+    /// Parameter types in the same order as `param_names`. Used only
+    /// by `.pyi` rendering; the `.py` factory binding doesn't reference
+    /// types. For companions, these are the companion's own parameter
+    /// types — never the parent's.
+    pub(crate) arg_tys: Vec<Ty>,
+    /// Return type, used only by `.pyi` rendering. The async-ness lives
+    /// in the `def` keyword (per 12d §3.4); this `Ty` is identical for
+    /// the sync and async fan-out siblings.
+    pub(crate) return_ty: Ty,
 }
