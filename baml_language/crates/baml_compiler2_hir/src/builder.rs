@@ -65,7 +65,7 @@ pub struct SemanticIndexBuilder<'db> {
     path_resolutions: Vec<(ast::ExprId, PathResolution)>,
     /// Path-root references collected while walking source order. Unlike
     /// `expr_scopes`, this carries the scope and innermost lambda context at
-    /// collection time so capture analysis does not rely on arena-local ExprIds.
+    /// collection time so capture analysis does not rely on arena-local `ExprId`s.
     path_root_references: Vec<PathRootReference>,
     lambda_stack: Vec<FileScopeId>,
 
@@ -368,7 +368,7 @@ impl<'db> SemanticIndexBuilder<'db> {
                 }
             }
             ast::Stmt::Throw { value } => {
-                self.walk_expr(*value, body, source_map, WalkContext::Nested)
+                self.walk_expr(*value, body, source_map, WalkContext::Nested);
             }
             ast::Stmt::Assign { target, value } => {
                 self.walk_expr(*target, body, source_map, WalkContext::Nested);
@@ -423,7 +423,7 @@ impl<'db> SemanticIndexBuilder<'db> {
                 }
             }
             ast::Expr::Throw { value } => {
-                self.walk_expr(*value, body, source_map, WalkContext::Nested)
+                self.walk_expr(*value, body, source_map, WalkContext::Nested);
             }
             ast::Expr::Binary { lhs, rhs, .. } => {
                 self.walk_expr(*lhs, body, source_map, WalkContext::Nested);

@@ -926,7 +926,6 @@ impl<'db> LoweringContext<'db> {
     }
 
     fn scope_is_descendant_or_self(
-        &self,
         index: &baml_compiler2_hir::semantic_index::FileSemanticIndex<'_>,
         scope_id: FileScopeId,
         ancestor_id: FileScopeId,
@@ -953,8 +952,8 @@ impl<'db> LoweringContext<'db> {
             .map(|source_map| source_map.pattern_span(pattern));
 
         for (scope_idx, bindings) in index.scope_bindings.iter().enumerate() {
-            let scope_id = FileScopeId::new(scope_idx as u32);
-            if !self.scope_is_descendant_or_self(&index, scope_id, self.current_scope) {
+            let scope_id = FileScopeId::new(u32::try_from(scope_idx).expect("scope id overflow"));
+            if !Self::scope_is_descendant_or_self(index, scope_id, self.current_scope) {
                 continue;
             }
             for binding in &bindings.bindings {
@@ -3625,7 +3624,7 @@ impl LoweringContext<'_> {
                     );
                 }
 
-                self.locals.insert(name.clone(), local);
+                self.locals.insert(name, local);
                 if let Some(binding_id) = self.binding_id_for_statement(stmt_id, pattern) {
                     self.binding_locals.insert(binding_id, local);
                 }
@@ -5109,7 +5108,7 @@ impl LoweringContext<'_> {
         let error_binding_local = first_clause.and_then(|clause| match binding_name.clone() {
             Some(name) if binding_is_captured => {
                 let local = self.builder.declare_local(
-                    Some(name.clone()),
+                    Some(name),
                     Ty::BuiltinUnknown {
                         attr: TyAttr::default(),
                     },
@@ -5143,7 +5142,7 @@ impl LoweringContext<'_> {
                 let binding = match binding {
                     Some(name) if is_captured => {
                         let local = self.builder.declare_local(
-                            Some(name.clone()),
+                            Some(name),
                             Ty::BuiltinUnknown {
                                 attr: TyAttr::default(),
                             },

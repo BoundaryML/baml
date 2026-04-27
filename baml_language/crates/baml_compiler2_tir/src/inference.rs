@@ -592,7 +592,7 @@ pub fn infer_scope_types<'db>(
                 let mut inferred_owner_scopes = Vec::new();
                 for ancestor_fsi in index.ancestor_scopes(file_scope) {
                     let anc_bindings = &index.scope_bindings[ancestor_fsi.index() as usize];
-                    let inference_fsi = inference_owner_scope(&index, ancestor_fsi);
+                    let inference_fsi = inference_owner_scope(index, ancestor_fsi);
                     let inference_scope_id = index.scope_ids[inference_fsi.index() as usize];
                     let capture_declared_in_ancestor =
                         |capture_name: &Name, binding_id: &BindingId| -> bool {

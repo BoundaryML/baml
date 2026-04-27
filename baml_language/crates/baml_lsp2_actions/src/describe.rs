@@ -366,8 +366,9 @@ fn describe_locals(db: &dyn Db, files: &[SourceFile], name: &str) -> Vec<SymbolD
                     // enclosing function body.
                     let def_site = binding.site;
                     let binding_span = binding.name_range;
-                    let binding_scope = FileScopeId::new(scope_idx as u32);
-                    let owner_scope = body_owner_scope(&index, binding_scope);
+                    let binding_scope =
+                        FileScopeId::new(u32::try_from(scope_idx).expect("scope id overflow"));
+                    let owner_scope = body_owner_scope(index, binding_scope);
                     let scope_id = index.scope_ids[owner_scope.index() as usize];
                     let inference = baml_compiler2_tir::inference::infer_scope_types(db, scope_id);
 
@@ -382,7 +383,7 @@ fn describe_locals(db: &dyn Db, files: &[SourceFile], name: &str) -> Vec<SymbolD
 
                     let type_str = match def_site {
                         baml_compiler2_hir::semantic_index::DefinitionSite::Statement(stmt_id) => {
-                            pattern_from_owner_body(db, func_loc, &index, owner_scope, stmt_id)
+                            pattern_from_owner_body(db, func_loc, index, owner_scope, stmt_id)
                                 .and_then(|pattern| inference.binding_type(pattern))
                                 .map(crate::utils::display_ty)
                                 .unwrap_or_else(|| "unknown".to_string())
