@@ -63,6 +63,14 @@ struct ThrowPatternMatches {
     definitely_handled: BTreeSet<Ty>,
 }
 
+struct TypedPattern {
+    narrowed_ty: Ty,
+    test_ty: Option<Ty>,
+    binding: Option<(Name, Ty)>,
+    match_cases: BTreeSet<String>,
+    covers_all: bool,
+}
+
 struct CallbackThrowProvenance {
     callback_name: Name,
     forwarding_call_expr: ExprId,
@@ -2280,14 +2288,17 @@ impl<'db> TypeInferenceBuilder<'db> {
             let arm = &body.match_arms[*arm_id];
             let pattern_id = arm.pattern;
 
-            self.record_pattern_test_types(pattern_id, &scrutinee_ty, body, arm.body);
+            let tp = self.lower_pattern(pattern_id, &scrutinee_ty, body, arm.body);
+            if let Some(test_ty) = &tp.test_ty {
+                self.bindings.insert(pattern_id, test_ty.clone());
+            }
 
-            let arm_cases = self.pattern_match_cases(pattern_id, &scrutinee_ty, body, arm.body);
             let mut unreachable = catch_all_seen;
             if !unreachable && arm.guard.is_none() {
                 if let Some(required) = &required_cases {
-                    if !arm_cases.is_empty()
-                        && arm_cases
+                    if !tp.match_cases.is_empty()
+                        && tp
+                            .match_cases
                             .iter()
                             .all(|c| covered_cases.contains(c) || !required.contains(c))
                     {
@@ -2300,21 +2311,16 @@ impl<'db> TypeInferenceBuilder<'db> {
                     .report_simple(TirTypeError::UnreachableArm, arm.body);
             }
 
-            let narrowed_scrutinee_ty =
-                self.pattern_narrowed_type(pattern_id, &scrutinee_ty, body, arm.body);
             let mut saved = Vec::new();
 
             if let Some(name) = &scrutinee_name {
                 saved.push((name.clone(), self.locals.get(name).cloned()));
-                self.locals
-                    .insert(name.clone(), narrowed_scrutinee_ty.clone());
+                self.locals.insert(name.clone(), tp.narrowed_ty.clone());
             }
 
-            if let Some((bind_name, bind_ty)) =
-                self.pattern_binding_for_arm(pattern_id, &scrutinee_ty, body, arm.body)
-            {
-                saved.push((bind_name.clone(), self.locals.get(&bind_name).cloned()));
-                self.locals.insert(bind_name, bind_ty);
+            if let Some((bind_name, bind_ty)) = &tp.binding {
+                saved.push((bind_name.clone(), self.locals.get(bind_name).cloned()));
+                self.locals.insert(bind_name.clone(), bind_ty.clone());
             }
 
             if let Some(guard_expr) = arm.guard {
@@ -2333,13 +2339,14 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
 
             if arm.guard.is_none() {
-                if self.pattern_covers_all_match(pattern_id, &scrutinee_ty, body, arm.body) {
+                if tp.covers_all {
                     catch_all_seen = true;
                     if let Some(required) = &required_cases {
                         covered_cases.clone_from(required);
                     }
                 } else if let Some(required) = &required_cases {
-                    covered_cases.extend(arm_cases.into_iter().filter(|c| required.contains(c)));
+                    covered_cases
+                        .extend(tp.match_cases.into_iter().filter(|c| required.contains(c)));
                 }
             }
         }
@@ -2446,26 +2453,21 @@ impl<'db> TypeInferenceBuilder<'db> {
 
             for &arm_id in &clause.arms {
                 let arm = &body.catch_arms[arm_id];
-                let matches =
-                    self.match_throw_types_for_pattern(arm.pattern, &residual, body, arm.body);
-                // Panic-containing patterns are never unreachable — panics can
-                // occur in any expression at runtime regardless of the
-                // declared throw set.
-                let panic_subset_ty = self.pattern_panic_narrowed_type(arm.pattern, body, arm.body);
+                let tp = self.lower_pattern(arm.pattern, &clause_binding_ty, body, arm.body);
+                if let Some(test_ty) = &tp.test_ty {
+                    self.bindings.insert(arm.pattern, test_ty.clone());
+                }
+
+                let throw_matches = Self::throw_matches_from_ty(&tp.narrowed_ty, &residual);
+                let panic_subset_ty = self.ty_panic_subset(&tp.narrowed_ty);
                 let has_panic_component = panic_subset_ty.is_some();
-                // Record resolved types for bare type sugar / typed binding
-                // patterns (including union members) so MIR can emit `IsType`
-                // checks for each subpattern.
-                self.record_pattern_test_types(arm.pattern, &clause_binding_ty, body, arm.body);
-                if matches.may_match.is_empty() && !has_panic_component {
+
+                if throw_matches.may_match.is_empty() && !has_panic_component {
                     self.context
                         .report_warning_simple(TirTypeError::UnreachableArm, arm.body);
                 }
 
-                let mut narrowed_binding_ty = Self::facts_to_ty(&matches.may_match);
-                // Panic members aren't tracked in the declared throw set, so
-                // add back the panic subset of the pattern to keep the clause
-                // binding (e.g. `e`) and arm bindings usable inside mixed arms.
+                let mut narrowed_binding_ty = Self::facts_to_ty(&throw_matches.may_match);
                 if let Some(panic_subset_ty) = panic_subset_ty {
                     narrowed_binding_ty = if matches!(narrowed_binding_ty, Ty::Never { .. }) {
                         panic_subset_ty
@@ -2473,34 +2475,33 @@ impl<'db> TypeInferenceBuilder<'db> {
                         Self::join_all(&[narrowed_binding_ty, panic_subset_ty])
                     };
                 }
-                let pattern_binding_ty = self.pattern_binding_ty_for_catch(
-                    arm.pattern,
-                    &clause_binding_ty,
-                    &narrowed_binding_ty,
-                    body,
-                    arm.body,
-                );
+
+                let is_multi = self.ty_has_multiple_variants(&tp.narrowed_ty);
+                let catch_binding_ty = |fallback: Ty| -> Ty {
+                    if is_multi {
+                        Ty::Error {
+                            attr: TyAttr::default(),
+                        }
+                    } else if matches!(narrowed_binding_ty, Ty::Never { .. }) {
+                        fallback
+                    } else {
+                        narrowed_binding_ty.clone()
+                    }
+                };
+
                 let mut saved = Vec::new();
                 if let Some(name) = &binding_name {
                     saved.push((name.clone(), self.locals.get(name).cloned()));
-                    self.locals.insert(name.clone(), pattern_binding_ty.clone());
+                    self.locals
+                        .insert(name.clone(), catch_binding_ty(clause_binding_ty.clone()));
                 }
-                if let Some((arm_bind_name, arm_bind_ty)) =
-                    self.pattern_binding_for_arm(arm.pattern, &narrowed_binding_ty, body, arm.body)
-                {
+                if let Some((arm_bind_name, arm_bind_pat_ty)) = tp.binding {
                     saved.push((
                         arm_bind_name.clone(),
                         self.locals.get(&arm_bind_name).cloned(),
                     ));
-                    let arm_bind_ty =
-                        if self.pattern_has_multiple_variants(arm.pattern, body, arm.body) {
-                            Ty::Error {
-                                attr: TyAttr::default(),
-                            }
-                        } else {
-                            arm_bind_ty
-                        };
-                    self.locals.insert(arm_bind_name, arm_bind_ty);
+                    self.locals
+                        .insert(arm_bind_name, catch_binding_ty(arm_bind_pat_ty));
                 }
 
                 let arm_ty = self.infer_expr(arm.body, body);
@@ -2514,7 +2515,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     }
                 }
 
-                for handled in &matches.definitely_handled {
+                for handled in &throw_matches.definitely_handled {
                     residual.remove(handled);
                 }
             }
@@ -2592,153 +2593,199 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
-    fn pattern_match_cases(
+    fn lower_pattern(
         &mut self,
         pattern_id: PatId,
         scrutinee_ty: &Ty,
         body: &ExprBody,
         at_expr: ExprId,
-    ) -> BTreeSet<String> {
+    ) -> TypedPattern {
         let pattern = &body.patterns[pattern_id];
-        // A typed binding (`x: T` / `_: T`) narrows like the legacy
-        // `TypedBinding`; we detect it by the presence of `narrow`.
-        if pattern.narrow.is_some() {
-            let narrowed = self.pattern_narrowed_type(pattern_id, scrutinee_ty, body, at_expr);
-            return if self.is_subtype(scrutinee_ty, &narrowed) {
+
+        if let Some(ty) = &pattern.narrow {
+            let resolved = self.resolve_type_expr(ty, at_expr);
+            let covers_all = self.is_subtype(scrutinee_ty, &resolved);
+            let match_cases = if covers_all {
                 self.required_match_cases(scrutinee_ty).unwrap_or_default()
             } else {
-                self.required_match_cases(&narrowed).unwrap_or_default()
+                self.required_match_cases(&resolved).unwrap_or_default()
+            };
+            return TypedPattern {
+                narrowed_ty: resolved.clone(),
+                test_ty: Some(resolved.clone()),
+                binding: pattern.binding_name().map(|n| (n.clone(), resolved)),
+                match_cases,
+                covers_all,
             };
         }
+
         match &pattern.kind {
-            PatternKind::Wildcard => self.required_match_cases(scrutinee_ty).unwrap_or_default(),
+            PatternKind::Wildcard => TypedPattern {
+                narrowed_ty: scrutinee_ty.clone(),
+                test_ty: None,
+                binding: None,
+                match_cases: self.required_match_cases(scrutinee_ty).unwrap_or_default(),
+                covers_all: true,
+            },
+
             PatternKind::Bind { name, .. } => {
                 if self.is_bare_type_sugar_binding(name) {
-                    let narrowed =
-                        self.pattern_narrowed_type(pattern_id, scrutinee_ty, body, at_expr);
-                    self.required_match_cases(&narrowed).unwrap_or_default()
-                } else {
-                    self.required_match_cases(scrutinee_ty).unwrap_or_default()
-                }
-            }
-            PatternKind::Literal(lit) => BTreeSet::from([Self::literal_case_name(lit)]),
-            PatternKind::Null => BTreeSet::from(["null".to_string()]),
-            PatternKind::EnumVariant { enum_name, variant } => {
-                // Use the qualified name from scrutinee_ty when the pattern's
-                // enum path matches (bare or namespace-qualified).
-                let qualified_enum = match scrutinee_ty {
-                    Ty::Enum(qtn, _) if Self::enum_name_matches(enum_name, qtn) => qtn.to_string(),
-                    _ => Self::enum_name_path(enum_name),
-                };
-                BTreeSet::from([format!("{qualified_enum}.{variant}")])
-            }
-            PatternKind::Or(parts) => {
-                let mut out = BTreeSet::new();
-                for part in parts {
-                    out.extend(self.pattern_match_cases(*part, scrutinee_ty, body, at_expr));
-                }
-                out
-            }
-            // Class / Type cores aren't yet emitted into TIR; treat as no-op
-            // for now so the exhaustive match doesn't error during the AST
-            // refactor. A later PR plumbs them through pattern compilation.
-            PatternKind::Class { .. } | PatternKind::Type(_) => {
-                self.required_match_cases(scrutinee_ty).unwrap_or_default()
-            }
-        }
-    }
-
-    fn pattern_covers_all_match(
-        &mut self,
-        pattern_id: PatId,
-        scrutinee_ty: &Ty,
-        body: &ExprBody,
-        at_expr: ExprId,
-    ) -> bool {
-        let pattern = &body.patterns[pattern_id];
-        // Typed binding (`x: T` / `_: T`): covers iff scrutinee already narrows to T.
-        if pattern.narrow.is_some() {
-            let narrowed = self.pattern_narrowed_type(pattern_id, scrutinee_ty, body, at_expr);
-            return self.is_subtype(scrutinee_ty, &narrowed);
-        }
-        match &pattern.kind {
-            // Wildcard always covers.
-            PatternKind::Wildcard => true,
-            // Plain binding covers unless it's a bare-type-sugar name like `int`.
-            PatternKind::Bind { name, .. } => !self.is_bare_type_sugar_binding(name),
-            PatternKind::Or(parts) => {
-                if let Some(required) = self.required_match_cases(scrutinee_ty) {
-                    let mut covered = BTreeSet::new();
-                    for part in parts {
-                        covered.extend(self.pattern_match_cases(
-                            *part,
-                            scrutinee_ty,
-                            body,
-                            at_expr,
-                        ));
+                    let resolved = self.resolve_type_expr(
+                        &TypeExpr::Path {
+                            segments: vec![name.clone()],
+                            generic_args: vec![],
+                            attrs: vec![],
+                        },
+                        at_expr,
+                    );
+                    TypedPattern {
+                        narrowed_ty: resolved.clone(),
+                        test_ty: Some(resolved.clone()),
+                        binding: None,
+                        match_cases: self.required_match_cases(&resolved).unwrap_or_default(),
+                        covers_all: false,
                     }
-                    required.iter().all(|c| covered.contains(c))
                 } else {
-                    false
+                    TypedPattern {
+                        narrowed_ty: scrutinee_ty.clone(),
+                        test_ty: None,
+                        binding: Some((name.clone(), scrutinee_ty.clone())),
+                        match_cases: self.required_match_cases(scrutinee_ty).unwrap_or_default(),
+                        covers_all: true,
+                    }
                 }
             }
-            _ => {
-                if let Some(required) = self.required_match_cases(scrutinee_ty) {
-                    let covered = self.pattern_match_cases(pattern_id, scrutinee_ty, body, at_expr);
-                    required.iter().all(|c| covered.contains(c))
+
+            PatternKind::Literal(lit) => TypedPattern {
+                narrowed_ty: Ty::Literal(lit.clone(), Freshness::Regular, TyAttr::default()),
+                test_ty: None,
+                binding: None,
+                match_cases: BTreeSet::from([Self::literal_case_name(lit)]),
+                covers_all: false,
+            },
+
+            PatternKind::Null => TypedPattern {
+                narrowed_ty: Ty::Primitive(PrimitiveType::Null, TyAttr::default()),
+                test_ty: None,
+                binding: None,
+                match_cases: BTreeSet::from(["null".to_string()]),
+                covers_all: false,
+            },
+
+            PatternKind::EnumVariant { enum_name, variant } => {
+                let enum_name = enum_name.clone();
+                let variant = variant.clone();
+                let scrutinee_enum = match scrutinee_ty {
+                    Ty::Enum(qn, _) if Self::enum_name_matches(&enum_name, qn) => Some(qn),
+                    _ => None,
+                };
+                let narrowed_ty = if let Some(qn) = scrutinee_enum {
+                    Ty::EnumVariant(qn.clone(), variant.clone(), TyAttr::default())
                 } else {
-                    false
+                    self.resolve_enum_variant(&enum_name, &variant, at_expr)
+                };
+                let qualified_enum = scrutinee_enum
+                    .map(std::string::ToString::to_string)
+                    .unwrap_or_else(|| Self::enum_name_path(&enum_name));
+                TypedPattern {
+                    test_ty: Some(narrowed_ty.clone()),
+                    match_cases: BTreeSet::from([format!("{qualified_enum}.{variant}")]),
+                    narrowed_ty,
+                    binding: None,
+                    covers_all: false,
                 }
             }
-        }
-    }
 
-    fn pattern_binding_for_arm(
-        &mut self,
-        pattern_id: PatId,
-        scrutinee_ty: &Ty,
-        body: &ExprBody,
-        at_expr: ExprId,
-    ) -> Option<(Name, Ty)> {
-        let pattern = &body.patterns[pattern_id];
-        // `x: T` / `_: T` — typed binding: name (if any) bound to resolved T.
-        if let Some(ty) = &pattern.narrow {
-            let resolved = self.resolve_type_expr(ty, at_expr);
-            return pattern.binding_name().map(|n| (n.clone(), resolved));
-        }
-        match &pattern.kind {
-            PatternKind::Bind { name, .. } if !self.is_bare_type_sugar_binding(name) => {
-                Some((name.clone(), scrutinee_ty.clone()))
+            PatternKind::Class { class, .. } => {
+                let class = class.clone();
+                let lookup = Name::new(class.as_str());
+                let narrowed_ty = self
+                    .package_items
+                    .lookup_type(&self.ns_context, &lookup)
+                    .filter(|def| matches!(def, Definition::Class(_)))
+                    .map(|def| {
+                        let qn =
+                            crate::lower_type_expr::qualify_def(self.context.db(), def, &lookup);
+                        Ty::Class(qn, vec![], TyAttr::default())
+                    })
+                    .unwrap_or_else(|| {
+                        self.context
+                            .report_simple(TirTypeError::UnresolvedName { name: class }, at_expr);
+                        Ty::Unknown {
+                            attr: TyAttr::default(),
+                        }
+                    });
+                TypedPattern {
+                    test_ty: Some(narrowed_ty.clone()),
+                    match_cases: self.required_match_cases(scrutinee_ty).unwrap_or_default(),
+                    narrowed_ty,
+                    binding: None,
+                    covers_all: false,
+                }
             }
-            _ => None,
-        }
-    }
 
-    fn record_pattern_test_types(
-        &mut self,
-        pattern_id: PatId,
-        scrutinee_ty: &Ty,
-        body: &ExprBody,
-        at_expr: ExprId,
-    ) {
-        let pattern = &body.patterns[pattern_id];
-        // Typed binding: record the explicit type.
-        if let Some(ty) = &pattern.narrow {
-            let resolved = self.resolve_type_expr(ty, at_expr);
-            self.bindings.insert(pattern_id, resolved);
-            return;
-        }
-        match &pattern.kind {
-            PatternKind::Bind { name, .. } if self.is_bare_type_sugar_binding(name) => {
-                let ty = self.pattern_narrowed_type(pattern_id, scrutinee_ty, body, at_expr);
-                self.bindings.insert(pattern_id, ty);
+            PatternKind::Type(ty_expr) => {
+                let ty_expr = ty_expr.clone();
+                let resolved = self.resolve_type_expr(&ty_expr, at_expr);
+                let covers_all = self.is_subtype(scrutinee_ty, &resolved);
+                TypedPattern {
+                    test_ty: Some(resolved.clone()),
+                    match_cases: self.required_match_cases(&resolved).unwrap_or_default(),
+                    narrowed_ty: resolved,
+                    binding: None,
+                    covers_all,
+                }
             }
+
             PatternKind::Or(parts) => {
-                for part in parts {
-                    self.record_pattern_test_types(*part, scrutinee_ty, body, at_expr);
+                let parts = parts.clone();
+                let mut narrowed_tys = Vec::new();
+                let mut all_cases = BTreeSet::new();
+
+                for part in &parts {
+                    let sub = self.lower_pattern(*part, scrutinee_ty, body, at_expr);
+                    narrowed_tys.push(sub.narrowed_ty);
+                    all_cases.extend(sub.match_cases);
+                    if let Some(test_ty) = sub.test_ty {
+                        self.bindings.insert(*part, test_ty);
+                    }
+                }
+
+                let covers_all = if let Some(required) = self.required_match_cases(scrutinee_ty) {
+                    required.iter().all(|c| all_cases.contains(c))
+                } else {
+                    false
+                };
+
+                TypedPattern {
+                    narrowed_ty: Self::join_all(&narrowed_tys),
+                    test_ty: None,
+                    binding: None,
+                    match_cases: all_cases,
+                    covers_all,
                 }
             }
-            _ => {}
+        }
+    }
+
+    fn resolve_enum_variant(&mut self, enum_name: &[Name], variant: &Name, at_expr: ExprId) -> Ty {
+        let lookup_name = Name::new(Self::enum_name_path(enum_name));
+        if let Some(def) = self
+            .package_items
+            .lookup_type(&self.ns_context, &lookup_name)
+        {
+            if matches!(def, Definition::Enum(_)) {
+                return Ty::EnumVariant(
+                    crate::lower_type_expr::qualify_def(self.context.db(), def, &lookup_name),
+                    variant.clone(),
+                    TyAttr::default(),
+                );
+            }
+        }
+        self.context
+            .report_simple(TirTypeError::UnresolvedName { name: lookup_name }, at_expr);
+        Ty::Unknown {
+            attr: TyAttr::default(),
         }
     }
 
@@ -2754,98 +2801,6 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
         }
         self.lower_pattern_type_expr(ty, at_expr)
-    }
-
-    fn pattern_narrowed_type(
-        &mut self,
-        pattern_id: PatId,
-        scrutinee_ty: &Ty,
-        body: &ExprBody,
-        at_expr: ExprId,
-    ) -> Ty {
-        let pattern = &body.patterns[pattern_id];
-        // `pat: T` — explicit narrow wins regardless of core kind.
-        if let Some(ty) = &pattern.narrow {
-            return self.resolve_type_expr(ty, at_expr);
-        }
-        match &pattern.kind {
-            // Wildcard contributes the full scrutinee type.
-            PatternKind::Wildcard => scrutinee_ty.clone(),
-            PatternKind::Bind { name, .. } => {
-                if let Some(prim_ty) = bare_type_sugar_to_ty(name) {
-                    prim_ty
-                } else if self.is_bare_type_sugar_binding(name) {
-                    self.lower_pattern_type_expr(
-                        &TypeExpr::Path {
-                            segments: vec![name.clone()],
-                            generic_args: vec![],
-                            attrs: vec![],
-                        },
-                        at_expr,
-                    )
-                } else {
-                    scrutinee_ty.clone()
-                }
-            }
-            PatternKind::Literal(lit) => Ty::Literal(
-                lit.clone(),
-                crate::ty::Freshness::Regular,
-                TyAttr::default(),
-            ),
-            PatternKind::Null => Ty::Primitive(PrimitiveType::Null, TyAttr::default()),
-            PatternKind::EnumVariant { enum_name, variant } => {
-                if let Ty::Enum(qn, _) = scrutinee_ty {
-                    if Self::enum_name_matches(enum_name, qn) {
-                        return Ty::EnumVariant(qn.clone(), variant.clone(), TyAttr::default());
-                    }
-                }
-                let lookup_name = Name::new(Self::enum_name_path(enum_name));
-                if let Some(def) = self
-                    .package_items
-                    .lookup_type(&self.ns_context, &lookup_name)
-                {
-                    if matches!(def, Definition::Enum(_)) {
-                        return Ty::EnumVariant(
-                            crate::lower_type_expr::qualify_def(
-                                self.context.db(),
-                                def,
-                                &lookup_name,
-                            ),
-                            variant.clone(),
-                            TyAttr::default(),
-                        );
-                    }
-                }
-                Ty::Unknown {
-                    attr: TyAttr::default(),
-                }
-            }
-            PatternKind::Or(parts) => {
-                let mut tys = Vec::new();
-                for part in parts {
-                    tys.push(self.pattern_narrowed_type(*part, scrutinee_ty, body, at_expr));
-                }
-                Self::join_all(&tys)
-            }
-            // Class destructure narrows to the named class. Inner field
-            // patterns are checked separately during pattern compilation
-            // (see HIR/MIR class-destructure desugaring).
-            PatternKind::Class { class, .. } => {
-                let lookup = Name::new(class.as_str());
-                if let Some(def) = self.package_items.lookup_type(&self.ns_context, &lookup) {
-                    if matches!(def, Definition::Class(_)) {
-                        let qn =
-                            crate::lower_type_expr::qualify_def(self.context.db(), def, &lookup);
-                        return Ty::Class(qn, vec![], TyAttr::default());
-                    }
-                }
-                Ty::Unknown {
-                    attr: TyAttr::default(),
-                }
-            }
-            // Bare type pattern in match-arm position narrows to that type.
-            PatternKind::Type(ty_expr) => self.resolve_type_expr(ty_expr, at_expr),
-        }
     }
 
     fn lower_pattern_type_expr(&mut self, expr: &TypeExpr, at_expr: ExprId) -> Ty {
@@ -2870,63 +2825,6 @@ impl<'db> TypeInferenceBuilder<'db> {
             baml_base::Literal::Float(v) => v.clone(),
             baml_base::Literal::String(v) => format!("{v:?}"),
             baml_base::Literal::Bool(v) => v.to_string(),
-        }
-    }
-
-    /// Return the subset of a catch pattern that can match `baml.panics.*`
-    /// values, if any.
-    fn pattern_panic_narrowed_type(
-        &mut self,
-        pattern_id: baml_compiler2_ast::PatId,
-        body: &baml_compiler2_ast::ExprBody,
-        at_expr: ExprId,
-    ) -> Option<Ty> {
-        let pat = &body.patterns[pattern_id];
-        if let Some(ty) = &pat.narrow {
-            let narrowed = self.resolve_type_expr(ty, at_expr);
-            return self.ty_panic_subset(&narrowed);
-        }
-        match &pat.kind {
-            PatternKind::Bind { name, .. } => {
-                if !self.is_bare_type_sugar_binding(name) {
-                    return None;
-                }
-                let narrowed = if let Some(prim_ty) = bare_type_sugar_to_ty(name) {
-                    prim_ty
-                } else {
-                    self.lower_pattern_type_expr(
-                        &TypeExpr::Path {
-                            segments: vec![name.clone()],
-                            generic_args: vec![],
-                            attrs: vec![],
-                        },
-                        at_expr,
-                    )
-                };
-                self.ty_panic_subset(&narrowed)
-            }
-            PatternKind::Type(ty_expr) => {
-                let narrowed = self.resolve_type_expr(ty_expr, at_expr);
-                self.ty_panic_subset(&narrowed)
-            }
-            PatternKind::Or(parts) => {
-                let mut panic_members = Vec::new();
-                for part in parts {
-                    if let Some(ty) = self.pattern_panic_narrowed_type(*part, body, at_expr) {
-                        panic_members.push(ty);
-                    }
-                }
-                if panic_members.is_empty() {
-                    None
-                } else {
-                    Some(Self::join_all(&panic_members))
-                }
-            }
-            PatternKind::Wildcard
-            | PatternKind::Literal(_)
-            | PatternKind::Null
-            | PatternKind::EnumVariant { .. }
-            | PatternKind::Class { .. } => None,
         }
     }
 
@@ -2955,45 +2853,6 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
             _ => None,
         }
-    }
-
-    fn pattern_binding_ty_for_catch(
-        &mut self,
-        pattern_id: PatId,
-        clause_binding_ty: &Ty,
-        narrowed_binding_ty: &Ty,
-        body: &ExprBody,
-        at_expr: ExprId,
-    ) -> Ty {
-        if self.pattern_has_multiple_variants(pattern_id, body, at_expr) {
-            // Multi-variant union binding — require narrowing (e.g. match)
-            // before field access. Use Error so diagnostics show the actual
-            // type rather than the stdlib `unknown`.
-            Ty::Error {
-                attr: TyAttr::default(),
-            }
-        } else if matches!(narrowed_binding_ty, Ty::Never { .. }) {
-            clause_binding_ty.clone()
-        } else {
-            narrowed_binding_ty.clone()
-        }
-    }
-
-    fn pattern_has_multiple_variants(
-        &mut self,
-        pattern_id: PatId,
-        body: &ExprBody,
-        at_expr: ExprId,
-    ) -> bool {
-        let pattern_ty = self.pattern_narrowed_type(
-            pattern_id,
-            &Ty::BuiltinUnknown {
-                attr: TyAttr::default(),
-            },
-            body,
-            at_expr,
-        );
-        self.ty_has_multiple_variants(&pattern_ty)
     }
 
     fn ty_has_multiple_variants(&self, ty: &Ty) -> bool {
@@ -3064,151 +2923,11 @@ impl<'db> TypeInferenceBuilder<'db> {
         Self::join_all(&tys)
     }
 
-    fn match_throw_types_for_pattern(
-        &mut self,
-        pattern_id: PatId,
-        throw_types: &BTreeSet<Ty>,
-        body: &ExprBody,
-        at_expr: ExprId,
-    ) -> ThrowPatternMatches {
-        let mut out = ThrowPatternMatches::default();
-        for throw_fact in throw_types {
-            match self.pattern_match_strength(pattern_id, throw_fact, body, at_expr) {
-                PatternMatchStrength::NoMatch => {}
-                PatternMatchStrength::MayMatch => {
-                    out.may_match.insert(throw_fact.clone());
-                }
-                PatternMatchStrength::DefiniteMatch => {
-                    out.may_match.insert(throw_fact.clone());
-                    out.definitely_handled.insert(throw_fact.clone());
-                }
-            }
-        }
-        out
-    }
-
-    fn pattern_match_strength(
-        &mut self,
-        pattern_id: PatId,
-        throw_fact: &Ty,
-        body: &ExprBody,
-        at_expr: ExprId,
-    ) -> PatternMatchStrength {
-        let is_unknown = matches!(
-            throw_fact,
-            Ty::Unknown { .. } | Ty::BuiltinUnknown { .. } | Ty::Error { .. }
-        );
-        let pat = &body.patterns[pattern_id];
-        if let Some(ty) = &pat.narrow {
-            let lowered = self.lower_pattern_type_expr(ty, at_expr);
-            return if Self::ty_covers_fact(&lowered, throw_fact) {
-                PatternMatchStrength::DefiniteMatch
-            } else if is_unknown {
-                PatternMatchStrength::MayMatch
-            } else {
-                PatternMatchStrength::NoMatch
-            };
-        }
-        match &pat.kind {
-            PatternKind::Wildcard => PatternMatchStrength::DefiniteMatch,
-            PatternKind::Bind { name, .. } => {
-                if self.is_bare_type_sugar_binding(name) {
-                    let lowered = if let Some(prim_ty) = bare_type_sugar_to_ty(name) {
-                        prim_ty
-                    } else {
-                        self.lower_pattern_type_expr(
-                            &TypeExpr::Path {
-                                segments: vec![name.clone()],
-                                generic_args: vec![],
-                                attrs: vec![],
-                            },
-                            at_expr,
-                        )
-                    };
-                    if Self::ty_covers_fact(&lowered, throw_fact) {
-                        PatternMatchStrength::DefiniteMatch
-                    } else if is_unknown {
-                        PatternMatchStrength::MayMatch
-                    } else {
-                        PatternMatchStrength::NoMatch
-                    }
-                } else {
-                    PatternMatchStrength::DefiniteMatch
-                }
-            }
-            PatternKind::Type(ty_expr) => {
-                let lowered = self.resolve_type_expr(ty_expr, at_expr);
-                if Self::ty_covers_fact(&lowered, throw_fact) {
-                    PatternMatchStrength::DefiniteMatch
-                } else if is_unknown {
-                    PatternMatchStrength::MayMatch
-                } else {
-                    PatternMatchStrength::NoMatch
-                }
-            }
-            PatternKind::Literal(lit) => {
-                let lit_ty = Ty::Primitive(PrimitiveType::from_literal(lit), TyAttr::default());
-                if &lit_ty == throw_fact || is_unknown {
-                    PatternMatchStrength::MayMatch
-                } else {
-                    PatternMatchStrength::NoMatch
-                }
-            }
-            PatternKind::Null => {
-                if matches!(throw_fact, Ty::Primitive(PrimitiveType::Null, _)) || is_unknown {
-                    PatternMatchStrength::DefiniteMatch
-                } else {
-                    PatternMatchStrength::NoMatch
-                }
-            }
-            PatternKind::EnumVariant { enum_name, variant } => {
-                let matches_variant = match throw_fact {
-                    Ty::EnumVariant(qn, v, _) => {
-                        Self::enum_name_matches(enum_name, qn) && v == variant
-                    }
-                    Ty::Enum(qn, _) => Self::enum_name_matches(enum_name, qn),
-                    _ => false,
-                };
-                if matches_variant {
-                    PatternMatchStrength::DefiniteMatch
-                } else if is_unknown {
-                    PatternMatchStrength::MayMatch
-                } else {
-                    PatternMatchStrength::NoMatch
-                }
-            }
-            PatternKind::Class { .. } => {
-                let lowered = self.pattern_narrowed_type(pattern_id, throw_fact, body, at_expr);
-                if Self::ty_covers_fact(&lowered, throw_fact) {
-                    PatternMatchStrength::DefiniteMatch
-                } else if is_unknown {
-                    PatternMatchStrength::MayMatch
-                } else {
-                    PatternMatchStrength::NoMatch
-                }
-            }
-            PatternKind::Or(parts) => {
-                let mut saw_may = false;
-                for part in parts {
-                    match self.pattern_match_strength(*part, throw_fact, body, at_expr) {
-                        PatternMatchStrength::DefiniteMatch => {
-                            return PatternMatchStrength::DefiniteMatch;
-                        }
-                        PatternMatchStrength::MayMatch => saw_may = true,
-                        PatternMatchStrength::NoMatch => {}
-                    }
-                }
-                if saw_may {
-                    PatternMatchStrength::MayMatch
-                } else {
-                    PatternMatchStrength::NoMatch
-                }
-            }
-        }
-    }
-
     /// Check if a pattern type covers a throw fact type.
     fn ty_covers_fact(pattern_ty: &Ty, fact: &Ty) -> bool {
+        if pattern_ty == fact {
+            return true;
+        }
         match pattern_ty {
             Ty::Primitive(p, _) => match fact {
                 Ty::Primitive(fp, _) => p == fp,
@@ -3241,6 +2960,37 @@ impl<'db> TypeInferenceBuilder<'db> {
             Ty::BuiltinUnknown { .. } | Ty::Unknown { .. } | Ty::Error { .. } => true,
             _ => false,
         }
+    }
+
+    fn ty_match_strength(narrowed_ty: &Ty, throw_fact: &Ty) -> PatternMatchStrength {
+        let is_unknown = matches!(
+            throw_fact,
+            Ty::Unknown { .. } | Ty::BuiltinUnknown { .. } | Ty::Error { .. }
+        );
+        if Self::ty_covers_fact(narrowed_ty, throw_fact) {
+            PatternMatchStrength::DefiniteMatch
+        } else if is_unknown {
+            PatternMatchStrength::MayMatch
+        } else {
+            PatternMatchStrength::NoMatch
+        }
+    }
+
+    fn throw_matches_from_ty(narrowed_ty: &Ty, throw_types: &BTreeSet<Ty>) -> ThrowPatternMatches {
+        let mut out = ThrowPatternMatches::default();
+        for throw_fact in throw_types {
+            match Self::ty_match_strength(narrowed_ty, throw_fact) {
+                PatternMatchStrength::NoMatch => {}
+                PatternMatchStrength::MayMatch => {
+                    out.may_match.insert(throw_fact.clone());
+                }
+                PatternMatchStrength::DefiniteMatch => {
+                    out.may_match.insert(throw_fact.clone());
+                    out.definitely_handled.insert(throw_fact.clone());
+                }
+            }
+        }
+        out
     }
 
     fn collect_effective_throws(&self, body: &ExprBody) -> BTreeSet<Ty> {

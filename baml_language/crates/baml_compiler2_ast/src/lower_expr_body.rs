@@ -1045,7 +1045,7 @@ impl LoweringContext {
         }
 
         let arm = MatchArm {
-            pattern: pattern.unwrap_or_else(|| self.patterns.alloc(Pattern::wildcard())),
+            pattern: pattern.unwrap_or_else(|| self.alloc_pattern(Pattern::wildcard(), arm_span)),
             guard,
             body: body.unwrap_or_else(|| self.exprs.alloc(Expr::Missing)),
         };

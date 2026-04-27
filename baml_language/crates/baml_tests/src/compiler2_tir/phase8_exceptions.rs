@@ -279,7 +279,7 @@ function fail(which: int) -> int {
 
 function f(which: int) -> int {
   return fail(which) catch (e) {
-    AppError | DivisionByZero => e.code
+    AppError | baml.panics.DivisionByZero => e.code
     _ => 0
   }
 }"#,

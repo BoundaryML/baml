@@ -4760,7 +4760,10 @@ impl LoweringContext<'_> {
                 self.builder
                     .branch(Operand::Copy(Place::Local(test_local)), success, failure);
             }
-            AstPatternKind::EnumVariant { enum_name, variant } => {
+            AstPatternKind::EnumVariant {
+                enum_name: _,
+                variant,
+            } => {
                 let variant = variant.clone();
                 let enum_ref = if let Some(Tir2Ty::EnumVariant(qtn, _, _)) =
                     self.pat_types.get(&(self.current_scope, pat_id))
@@ -4771,19 +4774,8 @@ impl LoweringContext<'_> {
                         name: qtn.name().clone(),
                     }
                 } else {
-                    let pkg_info = file_package(self.db, self.file);
-                    let joined_name = Name::new(
-                        enum_name
-                            .iter()
-                            .map(smol_str::SmolStr::as_str)
-                            .collect::<Vec<_>>()
-                            .join("."),
-                    );
-                    ItemRef::EnumType {
-                        package: pkg_info.package.clone(),
-                        namespace: pkg_info.namespace_path,
-                        name: joined_name,
-                    }
+                    self.builder.goto(failure);
+                    return;
                 };
                 let test = Rvalue::BinaryOp {
                     op: BinOp::Eq,

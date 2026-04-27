@@ -237,14 +237,16 @@ function user.auth.AuthMatchesLlmStatus(s: llm.Status) -> string {
 
 function user.auth.AuthMatchesRootStatus(s: Status) -> string {
     load_var s
-    load_const undefined_enum::user.auth.root.Status.Ok
+    load_const user.Status.Ok
+    alloc_variant user.Status
     cmp_op ==
     pop_jump_if_false L0
     jump L3
 
   L0:
     load_var s
-    load_const undefined_enum::user.auth.root.Status.Failed
+    load_const user.Status.Failed
+    alloc_variant user.Status
     cmp_op ==
     pop_jump_if_false L1
     jump L2
@@ -428,14 +430,16 @@ function user.llm.LlmIdentity(cfg: Config) -> Config {
 
 function user.llm.LlmMatchesRootStatus(s: Status) -> string {
     load_var s
-    load_const undefined_enum::user.llm.root.Status.Ok
+    load_const user.Status.Ok
+    alloc_variant user.Status
     cmp_op ==
     pop_jump_if_false L0
     jump L3
 
   L0:
     load_var s
-    load_const undefined_enum::user.llm.root.Status.Failed
+    load_const user.Status.Failed
+    alloc_variant user.Status
     cmp_op ==
     pop_jump_if_false L1
     jump L2
@@ -707,14 +711,16 @@ function user.llm.openai.OpenAIMatchesLlmStatus(s: llm.Status) -> string {
 
 function user.llm.openai.OpenAIMatchesRootStatus(s: Status) -> string {
     load_var s
-    load_const undefined_enum::user.llm.openai.root.Status.Ok
+    load_const user.Status.Ok
+    alloc_variant user.Status
     cmp_op ==
     pop_jump_if_false L0
     jump L3
 
   L0:
     load_var s
-    load_const undefined_enum::user.llm.openai.root.Status.Failed
+    load_const user.Status.Failed
+    alloc_variant user.Status
     cmp_op ==
     pop_jump_if_false L1
     jump L2

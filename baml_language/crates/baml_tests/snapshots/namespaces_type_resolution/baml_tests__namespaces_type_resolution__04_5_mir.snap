@@ -403,12 +403,12 @@ fn user.auth.AuthMatchesRootStatus(s: Status) -> string {
     let _3: bool
 
     bb0: {
-        _2 = copy _1 == const user.auth.root.Status.Ok;
+        _2 = copy _1 == const user.Status.Ok;
         branch copy _2 -> [bb4, bb1];
     }
 
     bb1: {
-        _3 = copy _1 == const user.auth.root.Status.Failed;
+        _3 = copy _1 == const user.Status.Failed;
         branch copy _3 -> [bb3, bb2];
     }
 
@@ -729,12 +729,12 @@ fn user.llm.LlmMatchesRootStatus(s: Status) -> string {
     let _3: bool
 
     bb0: {
-        _2 = copy _1 == const user.llm.root.Status.Ok;
+        _2 = copy _1 == const user.Status.Ok;
         branch copy _2 -> [bb4, bb1];
     }
 
     bb1: {
-        _3 = copy _1 == const user.llm.root.Status.Failed;
+        _3 = copy _1 == const user.Status.Failed;
         branch copy _3 -> [bb3, bb2];
     }
 
@@ -1161,12 +1161,12 @@ fn user.llm.openai.OpenAIMatchesRootStatus(s: Status) -> string {
     let _3: bool
 
     bb0: {
-        _2 = copy _1 == const user.llm.openai.root.Status.Ok;
+        _2 = copy _1 == const user.Status.Ok;
         branch copy _2 -> [bb4, bb1];
     }
 
     bb1: {
-        _3 = copy _1 == const user.llm.openai.root.Status.Failed;
+        _3 = copy _1 == const user.Status.Failed;
         branch copy _3 -> [bb3, bb2];
     }
 

@@ -94,6 +94,9 @@ fn validate_expr_body(body: &ExprBody, diagnostics: &mut Vec<(String, text_size:
         if let Some(ty) = &pat.narrow {
             validate_type_expr_tree(ty, diagnostics);
         }
+        if let crate::ast::PatternKind::Type(ty) = &pat.kind {
+            validate_type_expr_tree(ty, diagnostics);
+        }
     }
 
     // Recurse into lambda bodies — they have their own FunctionDef with nested ExprBody.
