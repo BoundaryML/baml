@@ -188,6 +188,109 @@ impl TypeExpr {
     }
 }
 
+impl std::fmt::Display for TypeExpr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        fn needs_parens(ty: &TypeExpr) -> bool {
+            matches!(ty, TypeExpr::Union { .. } | TypeExpr::Function { .. })
+        }
+
+        fn write_postfix_base(f: &mut std::fmt::Formatter<'_>, ty: &TypeExpr) -> std::fmt::Result {
+            if needs_parens(ty) {
+                write!(f, "({ty})")
+            } else {
+                write!(f, "{ty}")
+            }
+        }
+
+        match self {
+            TypeExpr::Path {
+                segments,
+                generic_args,
+                ..
+            } => {
+                let path = segments
+                    .iter()
+                    .map(smol_str::SmolStr::as_str)
+                    .collect::<Vec<_>>()
+                    .join(".");
+                write!(f, "{path}")?;
+                if !generic_args.is_empty() {
+                    write!(f, "<")?;
+                    for (i, arg) in generic_args.iter().enumerate() {
+                        if i > 0 {
+                            write!(f, ", ")?;
+                        }
+                        write!(f, "{arg}")?;
+                    }
+                    write!(f, ">")?;
+                }
+                Ok(())
+            }
+            TypeExpr::Int { .. } => write!(f, "int"),
+            TypeExpr::Float { .. } => write!(f, "float"),
+            TypeExpr::String { .. } => write!(f, "string"),
+            TypeExpr::Bool { .. } => write!(f, "bool"),
+            TypeExpr::Null { .. } => write!(f, "null"),
+            TypeExpr::Never { .. } => write!(f, "never"),
+            TypeExpr::Void { .. } => write!(f, "void"),
+            TypeExpr::Uint8Array { .. } => write!(f, "uint8array"),
+            TypeExpr::Media { kind, .. } => write!(f, "{}", format!("{kind:?}").to_lowercase()),
+            TypeExpr::Optional { inner, .. } => {
+                write_postfix_base(f, inner)?;
+                write!(f, "?")
+            }
+            TypeExpr::List { inner, .. } => {
+                write_postfix_base(f, inner)?;
+                write!(f, "[]")
+            }
+            TypeExpr::Map { key, value, .. } => write!(f, "map<{key}, {value}>"),
+            TypeExpr::Union { variants, .. } => {
+                for (i, v) in variants.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, " | ")?;
+                    }
+                    write!(f, "{v}")?;
+                }
+                Ok(())
+            }
+            TypeExpr::Literal { value, .. } => write!(f, "{value}"),
+            TypeExpr::Function {
+                params,
+                ret,
+                throws,
+                ..
+            } => {
+                write!(f, "(")?;
+                for (i, p) in params.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    if let Some(name) = &p.name {
+                        write!(f, "{}: {}", name.as_str(), p.ty)?;
+                    } else {
+                        write!(f, "{}", p.ty)?;
+                    }
+                }
+                write!(f, ") -> ")?;
+                if matches!(**ret, TypeExpr::Function { .. }) {
+                    write!(f, "({ret})")?;
+                } else {
+                    write!(f, "{ret}")?;
+                }
+                if let Some(throws) = throws {
+                    write!(f, " throws {throws}")?;
+                }
+                Ok(())
+            }
+            TypeExpr::BuiltinUnknown { .. } => write!(f, "unknown"),
+            TypeExpr::Type { .. } => write!(f, "type"),
+            TypeExpr::Rust { .. } => write!(f, "$rust_type"),
+            TypeExpr::Error { .. } => write!(f, "error"),
+            TypeExpr::Unknown { .. } => write!(f, "?"),
+        }
+    }
+}
+
 /// A parameter in a function type expression.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct FunctionTypeParam {

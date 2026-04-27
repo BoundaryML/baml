@@ -2957,7 +2957,6 @@ impl<'db> TypeInferenceBuilder<'db> {
             Ty::EnumVariant(qn, variant, _) => {
                 matches!(fact, Ty::EnumVariant(fqn, fv, _) if fqn == qn && fv == variant)
             }
-            Ty::BuiltinUnknown { .. } | Ty::Unknown { .. } | Ty::Error { .. } => true,
             _ => false,
         }
     }
@@ -2972,6 +2971,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             Ty::EnumVariant(qn, _, _) => {
                 matches!(fact, Ty::Enum(fqn, _) if fqn == qn)
             }
+            Ty::BuiltinUnknown { .. } | Ty::Unknown { .. } | Ty::Error { .. } => true,
             _ => false,
         }
     }

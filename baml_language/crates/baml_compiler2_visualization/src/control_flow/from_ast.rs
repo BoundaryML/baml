@@ -670,7 +670,7 @@ impl<'a> AstGraphBuilder<'a> {
                 let parts: Vec<_> = pats.iter().map(|p| self.format_pattern(*p)).collect();
                 parts.join(" | ")
             }
-            ast::PatternKind::Type(ty) => format!("{ty:?}"),
+            ast::PatternKind::Type(ty) => ty.to_string(),
             ast::PatternKind::Class { class, fields } => {
                 let field_strs: Vec<_> = fields
                     .iter()
@@ -686,7 +686,7 @@ impl<'a> AstGraphBuilder<'a> {
             }
         };
         if let Some(narrow) = &pat.narrow {
-            format!("{base}: {narrow:?}")
+            format!("{base}: {narrow}")
         } else {
             base
         }

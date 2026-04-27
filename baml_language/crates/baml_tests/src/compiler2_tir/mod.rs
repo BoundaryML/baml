@@ -25,7 +25,7 @@ pub(crate) mod support {
     use std::fmt::Write;
 
     use baml_compiler2_ast::{
-        CatchClauseKind, Expr, ExprBody, ExprId, Literal, PatId, Stmt, StmtId, TypeExpr,
+        CatchClauseKind, Expr, ExprBody, ExprId, Literal, PatId, Stmt, StmtId,
     };
     use baml_compiler2_hir::{
         body::FunctionBody, contributions::Definition, loc::FunctionLoc, scope::ScopeKind,
@@ -40,94 +40,6 @@ pub(crate) mod support {
     use baml_project::ProjectDatabase;
 
     // ── Rendering helpers ────────────────────────────────────────────────────
-
-    fn type_expr_to_string(ty: &TypeExpr) -> String {
-        fn type_expr_needs_postfix_parens(ty: &TypeExpr) -> bool {
-            matches!(ty, TypeExpr::Union { .. } | TypeExpr::Function { .. })
-        }
-
-        fn type_expr_as_postfix_base(ty: &TypeExpr) -> String {
-            let rendered = type_expr_to_string(ty);
-            if type_expr_needs_postfix_parens(ty) {
-                format!("({rendered})")
-            } else {
-                rendered
-            }
-        }
-
-        fn type_expr_as_function_result(ty: &TypeExpr) -> String {
-            let rendered = type_expr_to_string(ty);
-            if matches!(ty, TypeExpr::Function { .. }) {
-                format!("({rendered})")
-            } else {
-                rendered
-            }
-        }
-
-        match ty {
-            TypeExpr::Path { segments, .. } => segments
-                .iter()
-                .map(|n| n.as_str())
-                .collect::<Vec<_>>()
-                .join("."),
-            TypeExpr::Int { .. } => "int".into(),
-            TypeExpr::Float { .. } => "float".into(),
-            TypeExpr::String { .. } => "string".into(),
-            TypeExpr::Bool { .. } => "bool".into(),
-            TypeExpr::Null { .. } => "null".into(),
-            TypeExpr::Never { .. } => "never".into(),
-            TypeExpr::Void { .. } => "void".into(),
-            TypeExpr::Uint8Array { .. } => "uint8array".into(),
-            TypeExpr::Media { kind: k, .. } => format!("{:?}", k).to_lowercase(),
-            TypeExpr::Optional { inner, .. } => format!("{}?", type_expr_as_postfix_base(inner)),
-            TypeExpr::List { inner, .. } => format!("{}[]", type_expr_as_postfix_base(inner)),
-            TypeExpr::Map { key, value, .. } => format!(
-                "map<{}, {}>",
-                type_expr_to_string(key),
-                type_expr_to_string(value)
-            ),
-            TypeExpr::Union {
-                variants: members, ..
-            } => members
-                .iter()
-                .map(type_expr_to_string)
-                .collect::<Vec<_>>()
-                .join(" | "),
-            TypeExpr::Literal { value: lit, .. } => lit.to_string(),
-            TypeExpr::Function {
-                params,
-                ret,
-                throws,
-                ..
-            } => {
-                let ps: Vec<String> = params
-                    .iter()
-                    .map(|p| {
-                        p.name
-                            .as_ref()
-                            .map(|n| format!("{}: {}", n.as_str(), type_expr_to_string(&p.ty)))
-                            .unwrap_or_else(|| type_expr_to_string(&p.ty))
-                    })
-                    .collect();
-                let throws = throws
-                    .as_deref()
-                    .map(type_expr_to_string)
-                    .map(|throws| format!(" throws {throws}"))
-                    .unwrap_or_default();
-                format!(
-                    "({}) -> {}{}",
-                    ps.join(", "),
-                    type_expr_as_function_result(ret),
-                    throws
-                )
-            }
-            TypeExpr::BuiltinUnknown { .. } => "unknown".into(),
-            TypeExpr::Type { .. } => "type".into(),
-            TypeExpr::Rust { .. } => "$rust_type".into(),
-            TypeExpr::Error { .. } => "error".into(),
-            TypeExpr::Unknown { .. } => "?".into(),
-        }
-    }
 
     fn pat_desc(pat_id: PatId, body: &ExprBody) -> String {
         use baml_compiler2_ast::PatternKind;
@@ -152,7 +64,7 @@ pub(crate) mod support {
                     .join(", ");
                 format!("{class} {{ {fs} }}")
             }
-            PatternKind::Type(ty) => type_expr_to_string(ty),
+            PatternKind::Type(ty) => ty.to_string(),
             PatternKind::Literal(lit) => lit.to_string(),
             PatternKind::Null => "null".into(),
             PatternKind::EnumVariant { enum_name, variant } => {
@@ -174,7 +86,7 @@ pub(crate) mod support {
                 .join(" | "),
         };
         match &pat.narrow {
-            Some(ty) => format!("{core}: {}", type_expr_to_string(ty)),
+            Some(ty) => format!("{core}: {ty}"),
             None => core,
         }
     }
@@ -322,7 +234,7 @@ pub(crate) mod support {
             .iter()
             .map(|p| {
                 if let Some(ref te) = p.type_expr {
-                    format!("{}: {}", p.name, type_expr_to_string(&te.expr))
+                    format!("{}: {}", p.name, te.expr)
                 } else {
                     p.name.to_string()
                 }
@@ -331,12 +243,12 @@ pub(crate) mod support {
         let ret = func_def
             .return_type
             .as_ref()
-            .map(|te| format!(" {}", type_expr_to_string(&te.expr)))
+            .map(|te| format!(" {}", te.expr))
             .unwrap_or_default();
         let throws = func_def
             .throws
             .as_ref()
-            .map(|te| format!(" throws {}", type_expr_to_string(&te.expr)))
+            .map(|te| format!(" throws {}", te.expr))
             .unwrap_or_default();
         let generics = if func_def.generic_params.is_empty() {
             String::new()
@@ -364,7 +276,7 @@ pub(crate) mod support {
         local_type_names: &std::collections::HashSet<&str>,
     ) -> String {
         let qualify = |te: &baml_compiler2_ast::TypeExpr| -> String {
-            let raw = type_expr_to_string(te);
+            let raw = te.to_string();
             if local_type_names.contains(raw.as_str()) {
                 format!("{prefix}{raw}")
             } else {

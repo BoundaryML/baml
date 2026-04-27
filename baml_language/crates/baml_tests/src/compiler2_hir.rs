@@ -8,7 +8,6 @@
 #[cfg(test)]
 mod tests {
     use baml_base::Name;
-    use baml_compiler2_ast::{FunctionTypeParam, TypeExpr};
     use baml_compiler2_hir::{
         file_semantic_index,
         loc::FunctionLoc,
@@ -26,111 +25,6 @@ mod tests {
         let mut db = ProjectDatabase::new();
         db.set_project_root(std::path::Path::new("."));
         db
-    }
-
-    fn type_expr_to_string(ty: &TypeExpr) -> String {
-        fn type_expr_needs_postfix_parens(ty: &TypeExpr) -> bool {
-            matches!(ty, TypeExpr::Union { .. } | TypeExpr::Function { .. })
-        }
-
-        fn type_expr_as_postfix_base(ty: &TypeExpr) -> String {
-            let rendered = type_expr_to_string(ty);
-            if type_expr_needs_postfix_parens(ty) {
-                format!("({rendered})")
-            } else {
-                rendered
-            }
-        }
-
-        fn type_expr_as_function_result(ty: &TypeExpr) -> String {
-            let rendered = type_expr_to_string(ty);
-            if matches!(ty, TypeExpr::Function { .. }) {
-                format!("({rendered})")
-            } else {
-                rendered
-            }
-        }
-
-        match ty {
-            TypeExpr::Path {
-                segments,
-                generic_args,
-                ..
-            } => {
-                let path = segments
-                    .iter()
-                    .map(|n| n.as_str())
-                    .collect::<Vec<_>>()
-                    .join(".");
-                if generic_args.is_empty() {
-                    path
-                } else {
-                    format!(
-                        "{}<{}>",
-                        path,
-                        generic_args
-                            .iter()
-                            .map(type_expr_to_string)
-                            .collect::<Vec<_>>()
-                            .join(", ")
-                    )
-                }
-            }
-            TypeExpr::Int { .. } => "int".into(),
-            TypeExpr::Float { .. } => "float".into(),
-            TypeExpr::String { .. } => "string".into(),
-            TypeExpr::Bool { .. } => "bool".into(),
-            TypeExpr::Null { .. } => "null".into(),
-            TypeExpr::Never { .. } => "never".into(),
-            TypeExpr::Void { .. } => "void".into(),
-            TypeExpr::Uint8Array { .. } => "uint8array".into(),
-            TypeExpr::Media { kind, .. } => format!("{kind:?}").to_lowercase(),
-            TypeExpr::Optional { inner, .. } => format!("{}?", type_expr_as_postfix_base(inner)),
-            TypeExpr::List { inner, .. } => format!("{}[]", type_expr_as_postfix_base(inner)),
-            TypeExpr::Map { key, value, .. } => {
-                format!(
-                    "map<{}, {}>",
-                    type_expr_to_string(key),
-                    type_expr_to_string(value)
-                )
-            }
-            TypeExpr::Union { variants, .. } => variants
-                .iter()
-                .map(type_expr_to_string)
-                .collect::<Vec<_>>()
-                .join(" | "),
-            TypeExpr::Literal { value, .. } => value.to_string(),
-            TypeExpr::Function {
-                params,
-                ret,
-                throws,
-                ..
-            } => {
-                let params = params
-                    .iter()
-                    .map(|FunctionTypeParam { name, ty }| {
-                        name.as_ref()
-                            .map(|name| format!("{name}: {}", type_expr_to_string(ty)))
-                            .unwrap_or_else(|| type_expr_to_string(ty))
-                    })
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                let throws = throws
-                    .as_deref()
-                    .map(type_expr_to_string)
-                    .map(|throws| format!(" throws {throws}"))
-                    .unwrap_or_default();
-                format!(
-                    "({params}) -> {}{throws}",
-                    type_expr_as_function_result(ret)
-                )
-            }
-            TypeExpr::BuiltinUnknown { .. } => "unknown".into(),
-            TypeExpr::Type { .. } => "type".into(),
-            TypeExpr::Rust { .. } => "$rust_type".into(),
-            TypeExpr::Error { .. } => "error".into(),
-            TypeExpr::Unknown { .. } => "unknown".into(),
-        }
     }
 
     fn find_function_loc<'db>(
@@ -989,7 +883,7 @@ mod tests {
             vec![Name::new("__effect_param_0")]
         );
         assert_eq!(
-            type_expr_to_string(&sig.params[0].1),
+            sig.params[0].1.to_string(),
             "(value: int) -> string throws __effect_param_0"
         );
     }
@@ -1005,7 +899,7 @@ mod tests {
         let sig = elaborated_function_signature(&db, find_function_loc(&db, file, "use_alias"));
 
         assert!(sig.synthetic_effect_params.is_empty());
-        assert_eq!(type_expr_to_string(&sig.params[0].1), "Handler");
+        assert_eq!(sig.params[0].1.to_string(), "Handler");
     }
 
     #[test]
@@ -1023,7 +917,7 @@ mod tests {
             vec![Name::new("__effect_param_0")]
         );
         assert_eq!(
-            type_expr_to_string(&sig.params[0].1),
+            sig.params[0].1.to_string(),
             "((value: int) -> string throws never) -> string throws __effect_param_0"
         );
     }
@@ -1041,7 +935,7 @@ mod tests {
 
         assert!(sig.synthetic_effect_params.is_empty());
         assert_eq!(
-            type_expr_to_string(sig.return_type.as_ref().expect("return type")),
+            sig.return_type.as_ref().expect("return type").to_string(),
             "(value: int) -> string throws never"
         );
     }
@@ -1062,7 +956,7 @@ mod tests {
             vec![Name::new("__effect_param_0")]
         );
         assert_eq!(
-            type_expr_to_string(sig.return_type.as_ref().expect("return type")),
+            sig.return_type.as_ref().expect("return type").to_string(),
             "((value: int) -> string throws __effect_param_0) -> string throws __effect_param_0"
         );
     }
@@ -1082,7 +976,7 @@ mod tests {
 
         assert!(sig.synthetic_effect_params.is_empty());
         assert_eq!(
-            type_expr_to_string(sig.return_type.as_ref().expect("return type")),
+            sig.return_type.as_ref().expect("return type").to_string(),
             "((value: int) -> string throws string) -> string throws string"
         );
     }
@@ -1103,7 +997,7 @@ mod tests {
             vec![Name::new("__effect_param_0")]
         );
         assert_eq!(
-            type_expr_to_string(&sig.params[0].1),
+            sig.params[0].1.to_string(),
             "(value: T) -> string throws __effect_param_0"
         );
     }
