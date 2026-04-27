@@ -8,8 +8,7 @@
 pub(crate) mod class;
 pub(crate) mod enum_;
 pub(crate) mod function;
-pub(crate) mod instance_method;
-pub(crate) mod static_method;
+pub(crate) mod method;
 pub(crate) mod type_alias;
 
 use baml_codegen_types::{Name, Symbol, SymbolPool};
@@ -19,8 +18,7 @@ use crate::{
         class::{PyClass, PyClassProperty},
         enum_::{PyEnum, PyEnumVariant},
         function::{PyFunction, SyncAsync},
-        instance_method::PyInstanceMethod,
-        static_method::PyStaticMethod,
+        method::{MethodKind, PyMethodBinding},
         type_alias::PyTypeAlias,
     },
     routing::{LeafPath, route},
@@ -29,14 +27,11 @@ use crate::{
 /// Emitter-internal representation of one rendered Python symbol.
 /// One variant per Python-side symbol kind the emitter will ever
 /// produce. Built from `SymbolPool` entries during the render walk.
-#[allow(dead_code)]
 pub(crate) enum EmittedSymbol {
     Class(PyClass),
     Enum(PyEnum),
     TypeAlias(PyTypeAlias),
     Function(PyFunction),
-    StaticMethod(PyStaticMethod),
-    InstanceMethod(PyInstanceMethod),
 }
 
 impl EmittedSymbol {
@@ -47,8 +42,6 @@ impl EmittedSymbol {
             EmittedSymbol::Enum(e) => &e.py_name,
             EmittedSymbol::TypeAlias(a) => &a.py_name,
             EmittedSymbol::Function(f) => &f.py_name,
-            EmittedSymbol::StaticMethod(m) => &m.py_name,
-            EmittedSymbol::InstanceMethod(m) => &m.py_name,
         }
     }
 }
@@ -87,12 +80,23 @@ pub(crate) fn build_emitted(pool: &SymbolPool) -> Vec<(LeafPath, EmittedSymbol, 
                         ty: p.ty.clone(),
                     })
                     .collect();
+                // The class's pool key Display form is already the
+                // method-FQN root (`<pkg>.<ns…>.<ClassName>`). Methods
+                // append `.<method_bare>`; companions further append
+                // `$<suffix>` per the existing free-function rule.
+                let class_fqn_root = key.to_string();
+                let static_methods =
+                    expand_methods(&c.static_methods, &class_fqn_root, MethodKind::Static);
+                let instance_methods =
+                    expand_methods(&c.instance_methods, &class_fqn_root, MethodKind::Instance);
                 out.push((
                     leaf,
                     EmittedSymbol::Class(PyClass {
                         py_name: bare,
                         source: key.clone(),
                         properties,
+                        static_methods,
+                        instance_methods,
                     }),
                     sort_key,
                 ));
@@ -157,35 +161,103 @@ fn expand_function(
     // Display form: `<pkg>.<ns…>.<bare>`. No translation — emit fully
     // qualifies all symbols, so `pkg = "user"` lands on the wire as
     // `"user.…"` end-to-end.
-    let base_fqn = key.to_string();
-    let base_params: Vec<String> = f
-        .arguments
+    let fqn_root = key.to_string();
+    expand_callable(
+        bare,
+        &fqn_root,
+        &f.arguments,
+        &f.companions,
+        |py_name, fqn, mode, params| {
+            out.push((
+                leaf.clone(),
+                EmittedSymbol::Function(PyFunction {
+                    py_name,
+                    baml_fqn: fqn,
+                    mode,
+                    param_names: params,
+                }),
+                sort_key.clone(),
+            ));
+        },
+    );
+}
+
+/// Fan out one source-declared method (and its companions) into one
+/// `PyMethodBinding` per emitted line. Sorted before fan-out so the
+/// sibling order (sync → async → companion sync → companion async)
+/// matches free-function expansion exactly.
+fn expand_methods(
+    methods: &[baml_codegen_types::Function],
+    class_fqn_root: &str,
+    kind: MethodKind,
+) -> Vec<PyMethodBinding> {
+    let mut sorted: Vec<&baml_codegen_types::Function> = methods.iter().collect();
+    sorted.sort_by(|a, b| origin_key(&a.origin).cmp(&origin_key(&b.origin)));
+
+    let mut out: Vec<PyMethodBinding> = Vec::new();
+    for m in sorted {
+        let bare = m.name.as_str();
+        let fqn_root = format!("{class_fqn_root}.{bare}");
+        expand_callable(
+            bare,
+            &fqn_root,
+            &m.arguments,
+            &m.companions,
+            |py_name, fqn, mode, params| {
+                let param_names = match kind {
+                    MethodKind::Static => params,
+                    MethodKind::Instance => {
+                        let mut with_self = Vec::with_capacity(params.len() + 1);
+                        with_self.push("self".to_string());
+                        with_self.extend(params);
+                        with_self
+                    }
+                };
+                out.push(PyMethodBinding {
+                    py_name,
+                    baml_fqn: fqn,
+                    mode,
+                    param_names,
+                    kind,
+                });
+            },
+        );
+    }
+    out
+}
+
+/// Shared fan-out for free functions and methods. Calls `emit` once
+/// for each of: base sync, base async, then for each companion sync
+/// and async (in declaration order). The `emit` closure receives the
+/// per-line py-name, FQN, mode, and parameter names; the caller
+/// adapts those into the appropriate emitted-symbol struct.
+fn expand_callable<F>(
+    bare: &str,
+    fqn_root: &str,
+    arguments: &[baml_codegen_types::FunctionArgument],
+    companions: &[(String, baml_codegen_types::Function)],
+    mut emit: F,
+) where
+    F: FnMut(String, String, SyncAsync, Vec<String>),
+{
+    let base_params: Vec<String> = arguments
         .iter()
         .map(|a| a.name.as_str().to_string())
         .collect();
-    out.push((
-        leaf.clone(),
-        EmittedSymbol::Function(PyFunction {
-            py_name: bare.to_string(),
-            baml_fqn: base_fqn.clone(),
-            mode: SyncAsync::Sync,
-            param_names: base_params.clone(),
-        }),
-        sort_key.clone(),
-    ));
-    out.push((
-        leaf.clone(),
-        EmittedSymbol::Function(PyFunction {
-            py_name: format!("{bare}_async"),
-            baml_fqn: base_fqn,
-            mode: SyncAsync::Async,
-            param_names: base_params,
-        }),
-        sort_key.clone(),
-    ));
+    emit(
+        bare.to_string(),
+        fqn_root.to_string(),
+        SyncAsync::Sync,
+        base_params.clone(),
+    );
+    emit(
+        format!("{bare}_async"),
+        fqn_root.to_string(),
+        SyncAsync::Async,
+        base_params,
+    );
 
-    // Companions, in declaration order.
-    for (suffix, inner) in &f.companions {
+    for (suffix, inner) in companions {
         let (py_sync, py_async) = if suffix == "stream" {
             (format!("{bare}_stream"), format!("{bare}_stream_async"))
         } else {
@@ -194,35 +266,19 @@ fn expand_function(
                 format!("{bare}__{suffix}_async"),
             )
         };
-        let companion_fqn = format!("{key}${suffix}");
-        // §6: companion `param_names` come from the companion's own
-        // arguments, not the parent's.
+        let companion_fqn = format!("{fqn_root}${suffix}");
         let companion_params: Vec<String> = inner
             .arguments
             .iter()
             .map(|a| a.name.as_str().to_string())
             .collect();
-
-        out.push((
-            leaf.clone(),
-            EmittedSymbol::Function(PyFunction {
-                py_name: py_sync,
-                baml_fqn: companion_fqn.clone(),
-                mode: SyncAsync::Sync,
-                param_names: companion_params.clone(),
-            }),
-            sort_key.clone(),
-        ));
-        out.push((
-            leaf.clone(),
-            EmittedSymbol::Function(PyFunction {
-                py_name: py_async,
-                baml_fqn: companion_fqn,
-                mode: SyncAsync::Async,
-                param_names: companion_params,
-            }),
-            sort_key.clone(),
-        ));
+        emit(
+            py_sync,
+            companion_fqn.clone(),
+            SyncAsync::Sync,
+            companion_params.clone(),
+        );
+        emit(py_async, companion_fqn, SyncAsync::Async, companion_params);
     }
 }
 

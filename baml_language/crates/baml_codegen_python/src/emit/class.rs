@@ -7,7 +7,10 @@
 
 use baml_codegen_types::{Name, Ty};
 
-/// Python class definition. G4 populates `properties`; §7 handle-backed
+use crate::emit::method::PyMethodBinding;
+
+/// Python class definition. G4 populates `properties`; 12b populates
+/// `static_methods` and `instance_methods`; §7 handle-backed
 /// classes are deferred — every `PyClass` renders as vanilla Pydantic.
 pub(crate) struct PyClass {
     /// Python identifier (bare name). `$stream` suffix is stripped —
@@ -19,9 +22,13 @@ pub(crate) struct PyClass {
     /// Class fields, in IR declaration order. Field names are emitted
     /// verbatim per 09b §5 ("agent-friendly" naming).
     pub(crate) properties: Vec<PyClassProperty>,
-    // deferred to G4+: docstring: Option<String>,
-    // deferred: handle_backed: bool,
-    // deferred to G5: methods: Vec<PyMethod>,
+    /// Static method bindings, fanned out into one entry per emitted
+    /// line (sync, async, companion sync, companion async, …) in the
+    /// final render order. Pre-sorted by the expander so the renderer
+    /// is a straight walk.
+    pub(crate) static_methods: Vec<PyMethodBinding>,
+    /// Instance method bindings, same shape as `static_methods`.
+    pub(crate) instance_methods: Vec<PyMethodBinding>,
 }
 
 pub(crate) struct PyClassProperty {

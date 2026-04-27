@@ -256,6 +256,8 @@ mod tests {
                 docstring: None,
                 ty: Ty::Int,
             }],
+            static_methods: vec![],
+            instance_methods: vec![],
             origin: origin(file, span),
         })
     }
@@ -384,8 +386,8 @@ mod tests {
 
         let out = to_source_code(&pool, &[]);
         let leaf = &out[&PathBuf::from("lorem/__init__.py")];
-        let sync_line = "extract_resume       = __define_function(\"user.lorem.extract_resume\", \"sync\",  [\"x\"])\n";
-        let async_line = "extract_resume_async = __define_function(\"user.lorem.extract_resume\", \"async\", [\"x\"])\n";
+        let sync_line = "extract_resume       = _define_function(\"user.lorem.extract_resume\", \"sync\",  [\"x\"])\n";
+        let async_line = "extract_resume_async = _define_function(\"user.lorem.extract_resume\", \"async\", [\"x\"])\n";
         assert!(leaf.contains(sync_line), "missing sync line in:\n{leaf}");
         assert!(leaf.contains(async_line), "missing async line in:\n{leaf}");
         assert!(!leaf.contains("extract_resume_stream"));
@@ -411,13 +413,13 @@ mod tests {
         let leaf = &out[&PathBuf::from("lorem/__init__.py")];
         assert!(
             leaf.contains(
-                "extract_resume_stream       = __define_function(\"user.lorem.extract_resume$stream\", \"sync\",  [\"x\"])\n",
+                "extract_resume_stream       = _define_function(\"user.lorem.extract_resume$stream\", \"sync\",  [\"x\"])\n",
             ),
             "missing stream sync companion in:\n{leaf}"
         );
         assert!(
             leaf.contains(
-                "extract_resume_stream_async = __define_function(\"user.lorem.extract_resume$stream\", \"async\", [\"x\"])\n",
+                "extract_resume_stream_async = _define_function(\"user.lorem.extract_resume$stream\", \"async\", [\"x\"])\n",
             ),
             "missing stream async companion in:\n{leaf}"
         );
@@ -442,13 +444,13 @@ mod tests {
         let leaf = &out[&PathBuf::from("lorem/__init__.py")];
         assert!(
             leaf.contains(
-                "extract_resume__build_request       = __define_function(\"user.lorem.extract_resume$build_request\", \"sync\",  [\"x\"])\n",
+                "extract_resume__build_request       = _define_function(\"user.lorem.extract_resume$build_request\", \"sync\",  [\"x\"])\n",
             ),
             "missing build_request sync companion in:\n{leaf}"
         );
         assert!(
             leaf.contains(
-                "extract_resume__build_request_async = __define_function(\"user.lorem.extract_resume$build_request\", \"async\", [\"x\"])\n",
+                "extract_resume__build_request_async = _define_function(\"user.lorem.extract_resume$build_request\", \"async\", [\"x\"])\n",
             ),
             "missing build_request async companion in:\n{leaf}"
         );
@@ -559,7 +561,7 @@ mod tests {
     #[test]
     fn factory_import_present_only_in_leaves_with_functions() {
         // G5 emits `from baml.baml_core import define_function as
-        // __define_function` exactly once per leaf that carries any
+        // _define_function` exactly once per leaf that carries any
         // function/companion binding, and never in leaves that don't.
         let mut pool: SymbolPool = HashMap::new();
         // lorem leaf: class + function → factory import expected.
@@ -575,12 +577,12 @@ mod tests {
 
         let lorem = &out[&PathBuf::from("lorem/__init__.py")];
         assert!(
-            lorem.contains("from baml.baml_core import define_function as __define_function\n"),
+            lorem.contains("from baml.baml_core import define_function as _define_function\n"),
             "lorem missing factory import:\n{lorem}"
         );
         assert_eq!(
             lorem
-                .matches("from baml.baml_core import define_function as __define_function")
+                .matches("from baml.baml_core import define_function as _define_function")
                 .count(),
             1,
             "factory import should appear exactly once"
@@ -592,8 +594,8 @@ mod tests {
             "ipsum leaf has no functions and must not import factories:\n{ipsum}"
         );
         assert!(
-            !ipsum.contains("__define_function"),
-            "ipsum leaf must not reference __define_function:\n{ipsum}"
+            !ipsum.contains("_define_function"),
+            "ipsum leaf must not reference _define_function:\n{ipsum}"
         );
 
         // Stream-types leaves carry only stream-companion classes — no
@@ -685,6 +687,8 @@ mod tests {
                     ty,
                 })
                 .collect(),
+            static_methods: vec![],
+            instance_methods: vec![],
             origin: origin(file, span),
         })
     }
@@ -975,10 +979,10 @@ mod tests {
         let out = to_source_code(&pool, &[]);
         let leaf = &out[&PathBuf::from("lorem/__init__.py")];
         assert!(
-            leaf.contains("ping       = __define_function(\"user.lorem.ping\", \"sync\",  [])\n")
+            leaf.contains("ping       = _define_function(\"user.lorem.ping\", \"sync\",  [])\n")
         );
         assert!(
-            leaf.contains("ping_async = __define_function(\"user.lorem.ping\", \"async\", [])\n")
+            leaf.contains("ping_async = _define_function(\"user.lorem.ping\", \"async\", [])\n")
         );
     }
 
@@ -993,10 +997,10 @@ mod tests {
         let out = to_source_code(&pool, &[]);
         let leaf = &out[&PathBuf::from("lorem/__init__.py")];
         assert!(leaf.contains(
-            "make       = __define_function(\"user.lorem.make\", \"sync\",  [\"a\", \"b\", \"c\"])\n"
+            "make       = _define_function(\"user.lorem.make\", \"sync\",  [\"a\", \"b\", \"c\"])\n"
         ));
         assert!(leaf.contains(
-            "make_async = __define_function(\"user.lorem.make\", \"async\", [\"a\", \"b\", \"c\"])\n"
+            "make_async = _define_function(\"user.lorem.make\", \"async\", [\"a\", \"b\", \"c\"])\n"
         ));
     }
 
@@ -1019,14 +1023,14 @@ mod tests {
         let leaf = &out[&PathBuf::from("lorem/__init__.py")];
         // Parent uses parent params.
         assert!(leaf.contains(
-            "extract       = __define_function(\"user.lorem.extract\", \"sync\",  [\"a\", \"b\"])\n"
+            "extract       = _define_function(\"user.lorem.extract\", \"sync\",  [\"a\", \"b\"])\n"
         ));
         // Companion uses inner params, not parent's.
         assert!(leaf.contains(
-            "extract__build_request       = __define_function(\"user.lorem.extract$build_request\", \"sync\",  [\"text\"])\n"
+            "extract__build_request       = _define_function(\"user.lorem.extract$build_request\", \"sync\",  [\"text\"])\n"
         ));
         assert!(leaf.contains(
-            "extract__build_request_async = __define_function(\"user.lorem.extract$build_request\", \"async\", [\"text\"])\n"
+            "extract__build_request_async = _define_function(\"user.lorem.extract$build_request\", \"async\", [\"text\"])\n"
         ));
     }
 
@@ -1063,14 +1067,14 @@ mod tests {
         // Declaration order in a single fan-out block: parent → stream
         // → build_request → parse, with sync before async at each.
         let order = [
-            "extract       = __define_function",
-            "extract_async = __define_function",
-            "extract_stream       = __define_function",
-            "extract_stream_async = __define_function",
-            "extract__build_request       = __define_function",
-            "extract__build_request_async = __define_function",
-            "extract__parse       = __define_function",
-            "extract__parse_async = __define_function",
+            "extract       = _define_function",
+            "extract_async = _define_function",
+            "extract_stream       = _define_function",
+            "extract_stream_async = _define_function",
+            "extract__build_request       = _define_function",
+            "extract__build_request_async = _define_function",
+            "extract__parse       = _define_function",
+            "extract__parse_async = _define_function",
         ];
         let mut last = 0usize;
         for needle in order {
@@ -1084,7 +1088,7 @@ mod tests {
             last = i;
         }
         // No blank line between fan-out siblings.
-        let s = leaf.find("extract       = __define_function").unwrap();
+        let s = leaf.find("extract       = _define_function").unwrap();
         let e = leaf.find("extract__parse_async").unwrap();
         let block = &leaf[s..e];
         assert!(
@@ -1101,7 +1105,7 @@ mod tests {
         let out = to_source_code(&pool, &[]);
         let leaf = &out[&PathBuf::from("vendor/aws/s3/__init__.py")];
         assert!(leaf.contains(
-            "create_bucket       = __define_function(\"aws.s3.create_bucket\", \"sync\",  [])\n"
+            "create_bucket       = _define_function(\"aws.s3.create_bucket\", \"sync\",  [])\n"
         ));
     }
 
@@ -1113,7 +1117,7 @@ mod tests {
         let out = to_source_code(&pool, &[]);
         let leaf = &out[&PathBuf::from("baml/http/__init__.py")];
         assert!(leaf.contains(
-            "fetch       = __define_function(\"baml.http.fetch\", \"sync\",  [\"url\"])\n"
+            "fetch       = _define_function(\"baml.http.fetch\", \"sync\",  [\"url\"])\n"
         ));
     }
 
@@ -1125,7 +1129,7 @@ mod tests {
         let out = to_source_code(&pool, &[]);
         let root = &out[&PathBuf::from("__init__.py")];
         assert!(
-            root.contains("ping       = __define_function(\"user.ping\", \"sync\",  [])\n"),
+            root.contains("ping       = _define_function(\"user.ping\", \"sync\",  [])\n"),
             "missing root binding in:\n{root}"
         );
     }
@@ -1154,6 +1158,180 @@ mod tests {
         for (p, c) in &out1 {
             assert_eq!(&out2[p], c, "mismatch at {}", p.display());
         }
+    }
+
+    fn class_with_methods(
+        name: Name,
+        static_methods: Vec<Function>,
+        instance_methods: Vec<Function>,
+        file: &str,
+        span: u32,
+    ) -> Symbol {
+        Symbol::Class(Class {
+            name,
+            docstring: None,
+            properties: vec![],
+            static_methods,
+            instance_methods,
+            origin: origin(file, span),
+        })
+    }
+
+    fn method_func(bare: &str, args: &[&str], file: &str, span: u32) -> Function {
+        Function {
+            name: BaseName::new(bare),
+            docstring: None,
+            arguments: args
+                .iter()
+                .map(|n| FunctionArgument {
+                    name: BaseName::new(*n),
+                    docstring: None,
+                    ty: Ty::Int,
+                })
+                .collect(),
+            return_type: Ty::Int,
+            stream_return_type: None,
+            watchers: vec![],
+            companions: vec![],
+            origin: origin(file, span),
+        }
+    }
+
+    #[test]
+    fn class_static_method_wraps_in_staticmethod() {
+        let mut pool: SymbolPool = HashMap::new();
+        let n = cg_name("user", &["lorem"], "Counter");
+        pool.insert(
+            n.clone(),
+            class_with_methods(
+                n,
+                vec![method_func("zero", &[], "x.baml", 100)],
+                vec![],
+                "x.baml",
+                0,
+            ),
+        );
+
+        let out = to_source_code(&pool, &[]);
+        let leaf = &out[&PathBuf::from("lorem/__init__.py")];
+        assert!(
+            leaf.contains(
+                "from baml.baml_core import define_static_method as _define_static_method\n"
+            ),
+            "missing static-method factory import:\n{leaf}"
+        );
+        assert!(
+            leaf.contains(
+                "    zero       = staticmethod(_define_static_method(\"user.lorem.Counter.zero\", \"sync\",  []))\n"
+            ),
+            "missing static method sync line in:\n{leaf}"
+        );
+        assert!(
+            leaf.contains(
+                "    zero_async = staticmethod(_define_static_method(\"user.lorem.Counter.zero\", \"async\", []))\n"
+            ),
+            "missing static method async line in:\n{leaf}"
+        );
+    }
+
+    #[test]
+    fn class_instance_method_no_wrap_self_prepended() {
+        let mut pool: SymbolPool = HashMap::new();
+        let n = cg_name("user", &["lorem"], "Counter");
+        // The pool's `Function` for an instance method does not carry
+        // the `self` parameter — the receiver is prepended at render
+        // time. Pass `["by"]` and confirm the rendered RHS has
+        // `["self", "by"]`.
+        pool.insert(
+            n.clone(),
+            class_with_methods(
+                n,
+                vec![],
+                vec![method_func("bump", &["by"], "x.baml", 100)],
+                "x.baml",
+                0,
+            ),
+        );
+
+        let out = to_source_code(&pool, &[]);
+        let leaf = &out[&PathBuf::from("lorem/__init__.py")];
+        assert!(
+            leaf.contains(
+                "from baml.baml_core import define_instance_method as _define_instance_method\n"
+            ),
+            "missing instance-method factory import:\n{leaf}"
+        );
+        assert!(
+            leaf.contains(
+                "    bump       = _define_instance_method(\"user.lorem.Counter.bump\", \"sync\",  [\"self\", \"by\"])\n"
+            ),
+            "missing instance method sync line in:\n{leaf}"
+        );
+        assert!(
+            leaf.contains(
+                "    bump_async = _define_instance_method(\"user.lorem.Counter.bump\", \"async\", [\"self\", \"by\"])\n"
+            ),
+            "missing instance method async line in:\n{leaf}"
+        );
+        // Critical: instance methods must NOT be wrapped in
+        // `staticmethod(...)` — that breaks descriptor-protocol binding.
+        assert!(
+            !leaf.contains("staticmethod(_define_instance_method"),
+            "instance method must not be wrapped:\n{leaf}"
+        );
+    }
+
+    #[test]
+    fn class_with_both_method_kinds_emits_combined_import() {
+        let mut pool: SymbolPool = HashMap::new();
+        let n = cg_name("user", &["lorem"], "Mixed");
+        pool.insert(
+            n.clone(),
+            class_with_methods(
+                n,
+                vec![method_func("make", &["x"], "x.baml", 100)],
+                vec![method_func("describe", &[], "x.baml", 200)],
+                "x.baml",
+                0,
+            ),
+        );
+
+        let out = to_source_code(&pool, &[]);
+        let leaf = &out[&PathBuf::from("lorem/__init__.py")];
+        // Multiple factories → parenthesized form, alphabetized by
+        // original name (`define_instance_method` < `define_static_method`).
+        let expected_block = "from baml.baml_core import (\n\
+                              \x20   define_instance_method as _define_instance_method,\n\
+                              \x20   define_static_method as _define_static_method,\n\
+                              )\n";
+        assert!(
+            leaf.contains(expected_block),
+            "missing combined factory import:\n{leaf}"
+        );
+    }
+
+    #[test]
+    fn property_only_class_unchanged_by_method_renderer() {
+        // Class with only properties (no methods) should render
+        // byte-identical to G5 — no method block, no factory import.
+        let mut pool: SymbolPool = HashMap::new();
+        let n = cg_name("user", &["lorem"], "Resume");
+        pool.insert(n.clone(), class(n));
+
+        let out = to_source_code(&pool, &[]);
+        let leaf = &out[&PathBuf::from("lorem/__init__.py")];
+        assert!(
+            !leaf.contains("define_static_method"),
+            "property-only class must not import define_static_method:\n{leaf}"
+        );
+        assert!(
+            !leaf.contains("define_instance_method"),
+            "property-only class must not import define_instance_method:\n{leaf}"
+        );
+        assert!(
+            !leaf.contains("staticmethod("),
+            "property-only class must not contain staticmethod wrap:\n{leaf}"
+        );
     }
 
     #[test]

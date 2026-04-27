@@ -54,6 +54,15 @@ pub struct Class {
     pub name: super::Name,
     pub docstring: Option<String>,
     pub properties: Vec<ClassProperty>,
+    /// Static methods on this class. Source-declaration order is
+    /// preserved by the pool builder; the emitter sorts at fan-out
+    /// time. Static vs. instance is encoded structurally — kind is
+    /// implied by which vec the method lives in.
+    pub static_methods: Vec<Function>,
+    /// Instance methods on this class. The receiver (`self`) is **not**
+    /// in `Function::arguments` — it's a Python convention prepended at
+    /// render time.
+    pub instance_methods: Vec<Function>,
     pub origin: Origin,
 }
 
@@ -146,6 +155,9 @@ impl Class {
             .iter()
             .map(|prop| prop.ty.validate())
             .collect::<Result<Vec<_>, _>>()?;
+        for method in self.static_methods.iter().chain(&self.instance_methods) {
+            method.validate()?;
+        }
         Ok(())
     }
 
@@ -153,6 +165,12 @@ impl Class {
         self.properties
             .iter()
             .flat_map(|prop| prop.ty.walk_all_unions().into_iter())
+            .chain(
+                self.static_methods
+                    .iter()
+                    .chain(&self.instance_methods)
+                    .flat_map(|m| m.walk_all_unions().into_iter()),
+            )
             .collect::<_>()
     }
 }

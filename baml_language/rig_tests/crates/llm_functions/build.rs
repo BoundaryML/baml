@@ -130,7 +130,7 @@ def _install_baml_stub() -> None:
         def initialize_runtime(*_args, **_kwargs):
             return None
 
-    def define_function(fqn, _kind, param_names):
+    def _make_factory(fqn, _kind, param_names):
         def factory(*_args, **_kwargs):
             raise RuntimeError(
                 f"baml runtime not installed (called {fqn})"
@@ -140,7 +140,9 @@ def _install_baml_stub() -> None:
         return factory
 
     baml_core.BamlRuntime = BamlRuntime
-    baml_core.define_function = define_function
+    baml_core.define_function = _make_factory
+    baml_core.define_static_method = _make_factory
+    baml_core.define_instance_method = _make_factory
     baml.baml_core = baml_core
 
     sys.modules["baml"] = baml

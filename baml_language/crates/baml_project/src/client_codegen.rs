@@ -8,7 +8,9 @@ use std::collections::HashMap;
 
 use baml_codegen_types::{self as cg, Origin, SymbolPool};
 use baml_compiler2_ast::DeclarativeMeta;
-use baml_compiler2_hir::{file_package, package::PackageId};
+use baml_compiler2_hir::{
+    compiler2_all_files, file_package, ids::FunctionMarker, ids::LocalItemId, package::PackageId,
+};
 use baml_compiler2_tir::{
     lower_type_expr,
     normalize::find_recursive_aliases,
@@ -46,19 +48,15 @@ fn split_companion(name: &str) -> Option<(&str, &str)> {
 
 /// Build a codegen `SymbolPool` from the compiler database.
 ///
-/// Walks all user-package source files, extracts classes/enums/type aliases/
-/// declarative functions, resolves their types, and converts to codegen types.
+/// Walks every file visible to compiler2 (user files + stdlib stubs),
+/// extracts classes/enums/type aliases/functions/methods, resolves their
+/// types, and converts to codegen types.
 pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
     struct PendingFunction {
-        /// Package this function lives in (always `"user"` here, kept for symmetry).
         pkg: Name,
-        /// Namespace path segments (empty for root-level functions).
         ns_path: Vec<Name>,
-        /// Bare function name (without `$…` suffix).
         bare_name: Name,
-        /// Companion suffix (None for parent functions).
         companion_suffix: Option<String>,
-        /// The codegen function object.
         func: cg::Function,
     }
 
@@ -69,30 +67,67 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
         func: cg::Function,
     }
 
+    enum MethodKind {
+        Static,
+        Instance,
+    }
+
+    struct PendingMethod {
+        /// Pool key of the owning class.
+        parent_key: cg::Name,
+        bare_name: Name,
+        companion_suffix: Option<String>,
+        kind: MethodKind,
+        func: cg::Function,
+    }
+
     let mut pool = SymbolPool::new();
 
-    let user_pkg_id = PackageId::new(db, Name::new("user"));
-    let user_pkg_items = baml_compiler2_ppir::package_items(db, user_pkg_id);
-
-    // Build the alias map for recursive-alias detection.
-    let alias_map = baml_compiler2_tir::inference::collect_type_aliases(db, user_pkg_items);
-    let recursive_aliases = find_recursive_aliases(&alias_map);
-
-    // First pass: collect parent functions keyed by (namespace_path, bare_name) so
-    // the second pass can attach companions.
+    // Per-package alias and recursive-alias maps. A type alias only resolves
+    // within its own package, so we cache one map per package the first time
+    // we see a file from that package.
+    let mut alias_caches: HashMap<
+        Name,
+        (
+            HashMap<QualifiedTypeName, TirTy>,
+            std::collections::HashSet<QualifiedTypeName>,
+        ),
+    > = HashMap::new();
 
     let mut pending_functions: Vec<PendingFunction> = Vec::new();
+    let mut pending_methods: Vec<PendingMethod> = Vec::new();
 
-    for source_file in db.get_source_files() {
+    for source_file in compiler2_all_files(db) {
         let pkg_info = file_package::file_package(db, source_file);
-        if pkg_info.package.as_str() != "user" {
-            continue;
-        }
-
-        let item_tree = baml_compiler2_ppir::file_item_tree(db, source_file);
         let pkg: Name = pkg_info.package.clone();
         let ns_path: Vec<Name> = pkg_info.namespace_path.clone();
+
+        let pkg_id = PackageId::new(db, pkg.clone());
+        let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
+
+        let (alias_map, recursive_aliases) = alias_caches.entry(pkg.clone()).or_insert_with(|| {
+            let aliases = baml_compiler2_tir::inference::collect_type_aliases(db, pkg_items);
+            let recursive = find_recursive_aliases(&aliases);
+            (aliases, recursive)
+        });
+        let alias_map: &HashMap<QualifiedTypeName, TirTy> = alias_map;
+        let recursive_aliases: &std::collections::HashSet<QualifiedTypeName> = recursive_aliases;
+
+        let item_tree = baml_compiler2_ppir::file_item_tree(db, source_file);
         let source_file_path: String = source_file.path(db).to_string_lossy().into_owned();
+
+        // Collect the set of function IDs that are class methods for this
+        // file so the free-function walk below can skip them. Methods live in
+        // `item_tree.functions` alongside top-level functions; without this
+        // filter, a user-declared LLM method would incorrectly land in the
+        // free-function pool.
+        let mut method_ids: std::collections::HashSet<LocalItemId<FunctionMarker>> =
+            std::collections::HashSet::new();
+        for class in item_tree.classes.values() {
+            for m in &class.methods {
+                method_ids.insert(*m);
+            }
+        }
 
         // Classes
         for class in item_tree.classes.values() {
@@ -111,11 +146,11 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                     let ty = resolve_type_expr(
                         db,
                         field.type_expr.as_ref(),
-                        user_pkg_items,
+                        pkg_items,
                         &pkg_info.namespace_path,
                         &[],
-                        &alias_map,
-                        &recursive_aliases,
+                        alias_map,
+                        recursive_aliases,
                     )?;
                     Some(cg::ClassProperty {
                         name: field.name.clone(),
@@ -124,12 +159,100 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                     })
                 })
                 .collect();
+
+            // Methods — lower each into a `cg::Function` and queue up for
+            // the post-walk attach pass. Static vs. instance is dispatched
+            // structurally on whether the first parameter is named `self`.
+            // Companions of methods (e.g. `$build_request`) flow through the
+            // same pending list and reattach via the second-pass logic.
+            for method_id in &class.methods {
+                let Some(method) = item_tree.functions.get(method_id) else {
+                    continue;
+                };
+                if !method.generic_params.is_empty() {
+                    continue;
+                }
+
+                let method_name_str = method.name.as_str();
+                let (bare_name, companion_suffix) = match split_companion(method_name_str) {
+                    Some((parent, suffix)) => (Name::new(parent), Some(suffix.to_string())),
+                    None => (method.name.clone(), None),
+                };
+
+                let is_instance = method
+                    .params
+                    .first()
+                    .is_some_and(|p| p.name.as_str() == "self");
+                let kind = if is_instance {
+                    MethodKind::Instance
+                } else {
+                    MethodKind::Static
+                };
+
+                let arguments: Vec<cg::FunctionArgument> = method
+                    .params
+                    .iter()
+                    .skip(usize::from(is_instance))
+                    .filter_map(|param| {
+                        let ty = resolve_type_expr(
+                            db,
+                            param.type_expr.as_ref(),
+                            pkg_items,
+                            &pkg_info.namespace_path,
+                            &[],
+                            alias_map,
+                            recursive_aliases,
+                        )?;
+                        Some(cg::FunctionArgument {
+                            name: param.name.clone(),
+                            docstring: None,
+                            ty,
+                        })
+                    })
+                    .collect();
+
+                let return_type = resolve_type_expr(
+                    db,
+                    method.return_type.as_ref(),
+                    pkg_items,
+                    &pkg_info.namespace_path,
+                    &[],
+                    alias_map,
+                    recursive_aliases,
+                )
+                .unwrap_or(cg::Ty::Unit);
+
+                let cg_method = cg::Function {
+                    name: method.name.clone(),
+                    docstring: None,
+                    arguments,
+                    return_type,
+                    stream_return_type: None,
+                    watchers: Vec::new(),
+                    companions: Vec::new(),
+                    origin: Origin {
+                        source_file_path: source_file_path.clone(),
+                        span_start: u32::from(method.span.start()),
+                    },
+                };
+
+                pending_methods.push(PendingMethod {
+                    parent_key: cg_name.clone(),
+                    bare_name,
+                    companion_suffix,
+                    kind,
+                    func: cg_method,
+                });
+            }
+
             pool.insert(
                 cg_name.clone(),
                 cg::Symbol::Class(cg::Class {
                     name: cg_name,
                     docstring: None,
                     properties,
+                    static_methods: Vec::new(),
+                    instance_methods: Vec::new(),
                     origin: Origin {
                         source_file_path: source_file_path.clone(),
                         span_start: u32::from(class.span.start()),
@@ -173,11 +296,11 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
             if let Some(resolved) = resolve_type_expr(
                 db,
                 alias.type_expr.as_ref(),
-                user_pkg_items,
+                pkg_items,
                 &pkg_info.namespace_path,
                 &[],
-                &alias_map,
-                &recursive_aliases,
+                alias_map,
+                recursive_aliases,
             ) {
                 let cg_name = cg::Name {
                     pkg: pkg.clone(),
@@ -207,15 +330,18 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
             }
         }
 
-        // Functions — collect into pending list for two-pass processing.
-        for func in item_tree.functions.values() {
+        // Top-level functions — methods are skipped via `method_ids` so they
+        // don't double-emit.
+        for (id, func) in &item_tree.functions {
+            if method_ids.contains(id) {
+                continue;
+            }
             if !func.generic_params.is_empty() {
                 continue;
             }
 
             let func_name_str = func.name.as_str();
 
-            // Determine if this is a companion (has `$` in name).
             let (bare_name, companion_suffix) = match split_companion(func_name_str) {
                 Some((parent, suffix)) => (Name::new(parent), Some(suffix.to_string())),
                 None => (func.name.clone(), None),
@@ -236,11 +362,11 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                     let ty = resolve_type_expr(
                         db,
                         param.type_expr.as_ref(),
-                        user_pkg_items,
+                        pkg_items,
                         &pkg_info.namespace_path,
                         &[],
-                        &alias_map,
-                        &recursive_aliases,
+                        alias_map,
+                        recursive_aliases,
                     )?;
                     Some(cg::FunctionArgument {
                         name: param.name.clone(),
@@ -253,11 +379,11 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
             let return_type = resolve_type_expr(
                 db,
                 func.return_type.as_ref(),
-                user_pkg_items,
+                pkg_items,
                 &pkg_info.namespace_path,
                 &[],
-                &alias_map,
-                &recursive_aliases,
+                alias_map,
+                recursive_aliases,
             )
             .unwrap_or(cg::Ty::Unit);
 
@@ -326,6 +452,40 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
             name: parent.bare_name,
         };
         pool.insert(cg_name, cg::Symbol::Function(parent.func));
+    }
+
+    // Method attach pass — analogous to the function companion pass above.
+    // Group parents and companions, splice companions into their parent
+    // method's `companions` vec, then push the assembled methods into the
+    // owning class's `static_methods` / `instance_methods` vec.
+    let mut method_parents: Vec<PendingMethod> = Vec::new();
+    let mut method_companions: Vec<PendingMethod> = Vec::new();
+    for pm in pending_methods {
+        if pm.companion_suffix.is_none() {
+            method_parents.push(pm);
+        } else {
+            method_companions.push(pm);
+        }
+    }
+    for companion in method_companions {
+        let suffix = companion.companion_suffix.as_deref().unwrap();
+        if let Some(parent) = method_parents
+            .iter_mut()
+            .find(|p| p.parent_key == companion.parent_key && p.bare_name == companion.bare_name)
+        {
+            parent
+                .func
+                .companions
+                .push((suffix.to_string(), companion.func));
+        }
+    }
+    for pm in method_parents {
+        if let Some(cg::Symbol::Class(class)) = pool.get_mut(&pm.parent_key) {
+            match pm.kind {
+                MethodKind::Static => class.static_methods.push(pm.func),
+                MethodKind::Instance => class.instance_methods.push(pm.func),
+            }
+        }
     }
 
     pool
@@ -662,6 +822,50 @@ mod tests {
             companion_names.contains(&"parse"),
             "parse companion expected; got: {companion_names:?}"
         );
+    }
+
+    /// Verifies that user-package classes with static and instance methods
+    /// land on the owning class as `static_methods` / `instance_methods`,
+    /// the receiver is dropped from instance-method `arguments`, and free
+    /// functions on the same file route through the standard pool entry.
+    #[test]
+    fn test_user_class_methods_attach_to_class() {
+        let root = Path::new("/tmp/12b_user_methods");
+        let mut db = ProjectDatabase::new();
+        db.set_project_root(root);
+        db.add_or_update_file(
+            root.join("main.baml").as_path(),
+            "class Counter {\n  count int\n  function bump(self, by: int) -> int { self.count + by }\n  function zero() -> int { 0 }\n}\n",
+        );
+
+        let pool = build_symbol_pool(&db);
+
+        let key = pool
+            .keys()
+            .find(|k| k.name.as_str() == "Counter")
+            .expect("Counter class missing from pool");
+        let Some(cg::Symbol::Class(class)) = pool.get(key) else {
+            panic!("Counter must be a Class");
+        };
+
+        let static_names: Vec<&str> = class
+            .static_methods
+            .iter()
+            .map(|m| m.name.as_str())
+            .collect();
+        let instance_names: Vec<&str> = class
+            .instance_methods
+            .iter()
+            .map(|m| m.name.as_str())
+            .collect();
+        assert_eq!(static_names, vec!["zero"], "static methods mismatch");
+        assert_eq!(instance_names, vec!["bump"], "instance methods mismatch");
+
+        // Instance method's `arguments` excludes the `self` receiver — it's
+        // a Python convention prepended at render time.
+        let bump = &class.instance_methods[0];
+        let bump_args: Vec<&str> = bump.arguments.iter().map(|a| a.name.as_str()).collect();
+        assert_eq!(bump_args, vec!["by"], "self should not be in arguments");
     }
 
     /// Verifies that a class in a namespaced folder gets `namespace_path` populated.
