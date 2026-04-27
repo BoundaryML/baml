@@ -132,8 +132,7 @@ pub(crate) fn build_emitted(pool: &SymbolPool) -> Vec<(LeafPath, EmittedSymbol, 
             }
             Symbol::Function(f) => {
                 let sort_key = origin_key(&f.origin);
-                let fqn_prefix = fqn_prefix(key);
-                expand_function(&leaf, &bare, &fqn_prefix, f, &sort_key, &mut out);
+                expand_function(&leaf, key, &bare, f, &sort_key, &mut out);
             }
         }
     }
@@ -148,14 +147,17 @@ pub(crate) fn build_emitted(pool: &SymbolPool) -> Vec<(LeafPath, EmittedSymbol, 
 /// async → companions in declaration order, each sync then async.
 fn expand_function(
     leaf: &LeafPath,
+    key: &Name,
     bare: &str,
-    fqn_prefix: &str,
     f: &baml_codegen_types::Function,
     sort_key: &SortKey,
     out: &mut Vec<(LeafPath, EmittedSymbol, SortKey)>,
 ) {
-    // Base sync + async.
-    let base_fqn = format!("{fqn_prefix}.{bare}");
+    // Base sync + async. The FQN is just the codegen-facing `Name`'s
+    // Display form: `<pkg>.<ns…>.<bare>`. No translation — emit fully
+    // qualifies all symbols, so `pkg = "user"` lands on the wire as
+    // `"user.…"` end-to-end.
+    let base_fqn = key.to_string();
     let base_params: Vec<String> = f
         .arguments
         .iter()
@@ -192,7 +194,7 @@ fn expand_function(
                 format!("{bare}__{suffix}_async"),
             )
         };
-        let companion_fqn = format!("{fqn_prefix}.{bare}${suffix}");
+        let companion_fqn = format!("{key}${suffix}");
         // §6: companion `param_names` come from the companion's own
         // arguments, not the parent's.
         let companion_params: Vec<String> = inner
@@ -226,21 +228,4 @@ fn expand_function(
 
 fn origin_key(origin: &baml_codegen_types::Origin) -> SortKey {
     (origin.source_file_path.clone(), origin.span_start)
-}
-
-/// The FQN prefix that precedes the bare function name in factory
-/// bindings (e.g. `"root.lorem"` for `Name { pkg: "user", ns_path:
-/// ["lorem"], … }`). The `user` package is normalized to the
-/// external-facing `root` literal; other packages pass through.
-fn fqn_prefix(key: &Name) -> String {
-    let pkg = match key.pkg.as_str() {
-        "user" => "root",
-        other => other,
-    };
-    let mut s = pkg.to_string();
-    for seg in &key.namespace_path {
-        s.push('.');
-        s.push_str(seg.as_str());
-    }
-    s
 }

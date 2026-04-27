@@ -184,13 +184,11 @@ pub use bex_vm_types::Program as ProgramAlias;
 
 /// Build a `TypeName` from a fully-qualified dotted path.
 ///
-/// For user-defined types (package `"user"`), the display name omits the
-/// package prefix so that `class_name` and type signatures in tests/output
-/// show `"Point"` rather than `"user.Point"`.  For builtins (e.g. `"baml.*"`),
-/// the full FQ path is kept.
+/// Emit always fully qualifies — `display_name` keeps the literal package
+/// prefix (`"user.Point"`, `"baml.http.Response"`, `"<vendor>.<…>"`). The
+/// codegen-output Python and the runtime see the same `<pkg>.<…>` form
+/// end-to-end. See `12a-namespace-rules.md §5` for the rationale.
 fn fq_to_type_name(fq: &str) -> baml_type::TypeName {
-    // Strip the "user." prefix from the display name for user-defined types.
-    let display = fq.strip_prefix("user.").unwrap_or(fq);
     let segments: Vec<&str> = fq.split('.').collect();
     let name = baml_base::Name::new(*segments.last().expect("non-empty fq name"));
     let module_path = segments[..segments.len() - 1]
@@ -200,7 +198,7 @@ fn fq_to_type_name(fq: &str) -> baml_type::TypeName {
     baml_type::TypeName {
         name,
         module_path,
-        display_name: baml_base::Name::new(display),
+        display_name: baml_base::Name::new(fq),
     }
 }
 

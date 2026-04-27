@@ -216,10 +216,10 @@ def _decode_class(class_value) -> Any:
         entry.key: _decode_value_holder(entry.value)
         for entry in class_value.fields
     }
-    # Engine emits `user.*` FQNs; 09b §1 routing lives in `root.*` space.
-    # Translate before resolving so `_resolve_type` stays spec-pure.
-    from . import _engine_fqn_to_baml_fqn, _resolve_type
-    fqn = _engine_fqn_to_baml_fqn(class_value.name.name)
+    # Emit always fully qualifies, so the engine FQN already matches
+    # what `_resolve_type` consumes (`12a-namespace-rules.md §5`).
+    from . import _resolve_type
+    fqn = class_value.name.name
     cls = _resolve_type(fqn)
 
     # Handle-backed classes never arrive via `class_value` — BEX emits
@@ -245,8 +245,8 @@ def _decode_class(class_value) -> Any:
 def _decode_enum(enum_value) -> Any:
     """Resolve a `BamlValueEnum` to a member of the generated enum class."""
     variant = enum_value.value
-    from . import _engine_fqn_to_baml_fqn, _resolve_type
-    fqn = _engine_fqn_to_baml_fqn(enum_value.name.name)
+    from . import _resolve_type
+    fqn = enum_value.name.name
     cls = _resolve_type(fqn)
     try:
         return cls(variant)

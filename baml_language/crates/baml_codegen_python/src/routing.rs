@@ -4,13 +4,14 @@
 //! to enumerate leaves and interior directories, and later phases reuse
 //! it when resolving cross-leaf type references.
 //!
-//! Rule source: 09b-codegen-rules §1 + 11c-phaseg1 §3.
+//! Rule source: 09b-codegen-rules §1 + 11c-phaseg1 §3 (as corrected by
+//! 12a-namespace-rules §1, §5).
 //!
-//! The `pkg` field in the codegen-facing `Name` is the external BAML
-//! package name. Today the compiler frontend populates user-code symbols
-//! with `pkg == "user"`, while the external/documentation name for the
-//! same thing is `"root"` (matches `__define_function("root.lorem.foo", …)`
-//! strings rendered into generated code). Routing accepts both.
+//! The `pkg` field in the codegen-facing `Name` is the literal package
+//! name from HIR — `"user"` for project files, `"baml"` for stdlib,
+//! `"<vendor>"` for declared external packages. The string `"root"` is
+//! a `.baml` source-syntax keyword (substituted to the current package
+//! during HIR resolution) and never appears as `Name::pkg`.
 //!
 //! `"baml"` routes under `baml/`, anything else under `vendor/<pkg>/`.
 //!
@@ -57,9 +58,7 @@ pub(crate) fn route(name: &Name) -> LeafPath {
     }
 
     match name.pkg.as_str() {
-        // `user` is the internal compiler name; `root` is the external
-        // documentation name. Both land at the SDK root (no prefix).
-        "user" | "root" => {}
+        "user" => {}
         "baml" => segs.push("baml".to_string()),
         other => {
             segs.push("vendor".to_string());
@@ -102,13 +101,6 @@ mod tests {
         let lp = route(&n);
         assert_eq!(lp.segments, vec!["lorem".to_string()]);
         assert_eq!(lp.init_py(), PathBuf::from("lorem/__init__.py"));
-    }
-
-    #[test]
-    fn root_alias_matches_user() {
-        let u = route(&name("user", &["lorem"], "Resume"));
-        let r = route(&name("root", &["lorem"], "Resume"));
-        assert_eq!(u, r);
     }
 
     #[test]

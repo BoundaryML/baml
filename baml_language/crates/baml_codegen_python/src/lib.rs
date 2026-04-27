@@ -384,8 +384,8 @@ mod tests {
 
         let out = to_source_code(&pool, &[]);
         let leaf = &out[&PathBuf::from("lorem/__init__.py")];
-        let sync_line = "extract_resume       = __define_function(\"root.lorem.extract_resume\", \"sync\",  [\"x\"])\n";
-        let async_line = "extract_resume_async = __define_function(\"root.lorem.extract_resume\", \"async\", [\"x\"])\n";
+        let sync_line = "extract_resume       = __define_function(\"user.lorem.extract_resume\", \"sync\",  [\"x\"])\n";
+        let async_line = "extract_resume_async = __define_function(\"user.lorem.extract_resume\", \"async\", [\"x\"])\n";
         assert!(leaf.contains(sync_line), "missing sync line in:\n{leaf}");
         assert!(leaf.contains(async_line), "missing async line in:\n{leaf}");
         assert!(!leaf.contains("extract_resume_stream"));
@@ -411,13 +411,13 @@ mod tests {
         let leaf = &out[&PathBuf::from("lorem/__init__.py")];
         assert!(
             leaf.contains(
-                "extract_resume_stream       = __define_function(\"root.lorem.extract_resume$stream\", \"sync\",  [\"x\"])\n",
+                "extract_resume_stream       = __define_function(\"user.lorem.extract_resume$stream\", \"sync\",  [\"x\"])\n",
             ),
             "missing stream sync companion in:\n{leaf}"
         );
         assert!(
             leaf.contains(
-                "extract_resume_stream_async = __define_function(\"root.lorem.extract_resume$stream\", \"async\", [\"x\"])\n",
+                "extract_resume_stream_async = __define_function(\"user.lorem.extract_resume$stream\", \"async\", [\"x\"])\n",
             ),
             "missing stream async companion in:\n{leaf}"
         );
@@ -442,13 +442,13 @@ mod tests {
         let leaf = &out[&PathBuf::from("lorem/__init__.py")];
         assert!(
             leaf.contains(
-                "extract_resume__build_request       = __define_function(\"root.lorem.extract_resume$build_request\", \"sync\",  [\"x\"])\n",
+                "extract_resume__build_request       = __define_function(\"user.lorem.extract_resume$build_request\", \"sync\",  [\"x\"])\n",
             ),
             "missing build_request sync companion in:\n{leaf}"
         );
         assert!(
             leaf.contains(
-                "extract_resume__build_request_async = __define_function(\"root.lorem.extract_resume$build_request\", \"async\", [\"x\"])\n",
+                "extract_resume__build_request_async = __define_function(\"user.lorem.extract_resume$build_request\", \"async\", [\"x\"])\n",
             ),
             "missing build_request async companion in:\n{leaf}"
         );
@@ -975,10 +975,10 @@ mod tests {
         let out = to_source_code(&pool, &[]);
         let leaf = &out[&PathBuf::from("lorem/__init__.py")];
         assert!(
-            leaf.contains("ping       = __define_function(\"root.lorem.ping\", \"sync\",  [])\n")
+            leaf.contains("ping       = __define_function(\"user.lorem.ping\", \"sync\",  [])\n")
         );
         assert!(
-            leaf.contains("ping_async = __define_function(\"root.lorem.ping\", \"async\", [])\n")
+            leaf.contains("ping_async = __define_function(\"user.lorem.ping\", \"async\", [])\n")
         );
     }
 
@@ -993,10 +993,10 @@ mod tests {
         let out = to_source_code(&pool, &[]);
         let leaf = &out[&PathBuf::from("lorem/__init__.py")];
         assert!(leaf.contains(
-            "make       = __define_function(\"root.lorem.make\", \"sync\",  [\"a\", \"b\", \"c\"])\n"
+            "make       = __define_function(\"user.lorem.make\", \"sync\",  [\"a\", \"b\", \"c\"])\n"
         ));
         assert!(leaf.contains(
-            "make_async = __define_function(\"root.lorem.make\", \"async\", [\"a\", \"b\", \"c\"])\n"
+            "make_async = __define_function(\"user.lorem.make\", \"async\", [\"a\", \"b\", \"c\"])\n"
         ));
     }
 
@@ -1019,14 +1019,14 @@ mod tests {
         let leaf = &out[&PathBuf::from("lorem/__init__.py")];
         // Parent uses parent params.
         assert!(leaf.contains(
-            "extract       = __define_function(\"root.lorem.extract\", \"sync\",  [\"a\", \"b\"])\n"
+            "extract       = __define_function(\"user.lorem.extract\", \"sync\",  [\"a\", \"b\"])\n"
         ));
         // Companion uses inner params, not parent's.
         assert!(leaf.contains(
-            "extract__build_request       = __define_function(\"root.lorem.extract$build_request\", \"sync\",  [\"text\"])\n"
+            "extract__build_request       = __define_function(\"user.lorem.extract$build_request\", \"sync\",  [\"text\"])\n"
         ));
         assert!(leaf.contains(
-            "extract__build_request_async = __define_function(\"root.lorem.extract$build_request\", \"async\", [\"text\"])\n"
+            "extract__build_request_async = __define_function(\"user.lorem.extract$build_request\", \"async\", [\"text\"])\n"
         ));
     }
 
@@ -1125,7 +1125,7 @@ mod tests {
         let out = to_source_code(&pool, &[]);
         let root = &out[&PathBuf::from("__init__.py")];
         assert!(
-            root.contains("ping       = __define_function(\"root.ping\", \"sync\",  [])\n"),
+            root.contains("ping       = __define_function(\"user.ping\", \"sync\",  [])\n"),
             "missing root binding in:\n{root}"
         );
     }

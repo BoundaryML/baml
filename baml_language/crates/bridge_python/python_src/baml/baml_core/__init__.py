@@ -166,17 +166,18 @@ def get_runtime() -> BamlRuntime:
 
 
 def _routed_python_path(baml_fqn: str) -> str:
-    """Map a BAML FQN (e.g. ``root.lorem.Resume``) to a Python subpath
+    """Map a BAML FQN (e.g. ``user.lorem.Resume``) to a Python subpath
     under ``baml_sdk`` per 09b §1. Pure function; memoized below.
 
-    Phase-3 stub: covers the `root.*` / `baml.*` / `<vendor>.*` cases
-    without `$stream`. The full rules (including `$stream` trailing
-    suffix) are filled in during phase 4.
+    Emit always fully qualifies, so the FQN's first segment is the
+    literal package name: `user.*` → user-package leaves, `baml.*` →
+    stdlib, anything else → `vendor/<pkg>/...`. See
+    `12a-namespace-rules.md §5`.
     """
     pkg, _, tail = baml_fqn.partition(".")
     if not tail:
         raise ValueError(f"Unrecognised BAML FQN: {baml_fqn!r}")
-    if pkg == "root":
+    if pkg == "user":
         return tail
     if pkg == "baml":
         return f"baml.{tail}"
@@ -271,55 +272,19 @@ def _build_kwargs(
     return built
 
 
-def _baml_fqn_to_engine_fqn(baml_fqn: str) -> str:
-    """Translate the Python-facing BAML FQN (09b §1) to the bare name the
-    engine resolves.
-
-    `root.*` is a BAML source-language affordance meaning "top of the
-    current package" — it is never part of the engine-registered name.
-    Strip it before sending; the engine's `lookup_function` fallback
-    (`bex_engine/src/lib.rs:965`) then finds the function. `baml.*`
-    (stdlib) and third-party `<pkg>.*` pass through unchanged.
-    """
-    if baml_fqn.startswith("root."):
-        return baml_fqn[len("root."):]
-    return baml_fqn
-
-
-def _engine_fqn_to_baml_fqn(engine_fqn: str) -> str:
-    """Inverse of `_baml_fqn_to_engine_fqn` — translate an engine-level FQN
-    back into the `root.*` form that 09b §1 routing expects. Applied to
-    class/enum FQNs read off the outbound proto before `_resolve_type`.
-
-    Engine-side `TypeName.display_name` strips the internal package
-    prefix for user types (see `baml_compiler2_emit/src/lib.rs:191`), so
-    a user class `MyLorem` in namespace `lorem` arrives on the wire as
-    bare `lorem.MyLorem`. Stdlib types keep their `baml.*` prefix;
-    third-party `<pkg>.*` is similarly untouched.
-
-    Rule: `baml.*` / `root.*` pass-through; anything else is user code →
-    prepend `root.`. Preserves a trailing `$stream` suffix."""
-    stream_suffix = ""
-    core = engine_fqn
-    if core.endswith("$stream"):
-        core = core[: -len("$stream")]
-        stream_suffix = "$stream"
-    if not core.startswith("baml.") and not core.startswith("root."):
-        core = "root." + core
-    return core + stream_suffix
-
-
 def _make_call(
     baml_fqn: str, mode: Mode, param_names: List[str]
 ) -> Callable[..., Any]:
+    # Codegen always emits fully-qualified `<pkg>.<ns…>.<name>` FQNs and
+    # the engine stores user functions under the same form (see
+    # `12a-namespace-rules.md §5`); no translation step needed.
     names = list(param_names)
-    engine_fqn = _baml_fqn_to_engine_fqn(baml_fqn)
     if mode == "sync":
         def _sync(*args: Any, **kwargs: Any) -> Any:
             merged = _build_kwargs(args, kwargs, names)
             rt = get_runtime()
             args_proto = encode_call_args(merged)
-            result_bytes = rt.call_function_sync(engine_fqn, args_proto, None, None, None)
+            result_bytes = rt.call_function_sync(baml_fqn, args_proto, None, None, None)
             return decode_call_result(result_bytes)
 
         _sync.__name__ = baml_fqn.rsplit(".", 1)[-1] or baml_fqn
@@ -330,7 +295,7 @@ def _make_call(
             merged = _build_kwargs(args, kwargs, names)
             rt = get_runtime()
             args_proto = encode_call_args(merged)
-            result_bytes = await rt.call_function(engine_fqn, args_proto, None, None, None)
+            result_bytes = await rt.call_function(baml_fqn, args_proto, None, None, None)
             return decode_call_result(result_bytes)
 
         _async.__name__ = baml_fqn.rsplit(".", 1)[-1] or baml_fqn

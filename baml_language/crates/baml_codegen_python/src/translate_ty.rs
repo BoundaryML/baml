@@ -323,25 +323,25 @@ mod tests {
             },
             Case {
                 label: "class same leaf root namespace",
-                ty: Ty::Class(name("root", &["lorem"], "Resume")),
+                ty: Ty::Class(name("user", &["lorem"], "Resume")),
                 ctx: ctx(&["lorem"]),
                 expected: "Resume",
             },
             Case {
                 label: "class cross leaf root namespace",
-                ty: Ty::Class(name("root", &["lorem"], "Resume")),
+                ty: Ty::Class(name("user", &["lorem"], "Resume")),
                 ctx: ctx(&["ipsum"]),
                 expected: "lorem.Resume",
             },
             Case {
                 label: "class same leaf root init",
-                ty: Ty::Class(name("root", &[], "Foo")),
+                ty: Ty::Class(name("user", &[], "Foo")),
                 ctx: ctx(&[]),
                 expected: "Foo",
             },
             Case {
                 label: "class root init from namespaced leaf",
-                ty: Ty::Class(name("root", &[], "Foo")),
+                ty: Ty::Class(name("user", &[], "Foo")),
                 ctx: ctx(&["lorem"]),
                 expected: "Foo",
             },
@@ -377,43 +377,43 @@ mod tests {
             },
             Case {
                 label: "class stream from non stream leaf",
-                ty: Ty::Class(name("root", &["lorem"], "Resume$stream")),
+                ty: Ty::Class(name("user", &["lorem"], "Resume$stream")),
                 ctx: ctx(&["lorem"]),
                 expected: "stream_types.lorem.Resume",
             },
             Case {
                 label: "class stream same leaf",
-                ty: Ty::Class(name("root", &["lorem"], "Resume$stream")),
+                ty: Ty::Class(name("user", &["lorem"], "Resume$stream")),
                 ctx: ctx(&["stream_types", "lorem"]),
                 expected: "Resume",
             },
             Case {
                 label: "class non stream from stream leaf",
-                ty: Ty::Class(name("root", &["lorem"], "Resume")),
+                ty: Ty::Class(name("user", &["lorem"], "Resume")),
                 ctx: ctx(&["stream_types", "lorem"]),
                 expected: "lorem.Resume",
             },
             Case {
                 label: "enum same leaf",
-                ty: Ty::Enum(name("root", &["ipsum"], "Sentiment")),
+                ty: Ty::Enum(name("user", &["ipsum"], "Sentiment")),
                 ctx: ctx(&["ipsum"]),
                 expected: "Sentiment",
             },
             Case {
                 label: "enum cross leaf",
-                ty: Ty::Enum(name("root", &["ipsum"], "Sentiment")),
+                ty: Ty::Enum(name("user", &["ipsum"], "Sentiment")),
                 ctx: ctx(&["lorem"]),
                 expected: "ipsum.Sentiment",
             },
             Case {
                 label: "type alias same leaf",
-                ty: Ty::TypeAlias(name("root", &["util"], "StringList")),
+                ty: Ty::TypeAlias(name("user", &["util"], "StringList")),
                 ctx: ctx(&["util"]),
                 expected: "StringList",
             },
             Case {
                 label: "type alias cross leaf",
-                ty: Ty::TypeAlias(name("root", &["util"], "StringList")),
+                ty: Ty::TypeAlias(name("user", &["util"], "StringList")),
                 ctx: ctx(&["lorem"]),
                 expected: "util.StringList",
             },
@@ -441,8 +441,8 @@ mod tests {
             Case {
                 label: "map enum to class",
                 ty: Ty::Map {
-                    key: Box::new(Ty::Enum(name("root", &["ipsum"], "Sentiment"))),
-                    value: Box::new(Ty::Class(name("root", &["lorem"], "Resume"))),
+                    key: Box::new(Ty::Enum(name("user", &["ipsum"], "Sentiment"))),
+                    value: Box::new(Ty::Class(name("user", &["lorem"], "Resume"))),
                 },
                 ctx: ctx(&["lorem"]),
                 expected: "typing.Dict[ipsum.Sentiment, Resume]",
@@ -462,7 +462,7 @@ mod tests {
             Case {
                 label: "optional list same leaf class",
                 ty: Ty::Optional(Box::new(Ty::List(Box::new(Ty::Class(name(
-                    "root",
+                    "user",
                     &["lorem"],
                     "Resume",
                 )))))),
@@ -518,8 +518,8 @@ mod tests {
             Case {
                 label: "union stream and non stream classes",
                 ty: Ty::Union(vec![
-                    Ty::Class(name("root", &["lorem"], "Resume")),
-                    Ty::Class(name("root", &["lorem"], "Resume$stream")),
+                    Ty::Class(name("user", &["lorem"], "Resume")),
+                    Ty::Class(name("user", &["lorem"], "Resume$stream")),
                 ]),
                 ctx: ctx(&["lorem"]),
                 expected: "typing.Union[Resume, stream_types.lorem.Resume]",
@@ -532,13 +532,13 @@ mod tests {
             },
             Case {
                 label: "recursive alias self ref",
-                ty: Ty::TypeAlias(name("root", &["util"], "RecList")),
+                ty: Ty::TypeAlias(name("user", &["util"], "RecList")),
                 ctx: ctx_with_self(&["util"], &["util"], "RecList"),
                 expected: "\"RecList\"",
             },
             Case {
                 label: "recursive alias inside list",
-                ty: Ty::List(Box::new(Ty::TypeAlias(name("root", &["util"], "RecList")))),
+                ty: Ty::List(Box::new(Ty::TypeAlias(name("user", &["util"], "RecList")))),
                 ctx: ctx_with_self(&["util"], &["util"], "RecList"),
                 expected: "typing.List[\"RecList\"]",
             },
@@ -546,26 +546,26 @@ mod tests {
                 label: "recursive alias inside union",
                 ty: Ty::Union(vec![
                     Ty::Int,
-                    Ty::List(Box::new(Ty::TypeAlias(name("root", &["util"], "RecList")))),
+                    Ty::List(Box::new(Ty::TypeAlias(name("user", &["util"], "RecList")))),
                 ]),
                 ctx: ctx_with_self(&["util"], &["util"], "RecList"),
                 expected: "typing.Union[int, typing.List[\"RecList\"]]",
             },
             Case {
                 label: "recursive alias leaves other refs unquoted",
-                ty: Ty::List(Box::new(Ty::Class(name("root", &["util"], "Other")))),
+                ty: Ty::List(Box::new(Ty::Class(name("user", &["util"], "Other")))),
                 ctx: ctx_with_self(&["util"], &["util"], "RecList"),
                 expected: "typing.List[Other]",
             },
             Case {
                 label: "non recursive alias same leaf",
-                ty: Ty::TypeAlias(name("root", &["util"], "RecList")),
+                ty: Ty::TypeAlias(name("user", &["util"], "RecList")),
                 ctx: ctx(&["util"]),
                 expected: "RecList",
             },
             Case {
                 label: "non recursive alias cross leaf",
-                ty: Ty::TypeAlias(name("root", &["util"], "RecList")),
+                ty: Ty::TypeAlias(name("user", &["util"], "RecList")),
                 ctx: ctx(&["lorem"]),
                 expected: "util.RecList",
             },
@@ -584,7 +584,7 @@ mod tests {
             Case {
                 label: "map enum to stream vendor class",
                 ty: Ty::Map {
-                    key: Box::new(Ty::Enum(name("root", &["ipsum"], "Sentiment"))),
+                    key: Box::new(Ty::Enum(name("user", &["ipsum"], "Sentiment"))),
                     value: Box::new(Ty::Class(name("aws", &["s3"], "Bucket$stream"))),
                 },
                 ctx: ctx(&["lorem"]),
@@ -593,7 +593,7 @@ mod tests {
             Case {
                 label: "union across placements",
                 ty: Ty::Union(vec![
-                    Ty::Class(name("root", &["lorem"], "Resume")),
+                    Ty::Class(name("user", &["lorem"], "Resume")),
                     Ty::Class(name("aws", &["s3"], "Bucket")),
                     Ty::Class(name("baml", &["http"], "Response")),
                 ]),
