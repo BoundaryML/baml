@@ -2938,10 +2938,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 Ty::Literal(lit, _, _) => *p == PrimitiveType::from_literal(lit),
                 _ => false,
             },
-            Ty::Literal(lit, _, _) => {
-                let widened = Ty::Primitive(PrimitiveType::from_literal(lit), TyAttr::default());
-                &widened == fact
-            }
+            Ty::Literal(_, _, _) => false,
             Ty::Optional(inner, _) => {
                 matches!(fact, Ty::Primitive(PrimitiveType::Null, _))
                     || Self::ty_covers_fact(inner, fact)
@@ -2959,9 +2956,22 @@ impl<'db> TypeInferenceBuilder<'db> {
             Ty::TypeAlias(qn, _) => matches!(fact, Ty::TypeAlias(fqn, _) if fqn == qn),
             Ty::EnumVariant(qn, variant, _) => {
                 matches!(fact, Ty::EnumVariant(fqn, fv, _) if fqn == qn && fv == variant)
-                    || matches!(fact, Ty::Enum(fqn, _) if fqn == qn)
             }
             Ty::BuiltinUnknown { .. } | Ty::Unknown { .. } | Ty::Error { .. } => true,
+            _ => false,
+        }
+    }
+
+    fn ty_may_match_fact(pattern_ty: &Ty, fact: &Ty) -> bool {
+        match pattern_ty {
+            Ty::Literal(lit, _, _) => {
+                let widened = Ty::Primitive(PrimitiveType::from_literal(lit), TyAttr::default());
+                &widened == fact
+                    || matches!(fact, Ty::Primitive(p, _) if *p == PrimitiveType::from_literal(lit))
+            }
+            Ty::EnumVariant(qn, _, _) => {
+                matches!(fact, Ty::Enum(fqn, _) if fqn == qn)
+            }
             _ => false,
         }
     }
@@ -2973,7 +2983,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         );
         if Self::ty_covers_fact(narrowed_ty, throw_fact) {
             PatternMatchStrength::DefiniteMatch
-        } else if is_unknown {
+        } else if is_unknown || Self::ty_may_match_fact(narrowed_ty, throw_fact) {
             PatternMatchStrength::MayMatch
         } else {
             PatternMatchStrength::NoMatch

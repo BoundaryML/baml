@@ -38,21 +38,3 @@ function Caller(x: int) -> string {
 //    │ 
 //    │ Note: Error code: E0097
 // ───╯
-// Warning: unreachable arm
-//     ╭─[ throw_throws_caller_sees_contract.baml:16:29 ]
-//     │
-//  16 │     Errors.NotFoundError => "notfound",
-//     │                             ─────┬────  
-//     │                                  ╰────── unreachable arm
-//     │ 
-//     │ Note: Error code: E0063
-// ────╯
-// Warning: unreachable arm
-//     ╭─[ throw_throws_caller_sees_contract.baml:17:29 ]
-//     │
-//  17 │     Errors.InternalError => "internal"
-//     │                             ─────┬────  
-//     │                                  ╰────── unreachable arm
-//     │ 
-//     │ Note: Error code: E0063
-// ────╯

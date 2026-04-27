@@ -751,3 +751,67 @@ fn function_type_throws_returned_closure_rejects_throwing_value() {
         "expected returned closure surface to stay explicit-only, got:\n{output}"
     );
 }
+
+#[test]
+fn literal_catch_arm_does_not_consume_entire_type_from_residual() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"function fail() -> int {
+  throw 42
+}
+
+function f() -> int {
+  return fail() catch (e) {
+    42 => 1,
+    _: int => 2,
+    _ => 3
+  }
+}"#,
+    );
+
+    let output = render_tir(&db, file);
+    let unreachable_count = output.matches("unreachable arm").count();
+    // Only the trailing wildcard `_ => 3` should be unreachable (int is fully
+    // handled by the literal + typed arms). The `_: int` arm must stay reachable.
+    assert!(
+        unreachable_count <= 1,
+        "typed int arm after literal 42 arm should NOT be unreachable, got:\n{output}"
+    );
+}
+
+#[test]
+fn enum_variant_catch_arm_does_not_consume_entire_enum_from_residual() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"enum Status {
+  Active
+  Inactive
+  Pending
+}
+
+function fail(which: int) -> int {
+  if (which == 0) { throw Status.Active }
+  if (which == 1) { throw Status.Inactive }
+  throw Status.Pending
+}
+
+function f() -> int {
+  return fail(0) catch (e) {
+    Status.Active => 1,
+    _: Status => 2,
+    _ => 3
+  }
+}"#,
+    );
+
+    let output = render_tir(&db, file);
+    let unreachable_count = output.matches("unreachable arm").count();
+    // Only the trailing wildcard should be unreachable. The `_: Status` arm
+    // must stay reachable since Status.Active doesn't cover all variants.
+    assert!(
+        unreachable_count <= 1,
+        "typed Status arm after Status.Active arm should NOT be unreachable, got:\n{output}"
+    );
+}
