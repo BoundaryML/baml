@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 7142
 ---
 === HIR2 ===
 function user.sum_array(arr: int[]) -> int  [expr] {
@@ -7,4 +8,4 @@ function user.sum_array(arr: int[]) -> int  [expr] {
 }
 
 --- captures ---
-lambda () in sum_array: captures [sum, i]
+lambda () in ?: captures [sum, i]

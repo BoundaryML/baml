@@ -92,7 +92,7 @@ fn user.sum_array(arr: int[]) -> int {
 fn .<lambda(sum_array, 0)>() -> null {
     // Locals:
     let _0: null // _0 // return
-    let _1: void
+    let _1: int
 
     bb0: {
         _1 = copy capture[1];

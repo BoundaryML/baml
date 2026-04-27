@@ -359,7 +359,6 @@ async fn issue_e_method_resolution_different_types() {
 /// let x = 1; let g captures x (=1); let x = "shadow"; let f captures x (="shadow")
 /// Both lambdas should capture the correct x for their position.
 #[tokio::test]
-#[ignore = "BAML disallows variable shadowing; test kept for when shadowing is added"]
 async fn issue_f_shadowing_capture_correct_binding() {
     let output = baml_test!(
         "
@@ -379,7 +378,6 @@ async fn issue_f_shadowing_capture_correct_binding() {
 /// Issue F (variant): shadowed capture with mutation.
 /// The first x should be independently cell-wrapped from the second x.
 #[tokio::test]
-#[ignore = "BAML disallows variable shadowing; test kept for when shadowing is added"]
 async fn issue_f_shadowing_capture_independent_cells() {
     let output = baml_test!(
         "
