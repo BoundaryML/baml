@@ -360,13 +360,17 @@ impl BexEngine {
             Value::Float(f) => BexExternalValue::Float(*f),
             Value::Bool(b) => BexExternalValue::Bool(*b),
             Value::Object(ptr) => BexValue::HeapPtr(ptr)
-                .as_owned_but_very_slow(&self.heap, permit)
-                .unwrap_or_else(|_| {
-                    #[allow(clippy::print_stderr)]
-                    {
-                        eprintln!("Failed to deep-copy VM value for trace payload");
-                    }
-                    BexExternalValue::Null
+                .as_owned_for_trace(&self.heap, permit)
+                .unwrap_or_else(|e| {
+                    // Remaining errors here (InvalidHandle, TypeMismatch,
+                    // FieldNotFound) indicate engine-level invariant
+                    // violations — they shouldn't happen in normal operation.
+                    // Surface via structured tracing rather than stderr so
+                    // they're visible in logs without polluting CLI output,
+                    // and embed the error in the trace payload so it shows
+                    // up wherever traces are consumed.
+                    tracing::error!(error = %e, "trace payload deep-copy failed");
+                    BexExternalValue::String(format!("<trace-error: {e}>"))
                 }),
         }
     }
