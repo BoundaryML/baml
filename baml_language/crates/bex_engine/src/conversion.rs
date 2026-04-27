@@ -360,14 +360,8 @@ impl BexEngine {
             Value::Float(f) => BexExternalValue::Float(*f),
             Value::Bool(b) => BexExternalValue::Bool(*b),
             Value::Object(ptr) => BexValue::HeapPtr(ptr)
-                .as_owned_but_very_slow(&self.heap, permit)
-                .unwrap_or_else(|_| {
-                    #[allow(clippy::print_stderr)]
-                    {
-                        eprintln!("Failed to deep-copy VM value for trace payload");
-                    }
-                    BexExternalValue::Null
-                }),
+                .as_owned_for_trace(&self.heap, permit)
+                .unwrap_or(BexExternalValue::Null),
         }
     }
 
