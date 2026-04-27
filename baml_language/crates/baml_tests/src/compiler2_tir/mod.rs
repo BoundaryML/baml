@@ -25,7 +25,7 @@ pub(crate) mod support {
     use std::fmt::Write;
 
     use baml_compiler2_ast::{
-        CatchClauseKind, Expr, ExprBody, ExprId, Literal, PatId, Pattern, Stmt, StmtId, TypeExpr,
+        CatchClauseKind, Expr, ExprBody, ExprId, Literal, PatId, Stmt, StmtId, TypeExpr,
     };
     use baml_compiler2_hir::{
         body::FunctionBody, contributions::Definition, loc::FunctionLoc, scope::ScopeKind,
@@ -130,20 +130,52 @@ pub(crate) mod support {
     }
 
     fn pat_desc(pat_id: PatId, body: &ExprBody) -> String {
+        use baml_compiler2_ast::PatternKind;
         let pat = &body.patterns[pat_id];
-        match pat {
-            Pattern::Binding(n) => n.to_string(),
-            Pattern::TypedBinding { name, ty } => {
-                format!("{name}: {}", type_expr_to_string(ty))
+        let core = match &pat.kind {
+            PatternKind::Wildcard => "_".to_string(),
+            PatternKind::Bind { name, inner: None } => name.to_string(),
+            PatternKind::Bind {
+                name,
+                inner: Some(inner),
+            } => {
+                format!("{name}: {}", pat_desc(*inner, body))
             }
-            Pattern::Literal(lit) => lit.to_string(),
-            Pattern::Null => "null".into(),
-            Pattern::EnumVariant { enum_name, variant } => format!("{enum_name}.{variant}"),
-            Pattern::Union(pats) => pats
+            PatternKind::Class { class, fields } => {
+                let fs = fields
+                    .iter()
+                    .map(|f| match f.pat {
+                        None => f.field.to_string(),
+                        Some(p) => format!("{}: {}", f.field, pat_desc(p, body)),
+                    })
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                format!("{class} {{ {fs} }}")
+            }
+            PatternKind::Type(ty) => type_expr_to_string(ty),
+            PatternKind::Literal(lit) => lit.to_string(),
+            PatternKind::Null => "null".into(),
+            PatternKind::EnumVariant { enum_name, variant } => {
+                let path = enum_name
+                    .iter()
+                    .map(|n| n.as_str())
+                    .collect::<Vec<_>>()
+                    .join(".");
+                if path.is_empty() {
+                    variant.to_string()
+                } else {
+                    format!("{path}.{variant}")
+                }
+            }
+            PatternKind::Or(pats) => pats
                 .iter()
                 .map(|p| pat_desc(*p, body))
                 .collect::<Vec<_>>()
                 .join(" | "),
+        };
+        match &pat.narrow {
+            Some(ty) => format!("{core}: {}", type_expr_to_string(ty)),
+            None => core,
         }
     }
 
@@ -722,6 +754,21 @@ pub(crate) mod support {
         }
     }
 
+    fn pat_desc_short(pat: &baml_compiler2_ast::Pattern) -> String {
+        use baml_compiler2_ast::PatternKind;
+        let base = match &pat.kind {
+            PatternKind::Wildcard => "_".to_string(),
+            PatternKind::Bind { name, .. } => name.to_string(),
+            PatternKind::Type(ty) => format!("{ty:?}"),
+            other => format!("{other:?}"),
+        };
+        if let Some(narrow) = &pat.narrow {
+            format!("{base}: {}", type_expr_to_string(narrow))
+        } else {
+            base
+        }
+    }
+
     fn render_stmt(
         stmt_id: StmtId,
         body: &ExprBody,
@@ -737,13 +784,7 @@ pub(crate) mod support {
                 initializer,
                 ..
             } => {
-                let pat_name = match &body.patterns[*pattern] {
-                    Pattern::Binding(n) => n.to_string(),
-                    Pattern::TypedBinding { name, ty } => {
-                        format!("{name}: {}", type_expr_to_string(ty))
-                    }
-                    other => format!("{other:?}"),
-                };
+                let pat_name = pat_desc_short(&body.patterns[*pattern]);
                 if let Some(init) = initializer {
                     let init_ty = expr_ty(inference, *init);
                     let binding_ty = inference.binding_type(*pattern).map(|t| t.to_string());
@@ -802,11 +843,7 @@ pub(crate) mod support {
                 collection,
                 body: for_body,
             } => {
-                let bind_name = match &body.patterns[*binding] {
-                    Pattern::Binding(n) => n.to_string(),
-                    Pattern::TypedBinding { name, .. } => name.to_string(),
-                    other => format!("{other:?}"),
-                };
+                let bind_name = pat_desc_short(&body.patterns[*binding]);
                 let coll_desc = expr_desc(*collection, body);
                 writeln!(output, "{pad}for {bind_name} in {coll_desc}").ok();
                 render_expr(*for_body, body, inference, indent + 2, output);
@@ -1171,7 +1208,7 @@ pub(crate) mod support {
 
     /// Render a file's HIR2 (compiler2 item tree) as readable text.
     pub fn render_hir2(db: &ProjectDatabase, file: baml_base::SourceFile) -> String {
-        use baml_compiler2_ast::{CatchClauseKind, Expr, ExprBody, Literal, Pattern};
+        use baml_compiler2_ast::{CatchClauseKind, Expr, ExprBody, Literal};
         use baml_compiler2_hir::{
             file_item_tree,
             file_package::file_package,
@@ -1285,25 +1322,54 @@ pub(crate) mod support {
             prefix: &str,
             local_type_names: &std::collections::HashSet<&str>,
         ) -> String {
+            use baml_compiler2_ast::PatternKind;
             let pat = &body.patterns[pat_id];
-            match pat {
-                Pattern::Binding(n) => n.to_string(),
-                Pattern::TypedBinding { name, ty } => {
-                    format!("{name}: {}", type_expr_to_string_hir(ty, prefix))
-                }
-                Pattern::Literal(lit) => lit.to_string(),
-                Pattern::Null => "null".into(),
-                Pattern::EnumVariant { enum_name, variant } => {
+            let base = match &pat.kind {
+                PatternKind::Wildcard => "_".to_string(),
+                PatternKind::Bind { name, .. } => name.to_string(),
+                PatternKind::Literal(lit) => lit.to_string(),
+                PatternKind::Null => "null".into(),
+                PatternKind::EnumVariant { enum_name, variant } => {
+                    let joined = baml_base::Name::new(
+                        enum_name
+                            .iter()
+                            .map(|s| s.as_str())
+                            .collect::<Vec<_>>()
+                            .join("."),
+                    );
                     format!(
                         "{}.{variant}",
-                        qualify_type_name(enum_name, prefix, local_type_names)
+                        qualify_type_name(&joined, prefix, local_type_names)
                     )
                 }
-                Pattern::Union(pats) => pats
+                PatternKind::Or(pats) => pats
                     .iter()
                     .map(|p| pat_desc_hir(*p, body, prefix, local_type_names))
                     .collect::<Vec<_>>()
                     .join(" | "),
+                PatternKind::Type(ty) => type_expr_to_string_hir(ty, prefix),
+                PatternKind::Class { class, fields } => {
+                    let field_strs: Vec<_> = fields
+                        .iter()
+                        .map(|f| {
+                            if let Some(inner) = f.pat {
+                                format!(
+                                    "{}: {}",
+                                    f.field,
+                                    pat_desc_hir(inner, body, prefix, local_type_names)
+                                )
+                            } else {
+                                f.field.to_string()
+                            }
+                        })
+                        .collect();
+                    format!("{} {{ {} }}", class, field_strs.join(", "))
+                }
+            };
+            if let Some(narrow) = &pat.narrow {
+                format!("{base}: {}", type_expr_to_string_hir(narrow, prefix))
+            } else {
+                base
             }
         }
 

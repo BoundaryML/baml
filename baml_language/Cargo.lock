@@ -1223,6 +1223,7 @@ dependencies = [
 name = "baml_compiler2_visualization"
 version = "0.0.0-beta"
 dependencies = [
+ "baml_base",
  "baml_compiler2_ast",
  "indexmap 2.13.0",
  "la-arena",

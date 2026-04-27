@@ -16,7 +16,7 @@
 use std::collections::{BTreeSet, HashMap};
 
 use baml_base::Name;
-use baml_compiler2_ast::{Expr, ExprBody, ExprId, PatId, Stmt, StmtId, TypeExpr};
+use baml_compiler2_ast::{Expr, ExprBody, ExprId, PatId, PatternKind, Stmt, StmtId, TypeExpr};
 use baml_compiler2_hir::{
     contributions::Definition,
     package::{PackageId, PackageItems},
@@ -2004,13 +2004,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 let diverges = matches!(init_ty, Some(Ty::Never { .. }));
                 if let Some(ty) = init_ty {
                     self.bindings.insert(*pattern, ty.clone());
-                    let pat = &body.patterns[*pattern];
-                    let name = match pat {
-                        baml_compiler2_ast::Pattern::Binding(name) => Some(name),
-                        baml_compiler2_ast::Pattern::TypedBinding { name, .. } => Some(name),
-                        _ => None,
-                    };
-                    if let Some(name) = name {
+                    if let Some(name) = body.patterns[*pattern].binding_name() {
                         self.let_binding_patterns.insert(name.clone(), *pattern);
                         self.locals.insert(name.clone(), ty);
                         // Record declared type only for annotated let-bindings.
@@ -2071,12 +2065,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 };
 
                 // 3. Bind the loop variable to the element type
-                let pat = &body.patterns[*binding];
-                let name = match pat {
-                    baml_compiler2_ast::Pattern::Binding(name) => Some(name.clone()),
-                    baml_compiler2_ast::Pattern::TypedBinding { name, .. } => Some(name.clone()),
-                    _ => None,
-                };
+                let name = body.patterns[*binding].binding_name().cloned();
                 self.bindings.insert(*binding, elem_ty.clone());
                 if let Some(name) = name {
                     self.locals.insert(name, elem_ty);
@@ -2437,31 +2426,23 @@ impl<'db> TypeInferenceBuilder<'db> {
                     });
                 self.bindings.insert(st_binding, st_ty.clone());
                 // Also insert into locals so name resolution finds it.
-                let st_name = match &body.patterns[st_binding] {
-                    baml_compiler2_ast::Pattern::Binding(name) => Some(name.clone()),
-                    baml_compiler2_ast::Pattern::TypedBinding { name, .. } => Some(name.clone()),
-                    _ => None,
-                };
-                if let Some(name) = st_name {
-                    self.locals.insert(name, st_ty);
+                if let Some(name) = body.patterns[st_binding].binding_name() {
+                    self.locals.insert(name.clone(), st_ty);
                 }
             }
 
-            let binding_name = match &body.patterns[clause.binding] {
-                baml_compiler2_ast::Pattern::Binding(name) => Some(name.clone()),
-                baml_compiler2_ast::Pattern::TypedBinding { name, ty } => {
-                    if let Some(banned) = crate::throw_inference::is_banned_catch_binding_type(ty) {
-                        self.context.report_simple(
-                            TirTypeError::InvalidCatchBindingType {
-                                type_name: banned.to_string(),
-                            },
-                            base_expr_id,
-                        );
-                    }
-                    Some(name.clone())
+            let clause_pat = &body.patterns[clause.binding];
+            if let Some(ty) = &clause_pat.narrow {
+                if let Some(banned) = crate::throw_inference::is_banned_catch_binding_type(ty) {
+                    self.context.report_simple(
+                        TirTypeError::InvalidCatchBindingType {
+                            type_name: banned.to_string(),
+                        },
+                        base_expr_id,
+                    );
                 }
-                _ => None,
-            };
+            }
+            let binding_name = clause_pat.binding_name().cloned();
 
             for &arm_id in &clause.arms {
                 let arm = &body.catch_arms[arm_id];
@@ -2619,11 +2600,20 @@ impl<'db> TypeInferenceBuilder<'db> {
         at_expr: ExprId,
     ) -> BTreeSet<String> {
         let pattern = &body.patterns[pattern_id];
-        match pattern {
-            baml_compiler2_ast::Pattern::Binding(name) => {
-                if name.as_str() == "_" {
-                    self.required_match_cases(scrutinee_ty).unwrap_or_default()
-                } else if self.is_bare_type_sugar_binding(name) {
+        // A typed binding (`x: T` / `_: T`) narrows like the legacy
+        // `TypedBinding`; we detect it by the presence of `narrow`.
+        if pattern.narrow.is_some() {
+            let narrowed = self.pattern_narrowed_type(pattern_id, scrutinee_ty, body, at_expr);
+            return if self.is_subtype(scrutinee_ty, &narrowed) {
+                self.required_match_cases(scrutinee_ty).unwrap_or_default()
+            } else {
+                self.required_match_cases(&narrowed).unwrap_or_default()
+            };
+        }
+        match &pattern.kind {
+            PatternKind::Wildcard => self.required_match_cases(scrutinee_ty).unwrap_or_default(),
+            PatternKind::Bind { name, .. } => {
+                if self.is_bare_type_sugar_binding(name) {
                     let narrowed =
                         self.pattern_narrowed_type(pattern_id, scrutinee_ty, body, at_expr);
                     self.required_match_cases(&narrowed).unwrap_or_default()
@@ -2631,35 +2621,29 @@ impl<'db> TypeInferenceBuilder<'db> {
                     self.required_match_cases(scrutinee_ty).unwrap_or_default()
                 }
             }
-            baml_compiler2_ast::Pattern::TypedBinding { .. } => {
-                let narrowed = self.pattern_narrowed_type(pattern_id, scrutinee_ty, body, at_expr);
-                if self.is_subtype(scrutinee_ty, &narrowed) {
-                    self.required_match_cases(scrutinee_ty).unwrap_or_default()
-                } else {
-                    self.required_match_cases(&narrowed).unwrap_or_default()
-                }
-            }
-            baml_compiler2_ast::Pattern::Literal(lit) => {
-                BTreeSet::from([Self::literal_case_name(lit)])
-            }
-            baml_compiler2_ast::Pattern::Null => BTreeSet::from(["null".to_string()]),
-            baml_compiler2_ast::Pattern::EnumVariant { enum_name, variant } => {
+            PatternKind::Literal(lit) => BTreeSet::from([Self::literal_case_name(lit)]),
+            PatternKind::Null => BTreeSet::from(["null".to_string()]),
+            PatternKind::EnumVariant { enum_name, variant } => {
                 // Use the qualified name from scrutinee_ty when the pattern's
-                // enum_name matches (bare or namespace-qualified). For
-                // `root.Status.Ok`, enum_name is "root.Status" — strip the
-                // `root.` prefix and compare against the QTN's ns+name path.
+                // enum path matches (bare or namespace-qualified).
                 let qualified_enum = match scrutinee_ty {
                     Ty::Enum(qtn, _) if Self::enum_name_matches(enum_name, qtn) => qtn.to_string(),
-                    _ => enum_name.to_string(),
+                    _ => Self::enum_name_path(enum_name),
                 };
                 BTreeSet::from([format!("{qualified_enum}.{variant}")])
             }
-            baml_compiler2_ast::Pattern::Union(parts) => {
+            PatternKind::Or(parts) => {
                 let mut out = BTreeSet::new();
                 for part in parts {
                     out.extend(self.pattern_match_cases(*part, scrutinee_ty, body, at_expr));
                 }
                 out
+            }
+            // Class / Type cores aren't yet emitted into TIR; treat as no-op
+            // for now so the exhaustive match doesn't error during the AST
+            // refactor. A later PR plumbs them through pattern compilation.
+            PatternKind::Class { .. } | PatternKind::Type(_) => {
+                self.required_match_cases(scrutinee_ty).unwrap_or_default()
             }
         }
     }
@@ -2671,15 +2655,18 @@ impl<'db> TypeInferenceBuilder<'db> {
         body: &ExprBody,
         at_expr: ExprId,
     ) -> bool {
-        match &body.patterns[pattern_id] {
-            baml_compiler2_ast::Pattern::Binding(name) => {
-                !self.is_bare_type_sugar_binding(name) || name.as_str() == "_"
-            }
-            baml_compiler2_ast::Pattern::TypedBinding { .. } => {
-                let narrowed = self.pattern_narrowed_type(pattern_id, scrutinee_ty, body, at_expr);
-                self.is_subtype(scrutinee_ty, &narrowed)
-            }
-            baml_compiler2_ast::Pattern::Union(parts) => {
+        let pattern = &body.patterns[pattern_id];
+        // Typed binding (`x: T` / `_: T`): covers iff scrutinee already narrows to T.
+        if pattern.narrow.is_some() {
+            let narrowed = self.pattern_narrowed_type(pattern_id, scrutinee_ty, body, at_expr);
+            return self.is_subtype(scrutinee_ty, &narrowed);
+        }
+        match &pattern.kind {
+            // Wildcard always covers.
+            PatternKind::Wildcard => true,
+            // Plain binding covers unless it's a bare-type-sugar name like `int`.
+            PatternKind::Bind { name, .. } => !self.is_bare_type_sugar_binding(name),
+            PatternKind::Or(parts) => {
                 if let Some(required) = self.required_match_cases(scrutinee_ty) {
                     let mut covered = BTreeSet::new();
                     for part in parts {
@@ -2713,16 +2700,15 @@ impl<'db> TypeInferenceBuilder<'db> {
         body: &ExprBody,
         at_expr: ExprId,
     ) -> Option<(Name, Ty)> {
-        match &body.patterns[pattern_id] {
-            baml_compiler2_ast::Pattern::Binding(name) => {
-                if name.as_str() == "_" || self.is_bare_type_sugar_binding(name) {
-                    None
-                } else {
-                    Some((name.clone(), scrutinee_ty.clone()))
-                }
-            }
-            baml_compiler2_ast::Pattern::TypedBinding { name, ty } => {
-                Some((name.clone(), self.resolve_type_expr(ty, at_expr)))
+        let pattern = &body.patterns[pattern_id];
+        // `x: T` / `_: T` — typed binding: name (if any) bound to resolved T.
+        if let Some(ty) = &pattern.narrow {
+            let resolved = self.resolve_type_expr(ty, at_expr);
+            return pattern.binding_name().map(|n| (n.clone(), resolved));
+        }
+        match &pattern.kind {
+            PatternKind::Bind { name, .. } if !self.is_bare_type_sugar_binding(name) => {
+                Some((name.clone(), scrutinee_ty.clone()))
             }
             _ => None,
         }
@@ -2735,18 +2721,19 @@ impl<'db> TypeInferenceBuilder<'db> {
         body: &ExprBody,
         at_expr: ExprId,
     ) {
-        match &body.patterns[pattern_id] {
-            baml_compiler2_ast::Pattern::Binding(name)
-                if name.as_str() != "_" && self.is_bare_type_sugar_binding(name) =>
-            {
+        let pattern = &body.patterns[pattern_id];
+        // Typed binding: record the explicit type.
+        if let Some(ty) = &pattern.narrow {
+            let resolved = self.resolve_type_expr(ty, at_expr);
+            self.bindings.insert(pattern_id, resolved);
+            return;
+        }
+        match &pattern.kind {
+            PatternKind::Bind { name, .. } if self.is_bare_type_sugar_binding(name) => {
                 let ty = self.pattern_narrowed_type(pattern_id, scrutinee_ty, body, at_expr);
                 self.bindings.insert(pattern_id, ty);
             }
-            baml_compiler2_ast::Pattern::TypedBinding { ty, .. } => {
-                let resolved = self.resolve_type_expr(ty, at_expr);
-                self.bindings.insert(pattern_id, resolved);
-            }
-            baml_compiler2_ast::Pattern::Union(parts) => {
+            PatternKind::Or(parts) => {
                 for part in parts {
                     self.record_pattern_test_types(*part, scrutinee_ty, body, at_expr);
                 }
@@ -2776,8 +2763,15 @@ impl<'db> TypeInferenceBuilder<'db> {
         body: &ExprBody,
         at_expr: ExprId,
     ) -> Ty {
-        match &body.patterns[pattern_id] {
-            baml_compiler2_ast::Pattern::Binding(name) => {
+        let pattern = &body.patterns[pattern_id];
+        // `pat: T` — explicit narrow wins regardless of core kind.
+        if let Some(ty) = &pattern.narrow {
+            return self.resolve_type_expr(ty, at_expr);
+        }
+        match &pattern.kind {
+            // Wildcard contributes the full scrutinee type.
+            PatternKind::Wildcard => scrutinee_ty.clone(),
+            PatternKind::Bind { name, .. } => {
                 if let Some(prim_ty) = bare_type_sugar_to_ty(name) {
                     prim_ty
                 } else if self.is_bare_type_sugar_binding(name) {
@@ -2793,27 +2787,30 @@ impl<'db> TypeInferenceBuilder<'db> {
                     scrutinee_ty.clone()
                 }
             }
-            baml_compiler2_ast::Pattern::TypedBinding { ty, .. } => {
-                self.resolve_type_expr(ty, at_expr)
-            }
-            baml_compiler2_ast::Pattern::Literal(lit) => Ty::Literal(
+            PatternKind::Literal(lit) => Ty::Literal(
                 lit.clone(),
                 crate::ty::Freshness::Regular,
                 TyAttr::default(),
             ),
-            baml_compiler2_ast::Pattern::Null => {
-                Ty::Primitive(PrimitiveType::Null, TyAttr::default())
-            }
-            baml_compiler2_ast::Pattern::EnumVariant { enum_name, variant } => {
+            PatternKind::Null => Ty::Primitive(PrimitiveType::Null, TyAttr::default()),
+            PatternKind::EnumVariant { enum_name, variant } => {
                 if let Ty::Enum(qn, _) = scrutinee_ty {
                     if Self::enum_name_matches(enum_name, qn) {
                         return Ty::EnumVariant(qn.clone(), variant.clone(), TyAttr::default());
                     }
                 }
-                if let Some(def) = self.package_items.lookup_type(&self.ns_context, enum_name) {
+                let lookup_name = Name::new(Self::enum_name_path(enum_name));
+                if let Some(def) = self
+                    .package_items
+                    .lookup_type(&self.ns_context, &lookup_name)
+                {
                     if matches!(def, Definition::Enum(_)) {
                         return Ty::EnumVariant(
-                            crate::lower_type_expr::qualify_def(self.context.db(), def, enum_name),
+                            crate::lower_type_expr::qualify_def(
+                                self.context.db(),
+                                def,
+                                &lookup_name,
+                            ),
                             variant.clone(),
                             TyAttr::default(),
                         );
@@ -2823,13 +2820,31 @@ impl<'db> TypeInferenceBuilder<'db> {
                     attr: TyAttr::default(),
                 }
             }
-            baml_compiler2_ast::Pattern::Union(parts) => {
+            PatternKind::Or(parts) => {
                 let mut tys = Vec::new();
                 for part in parts {
                     tys.push(self.pattern_narrowed_type(*part, scrutinee_ty, body, at_expr));
                 }
                 Self::join_all(&tys)
             }
+            // Class destructure narrows to the named class. Inner field
+            // patterns are checked separately during pattern compilation
+            // (see HIR/MIR class-destructure desugaring).
+            PatternKind::Class { class, .. } => {
+                let lookup = Name::new(class.as_str());
+                if let Some(def) = self.package_items.lookup_type(&self.ns_context, &lookup) {
+                    if matches!(def, Definition::Class(_)) {
+                        let qn =
+                            crate::lower_type_expr::qualify_def(self.context.db(), def, &lookup);
+                        return Ty::Class(qn, vec![], TyAttr::default());
+                    }
+                }
+                Ty::Unknown {
+                    attr: TyAttr::default(),
+                }
+            }
+            // Bare type pattern in match-arm position narrows to that type.
+            PatternKind::Type(ty_expr) => self.resolve_type_expr(ty_expr, at_expr),
         }
     }
 
@@ -2866,12 +2881,16 @@ impl<'db> TypeInferenceBuilder<'db> {
         body: &baml_compiler2_ast::ExprBody,
         at_expr: ExprId,
     ) -> Option<Ty> {
-        match &body.patterns[pattern_id] {
-            baml_compiler2_ast::Pattern::Binding(name) => {
-                if name.as_str() == "_" || !self.is_bare_type_sugar_binding(name) {
+        let pat = &body.patterns[pattern_id];
+        if let Some(ty) = &pat.narrow {
+            let narrowed = self.resolve_type_expr(ty, at_expr);
+            return self.ty_panic_subset(&narrowed);
+        }
+        match &pat.kind {
+            PatternKind::Bind { name, .. } => {
+                if !self.is_bare_type_sugar_binding(name) {
                     return None;
                 }
-
                 let narrowed = if let Some(prim_ty) = bare_type_sugar_to_ty(name) {
                     prim_ty
                 } else {
@@ -2886,27 +2905,28 @@ impl<'db> TypeInferenceBuilder<'db> {
                 };
                 self.ty_panic_subset(&narrowed)
             }
-            baml_compiler2_ast::Pattern::TypedBinding { ty, .. } => {
-                let narrowed = self.resolve_type_expr(ty, at_expr);
+            PatternKind::Type(ty_expr) => {
+                let narrowed = self.resolve_type_expr(ty_expr, at_expr);
                 self.ty_panic_subset(&narrowed)
             }
-            baml_compiler2_ast::Pattern::Union(parts) => {
+            PatternKind::Or(parts) => {
                 let mut panic_members = Vec::new();
                 for part in parts {
                     if let Some(ty) = self.pattern_panic_narrowed_type(*part, body, at_expr) {
                         panic_members.push(ty);
                     }
                 }
-
                 if panic_members.is_empty() {
                     None
                 } else {
                     Some(Self::join_all(&panic_members))
                 }
             }
-            baml_compiler2_ast::Pattern::Literal(_)
-            | baml_compiler2_ast::Pattern::Null
-            | baml_compiler2_ast::Pattern::EnumVariant { .. } => None,
+            PatternKind::Wildcard
+            | PatternKind::Literal(_)
+            | PatternKind::Null
+            | PatternKind::EnumVariant { .. }
+            | PatternKind::Class { .. } => None,
         }
     }
 
@@ -2997,33 +3017,34 @@ impl<'db> TypeInferenceBuilder<'db> {
                 .is_some()
     }
 
-    /// Check if a pattern's `enum_name` (which may be dotted like `"root.Status"` or
-    /// `"root.llm.Status"`) refers to the same enum as a `QualifiedTypeName`.
-    fn enum_name_matches(enum_name: &Name, qtn: &crate::ty::QualifiedTypeName) -> bool {
-        // Bare name match: "Status" == qtn.name()
-        if qtn.name() == enum_name {
+    /// Join an enum path (e.g. `[root, Status]`) into a dotted display string.
+    fn enum_name_path(segs: &[Name]) -> String {
+        segs.iter().map(Name::as_str).collect::<Vec<_>>().join(".")
+    }
+
+    /// Check if a pattern's `enum_name` path (e.g. `[Status]`, `[root, Status]`,
+    /// or `[root, llm, Status]`) refers to the same enum as a `QualifiedTypeName`.
+    fn enum_name_matches(enum_name: &[Name], qtn: &crate::ty::QualifiedTypeName) -> bool {
+        // Bare match: single-segment path equal to the enum name.
+        if enum_name.len() == 1 && qtn.name() == &enum_name[0] {
             return true;
         }
-        // Dotted name: split on "." and compare
-        let parts: Vec<&str> = enum_name.as_str().split('.').collect();
-        if parts.len() < 2 {
+        if enum_name.is_empty() {
             return false;
         }
-        let name = parts[parts.len() - 1];
-        let path = &parts[..parts.len() - 1];
-        // Strip leading "root" if present
-        let ns_parts = if path.first() == Some(&"root") {
+        let (name, path) = enum_name.split_last().unwrap();
+        // Strip leading `root` if present.
+        let ns_parts: &[Name] = if path.first().map(Name::as_str) == Some("root") {
             &path[1..]
         } else {
             path
         };
-        // Compare namespace and name
-        name == qtn.name().as_str()
+        name == qtn.name()
             && ns_parts.len() == qtn.namespace().len()
             && ns_parts
                 .iter()
                 .zip(qtn.namespace().iter())
-                .all(|(a, b): (&&str, &Name)| *a == b.as_str())
+                .all(|(a, b)| a == b)
     }
 
     fn catch_base_throw_types(&self, base_expr_id: ExprId, body: &ExprBody) -> BTreeSet<Ty> {
@@ -3077,9 +3098,20 @@ impl<'db> TypeInferenceBuilder<'db> {
             throw_fact,
             Ty::Unknown { .. } | Ty::BuiltinUnknown { .. } | Ty::Error { .. }
         );
-        let pattern = &body.patterns[pattern_id];
-        match pattern {
-            baml_compiler2_ast::Pattern::Binding(name) => {
+        let pat = &body.patterns[pattern_id];
+        if let Some(ty) = &pat.narrow {
+            let lowered = self.lower_pattern_type_expr(ty, at_expr);
+            return if Self::ty_covers_fact(&lowered, throw_fact) {
+                PatternMatchStrength::DefiniteMatch
+            } else if is_unknown {
+                PatternMatchStrength::MayMatch
+            } else {
+                PatternMatchStrength::NoMatch
+            };
+        }
+        match &pat.kind {
+            PatternKind::Wildcard => PatternMatchStrength::DefiniteMatch,
+            PatternKind::Bind { name, .. } => {
                 if self.is_bare_type_sugar_binding(name) {
                     let lowered = if let Some(prim_ty) = bare_type_sugar_to_ty(name) {
                         prim_ty
@@ -3104,8 +3136,8 @@ impl<'db> TypeInferenceBuilder<'db> {
                     PatternMatchStrength::DefiniteMatch
                 }
             }
-            baml_compiler2_ast::Pattern::TypedBinding { ty, .. } => {
-                let lowered = self.lower_pattern_type_expr(ty, at_expr);
+            PatternKind::Type(ty_expr) => {
+                let lowered = self.resolve_type_expr(ty_expr, at_expr);
                 if Self::ty_covers_fact(&lowered, throw_fact) {
                     PatternMatchStrength::DefiniteMatch
                 } else if is_unknown {
@@ -3114,12 +3146,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     PatternMatchStrength::NoMatch
                 }
             }
-            baml_compiler2_ast::Pattern::Literal(lit) => {
-                // A literal value pattern (e.g. "boom", 42) matches a subset of a
-                // primitive throw fact.  It can never *definitely* handle the whole
-                // type (other values of the same type would still escape), so we
-                // return MayMatch — keeping the throw fact in the residual for
-                // subsequent arms.
+            PatternKind::Literal(lit) => {
                 let lit_ty = Ty::Primitive(PrimitiveType::from_literal(lit), TyAttr::default());
                 if &lit_ty == throw_fact || is_unknown {
                     PatternMatchStrength::MayMatch
@@ -3127,14 +3154,14 @@ impl<'db> TypeInferenceBuilder<'db> {
                     PatternMatchStrength::NoMatch
                 }
             }
-            baml_compiler2_ast::Pattern::Null => {
+            PatternKind::Null => {
                 if matches!(throw_fact, Ty::Primitive(PrimitiveType::Null, _)) || is_unknown {
                     PatternMatchStrength::DefiniteMatch
                 } else {
                     PatternMatchStrength::NoMatch
                 }
             }
-            baml_compiler2_ast::Pattern::EnumVariant { enum_name, variant } => {
+            PatternKind::EnumVariant { enum_name, variant } => {
                 let matches_variant = match throw_fact {
                     Ty::EnumVariant(qn, v, _) => {
                         Self::enum_name_matches(enum_name, qn) && v == variant
@@ -3150,7 +3177,17 @@ impl<'db> TypeInferenceBuilder<'db> {
                     PatternMatchStrength::NoMatch
                 }
             }
-            baml_compiler2_ast::Pattern::Union(parts) => {
+            PatternKind::Class { .. } => {
+                let lowered = self.pattern_narrowed_type(pattern_id, throw_fact, body, at_expr);
+                if Self::ty_covers_fact(&lowered, throw_fact) {
+                    PatternMatchStrength::DefiniteMatch
+                } else if is_unknown {
+                    PatternMatchStrength::MayMatch
+                } else {
+                    PatternMatchStrength::NoMatch
+                }
+            }
+            PatternKind::Or(parts) => {
                 let mut saw_may = false;
                 for part in parts {
                     match self.pattern_match_strength(*part, throw_fact, body, at_expr) {

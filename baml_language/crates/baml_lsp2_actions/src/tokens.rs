@@ -21,7 +21,7 @@ use std::collections::HashMap;
 
 use baml_base::SourceFile;
 use baml_compiler_syntax::{SyntaxKind, SyntaxNode, SyntaxToken};
-use baml_compiler2_ast::{Expr, ExprBody, Pattern};
+use baml_compiler2_ast::{Expr, ExprBody};
 use baml_compiler2_hir::{
     body::FunctionBody, contributions::Definition, loc::FunctionLoc, scope::ScopeKind,
 };
@@ -635,8 +635,8 @@ fn ty_to_token_type(ty: &Ty) -> Option<SemanticTokenType> {
 ///   emitted as Property (only if the object expression resolves to a class
 ///   and the field name appears in the span).
 ///
-/// - `Pattern::Binding` / `Pattern::TypedBinding` — bound variable names are
-///   classified as Variable.
+/// - `PatternKind::Bind` (with or without a `narrow`) — bound variable names
+///   are classified as Variable.
 fn build_resolution_map(
     expr_body: &ExprBody,
     source_map: &baml_compiler2_ast::AstSourceMap,
@@ -775,14 +775,10 @@ fn build_resolution_map(
 
     // Classify pattern binding names as Variable.
     for (pat_id, pattern) in expr_body.patterns.iter() {
-        let name_str = match pattern {
-            Pattern::Binding(name) => name.as_str(),
-            Pattern::TypedBinding { name, .. } => name.as_str(),
-            _ => continue,
-        };
-        if name_str == "_" {
+        let Some(name) = pattern.binding_name() else {
             continue;
-        }
+        };
+        let name_str = name.as_str();
 
         let span = source_map.pattern_span(pat_id);
         if span.is_empty() {

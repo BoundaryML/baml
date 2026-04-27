@@ -576,14 +576,153 @@ pub enum Stmt {
 }
 
 /// Patterns — modeled after `Pattern` in `body.rs`.
+///
+/// A pattern is `kind` plus an optional trailing `: T` narrow per BEP-015.
+/// Narrow currently carries the type-ascription part of `let x: T = ...`
+/// (and is also where future second-colon narrowing on structural patterns
+/// will land). All other shape lives in [`PatternKind`].
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Pattern {
-    Binding(Name),
-    TypedBinding { name: Name, ty: TypeExpr },
+pub struct Pattern {
+    pub kind: PatternKind,
+    /// Trailing `: T` narrow. For irrefutable `let`, the scrutinee's static
+    /// type must equal this type; checked in TIR, not at the AST level.
+    pub narrow: Option<TypeExpr>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PatternKind {
+    /// `_` — wildcard. Always irrefutable. Binds nothing.
+    Wildcard,
+    /// `x` (with `inner: None`) or `let x: <inner>` (with `inner: Some(_)`).
+    /// Binds `name` to the matched value; if `inner` is set, the value must
+    /// also satisfy the inner pattern.
+    Bind { name: Name, inner: Option<PatId> },
+    /// `User { f1, f2: <pat>, ... }` — class destructure. Future variant,
+    /// not yet emitted by the parser.
+    Class { class: Name, fields: Vec<FieldPat> },
+    /// Bare type-match in pattern position (e.g. an arm `int =>`). Future
+    /// variant, not yet emitted by the parser.
+    Type(TypeExpr),
+    /// `42`, `"hi"`, `true`, etc. Refutable.
     Literal(Literal),
+    /// `null` literal pattern. Refutable.
     Null,
-    EnumVariant { enum_name: Name, variant: Name },
-    Union(Vec<PatId>),
+    /// `Status.Active` or `baml.panics.DivideByZero` style enum variant.
+    /// `enum_name` carries the dotted path as proper segments (no string
+    /// round-tripping); the trailing identifier is `variant`. Refutable.
+    EnumVariant { enum_name: Vec<Name>, variant: Name },
+    /// `a | b | c` (formerly `Union`). Refutable in general (each part may be).
+    Or(Vec<PatId>),
+}
+
+/// Single field inside a class destructure pattern: `{ field: <pat> }`.
+/// `pat: None` is shorthand syntax `{ field }` and lowers to a `Bind` of
+/// `field`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FieldPat {
+    pub field: Name,
+    pub pat: Option<PatId>,
+}
+
+impl Pattern {
+    pub fn wildcard() -> Self {
+        Pattern {
+            kind: PatternKind::Wildcard,
+            narrow: None,
+        }
+    }
+
+    /// Plain binding `x`. Name `"_"` is canonicalized to a wildcard so the
+    /// AST never carries a `Bind { name: "_" }`.
+    pub fn binding(name: Name) -> Self {
+        if name.as_str() == "_" {
+            return Pattern::wildcard();
+        }
+        Pattern {
+            kind: PatternKind::Bind { name, inner: None },
+            narrow: None,
+        }
+    }
+
+    /// `Bind { name }` with `narrow: Some(ty)` — the legacy
+    /// `Pattern::TypedBinding { name, ty }` shape. Same `_`-canonicalization
+    /// rule as [`Pattern::binding`]: `typed_binding("_", T)` is a wildcard
+    /// carrying `narrow: Some(T)` (so `let _: int = e` still asserts `int`).
+    pub fn typed_binding(name: Name, ty: TypeExpr) -> Self {
+        if name.as_str() == "_" {
+            return Pattern {
+                kind: PatternKind::Wildcard,
+                narrow: Some(ty),
+            };
+        }
+        Pattern {
+            kind: PatternKind::Bind { name, inner: None },
+            narrow: Some(ty),
+        }
+    }
+
+    pub fn null() -> Self {
+        Pattern {
+            kind: PatternKind::Null,
+            narrow: None,
+        }
+    }
+
+    pub fn literal(lit: Literal) -> Self {
+        Pattern {
+            kind: PatternKind::Literal(lit),
+            narrow: None,
+        }
+    }
+
+    pub fn enum_variant(enum_name: Vec<Name>, variant: Name) -> Self {
+        Pattern {
+            kind: PatternKind::EnumVariant { enum_name, variant },
+            narrow: None,
+        }
+    }
+
+    pub fn or(parts: Vec<PatId>) -> Self {
+        Pattern {
+            kind: PatternKind::Or(parts),
+            narrow: None,
+        }
+    }
+
+    /// If this pattern is a simple `Bind`, return the bound name.
+    pub fn binding_name(&self) -> Option<&Name> {
+        match &self.kind {
+            PatternKind::Bind { name, .. } => Some(name),
+            _ => None,
+        }
+    }
+
+    /// True iff this pattern is structurally guaranteed to match every value
+    /// at its position. **Pure structural check** — does not consider the
+    /// scrutinee's static type. The TIR layer is responsible for verifying
+    /// `narrow` and `Class`/`Type` assertions against the scrutinee type.
+    ///
+    /// Used by the let-stmt validator to reject patterns that can fail at
+    /// runtime; refutable patterns belong in `match` / `if let` / `let-else`.
+    pub fn is_irrefutable(&self, body: &ExprBody) -> bool {
+        match &self.kind {
+            PatternKind::Wildcard => true,
+            PatternKind::Bind { inner, .. } => {
+                inner.is_none_or(|id| body.patterns[id].is_irrefutable(body))
+            }
+            PatternKind::Class { fields, .. } => fields.iter().all(|f| {
+                f.pat
+                    .is_none_or(|id| body.patterns[id].is_irrefutable(body))
+            }),
+            // `Type(T)` is structurally fine; whether the value is actually
+            // a `T` is a typing concern, not a pattern concern.
+            PatternKind::Type(_) => true,
+            PatternKind::Literal(_)
+            | PatternKind::Null
+            | PatternKind::EnumVariant { .. }
+            | PatternKind::Or(_) => false,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

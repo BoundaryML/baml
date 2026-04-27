@@ -653,18 +653,38 @@ impl<'a> AstGraphBuilder<'a> {
 
     fn format_pattern(&self, pat_id: ast::PatId) -> String {
         let pat = &self.body.patterns[pat_id];
-        match pat {
-            ast::Pattern::Binding(name) => name.to_string(),
-            ast::Pattern::TypedBinding { name, .. } => name.to_string(),
-            ast::Pattern::Literal(lit) => format_literal_ast(lit),
-            ast::Pattern::Null => "null".to_string(),
-            ast::Pattern::EnumVariant { enum_name, variant } => {
-                format!("{enum_name}.{variant}")
+        let base = match &pat.kind {
+            ast::PatternKind::Wildcard => "_".to_string(),
+            ast::PatternKind::Bind { name, .. } => name.to_string(),
+            ast::PatternKind::Literal(lit) => format_literal_ast(lit),
+            ast::PatternKind::Null => "null".to_string(),
+            ast::PatternKind::EnumVariant { enum_name, variant } => {
+                let path: Vec<_> = enum_name.iter().map(baml_base::Name::as_str).collect();
+                format!("{}.{variant}", path.join("."))
             }
-            ast::Pattern::Union(pats) => {
+            ast::PatternKind::Or(pats) => {
                 let parts: Vec<_> = pats.iter().map(|p| self.format_pattern(*p)).collect();
                 parts.join(" | ")
             }
+            ast::PatternKind::Type(ty) => format!("{ty:?}"),
+            ast::PatternKind::Class { class, fields } => {
+                let field_strs: Vec<_> = fields
+                    .iter()
+                    .map(|f| {
+                        if let Some(inner) = f.pat {
+                            format!("{}: {}", f.field, self.format_pattern(inner))
+                        } else {
+                            f.field.to_string()
+                        }
+                    })
+                    .collect();
+                format!("{} {{ {} }}", class, field_strs.join(", "))
+            }
+        };
+        if let Some(narrow) = &pat.narrow {
+            format!("{base}: {narrow:?}")
+        } else {
+            base
         }
     }
 }
@@ -1000,8 +1020,8 @@ mod tests {
     fn match_creates_branch_group_with_arms() {
         let body = make_ast_body(|exprs, _, patterns, match_arms| {
             let scrutinee = exprs.alloc(ast::Expr::Path(vec!["x".into()]));
-            let pat1 = patterns.alloc(ast::Pattern::Literal(ast::Literal::Int(1)));
-            let pat2 = patterns.alloc(ast::Pattern::Literal(ast::Literal::Int(2)));
+            let pat1 = patterns.alloc(ast::Pattern::literal(ast::Literal::Int(1)));
+            let pat2 = patterns.alloc(ast::Pattern::literal(ast::Literal::Int(2)));
             let body1 = exprs.alloc(ast::Expr::Null);
             let body2 = exprs.alloc(ast::Expr::Null);
             let arm1 = match_arms.alloc(ast::MatchArm {
@@ -1102,7 +1122,7 @@ mod tests {
                 then_branch: then_b,
                 else_branch: Some(else_b),
             });
-            let pat = patterns.alloc(ast::Pattern::Binding("x".into()));
+            let pat = patterns.alloc(ast::Pattern::binding("x".into()));
             let let_stmt = stmts.alloc(ast::Stmt::Let {
                 pattern: pat,
                 type_annotation: None,
