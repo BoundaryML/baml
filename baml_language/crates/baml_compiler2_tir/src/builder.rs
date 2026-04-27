@@ -78,6 +78,12 @@ struct CallbackThrowProvenance {
     callback_concrete_throws: Option<Ty>,
 }
 
+struct ScopedLocalsSnapshot {
+    locals: FxHashMap<Name, Ty>,
+    declared_types: FxHashMap<Name, Ty>,
+    let_binding_patterns: FxHashMap<Name, PatId>,
+}
+
 struct BuilderThrowsAnalysis<'a, 'db> {
     builder: &'a TypeInferenceBuilder<'db>,
 }
@@ -263,6 +269,44 @@ pub struct TypeInferenceBuilder<'db> {
 }
 
 impl<'db> TypeInferenceBuilder<'db> {
+    fn snapshot_scoped_locals(&self) -> ScopedLocalsSnapshot {
+        ScopedLocalsSnapshot {
+            locals: self.locals.clone(),
+            declared_types: self.declared_types.clone(),
+            let_binding_patterns: self.let_binding_patterns.clone(),
+        }
+    }
+
+    fn restore_scoped_locals(&mut self, snapshot: ScopedLocalsSnapshot) {
+        let declared_names = self
+            .let_binding_patterns
+            .iter()
+            .filter_map(|(name, pattern)| {
+                (snapshot.let_binding_patterns.get(name) != Some(pattern)).then_some(name.clone())
+            })
+            .collect::<Vec<_>>();
+
+        for name in declared_names {
+            if let Some(previous) = snapshot.locals.get(&name) {
+                self.locals.insert(name.clone(), previous.clone());
+            } else {
+                self.locals.remove(&name);
+            }
+
+            if let Some(previous) = snapshot.declared_types.get(&name) {
+                self.declared_types.insert(name.clone(), previous.clone());
+            } else {
+                self.declared_types.remove(&name);
+            }
+
+            if let Some(previous) = snapshot.let_binding_patterns.get(&name) {
+                self.let_binding_patterns.insert(name, *previous);
+            } else {
+                self.let_binding_patterns.remove(&name);
+            }
+        }
+    }
+
     pub fn new(
         context: InferContext<'db>,
         res_ctx: &'db PackageResolutionContext<'db>,
@@ -1066,6 +1110,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 )
             }
             Expr::Block { stmts, tail_expr } => {
+                let snapshot = self.snapshot_scoped_locals();
                 let mut diverged_at: Option<(usize, StmtId)> = None;
                 for (i, stmt_id) in stmts.iter().enumerate() {
                     if self.check_stmt_with_early_return_narrowing(*stmt_id, body) {
@@ -1073,7 +1118,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                         break;
                     }
                 }
-                if let Some((div_idx, div_stmt)) = diverged_at {
+                let ty = if let Some((div_idx, div_stmt)) = diverged_at {
                     let remaining = stmts.len() - div_idx - 1 + usize::from(tail_expr.is_some());
                     if remaining > 0 {
                         self.context.report_warning_at_stmt(
@@ -1093,7 +1138,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                         .unwrap_or(Ty::Void {
                             attr: TyAttr::default(),
                         })
-                }
+                };
+                self.restore_scoped_locals(snapshot);
+                ty
             }
             Expr::MemberAccess { base, member } => {
                 // `MemberAccess` now only comes from `FIELD_ACCESS_EXPR` (complex base
@@ -1488,6 +1535,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         match expr {
             // Block: check the tail expression against expected type
             Expr::Block { stmts, tail_expr } => {
+                let snapshot = self.snapshot_scoped_locals();
                 let mut diverged_at: Option<(usize, StmtId)> = None;
                 for (i, stmt_id) in stmts.iter().enumerate() {
                     if self.check_stmt_with_early_return_narrowing(*stmt_id, body) {
@@ -1534,6 +1582,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                         attr: TyAttr::default(),
                     }
                 };
+                self.restore_scoped_locals(snapshot);
                 self.record_expr_type(expr_id, ty.clone());
                 ty
             }
@@ -2074,13 +2123,16 @@ impl<'db> TypeInferenceBuilder<'db> {
 
                 // 3. Bind the loop variable to the element type
                 let name = body.patterns[*binding].binding_name().cloned();
+                let snapshot = self.snapshot_scoped_locals();
                 self.bindings.insert(*binding, elem_ty.clone());
                 if let Some(name) = name {
+                    self.let_binding_patterns.insert(name.clone(), *binding);
                     self.locals.insert(name, elem_ty);
                 }
 
                 // 4. Check the body
                 self.infer_expr(*for_body, body);
+                self.restore_scoped_locals(snapshot);
                 false
             }
             Stmt::Assign { target, value } => {

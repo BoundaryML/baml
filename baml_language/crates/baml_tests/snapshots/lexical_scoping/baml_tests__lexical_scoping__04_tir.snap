@@ -1,0 +1,129 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 17786
+---
+=== TIR2 ===
+function user.branch_locals(b: bool) -> int throws never {
+  { : int
+    if (b : bool) : int
+      { : int
+        let a = 1 : 1 -> int
+        a : int
+      }
+    else
+      { : int
+        let a = 2 : 2 -> int
+        a : int
+      }
+  }
+}
+function user.repeated_underscore() -> int throws never {
+  { : int
+    let _ = 1 : 1 -> int
+    let _ = 2 : 2 -> int
+    _ : int
+  }
+}
+function user.same_scope_shadow() -> int throws never {
+  { : int
+    let x = 1 : 1 -> int
+    let x = 2 : 2 -> int
+    x : int
+  }
+}
+function user.initializer_uses_previous() -> int throws never {
+  { : int
+    let x = 1 : 1 -> int
+    let x = x + 1 : int
+    x : int
+  }
+}
+function user.shadow_param(x: int) -> int throws never {
+  { : int
+    let x = x + 1 : int
+    x : int
+  }
+}
+function user.outer_restored() -> int throws never {
+  { : int
+    let x = 1 : 1 -> int
+    { : void
+      let x = 2 : 2 -> int
+    }
+    x : int
+  }
+}
+function user.declared_type_restored() -> string throws never {
+  { : "outer"
+    let x = "outer" : "outer"
+    { : void
+      let x = 1 : 1
+    }
+    x : "outer"
+  }
+}
+function user.for_loop_restores_outer() -> int throws never {
+  { : int
+    let x = 1 : 1 -> int
+    for x in [2, 3]
+      { : void
+        x : int
+      }
+    x : int
+  }
+}
+function user.for_underscore_binding() -> int throws never {
+  { : int
+    let _ = 1 : 1 -> int
+    for _ in [2, 3]
+      { : void
+        _ : int
+      }
+    _ : int
+  }
+}
+function user.watch_block_cleanup() -> int throws never {
+  { : int
+    let x = 1 : 1 -> int
+    { : void
+      let x = 2 : 2 -> int
+      x : int
+    }
+    x : int
+  }
+}
+function user.nested_outer_restored() -> int throws never {
+  { : int
+    let x = 1 : 1 -> int
+    { : void
+      let x = 2 : 2 -> int
+      { : void
+        let x = 3 : 3 -> int
+        x : int
+      }
+      x : int
+    }
+    x : int
+  }
+}
+function user.capture_before_after_shadow() -> int throws never {
+  { : int
+    let x = 1 : 1 -> int
+    let g = : () -> int throws never
+      () -> int { ... } : () -> int throws never
+        {
+          x
+        }
+    let x = 2 : 2 -> int
+    let f = : () -> int throws never
+      () -> int { ... } : () -> int throws never
+        {
+          x
+        }
+    g() * 10 + f() : int
+  }
+}
+lambda user.capture_before_after_shadow {
+}
+lambda user.capture_before_after_shadow {
+}

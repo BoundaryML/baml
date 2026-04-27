@@ -1060,14 +1060,7 @@ pub(crate) mod support {
             }
 
             // Collect expression types for this scope — skip if none
-            let mut has_expr_types = false;
-            for (_expr_id, owner_scope) in &index.expr_scopes {
-                if owner_scope.index() as usize == i {
-                    has_expr_types = true;
-                    break;
-                }
-            }
-            if !has_expr_types {
+            if inference.iter_expressions().next().is_none() {
                 continue;
             }
 
