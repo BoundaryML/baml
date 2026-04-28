@@ -1516,9 +1516,9 @@ impl<'a> Parser<'a> {
                 let closing_hashes = self.count_consecutive_hashes_after_quote();
                 if closing_hashes == opening_hashes {
                     // Found matching closing delimiter
-                    self.bump(); // Closing "
+                    self.bump_raw(); // Closing "
                     for _ in 0..closing_hashes {
-                        self.bump(); // #
+                        self.bump_raw(); // #
                     }
                     break;
                 }
@@ -1559,12 +1559,12 @@ impl<'a> Parser<'a> {
     /// Parse a Jinja expression: {{ ... }}
     fn parse_jinja_expression(&mut self, opening_hashes: usize) {
         self.with_node(SyntaxKind::TEMPLATE_INTERPOLATION, |p| {
-            p.bump(); // {
-            p.bump(); // {
+            p.bump_raw(); // {
+            p.bump_raw(); // {
 
             // Collect tokens until we find }}
             let mut depth = 1;
-            while !p.at_end() && depth > 0 {
+            while !p.at_end_raw() && depth > 0 {
                 if p.at_raw(TokenKind::Quote)
                     && p.count_consecutive_hashes_after_quote() == opening_hashes
                 {
@@ -1582,8 +1582,8 @@ impl<'a> Parser<'a> {
                 {
                     depth -= 1;
                     if depth == 0 {
-                        p.bump(); // }
-                        p.bump(); // }
+                        p.bump_raw(); // }
+                        p.bump_raw(); // }
                         break;
                     }
                     p.bump_raw();
@@ -1602,11 +1602,11 @@ impl<'a> Parser<'a> {
     /// Parse a Jinja statement: {% ... %}
     fn parse_jinja_statement(&mut self, opening_hashes: usize) {
         self.with_node(SyntaxKind::TEMPLATE_CONTROL, |p| {
-            p.bump(); // {
-            p.bump(); // %
+            p.bump_raw(); // {
+            p.bump_raw(); // %
 
             // Collect tokens until we find %}
-            while !p.at_end() {
+            while !p.at_end_raw() {
                 if p.at_raw(TokenKind::Quote)
                     && p.count_consecutive_hashes_after_quote() == opening_hashes
                 {
@@ -1616,8 +1616,8 @@ impl<'a> Parser<'a> {
                 if p.at_raw(TokenKind::Percent)
                     && p.peek_impl(1, false).map(|t| t.kind) == Some(TokenKind::RBrace)
                 {
-                    p.bump(); // %
-                    p.bump(); // }
+                    p.bump_raw(); // %
+                    p.bump_raw(); // }
                     break;
                 }
                 p.bump_raw();
@@ -1628,11 +1628,11 @@ impl<'a> Parser<'a> {
     /// Parse a Jinja comment: {# ... #}
     fn parse_jinja_comment(&mut self, opening_hashes: usize) {
         self.with_node(SyntaxKind::TEMPLATE_COMMENT, |p| {
-            p.bump(); // {
-            p.bump(); // #
+            p.bump_raw(); // {
+            p.bump_raw(); // #
 
             // Collect tokens until we find #}
-            while !p.at_end() {
+            while !p.at_end_raw() {
                 if p.at_raw(TokenKind::Quote)
                     && p.count_consecutive_hashes_after_quote() == opening_hashes
                 {
@@ -1642,8 +1642,8 @@ impl<'a> Parser<'a> {
                 if p.at_raw(TokenKind::Hash)
                     && p.peek_impl(1, false).map(|t| t.kind) == Some(TokenKind::RBrace)
                 {
-                    p.bump(); // #
-                    p.bump(); // }
+                    p.bump_raw(); // #
+                    p.bump_raw(); // }
                     break;
                 }
                 p.bump_raw();
@@ -1657,7 +1657,7 @@ impl<'a> Parser<'a> {
     fn parse_prompt_text(&mut self, opening_hashes: usize) {
         self.with_node(SyntaxKind::PROMPT_TEXT, |p| {
             // Collect tokens until we hit a Jinja construct or closing delimiter
-            while !p.at_end() {
+            while !p.at_end_raw() {
                 // Check for closing delimiter
                 if p.at_raw(TokenKind::Quote) {
                     let closing_hashes = p.count_consecutive_hashes_after_quote();
@@ -5205,6 +5205,30 @@ class Response {
             .collect();
 
         assert_eq!(attrs.len(), 1, "expected method block attribute");
+    }
+
+    #[test]
+    fn raw_string_keeps_line_comment_marker_as_text() {
+        let source = r##"
+function Demo() -> string {
+  #"//"#
+}
+"##;
+
+        let (_root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+    }
+
+    #[test]
+    fn raw_string_keeps_block_comment_end_marker_as_text() {
+        let source = r##"
+function Demo() -> string {
+  #"*/"#
+}
+"##;
+
+        let (_root, errors) = parse_source(source);
+        assert_no_errors(&errors);
     }
 
     #[test]

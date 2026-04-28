@@ -14,6 +14,9 @@ function user.FunctionWithComments$render_prompt(a: string, b: int) -> baml.llm.
 function user.FunctionWithComments$build_request(a: string, b: int) -> baml.http.Request throws never {
   baml.llm.build_request(TestClient, "FunctionWithComments", map { "a": a, "b": b }) : baml.http.Request
 }
+function user.FunctionWithComments$build_request_stream(a: string, b: int) -> baml.http.Request throws never {
+  baml.llm.build_request_stream(TestClient, "FunctionWithComments", map { "a": a, "b": b }) : baml.http.Request
+}
 function user.FunctionWithComments$parse(json: string) -> string throws never {
   baml.llm.parse<T>("FunctionWithComments", json) : string
 }
@@ -26,12 +29,21 @@ function user.CommentAfterArrow$render_prompt() -> baml.llm.PromptAst throws nev
 function user.CommentAfterArrow$build_request() -> baml.http.Request throws never {
   baml.llm.build_request(TestClient, "CommentAfterArrow", map {  }) : baml.http.Request
 }
+function user.CommentAfterArrow$build_request_stream() -> baml.http.Request throws never {
+  baml.llm.build_request_stream(TestClient, "CommentAfterArrow", map {  }) : baml.http.Request
+}
 function user.CommentAfterArrow$parse(json: string) -> string throws never {
   baml.llm.parse<T>("CommentAfterArrow", json) : string
 }
+function user.FunctionWithComments$stream(a: string, b: int) -> baml.llm.Stream<string, null | string> throws never {
+  baml.llm.stream_llm_function(TestClient, "FunctionWithComments", map { "a": a, "b": b }) : baml.llm.Stream<string, null | string>
+}
 function user.FunctionWithComments$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<string, null | string> throws never {
-  baml.llm.__make_stream(sse, "FunctionWithComments", TestClient) : unknown
+  TestClient.__make_stream(sse, "FunctionWithComments") : unknown
+}
+function user.CommentAfterArrow$stream() -> baml.llm.Stream<string, null | string> throws never {
+  baml.llm.stream_llm_function(TestClient, "CommentAfterArrow", map {  }) : baml.llm.Stream<string, null | string>
 }
 function user.CommentAfterArrow$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<string, null | string> throws never {
-  baml.llm.__make_stream(sse, "CommentAfterArrow", TestClient) : unknown
+  TestClient.__make_stream(sse, "CommentAfterArrow") : unknown
 }

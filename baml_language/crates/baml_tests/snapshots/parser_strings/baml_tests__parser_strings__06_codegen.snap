@@ -21,6 +21,16 @@ function user.FormatMessage$build_request(name: string) -> baml.http.Request {
     return
 }
 
+function user.FormatMessage$build_request_stream(name: string) -> baml.http.Request {
+    load_const null
+    load_const "FormatMessage"
+    load_var name
+    load_const "name"
+    alloc_map 1
+    call baml.llm.build_request_stream
+    return
+}
+
 function user.FormatMessage$parse(json: string) -> string {
     load_const "FormatMessage"
     load_var json
@@ -32,7 +42,7 @@ function user.FormatMessage$parse_stream(sse: baml.http.SseStream) -> baml.llm.S
     load_var sse
     load_const "FormatMessage"
     load_const null
-    call baml.llm.parse
+    call_indirect
     return
 }
 
@@ -43,6 +53,16 @@ function user.FormatMessage$render_prompt(name: string) -> baml.llm.PromptAst {
     load_const "name"
     alloc_map 1
     call baml.llm.render_prompt
+    return
+}
+
+function user.FormatMessage$stream(name: string) -> baml.llm.Stream {
+    load_const null
+    load_const "FormatMessage"
+    load_var name
+    load_const "name"
+    alloc_map 1
+    call baml.llm.stream_llm_function
     return
 }
 
@@ -71,6 +91,16 @@ function user.ProcessText$build_request(input: string) -> baml.http.Request {
     return
 }
 
+function user.ProcessText$build_request_stream(input: string) -> baml.http.Request {
+    load_const null
+    load_const "ProcessText"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request_stream
+    return
+}
+
 function user.ProcessText$parse(json: string) -> string {
     load_const "ProcessText"
     load_var json
@@ -82,7 +112,7 @@ function user.ProcessText$parse_stream(sse: baml.http.SseStream) -> baml.llm.Str
     load_var sse
     load_const "ProcessText"
     load_const null
-    call baml.llm.parse
+    call_indirect
     return
 }
 
@@ -93,5 +123,15 @@ function user.ProcessText$render_prompt(input: string) -> baml.llm.PromptAst {
     load_const "input"
     alloc_map 1
     call baml.llm.render_prompt
+    return
+}
+
+function user.ProcessText$stream(input: string) -> baml.llm.Stream {
+    load_const null
+    load_const "ProcessText"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.stream_llm_function
     return
 }

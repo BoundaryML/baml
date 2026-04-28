@@ -34,19 +34,19 @@ function user.CatchWithFallback(x: int) -> string {
     load_var x
     call user.MayFailIntOrString
     jump L4
-    load_var e
+    load_var _2
     is_type string
     pop_jump_if_false L0
     jump L3
 
   L0:
-    load_var e
+    load_var _2
     is_type int
     pop_jump_if_false L1
     jump L2
 
   L1:
-    load_var e
+    load_var _2
     throw
 
   L2:
@@ -84,19 +84,19 @@ function user.ChainedCatchClauses(x: int) -> string {
     load_var x
     call user.MayFailIntOrString
     jump L4
-    load_var e
+    load_var _2
     is_type string
     pop_jump_if_false L0
     jump L3
 
   L0:
-    load_var e
+    load_var _2
     is_type int
     pop_jump_if_false L1
     jump L2
 
   L1:
-    load_var e
+    load_var _2
     throw
 
   L2:

@@ -66,36 +66,6 @@ function ForLoopWithHeaders() -> int {
 
 //----
 //- diagnostics
-// Error: Duplicate binding `hello` in `ComplexHeaderTest`
-//     ╭─[ headers_complex_headers_test.baml:20:17 ]
-//     │
-//  11 │         let hello = "Hello";
-//     │             ──┬──  
-//     │               ╰──── first defined as binding here
-//     │ 
-//  20 │             let hello = "Hello";
-//     │                 ──┬──  
-//     │                   ╰──── duplicate binding definition
-//     │ 
-//  23 │             let hello = "Hello";
-//     │                 ──┬──  
-//     │                   ╰──── duplicate binding definition
-//     │ 
-//     │ Note: Error code: E0012
-// ────╯
-// Error: Duplicate binding `result` in `ForLoopWithHeaders`
-//     ╭─[ headers_complex_headers_test.baml:57:13 ]
-//     │
-//  49 │     let result = 0;
-//     │         ───┬──  
-//     │            ╰──── first defined as binding here
-//     │ 
-//  57 │         let result = result + processed;
-//     │             ───┬──  
-//     │                ╰──── duplicate binding definition
-//     │ 
-//     │ Note: Error code: E0012
-// ────╯
 // Error: type mismatch: expected string, got int
 //     ╭─[ headers_complex_headers_test.baml:43:5 ]
 //     │

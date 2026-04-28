@@ -14,6 +14,10 @@ function user.Ambiguous$build_request(input: string) -> baml.http.Request throws
   baml.llm.build_request(GPT4, "Ambiguous", map { "input": input }) : baml.http.Request
   !! 0..220: unresolved name: GPT4
 }
+function user.Ambiguous$build_request_stream(input: string) -> baml.http.Request throws never {
+  baml.llm.build_request_stream(GPT4, "Ambiguous", map { "input": input }) : baml.http.Request
+  !! 0..220: unresolved name: GPT4
+}
 function user.Ambiguous$parse(json: string) -> string throws never {
   baml.llm.parse<T>("Ambiguous", json) : string
 }
@@ -29,15 +33,24 @@ function user.AnotherLLM$build_request(input: string) -> baml.http.Request throw
   baml.llm.build_request(null, "AnotherLLM", map { "input": input }) : baml.http.Request
   !! 220..421: type mismatch: expected baml.llm.Client, got null
 }
+function user.AnotherLLM$build_request_stream(input: string) -> baml.http.Request throws never {
+  baml.llm.build_request_stream(null, "AnotherLLM", map { "input": input }) : baml.http.Request
+  !! 220..421: type mismatch: expected baml.llm.Client, got null
+}
 function user.AnotherLLM$parse(json: string) -> string throws never {
   baml.llm.parse<T>("AnotherLLM", json) : string
 }
-function user.Ambiguous$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<string, null | string> throws never {
-  baml.llm.__make_stream(sse, "Ambiguous", GPT4) : unknown
+function user.Ambiguous$stream(input: string) -> baml.llm.Stream<string, null | string> throws never {
+  baml.llm.stream_llm_function(GPT4, "Ambiguous", map { "input": input }) : baml.llm.Stream<string, null | string>
   !! 0..220: unresolved name: GPT4
 }
-function user.AnotherLLM$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<string, null | string> throws never {
-  baml.llm.__make_stream(sse, "AnotherLLM", null) : unknown
+function user.Ambiguous$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<string, null | string> throws never {
+  GPT4.__make_stream(sse, "Ambiguous") : unknown
+  !! 0..220: unresolved name: GPT4
+}
+function user.AnotherLLM$stream(input: string) -> baml.llm.Stream<string, null | string> throws never {
+  baml.llm.stream_llm_function(null, "AnotherLLM", map { "input": input }) : baml.llm.Stream<string, null | string>
+  !! 220..421: type mismatch: expected baml.llm.Client, got null
 }
 class user.JsonData {
   field1: int
@@ -69,11 +82,19 @@ function user.ExtractData$build_request(text: string) -> baml.http.Request throw
   baml.llm.build_request(GPT4, "ExtractData", map { "text": text }) : baml.http.Request
   !! 0..146: unresolved name: GPT4
 }
+function user.ExtractData$build_request_stream(text: string) -> baml.http.Request throws never {
+  baml.llm.build_request_stream(GPT4, "ExtractData", map { "text": text }) : baml.http.Request
+  !! 0..146: unresolved name: GPT4
+}
 function user.ExtractData$parse(json: string) -> user.JsonData throws never {
   baml.llm.parse<T>("ExtractData", json) : user.JsonData
 }
+function user.ExtractData$stream(text: string) -> baml.llm.Stream<user.JsonData, null | user.JsonData$stream> throws never {
+  baml.llm.stream_llm_function(GPT4, "ExtractData", map { "text": text }) : baml.llm.Stream<user.JsonData, null | user.JsonData$stream>
+  !! 0..146: unresolved name: GPT4
+}
 function user.ExtractData$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<user.JsonData, null | user.JsonData$stream> throws never {
-  baml.llm.__make_stream(sse, "ExtractData", GPT4) : unknown
+  GPT4.__make_stream(sse, "ExtractData") : unknown
   !! 0..146: unresolved name: GPT4
 }
 function user.LLMAnalyze(text: string) -> user.Analysis throws never {
@@ -86,6 +107,10 @@ function user.LLMAnalyze$render_prompt(text: string) -> baml.llm.PromptAst throw
 }
 function user.LLMAnalyze$build_request(text: string) -> baml.http.Request throws never {
   baml.llm.build_request(GPT4, "LLMAnalyze", map { "text": text }) : baml.http.Request
+  !! 0..242: unresolved name: GPT4
+}
+function user.LLMAnalyze$build_request_stream(text: string) -> baml.http.Request throws never {
+  baml.llm.build_request_stream(GPT4, "LLMAnalyze", map { "text": text }) : baml.http.Request
   !! 0..242: unresolved name: GPT4
 }
 function user.LLMAnalyze$parse(json: string) -> user.Analysis throws never {
@@ -131,6 +156,10 @@ function user.ChainedProcess$build_request(input: string) -> baml.http.Request t
   baml.llm.build_request(GPT4, "ChainedProcess", map { "input": input }) : baml.http.Request
   !! 674..860: unresolved name: GPT4
 }
+function user.ChainedProcess$build_request_stream(input: string) -> baml.http.Request throws never {
+  baml.llm.build_request_stream(GPT4, "ChainedProcess", map { "input": input }) : baml.http.Request
+  !! 674..860: unresolved name: GPT4
+}
 function user.ChainedProcess$parse(json: string) -> string throws never {
   baml.llm.parse<T>("ChainedProcess", json) : string
 }
@@ -139,8 +168,12 @@ function user.SimpleCalc(a: int, b: int) -> int throws never {
     return a + b * 2 : int
   }
 }
+function user.LLMAnalyze$stream(text: string) -> baml.llm.Stream<user.Analysis, null | user.Analysis$stream> throws never {
+  baml.llm.stream_llm_function(GPT4, "LLMAnalyze", map { "text": text }) : baml.llm.Stream<user.Analysis, null | user.Analysis$stream>
+  !! 0..242: unresolved name: GPT4
+}
 function user.LLMAnalyze$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<user.Analysis, null | user.Analysis$stream> throws never {
-  baml.llm.__make_stream(sse, "LLMAnalyze", GPT4) : unknown
+  GPT4.__make_stream(sse, "LLMAnalyze") : unknown
   !! 0..242: unresolved name: GPT4
 }
 class user.Analysis$stream {
@@ -148,7 +181,11 @@ class user.Analysis$stream {
   keywords: string[]
   score: null | float
 }
+function user.ChainedProcess$stream(input: string) -> baml.llm.Stream<string, null | string> throws never {
+  baml.llm.stream_llm_function(GPT4, "ChainedProcess", map { "input": input }) : baml.llm.Stream<string, null | string>
+  !! 674..860: unresolved name: GPT4
+}
 function user.ChainedProcess$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<string, null | string> throws never {
-  baml.llm.__make_stream(sse, "ChainedProcess", GPT4) : unknown
+  GPT4.__make_stream(sse, "ChainedProcess") : unknown
   !! 674..860: unresolved name: GPT4
 }

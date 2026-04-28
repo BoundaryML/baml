@@ -12,11 +12,10 @@
 use std::sync::Arc;
 
 use js_sys::Uint8Array;
-use sys_ops::io::{self, owned, BexExternalValue, CallId, OpErrorKind, SysOpContext, SysOpOutput};
+use sys_ops::io::{self, BexExternalValue, CallId, OpErrorKind, SysOpContext, SysOpOutput, owned};
 use sys_types::BexHeap;
 
-use crate::send_wrapper::SendWrapper;
-use crate::wasm_fs::WasmVfs;
+use crate::{send_wrapper::SendWrapper, wasm_fs::WasmVfs};
 
 /// WASM implementation of `baml.fs` namespace ops.
 ///
@@ -38,6 +37,47 @@ impl WasmIoFs {
     fn vfs(&self) -> &WasmVfs {
         self.vfs.as_ref()
     }
+}
+
+fn join_path(parent: &str, name: &str) -> String {
+    if parent == "/" {
+        format!("/{name}")
+    } else {
+        format!("{}/{}", parent.trim_end_matches('/'), name)
+    }
+}
+
+fn parent_path(path: &str) -> Option<String> {
+    let trimmed = path.trim_end_matches('/');
+    let (parent, _) = trimmed.rsplit_once('/')?;
+    if parent.is_empty() {
+        Some("/".to_string())
+    } else {
+        Some(parent.to_string())
+    }
+}
+
+fn ancestor_paths(path: &str) -> Vec<String> {
+    let absolute = path.starts_with('/');
+    let parts: Vec<&str> = path
+        .trim_matches('/')
+        .split('/')
+        .filter(|part| !part.is_empty())
+        .collect();
+    let mut ancestors = Vec::new();
+    for len in 1..parts.len() {
+        let joined = parts[..len].join("/");
+        ancestors.push(if absolute {
+            format!("/{joined}")
+        } else {
+            joined
+        });
+    }
+    ancestors
+}
+
+fn js_err(e: &wasm_bindgen::JsValue) -> OpErrorKind {
+    OpErrorKind::Other(e.as_string().unwrap_or_else(|| format!("{e:?}")))
 }
 
 // ============================================================================
@@ -258,10 +298,13 @@ impl io::IoNamespaceFs for WasmIoFs {
                     let Some(name) = v.as_string() else { continue };
                     // WasmVfs.readDir returns string[] of entry names.
                     // Probe metadata to distinguish files from directories.
-                    let full = format!("{path}/{name}");
+                    let full = join_path(&path, &name);
                     let (is_dir, is_file) = match self.vfs().vfs_metadata(&full) {
                         Ok(meta) => (meta.file_type == "directory", meta.file_type == "file"),
-                        Err(_) => (false, true),
+                        Err(e) => {
+                            log::warn!("failed to read metadata for {full}: {e:?}");
+                            (false, false)
+                        }
                     };
                     entries.push(owned::fs::DirEntry {
                         name,
@@ -281,14 +324,61 @@ impl io::IoNamespaceFs for WasmIoFs {
         _h: &Arc<BexHeap>,
         _c: CallId,
         path: String,
-        _options: owned::fs::MkdirOptions,
+        options: owned::fs::MkdirOptions,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        // WasmVfs.createDir doesn't expose a recursive flag — the JS host
-        // is expected to handle recursive creation transparently.
+        if !options.recursive {
+            match self.vfs().vfs_exists(&path) {
+                Ok(true) => {
+                    return SysOpOutput::err(OpErrorKind::Other(format!(
+                        "Directory already exists: {path}"
+                    )));
+                }
+                Ok(false) => {}
+                Err(e) => return SysOpOutput::err(js_err(&e)),
+            }
+
+            if let Some(parent) = parent_path(&path) {
+                match self.vfs().vfs_exists(&parent) {
+                    Ok(true) => {}
+                    Ok(false) => {
+                        return SysOpOutput::err(OpErrorKind::Other(format!(
+                            "Parent directory does not exist: {parent}"
+                        )));
+                    }
+                    Err(e) => return SysOpOutput::err(js_err(&e)),
+                }
+            }
+
+            return match self.vfs().vfs_create_dir(&path) {
+                Ok(()) => SysOpOutput::ok(()),
+                Err(e) => SysOpOutput::err(js_err(&e)),
+            };
+        }
+
+        match self.vfs().vfs_exists(&path) {
+            Ok(true) => return SysOpOutput::ok(()),
+            Ok(false) => {}
+            Err(e) => return SysOpOutput::err(js_err(&e)),
+        }
+
+        for ancestor in ancestor_paths(&path) {
+            match self.vfs().vfs_exists(&ancestor) {
+                Ok(true) => continue,
+                Ok(false) => {}
+                Err(e) => return SysOpOutput::err(js_err(&e)),
+            }
+            if let Err(e) = self.vfs().vfs_create_dir(&ancestor) {
+                return SysOpOutput::err(js_err(&e));
+            }
+        }
+
         match self.vfs().vfs_create_dir(&path) {
             Ok(()) => SysOpOutput::ok(()),
-            Err(e) => SysOpOutput::err(OpErrorKind::Other(format!("{e:?}"))),
+            Err(e) => match self.vfs().vfs_exists(&path) {
+                Ok(true) => SysOpOutput::ok(()),
+                _ => SysOpOutput::err(js_err(&e)),
+            },
         }
     }
 }

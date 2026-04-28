@@ -1,0 +1,24 @@
+# BEGIN_ONCALL_METADATA
+# slack_config:
+#   notification_channel: "#oncall"
+#
+# roster_by_rotation:
+#   oncall-founders: [vbv, aaron]
+#   oncall-discord: [antonio, kai, paulo, sam]
+#   none: [anish, avery]
+#
+# roster_by_human:
+#   aaron: [oncall-founders]
+#   anish: [none]
+#   antonio: [oncall-discord]
+#   avery: [none]
+#   kai: [oncall-discord]
+#   paulo: [oncall-discord]
+#   sam: [oncall-discord]
+#   vbv: [oncall-founders]
+# END_ONCALL_METADATA
+
+2026-04-18 oncall-founders=vbv   oncall-discord=sam
+2026-04-20 oncall-founders=vbv   oncall-discord=sam
+2026-04-24 oncall-founders=vbv   oncall-discord=sam
+2026-05-01 oncall-founders=aaron oncall-discord=antonio

@@ -16,7 +16,9 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         CALL_EXPR
-          PATH_EXPR "io.input"
+          PATH_EXPR "baml.io.input"
+            WORD "baml"
+            DOT "."
             WORD "io"
             DOT "."
             WORD "input"
@@ -45,7 +47,9 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         CALL_EXPR
-          PATH_EXPR "io.input"
+          PATH_EXPR "baml.io.input"
+            WORD "baml"
+            DOT "."
             WORD "io"
             DOT "."
             WORD "input"

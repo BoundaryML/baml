@@ -1223,6 +1223,7 @@ dependencies = [
 name = "baml_compiler2_visualization"
 version = "0.0.0-beta"
 dependencies = [
+ "baml_base",
  "baml_compiler2_ast",
  "indexmap 2.13.0",
  "la-arena",
@@ -1347,6 +1348,7 @@ dependencies = [
  "baml_compiler2_visualization",
  "baml_type",
  "base64",
+ "bex_events",
  "bex_events_native",
  "bex_heap",
  "bex_project",
@@ -1527,7 +1529,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "baml_builtins2",
- "baml_tests",
+ "baml_project",
  "baml_type",
  "bex_events",
  "bex_external_types",
@@ -1564,6 +1566,7 @@ dependencies = [
  "indexmap 2.13.0",
  "serde",
  "serde_json",
+ "sys_types",
  "uuid",
  "web-time",
 ]
@@ -1605,6 +1608,7 @@ dependencies = [
  "bex_vm_types",
  "indexmap 2.13.0",
  "thiserror 2.0.18",
+ "tokio",
 ]
 
 [[package]]
@@ -1679,8 +1683,7 @@ dependencies = [
  "anyhow",
  "baml_builtins2",
  "baml_builtins2_codegen",
- "baml_compiler2_emit",
- "baml_tests",
+ "baml_project",
  "baml_type",
  "base64",
  "bex_events",
@@ -1704,8 +1707,6 @@ dependencies = [
  "baml_base",
  "baml_builtins2",
  "baml_builtins2_codegen",
- "baml_compiler2_emit",
- "baml_tests",
  "baml_type",
  "bex_resource_types",
  "codspeed-divan-compat",

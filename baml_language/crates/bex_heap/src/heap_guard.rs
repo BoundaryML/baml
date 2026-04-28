@@ -5,7 +5,6 @@
 //! - A single exclusive heap access [`HeapGuard`], or
 //! - Any number of non-exclusive tracked active heap permits [`ActiveHeapPermit`].
 
-use ::bex_external_types::EpochGuard;
 use ::bex_vm_types::{HeapPtr, RootHaver};
 use ::core::{
     cell::UnsafeCell,
@@ -91,13 +90,29 @@ impl<T: RootHaver> ActiveHeapPermit<T> {
         unsafe { self.state.holder_mut() }
     }
 
-    /// Get an [`EpochGuard`] for the active permit.
-    /// This allows the lifetime of the permit to be passed to external code with zero overhead.
+    /// Get a type-erased [`PermitProof`] tied to this active permit's lifetime.
+    ///
+    /// This lets the GC-exclusion proof flow through APIs (e.g. the sys-op
+    /// dispatch glue) that cannot name the concrete `T`. The returned proof
+    /// is `Copy`, `Send`, and `Sync` and carries no runtime data — the
+    /// guarantee comes purely from the lifetime, which cannot outlive `self`.
     #[inline]
-    pub fn epoch_guard(&self) -> EpochGuard<'_> {
-        // SAFETY: EpochGuard is created with our lifetime so should never outlive the active permit
-        unsafe { EpochGuard::new() }
+    pub fn proof(&self) -> PermitProof<'_> {
+        PermitProof {
+            _marker: PhantomData,
+        }
     }
+}
+
+/// A type-erased proof that an [`ActiveHeapPermit`] is held in the current
+/// scope (for at least lifetime `'a`).
+///
+/// Constructed via [`ActiveHeapPermit::proof`]. Carries no runtime data — the
+/// GC-exclusion guarantee comes from the lifetime, which is bound by the
+/// originating permit's borrow.
+#[derive(Clone, Copy)]
+pub struct PermitProof<'a> {
+    _marker: PhantomData<&'a ()>,
 }
 
 impl<T: RootHaver> Deref for ActiveHeapPermit<T> {

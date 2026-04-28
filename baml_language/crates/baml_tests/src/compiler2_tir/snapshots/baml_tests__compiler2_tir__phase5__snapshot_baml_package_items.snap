@@ -57,7 +57,7 @@ namespace baml.llm:
   class AnthropicOptions { methods: [] }
   class AzureOpenAiOptions { methods: [] }
   class BedrockOptions { methods: [] }
-  class Client { methods: [to_primitive_client, get_constructor, build_attempt, build_attempt_with_state, build_plan, build_plan_with_state, execute_stream, execute_once_stream, execute_oneshot, execute_once_oneshot] }
+  class Client { methods: [to_primitive_client, get_constructor, build_attempt, build_attempt_with_state, build_plan, build_plan_with_state, execute_stream, execute_once_stream, __make_stream, execute_oneshot, execute_once_oneshot] }
   enum ClientType
   class ExecutionContext { methods: [] }
   class MediaUrlHandler { methods: [] }
@@ -74,6 +74,7 @@ namespace baml.llm:
   function __sap_parse_final<T, S>
   function __sap_parse_partial<T, S>
   function build_request
+  function build_request_stream
   function call_llm_function<T>
   function from_shorthand
   function get_jinja_template

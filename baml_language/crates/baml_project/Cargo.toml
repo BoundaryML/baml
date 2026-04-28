@@ -40,3 +40,9 @@ serde = { workspace = true, features = [ "derive" ] }
 serde_json = { workspace = true }
 text-size = { workspace = true }
 
+[features]
+default = [  ]
+# Exposes `baml_project::testing::*`, which contains compile helpers that panic
+# on diagnostic errors and are not appropriate for production use.
+testing = [  ]
+

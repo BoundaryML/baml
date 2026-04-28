@@ -7,4 +7,11 @@ requires-python = ">=3.12"
 
 # These are here to provide vscode autocomplete suggestions for bump-version.py
 # Keep them in sync with the inline dependencies
-dependencies = ["bump2version", "rich", "termcolor", "typer"]
+dependencies = ["bump2version", "rich", "termcolor", "typer", "pyyaml", "slack_sdk"]
+
+[dependency-groups]
+dev = ["pytest"]
+
+[tool.pytest.ini_options]
+pythonpath = ["bctl_src"]
+testpaths = ["bctl_src/tests"]

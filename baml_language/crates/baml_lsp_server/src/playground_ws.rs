@@ -128,7 +128,9 @@ pub enum WsOutMessage {
     /// A runtime event was emitted during execution (protobuf-encoded).
     #[serde(rename = "runtimeEvent")]
     RuntimeEvent {
-        /// Protobuf-encoded RuntimeEvent bytes (decode with RuntimeEvent.decode())
-        data: Vec<u8>,
+        /// Base64-encoded protobuf RuntimeEvent bytes
+        data: String,
+        #[serde(rename = "callId")]
+        call_id: u64,
     },
 }

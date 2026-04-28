@@ -11,3 +11,6 @@ rpi/
 
 # Riptide artifacts (cloud-synced)
 .humanlayer/tasks/
+
+# insta pending snapshot scratch files (resolved by `cargo insta review`)
+*.pending-snap

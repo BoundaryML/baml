@@ -27,6 +27,8 @@ mod db;
 
 pub mod position;
 pub mod symbols;
+#[cfg(feature = "testing")]
+pub mod testing;
 
 pub use check::{CheckResult, collect_compiler2_diagnostics, collect_diagnostics};
 pub use client_codegen::build_object_pool;

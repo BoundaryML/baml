@@ -225,6 +225,43 @@ async fn heap_guard_collects_and_forwards_roots_of_live_holders() {
 }
 
 #[tokio::test]
+async fn unit_permit_participates_in_park_as_no_op() {
+    let mgr = Arc::new(HeapPermitManager::new());
+
+    // `()` is `RootHaver` with no roots — equivalent to an external-only caller.
+    let inactive = mgr.new_permit(()).await;
+    let active = inactive.acquire().await;
+
+    // Another party tries to park; it blocks until we release.
+    let gc_mgr = Arc::clone(&mgr);
+    let gc_task = tokio::spawn(async move {
+        let mut guard = gc_mgr.request_park().await;
+        assert_eq!(guard.num_permits(), 1, "() holder should be tracked");
+
+        let mut roots = Vec::new();
+        guard.collect_roots(&mut roots);
+        assert!(
+            roots.is_empty(),
+            "()-backed permit must contribute zero roots"
+        );
+
+        let forwarding = HashMap::new();
+        guard.forward_roots(&forwarding); // must be a no-op with no panic
+    });
+
+    tokio::time::sleep(Duration::from_millis(50)).await;
+    assert!(
+        !gc_task.is_finished(),
+        "park must block while the ()-backed active permit is held"
+    );
+
+    let inactive = active.release();
+    with_timeout(gc_task).await.expect("GC task panicked");
+
+    drop(inactive);
+}
+
+#[tokio::test]
 async fn heap_guard_skips_dropped_holders() {
     let mgr = HeapPermitManager::new();
 

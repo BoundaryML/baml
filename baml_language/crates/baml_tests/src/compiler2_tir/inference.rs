@@ -2,7 +2,12 @@
 
 use baml_base::Name;
 use baml_compiler2_hir::{package::PackageId, scope::ScopeKind};
-use baml_compiler2_tir::{inference::infer_scope_types, package_interface::package_interface};
+use baml_compiler2_tir::{
+    inference::infer_scope_types,
+    package_interface::package_interface,
+    resolve::{ResolvedName, resolve_name_at_in_scope},
+};
+use text_size::TextSize;
 
 use super::support::{expr_type_in_function, make_db, render_tir};
 
@@ -52,6 +57,45 @@ fn let_binding_widens() {
       }
     }
     ");
+}
+
+#[test]
+fn resolver_initializer_shadowing_uses_previous_binding() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        "function f() -> int { let x = 1; let x = x + 1; x }",
+    );
+
+    let index = baml_compiler2_ppir::file_semantic_index(&db, file);
+    let function_scope = index
+        .scopes
+        .iter()
+        .enumerate()
+        .find_map(|(idx, scope)| {
+            (matches!(scope.kind, ScopeKind::Function)
+                && scope.name.as_ref().is_some_and(|name| name.as_str() == "f"))
+            .then_some(baml_compiler2_hir::scope::FileScopeId::new(idx as u32))
+        })
+        .expect("function scope");
+    let x_bindings = index.scope_bindings[function_scope.index() as usize]
+        .bindings
+        .iter()
+        .filter(|binding| binding.name == Name::new("x"))
+        .collect::<Vec<_>>();
+    assert_eq!(x_bindings.len(), 2);
+
+    let offset = TextSize::from(file.text(&db).find("x + 1").expect("initializer x") as u32);
+    let resolved =
+        resolve_name_at_in_scope(&db, file, offset, &Name::new("x"), Some(&Name::new("f")));
+
+    assert_eq!(
+        resolved,
+        ResolvedName::Local {
+            name: Name::new("x"),
+            definition_site: Some(x_bindings[0].site),
+        }
+    );
 }
 
 #[test]
@@ -284,12 +328,12 @@ fn two_functions_independent() {
 
 #[test]
 fn unresolved_path_after_valid_type() {
-    // Test: when a path like `media.Image.missing` fails, `missing` should be
+    // Test: when a path like `baml.media.Image.missing` fails, `missing` should be
     // reported as unresolved (not `Image`, which is a valid type in the media namespace).
     let mut db = make_db();
     let file = db.add_file(
         "test.baml",
-        "function f() -> int { return media.Image.missing; }",
+        "function f() -> int { return baml.media.Image.missing; }",
     );
     // The error should mention `missing`, not `Image`
     let output = render_tir(&db, file);
@@ -300,6 +344,30 @@ fn unresolved_path_after_valid_type() {
     assert!(
         !output.contains("unresolved name: Image"),
         "Error should NOT mention 'Image' as unresolved (it's a valid type), got:\n{output}"
+    );
+}
+
+#[test]
+fn io_input_requires_baml_prefix() {
+    let mut db = make_db();
+    let file = db.add_file("test.baml", "function f() -> string { io.input(\"x\") }");
+
+    let output = render_tir(&db, file);
+    assert!(
+        output.contains("unresolved name: io"),
+        "Expected bare io namespace to be rejected, got:\n{output}"
+    );
+}
+
+#[test]
+fn env_builtin_calls_require_baml_prefix() {
+    let mut db = make_db();
+    let file = db.add_file("test.baml", "function f() -> string? { env.get(\"X\") }");
+
+    let output = render_tir(&db, file);
+    assert!(
+        output.contains("unresolved name: env"),
+        "Expected bare env builtin call to be rejected, got:\n{output}"
     );
 }
 
@@ -337,6 +405,89 @@ fn function_type_throws_package_interface_exports_effect_params() {
     assert_eq!(
         format!("{}", exported.params[0].1),
         "(value: int) -> string throws __effect_param_0"
+    );
+}
+
+#[test]
+fn lambda_scope_retypes_capture_from_function_parameter() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "capture_param.baml",
+        "function main(x: int) -> int { let f = () -> int { x }; return f(); }",
+    );
+
+    let index = baml_compiler2_ppir::file_semantic_index(&db, file);
+    let lambda_scope_id = index
+        .scope_ids
+        .iter()
+        .copied()
+        .find(|scope_id| {
+            let scope = &index.scopes[scope_id.file_scope_id(&db).index() as usize];
+            matches!(scope.kind, ScopeKind::Lambda)
+        })
+        .expect("lambda scope");
+    let lambda_inference = infer_scope_types(&db, lambda_scope_id);
+
+    let item_tree = baml_compiler2_ppir::file_item_tree(&db, file);
+    let (main_id, _) = item_tree
+        .functions
+        .iter()
+        .find(|(_, func)| func.name.as_str() == "main")
+        .expect("main function");
+    let main_loc = baml_compiler2_hir::loc::FunctionLoc::new(&db, file, main_id);
+    let main_body = baml_compiler2_ppir::function_body(&db, main_loc);
+    let baml_compiler2_hir::body::FunctionBody::Expr(main_expr_body) = main_body.as_ref() else {
+        panic!("main expression body");
+    };
+    let lambda_body = main_expr_body
+        .exprs
+        .iter()
+        .find_map(|(_, expr)| {
+            if let baml_compiler2_ast::Expr::Lambda(func_def) = expr
+                && let Some(baml_compiler2_ast::FunctionBodyDef::Expr(lambda_body, _)) =
+                    &func_def.body
+            {
+                Some(lambda_body)
+            } else {
+                None
+            }
+        })
+        .expect("lambda body");
+    let root_expr = lambda_body.root_expr.expect("lambda root expr");
+
+    assert_eq!(
+        lambda_inference
+            .expression_type(root_expr)
+            .map(ToString::to_string),
+        Some("int".to_string())
+    );
+}
+
+#[test]
+fn lambda_parameter_shadowing_uses_parameter_declared_type() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "lambda_param_shadow.baml",
+        r#"
+function main() -> int {
+    let x: string = "";
+    let f = (x: int) -> int {
+        x = 1;
+        x
+    };
+    f(0)
+}
+"#,
+    );
+
+    let output = render_tir(&db, file);
+    assert!(
+        !output.contains("type mismatch: expected string, got int"),
+        "lambda parameter assignment should use the parameter annotation, got:\n{output}"
+    );
+    assert!(
+        output.contains("(x: int) -> int"),
+        "expected lambda parameter to keep its int type, got:\n{output}"
     );
 }
 

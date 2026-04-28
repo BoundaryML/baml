@@ -41,7 +41,7 @@
 //! - The argument count != param count (variadic / error cases)
 
 use baml_base::SourceFile;
-use baml_compiler2_ast::{Expr, Pattern, Stmt};
+use baml_compiler2_ast::{Expr, Stmt};
 use baml_compiler2_hir::{body::FunctionBody, loc::FunctionLoc, scope::ScopeKind};
 use baml_compiler2_tir::ty::Ty;
 use text_size::TextSize;
@@ -142,15 +142,10 @@ pub fn annotations(db: &dyn Db, file: SourceFile) -> Vec<InlineAnnotation> {
 
             // Get the binding name to suppress hints for `_`.
             let pat = &expr_body.patterns[*pattern];
-            let binding_name = match pat {
-                Pattern::Binding(name) => name.as_str(),
-                Pattern::TypedBinding { name, .. } => name.as_str(),
-                _ => continue, // Not a simple binding — skip
+            let Some(binding_name) = pat.binding_name() else {
+                continue; // Not a simple binding (or `_` wildcard) — skip
             };
-
-            if binding_name == "_" {
-                continue;
-            }
+            let _binding_name = binding_name.as_str();
 
             // Look up the inferred type.
             let Some(ty) = inference.binding_type(*pattern) else {

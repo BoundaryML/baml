@@ -24,91 +24,7 @@ use salsa::{Event, EventKind, Setter};
 
 /// Format compiler2 AST `TypeExpr` for HIR2 display.
 fn hir2_type_expr_to_string(ty: &baml_compiler2_ast::TypeExpr) -> String {
-    use baml_compiler2_ast::TypeExpr;
-
-    fn type_expr_needs_postfix_parens(ty: &TypeExpr) -> bool {
-        matches!(ty, TypeExpr::Union { .. } | TypeExpr::Function { .. })
-    }
-
-    fn type_expr_as_postfix_base(ty: &TypeExpr) -> String {
-        let rendered = hir2_type_expr_to_string(ty);
-        if type_expr_needs_postfix_parens(ty) {
-            format!("({rendered})")
-        } else {
-            rendered
-        }
-    }
-
-    fn type_expr_as_function_result(ty: &TypeExpr) -> String {
-        let rendered = hir2_type_expr_to_string(ty);
-        if matches!(ty, TypeExpr::Function { .. }) {
-            format!("({rendered})")
-        } else {
-            rendered
-        }
-    }
-
-    match ty {
-        TypeExpr::Path { segments, .. } => segments
-            .iter()
-            .map(|n| n.as_str())
-            .collect::<Vec<_>>()
-            .join("."),
-        TypeExpr::Int { .. } => "int".into(),
-        TypeExpr::Float { .. } => "float".into(),
-        TypeExpr::String { .. } => "string".into(),
-        TypeExpr::Bool { .. } => "bool".into(),
-        TypeExpr::Null { .. } => "null".into(),
-        TypeExpr::Never { .. } => "never".into(),
-        TypeExpr::Void { .. } => "void".into(),
-        TypeExpr::Uint8Array { .. } => "uint8array".into(),
-        TypeExpr::Media { kind, .. } => format!("{:?}", kind).to_lowercase(),
-        TypeExpr::Optional { inner, .. } => format!("{}?", type_expr_as_postfix_base(inner)),
-        TypeExpr::List { inner, .. } => format!("{}[]", type_expr_as_postfix_base(inner)),
-        TypeExpr::Map { key, value, .. } => format!(
-            "map<{}, {}>",
-            hir2_type_expr_to_string(key),
-            hir2_type_expr_to_string(value)
-        ),
-        TypeExpr::Union { variants, .. } => variants
-            .iter()
-            .map(hir2_type_expr_to_string)
-            .collect::<Vec<_>>()
-            .join(" | "),
-        TypeExpr::Literal { value, .. } => value.to_string(),
-        TypeExpr::Function {
-            params,
-            ret,
-            throws,
-            ..
-        } => {
-            let ps: Vec<String> = params
-                .iter()
-                .map(|p| {
-                    p.name
-                        .as_ref()
-                        .map(|n| format!("{}: {}", n.as_str(), hir2_type_expr_to_string(&p.ty)))
-                        .unwrap_or_else(|| hir2_type_expr_to_string(&p.ty))
-                })
-                .collect();
-            let throws = throws
-                .as_deref()
-                .map(hir2_type_expr_to_string)
-                .map(|throws| format!(" throws {throws}"))
-                .unwrap_or_default();
-            format!(
-                "({}) -> {}{}",
-                ps.join(", "),
-                type_expr_as_function_result(ret),
-                throws
-            )
-        }
-        TypeExpr::BuiltinUnknown { .. } => "unknown".into(),
-        TypeExpr::Type { .. } => "type".into(),
-        TypeExpr::Rust { .. } => "$rust_type".into(),
-        TypeExpr::Error { .. } => "error".into(),
-        TypeExpr::Unknown { .. } => "?".into(),
-    }
+    ty.to_string()
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -697,21 +613,45 @@ fn expr_desc_spans<'db>(
 }
 
 fn pat_desc(pat_id: baml_compiler2_ast::PatId, body: &baml_compiler2_ast::ExprBody) -> String {
-    use baml_compiler2_ast::Pattern;
+    use baml_compiler2_ast::PatternKind;
     let pat = &body.patterns[pat_id];
-    match pat {
-        Pattern::Binding(n) => n.to_string(),
-        Pattern::TypedBinding { name, ty } => {
-            format!("{name}: {}", hir2_type_expr_to_string(ty))
+    let base = match &pat.kind {
+        PatternKind::Wildcard => "_".to_string(),
+        // TODO: render inner pattern when bind-with-pattern syntax lands
+        PatternKind::Bind {
+            name,
+            inner: _inner,
+        } => name.to_string(),
+        PatternKind::Literal(lit) => lit.to_string(),
+        PatternKind::Null => "null".into(),
+        PatternKind::EnumVariant { enum_name, variant } => {
+            let path: Vec<_> = enum_name.iter().map(|s| s.as_str()).collect();
+            format!("{}.{variant}", path.join("."))
         }
-        Pattern::Literal(lit) => lit.to_string(),
-        Pattern::Null => "null".into(),
-        Pattern::EnumVariant { enum_name, variant } => format!("{enum_name}.{variant}"),
-        Pattern::Union(pats) => pats
+        PatternKind::Or(pats) => pats
             .iter()
             .map(|p| pat_desc(*p, body))
             .collect::<Vec<_>>()
             .join(" | "),
+        PatternKind::Type(ty) => hir2_type_expr_to_string(ty),
+        PatternKind::Class { class, fields } => {
+            let field_strs: Vec<_> = fields
+                .iter()
+                .map(|f| {
+                    if let Some(inner) = f.pat {
+                        format!("{}: {}", f.field, pat_desc(inner, body))
+                    } else {
+                        f.field.to_string()
+                    }
+                })
+                .collect();
+            format!("{} {{ {} }}", class, field_strs.join(", "))
+        }
+    };
+    if let Some(narrow) = &pat.narrow {
+        format!("{base}: {}", hir2_type_expr_to_string(narrow))
+    } else {
+        base
     }
 }
 
@@ -1603,11 +1543,12 @@ impl CompilerRunner {
                     for (name, idx) in &bindings.params {
                         file_detail.push(format!("{indent}  param[{idx}]: {name}"));
                     }
-                    for (name, _site, range) in &bindings.bindings {
+                    for binding in &bindings.bindings {
                         file_detail.push(format!(
-                            "{indent}  let {name}  {}..{}",
-                            u32::from(range.start()),
-                            u32::from(range.end()),
+                            "{indent}  let {}  {}..{}",
+                            binding.name,
+                            u32::from(binding.name_range.start()),
+                            u32::from(binding.name_range.end()),
                         ));
                     }
                 }
@@ -1984,25 +1925,49 @@ impl CompilerRunner {
     }
 
     fn run_tir2(&mut self) {
-        use baml_compiler2_ast::{Expr, ExprBody, Literal, Pattern, Stmt};
+        use baml_compiler2_ast::{Expr, ExprBody, Literal, PatternKind, Stmt};
         use baml_compiler2_hir::scope::ScopeKind;
         use baml_compiler2_tir::ty::Ty;
 
         fn pat_desc(pat_id: baml_compiler2_ast::PatId, body: &ExprBody) -> String {
             let pat = &body.patterns[pat_id];
-            match pat {
-                Pattern::Binding(n) => n.to_string(),
-                Pattern::TypedBinding { name, ty } => {
-                    format!("{name}: {}", hir2_type_expr_to_string(ty))
+            let base = match &pat.kind {
+                PatternKind::Wildcard => "_".to_string(),
+                // TODO: render inner pattern when bind-with-pattern syntax lands
+                PatternKind::Bind {
+                    name,
+                    inner: _inner,
+                } => name.to_string(),
+                PatternKind::Literal(lit) => lit.to_string(),
+                PatternKind::Null => "null".into(),
+                PatternKind::EnumVariant { enum_name, variant } => {
+                    let path: Vec<_> = enum_name.iter().map(|s| s.as_str()).collect();
+                    format!("{}.{variant}", path.join("."))
                 }
-                Pattern::Literal(lit) => lit.to_string(),
-                Pattern::Null => "null".into(),
-                Pattern::EnumVariant { enum_name, variant } => format!("{enum_name}.{variant}"),
-                Pattern::Union(pats) => pats
+                PatternKind::Or(pats) => pats
                     .iter()
                     .map(|p| pat_desc(*p, body))
                     .collect::<Vec<_>>()
                     .join(" | "),
+                PatternKind::Type(ty) => hir2_type_expr_to_string(ty),
+                PatternKind::Class { class, fields } => {
+                    let field_strs: Vec<_> = fields
+                        .iter()
+                        .map(|f| {
+                            if let Some(inner) = f.pat {
+                                format!("{}: {}", f.field, pat_desc(inner, body))
+                            } else {
+                                f.field.to_string()
+                            }
+                        })
+                        .collect();
+                    format!("{} {{ {} }}", class, field_strs.join(", "))
+                }
+            };
+            if let Some(narrow) = &pat.narrow {
+                format!("{base}: {}", hir2_type_expr_to_string(narrow))
+            } else {
+                base
             }
         }
 
@@ -2409,13 +2374,7 @@ impl CompilerRunner {
                             initializer,
                             ..
                         } => {
-                            let pat_name = match &body.patterns[*pattern] {
-                                Pattern::Binding(n) => n.to_string(),
-                                Pattern::TypedBinding { name, ty } => {
-                                    format!("{name}: {}", hir2_type_expr_to_string(ty))
-                                }
-                                other => format!("{other:?}"),
-                            };
+                            let pat_name = pat_desc(*pattern, body);
                             if let Some(init) = initializer {
                                 let init_ty = inference
                                     .expression_type(*init)
@@ -2565,13 +2524,7 @@ impl CompilerRunner {
                             collection,
                             body: body_expr,
                         } => {
-                            let pat_name = match &body.patterns[*binding] {
-                                Pattern::Binding(n) => n.to_string(),
-                                Pattern::TypedBinding { name, ty } => {
-                                    format!("{name}: {}", hir2_type_expr_to_string(ty))
-                                }
-                                other => format!("{other:?}"),
-                            };
+                            let pat_name = pat_desc(*binding, body);
                             let coll_desc = expr_desc(*collection, body);
                             let line = format!("{pad}for {pat_name} in {coll_desc}");
                             writeln!(output, "{line}").ok();

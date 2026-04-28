@@ -7,4 +7,4 @@ function user.sum_array(arr: int[]) -> int  [expr] {
 }
 
 --- captures ---
-lambda () in sum_array: captures [sum, i]
+lambda () in ?: captures [sum, i]

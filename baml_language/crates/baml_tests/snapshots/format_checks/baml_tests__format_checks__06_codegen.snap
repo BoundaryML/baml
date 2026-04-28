@@ -1307,6 +1307,16 @@ function user.LlmBasic$build_request(name: string) -> baml.http.Request {
     return
 }
 
+function user.LlmBasic$build_request_stream(name: string) -> baml.http.Request {
+    load_const null
+    load_const "LlmBasic"
+    load_var name
+    load_const "name"
+    alloc_map 1
+    call baml.llm.build_request_stream
+    return
+}
+
 function user.LlmBasic$parse(json: string) -> string {
     load_const "LlmBasic"
     load_var json
@@ -1318,7 +1328,7 @@ function user.LlmBasic$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream
     load_var sse
     load_const "LlmBasic"
     load_const null
-    call baml.llm.parse
+    call_indirect
     return
 }
 
@@ -1329,6 +1339,16 @@ function user.LlmBasic$render_prompt(name: string) -> baml.llm.PromptAst {
     load_const "name"
     alloc_map 1
     call baml.llm.render_prompt
+    return
+}
+
+function user.LlmBasic$stream(name: string) -> baml.llm.Stream {
+    load_const null
+    load_const "LlmBasic"
+    load_var name
+    load_const "name"
+    alloc_map 1
+    call baml.llm.stream_llm_function
     return
 }
 
@@ -1352,6 +1372,16 @@ function user.LlmMultiLine$build_request(text: string) -> baml.http.Request {
     return
 }
 
+function user.LlmMultiLine$build_request_stream(text: string) -> baml.http.Request {
+    load_const null
+    load_const "LlmMultiLine"
+    load_var text
+    load_const "text"
+    alloc_map 1
+    call baml.llm.build_request_stream
+    return
+}
+
 function user.LlmMultiLine$parse(json: string) -> string {
     load_const "LlmMultiLine"
     load_var json
@@ -1363,7 +1393,7 @@ function user.LlmMultiLine$parse_stream(sse: baml.http.SseStream) -> baml.llm.St
     load_var sse
     load_const "LlmMultiLine"
     load_const null
-    call baml.llm.parse
+    call_indirect
     return
 }
 
@@ -1374,6 +1404,16 @@ function user.LlmMultiLine$render_prompt(text: string) -> baml.llm.PromptAst {
     load_const "text"
     alloc_map 1
     call baml.llm.render_prompt
+    return
+}
+
+function user.LlmMultiLine$stream(text: string) -> baml.llm.Stream {
+    load_const null
+    load_const "LlmMultiLine"
+    load_var text
+    load_const "text"
+    alloc_map 1
+    call baml.llm.stream_llm_function
     return
 }
 
@@ -1397,6 +1437,16 @@ function user.LlmReversedOrder$build_request(text: string) -> baml.http.Request 
     return
 }
 
+function user.LlmReversedOrder$build_request_stream(text: string) -> baml.http.Request {
+    load_const null
+    load_const "LlmReversedOrder"
+    load_var text
+    load_const "text"
+    alloc_map 1
+    call baml.llm.build_request_stream
+    return
+}
+
 function user.LlmReversedOrder$parse(json: string) -> string {
     load_const "LlmReversedOrder"
     load_var json
@@ -1408,7 +1458,7 @@ function user.LlmReversedOrder$parse_stream(sse: baml.http.SseStream) -> baml.ll
     load_var sse
     load_const "LlmReversedOrder"
     load_const null
-    call baml.llm.parse
+    call_indirect
     return
 }
 
@@ -1419,6 +1469,16 @@ function user.LlmReversedOrder$render_prompt(text: string) -> baml.llm.PromptAst
     load_const "text"
     alloc_map 1
     call baml.llm.render_prompt
+    return
+}
+
+function user.LlmReversedOrder$stream(text: string) -> baml.llm.Stream {
+    load_const null
+    load_const "LlmReversedOrder"
+    load_var text
+    load_const "text"
+    alloc_map 1
+    call baml.llm.stream_llm_function
     return
 }
 
@@ -1464,6 +1524,27 @@ function user.LlmStringClient$build_request(text: string) -> baml.http.Request {
     return
 }
 
+function user.LlmStringClient$build_request_stream(text: string) -> baml.http.Request {
+    alloc_instance baml.llm.Client
+    load_const "openai/gpt-4o"
+    init_field .name
+    load_const baml.llm.ClientType.Primitive
+    alloc_variant baml.llm.ClientType
+    init_field .client_type
+    alloc_array 0
+    init_field .sub_clients
+    load_const null
+    init_field .retry
+    load_const 0
+    init_field .counter
+    load_const "LlmStringClient"
+    load_var text
+    load_const "text"
+    alloc_map 1
+    call baml.llm.build_request_stream
+    return
+}
+
 function user.LlmStringClient$parse(json: string) -> string {
     load_const "LlmStringClient"
     load_var json
@@ -1474,20 +1555,8 @@ function user.LlmStringClient$parse(json: string) -> string {
 function user.LlmStringClient$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream {
     load_var sse
     load_const "LlmStringClient"
-    alloc_instance baml.llm.Client
-    load_const "openai/gpt-4o"
-    init_field .name
     load_const null
-    load_const "Primitive"
-    load_map_element
-    init_field .client_type
-    alloc_array 0
-    init_field .sub_clients
-    load_const null
-    init_field .retry
-    load_const 0
-    init_field .counter
-    call baml.llm.parse
+    call_indirect
     return
 }
 
@@ -1509,6 +1578,27 @@ function user.LlmStringClient$render_prompt(text: string) -> baml.llm.PromptAst 
     load_const "text"
     alloc_map 1
     call baml.llm.render_prompt
+    return
+}
+
+function user.LlmStringClient$stream(text: string) -> baml.llm.Stream {
+    alloc_instance baml.llm.Client
+    load_const "openai/gpt-4o"
+    init_field .name
+    load_const baml.llm.ClientType.Primitive
+    alloc_variant baml.llm.ClientType
+    init_field .client_type
+    alloc_array 0
+    init_field .sub_clients
+    load_const null
+    init_field .retry
+    load_const 0
+    init_field .counter
+    load_const "LlmStringClient"
+    load_var text
+    load_const "text"
+    alloc_map 1
+    call baml.llm.stream_llm_function
     return
 }
 
@@ -1544,6 +1634,22 @@ function user.LlmWithLongSignature$build_request(first_context: string, second_c
     return
 }
 
+function user.LlmWithLongSignature$build_request_stream(first_context: string, second_context: string, third_context: string, user_query: string) -> baml.http.Request {
+    load_const null
+    load_const "LlmWithLongSignature"
+    load_var first_context
+    load_var second_context
+    load_var third_context
+    load_var user_query
+    load_const "first_context"
+    load_const "second_context"
+    load_const "third_context"
+    load_const "user_query"
+    alloc_map 4
+    call baml.llm.build_request_stream
+    return
+}
+
 function user.LlmWithLongSignature$parse(json: string) -> string {
     load_const "LlmWithLongSignature"
     load_var json
@@ -1555,7 +1661,7 @@ function user.LlmWithLongSignature$parse_stream(sse: baml.http.SseStream) -> bam
     load_var sse
     load_const "LlmWithLongSignature"
     load_const null
-    call baml.llm.parse
+    call_indirect
     return
 }
 
@@ -1572,6 +1678,22 @@ function user.LlmWithLongSignature$render_prompt(first_context: string, second_c
     load_const "user_query"
     alloc_map 4
     call baml.llm.render_prompt
+    return
+}
+
+function user.LlmWithLongSignature$stream(first_context: string, second_context: string, third_context: string, user_query: string) -> baml.llm.Stream {
+    load_const null
+    load_const "LlmWithLongSignature"
+    load_var first_context
+    load_var second_context
+    load_var third_context
+    load_var user_query
+    load_const "first_context"
+    load_const "second_context"
+    load_const "third_context"
+    load_const "user_query"
+    alloc_map 4
+    call baml.llm.stream_llm_function
     return
 }
 
@@ -3608,68 +3730,66 @@ function user.MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure,
     pop_jump_if_false L26
 
   L26:
-    load_var r
+    load_var x
     jump_table [L27, L27, L27, L27, L27, L27], default L27
 
   L27: 5
-    load_var r
+    load_var x
     is_type int
     pop_jump_if_false L28
-    load_var r
+    load_var x
     load_const 0
     cmp_op >
     pop_jump_if_false L28
     jump L29
 
   L28:
-    load_var r
+    load_var x
     is_type int
     pop_jump_if_false L29
-    load_var r
+    load_var x
     load_const 0
     cmp_op <
     pop_jump_if_false L29
 
   L29:
-    load_var r
+    load_var x
     is_type int
     pop_jump_if_false L35
-    load_var r
-    store_var n
-    load_var n
+    load_var x
     load_const 0
     cmp_op >
     jump_if_false L30
     pop 1
-    load_var n
+    load_var x
     load_const 100
     cmp_op <
 
   L30:
     jump_if_false L31
     pop 1
-    load_var n
+    load_var x
     load_const 42
     cmp_op !=
 
   L31:
     jump_if_false L32
     pop 1
-    load_var n
+    load_var x
     load_const 13
     cmp_op !=
 
   L32:
     jump_if_false L33
     pop 1
-    load_var n
+    load_var x
     load_const 7
     cmp_op !=
 
   L33:
     jump_if_false L34
     pop 1
-    load_var n
+    load_var x
     load_const 99
     cmp_op !=
 
@@ -3677,37 +3797,37 @@ function user.MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure,
     pop_jump_if_false L35
 
   L35:
-    load_var r
+    load_var x
     load_const 0
     cmp_op ==
     pop_jump_if_false L36
 
   L36:
-    load_var r
+    load_var x
     load_const 1
     cmp_op ==
     pop_jump_if_false L37
 
   L37:
-    load_var r
+    load_var x
     jump_table [L38, L38, L38, L38, L38, L38, L38, L38, L38, L38, L38, L38, L38, L38, L38, L38, L38, L38, L38, L38, L38, L38, L38, L38, L38], default L38
 
   L38: 24
-    load_var r
+    load_var s
     discriminant
     load_const MatchStatus.Active
     cmp_op ==
     pop_jump_if_false L39
 
   L39:
-    load_var r
+    load_var s
     discriminant
     load_const MatchStatus.Inactive
     cmp_op ==
     pop_jump_if_false L40
 
   L40:
-    load_var r
+    load_var x
     load_const 0
     cmp_op ==
     pop_jump_if_false L41
@@ -3728,38 +3848,36 @@ function user.MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure,
     store_var result
 
   L44:
-    load_var r
+    load_var x
     is_type int
     pop_jump_if_false L49
-    load_var r
-    store_var n
-    load_var n
+    load_var x
     load_const 0
     cmp_op >
     jump_if_false L45
     pop 1
-    load_var n
+    load_var x
     load_const 100
     cmp_op <
 
   L45:
     jump_if_false L46
     pop 1
-    load_var n
+    load_var x
     load_const 42
     cmp_op !=
 
   L46:
     jump_if_false L47
     pop 1
-    load_var n
+    load_var x
     load_const 13
     cmp_op !=
 
   L47:
     jump_if_false L48
     pop 1
-    load_var n
+    load_var x
     load_const 7
     cmp_op !=
 
@@ -3767,38 +3885,36 @@ function user.MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure,
     pop_jump_if_false L49
 
   L49:
-    load_var r
+    load_var x
     is_type int
     pop_jump_if_false L54
-    load_var r
-    store_var n
-    load_var n
+    load_var x
     load_const 0
     cmp_op >
     jump_if_false L50
     pop 1
-    load_var n
+    load_var x
     load_const 100
     cmp_op <
 
   L50:
     jump_if_false L51
     pop 1
-    load_var n
+    load_var x
     load_const 42
     cmp_op !=
 
   L51:
     jump_if_false L52
     pop 1
-    load_var n
+    load_var x
     load_const 13
     cmp_op !=
 
   L52:
     jump_if_false L53
     pop 1
-    load_var n
+    load_var x
     load_const 7
     cmp_op !=
 
@@ -3806,7 +3922,7 @@ function user.MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure,
     pop_jump_if_false L54
 
   L54:
-    load_var r
+    load_var x
     load_const 1
     bin_op +
     load_const 0
@@ -3814,41 +3930,41 @@ function user.MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure,
     pop_jump_if_false L55
 
   L55:
-    load_var r
-    load_var r
+    load_var x
+    load_var x
     bin_op *
     load_var b
     load_var b
     bin_op *
     bin_op +
-    load_var r
+    load_var x
     load_var b
     bin_op *
     bin_op +
-    load_var r
+    load_var x
     bin_op +
     load_var b
     bin_op +
-    load_var r
-    load_var r
+    load_var x
+    load_var x
     bin_op *
-    load_var r
-    bin_op *
-    bin_op +
-    load_var b
-    load_var b
-    bin_op *
-    load_var b
-    bin_op *
-    bin_op +
-    load_var r
-    load_var b
-    bin_op *
-    load_var r
+    load_var x
     bin_op *
     bin_op +
     load_var b
-    load_var r
+    load_var b
+    bin_op *
+    load_var b
+    bin_op *
+    bin_op +
+    load_var x
+    load_var b
+    bin_op *
+    load_var x
+    bin_op *
+    bin_op +
+    load_var b
+    load_var x
     bin_op *
     load_var b
     bin_op *
@@ -3858,7 +3974,7 @@ function user.MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure,
     pop_jump_if_false L56
 
   L56:
-    load_var r
+    load_var x
     load_const 1
     bin_op +
     load_const 0
@@ -3866,13 +3982,13 @@ function user.MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure,
     pop_jump_if_false L57
 
   L57:
-    load_var r
+    load_var x
     load_const 0
     cmp_op ==
     pop_jump_if_false L58
 
   L58:
-    load_var r
+    load_var x
     load_const 0
     cmp_op ==
     pop_jump_if_false L59
@@ -3885,14 +4001,14 @@ function user.MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure,
     pop_jump_if_false L60
 
   L60:
-    load_var r
+    load_var x
     load_const 0
     cmp_op ==
     pop_jump_if_false L61
     jump L65
 
   L61:
-    load_var r
+    load_var x
     load_const 1
     cmp_op ==
     pop_jump_if_false L62
@@ -3922,21 +4038,21 @@ function user.MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure,
     load_const true
     cmp_op ==
     pop_jump_if_false L67
-    load_var r
+    load_var s
     discriminant
     load_const MatchStatus.Active
     cmp_op ==
     pop_jump_if_false L66
 
   L66:
-    load_var r
+    load_var s
     discriminant
     load_const MatchStatus.Inactive
     cmp_op ==
     pop_jump_if_false L67
 
   L67:
-    load_var r
+    load_var x
     load_const 0
     cmp_op ==
     pop_jump_if_false L68
@@ -3945,21 +4061,21 @@ function user.MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure,
     jump L70
     load_var b
     pop_jump_if_false L70
-    load_var r
+    load_var s
     discriminant
     load_const MatchStatus.Active
     cmp_op ==
     pop_jump_if_false L69
 
   L69:
-    load_var r
+    load_var s
     discriminant
     load_const MatchStatus.Inactive
     cmp_op ==
     pop_jump_if_false L70
 
   L70:
-    load_var r
+    load_var x
     load_const 0
     cmp_op ==
     pop_jump_if_false L71
@@ -4486,6 +4602,14 @@ function user.TestTarget$build_request() -> baml.http.Request {
     return
 }
 
+function user.TestTarget$build_request_stream() -> baml.http.Request {
+    load_global user.BasicClient
+    load_const "TestTarget"
+    alloc_map 0
+    call baml.llm.build_request_stream
+    return
+}
+
 function user.TestTarget$parse(json: string) -> string {
     load_const "TestTarget"
     load_var json
@@ -4496,8 +4620,8 @@ function user.TestTarget$parse(json: string) -> string {
 function user.TestTarget$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream {
     load_var sse
     load_const "TestTarget"
-    load_global user.BasicClient
-    call baml.llm.parse
+    load_const null
+    call_indirect
     return
 }
 
@@ -4506,6 +4630,14 @@ function user.TestTarget$render_prompt() -> baml.llm.PromptAst {
     load_const "TestTarget"
     alloc_map 0
     call baml.llm.render_prompt
+    return
+}
+
+function user.TestTarget$stream() -> baml.llm.Stream {
+    load_global user.BasicClient
+    load_const "TestTarget"
+    alloc_map 0
+    call baml.llm.stream_llm_function
     return
 }
 

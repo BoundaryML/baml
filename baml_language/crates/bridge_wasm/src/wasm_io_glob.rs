@@ -13,12 +13,11 @@
 
 use std::sync::Arc;
 
-use sys_ops::io::{self, owned, BexExternalValue, CallId, OpErrorKind, SysOpContext, SysOpOutput};
+use sys_ops::io::{self, BexExternalValue, CallId, OpErrorKind, SysOpContext, SysOpOutput, owned};
 use sys_types::BexHeap;
 use wasm_bindgen::JsCast;
 
-use crate::send_wrapper::SendWrapper;
-use crate::wasm_fs::WasmVfs;
+use crate::{send_wrapper::SendWrapper, wasm_fs::WasmVfs};
 
 /// WASM implementation of `baml.glob` namespace + `Glob` class.
 pub(crate) struct WasmIoGlob {
@@ -73,12 +72,17 @@ impl io::IoClassGlobGlob for WasmIoGlob {
             Err(_) => {
                 return SysOpOutput::err(OpErrorKind::Other(
                     "Invalid glob handle: expected String pattern".into(),
-                ))
+                ));
             }
+        };
+        let (re, negated) = match glob_to_regex(&pattern) {
+            Ok(glob) => glob,
+            Err(e) => return SysOpOutput::err(OpErrorKind::Other(e)),
         };
 
         // Delegate to WasmVfs.readMany which accepts a glob string and returns
-        // `[string, Uint8Array][]`. We extract just the path strings.
+        // `[string, Uint8Array][]`. Filter with the same Rust matcher used by
+        // matches() so the host and native implementations agree on patterns.
         match self.vfs.vfs_read_many(&pattern) {
             Ok(arr) => {
                 let paths: Vec<String> = arr
@@ -88,6 +92,7 @@ impl io::IoClassGlobGlob for WasmIoGlob {
                         let pair: js_sys::Array = item.dyn_into().ok()?;
                         pair.get(0).as_string()
                     })
+                    .filter(|path| glob_regex_matches(&re, negated, path))
                     .collect();
                 SysOpOutput::ok(paths)
             }
@@ -111,14 +116,14 @@ impl io::IoClassGlobGlob for WasmIoGlob {
             Err(_) => {
                 return SysOpOutput::err(OpErrorKind::Other(
                     "Invalid glob handle: expected String pattern".into(),
-                ))
+                ));
             }
         };
 
         // Compile the glob to a regex at call time. The `regex` crate is
         // available on wasm32-unknown-unknown so this works in the browser.
         match glob_to_regex(&pattern) {
-            Ok(re) => SysOpOutput::ok(re.is_match(&path)),
+            Ok((re, negated)) => SysOpOutput::ok(glob_regex_matches(&re, negated, &path)),
             Err(e) => SysOpOutput::err(OpErrorKind::Other(e)),
         }
     }
@@ -133,7 +138,12 @@ impl io::IoClassGlobGlob for WasmIoGlob {
 // that both `sys_native` and `bridge_wasm` can depend on.
 // ============================================================================
 
-fn glob_to_regex(glob: &str) -> Result<regex::Regex, String> {
+fn glob_regex_matches(re: &regex::Regex, negated: bool, path: &str) -> bool {
+    let matched = re.is_match(path);
+    if negated { !matched } else { matched }
+}
+
+fn glob_to_regex(glob: &str) -> Result<(regex::Regex, bool), String> {
     let (negated, glob) = if let Some(rest) = glob.strip_prefix('!') {
         (true, rest)
     } else {
@@ -193,45 +203,17 @@ fn glob_to_regex(glob: &str) -> Result<regex::Regex, String> {
                 }
             }
             b'{' => {
-                let mut depth = 1usize;
-                let mut alts = String::from("(?:");
-                i += 1;
-                while i < bytes.len() && depth > 0 {
-                    match bytes[i] {
-                        b'{' => {
-                            depth += 1;
-                            alts.push('{');
-                        }
-                        b'}' => {
-                            depth -= 1;
-                            if depth == 0 {
-                                break;
-                            }
-                            alts.push('}');
-                        }
-                        b',' if depth == 1 => alts.push('|'),
-                        ch => {
-                            let c = ch as char;
-                            if ".+^${}()|[]\\".contains(c) {
-                                alts.push('\\');
-                            }
-                            alts.push(c);
-                        }
-                    }
+                if let Some((alts, next)) = parse_brace_alternation(bytes, i + 1) {
+                    re.push_str(&alts);
+                    i = next;
+                } else {
+                    re.push_str("\\{");
                     i += 1;
-                }
-                alts.push(')');
-                re.push_str(&alts);
-                if i < bytes.len() {
-                    i += 1; // consume closing '}'
                 }
             }
             ch => {
                 let c = ch as char;
-                if ".+^${}()|[]\\".contains(c) {
-                    re.push('\\');
-                }
-                re.push(c);
+                push_regex_literal(&mut re, c);
                 i += 1;
             }
         }
@@ -240,12 +222,42 @@ fn glob_to_regex(glob: &str) -> Result<regex::Regex, String> {
 
     let regex =
         regex::Regex::new(&re).map_err(|e| format!("Invalid glob pattern '{glob}': {e}"))?;
-    if negated {
-        let inner = &re[1..re.len() - 1]; // strip ^ and $
-        let neg_re = format!("^(?!{inner}).*$");
-        regex::Regex::new(&neg_re)
-            .map_err(|e| format!("Invalid negated glob pattern '{glob}': {e}"))
-    } else {
-        Ok(regex)
+    Ok((regex, negated))
+}
+
+fn parse_brace_alternation(bytes: &[u8], mut i: usize) -> Option<(String, usize)> {
+    let mut alts = String::from("(?:");
+    while i < bytes.len() {
+        match bytes[i] {
+            b'\\' if i + 1 < bytes.len() => {
+                push_regex_literal(&mut alts, bytes[i + 1] as char);
+                i += 2;
+            }
+            b'{' => {
+                let (nested, next) = parse_brace_alternation(bytes, i + 1)?;
+                alts.push_str(&nested);
+                i = next;
+            }
+            b'}' => {
+                alts.push(')');
+                return Some((alts, i + 1));
+            }
+            b',' => {
+                alts.push('|');
+                i += 1;
+            }
+            ch => {
+                push_regex_literal(&mut alts, ch as char);
+                i += 1;
+            }
+        }
     }
+    None
+}
+
+fn push_regex_literal(re: &mut String, c: char) {
+    if ".+^${}()|[]\\".contains(c) {
+        re.push('\\');
+    }
+    re.push(c);
 }

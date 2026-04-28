@@ -462,9 +462,7 @@ impl io::IoNamespaceFs for NativeSysOps {
             })?;
             let mut entries = Vec::new();
             while let Some(entry) = rd.next_entry().await.map_err(|e| {
-                OpErrorKind::Other(format!(
-                    "Failed to read directory entry in '{path}': {e}"
-                ))
+                OpErrorKind::Other(format!("Failed to read directory entry in '{path}': {e}"))
             })? {
                 let ft = entry.file_type().await.map_err(|e| {
                     OpErrorKind::Other(format!(
@@ -497,9 +495,7 @@ impl io::IoNamespaceFs for NativeSysOps {
             } else {
                 tokio::fs::create_dir(&path).await
             }
-            .map_err(|e| {
-                OpErrorKind::Other(format!("Failed to create directory '{path}': {e}"))
-            })
+            .map_err(|e| OpErrorKind::Other(format!("Failed to create directory '{path}': {e}")))
         })
     }
 }
@@ -567,76 +563,46 @@ impl io::IoClassGlobGlob for NativeSysOps {
         SysOpOutput::async_op(async move {
             let handle = downcast_glob_handle(&glob)?;
 
-            // Parse root: either a string or a ScanOptions instance
             let (cwd, dot, absolute, follow_symlinks, throw_on_broken, only_files) = match &root {
                 BexExternalValue::String(s) => (s.clone(), false, false, false, false, true),
                 BexExternalValue::Instance { fields, .. } => {
-                    let cwd = fields
-                        .get("cwd")
-                        .and_then(|v| {
-                            if let BexExternalValue::String(s) = v {
-                                Some(s.clone())
-                            } else {
-                                None
-                            }
-                        })
-                        .unwrap_or_else(|| ".".to_string());
-                    let dot = fields
-                        .get("dot")
-                        .and_then(|v| {
-                            if let BexExternalValue::Bool(b) = v {
-                                Some(*b)
-                            } else {
-                                None
-                            }
-                        })
-                        .unwrap_or(false);
-                    let absolute = fields
-                        .get("absolute")
-                        .and_then(|v| {
-                            if let BexExternalValue::Bool(b) = v {
-                                Some(*b)
-                            } else {
-                                None
-                            }
-                        })
-                        .unwrap_or(false);
-                    let follow_symlinks = fields
-                        .get("follow_symlinks")
-                        .and_then(|v| {
-                            if let BexExternalValue::Bool(b) = v {
-                                Some(*b)
-                            } else {
-                                None
-                            }
-                        })
-                        .unwrap_or(false);
-                    let throw_on_broken = fields
-                        .get("throw_error_on_broken_symlink")
-                        .and_then(|v| {
-                            if let BexExternalValue::Bool(b) = v {
-                                Some(*b)
-                            } else {
-                                None
-                            }
-                        })
-                        .unwrap_or(false);
-                    let only_files = fields
-                        .get("only_files")
-                        .and_then(|v| {
-                            if let BexExternalValue::Bool(b) = v {
-                                Some(*b)
-                            } else {
-                                None
-                            }
-                        })
-                        .unwrap_or(true);
-                    (cwd, dot, absolute, follow_symlinks, throw_on_broken, only_files)
+                    let get_string = |key: &str, default: &str| {
+                        fields
+                            .get(key)
+                            .and_then(|v| match v {
+                                BexExternalValue::String(s) => Some(s.clone()),
+                                _ => None,
+                            })
+                            .unwrap_or_else(|| default.to_string())
+                    };
+                    let get_bool = |key: &str, default: bool| {
+                        fields
+                            .get(key)
+                            .and_then(|v| match v {
+                                BexExternalValue::Bool(b) => Some(*b),
+                                _ => None,
+                            })
+                            .unwrap_or(default)
+                    };
+                    let cwd = get_string("cwd", ".");
+                    let dot = get_bool("dot", false);
+                    let absolute = get_bool("absolute", false);
+                    let follow_symlinks = get_bool("follow_symlinks", false);
+                    let throw_on_broken = get_bool("throw_error_on_broken_symlink", false);
+                    let only_files = get_bool("only_files", true);
+                    (
+                        cwd,
+                        dot,
+                        absolute,
+                        follow_symlinks,
+                        throw_on_broken,
+                        only_files,
+                    )
                 }
                 _ => {
                     return Err(OpErrorKind::Other(
                         "scan argument must be a string or ScanOptions".into(),
-                    ))
+                    ));
                 }
             };
 
@@ -658,7 +624,10 @@ impl io::IoClassGlobGlob for NativeSysOps {
                 let entry = match entry {
                     Ok(e) => e,
                     Err(e) => {
-                        if throw_on_broken {
+                        if throw_on_broken
+                            && e.io_error()
+                                .is_some_and(|e| e.kind() == std::io::ErrorKind::NotFound)
+                        {
                             return Err(OpErrorKind::Other(format!("Walk error: {e}")));
                         }
                         continue;
@@ -675,10 +644,7 @@ impl io::IoClassGlobGlob for NativeSysOps {
                     continue;
                 }
 
-                let rel = entry
-                    .path()
-                    .strip_prefix(&abs_cwd)
-                    .unwrap_or(entry.path());
+                let rel = entry.path().strip_prefix(&abs_cwd).unwrap_or(entry.path());
                 let rel_str = rel.to_string_lossy().replace('\\', "/");
 
                 // Skip dot files/dirs unless dot=true

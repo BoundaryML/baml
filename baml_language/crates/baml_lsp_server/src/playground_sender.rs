@@ -75,8 +75,12 @@ impl bex_project::PlaygroundSender for NativePlaygroundSender {
 
         // Handle RuntimeEvent specially: send as a dedicated WsOutMessage variant
         // for better type safety and easier client-side handling.
-        if let bex_project::PlaygroundNotification::RuntimeEvent { data } = notification {
-            let _ = self.broadcast_tx.send(WsOutMessage::RuntimeEvent { data });
+        if let bex_project::PlaygroundNotification::RuntimeEvent { data, call_id } = notification {
+            use base64::Engine as _;
+            let b64 = base64::engine::general_purpose::STANDARD.encode(&data);
+            let _ = self
+                .broadcast_tx
+                .send(WsOutMessage::RuntimeEvent { data: b64, call_id });
             return;
         }
 

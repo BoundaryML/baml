@@ -18,7 +18,10 @@ pub mod lowering_diagnostic;
 
 pub use ast::*;
 pub use disambiguate::is_field_attr;
-pub use lower_cst::{lower_file, lower_file_with_file_id, synthesize_llm_make_stream_call};
+pub use lower_cst::{
+    lower_file, lower_file_with_file_id, synthesize_llm_builtin_call,
+    synthesize_llm_make_stream_call,
+};
 pub use lowering_diagnostic::LoweringDiagnostic;
 
 /// Decode common escape sequences in a quoted string literal body.

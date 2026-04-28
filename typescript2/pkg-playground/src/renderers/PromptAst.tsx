@@ -75,9 +75,13 @@ const AstNode: FC<{ node: BamlJsPromptAst }> = ({ node }) => {
   }
 };
 
-export const PromptAstRenderer: FC<ResultRendererProps> = ({ value }) => {
+export const PromptAstRenderer: FC<ResultRendererProps> = ({ value, displayMode }) => {
   if (!isPromptAst(value)) {
     return <CodeBlock>{JSON.stringify(value, null, 2)}</CodeBlock>;
+  }
+
+  if (displayMode === 'inline') {
+    return <span className="font-vsc-mono text-xs text-vsc-text-faint">&lt;prompt_ast&gt;</span>;
   }
 
   return (

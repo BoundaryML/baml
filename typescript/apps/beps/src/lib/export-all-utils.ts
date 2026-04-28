@@ -98,6 +98,29 @@ function formatBepNumber(num: number): string {
   return `BEP-${String(num).padStart(3, "0")}`;
 }
 
+/**
+ * Generate a URL-safe slug from a title.
+ * Converts to lowercase, replaces spaces with hyphens, removes special chars.
+ */
+function generateSlug(title: string): string {
+  return title
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, "") // Remove special characters
+    .replace(/\s+/g, "-") // Replace spaces with hyphens
+    .replace(/-+/g, "-") // Collapse multiple hyphens
+    .replace(/^-|-$/g, "") // Remove leading/trailing hyphens
+    .slice(0, 50); // Limit length
+}
+
+/**
+ * Generate the folder name for a BEP: BEP-<NUMBER>-<slug>
+ */
+function formatBepFolderName(num: number, title: string): string {
+  const bepNum = `BEP-${String(num).padStart(3, "0")}`;
+  const slug = generateSlug(title);
+  return slug ? `${bepNum}-${slug}` : bepNum;
+}
+
 function formatDate(timestamp: number): string {
   return new Date(timestamp).toISOString().split("T")[0];
 }
@@ -141,10 +164,10 @@ function extractSummary(content: string, maxLength: number = 300): string {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// INDEX.md Generation
+// Claude.md Generation (main index file)
 // ─────────────────────────────────────────────────────────────────────────────
 
-export function generateIndexMd(data: ExportAllData): string {
+export function generateClaudeMd(data: ExportAllData): string {
   const sortedBeps = sortBepsByStatus(data.beps);
 
   let md = `# BAML Enhancement Proposals (BEPs) - Reference Bundle
@@ -196,13 +219,14 @@ BEPs are sorted by maturity - **implemented and accepted BEPs are the best refer
 
     for (const bep of beps) {
       const bepNum = formatBepNumber(bep.number);
+      const bepFolder = formatBepFolderName(bep.number, bep.title);
       const summary = extractSummary(bep.content, 150);
       const pageCount = bep.pages.length;
       const pageInfo = pageCount > 0 ? ` | ${pageCount} pages` : "";
       const issueInfo = bep.openIssueCount > 0 ? ` | ${bep.openIssueCount} open issues` : "";
       const starBadge = bep.isGoodReference ? " ⭐" : "";
 
-      md += `- **[${bepNum}: ${bep.title}](./${bepNum}/README.md)**${starBadge} (v${bep.currentVersion}${pageInfo}${issueInfo})
+      md += `- **[${bepNum}: ${bep.title}](./${bepFolder}/README.md)**${starBadge} (v${bep.currentVersion}${pageInfo}${issueInfo})
   ${summary}
   *Shepherds: ${bep.shepherdNames.join(", ") || "None"}*
 
@@ -222,9 +246,10 @@ BEPs are sorted by maturity - **implemented and accepted BEPs are the best refer
   const byNumber = [...data.beps].sort((a, b) => a.number - b.number);
   for (const bep of byNumber) {
     const bepNum = formatBepNumber(bep.number);
+    const bepFolder = formatBepFolderName(bep.number, bep.title);
     const emoji = getStatusEmoji(bep.status);
     const starBadge = bep.isGoodReference ? " ⭐" : "";
-    md += `| [${bepNum}](./${bepNum}/README.md)${starBadge} | ${bep.title} | ${emoji} ${bep.status} | v${bep.currentVersion} | ${bep.shepherdNames.join(", ") || "-"} |\n`;
+    md += `| [${bepNum}](./${bepFolder}/README.md)${starBadge} | ${bep.title} | ${emoji} ${bep.status} | v${bep.currentVersion} | ${bep.shepherdNames.join(", ") || "-"} |\n`;
   }
 
   md += `
@@ -247,24 +272,56 @@ When creating a new BEP, consider referencing:
 
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Individual BEP README.md Generation
+// Individual BEP meta.json Generation
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface BepMetadata {
+  id: string;
+  number: number;
+  title: string;
+  status: string;
+  version: number;
+  shepherds: string[];
+  created: string;
+  updated: string;
+  isGoodReference: boolean;
+  openIssueCount: number;
+  pages: Array<{
+    slug: string;
+    title: string;
+    order: number;
+  }>;
+}
+
+export function generateBepMetaJson(bep: ExportAllBep): string {
+  const metadata: BepMetadata = {
+    id: formatBepNumber(bep.number),
+    number: bep.number,
+    title: bep.title,
+    status: bep.status,
+    version: bep.currentVersion,
+    shepherds: bep.shepherdNames,
+    created: formatDate(bep.createdAt),
+    updated: formatDate(bep.updatedAt),
+    isGoodReference: bep.isGoodReference,
+    openIssueCount: bep.openIssueCount,
+    pages: bep.pages.map((p) => ({
+      slug: p.slug,
+      title: p.title,
+      order: p.order,
+    })),
+  };
+  return JSON.stringify(metadata, null, 2);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Individual BEP README.md Generation (main content file)
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function generateBepReadme(bep: ExportAllBep): string {
   const bepNum = formatBepNumber(bep.number);
 
-  let md = `---
-id: ${bepNum}
-title: "${bep.title}"
-status: ${bep.status}
-version: ${bep.currentVersion}
-shepherds: [${bep.shepherdNames.join(", ")}]
-created: ${formatDate(bep.createdAt)}
-updated: ${formatDate(bep.updatedAt)}
-isGoodReference: ${bep.isGoodReference}
----
-
-`;
+  let md = "";
 
   // Good reference badge
   if (bep.isGoodReference) {
@@ -307,13 +364,8 @@ isGoodReference: ${bep.isGoodReference}
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function generatePageMd(page: ExportAllPage): string {
-  return `---
-slug: ${page.slug}
-title: "${page.title}"
----
-
-${page.content}
-`;
+  // No frontmatter - metadata is in meta.json
+  return page.content;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -341,8 +393,9 @@ These BEPs are excellent examples of writing style and structure:
 `;
     for (const bep of goodReferenceBeps) {
       const refBepNum = formatBepNumber(bep.number);
+      const refFolder = formatBepFolderName(bep.number, bep.title);
       const summary = extractSummary(bep.content, 120);
-      md += `- **[${refBepNum}: ${bep.title}](../${refBepNum}/README.md)** (${getStatusEmoji(bep.status)} ${bep.status})
+      md += `- **[${refBepNum}: ${bep.title}](../${refFolder}/README.md)** (${getStatusEmoji(bep.status)} ${bep.status})
   ${summary}
 
 `;
@@ -352,7 +405,22 @@ These BEPs are excellent examples of writing style and structure:
 `;
   }
 
-  md += `## Writing Style
+  md += `## Directory Structure
+
+Each BEP is exported as a folder with this structure:
+
+\`\`\`
+BEP-001-your-proposal-slug/
+├── meta.json           # Metadata (status, version, shepherds, pages list)
+├── README.md           # Main proposal content
+└── pages/              # Additional pages (addenda)
+    ├── background.md
+    └── examples.md
+\`\`\`
+
+---
+
+## Writing Style
 
 Write in the style of a [PEP](https://peps.python.org/) or [TC39 proposal](https://github.com/tc39/proposals).
 
@@ -394,7 +462,35 @@ Unresolved decisions, future work.
 
 ---
 
-## API Usage
+## Pull API - Download All BEPs
+
+Download all BEPs as a ZIP archive:
+
+\`\`\`bash
+# Download to a new timestamped folder (copy mode - default)
+curl -o all-beps.zip "${apiBaseUrl}/api/agent/beps/pull"
+unzip all-beps.zip -d all-beps-$(date +%Y%m%d)
+
+# Download and replace existing folder (inplace mode)
+curl -o all-beps.zip "${apiBaseUrl}/api/agent/beps/pull"
+rm -rf ./all-beps && unzip all-beps.zip -d ./all-beps
+\`\`\`
+
+The ZIP contains the full export structure:
+\`\`\`
+all-beps/
+├── Claude.md                    # Main index
+├── NEW-BEP/INSTRUCTIONS.md      # This file
+├── BEP-001-slug/
+│   ├── meta.json
+│   ├── README.md
+│   └── pages/
+└── ...
+\`\`\`
+
+---
+
+## Push API - Create/Update BEPs
 
 ### Create a New BEP
 
@@ -404,7 +500,14 @@ curl -X POST "${apiBaseUrl}/api/agent/beps" \\
   -H "Content-Type: application/json" \\
   -d '{
     "title": "Your Proposal Title",
-    "content": "# Your Proposal Title\\n\\n## Summary\\n\\n..."
+    "content": "# Your Proposal Title\\n\\n## Summary\\n\\n...",
+    "pages": [
+      {
+        "slug": "background",
+        "title": "Background Research",
+        "content": "# Background\\n\\nDetailed research..."
+      }
+    ]
   }'
 \`\`\`
 
@@ -428,28 +531,69 @@ curl -X PUT "${apiBaseUrl}/api/agent/beps" \\
   -d '{
     "number": ${nextNumber},
     "content": "# Updated Title\\n\\n...",
+    "pages": [
+      {
+        "slug": "background",
+        "title": "Updated Background",
+        "content": "# Background\\n\\nUpdated..."
+      },
+      {
+        "slug": "new-page",
+        "title": "New Page",
+        "content": "# New\\n\\n..."
+      }
+    ],
     "editNote": "Updated based on feedback",
     "versionMode": "new"
   }'
 \`\`\`
 
-### API Fields
+**Page behavior on update:**
+- Pages with matching slugs → **updated**
+- Pages with new slugs → **created**
+- Existing pages not in array → **deleted**
+- Omit \`pages\` field → keep existing pages unchanged
 
-**Create (POST):**
+---
+
+## API Reference
+
+### Pull (GET /api/agent/beps/pull)
+
+Downloads all BEPs as a ZIP archive. No authentication required.
+
+| Param | Type | Description |
+|-------|------|-------------|
+| (none) | | Returns ZIP file |
+
+### Create (POST /api/agent/beps)
 
 | Field | Required | Description |
 |-------|----------|-------------|
 | \`title\` | Yes | The BEP title |
 | \`content\` | Yes | Full markdown content |
+| \`pages\` | No | Array of additional pages |
 
-**Update (PUT):**
+**Page object:**
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| \`slug\` | Yes | URL-safe identifier (e.g., \`"background"\`) |
+| \`title\` | Yes | Display title |
+| \`content\` | Yes | Full markdown content |
+
+### Update (PUT /api/agent/beps)
 
 | Field | Required | Description |
 |-------|----------|-------------|
 | \`number\` | Yes | The BEP number to update |
-| \`content\` | Yes | Updated markdown content |
+| \`title\` | No | Updated title |
+| \`content\` | No* | Updated markdown content |
+| \`pages\` | No* | Updated pages array (replaces all existing) |
 | \`editNote\` | No | Note describing the changes |
 | \`versionMode\` | No | \`"new"\` (default) or \`"current"\` |
+
+*At least one of \`title\`, \`content\`, or \`pages\` must be provided.
 `;
 
   return md;
@@ -471,10 +615,10 @@ export function generateAllBepsExportFiles(data: ExportAllData, apiBaseUrl: stri
     data.beps.filter((bep) => bep.isGoodReference)
   );
 
-  // Index file
+  // Main index file (Claude.md)
   files.push({
-    path: "INDEX.md",
-    content: generateIndexMd(data),
+    path: "Claude.md",
+    content: generateClaudeMd(data),
   });
 
   // NEW-BEP instructions
@@ -483,11 +627,17 @@ export function generateAllBepsExportFiles(data: ExportAllData, apiBaseUrl: stri
     content: generateNewBepInstructions(nextNumber, apiBaseUrl, goodReferenceBeps),
   });
 
-  // Individual BEP folders
+  // Individual BEP folders: BEP-<NUMBER>-<slug>/
   for (const bep of data.beps) {
-    const bepFolder = formatBepNumber(bep.number);
+    const bepFolder = formatBepFolderName(bep.number, bep.title);
 
-    // Main README
+    // Metadata JSON file
+    files.push({
+      path: `${bepFolder}/meta.json`,
+      content: generateBepMetaJson(bep),
+    });
+
+    // Main content file (README.md)
     files.push({
       path: `${bepFolder}/README.md`,
       content: generateBepReadme(bep),

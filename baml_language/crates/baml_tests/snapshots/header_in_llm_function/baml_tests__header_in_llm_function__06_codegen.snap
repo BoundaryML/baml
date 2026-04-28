@@ -28,6 +28,16 @@ function user.FetchDatax$build_request(user_id: string) -> baml.http.Request {
     return
 }
 
+function user.FetchDatax$build_request_stream(user_id: string) -> baml.http.Request {
+    load_global user.VertexGCP
+    load_const "FetchDatax"
+    load_var user_id
+    load_const "user_id"
+    alloc_map 1
+    call baml.llm.build_request_stream
+    return
+}
+
 function user.FetchDatax$parse(json: string) -> Hi {
     load_const "FetchDatax"
     load_var json
@@ -38,8 +48,8 @@ function user.FetchDatax$parse(json: string) -> Hi {
 function user.FetchDatax$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream {
     load_var sse
     load_const "FetchDatax"
-    load_global user.VertexGCP
-    call baml.llm.parse
+    load_const null
+    call_indirect
     return
 }
 
@@ -50,6 +60,16 @@ function user.FetchDatax$render_prompt(user_id: string) -> baml.llm.PromptAst {
     load_const "user_id"
     alloc_map 1
     call baml.llm.render_prompt
+    return
+}
+
+function user.FetchDatax$stream(user_id: string) -> baml.llm.Stream {
+    load_global user.VertexGCP
+    load_const "FetchDatax"
+    load_var user_id
+    load_const "user_id"
+    alloc_map 1
+    call baml.llm.stream_llm_function
     return
 }
 

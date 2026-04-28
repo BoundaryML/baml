@@ -328,15 +328,16 @@ fn resolution_to_item_ref(
 use baml_compiler2_ast::{
     AssignOp as AstAssignOp, AstSourceMap, BinaryOp as AstBinaryOp, Expr as AstExpr,
     ExprBody as AstExprBody, ExprId as AstExprId, Literal as AstLiteral, PatId as AstPatId,
-    Pattern as AstPattern, Stmt as AstStmt, StmtId as AstStmtId, UnaryOp as AstUnaryOp,
+    PatternKind as AstPatternKind, Stmt as AstStmt, StmtId as AstStmtId, UnaryOp as AstUnaryOp,
 };
 use baml_compiler2_hir::{
     body::{FunctionBody, LetBody, let_body, let_body_source_map},
-    file_semantic_index,
     loc::{FunctionLoc, LetLoc},
     package::{PackageId, package_dependencies, package_items},
     scope::FileScopeId,
+    semantic_index::{BindingId, DefinitionSite},
 };
+use baml_compiler2_ppir::file_semantic_index;
 use baml_compiler2_tir::{
     inference::infer_scope_types,
     resolve::{ResolvedName, resolve_name_at_in_scope},
@@ -347,6 +348,7 @@ struct LoweringContext<'db> {
     db: &'db dyn crate::Db,
     builder: MirBuilder,
     locals: HashMap<Name, Local>,
+    binding_locals: HashMap<BindingId, Local>,
     loop_context: Option<LoopContext>,
     catch_context: Option<CatchContext>,
     exit_block: BlockId,
@@ -393,7 +395,7 @@ struct LoweringContext<'db> {
     // class_fields and class_type_tags are keyed by TypeName (name + module_path)
     // so that e.g. baml.http.Request and a user-defined Request are distinct.
     // enum_variants is keyed by Name (short name only) because match-arm lowering
-    // (AstPattern::EnumVariant) only provides the enum's short Name, not a full
+    // (PatternKind::EnumVariant) only provides the enum's short Name, not a full
     // TypeName with module_path. Upgrading to TypeName would require resolving the
     // enum's package at each match site.
     class_fields: IndexMap<TypeName, IndexMap<String, usize>>,
@@ -417,18 +419,16 @@ struct LoweringContext<'db> {
 
     // Capture map for the current lambda body.
     // `Some(map)` when lowering inside a lambda body; `None` for top-level functions.
-    // Maps captured variable name -> index into the closure's captures array.
+    // Maps captured binding identity -> index into the closure's captures array.
     // Used by `lower_path_expr` to resolve references to captured variables as
     // `Place::Capture(idx)` instead of `Place::Local(_)`.
-    capture_indices: Option<HashMap<Name, usize>>,
+    capture_indices: Option<HashMap<BindingId, usize>>,
 
-    // Names that were added to the current lambda's capture list transitively
-    // (i.e. because an inner lambda needed them but they weren't in the HIR
-    // capture list for this lambda).  Populated by `lower_lambda` when building
-    // an inner closure's capture operands.  Collected by the *parent*
-    // `lower_lambda` call after the body is lowered so it can extend the outer
-    // MakeClosure with extra captures.
-    transitive_captures_needed: Vec<Name>,
+    // Bindings that were added to the current lambda's capture list transitively
+    // because an inner lambda needed them but they were not in the HIR capture
+    // list for this lambda. Collected by the parent `lower_lambda` call after
+    // the body is lowered so it can extend the outer MakeClosure with extra captures.
+    transitive_captures_needed: Vec<BindingId>,
 
     /// Stack of null-exit blocks for active `OptionalChain` scopes.
     /// When an `OptionalFieldAccess`/`OptionalIndex`/`OptionalCall` encounters null,
@@ -710,6 +710,7 @@ impl<'db> LoweringContext<'db> {
             db,
             builder: MirBuilder::new(func_name, arity),
             locals: HashMap::new(),
+            binding_locals: HashMap::new(),
             loop_context: None,
             catch_context: None,
             exit_block: BlockId(0), // placeholder; overwritten in lower_function_body
@@ -879,6 +880,7 @@ impl<'db> LoweringContext<'db> {
             db,
             builder: MirBuilder::new(let_name.clone(), 0),
             locals: HashMap::new(),
+            binding_locals: HashMap::new(),
             loop_context: None,
             catch_context: None,
             exit_block: BlockId(0), // placeholder; overwritten in lower_let_body_inner
@@ -921,6 +923,169 @@ impl<'db> LoweringContext<'db> {
         };
         *count += 1;
         Name::new(&name)
+    }
+
+    fn scope_is_descendant_or_self(
+        index: &baml_compiler2_hir::semantic_index::FileSemanticIndex<'_>,
+        scope_id: FileScopeId,
+        ancestor_id: FileScopeId,
+    ) -> bool {
+        let mut current = Some(scope_id);
+        while let Some(id) = current {
+            if id == ancestor_id {
+                return true;
+            }
+            current = index.scopes[id.index() as usize].parent;
+        }
+        false
+    }
+
+    fn binding_id_for_pattern_site(
+        &self,
+        pattern: AstPatId,
+        site: DefinitionSite,
+    ) -> Option<BindingId> {
+        let index = file_semantic_index(self.db, self.file);
+        let pattern_span = self
+            .source_map
+            .as_ref()
+            .map(|source_map| source_map.pattern_span(pattern));
+
+        for (scope_idx, bindings) in index.scope_bindings.iter().enumerate() {
+            let scope_id = FileScopeId::new(u32::try_from(scope_idx).expect("scope id overflow"));
+            if !Self::scope_is_descendant_or_self(index, scope_id, self.current_scope) {
+                continue;
+            }
+            for binding in &bindings.bindings {
+                let pattern_matches_name_range = pattern_span.is_none_or(|span| {
+                    span == binding.name_range
+                        || (span.start() <= binding.name_range.start()
+                            && binding.name_range.end() <= span.end())
+                });
+                if binding.site == site && binding.pattern == pattern && pattern_matches_name_range
+                {
+                    return Some(BindingId {
+                        scope: scope_id,
+                        site,
+                    });
+                }
+            }
+        }
+        None
+    }
+
+    fn binding_id_for_statement(&self, stmt_id: AstStmtId, pattern: AstPatId) -> Option<BindingId> {
+        self.binding_id_for_pattern_site(pattern, DefinitionSite::Statement(stmt_id))
+    }
+
+    fn record_pattern_binding_local(&mut self, pattern: AstPatId, local: Local) {
+        if let Some(binding_id) =
+            self.binding_id_for_pattern_site(pattern, DefinitionSite::PatternBinding(pattern))
+        {
+            self.binding_locals.insert(binding_id, local);
+        }
+    }
+
+    fn pattern_binding_is_captured(&self, pattern: AstPatId) -> bool {
+        let Some(binding_id) =
+            self.binding_id_for_pattern_site(pattern, DefinitionSite::PatternBinding(pattern))
+        else {
+            return false;
+        };
+        let index = file_semantic_index(self.db, self.file);
+        index
+            .scope_bindings
+            .get(binding_id.scope.index() as usize)
+            .is_some_and(|bindings| bindings.captured_bindings.contains(&binding_id))
+    }
+
+    fn binding_id_for_name_at(&self, expr_id: AstExprId, name: &Name) -> Option<BindingId> {
+        let index = file_semantic_index(self.db, self.file);
+        let (scope_id, offset) = if let Some(source_map) = self.source_map.as_ref() {
+            let offset = source_map.expr_span(expr_id).start();
+            (
+                index.scope_at_offset(offset, self.scope_func_name.as_ref()),
+                offset,
+            )
+        } else {
+            // The source-map-less branch is only valid for **synthesized**
+            // expressions emitted by the lowering itself (e.g. for-loop index
+            // increments, capture forwarding, init function bodies). The
+            // fallback uses `current_scope` and the scope's end offset, which
+            // is correct for synthesized refs at the end of the current scope
+            // but would silently pick the post-shadow binding for a
+            // user-written name lowered without a source map.
+            //
+            // If you find yourself adding a user-visible expression that
+            // hits this path: the right fix is to thread a `BindingId`
+            // through to the call site, not to widen this fallback.
+            let scope_id = self.current_scope;
+            let offset = index.scopes[scope_id.index() as usize].range.end();
+            (scope_id, offset)
+        };
+        index.visible_binding_at(scope_id, offset, name)
+    }
+
+    fn capture_index_for_name_at(&self, expr_id: AstExprId, name: &Name) -> Option<usize> {
+        let binding_id = self.binding_id_for_name_at(expr_id, name)?;
+        self.capture_indices
+            .as_ref()
+            .and_then(|captures| captures.get(&binding_id).copied())
+    }
+
+    /// Emit `unwatch` ops for every watched local at index `[watched_depth..]`
+    /// of `watched_locals_stack`, in reverse declaration order.
+    ///
+    /// This is the single emitter for unwatch sequences. All scope-exit
+    /// paths go through it:
+    ///   - normal block fallthrough: `lower_scoped_block` (depth = entry stack len)
+    ///   - normal `for`-body fallthrough (depth = entry stack len)
+    ///   - normal match/catch arm-body fallthrough (depth = arm-entry stack len)
+    ///   - `break` / `continue` (depth = `loop_context.watched_locals_depth`)
+    ///   - `return` / `throw` (depth = 0 — the stack is swapped at lambda
+    ///     boundaries, so 0 means "everything in the enclosing function")
+    ///
+    /// Does NOT truncate the stack — callers that own the scope are
+    /// responsible for truncating via `restore_locals_after_scope`. Divergent
+    /// callers (break/continue/return/throw) leave the stack alone because a
+    /// dead block follows the divergent terminator.
+    fn emit_unwatch_to_depth(&mut self, watched_depth: usize) {
+        let watched = self.watched_locals_stack[watched_depth..].to_vec();
+        for local in watched.into_iter().rev() {
+            self.builder.unwatch(local);
+        }
+    }
+
+    fn restore_locals_after_scope(
+        &mut self,
+        saved_locals: HashMap<Name, Local>,
+        watched_depth: usize,
+    ) {
+        self.watched_locals_stack.truncate(watched_depth);
+        self.locals = saved_locals;
+    }
+
+    fn restore_active_locals(&mut self, saved_locals: HashMap<Name, Local>) {
+        self.locals = saved_locals;
+    }
+
+    fn mark_captured_locals_in_scope_tree(&mut self, root_scope: FileScopeId) {
+        let index = file_semantic_index(self.db, self.file);
+        let root = &index.scopes[root_scope.index() as usize];
+        let start = root_scope.index();
+        let end = root.descendants.end.index();
+
+        for raw_idx in start..end {
+            let scope_id = FileScopeId::new(raw_idx);
+            let Some(scope_bindings) = index.scope_bindings.get(scope_id.index() as usize) else {
+                continue;
+            };
+            for binding_id in &scope_bindings.captured_bindings {
+                if let Some(&local) = self.binding_locals.get(binding_id) {
+                    self.builder.local_decl_mut(local).is_captured = true;
+                }
+            }
+        }
     }
 
     /// Get the `baml_type::Ty` for an expression by looking up in the aggregated map
@@ -1050,7 +1215,7 @@ impl LoweringContext<'_> {
         // Parameter locals _1..=_n
         // For `self` with no annotation, look up the TIR-inferred parameter type
         // which correctly resolves to the enclosing class type.
-        for (param_name, param_te) in &sig.params {
+        for (param_idx, (param_name, param_te)) in sig.params.iter().enumerate() {
             let param_ty = if param_name.as_str() == "self"
                 && matches!(param_te, baml_compiler2_ast::TypeExpr::Unknown { .. })
             {
@@ -1091,6 +1256,13 @@ impl LoweringContext<'_> {
                 .builder
                 .declare_local(Some(param_name.clone()), param_ty, None, false);
             self.locals.insert(param_name.clone(), local);
+            self.binding_locals.insert(
+                BindingId {
+                    scope: self.current_scope,
+                    site: DefinitionSite::Parameter(param_idx),
+                },
+                local,
+            );
         }
 
         // Entry and exit blocks
@@ -1117,20 +1289,9 @@ impl LoweringContext<'_> {
         self.builder.set_current_block(self.exit_block);
         self.builder.return_();
 
-        // Mark locals that are captured by nested lambdas with `is_captured = true`.
-        // The HIR `ScopeBindings.captured_names` for the function scope records which
-        // names are captured by any descendant lambda. These locals need cell wrapping.
-        {
-            let func_scope_id = self.current_scope;
-            let index = file_semantic_index(self.db, self.file);
-            if let Some(sb) = index.scope_bindings.get(func_scope_id.index() as usize) {
-                for captured_name in &sb.captured_names {
-                    if let Some(&local) = self.locals.get(captured_name) {
-                        self.builder.local_decl_mut(local).is_captured = true;
-                    }
-                }
-            }
-        }
+        // Mark locals captured by nested lambdas. HIR stores this by binding
+        // identity, including block-owned bindings.
+        self.mark_captured_locals_in_scope_tree(self.current_scope);
 
         // Take the builder out of self to call `build()` which consumes it
         let dummy = MirBuilder::new(Name::new("_dummy"), 0);
@@ -1256,23 +1417,21 @@ impl LoweringContext<'_> {
         };
 
         // Read HIR captures for this lambda scope.
-        // `captures` lists (name, DefinitionSite) pairs that the lambda reads from
-        // enclosing scopes. The DefinitionSite uniquely identifies the declaration
-        // even with shadowing.
-        // We build `capture_indices` (name → index in closure.captures[]) so that
-        // `lower_path_expr` and `lower_lvalue` can emit Place::Capture(idx).
-        let hir_captures: Vec<Name> = {
+        // `captures` lists the exact binding identities that the lambda reads
+        // from enclosing scopes. We build `capture_indices` so path/lvalue
+        // lowering can emit `Place::Capture(idx)` without collapsing shadows by name.
+        let hir_captures: Vec<(Name, BindingId)> = {
             let index = file_semantic_index(self.db, self.file);
             index
                 .scope_bindings
                 .get(lambda_scope_id.index() as usize)
-                .map(|sb| sb.captures.iter().map(|(name, _)| name.clone()).collect())
+                .map(|sb| sb.captures.clone())
                 .unwrap_or_default()
         };
-        let lambda_capture_indices: HashMap<Name, usize> = hir_captures
+        let lambda_capture_indices: HashMap<BindingId, usize> = hir_captures
             .iter()
             .enumerate()
-            .map(|(i, name)| (name.clone(), i))
+            .map(|(i, (_, binding_id))| (*binding_id, i))
             .collect();
 
         // Save parent state.
@@ -1283,6 +1442,7 @@ impl LoweringContext<'_> {
         let saved_body = std::mem::replace(&mut self.body, lambda_body);
         let saved_source_map = std::mem::replace(&mut self.source_map, lambda_source_map);
         let saved_locals = std::mem::take(&mut self.locals);
+        let saved_binding_locals = std::mem::take(&mut self.binding_locals);
         let saved_exit_block = self.exit_block;
         let saved_loop_context = self.loop_context.take();
         let saved_catch_context = self.catch_context.take();
@@ -1325,7 +1485,7 @@ impl LoweringContext<'_> {
         );
 
         // Declare parameter locals _1..=_n.
-        for param in &func_def.params {
+        for (param_idx, param) in func_def.params.iter().enumerate() {
             let param_ty = match &param.type_expr {
                 Some(spanned_te) => {
                     let mut diags = Vec::new();
@@ -1347,6 +1507,13 @@ impl LoweringContext<'_> {
                 .builder
                 .declare_local(Some(param.name.clone()), param_ty, None, false);
             self.locals.insert(param.name.clone(), local);
+            self.binding_locals.insert(
+                BindingId {
+                    scope: self.current_scope,
+                    site: DefinitionSite::Parameter(param_idx),
+                },
+                local,
+            );
         }
 
         // Create entry and exit blocks.
@@ -1372,19 +1539,9 @@ impl LoweringContext<'_> {
         self.builder.set_current_block(self.exit_block);
         self.builder.return_();
 
-        // Mark locals that are captured by nested lambdas with `is_captured = true`.
-        // This mirrors the same step in `lower_function_body` but for lambdas.
-        // Uses the lambda's own scope id (lambda_scope_id) to look up HIR captured_names.
-        {
-            let index = file_semantic_index(self.db, self.file);
-            if let Some(sb) = index.scope_bindings.get(lambda_scope_id.index() as usize) {
-                for captured_name in &sb.captured_names {
-                    if let Some(&local) = self.locals.get(captured_name) {
-                        self.builder.local_decl_mut(local).is_captured = true;
-                    }
-                }
-            }
-        }
+        // Mark locals captured by nested lambdas. HIR stores this by binding
+        // identity, including block-owned bindings.
+        self.mark_captured_locals_in_scope_tree(lambda_scope_id);
 
         // Build the lambda MirFunction.
         // First, collect any nested lambdas that were encountered while lowering
@@ -1416,6 +1573,7 @@ impl LoweringContext<'_> {
         self.body = saved_body;
         self.source_map = saved_source_map;
         self.locals = saved_locals;
+        self.binding_locals = saved_binding_locals;
         self.exit_block = saved_exit_block;
         self.loop_context = saved_loop_context;
         self.catch_context = saved_catch_context;
@@ -1433,9 +1591,12 @@ impl LoweringContext<'_> {
         // handle propagation by pushing to `transitive_captures_needed` when a
         // name is not found in the current scope's locals or captures.
         let mut extended_hir_captures = hir_captures;
-        for name in &newly_needed_transitive {
-            if !extended_hir_captures.contains(name) {
-                extended_hir_captures.push(name.clone());
+        for binding_id in newly_needed_transitive {
+            if !extended_hir_captures
+                .iter()
+                .any(|(_, existing)| *existing == binding_id)
+            {
+                extended_hir_captures.push((Name::new("_capture"), binding_id));
             }
         }
 
@@ -1449,17 +1610,17 @@ impl LoweringContext<'_> {
         // lambda — i.e. the current lambda (f) will need to capture it from ITS
         // parent, and g will receive it via f's capture slot.
         let mut capture_operands: Vec<Operand> = Vec::with_capacity(extended_hir_captures.len());
-        for name in &extended_hir_captures {
-            if let Some(&local) = self.locals.get(name) {
+        for (_, binding_id) in &extended_hir_captures {
+            if let Some(&local) = self.binding_locals.get(binding_id) {
                 // Mark the local as captured at the capture site — this is the
                 // definitive place where we know the exact Local being captured,
-                // even in the presence of shadowing (future-proofing).
+                // even in the presence of shadowing.
                 self.builder.local_decl_mut(local).is_captured = true;
                 capture_operands.push(Operand::Copy(Place::Local(local)));
             } else if let Some(cap_idx) = self
                 .capture_indices
                 .as_ref()
-                .and_then(|m| m.get(name))
+                .and_then(|m| m.get(binding_id))
                 .copied()
             {
                 // The variable is itself a capture in the current scope.
@@ -1472,11 +1633,11 @@ impl LoweringContext<'_> {
                 let new_idx = {
                     let ci = self.capture_indices.get_or_insert_with(HashMap::new);
                     let idx = ci.len();
-                    ci.insert(name.clone(), idx);
+                    ci.insert(*binding_id, idx);
                     idx
                 };
                 // Signal to our parent lambda that it needs to capture this name.
-                self.transitive_captures_needed.push(name.clone());
+                self.transitive_captures_needed.push(*binding_id);
                 capture_operands.push(Operand::Copy(Place::Capture(new_idx)));
             }
         }
@@ -1498,6 +1659,38 @@ impl LoweringContext<'_> {
 // ─── 3.2: Core lower_expr dispatch ───────────────────────────────────────────
 
 impl LoweringContext<'_> {
+    fn lower_scoped_block(
+        &mut self,
+        stmts: &[AstStmtId],
+        tail_expr: Option<AstExprId>,
+        dest: Place,
+    ) {
+        let saved_locals = self.locals.clone();
+        let watched_depth = self.watched_locals_stack.len();
+
+        for &stmt_id in stmts {
+            self.lower_stmt(stmt_id);
+            if self.builder.is_current_terminated() {
+                break;
+            }
+        }
+
+        if !self.builder.is_current_terminated() {
+            match tail_expr {
+                Some(tail) => self.lower_expr(tail, dest),
+                None => {
+                    self.builder
+                        .assign(dest, Rvalue::Use(Operand::Constant(Constant::Null)));
+                }
+            }
+        }
+
+        if !self.builder.is_current_terminated() {
+            self.emit_unwatch_to_depth(watched_depth);
+        }
+        self.restore_locals_after_scope(saved_locals, watched_depth);
+    }
+
     fn lower_expr(&mut self, expr_id: AstExprId, dest: Place) {
         let prev_span = self.builder.current_source_span;
         if let Some(span) = self.span_for_expr(expr_id) {
@@ -1589,21 +1782,7 @@ impl LoweringContext<'_> {
             }
 
             AstExpr::Block { stmts, tail_expr } => {
-                for &stmt_id in &stmts {
-                    self.lower_stmt(stmt_id);
-                    if self.builder.is_current_terminated() {
-                        break; // Remaining stmts are dead code (after return/throw/break/continue)
-                    }
-                }
-                if !self.builder.is_current_terminated() {
-                    match tail_expr {
-                        Some(tail) => self.lower_expr(tail, dest),
-                        None => {
-                            self.builder
-                                .assign(dest, Rvalue::Use(Operand::Constant(Constant::Null)));
-                        }
-                    }
-                }
+                self.lower_scoped_block(&stmts, tail_expr, dest);
             }
 
             AstExpr::Match {
@@ -1702,11 +1881,8 @@ impl<'db> LoweringContext<'db> {
                             let receiver_op = if receiver_segments.len() == 1 {
                                 if let Some(&recv_local) = self.locals.get(&receiver_segments[0]) {
                                     Operand::Copy(Place::Local(recv_local))
-                                } else if let Some(cap_idx) = self
-                                    .capture_indices
-                                    .as_ref()
-                                    .and_then(|m| m.get(&receiver_segments[0]))
-                                    .copied()
+                                } else if let Some(cap_idx) =
+                                    self.capture_index_for_name_at(expr_id, &receiver_segments[0])
                                 {
                                     // Receiver is a captured variable — use capture slot.
                                     Operand::Copy(Place::Capture(cap_idx))
@@ -1760,7 +1936,7 @@ impl<'db> LoweringContext<'db> {
             }
 
             // Check flat resolutions (set by infer_multi_segment_path for package-rooted paths
-            // like baml.fs.open, env.get, etc.).
+            // like baml.fs.open, baml.env.get, etc.).
             if let Some(resolution) = self
                 .resolutions
                 .get(&(self.current_scope, expr_id))
@@ -1775,11 +1951,8 @@ impl<'db> LoweringContext<'db> {
                             let receiver_op = if receiver_segments.len() == 1 {
                                 if let Some(&recv_local) = self.locals.get(&receiver_segments[0]) {
                                     Operand::Copy(Place::Local(recv_local))
-                                } else if let Some(cap_idx) = self
-                                    .capture_indices
-                                    .as_ref()
-                                    .and_then(|m| m.get(&receiver_segments[0]))
-                                    .copied()
+                                } else if let Some(cap_idx) =
+                                    self.capture_index_for_name_at(expr_id, &receiver_segments[0])
                                 {
                                     // Receiver is a captured variable — use capture slot.
                                     Operand::Copy(Place::Capture(cap_idx))
@@ -1875,12 +2048,7 @@ impl<'db> LoweringContext<'db> {
                 if let Some(&local) = self.locals.get(&local_name) {
                     self.builder
                         .assign(dest, Rvalue::Use(Operand::Copy(Place::Local(local))));
-                } else if let Some(cap_idx) = self
-                    .capture_indices
-                    .as_ref()
-                    .and_then(|m| m.get(&local_name))
-                    .copied()
-                {
+                } else if let Some(cap_idx) = self.capture_index_for_name_at(expr_id, &local_name) {
                     // This variable is captured from an enclosing scope.
                     // Emit a LoadCapture via Place::Capture.
                     self.builder
@@ -1942,12 +2110,7 @@ impl<'db> LoweringContext<'db> {
                     self.builder.local_ty(root_local)
                 };
                 (place, ty)
-            } else if let Some(cap_idx) = self
-                .capture_indices
-                .as_ref()
-                .and_then(|m| m.get(&segments[0]))
-                .copied()
-            {
+            } else if let Some(cap_idx) = self.capture_index_for_name_at(expr_id, &segments[0]) {
                 let place = Place::Capture(cap_idx);
                 let ty = self
                     .path_root_ty(expr_id)
@@ -2684,6 +2847,10 @@ impl LoweringContext<'_> {
                     // Simple local variable receiver (e.g. `self`).
                     if let Some(&recv_local) = self.locals.get(&receiver_segments[0]) {
                         Operand::Copy(Place::Local(recv_local))
+                    } else if let Some(cap_idx) =
+                        self.capture_index_for_name_at(callee, &receiver_segments[0])
+                    {
+                        Operand::Copy(Place::Capture(cap_idx))
                     } else {
                         Operand::Constant(Constant::Null)
                     }
@@ -2714,9 +2881,13 @@ impl LoweringContext<'_> {
                     None => self.lower_to_operand(callee),
                 };
                 let first_seg = &segments[0];
-                let receiver_local = self.locals.get(first_seg).copied();
-                if let Some(receiver_local) = receiver_local {
-                    let receiver_op = Operand::Copy(Place::Local(receiver_local));
+                let receiver_op = if let Some(&receiver_local) = self.locals.get(first_seg) {
+                    Some(Operand::Copy(Place::Local(receiver_local)))
+                } else {
+                    self.capture_index_for_name_at(callee, first_seg)
+                        .map(|cap_idx| Operand::Copy(Place::Capture(cap_idx)))
+                };
+                if let Some(receiver_op) = receiver_op {
                     let mut all_args = vec![receiver_op];
                     all_args.extend(args.iter().map(|&a| self.lower_to_operand(a)));
                     (callee_op, all_args)
@@ -3472,21 +3643,15 @@ impl LoweringContext<'_> {
             } => {
                 // Extract binding name from pattern
                 let pat = self.body.patterns[pattern].clone();
-                let name = match &pat {
-                    AstPattern::Binding(n) => n.clone(),
-                    AstPattern::TypedBinding { name, .. } => name.clone(),
-                    _ => Name::new("_"),
-                };
+                let name = pat
+                    .binding_name()
+                    .cloned()
+                    .unwrap_or_else(|| Name::new("_"));
 
                 let local_ty = self.pat_ty(pattern);
                 let local =
                     self.builder
                         .declare_local(Some(name.clone()), local_ty, None, is_watched);
-                self.locals.insert(name, local);
-
-                if is_watched {
-                    self.watched_locals_stack.push(local);
-                }
 
                 if let Some(init) = initializer {
                     self.lower_expr(init, Place::local(local));
@@ -3495,6 +3660,15 @@ impl LoweringContext<'_> {
                         Place::local(local),
                         Rvalue::Use(Operand::Constant(Constant::Null)),
                     );
+                }
+
+                self.locals.insert(name, local);
+                if let Some(binding_id) = self.binding_id_for_statement(stmt_id, pattern) {
+                    self.binding_locals.insert(binding_id, local);
+                }
+
+                if is_watched {
+                    self.watched_locals_stack.push(local);
                 }
             }
 
@@ -3573,6 +3747,9 @@ impl LoweringContext<'_> {
                 collection,
                 body,
             } => {
+                let saved_locals = self.locals.clone();
+                let watched_depth = self.watched_locals_stack.len();
+
                 // 1. Evaluate collection into a temp local
                 let coll_ty = self.expr_ty(collection);
                 let coll_local = self.builder.temp(coll_ty.clone());
@@ -3607,7 +3784,6 @@ impl LoweringContext<'_> {
 
                 // Register loop context so break/continue work inside for-loops
                 let prev_loop = self.loop_context.take();
-                let watched_depth = self.watched_locals_stack.len();
                 self.loop_context = Some(LoopContext {
                     break_target: bb_exit,
                     continue_target: bb_after,
@@ -3656,40 +3832,28 @@ impl LoweringContext<'_> {
                 // before the assignment so each iteration's closures capture a
                 // distinct cell.
                 {
-                    let pat = self.body.patterns[binding].clone();
-                    match pat {
-                        AstPattern::Binding(name) if name.as_str() != "_" => {
-                            let ty = self
-                                .pat_types
+                    let pat = &self.body.patterns[binding];
+                    if let Some(name) = pat.binding_name() {
+                        let ty = if let Some(narrow) = &pat.narrow {
+                            self.resolve_type_annotation(narrow)
+                        } else {
+                            self.pat_types
                                 .get(&(self.current_scope, binding))
                                 .map(|ty| convert_tir2_ty(ty, &self.resolved_aliases))
-                                .unwrap_or_else(|| self.builder.local_ty(elem_local));
-                            let local =
-                                self.builder
-                                    .declare_local(Some(name.clone()), ty, None, false);
-                            self.builder.fresh_cell(local);
-                            self.builder.assign(
-                                Place::local(local),
-                                Rvalue::Use(Operand::Copy(Place::Local(elem_local))),
-                            );
-                            self.locals.insert(name, local);
+                                .unwrap_or_else(|| self.builder.local_ty(elem_local))
+                        };
+                        let local = self
+                            .builder
+                            .declare_local(Some(name.clone()), ty, None, false);
+                        self.builder.fresh_cell(local);
+                        self.builder.assign(
+                            Place::local(local),
+                            Rvalue::Use(Operand::Copy(Place::Local(elem_local))),
+                        );
+                        self.locals.insert(name.clone(), local);
+                        if let Some(binding_id) = self.binding_id_for_statement(stmt_id, binding) {
+                            self.binding_locals.insert(binding_id, local);
                         }
-                        AstPattern::TypedBinding { name, ty, .. } if name.as_str() != "_" => {
-                            let resolved_ty = self.resolve_type_annotation(&ty);
-                            let local = self.builder.declare_local(
-                                Some(name.clone()),
-                                resolved_ty,
-                                None,
-                                false,
-                            );
-                            self.builder.fresh_cell(local);
-                            self.builder.assign(
-                                Place::local(local),
-                                Rvalue::Use(Operand::Copy(Place::Local(elem_local))),
-                            );
-                            self.locals.insert(name, local);
-                        }
-                        _ => {}
                     }
                 }
 
@@ -3700,8 +3864,10 @@ impl LoweringContext<'_> {
                 self.lower_expr(body, Place::local(body_temp));
 
                 if !self.builder.is_current_terminated() {
+                    self.emit_unwatch_to_depth(watched_depth);
                     self.builder.goto(bb_after);
                 }
+                self.restore_locals_after_scope(saved_locals, watched_depth);
 
                 // 7. After: __idx += 1
                 self.builder.set_current_block(bb_after);
@@ -3725,11 +3891,10 @@ impl LoweringContext<'_> {
                 if let Some(e) = expr {
                     self.lower_expr(e, Place::local(ret));
                 }
-                // Unwatch all watched locals before returning
-                let watched = self.watched_locals_stack.clone();
-                for &local in watched.iter().rev() {
-                    self.builder.unwatch(local);
-                }
+                // Unwatch all watched locals in this function (the stack is
+                // swapped at lambda boundaries, so depth=0 covers exactly the
+                // current function's watches).
+                self.emit_unwatch_to_depth(0);
                 self.builder.goto(self.exit_block);
                 // Create a dead successor block for the builder cursor
                 // (subsequent statements in the same block-list are dead code)
@@ -3742,6 +3907,10 @@ impl LoweringContext<'_> {
 
             AstStmt::Throw { value } => {
                 let val_op = self.lower_to_operand(value);
+                // Unwatch all watched locals in this function before throwing,
+                // matching the Return path. Without this, a
+                // `watch let conn = …` followed by a `throw` leaks the watcher.
+                self.emit_unwatch_to_depth(0);
                 self.builder.throw(val_op);
                 let dead = self.builder.create_block();
                 self.builder.set_current_block(dead);
@@ -3751,10 +3920,7 @@ impl LoweringContext<'_> {
                 if let Some(ref loop_ctx) = self.loop_context {
                     let target = loop_ctx.break_target;
                     let depth = loop_ctx.watched_locals_depth;
-                    let watched: Vec<Local> = self.watched_locals_stack[depth..].to_vec();
-                    for &local in watched.iter().rev() {
-                        self.builder.unwatch(local);
-                    }
+                    self.emit_unwatch_to_depth(depth);
                     self.builder.goto(target);
                 }
                 let dead = self.builder.create_block();
@@ -3765,10 +3931,7 @@ impl LoweringContext<'_> {
                 if let Some(ref loop_ctx) = self.loop_context {
                     let target = loop_ctx.continue_target;
                     let depth = loop_ctx.watched_locals_depth;
-                    let watched: Vec<Local> = self.watched_locals_stack[depth..].to_vec();
-                    for &local in watched.iter().rev() {
-                        self.builder.unwatch(local);
-                    }
+                    self.emit_unwatch_to_depth(depth);
                     self.builder.goto(target);
                 }
                 let dead = self.builder.create_block();
@@ -3861,11 +4024,7 @@ impl LoweringContext<'_> {
             AstExpr::Path(segments) if segments.len() == 1 => {
                 if let Some(&local) = self.locals.get(&segments[0]) {
                     Place::Local(local)
-                } else if let Some(cap_idx) = self
-                    .capture_indices
-                    .as_ref()
-                    .and_then(|m| m.get(&segments[0]))
-                    .copied()
+                } else if let Some(cap_idx) = self.capture_index_for_name_at(expr_id, &segments[0])
                 {
                     // Assignment to a captured variable in a closure body.
                     Place::Capture(cap_idx)
@@ -3879,35 +4038,32 @@ impl LoweringContext<'_> {
             AstExpr::Path(segments) if segments.len() >= 2 => {
                 // Multi-segment path lvalue: `a.b` or `a.b.c`.
                 // Chain field projections from the root local or capture.
-                let (mut current_place, mut current_ty) =
-                    if let Some(&l) = self.locals.get(&segments[0]) {
-                        let ty = self
-                            .path_root_ty(expr_id)
-                            .unwrap_or_else(|| self.builder.local_ty(l));
-                        (Place::Local(l), ty)
-                    } else if let Some(cap_idx) = self
-                        .capture_indices
-                        .as_ref()
-                        .and_then(|m| m.get(&segments[0]))
-                        .copied()
-                    {
-                        let ty = self
-                            .path_root_ty(expr_id)
-                            .unwrap_or_else(|| Ty::BuiltinUnknown {
-                                attr: TyAttr::default(),
-                            });
-                        (Place::Capture(cap_idx), ty)
-                    } else {
-                        let tmp = self.builder.temp(Ty::Null {
+                let (mut current_place, mut current_ty) = if let Some(&l) =
+                    self.locals.get(&segments[0])
+                {
+                    let ty = self
+                        .path_root_ty(expr_id)
+                        .unwrap_or_else(|| self.builder.local_ty(l));
+                    (Place::Local(l), ty)
+                } else if let Some(cap_idx) = self.capture_index_for_name_at(expr_id, &segments[0])
+                {
+                    let ty = self
+                        .path_root_ty(expr_id)
+                        .unwrap_or_else(|| Ty::BuiltinUnknown {
                             attr: TyAttr::default(),
                         });
-                        (
-                            Place::Local(tmp),
-                            Ty::Null {
-                                attr: TyAttr::default(),
-                            },
-                        )
-                    };
+                    (Place::Capture(cap_idx), ty)
+                } else {
+                    let tmp = self.builder.temp(Ty::Null {
+                        attr: TyAttr::default(),
+                    });
+                    (
+                        Place::Local(tmp),
+                        Ty::Null {
+                            attr: TyAttr::default(),
+                        },
+                    )
+                };
 
                 for seg in &segments[1..] {
                     if let Ty::Class(ref tn, _) = current_ty.clone() {
@@ -4230,32 +4386,31 @@ impl LoweringContext<'_> {
                 return false;
             }
             let pat = &self.body.patterns[pattern];
-            match pat {
-                AstPattern::Literal(Literal::Int(val)) => {
-                    // Integer arm: verify kind consistency
+            match &pat.kind {
+                AstPatternKind::Literal(Literal::Int(val)) => {
                     match &switch_kind {
                         None => switch_kind = Some(SwitchKind::Integer),
                         Some(SwitchKind::Integer) => {}
-                        Some(_) => return false, // Mixed int + enum
+                        Some(_) => return false,
                     }
                     let v = *val;
                     if seen_values.insert(v) {
                         int_arms.push((v, i));
                     }
                 }
-                AstPattern::EnumVariant { enum_name, variant } => {
-                    // Enum variant arm: verify enum consistency
-                    let enum_name = enum_name.clone();
+                AstPatternKind::EnumVariant { enum_name, variant } => {
+                    let short_name = enum_name.last().unwrap().clone();
                     let variant = variant.clone();
                     match &switch_kind {
-                        None => switch_kind = Some(SwitchKind::EnumDiscriminant(enum_name.clone())),
-                        Some(SwitchKind::EnumDiscriminant(n)) if *n == enum_name => {}
-                        _ => return false, // Different enum or mixed with int
+                        None => {
+                            switch_kind = Some(SwitchKind::EnumDiscriminant(short_name.clone()));
+                        }
+                        Some(SwitchKind::EnumDiscriminant(n)) if *n == short_name => {}
+                        _ => return false,
                     }
-                    // Look up variant index
                     let idx = self
                         .enum_variants
-                        .get(&enum_name)
+                        .get(&short_name)
                         .and_then(|m| m.get(variant.as_str()))
                         .copied();
                     let Some(idx) = idx else { return false };
@@ -4264,13 +4419,11 @@ impl LoweringContext<'_> {
                         int_arms.push((disc, i));
                     }
                 }
-                AstPattern::Union(sub_pats) => {
-                    // Union pattern: each sub-pattern maps to the same arm body.
-                    // All sub-patterns must be the same kind (int, enum variant, or type tag).
+                AstPatternKind::Or(sub_pats) => {
                     for sub_pat_id in sub_pats {
                         let sub_pat = &self.body.patterns[*sub_pat_id];
-                        match sub_pat {
-                            AstPattern::Literal(Literal::Int(val)) => {
+                        match &sub_pat.kind {
+                            AstPatternKind::Literal(Literal::Int(val)) => {
                                 match &switch_kind {
                                     None => switch_kind = Some(SwitchKind::Integer),
                                     Some(SwitchKind::Integer) => {}
@@ -4281,20 +4434,20 @@ impl LoweringContext<'_> {
                                     int_arms.push((v, i));
                                 }
                             }
-                            AstPattern::EnumVariant { enum_name, variant } => {
-                                let enum_name = enum_name.clone();
+                            AstPatternKind::EnumVariant { enum_name, variant } => {
+                                let short_name = enum_name.last().unwrap().clone();
                                 let variant = variant.clone();
                                 match &switch_kind {
                                     None => {
                                         switch_kind =
-                                            Some(SwitchKind::EnumDiscriminant(enum_name.clone()));
+                                            Some(SwitchKind::EnumDiscriminant(short_name.clone()));
                                     }
-                                    Some(SwitchKind::EnumDiscriminant(n)) if *n == enum_name => {}
+                                    Some(SwitchKind::EnumDiscriminant(n)) if *n == short_name => {}
                                     _ => return false,
                                 }
                                 let idx = self
                                     .enum_variants
-                                    .get(&enum_name)
+                                    .get(&short_name)
                                     .and_then(|m| m.get(variant.as_str()))
                                     .copied();
                                 let Some(idx) = idx else { return false };
@@ -4303,8 +4456,7 @@ impl LoweringContext<'_> {
                                     int_arms.push((disc, i));
                                 }
                             }
-                            AstPattern::Binding(_) | AstPattern::TypedBinding { .. } => {
-                                // Type-pattern sub-arm: look up type tag via TIR.
+                            AstPatternKind::Bind { .. } | AstPatternKind::Type(_) => {
                                 match &switch_kind {
                                     None => switch_kind = Some(SwitchKind::TypeTag),
                                     Some(SwitchKind::TypeTag) => {}
@@ -4325,12 +4477,11 @@ impl LoweringContext<'_> {
                         }
                     }
                 }
-                AstPattern::TypedBinding { .. } => {
-                    // Type-annotated binding → classify as TypeTag
+                AstPatternKind::Type(_) => {
                     match &switch_kind {
                         None => switch_kind = Some(SwitchKind::TypeTag),
                         Some(SwitchKind::TypeTag) => {}
-                        Some(_) => return false, // Mixed TypeTag + Integer/Enum
+                        Some(_) => return false,
                     }
                     match self.classify_pattern_type_tag(pattern) {
                         Some(tags) => {
@@ -4343,8 +4494,24 @@ impl LoweringContext<'_> {
                         None => return false,
                     }
                 }
-                AstPattern::Binding(name) if name.as_str() != "_" => {
-                    // Bare name resolved to a type by TIR (e.g. `DivisionByZero =>`)
+                _ if pat.narrow.is_some() => {
+                    match &switch_kind {
+                        None => switch_kind = Some(SwitchKind::TypeTag),
+                        Some(SwitchKind::TypeTag) => {}
+                        Some(_) => return false,
+                    }
+                    match self.classify_pattern_type_tag(pattern) {
+                        Some(tags) => {
+                            for tag in tags {
+                                if seen_values.insert(tag) {
+                                    int_arms.push((tag, i));
+                                }
+                            }
+                        }
+                        None => return false,
+                    }
+                }
+                AstPatternKind::Bind { .. } => {
                     if self.pat_types.contains_key(&(self.current_scope, pattern)) {
                         match &switch_kind {
                             None => switch_kind = Some(SwitchKind::TypeTag),
@@ -4362,21 +4529,21 @@ impl LoweringContext<'_> {
                             None => return false,
                         }
                     } else {
-                        // Regular binding without type info — wildcard-like
                         if i != arms.len() - 1 {
                             return false;
                         }
                         otherwise_idx = Some(i);
                     }
                 }
-                AstPattern::Binding(_) => {
-                    // Wildcard `_` — must be last arm
+                AstPatternKind::Wildcard => {
                     if i != arms.len() - 1 {
                         return false;
                     }
                     otherwise_idx = Some(i);
                 }
-                AstPattern::Null | AstPattern::Literal(_) => return false,
+                AstPatternKind::Null
+                | AstPatternKind::Literal(_)
+                | AstPatternKind::Class { .. } => return false,
             }
         }
 
@@ -4459,11 +4626,20 @@ impl LoweringContext<'_> {
 
                 self.builder.set_current_block(bb_body);
                 let (pattern, body, _) = arms[arm_idx];
+                let saved_locals = self.locals.clone();
+                let watched_depth = self.watched_locals_stack.len();
                 self.bind_pattern(scrutinee, pattern);
                 self.lower_expr(body, dest.clone());
                 if !self.builder.is_current_terminated() {
+                    // A `watch let` declared inside an arm body must be torn
+                    // down on fallthrough. Without this the watcher leaks past
+                    // the arm. Mirrors `lower_match_chain`.
+                    self.emit_unwatch_to_depth(watched_depth);
                     self.builder.goto(join);
                 }
+                // Restore both the name→local map AND truncate the watched
+                // stack back to the arm-entry depth (mirrors `lower_scoped_block`).
+                self.restore_locals_after_scope(saved_locals, watched_depth);
             }
         }
 
@@ -4529,11 +4705,19 @@ impl LoweringContext<'_> {
                 self.builder.set_current_block(bb_wildcard_body);
             }
             let (pattern, body, _) = arms[idx];
+            let saved_locals = self.locals.clone();
+            let watched_depth = self.watched_locals_stack.len();
             self.bind_pattern(scrutinee, pattern);
             self.lower_expr(body, dest);
             if !self.builder.is_current_terminated() {
+                // A `watch let` declared inside the wildcard body must be
+                // torn down on fallthrough; mirrors the int-arm path above.
+                self.emit_unwatch_to_depth(watched_depth);
                 self.builder.goto(join);
             }
+            // Restore name→local map AND truncate the watched stack back to
+            // the arm-entry depth (mirrors `lower_scoped_block`).
+            self.restore_locals_after_scope(saved_locals, watched_depth);
         } else {
             // No wildcard — decide what the otherwise block does.
             // Use `is_switch_exhaustive` (which may be inferred for TypeTag)
@@ -4617,11 +4801,20 @@ impl LoweringContext<'_> {
 
         // Exhaustive last arm: skip the pattern test — it must match.
         if exhaustive && rest.is_empty() && arm.guard.is_none() {
+            let saved_locals = self.locals.clone();
+            let watched_depth = self.watched_locals_stack.len();
             self.bind_pattern(scrutinee, arm.pattern);
             self.lower_expr(arm.body, dest);
             if !self.builder.is_current_terminated() {
+                // A `watch let` declared inside an arm body must be torn
+                // down on fallthrough. Without this the watcher leaks past
+                // the arm.
+                self.emit_unwatch_to_depth(watched_depth);
                 self.builder.goto(join);
             }
+            // Restore both the name→local map AND truncate the watched stack
+            // back to the arm-entry depth (mirrors `lower_scoped_block`).
+            self.restore_locals_after_scope(saved_locals, watched_depth);
             return;
         }
 
@@ -4631,6 +4824,8 @@ impl LoweringContext<'_> {
         self.lower_pattern_test(scrutinee, arm.pattern, bb_body, bb_next);
 
         self.builder.set_current_block(bb_body);
+        let saved_locals = self.locals.clone();
+        let watched_depth = self.watched_locals_stack.len();
         self.bind_pattern(scrutinee, arm.pattern);
         if let Some(guard) = arm.guard {
             let guard_op = self.lower_to_operand(guard);
@@ -4640,8 +4835,11 @@ impl LoweringContext<'_> {
         }
         self.lower_expr(arm.body, dest.clone());
         if !self.builder.is_current_terminated() {
+            // See exhaustive arm comment above.
+            self.emit_unwatch_to_depth(watched_depth);
             self.builder.goto(join);
         }
+        self.restore_locals_after_scope(saved_locals, watched_depth);
 
         self.builder.set_current_block(bb_next);
         self.lower_match_chain(scrutinee, rest, dest, join, exhaustive);
@@ -4709,33 +4907,37 @@ impl LoweringContext<'_> {
         failure: BlockId,
     ) {
         let pat = self.body.patterns[pat_id].clone();
-        match pat {
-            AstPattern::Binding(ref name) => {
-                // Bare type sugar: the TIR resolved this binding name to a
-                // type (e.g. `DivisionByZero =>` resolves to a class).
-                // Generate an IsType test instead of an unconditional match.
-                if name.as_str() != "_" {
-                    if let Some(tir_ty) = self.pat_types.get(&(self.current_scope, pat_id)).cloned()
-                    {
-                        let resolved = self.resolved_aliases.convert(&tir_ty);
-                        self.emit_is_type_branch(scrutinee, resolved, success, failure);
-                        return;
-                    }
-                }
-                // Regular binding — always matches
+        if let Some(ty) = &pat.narrow {
+            let annotation_ty = self
+                .pat_types
+                .get(&(self.current_scope, pat_id))
+                .map(|tir_ty| convert_tir2_ty(tir_ty, &self.resolved_aliases))
+                .unwrap_or_else(|| self.resolve_type_annotation(ty));
+            self.emit_is_type_branch(scrutinee, annotation_ty, success, failure);
+            return;
+        }
+        match &pat.kind {
+            AstPatternKind::Wildcard => {
                 self.builder.goto(success);
             }
-            AstPattern::TypedBinding { .. } => {
-                // TIR always resolves TypedBinding patterns via record_pattern_test_types.
+            AstPatternKind::Bind { .. } => {
+                if let Some(tir_ty) = self.pat_types.get(&(self.current_scope, pat_id)).cloned() {
+                    let resolved = self.resolved_aliases.convert(&tir_ty);
+                    self.emit_is_type_branch(scrutinee, resolved, success, failure);
+                } else {
+                    self.builder.goto(success);
+                }
+            }
+            AstPatternKind::Type(ty_expr) => {
                 let annotation_ty = self
                     .pat_types
                     .get(&(self.current_scope, pat_id))
                     .map(|tir_ty| convert_tir2_ty(tir_ty, &self.resolved_aliases))
-                    .expect("TIR must resolve TypedBinding patterns");
+                    .unwrap_or_else(|| self.resolve_type_annotation(ty_expr));
                 self.emit_is_type_branch(scrutinee, annotation_ty, success, failure);
             }
-            AstPattern::Literal(lit) => {
-                let constant = Self::lower_literal(&lit);
+            AstPatternKind::Literal(lit) => {
+                let constant = Self::lower_literal(lit);
                 let test = Rvalue::BinaryOp {
                     op: BinOp::Eq,
                     left: Operand::Copy(Place::Local(scrutinee)),
@@ -4748,7 +4950,7 @@ impl LoweringContext<'_> {
                 self.builder
                     .branch(Operand::Copy(Place::Local(test_local)), success, failure);
             }
-            AstPattern::Null => {
+            AstPatternKind::Null => {
                 let test = Rvalue::BinaryOp {
                     op: BinOp::Eq,
                     left: Operand::Copy(Place::Local(scrutinee)),
@@ -4761,9 +4963,11 @@ impl LoweringContext<'_> {
                 self.builder
                     .branch(Operand::Copy(Place::Local(test_local)), success, failure);
             }
-            AstPattern::EnumVariant { enum_name, variant } => {
-                // Resolve the enum's package from TIR type info when available,
-                // otherwise fall back to the current file's package.
+            AstPatternKind::EnumVariant {
+                enum_name: _,
+                variant,
+            } => {
+                let variant = variant.clone();
                 let enum_ref = if let Some(Tir2Ty::EnumVariant(qtn, _, _)) =
                     self.pat_types.get(&(self.current_scope, pat_id))
                 {
@@ -4773,12 +4977,8 @@ impl LoweringContext<'_> {
                         name: qtn.name().clone(),
                     }
                 } else {
-                    let pkg_info = file_package(self.db, self.file);
-                    ItemRef::EnumType {
-                        package: pkg_info.package.clone(),
-                        namespace: pkg_info.namespace_path,
-                        name: enum_name,
-                    }
+                    self.builder.goto(failure);
+                    return;
                 };
                 let test = Rvalue::BinaryOp {
                     op: BinOp::Eq,
@@ -4792,7 +4992,7 @@ impl LoweringContext<'_> {
                 self.builder
                     .branch(Operand::Copy(Place::Local(test_local)), success, failure);
             }
-            AstPattern::Union(sub_pats) => {
+            AstPatternKind::Or(sub_pats) => {
                 if sub_pats.is_empty() {
                     self.builder.goto(failure);
                     return;
@@ -4810,43 +5010,40 @@ impl LoweringContext<'_> {
                     }
                 }
             }
+            AstPatternKind::Class { .. } => {
+                // Class destructure: the IsType test narrows to the class.
+                // Field bindings are handled in bind_pattern.
+                if let Some(tir_ty) = self.pat_types.get(&(self.current_scope, pat_id)).cloned() {
+                    let resolved = self.resolved_aliases.convert(&tir_ty);
+                    self.emit_is_type_branch(scrutinee, resolved, success, failure);
+                } else {
+                    self.builder.goto(success);
+                }
+            }
         }
     }
 
     fn bind_pattern(&mut self, scrutinee: Local, pat_id: AstPatId) {
-        let pat = self.body.patterns[pat_id].clone();
-        match pat {
-            AstPattern::Binding(name) if name.as_str() != "_" => {
-                // Prefer TIR-inferred type; fall back to the scrutinee's declared type
-                // rather than Null, so catch bindings get the error's type (unknown) not null.
-                let ty = self
-                    .pat_types
+        let pat = &self.body.patterns[pat_id];
+        if let Some(name) = pat.binding_name() {
+            let name = name.clone();
+            let ty = if let Some(narrow) = &pat.narrow {
+                self.resolve_type_annotation(narrow)
+            } else {
+                self.pat_types
                     .get(&(self.current_scope, pat_id))
                     .map(|ty| convert_tir2_ty(ty, &self.resolved_aliases))
-                    .unwrap_or_else(|| self.builder.local_ty(scrutinee));
-                let local = self
-                    .builder
-                    .declare_local(Some(name.clone()), ty, None, false);
-                self.builder.assign(
-                    Place::local(local),
-                    Rvalue::Use(Operand::Copy(Place::Local(scrutinee))),
-                );
-                self.locals.insert(name, local);
-            }
-            AstPattern::TypedBinding { name, ty, .. } if name.as_str() != "_" => {
-                let resolved_ty = self.resolve_type_annotation(&ty);
-                let local =
-                    self.builder
-                        .declare_local(Some(name.clone()), resolved_ty, None, false);
-                self.builder.assign(
-                    Place::local(local),
-                    Rvalue::Use(Operand::Copy(Place::Local(scrutinee))),
-                );
-                self.locals.insert(name, local);
-            }
-            _ => {
-                // Wildcard `_`, Literal, Null, EnumVariant, Union — no binding needed
-            }
+                    .unwrap_or_else(|| self.builder.local_ty(scrutinee))
+            };
+            let local = self
+                .builder
+                .declare_local(Some(name.clone()), ty, None, false);
+            self.builder.assign(
+                Place::local(local),
+                Rvalue::Use(Operand::Copy(Place::Local(scrutinee))),
+            );
+            self.locals.insert(name, local);
+            self.record_pattern_binding_local(pat_id, local);
         }
     }
 }
@@ -4864,24 +5061,23 @@ impl LoweringContext<'_> {
     /// wildcards, enum variants, and types without tag mappings.
     fn classify_pattern_type_tag(&self, pat_id: AstPatId) -> Option<Vec<i64>> {
         let pat = &self.body.patterns[pat_id];
-        match pat {
-            AstPattern::Binding(name) if name.as_str() == "_" => {
-                // Pure wildcard — handled separately, not a type test
-                None
-            }
-            AstPattern::Binding(_) => {
-                // Named binding resolved by TIR to a type
+        if pat.narrow.is_some() {
+            let tir_ty = self.pat_types.get(&(self.current_scope, pat_id))?;
+            let resolved = self.resolved_aliases.convert(tir_ty);
+            return self.ty_to_type_tags(&resolved);
+        }
+        match &pat.kind {
+            AstPatternKind::Wildcard => None,
+            AstPatternKind::Bind { .. } => {
                 let tir_ty = self.pat_types.get(&(self.current_scope, pat_id))?;
                 let resolved = self.resolved_aliases.convert(tir_ty);
                 self.ty_to_type_tags(&resolved)
             }
-            AstPattern::TypedBinding { .. } => {
-                // Type-annotated binding — always resolved by TIR
+            AstPatternKind::Type(_) => {
                 let tir_ty = self.pat_types.get(&(self.current_scope, pat_id))?;
                 let resolved = self.resolved_aliases.convert(tir_ty);
                 self.ty_to_type_tags(&resolved)
             }
-            // Literal, Null, EnumVariant, Union — not type-tag eligible
             _ => None,
         }
     }
@@ -4942,65 +5138,158 @@ impl LoweringContext<'_> {
     ) {
         use baml_compiler2_ast::CatchClauseKind;
 
+        #[derive(Clone)]
+        struct ClauseLocals {
+            binding_name: Option<Name>,
+            binding_local: Option<Local>,
+            binding_copy_local: Option<Local>,
+            stack_trace_name: Option<Name>,
+            stack_trace_payload: Option<Local>,
+            stack_trace_copy_local: Option<Local>,
+        }
+
+        fn install_clause_locals(
+            ctx: &mut LoweringContext<'_>,
+            error_local: Local,
+            clause: &ClauseLocals,
+        ) {
+            if let (Some(name), Some(local)) = (&clause.binding_name, clause.binding_local) {
+                ctx.locals.insert(name.clone(), local);
+            }
+            if let Some(binding_copy_local) = clause.binding_copy_local {
+                ctx.builder.assign(
+                    Place::local(binding_copy_local),
+                    Rvalue::Use(Operand::Copy(Place::Local(error_local))),
+                );
+            }
+            if let (Some(name), Some(local)) =
+                (&clause.stack_trace_name, clause.stack_trace_copy_local)
+            {
+                ctx.locals.insert(name.clone(), local);
+            }
+            if let (Some(payload), Some(copy_local)) =
+                (clause.stack_trace_payload, clause.stack_trace_copy_local)
+                && payload != copy_local
+            {
+                ctx.builder.assign(
+                    Place::local(copy_local),
+                    Rvalue::Use(Operand::Copy(Place::Local(payload))),
+                );
+            }
+        }
+
+        let saved_catch_outer_locals = self.locals.clone();
         let bb_join = self.builder.create_block();
         let bb_handler = self.builder.create_block();
 
         // Use the user-provided binding name (e.g. `e` from `catch (e)`) so it
-        // shows up in bytecode instead of an anonymous `_N` temp.
-        let binding_name = clauses
-            .first()
-            .and_then(|c| match &self.body.patterns[c.binding] {
-                AstPattern::Binding(name) if name.as_str() != "_" => Some(name.clone()),
-                _ => None,
-            });
+        // shows up in bytecode instead of an anonymous `_N` temp. Only do this
+        // for single-clause catches with a non-captured binding.
+        let single_clause_binding_name = clauses.first().and_then(|c| {
+            if clauses.len() == 1 && !self.pattern_binding_is_captured(c.binding) {
+                self.body.patterns[c.binding].binding_name().cloned()
+            } else {
+                None
+            }
+        });
         let error_local = self.builder.declare_local(
-            binding_name.clone(),
+            single_clause_binding_name,
             Ty::BuiltinUnknown {
                 attr: TyAttr::default(),
             },
             None,
             false,
         );
-        if let Some(name) = binding_name {
-            self.locals.insert(name, error_local);
-        }
 
-        // Declare stack trace local if the catch clause has a second binding.
-        let stack_trace_local = clauses.first().and_then(|c| {
-            c.stack_trace_binding.map(|st_pat| {
-                let st_name = match &self.body.patterns[st_pat] {
-                    AstPattern::Binding(name) if name.as_str() != "_" => Some(name.clone()),
-                    _ => None,
-                };
-                let local = self.builder.declare_local(
-                    st_name.clone(),
+        let stack_trace_local = clauses
+            .iter()
+            .any(|c| c.stack_trace_binding.is_some())
+            .then(|| {
+                self.builder.declare_local(
+                    None,
                     Ty::BuiltinUnknown {
                         attr: TyAttr::default(),
                     },
                     None,
                     false,
-                );
-                if let Some(name) = st_name {
-                    self.locals.insert(name, local);
+                )
+            });
+
+        let mut clause_locals = Vec::with_capacity(clauses.len());
+        for clause in clauses {
+            let binding_name = self.body.patterns[clause.binding].binding_name().cloned();
+            let binding_is_captured = self.pattern_binding_is_captured(clause.binding);
+            let (binding_local, binding_copy_local) = match binding_name.clone() {
+                Some(name) if binding_is_captured => {
+                    let local = self.builder.declare_local(
+                        Some(name),
+                        Ty::BuiltinUnknown {
+                            attr: TyAttr::default(),
+                        },
+                        None,
+                        false,
+                    );
+                    self.record_pattern_binding_local(clause.binding, local);
+                    (Some(local), Some(local))
                 }
-                local
-            })
-        });
+                Some(_) => {
+                    self.record_pattern_binding_local(clause.binding, error_local);
+                    (Some(error_local), None)
+                }
+                None => (None, None),
+            };
+
+            let (stack_trace_name, stack_trace_copy_local) = if let (Some(st_pat), Some(payload)) =
+                (clause.stack_trace_binding, stack_trace_local)
+            {
+                let name = self.body.patterns[st_pat].binding_name().cloned();
+                let is_captured = self.pattern_binding_is_captured(st_pat);
+                match name.clone() {
+                    Some(name) if is_captured => {
+                        let local = self.builder.declare_local(
+                            Some(name.clone()),
+                            Ty::BuiltinUnknown {
+                                attr: TyAttr::default(),
+                            },
+                            None,
+                            false,
+                        );
+                        self.record_pattern_binding_local(st_pat, local);
+                        (Some(name), Some(local))
+                    }
+                    Some(name) => {
+                        self.record_pattern_binding_local(st_pat, payload);
+                        (Some(name), Some(payload))
+                    }
+                    None => (None, None),
+                }
+            } else {
+                (None, None)
+            };
+
+            clause_locals.push(ClauseLocals {
+                binding_name,
+                binding_local,
+                binding_copy_local,
+                stack_trace_name,
+                stack_trace_payload: stack_trace_local,
+                stack_trace_copy_local,
+            });
+        }
 
         // Flatten all arms from all clauses (blocks created lazily below).
-        let mut arms: Vec<(baml_compiler2_ast::CatchArm, bool)> = Vec::new();
-        for clause in clauses {
+        let mut arms: Vec<(baml_compiler2_ast::CatchArm, bool, usize)> = Vec::new();
+        for (clause_idx, clause) in clauses.iter().enumerate() {
             for &arm_id in &clause.arms {
                 let arm = self.body.catch_arms[arm_id].clone();
-                let is_wildcard = matches!(
-                    self.body.patterns[arm.pattern],
-                    AstPattern::Binding(ref name) if name.as_str() == "_"
-                );
-                arms.push((arm, is_wildcard));
+                let pat = &self.body.patterns[arm.pattern];
+                let is_wildcard =
+                    matches!(pat.kind, AstPatternKind::Wildcard) && pat.narrow.is_none();
+                arms.push((arm, is_wildcard, clause_idx));
             }
         }
 
-        let has_wildcard = arms.iter().any(|(_, is_wc)| *is_wc);
+        let has_wildcard = arms.iter().any(|(_, is_wc, _)| *is_wc);
         let is_catch_all_panics = clauses
             .iter()
             .any(|clause| matches!(clause.kind, CatchClauseKind::CatchAllPanics));
@@ -5038,21 +5327,27 @@ impl LoweringContext<'_> {
         // Switch on Rvalue::TypeTag instead of a sequential is_type chain.
         let switch_arms: Vec<(AstPatId, AstExprId, Option<AstExprId>)> = arms
             .iter()
-            .map(|(arm, _)| (arm.pattern, arm.body, None))
+            .map(|(arm, _, _)| (arm.pattern, arm.body, None))
             .collect();
         self.builder.set_current_block(bb_handler);
-        if self.try_lower_as_switch(
-            error_local,
-            &switch_arms,
-            dest.clone(),
-            bb_join,
-            SwitchOtherwise::Catch {
+        if clauses.len() == 1 {
+            install_clause_locals(self, error_local, &clause_locals[0]);
+        }
+        if clauses.len() == 1
+            && self.try_lower_as_switch(
                 error_local,
-                needs_throw_if_panic,
-            },
-            None,
-        ) {
+                &switch_arms,
+                dest.clone(),
+                bb_join,
+                SwitchOtherwise::Catch {
+                    error_local,
+                    needs_throw_if_panic,
+                },
+                None,
+            )
+        {
             self.builder.set_current_block(bb_join);
+            self.restore_active_locals(saved_catch_outer_locals);
             return;
         }
 
@@ -5061,10 +5356,17 @@ impl LoweringContext<'_> {
         // doesn't leave orphaned unterminated blocks).
         let arms_with_blocks: Vec<_> = arms
             .iter()
-            .map(|(arm, is_wc)| (arm.clone(), self.builder.create_block(), *is_wc))
+            .map(|(arm, is_wc, clause_idx)| {
+                (
+                    arm.clone(),
+                    self.builder.create_block(),
+                    *is_wc,
+                    *clause_idx,
+                )
+            })
             .collect();
 
-        for &(ref arm, body_block, is_wildcard) in &arms_with_blocks {
+        for &(ref arm, body_block, is_wildcard, _) in &arms_with_blocks {
             if is_wildcard && needs_throw_if_panic {
                 let bb_wildcard = self.builder.create_block();
                 self.builder
@@ -5083,16 +5385,27 @@ impl LoweringContext<'_> {
         }
 
         // Lower each arm body.
-        for &(ref arm, body_block, _) in &arms_with_blocks {
+        for &(ref arm, body_block, _, clause_idx) in &arms_with_blocks {
             self.builder.set_current_block(body_block);
+            let saved_locals = self.locals.clone();
+            let watched_depth = self.watched_locals_stack.len();
+            let clause = clause_locals[clause_idx].clone();
+            install_clause_locals(self, error_local, &clause);
             self.bind_pattern(error_local, arm.pattern);
             self.lower_expr(arm.body, dest.clone());
             if !self.builder.is_current_terminated() {
+                // A `watch let` declared inside a catch-arm body must be
+                // torn down on fallthrough.
+                self.emit_unwatch_to_depth(watched_depth);
                 self.builder.goto(bb_join);
             }
+            // Restore name→local map AND truncate the watched stack back to
+            // the arm-entry depth (mirrors `lower_scoped_block`).
+            self.restore_locals_after_scope(saved_locals, watched_depth);
         }
 
         self.builder.set_current_block(bb_join);
+        self.restore_active_locals(saved_catch_outer_locals);
     }
 }
 

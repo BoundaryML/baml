@@ -17,17 +17,17 @@ function user.GetUser$build_request() -> baml.http.Request {
     return
 }
 
-function user.GetUser$parse(json: string) -> MyClass {
+function user.GetUser$build_request_stream() -> baml.http.Request {
+    load_const null
     load_const "GetUser"
-    load_var json
-    call baml.llm.parse
+    alloc_map 0
+    call baml.llm.build_request_stream
     return
 }
 
-function user.GetUser$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream {
-    load_var sse
+function user.GetUser$parse(json: string) -> MyClass {
     load_const "GetUser"
-    load_const null
+    load_var json
     call baml.llm.parse
     return
 }
@@ -37,5 +37,13 @@ function user.GetUser$render_prompt() -> baml.llm.PromptAst {
     load_const "GetUser"
     alloc_map 0
     call baml.llm.render_prompt
+    return
+}
+
+function user.GetUser$stream() -> baml.llm.Stream {
+    load_const null
+    load_const "GetUser"
+    alloc_map 0
+    call baml.llm.stream_llm_function
     return
 }

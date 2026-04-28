@@ -1,0 +1,48 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+function user.block_does_not_leak(b: bool) -> int {
+    load_var b
+    pop_jump_if_false L0
+
+  L0:
+    load_const null
+    return
+}
+
+function user.for_binding_does_not_leak() -> int {
+    load_const 1
+    load_const 2
+    alloc_array 2
+    store_var _1
+    load_const 0
+    store_var __for_idx
+
+  L0:
+    load_var __for_idx
+    load_var _1
+    call baml.Array.length
+    cmp_op <
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const null
+    return
+
+  L2:
+    load_var _1
+    load_var __for_idx
+    load_array_element
+    store_var x
+    load_var __for_idx
+    load_const 1
+    bin_op +
+    store_var __for_idx
+    jump L0
+}
+
+function user.standalone_block_does_not_leak() -> int {
+    load_const null
+    return
+}

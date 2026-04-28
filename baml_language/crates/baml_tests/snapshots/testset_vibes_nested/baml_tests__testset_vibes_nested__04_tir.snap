@@ -19,6 +19,9 @@ function user.ClassifySentiment$render_prompt(text: string) -> baml.llm.PromptAs
 function user.ClassifySentiment$build_request(text: string) -> baml.http.Request throws never {
   baml.llm.build_request(GPT4o, "ClassifySentiment", map { "text": text }) : baml.http.Request
 }
+function user.ClassifySentiment$build_request_stream(text: string) -> baml.http.Request throws never {
+  baml.llm.build_request_stream(GPT4o, "ClassifySentiment", map { "text": text }) : baml.http.Request
+}
 function user.ClassifySentiment$parse(json: string) -> user.Sentiment throws never {
   baml.llm.parse<T>("ClassifySentiment", json) : user.Sentiment
 }
@@ -30,6 +33,9 @@ function user.GenerateTests$render_prompt(count: int, topic: string) -> baml.llm
 }
 function user.GenerateTests$build_request(count: int, topic: string) -> baml.http.Request throws never {
   baml.llm.build_request(GPT4o, "GenerateTests", map { "count": count, "topic": topic }) : baml.http.Request
+}
+function user.GenerateTests$build_request_stream(count: int, topic: string) -> baml.http.Request throws never {
+  baml.llm.build_request_stream(GPT4o, "GenerateTests", map { "count": count, "topic": topic }) : baml.http.Request
 }
 function user.GenerateTests$parse(json: string) -> string[] throws never {
   baml.llm.parse<T>("GenerateTests", json) : string[]
@@ -56,6 +62,9 @@ function user.ClassifySentiment2$render_prompt(text: string) -> baml.llm.PromptA
 }
 function user.ClassifySentiment2$build_request(text: string) -> baml.http.Request throws never {
   baml.llm.build_request(GPT4o, "ClassifySentiment2", map { "text": text }) : baml.http.Request
+}
+function user.ClassifySentiment2$build_request_stream(text: string) -> baml.http.Request throws never {
+  baml.llm.build_request_stream(GPT4o, "ClassifySentiment2", map { "text": text }) : baml.http.Request
 }
 function user.ClassifySentiment2$parse(json: string) -> string throws never {
   baml.llm.parse<T>("ClassifySentiment2", json) : string
@@ -93,12 +102,21 @@ class user.Sentiment$stream {
   confidence: null | float
   reasoning: null | string
 }
+function user.ClassifySentiment$stream(text: string) -> baml.llm.Stream<user.Sentiment, null | user.Sentiment$stream> throws never {
+  baml.llm.stream_llm_function(GPT4o, "ClassifySentiment", map { "text": text }) : baml.llm.Stream<user.Sentiment, null | user.Sentiment$stream>
+}
 function user.ClassifySentiment$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<user.Sentiment, null | user.Sentiment$stream> throws never {
-  baml.llm.__make_stream(sse, "ClassifySentiment", GPT4o) : unknown
+  GPT4o.__make_stream(sse, "ClassifySentiment") : unknown
+}
+function user.GenerateTests$stream(count: int, topic: string) -> baml.llm.Stream<string[], string[]> throws never {
+  baml.llm.stream_llm_function(GPT4o, "GenerateTests", map { "count": count, "topic": topic }) : baml.llm.Stream<string[], string[]>
 }
 function user.GenerateTests$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<string[], string[]> throws never {
-  baml.llm.__make_stream(sse, "GenerateTests", GPT4o) : unknown
+  GPT4o.__make_stream(sse, "GenerateTests") : unknown
+}
+function user.ClassifySentiment2$stream(text: string) -> baml.llm.Stream<string, null | string> throws never {
+  baml.llm.stream_llm_function(GPT4o, "ClassifySentiment2", map { "text": text }) : baml.llm.Stream<string, null | string>
 }
 function user.ClassifySentiment2$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<string, null | string> throws never {
-  baml.llm.__make_stream(sse, "ClassifySentiment2", GPT4o) : unknown
+  GPT4o.__make_stream(sse, "ClassifySentiment2") : unknown
 }

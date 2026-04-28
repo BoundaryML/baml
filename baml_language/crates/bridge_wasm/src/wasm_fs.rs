@@ -152,7 +152,9 @@ impl std::fmt::Debug for WasmFs {
 
 impl WasmFs {
     #[allow(clippy::new_ret_no_self, clippy::arc_with_non_send_sync)]
-    pub(super) fn new(wasm_vfs: std::sync::Arc<WasmVfs>) -> Box<dyn bex_project::BulkReadFileSystem> {
+    pub(super) fn new(
+        wasm_vfs: std::sync::Arc<WasmVfs>,
+    ) -> Box<dyn bex_project::BulkReadFileSystem> {
         Box::new(Self {
             vfs: SendWrapper::new(wasm_vfs),
         })

@@ -30,7 +30,7 @@ interface TestTreeNodeProps {
   def: SerializedTestDef;
   depth?: number;
   onRunTest?: (name: string) => void;
-  testRunResults?: Map<string, Record<string, unknown>>;
+  testRunResults?: Map<string, unknown>;
   failedExpands?: Set<string>;
   onRetryExpand?: (name: string) => void;
 }
@@ -72,7 +72,8 @@ function TestTreeNode({ def, depth = 0, onRunTest, testRunResults, failedExpands
 
   if ('type' in def && def.type === 'test') {
     const report = testRunResults?.get(def.name);
-    const outcome = typeof report?.outcome === 'string' ? report.outcome : undefined;
+    const reportObj = report != null && typeof report === 'object' ? (report as Record<string, unknown>) : null;
+    const outcome = typeof reportObj?.outcome === 'string' ? reportObj.outcome : undefined;
     return (
       <div
         className="flex items-center gap-1.5 pr-2 py-0.5 text-[10px] font-vsc-mono text-vsc-text-muted"
@@ -148,7 +149,7 @@ export interface FunctionSidebarProps {
   onSelectFn: (name: string | null) => void;
   onRefreshTests: () => void;
   onRunTest?: (name: string) => void;
-  testRunResults?: Map<string, Record<string, unknown>>;
+  testRunResults?: Map<string, unknown>;
   /** Testset names whose expansion failed — shows error state instead of spinner */
   failedExpands?: Set<string>;
   /** Called when the user clicks retry on a failed testset expansion */

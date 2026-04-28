@@ -11,6 +11,9 @@ function user.TypeBuilderFn(from_text: string) -> user.Resume  [llm] {
 function user.TypeBuilderFn$build_request(from_text: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(baml.llm.Client { name: "openai/gpt-4o-mini", client_type: baml.llm.ClientType.Primitive, sub_clients: [], retry: null, counter: 0 }, "TypeBuilderFn", map { "from_text": from_text })
 }
+function user.TypeBuilderFn$build_request_stream(from_text: string) -> baml.http.Request  [expr] {
+  baml.llm.build_request_stream(baml.llm.Client { name: "openai/gpt-4o-mini", client_type: baml.llm.ClientType.Primitive, sub_clients: [], retry: null, counter: 0 }, "TypeBuilderFn", map { "from_text": from_text })
+}
 function user.TypeBuilderFn$parse(json: string) -> user.Resume  [expr] {
   baml.llm.parse("TypeBuilderFn", json)
 }

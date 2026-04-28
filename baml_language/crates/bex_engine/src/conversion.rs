@@ -6,12 +6,12 @@
 
 use ::bex_vm_types::ObjectType;
 use baml_type::Literal;
-use bex_external_types::{BexExternalAdt, BexExternalValue, EpochGuard, Ty, UnionMetadata};
-use bex_heap::BexValue;
+use bex_external_types::{BexExternalAdt, BexExternalValue, Ty, UnionMetadata};
+use bex_heap::{ActiveHeapPermit, BexValue, PermitProof};
 use bex_vm::BexVm;
 use bex_vm_types::{HeapPtr, Object, Value};
 
-use crate::{BexEngine, EngineError, heap_guard::ActiveHeapPermit};
+use crate::{BexEngine, EngineError};
 
 // ============================================================================
 // VM Value to External Conversion
@@ -25,7 +25,7 @@ impl BexEngine {
         &self,
         value: &Value,
         declared_type: &Ty,
-        guard: &EpochGuard<'_>,
+        permit: PermitProof<'_>,
     ) -> Result<BexExternalValue, EngineError> {
         // If declared type is a union, find which member matches the actual value
         let effective_type = resolve_effective_type(value, declared_type);
@@ -36,7 +36,7 @@ impl BexEngine {
             Value::Float(f) => BexExternalValue::Float(*f),
             Value::Bool(b) => BexExternalValue::Bool(*b),
             Value::Object(idx) => {
-                self.convert_heap_ptr_to_external_with_type(*idx, effective_type, guard)?
+                self.convert_heap_ptr_to_external_with_type(*idx, effective_type, permit)?
             }
         };
 
@@ -55,7 +55,7 @@ impl BexEngine {
         &self,
         ptr: HeapPtr,
         effective_type: &Ty,
-        guard: &EpochGuard<'_>,
+        permit: PermitProof<'_>,
     ) -> Result<BexExternalValue, EngineError> {
         // SAFETY: We only read objects, and the pointer comes from a valid handle.
         let obj = unsafe { ptr.get() };
@@ -76,7 +76,7 @@ impl BexEngine {
 
                 let items: Result<Vec<_>, _> = arr
                     .iter()
-                    .map(|v| self.convert_vm_value_to_external_with_type(v, element_type, guard))
+                    .map(|v| self.convert_vm_value_to_external_with_type(v, element_type, permit))
                     .collect();
                 Ok(BexExternalValue::Array {
                     element_type: element_type.clone(),
@@ -105,7 +105,7 @@ impl BexEngine {
                         .map(|(k, v)| {
                             Ok((
                                 k.clone(),
-                                self.convert_vm_value_to_external_with_type(v, value_type, guard)?,
+                                self.convert_vm_value_to_external_with_type(v, value_type, permit)?,
                             ))
                         })
                         .collect();
@@ -144,7 +144,7 @@ impl BexEngine {
                                 self.convert_vm_value_to_external_with_type(
                                     value,
                                     &class_field.field_type,
-                                    guard,
+                                    permit,
                                 )?,
                             ))
                         })
@@ -234,8 +234,7 @@ impl BexEngine {
     ) -> Value {
         match external {
             BexExternalValue::Handle(handle) => Value::Object(
-                handle
-                    .object_ptr(&vm.epoch_guard())
+                self.resolve_handle(vm.proof(), &handle)
                     .expect("Handle should be valid - object was returned to external code"),
             ),
             BexExternalValue::Null => Value::Null,
@@ -350,23 +349,28 @@ impl BexEngine {
     /// Unlike `vm_arg_to_bex_value` which creates `Handle` references for objects,
     /// this method deep-copies heap objects into standalone values. Use this for
     /// trace event payloads that escape the engine scope (e.g. event collectors).
-    pub(crate) fn vm_value_to_owned(&self, value: &Value) -> BexExternalValue {
+    pub(crate) fn vm_value_to_owned(
+        &self,
+        permit: PermitProof<'_>,
+        value: &Value,
+    ) -> BexExternalValue {
         match value {
             Value::Null => BexExternalValue::Null,
             Value::Int(i) => BexExternalValue::Int(*i),
             Value::Float(f) => BexExternalValue::Float(*f),
             Value::Bool(b) => BexExternalValue::Bool(*b),
-            Value::Object(ptr) => self
-                .heap
-                .with_gc_protection(|protected| {
-                    BexValue::HeapPtr(ptr).as_owned_but_very_slow(&protected)
-                })
-                .unwrap_or_else(|_| {
-                    #[allow(clippy::print_stderr)]
-                    {
-                        eprintln!("Failed to deep-copy VM value for trace payload");
-                    }
-                    BexExternalValue::Null
+            Value::Object(ptr) => BexValue::HeapPtr(ptr)
+                .as_owned_for_trace(&self.heap, permit)
+                .unwrap_or_else(|e| {
+                    // Remaining errors here (InvalidHandle, TypeMismatch,
+                    // FieldNotFound) indicate engine-level invariant
+                    // violations — they shouldn't happen in normal operation.
+                    // Surface via structured tracing rather than stderr so
+                    // they're visible in logs without polluting CLI output,
+                    // and embed the error in the trace payload so it shows
+                    // up wherever traces are consumed.
+                    tracing::error!(error = %e, "trace payload deep-copy failed");
+                    BexExternalValue::String(format!("<trace-error: {e}>"))
                 }),
         }
     }

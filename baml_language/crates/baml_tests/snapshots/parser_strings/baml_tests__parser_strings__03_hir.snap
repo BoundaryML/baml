@@ -20,6 +20,9 @@ function user.FormatMessage(name: string) -> string  [llm] {
 function user.FormatMessage$build_request(name: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "FormatMessage", map { "name": name })
 }
+function user.FormatMessage$build_request_stream(name: string) -> baml.http.Request  [expr] {
+  baml.llm.build_request_stream(GPT4, "FormatMessage", map { "name": name })
+}
 function user.FormatMessage$parse(json: string) -> string  [expr] {
   baml.llm.parse("FormatMessage", json)
 }
@@ -37,6 +40,9 @@ function user.ProcessText(input: string) -> string  [llm] {
 }
 function user.ProcessText$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "ProcessText", map { "input": input })
+}
+function user.ProcessText$build_request_stream(input: string) -> baml.http.Request  [expr] {
+  baml.llm.build_request_stream(GPT4, "ProcessText", map { "input": input })
 }
 function user.ProcessText$parse(json: string) -> string  [expr] {
   baml.llm.parse("ProcessText", json)

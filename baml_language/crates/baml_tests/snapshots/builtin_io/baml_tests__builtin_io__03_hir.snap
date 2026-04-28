@@ -63,10 +63,10 @@ function user.WriteFileBytes() -> int  [expr] {
   { let data = baml.fs.open("source.bin", "r").bytes() } baml.fs.write_bytes("output.bin", data)
 }
 function user.AskName() -> string  [expr] {
-  {  } io.input("What is your name? ")
+  {  } baml.io.input("What is your name? ")
 }
 function user.AskNoPrompt() -> string  [expr] {
-  {  } io.input(null)
+  {  } baml.io.input(null)
 }
 function user.ConnectAndRead() -> string  [expr] {
   { let sock = baml.net.connect("127.0.0.1:8080") } sock.read()

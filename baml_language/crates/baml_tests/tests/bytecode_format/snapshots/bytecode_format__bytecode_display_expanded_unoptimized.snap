@@ -400,7 +400,7 @@ function testing.TestRegistry.expand_set(self: null, name: string) -> (testing.S
 
   164   49    load_var 13            (sub)
         50    load_var 2             (name)
-        51    call 160               (testing.TestRegistry.expand_set)
+        51    call 162               (testing.TestRegistry.expand_set)
         52    jump +51               (to 103)
 
   144   53    load_var 3             (_3)
@@ -464,7 +464,7 @@ function testing.TestRegistry.expand_set(self: null, name: string) -> (testing.S
         100   pop 1                  
 
   157   101   load_var 1             (self)
-        102   call 168               (testing.TestRegistry.serialize)
+        102   call 170               (testing.TestRegistry.serialize)
         103   return                 
 }
 
@@ -544,7 +544,7 @@ function testing.TestRegistry.run_test(self: null, name: string) -> testing.Test
 
   135   49   load_var 9             (sub)
         50   load_var 2             (name)
-        51   call 170               (testing.TestRegistry.run_test)
+        51   call 172               (testing.TestRegistry.run_test)
         52   jump +21               (to 73)
 
   124   53   load_var 3             (_3)
@@ -569,7 +569,7 @@ function testing.TestRegistry.run_test(self: null, name: string) -> testing.Test
         69   load_field 1           (body)
         70   load_var 5             (t)
         71   load_field 2           (runner)
-        72   call 169               (testing.run_test)
+        72   call 171               (testing.run_test)
         73   return                 
 }
 
@@ -648,7 +648,7 @@ function testing.TestRegistry.serialize(self: null) -> (testing.SerializedTest |
         62   store_var 12            (_25)
 
   110   63   load_var 11             (sub)
-        64   call 168                (testing.TestRegistry.serialize)
+        64   call 170                (testing.TestRegistry.serialize)
         65   store_var 13            (_26)
 
   108   66   load_var 3              (items)
@@ -698,7 +698,7 @@ function testing.run_test(body: () -> void throws unknown, runner: ((() -> testi
         2    store_var 1             
 
   173   3    load_var 1              (body)
-        4    make_closure 344 1      
+        4    make_closure 346 1      
         5    store_var 3             (base_run)
 
   188   6    load_var 2              (runner)

@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 39494
 ---
 === MIR2 ===
 fn user.$init_test_25(registry: testing.TestCollector) -> null {
@@ -91,7 +92,7 @@ fn .<lambda(<lambda($init_test_25, 0)>, 1)>(testset: testing.TestCollector) -> n
     let _1: testing.TestCollector // testset // param
     let _2: baml.http.Response // req
     let _3: string
-    let _4: void
+    let _4: string
     let _5: future<baml.http.Response>
     let _6: string // data
     let _7: future<string>
@@ -252,7 +253,7 @@ fn .<lambda(<lambda(<lambda($init_test_25, 0)>, 3)>, 4)>(testset: testing.TestCo
     let _0: null // _0 // return
     let _1: testing.TestCollector // testset // param
     let _2: string[] // tests
-    let _3: void
+    let _3: string
     let _4: string[]
     let _5: int // __for_idx_3
     let _6: int
@@ -363,6 +364,22 @@ fn user.ClassifySentiment$build_request(text: string) -> baml.http.Request {
     }
 }
 
+fn user.ClassifySentiment$build_request_stream(text: string) -> baml.http.Request {
+    // Locals:
+    let _0: baml.http.Request // _0 // return
+    let _1: string // text // param
+    let _2: map<string, unknown>
+
+    bb0: {
+        _2 = { const "text": copy _1 };
+        _0 = call const fn baml.llm.build_request_stream(const fn user.GPT4o, const "ClassifySentiment", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
 fn user.ClassifySentiment$parse(json: string) -> Sentiment {
     // Locals:
     let _0: Sentiment // _0 // return
@@ -418,6 +435,22 @@ fn user.ClassifySentiment2$build_request(text: string) -> baml.http.Request {
     bb0: {
         _2 = { const "text": copy _1 };
         _0 = call const fn baml.llm.build_request(const fn user.GPT4o, const "ClassifySentiment2", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.ClassifySentiment2$build_request_stream(text: string) -> baml.http.Request {
+    // Locals:
+    let _0: baml.http.Request // _0 // return
+    let _1: string // text // param
+    let _2: map<string, unknown>
+
+    bb0: {
+        _2 = { const "text": copy _1 };
+        _0 = call const fn baml.llm.build_request_stream(const fn user.GPT4o, const "ClassifySentiment2", copy _2) -> [bb1];
     }
 
     bb1: {
@@ -555,6 +588,23 @@ fn user.GenerateTests$build_request(count: int, topic: string) -> baml.http.Requ
     bb0: {
         _3 = { const "count": copy _1, const "topic": copy _2 };
         _0 = call const fn baml.llm.build_request(const fn user.GPT4o, const "GenerateTests", copy _3) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.GenerateTests$build_request_stream(count: int, topic: string) -> baml.http.Request {
+    // Locals:
+    let _0: baml.http.Request // _0 // return
+    let _1: int // count // param
+    let _2: string // topic // param
+    let _3: map<string, unknown>
+
+    bb0: {
+        _3 = { const "count": copy _1, const "topic": copy _2 };
+        _0 = call const fn baml.llm.build_request_stream(const fn user.GPT4o, const "GenerateTests", copy _3) -> [bb1];
     }
 
     bb1: {

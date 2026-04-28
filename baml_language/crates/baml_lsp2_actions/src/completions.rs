@@ -30,6 +30,8 @@
 //! - `resolve_class_fields(class_loc)` — fields for field-access completions.
 //! - `file_item_tree(file)[enum_loc.id]` — variants for field-access on enums.
 
+use std::collections::HashSet;
+
 use baml_base::{Name, SourceFile, attr::TyAttr};
 use baml_compiler_syntax::{SyntaxKind, SyntaxNode};
 use baml_compiler2_hir::{
@@ -1036,10 +1038,12 @@ fn extract_pat_from_stmt(
     stmt_id: baml_compiler2_ast::StmtId,
 ) -> Option<baml_compiler2_ast::PatId> {
     let stmt = &expr_body.stmts[stmt_id];
-    if let baml_compiler2_ast::Stmt::Let { pattern, .. } = stmt {
-        Some(*pattern)
-    } else {
-        None
+    match stmt {
+        baml_compiler2_ast::Stmt::Let { pattern, .. }
+        | baml_compiler2_ast::Stmt::For {
+            binding: pattern, ..
+        } => Some(*pattern),
+        _ => None,
     }
 }
 
@@ -1093,20 +1097,20 @@ fn completions_for_value_position(
     let index = baml_compiler2_hir::file_semantic_index(db, file);
     let scope_id = index.scope_at_offset(offset, None);
 
+    let mut emitted_locals: HashSet<Name> = HashSet::new();
     let mut sort_prefix = 0usize;
     for ancestor_id in index.ancestor_scopes(scope_id) {
         let bindings: &ScopeBindings = &index.scope_bindings[ancestor_id.index() as usize];
 
         // Let bindings (reverse source order so most-recent is first).
-        for (name, _site, binding_range) in bindings.bindings.iter().rev() {
+        for binding in bindings.bindings.iter().rev() {
             // Only show bindings that are visible at the cursor position.
-            if binding_range.start() <= offset {
+            if index.binding_visible_at(binding, offset)
+                && emitted_locals.insert(binding.name.clone())
+            {
                 items.push(
-                    Completion::new(name.as_str(), CompletionKind::Variable).with_sort(format!(
-                        "{:03}_{}",
-                        sort_prefix,
-                        name.as_str()
-                    )),
+                    Completion::new(binding.name.as_str(), CompletionKind::Variable)
+                        .with_sort(format!("{:03}_{}", sort_prefix, binding.name.as_str())),
                 );
                 sort_prefix += 1;
             }
@@ -1114,6 +1118,9 @@ fn completions_for_value_position(
 
         // Parameters.
         for (name, _idx) in &bindings.params {
+            if !emitted_locals.insert(name.clone()) {
+                continue;
+            }
             items.push(
                 Completion::new(name.as_str(), CompletionKind::Variable)
                     .with_detail("parameter")

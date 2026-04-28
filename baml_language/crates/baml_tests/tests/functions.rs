@@ -261,7 +261,6 @@ async fn early_return() {
 }
 
 #[tokio::test]
-#[ignore = "compiler2: duplicate binding error for let-in-nested-scope variables"]
 async fn early_return_from_nested_scopes() {
     let output = baml_test!(
         r#"
@@ -316,20 +315,22 @@ async fn early_return_from_nested_scopes() {
 
           L2:
             load_const 7
-            return
+            jump L6
 
           L3:
             load_const true
             pop_jump_if_false L1
             load_const 0
-            return
+            jump L6
 
           L4:
             load_const 0
-            return
+            jump L6
 
           L5:
             load_const 0
+
+          L6:
             return
         }
     ");

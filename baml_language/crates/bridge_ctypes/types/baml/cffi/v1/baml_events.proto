@@ -17,6 +17,7 @@ message RuntimeEvent {
   uint64 timestamp_ms = 4;
   repeated string call_stack = 5;
   EventKind event = 6;
+  uint64 call_id = 7;
 }
 
 /// The kind of event.

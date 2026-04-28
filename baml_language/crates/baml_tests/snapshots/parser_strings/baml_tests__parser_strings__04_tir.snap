@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 29695
 ---
 === TIR2 ===
 class user.NestedQuotes {
@@ -26,6 +25,10 @@ function user.FormatMessage$build_request(name: string) -> baml.http.Request thr
   baml.llm.build_request(GPT4, "FormatMessage", map { "name": name }) : baml.http.Request
   !! 345..553: unresolved name: GPT4
 }
+function user.FormatMessage$build_request_stream(name: string) -> baml.http.Request throws never {
+  baml.llm.build_request_stream(GPT4, "FormatMessage", map { "name": name }) : baml.http.Request
+  !! 345..553: unresolved name: GPT4
+}
 function user.FormatMessage$parse(json: string) -> string throws never {
   baml.llm.parse<T>("FormatMessage", json) : string
 }
@@ -40,8 +43,12 @@ class user.NestedQuotes$stream {
   complex_nesting: null | string @description("It's \"really\" 'complex'")
   json_like: null | string @alias("{\"key\": \"value\"}")
 }
+function user.FormatMessage$stream(name: string) -> baml.llm.Stream<string, null | string> throws never {
+  baml.llm.stream_llm_function(GPT4, "FormatMessage", map { "name": name }) : baml.llm.Stream<string, null | string>
+  !! 345..553: unresolved name: GPT4
+}
 function user.FormatMessage$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<string, null | string> throws never {
-  baml.llm.__make_stream(sse, "FormatMessage", GPT4) : unknown
+  GPT4.__make_stream(sse, "FormatMessage") : unknown
   !! 345..553: unresolved name: GPT4
 }
 class user.RawStrings {
@@ -66,6 +73,10 @@ function user.ProcessText$build_request(input: string) -> baml.http.Request thro
   baml.llm.build_request(GPT4, "ProcessText", map { "input": input }) : baml.http.Request
   !! 364..532: unresolved name: GPT4
 }
+function user.ProcessText$build_request_stream(input: string) -> baml.http.Request throws never {
+  baml.llm.build_request_stream(GPT4, "ProcessText", map { "input": input }) : baml.http.Request
+  !! 364..532: unresolved name: GPT4
+}
 function user.ProcessText$parse(json: string) -> string throws never {
   baml.llm.parse<T>("ProcessText", json) : string
 }
@@ -79,8 +90,12 @@ class user.RawStrings$stream {
     and #hashes#
   "###)
 }
+function user.ProcessText$stream(input: string) -> baml.llm.Stream<string, null | string> throws never {
+  baml.llm.stream_llm_function(GPT4, "ProcessText", map { "input": input }) : baml.llm.Stream<string, null | string>
+  !! 364..532: unresolved name: GPT4
+}
 function user.ProcessText$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<string, null | string> throws never {
-  baml.llm.__make_stream(sse, "ProcessText", GPT4) : unknown
+  GPT4.__make_stream(sse, "ProcessText") : unknown
   !! 364..532: unresolved name: GPT4
 }
 class user.Messages {

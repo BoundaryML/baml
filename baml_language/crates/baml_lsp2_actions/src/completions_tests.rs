@@ -454,4 +454,45 @@ function Test() -> string {
             "Detail should contain '-> bool', got: {detail_str}"
         );
     }
+
+    #[test]
+    fn test_value_completion_hides_shadowed_same_scope_local() {
+        let test = CursorTest::new(
+            r#"
+function Test() -> int {
+    let x = 1
+    let x = 2
+    x<[CURSOR]
+}
+"#,
+        );
+
+        let completions = completions_at(&test.db, test.cursor.file, test.cursor.offset);
+        let x_count = completions.iter().filter(|c| c.label == "x").count();
+
+        assert_eq!(
+            x_count, 1,
+            "Should only complete the innermost visible 'x', got: {completions:?}"
+        );
+    }
+
+    #[test]
+    fn test_value_completion_hides_shadowed_parameter() {
+        let test = CursorTest::new(
+            r#"
+function Test(x: int) -> int {
+    let x = 2
+    x<[CURSOR]
+}
+"#,
+        );
+
+        let completions = completions_at(&test.db, test.cursor.file, test.cursor.offset);
+        let x_count = completions.iter().filter(|c| c.label == "x").count();
+
+        assert_eq!(
+            x_count, 1,
+            "Should only complete the local that shadows parameter 'x', got: {completions:?}"
+        );
+    }
 }
