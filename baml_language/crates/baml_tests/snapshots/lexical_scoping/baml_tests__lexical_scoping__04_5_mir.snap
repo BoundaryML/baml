@@ -160,52 +160,6 @@ fn user.for_loop_restores_outer() -> int {
     }
 }
 
-fn user.for_underscore_binding() -> int {
-    // Locals:
-    let _0: int // _0 // return
-    let _1: int // _
-    let _2: int[]
-    let _3: int // __for_idx
-    let _4: int
-    let _5: bool
-    let _6: int
-    let _7: int // _
-
-    bb0: {
-        _1 = const 1_i64;
-        _2 = [const 2_i64, const 3_i64];
-        _3 = const 0_i64;
-        goto -> bb1;
-    }
-
-    bb1: {
-        _4 = len(_2);
-        _5 = copy _3 < copy _4;
-        branch copy _5 -> [bb4, bb2];
-    }
-
-    bb2: {
-        _0 = copy _1;
-        goto -> bb3;
-    }
-
-    bb3: {
-        return;
-    }
-
-    bb4: {
-        _6 = copy _2[_3];
-        fresh_cell(_7);
-        _7 = copy _6;
-        goto -> bb5;
-    }
-
-    bb5: {
-        _3 = copy _3 + const 1_i64;
-        goto -> bb1;
-    }
-}
-
 fn user.initializer_uses_previous() -> int {
     // Locals:
     let _0: int // _0 // return
@@ -305,22 +259,6 @@ fn user.outer_restored() -> int {
 
     bb0: {
         _1 = const 1_i64;
-        _0 = copy _1;
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.repeated_underscore() -> int {
-    // Locals:
-    let _0: int // _0 // return
-    let _1: int // _
-
-    bb0: {
-        _1 = const 2_i64;
         _0 = copy _1;
         goto -> bb1;
     }

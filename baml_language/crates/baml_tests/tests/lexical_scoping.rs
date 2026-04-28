@@ -4,12 +4,6 @@ use baml_tests::baml_test;
 use bex_engine::BexExternalValue;
 
 const LEXICAL_SCOPE_RUNTIME_REGRESSIONS: &str = r#"
-function repeated_underscore() -> int {
-    let _ = 1
-    let _ = 2
-    _
-}
-
 function same_scope_shadow() -> int {
     let x = 1
     let x = 2
@@ -86,7 +80,6 @@ async fn assert_lexical_scope_result(entry: &str, expected: i64) {
 
 #[tokio::test]
 async fn lexical_scoping_runtime_regressions() {
-    assert_lexical_scope_result("repeated_underscore()", 2).await;
     assert_lexical_scope_result("same_scope_shadow()", 2).await;
     assert_lexical_scope_result("outer_restored()", 1).await;
     assert_lexical_scope_result("initializer_uses_previous()", 2).await;
@@ -97,7 +90,16 @@ async fn lexical_scoping_runtime_regressions() {
 }
 
 #[tokio::test]
-async fn declared_type_and_for_underscore_restore_outer_binding() {
+async fn declared_type_restored_across_scope() {
+    // Verifies that a typed outer binding is restored after an inner scope
+    // shadows it with a different declared type. The inner `let x: int = 1`
+    // exists only inside the block; after the block, `x` resolves back to
+    // the outer `string` binding.
+    //
+    // (The previous `let _ = ...; _` half of this test was removed: under
+    // the new patterns backend (PR BoundaryML/baml#3417, "implement new
+    // patterns backend without parser support"), `_` is canonicalized to
+    // a wildcard at AST construction and is no longer a referenceable name.)
     let string_output = baml_test!(
         r#"
         function main() -> string {
@@ -114,20 +116,6 @@ async fn declared_type_and_for_underscore_restore_outer_binding() {
         string_output.result,
         Ok(BexExternalValue::String("outer".to_string()))
     );
-
-    let underscore_output = baml_test!(
-        "
-        function main() -> int {
-            let _ = 1
-            for (let _ in [2, 3]) {
-                _
-            }
-            _
-        }
-    "
-    );
-
-    assert_eq!(underscore_output.result, Ok(BexExternalValue::Int(1)));
 }
 
 #[tokio::test]

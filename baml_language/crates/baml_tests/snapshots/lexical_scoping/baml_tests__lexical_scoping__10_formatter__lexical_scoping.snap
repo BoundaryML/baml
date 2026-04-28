@@ -11,12 +11,6 @@ function branch_locals(b: bool) -> int {
     }
 }
 
-function repeated_underscore() -> int {
-    let _ = 1;
-    let _ = 2;
-    _
-}
-
 function same_scope_shadow() -> int {
     let x = 1;
     let x = 2;
@@ -57,15 +51,6 @@ function for_loop_restores_outer() -> int {
     }
     ;
     x
-}
-
-function for_underscore_binding() -> int {
-    let _ = 1;
-    for (let _ in [2, 3]) {
-        _;
-    }
-    ;
-    _
 }
 
 function watch_block_cleanup() -> int {
