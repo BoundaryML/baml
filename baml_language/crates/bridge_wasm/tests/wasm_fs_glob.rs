@@ -1,19 +1,22 @@
 // WASM integration tests for `baml.fs` and `baml.glob` operations.
 //
 // These tests verify that the `bridge_wasm` crate correctly wires up the
-// fs and glob IO namespaces via mock JS objects. They run in a real
-// browser (headless Chrome) to validate the full WASM pipeline.
+// fs and glob IO namespaces via mock JS objects under Node's WASM runtime.
 //
 // Run with:
-//   cd baml_language && wasm-pack test --headless --chrome -p bridge_wasm
-//
-// Or with Node.js (no browser needed):
-//   cd baml_language && wasm-pack test --node -p bridge_wasm
+//   cd baml_language/crates/bridge_wasm && wasm-pack test --node
 
-use wasm_bindgen::prelude::*;
+use bridge_wasm::{
+    BamlWasmRuntime, LspNotification,
+    baml::cffi::{
+        BamlOutboundValue, CallFunctionArgs, baml_outbound_value::Value as OutboundValue,
+    },
+};
+use prost::Message;
+use wasm_bindgen::{JsCast, prelude::*};
 use wasm_bindgen_test::*;
 
-wasm_bindgen_test_configure!(run_in_browser);
+wasm_bindgen_test_configure!(run_in_node_experimental);
 
 /// Helper: build a mock VFS JS object with all required methods.
 ///
@@ -129,10 +132,13 @@ fn mock_vfs(files: &[(&str, &str)], dirs: &[&str]) -> JsValue {
             "path",
             r#"
             if (this._files.hasOwnProperty(path)) {
-                return { fileType: 'file', len: new TextEncoder().encode(this._files[path]).length };
+                var len = new TextEncoder().encode(this._files[path]).length;
+                return { fileType: 'file', file_type: 'file', len: len };
             }
             for (var i = 0; i < this._dirs.length; i++) {
-                if (this._dirs[i] === path) return { fileType: 'directory', len: 0 };
+                if (this._dirs[i] === path) {
+                    return { fileType: 'directory', file_type: 'directory', len: 0 };
+                }
             }
             throw new Error('Not found: ' + path);
             "#,
@@ -174,9 +180,20 @@ fn mock_vfs(files: &[(&str, &str)], dirs: &[&str]) -> JsValue {
         &js_sys::Function::new_with_args(
             "glob",
             r#"
+            function matches(path) {
+                if (glob === '/workspace/baml_src/**/*.baml') {
+                    return path.startsWith('/workspace/baml_src/') && path.endsWith('.baml');
+                }
+                if (glob === '/workspace/data/**/*.txt') {
+                    return path.startsWith('/workspace/data/') && path.endsWith('.txt');
+                }
+                if (glob === '**/*.txt') return path.endsWith('.txt');
+                return true;
+            }
             var result = [];
             var keys = Object.keys(this._files);
             for (var i = 0; i < keys.length; i++) {
+                if (!matches(keys[i])) continue;
                 result.push([keys[i], new TextEncoder().encode(this._files[keys[i]])]);
             }
             return result;
@@ -186,6 +203,95 @@ fn mock_vfs(files: &[(&str, &str)], dirs: &[&str]) -> JsValue {
     .unwrap();
 
     obj.into()
+}
+
+fn callbacks() -> JsValue {
+    let obj = js_sys::Object::new();
+    js_sys::Reflect::set(
+        &obj,
+        &JsValue::from_str("fetch"),
+        &js_sys::Function::new_with_args(
+            "callId, method, url, headersJson, body",
+            "return Promise.reject(new Error('fetch is not available in this test'));",
+        ),
+    )
+    .unwrap();
+    js_sys::Reflect::set(
+        &obj,
+        &JsValue::from_str("env"),
+        &js_sys::Function::new_with_args("variable", "return undefined;"),
+    )
+    .unwrap();
+    js_sys::Reflect::set(
+        &obj,
+        &JsValue::from_str("input"),
+        &js_sys::Function::new_with_args("callId, prompt", "return '';"),
+    )
+    .unwrap();
+
+    let noop = js_sys::Function::new_with_args("value", "");
+    js_sys::Reflect::set(&obj, &JsValue::from_str("lsp_send_notification"), &noop).unwrap();
+    js_sys::Reflect::set(&obj, &JsValue::from_str("lsp_send_response"), &noop).unwrap();
+    js_sys::Reflect::set(&obj, &JsValue::from_str("lsp_make_request"), &noop).unwrap();
+    js_sys::Reflect::set(
+        &obj,
+        &JsValue::from_str("playground_send_notification"),
+        &noop,
+    )
+    .unwrap();
+
+    obj.into()
+}
+
+fn open_project(runtime: &BamlWasmRuntime, source: &str) {
+    runtime.handle_notification(LspNotification {
+        method: "textDocument/didOpen".to_string(),
+        params: serde_json::json!({
+            "textDocument": {
+                "uri": "file:///workspace/baml_src/main.baml",
+                "languageId": "baml",
+                "version": 1,
+                "text": source,
+            }
+        }),
+    });
+}
+
+fn runtime(files: &[(&str, &str)], dirs: &[&str], source: &str) -> BamlWasmRuntime {
+    let vfs = mock_vfs(files, dirs);
+    let callbacks = callbacks();
+    let runtime = BamlWasmRuntime::create(callbacks.unchecked_ref(), vfs.unchecked_into()).unwrap();
+    open_project(&runtime, source);
+    runtime
+}
+
+async fn call_no_args(runtime: &BamlWasmRuntime, call_id: u32, name: &str) -> BamlOutboundValue {
+    let args = CallFunctionArgs::default().encode_to_vec();
+    let bytes = runtime
+        .call_function(call_id, "/workspace/baml_src".to_string(), name, &args)
+        .await
+        .unwrap();
+    BamlOutboundValue::decode(bytes.as_slice()).unwrap()
+}
+
+fn bool_value(value: BamlOutboundValue) -> bool {
+    match value.value {
+        Some(OutboundValue::BoolValue(v)) => v,
+        other => panic!("expected bool result, got {other:?}"),
+    }
+}
+
+fn string_list(value: BamlOutboundValue) -> Vec<String> {
+    let Some(OutboundValue::ListValue(list)) = value.value else {
+        panic!("expected list result, got {:?}", value.value);
+    };
+    list.items
+        .into_iter()
+        .map(|item| match item.value {
+            Some(OutboundValue::StringValue(s)) => s,
+            other => panic!("expected string list item, got {other:?}"),
+        })
+        .collect()
 }
 
 // ---------------------------------------------------------------------------
@@ -327,4 +433,91 @@ fn mock_vfs_read_many_returns_pairs() {
     assert!(first_pair.get(0).as_string().is_some());
     let data: js_sys::Uint8Array = first_pair.get(1).unchecked_into();
     assert!(data.length() > 0);
+}
+
+const FS_GLOB_SOURCE: &str = r#"
+function MkdirRecursive() -> bool {
+  baml.fs.mkdir("/generated/nested", baml.fs.MkdirOptions { recursive: true });
+  baml.fs.exists("/generated/nested")
+}
+
+function ReadDirNames() -> string[] {
+  let entries = baml.fs.read_dir("/workspace/data");
+  entries.map((entry) -> { entry.name })
+}
+
+function GlobMatchesTxt() -> bool {
+  let glob = baml.glob.new("**/*.txt");
+  glob.matches("/workspace/data/a.txt") && !glob.matches("/workspace/data/b.rs")
+}
+
+function GlobScanTxt() -> string[] {
+  let glob = baml.glob.new("/workspace/data/**/*.txt");
+  glob.scan("/")
+}
+"#;
+
+fn runtime_files() -> Vec<(&'static str, &'static str)> {
+    vec![
+        ("/workspace/baml_src/main.baml", FS_GLOB_SOURCE),
+        ("/workspace/data/a.txt", "aaa"),
+        ("/workspace/data/b.rs", "bbb"),
+        ("/workspace/data/sub/c.txt", "ccc"),
+    ]
+}
+
+fn runtime_dirs() -> Vec<&'static str> {
+    vec![
+        "/workspace",
+        "/workspace/baml_src",
+        "/workspace/data",
+        "/workspace/data/sub",
+    ]
+}
+
+#[wasm_bindgen_test]
+async fn wasm_runtime_mkdir_recursive_then_exists() {
+    let files = runtime_files();
+    let dirs = runtime_dirs();
+    let runtime = runtime(&files, &dirs, FS_GLOB_SOURCE);
+
+    let result = call_no_args(&runtime, 1, "MkdirRecursive").await;
+    assert!(bool_value(result));
+}
+
+#[wasm_bindgen_test]
+async fn wasm_runtime_read_dir_returns_entries() {
+    let files = runtime_files();
+    let dirs = runtime_dirs();
+    let runtime = runtime(&files, &dirs, FS_GLOB_SOURCE);
+
+    let result = call_no_args(&runtime, 2, "ReadDirNames").await;
+    let mut names = string_list(result);
+    names.sort();
+    assert_eq!(names, vec!["a.txt", "b.rs", "sub"]);
+}
+
+#[wasm_bindgen_test]
+async fn wasm_runtime_glob_matches_paths() {
+    let files = runtime_files();
+    let dirs = runtime_dirs();
+    let runtime = runtime(&files, &dirs, FS_GLOB_SOURCE);
+
+    let result = call_no_args(&runtime, 3, "GlobMatchesTxt").await;
+    assert!(bool_value(result));
+}
+
+#[wasm_bindgen_test]
+async fn wasm_runtime_glob_scan_filters_paths() {
+    let files = runtime_files();
+    let dirs = runtime_dirs();
+    let runtime = runtime(&files, &dirs, FS_GLOB_SOURCE);
+
+    let result = call_no_args(&runtime, 4, "GlobScanTxt").await;
+    let mut paths = string_list(result);
+    paths.sort();
+    assert_eq!(
+        paths,
+        vec!["/workspace/data/a.txt", "/workspace/data/sub/c.txt"]
+    );
 }

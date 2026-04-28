@@ -62,6 +62,7 @@ pub use error::BridgeError;
 use js_sys::Function;
 use prost::Message;
 use wasm_bindgen::prelude::*;
+pub use wasm_lsp::LspNotification;
 
 static LOGGER_INIT: std::sync::Once = std::sync::Once::new();
 
