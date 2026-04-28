@@ -10,7 +10,7 @@ fn user.llm.UseConfig(cfg: Config) -> llm.Response {
 
     bb0: {
         _2 = copy _1.0;
-        _0 = Response { copy _2 };
+        _0 = user.llm.Response { copy _2 };
         goto -> bb1;
     }
 

@@ -32,7 +32,7 @@ fn .<lambda($init_test_25, 0)>() -> null {
     let _2: int
 
     bb0: {
-        _1 = HasWith { const 1_i64 };
+        _1 = user.HasWith { const 1_i64 };
         _2 = copy _1.0;
         _0 = call const fn assert.equal(copy _2, const 1_i64) -> [bb1];
     }
@@ -47,7 +47,7 @@ fn user.make_foo() -> Foo {
     let _0: Foo // _0 // return
 
     bb0: {
-        _0 = Foo { const 1_i64 };
+        _0 = user.Foo { const 1_i64 };
         goto -> bb1;
     }
 

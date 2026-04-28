@@ -7,7 +7,7 @@ fn user.GetHttpStatus() -> http.Response {
     let _0: http.Response // _0 // return
 
     bb0: {
-        _0 = Response { const 200_i64, const "ok" };
+        _0 = user.http.Response { const 200_i64, const "ok" };
         goto -> bb1;
     }
 
@@ -21,7 +21,7 @@ fn user.GetLlmText() -> llm.Response {
     let _0: llm.Response // _0 // return
 
     bb0: {
-        _0 = Response { const "hello", const 5_i64 };
+        _0 = user.llm.Response { const "hello", const 5_i64 };
         goto -> bb1;
     }
 

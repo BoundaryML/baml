@@ -536,7 +536,7 @@ fn user.Foo() -> string | image {
 fn user.GPT4o$new() -> null {
     // Locals:
     let _0: null // _0 // return
-    let _1: void
+    let _1: baml.llm.PrimitiveClientOptions
     let _2: string
     let _3: map<void, void>
     let _4: map<void, void>

@@ -24,7 +24,7 @@ function user.TypeBuilderFn$stream(from_text: string) -> baml.llm.Stream<user.Re
   baml.llm.stream_llm_function(baml.llm.Client { name: "openai/gpt-4o-mini", client_type: baml.llm.ClientType.Primitive, sub_clients: [], retry: null, counter: 0 }, "TypeBuilderFn", map { "from_text": from_text }) : baml.llm.Stream<user.Resume, null | user.Resume$stream>
 }
 function user.TypeBuilderFn$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<user.Resume, null | user.Resume$stream> throws never {
-  baml.llm.Client { name: "openai/gpt-4o-mini", client_type: baml.llm.ClientType.Primitive, sub_clients: [], retry: null, counter: 0 }.__make_stream(sse, "TypeBuilderFn") : unknown
+  baml.llm.Client { name: "openai/gpt-4o-mini", client_type: baml.llm.ClientType.Primitive, sub_clients: [], retry: null, counter: 0 }.__make_stream(sse, "TypeBuilderFn") : baml.llm.Stream<user.Resume, null | user.Resume$stream>
 }
 class user.Resume$stream {
   name: null | string

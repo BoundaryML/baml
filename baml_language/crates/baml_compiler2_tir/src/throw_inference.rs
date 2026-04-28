@@ -358,21 +358,11 @@ fn throw_fact_from_expr<'db>(
             type_name: Some(name),
             ..
         } => {
-            if let Some(def) = pkg_items.lookup_type(ns_context, name) {
-                match def {
-                    Definition::Class(_) => {
-                        Ty::Class(qualify_def(db, def, name), vec![], TyAttr::default())
-                    }
-                    Definition::Enum(_) => Ty::Enum(qualify_def(db, def, name), TyAttr::default()),
-                    _ => Ty::Unknown {
-                        attr: TyAttr::default(),
-                    },
-                }
-            } else {
-                Ty::Unknown {
-                    attr: TyAttr::default(),
-                }
-            }
+            // The parser stores qualified paths like `baml.errors.DevOther` as
+            // a single dotted Name. Split into segments and resolve through
+            // the same path-resolution logic used for Path/MemberAccess.
+            let segments: Vec<Name> = name.as_str().split('.').map(Name::new).collect();
+            resolve_path_to_ty(db, pkg_items, ns_context, &segments)
         }
         _ => Ty::Unknown {
             attr: TyAttr::default(),

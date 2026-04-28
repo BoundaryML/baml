@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 12886
 ---
 === MIR2 ===
 fn user.array_length() -> int {
@@ -61,7 +60,7 @@ fn user.GreetBaz(n: string) -> string {
     let _2: Baz // baz
 
     bb0: {
-        _2 = Baz { copy _1 };
+        _2 = user.Baz { copy _1 };
         _0 = call const fn user.Baz.Greeting(copy _2) -> [bb1];
     }
 

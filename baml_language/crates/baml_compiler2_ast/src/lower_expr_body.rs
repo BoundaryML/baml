@@ -1997,9 +1997,13 @@ impl LoweringContext {
 
         // Look for the optional type name (first WORD or path before the brace).
         // The type name may be:
-        //   - A simple WORD token: `MyClass { ... }`
-        //   - A qualified path node: `baml.errors.DevOther { ... }` (parsed as PATH_EXPR)
-        // For qualified paths, extract the final segment as the class name.
+        //   - A simple WORD token: `MyClass { ... }` → stored as `"MyClass"`.
+        //   - A qualified path node: `baml.errors.DevOther { ... }` (parsed as
+        //     PATH_EXPR) → stored as the full dotted string `"baml.errors.DevOther"`,
+        //     so downstream consumers (TIR resolution, MIR field-order lookup)
+        //     have the namespace info needed to find the right type. Without
+        //     this, `lookup_type` would only see the bare name and miss the
+        //     class living in another namespace.
         'outer: for elem in node.children_with_tokens() {
             match elem {
                 rowan::NodeOrToken::Token(token) => {
@@ -2011,19 +2015,17 @@ impl LoweringContext {
                     }
                 }
                 rowan::NodeOrToken::Node(child_node) => {
-                    // A child node before L_BRACE is the type name path (e.g. PATH_EXPR).
-                    // Walk its tokens to find the last WORD — that's the class name.
-                    let mut last_word: Option<Name> = None;
-                    for token in child_node
+                    // A child node before L_BRACE is the type name path (e.g.
+                    // PATH_EXPR). Collect every WORD token and join them with
+                    // dots to preserve the qualified path.
+                    let segments: Vec<String> = child_node
                         .children_with_tokens()
                         .filter_map(rowan::NodeOrToken::into_token)
-                    {
-                        if is_ident_token(token.kind()) {
-                            last_word = Some(Name::new(token.text()));
-                        }
-                    }
-                    if let Some(name) = last_word {
-                        type_name = Some(name);
+                        .filter(|t| is_ident_token(t.kind()))
+                        .map(|t| t.text().to_string())
+                        .collect();
+                    if !segments.is_empty() {
+                        type_name = Some(Name::new(segments.join(".")));
                     }
                     // After handling the path node, stop scanning for more pre-brace items.
                     break 'outer;

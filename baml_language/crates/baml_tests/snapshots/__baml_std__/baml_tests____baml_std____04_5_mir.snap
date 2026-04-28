@@ -247,7 +247,7 @@ fn baml.llm.call_llm_function(client: baml.llm.Client, function_name: string, ar
 
     bb2: {
         _7 = copy _4;
-        _6 = ExecutionContext { copy _7, copy _3, copy _2 };
+        _6 = baml.llm.ExecutionContext { copy _7, copy _3, copy _2 };
         _9 = copy _6;
         _8 = call const fn baml.llm.Client.execute_oneshot(copy _1, copy _9, const 0_i64) -> [bb3];
     }
@@ -494,7 +494,7 @@ fn baml.llm.stream_llm_function(client: baml.llm.Client, function_name: string, 
 
     bb2: {
         _7 = copy _4;
-        _6 = ExecutionContext { copy _7, copy _3, copy _2 };
+        _6 = baml.llm.ExecutionContext { copy _7, copy _3, copy _2 };
         _9 = copy _6;
         _8 = call const fn baml.llm.Client.execute_stream(copy _1, copy _9, const 0_i64) -> [bb3];
     }
@@ -572,7 +572,7 @@ fn baml.llm.Client.__make_stream(self: baml.llm.Client, sse: baml.http.SseStream
         _15 = copy _4;
         _16 = copy _9;
         _17 = copy _11;
-        _0 = Stream { copy _15, copy _16, copy _2, copy _17 };
+        _0 = baml.llm.Stream { copy _15, copy _16, copy _2, copy _17 };
         goto -> bb10;
     }
 
@@ -597,7 +597,7 @@ fn baml.llm.Client.build_attempt(self: baml.llm.Client) -> baml.llm.Orchestratio
 
     bb0: {
         _3 = [];
-        _2 = PlannerState { copy _3 };
+        _2 = baml.llm.PlannerState { copy _3 };
         _4 = copy _2;
         _0 = call const fn baml.llm.Client.build_attempt_with_state(copy _1, copy _4) -> [bb1];
     }
@@ -747,7 +747,7 @@ fn baml.llm.Client.build_attempt_with_state(self: baml.llm.Client, planner_state
 
     bb18: {
         _7 = copy _5;
-        _6 = OrchestrationStep { copy _7, const 0_i64 };
+        _6 = baml.llm.OrchestrationStep { copy _7, const 0_i64 };
         _0 = [copy _6];
         goto -> bb19;
     }
@@ -767,7 +767,7 @@ fn baml.llm.Client.build_plan(self: baml.llm.Client) -> baml.llm.OrchestrationSt
 
     bb0: {
         _3 = [];
-        _2 = PlannerState { copy _3 };
+        _2 = baml.llm.PlannerState { copy _3 };
         _4 = copy _2;
         _0 = call const fn baml.llm.Client.build_plan_with_state(copy _1, copy _4) -> [bb1];
     }
@@ -918,7 +918,7 @@ fn baml.llm.Client.build_plan_with_state(self: baml.llm.Client, planner_state: b
         _31 = copy _30;
         _34 = copy _31.0;
         _35 = copy _13;
-        _33 = OrchestrationStep { copy _34, copy _35 };
+        _33 = baml.llm.OrchestrationStep { copy _34, copy _35 };
         _32 = call const fn baml.Array.push(copy _6, copy _33) -> [bb17];
     }
 
@@ -978,7 +978,7 @@ fn baml.llm.Client.execute_once_oneshot(self: baml.llm.Client, context: baml.llm
     let _39: void
     let _40: bool
     let _41: future<void>
-    let _42: void
+    let _42: baml.errors.DevOther
     let _43: string
     let _44: string
     let _45: baml.llm.Client[]
@@ -989,11 +989,11 @@ fn baml.llm.Client.execute_once_oneshot(self: baml.llm.Client, context: baml.llm
     let _50: baml.llm.Client // sub
     let _51: void // result2
     let _52: unknown // e
-    let _53: void
+    let _53: baml.errors.DevOther
     let _54: bool
     let _55: int
     let _56: (baml.llm.Client[]) -> int throws never
-    let _57: void
+    let _57: baml.errors.DevOther
     let _58: int // idx
     let _59: int
     let _60: int
@@ -1044,7 +1044,7 @@ fn baml.llm.Client.execute_once_oneshot(self: baml.llm.Client, context: baml.llm
     }
 
     bb7: {
-        _57 = DevOther { const "RoundRobin client has no sub-clients" };
+        _57 = baml.errors.DevOther { const "RoundRobin client has no sub-clients" };
         throw copy _57;
     }
 
@@ -1201,7 +1201,7 @@ fn baml.llm.Client.execute_once_oneshot(self: baml.llm.Client, context: baml.llm
     bb41: {
         _44 = copy _36;
         _43 = const "HTTP request failed: " + copy _44;
-        _42 = DevOther { copy _43 };
+        _42 = baml.errors.DevOther { copy _43 };
         throw copy _42;
     }
 
@@ -1221,7 +1221,7 @@ fn baml.llm.Client.execute_once_oneshot(self: baml.llm.Client, context: baml.llm
     }
 
     bb45: {
-        _53 = DevOther { const "All orchestration steps failed" };
+        _53 = baml.errors.DevOther { const "All orchestration steps failed" };
         throw copy _53;
     }
 
@@ -1279,11 +1279,11 @@ fn baml.llm.Client.execute_once_stream(self: baml.llm.Client, context: baml.llm.
     let _32: baml.llm.Client // sub
     let _33: baml.llm.Stream // result2
     let _34: unknown // e
-    let _35: void
+    let _35: baml.errors.DevOther
     let _36: bool
     let _37: int
     let _38: (baml.llm.Client[]) -> int throws never
-    let _39: void
+    let _39: baml.errors.DevOther
     let _40: int // idx
     let _41: int
     let _42: int
@@ -1334,7 +1334,7 @@ fn baml.llm.Client.execute_once_stream(self: baml.llm.Client, context: baml.llm.
     }
 
     bb7: {
-        _39 = DevOther { const "RoundRobin client has no sub-clients" };
+        _39 = baml.errors.DevOther { const "RoundRobin client has no sub-clients" };
         throw copy _39;
     }
 
@@ -1422,7 +1422,7 @@ fn baml.llm.Client.execute_once_stream(self: baml.llm.Client, context: baml.llm.
     }
 
     bb25: {
-        _35 = DevOther { const "All orchestration steps failed" };
+        _35 = baml.errors.DevOther { const "All orchestration steps failed" };
         throw copy _35;
     }
 
@@ -1476,7 +1476,7 @@ fn baml.llm.Client.execute_oneshot(self: baml.llm.Client, context: baml.llm.Exec
     let _28: void // result2
     let _29: unknown // e
     let _30: int
-    let _31: void
+    let _31: baml.errors.DevOther
     let _32: bool
     let _33: void // result
 
@@ -1525,7 +1525,7 @@ fn baml.llm.Client.execute_oneshot(self: baml.llm.Client, context: baml.llm.Exec
     }
 
     bb8: {
-        _31 = DevOther { const "All orchestration steps failed" };
+        _31 = baml.errors.DevOther { const "All orchestration steps failed" };
         throw copy _31;
     }
 
@@ -1623,7 +1623,7 @@ fn baml.llm.Client.execute_stream(self: baml.llm.Client, context: baml.llm.Execu
     let _28: baml.llm.Stream // result2
     let _29: unknown // e
     let _30: int
-    let _31: void
+    let _31: baml.errors.DevOther
     let _32: bool
     let _33: baml.llm.Stream // result
 
@@ -1672,7 +1672,7 @@ fn baml.llm.Client.execute_stream(self: baml.llm.Client, context: baml.llm.Execu
     }
 
     bb8: {
-        _31 = DevOther { const "All orchestration steps failed" };
+        _31 = baml.errors.DevOther { const "All orchestration steps failed" };
         throw copy _31;
     }
 
@@ -1909,7 +1909,7 @@ fn baml.llm.Stream.final(self: baml.llm.Stream) -> void {
     }
 
     bb27: {
-        _28 = LlmClientError { const "Streaming finished without finish_reason" };
+        _28 = root.errors.LlmClientError { const "Streaming finished without finish_reason" };
         throw copy _28;
     }
 }
@@ -2073,12 +2073,12 @@ fn baml.llm.Stream.next(self: baml.llm.Stream) -> void | baml.stream.StreamFinis
     }
 
     bb22: {
-        _0 = StreamFinished {  };
+        _0 = baml.stream.StreamFinished {  };
         goto -> bb24;
     }
 
     bb23: {
-        _0 = StreamFinished {  };
+        _0 = baml.stream.StreamFinished {  };
         goto -> bb24;
     }
 

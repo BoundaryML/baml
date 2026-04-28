@@ -115,7 +115,7 @@ function testing.TestCollector.find_testset(self: null, name: string) -> testing
 }
 
 function testing.TestCollector.new(prefix: string) -> testing.TestCollector {
-  23   0   alloc_instance 125   (TestCollector)
+  23   0   alloc_instance 125   (testing.TestCollector)
        1   load_var 1           (prefix)
        2   init_field 0         (prefix)
        3   alloc_array 0        
@@ -189,7 +189,7 @@ function testing.TestCollector.register_test(self: null, name: string, body: () 
 
   34   54   load_var 1             (self)
        55   load_field 1           (tests)
-       56   alloc_instance 117     (TestRegistration)
+       56   alloc_instance 117     (testing.TestRegistration)
        57   load_var 12            (final_name)
        58   init_field 0           (name)
        59   load_var 3             (body)
@@ -295,7 +295,7 @@ function testing.TestCollector.register_test_set(self: null, name: string, colle
 
   45   54   load_var 1             (self)
        55   load_field 2           (testsets)
-       56   alloc_instance 119     (TestSetRegistration)
+       56   alloc_instance 119     (testing.TestSetRegistration)
        57   load_var 12            (final_name)
        58   init_field 0           (name)
        59   load_var 3             (collector)
@@ -424,7 +424,7 @@ function testing.TestRegistry.expand_set(self: null, name: string) -> (testing.S
   147   68    call 67                (baml.sys.now_ms)
         69    store_var 6            (start)
 
-  148   70    alloc_instance 125     (TestCollector)
+  148   70    alloc_instance 125     (testing.TestCollector)
         71    load_var 2             (name)
         72    init_field 0           (prefix)
         73    alloc_array 0          
@@ -444,7 +444,7 @@ function testing.TestRegistry.expand_set(self: null, name: string) -> (testing.S
         85    bin_op -               
         86    store_var 8            (elapsed)
 
-  151   87    alloc_instance 124     (TestRegistry)
+  151   87    alloc_instance 124     (testing.TestRegistry)
 
   152   88    load_var 7             (sub_collector)
         89    init_field 0           (collector)
@@ -469,7 +469,7 @@ function testing.TestRegistry.expand_set(self: null, name: string) -> (testing.S
 }
 
 function testing.TestRegistry.new(collector: testing.TestCollector) -> testing.TestRegistry {
-  87   0   alloc_instance 124   (TestRegistry)
+  87   0   alloc_instance 124   (testing.TestRegistry)
        1   load_var 1           (collector)
        2   init_field 0         (collector)
 
@@ -630,7 +630,7 @@ function testing.TestRegistry.serialize(self: null) -> (testing.SerializedTest |
         47   pop_jump_if_false +30   (to 77)
 
   115   48   load_var 3              (items)
-        49   alloc_instance 118      (SerializedTest)
+        49   alloc_instance 118      (testing.SerializedTest)
         50   load_const 3            ("lazyTestSet")
         51   init_field 0            (type)
         52   load_var 9              (ts)
@@ -652,7 +652,7 @@ function testing.TestRegistry.serialize(self: null) -> (testing.SerializedTest |
         65   store_var 13            (_26)
 
   108   66   load_var 3              (items)
-        67   alloc_instance 116      (SerializedTestSet)
+        67   alloc_instance 116      (testing.SerializedTestSet)
         68   load_var 12             (_25)
         69   init_field 0            (name)
         70   load_var 13             (_26)
@@ -676,7 +676,7 @@ function testing.TestRegistry.serialize(self: null) -> (testing.SerializedTest |
         85   store_var 6             (t)
 
   102   86   load_var 3              (items)
-        87   alloc_instance 118      (SerializedTest)
+        87   alloc_instance 118      (testing.SerializedTest)
         88   load_const 5            ("test")
         89   init_field 0            (type)
         90   load_var 6              (t)
@@ -767,7 +767,7 @@ function user.User.promote(self: null, bonus: int) -> Report {
        13   bin_op +           
        14   store_var 5        (new_score)
 
-  12   15   alloc_instance 5   (Report)
+  12   15   alloc_instance 5   (user.Report)
 
   13   16   load_var 5         (new_score)
        17   init_field 0       (score)
@@ -985,7 +985,7 @@ function user.score(input: User | ErrorInfo, threshold: int) -> Report {
        117   alloc_map 2             
        118   store_var 18            (breakdown)
 
-  85   119   alloc_instance 5        (Report)
+  85   119   alloc_instance 5        (user.Report)
 
   86   120   load_var 17             (top)
        121   init_field 0            (score)

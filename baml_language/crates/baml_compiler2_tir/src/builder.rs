@@ -1498,15 +1498,14 @@ impl<'db> TypeInferenceBuilder<'db> {
                 type_name
                     .as_ref()
                     .and_then(|n| {
-                        self.package_items
-                            .lookup_type(&self.ns_context, n)
-                            .map(|def| {
-                                Ty::Class(
-                                    crate::lower_type_expr::qualify_def(self.context.db(), def, n),
-                                    vec![],
-                                    TyAttr::default(),
-                                )
-                            })
+                        // The parser stores qualified paths like
+                        // `baml.glob.ScanOptions` as a single dotted Name.
+                        // Split it back into segments so resolve_type can find
+                        // types living in another namespace.
+                        let path: Vec<Name> = n.as_str().split('.').map(Name::new).collect();
+                        self.res_ctx
+                            .resolve_type(self.context.db(), &path, &self.ns_context)
+                            .map(|(_, ty)| ty)
                     })
                     .unwrap_or(Ty::Unknown {
                         attr: TyAttr::default(),

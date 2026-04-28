@@ -4,12 +4,12 @@ source: crates/baml_tests/src/generated_tests.rs
 === TIR2 ===
 function user.GetLlmText() -> user.llm.Response throws never {
   { : user.llm.Response
-    Response { text: "hello", tokens: 5 } : user.llm.Response
+    root.llm.Response { text: "hello", tokens: 5 } : user.llm.Response
   }
 }
 function user.GetHttpStatus() -> user.http.Response throws never {
   { : user.http.Response
-    Response { status: 200, body: "ok" } : user.http.Response
+    root.http.Response { status: 200, body: "ok" } : user.http.Response
   }
 }
 class user.http.Response {

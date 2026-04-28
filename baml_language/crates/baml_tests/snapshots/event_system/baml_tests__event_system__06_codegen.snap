@@ -98,7 +98,7 @@ function user.simple_function() -> int {
 }
 
 function user.test_logging() -> void {
-    alloc_instance User
+    alloc_instance user.User
     load_const 123
     init_field .id
     load_const "Alice"
