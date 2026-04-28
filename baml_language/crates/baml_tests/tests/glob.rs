@@ -257,6 +257,33 @@ async fn glob_scan_matches_absolute_pattern() {
     );
 }
 
+#[tokio::test]
+async fn glob_scan_default_prunes_dot_directories() {
+    // dot=false (default) must skip files inside dot directories. Beyond
+    // correctness, this also locks in the walker-side pruning so we don't
+    // descend into trees like `.git/`.
+    let (_tmp, root) = tmp(indexmap! {
+        "visible.txt" => "visible",
+    });
+    std::fs::create_dir_all(format!("{root}/.git/objects")).unwrap();
+    std::fs::write(format!("{root}/.git/objects/secret.txt"), "x").unwrap();
+    std::fs::write(format!("{root}/.git/HEAD"), "x").unwrap();
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> string[] {{
+                let g = baml.glob.new("**/*.txt");
+                g.scan("{root}")
+            }}
+        "#
+    ));
+
+    assert_eq!(
+        string_items(output.result.as_ref().unwrap()),
+        vec!["visible.txt"]
+    );
+}
+
 #[cfg(unix)]
 #[tokio::test]
 async fn glob_scan_skips_broken_symlinks_by_default() {

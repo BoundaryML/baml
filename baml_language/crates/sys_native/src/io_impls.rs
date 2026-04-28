@@ -625,9 +625,19 @@ impl io::IoClassGlobGlob for NativeSysOps {
                     .join(cwd_path)
             };
 
+            // Prune dot directories during the walk when `dot=false` so we
+            // never descend into trees like `.git/`. The previous post-walk
+            // filter still discarded those entries but only after walkdir
+            // had paid the I/O to enumerate them. Depth 0 is always kept so
+            // the user can scan a dot-prefixed root they explicitly point
+            // at (e.g. `Glob.scan(".config")`).
             let walker = walkdir::WalkDir::new(&abs_cwd)
                 .follow_links(follow_symlinks)
-                .into_iter();
+                .into_iter()
+                .filter_entry(move |entry| {
+                    dot || entry.depth() == 0
+                        || !entry.file_name().to_string_lossy().starts_with('.')
+                });
 
             let mut results = Vec::new();
             for entry in walker {
@@ -674,10 +684,8 @@ impl io::IoClassGlobGlob for NativeSysOps {
                 let dot_rel_str = format!("./{rel_str}");
                 let abs_str = entry.path().to_string_lossy().replace('\\', "/");
 
-                // Skip dot files/dirs unless dot=true
-                if !dot && rel_str.split('/').any(|seg| seg.starts_with('.')) {
-                    continue;
-                }
+                // Dot filtering is handled by `filter_entry` above; no need
+                // to re-check here.
 
                 if !handle.is_match_any([rel_str.as_str(), dot_rel_str.as_str(), abs_str.as_str()])
                 {
