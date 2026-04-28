@@ -258,6 +258,32 @@ async fn glob_scan_matches_absolute_pattern() {
 }
 
 #[tokio::test]
+async fn glob_scan_dot_pattern_matches_only_dot_files() {
+    // Regression for the OR-against-three-forms strategy: a plain pattern
+    // like `.*` would match every file because the `./<name>` form always
+    // starts with `.`. The fix makes a plain pattern match only the relative
+    // form, so `.*` matches `.hidden` but not `regular.txt`.
+    let (_tmp, root) = tmp(indexmap! {
+        ".hidden" => "h",
+        "regular.txt" => "r",
+    });
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> string[] {{
+                let g = baml.glob.new(".*");
+                g.scan(baml.glob.ScanOptions {{ cwd: "{root}", dot: true }})
+            }}
+        "#
+    ));
+
+    assert_eq!(
+        string_items(output.result.as_ref().unwrap()),
+        vec![".hidden"]
+    );
+}
+
+#[tokio::test]
 async fn glob_scan_default_prunes_dot_directories() {
     // dot=false (default) must skip files inside dot directories. Beyond
     // correctness, this also locks in the walker-side pruning so we don't

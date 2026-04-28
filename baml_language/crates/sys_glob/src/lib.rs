@@ -9,20 +9,72 @@ use regex::Regex;
 pub struct GlobPattern {
     re: Regex,
     negated: bool,
+    target: MatchTarget,
+}
+
+/// Which path representation a glob pattern is meant to be tested against.
+///
+/// Decided once at compile time from the pattern's leading characters. Picking
+/// a canonical form avoids the false positives an OR-against-three-forms
+/// strategy produces: e.g. `.*` would match every file via the `./<name>`
+/// form, even files that don't actually start with a dot.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MatchTarget {
+    /// Plain pattern (`foo.txt`, `**/*.ts`) — match against the entry's
+    /// path relative to the scan root (e.g. `src/foo.ts`).
+    Relative,
+    /// `./`-prefixed pattern (`./*.txt`) — match against `./<rel>`.
+    DotRelative,
+    /// Absolute pattern (`/abs/*.ts`) — match against the entry's absolute
+    /// path.
+    Absolute,
 }
 
 impl GlobPattern {
     pub fn new(pattern: &str) -> Result<Self, String> {
+        // Negation is `!` followed by an inner pattern; classify by the inner
+        // pattern's shape, not the leading `!`.
+        let inner = pattern.strip_prefix('!').unwrap_or(pattern);
+        let target = if inner.starts_with('/') {
+            MatchTarget::Absolute
+        } else if inner.starts_with("./") {
+            MatchTarget::DotRelative
+        } else {
+            MatchTarget::Relative
+        };
         let (re, negated) = glob_to_regex(pattern)?;
-        Ok(Self { re, negated })
+        Ok(Self {
+            re,
+            negated,
+            target,
+        })
     }
 
+    pub fn target(&self) -> MatchTarget {
+        self.target
+    }
+
+    /// Test a single arbitrary path string against the compiled pattern.
+    /// Used by `Glob.matches(path)` where the caller decides what to pass.
     pub fn is_match(&self, path: &str) -> bool {
-        self.is_match_any([path])
+        let matched = self.re.is_match(path);
+        if self.negated { !matched } else { matched }
     }
 
-    pub fn is_match_any<'a>(&self, paths: impl IntoIterator<Item = &'a str>) -> bool {
-        let matched = paths.into_iter().any(|path| self.re.is_match(path));
+    /// Test a directory-walk entry, picking the canonical path form based on
+    /// the pattern's shape. Used by `Glob.scan` so callers don't have to
+    /// reimplement the form-selection rule.
+    pub fn is_match_entry(&self, rel: &str, abs: &str) -> bool {
+        let dot_rel;
+        let path = match self.target {
+            MatchTarget::Relative => rel,
+            MatchTarget::DotRelative => {
+                dot_rel = format!("./{rel}");
+                &dot_rel
+            }
+            MatchTarget::Absolute => abs,
+        };
+        let matched = self.re.is_match(path);
         if self.negated { !matched } else { matched }
     }
 }
@@ -208,5 +260,65 @@ mod tests {
         let g = GlobPattern::new("!index.ts").unwrap();
         assert!(g.is_match("main.ts"));
         assert!(!g.is_match("index.ts"));
+    }
+
+    #[test]
+    fn classify_target_by_pattern_shape() {
+        use super::MatchTarget;
+        assert_eq!(
+            GlobPattern::new("*.ts").unwrap().target(),
+            MatchTarget::Relative
+        );
+        assert_eq!(
+            GlobPattern::new("foo/bar.ts").unwrap().target(),
+            MatchTarget::Relative
+        );
+        assert_eq!(
+            GlobPattern::new("./*.ts").unwrap().target(),
+            MatchTarget::DotRelative
+        );
+        assert_eq!(
+            GlobPattern::new("/abs/*.ts").unwrap().target(),
+            MatchTarget::Absolute
+        );
+        // Negation classifies by the inner pattern's shape.
+        assert_eq!(
+            GlobPattern::new("!*.ts").unwrap().target(),
+            MatchTarget::Relative
+        );
+        assert_eq!(
+            GlobPattern::new("!./*.ts").unwrap().target(),
+            MatchTarget::DotRelative
+        );
+        assert_eq!(
+            GlobPattern::new("!/abs/*.ts").unwrap().target(),
+            MatchTarget::Absolute
+        );
+    }
+
+    #[test]
+    fn match_entry_picks_relative_form_for_plain_pattern() {
+        // Pattern `.*` (literal dot, then `*`) under the OR-against-three-forms
+        // strategy would falsely match every file via the `./<rel>` form.
+        // With canonical-by-shape, plain patterns match against rel only.
+        let g = GlobPattern::new(".*").unwrap();
+        assert!(!g.is_match_entry("regular.txt", "/scan/regular.txt"));
+        assert!(g.is_match_entry(".hidden", "/scan/.hidden"));
+    }
+
+    #[test]
+    fn match_entry_dot_relative_uses_dot_form() {
+        let g = GlobPattern::new("./*.txt").unwrap();
+        // Pattern wants to match `./<name>`, so against rel `foo.txt` it must
+        // hit the `./foo.txt` form internally.
+        assert!(g.is_match_entry("foo.txt", "/scan/foo.txt"));
+        assert!(!g.is_match_entry("foo.rs", "/scan/foo.rs"));
+    }
+
+    #[test]
+    fn match_entry_absolute_uses_abs_form() {
+        let g = GlobPattern::new("/scan/*.txt").unwrap();
+        assert!(g.is_match_entry("foo.txt", "/scan/foo.txt"));
+        assert!(!g.is_match_entry("foo.txt", "/other/foo.txt"));
     }
 }

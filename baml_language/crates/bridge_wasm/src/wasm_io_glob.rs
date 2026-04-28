@@ -112,8 +112,7 @@ impl io::IoClassGlobGlob for WasmIoGlob {
                 continue;
             }
 
-            let dot_rel_path = format!("./{rel_path}");
-            if !compiled.is_match_any([path.as_str(), rel_path.as_str(), dot_rel_path.as_str()]) {
+            if !compiled.is_match_entry(&rel_path, &path) {
                 continue;
             }
 

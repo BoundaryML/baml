@@ -681,14 +681,12 @@ impl io::IoClassGlobGlob for NativeSysOps {
 
                 let rel = entry.path().strip_prefix(&abs_cwd).unwrap_or(entry.path());
                 let rel_str = rel.to_string_lossy().replace('\\', "/");
-                let dot_rel_str = format!("./{rel_str}");
                 let abs_str = entry.path().to_string_lossy().replace('\\', "/");
 
                 // Dot filtering is handled by `filter_entry` above; no need
                 // to re-check here.
 
-                if !handle.is_match_any([rel_str.as_str(), dot_rel_str.as_str(), abs_str.as_str()])
-                {
+                if !handle.is_match_entry(&rel_str, &abs_str) {
                     continue;
                 }
 
