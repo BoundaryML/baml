@@ -181,24 +181,40 @@ fn render_package_init_pyi(children: &BTreeSet<String>) -> String {
     s
 }
 
+#[derive(askama::Template)]
+#[template(
+    source = r#"from __future__ import annotations
+
+from baml.baml_core import BamlRuntime
+from .baml import _inlinedbaml
+
+BamlRuntime.initialize_runtime(
+    "baml_src", _inlinedbaml.FILES, sdk_root=__name__
+)
+{%- if has_children %}
+
+from . import {{ children_csv }}
+{%- endif %}
+"#,
+    ext = "txt"
+)]
+struct RootInit {
+    has_children: bool,
+    children_csv: String,
+}
+
 fn render_root_init(top_children: &BTreeSet<String>) -> String {
-    let mut s = String::new();
-    s.push_str(HEADER);
-    s.push('\n');
-    s.push_str("from baml.baml_core import BamlRuntime\n");
-    s.push_str("from .baml import _inlinedbaml\n");
-    s.push('\n');
-    s.push_str(
-        "BamlRuntime.initialize_runtime(\n    \"baml_src\", _inlinedbaml.FILES, sdk_root=__name__\n)\n",
-    );
-
-    if !top_children.is_empty() {
-        let list: Vec<&str> = top_children.iter().map(String::as_str).collect();
-        s.push('\n');
-        writeln!(s, "from . import {}", list.join(", ")).unwrap();
+    use askama::Template;
+    RootInit {
+        has_children: !top_children.is_empty(),
+        children_csv: top_children
+            .iter()
+            .map(String::as_str)
+            .collect::<Vec<_>>()
+            .join(", "),
     }
-
-    s
+    .render()
+    .expect("root_init template should always render")
 }
 
 fn render_inlinedbaml(files: &[UserBamlFile]) -> String {
@@ -1523,7 +1539,7 @@ mod tests {
                     ty: Ty::String,
                 }],
                 return_type: Ty::Class(resume),
-                    watchers: vec![],
+                watchers: vec![],
                 companions: vec![],
                 origin: origin("x.baml", 100),
             }),
@@ -1580,7 +1596,7 @@ mod tests {
                     ty: Ty::String,
                 }],
                 return_type: Ty::Class(resume),
-                    watchers: vec![],
+                watchers: vec![],
                 companions: vec![("parse".to_string(), companion)],
                 origin: origin("x.baml", 100),
             }),
@@ -2064,7 +2080,7 @@ mod tests {
                     ty: Ty::String,
                 }],
                 return_type: Ty::Enum(sentiment),
-                    watchers: vec![],
+                watchers: vec![],
                 companions: vec![],
                 origin: origin("x.baml", 100),
             }),
