@@ -600,6 +600,80 @@ Downloads all BEPs as a ZIP archive. No authentication required.
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// BEP Skill Generation (for Claude Code)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export function generateBepSkill(): string {
+  return `---
+name: bep
+description: Work with BAML Enhancement Proposals — create, edit, review, or push BEPs.
+user-invocable: true
+allowed-tools: Bash Read Edit Write Grep Glob Agent
+argument-hint: [number-or-title]
+---
+
+You are working in a BEP (BAML Enhancement Proposal) repository. Use the \`./bep\` CLI for all operations.
+
+## CLI Reference
+
+\`\`\`
+./bep pull              # Fetch all BEPs from server, diff, prompt to apply
+./bep list              # List local BEPs (--status STATUS, --json)
+./bep new "Title"       # Scaffold BEP-?-slug/ locally
+./bep diff <ref>        # Diff local vs server (--full for unified diff)
+./bep push <ref>        # Dry-run diff + prompt to push (-y to confirm)
+./bep open <number>     # Open in browser
+\`\`\`
+
+\`<ref>\` is a BEP number (e.g. \`41\`) or slug (e.g. \`my-feature\` for \`BEP-?-my-feature\`).
+
+## What to do
+
+If \`$ARGUMENTS\` is a number, read that BEP's README.md and ask what the user wants to change.
+
+If \`$ARGUMENTS\` is a title/topic, create a new BEP:
+1. Run \`./bep new "$ARGUMENTS"\`
+2. Read good reference BEPs (marked with \`isGoodReference\` in meta.json) for style
+3. Write the README.md following the structure below
+4. Run \`./bep diff <slug>\` to preview, then ask if user wants to push
+
+If no arguments, ask what the user wants to do.
+
+## BEP Writing Style
+
+Write like a [PEP](https://peps.python.org/) or [TC39 proposal](https://github.com/tc39/proposals).
+
+Structure:
+
+\`\`\`markdown
+# Title
+
+## Summary
+
+Brief description + code example showing the feature.
+
+## Prior Art
+
+Other languages, related work.
+
+## Proposed Design
+
+Detailed technical design — the heart of the BEP.
+
+## Design Tradeoffs
+
+Alternatives considered and why this approach wins.
+
+## Open Questions
+
+Unresolved decisions, future work.
+\`\`\`
+
+Be concrete. Lead with code examples. Avoid hand-waving.
+`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Generate All Files
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -625,6 +699,12 @@ export function generateAllBepsExportFiles(data: ExportAllData, apiBaseUrl: stri
   files.push({
     path: "NEW-BEP/INSTRUCTIONS.md",
     content: generateNewBepInstructions(nextNumber, apiBaseUrl, goodReferenceBeps),
+  });
+
+  // BEP skill for Claude Code
+  files.push({
+    path: "skills/bep.md",
+    content: generateBepSkill(),
   });
 
   // Individual BEP folders: BEP-<NUMBER>-<slug>/
