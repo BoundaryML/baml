@@ -1,3 +1,10 @@
+/**
+ * THIS FILE IS AUTO-GENERATED — DO NOT EDIT BY HAND.
+ *
+ * Source: baml_language/crates/bridge_nodejs/typescript_src/
+ * Proto:  baml_language/crates/bridge_ctypes/types/baml/cffi/v1/*.proto
+ * Build:  cd baml_language/crates/bridge_nodejs && pnpm build:debug
+ */
 import { BamlRuntime, AbortController, HostSpanManager, Collector as NativeCollector, FunctionLog as NativeFunctionLog, Timing, Usage, LLMCall } from './native';
 export { BamlRuntime, AbortController, BamlHandle, HostSpanManager, getVersion, flushEvents } from './native';
 export { Timing, Usage, LLMCall } from './native';
