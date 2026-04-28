@@ -6082,14 +6082,20 @@ impl<'db> TypeInferenceBuilder<'db> {
 
         // Seed lambda params (captures remain accessible via parent locals).
         //
-        // Params go through `add_local` rather than raw inserts so the
-        // locals-population paths are uniform. We also clear any stale
+        // Directly overwrite `declared_types` and `locals` rather than going
+        // through `add_local`: that helper uses `entry().or_insert_with()` for
+        // `declared_types`, which would preserve a stale outer entry when a
+        // lambda param shadows an annotated outer let. The lambda param's
+        // declared type must replace any outer declaration so subsequent
+        // assignments inside the body type-check against the param's type
+        // (not the shadowed outer's). Also clear any stale
         // `let_binding_patterns` entry the parent scope might have had under
         // the same name; lambda params shadow outer let-patterns and the
         // pattern's binding identity is irrelevant inside the lambda body.
         for (name_opt, ty) in param_tys {
             if let Some(name) = name_opt {
-                self.add_local(name.clone(), ty.clone());
+                self.declared_types.insert(name.clone(), ty.clone());
+                self.locals.insert(name.clone(), ty.clone());
                 self.let_binding_patterns.remove(name);
             }
         }
