@@ -4627,12 +4627,19 @@ impl LoweringContext<'_> {
                 self.builder.set_current_block(bb_body);
                 let (pattern, body, _) = arms[arm_idx];
                 let saved_locals = self.locals.clone();
+                let watched_depth = self.watched_locals_stack.len();
                 self.bind_pattern(scrutinee, pattern);
                 self.lower_expr(body, dest.clone());
                 if !self.builder.is_current_terminated() {
+                    // A `watch let` declared inside an arm body must be torn
+                    // down on fallthrough. Without this the watcher leaks past
+                    // the arm. Mirrors `lower_match_chain`.
+                    self.emit_unwatch_to_depth(watched_depth);
                     self.builder.goto(join);
                 }
-                self.restore_active_locals(saved_locals);
+                // Restore both the name→local map AND truncate the watched
+                // stack back to the arm-entry depth (mirrors `lower_scoped_block`).
+                self.restore_locals_after_scope(saved_locals, watched_depth);
             }
         }
 
@@ -4699,12 +4706,18 @@ impl LoweringContext<'_> {
             }
             let (pattern, body, _) = arms[idx];
             let saved_locals = self.locals.clone();
+            let watched_depth = self.watched_locals_stack.len();
             self.bind_pattern(scrutinee, pattern);
             self.lower_expr(body, dest);
             if !self.builder.is_current_terminated() {
+                // A `watch let` declared inside the wildcard body must be
+                // torn down on fallthrough; mirrors the int-arm path above.
+                self.emit_unwatch_to_depth(watched_depth);
                 self.builder.goto(join);
             }
-            self.restore_active_locals(saved_locals);
+            // Restore name→local map AND truncate the watched stack back to
+            // the arm-entry depth (mirrors `lower_scoped_block`).
+            self.restore_locals_after_scope(saved_locals, watched_depth);
         } else {
             // No wildcard — decide what the otherwise block does.
             // Use `is_switch_exhaustive` (which may be inferred for TypeTag)

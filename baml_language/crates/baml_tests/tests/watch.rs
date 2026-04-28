@@ -1116,6 +1116,98 @@ async fn watch_match_arm_fallthrough_unwatches() {
 }
 
 #[tokio::test]
+async fn watch_switch_arm_fallthrough_unwatches() {
+    // Expected notifications: [["x"]]
+    //
+    // Four dense int arms drive `try_lower_as_switch` (lower.rs:4351), which
+    // emits a Switch terminator and lowers the matching arm body in
+    // `try_lower_as_switch` itself rather than `lower_match_chain`. The arm
+    // body declares a `watch let x` and falls through to the join — the
+    // watcher must be torn down before the goto-to-join so it does not leak
+    // past the arm. After the match returns, an assignment to a distinct
+    // outer variable must NOT be observed by an `x` watcher.
+    let output = baml_test!(
+        r#"
+        function entry(input: int) -> int {
+            let result = match (input) {
+                0 => 100,
+                1 => {
+                    watch let x = 0;
+                    x = 5;
+                    x
+                }
+                2 => 102,
+                3 => 103,
+                _ => 999
+            };
+            // If the arm-scoped watch leaked past the arm, this assignment
+            // would be observed by an `x` watcher. After the arm, x must
+            // already be unwatched.
+            let result2 = result + 1;
+            result2
+        }
+
+        function main() -> int {
+            entry(1)
+        }
+    "#
+    );
+
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function entry(input: int) -> int {
+        load_var input
+        jump_table [L4, L3, L2, L1], default L0
+
+      L0:
+        load_const 999
+        store_var result
+        jump L5
+
+      L1: 3
+        load_const 103
+        store_var result
+        jump L5
+
+      L2: 2
+        load_const 102
+        store_var result
+        jump L5
+
+      L3: 1
+        load_const 0
+        store_var x
+        load_const "x"
+        load_const null
+        watch x
+        load_const 5
+        store_var x
+        load_var x
+        store_var result
+        unwatch x
+        jump L5
+
+      L4: 0
+        load_const 100
+        store_var result
+
+      L5:
+        load_var result
+        load_const 1
+        bin_op +
+        return
+    }
+
+    function main() -> int {
+        load_const 1
+        call user.entry
+        return
+    }
+    "#);
+
+    assert_eq!(output.result, Ok(BexExternalValue::Int(6)));
+}
+
+#[tokio::test]
 async fn watch_catch_arm_fallthrough_unwatches() {
     // Expected notifications: [["x"]]
     // (Same shape as watch_match_arm_fallthrough_unwatches, but the watch
