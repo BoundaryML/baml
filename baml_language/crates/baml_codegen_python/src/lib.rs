@@ -922,6 +922,11 @@ mod tests {
             stream_leaf.contains(expected),
             "stream leaf missing body:\n{stream_leaf}"
         );
+        // 12f: depth-2 stream leaf needs three dots to anchor at root.
+        assert!(
+            stream_leaf.contains("if typing.TYPE_CHECKING:\n    from ... import lorem\n"),
+            "stream leaf missing three-dot lorem import:\n{stream_leaf}"
+        );
     }
 
     #[test]
@@ -955,6 +960,11 @@ mod tests {
         let out = to_source_code(&pool, &[]);
         let lorem_leaf = &out[&PathBuf::from("lorem/__init__.py")];
         assert!(lorem_leaf.contains("    sentiment: ipsum.Sentiment\n"));
+        // 12f: cross-leaf type triggers a guarded relative import block.
+        assert!(
+            lorem_leaf.contains("if typing.TYPE_CHECKING:\n    from .. import ipsum\n"),
+            "lorem missing guarded ipsum import:\n{lorem_leaf}"
+        );
     }
 
     fn func_with_args(
@@ -1762,6 +1772,322 @@ mod tests {
                 path.display()
             );
         }
+    }
+
+    // ----- 12f cross-leaf relative-import block -----
+
+    #[test]
+    fn cross_leaf_user_user() {
+        // lorem leaf references ipsum.Sentiment (sibling user-package
+        // leaf). Both `.py` and `.pyi` carry a guarded `from .. import ipsum`.
+        let mut pool: SymbolPool = HashMap::new();
+        let sentiment = cg_name("user", &["ipsum"], "Sentiment");
+        let envelope = cg_name("user", &["lorem"], "Envelope");
+        pool.insert(
+            sentiment.clone(),
+            Symbol::Enum(Enum {
+                name: sentiment.clone(),
+                docstring: None,
+                variants: vec![EnumVariant {
+                    name: BaseName::new("POSITIVE"),
+                    docstring: None,
+                    value: "POSITIVE".to_string(),
+                }],
+                origin: origin("ipsum.baml", 0),
+            }),
+        );
+        pool.insert(
+            envelope.clone(),
+            class_with_props(
+                envelope,
+                vec![("sentiment", Ty::Enum(sentiment))],
+                "lorem.baml",
+                0,
+            ),
+        );
+
+        let out = to_source_code(&pool, &[]);
+        let py = &out[&PathBuf::from("lorem/__init__.py")];
+        assert!(
+            py.contains("if typing.TYPE_CHECKING:\n    from .. import ipsum\n"),
+            "py missing guarded ipsum import:\n{py}"
+        );
+        // The pyi mirrors the `.py` import block (12f §4.2).
+        let pyi = &out[&PathBuf::from("lorem/__init__.pyi")];
+        // `.pyi` only needs the import when a *signature* (not a class
+        // field) references the cross-leaf type. This class has only a
+        // property; methods/aliases would also trigger the import.
+        // Property-only classes don't mirror fields into `.pyi`, so the
+        // pyi here legitimately has no cross-leaf segments.
+        assert!(!pyi.contains("if typing.TYPE_CHECKING:"));
+    }
+
+    #[test]
+    fn cross_leaf_user_baml() {
+        // lorem leaf references baml.http.Response — needs `from ..
+        // import baml` so the `baml.http.Response` annotation resolves
+        // through the generated `baml_sdk/baml/` subpackage.
+        let mut pool: SymbolPool = HashMap::new();
+        let response = cg_name("baml", &["http"], "Response");
+        let envelope = cg_name("user", &["lorem"], "Envelope");
+        pool.insert(response.clone(), class(response.clone()));
+        pool.insert(
+            envelope.clone(),
+            class_with_props(envelope, vec![("resp", Ty::Class(response))], "x.baml", 0),
+        );
+        let out = to_source_code(&pool, &[]);
+        let py = &out[&PathBuf::from("lorem/__init__.py")];
+        assert!(
+            py.contains("if typing.TYPE_CHECKING:\n    from .. import baml\n"),
+            "py missing guarded baml import:\n{py}"
+        );
+        assert!(py.contains("    resp: baml.http.Response\n"));
+    }
+
+    #[test]
+    fn cross_leaf_user_vendor() {
+        // lorem leaf references aws.s3.Bucket — routes to vendor/aws/s3,
+        // first segment is `vendor`.
+        let mut pool: SymbolPool = HashMap::new();
+        let bucket = cg_name("aws", &["s3"], "Bucket");
+        let envelope = cg_name("user", &["lorem"], "Envelope");
+        pool.insert(bucket.clone(), class(bucket.clone()));
+        pool.insert(
+            envelope.clone(),
+            class_with_props(envelope, vec![("b", Ty::Class(bucket))], "x.baml", 0),
+        );
+        let out = to_source_code(&pool, &[]);
+        let py = &out[&PathBuf::from("lorem/__init__.py")];
+        assert!(
+            py.contains("if typing.TYPE_CHECKING:\n    from .. import vendor\n"),
+            "py missing guarded vendor import:\n{py}"
+        );
+        assert!(py.contains("    b: vendor.aws.s3.Bucket\n"));
+    }
+
+    #[test]
+    fn cross_leaf_stream_to_nonstream() {
+        // stream_types/lorem leaf references the non-stream Resume —
+        // depth 2, three dots: `from ... import lorem`.
+        let mut pool: SymbolPool = HashMap::new();
+        let non_stream = cg_name("user", &["lorem"], "Resume");
+        let stream = cg_name("user", &["lorem"], "Resume$stream");
+        pool.insert(
+            non_stream.clone(),
+            class_with_props(non_stream.clone(), vec![("name", Ty::String)], "x.baml", 0),
+        );
+        pool.insert(
+            stream.clone(),
+            class_with_props(
+                stream,
+                vec![("origin", Ty::Class(non_stream))],
+                "x.baml",
+                0,
+            ),
+        );
+        let out = to_source_code(&pool, &[]);
+        let py = &out[&PathBuf::from("stream_types/lorem/__init__.py")];
+        assert!(
+            py.contains("if typing.TYPE_CHECKING:\n    from ... import lorem\n"),
+            "py missing guarded lorem import from stream leaf:\n{py}"
+        );
+    }
+
+    #[test]
+    fn cross_leaf_deep_stream_vendor() {
+        // stream_types/vendor/aws/s3 leaf (depth 4) referencing baml.http.Response.
+        let mut pool: SymbolPool = HashMap::new();
+        let response = cg_name("baml", &["http"], "Response");
+        let stream_bucket = cg_name("aws", &["s3"], "Bucket$stream");
+        pool.insert(response.clone(), class(response.clone()));
+        pool.insert(
+            stream_bucket.clone(),
+            class_with_props(
+                stream_bucket,
+                vec![("resp", Ty::Class(response))],
+                "x.baml",
+                0,
+            ),
+        );
+        let out = to_source_code(&pool, &[]);
+        let py = &out[&PathBuf::from("stream_types/vendor/aws/s3/__init__.py")];
+        assert!(
+            py.contains("if typing.TYPE_CHECKING:\n    from ..... import baml\n"),
+            "py missing five-dot baml import:\n{py}"
+        );
+    }
+
+    #[test]
+    fn import_block_one_line_per_segment() {
+        // A leaf with multiple cross-leaf first-segments emits one
+        // `from <dots> import <name>` line per segment, never the
+        // comma-joined form.
+        let mut pool: SymbolPool = HashMap::new();
+        let resume = cg_name("user", &["lorem"], "Resume");
+        let sentiment = cg_name("user", &["ipsum"], "Sentiment");
+        let bucket = cg_name("aws", &["s3"], "Bucket");
+        let response = cg_name("baml", &["http"], "Response");
+        pool.insert(sentiment.clone(), Symbol::Enum(Enum {
+            name: sentiment.clone(),
+            docstring: None,
+            variants: vec![EnumVariant {
+                name: BaseName::new("X"),
+                docstring: None,
+                value: "X".to_string(),
+            }],
+            origin: origin("x.baml", 0),
+        }));
+        pool.insert(bucket.clone(), class(bucket.clone()));
+        pool.insert(response.clone(), class(response.clone()));
+        pool.insert(
+            resume.clone(),
+            class_with_props(
+                resume,
+                vec![
+                    ("s", Ty::Enum(sentiment)),
+                    ("b", Ty::Class(bucket)),
+                    ("r", Ty::Class(response)),
+                ],
+                "x.baml",
+                0,
+            ),
+        );
+        let out = to_source_code(&pool, &[]);
+        let py = &out[&PathBuf::from("lorem/__init__.py")];
+        let expected_block = "if typing.TYPE_CHECKING:\n\
+                              \x20   from .. import baml\n\
+                              \x20   from .. import ipsum\n\
+                              \x20   from .. import vendor\n";
+        assert!(
+            py.contains(expected_block),
+            "py missing one-per-line cross-leaf block:\n{py}"
+        );
+        // Never comma-joined.
+        assert!(!py.contains("from .. import baml,"));
+        assert!(!py.contains("from .. import ipsum, vendor"));
+    }
+
+    #[test]
+    fn import_block_dedups_within_segment() {
+        // Two cross-leaf references whose routed paths share a first
+        // segment (`vendor`) produce exactly one `from .. import vendor`.
+        let mut pool: SymbolPool = HashMap::new();
+        let s3_bucket = cg_name("aws", &["s3"], "Bucket");
+        let gcs_object = cg_name("gcp", &["gcs"], "Object");
+        let resume = cg_name("user", &["lorem"], "Resume");
+        pool.insert(s3_bucket.clone(), class(s3_bucket.clone()));
+        pool.insert(gcs_object.clone(), class(gcs_object.clone()));
+        pool.insert(
+            resume.clone(),
+            class_with_props(
+                resume,
+                vec![
+                    ("a", Ty::Class(s3_bucket)),
+                    ("b", Ty::Class(gcs_object)),
+                ],
+                "x.baml",
+                0,
+            ),
+        );
+        let out = to_source_code(&pool, &[]);
+        let py = &out[&PathBuf::from("lorem/__init__.py")];
+        assert_eq!(
+            py.matches("from .. import vendor").count(),
+            1,
+            "expected exactly one `from .. import vendor`:\n{py}"
+        );
+    }
+
+    #[test]
+    fn same_leaf_reference_emits_no_import() {
+        // A class field of type `Resume` in the same leaf doesn't trigger
+        // any cross-leaf import or TYPE_CHECKING block.
+        let mut pool: SymbolPool = HashMap::new();
+        let resume = cg_name("user", &["lorem"], "Resume");
+        let other = cg_name("user", &["lorem"], "Other");
+        pool.insert(resume.clone(), class(resume.clone()));
+        pool.insert(
+            other.clone(),
+            class_with_props(other, vec![("r", Ty::Class(resume))], "x.baml", 100),
+        );
+        let out = to_source_code(&pool, &[]);
+        let py = &out[&PathBuf::from("lorem/__init__.py")];
+        assert!(!py.contains("if typing.TYPE_CHECKING:"));
+        assert!(!py.contains("from .."));
+        let pyi = &out[&PathBuf::from("lorem/__init__.pyi")];
+        assert!(!pyi.contains("if typing.TYPE_CHECKING:"));
+    }
+
+    #[test]
+    fn children_reexport_stays_unguarded() {
+        // The leaf's `from . import <children>` line must not be wrapped
+        // in TYPE_CHECKING — it's load-bearing at runtime.
+        let mut pool: SymbolPool = HashMap::new();
+        // Force two children on root: lorem (user) + vendor (via aws).
+        let resume = cg_name("user", &["lorem"], "Resume");
+        let bucket = cg_name("aws", &["s3"], "Bucket");
+        pool.insert(resume.clone(), class(resume));
+        pool.insert(bucket.clone(), class(bucket));
+        let out = to_source_code(&pool, &[]);
+        let root_py = &out[&PathBuf::from("__init__.py")];
+        // The children re-export line exists and is NOT under a guard.
+        assert!(root_py.contains("from . import baml, lorem, vendor\n"));
+        let line_idx = root_py
+            .find("from . import baml, lorem, vendor")
+            .unwrap();
+        let prefix = &root_py[..line_idx];
+        // No TYPE_CHECKING block precedes the children re-export line.
+        assert!(!prefix.contains("if typing.TYPE_CHECKING:"));
+    }
+
+    #[test]
+    fn cross_leaf_via_function_signature_in_pyi() {
+        // Leaf with only a function whose param/return crosses leaves —
+        // .pyi must carry the TYPE_CHECKING block (signatures render
+        // types). The .py side gets the same block defensively.
+        let mut pool: SymbolPool = HashMap::new();
+        let sentiment = cg_name("user", &["ipsum"], "Sentiment");
+        let func = cg_name("user", &["lorem"], "classify");
+        pool.insert(sentiment.clone(), Symbol::Enum(Enum {
+            name: sentiment.clone(),
+            docstring: None,
+            variants: vec![EnumVariant {
+                name: BaseName::new("X"),
+                docstring: None,
+                value: "X".to_string(),
+            }],
+            origin: origin("x.baml", 0),
+        }));
+        pool.insert(
+            func,
+            Symbol::Function(Function {
+                name: BaseName::new("classify"),
+                docstring: None,
+                arguments: vec![FunctionArgument {
+                    name: BaseName::new("text"),
+                    docstring: None,
+                    ty: Ty::String,
+                }],
+                return_type: Ty::Enum(sentiment),
+                stream_return_type: None,
+                watchers: vec![],
+                companions: vec![],
+                origin: origin("x.baml", 100),
+            }),
+        );
+        let out = to_source_code(&pool, &[]);
+        let pyi = &out[&PathBuf::from("lorem/__init__.pyi")];
+        assert!(
+            pyi.contains("if typing.TYPE_CHECKING:\n    from .. import ipsum\n"),
+            "pyi missing guarded ipsum import:\n{pyi}"
+        );
+        assert!(pyi.contains("def classify(text: str) -> ipsum.Sentiment: ..."));
+
+        // .py for a function-only leaf — typing must still be imported
+        // (the TYPE_CHECKING block needs it).
+        let py = &out[&PathBuf::from("lorem/__init__.py")];
+        assert!(py.contains("import typing\n"));
+        assert!(py.contains("if typing.TYPE_CHECKING:\n    from .. import ipsum\n"));
     }
 
     #[test]

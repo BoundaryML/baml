@@ -10,20 +10,7 @@
 import asyncio
 import atexit
 import importlib
-import sys
 from typing import Any, Awaitable, Callable, Dict, List, Literal, Sequence, Union
-
-# The generated protobuf stubs in ``baml/baml_core/cffi/v1/*_pb2.py`` hard-
-# code ``from baml.cffi.v1 import baml_inbound_pb2`` because the ``.proto``
-# package declaration is ``baml.cffi.v1``. Re-expose the real package under
-# the legacy path so those stubs import without a regeneration step; the
-# wire format is unaffected (protobuf package name only drives Python
-# module layout, not field encoding).
-from . import cffi as _cffi  # noqa: E402
-from .cffi import v1 as _cffi_v1  # noqa: E402
-
-sys.modules.setdefault("baml.cffi", _cffi)
-sys.modules.setdefault("baml.cffi.v1", _cffi_v1)
 
 from .baml_core import (
     AbortController,

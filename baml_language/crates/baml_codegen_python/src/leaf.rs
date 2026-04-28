@@ -3,7 +3,10 @@
 //! sorted at build time so the renderer is a straight walk — no
 //! ordering logic at render time.
 
-use std::{collections::BTreeMap, fmt::Write as _};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    fmt::Write as _,
+};
 
 use baml_codegen_types::Ty;
 
@@ -14,7 +17,7 @@ use crate::{
         method::{MethodKind, PyMethodBinding},
     },
     py_string,
-    routing::LeafPath,
+    routing::{LeafPath, route},
     translate_ty::{TranslateCtx, translate_ty},
 };
 
@@ -103,6 +106,91 @@ impl LeafBody {
         self.symbols.is_empty()
     }
 
+    /// First segments of every cross-leaf routed module path referenced
+    /// by any type expression that contributes to this leaf's `.py`,
+    /// deduped and sorted.
+    ///
+    /// Per 12f §4.1: walks class fields, function/method param+return
+    /// types, and type-alias RHS. Function/method types don't render
+    /// annotations in the `.py` (factory bindings only), but they're
+    /// included for parity with `.pyi` so the import block is identical
+    /// across the two files where the underlying type sources match.
+    /// The TYPE_CHECKING guard makes the extras free at runtime.
+    pub(crate) fn cross_leaf_first_segments_py(&self) -> Vec<String> {
+        let mut set: BTreeSet<String> = BTreeSet::new();
+        let current = &self.leaf;
+        for (sym, _) in &self.symbols {
+            match sym {
+                EmittedSymbol::Class(c) => {
+                    for prop in &c.properties {
+                        collect_cross_leaf(&prop.ty, current, &mut set);
+                    }
+                    for m in &c.static_methods {
+                        for ty in &m.arg_tys {
+                            collect_cross_leaf(ty, current, &mut set);
+                        }
+                        collect_cross_leaf(&m.return_ty, current, &mut set);
+                    }
+                    for m in &c.instance_methods {
+                        for ty in &m.arg_tys {
+                            collect_cross_leaf(ty, current, &mut set);
+                        }
+                        collect_cross_leaf(&m.return_ty, current, &mut set);
+                    }
+                }
+                EmittedSymbol::Function(f) => {
+                    for ty in &f.arg_tys {
+                        collect_cross_leaf(ty, current, &mut set);
+                    }
+                    collect_cross_leaf(&f.return_ty, current, &mut set);
+                }
+                EmittedSymbol::TypeAlias(a) => {
+                    collect_cross_leaf(&a.resolves_to, current, &mut set);
+                }
+                EmittedSymbol::Enum(_) => {}
+            }
+        }
+        set.into_iter().collect()
+    }
+
+    /// First segments for the `.pyi` companion. Walks function /
+    /// method param+return types and type-alias RHS — the type sources
+    /// that mirror into the typed surface. Class fields are not
+    /// mirrored into `.pyi` (12d §3.1), so they don't contribute.
+    pub(crate) fn cross_leaf_first_segments_pyi(&self) -> Vec<String> {
+        let mut set: BTreeSet<String> = BTreeSet::new();
+        let current = &self.leaf;
+        for (sym, _) in &self.symbols {
+            match sym {
+                EmittedSymbol::Class(c) => {
+                    for m in &c.static_methods {
+                        for ty in &m.arg_tys {
+                            collect_cross_leaf(ty, current, &mut set);
+                        }
+                        collect_cross_leaf(&m.return_ty, current, &mut set);
+                    }
+                    for m in &c.instance_methods {
+                        for ty in &m.arg_tys {
+                            collect_cross_leaf(ty, current, &mut set);
+                        }
+                        collect_cross_leaf(&m.return_ty, current, &mut set);
+                    }
+                }
+                EmittedSymbol::Function(f) => {
+                    for ty in &f.arg_tys {
+                        collect_cross_leaf(ty, current, &mut set);
+                    }
+                    collect_cross_leaf(&f.return_ty, current, &mut set);
+                }
+                EmittedSymbol::TypeAlias(a) => {
+                    collect_cross_leaf(&a.resolves_to, current, &mut set);
+                }
+                EmittedSymbol::Enum(_) => {}
+            }
+        }
+        set.into_iter().collect()
+    }
+
     /// Whether this leaf's `.pyi` needs `import typing`. Per 12d §7,
     /// any rendered signature (function, method, or type alias) pulls
     /// in `typing` — type aliases declare `typing.TypeAlias` and
@@ -117,6 +205,49 @@ impl LeafBody {
             }
             EmittedSymbol::Enum(_) => false,
         })
+    }
+}
+
+/// Walk a `Ty` and add the first routed segment of every `Name`-bearing
+/// reference (class / enum / type alias) whose routed leaf differs from
+/// `current`. The empty-routed-leaf case (root-leaf reference from a
+/// non-root leaf) emits no import — the translator already renders such
+/// references as a bare name without prefix.
+fn collect_cross_leaf(ty: &Ty, current: &LeafPath, out: &mut BTreeSet<String>) {
+    match ty {
+        Ty::Class(name) | Ty::Enum(name) | Ty::TypeAlias(name) => {
+            let routed = route(name);
+            if routed != *current && !routed.segments.is_empty() {
+                out.insert(routed.segments[0].clone());
+            }
+        }
+        Ty::Optional(inner) | Ty::List(inner) => collect_cross_leaf(inner, current, out),
+        Ty::Map { key, value } => {
+            collect_cross_leaf(key, current, out);
+            collect_cross_leaf(value, current, out);
+        }
+        Ty::Union(items) => {
+            for item in items {
+                collect_cross_leaf(item, current, out);
+            }
+        }
+        Ty::Callable { params, ret } => {
+            for p in params {
+                collect_cross_leaf(p, current, out);
+            }
+            collect_cross_leaf(ret, current, out);
+        }
+        Ty::Int
+        | Ty::Float
+        | Ty::String
+        | Ty::Bool
+        | Ty::Null
+        | Ty::Literal(_)
+        | Ty::Uint8Array
+        | Ty::Media(_)
+        | Ty::BuiltinUnknown
+        | Ty::Unit
+        | Ty::BamlOptions => {}
     }
 }
 
@@ -375,7 +506,17 @@ pub(crate) fn render_leaf_body(body: &LeafBody) -> String {
 
     let mut out = String::new();
 
-    let stdlibs = body.stdlib_imports();
+    let mut stdlibs = body.stdlib_imports();
+    let cross_leaf_segments = body.cross_leaf_first_segments_py();
+    // Cross-leaf TYPE_CHECKING blocks reference `typing.TYPE_CHECKING`,
+    // so a leaf whose only typing usage is the cross-leaf block (e.g.
+    // a function-only leaf with a cross-leaf parameter type) still
+    // needs `import typing`. `stdlib_imports` returns `["enum"?,
+    // "typing"?]` in alphabetical order; appending keeps that order
+    // because "typing" sorts after "enum".
+    if !cross_leaf_segments.is_empty() && !stdlibs.iter().any(|s| *s == "typing") {
+        stdlibs.push("typing");
+    }
     let needs_pydantic = body.needs_pydantic();
     let needs_factory = body.needs_define_function();
     let has_stdlib_block = !stdlibs.is_empty() || needs_pydantic;
@@ -386,6 +527,27 @@ pub(crate) fn render_leaf_body(body: &LeafBody) -> String {
         }
         if needs_pydantic {
             out.push_str("import pydantic\n");
+        }
+    }
+    // Cross-leaf imports go between the stdlib block and the factory
+    // imports, wrapped in `if typing.TYPE_CHECKING:`. The guard keeps
+    // them out of the runtime import graph — required so recursive
+    // cross-leaf type references (leaf A → leaf B → leaf A) don't
+    // create an import cycle. `from __future__ import annotations`
+    // (already in every header) makes the type annotations resolve
+    // lazily as strings, so type checkers see the imports while
+    // runtime never executes them.
+    //
+    // Dot count = depth + 1: anchors every cross-leaf import at the
+    // `baml_sdk/` root regardless of what absolute name the package
+    // ends up with after install. One `from <dots> import <name>` per
+    // first-segment, alphabetically sorted by the BTreeSet collector.
+    if !cross_leaf_segments.is_empty() {
+        out.push('\n');
+        out.push_str("if typing.TYPE_CHECKING:\n");
+        let dots = ".".repeat(body.leaf.segments.len() + 1);
+        for seg in &cross_leaf_segments {
+            writeln!(out, "    from {dots} import {seg}").unwrap();
         }
     }
     // Factory imports come after stdlib/pydantic, before the body —
@@ -625,7 +787,12 @@ pub(crate) fn render_leaf_body_pyi(body: &LeafBody) -> String {
         .symbols
         .iter()
         .any(|(s, _)| matches!(s, EmittedSymbol::Enum(_)));
-    let needs_typing = body.needs_typing_pyi();
+    let cross_leaf_segments = body.cross_leaf_first_segments_pyi();
+    // Same rule as `.py`: typing is needed if any signature is rendered
+    // OR the cross-leaf block fires. The block uses
+    // `typing.TYPE_CHECKING`, so the import has to be in scope even if
+    // no signature would otherwise pull it in.
+    let needs_typing = body.needs_typing_pyi() || !cross_leaf_segments.is_empty();
     let needs_pydantic = body.needs_pydantic();
     let has_stdlib_block = needs_enum || needs_typing || needs_pydantic;
     if has_stdlib_block {
@@ -638,6 +805,18 @@ pub(crate) fn render_leaf_body_pyi(body: &LeafBody) -> String {
         }
         if needs_pydantic {
             out.push_str("import pydantic\n");
+        }
+    }
+
+    // Cross-leaf TYPE_CHECKING block — same shape as `.py` per 12f §4.2.
+    // Mirroring keeps `.py` and `.pyi` easy to diff; the guard is a
+    // no-op in `.pyi` (already type-check-only) but matters in `.py`.
+    if !cross_leaf_segments.is_empty() {
+        out.push('\n');
+        out.push_str("if typing.TYPE_CHECKING:\n");
+        let dots = ".".repeat(body.leaf.segments.len() + 1);
+        for seg in &cross_leaf_segments {
+            writeln!(out, "    from {dots} import {seg}").unwrap();
         }
     }
 
