@@ -1,10 +1,3 @@
-/**
- * THIS FILE IS AUTO-GENERATED — DO NOT EDIT BY HAND.
- *
- * Source: baml_language/crates/bridge_nodejs/typescript_src/
- * Proto:  baml_language/crates/bridge_ctypes/types/baml/cffi/v1/*.proto
- * Build:  cd baml_language/crates/bridge_nodejs && pnpm build:debug
- */
 "use strict";
 // proto.ts — mirrors bridge_python/python_src/baml_py/proto.py
 //
@@ -129,12 +122,6 @@ function decodeValueHolder(holder) {
     }
     if (holder.unionVariantValue && holder.unionVariantValue.value) {
         return decodeValueHolder(holder.unionVariantValue.value);
-    }
-    if (holder.checkedValue && holder.checkedValue.value) {
-        return decodeValueHolder(holder.checkedValue.value);
-    }
-    if (holder.streamingStateValue && holder.streamingStateValue.value) {
-        return decodeValueHolder(holder.streamingStateValue.value);
     }
     // handle_value: pass the protobufjs Long directly as the key — BamlHandle's
     // constructor accepts { low, high } which is layout-compatible with Long.

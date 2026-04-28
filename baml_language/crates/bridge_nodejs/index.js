@@ -1,10 +1,3 @@
-/**
- * THIS FILE IS AUTO-GENERATED — DO NOT EDIT BY HAND.
- *
- * Source: baml_language/crates/bridge_nodejs/typescript_src/
- * Proto:  baml_language/crates/bridge_ctypes/types/baml/cffi/v1/*.proto
- * Build:  cd baml_language/crates/bridge_nodejs && pnpm build:debug
- */
 "use strict";
 // index.ts — mirrors bridge_python/python_src/baml_py/__init__.py
 Object.defineProperty(exports, "__esModule", { value: true });
