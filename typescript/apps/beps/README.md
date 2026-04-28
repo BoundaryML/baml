@@ -456,6 +456,7 @@ Both can be created from comments to maintain traceability.
 | `/api/agent/beps`          | GET      | Public read-only BEP listing/fetch for agents |
 | `/api/agent/beps`          | POST     | Create a new BEP (requires API token)         |
 | `/api/agent/beps`          | PUT      | Update an existing BEP (requires API token)   |
+| `/api/agent/beps/pull`     | GET      | Download all BEPs as ZIP archive              |
 
 ### Public Agent Endpoint
 
@@ -724,6 +725,45 @@ Update an existing BEP with optional page management.
   "url": "https://beps.boundaryml.com/beps/15"
 }
 ```
+
+### Pull All BEPs Endpoint
+
+`GET /api/agent/beps/pull`
+
+Download all BEPs as a ZIP archive. No authentication required.
+
+#### Usage
+
+```bash
+# Download to a new timestamped folder (copy mode)
+curl -o all-beps.zip "https://beps.boundaryml.com/api/agent/beps/pull"
+unzip all-beps.zip -d all-beps-$(date +%Y%m%d)
+
+# Download and replace existing folder (inplace mode)
+curl -o all-beps.zip "https://beps.boundaryml.com/api/agent/beps/pull"
+rm -rf ./all-beps && unzip all-beps.zip -d .
+```
+
+#### Response
+
+Returns a ZIP file (`application/zip`) containing:
+
+```
+all-beps/
+├── Claude.md                    # Main index with status-sorted list
+├── NEW-BEP/
+│   └── INSTRUCTIONS.md          # API usage instructions
+├── BEP-001-proposal-slug/
+│   ├── meta.json                # Metadata (status, version, pages)
+│   ├── README.md                # Full proposal content
+│   └── pages/                   # Additional pages (if any)
+└── BEP-002-another-slug/
+    └── ...
+```
+
+Headers:
+- `Content-Type: application/zip`
+- `Content-Disposition: attachment; filename="all-beps-YYYY-MM-DD.zip"`
 
 ---
 

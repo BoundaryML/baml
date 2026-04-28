@@ -462,7 +462,35 @@ Unresolved decisions, future work.
 
 ---
 
-## API Usage
+## Pull API - Download All BEPs
+
+Download all BEPs as a ZIP archive:
+
+\`\`\`bash
+# Download to a new timestamped folder (copy mode - default)
+curl -o all-beps.zip "${apiBaseUrl}/api/agent/beps/pull"
+unzip all-beps.zip -d all-beps-$(date +%Y%m%d)
+
+# Download and replace existing folder (inplace mode)
+curl -o all-beps.zip "${apiBaseUrl}/api/agent/beps/pull"
+rm -rf ./all-beps && unzip all-beps.zip -d ./all-beps
+\`\`\`
+
+The ZIP contains the full export structure:
+\`\`\`
+all-beps/
+├── Claude.md                    # Main index
+├── NEW-BEP/INSTRUCTIONS.md      # This file
+├── BEP-001-slug/
+│   ├── meta.json
+│   ├── README.md
+│   └── pages/
+└── ...
+\`\`\`
+
+---
+
+## Push API - Create/Update BEPs
 
 ### Create a New BEP
 
@@ -472,7 +500,14 @@ curl -X POST "${apiBaseUrl}/api/agent/beps" \\
   -H "Content-Type: application/json" \\
   -d '{
     "title": "Your Proposal Title",
-    "content": "# Your Proposal Title\\n\\n## Summary\\n\\n..."
+    "content": "# Your Proposal Title\\n\\n## Summary\\n\\n...",
+    "pages": [
+      {
+        "slug": "background",
+        "title": "Background Research",
+        "content": "# Background\\n\\nDetailed research..."
+      }
+    ]
   }'
 \`\`\`
 
@@ -487,32 +522,6 @@ Response:
 }
 \`\`\`
 
-### Create a BEP with Additional Pages (Addenda)
-
-You can include multiple pages in a single API call:
-
-\`\`\`bash
-curl -X POST "${apiBaseUrl}/api/agent/beps" \\
-  -H "Authorization: Bearer <your-api-token>" \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "title": "Your Proposal Title",
-    "content": "# Main Content\\n\\n...",
-    "pages": [
-      {
-        "slug": "background",
-        "title": "Background Research",
-        "content": "# Background\\n\\nDetailed research..."
-      },
-      {
-        "slug": "examples",
-        "title": "Code Examples",
-        "content": "# Examples\\n\\nUsage examples..."
-      }
-    ]
-  }'
-\`\`\`
-
 ### Update an Existing BEP
 
 \`\`\`bash
@@ -522,64 +531,55 @@ curl -X PUT "${apiBaseUrl}/api/agent/beps" \\
   -d '{
     "number": ${nextNumber},
     "content": "# Updated Title\\n\\n...",
+    "pages": [
+      {
+        "slug": "background",
+        "title": "Updated Background",
+        "content": "# Background\\n\\nUpdated..."
+      },
+      {
+        "slug": "new-page",
+        "title": "New Page",
+        "content": "# New\\n\\n..."
+      }
+    ],
     "editNote": "Updated based on feedback",
     "versionMode": "new"
   }'
 \`\`\`
 
-### Update with Additional Pages
-
-When updating, you can add, update, or remove pages:
-
-\`\`\`bash
-curl -X PUT "${apiBaseUrl}/api/agent/beps" \\
-  -H "Authorization: Bearer <your-api-token>" \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "number": ${nextNumber},
-    "content": "# Updated Main Content\\n\\n...",
-    "pages": [
-      {
-        "slug": "background",
-        "title": "Updated Background",
-        "content": "# Background\\n\\nUpdated research..."
-      },
-      {
-        "slug": "new-addendum",
-        "title": "New Addendum",
-        "content": "# New Section\\n\\nNew content..."
-      }
-    ],
-    "editNote": "Added new addendum, updated background",
-    "versionMode": "new"
-  }'
-\`\`\`
-
-**Note:** When you provide a \`pages\` array in an update:
-- Pages with matching slugs are **updated**
-- Pages with new slugs are **created**
-- Pages that exist but aren't in the array are **deleted**
-
-To keep existing pages unchanged, omit the \`pages\` field entirely.
+**Page behavior on update:**
+- Pages with matching slugs → **updated**
+- Pages with new slugs → **created**
+- Existing pages not in array → **deleted**
+- Omit \`pages\` field → keep existing pages unchanged
 
 ---
 
 ## API Reference
+
+### Pull (GET /api/agent/beps/pull)
+
+Downloads all BEPs as a ZIP archive. No authentication required.
+
+| Param | Type | Description |
+|-------|------|-------------|
+| (none) | | Returns ZIP file |
 
 ### Create (POST /api/agent/beps)
 
 | Field | Required | Description |
 |-------|----------|-------------|
 | \`title\` | Yes | The BEP title |
-| \`content\` | Yes | Full markdown content for Claude.md |
-| \`pages\` | No | Array of additional pages (addenda) |
+| \`content\` | Yes | Full markdown content |
+| \`pages\` | No | Array of additional pages |
 
 **Page object:**
 
 | Field | Required | Description |
 |-------|----------|-------------|
-| \`slug\` | Yes | URL-safe identifier (e.g., \`"background"\`, \`"examples"\`) |
-| \`title\` | Yes | Display title for the page |
+| \`slug\` | Yes | URL-safe identifier (e.g., \`"background"\`) |
+| \`title\` | Yes | Display title |
 | \`content\` | Yes | Full markdown content |
 
 ### Update (PUT /api/agent/beps)
@@ -589,26 +589,11 @@ To keep existing pages unchanged, omit the \`pages\` field entirely.
 | \`number\` | Yes | The BEP number to update |
 | \`title\` | No | Updated title |
 | \`content\` | No* | Updated markdown content |
-| \`pages\` | No* | Updated pages array (replaces all existing pages) |
+| \`pages\` | No* | Updated pages array (replaces all existing) |
 | \`editNote\` | No | Note describing the changes |
-| \`versionMode\` | No | \`"new"\` (default) creates a new version, \`"current"\` updates in place |
+| \`versionMode\` | No | \`"new"\` (default) or \`"current"\` |
 
 *At least one of \`title\`, \`content\`, or \`pages\` must be provided.
-
-### Response Fields
-
-| Field | Description |
-|-------|-------------|
-| \`success\` | \`true\` if operation succeeded |
-| \`bepId\` | Internal BEP ID |
-| \`number\` | BEP number |
-| \`formattedId\` | Formatted ID (e.g., "BEP-001") |
-| \`url\` | URL to view the BEP |
-| \`versionNumber\` | (update only) New version number |
-| \`versionAction\` | (update only) \`"created"\` or \`"updated"\` |
-| \`pagesCreated\` | (update only) Number of pages created |
-| \`pagesUpdated\` | (update only) Number of pages updated |
-| \`pagesDeleted\` | (update only) Number of pages deleted |
 `;
 
   return md;
