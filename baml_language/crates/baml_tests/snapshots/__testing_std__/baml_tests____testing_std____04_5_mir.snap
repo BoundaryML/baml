@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 956
 ---
 === MIR2 ===
 
@@ -611,7 +610,7 @@ fn .<lambda(run_test, 0)>() -> null {
     let _2: testing.RunReport // result
     let _3: unknown // e
     let _4: void
-    let _5: void
+    let _5: () -> void throws unknown
     let _6: "pass" | "fail" | "error"
     let _7: testing.RunReport[]
     let _8: testing.RunReport

@@ -103,3 +103,28 @@ fn describe_is_case_sensitive() {
     let descs = project.describe("point");
     assert!(descs.is_empty());
 }
+
+#[test]
+fn describe_lambda_local_binding_uses_lambda_body() {
+    let mut builder = ProjectTest::builder();
+    builder.source(
+        "lambda.baml",
+        r#"
+function LambdaLocalDescribe() -> string {
+    let f = () -> string {
+        let ignored = 1
+        let target = "lambda"
+        target
+    }
+    f()
+}
+"#,
+    );
+    let project = builder.build();
+
+    let descs = project.describe("target");
+
+    assert_eq!(descs.len(), 1);
+    assert_eq!(descs[0].shape, "let target: string");
+    assert_eq!(descs[0].resolved_type.as_deref(), Some("string"));
+}

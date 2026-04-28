@@ -54,7 +54,7 @@ fn user.CatchWithFallback(x: int) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: int // x // param
-    let _2: unknown // e
+    let _2: unknown
     let _3: bool
     let _4: bool
 
@@ -125,7 +125,7 @@ fn user.ChainedCatchClauses(x: int) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: int // x // param
-    let _2: unknown // e
+    let _2: unknown
     let _3: bool
     let _4: bool
 

@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 14409
 ---
 === MIR2 ===
 fn user.test_generic_capture(box: Box) -> string {
@@ -25,9 +24,11 @@ fn user.test_generic_capture(box: Box) -> string {
 fn .<lambda(test_generic_capture, 0)>() -> null {
     // Locals:
     let _0: null // _0 // return
+    let _1: string
 
     bb0: {
-        _0 = const null;
+        _1 = const "name";
+        _0 = copy capture[0].0[_1];
         goto -> bb1;
     }
 

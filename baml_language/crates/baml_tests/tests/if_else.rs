@@ -237,7 +237,6 @@ async fn if_else_with_parameter() {
 }
 
 #[tokio::test]
-#[ignore = "compiler2: duplicate binding error for let-in-if-branch variables"]
 async fn if_else_return_expr_with_locals() {
     let output = baml_test! {
         baml: "
@@ -309,7 +308,6 @@ async fn if_else_assignment_with_param() {
 }
 
 #[tokio::test]
-#[ignore = "compiler2: duplicate binding error for let-in-if-branch variables"]
 async fn if_else_assignment_with_locals() {
     let output = baml_test! {
         baml: "
@@ -1200,7 +1198,6 @@ async fn block_expression() {
 // ============================================================================
 
 #[tokio::test]
-#[ignore = "compiler2: duplicate binding error for let-in-if-branch variables"]
 async fn if_else_statement() {
     let output = baml_test! {
         baml: "
@@ -1239,18 +1236,14 @@ async fn if_else_statement() {
         jump L1
 
       L0:
-        load_const 3
-        store_var x
         load_const 4
-        call identity
+        call user.identity
         pop 1
         jump L2
 
       L1:
-        load_const 2
-        store_var y
         load_const 1
-        call identity
+        call user.identity
         pop 1
 
       L2:

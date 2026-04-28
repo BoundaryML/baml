@@ -78,6 +78,42 @@ struct CallbackThrowProvenance {
     callback_concrete_throws: Option<Ty>,
 }
 
+struct ScopedLocalsSnapshot {
+    locals: FxHashMap<Name, Ty>,
+    declared_types: FxHashMap<Name, Ty>,
+    let_binding_patterns: FxHashMap<Name, PatId>,
+    scoped_local_declarations_len: usize,
+    scoped_local_assignments_len: usize,
+}
+
+struct ScopedLocalDeclaration {
+    name: Name,
+    /// The pattern of this declaration. Used by `restore_scoped_locals_inner`
+    /// to identify "inner" bindings (those declared in the closing scope) so
+    /// assignments to inner bindings can be filtered out — Slack rule 3 vs
+    /// rule 2. The pattern (rather than name) is needed to distinguish
+    /// inner-shadow assignments from outer-binding assignments.
+    pattern: PatId,
+    previous_local: Option<Ty>,
+    previous_declared_type: Option<Ty>,
+    previous_let_binding_pattern: Option<PatId>,
+}
+
+/// One entry in `scoped_local_assignments`: a per-name assignment recorded
+/// during type inference. `pattern` carries the binding identity at the
+/// assignment site:
+///   - `Some(PatId)` means the assignment targets a let-binding's pattern
+///     — used to distinguish inner-shadow assignments (drop on scope exit)
+///     from outer-binding assignments (propagate).
+///   - `None` means the name has no let-binding pattern in scope (e.g. a
+///     function parameter assignment). These are always treated as
+///     outer-scope and propagate on scope exit.
+#[derive(Clone)]
+struct ScopedAssignment {
+    name: Name,
+    pattern: Option<PatId>,
+}
+
 struct BuilderThrowsAnalysis<'a, 'db> {
     builder: &'a TypeInferenceBuilder<'db>,
 }
@@ -193,6 +229,19 @@ pub struct TypeInferenceBuilder<'db> {
     /// establishment can keep declaration-side binding types in sync with the
     /// flow-sensitive local type seen by MIR lowering.
     let_binding_patterns: FxHashMap<Name, PatId>,
+    /// Per-declaration restore points for active name-keyed lookup maps.
+    ///
+    /// A lexical scope exit must remove declarations introduced inside that
+    /// scope, but it must restore a shadowed name to the state immediately
+    /// before the shadowing declaration rather than to scope entry. That keeps
+    /// earlier outer assignments in the same scope visible after the block.
+    scoped_local_declarations: Vec<ScopedLocalDeclaration>,
+    /// Assignments whose active local type was updated by assignment or
+    /// container establishment. Tracked by binding identity (`PatId`) so
+    /// scope-restore can filter inner-shadow assignments (which must NOT
+    /// propagate — rule 3) from outer-binding assignments (which MUST
+    /// propagate — rule 2).
+    scoped_local_assignments: Vec<ScopedAssignment>,
     /// Member resolutions: for field-access expressions that resolved to a
     /// class field, enum variant, method, or free function — records the
     /// structural path so MIR can emit the correct `QualifiedName` and LSP
@@ -263,6 +312,146 @@ pub struct TypeInferenceBuilder<'db> {
 }
 
 impl<'db> TypeInferenceBuilder<'db> {
+    fn snapshot_scoped_locals(&self) -> ScopedLocalsSnapshot {
+        ScopedLocalsSnapshot {
+            locals: self.locals.clone(),
+            declared_types: self.declared_types.clone(),
+            let_binding_patterns: self.let_binding_patterns.clone(),
+            scoped_local_declarations_len: self.scoped_local_declarations.len(),
+            scoped_local_assignments_len: self.scoped_local_assignments.len(),
+        }
+    }
+
+    fn restore_scoped_locals(&mut self, snapshot: ScopedLocalsSnapshot) {
+        self.restore_scoped_locals_inner(snapshot);
+    }
+
+    fn restore_scoped_locals_inner(&mut self, snapshot: ScopedLocalsSnapshot) {
+        // Pull the new assignments and declarations introduced since the
+        // snapshot. We filter assignments by binding identity below, so the
+        // names alone are not enough.
+        let new_assignments: Vec<ScopedAssignment> = self
+            .scoped_local_assignments
+            .split_off(snapshot.scoped_local_assignments_len);
+        let scoped_declarations = self
+            .scoped_local_declarations
+            .split_off(snapshot.scoped_local_declarations_len);
+
+        // The PatIds of bindings declared inside the closing scope. An
+        // assignment whose pattern is in this set targets an inner shadow
+        // and must NOT propagate to the outer scope (Slack rule 3).
+        let inner_pat_ids: FxHashSet<PatId> = scoped_declarations
+            .iter()
+            .map(|declaration| declaration.pattern)
+            .collect();
+
+        // Filter assignments: keep those that target a binding declared in an
+        // outer scope (or have no pattern, meaning a parameter assignment —
+        // always propagated).
+        let kept_assignments: Vec<ScopedAssignment> = new_assignments
+            .into_iter()
+            .filter(|assignment| match assignment.pattern {
+                Some(pat) => !inner_pat_ids.contains(&pat),
+                None => true,
+            })
+            .collect();
+        let assigned_names: FxHashSet<Name> = kept_assignments
+            .iter()
+            .map(|assignment| assignment.name.clone())
+            .collect();
+
+        // Roll back inner declarations: each declaration's previous_* fields
+        // capture the state of `locals`/`declared_types`/`let_binding_patterns`
+        // immediately before the declaration. Walking declarations in reverse
+        // restores the outer snapshot — except where a kept (outer) assignment
+        // updated the same name, which we preserve in the locals loop below.
+        for declaration in scoped_declarations.into_iter().rev() {
+            Self::restore_map_entry(
+                &mut self.locals,
+                declaration.name.clone(),
+                declaration.previous_local,
+            );
+            Self::restore_map_entry(
+                &mut self.declared_types,
+                declaration.name.clone(),
+                declaration.previous_declared_type,
+            );
+            Self::restore_map_entry(
+                &mut self.let_binding_patterns,
+                declaration.name,
+                declaration.previous_let_binding_pattern,
+            );
+        }
+
+        let local_names = self
+            .locals
+            .keys()
+            .chain(snapshot.locals.keys())
+            .cloned()
+            .collect::<FxHashSet<_>>();
+        for name in local_names {
+            if assigned_names.contains(&name) {
+                continue;
+            }
+            Self::restore_map_entry(
+                &mut self.locals,
+                name.clone(),
+                snapshot.locals.get(&name).cloned(),
+            );
+        }
+
+        self.declared_types = snapshot.declared_types;
+        self.let_binding_patterns = snapshot.let_binding_patterns;
+        // Re-extend the outer scope's assignment record with the kept
+        // (outer-targeting) assignments so a further enclosing scope's
+        // restore can also see them.
+        self.scoped_local_assignments.extend(kept_assignments);
+    }
+
+    fn restore_map_entry<T>(map: &mut FxHashMap<Name, T>, name: Name, previous: Option<T>) {
+        if let Some(previous) = previous {
+            map.insert(name, previous);
+        } else {
+            map.remove(&name);
+        }
+    }
+
+    fn declare_scoped_local(
+        &mut self,
+        name: Name,
+        pattern: PatId,
+        ty: Ty,
+        declared_ty: Option<Ty>,
+    ) {
+        self.scoped_local_declarations.push(ScopedLocalDeclaration {
+            previous_local: self.locals.get(&name).cloned(),
+            previous_declared_type: self.declared_types.get(&name).cloned(),
+            previous_let_binding_pattern: self.let_binding_patterns.get(&name).copied(),
+            name: name.clone(),
+            pattern,
+        });
+
+        self.let_binding_patterns.insert(name.clone(), pattern);
+        self.locals.insert(name.clone(), ty);
+        if let Some(declared_ty) = declared_ty {
+            self.declared_types.insert(name, declared_ty);
+        } else {
+            self.declared_types.remove(&name);
+        }
+    }
+
+    fn assign_local(&mut self, name: Name, ty: Ty) {
+        // Resolve the binding identity at the assignment site. If the name has
+        // a let-pattern in `let_binding_patterns`, the assignment targets that
+        // binding (which may be an outer or inner one). If not, the name maps
+        // to a parameter — record a None pattern so scope-restore always
+        // propagates the assignment outward.
+        let pattern = self.let_binding_patterns.get(&name).copied();
+        self.locals.insert(name.clone(), ty);
+        self.scoped_local_assignments
+            .push(ScopedAssignment { name, pattern });
+    }
+
     pub fn new(
         context: InferContext<'db>,
         res_ctx: &'db PackageResolutionContext<'db>,
@@ -279,6 +468,8 @@ impl<'db> TypeInferenceBuilder<'db> {
             expressions: FxHashMap::default(),
             bindings: FxHashMap::default(),
             let_binding_patterns: FxHashMap::default(),
+            scoped_local_declarations: Vec::new(),
+            scoped_local_assignments: Vec::new(),
             resolutions: FxHashMap::default(),
             res_ctx,
             package_items,
@@ -352,11 +543,40 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// Also records the declared type (parameters always have annotations).
     /// Uses `entry().or_insert()` so repeated calls (e.g. from narrowing
     /// save/restore) don't overwrite the original declared type.
+    ///
+    /// Function and lambda parameters do not have AST `PatId`s, so they
+    /// cannot flow through `declare_scoped_local`. Their assignments are
+    /// tracked separately via `ScopedAssignment { pattern: None }`.
     pub fn add_local(&mut self, name: Name, ty: Ty) {
         self.declared_types
             .entry(name.clone())
             .or_insert_with(|| ty.clone());
         self.locals.insert(name, ty);
+    }
+
+    /// Apply a transient type narrowing for `name` — used inside match arms
+    /// to refine the scrutinee's type for the arm body. This is NOT a
+    /// binding declaration: the surrounding `snapshot_scoped_locals` /
+    /// `restore_scoped_locals` pair owns the rollback. Tracked
+    /// assignments inside the arm body still propagate per Slack rule 2.
+    ///
+    /// Exists so all `self.locals` writes are named.
+    fn narrow_local(&mut self, name: Name, ty: Ty) {
+        self.locals.insert(name, ty);
+    }
+
+    /// Seed a captured-name marker as `Ty::Unknown` to suppress false
+    /// "unresolved name" diagnostics inside a lambda body. This is NOT a
+    /// binding; the actual capture's type is resolved by the parent scope.
+    ///
+    /// Exists so all `self.locals` writes are named.
+    fn seed_capture_unknown(&mut self, name: Name) {
+        self.locals.insert(
+            name,
+            Ty::Unknown {
+                attr: TyAttr::default(),
+            },
+        );
     }
 
     fn sync_let_binding_type(&mut self, name: &Name, ty: Ty) {
@@ -1066,6 +1286,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 )
             }
             Expr::Block { stmts, tail_expr } => {
+                let snapshot = self.snapshot_scoped_locals();
                 let mut diverged_at: Option<(usize, StmtId)> = None;
                 for (i, stmt_id) in stmts.iter().enumerate() {
                     if self.check_stmt_with_early_return_narrowing(*stmt_id, body) {
@@ -1073,7 +1294,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                         break;
                     }
                 }
-                if let Some((div_idx, div_stmt)) = diverged_at {
+                let ty = if let Some((div_idx, div_stmt)) = diverged_at {
                     let remaining = stmts.len() - div_idx - 1 + usize::from(tail_expr.is_some());
                     if remaining > 0 {
                         self.context.report_warning_at_stmt(
@@ -1093,7 +1314,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                         .unwrap_or(Ty::Void {
                             attr: TyAttr::default(),
                         })
-                }
+                };
+                self.restore_scoped_locals(snapshot);
+                ty
             }
             Expr::MemberAccess { base, member } => {
                 // `MemberAccess` now only comes from `FIELD_ACCESS_EXPR` (complex base
@@ -1488,6 +1711,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         match expr {
             // Block: check the tail expression against expected type
             Expr::Block { stmts, tail_expr } => {
+                let snapshot = self.snapshot_scoped_locals();
                 let mut diverged_at: Option<(usize, StmtId)> = None;
                 for (i, stmt_id) in stmts.iter().enumerate() {
                     if self.check_stmt_with_early_return_narrowing(*stmt_id, body) {
@@ -1534,6 +1758,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                         attr: TyAttr::default(),
                     }
                 };
+                self.restore_scoped_locals(snapshot);
                 self.record_expr_type(expr_id, ty.clone());
                 ty
             }
@@ -2013,12 +2238,8 @@ impl<'db> TypeInferenceBuilder<'db> {
                 if let Some(ty) = init_ty {
                     self.bindings.insert(*pattern, ty.clone());
                     if let Some(name) = body.patterns[*pattern].binding_name() {
-                        self.let_binding_patterns.insert(name.clone(), *pattern);
-                        self.locals.insert(name.clone(), ty);
                         // Record declared type only for annotated let-bindings.
-                        if let Some(decl_ty) = ann_ty_for_decl {
-                            self.declared_types.insert(name.clone(), decl_ty);
-                        }
+                        self.declare_scoped_local(name.clone(), *pattern, ty, ann_ty_for_decl);
                     }
                 }
                 diverges
@@ -2041,10 +2262,29 @@ impl<'db> TypeInferenceBuilder<'db> {
             Stmt::While {
                 condition,
                 body: while_body,
+                after,
                 ..
             } => {
                 self.infer_expr(*condition, body);
+                // Snapshot scoped locals before the body and restore after,
+                // mirroring `Stmt::For`. Without this, a `let x = ...`
+                // inside the while body (or any narrowing of an outer name)
+                // leaks past the loop, violating Slack rule 1.
+                // `restore_scoped_locals` keeps outer-binding mutations from
+                // the body — Slack rule 2 — by filtering assignments
+                // through binding identity.
+                let snapshot = self.snapshot_scoped_locals();
                 self.infer_expr(*while_body, body);
+                self.restore_scoped_locals(snapshot);
+                // Type-check the C-style for `after` step, if present. It
+                // runs at the same lexical level as the body but in the
+                // surrounding scope (HIR P1.2.b puts it inside the wrapping
+                // While scope but outside the body's block scope), so we
+                // check it AFTER restoring the snapshot — body-declared lets
+                // are not in scope here.
+                if let Some(after_stmt) = after {
+                    self.check_stmt(*after_stmt, body);
+                }
                 false
             }
             // Design note: Stmt::For is kept as a first-class construct (not desugared
@@ -2074,13 +2314,15 @@ impl<'db> TypeInferenceBuilder<'db> {
 
                 // 3. Bind the loop variable to the element type
                 let name = body.patterns[*binding].binding_name().cloned();
+                let snapshot = self.snapshot_scoped_locals();
                 self.bindings.insert(*binding, elem_ty.clone());
                 if let Some(name) = name {
-                    self.locals.insert(name, elem_ty);
+                    self.declare_scoped_local(name, *binding, elem_ty, None);
                 }
 
                 // 4. Check the body
                 self.infer_expr(*for_body, body);
+                self.restore_scoped_locals(snapshot);
                 false
             }
             Stmt::Assign { target, value } => {
@@ -2118,7 +2360,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     // Update the local to the assigned value's type (invalidates narrowing)
                     if let Expr::Path(segments) = &body.exprs[*target] {
                         if segments.len() == 1 {
-                            self.locals.insert(segments[0].clone(), value_ty);
+                            self.assign_local(segments[0].clone(), value_ty);
                         }
                     }
                 } else {
@@ -2311,16 +2553,30 @@ impl<'db> TypeInferenceBuilder<'db> {
                     .report_simple(TirTypeError::UnreachableArm, arm.body);
             }
 
-            let mut saved = Vec::new();
+            // Route arm-pattern bindings through the standard
+            // snapshot/declare_scoped_local/restore flow. A prior
+            // ad-hoc `saved: Vec<(Name, Option<Ty>)>` plumbing wrote directly
+            // to `self.locals` without registering the binding's pattern, so
+            // an arm-arm pattern like `Foo(xs)` with the same name as an
+            // outer `let xs = []` would share the outer's pattern slot — and
+            // when the arm body widens `xs` (e.g. `xs.push("s")`), it would
+            // widen the OUTER binding's evolving type. Slack rule 3 requires
+            // shadowing to keep identities separate; using the binding's
+            // PatId achieves that via `restore_scoped_locals_inner`'s
+            // inner_pat_ids filter (P2.1).
+            let snapshot = self.snapshot_scoped_locals();
 
+            // Narrow the scrutinee for the duration of this arm. This is a
+            // type narrowing, not a let-binding — the snapshot's locals map
+            // captures the pre-narrow type and `restore_scoped_locals` rolls
+            // it back unless the arm body assigned to it (in which case the
+            // assignment correctly propagates per Slack rule 2).
             if let Some(name) = &scrutinee_name {
-                saved.push((name.clone(), self.locals.get(name).cloned()));
-                self.locals.insert(name.clone(), tp.narrowed_ty.clone());
+                self.narrow_local(name.clone(), tp.narrowed_ty.clone());
             }
 
             if let Some((bind_name, bind_ty)) = &tp.binding {
-                saved.push((bind_name.clone(), self.locals.get(bind_name).cloned()));
-                self.locals.insert(bind_name.clone(), bind_ty.clone());
+                self.declare_scoped_local(bind_name.clone(), pattern_id, bind_ty.clone(), None);
             }
 
             if let Some(guard_expr) = arm.guard {
@@ -2330,13 +2586,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             let arm_ty = self.infer_expr(arm.body, body);
             arm_types.push(arm_ty);
 
-            for (name, previous) in saved {
-                if let Some(prev_ty) = previous {
-                    self.locals.insert(name, prev_ty);
-                } else {
-                    self.locals.remove(&name);
-                }
-            }
+            self.restore_scoped_locals(snapshot);
 
             if arm.guard.is_none() {
                 if tp.covers_all {
@@ -2409,6 +2659,15 @@ impl<'db> TypeInferenceBuilder<'db> {
                 .insert(clause.binding, clause_binding_ty.clone());
 
             // Type the optional stack trace binding as baml.errors.StackTrace.
+            //
+            // The stack-trace binding's lifetime is the catch-clause body.
+            // We snapshot scoped locals before introducing it and restore
+            // after the clause's arms finish, so the binding does not leak
+            // into the rest of the function.
+            let st_snapshot = clause
+                .stack_trace_binding
+                .is_some()
+                .then(|| self.snapshot_scoped_locals());
             if let Some(st_binding) = clause.stack_trace_binding {
                 let db = self.context.db();
                 let baml_name = baml_base::Name::new("baml");
@@ -2432,9 +2691,14 @@ impl<'db> TypeInferenceBuilder<'db> {
                         attr: TyAttr::default(),
                     });
                 self.bindings.insert(st_binding, st_ty.clone());
-                // Also insert into locals so name resolution finds it.
+                // Register the stack-trace name through declare_scoped_local
+                // so name resolution finds it AND so the binding is unwound
+                // by the matching restore_scoped_locals at the end of the
+                // clause. A prior raw `self.locals.insert` had no paired
+                // snapshot/restore at all and leaked the binding into the
+                // rest of the function.
                 if let Some(name) = body.patterns[st_binding].binding_name() {
-                    self.locals.insert(name.clone(), st_ty);
+                    self.declare_scoped_local(name.clone(), st_binding, st_ty, None);
                 }
             }
 
@@ -2489,35 +2753,46 @@ impl<'db> TypeInferenceBuilder<'db> {
                     }
                 };
 
-                let mut saved = Vec::new();
+                // Route catch-arm bindings through
+                // snapshot/declare_scoped_local/restore so the arm pattern's
+                // PatId is recorded. A prior ad-hoc `saved: Vec<(Name,
+                // Option<Ty>)>` would write to `self.locals` without
+                // registering the pattern, so an arm pattern with the same
+                // name as an outer binding shared the outer's pattern slot.
+                let arm_snapshot = self.snapshot_scoped_locals();
+
                 if let Some(name) = &binding_name {
-                    saved.push((name.clone(), self.locals.get(name).cloned()));
-                    self.locals
-                        .insert(name.clone(), catch_binding_ty(clause_binding_ty.clone()));
+                    self.declare_scoped_local(
+                        name.clone(),
+                        clause.binding,
+                        catch_binding_ty(clause_binding_ty.clone()),
+                        None,
+                    );
                 }
                 if let Some((arm_bind_name, arm_bind_pat_ty)) = tp.binding {
-                    saved.push((
-                        arm_bind_name.clone(),
-                        self.locals.get(&arm_bind_name).cloned(),
-                    ));
-                    self.locals
-                        .insert(arm_bind_name, catch_binding_ty(arm_bind_pat_ty));
+                    self.declare_scoped_local(
+                        arm_bind_name,
+                        arm.pattern,
+                        catch_binding_ty(arm_bind_pat_ty),
+                        None,
+                    );
                 }
 
                 let arm_ty = self.infer_expr(arm.body, body);
                 result_members.push(arm_ty);
 
-                for (name, previous) in saved {
-                    if let Some(prev_ty) = previous {
-                        self.locals.insert(name, prev_ty);
-                    } else {
-                        self.locals.remove(&name);
-                    }
-                }
+                self.restore_scoped_locals(arm_snapshot);
 
                 for handled in &throw_matches.definitely_handled {
                     residual.remove(handled);
                 }
+            }
+
+            // Restore the snapshot taken before the clause's stack-trace
+            // binding was introduced. This unwinds the stack-trace name from
+            // `locals` so it does not leak past the clause.
+            if let Some(snapshot) = st_snapshot {
+                self.restore_scoped_locals(snapshot);
             }
 
             if matches!(
@@ -5034,7 +5309,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     } else {
                         Ty::List(Box::new(widened_arg), container_attr)
                     };
-                    self.locals.insert(local_name.clone(), new_ty.clone());
+                    self.assign_local(local_name.clone(), new_ty.clone());
                     self.sync_let_binding_type(&local_name, new_ty.clone());
                     new_ty
                 } else if !self.is_subtype(&widened_arg, elem_ty) {
@@ -5122,7 +5397,8 @@ impl<'db> TypeInferenceBuilder<'db> {
                     } else {
                         Ty::List(Box::new(widened_val.clone()), container_attr)
                     };
-                    self.locals.insert(local_name, new_ty);
+                    self.assign_local(local_name.clone(), new_ty.clone());
+                    self.sync_let_binding_type(&local_name, new_ty);
                 } else if !self.is_subtype(&widened_val, elem_ty) {
                     self.context.report(
                         TirTypeError::TypeMismatch {
@@ -5163,7 +5439,8 @@ impl<'db> TypeInferenceBuilder<'db> {
                             container_attr,
                         )
                     };
-                    self.locals.insert(local_name, new_ty);
+                    self.assign_local(local_name.clone(), new_ty.clone());
+                    self.sync_let_binding_type(&local_name, new_ty);
                 } else {
                     if !self.is_subtype(&widened_key, key_ty) {
                         self.context.report(
@@ -5784,6 +6061,9 @@ impl<'db> TypeInferenceBuilder<'db> {
         // Save current state (including expressions to prevent ExprId collisions)
         let saved_locals = self.locals.clone();
         let saved_declared = self.declared_types.clone();
+        let saved_let_binding_patterns = std::mem::take(&mut self.let_binding_patterns);
+        let saved_scoped_local_declarations = std::mem::take(&mut self.scoped_local_declarations);
+        let saved_scoped_local_assignments = std::mem::take(&mut self.scoped_local_assignments);
         let saved_return_ty = self.declared_return_ty.clone();
         let saved_generic_params = self.generic_params.clone();
         let saved_expressions = std::mem::take(&mut self.expressions);
@@ -5800,10 +6080,23 @@ impl<'db> TypeInferenceBuilder<'db> {
         new_generic_params.extend(func_def.generic_params.iter().cloned());
         self.generic_params = new_generic_params;
 
-        // Seed lambda params (captures remain accessible via parent locals)
+        // Seed lambda params (captures remain accessible via parent locals).
+        //
+        // Directly overwrite `declared_types` and `locals` rather than going
+        // through `add_local`: that helper uses `entry().or_insert_with()` for
+        // `declared_types`, which would preserve a stale outer entry when a
+        // lambda param shadows an annotated outer let. The lambda param's
+        // declared type must replace any outer declaration so subsequent
+        // assignments inside the body type-check against the param's type
+        // (not the shadowed outer's). Also clear any stale
+        // `let_binding_patterns` entry the parent scope might have had under
+        // the same name; lambda params shadow outer let-patterns and the
+        // pattern's binding identity is irrelevant inside the lambda body.
         for (name_opt, ty) in param_tys {
             if let Some(name) = name_opt {
-                self.add_local(name.clone(), ty.clone());
+                self.declared_types.insert(name.clone(), ty.clone());
+                self.locals.insert(name.clone(), ty.clone());
+                self.let_binding_patterns.remove(name);
             }
         }
 
@@ -5817,36 +6110,24 @@ impl<'db> TypeInferenceBuilder<'db> {
         //
         // Also captures the lambda's `FileScopeId` for use as a position-independent
         // key in `nested_lambda_types` (avoids TextRange in Salsa-cached output).
-        let lambda_file_scope_id;
-        {
+        let lambda_file_scope_id = {
             let db = self.context.db();
             let file = self.context.scope().file(db);
             let index = baml_compiler2_ppir::file_semantic_index(db, file);
-            let lambda_span = func_def.span;
-            let mut found_fsi = None;
-            for (i, scope) in index.scopes.iter().enumerate() {
-                if matches!(scope.kind, baml_compiler2_hir::scope::ScopeKind::Lambda)
-                    && scope.range == lambda_span
+            // Captures are seeded only if the lambda scope is located (it
+            // always should be, but be defensive).
+            let found_fsi = index.lambda_scope_for(func_def.span);
+            if let Some(fsi) = found_fsi {
+                for (capture_name, _def_site) in
+                    &index.scope_bindings[fsi.index() as usize].captures
                 {
-                    #[allow(clippy::cast_possible_truncation)]
-                    {
-                        found_fsi = Some(FileScopeId::new(i as u32));
+                    if !self.locals.contains_key(capture_name) {
+                        self.seed_capture_unknown(capture_name.clone());
                     }
-                    for (capture_name, _def_site) in &index.scope_bindings[i].captures {
-                        if !self.locals.contains_key(capture_name) {
-                            self.locals.insert(
-                                capture_name.clone(),
-                                Ty::Unknown {
-                                    attr: TyAttr::default(),
-                                },
-                            );
-                        }
-                    }
-                    break;
                 }
             }
-            lambda_file_scope_id = found_fsi;
-        }
+            found_fsi
+        };
 
         // Set return type context for return statement checking inside lambda
         if let Some(ret) = expected_ret {
@@ -5891,6 +6172,9 @@ impl<'db> TypeInferenceBuilder<'db> {
         self.lambda_effective_throws = saved_lambda_effective_throws;
         self.locals = saved_locals;
         self.declared_types = saved_declared;
+        self.let_binding_patterns = saved_let_binding_patterns;
+        self.scoped_local_declarations = saved_scoped_local_declarations;
+        self.scoped_local_assignments = saved_scoped_local_assignments;
         self.declared_return_ty = saved_return_ty;
         self.generic_params = saved_generic_params;
 

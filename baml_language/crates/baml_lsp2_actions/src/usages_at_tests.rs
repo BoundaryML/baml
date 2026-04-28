@@ -223,6 +223,34 @@ function Test() -> string {
     }
 
     #[test]
+    fn test_find_refs_local_variable_ignores_shadowed_binding() {
+        let test = CursorTest::new(
+            r#"
+function Test() -> string {
+    let <[CURSOR]x = "outer"
+    let y = x
+    {
+        let x = "inner"
+        x
+    }
+    x
+}
+"#,
+        );
+
+        let usages = test.find_all_usages();
+        assert_eq!(
+            usages.len(),
+            2,
+            "Should only find usages of the outer 'x', found: {:?}",
+            usages
+                .iter()
+                .map(|l| test.format_location_with_name(l))
+                .collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
     fn test_find_refs_multi_file() {
         let mut builder = CursorTest::builder();
         builder.source(

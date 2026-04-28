@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 690
 ---
 function baml.Array.at(self: null, index: int) -> void? {
 }
@@ -1224,17 +1225,17 @@ function baml.llm.Stream.final(self: null) -> void {
     load_field ._sse
     dispatch_future baml.http.SseStream.next
     await
-    store_var _6
-    load_var _6
+    store_var _7
+    load_var _7
     is_type null
     pop_jump_if_false L1
     jump L3
 
   L1:
-    load_var _6
+    load_var _7
     is_type string
     pop_jump_if_false L2
-    load_var _6
+    load_var _7
     store_var next
 
   L2:
@@ -1260,20 +1261,20 @@ function baml.llm.Stream.final(self: null) -> void {
     load_field ._acc
     dispatch_future baml.llm.StreamAccumulator.finish_reason
     await
-    store_var _23
-    load_var _23
+    store_var _24
+    load_var _24
     load_const null
     cmp_op ==
     pop_jump_if_false L4
     jump L6
 
   L4:
-    load_var _23
+    load_var _24
     is_type string
     pop_jump_if_false L5
     load_var self
     load_field ._client
-    load_var _23
+    load_var _24
     dispatch_future baml.llm.PrimitiveClient.validate_finish_reason
     await
     pop 1
@@ -1312,17 +1313,17 @@ function baml.llm.Stream.next(self: null) -> void | baml.stream.StreamFinished {
     load_field ._sse
     dispatch_future baml.http.SseStream.next
     await
-    store_var _2
-    load_var _2
+    store_var _3
+    load_var _3
     is_type null
     pop_jump_if_false L3
     jump L8
 
   L3:
-    load_var _2
+    load_var _3
     is_type string
     pop_jump_if_false L4
-    load_var _2
+    load_var _3
     store_var next
 
   L4:

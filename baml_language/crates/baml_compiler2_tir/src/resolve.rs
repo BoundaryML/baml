@@ -77,15 +77,12 @@ pub fn resolve_name_at_in_scope<'db>(
         let bindings = &index.scope_bindings[ancestor_id.index() as usize];
 
         // Check let-bindings in this scope (reverse order for shadowing)
-        for (binding_name, def_site, binding_range) in bindings.bindings.iter().rev() {
-            if binding_name == name {
-                // Only visible if the binding precedes the use site
-                if binding_range.start() <= at_offset {
-                    return ResolvedName::Local {
-                        name: name.clone(),
-                        definition_site: Some(*def_site),
-                    };
-                }
+        for binding in bindings.bindings.iter().rev() {
+            if &binding.name == name && index.binding_visible_at(binding, at_offset) {
+                return ResolvedName::Local {
+                    name: name.clone(),
+                    definition_site: Some(binding.site),
+                };
             }
         }
 

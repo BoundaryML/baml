@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 585
 ---
 === MIR2 ===
 
@@ -1735,39 +1736,40 @@ fn baml.llm.Stream.final(self: baml.llm.Stream) -> void {
     let _3: bool
     let _4: () -> bool throws baml.errors.LlmClient
     let _5: future<bool>
-    let _6: string?
-    let _7: () -> string? throws baml.errors.Io
-    let _8: future<string?>
-    let _9: bool
+    let _6: string // next
+    let _7: string?
+    let _8: () -> string? throws baml.errors.Io
+    let _9: future<string?>
     let _10: bool
-    let _11: string // next
-    let _12: null
-    let _13: (string) -> null throws baml.errors.LlmClient
-    let _14: string
-    let _15: future<null>
-    let _16: bool
-    let _17: () -> bool throws baml.errors.LlmClient
-    let _18: future<bool>
-    let _19: null
-    let _20: () -> null throws never
-    let _21: future<null>
-    let _22: null
-    let _23: string?
-    let _24: () -> string? throws baml.errors.LlmClient
-    let _25: future<string?>
-    let _26: bool
-    let _27: void
-    let _28: bool
-    let _29: string // reason
-    let _30: (string) -> null throws baml.errors.LlmClient
-    let _31: string
-    let _32: future<null>
-    let _33: string // content
-    let _34: () -> string throws baml.errors.LlmClient
-    let _35: future<string>
-    let _36: string
-    let _37: baml.llm.StreamCache
-    let _38: future<void>
+    let _11: bool
+    let _12: string // next
+    let _13: null
+    let _14: (string) -> null throws baml.errors.LlmClient
+    let _15: string
+    let _16: future<null>
+    let _17: bool
+    let _18: () -> bool throws baml.errors.LlmClient
+    let _19: future<bool>
+    let _20: null
+    let _21: () -> null throws never
+    let _22: future<null>
+    let _23: null
+    let _24: string?
+    let _25: () -> string? throws baml.errors.LlmClient
+    let _26: future<string?>
+    let _27: bool
+    let _28: void
+    let _29: bool
+    let _30: string // reason
+    let _31: (string) -> null throws baml.errors.LlmClient
+    let _32: string
+    let _33: future<null>
+    let _34: string // content
+    let _35: () -> string throws baml.errors.LlmClient
+    let _36: future<string>
+    let _37: string
+    let _38: baml.llm.StreamCache
+    let _39: future<void>
 
     bb0: {
         goto -> bb1;
@@ -1788,108 +1790,109 @@ fn baml.llm.Stream.final(self: baml.llm.Stream) -> void {
     }
 
     bb4: {
-        _7 = copy _1.2;
-        _8 = dispatch_future const fn baml.http.SseStream.next(copy _7) -> bb5;
+        _8 = copy _1.2;
+        _9 = dispatch_future const fn baml.http.SseStream.next(copy _8) -> bb5;
     }
 
     bb5: {
-        _6 = await _8 -> [bb6];
+        _7 = await _9 -> [bb6];
     }
 
     bb6: {
-        _9 = is_type(copy _6, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
-        branch copy _9 -> [bb16, bb7];
+        _10 = is_type(copy _7, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _10 -> [bb16, bb7];
     }
 
     bb7: {
-        _10 = is_type(copy _6, String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
-        branch copy _10 -> [bb8, bb9];
+        _11 = is_type(copy _7, String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _11 -> [bb8, bb9];
     }
 
     bb8: {
-        _11 = copy _6;
+        _12 = copy _7;
+        _6 = copy _12;
         goto -> bb9;
     }
 
     bb9: {
-        _13 = copy _1.1;
-        _14 = copy _11;
-        _15 = dispatch_future const fn baml.llm.StreamAccumulator.add_events(copy _13, copy _14) -> bb10;
+        _14 = copy _1.1;
+        _15 = copy _6;
+        _16 = dispatch_future const fn baml.llm.StreamAccumulator.add_events(copy _14, copy _15) -> bb10;
     }
 
     bb10: {
-        _12 = await _15 -> [bb11];
+        _13 = await _16 -> [bb11];
     }
 
     bb11: {
-        _17 = copy _1.1;
-        _18 = dispatch_future const fn baml.llm.StreamAccumulator.is_done(copy _17) -> bb12;
+        _18 = copy _1.1;
+        _19 = dispatch_future const fn baml.llm.StreamAccumulator.is_done(copy _18) -> bb12;
     }
 
     bb12: {
-        _16 = await _18 -> [bb13];
+        _17 = await _19 -> [bb13];
     }
 
     bb13: {
-        branch copy _16 -> [bb14, bb1];
+        branch copy _17 -> [bb14, bb1];
     }
 
     bb14: {
-        _20 = copy _1.2;
-        _21 = dispatch_future const fn baml.http.SseStream.close(copy _20) -> bb15;
+        _21 = copy _1.2;
+        _22 = dispatch_future const fn baml.http.SseStream.close(copy _21) -> bb15;
     }
 
     bb15: {
-        _19 = await _21 -> [bb16];
+        _20 = await _22 -> [bb16];
     }
 
     bb16: {
-        _24 = copy _1.1;
-        _25 = dispatch_future const fn baml.llm.StreamAccumulator.finish_reason(copy _24) -> bb17;
+        _25 = copy _1.1;
+        _26 = dispatch_future const fn baml.llm.StreamAccumulator.finish_reason(copy _25) -> bb17;
     }
 
     bb17: {
-        _23 = await _25 -> [bb18];
+        _24 = await _26 -> [bb18];
     }
 
     bb18: {
-        _26 = copy _23 == const null;
-        branch copy _26 -> [bb27, bb19];
+        _27 = copy _24 == const null;
+        branch copy _27 -> [bb27, bb19];
     }
 
     bb19: {
-        _28 = is_type(copy _23, String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
-        branch copy _28 -> [bb20, bb22];
+        _29 = is_type(copy _24, String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _29 -> [bb20, bb22];
     }
 
     bb20: {
-        _29 = copy _23;
-        _30 = copy _1.0;
-        _31 = copy _29;
-        _32 = dispatch_future const fn baml.llm.PrimitiveClient.validate_finish_reason(copy _30, copy _31) -> bb21;
+        _30 = copy _24;
+        _31 = copy _1.0;
+        _32 = copy _30;
+        _33 = dispatch_future const fn baml.llm.PrimitiveClient.validate_finish_reason(copy _31, copy _32) -> bb21;
     }
 
     bb21: {
-        _22 = await _32 -> [bb22];
+        _23 = await _33 -> [bb22];
     }
 
     bb22: {
-        _34 = copy _1.1;
-        _35 = dispatch_future const fn baml.llm.StreamAccumulator.content(copy _34) -> bb23;
+        _35 = copy _1.1;
+        _36 = dispatch_future const fn baml.llm.StreamAccumulator.content(copy _35) -> bb23;
     }
 
     bb23: {
-        _33 = await _35 -> [bb24];
+        _34 = await _36 -> [bb24];
     }
 
     bb24: {
-        _36 = copy _33;
-        _37 = copy _1.3;
-        _38 = dispatch_future const fn baml.llm.__sap_parse_final(copy _36, copy _37) -> bb25;
+        _37 = copy _34;
+        _38 = copy _1.3;
+        _39 = dispatch_future const fn baml.llm.__sap_parse_final(copy _37, copy _38) -> bb25;
     }
 
     bb25: {
-        _0 = await _38 -> [bb26];
+        _0 = await _39 -> [bb26];
     }
 
     bb26: {
@@ -1897,8 +1900,8 @@ fn baml.llm.Stream.final(self: baml.llm.Stream) -> void {
     }
 
     bb27: {
-        _27 = LlmClientError { const "Streaming finished without finish_reason" };
-        throw copy _27;
+        _28 = LlmClientError { const "Streaming finished without finish_reason" };
+        throw copy _28;
     }
 }
 
@@ -1928,32 +1931,33 @@ fn baml.llm.Stream.next(self: baml.llm.Stream) -> void | baml.stream.StreamFinis
     // Locals:
     let _0: void | baml.stream.StreamFinished // _0 // return
     let _1: baml.llm.Stream // self // param
-    let _2: string?
-    let _3: () -> string? throws baml.errors.Io
-    let _4: future<string?>
-    let _5: bool
+    let _2: string // next
+    let _3: string?
+    let _4: () -> string? throws baml.errors.Io
+    let _5: future<string?>
     let _6: bool
-    let _7: string // next
-    let _8: null
-    let _9: (string) -> null throws baml.errors.LlmClient
-    let _10: string
-    let _11: future<null>
-    let _12: bool
-    let _13: () -> bool throws baml.errors.LlmClient
-    let _14: future<bool>
-    let _15: null
-    let _16: () -> null throws never
-    let _17: future<null>
-    let _18: string // content
-    let _19: () -> string throws baml.errors.LlmClient
-    let _20: future<string>
-    let _21: void | baml.stream.StreamNoYield // parsed
-    let _22: string
-    let _23: baml.llm.StreamCache
-    let _24: future<void | baml.stream.StreamNoYield>
-    let _25: bool
+    let _7: bool
+    let _8: string // next
+    let _9: null
+    let _10: (string) -> null throws baml.errors.LlmClient
+    let _11: string
+    let _12: future<null>
+    let _13: bool
+    let _14: () -> bool throws baml.errors.LlmClient
+    let _15: future<bool>
+    let _16: null
+    let _17: () -> null throws never
+    let _18: future<null>
+    let _19: string // content
+    let _20: () -> string throws baml.errors.LlmClient
+    let _21: future<string>
+    let _22: void | baml.stream.StreamNoYield // parsed
+    let _23: string
+    let _24: baml.llm.StreamCache
+    let _25: future<void | baml.stream.StreamNoYield>
     let _26: bool
-    let _27: void // parsed
+    let _27: bool
+    let _28: void // parsed
 
     bb0: {
         goto -> bb1;
@@ -1968,94 +1972,95 @@ fn baml.llm.Stream.next(self: baml.llm.Stream) -> void | baml.stream.StreamFinis
     }
 
     bb3: {
-        _3 = copy _1.2;
-        _4 = dispatch_future const fn baml.http.SseStream.next(copy _3) -> bb4;
+        _4 = copy _1.2;
+        _5 = dispatch_future const fn baml.http.SseStream.next(copy _4) -> bb4;
     }
 
     bb4: {
-        _2 = await _4 -> [bb5];
+        _3 = await _5 -> [bb5];
     }
 
     bb5: {
-        _5 = is_type(copy _2, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
-        branch copy _5 -> [bb23, bb6];
+        _6 = is_type(copy _3, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _6 -> [bb23, bb6];
     }
 
     bb6: {
-        _6 = is_type(copy _2, String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
-        branch copy _6 -> [bb7, bb8];
+        _7 = is_type(copy _3, String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _7 -> [bb7, bb8];
     }
 
     bb7: {
-        _7 = copy _2;
+        _8 = copy _3;
+        _2 = copy _8;
         goto -> bb8;
     }
 
     bb8: {
-        _9 = copy _1.1;
-        _10 = copy _7;
-        _11 = dispatch_future const fn baml.llm.StreamAccumulator.add_events(copy _9, copy _10) -> bb9;
+        _10 = copy _1.1;
+        _11 = copy _2;
+        _12 = dispatch_future const fn baml.llm.StreamAccumulator.add_events(copy _10, copy _11) -> bb9;
     }
 
     bb9: {
-        _8 = await _11 -> [bb10];
+        _9 = await _12 -> [bb10];
     }
 
     bb10: {
-        _13 = copy _1.1;
-        _14 = dispatch_future const fn baml.llm.StreamAccumulator.is_done(copy _13) -> bb11;
+        _14 = copy _1.1;
+        _15 = dispatch_future const fn baml.llm.StreamAccumulator.is_done(copy _14) -> bb11;
     }
 
     bb11: {
-        _12 = await _14 -> [bb12];
+        _13 = await _15 -> [bb12];
     }
 
     bb12: {
-        branch copy _12 -> [bb20, bb13];
+        branch copy _13 -> [bb20, bb13];
     }
 
     bb13: {
-        _19 = copy _1.1;
-        _20 = dispatch_future const fn baml.llm.StreamAccumulator.content(copy _19) -> bb14;
+        _20 = copy _1.1;
+        _21 = dispatch_future const fn baml.llm.StreamAccumulator.content(copy _20) -> bb14;
     }
 
     bb14: {
-        _18 = await _20 -> [bb15];
+        _19 = await _21 -> [bb15];
     }
 
     bb15: {
-        _22 = copy _18;
-        _23 = copy _1.3;
-        _24 = dispatch_future const fn baml.llm.__sap_parse_partial(copy _22, copy _23) -> bb16;
+        _23 = copy _19;
+        _24 = copy _1.3;
+        _25 = dispatch_future const fn baml.llm.__sap_parse_partial(copy _23, copy _24) -> bb16;
     }
 
     bb16: {
-        _21 = await _24 -> [bb17];
+        _22 = await _25 -> [bb17];
     }
 
     bb17: {
-        _25 = is_type(copy _21, Class(TypeName { name: "StreamNoYield", module_path: ["baml", "stream"], display_name: "baml.stream.StreamNoYield" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
-        branch copy _25 -> [bb1, bb18];
+        _26 = is_type(copy _22, Class(TypeName { name: "StreamNoYield", module_path: ["baml", "stream"], display_name: "baml.stream.StreamNoYield" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        branch copy _26 -> [bb1, bb18];
     }
 
     bb18: {
-        _26 = is_type(copy _21, Void { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
-        branch copy _26 -> [bb19, bb1];
+        _27 = is_type(copy _22, Void { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _27 -> [bb19, bb1];
     }
 
     bb19: {
-        _27 = copy _21;
-        _0 = copy _27;
+        _28 = copy _22;
+        _0 = copy _28;
         goto -> bb24;
     }
 
     bb20: {
-        _16 = copy _1.2;
-        _17 = dispatch_future const fn baml.http.SseStream.close(copy _16) -> bb21;
+        _17 = copy _1.2;
+        _18 = dispatch_future const fn baml.http.SseStream.close(copy _17) -> bb21;
     }
 
     bb21: {
-        _15 = await _17 -> [bb22];
+        _16 = await _18 -> [bb22];
     }
 
     bb22: {

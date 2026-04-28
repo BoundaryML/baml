@@ -641,23 +641,6 @@ function foo() -> int {
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Duplicate binding `a` in `foo`
-//     ╭─[ parens.baml:59:23 ]
-//     │
-//  55 │   ╭─▶    for let a in as {}
-//     ┆   ┆   
-//  57 │   ├─▶    for (let a in as {}
-//     │   │                            
-//     │   ╰──────────────────────────── first defined as binding here
-//     │ 
-//  59 │ ╭───▶    for let a in as) {}
-//     ┆ ┆     
-//  61 │ ├───▶    for (let a in as) {}
-//     │ │                               
-//     │ ╰─────────────────────────────── duplicate binding definition
-//     │       
-//     │       Note: Error code: E0012
-// ────╯
 // Error: unresolved name: i
 //     ╭─[ parens.baml:39:10 ]
 //     │
@@ -738,6 +721,15 @@ function foo() -> int {
 //     │                    ╰──── cannot iterate over type `unknown`
 //     │ 
 //     │ Note: Error code: E0006
+// ────╯
+// Error: unresolved name: a
+//     ╭─[ parens.baml:59:12 ]
+//     │
+//  59 │    for let a in as) {}
+//     │            ┬  
+//     │            ╰── unresolved name: a
+//     │ 
+//     │ Note: Error code: E0003
 // ────╯
 // Error: unresolved name: as
 //     ╭─[ parens.baml:59:17 ]

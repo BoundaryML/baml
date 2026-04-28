@@ -1543,11 +1543,12 @@ impl CompilerRunner {
                     for (name, idx) in &bindings.params {
                         file_detail.push(format!("{indent}  param[{idx}]: {name}"));
                     }
-                    for (name, _site, range) in &bindings.bindings {
+                    for binding in &bindings.bindings {
                         file_detail.push(format!(
-                            "{indent}  let {name}  {}..{}",
-                            u32::from(range.start()),
-                            u32::from(range.end()),
+                            "{indent}  let {}  {}..{}",
+                            binding.name,
+                            u32::from(binding.name_range.start()),
+                            u32::from(binding.name_range.end()),
                         ));
                     }
                 }
