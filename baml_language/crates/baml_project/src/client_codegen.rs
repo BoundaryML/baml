@@ -229,7 +229,6 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                     docstring: None,
                     arguments,
                     return_type,
-                    stream_return_type: None,
                     watchers: Vec::new(),
                     companions: Vec::new(),
                     origin: Origin {
@@ -394,7 +393,6 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                 docstring: None,
                 arguments,
                 return_type,
-                stream_return_type: None, // TODO: streaming support
                 watchers: Vec::new(),
                 companions: Vec::new(),
                 origin: Origin {

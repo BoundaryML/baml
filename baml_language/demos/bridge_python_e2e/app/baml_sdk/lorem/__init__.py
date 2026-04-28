@@ -15,14 +15,18 @@ from baml.baml_core import (
 
 ExtractResume       = _define_function("user.lorem.ExtractResume", "sync",  ["text"])
 ExtractResume_async = _define_function("user.lorem.ExtractResume", "async", ["text"])
-ExtractResume__parse_stream       = _define_function("user.lorem.ExtractResume$parse_stream", "sync",  ["sse"])
-ExtractResume__parse_stream_async = _define_function("user.lorem.ExtractResume$parse_stream", "async", ["sse"])
 ExtractResume__build_request       = _define_function("user.lorem.ExtractResume$build_request", "sync",  ["text"])
 ExtractResume__build_request_async = _define_function("user.lorem.ExtractResume$build_request", "async", ["text"])
 ExtractResume__parse       = _define_function("user.lorem.ExtractResume$parse", "sync",  ["json"])
 ExtractResume__parse_async = _define_function("user.lorem.ExtractResume$parse", "async", ["json"])
 ExtractResume__render_prompt       = _define_function("user.lorem.ExtractResume$render_prompt", "sync",  ["text"])
 ExtractResume__render_prompt_async = _define_function("user.lorem.ExtractResume$render_prompt", "async", ["text"])
+ExtractResume_stream       = _define_function("user.lorem.ExtractResume$stream", "sync",  ["text"])
+ExtractResume_stream_async = _define_function("user.lorem.ExtractResume$stream", "async", ["text"])
+ExtractResume__build_request_stream       = _define_function("user.lorem.ExtractResume$build_request_stream", "sync",  ["text"])
+ExtractResume__build_request_stream_async = _define_function("user.lorem.ExtractResume$build_request_stream", "async", ["text"])
+ExtractResume__parse_stream       = _define_function("user.lorem.ExtractResume$parse_stream", "sync",  ["sse"])
+ExtractResume__parse_stream_async = _define_function("user.lorem.ExtractResume$parse_stream", "async", ["sse"])
 
 
 class Address(pydantic.BaseModel):
@@ -60,14 +64,18 @@ class Resume(pydantic.BaseModel):
 __all__ = [
     "ExtractResume",
     "ExtractResume_async",
-    "ExtractResume__parse_stream",
-    "ExtractResume__parse_stream_async",
     "ExtractResume__build_request",
     "ExtractResume__build_request_async",
     "ExtractResume__parse",
     "ExtractResume__parse_async",
     "ExtractResume__render_prompt",
     "ExtractResume__render_prompt_async",
+    "ExtractResume_stream",
+    "ExtractResume_stream_async",
+    "ExtractResume__build_request_stream",
+    "ExtractResume__build_request_stream_async",
+    "ExtractResume__parse_stream",
+    "ExtractResume__parse_stream_async",
     "Address",
     "Sentiment",
     "PhoneNumber",

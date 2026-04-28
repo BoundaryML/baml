@@ -29,9 +29,6 @@ pub struct Function {
     pub docstring: Option<String>,
     pub arguments: Vec<FunctionArgument>,
     pub return_type: super::Ty,
-    /// Only available if function streams
-    /// Expresion functions don't stream for example
-    pub stream_return_type: Option<super::Ty>,
 
     // TODO: add other APIs here that impact code-gen
     pub watchers: Vec<(baml_base::Name, super::Ty)>,
@@ -120,9 +117,6 @@ impl Function {
             .map(|args| args.ty.validate())
             .collect::<Result<Vec<_>, _>>()?;
         self.return_type.validate()?;
-        if let Some(stream_type) = &self.stream_return_type {
-            stream_type.validate()?;
-        }
         for (_, companion) in &self.companions {
             companion.validate()?;
         }
@@ -135,11 +129,6 @@ impl Function {
             .iter()
             .flat_map(|args| args.ty.walk_all_unions().into_iter())
             .chain(self.return_type.walk_all_unions())
-            .chain(
-                self.stream_return_type
-                    .iter()
-                    .flat_map(|ty| ty.walk_all_unions().into_iter()),
-            )
             .chain(
                 self.companions
                     .iter()
